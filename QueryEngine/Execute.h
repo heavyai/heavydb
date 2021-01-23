@@ -832,7 +832,8 @@ class Executor {
       const std::vector<InputTableInfo>& query_infos,
       const MemoryLevel memory_level,
       const HashType preferred_hash_type,
-      ColumnCacheMap& column_cache);
+      ColumnCacheMap& column_cache,
+      const QueryHint& query_hint);
   void nukeOldState(const bool allow_lazy_fetch,
                     const std::vector<InputTableInfo>& query_infos,
                     const PlanState::DeletedColumnsMap& deleted_cols_map,

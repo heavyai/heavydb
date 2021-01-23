@@ -242,7 +242,7 @@ std::string apply_copy_to_shim(const std::string& query_str) {
   return result;
 }
 
-QueryHint QueryRunner::getParsedQueryHintofQuery(const std::string& query_str) {
+QueryHint QueryRunner::getParsedQueryHint(const std::string& query_str) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);

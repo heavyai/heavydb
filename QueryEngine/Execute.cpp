@@ -1335,6 +1335,7 @@ RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in
           ra_exe_unit_in.estimator,
           ra_exe_unit_in.sort_info,
           new_scan_limit,
+          ra_exe_unit_in.query_hint,
           ra_exe_unit_in.use_bump_allocator,
           ra_exe_unit_in.union_all,
           ra_exe_unit_in.query_state};
@@ -3120,7 +3121,8 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const std::vector<InputTableInfo>& query_infos,
     const MemoryLevel memory_level,
     const HashType preferred_hash_type,
-    ColumnCacheMap& column_cache) {
+    ColumnCacheMap& column_cache,
+    const QueryHint& query_hint) {
   if (!g_enable_overlaps_hashjoin && qual_bin_oper->is_overlaps_oper()) {
     return {nullptr, "Overlaps hash join disabled, attempting to fall back to loop join"};
   }
@@ -3137,7 +3139,8 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                      preferred_hash_type,
                                      deviceCountForMemoryLevel(memory_level),
                                      column_cache,
-                                     this);
+                                     this,
+                                     query_hint);
     return {tbl, ""};
   } catch (const HashJoinFail& e) {
     return {nullptr, e.what()};

@@ -518,7 +518,8 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
           co.device_type == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
                                                     : MemoryLevel::CPU_LEVEL,
           HashType::OneToOne,
-          column_cache);
+          column_cache,
+          ra_exe_unit.query_hint);
       current_level_hash_table = hash_table_or_error.hash_table;
     }
     if (hash_table_or_error.hash_table) {

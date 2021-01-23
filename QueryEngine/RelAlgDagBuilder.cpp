@@ -1199,43 +1199,47 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept
 
 void handleQueryHint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
                      RelAlgDagBuilder* dag_builder) noexcept {
-  QueryHint query_hints;
+  Hints* hint_delivered = nullptr;
   for (auto node : nodes) {
     const auto agg_node = std::dynamic_pointer_cast<RelAggregate>(node);
     if (agg_node) {
-      if (agg_node->hasHintEnabled("cpu_mode")) {
-        query_hints.cpu_mode = true;
+      if (agg_node->hasDeliveredHint()) {
+        hint_delivered = agg_node->getDeliveredHints();
+        break;
       }
     }
     const auto project_node = std::dynamic_pointer_cast<RelProject>(node);
     if (project_node) {
-      if (project_node->hasHintEnabled("cpu_mode")) {
-        query_hints.cpu_mode = true;
+      if (project_node->hasDeliveredHint()) {
+        hint_delivered = project_node->getDeliveredHints();
+        break;
       }
     }
     const auto scan_node = std::dynamic_pointer_cast<RelScan>(node);
     if (scan_node) {
-      if (scan_node->hasHintEnabled("cpu_mode")) {
-        query_hints.cpu_mode = true;
+      if (scan_node->hasDeliveredHint()) {
+        hint_delivered = scan_node->getDeliveredHints();
+        break;
       }
     }
     const auto join_node = std::dynamic_pointer_cast<RelJoin>(node);
     if (join_node) {
-      if (join_node->hasHintEnabled("cpu_mode")) {
-        query_hints.cpu_mode = true;
+      if (join_node->hasDeliveredHint()) {
+        hint_delivered = join_node->getDeliveredHints();
+        break;
       }
     }
     const auto compound_node = std::dynamic_pointer_cast<RelCompound>(node);
     if (compound_node) {
-      if (compound_node->hasHintEnabled("cpu_mode")) {
-        query_hints.cpu_mode = true;
+      if (compound_node->hasDeliveredHint()) {
+        hint_delivered = compound_node->getDeliveredHints();
+        break;
       }
     }
   }
-  if (query_hints.cpu_mode) {
-    VLOG(1) << "A user forces to run the query on the CPU execution mode";
+  if (hint_delivered && !hint_delivered->empty()) {
+    dag_builder->registerQueryHints(hint_delivered);
   }
-  dag_builder->registerQueryHints(query_hints);
 }
 
 void mark_nops(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
@@ -2575,7 +2579,7 @@ class RelAlgDispatcher {
 RelAlgDagBuilder::RelAlgDagBuilder(const std::string& query_ra,
                                    const Catalog_Namespace::Catalog& cat,
                                    const RenderInfo* render_info)
-    : cat_(cat), render_info_(render_info) {
+    : cat_(cat), render_info_(render_info), query_hint_(QueryHint::defaults()) {
   rapidjson::Document query_ast;
   query_ast.Parse(query_ra.c_str());
   VLOG(2) << "Parsing query RA JSON: " << query_ra;
@@ -2597,7 +2601,7 @@ RelAlgDagBuilder::RelAlgDagBuilder(RelAlgDagBuilder& root_dag_builder,
                                    const rapidjson::Value& query_ast,
                                    const Catalog_Namespace::Catalog& cat,
                                    const RenderInfo* render_info)
-    : cat_(cat), render_info_(render_info) {
+    : cat_(cat), render_info_(render_info), query_hint_(QueryHint::defaults()) {
   build(query_ast, root_dag_builder);
 }
 

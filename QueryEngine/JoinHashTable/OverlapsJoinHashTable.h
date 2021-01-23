@@ -39,6 +39,7 @@ class OverlapsJoinHashTable : public HashJoin {
       , device_count_(device_count) {
     CHECK_GT(device_count_, 0);
     hash_tables_for_device_.resize(std::max(device_count_, 1));
+    query_hint_ = QueryHint::defaults();
   }
 
   virtual ~OverlapsJoinHashTable() {}
@@ -50,7 +51,8 @@ class OverlapsJoinHashTable : public HashJoin {
       const Data_Namespace::MemoryLevel memory_level,
       const int device_count,
       ColumnCacheMap& column_cache,
-      Executor* executor);
+      Executor* executor,
+      const QueryHint& query_hint);
 
   static auto getCacheInvalidator() -> std::function<void()> {
     VLOG(1) << "Invalidate " << auto_tuner_cache_.size() << " cached overlaps hashtable.";
@@ -134,6 +136,10 @@ class OverlapsJoinHashTable : public HashJoin {
     UNREACHABLE();  // not applicable for overlaps join
     return nullptr;
   }
+
+  const QueryHint& getRegisteredQueryHint() { return query_hint_; }
+
+  void registerQueryHint(const QueryHint& query_hint) { query_hint_ = query_hint; }
 
   static std::map<HashTableCacheKey, double> auto_tuner_cache_;
   static std::mutex auto_tuner_cache_mutex_;
@@ -245,4 +251,6 @@ class OverlapsJoinHashTable : public HashJoin {
   using HashTableCacheValue = std::shared_ptr<HashTable>;
   static std::unique_ptr<HashTableCache<HashTableCacheKey, HashTableCacheValue>>
       hash_table_cache_;
+
+  QueryHint query_hint_;
 };

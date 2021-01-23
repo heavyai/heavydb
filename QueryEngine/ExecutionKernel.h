@@ -43,6 +43,7 @@ class SharedKernelContext {
   std::vector<uint64_t> all_frag_row_offsets_;
   std::mutex all_frag_row_offsets_mutex_;
   const std::vector<InputTableInfo>& query_infos_;
+  const QueryHint query_hint_;
 };
 
 class ExecutionKernel {

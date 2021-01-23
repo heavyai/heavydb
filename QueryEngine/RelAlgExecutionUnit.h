@@ -27,6 +27,7 @@
 #define QUERYENGINE_RELALGEXECUTIONUNIT_H
 
 #include "Descriptors/InputDescriptors.h"
+#include "QueryHint.h"
 #include "Shared/sqldefs.h"
 #include "Shared/toString.h"
 #include "TableFunctions/TableFunctionOutputBufferSizeType.h"
@@ -73,6 +74,7 @@ struct RelAlgExecutionUnit {
   const std::shared_ptr<Analyzer::Estimator> estimator;
   const SortInfo sort_info;
   size_t scan_limit;
+  QueryHint query_hint;
   bool use_bump_allocator{false};
   // empty if not a UNION, true if UNION ALL, false if regular UNION
   const std::optional<bool> union_all;

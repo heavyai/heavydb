@@ -40,7 +40,8 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     const Data_Namespace::MemoryLevel memory_level,
     const int device_count,
     ColumnCacheMap& column_cache,
-    Executor* executor) {
+    Executor* executor,
+    const QueryHint& query_hint) {
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
   auto inner_outer_pairs = normalize_column_pairs(
       condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
@@ -95,6 +96,9 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
                                                                  executor,
                                                                  inner_outer_pairs,
                                                                  device_count);
+  if (query_hint.hint_delivered) {
+    join_hash_table->registerQueryHint(query_hint);
+  }
   try {
     join_hash_table->reify(layout);
   } catch (const HashJoinFail& e) {
@@ -130,6 +134,34 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
   if (query_info.fragments.empty()) {
     return;
   }
+
+  auto overlaps_max_table_size_bytes = g_overlaps_max_table_size_bytes;
+  bool use_user_given_bucket_threshold = false;
+  auto query_hint = getRegisteredQueryHint();
+  if (query_hint.hint_delivered) {
+    if (query_hint.overlaps_bucket_threshold != overlaps_hashjoin_bucket_threshold_) {
+      VLOG(1) << "User changes a threshold \'overlaps_hashjoin_bucket_threshold\' via "
+                 "query hint: "
+              << overlaps_hashjoin_bucket_threshold_ << " -> "
+              << query_hint.overlaps_bucket_threshold;
+      overlaps_hashjoin_bucket_threshold_ = query_hint.overlaps_bucket_threshold;
+      use_user_given_bucket_threshold = true;
+    }
+    if (query_hint.overlaps_max_size != overlaps_max_table_size_bytes) {
+      std::ostringstream oss;
+      oss << "User requests to change a threshold \'overlaps_max_table_size_bytes\' via "
+             "query hint: "
+          << overlaps_max_table_size_bytes << " -> " << query_hint.overlaps_max_size;
+      if (!use_user_given_bucket_threshold) {
+        overlaps_max_table_size_bytes = query_hint.overlaps_max_size;
+      } else {
+        oss << ", but is skipped since the query hint also changes the threshold "
+               "\'overlaps_hashjoin_bucket_threshold\'";
+      }
+      VLOG(1) << oss.str();
+    }
+  }
+
   std::vector<ColumnsForDevice> columns_per_device;
   const auto catalog = executor_->getCatalog();
   CHECK(catalog);
@@ -175,42 +207,45 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
 
   // Auto-tuner: Pre-calculate some possible hash table sizes.
   std::lock_guard<std::mutex> guard(auto_tuner_cache_mutex_);
-  auto atc = auto_tuner_cache_.find(cache_key);
-  if (atc != auto_tuner_cache_.end()) {
-    overlaps_hashjoin_bucket_threshold_ = atc->second;
-    VLOG(1) << "Auto tuner using cached overlaps hash table size of: "
-            << overlaps_hashjoin_bucket_threshold_;
-  } else {
-    VLOG(1) << "Auto tuning for the overlaps hash table size:";
-    // TODO(jclay): Currently, joining on large poly sets
-    // will lead to lengthy construction times (and large hash tables)
-    // tune this to account for the characteristics of the data being joined.
-    const double min_threshold{1e-5};
-    const double max_threshold{1};
-    double good_threshold{max_threshold};
-    for (double threshold = max_threshold; threshold >= min_threshold;
-         threshold /= 10.0) {
-      overlaps_hashjoin_bucket_threshold_ = threshold;
-      size_t entry_count;
-      size_t emitted_keys_count;
-      std::tie(entry_count, emitted_keys_count) =
-          calculateCounts(shard_count, query_info, columns_per_device);
-      size_t hash_table_size = calculateHashTableSize(
-          bucket_sizes_for_dimension_.size(), emitted_keys_count, entry_count);
-      bucket_sizes_for_dimension_.clear();
-      VLOG(1) << "Calculated bin threshold of " << std::fixed << threshold
-              << " giving: entry count " << entry_count << " hash table size "
-              << hash_table_size;
-      if (hash_table_size <= g_overlaps_max_table_size_bytes) {
-        good_threshold = overlaps_hashjoin_bucket_threshold_;
-      } else {
-        VLOG(1) << "Rejected bin threshold of " << std::fixed << threshold;
-        break;
+  if (!use_user_given_bucket_threshold) {
+    // auto-tuning is valid iff no query hint is delivered to change bucket threshold
+    auto atc = auto_tuner_cache_.find(cache_key);
+    if (atc != auto_tuner_cache_.end()) {
+      overlaps_hashjoin_bucket_threshold_ = atc->second;
+      VLOG(1) << "Auto tuner using cached overlaps hash table size of: "
+              << overlaps_hashjoin_bucket_threshold_;
+    } else {
+      VLOG(1) << "Auto tuning for the overlaps hash table size:";
+      // TODO(jclay): Currently, joining on large poly sets
+      // will lead to lengthy construction times (and large hash tables)
+      // tune this to account for the characteristics of the data being joined.
+      const double min_threshold{1e-5};
+      const double max_threshold{1};
+      double good_threshold{max_threshold};
+      for (double threshold = max_threshold; threshold >= min_threshold;
+           threshold /= 10.0) {
+        overlaps_hashjoin_bucket_threshold_ = threshold;
+        size_t entry_count;
+        size_t emitted_keys_count;
+        std::tie(entry_count, emitted_keys_count) =
+            calculateCounts(shard_count, query_info, columns_per_device);
+        size_t hash_table_size = calculateHashTableSize(
+            bucket_sizes_for_dimension_.size(), emitted_keys_count, entry_count);
+        bucket_sizes_for_dimension_.clear();
+        VLOG(1) << "Calculated bin threshold of " << std::fixed << threshold
+                << " giving: entry count " << entry_count << " hash table size "
+                << hash_table_size;
+        if (hash_table_size <= overlaps_max_table_size_bytes) {
+          good_threshold = overlaps_hashjoin_bucket_threshold_;
+        } else {
+          VLOG(1) << "Rejected bin threshold of " << std::fixed << threshold;
+          break;
+        }
       }
-    }
-    overlaps_hashjoin_bucket_threshold_ = good_threshold;
-    if (!cache_key_contains_intermediate_table(cache_key)) {
-      auto_tuner_cache_[cache_key] = overlaps_hashjoin_bucket_threshold_;
+      overlaps_hashjoin_bucket_threshold_ = good_threshold;
+      if (!cache_key_contains_intermediate_table(cache_key)) {
+        auto_tuner_cache_[cache_key] = overlaps_hashjoin_bucket_threshold_;
+      }
     }
   }
 

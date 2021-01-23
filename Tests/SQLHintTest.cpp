@@ -20,6 +20,7 @@
 
 #include "Catalog/Catalog.h"
 #include "Catalog/DBObject.h"
+#include "DBHandlerTestHelpers.h"
 #include "DataMgr/DataMgr.h"
 #include "QueryEngine/Execute.h"
 #include "QueryRunner/QueryRunner.h"
@@ -49,6 +50,12 @@ bool skip_tests(const ExecutorDeviceType device_type) {
     continue;                                                \
   }
 
+bool approx_eq(const double v, const double target, const double eps = 0.01) {
+  const auto v_u64 = *reinterpret_cast<const uint64_t*>(may_alias_ptr(&v));
+  const auto target_u64 = *reinterpret_cast<const uint64_t*>(may_alias_ptr(&target));
+  return v_u64 == target_u64 || (target - eps < v && v < target + eps);
+}
+
 inline void run_ddl_statement(const std::string& create_table_stmt) {
   QR::get()->runDDLStatement(create_table_stmt);
 }
@@ -65,16 +72,82 @@ TEST(CPU_MODE, ForceToCPUMode) {
   const auto query_without_cpu_mode_hint = "SELECT * FROM SQL_HINT_DUMMY";
   QR::get()->runDDLStatement(drop_table_ddl);
   QR::get()->runDDLStatement(create_table_ddl);
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    if (QR::get()->gpusPresent()) {
-      auto query_hints = QR::get()->getParsedQueryHintofQuery(query_with_cpu_mode_hint);
-      CHECK(query_hints.cpu_mode);
-      query_hints = QR::get()->getParsedQueryHintofQuery(query_without_cpu_mode_hint);
-      CHECK(!query_hints.cpu_mode);
-    }
+  if (QR::get()->gpusPresent()) {
+    auto query_hints = QR::get()->getParsedQueryHint(query_with_cpu_mode_hint);
+    CHECK(query_hints.hint_delivered && query_hints.cpu_mode);
+    query_hints = QR::get()->getParsedQueryHint(query_without_cpu_mode_hint);
+    CHECK(!query_hints.hint_delivered && !query_hints.cpu_mode);
   }
   QR::get()->runDDLStatement(drop_table_ddl);
+}
+
+TEST(OVERLAPS_JOIN_PARAM, Check_Overlaps_Join_Hint) {
+  const auto overlaps_join_status_backup = g_enable_overlaps_hashjoin;
+  g_enable_overlaps_hashjoin = true;
+  ScopeGuard reset_loop_join_state = [&overlaps_join_status_backup] {
+    g_enable_overlaps_hashjoin = overlaps_join_status_backup;
+  };
+
+  const auto drop_table_ddl_1 = "DROP TABLE IF EXISTS geospatial_test";
+  const auto drop_table_ddl_2 = "DROP TABLE IF EXISTS geospatial_inner_join_test";
+  const auto create_table_ddl_1 =
+      "CREATE TABLE geospatial_test(id INT, p POINT, l LINESTRING, poly POLYGON);";
+  const auto create_table_ddl_2 =
+      "CREATE TABLE geospatial_inner_join_test(id INT, p POINT, l LINESTRING, poly "
+      "POLYGON);";
+
+  QR::get()->runDDLStatement(drop_table_ddl_1);
+  QR::get()->runDDLStatement(drop_table_ddl_2);
+  QR::get()->runDDLStatement(create_table_ddl_1);
+  QR::get()->runDDLStatement(create_table_ddl_2);
+
+  const auto q1 =
+      "SELECT /*+ overlaps_bucket_threshold(0.718) */ a.id FROM geospatial_test a INNER "
+      "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
+  const auto q2 =
+      "SELECT /*+ overlaps_max_size(2021) */ a.id FROM geospatial_test a INNER JOIN "
+      "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
+  const auto q3 =
+      "SELECT /*+ overlaps_bucket_threshold(0.718), overlaps_max_size(2021) */ a.id FROM "
+      "geospatial_test a INNER JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, "
+      "a.p);";
+  const auto query_without_hint =
+      "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON "
+      "ST_Contains(b.poly, a.p);";
+  const auto wrong_q1 =
+      "SELECT /*+ overlaps_bucket_threshold(-0.718) */ a.id FROM geospatial_test a INNER "
+      "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
+  const auto wrong_q2 =
+      "SELECT /*+ overlaps_bucket_threshold(1.718) */ a.id FROM geospatial_test a INNER "
+      "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
+  const auto wrong_q3 =
+      "SELECT /*+ overlaps_max_size(-2021) */ a.id FROM geospatial_test a INNER "
+      "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
+
+  auto q1_hints = QR::get()->getParsedQueryHint(q1);
+  CHECK(q1_hints.hint_delivered && approx_eq(q1_hints.overlaps_bucket_threshold, 0.718));
+
+  auto q2_hints = QR::get()->getParsedQueryHint(q2);
+  CHECK(q2_hints.hint_delivered && (q2_hints.overlaps_max_size == 2021));
+
+  auto q3_hints = QR::get()->getParsedQueryHint(q3);
+  CHECK(q3_hints.hint_delivered && (q3_hints.overlaps_max_size == 2021) &&
+        approx_eq(q3_hints.overlaps_bucket_threshold, 0.718));
+
+  auto query_without_hint_res = QR::get()->getParsedQueryHint(query_without_hint);
+  CHECK(!query_without_hint_res.hint_delivered);
+
+  auto wrong_q1_hints = QR::get()->getParsedQueryHint(wrong_q1);
+  CHECK(!wrong_q1_hints.hint_delivered);
+
+  auto wrong_q2_hints = QR::get()->getParsedQueryHint(wrong_q2);
+  CHECK(!wrong_q2_hints.hint_delivered);
+
+  auto wrong_q3_hints = QR::get()->getParsedQueryHint(wrong_q3);
+  CHECK(!wrong_q3_hints.hint_delivered);
+
+  QR::get()->runDDLStatement(drop_table_ddl_1);
+  QR::get()->runDDLStatement(drop_table_ddl_2);
 }
 
 int main(int argc, char** argv) {

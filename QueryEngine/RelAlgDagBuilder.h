@@ -840,6 +840,10 @@ class RelScan : public RelAlgNode {
     return hints_->at(hint_name);
   }
 
+  bool hasDeliveredHint() { return !hints_->empty(); }
+
+  Hints* getDeliveredHints() { return hints_.get(); }
+
  private:
   const TableDescriptor* td_;
   const std::vector<std::string> field_names_;
@@ -1004,6 +1008,10 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
     return hints_->at(hint_name);
   }
 
+  bool hasDeliveredHint() { return !hints_->empty(); }
+
+  Hints* getDeliveredHints() { return hints_.get(); }
+
  private:
   template <typename EXPR_VISITOR_FUNCTOR>
   void visitScalarExprs(EXPR_VISITOR_FUNCTOR visitor_functor) const {
@@ -1113,6 +1121,10 @@ class RelAggregate : public RelAlgNode {
     return hints_->at(hint_name);
   }
 
+  bool hasDeliveredHint() { return !hints_->empty(); }
+
+  Hints* getDeliveredHints() { return hints_.get(); }
+
  private:
   const size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
@@ -1187,6 +1199,10 @@ class RelJoin : public RelAlgNode {
     CHECK(hasHintEnabled(hint_name));
     return hints_->at(hint_name);
   }
+
+  bool hasDeliveredHint() { return !hints_->empty(); }
+
+  Hints* getDeliveredHints() { return hints_.get(); }
 
  private:
   mutable std::unique_ptr<const RexScalar> condition_;
@@ -1362,6 +1378,10 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
     CHECK(hasHintEnabled(hint_name));
     return hints_->at(hint_name);
   }
+
+  bool hasDeliveredHint() { return !hints_->empty(); }
+
+  Hints* getDeliveredHints() { return hints_.get(); }
 
  private:
   std::unique_ptr<const RexScalar> filter_expr_;
@@ -1832,7 +1852,53 @@ class RelAlgDagBuilder : public boost::noncopyable {
     return subqueries_;
   }
 
-  void registerQueryHints(QueryHint& query_hint) { query_hint_ = query_hint; }
+  void registerQueryHints(Hints* hints_delivered) {
+    for (auto& kv : query_hint_.OMNISCI_SUPPORTED_HINT_CLASS) {
+      auto target = hints_delivered->find(kv.first);
+      if (target != hints_delivered->end()) {
+        int target_hint_num = kv.second;
+        switch (target_hint_num) {
+          case 0: {  // cpu_mode
+            query_hint_.hint_delivered = true;
+            query_hint_.cpu_mode = true;
+            VLOG(1) << "A user forces to run the query on the CPU execution mode";
+            break;
+          }
+          case 1: {  // overlaps_bucket_threshold
+            CHECK(target->second.getListOptions().size() == 1);
+            double overlaps_bucket_threshold =
+                std::stod(target->second.getListOptions()[0]);
+            if (overlaps_bucket_threshold >= 0.0 && overlaps_bucket_threshold <= 1.0) {
+              query_hint_.hint_delivered = true;
+              query_hint_.overlaps_bucket_threshold = overlaps_bucket_threshold;
+            } else {
+              VLOG(1) << "Skip the given query hint \"overlaps_bucket_threshold\" ("
+                      << overlaps_bucket_threshold
+                      << ") : the hint value should be within 0.0 ~ 1.0";
+            }
+            break;
+          }
+          case 2: {  // overlaps_max_size
+            CHECK(target->second.getListOptions().size() == 1);
+            std::stringstream ss(target->second.getListOptions()[0]);
+            int overlaps_max_size;
+            ss >> overlaps_max_size;
+            if (overlaps_max_size >= 0) {
+              query_hint_.hint_delivered = true;
+              query_hint_.overlaps_max_size = (size_t)overlaps_max_size;
+            } else {
+              VLOG(1) << "Skip the query hint \"overlaps_max_size\" ("
+                      << overlaps_max_size
+                      << ") : the hint value should be larger than or equal to zero";
+            }
+            break;
+          }
+          default:
+            break;
+        }
+      }
+    }
+  }
 
   const QueryHint getQueryHints() const { return query_hint_; }
 

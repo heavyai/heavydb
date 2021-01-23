@@ -222,7 +222,8 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
     const HashType preferred_hash_type,
     const int device_count,
     ColumnCacheMap& column_cache,
-    Executor* executor) {
+    Executor* executor,
+    const QueryHint& query_hint) {
   auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<HashJoin> join_hash_table;
   CHECK_GT(device_count, 0);
@@ -232,8 +233,13 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
   }
   if (qual_bin_oper->is_overlaps_oper()) {
     VLOG(1) << "Trying to build geo hash table:";
-    join_hash_table = OverlapsJoinHashTable::getInstance(
-        qual_bin_oper, query_infos, memory_level, device_count, column_cache, executor);
+    join_hash_table = OverlapsJoinHashTable::getInstance(qual_bin_oper,
+                                                         query_infos,
+                                                         memory_level,
+                                                         device_count,
+                                                         column_cache,
+                                                         executor,
+                                                         query_hint);
   } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
                  qual_bin_oper->get_left_operand())) {
     VLOG(1) << "Trying to build keyed hash table:";
@@ -458,6 +464,7 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
       AllColumnVarsVisitor().visit(qual_bin_oper.get());
   auto query_infos = getSyntheticInputTableInfo(cvs, executor);
   setupSyntheticCaching(cvs, executor);
+  QueryHint query_hint = QueryHint::defaults();
 
   auto hash_table = HashJoin::getInstance(qual_bin_oper,
                                           query_infos,
@@ -465,7 +472,8 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
                                           preferred_hash_type,
                                           device_count,
                                           column_cache,
-                                          executor);
+                                          executor,
+                                          query_hint);
   return hash_table;
 }
 
@@ -481,6 +489,7 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
       AllColumnVarsVisitor().visit(qual_bin_oper.get());
   auto query_infos = getSyntheticInputTableInfo(cvs, executor);
   setupSyntheticCaching(cvs, executor);
+  QueryHint query_hint = QueryHint::defaults();
 
   auto hash_table = HashJoin::getInstance(qual_bin_oper,
                                           query_infos,
@@ -488,7 +497,8 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
                                           preferred_hash_type,
                                           device_count,
                                           column_cache,
-                                          executor);
+                                          executor,
+                                          query_hint);
   return hash_table;
 }
 
