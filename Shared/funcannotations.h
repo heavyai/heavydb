@@ -47,13 +47,11 @@
 #endif
 
 #if defined(__CUDACC__) || (defined(__GNUC__) && defined(__SANITIZE_THREAD__)) || \
-    defined(WITH_JIT_DEBUG)
+    defined(WITH_JIT_DEBUG) || defined(_MSC_VER)
 #define ALWAYS_INLINE
 #elif defined(ENABLE_EMBEDDED_DATABASE)
 #define ALWAYS_INLINE \
   __attribute__((always_inline)) __attribute__((__visibility__("hidden")))
-#elif defined(_MSC_VER)
-#define ALWAYS_INLINE __inline
 #else
 #define ALWAYS_INLINE __attribute__((always_inline))
 #endif
