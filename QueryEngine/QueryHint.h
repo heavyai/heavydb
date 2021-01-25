@@ -30,18 +30,19 @@ struct QueryHint {
   // note that we should check if H is valid W.R.T the proper value range
   // i.e., if H is valid in 0.0 ~ 1.0, then we check that at the point
   // when we decide to use H, and use D iff given H does not have a valid value
-  QueryHint() {
-    hint_delivered = false;
-    cpu_mode = false;
-    overlaps_bucket_threshold = 0.1;
-    overlaps_max_size = g_overlaps_max_table_size_bytes;
-  }
+  QueryHint()
+      : hint_delivered(false)
+      , cpu_mode(false)
+      , overlaps_bucket_threshold(0.1)
+      , overlaps_max_size(g_overlaps_max_table_size_bytes)
+      , overlaps_allow_gpu_build(false) {}
 
   QueryHint& operator=(const QueryHint& other) {
     hint_delivered = other.hint_delivered;
     cpu_mode = other.cpu_mode;
     overlaps_bucket_threshold = other.overlaps_bucket_threshold;
     overlaps_max_size = other.overlaps_max_size;
+    overlaps_allow_gpu_build = other.overlaps_allow_gpu_build;
     return *this;
   }
 
@@ -50,6 +51,7 @@ struct QueryHint {
     cpu_mode = other.cpu_mode;
     overlaps_bucket_threshold = other.overlaps_bucket_threshold;
     overlaps_max_size = other.overlaps_max_size;
+    overlaps_allow_gpu_build = other.overlaps_allow_gpu_build;
   }
 
   // set true if at least one query hint is delivered
@@ -61,11 +63,13 @@ struct QueryHint {
   // overlaps hash join
   double overlaps_bucket_threshold;  // defined in "OverlapsJoinHashTable.h"
   size_t overlaps_max_size;
+  bool overlaps_allow_gpu_build;
 
   std::unordered_map<std::string, int> OMNISCI_SUPPORTED_HINT_CLASS = {
       {"cpu_mode", 0},
       {"overlaps_bucket_threshold", 1},
-      {"overlaps_max_size", 2}};
+      {"overlaps_max_size", 2},
+      {"overlaps_allow_gpu_build", 3}};
 
   static QueryHint defaults() { return QueryHint(); }
 };

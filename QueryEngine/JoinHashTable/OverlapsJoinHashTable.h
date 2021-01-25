@@ -115,12 +115,13 @@ class OverlapsJoinHashTable : public HashJoin {
 
   int getDeviceCount() const noexcept override { return device_count_; };
 
-  void initHashTableOnCpu(const std::vector<JoinColumn>& join_columns,
-                          const std::vector<JoinColumnTypeInfo>& join_column_types,
-                          const std::vector<JoinBucketInfo>& join_bucket_info,
-                          const HashType layout,
-                          const size_t entry_count,
-                          const size_t emitted_keys_count);
+  std::shared_ptr<BaselineHashTable> initHashTableOnCpu(
+      const std::vector<JoinColumn>& join_columns,
+      const std::vector<JoinColumnTypeInfo>& join_column_types,
+      const std::vector<JoinBucketInfo>& join_bucket_info,
+      const HashType layout,
+      const size_t entry_count,
+      const size_t emitted_keys_count);
 
   HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&,
                                          const size_t) override;
@@ -173,9 +174,7 @@ class OverlapsJoinHashTable : public HashJoin {
   }
 
   Data_Namespace::MemoryLevel getEffectiveMemoryLevel(
-      const std::vector<InnerOuter>& inner_outer_pairs) const {
-    return memory_level_;
-  }
+      const std::vector<InnerOuter>& inner_outer_pairs) const;
 
   int getInnerTableId() const noexcept override;
 
@@ -222,7 +221,7 @@ class OverlapsJoinHashTable : public HashJoin {
       const HashTableCacheKey&) const;
 
   void putHashTableOnCpuToCache(const HashTableCacheKey& key,
-                                std::shared_ptr<HashTable>& hash_table);
+                                std::shared_ptr<HashTable> hash_table);
 
   void computeBucketSizes(std::vector<double>& bucket_sizes_for_dimension,
                           const JoinColumn& join_column,
@@ -247,6 +246,8 @@ class OverlapsJoinHashTable : public HashJoin {
 
   std::optional<HashType>
       layout_override_;  // allows us to use a 1:many hash table for many:many
+
+  std::mutex cpu_hash_table_buff_mutex_;
 
   using HashTableCacheValue = std::shared_ptr<HashTable>;
   static std::unique_ptr<HashTableCache<HashTableCacheKey, HashTableCacheValue>>

@@ -1893,6 +1893,12 @@ class RelAlgDagBuilder : public boost::noncopyable {
             }
             break;
           }
+          case 3: {  // overlaps_allow_gpu_build
+            query_hint_.hint_delivered = true;
+            query_hint_.overlaps_allow_gpu_build = true;
+            VLOG(1) << "Allowing GPU hash table build for overlaps join.";
+            break;
+          }
           default:
             break;
         }

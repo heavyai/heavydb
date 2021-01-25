@@ -408,6 +408,8 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
   CHECK_EQ(columns_per_device.front().join_columns.size(),
            columns_per_device.front().join_buckets.size());
   if (effective_memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
+    // Note that this path assumes each device has the same hash table (for GPU hash join
+    // w/ hash table built on CPU)
     const auto composite_key_info =
         HashJoin::getCompositeKeyInfo(inner_outer_pairs_, executor_);
     HashTableCacheKey cache_key{columns_per_device.front().join_columns.front().num_elems,
@@ -426,7 +428,6 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
 
     std::vector<int32_t> num_keys_for_row;
     // TODO(adb): support multi-column overlaps join
-    CHECK_EQ(columns_per_device.size(), 1u);
     num_keys_for_row.resize(columns_per_device.front().join_columns[0].num_elems);
 
     approximate_distinct_tuples_overlaps(hll_result,
@@ -585,14 +586,56 @@ void OverlapsJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_d
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
 
   if (effective_memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
-    initHashTableOnCpu(columns_for_device.join_columns,
-                       columns_for_device.join_column_types,
-                       columns_for_device.join_buckets,
-                       layout,
-                       entry_count,
-                       emitted_keys_count);
+    VLOG(1) << "Building overlaps join hash table on CPU.";
+    auto hash_table = initHashTableOnCpu(columns_for_device.join_columns,
+                                         columns_for_device.join_column_types,
+                                         columns_for_device.join_buckets,
+                                         layout,
+                                         entry_count,
+                                         emitted_keys_count);
+    CHECK(hash_table);
+
+#ifdef HAVE_CUDA
+    if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
+      auto catalog = executor_->getCatalog();
+      CHECK(catalog);
+      auto& data_mgr = catalog->getDataMgr();
+
+      // copy hash table to GPU
+      BaselineJoinHashTableBuilder gpu_builder(executor_->catalog_);
+      gpu_builder.allocateDeviceMemory(layout,
+                                       getKeyComponentWidth(),
+                                       getKeyComponentCount(),
+                                       entry_count,
+                                       emitted_keys_count,
+                                       device_id);
+      std::shared_ptr<BaselineHashTable> gpu_hash_table = gpu_builder.getHashTable();
+      CHECK(gpu_hash_table);
+      auto gpu_buffer_ptr = gpu_hash_table->getGpuBuffer();
+      CHECK(gpu_buffer_ptr);
+
+      CHECK_LE(hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
+               gpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::GPU));
+      copy_to_gpu(&data_mgr,
+                  reinterpret_cast<CUdeviceptr>(gpu_buffer_ptr),
+                  hash_table->getCpuBuffer(),
+                  hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
+                  device_id);
+      CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
+      hash_tables_for_device_[device_id] = std::move(gpu_hash_table);
+    } else {
+#else
+    CHECK_EQ(Data_Namespace::CPU_LEVEL, effective_memory_level);
+#endif
+      CHECK_EQ(hash_tables_for_device_.size(), size_t(1));
+      hash_tables_for_device_[0] = std::move(hash_table);
+#ifdef HAVE_CUDA
+    }
+#endif
   } else {
+    VLOG(1) << "Building overlaps join hash table on GPU.";
     // TODO(adb): 4 byte keys
+    CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level_);
 
 #ifdef HAVE_CUDA
     const auto catalog = executor_->getCatalog();
@@ -633,7 +676,7 @@ void OverlapsJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_d
   }
 }
 
-void OverlapsJoinHashTable::initHashTableOnCpu(
+std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnCpu(
     const std::vector<JoinColumn>& join_columns,
     const std::vector<JoinColumnTypeInfo>& join_column_types,
     const std::vector<JoinBucketInfo>& join_bucket_info,
@@ -650,16 +693,18 @@ void OverlapsJoinHashTable::initHashTableOnCpu(
                               condition_->get_optype(),
                               overlaps_hashjoin_bucket_threshold_};
 
-  if (auto hash_table = initHashTableOnCpuFromCache(cache_key)) {
-    // See if a hash table of a different layout was returned.
-    // If it was OneToMany, we can reuse it on ManyToMany.
-    if (layout == HashType::ManyToMany &&
-        hash_table->getLayout() == HashType::OneToMany) {
-      // use the cached hash table
-      layout_override_ = HashType::ManyToMany;
-      CHECK_GT(hash_tables_for_device_.size(), size_t(0));
-      hash_tables_for_device_[0] = hash_table;
-      return;
+  std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
+  if (auto generic_hash_table = initHashTableOnCpuFromCache(cache_key)) {
+    if (auto hash_table =
+            std::dynamic_pointer_cast<BaselineHashTable>(generic_hash_table)) {
+      // See if a hash table of a different layout was returned.
+      // If it was OneToMany, we can reuse it on ManyToMany.
+      if (layout == HashType::ManyToMany &&
+          hash_table->getLayout() == HashType::OneToMany) {
+        // use the cached hash table
+        layout_override_ = HashType::ManyToMany;
+        return hash_table;
+      }
     }
   }
   CHECK(layoutRequiresAdditionalBuffers(layout));
@@ -686,11 +731,11 @@ void OverlapsJoinHashTable::initHashTableOnCpu(
         std::string("Unrecognized error when initializing overlaps hash table (") +
         std::to_string(err) + std::string(")"));
   }
-  CHECK(!hash_tables_for_device_.empty());
-  hash_tables_for_device_[0] = builder.getHashTable();
+  std::shared_ptr<BaselineHashTable> hash_table = builder.getHashTable();
   if (HashJoin::getInnerTableId(inner_outer_pairs_) > 0) {
-    putHashTableOnCpuToCache(cache_key, hash_tables_for_device_[0]);
+    putHashTableOnCpuToCache(cache_key, hash_table);
   }
+  return hash_table;
 }
 
 #define LL_CONTEXT executor_->cgen_state_->context_
@@ -1012,6 +1057,15 @@ std::set<DecodedJoinHashBufferEntry> OverlapsJoinHashTable::toSet(
                           buffer_size);
 }
 
+Data_Namespace::MemoryLevel OverlapsJoinHashTable::getEffectiveMemoryLevel(
+    const std::vector<InnerOuter>& inner_outer_pairs) const {
+  // always build on CPU
+  if (query_hint_.hint_delivered && query_hint_.overlaps_allow_gpu_build) {
+    return memory_level_;
+  }
+  return Data_Namespace::MemoryLevel::CPU_LEVEL;
+}
+
 int OverlapsJoinHashTable::getInnerTableId() const noexcept {
   try {
     return HashJoin::getInnerTableId(inner_outer_pairs_);
@@ -1051,7 +1105,7 @@ OverlapsJoinHashTable::getApproximateTupleCountFromCache(
 
 void OverlapsJoinHashTable::putHashTableOnCpuToCache(
     const HashTableCacheKey& key,
-    std::shared_ptr<HashTable>& hash_table) {
+    std::shared_ptr<HashTable> hash_table) {
   for (auto chunk_key : key.chunk_keys) {
     CHECK_GE(chunk_key.size(), size_t(2));
     if (chunk_key[1] < 0) {
