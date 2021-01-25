@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev bf83d84
+                5.6.0dev e4d26ea
               </div>
             
           
@@ -1648,7 +1648,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html">Struct RelAlgExecutionUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_1_1_table_function_work_unit.html">Struct RelAlgExecutor::TableFunctionWorkUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_1_1_work_unit.html">Struct RelAlgExecutor::WorkUnit</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_traits.html">Struct RelAlgExecutorTraits</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_render_query_options.html">Struct RenderQueryOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_column_wise_target_accessor.html">Struct ResultSet::ColumnWiseTargetAccessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_query_execution_timings.html">Struct ResultSet::QueryExecutionTimings</a></li>
@@ -1905,25 +1904,48 @@
 <dl class="class">
 <dt id="_CPPv4N17StorageIOFacility21TransactionParametersE">
 <span id="_CPPv3N17StorageIOFacility21TransactionParametersE"></span><span id="_CPPv2N17StorageIOFacility21TransactionParametersE"></span><span id="StorageIOFacility::TransactionParameters"></span><span class="target" id="class_storage_i_o_facility_1_1_transaction_parameters"></span><em class="property">class </em><code class="sig-name descname">TransactionParameters</code><br /></dt>
-<dd><p>Subclassed by <a class="reference internal" href="../struct/struct_storage_i_o_facility_1_1_delete_transaction_parameters.html#struct_storage_i_o_facility_1_1_delete_transaction_parameters"><span class="std std-ref">StorageIOFacility&lt; EXECUTOR_TRAITS, FRAGMENT_UPDATER &gt;::DeleteTransactionParameters</span></a>, <a class="reference internal" href="class_storage_i_o_facility_1_1_update_transaction_parameters.html#class_storage_i_o_facility_1_1_update_transaction_parameters"><span class="std std-ref">StorageIOFacility&lt; EXECUTOR_TRAITS, FRAGMENT_UPDATER &gt;::UpdateTransactionParameters</span></a></p>
+<dd><p>Subclassed by <a class="reference internal" href="../struct/struct_storage_i_o_facility_1_1_delete_transaction_parameters.html#struct_storage_i_o_facility_1_1_delete_transaction_parameters"><span class="std std-ref">StorageIOFacility::DeleteTransactionParameters</span></a>, <a class="reference internal" href="class_storage_i_o_facility_1_1_update_transaction_parameters.html#class_storage_i_o_facility_1_1_update_transaction_parameters"><span class="std std-ref">StorageIOFacility::UpdateTransactionParameters</span></a></p>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4IEN17StorageIOFacilityI15EXECUTOR_TRAITS16FRAGMENT_UPDATERE21TransactionParameters21getTransactionTrackerERN17StorageIOFacility14TransactionLogEv">
-<span id="_CPPv3IEN17StorageIOFacilityI15EXECUTOR_TRAITS16FRAGMENT_UPDATERE21TransactionParameters21getTransactionTrackerEv"></span><span id="_CPPv2IEN17StorageIOFacilityI15EXECUTOR_TRAITS16FRAGMENT_UPDATERE21TransactionParameters21getTransactionTrackerEv"></span><span class="target" id="class_storage_i_o_facility_1_1_transaction_parameters_1ae000d82f92cb2c136cd3debe369b1952"></span>template&lt;&gt;<br />StorageIOFacility::TransactionLog &amp;<code class="sig-name descname">getTransactionTracker</code><span class="sig-paren">(</span><span class="sig-paren">)</span><br /></dt>
+<dt id="_CPPv4N17StorageIOFacility21TransactionParameters21TransactionParametersEKb">
+<span id="_CPPv3N17StorageIOFacility21TransactionParameters21TransactionParametersEKb"></span><span id="_CPPv2N17StorageIOFacility21TransactionParameters21TransactionParametersEKb"></span><span id="StorageIOFacility::TransactionParameters::TransactionParameters__bC"></span><span class="target" id="class_storage_i_o_facility_1_1_transaction_parameters_1a9a7888c8f3594d3d8b6429deb1273b80"></span><code class="sig-name descname">TransactionParameters</code><span class="sig-paren">(</span><em class="property">const</em> bool <em>table_is_temporary</em><span class="sig-paren">)</span><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4IEN17StorageIOFacilityI15EXECUTOR_TRAITS16FRAGMENT_UPDATERE21TransactionParameters19finalizeTransactionEvv">
-<span id="_CPPv3IEN17StorageIOFacilityI15EXECUTOR_TRAITS16FRAGMENT_UPDATERE21TransactionParameters19finalizeTransactionEv"></span><span id="_CPPv2IEN17StorageIOFacilityI15EXECUTOR_TRAITS16FRAGMENT_UPDATERE21TransactionParameters19finalizeTransactionEv"></span><span class="target" id="class_storage_i_o_facility_1_1_transaction_parameters_1ac62b25a182e6d2ed44fdbcbbba60cfa1"></span>template&lt;&gt;<br />void <code class="sig-name descname">finalizeTransaction</code><span class="sig-paren">(</span><span class="sig-paren">)</span><br /></dt>
+<dt id="_CPPv4N17StorageIOFacility21TransactionParametersD0Ev">
+<span id="_CPPv3N17StorageIOFacility21TransactionParametersD0Ev"></span><span id="_CPPv2N17StorageIOFacility21TransactionParametersD0Ev"></span><span id="StorageIOFacility::TransactionParameters::~TransactionParameters"></span><span class="target" id="class_storage_i_o_facility_1_1_transaction_parameters_1a2a637f02f75bd15c75499c35d1be1306"></span><em class="property">virtual</em> <code class="sig-name descname">~TransactionParameters</code><span class="sig-paren">(</span><span class="sig-paren">)</span><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17StorageIOFacility21TransactionParameters21getTransactionTrackerEv">
+<span id="_CPPv3N17StorageIOFacility21TransactionParameters21getTransactionTrackerEv"></span><span id="_CPPv2N17StorageIOFacility21TransactionParameters21getTransactionTrackerEv"></span><span id="StorageIOFacility::TransactionParameters::getTransactionTracker"></span><span class="target" id="class_storage_i_o_facility_1_1_transaction_parameters_1a549d930259b19daa5b432e9169a86634"></span><a class="reference internal" href="class_storage_i_o_facility.html#_CPPv417StorageIOFacility" title="StorageIOFacility">StorageIOFacility</a>::<a class="reference internal" href="class_storage_i_o_facility.html#_CPPv4N17StorageIOFacility14TransactionLogE" title="StorageIOFacility::TransactionLog">TransactionLog</a> &amp;<code class="sig-name descname">getTransactionTracker</code><span class="sig-paren">(</span><span class="sig-paren">)</span><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17StorageIOFacility21TransactionParameters19finalizeTransactionEv">
+<span id="_CPPv3N17StorageIOFacility21TransactionParameters19finalizeTransactionEv"></span><span id="_CPPv2N17StorageIOFacility21TransactionParameters19finalizeTransactionEv"></span><span id="StorageIOFacility::TransactionParameters::finalizeTransaction"></span><span class="target" id="class_storage_i_o_facility_1_1_transaction_parameters_1a3a44e22ced6205e4cd08ac58f61205f6"></span>void <code class="sig-name descname">finalizeTransaction</code><span class="sig-paren">(</span><span class="sig-paren">)</span><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK17StorageIOFacility21TransactionParameters16tableIsTemporaryEv">
+<span id="_CPPv3NK17StorageIOFacility21TransactionParameters16tableIsTemporaryEv"></span><span id="_CPPv2NK17StorageIOFacility21TransactionParameters16tableIsTemporaryEv"></span><span id="StorageIOFacility::TransactionParameters::tableIsTemporaryC"></span><span class="target" id="class_storage_i_o_facility_1_1_transaction_parameters_1a34591a51b571bb4ec22ad3db57daa9f5"></span>auto <code class="sig-name descname">tableIsTemporary</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Protected Attributes</p>
+<dl class="member">
+<dt id="_CPPv4N17StorageIOFacility21TransactionParameters19table_is_temporary_E">
+<span id="_CPPv3N17StorageIOFacility21TransactionParameters19table_is_temporary_E"></span><span id="_CPPv2N17StorageIOFacility21TransactionParameters19table_is_temporary_E"></span><span id="StorageIOFacility::TransactionParameters::table_is_temporary___b"></span><span class="target" id="class_storage_i_o_facility_1_1_transaction_parameters_1a488fbd65980cca05a8c3758791091b04"></span>bool <code class="sig-name descname">table_is_temporary_</code><br /></dt>
 <dd></dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Members</p>
 <dl class="member">
-<dt id="_CPPv4IEN17StorageIOFacilityI15EXECUTOR_TRAITS16FRAGMENT_UPDATERE21TransactionParameters20transaction_tracker_E">
-<span id="_CPPv3IEN17StorageIOFacilityI15EXECUTOR_TRAITS16FRAGMENT_UPDATERE21TransactionParameters20transaction_tracker_E"></span><span id="_CPPv2IEN17StorageIOFacilityI15EXECUTOR_TRAITS16FRAGMENT_UPDATERE21TransactionParameters20transaction_tracker_E"></span>template&lt;&gt;<br /><span class="target" id="class_storage_i_o_facility_1_1_transaction_parameters_1ad79e424f9ecf8c6be6fb3e9fa277b8ab"></span>StorageIOFacility::TransactionLog <code class="sig-name descname">transaction_tracker_</code><br /></dt>
+<dt id="_CPPv4N17StorageIOFacility21TransactionParameters20transaction_tracker_E">
+<span id="_CPPv3N17StorageIOFacility21TransactionParameters20transaction_tracker_E"></span><span id="_CPPv2N17StorageIOFacility21TransactionParameters20transaction_tracker_E"></span><span id="StorageIOFacility::TransactionParameters::transaction_tracker___StorageIOFacility::TransactionLog"></span><span class="target" id="class_storage_i_o_facility_1_1_transaction_parameters_1ab2e725287f009f436f878019b94edbfe"></span><a class="reference internal" href="class_storage_i_o_facility.html#_CPPv417StorageIOFacility" title="StorageIOFacility">StorageIOFacility</a>::<a class="reference internal" href="class_storage_i_o_facility.html#_CPPv4N17StorageIOFacility14TransactionLogE" title="StorageIOFacility::TransactionLog">TransactionLog</a> <code class="sig-name descname">transaction_tracker_</code><br /></dt>
 <dd></dd></dl>
 
 </div>
