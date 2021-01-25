@@ -51,13 +51,26 @@ void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,
 }
 
 void ForeignTableRefreshScheduler::start(std::atomic<bool>& is_program_running) {
-  if (!is_scheduler_running_) {
+  if (is_program_running && !is_scheduler_running_) {
+    is_scheduler_running_ = true;
     scheduler_thread_ = std::thread([&is_program_running]() {
-      while (is_program_running) {
+      while (is_program_running && is_scheduler_running_) {
         auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
+        // Exit if scheduler has been stopped asynchronously
+        if (!is_program_running || !is_scheduler_running_) {
+          return;
+        }
         for (const auto& catalog : sys_catalog.getCatalogsForAllDbs()) {
+          // Exit if scheduler has been stopped asynchronously
+          if (!is_program_running || !is_scheduler_running_) {
+            return;
+          }
           auto tables = catalog->getAllForeignTablesForRefresh();
           for (auto table : tables) {
+            // Exit if scheduler has been stopped asynchronously
+            if (!is_program_running || !is_scheduler_running_) {
+              return;
+            }
             try {
               refresh_foreign_table(*catalog, table->tableName, false);
             } catch (std::runtime_error& e) {
@@ -67,17 +80,26 @@ void ForeignTableRefreshScheduler::start(std::atomic<bool>& is_program_running) 
             has_refreshed_table_ = true;
           }
         }
-        std::this_thread::sleep_for(thread_wait_duration_);
+        // Exit if scheduler has been stopped asynchronously
+        if (!is_program_running || !is_scheduler_running_) {
+          return;
+        }
+
+        // A condition variable is used here (instead of a sleep call)
+        // in order to allow for thread wake-up, even in the middle
+        // of a wait interval.
+        std::unique_lock<std::mutex> wait_lock(wait_mutex_);
+        wait_condition_.wait_for(wait_lock, thread_wait_duration_);
       }
     });
-    is_scheduler_running_ = true;
   }
 }
 
 void ForeignTableRefreshScheduler::stop() {
   if (is_scheduler_running_) {
-    scheduler_thread_.join();
     is_scheduler_running_ = false;
+    wait_condition_.notify_one();
+    scheduler_thread_.join();
   }
 }
 
@@ -97,8 +119,10 @@ void ForeignTableRefreshScheduler::resetHasRefreshedTable() {
   has_refreshed_table_ = false;
 }
 
-bool ForeignTableRefreshScheduler::is_scheduler_running_{false};
+std::atomic<bool> ForeignTableRefreshScheduler::is_scheduler_running_{false};
 std::chrono::seconds ForeignTableRefreshScheduler::thread_wait_duration_{60};
 std::thread ForeignTableRefreshScheduler::scheduler_thread_;
 std::atomic<bool> ForeignTableRefreshScheduler::has_refreshed_table_{false};
+std::mutex ForeignTableRefreshScheduler::wait_mutex_;
+std::condition_variable ForeignTableRefreshScheduler::wait_condition_;
 }  // namespace foreign_storage

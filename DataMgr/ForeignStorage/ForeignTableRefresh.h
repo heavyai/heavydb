@@ -37,9 +37,11 @@ class ForeignTableRefreshScheduler {
   static void resetHasRefreshedTable();
 
  private:
-  static bool is_scheduler_running_;
+  static std::atomic<bool> is_scheduler_running_;
   static std::chrono::seconds thread_wait_duration_;
   static std::thread scheduler_thread_;
   static std::atomic<bool> has_refreshed_table_;
+  static std::mutex wait_mutex_;
+  static std::condition_variable wait_condition_;
 };
 }  // namespace foreign_storage
