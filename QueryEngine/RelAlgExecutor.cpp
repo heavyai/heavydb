@@ -2530,8 +2530,9 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     if (sort->collationCount() != 0 && !rows_to_sort->definitelyHasNoRows() &&
         !use_speculative_top_n(source_work_unit.exe_unit,
                                rows_to_sort->getQueryMemDesc())) {
+      const size_t top_n = limit == 0 ? 0 : limit + offset;
       rows_to_sort->sort(
-          source_work_unit.exe_unit.sort_info.order_entries, limit + offset, executor_);
+          source_work_unit.exe_unit.sort_info.order_entries, top_n, executor_);
     }
     if (limit || offset) {
       if (g_cluster && sort->collationCount() == 0) {

@@ -18995,7 +18995,7 @@ TEST(Select, GeoSpatial_GeoJoin) {
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
             "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
-            "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2 OFFSET 1;",
+            "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2 ORDER BY 1 OFFSET 1;",
             dt))));
 
     ASSERT_EQ(
@@ -19017,7 +19017,8 @@ TEST(Select, GeoSpatial_GeoJoin) {
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
             "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
-            "b ON ST_Contains(ST_SetSRID(b.poly, 4326), a.gp4326) WHERE b.id = 2 "
+            "b ON ST_Contains(ST_SetSRID(b.poly, 4326), a.gp4326) WHERE b.id = 2 ORDER "
+            "BY 1 "
             "OFFSET 1;",
             dt))));
 
