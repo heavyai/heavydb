@@ -18,10 +18,12 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <random>
 
 #include "Logger/Logger.h"
+#include "Shared/measure.h"
 
-#define OMNISCI_TASK 1
+// #define OMNISCI_TASK 1
 
 /**
  * A thread pool which supports thread re-use across tasks.  Tasks are submitted to the
@@ -58,129 +60,103 @@ class KernelThreadPool {
 #endif
 
   KernelThreadPool(const size_t num_hardware_threads)
-      : workers_(num_hardware_threads), per_thread_tasks_(num_hardware_threads) {
-    CHECK_EQ(workers_.size(), per_thread_tasks_.size());
-    for (size_t i = 0; i < workers_.size(); i++) {
-      workers_[i] = std::thread(&KernelThreadPool::worker, this, i);
+      : threads_(num_hardware_threads), workers_(num_hardware_threads) {
+    CHECK_EQ(threads_.size(), workers_.size());
+    for (size_t i = 0; i < threads_.size(); i++) {
+      threads_[i] = std::thread(&KernelThreadPool::worker, this, i);
     }
+    dist_ = std::uniform_int_distribution<size_t>(0, workers_.size() - 1);
   }
 
   ~KernelThreadPool() {
-    {
-      std::lock_guard<decltype(ready_mutex_)> lock(ready_mutex_);
-      threads_should_exit_ = true;
-    }
-    ready_cv_.notify_all();
     for (auto& worker : workers_) {
-      worker.join();
+      {
+        std::lock_guard<decltype(worker.mutex)> lock(worker.mutex);
+        worker.should_exit = true;
+      }
+      worker.cv.notify_one();
+    }
+
+    for (auto& thread : threads_) {
+      thread.join();
     }
   }
 
-  std::future<void> submit(Task&& task) {
-    std::unique_lock ready_lock(ready_mutex_);
+  std::future<void> submitToWorker(Task&& task, const size_t worker_idx) {
+    CHECK_LT(worker_idx, workers_.size());
+    auto& worker = workers_[worker_idx];
+    std::unique_lock lock(worker.mutex);
     auto future = task.get_future();
-    main_tasks_.push_back(std::move(task));
-    ready_lock.unlock();
-    ready_cv_.notify_one();
+    worker.tasks.push_back(std::move(task));
+    lock.unlock();
+    worker.cv.notify_one();
     return future;
   }
 
+  std::future<void> submit(Task&& task) {
+    const size_t worker_idx = dist_(prng_);
+    return submitToWorker(std::move(task), worker_idx);
+  }
+
   std::vector<std::future<void>> submitBatch(std::vector<Task>&& tasks) {
-    std::unique_lock ready_lock(ready_mutex_);
-    const size_t num_tasks = tasks.size();
+    auto clock_begin = timer_start();
     std::vector<std::future<void>> futures;
-    for (size_t i = 0; i < num_tasks; i++) {
-      main_tasks_.emplace_back(std::move(tasks[i]));
-      futures.emplace_back(main_tasks_.back().get_future());
+    const size_t workers_size = workers_.size() == 1 ? 1 : workers_.size() - 1;
+    for (size_t i = 0; i < tasks.size(); i++) {
+      const size_t worker_idx = i & workers_size;
+      futures.emplace_back(submitToWorker(std::move(tasks[i]), worker_idx));
     }
-    ready_lock.unlock();
-    for (size_t i = 0; i < num_tasks; i++) {
-      if (i == workers_.size()) {
-        break;
-      }
-      ready_cv_.notify_one();
-    }
+    VLOG(1) << "Submitted all kernels in " << timer_stop(clock_begin);
     return futures;
   }
 
-  void clearQueue() noexcept {
-    std::lock_guard<decltype(ready_mutex_)> lock(ready_mutex_);
-    main_tasks_.clear();
-  }
-
-  size_t numWorkers() const { return workers_.size(); }
+  size_t numWorkers() const { return threads_.size(); }
 
  private:
   void worker(const size_t thread_idx) {
-    std::unique_lock<std::mutex> ready_lock(ready_mutex_);
-    while (true) {
-      ready_cv_.wait(ready_lock,
-                     [this] { return !main_tasks_.empty() || threads_should_exit_; });
+    CHECK_LT(thread_idx, workers_.size());
+    auto& worker = workers_[thread_idx];
 
-      if (threads_should_exit_) {
+    std::unique_lock ready_lock(worker.mutex);
+    while (true) {
+      worker.cv.wait(ready_lock,
+                     [&worker] { return !worker.tasks.empty() || worker.should_exit; });
+
+      if (worker.should_exit) {
         return;
       }
 
-      CHECK_LT(thread_idx, per_thread_tasks_.size());
-      auto& this_threads_tasks = per_thread_tasks_[thread_idx];
+      auto clock_begin = timer_start();
 
-      // on wake up, greedily take tasks from the queue
-      // by default we will take the first N tasks / M workers tasks.
-      // we have exclusive access to the main task queue, so this should be safe
-      std::unique_lock<std::mutex> thread_lock(this_threads_tasks.thread_queue_mutex);
-      // grab at least one task
-      this_threads_tasks.thread_queue.push_back(std::move(main_tasks_.front()));
-      main_tasks_.pop_front();
-
-      // get additional tasks
-      auto num_tasks_to_steal = ceil(main_tasks_.size() / workers_.size());
-      for (size_t i = 0; i < num_tasks_to_steal; i++) {
-        if (main_tasks_.empty()) {
-          break;
-        }
-        this_threads_tasks.thread_queue.push_back(std::move(main_tasks_.front()));
-        main_tasks_.pop_front();
-      }
-
-      VLOG(1) << "Thread " << thread_idx << " assigned "
-              << this_threads_tasks.thread_queue.size() << " tasks.";
-      // allow other threads to pick up tasks
+      auto tasks = std::move(worker.tasks);
+      worker.tasks.clear();
       ready_lock.unlock();
 
-      auto current_task = std::move(this_threads_tasks.thread_queue.front());
-      this_threads_tasks.thread_queue.pop_front();
-      thread_lock.unlock();
-
-      while (true) {
-        current_task();
-        thread_lock.lock();
-        if (!this_threads_tasks.thread_queue.empty()) {
-          current_task = std::move(this_threads_tasks.thread_queue.front());
-          this_threads_tasks.thread_queue.pop_front();
-        } else {
-          break;
-        }
-        thread_lock.unlock();
+      for (auto& task : tasks) {
+        task();
       }
 
-      VLOG(1) << "Thread " << thread_idx << " finished.";
+      VLOG(1) << "Thread " << thread_idx << " finished task in "
+              << timer_stop(clock_begin) << ".";
       // wait for signal
       ready_lock.lock();
     }
   }
 
-  std::vector<std::thread> workers_;
+  std::vector<std::thread> threads_;
 
-  // ready mutex and ready cv guard current_task_idx and main_tasks_
-  std::mutex ready_mutex_;
-  std::condition_variable ready_cv_;
-  std::deque<Task> main_tasks_;  // protected shared variable
-  struct ProtectedThreadQueue {
-    ProtectedThreadQueue() {}
+  struct WorkerInterface {
+    WorkerInterface() {}
 
-    std::deque<Task> thread_queue;
-    std::mutex thread_queue_mutex;
+    WorkerInterface(const WorkerInterface&) = delete;
+
+    std::mutex mutex;
+    std::condition_variable cv;
+    std::deque<Task> tasks;
+    bool should_exit{false};
   };
-  std::vector<ProtectedThreadQueue> per_thread_tasks_;
-  bool threads_should_exit_{false};
+  std::vector<WorkerInterface> workers_;
+
+  std::mt19937 prng_{std::random_device{}()};
+  std::uniform_int_distribution<size_t> dist_;
 };

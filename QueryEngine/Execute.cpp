@@ -2120,6 +2120,8 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
   std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);
   kernel_queue_time_ms_ += timer_stop(clock_begin);
 
+  auto kernel_clock_begin = timer_start();
+
   KernelThreadPool* thread_pool;
   if (device_count > 0) {
     // use gpu thread pool
@@ -2169,16 +2171,22 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
     }
   }
 
+  VLOG(1) << "All kernels submitted in " << timer_stop(kernel_clock_begin);
+
   // wait first to ensure all threads exit before reading exceptions
   for (auto& future : execution_kernel_futures) {
     future.wait();
   }
+
+  VLOG(1) << "All kernels finished in " << timer_stop(kernel_clock_begin);
 
   // get() reads exceptions and may terminate early. the clear queue scope guard will
   // ensure all tasks get cleaned up upon termination.
   for (auto& future : execution_kernel_futures) {
     future.get();
   }
+
+  VLOG(1) << "Futures returned in " << timer_stop(kernel_clock_begin);
 }
 
 std::vector<size_t> Executor::getTableFragmentIndices(
