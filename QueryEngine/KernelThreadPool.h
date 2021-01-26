@@ -23,8 +23,6 @@
 #include "Logger/Logger.h"
 #include "Shared/measure.h"
 
-// #define OMNISCI_TASK 1
-
 /**
  * A thread pool which supports thread re-use across tasks.  Tasks are submitted to the
  * queue. Notification is submitted to a worker thread for each submitted task to the
@@ -33,31 +31,7 @@
  */
 class KernelThreadPool {
  public:
-#ifdef OMNISCI_TASK
-  struct Task {
-    Task(std::function<void()>&& f_in) : f(std::move(f_in)) {}
-
-    std::future<void> get_future() { return promise.get_future(); }
-
-    void operator()() {
-      try {
-        f();
-        promise.set_value();
-      } catch (...) {
-        try {
-          promise.set_exception(std::current_exception());
-        } catch (std::exception& e) {
-          LOG(FATAL) << e.what();
-        }
-      }
-    }
-
-    std::function<void()> f;
-    std::promise<void> promise;
-  };
-#else
   using Task = std::packaged_task<void()>;
-#endif
 
   KernelThreadPool(const size_t num_hardware_threads)
       : threads_(num_hardware_threads), workers_(num_hardware_threads) {
