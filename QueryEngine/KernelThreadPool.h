@@ -70,11 +70,9 @@ class KernelThreadPool {
 
   ~KernelThreadPool() {
     for (auto& worker : workers_) {
-      {
-        std::lock_guard<decltype(worker.mutex)> lock(worker.mutex);
-        worker.should_exit = true;
-      }
-      worker.cv.notify_one();
+      std::lock_guard<decltype(worker.mutex)> lock(worker.mutex);
+      worker.should_exit = true;
+      worker.promise.set_value();
     }
 
     for (auto& thread : threads_) {
@@ -88,8 +86,14 @@ class KernelThreadPool {
     std::unique_lock lock(worker.mutex);
     auto future = task.get_future();
     worker.tasks.push_back(std::move(task));
+    try {
+      worker.promise.set_value();
+    } catch (const std::future_error& e) {
+      if (e.code() != std::future_errc::promise_already_satisfied) {
+        throw e;
+      }
+    }
     lock.unlock();
-    worker.cv.notify_one();
     return future;
   }
 
@@ -117,19 +121,23 @@ class KernelThreadPool {
     CHECK_LT(thread_idx, workers_.size());
     auto& worker = workers_[thread_idx];
 
-    std::unique_lock ready_lock(worker.mutex);
     while (true) {
-      worker.cv.wait(ready_lock,
-                     [&worker] { return !worker.tasks.empty() || worker.should_exit; });
+      worker.future.wait();
 
+      std::unique_lock ready_lock(worker.mutex);
       if (worker.should_exit) {
         return;
       }
+
+      CHECK(!worker.tasks.empty());
 
       auto clock_begin = timer_start();
 
       auto tasks = std::move(worker.tasks);
       worker.tasks.clear();
+      // reset promise
+      worker.promise = std::promise<void>();
+      worker.future = worker.promise.get_future();
       ready_lock.unlock();
 
       for (auto& task : tasks) {
@@ -138,20 +146,19 @@ class KernelThreadPool {
 
       VLOG(1) << "Thread " << thread_idx << " finished task in "
               << timer_stop(clock_begin) << ".";
-      // wait for signal
-      ready_lock.lock();
     }
   }
 
   std::vector<std::thread> threads_;
 
   struct WorkerInterface {
-    WorkerInterface() {}
+    WorkerInterface() { future = promise.get_future(); }
 
     WorkerInterface(const WorkerInterface&) = delete;
 
     std::mutex mutex;
-    std::condition_variable cv;
+    std::promise<void> promise;
+    std::future<void> future;
     std::deque<Task> tasks;
     bool should_exit{false};
   };
