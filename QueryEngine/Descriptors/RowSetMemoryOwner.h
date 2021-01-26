@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,13 +40,13 @@ class ResultSet;
  * Handles allocations and outputs for all stages in a query, either explicitly or via a
  * managed allocator object
  */
-class RowSetMemoryOwner : boost::noncopyable {
+class RowSetMemoryOwner : public SimpleAllocator, boost::noncopyable {
  public:
   RowSetMemoryOwner(const size_t arena_block_size)
       : arena_block_size_(arena_block_size)
       , allocator_(std::make_unique<Arena>(arena_block_size)) {}
 
-  int8_t* allocate(const size_t num_bytes) {
+  int8_t* allocate(const size_t num_bytes) override {
     CHECK(allocator_);
     std::lock_guard<std::mutex> lock(state_mutex_);
     return reinterpret_cast<int8_t*>(allocator_->allocate(num_bytes));
@@ -186,7 +186,7 @@ class RowSetMemoryOwner : boost::noncopyable {
     return string_dictionary_generations_;
   }
 
-  quantile::TDigest* newTDigest();
+  quantile::TDigest* nullTDigest();
 
  private:
   struct CountDistinctBitmapBuffer {
@@ -207,7 +207,6 @@ class RowSetMemoryOwner : boost::noncopyable {
   std::vector<void*> col_buffers_;
   std::vector<Data_Namespace::AbstractBuffer*> varlen_input_buffers_;
   std::vector<std::unique_ptr<quantile::TDigest>> t_digests_;
-  std::vector<quantile::TDigest::Memory> t_digest_buffers_;
 
   size_t arena_block_size_;  // for cloning
   std::unique_ptr<Arena> allocator_;

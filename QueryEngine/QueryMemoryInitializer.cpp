@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -547,8 +547,8 @@ void QueryMemoryInitializer::initColumnPerRow(const QueryMemoryDescriptor& query
           bm_sz > 0 ? allocateCountDistinctBitmap(bm_sz) : allocateCountDistinctSet();
       ++init_vec_idx;
     } else if (query_mem_desc.isGroupBy() && tdigest_deferred[col_idx]) {
-      // APPROX_MEDIAN
-      init_val = reinterpret_cast<int64_t>(row_set_mem_owner_->newTDigest());
+      // allocate for APPROX_MEDIAN only when slot is used
+      init_val = reinterpret_cast<int64_t>(row_set_mem_owner_->nullTDigest());
       ++init_vec_idx;
     } else {
       if (query_mem_desc.getPaddedSlotWidthBytes(col_idx) > 0) {
@@ -695,8 +695,9 @@ std::vector<bool> QueryMemoryInitializer::allocateTDigests(
         if (deferred) {
           tdigest_deferred[agg_col_idx] = true;
         } else {
+          // allocate for APPROX_MEDIAN only when slot is used
           init_agg_vals_[agg_col_idx] =
-              reinterpret_cast<int64_t>(row_set_mem_owner_->newTDigest());
+              reinterpret_cast<int64_t>(row_set_mem_owner_->nullTDigest());
         }
       }
     }

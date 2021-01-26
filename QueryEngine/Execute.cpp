@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -238,15 +238,12 @@ StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
   return lit_str_dict_proxy_.get();
 }
 
-quantile::TDigest* RowSetMemoryOwner::newTDigest() {
+quantile::TDigest* RowSetMemoryOwner::nullTDigest() {
   std::lock_guard<std::mutex> lock(state_mutex_);
-  auto& td = t_digests_.emplace_back(std::make_unique<quantile::TDigest>());
-  // Separating TDigests from their buffers allows for flexibile memory management.
-  // The incoming Buffer is used to collect and sort incoming data,
-  // and used as scratch space during its merging into the main Centroids buffer.
-  td->setBuffer(t_digest_buffers_.emplace_back(g_approx_quantile_buffer));
-  td->setCentroids(t_digest_buffers_.emplace_back(g_approx_quantile_centroids));
-  return td.get();
+  return t_digests_
+      .emplace_back(std::make_unique<quantile::TDigest>(
+          this, g_approx_quantile_buffer, g_approx_quantile_centroids))
+      .get();
 }
 
 bool Executor::isCPUOnly() const {

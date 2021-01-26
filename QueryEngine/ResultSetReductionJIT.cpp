@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -461,9 +461,12 @@ extern "C" void approx_median_jit_rt(const int64_t new_set_handle,
                                      const void* that_qmd_handle,
                                      const void* this_qmd_handle,
                                      const int64_t target_logical_idx) {
-  auto* accumulator = reinterpret_cast<quantile::TDigest*>(old_set_handle);
   auto* incoming = reinterpret_cast<quantile::TDigest*>(new_set_handle);
-  accumulator->mergeTDigest(*incoming);
+  if (incoming->centroids().capacity()) {
+    auto* accumulator = reinterpret_cast<quantile::TDigest*>(old_set_handle);
+    accumulator->allocate();
+    accumulator->mergeTDigest(*incoming);
+  }
 }
 
 extern "C" void get_group_value_reduction_rt(int8_t* groups_buffer,

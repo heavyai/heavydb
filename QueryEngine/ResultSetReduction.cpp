@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1576,15 +1576,18 @@ void ResultSetStorage::reduceOneApproxMedianSlot(int8_t* this_ptr1,
                                                  const ResultSetStorage& that) const {
   CHECK_LT(target_logical_idx, query_mem_desc_.getCountDistinctDescriptorsSize());
   static_assert(sizeof(int64_t) == sizeof(quantile::TDigest*));
-  auto* accumulator = *reinterpret_cast<quantile::TDigest**>(this_ptr1);
   auto* incoming = *reinterpret_cast<quantile::TDigest* const*>(that_ptr1);
-  CHECK(accumulator) << "this_ptr1=" << (void*)this_ptr1
-                     << ", that_ptr1=" << (void const*)that_ptr1
-                     << ", target_logical_idx=" << target_logical_idx;
   CHECK(incoming) << "this_ptr1=" << (void*)this_ptr1
                   << ", that_ptr1=" << (void const*)that_ptr1
                   << ", target_logical_idx=" << target_logical_idx;
-  accumulator->mergeTDigest(*incoming);
+  if (incoming->centroids().capacity()) {
+    auto* accumulator = *reinterpret_cast<quantile::TDigest**>(this_ptr1);
+    CHECK(accumulator) << "this_ptr1=" << (void*)this_ptr1
+                       << ", that_ptr1=" << (void const*)that_ptr1
+                       << ", target_logical_idx=" << target_logical_idx;
+    accumulator->allocate();
+    accumulator->mergeTDigest(*incoming);
+  }
 }
 
 void ResultSetStorage::reduceOneCountDistinctSlot(int8_t* this_ptr1,
