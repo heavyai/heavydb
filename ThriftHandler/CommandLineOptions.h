@@ -178,6 +178,7 @@ extern size_t g_gpu_smem_threshold;
 extern bool g_enable_smem_non_grouped_agg;
 extern bool g_enable_smem_grouped_non_count_agg;
 extern bool g_use_estimator_result_cache;
+extern bool g_enable_lazy_fetch;
 
 extern int64_t g_omni_kafka_seek;
 extern size_t g_leaf_count;

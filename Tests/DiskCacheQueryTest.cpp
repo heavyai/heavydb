@@ -48,6 +48,7 @@ class TableTest : public DBHandlerTestFixture {
   inline static PersistentStorageMgr* psm_;
 
   static void SetUpTestSuite() {
+    setupFSI(fsi);
     DBHandlerTestFixture::createDBHandler(DiskCacheLevel::all);
     cat_ = &getCatalog();
     ASSERT_NE(cat_, nullptr);

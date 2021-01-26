@@ -25,11 +25,10 @@
 
 #include "Catalog/Catalog.h"
 #include "CudaMgr/CudaMgr.h"
+#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "ImportExport/Importer.h"
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_path.h"
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
-#include "Import/Importer.h"
 #include "QueryRunner/QueryRunner.h"
 
 #define CALCITEPORT 3279
@@ -146,9 +145,10 @@ int main(int argc, char* argv[]) {
   try {
     SystemParameters sys_parms;
     auto fsi = std::make_shared<ForeignStorageInterface>();
-    auto dummy =
-        std::make_shared<Data_Namespace::DataMgr>(data_path, fsi, sys_parms, nullptr, false, 0);
-    auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path, 1024, 5000, true, "");
+    auto dummy = std::make_shared<Data_Namespace::DataMgr>(
+        data_path, fsi, sys_parms, nullptr, false, 0);
+    auto calcite =
+        std::make_shared<Calcite>(-1, CALCITEPORT, base_path, 1024, 5000, true, "");
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
     sys_cat.init(base_path, fsi, dummy, {}, calcite, true, false, {});
 

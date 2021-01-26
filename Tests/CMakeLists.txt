@@ -101,6 +101,8 @@ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
 endif()
 if(ENABLE_CUDA)
   add_executable(GpuSharedMemoryTest GpuSharedMemoryTest.cpp ResultSetTestUtils.cpp)
+elseif(ENABLE_DBE)
+  add_executable(EmbeddedDatabaseTest EmbeddedDatabaseTest.cpp)
 endif()
 if(("${MAPD_EDITION_LOWER}" STREQUAL "ee") AND ENABLE_AWS_S3)
   add_executable(UserMappingDdlTest ee/UserMappingDdlTest.cpp)
@@ -201,6 +203,8 @@ endif()
 target_link_libraries(TableUpdateDeleteBenchmark benchmark ${EXECUTE_TEST_LIBS})
 if(ENABLE_CUDA)
   target_link_libraries(GpuSharedMemoryTest ${EXECUTE_TEST_LIBS})
+elseif(ENABLE_DBE)
+  target_link_libraries(EmbeddedDatabaseTest gtest DBEngine)
 endif()
 
 if(("${MAPD_EDITION_LOWER}" STREQUAL "ee") AND ENABLE_AWS_S3)
@@ -275,6 +279,8 @@ add_test(JSONTest JSONTest ${TEST_ARGS})
 
 if(ENABLE_CUDA)
   add_test(GpuSharedMemoryTest GpuSharedMemoryTest ${TEST_ARGS})
+elseif(ENABLE_DBE)
+  add_test(EmbeddedDatabaseTest EmbeddedDatabaseTest ${TEST_ARGS})
 endif()
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
@@ -363,6 +369,8 @@ set(TEST_PROGRAMS
 
 if(ENABLE_CUDA)
   list(APPEND TEST_PROGRAMS GpuSharedMemoryTest)
+elseif(ENABLE_DBE)
+  list(APPEND TEST_PROGRAMS EmbeddedDatabaseTest)
 endif()
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
@@ -411,3 +419,18 @@ add_custom_target(topk_tests
     COMMAND initdb -f ${TEST_BASE_PATH}
     COMMAND ${CMAKE_CTEST_COMMAND} --verbose --tests-regex "\"(TopKTest)\""
     DEPENDS TopKTest)
+
+if(ENABLE_DBE)
+  set(DBE_TEST_PROGRAMS EmbeddedDatabaseTest)
+  set_tests_properties(${DBE_TEST_PROGRAMS} PROPERTIES LABELS "embedded")
+  add_custom_target(dbe_all_tests
+    COMMAND mkdir -p ${TEST_BASE_PATH}
+    COMMAND env AWS_REGION=${AWS_REGION}
+                AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                ${CMAKE_CTEST_COMMAND} --verbose --label-regex embedded
+    DEPENDS DBEngine ${DBE_TEST_PROGRAMS}
+    USES_TERMINAL)
+  add_dependencies(dbe_all_tests dbe4py-test)
+  add_dependencies(all_tests dbe4py-test)
+endif()

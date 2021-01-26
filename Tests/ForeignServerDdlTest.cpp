@@ -89,6 +89,7 @@ class CreateForeignServerTest : public DBHandlerTestFixture {
     ASSERT_EQ("/test_path/",
               foreign_server->options
                   .find(foreign_storage::AbstractFileStorageDataWrapper::BASE_PATH_KEY)
+                  ->second);
   }
 };
 
@@ -147,7 +148,8 @@ TEST_F(CreateForeignServerTest, MissingBasePath) {
 TEST_F(CreateForeignServerTest, InvalidOption) {
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
-      "(invalid_key = 'value', storage_type = 'LOCAL_FILE', base_path = './test_path/');"};
+      "(invalid_key = 'value', storage_type = 'LOCAL_FILE', base_path = "
+      "'./test_path/');"};
   std::string error_message{
       "Exception: Invalid foreign server option \"INVALID_KEY\". "
       "Option must be one of the following: " +

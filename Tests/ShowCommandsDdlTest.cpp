@@ -20,11 +20,9 @@
  */
 
 #include <gtest/gtest.h>
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
-#include "DBHandlerTestHelpers.h"
 #include "Shared/File.h"
 #include "TestHelpers.h"
 
@@ -34,7 +32,6 @@
 
 extern bool g_enable_fsi;
 std::shared_ptr<ForeignStorageInterface> fsi;
-
 
 class ShowUserSessionsTest : public DBHandlerTestFixture {
  public:
@@ -1684,6 +1681,7 @@ TEST_F(ShowTableDetailsTest, ViewSpecified) {
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   fsi.reset(new ForeignStorageInterface());
+  registerArrowCsvForeignStorage(fsi);
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   DBHandlerTestFixture::initTestArgs(argc, argv);

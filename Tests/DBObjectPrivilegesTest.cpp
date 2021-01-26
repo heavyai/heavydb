@@ -348,7 +348,7 @@ TEST_F(GrantSyntax, MultiRoleGrantRevoke) {
 }
 
 class InvalidGrantSyntax : public DBHandlerTestFixture {
-protected:
+ protected:
   static void SetUpTestSuite() { setupFSI(fsi); }
 };
 

@@ -49,7 +49,8 @@ TEST_F(PersistentStorageMgrTest, DiskCache_InitializeWithoutCache) {
 }
 
 TEST_F(PersistentStorageMgrTest, MutableDiskCache_CustomPath) {
-  MutableCachePersistentStorageMgr psm(data_path, fsi, 0, {cache_path_, DiskCacheLevel::all});
+  MutableCachePersistentStorageMgr psm(
+      data_path, fsi, 0, {cache_path_, DiskCacheLevel::all});
   ASSERT_EQ(psm.getDiskCache()->getGlobalFileMgr()->getBasePath(), cache_path_ + "/");
 }
 

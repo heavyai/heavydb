@@ -206,7 +206,6 @@ class ArrowResultSetConverter {
     SQLTypes physical_type;
   };
 
- private:
   ArrowResultSetConverter(const std::shared_ptr<ResultSet>& results,
                           const std::vector<std::string>& col_names,
                           const int32_t first_n)
@@ -214,6 +213,7 @@ class ArrowResultSetConverter {
 
   std::shared_ptr<arrow::RecordBatch> convertToArrow() const;
 
+ private:
   std::shared_ptr<arrow::RecordBatch> getArrowBatch(
       const std::shared_ptr<arrow::Schema>& schema) const;
 
@@ -245,11 +245,6 @@ class ArrowResultSetConverter {
   std::vector<std::string> col_names_;
   int32_t top_n_;
   ArrowTransport transport_method_;
-
-  // Here we hold temporary buffers for arrow arrays when
-  // array builders are not used.
-  mutable std::vector<std::unique_ptr<int8_t[]>> values_;
-  mutable std::vector<std::unique_ptr<uint8_t[]>> is_valid_;
 
   friend class ArrowResultSet;
 };

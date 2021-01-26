@@ -246,6 +246,7 @@ class DBHandlerTestFixture : public testing::Test {
                                                 libgeos_so_filename_,
 #endif
                                                 disk_cache_config,
+                                                false,
                                                 fsi_);
       loginAdmin();
 

@@ -21,8 +21,8 @@
 #include <boost/algorithm/string.hpp>
 
 #include "Catalog/Catalog.h"
-#include "Logger/Logger.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
+#include "Logger/Logger.h"
 #include "MigrationMgr/MigrationMgr.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/scope.h"
