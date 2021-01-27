@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -293,8 +293,8 @@ struct CgenState {
       const bool is_signed);
 
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
-
   llvm::ConstantFP* inlineFpNull(const SQLTypeInfo&);
+  llvm::Constant* inlineNull(const SQLTypeInfo&);
 
   template <class T>
   llvm::ConstantInt* llInt(const T v) const {
@@ -314,10 +314,6 @@ struct CgenState {
   llvm::ConstantInt* llBool(const bool v) const { return ::ll_bool(v, context_); }
 
   void emitErrorCheck(llvm::Value* condition, llvm::Value* errorCode, std::string label);
-
-  // Convert null sentinel of given type into a double by value (not by bits).
-  // Example: for type SMALLINT, return -32768.0 as a double value.
-  llvm::Value* nullValueAsDouble(SQLTypeInfo const&);
 
   llvm::Module* module_;
   llvm::Function* row_func_;

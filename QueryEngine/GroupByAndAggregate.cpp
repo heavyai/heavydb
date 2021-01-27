@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1799,21 +1799,35 @@ void GroupByAndAggregate::codegenApproxMedian(const size_t target_idx,
   if (device_type == ExecutorDeviceType::GPU) {
     throw QueryMustRunOnCpu();
   }
+  llvm::BasicBlock *calc, *skip;
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
-  constexpr size_t MAXLEN = std::string_view("agg_approx_median_skip_val_gpu").size();
-  char agg_fname[MAXLEN + 1] = "agg_approx_median";
-  auto const agg_info = get_target_info(target_expr, g_bigint_count);
   auto const arg_ti =
       static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info();
+  bool const nullable = !arg_ti.get_notnull();
+
+  auto* cs = executor_->cgen_state_.get();
+  auto& irb = cs->ir_builder_;
+  if (nullable) {
+    auto* const null_value = cs->castToTypeIn(cs->inlineNull(arg_ti), 64);
+    auto* const skip_cond = arg_ti.is_fp()
+                                ? irb.CreateFCmpOEQ(agg_args.back(), null_value)
+                                : irb.CreateICmpEQ(agg_args.back(), null_value);
+    calc = llvm::BasicBlock::Create(cs->context_, "calc_approx_median");
+    skip = llvm::BasicBlock::Create(cs->context_, "skip_approx_median");
+    irb.CreateCondBr(skip_cond, skip, calc);
+    cs->current_func_->getBasicBlockList().push_back(calc);
+    irb.SetInsertPoint(calc);
+  }
   if (!arg_ti.is_fp()) {
+    auto const agg_info = get_target_info(target_expr, g_bigint_count);
     agg_args.back() = executor_->castToFP(agg_args.back(), arg_ti, agg_info.sql_type);
   }
-  if (!arg_ti.get_notnull()) {
-    strcat(agg_fname, "_skip_val");
-    auto* skip_val = executor_->cgen_state_->nullValueAsDouble(arg_ti);
-    agg_args.push_back(skip_val);
+  emitCall("agg_approx_median", agg_args);
+  if (nullable) {
+    irb.CreateBr(skip);
+    cs->current_func_->getBasicBlockList().push_back(skip);
+    irb.SetInsertPoint(skip);
   }
-  emitCall(agg_fname, agg_args);
 }
 
 llvm::Value* GroupByAndAggregate::getAdditionalLiteral(const int32_t off) {

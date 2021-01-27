@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -788,7 +788,6 @@ declare void @agg_count_distinct_bitmap_gpu(i64*, i64, i64, i64, i64, i64, i64);
 declare void @agg_count_distinct_bitmap_skip_val_gpu(i64*, i64, i64, i64, i64, i64, i64, i64);
 declare void @agg_approximate_count_distinct_gpu(i64*, i64, i32, i64, i64);
 declare void @agg_approx_median(i64*, double);
-declare void @agg_approx_median_skip_val(i64*, double, double);
 declare void @record_error_code(i32, i32*);
 declare i32 @get_error_code(i32*);
 declare i1 @dynamic_watchdog();

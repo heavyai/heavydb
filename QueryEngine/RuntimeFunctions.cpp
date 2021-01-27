@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -344,14 +344,6 @@ extern "C" NEVER_INLINE void agg_approx_median_impl(int64_t* agg, const double v
 
 extern "C" ALWAYS_INLINE void agg_approx_median(int64_t* agg, const double val) {
   agg_approx_median_impl(agg, val);
-}
-
-extern "C" ALWAYS_INLINE void agg_approx_median_skip_val(int64_t* agg,
-                                                         const double val,
-                                                         const double skip_val) {
-  if (val != skip_val) {
-    agg_approx_median_impl(agg, val);
-  }
 }
 
 extern "C" ALWAYS_INLINE int8_t bit_is_set(const int64_t bitset,

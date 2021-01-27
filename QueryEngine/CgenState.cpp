@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,6 +72,11 @@ llvm::ConstantFP* CgenState::inlineFpNull(const SQLTypeInfo& type_info) {
     default:
       abort();
   }
+}
+
+llvm::Constant* CgenState::inlineNull(const SQLTypeInfo& ti) {
+  return ti.is_fp() ? static_cast<llvm::Constant*>(inlineFpNull(ti))
+                    : static_cast<llvm::Constant*>(inlineIntNull(ti));
 }
 
 std::pair<llvm::ConstantInt*, llvm::ConstantInt*> CgenState::inlineIntMaxMin(
@@ -168,17 +173,4 @@ void CgenState::emitErrorCheck(llvm::Value* condition,
   ir_builder_.SetInsertPoint(check_fail);
   ir_builder_.CreateRet(errorCode);
   ir_builder_.SetInsertPoint(check_ok);
-}
-
-llvm::Value* CgenState::nullValueAsDouble(SQLTypeInfo const& ti) {
-  if (ti.is_fp()) {
-    return ti.get_size() == sizeof(double)
-               ? inlineFpNull(ti)
-               : ir_builder_.CreateFPCast(
-                     castToTypeIn(inlineFpNull(ti), 8 * sizeof(double)),
-                     llvm::Type::getDoubleTy(context_));
-  } else {
-    return ir_builder_.CreateSIToFP(castToTypeIn(inlineIntNull(ti), 8 * sizeof(double)),
-                                    llvm::Type::getDoubleTy(context_));
-  }
 }

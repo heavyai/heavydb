@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2254,8 +2254,6 @@ TEST(Select, ApproxMedianSanity) {
     auto dt = ExecutorDeviceType::CPU;
     auto approx_median = [dt](std::string const col) {
       std::string const query = "SELECT APPROX_MEDIAN(" + col + ") FROM test;";
-      // std::cout << __FILE__ << " +" << __LINE__ << ' ' << __func__
-      //          << ' ' << query << std::endl;
       return v<double>(run_simple_agg(query, dt));
     };
     EXPECT_EQ(-7.5, approx_median("w"));
@@ -2276,6 +2274,24 @@ TEST(Select, ApproxMedianSanity) {
     EXPECT_EQ(4611686018427387904.0, approx_median("ofq"));
     EXPECT_EQ(-4611686018427387904.5, approx_median("ufq"));
     EXPECT_EQ(32767.0, approx_median("smallint_nulls"));
+  }
+}
+
+TEST(Select, ApproxMedianLargeInts) {
+  if (g_aggregator) {
+    LOG(WARNING) << "Skipping ApproxMedianLargeInts tests in distributed mode.";
+  } else {
+    auto dt = ExecutorDeviceType::CPU;
+    auto approx_median = [dt](std::string const col) {
+      std::string const query =
+          "SELECT APPROX_MEDIAN(" + col + ") FROM test_approx_median;";
+      return v<double>(run_simple_agg(query, dt));
+    };
+    run_ddl_statement("DROP TABLE IF EXISTS test_approx_median;");
+    run_ddl_statement("CREATE TABLE test_approx_median (b BIGINT);");
+    run_multiple_agg("INSERT INTO test_approx_median VALUES (-9223372036854775807);", dt);
+    run_multiple_agg("INSERT INTO test_approx_median VALUES ( 9223372036854775807);", dt);
+    EXPECT_EQ(0.0, approx_median("b"));
   }
 }
 
