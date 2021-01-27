@@ -7,14 +7,18 @@ import com.mapd.calcite.parser.MapDParser;
 import com.mapd.calcite.parser.MapDParserOptions;
 import com.mapd.calcite.parser.MapDSchema;
 import com.mapd.calcite.parser.MapDSerializer;
+import com.mapd.calcite.parser.MapDSqlOperatorTable;
 import com.mapd.calcite.parser.MapDUser;
 
+import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParseException;
+import org.apache.calcite.sql.parser.SqlParser;
+import org.apache.calcite.sql.validate.SqlConformanceEnum;
 import org.apache.calcite.tools.FrameworkConfig;
 import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.tools.Planner;
@@ -22,6 +26,7 @@ import org.apache.calcite.tools.RelConversionException;
 import org.apache.calcite.tools.ValidationException;
 import org.slf4j.LoggerFactory;
 
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -34,24 +39,26 @@ public class tester {
 
   public static void main(String[] args) {
     final SqlStdOperatorTable stdOpTab = SqlStdOperatorTable.instance();
-    // SqlOperatorTable opTab =
-    // ChainedSqlOperatorTable.of(stdOpTab,
-    // new ListSqlOperatorTable(
-    // ImmutableList.<SqlOperator>of(new MyCountAggFunction())));
-    MapDUser mdu = new MapDUser("admin", "passwd", "catalog", -1);
-    MapDSchema mapd =
-            new MapDSchema("/home/michael/mapd2/build/data", null, -1, mdu, null);
+
+    MapDUser mdu = new MapDUser("admin", "passwd", "omnisci", -1);
+    MapDSchema mapd = new MapDSchema("<<PATH_TO_DATA_DIR>>", null, -1, mdu, null);
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
-    final FrameworkConfig config = Frameworks.newConfigBuilder()
-                                           .defaultSchema(rootSchema.add("omnisci", mapd))
-                                           .operatorTable(stdOpTab)
-                                           .build();
+    final FrameworkConfig config =
+            Frameworks.newConfigBuilder()
+                    .defaultSchema(rootSchema.add("omnisci", mapd))
+                    .operatorTable(stdOpTab)
+                    .parserConfig(SqlParser.configBuilder()
+                                          .setConformance(SqlConformanceEnum.LENIENT)
+                                          .setUnquotedCasing(Casing.UNCHANGED)
+                                          .setCaseSensitive(false)
+                                          .build())
+                    .build();
 
     Planner p = Frameworks.getPlanner(config);
 
     SqlNode parseR = null;
     try {
-      parseR = p.parse("select * from customer where c_custkey = 1.345000 limit 5");
+      parseR = p.parse("<<QUERY>>");
     } catch (SqlParseException ex) {
       Logger.getLogger(tester.class.getName()).log(Level.SEVERE, null, ex);
     }
@@ -74,14 +81,18 @@ public class tester {
     MAPDLOGGER.error("Json Version \n" + MapDSerializer.toString(relR.project()));
 
     // now do with MapD parser
-    MapDParser mp = new MapDParser("/home/michael/mapd2/build/data", null, -1, null);
+    Supplier<MapDSqlOperatorTable> operatorTable = new Supplier<MapDSqlOperatorTable>() {
+      @Override
+      public MapDSqlOperatorTable get() {
+        return new MapDSqlOperatorTable(SqlStdOperatorTable.instance());
+      }
+    };
+    MapDParser mp = new MapDParser("<<PATH_TO_DATA_DIR>>", operatorTable, -1, null);
     mp.setUser(mdu);
 
     try {
       MapDParserOptions mdpo = new MapDParserOptions();
-      MAPDLOGGER.error("MapDParser result: \n"
-              + mp.processSql(
-                      "select * from customer where c_custkey = 1.345000 limit 5", mdpo));
+      MAPDLOGGER.error("MapDParser result: \n" + mp.processSql("<<QUERY>>", mdpo));
     } catch (SqlParseException ex) {
       Logger.getLogger(tester.class.getName()).log(Level.SEVERE, null, ex);
     } catch (ValidationException ex) {
