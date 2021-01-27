@@ -2110,8 +2110,7 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
   return execution_kernels;
 }
 
-static std::unique_ptr<KernelThreadPool> cpu_thread_pool;
-static std::unique_ptr<KernelThreadPool> gpu_thread_pool;
+static std::unique_ptr<KernelThreadPool> kernel_thread_pool;
 
 void Executor::launchKernels(SharedKernelContext& shared_context,
                              std::vector<std::unique_ptr<ExecutionKernel>>&& kernels,
@@ -2123,53 +2122,26 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
   auto kernel_clock_begin = timer_start();
 
   KernelThreadPool* thread_pool;
-  if (device_count > 0) {
-    // use gpu thread pool
-    if (!gpu_thread_pool) {
-      VLOG(1) << "Instantiating GPU thread pool with " << device_count << " threads.";
-      gpu_thread_pool = std::make_unique<KernelThreadPool>(device_count);
-    }
-    thread_pool = gpu_thread_pool.get();
-  } else {
-    // use cpu thread pool
-    if (!cpu_thread_pool) {
-      VLOG(1) << "Instantiating CPU thread pool with " << g_num_kernel_threads
-              << " threads.";
-      cpu_thread_pool = std::make_unique<KernelThreadPool>(g_num_kernel_threads);
-    }
-    thread_pool = cpu_thread_pool.get();
+  if (!kernel_thread_pool) {
+    VLOG(1) << "Instantiating CPU thread pool with " << g_num_kernel_threads
+            << " threads.";
+    kernel_thread_pool = std::make_unique<KernelThreadPool>(g_num_kernel_threads);
   }
+  thread_pool = kernel_thread_pool.get();
   CHECK(thread_pool);
 
   VLOG(1) << "Launching " << kernels.size() << " kernels for query.";
-  std::vector<std::future<void>> execution_kernel_futures;
-
-  // batch mode for cpu
-  if (!(device_count > 0)) {
-    std::vector<KernelThreadPool::Task> tasks;
-    tasks.reserve(kernels.size());
-    for (auto& kernel : kernels) {
-      tasks.emplace_back([this, &kernel, &shared_context]() {
-        CHECK(kernel);
-        // TODO: handle debug timer...
-        //                  DEBUG_TIMER_NEW_THREAD(parent_thread_id);
-        kernel->run(this, shared_context);
-      });
-    }
-    execution_kernel_futures = thread_pool->submitBatch(std::move(tasks));
-  } else {
-    // single submissions mode for gpu
-    execution_kernel_futures.reserve(kernels.size());
-    for (auto& kernel : kernels) {
-      execution_kernel_futures.emplace_back(
-          thread_pool->submit(KernelThreadPool::Task([this, &kernel, &shared_context]() {
-            CHECK(kernel);
-            // TODO: handle debug timer...
-            //                  DEBUG_TIMER_NEW_THREAD(parent_thread_id);
-            kernel->run(this, shared_context);
-          })));
-    }
+  std::vector<KernelThreadPool::Task> tasks;
+  tasks.reserve(kernels.size());
+  for (auto& kernel : kernels) {
+    tasks.emplace_back([this, &kernel, &shared_context]() {
+      CHECK(kernel);
+      // TODO: handle debug timer...
+      //                  DEBUG_TIMER_NEW_THREAD(parent_thread_id);
+      kernel->run(this, shared_context);
+    });
   }
+  auto execution_kernel_futures = thread_pool->submitBatch(std::move(tasks));
 
   VLOG(1) << "All kernels submitted in " << timer_stop(kernel_clock_begin);
 
