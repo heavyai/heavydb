@@ -801,8 +801,7 @@ size_t PerfectJoinHashTable::getComponentBufferSize() const noexcept {
     return 0;
   }
   auto hash_table = hash_tables_for_device_.front();
-  CHECK(hash_table);
-  if (hash_table->getLayout() == HashType::OneToMany) {
+  if (hash_table && hash_table->getLayout() == HashType::OneToMany) {
     return hash_table->getEntryCount() * sizeof(int32_t);
   } else {
     return 0;
