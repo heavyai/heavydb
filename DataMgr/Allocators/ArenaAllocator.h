@@ -32,7 +32,9 @@ class SysAllocator {
   template <class U>
   constexpr SysAllocator(const SysAllocator<U>&) noexcept {}
 
-  [[nodiscard]] T* allocate(size_t count) { return checked_malloc(count); }
+  [[nodiscard]] T* allocate(size_t count) {
+    return reinterpret_cast<T*>(checked_malloc(count));
+  }
 
   void deallocate(T* p, size_t /* count */) { free(p); }
 
@@ -45,18 +47,28 @@ class SysAllocator {
 #include <folly/Memory.h>
 #include <folly/memory/Arena.h>
 
-constexpr size_t kArenaBlockOverhead = folly::Arena<::SysAllocator<void>>::kBlockOverhead;
+#ifdef FOLLY_2021
+using AllocatorType = char;
+#else
+using AllocatorType = void;
+#endif
+
+constexpr size_t kArenaBlockOverhead =
+    folly::Arena< ::SysAllocator<AllocatorType> >::kBlockOverhead;
 
 /**
  * Arena allocator using checked_malloc with default allocation size 2GB. Note that the
  * allocator only frees memory on destruction.
  */
-class Arena : public folly::Arena<::SysAllocator<void>> {
+class Arena : public folly::Arena< ::SysAllocator<AllocatorType> > {
  public:
   explicit Arena(size_t min_block_size = static_cast<size_t>(1UL << 32) + kBlockOverhead,
                  size_t size_limit = kNoSizeLimit,
                  size_t max_align = kDefaultMaxAlign)
-      : folly::Arena<SysAllocator<void>>({}, min_block_size, size_limit, max_align) {}
+      : folly::Arena<SysAllocator<AllocatorType> >({},
+                                                   min_block_size,
+                                                   size_limit,
+                                                   max_align) {}
 
   void* allocateAndZero(const size_t size) {
     auto ret = allocate(size);
@@ -66,8 +78,8 @@ class Arena : public folly::Arena<::SysAllocator<void>> {
 };
 
 template <>
-struct folly::ArenaAllocatorTraits<::SysAllocator<void>> {
-  static size_t goodSize(const ::SysAllocator<void>& /* alloc */, size_t size) {
+struct folly::ArenaAllocatorTraits< ::SysAllocator<AllocatorType> > {
+  static size_t goodSize(const ::SysAllocator<AllocatorType>& /* alloc */, size_t size) {
     return folly::goodMallocSize(size);
   }
 };
