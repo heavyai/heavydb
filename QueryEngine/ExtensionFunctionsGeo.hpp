@@ -115,7 +115,7 @@ DEVICE ALWAYS_INLINE double distance_point_point_squared(double p1x,
   auto x2 = x * x;
   auto y2 = y * y;
   auto d2 = x2 + y2;
-  if (tol_zero(d2, TOLERANCE_DEFAULT * TOLERANCE_DEFAULT)) {
+  if (tol_zero(d2, TOLERANCE_DEFAULT_SQUARED)) {
     return 0.0;
   }
   return d2;
@@ -155,6 +155,33 @@ double distance_point_line(double px,
   double projx = l1x + k * (l2x - l1x);
   double projy = l1y + k * (l2y - l1y);
   return distance_point_point(px, py, projx, projy);
+}
+
+// Cartesian distance between a point and a line segment
+DEVICE
+double distance_point_line_squared(double px,
+                                   double py,
+                                   double l1x,
+                                   double l1y,
+                                   double l2x,
+                                   double l2y) {
+  double length = distance_point_point_squared(l1x, l1y, l2x, l2y);
+  if (tol_zero(length, TOLERANCE_DEFAULT_SQUARED)) {
+    return distance_point_point_squared(px, py, l1x, l1y);
+  }
+
+  // Find projection of point P onto the line segment AB:
+  // Line containing that segment: A + k * (B - A)
+  // Projection of point P onto the line touches it at
+  //   k = dot(P-A,B-A) / length^2
+  // AB segment is represented by k = [0,1]
+  // Clamping k to [0,1] will give the shortest distance from P to AB segment
+  double dotprod = (px - l1x) * (l2x - l1x) + (py - l1y) * (l2y - l1y);
+  double k = dotprod / (length * length);
+  k = fmax(0.0, fmin(1.0, k));
+  double projx = l1x + k * (l2x - l1x);
+  double projy = l1y + k * (l2y - l1y);
+  return distance_point_point_squared(px, py, projx, projy);
 }
 
 // Given three colinear points p, q, r, the function checks if
@@ -311,6 +338,26 @@ double distance_line_line(double l11x,
                        distance_point_line(l12x, l12y, l21x, l21y, l22x, l22y));
   double dist21 = fmin(distance_point_line(l21x, l21y, l11x, l11y, l12x, l12y),
                        distance_point_line(l22x, l22y, l11x, l11y, l12x, l12y));
+  return fmin(dist12, dist21);
+}
+
+// Cartesian squared distance between two line segments l11-l12 and l21-l22
+DEVICE
+double distance_line_line_squared(double l11x,
+                                  double l11y,
+                                  double l12x,
+                                  double l12y,
+                                  double l21x,
+                                  double l21y,
+                                  double l22x,
+                                  double l22y) {
+  if (line_intersects_line(l11x, l11y, l12x, l12y, l21x, l21y, l22x, l22y)) {
+    return 0.0;
+  }
+  double dist12 = fmin(distance_point_line_squared(l11x, l11y, l21x, l21y, l22x, l22y),
+                       distance_point_line_squared(l12x, l12y, l21x, l21y, l22x, l22y));
+  double dist21 = fmin(distance_point_line_squared(l21x, l21y, l11x, l11y, l12x, l12y),
+                       distance_point_line_squared(l22x, l22y, l11x, l11y, l12x, l12y));
   return fmin(dist12, dist21);
 }
 
@@ -604,8 +651,27 @@ DEVICE ALWAYS_INLINE bool box_overlaps_box(double* bounds1,
   // TODO: tolerance
   if (bounds1[2] < bounds2[0] ||  // box1 is left of box2:  box1.xmax < box2.xmin
       bounds1[0] > bounds2[2] ||  // box1 is right of box2: box1.xmin > box2.xmax
-      bounds1[3] < bounds2[1] ||  // box1 is below box2:    box1.ymax < box2.miny
+      bounds1[3] < bounds2[1] ||  // box1 is below box2:    box1.ymax < box2.ymin
       bounds1[1] > bounds2[3]) {  // box1 is above box2:    box1.ymin > box1.ymax
+    return false;
+  }
+  return true;
+}
+
+DEVICE ALWAYS_INLINE bool box_dwithin_box(double* bounds1,
+                                          int64_t bounds1_size,
+                                          double* bounds2,
+                                          int64_t bounds2_size,
+                                          double distance) {
+  // TODO: tolerance
+  if (bounds1[2] + distance <
+          bounds2[0] ||  // box1 is left of box2:  box1.xmax < box2.xmin
+      bounds1[0] - distance >
+          bounds2[2] ||  // box1 is right of box2: box1.xmin > box2.xmax
+      bounds1[3] + distance <
+          bounds2[1] ||  // box1 is below box2:    box1.ymax < box2.ymin
+      bounds1[1] - distance >
+          bounds2[3]) {  // box1 is above box2:    box1.ymin > box1.ymax
     return false;
   }
   return true;
@@ -1808,6 +1874,99 @@ double ST_Distance_LineString_LineString(int8_t* l1,
     l11y = l12y;
   }
   return dist;
+}
+
+EXTENSION_INLINE
+bool ST_DWithin_LineString_LineString(int8_t* l1,
+                                      int64_t l1size,
+                                      double* l1bounds,
+                                      int64_t l1bounds_size,
+                                      int32_t l1index,
+                                      int8_t* l2,
+                                      int64_t l2size,
+                                      double* l2bounds,
+                                      int64_t l2bounds_size,
+                                      int32_t l2index,
+                                      int32_t ic1,
+                                      int32_t isr1,
+                                      int32_t ic2,
+                                      int32_t isr2,
+                                      int32_t osr,
+                                      double distance_within_squared) {
+  const double distance_within = sqrt(distance_within_squared);
+  if (l1bounds && l2bounds) {
+    if (!box_dwithin_box(
+            l1bounds, l1bounds_size, l2bounds, l2bounds_size, distance_within)) {
+      return false;
+    }
+  }
+
+  auto l1_num_coords = l1size / compression_unit_size(ic1);
+  if (l1index != 0) {
+    // l1 is a statically indexed linestring
+    auto l1_num_points = l1_num_coords / 2;
+    if (l1index < 0 || l1index > l1_num_points) {
+      l1index = l1_num_points;
+    }
+    int8_t* p = l1 + 2 * (l1index - 1) * compression_unit_size(ic1);
+    int64_t psize = 2 * compression_unit_size(ic1);
+    return ST_Distance_Point_LineString(
+               p, psize, l2, l2size, l2index, ic1, isr1, ic2, isr2, osr) <=
+           distance_within;
+  }
+
+  auto l2_num_coords = l2size / compression_unit_size(ic2);
+  if (l2index != 0) {
+    // l2 is a statically indexed linestring
+    auto l2_num_points = l2_num_coords / 2;
+    if (l2index < 0 || l2index > l2_num_points) {
+      l2index = l2_num_points;
+    }
+    int8_t* p = l2 + 2 * (l2index - 1) * compression_unit_size(ic2);
+    int64_t psize = 2 * compression_unit_size(ic2);
+    return ST_Distance_Point_LineString(
+               p, psize, l1, l1size, l1index, ic2, isr2, ic1, isr1, osr) <=
+           distance_within;
+  }
+
+  double dist_squared = 0.0;
+  double l11x = coord_x(l1, 0, ic1, isr1, osr);
+  double l11y = coord_y(l1, 1, ic1, isr1, osr);
+  for (int32_t i1 = 2; i1 < l1_num_coords; i1 += 2) {
+    double l12x = coord_x(l1, i1, ic1, isr1, osr);
+    double l12y = coord_y(l1, i1 + 1, ic1, isr1, osr);
+
+    double l21x = coord_x(l2, 0, ic2, isr2, osr);
+    double l21y = coord_y(l2, 1, ic2, isr2, osr);
+    for (int32_t i2 = 2; i2 < l2_num_coords; i2 += 2) {
+      double l22x = coord_x(l2, i2, ic2, isr2, osr);
+      double l22y = coord_y(l2, i2 + 1, ic2, isr2, osr);
+
+      double ldist_squared =
+          distance_line_line_squared(l11x, l11y, l12x, l12y, l21x, l21y, l22x, l22y);
+      if (i1 == 2 && i2 == 2) {
+        dist_squared = ldist_squared;  // initialize dist with distance between the first
+                                       // two segments
+      } else if (dist_squared > ldist_squared) {
+        dist_squared = ldist_squared;
+      }
+      if (tol_zero(dist_squared, TOLERANCE_DEFAULT_SQUARED)) {
+        dist_squared = 0.0;  // Segments touch
+      }
+      if (dist_squared <=
+          distance_within_squared) {  // Short circuit if we've found two segments closer
+                                      // than distance_within_squared
+        return true;
+      }
+
+      l21x = l22x;  // advance to the next point on l2
+      l21y = l22y;
+    }
+
+    l11x = l12x;  // advance to the next point on l1
+    l11y = l12y;
+  }
+  return false;
 }
 
 EXTENSION_NOINLINE
