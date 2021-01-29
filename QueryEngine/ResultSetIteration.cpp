@@ -1855,6 +1855,7 @@ double calculate_quantile(int8_t const* ptr, double const q) {
   CHECK(t_digest) << "ptr=" << (void const*)ptr << ", q=" << q;
   t_digest->mergeBuffer();
   double const median = t_digest->quantile(q);
+  VLOG(2) << "median(" << median << ") t_digest->centroids()=" << t_digest->centroids();
   return boost::math::isnan(median) ? NULL_DOUBLE : median;
 }
 }  // namespace

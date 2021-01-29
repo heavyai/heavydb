@@ -403,27 +403,29 @@ DEVICE CentroidsMerger<RealType, IndexType>::CentroidsMerger(
 template <typename RealType, typename IndexType>
 DEVICE Centroids<RealType, IndexType>*
 CentroidsMerger<RealType, IndexType>::getNextCentroid() const {
-  if (buf_->hasNext() && centroids_->hasNext()) {
-    return (*buf_ < *centroids_) == forward_ ? buf_ : centroids_;
-  } else if (buf_->hasNext()) {
+  if (buf_->hasNext()) {
+    if (centroids_->hasNext()) {
+      return (*buf_ < *centroids_) == forward_ ? buf_ : centroids_;
+    }
     return buf_;
   } else if (centroids_->hasNext()) {
     return centroids_;
-  } else {
-    return nullptr;  // hasNext() is false
   }
+  return nullptr;
 }
 
 namespace {
 
 // Helper struct for mergeCentroids() for tracking skipped centroids.
+// A consecutive sequence of incoming centroids with the same mean
+// and exceed max_count are skipped before expensive reshuffling of memory.
 template <typename RealType, typename IndexType>
 class Skipped {
   struct Data {
     Centroids<RealType, IndexType>* centroid_{nullptr};
-    IndexType start_{};
-    IndexType count_merged_{};
-    IndexType count_skipped_{};
+    IndexType start_{0};
+    IndexType count_merged_{0};
+    IndexType count_skipped_{0};
   } data_[2];
   Centroid<RealType, IndexType> mean_;
 
@@ -470,13 +472,8 @@ class Skipped {
   }
   DEVICE void merged(Centroids<RealType, IndexType>* next_centroid) {
     IndexType const idx = index(next_centroid);
-    if (idx == 1 && data_[1].centroid_ == nullptr) {
-      data_[1] = {next_centroid, next_centroid->next_idx_ + next_centroid->inc_, 0, 0};
-    } else if (data_[idx].count_skipped_) {
+    if (data_[idx].count_skipped_) {
       ++data_[idx].count_merged_;
-    } else {
-      assert(idx == 1);
-      data_[1].start_ += next_centroid->inc_;
     }
   }
   DEVICE operator bool() const { return data_[0].centroid_; }
@@ -493,6 +490,7 @@ class Skipped {
     mean_ = Centroid<RealType, IndexType>{next_centroid->nextSum(),
                                           next_centroid->nextCount()};
     data_[0] = {next_centroid, next_centroid->next_idx_, 0, 1};
+    next_centroid->next_idx_ += next_centroid->inc_;
   }
   DEVICE void skipSubsequent(Centroids<RealType, IndexType>* next_centroid) {
     IndexType const idx = index(next_centroid);
