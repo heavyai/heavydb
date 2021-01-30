@@ -241,14 +241,17 @@ llvm::Value* CodeGenerator::codegenOverlaps(const SQLOps optype,
                                             const std::shared_ptr<Analyzer::Expr> lhs,
                                             const std::shared_ptr<Analyzer::Expr> rhs,
                                             const CompilationOptions& co) {
-  // TODO(adb): we should never get here, but going to leave this in place for now since
-  // it will likely be useful in factoring the bounds check out of ST_Contains
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto lhs_ti = lhs->get_type_info();
   if (g_enable_overlaps_hashjoin) {
-    LOG(FATAL) << "Fatal error when generating code for qualifier "
-               << lhs_ti.get_type_name();
+    // failed to build a suitable hash table. short circuit the overlaps expression by
+    // always returning true. this will fall into the ST_Contains check, which will do
+    // overlaps checks before the heavier contains computation.
+    VLOG(1) << "Failed to build overlaps hash table, short circuiting overlaps operator.";
+    return llvm::ConstantInt::get(get_int_type(8, cgen_state_->context_), true);
   }
+  // TODO(adb): we should never get here, but going to leave this in place for now since
+  // it will likely be useful in factoring the bounds check out of ST_Contains
   CHECK(lhs_ti.is_geometry());
 
   if (lhs_ti.is_geometry()) {
