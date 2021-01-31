@@ -2421,6 +2421,73 @@ double ST_Distance_MultiPolygon_MultiPolygon(int8_t* mpoly1_coords,
 }
 
 //
+// ST_DWithin
+//
+
+EXTENSION_INLINE
+bool ST_DWithin_Point_Point(int8_t* p1,
+                            int64_t p1size,
+                            int8_t* p2,
+                            int64_t p2size,
+                            int32_t ic1,
+                            int32_t isr1,
+                            int32_t ic2,
+                            int32_t isr2,
+                            int32_t osr,
+                            double distance_within) {
+  return ST_Distance_Point_Point_Squared(
+             p1, p1size, p2, p2size, ic1, isr1, ic2, isr2, osr) <=
+         distance_within * distance_within;
+}
+
+EXTENSION_INLINE
+bool ST_DWithin_LineString_LineString(int8_t* l1,
+                                      int64_t l1size,
+                                      double* l1bounds,
+                                      int64_t l1bounds_size,
+                                      int32_t l1index,
+                                      int8_t* l2,
+                                      int64_t l2size,
+                                      double* l2bounds,
+                                      int64_t l2bounds_size,
+                                      int32_t l2index,
+                                      int32_t ic1,
+                                      int32_t isr1,
+                                      int32_t ic2,
+                                      int32_t isr2,
+                                      int32_t osr,
+                                      double distance_within) {
+  if (l1bounds && l2bounds) {
+    // Bounding boxes need to be transformed to output SR before proximity check
+    if (!box_dwithin_box(l1bounds,
+                         l1bounds_size,
+                         isr1,
+                         l2bounds,
+                         l2bounds_size,
+                         isr2,
+                         osr,
+                         distance_within)) {
+      return false;
+    }
+  }
+
+  // May need to adjust the threshold by TOLERANCE_DEFAULT
+  const double threshold = distance_within;
+  return ST_Distance_LineString_LineString(l1,
+                                           l1size,
+                                           l1index,
+                                           l2,
+                                           l2size,
+                                           l2index,
+                                           ic1,
+                                           isr1,
+                                           ic2,
+                                           isr2,
+                                           osr,
+                                           threshold) <= distance_within;
+}
+
+//
 // ST_MaxDistance
 //
 
