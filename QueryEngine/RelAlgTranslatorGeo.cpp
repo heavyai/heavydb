@@ -943,16 +943,25 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   bool swap_args = false;
   bool with_bounds = false;
   bool negate_result = false;
+  Analyzer::ExpressionPtr threshold_expr = nullptr;
   if (function_name == "ST_DWithin"sv) {
-    // Note only works with linestring_linestring now, needs function support for the
-    // other geo type combos
     CHECK_EQ(size_t(3), rex_function->size());
-    with_bounds = true;
-    return_type = SQLTypeInfo(kBOOLEAN, false);
+    function_name = "ST_Distance";
+    return_type = SQLTypeInfo(kDOUBLE, false);
+    // Inject ST_DWithin's short-circuiting threshold into ST_MaxDistance
+    threshold_expr = translateScalarRex(rex_function->getOperand(2));
   } else if (function_name == "ST_DFullyWithin"sv) {
     CHECK_EQ(size_t(3), rex_function->size());
     function_name = "ST_MaxDistance";
     return_type = SQLTypeInfo(kDOUBLE, false);
+    // TODO: inject ST_DFullyWithin's short-circuiting threshold into ST_MaxDistance
+    threshold_expr = nullptr;
+  } else if (function_name == "ST_Distance"sv) {
+    // TODO: pick up an outside short-circuiting threshold and inject into ST_Distance
+    threshold_expr = nullptr;
+  } else if (function_name == "ST_MaxDistance"sv) {
+    // TODO: pick up an outside short-circuiting threshold and inject into ST_MaxDistance
+    threshold_expr = nullptr;
   } else {
     CHECK_EQ(size_t(2), rex_function->size());
   }
@@ -1060,20 +1069,25 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   output_srid.intval = arg0_ti.get_output_srid();
   geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, output_srid));
 
-  if (function_name == "ST_DWithin") {
-    auto distance_expr = translateScalarRex(rex_function->getOperand(2));
-    const auto& distance_ti = SQLTypeInfo(kDOUBLE, false);
-    if (distance_expr->get_type_info().get_type() != kDOUBLE) {
-      distance_expr = distance_expr->add_cast(distance_ti);
+  // Some geo distance functions will be injected with a short-circuit threshold.
+  // Threshold value would come from Geo comparison operations or from other
+  // geo operations, e.g. ST_DWithin
+  // At this point, only ST_Distance_LineString_LineString requires a threshold arg.
+  // TODO: Other combinations that involve LINESTRING, POLYGON and MULTIPOLYGON args
+  // TODO: Inject threshold into ST_MaxDistance
+  if (specialized_geofunc == "ST_Distance_LineString_LineString"sv) {
+    if (threshold_expr) {
+      if (threshold_expr->get_type_info().get_type() != kDOUBLE) {
+        const auto& threshold_ti = SQLTypeInfo(kDOUBLE, false);
+        threshold_expr = threshold_expr->add_cast(threshold_ti);
+      }
+      threshold_expr = fold_expr(threshold_expr.get());
+    } else {
+      Datum d;
+      d.doubleval = 0.0;
+      threshold_expr = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
     }
-    distance_expr = makeExpr<Analyzer::BinOper>(distance_ti,
-                                                distance_expr->get_contains_agg(),
-                                                kMULTIPLY,
-                                                kONE,
-                                                distance_expr,
-                                                distance_expr);
-    distance_expr = fold_expr(distance_expr.get());
-    geoargs.push_back(distance_expr);
+    geoargs.push_back(threshold_expr);
   }
 
   auto result =
@@ -1086,213 +1100,258 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateTernaryGeoFunction(
     const RexFunctionOperator* rex_function) const {
-  // Test code for ST_DWithin_Linestring_Linestring - should be generalized for the other
-  // types and
   CHECK_EQ(size_t(3), rex_function->size());
-  const auto geo_distance_expr = translateBinaryGeoFunction(rex_function);
-  if (rex_function->getName() == "ST_DWithin") {
-    auto func_oper = dynamic_cast<Analyzer::FunctionOper*>(geo_distance_expr.get());
-    if (func_oper && func_oper->getName() == "ST_DWithin_LineString_LineString"sv) {
-      return geo_distance_expr;
-    }
+
+  auto function_name = rex_function->getName();
+  auto return_type = rex_function->getType();
+  bool with_bounds = true;
+  SQLTypeInfo arg0_ti;
+  SQLTypeInfo arg1_ti;
+  int32_t lindex0 = 0;
+  int32_t lindex1 = 0;
+
+  auto geoargs0 = translateGeoFunctionArg(
+      rex_function->getOperand(0), arg0_ti, lindex0, with_bounds, false, false);
+  if (arg0_ti.get_type() == kLINESTRING) {
+    Datum index;
+    index.intval = lindex0;
+    geoargs0.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));
   }
-
-  // Normal function logic below, should be integrated with above
-
+  auto geoargs1 = translateGeoFunctionArg(
+      rex_function->getOperand(1), arg1_ti, lindex1, with_bounds, false, false);
+  if (arg1_ti.get_type() == kLINESTRING) {
+    Datum index;
+    index.intval = lindex1;
+    geoargs1.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));
+  }
   auto distance_expr = translateScalarRex(rex_function->getOperand(2));
   const auto& distance_ti = SQLTypeInfo(kDOUBLE, false);
   if (distance_expr->get_type_info().get_type() != kDOUBLE) {
     distance_expr = distance_expr->add_cast(distance_ti);
   }
+  std::string specialized_geofunc{function_name + suffix(arg0_ti.get_type()) +
+                                  suffix(arg1_ti.get_type())};
 
-  // Translate the geo distance function call portion
+  if (specialized_geofunc == "ST_DWithin_Point_Point"sv ||
+      specialized_geofunc == "ST_DWithin_LineString_LineString"sv) {
+    std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
+    geoargs.insert(geoargs.end(), geoargs0.begin(), geoargs0.end());
+    geoargs.insert(geoargs.end(), geoargs1.begin(), geoargs1.end());
 
-  if (rex_function->getName() == "ST_DWithin") {
-    auto func_oper = dynamic_cast<Analyzer::FunctionOper*>(geo_distance_expr.get());
-    if (func_oper && func_oper->getName() == "ST_Distance_Point_Point_Squared"sv) {
-      // Point_Point combination will yield geo_distance squared which is faster,
-      // need to compare it with distance squared
-      distance_expr = makeExpr<Analyzer::BinOper>(distance_ti,
-                                                  distance_expr->get_contains_agg(),
-                                                  kMULTIPLY,
-                                                  kONE,
-                                                  distance_expr,
-                                                  distance_expr);
-      distance_expr = fold_expr(distance_expr.get());
+    if (arg0_ti.get_subtype() == kGEOMETRY &&
+        arg0_ti.get_subtype() != arg1_ti.get_subtype()) {
+      throw QueryNotSupported(rex_function->getName() +
+                              " accepts only accepts GEOMETRY arguments");
     }
+    // Check SRID match if at least one is set/valid
+    if ((arg0_ti.get_output_srid() > 0 || arg1_ti.get_output_srid() > 0) &&
+        arg0_ti.get_output_srid() != arg1_ti.get_output_srid()) {
+      throw QueryNotSupported(rex_function->getName() + " cannot accept different SRIDs");
+    }
+    // Add first input's compression mode and SRID args to enable on-the-fly
+    // decompression/transforms
+    Datum input_compression0;
+    input_compression0.intval = Geospatial::get_compression_scheme(arg0_ti);
+    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression0));
+    Datum input_srid0;
+    input_srid0.intval = arg0_ti.get_input_srid();
+    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid0));
 
+    // Add second input's compression mode and SRID args to enable on-the-fly
+    // decompression/transforms
+    Datum input_compression1;
+    input_compression1.intval = Geospatial::get_compression_scheme(arg1_ti);
+    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression1));
+    Datum input_srid1;
+    input_srid1.intval = arg1_ti.get_input_srid();
+    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid1));
+
+    // Add output SRID arg to enable on-the-fly transforms
+    Datum output_srid;
+    output_srid.intval = arg0_ti.get_output_srid();
+    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, output_srid));
+
+    // Also add the within distance
+    geoargs.push_back(distance_expr);
+
+    auto result =
+        makeExpr<Analyzer::FunctionOper>(return_type, specialized_geofunc, geoargs);
+    return result;
+  }
+
+  // Otherwise translate function as binary geo to get distance and generate comparison
+  const auto geo_distance = translateBinaryGeoFunction(rex_function);
+  return makeExpr<Analyzer::BinOper>(kBOOLEAN, kLE, kONE, geo_distance, distance_expr);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoComparison(
+    const RexOperator* rex_operator) const {
+  if (rex_operator->size() != size_t(2)) {
+    return nullptr;
+  }
+
+  auto geo_distance_expr = translateScalarRex(rex_operator->getOperand(0));
+  auto func_oper = dynamic_cast<Analyzer::FunctionOper*>(geo_distance_expr.get());
+  if (func_oper && func_oper->getName() == "ST_Distance_Point_Point"sv) {
+    const auto& distance_ti = SQLTypeInfo(kDOUBLE, false);
+    std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
+    for (size_t i = 0; i < func_oper->getArity(); i++) {
+      geoargs.push_back(func_oper->getOwnArg(i));
+    }
+    geo_distance_expr = makeExpr<Analyzer::FunctionOper>(
+        distance_ti, "ST_Distance_Point_Point_Squared"s, geoargs);
+    auto distance_expr = translateScalarRex(rex_operator->getOperand(1));
+    if (distance_expr->get_type_info().get_type() != kDOUBLE) {
+      distance_expr = distance_expr->add_cast(distance_ti);
+    }
+    distance_expr = makeExpr<Analyzer::BinOper>(distance_ti,
+                                                distance_expr->get_contains_agg(),
+                                                kMULTIPLY,
+                                                kONE,
+                                                distance_expr,
+                                                distance_expr);
+    distance_expr = fold_expr(distance_expr.get());
     return makeExpr<Analyzer::BinOper>(
-        kBOOLEAN, kLE, kONE, geo_distance_expr, distance_expr);
+        kBOOLEAN, rex_operator->getOperator(), kONE, geo_distance_expr, distance_expr);
   }
+  return nullptr;
+}
 
-  std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoComparison(
-      const RexOperator* rex_operator) const {
-    if (rex_operator->size() != size_t(2)) {
-      return nullptr;
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
+    const RexFunctionOperator* rex_function) const {
+  int32_t lindex = 0;
+  std::string specialized_geofunc{rex_function->getName()};
+  if (func_resolve(rex_function->getName(),
+                   "convert_meters_to_pixel_width"sv,
+                   "convert_meters_to_pixel_height"sv)) {
+    CHECK_EQ(rex_function->size(), 6u);
+    SQLTypeInfo arg_ti;
+    std::vector<std::shared_ptr<Analyzer::Expr>> args;
+    args.push_back(translateScalarRex(rex_function->getOperand(0)));
+    auto geoargs = translateGeoFunctionArg(
+        rex_function->getOperand(1), arg_ti, lindex, false, true, false);
+    // only works on points
+    if (arg_ti.get_type() != kPOINT) {
+      throw QueryNotSupported(rex_function->getName() +
+                              " expects a point for the second argument");
     }
 
-    auto geo_distance_expr = translateScalarRex(rex_operator->getOperand(0));
-    auto func_oper = dynamic_cast<Analyzer::FunctionOper*>(geo_distance_expr.get());
-    if (func_oper && func_oper->getName() == "ST_Distance_Point_Point"sv) {
-      const auto& distance_ti = SQLTypeInfo(kDOUBLE, false);
-      std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
-      for (size_t i = 0; i < func_oper->getArity(); i++) {
-        geoargs.push_back(func_oper->getOwnArg(i));
-      }
-      geo_distance_expr = makeExpr<Analyzer::FunctionOper>(
-          distance_ti, "ST_Distance_Point_Point_Squared"s, geoargs);
-      auto distance_expr = translateScalarRex(rex_operator->getOperand(1));
-      if (distance_expr->get_type_info().get_type() != kDOUBLE) {
-        distance_expr = distance_expr->add_cast(distance_ti);
-      }
-      distance_expr = makeExpr<Analyzer::BinOper>(distance_ti,
-                                                  distance_expr->get_contains_agg(),
-                                                  kMULTIPLY,
-                                                  kONE,
-                                                  distance_expr,
-                                                  distance_expr);
-      distance_expr = fold_expr(distance_expr.get());
-      return makeExpr<Analyzer::BinOper>(
-          kBOOLEAN, rex_operator->getOperator(), kONE, geo_distance_expr, distance_expr);
+    args.insert(args.end(), geoargs.begin(), geoargs.begin() + 1);
+
+    // Add compression information
+    Datum input_compression;
+    input_compression.intval = Geospatial::get_compression_scheme(arg_ti);
+    args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
+    if (arg_ti.get_input_srid() != 4326) {
+      throw QueryNotSupported(
+          rex_function->getName() +
+          " currently only supports points of with SRID WGS84/EPSG:4326");
     }
-    return nullptr;
-  }
+    Datum input_srid;
+    input_srid.intval = arg_ti.get_input_srid();
+    args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid));
+    Datum output_srid;
+    // Forcing web-mercator projection for now
+    // TODO(croot): check that the input-to-output conversion routines exist?
+    output_srid.intval =
+        arg_ti.get_output_srid() != 900913 ? 900913 : arg_ti.get_output_srid();
+    args.push_back(makeExpr<Analyzer::Constant>(kINT, false, output_srid));
 
-  std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
-      const RexFunctionOperator* rex_function) const {
-    int32_t lindex = 0;
-    std::string specialized_geofunc{rex_function->getName()};
-    if (func_resolve(rex_function->getName(),
-                     "convert_meters_to_pixel_width"sv,
-                     "convert_meters_to_pixel_height"sv)) {
-      CHECK_EQ(rex_function->size(), 6u);
-      SQLTypeInfo arg_ti;
-      std::vector<std::shared_ptr<Analyzer::Expr>> args;
-      args.push_back(translateScalarRex(rex_function->getOperand(0)));
-      auto geoargs = translateGeoFunctionArg(
-          rex_function->getOperand(1), arg_ti, lindex, false, true, false);
-      // only works on points
-      if (arg_ti.get_type() != kPOINT) {
-        throw QueryNotSupported(rex_function->getName() +
-                                " expects a point for the second argument");
-      }
-
-      args.insert(args.end(), geoargs.begin(), geoargs.begin() + 1);
-
-      // Add compression information
-      Datum input_compression;
-      input_compression.intval = Geospatial::get_compression_scheme(arg_ti);
-      args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
-      if (arg_ti.get_input_srid() != 4326) {
-        throw QueryNotSupported(
-            rex_function->getName() +
-            " currently only supports points of with SRID WGS84/EPSG:4326");
-      }
-      Datum input_srid;
-      input_srid.intval = arg_ti.get_input_srid();
-      args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid));
-      Datum output_srid;
-      // Forcing web-mercator projection for now
-      // TODO(croot): check that the input-to-output conversion routines exist?
-      output_srid.intval =
-          arg_ti.get_output_srid() != 900913 ? 900913 : arg_ti.get_output_srid();
-      args.push_back(makeExpr<Analyzer::Constant>(kINT, false, output_srid));
-
-      args.push_back(translateScalarRex(rex_function->getOperand(2)));
-      args.push_back(translateScalarRex(rex_function->getOperand(3)));
-      args.push_back(translateScalarRex(rex_function->getOperand(4)));
-      args.push_back(translateScalarRex(rex_function->getOperand(5)));
-      return makeExpr<Analyzer::FunctionOper>(
-          rex_function->getType(), specialized_geofunc, args);
-    } else if (rex_function->getName() == "is_point_in_view"sv) {
-      CHECK_EQ(rex_function->size(), 5u);
-      SQLTypeInfo arg_ti;
-      std::vector<std::shared_ptr<Analyzer::Expr>> args;
-      auto geoargs = translateGeoFunctionArg(
-          rex_function->getOperand(0), arg_ti, lindex, false, true, false);
-      // only works on points
-      if (arg_ti.get_type() != kPOINT) {
-        throw QueryNotSupported(rex_function->getName() +
-                                " expects a point for the second argument");
-      }
-
-      args.insert(args.end(), geoargs.begin(), geoargs.begin() + 1);
-
-      // Add compression information
-      Datum input_compression;
-      input_compression.intval = Geospatial::get_compression_scheme(arg_ti);
-      args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
-      if (arg_ti.get_input_srid() != 4326) {
-        throw QueryNotSupported(
-            rex_function->getName() +
-            " currently only supports points of with SRID WGS84/EPSG:4326");
-      }
-      args.push_back(translateScalarRex(rex_function->getOperand(1)));
-      args.push_back(translateScalarRex(rex_function->getOperand(2)));
-      args.push_back(translateScalarRex(rex_function->getOperand(3)));
-      args.push_back(translateScalarRex(rex_function->getOperand(4)));
-      return makeExpr<Analyzer::FunctionOper>(
-          rex_function->getType(), specialized_geofunc, args);
-    } else if (rex_function->getName() == "is_point_size_in_view"sv) {
-      CHECK_EQ(rex_function->size(), 6u);
-      SQLTypeInfo arg_ti;
-      std::vector<std::shared_ptr<Analyzer::Expr>> args;
-      auto geoargs = translateGeoFunctionArg(
-          rex_function->getOperand(0), arg_ti, lindex, false, true, false);
-      // only works on points
-      if (arg_ti.get_type() != kPOINT) {
-        throw QueryNotSupported(rex_function->getName() +
-                                " expects a point for the second argument");
-      }
-
-      args.insert(args.end(), geoargs.begin(), geoargs.begin() + 1);
-
-      // Add compression information
-      Datum input_compression;
-      input_compression.intval = Geospatial::get_compression_scheme(arg_ti);
-      args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
-      if (arg_ti.get_input_srid() != 4326) {
-        throw QueryNotSupported(
-            rex_function->getName() +
-            " currently only supports points of with SRID WGS84/EPSG:4326");
-      }
-      args.push_back(translateScalarRex(rex_function->getOperand(1)));
-      args.push_back(translateScalarRex(rex_function->getOperand(2)));
-      args.push_back(translateScalarRex(rex_function->getOperand(3)));
-      args.push_back(translateScalarRex(rex_function->getOperand(4)));
-      args.push_back(translateScalarRex(rex_function->getOperand(5)));
-      return makeExpr<Analyzer::FunctionOper>(
-          rex_function->getType(), specialized_geofunc, args);
+    args.push_back(translateScalarRex(rex_function->getOperand(2)));
+    args.push_back(translateScalarRex(rex_function->getOperand(3)));
+    args.push_back(translateScalarRex(rex_function->getOperand(4)));
+    args.push_back(translateScalarRex(rex_function->getOperand(5)));
+    return makeExpr<Analyzer::FunctionOper>(
+        rex_function->getType(), specialized_geofunc, args);
+  } else if (rex_function->getName() == "is_point_in_view"sv) {
+    CHECK_EQ(rex_function->size(), 5u);
+    SQLTypeInfo arg_ti;
+    std::vector<std::shared_ptr<Analyzer::Expr>> args;
+    auto geoargs = translateGeoFunctionArg(
+        rex_function->getOperand(0), arg_ti, lindex, false, true, false);
+    // only works on points
+    if (arg_ti.get_type() != kPOINT) {
+      throw QueryNotSupported(rex_function->getName() +
+                              " expects a point for the second argument");
     }
-    CHECK(false);
-    return nullptr;
+
+    args.insert(args.end(), geoargs.begin(), geoargs.begin() + 1);
+
+    // Add compression information
+    Datum input_compression;
+    input_compression.intval = Geospatial::get_compression_scheme(arg_ti);
+    args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
+    if (arg_ti.get_input_srid() != 4326) {
+      throw QueryNotSupported(
+          rex_function->getName() +
+          " currently only supports points of with SRID WGS84/EPSG:4326");
+    }
+    args.push_back(translateScalarRex(rex_function->getOperand(1)));
+    args.push_back(translateScalarRex(rex_function->getOperand(2)));
+    args.push_back(translateScalarRex(rex_function->getOperand(3)));
+    args.push_back(translateScalarRex(rex_function->getOperand(4)));
+    return makeExpr<Analyzer::FunctionOper>(
+        rex_function->getType(), specialized_geofunc, args);
+  } else if (rex_function->getName() == "is_point_size_in_view"sv) {
+    CHECK_EQ(rex_function->size(), 6u);
+    SQLTypeInfo arg_ti;
+    std::vector<std::shared_ptr<Analyzer::Expr>> args;
+    auto geoargs = translateGeoFunctionArg(
+        rex_function->getOperand(0), arg_ti, lindex, false, true, false);
+    // only works on points
+    if (arg_ti.get_type() != kPOINT) {
+      throw QueryNotSupported(rex_function->getName() +
+                              " expects a point for the second argument");
+    }
+
+    args.insert(args.end(), geoargs.begin(), geoargs.begin() + 1);
+
+    // Add compression information
+    Datum input_compression;
+    input_compression.intval = Geospatial::get_compression_scheme(arg_ti);
+    args.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
+    if (arg_ti.get_input_srid() != 4326) {
+      throw QueryNotSupported(
+          rex_function->getName() +
+          " currently only supports points of with SRID WGS84/EPSG:4326");
+    }
+    args.push_back(translateScalarRex(rex_function->getOperand(1)));
+    args.push_back(translateScalarRex(rex_function->getOperand(2)));
+    args.push_back(translateScalarRex(rex_function->getOperand(3)));
+    args.push_back(translateScalarRex(rex_function->getOperand(4)));
+    args.push_back(translateScalarRex(rex_function->getOperand(5)));
+    return makeExpr<Analyzer::FunctionOper>(
+        rex_function->getType(), specialized_geofunc, args);
   }
+  CHECK(false);
+  return nullptr;
+}
 
-  std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoOverlapsOper(
-      const RexOperator* rex_operator) const {
-    CHECK_EQ(rex_operator->size(), 2u);
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoOverlapsOper(
+    const RexOperator* rex_operator) const {
+  CHECK_EQ(rex_operator->size(), 2u);
 
-    auto translate_input =
-        [&](const RexScalar* operand) -> std::shared_ptr<Analyzer::Expr> {
-      const auto input = dynamic_cast<const RexInput*>(operand);
-      CHECK(input);
+  auto translate_input =
+      [&](const RexScalar* operand) -> std::shared_ptr<Analyzer::Expr> {
+    const auto input = dynamic_cast<const RexInput*>(operand);
+    CHECK(input);
 
-      SQLTypeInfo ti;
-      const auto exprs = translateGeoColumn(input, ti, true, false, false);
-      CHECK_GT(exprs.size(), 0u);
-      if (ti.get_type() == kPOINT) {
-        return exprs.front();
-      } else {
-        return exprs.back();
-      }
-    };
+    SQLTypeInfo ti;
+    const auto exprs = translateGeoColumn(input, ti, true, false, false);
+    CHECK_GT(exprs.size(), 0u);
+    if (ti.get_type() == kPOINT) {
+      return exprs.front();
+    } else {
+      return exprs.back();
+    }
+  };
 
-    SQLQualifier sql_qual{kONE};
-    SQLOps sql_op{kOVERLAPS};
-    return makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false),
-                                       false,
-                                       sql_op,
-                                       sql_qual,
-                                       translate_input(rex_operator->getOperand(1)),
-                                       translate_input(rex_operator->getOperand(0)));
-  }
+  SQLQualifier sql_qual{kONE};
+  SQLOps sql_op{kOVERLAPS};
+  return makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false),
+                                     false,
+                                     sql_op,
+                                     sql_qual,
+                                     translate_input(rex_operator->getOperand(1)),
+                                     translate_input(rex_operator->getOperand(0)));
+}
