@@ -1858,7 +1858,8 @@ double ST_Distance_LineString_LineString(int8_t* l1,
                                          int32_t isr1,
                                          int32_t ic2,
                                          int32_t isr2,
-                                         int32_t osr) {
+                                         int32_t osr,
+                                         double threshold) {
   auto l1_num_coords = l1size / compression_unit_size(ic1);
   if (l1index != 0) {
     // l1 is a statically indexed linestring
@@ -1885,92 +1886,7 @@ double ST_Distance_LineString_LineString(int8_t* l1,
         p, psize, l1, l1size, l1index, ic2, isr2, ic1, isr1, osr);
   }
 
-  double dist = 0.0;
-  double l11x = coord_x(l1, 0, ic1, isr1, osr);
-  double l11y = coord_y(l1, 1, ic1, isr1, osr);
-  for (int32_t i1 = 2; i1 < l1_num_coords; i1 += 2) {
-    double l12x = coord_x(l1, i1, ic1, isr1, osr);
-    double l12y = coord_y(l1, i1 + 1, ic1, isr1, osr);
-
-    double l21x = coord_x(l2, 0, ic2, isr2, osr);
-    double l21y = coord_y(l2, 1, ic2, isr2, osr);
-    for (int32_t i2 = 2; i2 < l2_num_coords; i2 += 2) {
-      double l22x = coord_x(l2, i2, ic2, isr2, osr);
-      double l22y = coord_y(l2, i2 + 1, ic2, isr2, osr);
-
-      double ldist = distance_line_line(l11x, l11y, l12x, l12y, l21x, l21y, l22x, l22y);
-      if (i1 == 2 && i2 == 2) {
-        dist = ldist;  // initialize dist with distance between the first two segments
-      } else if (dist > ldist) {
-        dist = ldist;
-      }
-      if (tol_zero(dist)) {
-        return 0.0;  // segments touch
-      }
-
-      l21x = l22x;  // advance to the next point on l2
-      l21y = l22y;
-    }
-
-    l11x = l12x;  // advance to the next point on l1
-    l11y = l12y;
-  }
-  return dist;
-}
-
-EXTENSION_INLINE
-bool ST_DWithin_LineString_LineString(int8_t* l1,
-                                      int64_t l1size,
-                                      double* l1bounds,
-                                      int64_t l1bounds_size,
-                                      int32_t l1index,
-                                      int8_t* l2,
-                                      int64_t l2size,
-                                      double* l2bounds,
-                                      int64_t l2bounds_size,
-                                      int32_t l2index,
-                                      int32_t ic1,
-                                      int32_t isr1,
-                                      int32_t ic2,
-                                      int32_t isr2,
-                                      int32_t osr,
-                                      double distance_within_squared) {
-  const double distance_within = sqrt(distance_within_squared);
-  if (l1bounds && l2bounds) {
-    if (!box_dwithin_box(
-            l1bounds, l1bounds_size, l2bounds, l2bounds_size, distance_within)) {
-      return false;
-    }
-  }
-
-  auto l1_num_coords = l1size / compression_unit_size(ic1);
-  if (l1index != 0) {
-    // l1 is a statically indexed linestring
-    auto l1_num_points = l1_num_coords / 2;
-    if (l1index < 0 || l1index > l1_num_points) {
-      l1index = l1_num_points;
-    }
-    int8_t* p = l1 + 2 * (l1index - 1) * compression_unit_size(ic1);
-    int64_t psize = 2 * compression_unit_size(ic1);
-    return ST_Distance_Point_LineString(
-               p, psize, l2, l2size, l2index, ic1, isr1, ic2, isr2, osr) <=
-           distance_within;
-  }
-
-  auto l2_num_coords = l2size / compression_unit_size(ic2);
-  if (l2index != 0) {
-    // l2 is a statically indexed linestring
-    auto l2_num_points = l2_num_coords / 2;
-    if (l2index < 0 || l2index > l2_num_points) {
-      l2index = l2_num_points;
-    }
-    int8_t* p = l2 + 2 * (l2index - 1) * compression_unit_size(ic2);
-    int64_t psize = 2 * compression_unit_size(ic2);
-    return ST_Distance_Point_LineString(
-               p, psize, l1, l1size, l1index, ic2, isr2, ic1, isr1, osr) <=
-           distance_within;
-  }
-
+  double threshold_squared = threshold * threshold;
   double dist_squared = 0.0;
   double l11x = coord_x(l1, 0, ic1, isr1, osr);
   double l11y = coord_y(l1, 1, ic1, isr1, osr);
@@ -1993,12 +1909,12 @@ bool ST_DWithin_LineString_LineString(int8_t* l1,
         dist_squared = ldist_squared;
       }
       if (tol_zero(dist_squared, TOLERANCE_DEFAULT_SQUARED)) {
-        dist_squared = 0.0;  // Segments touch
+        return 0.0;  // Segments touch, short-circuit
       }
-      if (dist_squared <=
-          distance_within_squared) {  // Short circuit if we've found two segments closer
-                                      // than distance_within_squared
-        return true;
+      if (dist_squared <= threshold_squared) {
+        // If threashold_squared is defined and the calculated dist_squared dips under it,
+        // short-circuit and return it
+        return sqrt(dist_squared);
       }
 
       l21x = l22x;  // advance to the next point on l2
@@ -2008,7 +1924,7 @@ bool ST_DWithin_LineString_LineString(int8_t* l1,
     l11x = l12x;  // advance to the next point on l1
     l11y = l12y;
   }
-  return false;
+  return sqrt(dist_squared);
 }
 
 EXTENSION_NOINLINE
@@ -2516,6 +2432,7 @@ double max_distance_point_line(double px,
                                double l1y,
                                double l2x,
                                double l2y) {
+  // TODO: switch to squared distances
   double length1 = distance_point_point(px, py, l1x, l1y);
   double length2 = distance_point_point(px, py, l2x, l2y);
   if (length1 > length2) {
@@ -2535,6 +2452,7 @@ DEVICE ALWAYS_INLINE double max_distance_point_linestring(int8_t* p,
                                                           int32_t isr2,
                                                           int32_t osr,
                                                           bool check_closed) {
+  // TODO: switch to squared distances
   double px = coord_x(p, 0, ic1, isr1, osr);
   double py = coord_y(p, 1, ic1, isr1, osr);
 
@@ -2606,6 +2524,8 @@ double ST_MaxDistance_LineString_Point(int8_t* l,
   return max_distance_point_linestring(
       p, psize, l, lsize, lindex, ic2, isr2, ic1, isr1, osr, false);
 }
+
+// TODO: add ST_MaxDistance_LineString_LineString (with short-circuit threshold)
 
 //
 // ST_Contains
@@ -2734,7 +2654,7 @@ bool ST_Contains_LineString_LineString(int8_t* l1,
   if (l1i != 0 || l2i != 0) {
     // At least one linestring is indexed, can rely on distance
     return tol_zero(ST_Distance_LineString_LineString(
-        l1, l1size, l1i, l2, l2size, l2i, ic1, isr1, ic2, isr2, osr));
+        l1, l1size, l1i, l2, l2size, l2i, ic1, isr1, ic2, isr2, osr, 0.0));
   }
 
   // TODO: sublinestring
@@ -3269,7 +3189,7 @@ bool ST_Intersects_LineString_Linestring(int8_t* l1,
   }
 
   return tol_zero(ST_Distance_LineString_LineString(
-      l1, l1size, l1i, l2, l2size, l2i, ic1, isr1, ic2, isr2, osr));
+      l1, l1size, l1i, l2, l2size, l2i, ic1, isr1, ic2, isr2, osr, 0.0));
 }
 
 EXTENSION_NOINLINE
