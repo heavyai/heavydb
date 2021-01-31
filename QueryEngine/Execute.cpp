@@ -3253,6 +3253,19 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
 #include "StringFunctions.cpp"
 #undef EXECUTE_INCLUDE
 
+namespace {
+void add_deleted_col_to_map(PlanState::DeletedColumnsMap& deleted_cols_map,
+                            const ColumnDescriptor* deleted_cd) {
+  auto deleted_cols_it = deleted_cols_map.find(deleted_cd->tableId);
+  if (deleted_cols_it == deleted_cols_map.end()) {
+    CHECK(
+        deleted_cols_map.insert(std::make_pair(deleted_cd->tableId, deleted_cd)).second);
+  } else {
+    CHECK_EQ(deleted_cd, deleted_cols_it->second);
+  }
+}
+}  // namespace
+
 std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> Executor::addDeletedColumn(
     const RelAlgExecutionUnit& ra_exe_unit,
     const CompilationOptions& co) {
@@ -3279,19 +3292,15 @@ std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> Executor::addDelet
           input_col.get()->getScanDesc().getTableId() == deleted_cd->tableId &&
           input_col.get()->getScanDesc().getNestLevel() == input_table.getNestLevel()) {
         found = true;
+        add_deleted_col_to_map(deleted_cols_map, deleted_cd);
+        break;
       }
     }
     if (!found) {
       // add deleted column
       ra_exe_unit_with_deleted.input_col_descs.emplace_back(new InputColDescriptor(
           deleted_cd->columnId, deleted_cd->tableId, input_table.getNestLevel()));
-      auto deleted_cols_it = deleted_cols_map.find(deleted_cd->tableId);
-      if (deleted_cols_it == deleted_cols_map.end()) {
-        CHECK(deleted_cols_map.insert(std::make_pair(deleted_cd->tableId, deleted_cd))
-                  .second);
-      } else {
-        CHECK_EQ(deleted_cd, deleted_cols_it->second);
-      }
+      add_deleted_col_to_map(deleted_cols_map, deleted_cd);
     }
   }
   return std::make_tuple(ra_exe_unit_with_deleted, deleted_cols_map);

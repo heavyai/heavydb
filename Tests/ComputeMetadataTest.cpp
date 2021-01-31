@@ -37,8 +37,9 @@ inline void run_ddl_statement(const std::string& stmt) {
   QR::get()->runDDLStatement(stmt);
 }
 
-std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
-                                            const ExecutorDeviceType device_type) {
+std::shared_ptr<ResultSet> run_multiple_agg(
+    const std::string& query_str,
+    const ExecutorDeviceType device_type = ExecutorDeviceType::CPU) {
   return QR::get()->runSQL(query_str, device_type, false, false);
 }
 
@@ -535,6 +536,45 @@ TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, SmallDateNarrowMin)
 TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, SmallDateNarrowMax)
 TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, DeleteReset)
 TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, EncodedStringNull)
+
+class DeletedRowsMetadataUpdateTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    run_ddl_statement("drop table if exists test_table;");
+    run_ddl_statement("create table test_table (i int);");
+  }
+
+  void TearDown() override { run_ddl_statement("drop table test_table;"); }
+
+  void sqlAndCompareResult(const std::string& sql,
+                           const std::vector<int>& expected_result) {
+    auto result = run_multiple_agg(sql);
+    ASSERT_EQ(1U, result->colCount());
+
+    std::vector<int> actual_result;
+    for (size_t i = 0; i < result->rowCount(); i++) {
+      auto row = result->getNextRow(false, false);
+      auto& target_value = boost::get<ScalarTargetValue>(row[0]);
+      actual_result.emplace_back(boost::get<int64_t>(target_value));
+    }
+    ASSERT_EQ(expected_result, actual_result);
+  }
+};
+
+TEST_F(DeletedRowsMetadataUpdateTest, ComputeMetadataAfterDelete) {
+  run_multiple_agg("insert into test_table values (1);");
+  run_multiple_agg("insert into test_table values (2);");
+  run_multiple_agg("insert into test_table values (3);");
+  sqlAndCompareResult("select * from test_table;", {1, 2, 3});
+
+  run_multiple_agg("delete from test_table where i <= 2;");
+  sqlAndCompareResult("select * from test_table;", {3});
+
+  const auto catalog = QR::get()->getCatalog();
+  const auto td = catalog->getMetadataForTable("test_table");
+  recompute_metadata(td, *catalog);
+  sqlAndCompareResult("select * from test_table;", {3});
+}
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
