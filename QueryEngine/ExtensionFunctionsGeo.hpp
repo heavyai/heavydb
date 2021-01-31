@@ -1900,8 +1900,12 @@ double ST_Distance_LineString_LineString(int8_t* l1,
       double l22x = coord_x(l2, i2, ic2, isr2, osr);
       double l22y = coord_y(l2, i2 + 1, ic2, isr2, osr);
 
+      // double ldist_squared =
+      //    distance_line_line_squared(l11x, l11y, l12x, l12y, l21x, l21y, l22x, l22y);
       double ldist_squared =
-          distance_line_line_squared(l11x, l11y, l12x, l12y, l21x, l21y, l22x, l22y);
+          distance_line_line(l11x, l11y, l12x, l12y, l21x, l21y, l22x, l22y);
+      ldist_squared *= ldist_squared;
+
       if (i1 == 2 && i2 == 2) {
         dist_squared = ldist_squared;  // initialize dist with distance between the first
                                        // two segments
