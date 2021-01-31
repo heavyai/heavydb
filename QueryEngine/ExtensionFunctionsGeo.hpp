@@ -81,6 +81,26 @@ DEVICE ALWAYS_INLINE double transform_coord(double coord,
   return coord;
 }
 
+DEVICE ALWAYS_INLINE double transform_coord_x(double coord, int32_t isr, int32_t osr) {
+  if (isr == 4326) {
+    if (osr == 900913) {
+      // WGS 84 --> Web Mercator
+      return conv_4326_900913_x(coord);
+    }
+  }
+  return coord;
+}
+
+DEVICE ALWAYS_INLINE double transform_coord_y(double coord, int32_t isr, int32_t osr) {
+  if (isr == 4326) {
+    if (osr == 900913) {
+      // WGS 84 --> Web Mercator
+      return conv_4326_900913_y(coord);
+    }
+  }
+  return coord;
+}
+
 // X coord accessor handling on-the-fly decommpression and transforms
 DEVICE ALWAYS_INLINE double coord_x(int8_t* data,
                                     int32_t index,
@@ -607,6 +627,7 @@ DEVICE ALWAYS_INLINE bool box_contains_point(double* bounds,
                                              int64_t bounds_size,
                                              double px,
                                              double py) {
+  // TODO: mixed spatial references
   return (tol_ge(px, bounds[0]) && tol_ge(py, bounds[1]) && tol_le(px, bounds[2]) &&
           tol_le(py, bounds[3]));
 }
@@ -615,6 +636,7 @@ EXTENSION_NOINLINE bool Point_Overlaps_Box(double* bounds,
                                            int64_t bounds_size,
                                            double px,
                                            double py) {
+  // TODO: mixed spatial references
   return box_contains_point(bounds, bounds_size, px, py);
 }
 
@@ -622,6 +644,7 @@ DEVICE ALWAYS_INLINE bool box_contains_box(double* bounds1,
                                            int64_t bounds1_size,
                                            double* bounds2,
                                            int64_t bounds2_size) {
+  // TODO: mixed spatial references
   return (
       box_contains_point(
           bounds1, bounds1_size, bounds2[0], bounds2[1]) &&  // box1 <- box2: xmin, ymin
@@ -633,6 +656,7 @@ DEVICE ALWAYS_INLINE bool box_contains_box_vertex(double* bounds1,
                                                   int64_t bounds1_size,
                                                   double* bounds2,
                                                   int64_t bounds2_size) {
+  // TODO: mixed spatial references
   return (
       box_contains_point(
           bounds1, bounds1_size, bounds2[0], bounds2[1]) ||  // box1 <- box2: xmin, ymin
@@ -649,6 +673,7 @@ DEVICE ALWAYS_INLINE bool box_overlaps_box(double* bounds1,
                                            double* bounds2,
                                            int64_t bounds2_size) {
   // TODO: tolerance
+  // TODO: mixed spatial references
   if (bounds1[2] < bounds2[0] ||  // box1 is left of box2:  box1.xmax < box2.xmin
       bounds1[0] > bounds2[2] ||  // box1 is right of box2: box1.xmin > box2.xmax
       bounds1[3] < bounds2[1] ||  // box1 is below box2:    box1.ymax < box2.ymin
@@ -660,18 +685,35 @@ DEVICE ALWAYS_INLINE bool box_overlaps_box(double* bounds1,
 
 DEVICE ALWAYS_INLINE bool box_dwithin_box(double* bounds1,
                                           int64_t bounds1_size,
+                                          int32_t isr1,
                                           double* bounds2,
                                           int64_t bounds2_size,
+                                          int32_t isr2,
+                                          int32_t osr,
                                           double distance) {
   // TODO: tolerance
-  if (bounds1[2] + distance <
-          bounds2[0] ||  // box1 is left of box2:  box1.xmax < box2.xmin
-      bounds1[0] - distance >
-          bounds2[2] ||  // box1 is right of box2: box1.xmin > box2.xmax
-      bounds1[3] + distance <
-          bounds2[1] ||  // box1 is below box2:    box1.ymax < box2.ymin
-      bounds1[1] - distance >
-          bounds2[3]) {  // box1 is above box2:    box1.ymin > box1.ymax
+
+  // Bounds come in corresponding input spatial references.
+  // For example, here the first bounding box may come in 4326, second in 900913:
+  //   ST_DWithin(ST_Transform(linestring4326, 900913), linestring900913, 10)
+  // Distance is given in osr spatial reference units, in this case 10 meters.
+  // Bounds should be converted to osr before calculations, if isr != osr.
+
+  // TODO: revise all other functions that process bounds
+
+  if (
+      // box1 is left of box2:  box1.xmax + distance < box2.xmin
+      transform_coord_x(bounds1[2], isr1, osr) + distance <
+          transform_coord_x(bounds2[0], isr2, osr) ||
+      // box1 is right of box2: box1.xmin - distance > box2.xmax
+      transform_coord_x(bounds1[0], isr1, osr) - distance >
+          transform_coord_x(bounds2[2], isr2, osr) ||
+      // box1 is below box2:    box1.ymax + distance < box2.ymin
+      transform_coord_y(bounds1[3], isr1, osr) + distance <
+          transform_coord_y(bounds2[1], isr2, osr) ||
+      // box1 is above box2:    box1.ymin - distance > box1.ymax
+      transform_coord_y(bounds1[1], isr1, osr) - distance >
+          transform_coord_y(bounds2[3], isr2, osr)) {
     return false;
   }
   return true;
