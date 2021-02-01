@@ -2822,9 +2822,10 @@ int32_t Executor::executePlanWithoutGroupBy(
       for (int i = 0; i < num_iterations; i++) {
         int64_t val1;
         const bool float_argument_input = takes_float_argument(agg_info);
-        if (is_distinct_target(agg_info)) {
+        if (is_distinct_target(agg_info) || agg_info.agg_kind == kAPPROX_MEDIAN) {
           CHECK(agg_info.agg_kind == kCOUNT ||
-                agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
+                agg_info.agg_kind == kAPPROX_COUNT_DISTINCT ||
+                agg_info.agg_kind == kAPPROX_MEDIAN);
           val1 = out_vec[out_vec_idx][0];
           error_code = 0;
         } else {
