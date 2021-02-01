@@ -1070,7 +1070,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, output_srid));
 
   // Some geo distance functions will be injected with a short-circuit threshold.
-  // Threshold value would come from Geo comparison operations or from other
+  // Threshold value would come from Geo comparison operations or from other outer
   // geo operations, e.g. ST_DWithin
   // At this point, only ST_Distance_LineString_LineString requires a threshold arg.
   // TODO: Other combinations that involve LINESTRING, POLYGON and MULTIPOLYGON args
@@ -1179,8 +1179,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateTernaryGeoFunction(
     return result;
   }
 
-  // Otherwise translate function as binary geo to get distance and generate comparison
+  // Otherwise translate function as binary geo to get distance,
+  // with optional short-circuiting threshold held in the third operand
   const auto geo_distance = translateBinaryGeoFunction(rex_function);
+  // and generate the comparison
   return makeExpr<Analyzer::BinOper>(kBOOLEAN, kLE, kONE, geo_distance, distance_expr);
 }
 
@@ -1190,30 +1192,22 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoComparison(
     return nullptr;
   }
 
-  auto geo_distance_expr = translateScalarRex(rex_operator->getOperand(0));
-  auto func_oper = dynamic_cast<Analyzer::FunctionOper*>(geo_distance_expr.get());
-  if (func_oper && func_oper->getName() == "ST_Distance_Point_Point"sv) {
-    const auto& distance_ti = SQLTypeInfo(kDOUBLE, false);
-    std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
-    for (size_t i = 0; i < func_oper->getArity(); i++) {
-      geoargs.push_back(func_oper->getOwnArg(i));
-    }
-    geo_distance_expr = makeExpr<Analyzer::FunctionOper>(
-        distance_ti, "ST_Distance_Point_Point_Squared"s, geoargs);
-    auto distance_expr = translateScalarRex(rex_operator->getOperand(1));
-    if (distance_expr->get_type_info().get_type() != kDOUBLE) {
-      distance_expr = distance_expr->add_cast(distance_ti);
-    }
-    distance_expr = makeExpr<Analyzer::BinOper>(distance_ti,
-                                                distance_expr->get_contains_agg(),
-                                                kMULTIPLY,
-                                                kONE,
-                                                distance_expr,
-                                                distance_expr);
-    distance_expr = fold_expr(distance_expr.get());
-    return makeExpr<Analyzer::BinOper>(
-        kBOOLEAN, rex_operator->getOperator(), kONE, geo_distance_expr, distance_expr);
+  const auto rex_operand = rex_operator->getOperand(0);
+  const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex_operand);
+  if (!rex_function) {
+    return nullptr;
   }
+  if (rex_function->getName() == "ST_Distance"sv && rex_operator->getOperator() == kLE) {
+    auto ti = rex_operator->getType();
+    std::vector<std::unique_ptr<const RexScalar>> st_dwithin_operands;
+    st_dwithin_operands.emplace_back(rex_function->getOperandAndRelease(0));
+    st_dwithin_operands.emplace_back(rex_function->getOperandAndRelease(1));
+    st_dwithin_operands.emplace_back(rex_operator->getOperandAndRelease(1));
+    std::unique_ptr<RexFunctionOperator> st_dwithin(
+        new RexFunctionOperator("ST_DWithin", st_dwithin_operands, ti));
+    return translateTernaryGeoFunction(st_dwithin.get());
+  }
+
   return nullptr;
 }
 
