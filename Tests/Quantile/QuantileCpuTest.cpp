@@ -163,6 +163,116 @@ TEST(Quantile, Basic) {
   EXPECT_NEAR(exact, estimated, 0.001 * exact);
 }
 
+TEST(Quantile, TwoValues) {
+  // Set data
+  constexpr size_t N = 1e8 + 1;         // number of data points
+  constexpr size_t M = 300;             // Max number of centroids per digest
+  constexpr size_t buf_size = 10000;    // Input buffer size
+  constexpr size_t mixer = 2654435761;  // closest prime to 2^32 / phi
+  constexpr Real q = 0.5;
+
+  // Number of partitions = number of independent digests
+  size_t const ndigests = std::thread::hardware_concurrency();
+  std::cout << "ndigests = " << ndigests << std::endl;
+
+  std::cout << "\nAllocating test data of size " << N << "... " << std::flush;
+  std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+  std::unique_ptr<Real[]> data_ptr = std::make_unique<Real[]>(N);
+  VectorView<Real> data(data_ptr.get(), N, N);
+  std::cout << msSince(start) << "ms" << std::endl;
+
+  std::cout << "\nSetting ordered data... " << std::flush;
+  start = std::chrono::steady_clock::now();
+  tbb::parallel_for_each(makeIntervals<size_t>(0, N, ndigests), [&](auto interval) {
+    for (size_t i = interval.begin; i != interval.end; ++i) {
+      data[i] = N / 2 < i;
+    }
+  });
+  std::cout << msSince(start) << "ms" << std::endl;
+
+  // Actual quantile
+  Real const exact = exact_quantile(data, q);
+  std::cout.setf(std::ios::fixed);
+  std::cout << "exact_quantile(data, " << q << ") = " << exact << std::endl;
+
+  std::cout << "\nSetting shuffled data... " << std::flush;
+  start = std::chrono::steady_clock::now();
+  // Fill data with a pseudo-random permutation of 0, 0, 0, ..., 1, 1
+  tbb::parallel_for_each(makeIntervals<size_t>(0, N, ndigests), [&](auto interval) {
+    for (size_t i = interval.begin; i != interval.end; ++i) {
+      data[i] = N / 2 < i * mixer % N;
+    }
+  });
+  std::cout << msSince(start) << "ms" << std::endl;
+
+  std::cout << "\nReserving centroids memory... " << std::flush;
+  start = std::chrono::steady_clock::now();
+  std::vector<TDigest> digests(ndigests);
+  TDigest::Memory centroids_memory(ndigests * M);
+  // Doesn't have to be parallel, but useful template for GPU.
+  tbb::parallel_for_each(
+      makeIntervals<size_t>(0, centroids_memory.size(), ndigests), [&](auto interval) {
+        size_t const size = interval.end - interval.begin;
+        VectorView<Real> sums(
+            centroids_memory.sums().data() + interval.begin, size, size);
+        VectorView<Index> counts(
+            centroids_memory.counts().data() + interval.begin, size, size);
+        digests[interval.index].setCentroids(sums, counts);
+      });
+  std::cout << " with " << centroids_memory.nbytes() * 1e-6
+            << "MB of centroids memory in " << msSince(start) << "ms" << std::endl;
+
+  // Incoming buffer.
+  std::cout << "\nReserving buffer memory... " << std::flush;
+  TDigest::Memory buffer(buf_size);
+  std::cout << " with " << buffer.nbytes() * 1e-6 << "MB of centroids memory in "
+            << msSince(start) << "ms" << std::endl;
+
+  std::cout << "\nFilling digests... " << std::flush;
+  start = std::chrono::steady_clock::now();
+  for (auto src_begin = data.cbegin(); src_begin != data.cend();) {
+    size_t const n = std::min(size_t(data.cend() - src_begin), buffer.sums().size());
+    // Faster way to copy?
+    std::copy(src_begin, src_begin + n, buffer.sums().begin());
+    tbb::parallel_sort(buffer.sums().begin(), buffer.sums().begin() + n);
+    // Process ndigests partitions in parallel
+    tbb::parallel_for_each(makeIntervals<size_t>(0, n, ndigests), [&](auto interval) {
+      digests[interval.index].mergeSorted(buffer.sums().data() + interval.begin,
+                                          buffer.counts().data() + interval.begin,
+                                          interval.end - interval.begin);
+      /*
+      auto const counts =
+          std::accumulate(digests[interval.index].centroids().counts().begin(),
+                          digests[interval.index].centroids().counts().end(),
+                          size_t(0));
+      std::cout << counts << ' ';
+      */
+    });
+    src_begin += n;
+  }
+  std::cout << msSince(start) << "ms" << std::endl;
+
+  std::cout << "\nReducing digests... " << std::flush;
+  start = std::chrono::steady_clock::now();
+  // Reduce into digests.front(). ceil(log_2(ndigests)) serial iterations
+  for (size_t i = 1; i < ndigests; i <<= 1) {
+    tbb::parallel_for(size_t(0), ndigests, i << 1, [&](size_t j) {
+      if ((i ^ j) < ndigests) {
+        digests[j].mergeTDigest(digests[i ^ j]);
+      }
+    });
+  }
+  std::cout << msSince(start) << "ms" << std::endl;
+
+  std::cout << "\nCalculating quantile estimate... " << std::flush;
+  start = std::chrono::steady_clock::now();
+  Real const estimated = digests.front().quantile(buffer.counts().data(), q);
+  std::cout << msSince(start) << "ms" << std::endl;
+  std::cout.setf(std::ios::fixed);
+  std::cout << "digests.front().quantile(" << q << ") = " << estimated << std::endl;
+  EXPECT_NEAR(exact, estimated, 10.0);
+}
+
 TEST(Quantile, EmptyDataSets) {
   TDigest::Memory memory0(3);
   TDigest t_digest0(memory0);
