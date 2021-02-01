@@ -10,6 +10,7 @@
   CUDA                                      [NVIDIA EULA](http://docs.nvidia.com/cuda/eula/index.html#redistribution-rights)              GPU access
   double-conversion                         [BSD-like](https://github.com/google/double-conversion/blob/master/COPYING)                   Folly
   EGL, KHR                                  [MIT]()                                                                                       Rendering Support
+  fmt                                       [MIT](https://github.com/fmtlib/fmt/blob/master/LICENSE.rst)                                  Folly
   Folly                                     [Apache](https://github.com/facebook/folly/blob/master/LICENSE)                               Multiple
   glbinding                                 [MIT](https://github.com/cginternals/glbinding/blob/master/LICENSE)                           OpenGL management
   gflags                                    [BSD-like](https://github.com/gflags/gflags/blob/master/COPYING.txt)                          Folly
