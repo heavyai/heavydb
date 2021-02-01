@@ -683,6 +683,35 @@ DEVICE ALWAYS_INLINE bool box_overlaps_box(double* bounds1,
   return true;
 }
 
+DEVICE ALWAYS_INLINE bool point_dwithin_box(int8_t* p1,
+                                            int64_t p1size,
+                                            int32_t ic1,
+                                            int32_t isr1,
+                                            double* bounds2,
+                                            int64_t bounds2_size,
+                                            int32_t isr2,
+                                            int32_t osr,
+                                            double distance) {
+  // TODO: tolerance
+
+  // Point has to be uncompressed and transformed to output SR.
+  // Bounding box has to be transformed to output SR.
+  auto px = coord_x(p1, 0, ic1, isr1, osr);
+  auto py = coord_y(p1, 1, ic1, isr1, osr);
+  if (
+      // point is left of box2:  px < box2.xmin - distance
+      px < transform_coord_x(bounds2[0], isr2, osr) - distance ||
+      // point is right of box2: px > box2.xmax + distance
+      px > transform_coord_x(bounds2[2], isr2, osr) + distance ||
+      // point is below box2:    py < box2.ymin - distance
+      py < transform_coord_y(bounds2[1], isr2, osr) - distance ||
+      // point is above box2:    py > box2.ymax + distance
+      py > transform_coord_y(bounds2[3], isr2, osr) + distance) {
+    return false;
+  }
+  return true;
+}
+
 DEVICE ALWAYS_INLINE bool box_dwithin_box(double* bounds1,
                                           int64_t bounds1_size,
                                           int32_t isr1,
@@ -1902,9 +1931,9 @@ double ST_Distance_LineString_LineString(int8_t* l1,
 
       // double ldist_squared =
       //    distance_line_line_squared(l11x, l11y, l12x, l12y, l21x, l21y, l22x, l22y);
-      double ldist_squared =
-          distance_line_line(l11x, l11y, l12x, l12y, l21x, l21y, l22x, l22y);
-      ldist_squared *= ldist_squared;
+      // TODO: fix distance_line_line_squared
+      double ldist = distance_line_line(l11x, l11y, l12x, l12y, l21x, l21y, l22x, l22y);
+      double ldist_squared = ldist * ldist;
 
       if (i1 == 2 && i2 == 2) {
         dist_squared = ldist_squared;  // initialize dist with distance between the first
@@ -2442,6 +2471,64 @@ bool ST_DWithin_Point_Point(int8_t* p1,
   return ST_Distance_Point_Point_Squared(
              p1, p1size, p2, p2size, ic1, isr1, ic2, isr2, osr) <=
          distance_within * distance_within;
+}
+
+EXTENSION_INLINE
+bool ST_DWithin_Point_LineString(int8_t* p1,
+                                 int64_t p1size,
+                                 int8_t* l2,
+                                 int64_t l2size,
+                                 double* l2bounds,
+                                 int64_t l2bounds_size,
+                                 int32_t l2index,
+                                 int32_t ic1,
+                                 int32_t isr1,
+                                 int32_t ic2,
+                                 int32_t isr2,
+                                 int32_t osr,
+                                 double distance_within) {
+  if (l2bounds) {
+    // Bounding boxes need to be transformed to output SR before proximity check
+    if (!point_dwithin_box(
+            p1, p1size, ic1, isr1, l2bounds, l2bounds_size, isr2, osr, distance_within)) {
+      return false;
+    }
+  }
+
+  // May need to adjust the threshold by TOLERANCE_DEFAULT
+  // TODO: inject short-circuit threshold
+  return ST_Distance_Point_LineString(
+             p1, p1size, l2, l2size, l2index, ic1, isr1, ic2, isr2, osr) <=
+         distance_within;
+}
+
+EXTENSION_INLINE
+bool ST_DWithin_LineString_Point(int8_t* l1,
+                                 int64_t l1size,
+                                 double* l1bounds,
+                                 int64_t l1bounds_size,
+                                 int32_t l1index,
+                                 int8_t* p2,
+                                 int64_t p2size,
+                                 int32_t ic1,
+                                 int32_t isr1,
+                                 int32_t ic2,
+                                 int32_t isr2,
+                                 int32_t osr,
+                                 double distance_within) {
+  return ST_DWithin_Point_LineString(p2,
+                                     p2size,
+                                     l1,
+                                     l1size,
+                                     l1bounds,
+                                     l1bounds_size,
+                                     l1index,
+                                     ic2,
+                                     isr2,
+                                     ic1,
+                                     isr1,
+                                     osr,
+                                     distance_within);
 }
 
 EXTENSION_INLINE

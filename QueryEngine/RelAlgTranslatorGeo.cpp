@@ -1133,6 +1133,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateTernaryGeoFunction(
                                   suffix(arg1_ti.get_type())};
 
   if (specialized_geofunc == "ST_DWithin_Point_Point"sv ||
+      specialized_geofunc == "ST_DWithin_Point_LineString"sv ||
+      specialized_geofunc == "ST_DWithin_LineString_Point"sv ||
       specialized_geofunc == "ST_DWithin_LineString_LineString"sv) {
     std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
     geoargs.insert(geoargs.end(), geoargs0.begin(), geoargs0.end());
