@@ -294,7 +294,7 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
       }
     } else if (join.getJoinType() == JoinRelType.LEFT) {
       // 3) left -> inner
-      if (leftNullRejected) {
+      if (rightNullRejected) {
         newJoinNode = join.copy(join.getTraitSet(),
                 join.getCondition(),
                 join.getLeft(),
@@ -450,8 +450,12 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
             || SqlKind.BINARY_EQUALITY.contains(opKind));
   }
 
+  boolean isNotNullFilter(RexCall c) {
+    return (c.op.kind == SqlKind.IS_NOT_NULL && c.operands.size() == 1);
+  }
+
   boolean isCandidateFilterPred(RexCall c) {
-    return ((c.op.kind == SqlKind.IS_NOT_NULL && c.operands.size() == 1)
+    return (isNotNullFilter(c)
             || (c.operands.size() == 2 && isComparisonOp(c)
                     && c.operands.get(0) instanceof RexInputRef
                     && c.operands.get(1) instanceof RexLiteral));

@@ -8954,6 +8954,33 @@ TEST(Select, Joins_LeftJoin_Filters) {
           dt));
     THROW_ON_AGGREGATOR(c(
         "SELECT a.x FROM join_test a LEFT JOIN test b ON a.x = b.x WHERE a.x = 7;", dt));
+    // fold left join -> inner join optimization testing
+    c(R"(SELECT a.o1, count(*) FROM test a LEFT JOIN test_inner b ON a.o1 = b.dt16 WHERE b.dt16 < '2020-01-01' GROUP BY 1;)",
+      dt);
+    c(R"(SELECT a.x, count(*) FROM test a LEFT JOIN test_inner b ON a.x = b.y WHERE a.x = cast('7' as integer) GROUP BY 1 ORDER BY 2;)",
+      dt);
+    c(R"(SELECT a.x, count(*) FROM test a LEFT JOIN test_inner b ON a.x = b.y WHERE a.x = cast('7' as integer) AND b.y IS NOT NULL GROUP BY 1 ORDER BY 1;)",
+      dt);
+    c(R"(SELECT a.x, count(*) FROM test a LEFT JOIN test_inner b ON a.x = b.y WHERE b.y IS NOT NULL GROUP BY 1 ORDER BY 1;)",
+      dt);
+    c(R"(SELECT a.o1, count(*) FROM test a LEFT JOIN test_empty b ON a.o1 = b.o1 GROUP BY 1 ORDER BY 2;)",
+      dt);
+    c(R"(SELECT a.o1, count(*) FROM test a LEFT JOIN test_empty b ON a.o1 = b.o1 WHERE (a.o1 >= '1990-01-01') GROUP BY 1 ORDER BY 2;)",
+      dt);
+    {
+      auto result = run_multiple_agg(
+          R"(SELECT a.o1, count(*) FROM test a LEFT JOIN test_empty b ON a.o1 = b.o1 WHERE (a.o1 >= DATE '1990-01-01') GROUP BY 1 ORDER BY 2;)",
+          dt);
+      EXPECT_EQ(result->rowCount(), size_t(1));
+    }
+    {
+      auto result = run_multiple_agg(
+          R"(SELECT a.o1, count(*) FROM test a LEFT JOIN test_empty b ON a.o1 = b.o1 WHERE (a.o1 >= DATE '1990-01-01' AND b.o1 IS NOT NULL) GROUP BY 1 ORDER BY 2;)",
+          dt);
+      EXPECT_EQ(result->rowCount(), size_t(0));
+    }
+    c(R"(SELECT a.o1, count(*) FROM test a LEFT JOIN test_empty b ON a.o1 = b.o1 WHERE (a.o1 >= CAST('1990-01-01' AS DATE)) GROUP BY 1 ORDER BY 2;)",
+      dt);
   }
 }
 
@@ -9130,36 +9157,17 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
       "null and a < 0 order by a,b,c,d,e,f;",
       dt);
 
-    // reverse column order in outer join predicate
-    c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on d = a "
-      "where d is not null and a < 0 order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and d is not "
-      "null and a < 0 order by a,b,c,d,e,f;",
-      dt);
-
-    c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "where a < 0 order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and a < 0 "
-      "order by a,b,c,d,e,f;",
-      dt);
-
-    c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on b = e "
-      "where b is not null and a < 0 order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where b = e and b is not "
-      "null and a < 0 order by a,b,c,d,e,f;",
-      dt);
-
     //    b) return a single matching row
     c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "where a is not null order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and a is not "
+      "where d is not null order by a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and d is not "
       "null order by a,b,c,d,e,f;",
       dt);
 
     //    c) return multiple matching rows (four rows)
     c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on b = e "
-      "where b > 1 order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where b = e and b > 1 "
+      "where e > 1 order by a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where b = e and e > 1 "
       "order by a,b,c,d,e,f",
       dt);
 
@@ -9302,43 +9310,30 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
     // 3. execute left outer join via inner join
     //    a) return zero matching row
     c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and b = e where a is not null and b is not null and d < 1 order by a,b,c,d,e,f;",
+      "and b = e where a is not null and e is not null and d < 1 order by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and b = e and "
-      "a is not null and b is not null and d < 1 order by a,b,c,d,e,f;",
-      dt);
-
-    c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and c = f where a is not null and c is not null and d < 1 order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and c = f and "
-      "a is not null and c is not null and d < 1 order by a,b,c,d,e,f;",
+      "a is not null and e is not null and d < 1 order by a,b,c,d,e,f;",
       dt);
 
     c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on c = f "
-      "and b = e where c is not null and b is not null and f > 4 order by a,b,c,d,e,f;",
+      "and b = e where f > 4 order by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where c = f and b = e and "
-      "c is not null and b is not null and f > 4 order by a,b,c,d,e,f;",
+      "f > 4 order by a,b,c,d,e,f;",
       dt);
 
     //    b) return a single matching row
     c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and b = e where a is not null and b is not null and d < 999999 order by "
+      "and b = e where a is not null and e is not null and d < 999999 order by "
       "a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and b = e and "
-      "a is not null and b is not null and d < 999999 order by a,b,c,d,e,f;",
-      dt);
-
-    c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and c = f where a is not null and c is not null and d < 9999999 order by "
-      "a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and c = f and "
-      "a is not null and c is not null and d < 9999999 order by a,b,c,d,e,f;",
+      "a is not null and e is not null and d < 999999 order by a,b,c,d,e,f;",
       dt);
 
     c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on c = f "
-      "and b = e where c is not null and b is not null and e < 9999999 order by "
+      "and b = e where e < 9999999 order by "
       "a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where c = f and b = e and "
-      "c is not null and b is not null and e < 9999999 order by a,b,c,d,e,f;",
+      "c is not null and e < 9999999 order by a,b,c,d,e,f;",
       dt);
 
     {
@@ -9420,6 +9415,30 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
           "join (select a, b, c from outer_join_foo where c is not null) tmp on tmp.a = "
           "foo.a and tmp.b = foo.b and tmp.c = foo.c order by 1, 2;";
       c(test_query10, test_query10, dt);
+    }
+
+    {
+      // [BE-5764] null rejection rule issue v3
+      // reported query
+      run_ddl_statement("DROP TABLE IF EXISTS BE_5764_a;");
+      run_ddl_statement("DROP TABLE IF EXISTS BE_5764_b;");
+      run_ddl_statement(
+          "CREATE TABLE BE_5764_a (text_ TEXT, days_ DATE ENCODING DAYS(16));");
+      run_ddl_statement(
+          "CREATE TABLE BE_5764_b (text_ TEXT, days_ DATE ENCODING DAYS(16)) WITH "
+          "(PARTITIONS='REPLICATED');");
+      run_multiple_agg("INSERT INTO BE_5764_a VALUES ('A', '2021-01-01');",
+                       ExecutorDeviceType::CPU);
+      auto q1_res = run_multiple_agg(
+          "SELECT BE_5764_a.days_ FROM BE_5764_a LEFT JOIN BE_5764_b ON (BE_5764_a.days_ "
+          "= BE_5764_b.days_) WHERE (BE_5764_a.days_ >= '2020-11-20') GROUP BY 1;",
+          dt);
+      auto q2_res = run_multiple_agg(
+          "SELECT BE_5764_a.days_ FROM BE_5764_a LEFT JOIN BE_5764_b ON (BE_5764_a.days_ "
+          "= BE_5764_b.days_) WHERE (BE_5764_a.days_ >= DATE '2020-11-20') GROUP BY 1;",
+          dt);
+      CHECK_EQ(q1_res->rowCount(), (size_t)1);
+      CHECK_EQ(q1_res->rowCount(), q2_res->rowCount());
     }
   }
 }
