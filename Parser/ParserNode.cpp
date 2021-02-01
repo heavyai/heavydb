@@ -929,10 +929,15 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
     const std::shared_ptr<Analyzer::Expr> else_e_in) {
   SQLTypeInfo ti;
   bool has_agg = false;
+  std::set<int> dictionary_ids;
+
   for (auto& p : expr_pair_list) {
     auto e1 = p.first;
     CHECK(e1->get_type_info().is_boolean());
     auto e2 = p.second;
+    if (e2->get_type_info().is_dict_encoded_string()) {
+      dictionary_ids.insert(e2->get_type_info().get_comp_param());
+    }
     if (ti.get_type() == kNULLT) {
       ti = e2->get_type_info();
     } else if (e2->get_type_info().get_type() == kNULLT) {
@@ -963,6 +968,9 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
       ti.set_notnull(false);
       else_e->set_type_info(ti);
     } else if (ti != else_e->get_type_info()) {
+      if (else_e->get_type_info().is_dict_encoded_string()) {
+        dictionary_ids.insert(else_e->get_type_info().get_comp_param());
+      }
       ti.set_notnull(false);
       if (ti.is_string() && else_e->get_type_info().is_string()) {
         ti = Analyzer::BinOper::common_string_type(ti, else_e->get_type_info());
@@ -998,7 +1006,20 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
     throw std::runtime_error(
         "Can't deduce the type for case expressions, all branches null");
   }
-  return makeExpr<Analyzer::CaseExpr>(ti, has_agg, cast_expr_pair_list, else_e);
+
+  auto case_expr = makeExpr<Analyzer::CaseExpr>(ti, has_agg, cast_expr_pair_list, else_e);
+  if (ti.get_compression() != kENCODING_DICT && dictionary_ids.size() == 1 &&
+      *(dictionary_ids.begin()) > 0) {
+    // the above logic makes two assumptions when strings are present. 1) that all types
+    // in the case statement are either null or strings, and 2) that none-encoded strings
+    // will always win out over dict encoding. If we only have one dictionary, and that
+    // dictionary is not a transient dictionary, we can cast the entire case to be dict
+    // encoded and use transient dictionaries for any literals
+    ti.set_compression(kENCODING_DICT);
+    ti.set_comp_param(*dictionary_ids.begin());
+    case_expr->add_cast(ti);
+  }
+  return case_expr;
 }
 
 std::string CaseExpr::to_string() const {

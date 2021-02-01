@@ -2552,6 +2552,7 @@ TEST(Select, DistinctProjection) {
 TEST(Select, Case) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+
     c("SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE "
       "3 END) FROM test;",
       dt);
@@ -2606,6 +2607,27 @@ TEST(Select, Case) {
       "ELSE 'ooops' END AS g, "
       "COUNT(*) FROM test GROUP BY g ORDER BY g;",
       dt);
+    c(R"(SELECT CASE WHEN x = 7 THEN 'a' WHEN x = 8 then 'b' ELSE shared_dict END FROM test GROUP BY 1 ORDER BY 1 ASC;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 7 THEN 'a' WHEN x = 8 then str ELSE str END FROM test GROUP BY 1 ORDER BY 1 ASC;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 7 THEN 'a' WHEN x = 8 then str ELSE shared_dict END FROM test GROUP BY 1 ORDER BY 1 ASC;)",
+      dt);
+    c(R"(SELECT COUNT(*) FROM (SELECT CASE WHEN x = 7 THEN 1 WHEN x = 8 then str ELSE shared_dict END FROM test GROUP BY 1);)",
+      dt);
+    c(R"(SELECT COUNT(*) FROM test WHERE (CASE WHEN x = 7 THEN str ELSE 'b' END) = shared_dict;)",
+      dt);
+    {
+      const auto watchdog_state = g_enable_watchdog;
+      g_enable_watchdog = true;
+      ScopeGuard reset_Watchdog_state = [&watchdog_state] {
+        g_enable_watchdog = watchdog_state;
+      };
+      EXPECT_ANY_THROW(run_multiple_agg(
+          R"(SELECT CASE WHEN x = 7 THEN 'a' WHEN x = 8 then str ELSE fixed_str END FROM test;)",
+          dt));  // Exception: Cast from dictionary-encoded string to none-encoded would
+                 // be slow
+    }
     c("SELECT y AS key0, SUM(CASE WHEN x > 7 THEN x / (x - 7) ELSE 99 END) FROM test "
       "GROUP BY key0 ORDER BY key0;",
       dt);
@@ -8521,12 +8543,6 @@ TEST(Select, Joins_Negative_ShardKey) {
 }
 
 TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
-  const auto save_watchdog = g_enable_watchdog;
-  g_enable_watchdog = false;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner "
@@ -8642,11 +8658,6 @@ TEST(Select, Joins_InnerJoin_Filters) {
 }
 
 TEST(Select, Joins_LeftOuterJoin) {
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = "
@@ -14432,13 +14443,7 @@ TEST(Truncate, Count) {
   run_ddl_statement("drop table trunc_test;");
 }
 
-TEST(Update, VarlenSmartSwitch) {
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-  g_enable_watchdog = false;
-
+TEST(Update, BasicVarlenUpdate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -14617,12 +14622,6 @@ TEST(Update, SimpleFilter) {
 }
 
 TEST(Update, Text) {
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-  g_enable_watchdog = false;
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -14648,17 +14647,9 @@ TEST(Update, Text) {
               v<int64_t>(run_simple_agg(
                   "select count(t) from text_default where t='pizza';", dt)));
   }
-
-  g_enable_watchdog = save_watchdog;
 }
 
 TEST(Update, TextINVariant) {
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-  g_enable_watchdog = false;
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -14682,12 +14673,6 @@ TEST(Update, TextINVariant) {
 }
 
 TEST(Update, TextEncodingDict16) {
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-  g_enable_watchdog = false;
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -14725,12 +14710,6 @@ TEST(Update, TextEncodingDict16) {
 }
 
 TEST(Update, TextEncodingDict8) {
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-  g_enable_watchdog = false;
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -16239,12 +16218,6 @@ TEST(Join, InnerJoin_TwoTables) {
 TEST(Join, InnerJoin_AtLeastThreeTables) {
   SKIP_ALL_ON_AGGREGATOR();
 
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-  g_enable_watchdog = false;
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner "
@@ -16354,12 +16327,6 @@ TEST(Join, InnerJoin_Filters) {
 
 TEST(Join, LeftOuterJoin) {
   SKIP_ALL_ON_AGGREGATOR();
-
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-  g_enable_watchdog = false;
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -16773,12 +16740,6 @@ TEST(Delete, MultiDelete) {
 }
 
 TEST(Delete, Joins_ImplicitJoins) {
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-  g_enable_watchdog = false;
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("DELETE FROM test WHERE test.x = 8;", dt);
