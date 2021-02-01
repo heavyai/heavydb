@@ -2532,6 +2532,164 @@ bool ST_DWithin_LineString_Point(int8_t* l1,
 }
 
 EXTENSION_INLINE
+bool ST_DWithin_Point_Polygon(int8_t* p,
+                              int64_t psize,
+                              int8_t* poly_coords,
+                              int64_t poly_coords_size,
+                              int32_t* poly_ring_sizes,
+                              int64_t poly_num_rings,
+                              double* poly_bounds,
+                              int64_t poly_bounds_size,
+                              int32_t ic1,
+                              int32_t isr1,
+                              int32_t ic2,
+                              int32_t isr2,
+                              int32_t osr,
+                              double distance_within) {
+  if (poly_bounds) {
+    if (!point_dwithin_box(p,
+                           psize,
+                           ic1,
+                           isr1,
+                           poly_bounds,
+                           poly_bounds_size,
+                           isr2,
+                           osr,
+                           distance_within)) {
+      return false;
+    }
+  }
+
+  // May need to adjust the threshold by TOLERANCE_DEFAULT
+  // TODO: inject short-circuit threshold
+  return ST_Distance_Point_Polygon(p,
+                                   psize,
+                                   poly_coords,
+                                   poly_coords_size,
+                                   poly_ring_sizes,
+                                   poly_num_rings,
+                                   ic1,
+                                   isr1,
+                                   ic2,
+                                   isr2,
+                                   osr) <= distance_within;
+}
+
+EXTENSION_INLINE
+bool ST_DWithin_Polygon_Point(int8_t* poly_coords,
+                              int64_t poly_coords_size,
+                              int32_t* poly_ring_sizes,
+                              int64_t poly_num_rings,
+                              double* poly_bounds,
+                              int64_t poly_bounds_size,
+                              int8_t* p,
+                              int64_t psize,
+                              int32_t ic1,
+                              int32_t isr1,
+                              int32_t ic2,
+                              int32_t isr2,
+                              int32_t osr,
+                              double distance_within) {
+  return ST_DWithin_Point_Polygon(p,
+                                  psize,
+                                  poly_coords,
+                                  poly_coords_size,
+                                  poly_ring_sizes,
+                                  poly_num_rings,
+                                  poly_bounds,
+                                  poly_bounds_size,
+                                  ic2,
+                                  isr2,
+                                  ic1,
+                                  isr1,
+                                  osr,
+                                  distance_within);
+}
+
+EXTENSION_INLINE
+bool ST_DWithin_Point_MultiPolygon(int8_t* p,
+                                   int64_t psize,
+                                   int8_t* mpoly_coords,
+                                   int64_t mpoly_coords_size,
+                                   int32_t* mpoly_ring_sizes,
+                                   int64_t mpoly_num_rings,
+                                   int32_t* mpoly_poly_sizes,
+                                   int64_t mpoly_num_polys,
+                                   double* mpoly_bounds,
+                                   int64_t mpoly_bounds_size,
+                                   int32_t ic1,
+                                   int32_t isr1,
+                                   int32_t ic2,
+                                   int32_t isr2,
+                                   int32_t osr,
+                                   double distance_within) {
+  if (mpoly_bounds) {
+    if (!point_dwithin_box(p,
+                           psize,
+                           ic1,
+                           isr1,
+                           mpoly_bounds,
+                           mpoly_bounds_size,
+                           isr2,
+                           osr,
+                           distance_within)) {
+      return false;
+    }
+  }
+
+  // May need to adjust the threshold by TOLERANCE_DEFAULT
+  // TODO: inject short-circuit threshold
+  return ST_Distance_Point_MultiPolygon(p,
+                                        psize,
+                                        mpoly_coords,
+                                        mpoly_coords_size,
+                                        mpoly_ring_sizes,
+                                        mpoly_num_rings,
+                                        mpoly_poly_sizes,
+                                        mpoly_num_polys,
+                                        ic1,
+                                        isr1,
+                                        ic2,
+                                        isr2,
+                                        osr) <= distance_within;
+}
+
+EXTENSION_INLINE
+bool ST_DWithin_MultiPolygon_Point(int8_t* mpoly_coords,
+                                   int64_t mpoly_coords_size,
+                                   int32_t* mpoly_ring_sizes,
+                                   int64_t mpoly_num_rings,
+                                   int32_t* mpoly_poly_sizes,
+                                   int64_t mpoly_num_polys,
+                                   double* mpoly_bounds,
+                                   int64_t mpoly_bounds_size,
+                                   int8_t* p,
+                                   int64_t psize,
+                                   int32_t ic1,
+                                   int32_t isr1,
+                                   int32_t ic2,
+                                   int32_t isr2,
+                                   int32_t osr,
+                                   double distance_within) {
+  return ST_DWithin_Point_MultiPolygon(p,
+                                       psize,
+                                       mpoly_coords,
+                                       mpoly_coords_size,
+                                       mpoly_ring_sizes,
+                                       mpoly_num_rings,
+                                       mpoly_poly_sizes,
+                                       mpoly_num_polys,
+                                       mpoly_bounds,
+                                       mpoly_bounds_size,
+                                       ic2,
+                                       isr2,
+                                       ic1,
+                                       isr1,
+                                       osr,
+                                       distance_within);
+}
+
+EXTENSION_INLINE
 bool ST_DWithin_LineString_LineString(int8_t* l1,
                                       int64_t l1size,
                                       double* l1bounds,
