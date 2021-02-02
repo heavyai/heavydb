@@ -1132,14 +1132,21 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateTernaryGeoFunction(
   std::string specialized_geofunc{function_name + suffix(arg0_ti.get_type()) +
                                   suffix(arg1_ti.get_type())};
 
-  if (specialized_geofunc == "ST_DWithin_Point_Point"sv ||
-      specialized_geofunc == "ST_DWithin_Point_LineString"sv ||
-      specialized_geofunc == "ST_DWithin_LineString_Point"sv ||
-      specialized_geofunc == "ST_DWithin_Point_Polygon"sv ||
-      specialized_geofunc == "ST_DWithin_Polygon_Point"sv ||
-      specialized_geofunc == "ST_DWithin_Point_MultiPolygon"sv ||
-      specialized_geofunc == "ST_DWithin_MultiPolygon_Point"sv ||
-      specialized_geofunc == "ST_DWithin_LineString_LineString"sv) {
+  if (func_resolve(specialized_geofunc,
+                   "ST_DWithin_Point_Point"sv,
+                   "ST_DWithin_Point_LineString"sv,
+                   "ST_DWithin_LineString_Point"sv,
+                   "ST_DWithin_Point_Polygon"sv,
+                   "ST_DWithin_Polygon_Point"sv,
+                   "ST_DWithin_Point_MultiPolygon"sv,
+                   "ST_DWithin_MultiPolygon_Point"sv,
+                   "ST_DWithin_LineString_LineString"sv,
+                   "ST_DWithin_LineString_Polygon"sv,
+                   "ST_DWithin_Polygon_LineString"sv,
+                   "ST_DWithin_Polygon_Polygon"sv,
+                   "ST_DWithin_Polygon_MultiPolygon"sv,
+                   "ST_DWithin_MultiPolygon_Polygon"sv,
+                   "ST_DWithin_MultiPolygon_MultiPolygon"sv)) {
     std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
     geoargs.insert(geoargs.end(), geoargs0.begin(), geoargs0.end());
     geoargs.insert(geoargs.end(), geoargs1.begin(), geoargs1.end());
