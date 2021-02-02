@@ -1033,7 +1033,7 @@ std::tuple<std::vector<bool>, size_t> ResultSet::getSupportedSingleSlotTargetBit
   for (size_t target_idx = 0; target_idx < single_slot_targets.size(); target_idx++) {
     const auto& target = targets_[target_idx];
     if (single_slot_targets[target_idx] &&
-        (is_distinct_target(target) ||
+        (is_distinct_target(target) || target.agg_kind == kAPPROX_MEDIAN ||
          (target.is_agg && target.agg_kind == kSAMPLE && target.sql_type == kFLOAT))) {
       single_slot_targets[target_idx] = false;
       num_single_slot_targets--;

@@ -2295,6 +2295,20 @@ TEST(Select, ApproxMedianLargeInts) {
   }
 }
 
+TEST(Select, ApproxMedianSubqueries) {
+  if (g_aggregator) {
+    LOG(WARNING) << "Skipping ApproxMedianLargeInts tests in distributed mode.";
+  } else {
+    auto const dt = ExecutorDeviceType::CPU;
+    const char* query =
+        "SELECT MIN(am) FROM (SELECT x, APPROX_MEDIAN(w) AS am FROM test GROUP BY x);";
+    EXPECT_EQ(-8.0, v<double>(run_simple_agg(query, dt)));
+    query =
+        "SELECT MAX(am) FROM (SELECT x, APPROX_MEDIAN(w) AS am FROM test GROUP BY x);";
+    EXPECT_EQ(-7.0, v<double>(run_simple_agg(query, dt)));
+  }
+}
+
 TEST(Select, ScanNoAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

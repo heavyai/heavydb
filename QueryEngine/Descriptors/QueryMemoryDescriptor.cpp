@@ -23,6 +23,8 @@
 #include "../UsedColumnsVisitor.h"
 #include "ColSlotContext.h"
 
+#include <boost/algorithm/cxx11/any_of.hpp>
+
 bool g_enable_smem_group_by{true};
 extern bool g_enable_columnar_output;
 
@@ -372,6 +374,15 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       streaming_top_n);
 }
 
+namespace {
+bool anyOf(std::vector<Analyzer::Expr*> const& target_exprs, SQLAgg const agg_kind) {
+  return boost::algorithm::any_of(target_exprs, [agg_kind](Analyzer::Expr const* expr) {
+    auto const* const agg = dynamic_cast<Analyzer::AggExpr const*>(expr);
+    return agg && agg->get_aggtype() == agg_kind;
+  });
+}
+}  // namespace
+
 QueryMemoryDescriptor::QueryMemoryDescriptor(
     const Executor* executor,
     const RelAlgExecutionUnit& ra_exe_unit,
@@ -428,17 +439,19 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
         output_columnar_ = output_columnar_hint;
         break;
       case QueryDescriptionType::GroupByPerfectHash:
-        output_columnar_ =
-            output_columnar_hint && QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
-                                        count_distinct_descriptors_);
+        output_columnar_ = output_columnar_hint &&
+                           QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
+                               count_distinct_descriptors_) &&
+                           !anyOf(ra_exe_unit.target_exprs, kAPPROX_MEDIAN);
         break;
       case QueryDescriptionType::GroupByBaselineHash:
         output_columnar_ = output_columnar_hint;
         break;
       case QueryDescriptionType::NonGroupedAggregate:
-        output_columnar_ =
-            output_columnar_hint && QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
-                                        count_distinct_descriptors_);
+        output_columnar_ = output_columnar_hint &&
+                           QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
+                               count_distinct_descriptors_) &&
+                           !anyOf(ra_exe_unit.target_exprs, kAPPROX_MEDIAN);
         break;
       default:
         output_columnar_ = false;

@@ -1718,6 +1718,17 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
   return TargetValue(nullptr);
 }
 
+namespace {
+double calculate_quantile(quantile::TDigest* const t_digest, double const q) {
+  static_assert(sizeof(int64_t) == sizeof(quantile::TDigest*));
+  CHECK(t_digest) << "t_digest=" << (void*)t_digest << ", q=" << q;
+  t_digest->mergeBuffer();
+  double const median = t_digest->quantile(q);
+  VLOG(2) << "median(" << median << ") t_digest->centroids()=" << t_digest->centroids();
+  return boost::math::isnan(median) ? NULL_DOUBLE : median;
+}
+}  // namespace
+
 // Reads an integer or a float from ptr based on the type and the byte width.
 TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
                                        const int8_t compact_sz,
@@ -1778,6 +1789,9 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
     }
   }
   if (chosen_type.is_fp()) {
+    if (target_info.agg_kind == kAPPROX_MEDIAN) {
+      return calculate_quantile(*reinterpret_cast<quantile::TDigest* const*>(ptr), 0.5);
+    }
     switch (actual_compact_sz) {
       case 8: {
         const auto dval = *reinterpret_cast<const double*>(ptr);
@@ -1848,18 +1862,6 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
   return TargetValue(int64_t(0));
 }
 
-namespace {
-double calculate_quantile(int8_t const* ptr, double const q) {
-  static_assert(sizeof(int64_t) == sizeof(quantile::TDigest*));
-  auto* t_digest = *reinterpret_cast<quantile::TDigest* const*>(ptr);
-  CHECK(t_digest) << "ptr=" << (void const*)ptr << ", q=" << q;
-  t_digest->mergeBuffer();
-  double const median = t_digest->quantile(q);
-  VLOG(2) << "median(" << median << ") t_digest->centroids()=" << t_digest->centroids();
-  return boost::math::isnan(median) ? NULL_DOUBLE : median;
-}
-}  // namespace
-
 // Gets the TargetValue stored at position local_entry_idx in the col1_ptr and col2_ptr
 // column buffers. The second column is only used for AVG.
 // the global_entry_idx is passed to makeTargetValue to be used for
@@ -1911,8 +1913,6 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(
                                        target_logical_idx,
                                        translate_strings,
                                        global_entry_idx);
-  } else if (target_info.agg_kind == kAPPROX_MEDIAN) {
-    return calculate_quantile(ptr1, 0.5);
   }
   if (query_mem_desc_.targetGroupbyIndicesSize() == 0 ||
       query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) < 0) {
@@ -2015,8 +2015,6 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
                                        target_logical_idx,
                                        translate_strings,
                                        entry_buff_idx);
-  } else if (target_info.agg_kind == kAPPROX_MEDIAN) {
-    return calculate_quantile(rowwise_target_ptr, 0.5);
   }
   if (query_mem_desc_.targetGroupbyIndicesSize() == 0 ||
       query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) < 0) {
