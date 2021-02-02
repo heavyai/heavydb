@@ -2503,35 +2503,6 @@ bool ST_DWithin_Point_LineString(int8_t* p1,
 }
 
 EXTENSION_INLINE
-bool ST_DWithin_LineString_Point(int8_t* l1,
-                                 int64_t l1size,
-                                 double* l1bounds,
-                                 int64_t l1bounds_size,
-                                 int32_t l1index,
-                                 int8_t* p2,
-                                 int64_t p2size,
-                                 int32_t ic1,
-                                 int32_t isr1,
-                                 int32_t ic2,
-                                 int32_t isr2,
-                                 int32_t osr,
-                                 double distance_within) {
-  return ST_DWithin_Point_LineString(p2,
-                                     p2size,
-                                     l1,
-                                     l1size,
-                                     l1bounds,
-                                     l1bounds_size,
-                                     l1index,
-                                     ic2,
-                                     isr2,
-                                     ic1,
-                                     isr1,
-                                     osr,
-                                     distance_within);
-}
-
-EXTENSION_INLINE
 bool ST_DWithin_Point_Polygon(int8_t* p,
                               int64_t psize,
                               int8_t* poly_coords,
@@ -2573,37 +2544,6 @@ bool ST_DWithin_Point_Polygon(int8_t* p,
                                    ic2,
                                    isr2,
                                    osr) <= distance_within;
-}
-
-EXTENSION_INLINE
-bool ST_DWithin_Polygon_Point(int8_t* poly_coords,
-                              int64_t poly_coords_size,
-                              int32_t* poly_ring_sizes,
-                              int64_t poly_num_rings,
-                              double* poly_bounds,
-                              int64_t poly_bounds_size,
-                              int8_t* p,
-                              int64_t psize,
-                              int32_t ic1,
-                              int32_t isr1,
-                              int32_t ic2,
-                              int32_t isr2,
-                              int32_t osr,
-                              double distance_within) {
-  return ST_DWithin_Point_Polygon(p,
-                                  psize,
-                                  poly_coords,
-                                  poly_coords_size,
-                                  poly_ring_sizes,
-                                  poly_num_rings,
-                                  poly_bounds,
-                                  poly_bounds_size,
-                                  ic2,
-                                  isr2,
-                                  ic1,
-                                  isr1,
-                                  osr,
-                                  distance_within);
 }
 
 EXTENSION_INLINE
@@ -2652,41 +2592,6 @@ bool ST_DWithin_Point_MultiPolygon(int8_t* p,
                                         ic2,
                                         isr2,
                                         osr) <= distance_within;
-}
-
-EXTENSION_INLINE
-bool ST_DWithin_MultiPolygon_Point(int8_t* mpoly_coords,
-                                   int64_t mpoly_coords_size,
-                                   int32_t* mpoly_ring_sizes,
-                                   int64_t mpoly_num_rings,
-                                   int32_t* mpoly_poly_sizes,
-                                   int64_t mpoly_num_polys,
-                                   double* mpoly_bounds,
-                                   int64_t mpoly_bounds_size,
-                                   int8_t* p,
-                                   int64_t psize,
-                                   int32_t ic1,
-                                   int32_t isr1,
-                                   int32_t ic2,
-                                   int32_t isr2,
-                                   int32_t osr,
-                                   double distance_within) {
-  return ST_DWithin_Point_MultiPolygon(p,
-                                       psize,
-                                       mpoly_coords,
-                                       mpoly_coords_size,
-                                       mpoly_ring_sizes,
-                                       mpoly_num_rings,
-                                       mpoly_poly_sizes,
-                                       mpoly_num_polys,
-                                       mpoly_bounds,
-                                       mpoly_bounds_size,
-                                       ic2,
-                                       isr2,
-                                       ic1,
-                                       isr1,
-                                       osr,
-                                       distance_within);
 }
 
 EXTENSION_INLINE
@@ -2785,43 +2690,6 @@ bool ST_DWithin_LineString_Polygon(int8_t* l1,
 }
 
 EXTENSION_INLINE
-bool ST_DWithin_Polygon_LineString(int8_t* poly_coords,
-                                   int64_t poly_coords_size,
-                                   int32_t* poly_ring_sizes,
-                                   int64_t poly_num_rings,
-                                   double* poly_bounds,
-                                   int64_t poly_bounds_size,
-                                   int8_t* l2,
-                                   int64_t l2size,
-                                   double* l2bounds,
-                                   int64_t l2bounds_size,
-                                   int32_t l2index,
-                                   int32_t ic1,
-                                   int32_t isr1,
-                                   int32_t ic2,
-                                   int32_t isr2,
-                                   int32_t osr,
-                                   double distance_within) {
-  return ST_DWithin_LineString_Polygon(l2,
-                                       l2size,
-                                       l2bounds,
-                                       l2bounds_size,
-                                       l2index,
-                                       poly_coords,
-                                       poly_coords_size,
-                                       poly_ring_sizes,
-                                       poly_num_rings,
-                                       poly_bounds,
-                                       poly_bounds_size,
-                                       ic2,
-                                       isr2,
-                                       ic1,
-                                       isr1,
-                                       osr,
-                                       distance_within);
-}
-
-EXTENSION_INLINE
 bool ST_DWithin_LineString_MultiPolygon(int8_t* l1,
                                         int64_t l1size,
                                         double* l1bounds,
@@ -2871,47 +2739,6 @@ bool ST_DWithin_LineString_MultiPolygon(int8_t* l1,
                                              ic2,
                                              isr2,
                                              osr) <= distance_within;
-}
-
-EXTENSION_INLINE
-bool ST_DWithin_MultiPolygon_LineString(int8_t* mpoly_coords,
-                                        int64_t mpoly_coords_size,
-                                        int32_t* mpoly_ring_sizes,
-                                        int64_t mpoly_num_rings,
-                                        int32_t* mpoly_poly_sizes,
-                                        int64_t mpoly_num_polys,
-                                        double* mpoly_bounds,
-                                        int64_t mpoly_bounds_size,
-                                        int8_t* l2,
-                                        int64_t l2size,
-                                        double* l2bounds,
-                                        int64_t l2bounds_size,
-                                        int32_t l2index,
-                                        int32_t ic1,
-                                        int32_t isr1,
-                                        int32_t ic2,
-                                        int32_t isr2,
-                                        int32_t osr,
-                                        double distance_within) {
-  return ST_DWithin_LineString_MultiPolygon(l2,
-                                            l2size,
-                                            l2bounds,
-                                            l2bounds_size,
-                                            l2index,
-                                            mpoly_coords,
-                                            mpoly_coords_size,
-                                            mpoly_ring_sizes,
-                                            mpoly_num_rings,
-                                            mpoly_poly_sizes,
-                                            mpoly_num_polys,
-                                            mpoly_bounds,
-                                            mpoly_bounds_size,
-                                            ic2,
-                                            isr2,
-                                            ic1,
-                                            isr1,
-                                            osr,
-                                            distance_within);
 }
 
 EXTENSION_INLINE
@@ -3016,49 +2843,6 @@ bool ST_DWithin_Polygon_MultiPolygon(int8_t* poly_coords,
                                           ic2,
                                           isr2,
                                           osr) <= distance_within;
-}
-
-EXTENSION_INLINE
-bool ST_DWithin_MultiPolygon_Polygon(int8_t* mpoly_coords,
-                                     int64_t mpoly_coords_size,
-                                     int32_t* mpoly_ring_sizes,
-                                     int64_t mpoly_num_rings,
-                                     int32_t* mpoly_poly_sizes,
-                                     int64_t mpoly_num_polys,
-                                     double* mpoly_bounds,
-                                     int64_t mpoly_bounds_size,
-                                     int8_t* poly_coords,
-                                     int64_t poly_coords_size,
-                                     int32_t* poly_ring_sizes,
-                                     int64_t poly_num_rings,
-                                     double* poly_bounds,
-                                     int64_t poly_bounds_size,
-                                     int32_t ic1,
-                                     int32_t isr1,
-                                     int32_t ic2,
-                                     int32_t isr2,
-                                     int32_t osr,
-                                     double distance_within) {
-  return ST_DWithin_Polygon_MultiPolygon(poly_coords,
-                                         poly_coords_size,
-                                         poly_ring_sizes,
-                                         poly_num_rings,
-                                         poly_bounds,
-                                         poly_bounds_size,
-                                         mpoly_coords,
-                                         mpoly_coords_size,
-                                         mpoly_ring_sizes,
-                                         mpoly_num_rings,
-                                         mpoly_poly_sizes,
-                                         mpoly_num_polys,
-                                         mpoly_bounds,
-                                         mpoly_bounds_size,
-                                         ic2,
-                                         isr2,
-                                         ic1,
-                                         isr1,
-                                         osr,
-                                         distance_within);
 }
 
 EXTENSION_INLINE

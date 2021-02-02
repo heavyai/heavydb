@@ -17282,7 +17282,7 @@ TEST(Select, GeoSpatial_Basics) {
     ASSERT_EQ(
         static_cast<int64_t>(5),
         v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(p,l) < 2.0;", dt)));
+            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(l,p) <= 2.0;", dt)));
     ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
@@ -18378,6 +18378,13 @@ TEST(Select, GeoSpatial_Projection) {
                                         "'POLYGON((4 2, 5 3, 4 3))', "
                                         "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
                                         "((1 1, -1 1, -1 -1, 1 -1, 1 1)))', "
+                                        "3.0) from geospatial_test limit 1;",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("SELECT ST_DWithin("
+                                        "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
+                                        "((1 1, -1 1, -1 -1, 1 -1, 1 1)))', "
+                                        "'POLYGON((4 2, 5 3, 4 3))', "
                                         "3.0) from geospatial_test limit 1;",
                                         dt)));
     ASSERT_EQ(static_cast<int64_t>(1),

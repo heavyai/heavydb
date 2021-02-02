@@ -1102,55 +1102,36 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateTernaryGeoFunction(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(3), rex_function->size());
 
-  auto function_name = rex_function->getName();
-  auto return_type = rex_function->getType();
-  bool with_bounds = true;
-  SQLTypeInfo arg0_ti;
-  SQLTypeInfo arg1_ti;
-  int32_t lindex0 = 0;
-  int32_t lindex1 = 0;
-
-  auto geoargs0 = translateGeoFunctionArg(
-      rex_function->getOperand(0), arg0_ti, lindex0, with_bounds, false, false);
-  if (arg0_ti.get_type() == kLINESTRING) {
-    Datum index;
-    index.intval = lindex0;
-    geoargs0.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));
-  }
-  auto geoargs1 = translateGeoFunctionArg(
-      rex_function->getOperand(1), arg1_ti, lindex1, with_bounds, false, false);
-  if (arg1_ti.get_type() == kLINESTRING) {
-    Datum index;
-    index.intval = lindex1;
-    geoargs1.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));
-  }
   auto distance_expr = translateScalarRex(rex_function->getOperand(2));
   const auto& distance_ti = SQLTypeInfo(kDOUBLE, false);
   if (distance_expr->get_type_info().get_type() != kDOUBLE) {
     distance_expr = distance_expr->add_cast(distance_ti);
   }
-  std::string specialized_geofunc{function_name + suffix(arg0_ti.get_type()) +
-                                  suffix(arg1_ti.get_type())};
 
-  if (func_resolve(specialized_geofunc,
-                   "ST_DWithin_Point_Point"sv,
-                   "ST_DWithin_Point_LineString"sv,
-                   "ST_DWithin_LineString_Point"sv,
-                   "ST_DWithin_Point_Polygon"sv,
-                   "ST_DWithin_Polygon_Point"sv,
-                   "ST_DWithin_Point_MultiPolygon"sv,
-                   "ST_DWithin_MultiPolygon_Point"sv,
-                   "ST_DWithin_LineString_LineString"sv,
-                   "ST_DWithin_LineString_Polygon"sv,
-                   "ST_DWithin_Polygon_LineString"sv,
-                   "ST_DWithin_Polygon_Polygon"sv,
-                   "ST_DWithin_Polygon_MultiPolygon"sv,
-                   "ST_DWithin_MultiPolygon_Polygon"sv,
-                   "ST_DWithin_MultiPolygon_MultiPolygon"sv)) {
-    std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
-    geoargs.insert(geoargs.end(), geoargs0.begin(), geoargs0.end());
-    geoargs.insert(geoargs.end(), geoargs1.begin(), geoargs1.end());
+  auto function_name = rex_function->getName();
+  if (function_name == "ST_DWithin"sv) {
+    auto return_type = rex_function->getType();
+    bool swap_args = false;
+    bool with_bounds = true;
+    SQLTypeInfo arg0_ti;
+    SQLTypeInfo arg1_ti;
+    int32_t lindex0 = 0;
+    int32_t lindex1 = 0;
 
+    auto geoargs0 = translateGeoFunctionArg(
+        rex_function->getOperand(0), arg0_ti, lindex0, with_bounds, false, false);
+    if (arg0_ti.get_type() == kLINESTRING) {
+      Datum index;
+      index.intval = lindex0;
+      geoargs0.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));
+    }
+    auto geoargs1 = translateGeoFunctionArg(
+        rex_function->getOperand(1), arg1_ti, lindex1, with_bounds, false, false);
+    if (arg1_ti.get_type() == kLINESTRING) {
+      Datum index;
+      index.intval = lindex1;
+      geoargs1.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));
+    }
     if (arg0_ti.get_subtype() == kGEOMETRY &&
         arg0_ti.get_subtype() != arg1_ti.get_subtype()) {
       throw QueryNotSupported(rex_function->getName() +
@@ -1161,29 +1142,52 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateTernaryGeoFunction(
         arg0_ti.get_output_srid() != arg1_ti.get_output_srid()) {
       throw QueryNotSupported(rex_function->getName() + " cannot accept different SRIDs");
     }
-    // Add first input's compression mode and SRID args to enable on-the-fly
+
+    if ((arg1_ti.get_type() == kPOINT && arg0_ti.get_type() != kPOINT) ||
+        (arg1_ti.get_type() == kLINESTRING && arg0_ti.get_type() == kPOLYGON) ||
+        (arg1_ti.get_type() == kPOLYGON && arg0_ti.get_type() == kMULTIPOLYGON)) {
+      // Swap arguments and use single implementation per arg pair
+      swap_args = true;
+    }
+
+    // First input's compression mode and SRID args to enable on-the-fly
     // decompression/transforms
     Datum input_compression0;
     input_compression0.intval = Geospatial::get_compression_scheme(arg0_ti);
-    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression0));
     Datum input_srid0;
     input_srid0.intval = arg0_ti.get_input_srid();
-    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid0));
 
-    // Add second input's compression mode and SRID args to enable on-the-fly
+    // Second input's compression mode and SRID args to enable on-the-fly
     // decompression/transforms
     Datum input_compression1;
     input_compression1.intval = Geospatial::get_compression_scheme(arg1_ti);
-    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression1));
     Datum input_srid1;
     input_srid1.intval = arg1_ti.get_input_srid();
-    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid1));
 
-    // Add output SRID arg to enable on-the-fly transforms
+    // Output SRID arg to enable on-the-fly transforms
     Datum output_srid;
     output_srid.intval = arg0_ti.get_output_srid();
-    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, output_srid));
 
+    std::string specialized_geofunc{function_name};
+    std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
+    if (swap_args) {
+      specialized_geofunc += suffix(arg1_ti.get_type()) + suffix(arg0_ti.get_type());
+      geoargs.insert(geoargs.end(), geoargs1.begin(), geoargs1.end());
+      geoargs.insert(geoargs.end(), geoargs0.begin(), geoargs0.end());
+      geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression1));
+      geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid1));
+      geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression0));
+      geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid0));
+    } else {
+      specialized_geofunc += suffix(arg0_ti.get_type()) + suffix(arg1_ti.get_type());
+      geoargs.insert(geoargs.end(), geoargs0.begin(), geoargs0.end());
+      geoargs.insert(geoargs.end(), geoargs1.begin(), geoargs1.end());
+      geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression0));
+      geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid0));
+      geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression1));
+      geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid1));
+    }
+    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, output_srid));
     // Also add the within distance
     geoargs.push_back(distance_expr);
 
