@@ -1075,7 +1075,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   // At this point, only ST_Distance_LineString_LineString requires a threshold arg.
   // TODO: Other combinations that involve LINESTRING, POLYGON and MULTIPOLYGON args
   // TODO: Inject threshold into ST_MaxDistance
-  if (specialized_geofunc == "ST_Distance_LineString_LineString"sv) {
+  if (function_name == "ST_Distance"sv && arg0_ti.get_subtype() != kGEOGRAPHY &&
+      (arg0_ti.get_type() != kPOINT || arg1_ti.get_type() != kPOINT)) {
     if (threshold_expr) {
       if (threshold_expr->get_type_info().get_type() != kDOUBLE) {
         const auto& threshold_ti = SQLTypeInfo(kDOUBLE, false);
