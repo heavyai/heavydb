@@ -135,6 +135,7 @@ class ForeignTableTest : public DBHandlerTestFixture {
 class SelectQueryTest : public ForeignTableTest {
  protected:
   void SetUp() override {
+    g_enable_fsi = true;
     ForeignTableTest::SetUp();
     import_export::delimited_parser::set_max_buffer_resize(max_buffer_resize_);
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
@@ -143,6 +144,7 @@ class SelectQueryTest : public ForeignTableTest {
   }
 
   void TearDown() override {
+    g_enable_fsi = true;
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_2;");
     sql("DROP SERVER IF EXISTS test_server;");
@@ -965,6 +967,17 @@ TEST_F(SelectQueryTest, SchemaMismatch_CSV_Multithreaded) {
                           "Exception: Mismatched number of logical columns: (expected 5 "
                           "columns, has 4): in file '" +
                               getDataFilesPath() + "0_255.csv'");
+}
+
+TEST_F(SelectQueryTest, ExistingTableWithFsiDisabled) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (i INTEGER) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "/1.csv');";
+  sql(query);
+  g_enable_fsi = false;
+  queryAndAssertException("SELECT * FROM test_foreign_table;",
+                          "Exception: Query cannot be executed for foreign table because "
+                          "FSI is currently disabled.");
 }
 
 INSTANTIATE_TEST_SUITE_P(CachOnOffSelectQueryTests,

@@ -22,6 +22,7 @@
 #include "ForeignTableSchema.h"
 #include "ParquetDataWrapper.h"
 
+extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
 
 namespace foreign_storage {
@@ -142,6 +143,10 @@ bool ForeignStorageMgr::fetchBufferIfTempBufferMapEntryExists(
 void ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
     ChunkMetadataVector& chunk_metadata,
     const ChunkKey& key_prefix) {
+  if (!g_enable_fsi) {
+    throw ForeignStorageException{
+        "Query cannot be executed for foreign table because FSI is currently disabled."};
+  }
   CHECK(is_table_key(key_prefix));
   checkIfS3NeedsToBeEnabled(key_prefix);
   createDataWrapperIfNotExists(key_prefix);
