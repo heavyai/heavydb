@@ -69,7 +69,7 @@ std::string SQLTypeInfo::comp_name[kENCODING_LAST] =
     {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
 
 int64_t parse_numeric(const std::string_view s, SQLTypeInfo& ti) {
-  assert(s.length() <= 20);
+  assert(s.length() <= 30);
   size_t dot = s.find_first_of('.', 0);
   std::string before_dot;
   std::string after_dot;

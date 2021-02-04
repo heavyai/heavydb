@@ -31,6 +31,7 @@
 #include "ImportExport/DelimitedParserUtils.h"
 #include "ImportExport/Importer.h"
 #include "Shared/sqltypes.h"
+#include "Shared/thread_count.h"
 #include "Utils/DdlUtils.h"
 
 namespace foreign_storage {
@@ -357,7 +358,7 @@ size_t get_thread_count(const import_export::CopyParams& copy_params,
                         const size_t buffer_size) {
   size_t thread_count = copy_params.threads;
   if (thread_count == 0) {
-    thread_count = std::thread::hardware_concurrency();
+    thread_count = cpu_threads();
   }
   if (size_known) {
     size_t num_buffers_in_file = (file_size + buffer_size - 1) / buffer_size;
@@ -374,7 +375,7 @@ size_t get_thread_count(const import_export::CopyParams& copy_params,
   size_t thread_count = copy_params.threads;
   if (thread_count == 0) {
     thread_count =
-        std::min<size_t>(std::thread::hardware_concurrency(), file_regions.size());
+        std::min<size_t>(cpu_threads(), file_regions.size());
   }
   CHECK(thread_count);
   return thread_count;
