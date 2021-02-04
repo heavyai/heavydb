@@ -151,6 +151,9 @@ class HashJoin {
       const Analyzer::ColumnVar* hash_col,
       const std::vector<Fragmenter_Namespace::FragmentInfo>& fragment_info,
       const Data_Namespace::MemoryLevel effective_memory_level,
+#ifdef HAVE_DCPMM
+      const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
       const int device_id,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
       DeviceAllocator* dev_buff_owner,
@@ -253,6 +256,12 @@ class HashJoin {
       const Executor* executor);
 
  protected:
+  // We don't want to create JoinHashTable for big ranges
+  // with small number of valid entries. Therefore we set
+  // a minimal part (in percent) of a table which has to
+  // be filled with valid entries.
+  static constexpr size_t huge_join_hash_min_load_ = 10;
+
   virtual size_t getComponentBufferSize() const noexcept = 0;
 
   std::vector<std::shared_ptr<HashTable>> hash_tables_for_device_;

@@ -617,4 +617,10 @@ service OmniSci {
   # user-defined functions
   map<string, string> get_device_parameters(1: TSessionId session) throws (1: TOmniSciException e)
   void register_runtime_extension_functions(1: TSessionId session, 2: list<extension_functions.TUserDefinedFunction> udfs, 3: list<extension_functions.TUserDefinedTableFunction> udtfs, 4: map<string, string> device_ir_map) throws (1: TOmniSciException e)
+  # Intel(R) Optane DCPMM
+  bool heat_column(1: TSessionId session 2: string table_name 3: string column_name) throws (1: TOmniSciException e)
+  bool cool_column(1: TSessionId session 2: string table_name 3: string column_name) throws (1: TOmniSciException e)
+  void start_profiling(1: TSessionId session) throws (1: TOmniSciException e)
+  void stop_profiling(1: TSessionId session) throws (1: TOmniSciException e)
+  i64 estimate_dram_size(1: TSessionId session 2: i32 perf_bar) throws (1: TOmniSciException e)
 }

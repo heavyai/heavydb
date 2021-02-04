@@ -266,6 +266,17 @@ StandardCommand(Help, {
                "specified file and returns a CREATE TABLE statement\n";
   std::cout << "\\clear_cpu Releases CPU memory held by OmniSci server Data Manager\n";
   std::cout << "\\clear_gpu Releases GPU memory held by OmniSci server Data Manager\n";
+  std::cout << "\\heat_column <table> <column> Set "
+               "<table>.<column> hot.\n";
+  std::cout << "\\cool_column <table> <column> Set "
+               "<table>.<column> cold.\n";
+  std::cout << "\\start_profiling Start "
+               "data manager profiling.\n";
+  std::cout << "\\stop_profiling Stop "
+               "data manager profiling.\n";
+  std::cout
+      << "\\estimate_dram_size <perf_bar> Estimate"
+         "amount of DRAM recommended to meet a performance target in AppDirect mode.\n";
 
   std::cout << "\\q Quit.\n";
   std::cout.flush();

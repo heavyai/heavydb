@@ -58,6 +58,9 @@ class PerfectJoinHashTable : public HashJoin {
       const Data_Namespace::MemoryLevel memory_level,
       const HashType preferred_hash_type,
       const int device_count,
+#ifdef HAVE_DCPMM
+      const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
       ColumnCacheMap& column_cache,
       Executor* executor);
 
@@ -136,6 +139,9 @@ class PerfectJoinHashTable : public HashJoin {
                        const Analyzer::ColumnVar* col_var,
                        const std::vector<InputTableInfo>& query_infos,
                        const Data_Namespace::MemoryLevel memory_level,
+#ifdef HAVE_DCPMM
+                       const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
                        const HashType preferred_hash_type,
                        const ExpressionRange& col_range,
                        ColumnCacheMap& column_cache,
@@ -145,6 +151,9 @@ class PerfectJoinHashTable : public HashJoin {
       , col_var_(std::dynamic_pointer_cast<Analyzer::ColumnVar>(col_var->deep_copy()))
       , query_infos_(query_infos)
       , memory_level_(memory_level)
+#ifdef HAVE_DCPMM
+      , eo_(eo)
+#endif /* HAVE_DCPMM */
       , hash_type_(preferred_hash_type)
       , col_range_(col_range)
       , executor_(executor)
@@ -197,6 +206,10 @@ class PerfectJoinHashTable : public HashJoin {
   Executor* executor_;
   ColumnCacheMap& column_cache_;
   const int device_count_;
+
+#ifdef HAVE_DCPMM
+  ExecutionOptions eo_;
+#endif
 
   struct JoinHashTableCacheKey {
     const ExpressionRange col_range;

@@ -158,6 +158,9 @@ class BaselineJoinHashTable : public HashJoin {
   BaselineJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
                         const std::vector<InputTableInfo>& query_infos,
                         const Data_Namespace::MemoryLevel memory_level,
+#ifdef HAVE_DCPMM
+                        const ExecutionOptions& eo,
+#endif
                         ColumnCacheMap& column_cache,
                         Executor* executor,
                         const std::vector<InnerOuter>& inner_outer_pairs,
@@ -238,4 +241,8 @@ class BaselineJoinHashTable : public HashJoin {
   using HashTableCacheValue = std::shared_ptr<HashTable>;
   static std::unique_ptr<HashTableCache<HashTableCacheKey, HashTableCacheValue>>
       hash_table_cache_;
+
+#ifdef HAVE_DCPMM
+  ExecutionOptions eo_;
+#endif
 };

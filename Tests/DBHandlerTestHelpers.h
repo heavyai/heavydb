@@ -231,6 +231,7 @@ class DBHandlerTestFixture : public testing::Test {
                                                 num_reader_threads,
                                                 auth_metadata_,
                                                 system_parameters_,
+                                                PMMInfo::disabled(),
                                                 legacy_syntax,
                                                 idle_session_duration,
                                                 max_session_duration,

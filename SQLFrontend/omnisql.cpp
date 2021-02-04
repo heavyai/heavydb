@@ -93,6 +93,60 @@ void completion(const char* buf, linenoiseCompletions* lc) {
   }
 }
 
+void set_column_hot(ClientContext& context, char const* table, char const* column) {
+  if (thrift_with_retry(kHEAT_COLUMN, context, table, column)) {
+    std::cout << "Column " << column << " in table " << table << " is set to hot."
+              << std::endl;
+  }
+}
+
+void set_column_cold(ClientContext& context, char const* table, char const* column) {
+  if (thrift_with_retry(kCOOL_COLUMN, context, table, column)) {
+    std::cout << "Column " << column << " in table " << table << " is set to cold."
+              << std::endl;
+  }
+}
+
+void start_profiling(ClientContext& context) {
+  if (!thrift_with_retry(kDMSTATS, context, nullptr)) {
+    std::cout << "Failed to start data manager profiling." << std::endl;
+  } else {
+    std::cout << "Data manager profiling on." << std::endl;
+  }
+}
+
+void stop_profiling(ClientContext& context) {
+  if (!thrift_with_retry(kNODMSTATS, context, nullptr)) {
+    std::cout << "Failed to stop collecting data manager profiling." << std::endl;
+  } else {
+    std::cout << "Data manager profiling off." << std::endl;
+  }
+}
+
+void estimate_dram_size(ClientContext& context, char const* perf_bar_str) {
+  int perf_bar;
+  int64_t size;
+
+  perf_bar = atoi(perf_bar_str);
+  size = thrift_with_retry(kPREDICT_DRAM_SIZE, context, perf_bar);
+
+  if (size == 0) {
+    std::cout << "Not enough data available." << std::endl;
+  } else {
+    if (size > 1024 * 1024 * 1024) {
+      std::cout << ((size * 1.0) / (1024 * 1024 * 1024)) << "GB of DRAM recommended."
+                << std::endl;
+    } else {
+      if (size > 1024 * 1024) {
+        std::cout << ((size * 1.0) / (1024 * 1024)) << "MB of DRAM recommended."
+                  << std::endl;
+      } else {
+        std::cout << size << "bytes of DRAM recommended." << std::endl;
+      }
+    }
+  }
+}
+
 #define LOAD_PATCH_SIZE 10000
 
 void copy_table(char const* filepath, char const* table, ClientContext& context) {
@@ -1503,6 +1557,11 @@ int main(int argc, char** argv) {
         ( "\\timing", 1, 1, [&](Params const&) { print_timing = true; } )
         ( "\\notiming", 1, 1, [&](Params const&) { print_timing = false; } )
         ( "\\db", 1, 2, SwitchDatabaseCmd<>( context ), "Usage: \\db [database|...]" )
+        ( "\\heat_column", 3, 3, [&](Params const& p) { set_column_hot(context, p[1].c_str(), p[2].c_str() ); } )
+        ( "\\cool_column", 3, 3, [&](Params const& p) { set_column_cold(context, p[1].c_str(), p[2].c_str() ); } )
+        ( "\\start_profiling", 1, 1, [&](Params const& p) { start_profiling(context); } )
+        ( "\\stop_profiling", 1, 1, [&](Params const& p) { stop_profiling(context); } )
+        ( "\\estimate_dram_size", 2, 2, [&](Params const& p) { estimate_dram_size(context, p[1].c_str() ); } )
         .is_resolved();
 
       if (resolution_status == false) {

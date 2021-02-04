@@ -62,6 +62,8 @@ class CommandLineOptions {
   bool log_user_origin = true;
   AuthMetadata authMetadata;
 
+  PMMInfo pmm_info = PMMInfo::disabled();
+
   SystemParameters system_parameters;
   bool enable_rendering = false;
   bool enable_auto_clear_render_mem = false;

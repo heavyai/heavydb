@@ -157,6 +157,7 @@ QueryRunner::QueryRunner(const char* db_path,
                                                             mapd_params,
                                                             std::move(cuda_mgr),
                                                             uses_gpus,
+                                                            PMMInfo::disabled(),
                                                             reserved_gpu_mem,
                                                             0,
                                                             disk_cache_config);

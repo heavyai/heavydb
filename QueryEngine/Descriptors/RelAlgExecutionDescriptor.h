@@ -30,10 +30,16 @@ class ExecutionResult {
  public:
   ExecutionResult();
 
-  ExecutionResult(const std::shared_ptr<ResultSet>& rows,
+  ExecutionResult(const ResultSetPtr& rows,
                   const std::vector<TargetMetaInfo>& targets_meta);
 
   ExecutionResult(ResultSetPtr&& result, const std::vector<TargetMetaInfo>& targets_meta);
+
+  ExecutionResult(const TemporaryTable& results,
+                  const std::vector<TargetMetaInfo>& targets_meta);
+
+  ExecutionResult(TemporaryTable&& results,
+                  const std::vector<TargetMetaInfo>& targets_meta);
 
   ExecutionResult(const ExecutionResult& that);
 
@@ -44,11 +50,14 @@ class ExecutionResult {
 
   ExecutionResult& operator=(const ExecutionResult& that);
 
-  const std::shared_ptr<ResultSet>& getRows() const { return result_; }
+  const ResultSetPtr& getRows() const {
+    CHECK_EQ(results_.getFragCount(), 1);
+    return results_[0];
+  }
 
-  bool empty() const { return !result_; }
+  bool empty() const { return results_.empty(); }
 
-  const ResultSetPtr& getDataPtr() const { return result_; }
+  const TemporaryTable& getTable() const { return results_; }
 
   const std::vector<TargetMetaInfo>& getTargetsMeta() const { return targets_meta_; }
 
@@ -57,17 +66,21 @@ class ExecutionResult {
   const bool isFilterPushDownEnabled() const { return filter_push_down_enabled_; }
 
   void setQueueTime(const int64_t queue_time_ms) {
-    CHECK(result_);
-    result_->setQueueTime(queue_time_ms);
+    CHECK(!results_.empty());
+    results_[0]->setQueueTime(queue_time_ms);
   }
 
   std::string toString() const {
+    // TODO: fixup
+    return "";
+#if 0
     return ::typeName(this) + "(" + ::toString(result_) + ", " +
            ::toString(targets_meta_) + ")";
+#endif
   }
 
  private:
-  ResultSetPtr result_;
+  TemporaryTable results_;
   std::vector<TargetMetaInfo> targets_meta_;
   // filters chosen to be pushed down
   std::vector<PushedDownFilterInfo> pushed_down_filter_info_;
@@ -143,6 +156,8 @@ class RaExecutionSequence {
 
   size_t totalDescriptorsCount() const;
 
+  bool hasTableFunctions() const { return table_functions_ > 0; }
+
  private:
   DAG graph_;
 
@@ -150,6 +165,7 @@ class RaExecutionSequence {
   std::vector<Vertex> ordering_;  // reverse order topological sort of graph_
   size_t current_vertex_ = 0;
   size_t scan_count_ = 0;
+  size_t table_functions_ = 0;
 
   /**
    * Starting from the current vertex, iterate the graph counting the number of execution

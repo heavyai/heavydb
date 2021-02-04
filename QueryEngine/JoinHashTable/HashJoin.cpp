@@ -36,6 +36,9 @@ JoinColumn HashJoin::fetchJoinColumn(
     const Analyzer::ColumnVar* hash_col,
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragment_info,
     const Data_Namespace::MemoryLevel effective_memory_level,
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
     const int device_id,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
     DeviceAllocator* dev_buff_owner,
@@ -50,6 +53,9 @@ JoinColumn HashJoin::fetchJoinColumn(
                                                            fragment_info,
                                                            effective_memory_level,
                                                            device_id,
+#ifdef HAVE_DCPMM
+                                                           eo.query_id,
+#endif
                                                            dev_buff_owner,
                                                            chunks_owner,
                                                            malloc_owner,

@@ -2596,7 +2596,7 @@ void SysCatalog::storeDataMgrStatistics(
     std::shared_ptr<Catalog> cat;
 
     if (SysCatalog::instance().getMetadataForDBById((it2->first)[0], db)) {
-      cat = Catalog::get(db.dbName);
+      cat = getCatalog(db.dbName);
 
       if (cat) {
         cat->storeDataMgrStatistics((it2->first)[1],
@@ -2745,7 +2745,7 @@ void SysCatalog::clearDataMgrStatistics(bool isPmem) {
 
   dblist = SysCatalog::instance().getAllDBMetadata();
   for (std::list<DBMetadata>::iterator it = dblist.begin(); it != dblist.end(); ++it) {
-    cat = Catalog::get(it->dbName);
+    cat = getCatalog(it->dbName);
     if (cat) {
       cat->clearDataMgrStatistics();
     }

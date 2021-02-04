@@ -151,6 +151,14 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
         context.client.get_dashboard(
             context.dash_return, context.session, context.dash_id);
         break;
+      case kDMSTATS:
+        // context.client.start_profiling(context.session);
+        std::cerr << "TODO";
+        break;
+      case kNODMSTATS:
+        // context.client.stop_profiling(context.session);
+        std::cerr << "TODO";
+        break;
     }
   } catch (TOmniSciException& e) {
     std::cerr << e.error_msg << std::endl;
@@ -175,6 +183,58 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
       std::cerr << "Thrift error: " << te1.what() << std::endl;
       return false;
     }
+  }
+  return true;
+}
+
+// TODO: Need to avoid thrift_with_retry overloads. finish the retry part?
+template <typename SERVICE_ENUM, typename CLIENT_CONTEXT>
+bool thrift_with_retry(SERVICE_ENUM which_service,
+                       CLIENT_CONTEXT& context,
+                       char const* arg1,
+                       char const* arg2,
+                       const int try_count = 1) {
+  using TException = ::apache::thrift::TException;
+
+  try {
+    switch (which_service) {
+      case kHEAT_COLUMN:
+        return context.client.heat_column(context.session, arg1, arg2);
+      case kCOOL_COLUMN:
+        return context.client.cool_column(context.session, arg1, arg2);
+      default:
+        break;
+    }
+  } catch (TOmniSciException& e) {
+    std::cerr << e.error_msg << std::endl;
+    return false;
+  } catch (TException& te) {
+    std::cerr << "Thrift error: " << te.what() << std::endl;
+    return false;
+  }
+  return true;
+}
+
+template <typename SERVICE_ENUM, typename CLIENT_CONTEXT>
+int64_t thrift_with_retry(SERVICE_ENUM which_service,
+                          CLIENT_CONTEXT& context,
+                          const int arg,
+                          const int try_count = 1) {
+  using TException = ::apache::thrift::TException;
+
+  try {
+    switch (which_service) {
+      case kPREDICT_DRAM_SIZE:
+        return context.client.estimate_dram_size(context.session, arg);
+      default:
+        break;
+    }
+  } catch (TOmniSciException& e) {
+    std::cerr << e.error_msg << std::endl;
+    return false;
+  } catch (TException& te) {
+    std::cerr << "Thrift error: " << te.what() << std::endl;
+    return false;
   }
   return true;
 }

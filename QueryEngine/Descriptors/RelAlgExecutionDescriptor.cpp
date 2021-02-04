@@ -22,20 +22,27 @@
 #include "QueryEngine/RelAlgDagBuilder.h"
 
 ExecutionResult::ExecutionResult()
-    : result_(), targets_meta_(), filter_push_down_enabled_(false) {
+    : results_(), targets_meta_(), filter_push_down_enabled_(false) {
   std::vector<TargetInfo> target_infos;
-  result_ = nullptr;
 }
 
-ExecutionResult::ExecutionResult(const std::shared_ptr<ResultSet>& rows,
+ExecutionResult::ExecutionResult(const ResultSetPtr& rows,
                                  const std::vector<TargetMetaInfo>& targets_meta)
-    : result_(rows), targets_meta_(targets_meta), filter_push_down_enabled_(false) {}
+    : results_(rows), targets_meta_(targets_meta), filter_push_down_enabled_(false) {}
 
 ExecutionResult::ExecutionResult(ResultSetPtr&& result,
                                  const std::vector<TargetMetaInfo>& targets_meta)
     : targets_meta_(targets_meta), filter_push_down_enabled_(false) {
-  result_ = std::move(result);
+  results_ = std::move(result);
 }
+
+ExecutionResult::ExecutionResult(const TemporaryTable& results,
+                                 const std::vector<TargetMetaInfo>& targets_meta)
+    : results_(results), targets_meta_(targets_meta), filter_push_down_enabled_(false) {}
+
+ExecutionResult::ExecutionResult(TemporaryTable&& results,
+                                 const std::vector<TargetMetaInfo>& targets_meta)
+    : results_(results), targets_meta_(targets_meta), filter_push_down_enabled_(false) {}
 
 ExecutionResult::ExecutionResult(const ExecutionResult& that)
     : targets_meta_(that.targets_meta_)
@@ -45,7 +52,7 @@ ExecutionResult::ExecutionResult(const ExecutionResult& that)
       (filter_push_down_enabled_ && pushed_down_filter_info_.empty())) {
     return;
   }
-  result_ = that.result_;
+  results_ = that.results_;
 }
 
 ExecutionResult::ExecutionResult(ExecutionResult&& that)
@@ -56,7 +63,7 @@ ExecutionResult::ExecutionResult(ExecutionResult&& that)
       (filter_push_down_enabled_ && pushed_down_filter_info_.empty())) {
     return;
   }
-  result_ = std::move(that.result_);
+  results_ = std::move(that.results_);
 }
 
 ExecutionResult::ExecutionResult(
@@ -72,7 +79,7 @@ ExecutionResult& ExecutionResult::operator=(const ExecutionResult& that) {
     filter_push_down_enabled_ = that.filter_push_down_enabled_;
     return *this;
   }
-  result_ = that.result_;
+  results_ = that.results_;
   targets_meta_ = that.targets_meta_;
   return *this;
 }
@@ -233,6 +240,9 @@ RaExecutionDesc* RaExecutionSequence::next() {
     if (dynamic_cast<const RelScan*>(node)) {
       scan_count_++;
       continue;
+    }
+    if (dynamic_cast<const RelTableFunction*>(node)) {
+      table_functions_++;
     }
     descs_.emplace_back(std::make_unique<RaExecutionDesc>(node));
     return descs_.back().get();

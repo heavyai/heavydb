@@ -144,7 +144,7 @@ int main(int argc, char* argv[]) {
   try {
     SystemParameters sys_parms;
     auto dummy = std::make_shared<Data_Namespace::DataMgr>(
-        data_path, sys_parms, nullptr, false, 0);
+        data_path, sys_parms, nullptr, false, PMMInfo::disabled(), 0);
     auto calcite =
         std::make_shared<Calcite>(-1, CALCITEPORT, base_path, 1024, 5000, true, "");
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();

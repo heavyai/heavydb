@@ -183,6 +183,11 @@ Catalog::Catalog(const string& basePath,
   if (!is_new_db) {
     CheckAndExecuteMigrationsPostBuildMaps();
   }
+
+  if (dataMgr->pmmPresent()) {
+    setSoftHotColumns(dataMgr->getProfileScaleFactor());
+  }
+
   if (g_serialize_temp_tables) {
     boost::filesystem::remove(table_json_filepath(basePath_, currentDB_.dbName));
   }
@@ -984,7 +989,8 @@ void Catalog::buildMaps() {
   string columnQuery(
       "SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, "
       "is_notnull, compression, comp_param, "
-      "size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol from "
+      "size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol, "
+      "is_hotcol, bufs_fetched, unique_chunks_fetched, data_fetched from "
       "mapd_columns ORDER BY tableid, "
       "columnid");
   sqliteConnector_.query(columnQuery);
@@ -1008,6 +1014,10 @@ void Catalog::buildMaps() {
     cd->isVirtualCol = sqliteConnector_.getData<bool>(r, 13);
     cd->virtualExpr = sqliteConnector_.getData<string>(r, 14);
     cd->isDeletedCol = sqliteConnector_.getData<bool>(r, 15);
+    cd->isHotCol = sqliteConnector_.getData<bool>(r, 16);
+    cd->chunkBufsFetched = sqliteConnector_.getData<size_t>(r, 17);
+    cd->uniqueChunksFetched = sqliteConnector_.getData<size_t>(r, 18);
+    cd->chunkDataFetched = sqliteConnector_.getData<size_t>(r, 19);
     cd->isGeoPhyCol = skip_physical_cols > 0;
     ColumnKey columnKey(cd->tableId, to_upper(cd->columnName));
     columnDescriptorMap_[columnKey] = cd;
@@ -1869,12 +1879,12 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
       "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, "
       "colscale, is_notnull, "
       "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr, "
-      "is_deletedcol) "
+      "is_deletedcol, is_hotcol, bufs_fetched, unique_chunks_fetched, data_fetched) "
       "VALUES (?, "
       "(SELECT max(columnid) + 1 FROM mapd_columns WHERE tableid = ?), "
       "?, ?, ?, "
       "?, "
-      "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       std::vector<std::string>{std::to_string(td.tableId),
                                std::to_string(td.tableId),
                                cd.columnName,
@@ -1890,7 +1900,11 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
                                std::to_string(cd.isSystemCol),
                                std::to_string(cd.isVirtualCol),
                                cd.virtualExpr,
-                               std::to_string(cd.isDeletedCol)});
+                               std::to_string(cd.isDeletedCol),
+                               std::to_string(cd.isHotCol),
+                               std::to_string(cd.chunkBufsFetched),
+                               std::to_string(cd.uniqueChunksFetched),
+                               std::to_string(cd.chunkDataFetched)});
 
   sqliteConnector_.query_with_text_params(
       "UPDATE mapd_tables SET ncolumns = ncolumns + 1 WHERE tableid = ?",
@@ -2176,6 +2190,10 @@ void Catalog::createTable(
   // add row_id column -- Must be last column in the table
   cd.columnName = "rowid";
   cd.isSystemCol = true;
+
+  // keep it hot
+  cd.isHotCol = true;
+
   cd.columnType = SQLTypeInfo(kBIGINT, true);
 #ifdef MATERIALIZED_ROWID
   cd.isVirtualCol = false;
@@ -2251,10 +2269,11 @@ void Catalog::createTable(
             "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, "
             "coldim, colscale, is_notnull, "
             "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, "
-            "virtual_expr, is_deletedcol) "
+            "virtual_expr, is_deletedcol, is_hotcol, bufs_fetched, "
+            "unique_chunks_fetched, data_fetched) "
             "VALUES (?, ?, ?, ?, ?, "
             "?, "
-            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             std::vector<std::string>{std::to_string(td.tableId),
                                      std::to_string(colId),
                                      cd.columnName,
@@ -2270,7 +2289,11 @@ void Catalog::createTable(
                                      std::to_string(cd.isSystemCol),
                                      std::to_string(cd.isVirtualCol),
                                      cd.virtualExpr,
-                                     std::to_string(cd.isDeletedCol)});
+                                     std::to_string(cd.isDeletedCol),
+                                     std::to_string(cd.isHotCol),
+                                     std::to_string(cd.chunkBufsFetched),
+                                     std::to_string(cd.uniqueChunksFetched),
+                                     std::to_string(cd.chunkDataFetched)});
         cd.tableId = td.tableId;
         cd.columnId = colId++;
         cds.push_back(cd);
@@ -3368,17 +3391,6 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
   }
 }
 
-void Catalog::removeFragmenterForTable(const int table_id) {
-  cat_write_lock write_lock(this);
-  auto td = getMetadataForTable(table_id, false);
-  if (td->fragmenter != nullptr) {
-    auto tableDescIt = tableDescriptorMapById_.find(table_id);
-    CHECK(tableDescIt != tableDescriptorMapById_.end());
-    tableDescIt->second->fragmenter = nullptr;
-    CHECK(td->fragmenter == nullptr);
-  }
-}
-
 // used by rollback_table_epoch to clean up in memory artifacts after a rollback
 void Catalog::removeChunks(const int table_id) {
   auto td = getMetadataForTable(table_id);
@@ -3396,6 +3408,123 @@ void Catalog::removeChunks(const int table_id) {
 
   dataMgr_->deleteChunksWithPrefix(chunkKey, MemoryLevel::CPU_LEVEL);
   dataMgr_->deleteChunksWithPrefix(chunkKey, MemoryLevel::GPU_LEVEL);
+}
+
+void Catalog::removeFragmenterForTable(const int table_id) {
+  cat_write_lock write_lock(this);
+  auto td = getMetadataForTable(table_id, false);
+  if (td->fragmenter != nullptr) {
+    auto tableDescIt = tableDescriptorMapById_.find(table_id);
+    CHECK(tableDescIt != tableDescriptorMapById_.end());
+    tableDescIt->second->fragmenter = nullptr;
+    CHECK(td->fragmenter == nullptr);
+  }
+}
+
+void Catalog::setSoftHotColumns(int sf) {
+  std::map<unsigned long, long> query_pmem_time;
+  std::map<unsigned long, long> query_dram_time;
+  std::vector<unsigned long> query_id_diff;
+  std::vector<long> query_time_diff;
+  std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnFetchStats2;
+  std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnChunkStats2;
+  std::map<unsigned long, std::map<std::vector<int>, size_t>>
+      queryColumnFetchDataSizeStats2;
+  std::map<std::vector<int>, size_t> columnFetchStats2;
+  std::map<std::vector<int>, size_t> columnChunkStats2;
+  std::map<std::vector<int>, size_t> columnFetchDataSizeStats2;
+
+  size_t peakWorkVmSize;
+
+  if (SysCatalog::instance().loadDataMgrStatistics(sf,
+                                                   peakWorkVmSize,
+                                                   query_pmem_time,
+                                                   query_dram_time,
+                                                   query_id_diff,
+                                                   query_time_diff,
+                                                   queryColumnFetchStats2,
+                                                   queryColumnChunkStats2,
+                                                   queryColumnFetchDataSizeStats2,
+                                                   columnFetchStats2,
+                                                   columnChunkStats2,
+                                                   columnFetchDataSizeStats2)) {
+    // std::cout << "query_pmem_time and query_dram_time do not have the same query ids"
+    // << std::endl;
+    return;
+  }
+
+  if ((columnFetchStats2.size() == 0) || (columnChunkStats2.size() == 0) ||
+      (columnFetchDataSizeStats2.size() == 0)) {
+    // std::cout << "Column data statistics are not available" << std::endl;
+    return;
+  }
+
+  size_t totalBytes = peakWorkVmSize;
+  size_t highWaterMark;
+
+  highWaterMark = sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGE_SIZE) * 4 /
+                  5;  // 80 percent of total DRAM
+  // std::cout << "High water mark = " << highWaterMark << std::endl;
+
+  // find hard hot columns first
+
+  for (auto it = columnDescriptorMapById_.begin(); it != columnDescriptorMapById_.end();
+       ++it) {
+    if (it->second->isHotCol && it->second->uniqueChunksFetched) {
+      totalBytes += (it->second->chunkDataFetched * it->second->uniqueChunksFetched +
+                     it->second->chunkBufsFetched - 1) /
+                    it->second->chunkBufsFetched;
+    }
+  }
+
+  // favor queries that benefit from memory placement first
+  // TODO: what if not all but some columns of a query can fit in DRAM?
+  // TODO: handle DRAM buffer eviction? for example, columns are used in the order of A,
+  // B, C, B, D. Column A can be evicted for column B/C/D
+  for (unsigned int i = 0; i < query_id_diff.size(); i++) {
+    std::map<unsigned long, std::map<std::vector<int>, size_t>>::const_iterator it2;
+
+    it2 = queryColumnFetchStats2.find(query_id_diff[i]);
+    if (it2 == queryColumnFetchStats2.end())
+      continue;
+
+    for (std::map<std::vector<int>, size_t>::const_iterator it3 = it2->second.begin();
+         it3 != it2->second.end();
+         it3++) {
+      size_t estimatedColumnSize;
+
+      int dbId = it3->first[0];
+      int tableId = it3->first[1];
+      int columnId = it3->first[2];
+
+      if (dbId != currentDB_.dbId)
+        continue;
+
+      ColumnIdKey columnIdKey(tableId, columnId);
+      ColumnDescriptorMapById::iterator colDescIt =
+          columnDescriptorMapById_.find(columnIdKey);
+      if (colDescIt == columnDescriptorMapById_.end()) {
+        continue;
+      }
+      if (colDescIt->second->isHotCol || colDescIt->second->isSoftHotCol)
+        continue;
+
+      // TODO: do we have a better way to get column size?
+      estimatedColumnSize =
+          (columnFetchDataSizeStats2[it3->first] * columnChunkStats2[it3->first] +
+           columnFetchStats2[it3->first] - 1) /
+          columnFetchStats2[it3->first];
+
+      if (totalBytes + estimatedColumnSize <= highWaterMark) {
+        totalBytes += estimatedColumnSize;
+        colDescIt->second->isSoftHotCol = true;
+        std::cout << "Column " << colDescIt->second->columnName << " is set to soft hot"
+                  << std::endl;
+      } else {
+        break;
+      }
+    }
+  }
 }
 
 void Catalog::dropTable(const TableDescriptor* td) {
@@ -3576,6 +3705,85 @@ void Catalog::renameColumn(const TableDescriptor* td,
         changeCd;
   }
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
+}
+
+void Catalog::setColumnHot(const TableDescriptor* td, ColumnDescriptor* cd) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query_with_text_params(
+        "UPDATE mapd_columns SET is_hotcol = ? WHERE tableid = ? AND columnid = ?",
+        std::vector<std::string>{std::to_string(true),
+                                 std::to_string(td->tableId),
+                                 std::to_string(cd->columnId)});
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+
+  cd->isHotCol = true;
+}
+
+void Catalog::setColumnCold(const TableDescriptor* td, ColumnDescriptor* cd) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query_with_text_params(
+        "UPDATE mapd_columns SET is_hotcol = ? WHERE tableid = ? AND columnid = ?",
+        std::vector<std::string>{std::to_string(false),
+                                 std::to_string(td->tableId),
+                                 std::to_string(cd->columnId)});
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+
+  cd->isHotCol = false;
+}
+
+void Catalog::storeDataMgrStatistics(int tableId,
+                                     int colId,
+                                     size_t chunksFetched,
+                                     size_t uniqueChunksFetched,
+                                     size_t chunkDataFetched) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query_with_text_params(
+        "UPDATE mapd_columns SET bufs_fetched = ?, unique_chunks_fetched = ?, "
+        "data_fetched = ? WHERE tableid = ? AND columnid = ?",
+        std::vector<std::string>{std::to_string(chunksFetched),
+                                 std::to_string(uniqueChunksFetched),
+                                 std::to_string(chunkDataFetched),
+                                 std::to_string(tableId),
+                                 std::to_string(colId)});
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
+void Catalog::clearDataMgrStatistics(void) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query_with_text_params(
+        "UPDATE mapd_columns SET bufs_fetched = ?, unique_chunks_fetched = ?, "
+        "data_fetched = ?",
+        std::vector<std::string>{
+            std::to_string(0), std::to_string(0), std::to_string(0)});
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
 }
 
 int32_t Catalog::createDashboard(DashboardDescriptor& vd) {
@@ -4017,6 +4225,9 @@ void Catalog::vacuumDeletedRows(const TableDescriptor* td) const {
                                                    &getDataMgr(),
                                                    cm.first,
                                                    updel_roll.memoryLevel,
+#ifdef HAVE_DCPMM
+                                                   0,
+#endif /* HAVE_DCPMM */
                                                    0,
                                                    cm.second->numBytes,
                                                    cm.second->numElements);

@@ -194,8 +194,6 @@ class ColumnarResults {
                                     // with minimal ussage of result set's iterator access
 };
 
-using ColumnCacheMap =
-    std::unordered_map<int,
-                       std::unordered_map<int, std::shared_ptr<const ColumnarResults>>>;
+using ColumnCacheMap = std::map<int, std::vector<std::shared_ptr<const ColumnarResults>>>;
 
 #endif  // COLUMNAR_RESULTS_H

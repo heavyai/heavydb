@@ -178,6 +178,7 @@ class DBHandler : public OmniSciIf {
             const size_t num_reader_threads,
             const AuthMetadata& authMetadata,
             const SystemParameters& system_parameters,
+            const PMMInfo& pmm_info,
             const bool legacy_syntax,
             const int idle_session_duration,
             const int max_session_duration,
@@ -518,6 +519,16 @@ class DBHandler : public OmniSciIf {
 
   // end of sync block for HAHandler and mapd.thrift
 
+  bool heat_column(const TSessionId& session,
+                   const std::string& table_name,
+                   const std::string& column_name) override;
+  bool cool_column(const TSessionId& session,
+                   const std::string& table_name,
+                   const std::string& column_name) override;
+  void start_profiling(const TSessionId& session) override;
+  void stop_profiling(const TSessionId& session) override;
+  int64_t estimate_dram_size(const TSessionId& session, const int32_t perf_bar) override;
+
   void shutdown();
   void emergency_shutdown();
 
@@ -799,6 +810,8 @@ class DBHandler : public OmniSciIf {
   const int max_session_duration_;   // max duration of session
 
   const bool runtime_udf_registration_enabled_;
+
+  std::map<unsigned long, long> query_time;
 
   struct GeoCopyFromState {
     std::string geo_copy_from_table;

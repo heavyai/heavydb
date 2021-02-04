@@ -214,6 +214,7 @@ class RelAlgExecutor : private StorageIOFacility {
       const RelAlgExecutionUnit& ra_exe_unit,
       const std::vector<InputTableInfo>& query_infos,
       const CompilationOptions& co,
+      const ExecutionOptions& eo,
       ColumnCacheMap& column_cache_map,
       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
@@ -336,6 +337,12 @@ class RelAlgExecutor : private StorageIOFacility {
     CHECK_LT(size_t(0), result->colCount());
     CHECK_LT(table_id, 0);
     const auto it_ok = temporary_tables_.emplace(table_id, result);
+    CHECK(it_ok.second);
+  }
+
+  void addTemporaryTable(const int table_id, const TemporaryTable& table) {
+    CHECK_LT(table_id, 0);
+    const auto it_ok = temporary_tables_.emplace(table_id, table);
     CHECK(it_ok.second);
   }
 

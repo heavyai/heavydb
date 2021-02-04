@@ -41,6 +41,9 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     const Data_Namespace::MemoryLevel memory_level,
     const HashType preferred_hash_type,
     const int device_count,
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif /* HAVE_DCPMM */
     ColumnCacheMap& column_cache,
     Executor* executor) {
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
@@ -57,6 +60,9 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
       std::shared_ptr<BaselineJoinHashTable>(new BaselineJoinHashTable(condition,
                                                                        query_infos,
                                                                        memory_level,
+#ifdef HAVE_DCPMM
+                                                                       eo,
+#endif
                                                                        column_cache,
                                                                        executor,
                                                                        inner_outer_pairs,
@@ -100,6 +106,9 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     const std::shared_ptr<Analyzer::BinOper> condition,
     const std::vector<InputTableInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
+#ifdef HAVE_DCPMM
+    const ExecutionOptions& eo,
+#endif
     ColumnCacheMap& column_cache,
     Executor* executor,
     const std::vector<InnerOuter>& inner_outer_pairs,
@@ -108,6 +117,9 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     , query_infos_(query_infos)
     , memory_level_(memory_level)
     , executor_(executor)
+#ifdef HAVE_DCPMM
+    , eo_(eo)
+#endif
     , column_cache_(column_cache)
     , inner_outer_pairs_(inner_outer_pairs)
     , catalog_(executor->getCatalog())
@@ -281,6 +293,9 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
     const auto columns_for_device =
         fetchColumnsForDevice(fragments,
                               device_id,
+#ifdef HAVE_DCPMM
+                              eo_,
+#endif
                               memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
                                   ? dev_buff_owners[device_id].get()
                                   : nullptr);
