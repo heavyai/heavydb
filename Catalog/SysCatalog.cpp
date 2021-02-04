@@ -197,6 +197,23 @@ void SysCatalog::initDB() {
         "objectPermissions integer, "
         "objectOwnerId integer, UNIQUE(roleName, objectPermissionsType, dbId, "
         "objectId))");
+    sqliteConnector_->query("CREATE TABLE peak_work_vm(peak_work_vm_size BIGINT)");
+    sqliteConnector_->query(
+        "CREATE TABLE query_pmem_profile(query_id integer primary key, "
+        "elapsed_time BIGINT)");
+    sqliteConnector_->query(
+        "CREATE TABLE query_dram_profile(query_id integer primary key, "
+        "elapsed_time BIGINT)");
+    sqliteConnector_->query(
+        "CREATE TABLE query_column_data_profile(query_id integer, "
+        "dbid integer reference mapd_databases, "
+        "tableid integer references mapd_tables, columnid integer,"
+        "bufs_fetched BIGINT, unique_chunks_fetched BIGINT, data_fetched BIGINT)");
+    sqliteConnector_->query(
+        "CREATE TABLE column_data_profile("
+        "dbid integer reference mapd_databases, "
+        "tableid integer references mapd_tables, columnid integer,"
+        "bufs_fetched BIGINT, unique_chunks_fetched BIGINT, data_fetched BIGINT)");
   } catch (const std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
@@ -1100,7 +1117,8 @@ void SysCatalog::createDatabase(const string& name, int owner) {
         "boolean, compression integer, "
         "comp_param integer, size integer, chunks text, is_systemcol boolean, "
         "is_virtualcol boolean, virtual_expr "
-        "text, is_deletedcol boolean, version_num BIGINT, "
+        "text, is_deletedcol boolean, is_hotcol boolean, bufs_fetched BIGINT, "
+        "unique_chunks_fetched BIGINT, data_fetched BIGINT, version_num BIGINT, "
         "primary key(tableid, columnid), unique(tableid, name))");
     dbConn->query(
         "CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text)");
@@ -1668,9 +1686,9 @@ void SysCatalog::revokeDBObjectPrivilegesFromAll_unsafe(DBObject dbObject,
   dbObject.loadKey(*catalog);
   auto privs = (dbObject.getObjectKey().permissionType == TableDBObjectType)
                    ? AccessPrivileges::ALL_TABLE
-                   : (dbObject.getObjectKey().permissionType == DashboardDBObjectType)
-                         ? AccessPrivileges::ALL_DASHBOARD
-                         : AccessPrivileges::ALL_TABLE;
+               : (dbObject.getObjectKey().permissionType == DashboardDBObjectType)
+                   ? AccessPrivileges::ALL_DASHBOARD
+                   : AccessPrivileges::ALL_TABLE;
   dbObject.setPrivileges(privs);
   for (const auto& grantee : granteeMap_) {
     if (grantee.second->findDbObject(dbObject.getObjectKey(), true)) {
@@ -2501,6 +2519,237 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(
 
 void SysCatalog::removeCatalog(const std::string& dbName) {
   cat_map_.erase(dbName);
+}
+
+void SysCatalog::storeDataMgrStatistics(
+    bool isPmem,
+    size_t& peakWorkVmSize,
+    std::map<unsigned long, long>& query_time,
+    std::map<unsigned long, std::map<std::vector<int>, size_t>>& queryColumnFetchStats,
+    std::map<unsigned long, std::map<std::vector<int>, size_t>>& queryColumnChunkStats,
+    std::map<unsigned long, std::map<std::vector<int>, size_t>>&
+        queryColumnFetchDataSizeStats,
+    std::map<std::vector<int>, size_t>& columnFetchStats,
+    std::map<std::vector<int>, size_t>& columnChunkStats,
+    std::map<std::vector<int>, size_t>& columnFetchDataSizeStats) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    if (isPmem) {
+      sqliteConnector_->query_with_text_params(
+          "INSERT INTO peak_work_vm VALUES (?)",
+          std::vector<std::string>{std::to_string(peakWorkVmSize)});
+    }
+
+    std::string queryStr = isPmem ? "INSERT INTO query_pmem_profile VALUES (?, ?)"
+                                  : "INSERT INTO query_dram_profile VALUES (?, ?)";
+    for (auto it = query_time.begin(); it != query_time.end(); ++it) {
+      sqliteConnector_->query_with_text_params(
+          queryStr,
+          std::vector<std::string>{std::to_string(it->first),
+                                   std::to_string(it->second)});
+    }
+
+    std::map<unsigned long, std::map<std::vector<int>, size_t>>::const_iterator it2;
+    for (it2 = queryColumnFetchStats.begin(); it2 != queryColumnFetchStats.end(); it2++) {
+      for (std::map<std::vector<int>, size_t>::const_iterator it3 = it2->second.begin();
+           it3 != it2->second.end();
+           ++it3) {
+        sqliteConnector_->query_with_text_params(
+            "INSERT INTO query_column_data_profile VALUES (?, ?, ?, ?, ?, ?, ?)",
+            std::vector<std::string>{
+                std::to_string(it2->first),
+                std::to_string((it3->first)[0]),
+                std::to_string((it3->first)[1]),
+                std::to_string((it3->first)[2]),
+                std::to_string(it3->second),
+                std::to_string(queryColumnChunkStats[it2->first][it3->first]),
+                std::to_string(queryColumnFetchDataSizeStats[it2->first][it3->first]),
+            });
+      }
+    }
+
+    std::map<std::vector<int>, size_t>::const_iterator it4;
+    for (it4 = columnFetchStats.begin(); it4 != columnFetchStats.end(); it4++) {
+      sqliteConnector_->query_with_text_params(
+          "INSERT INTO column_data_profile VALUES (?, ?, ?, ?, ?, ?)",
+          std::vector<std::string>{
+              std::to_string((it4->first)[0]),
+              std::to_string((it4->first)[1]),
+              std::to_string((it4->first)[2]),
+              std::to_string(it4->second),
+              std::to_string(columnChunkStats[it4->first]),
+              std::to_string(columnFetchDataSizeStats[it4->first]),
+          });
+    }
+  } catch (const std::exception& e) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+
+  for (std::map<std::vector<int>, size_t>::const_iterator it2 = columnFetchStats.begin();
+       it2 != columnFetchStats.end();
+       ++it2) {
+    struct DBMetadata db;
+    std::shared_ptr<Catalog> cat;
+
+    if (SysCatalog::instance().getMetadataForDBById((it2->first)[0], db)) {
+      cat = Catalog::get(db.dbName);
+
+      if (cat) {
+        cat->storeDataMgrStatistics((it2->first)[1],
+                                    (it2->first)[2],
+                                    it2->second,
+                                    columnChunkStats[it2->first],
+                                    columnFetchDataSizeStats[it2->first]);
+      }
+    }
+  }
+}
+
+int SysCatalog::loadDataMgrStatistics(
+    int sf,
+    size_t& peakWorkVmSize,
+    std::map<unsigned long, long>& query_pmem_time,
+    std::map<unsigned long, long>& query_dram_time,
+    std::vector<unsigned long>& query_id_diffs,
+    std::vector<long>& query_time_diffs,
+    std::map<unsigned long, std::map<std::vector<int>, size_t>>& queryColumnFetchStats,
+    std::map<unsigned long, std::map<std::vector<int>, size_t>>&
+        queryColumnChunkFetchStats,
+    std::map<unsigned long, std::map<std::vector<int>, size_t>>&
+        queryColumnDataFetchStats,
+    std::map<std::vector<int>, size_t>& columnFetchStats,
+    std::map<std::vector<int>, size_t>& columnChunkFetchStats,
+    std::map<std::vector<int>, size_t>& columnDataFetchStats) {
+  sys_sqlite_lock sqlite_lock(this);
+
+  // check profile data of both DRAM and PMEM are present
+  sqliteConnector_->query(
+      "SELECT query_id FROM query_pmem_profile EXCEPT SELECT query_id FROM "
+      "query_dram_profile");
+  if (sqliteConnector_->getNumRows() != 0)
+    return 1;
+
+  sqliteConnector_->query(
+      "SELECT query_id FROM query_dram_profile EXCEPT SELECT query_id FROM "
+      "query_pmem_profile");
+  if (sqliteConnector_->getNumRows() != 0)
+    return 2;
+
+  // we have profile data of both DRAM and PMEM runs
+  sqliteConnector_->query("SELECT peak_work_vm_size FROM peak_work_vm");
+  if (sqliteConnector_->getNumRows() != 0)
+    peakWorkVmSize = sqliteConnector_->getData<size_t>(0, 0) * sf;
+
+  sqliteConnector_->query(
+      "SELECT query_id, elapsed_time FROM query_pmem_profile ORDER BY query_id");
+  size_t rows = sqliteConnector_->getNumRows();
+  for (size_t i = 0; i < rows; i++) {
+    query_pmem_time[sqliteConnector_->getData<unsigned long>(i, 0)] =
+        sqliteConnector_->getData<long>(i, 1) * sf;
+  }
+
+  sqliteConnector_->query(
+      "SELECT query_id, elapsed_time FROM query_dram_profile ORDER BY query_id");
+  rows = sqliteConnector_->getNumRows();
+  for (size_t i = 0; i < rows; i++) {
+    query_dram_time[sqliteConnector_->getData<unsigned long>(i, 0)] =
+        sqliteConnector_->getData<long>(i, 1) * sf;
+  }
+
+  sqliteConnector_->query(
+      "SELECT query_pmem_profile.query_id, query_pmem_profile.elapsed_time - "
+      "query_dram_profile.elapsed_time diff FROM query_pmem_profile, query_dram_profile "
+      "WHERE query_pmem_profile.query_id = query_dram_profile.query_id ORDER by diff "
+      "DESC");
+  rows = sqliteConnector_->getNumRows();
+  for (size_t i = 0; i < rows; i++) {
+    query_id_diffs.push_back(sqliteConnector_->getData<unsigned long>(i, 0));
+    query_time_diffs.push_back(sqliteConnector_->getData<long>(i, 1) * sf);
+  }
+
+  sqliteConnector_->query(
+      "SELECT query_id, dbid, tableid, columnid, bufs_fetched, unique_chunks_fetched, "
+      "data_fetched FROM query_column_data_profile ORDER BY query_id, dbid, tableid, "
+      "columnid");
+  rows = sqliteConnector_->getNumRows();
+  for (size_t i = 0; i < rows;) {
+    std::map<std::vector<int>, size_t> queryColumns;
+    std::map<std::vector<int>, size_t> queryChunks;
+    std::map<std::vector<int>, size_t> queryData;
+    unsigned long query_id = sqliteConnector_->getData<unsigned long>(i, 0);
+
+    queryColumnFetchStats[query_id] = queryColumns;
+    queryColumnChunkFetchStats[query_id] = queryChunks;
+    queryColumnDataFetchStats[query_id] = queryData;
+    while ((i < rows) && (sqliteConnector_->getData<unsigned long>(i, 0) == query_id)) {
+      std::vector<int> key;
+
+      key.push_back(sqliteConnector_->getData<int>(i, 1));
+      key.push_back(sqliteConnector_->getData<int>(i, 2));
+      key.push_back(sqliteConnector_->getData<int>(i, 3));
+
+      queryColumnFetchStats[query_id][key] = sqliteConnector_->getData<size_t>(i, 4) * sf;
+      queryColumnChunkFetchStats[query_id][key] =
+          sqliteConnector_->getData<size_t>(i, 5) * sf;
+      queryColumnDataFetchStats[query_id][key] =
+          sqliteConnector_->getData<size_t>(i, 6) * sf;
+
+      i++;
+    }
+  }
+
+  sqliteConnector_->query(
+      "SELECT dbid, tableid, columnid, bufs_fetched, unique_chunks_fetched, data_fetched "
+      "FROM column_data_profile ORDER BY dbid, tableid, columnid");
+  rows = sqliteConnector_->getNumRows();
+  for (size_t i = 0; i < rows; i++) {
+    std::vector<int> key;
+
+    key.push_back(sqliteConnector_->getData<int>(i, 0));
+    key.push_back(sqliteConnector_->getData<int>(i, 1));
+    key.push_back(sqliteConnector_->getData<int>(i, 2));
+
+    columnFetchStats[key] = sqliteConnector_->getData<size_t>(i, 3) * sf;
+    columnChunkFetchStats[key] = sqliteConnector_->getData<size_t>(i, 4) * sf;
+    columnDataFetchStats[key] = sqliteConnector_->getData<size_t>(i, 5) * sf;
+  }
+
+  return 0;
+}
+
+void SysCatalog::clearDataMgrStatistics(bool isPmem) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    if (isPmem) {
+      sqliteConnector_->query("DELETE FROM query_pmem_profile");
+      sqliteConnector_->query("DELETE FROM peak_work_vm");
+    } else {
+      sqliteConnector_->query("DELETE FROM query_dram_profile");
+    }
+    sqliteConnector_->query("DELETE FROM column_data_profile");
+    sqliteConnector_->query("DELETE FROM query_column_data_profile");
+  } catch (const std::exception& e) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+
+  std::shared_ptr<Catalog> cat;
+  std::list<DBMetadata> dblist;
+
+  dblist = SysCatalog::instance().getAllDBMetadata();
+  for (std::list<DBMetadata>::iterator it = dblist.begin(); it != dblist.end(); ++it) {
+    cat = Catalog::get(it->dbName);
+    if (cat) {
+      cat->clearDataMgrStatistics();
+    }
+  }
 }
 
 }  // namespace Catalog_Namespace

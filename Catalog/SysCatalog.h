@@ -288,6 +288,36 @@ class SysCatalog : private CommonFileOperations {
     return sys_cat;
   }
 
+  void storeDataMgrStatistics(
+      bool isPmem,
+      size_t& peakWorkVmSize,
+      std::map<unsigned long, long>& query_time,
+      std::map<unsigned long, std::map<std::vector<int>, size_t>>& queryColumnFetchStats,
+      std::map<unsigned long, std::map<std::vector<int>, size_t>>& queryColumnChunkStats,
+      std::map<unsigned long, std::map<std::vector<int>, size_t>>&
+          queryColumnFetchDataSizeStats,
+      std::map<std::vector<int>, size_t>& columnFetchStats,
+      std::map<std::vector<int>, size_t>& columnChunkStats,
+      std::map<std::vector<int>, size_t>& columnFetchDataSizeStats);
+
+  int loadDataMgrStatistics(
+      int sf,
+      size_t& peakWorkVmSize,
+      std::map<unsigned long, long>& query_pmem_time,
+      std::map<unsigned long, long>& query_dram_time,
+      std::vector<unsigned long>& query_id_diffs,
+      std::vector<long>& query_time_diffs,
+      std::map<unsigned long, std::map<std::vector<int>, size_t>>& queryColumnFetchStats,
+      std::map<unsigned long, std::map<std::vector<int>, size_t>>&
+          queryColumnChunkFetchStats,
+      std::map<unsigned long, std::map<std::vector<int>, size_t>>&
+          queryColumnDataFetchStats,
+      std::map<std::vector<int>, size_t>& columnFetchStats,
+      std::map<std::vector<int>, size_t>& columnChunkFetchStats,
+      std::map<std::vector<int>, size_t>& columnDataFetchStats);
+
+  void clearDataMgrStatistics(bool isPmem);
+
   void populateRoleDbObjects(const std::vector<DBObject>& objects);
   std::string name() const { return OMNISCI_DEFAULT_DB; }
   void renameObjectsInDescriptorMap(DBObject& object,

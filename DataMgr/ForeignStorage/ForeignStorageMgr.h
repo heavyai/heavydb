@@ -52,13 +52,27 @@ class ForeignStorageMgr : public AbstractBufferMgr {
  public:
   ForeignStorageMgr();
 
-  AbstractBuffer* createBuffer(const ChunkKey& chunk_key,
+  AbstractBuffer* createBuffer(BufferProperty bufProp,
+                               const ChunkKey& chunk_key,
                                const size_t page_size,
                                const size_t initial_size) override;
+
+#ifdef HAVE_DCPMM
+  virtual AbstractBuffer* createBuffer(BufferProperty bufProp,
+                                       const ChunkKey& key,
+                                       const size_t maxRows,
+                                       const int sqlTypeSize,
+                                       const size_t pageSize) override {
+    CHECK(false) << "TODO";
+  }
+#endif /* HAVE_DCPMM */
+
   void deleteBuffer(const ChunkKey& chunk_key, const bool purge) override;
   void deleteBuffersWithPrefix(const ChunkKey& chunk_key_prefix,
                                const bool purge) override;
-  AbstractBuffer* getBuffer(const ChunkKey& chunk_key, const size_t num_bytes) override;
+  AbstractBuffer* getBuffer(BufferProperty bufProp,
+                            const ChunkKey& chunk_key,
+                            const size_t num_bytes) override;
   void fetchBuffer(const ChunkKey& chunk_key,
                    AbstractBuffer* destination_buffer,
                    const size_t num_bytes) override;

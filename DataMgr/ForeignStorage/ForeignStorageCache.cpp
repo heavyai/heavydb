@@ -55,7 +55,7 @@ ForeignStorageCache::ForeignStorageCache(const DiskCacheConfig& config)
     : num_chunks_added_(0), num_metadata_added_(0) {
   validatePath(config.path);
   global_file_mgr_ = std::make_unique<File_Namespace::GlobalFileMgr>(
-      0, config.path, config.num_reader_threads);
+      0, PMMInfo::disabled(), config.path, config.num_reader_threads);
 }
 
 void ForeignStorageCache::deleteBufferIfExists(const ChunkKey& chunk_key) {
@@ -112,7 +112,7 @@ AbstractBuffer* ForeignStorageCache::getCachedChunkIfExists(const ChunkKey& chun
       return nullptr;
     }
   }
-  return global_file_mgr_->getBuffer(chunk_key);
+  return global_file_mgr_->getBuffer(CAPACITY, chunk_key);
 }
 
 bool ForeignStorageCache::isMetadataCached(const ChunkKey& chunk_key) const {
@@ -133,7 +133,8 @@ bool ForeignStorageCache::recoverCacheForTable(ChunkMetadataVector& meta_vec,
     cached_metadata_.emplace(chunk_key);
     // If there is no page count then the chunk was metadata only and should not be
     // cached.
-    if (const auto& buf = global_file_mgr_->getBuffer(chunk_key); buf->pageCount() > 0) {
+    if (const auto& buf = global_file_mgr_->getBuffer(CAPACITY, chunk_key);
+        buf->pageCount() > 0) {
       cached_chunks_.emplace(chunk_key);
     }
 
@@ -146,7 +147,7 @@ bool ForeignStorageCache::recoverCacheForTable(ChunkMetadataVector& meta_vec,
                                   chunk_key[CHUNK_KEY_FRAGMENT_IDX],
                                   2};
 
-      if (const auto& buf = global_file_mgr_->getBuffer(index_chunk_key);
+      if (const auto& buf = global_file_mgr_->getBuffer(CAPACITY, index_chunk_key);
           buf->pageCount() > 0) {
         cached_chunks_.emplace(index_chunk_key);
       }
@@ -185,19 +186,19 @@ void ForeignStorageCache::cacheMetadataVec(const ChunkMetadataVector& metadata_v
     }
     bool chunk_in_cache = false;
     if (!global_file_mgr_->isBufferOnDevice(chunk_key)) {
-      buf = global_file_mgr_->createBuffer(chunk_key);
+      buf = global_file_mgr_->createBuffer(CAPACITY, chunk_key);
 
       if (!index_chunk_key.empty()) {
         CHECK(!global_file_mgr_->isBufferOnDevice(index_chunk_key));
-        index_buffer = global_file_mgr_->createBuffer(index_chunk_key);
+        index_buffer = global_file_mgr_->createBuffer(CAPACITY, index_chunk_key);
         CHECK(index_buffer);
       }
     } else {
-      buf = global_file_mgr_->getBuffer(chunk_key);
+      buf = global_file_mgr_->getBuffer(CAPACITY, chunk_key);
 
       if (!index_chunk_key.empty()) {
         CHECK(global_file_mgr_->isBufferOnDevice(index_chunk_key));
-        index_buffer = global_file_mgr_->getBuffer(index_chunk_key);
+        index_buffer = global_file_mgr_->getBuffer(CAPACITY, index_chunk_key);
         CHECK(index_buffer);
       }
 
@@ -234,7 +235,9 @@ void ForeignStorageCache::getCachedMetadataVecForKeyPrefix(
   iterate_over_matching_prefix(
       [&metadata_vec, this](auto chunk) {
         std::shared_ptr<ChunkMetadata> buf_metadata = std::make_shared<ChunkMetadata>();
-        global_file_mgr_->getBuffer(chunk)->getEncoder()->getMetadata(buf_metadata);
+        global_file_mgr_->getBuffer(CAPACITY, chunk)
+            ->getEncoder()
+            ->getMetadata(buf_metadata);
         metadata_vec.push_back(std::make_pair(chunk, buf_metadata));
       },
       cached_metadata_,
@@ -319,7 +322,7 @@ std::map<ChunkKey, AbstractBuffer*> ForeignStorageCache::getChunkBuffersForCachi
   for (const auto& chunk_key : chunk_keys) {
     CHECK(cached_chunks_.find(chunk_key) == cached_chunks_.end());
     CHECK(global_file_mgr_->isBufferOnDevice(chunk_key));
-    chunk_buffer_map[chunk_key] = global_file_mgr_->getBuffer(chunk_key);
+    chunk_buffer_map[chunk_key] = global_file_mgr_->getBuffer(CAPACITY, chunk_key);
     CHECK(dynamic_cast<File_Namespace::FileBuffer*>(chunk_buffer_map[chunk_key]));
     CHECK_EQ(chunk_buffer_map[chunk_key]->pageCount(), static_cast<size_t>(0));
 
@@ -336,8 +339,8 @@ void ForeignStorageCache::eraseChunk(const ChunkKey& chunk_key) {
   if (cached_chunks_.find(chunk_key) == cached_chunks_.end()) {
     return;
   }
-  File_Namespace::FileBuffer* file_buffer =
-      static_cast<File_Namespace::FileBuffer*>(global_file_mgr_->getBuffer(chunk_key));
+  File_Namespace::FileBuffer* file_buffer = static_cast<File_Namespace::FileBuffer*>(
+      global_file_mgr_->getBuffer(CAPACITY, chunk_key));
   file_buffer->freeChunkPages();
   cached_chunks_.erase(chunk_key);
 }
@@ -345,8 +348,8 @@ void ForeignStorageCache::eraseChunk(const ChunkKey& chunk_key) {
 std::set<ChunkKey>::iterator ForeignStorageCache::evictChunkByIterator(
     const std::set<ChunkKey>::iterator& chunk_it) {
   auto timer = DEBUG_TIMER(__func__);
-  File_Namespace::FileBuffer* file_buffer =
-      static_cast<File_Namespace::FileBuffer*>(global_file_mgr_->getBuffer(*chunk_it));
+  File_Namespace::FileBuffer* file_buffer = static_cast<File_Namespace::FileBuffer*>(
+      global_file_mgr_->getBuffer(CAPACITY, *chunk_it));
   file_buffer->freeChunkPages();
   return cached_chunks_.erase(chunk_it);
 }
@@ -416,10 +419,10 @@ AbstractBuffer* ForeignStorageCache::getChunkBufferForPrecaching(
     bool is_new_buffer) {
   if (!is_new_buffer) {
     CHECK(getGlobalFileMgr()->isBufferOnDevice(chunk_key));
-    return getGlobalFileMgr()->getBuffer(chunk_key);
+    return getGlobalFileMgr()->getBuffer(CAPACITY, chunk_key);
   } else {
     CHECK(!getGlobalFileMgr()->isBufferOnDevice(chunk_key));
-    return getGlobalFileMgr()->createBuffer(chunk_key);
+    return getGlobalFileMgr()->createBuffer(CAPACITY, chunk_key);
   }
 }
 

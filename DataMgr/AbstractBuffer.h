@@ -135,7 +135,7 @@ class AbstractBuffer {
   size_t size_;
   int device_id_;
 
- private:
+  //  private: // TODO -- fix
   bool is_dirty_;
   bool is_appended_;
   bool is_updated_;

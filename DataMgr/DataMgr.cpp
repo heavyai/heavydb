@@ -21,7 +21,10 @@
 
 #include "DataMgr/DataMgr.h"
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
+#include "BufferMgr/CpuBufferMgr/CpuHeteroBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
+#include "Catalog/Catalog.h"
+#include "Catalog/SysCatalog.h"
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "FileMgr/GlobalFileMgr.h"
@@ -45,6 +48,7 @@ DataMgr::DataMgr(const std::string& dataDir,
                  const SystemParameters& system_parameters,
                  std::unique_ptr<CudaMgr_Namespace::CudaMgr> cudaMgr,
                  const bool useGpus,
+                 const PMMInfo& pmm_info,
                  const size_t reservedGpuMem,
                  const size_t numReaderThreads,
                  const DiskCacheConfig cache_config)
@@ -69,7 +73,21 @@ DataMgr::DataMgr(const std::string& dataDir,
     hasGpus_ = false;
   }
 
-  populateMgrs(system_parameters, numReaderThreads, cache_config);
+  hasPmm_ = pmm_info.pmm;
+  profSF_ = system_parameters.prof_scale_factor;
+  if (hasPmm_) {
+    LOG(INFO) << "Use DCPMM as volatile memory for cold columns" << std::endl;
+  }
+  statisticsOn_ = false;
+#ifdef HAVE_DCPMM
+  hasPmmStore_ = pmm_info.pmm_store;
+  if (hasPmmStore_) {
+    LOG(INFO) << "Use DCPMM for persistent data store" << std::endl;
+  }
+  populateMgrs(system_parameters, pmm_info, numReaderThreads, cache_config);
+#else  /* HAVE_DCPMM */
+  populateMgrs(system_parameters, pmm_info, numReaderThreads, cache_config);
+#endif /* HAVE_DCPMM */
   createTopLevelMetadata();
 }
 
@@ -173,16 +191,19 @@ void DataMgr::resetPersistentStorage(const DiskCacheConfig& cache_config,
     }
   }
   bufferMgrs_.clear();
-  populateMgrs(sys_params, num_reader_threads, cache_config);
+  auto pmm_disabled = PMMInfo::disabled();
+  populateMgrs(sys_params, pmm_disabled, num_reader_threads, cache_config);
   createTopLevelMetadata();
 }
 
 void DataMgr::populateMgrs(const SystemParameters& system_parameters,
+                           const PMMInfo& pmm_info,
                            const size_t userSpecifiedNumReaderThreads,
                            const DiskCacheConfig& cache_config) {
   // no need for locking, as this is only called in the constructor
   bufferMgrs_.resize(2);
-  bufferMgrs_[0].push_back(PersistentStorageMgr::createPersistentStorageMgr(
+  // TODO: just pass the PMM info directly here
+  bufferMgrs_[DISK_LEVEL].push_back(PersistentStorageMgr::createPersistentStorageMgr(
       dataDir_, userSpecifiedNumReaderThreads, cache_config));
 
   levelSizes_.push_back(1);
@@ -207,13 +228,14 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
     LOG(INFO) << "Reserved GPU memory is " << (float)reservedGpuMem_ / (1024 * 1024)
               << "MB includes render buffer allocation";
     bufferMgrs_.resize(3);
-    bufferMgrs_[1].push_back(new Buffer_Namespace::CpuBufferMgr(0,
-                                                                cpuBufferSize,
-                                                                cudaMgr_.get(),
-                                                                minCpuSlabSize,
-                                                                maxCpuSlabSize,
-                                                                page_size,
-                                                                bufferMgrs_[0][0]));
+    bufferMgrs_[CPU_LEVEL].push_back(
+        new Buffer_Namespace::CpuBufferMgr(0,
+                                           cpuBufferSize,
+                                           cudaMgr_.get(),
+                                           minCpuSlabSize,
+                                           maxCpuSlabSize,
+                                           page_size,
+                                           bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
@@ -233,23 +255,26 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                 << (float)maxGpuSlabSize / (1024 * 1024) << "MB";
       LOG(INFO) << "Max memory pool size for GPU " << gpuNum << " is "
                 << (float)gpuMaxMemSize / (1024 * 1024) << "MB";
-      bufferMgrs_[2].push_back(new Buffer_Namespace::GpuCudaBufferMgr(gpuNum,
-                                                                      gpuMaxMemSize,
-                                                                      cudaMgr_.get(),
-                                                                      minGpuSlabSize,
-                                                                      maxGpuSlabSize,
-                                                                      page_size,
-                                                                      bufferMgrs_[1][0]));
+      bufferMgrs_[GPU_LEVEL].push_back(
+          new Buffer_Namespace::GpuCudaBufferMgr(gpuNum,
+                                                 gpuMaxMemSize,
+                                                 cudaMgr_.get(),
+                                                 minGpuSlabSize,
+                                                 maxGpuSlabSize,
+                                                 page_size,
+                                                 bufferMgrs_[1][0]));
     }
     levelSizes_.push_back(numGpus);
   } else {
-    bufferMgrs_[1].push_back(new Buffer_Namespace::CpuBufferMgr(0,
-                                                                cpuBufferSize,
-                                                                cudaMgr_.get(),
-                                                                minCpuSlabSize,
-                                                                maxCpuSlabSize,
-                                                                page_size,
-                                                                bufferMgrs_[0][0]));
+    // TODO: optane for GPU installations
+    bufferMgrs_[CPU_LEVEL].push_back(
+        new Buffer_Namespace::CpuHeteroBufferMgr(0,
+                                                 cpuBufferSize,
+                                                 cudaMgr_.get(),
+                                                 minCpuSlabSize,
+                                                 maxCpuSlabSize,
+                                                 page_size,
+                                                 bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
   }
 }
@@ -408,21 +433,99 @@ bool DataMgr::isBufferOnDevice(const ChunkKey& key,
   return bufferMgrs_[memLevel][deviceId]->isBufferOnDevice(key);
 }
 
+#ifdef HAVE_DCPMM
+bool DataMgr::isBufferInPersistentMemory(const ChunkKey& key,
+                                         const MemoryLevel memLevel,
+                                         const int deviceId) {
+  if (memLevel == DISK_LEVEL) {
+    return bufferMgrs_[memLevel][deviceId]->isBufferInPersistentMemory(key);
+  } else {
+    return false;
+  }
+}
+#endif /* HAVE_DCPMM */
+
 void DataMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                               const ChunkKey& keyPrefix) {
   bufferMgrs_[0][0]->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, keyPrefix);
 }
 
-AbstractBuffer* DataMgr::createChunkBuffer(const ChunkKey& key,
+BufferProperty get_buffer_property(BufferDescriptor bd) {
+  if (bd.hotness_ == BufferDescriptor::Hot || bd.hotness_ == BufferDescriptor::SoftHot) {
+    return BufferProperty::HIGH_BDWTH;
+  }
+
+  return BufferProperty::CAPACITY;
+}
+
+#ifdef HAVE_DCPMM
+AbstractBuffer* DataMgr::createChunkBuffer(BufferDescriptor bd,
+                                           const ChunkKey& key,
+                                           const MemoryLevel memoryLevel,
+                                           const size_t maxRows,
+                                           const size_t sqlTypeSize,
+                                           const int deviceId,
+                                           const size_t page_size) {
+  int level = static_cast<int>(memoryLevel);
+  if ((memoryLevel == DISK_LEVEL) && (hasPmmStore_ == true)) {
+    // use DCPMM for persistent storage
+    return bufferMgrs_[level][deviceId]->createBuffer(
+        get_buffer_property(bd), key, maxRows, sqlTypeSize, page_size);
+  } else {
+    return bufferMgrs_[level][deviceId]->createBuffer(
+        get_buffer_property(bd), key, page_size);
+  }
+}
+
+AbstractBuffer* DataMgr::getChunkBuffer(BufferDescriptor bd,
+                                        const ChunkKey& key,
+                                        const MemoryLevel memoryLevel,
+                                        const unsigned long query_id,
+                                        const int deviceId,
+                                        const size_t numBytes) {
+  if ((numBytes > 0) && (query_id != 0)) {
+    std::unique_lock<std::mutex> chunkFetchStatsLock(chunkFetchStatsMutex_);
+
+    if (statisticsOn_) {
+      std::map<unsigned long, std::map<ChunkKey, size_t>>::iterator it;
+
+      it = chunkFetchStats_.find(query_id);
+      if (it == chunkFetchStats_.end()) {
+        std::map<ChunkKey, size_t> queryChunkStats;
+        std::map<ChunkKey, size_t> queryDataStats;
+
+        chunkFetchStats_[query_id] = queryChunkStats;
+        chunkFetchDataSizeStats_[query_id] = queryDataStats;
+      }
+
+      auto it2 = chunkFetchStats_[query_id].find(key);
+      if (it2 != chunkFetchStats_[query_id].end()) {
+        (it2->second)++;
+        chunkFetchDataSizeStats_[query_id][key] += numBytes;
+      } else {
+        chunkFetchStats_[query_id][key] = 1;
+        chunkFetchDataSizeStats_[query_id][key] = numBytes;
+      }
+    }
+  }
+
+  return getChunkBuffer(bd, key, memoryLevel, deviceId, numBytes);
+}
+#else   /* HAVE_DCPMM */
+
+AbstractBuffer* DataMgr::createChunkBuffer(BufferDescriptor bd,
+                                           const ChunkKey& key,
                                            const MemoryLevel memoryLevel,
                                            const int deviceId,
                                            const size_t page_size) {
   std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   int level = static_cast<int>(memoryLevel);
-  return bufferMgrs_[level][deviceId]->createBuffer(key, page_size);
+  return bufferMgrs_[level][deviceId]->createBuffer(
+      get_buffer_property(bd), key, page_size);
 }
 
-AbstractBuffer* DataMgr::getChunkBuffer(const ChunkKey& key,
+AbstractBuffer* DataMgr::getChunkBuffer(BufferDescriptor bd,
+                                        const ChunkKey& key,
                                         const MemoryLevel memoryLevel,
                                         const int deviceId,
                                         const size_t numBytes) {
@@ -430,8 +533,9 @@ AbstractBuffer* DataMgr::getChunkBuffer(const ChunkKey& key,
   const auto level = static_cast<size_t>(memoryLevel);
   CHECK_LT(level, levelSizes_.size());     // make sure we have a legit buffermgr
   CHECK_LT(deviceId, levelSizes_[level]);  // make sure we have a legit buffermgr
-  return bufferMgrs_[level][deviceId]->getBuffer(key, numBytes);
+  return bufferMgrs_[level][deviceId]->getBuffer(get_buffer_property(bd), key, numBytes);
 }
+#endif  // HAVE_DCPMM
 
 void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix) {
   std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
@@ -531,6 +635,283 @@ File_Namespace::GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
       dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
   CHECK(global_file_mgr);
   return global_file_mgr;
+}
+
+void DataMgr::startCollectingStatistics(void) {
+  std::unique_lock<std::mutex> chunkFetchStatsLock(chunkFetchStatsMutex_);
+  // reset current database or all databases?
+  Catalog_Namespace::SysCatalog::instance().clearDataMgrStatistics(hasPmm_);
+  statisticsOn_ = true;
+  chunkFetchStatsLock.unlock();
+
+  LOG(INFO) << "Data manager profiling on." << std::endl;
+}
+
+size_t DataMgr::getPeakVmSize(void) {
+  FILE* fp;
+  char statusFileName[256];
+
+  sprintf(statusFileName, "/proc/%d/status", getpid());
+  fp = fopen(statusFileName, "r");
+  if (fp == NULL) {
+    LOG(INFO) << "Cannot get peak vm size" << std::endl;
+    return 0;
+  }
+
+  char token[128];
+  size_t peakVmSize;
+  while (!feof(fp)) {
+    fscanf(fp, "%s", token);
+    if (strcmp(token, "VmPeak:") == 0) {
+      fscanf(fp, "%lu", &peakVmSize);
+      fclose(fp);
+      return peakVmSize * 1024;
+    }
+  }
+  return 0;
+}
+
+void DataMgr::stopCollectingStatistics(std::map<unsigned long, long>& query_time) {
+  std::map<unsigned long, std::map<std::vector<int>, size_t>>
+      queryColumnFetchStats;  // number of times column fetched in the query
+  std::map<unsigned long, std::map<std::vector<int>, size_t>>
+      queryColumnChunkStats;  // number of unique chunks fetched in the query
+  std::map<unsigned long, std::map<std::vector<int>, size_t>>
+      queryColumnFetchDataSizeStats;  // size of data fetched in the query
+
+  std::map<std::vector<int>, size_t>
+      columnFetchStats;  // aggregated number of times columns fetched
+  std::map<std::vector<int>, size_t>
+      columnChunkStats;  // aggregated number of unique columns fetched
+  std::map<std::vector<int>, size_t>
+      columnFetchDataSizeStats;  // aggregated size of data fetched
+
+  std::unique_lock<std::mutex> chunkFetchStatsLock(chunkFetchStatsMutex_);
+
+  if (statisticsOn_) {
+    for (auto itmom = chunkFetchStats_.cbegin(); itmom != chunkFetchStats_.cend();
+         ++itmom) {
+      // aggrgate chunk fetch stats by columns
+      std::map<std::vector<int>, size_t> queryColumns;
+      std::map<std::vector<int>, size_t> queryChunks;
+      std::map<std::vector<int>, size_t> queryData;
+
+      unsigned long query_id = itmom->first;
+      queryColumnFetchStats[query_id] = queryColumns;
+      queryColumnChunkStats[query_id] = queryChunks;
+      queryColumnFetchDataSizeStats[query_id] = queryData;
+
+      std::map<std::vector<int>, size_t>::const_iterator itm;
+      for (itm = itmom->second.begin(); itm != itmom->second.end(); ++itm) {
+        std::vector<int> key;
+
+        key = itm->first;
+        key.pop_back();  // pop off chunk id
+
+        std::map<std::vector<int>, size_t>::iterator itm2;
+
+        itm2 = columnFetchStats.find(key);
+        if (itm2 != columnFetchStats.end()) {
+          itm2->second += itm->second;
+          columnChunkStats[key] += 1;
+          columnFetchDataSizeStats[key] += chunkFetchDataSizeStats_[query_id][itm->first];
+        } else {
+          columnFetchStats[key] = itm->second;
+          columnChunkStats[key] = 1;
+          columnFetchDataSizeStats[key] = chunkFetchDataSizeStats_[query_id][itm->first];
+        }
+
+        std::map<unsigned long, std::map<std::vector<int>, size_t>>::iterator itmom2;
+        itmom2 = queryColumnFetchStats.find(query_id);
+        itm2 = itmom2->second.find(key);
+        if (itm2 != itmom2->second.end()) {
+          itm2->second += itm->second;
+          queryColumnChunkStats[query_id][key] += 1;
+          queryColumnFetchDataSizeStats[query_id][key] +=
+              chunkFetchDataSizeStats_[query_id][itm->first];
+
+        } else {
+          queryColumnFetchStats[query_id][key] = itm->second;
+          queryColumnChunkStats[query_id][key] = 1;
+          queryColumnFetchDataSizeStats[query_id][key] =
+              chunkFetchDataSizeStats_[query_id][itm->first];
+        }
+      }
+    }
+
+    size_t peakWorkVmSize = 0;
+    if (hasPmm_) {
+      peakWorkVmSize = getPeakVmSize();
+      // TODO: need to re-factor this. Now just commented
+      // peakWorkVmSize -= bufferMgrs_[MemoryLevel::PMM_LEVEL][0]->getMaxSize();
+    }
+
+    Catalog_Namespace::SysCatalog::instance().storeDataMgrStatistics(
+        hasPmm_,
+        peakWorkVmSize,
+        query_time,
+        queryColumnFetchStats,
+        queryColumnChunkStats,
+        queryColumnFetchDataSizeStats,
+        columnFetchStats,
+        columnChunkStats,
+        columnFetchDataSizeStats);
+
+#if 0
+    for (auto it2 = columnFetchStats.cbegin(); it2 != columnFetchStats.cend(); ++it2) {
+      for (auto it3 = (it2->first).cbegin(); it3 != (it2->first).cend(); it3++) {
+        std::cout << " " << *it3;
+      }
+
+      std::cout << " " << it2->second;
+
+      std::cout << " " << columnChunkStats[it2->first];
+            std::cout << " " << columnFetchDataSizeStats[it2->first];
+            std::cout << std::endl;
+    }
+#endif /* 0 */
+
+    chunkFetchStats_.clear();
+    chunkFetchDataSizeStats_.clear();
+
+    statisticsOn_ = false;
+  }
+  chunkFetchStatsLock.unlock();
+
+  LOG(INFO) << "Data manager profiling off." << std::endl;
+
+  estimateDramRecommended(100);
+}
+
+size_t DataMgr::estimateDramRecommended(int percentDramPerf) {
+  std::map<unsigned long, long> query_pmem_time;
+  std::map<unsigned long, long> query_dram_time;
+  std::vector<unsigned long> query_id_diff;
+  std::vector<long> query_time_diff;
+  std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnFetchStats2;
+  std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnChunkStats2;
+  std::map<unsigned long, std::map<std::vector<int>, size_t>>
+      queryColumnFetchDataSizeStats2;
+  std::map<std::vector<int>, size_t> columnFetchStats2;
+  std::map<std::vector<int>, size_t> columnChunkStats2;
+  std::map<std::vector<int>, size_t> columnFetchDataSizeStats2;
+
+  size_t peakWorkVmSize;
+
+  if ((percentDramPerf > 100) || (percentDramPerf < 0)) {
+    LOG(INFO)
+        << "Percentage of DRAM performance must be between 0 and 100, for example, 80."
+        << std::endl;
+    return 0;
+  }
+
+  if (Catalog_Namespace::SysCatalog::instance().loadDataMgrStatistics(
+          profSF_,
+          peakWorkVmSize,
+          query_pmem_time,
+          query_dram_time,
+          query_id_diff,
+          query_time_diff,
+          queryColumnFetchStats2,
+          queryColumnChunkStats2,
+          queryColumnFetchDataSizeStats2,
+          columnFetchStats2,
+          columnChunkStats2,
+          columnFetchDataSizeStats2)) {
+    LOG(INFO) << "query_pmem_time and query_dram_time do not have the same query ids"
+              << std::endl;
+    return 0;
+  }
+
+  // for (unsigned int i = 0; i < query_id_diff.size(); i++) {
+  //  std::cout << query_id_diff[i] << " " <<  query_time_diff[i] << std::endl;
+  //}
+
+  // TODO: refine this algorithm to make it more accurate
+  long query_dram_time_total;
+  long query_pmem_time_total;
+
+  query_dram_time_total = 0;
+  for (std::map<unsigned long, long>::iterator it = query_dram_time.begin();
+       it != query_dram_time.end();
+       it++) {
+    query_dram_time_total += it->second;
+  }
+
+  query_pmem_time_total = 0;
+  for (std::map<unsigned long, long>::iterator it = query_pmem_time.begin();
+       it != query_pmem_time.end();
+       it++) {
+    query_pmem_time_total += it->second;
+  }
+
+  unsigned long hotcut = 0;
+  // (pmem_time - dram_time)/dram_time <= (100 - percentDramPerf)/100 ==>
+  // 100 * pmem_time <= (100 * dram_time + 100 * dram_time - percentDramPerf * dram_time
+  // ==> 100 * pmem_time <= (200 - percentDramPerf) * dram_time
+  while (query_pmem_time_total && query_dram_time_total &&
+         ((100 * query_pmem_time_total) >
+          ((200 - percentDramPerf) * query_dram_time_total)) &&
+         (hotcut < query_time_diff.size())) {
+    query_pmem_time_total -= query_time_diff[hotcut];
+    hotcut++;
+  }
+
+  std::map<std::vector<int>, size_t> hotColumnFetchStats2;
+  std::map<std::vector<int>, size_t> hotColumnChunkStats2;
+  std::map<std::vector<int>, size_t> hotColumnFetchDataSizeStats2;
+
+  for (unsigned long i = 0; i < hotcut; i++) {
+    unsigned long query_id;
+
+    query_id = query_id_diff[i];
+    for (std::map<std::vector<int>, size_t>::iterator it =
+             queryColumnFetchStats2[query_id].begin();
+         it != queryColumnFetchStats2[query_id].end();
+         it++) {
+      if (hotColumnFetchStats2.find(it->first) != hotColumnFetchStats2.end()) {
+        hotColumnFetchStats2[it->first] += it->second;
+        hotColumnChunkStats2[it->first] += queryColumnChunkStats2[query_id][it->first];
+        hotColumnFetchDataSizeStats2[it->first] +=
+            queryColumnFetchDataSizeStats2[query_id][it->first];
+      } else {
+        hotColumnFetchStats2[it->first] = it->second;
+        hotColumnChunkStats2[it->first] = queryColumnChunkStats2[query_id][it->first];
+        hotColumnFetchDataSizeStats2[it->first] =
+            queryColumnFetchDataSizeStats2[query_id][it->first];
+      }
+    }
+  }
+
+  size_t dramRecommended = peakWorkVmSize;
+  for (std::map<std::vector<int>, size_t>::iterator it = hotColumnFetchStats2.begin();
+       it != hotColumnFetchStats2.end();
+       it++) {
+    size_t estimatedColumnSize;
+
+    estimatedColumnSize = hotColumnFetchDataSizeStats2[it->first] *
+                          hotColumnChunkStats2[it->first] * 1.0 / it->second;
+    dramRecommended += estimatedColumnSize;
+  }
+
+  return dramRecommended;
+
+#if 0
+  for (std::map<unsigned long, long>::const_iterator it = query_pmem_time.begin(); it != query_pmem_time.end(); ++it) {
+    std::cout << it->first << " " << it->second << std::endl;
+  }
+
+  for (std::map<unsigned long, long>::const_iterator it = query_dram_time.begin(); it != query_dram_time.end(); ++it) {
+    std::cout << it->first << " " << it->second << std::endl;
+  }
+
+  for (std::map<unsigned long, std::map<std::vector<int>, size_t>>::const_iterator it = queryColumnFetchStats2.begin(); it != queryColumnFetchStats2.end(); it++) {
+    std::cout << it->first << std::endl;
+    for (std::map<std::vector<int>, size_t>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); it2++) {
+      std::cout << "    " << it2->first[0] << " " << it2->first[1] << " " << it2->first[2] << " " << it2->second << " " << queryColumnChunkStats2[it->first][it2->first] << " " << queryColumnFetchDataSizeStats2[it->first][it2->first] << std::endl;
+    }
+  }
+#endif /* 0 */
 }
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem_info) {

@@ -418,18 +418,18 @@ void ArrowForeignStorageBase::parseArrowTable(Catalog_Namespace::Catalog* catalo
               auto k = key;
               k.push_back(1);
               {
-                auto b = mgr->createBuffer(k);
+                auto b = mgr->createBuffer(CAPACITY, k);
                 b->setSize(varlen);
                 b->initEncoder(c.columnType);
               }
               k[4] = 2;
               {
-                auto b = mgr->createBuffer(k);
+                auto b = mgr->createBuffer(CAPACITY, k);
                 b->setSqlType(SQLTypeInfo(kINT, false));
                 b->setSize(frag.sz * b->getSqlType().get_size());
               }
             } else {
-              auto b = mgr->createBuffer(key);
+              auto b = mgr->createBuffer(CAPACITY, key);
               b->setSize(frag.sz * c.columnType.get_size());
               b->initEncoder(c.columnType);
               if (!empty) {

@@ -34,7 +34,9 @@
 
 #include "../AbstractBuffer.h"
 #include "../AbstractBufferMgr.h"
+#include "DataMgr/PMMInfo.h"
 #include "FileMgr.h"
+#include "PmmPersistentBufferMgr.h"
 
 using namespace Data_Namespace;
 
@@ -55,16 +57,31 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
  public:
   /// Constructor
   GlobalFileMgr(const int32_t deviceId,
+                const PMMInfo& pmm_info,
                 std::string basePath = ".",
                 const size_t num_reader_threads = 0,
                 const size_t defaultPageSize = DEFAULT_PAGE_SIZE);
 
   /// Creates a chunk with the specified key and page size.
-  AbstractBuffer* createBuffer(const ChunkKey& key,
+  AbstractBuffer* createBuffer(BufferProperty bufProp,
+                               const ChunkKey& key,
                                size_t pageSize = 0,
                                const size_t numBytes = 0) override {
-    return getFileMgr(key)->createBuffer(key, pageSize, numBytes);
+    return getFileMgr(key)->createBuffer(bufProp, key, pageSize, numBytes);
   }
+
+#ifdef HAVE_DCPMM
+  AbstractBuffer* createBuffer(BufferProperty bufProp,
+                               const ChunkKey& key,
+                               const size_t maxRows,
+                               const int sqlTypeSize,
+                               const size_t pageSize) override {
+    return getFileMgr(key)->createBuffer(bufProp, key, maxRows, sqlTypeSize, pageSize);
+  }
+  bool isBufferInPersistentMemory(const ChunkKey& key) override {
+    return getFileMgr(key)->isBufferInPersistentMemory(key);
+  }
+#endif /* HAVE_DCPMM */
 
   bool isBufferOnDevice(const ChunkKey& key) override {
     return getFileMgr(key)->isBufferOnDevice(key);
@@ -82,8 +99,10 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
                                const bool purge = true) override;
 
   /// Returns the a pointer to the chunk with the specified key.
-  AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) override {
-    return getFileMgr(key)->getBuffer(key, numBytes);
+  AbstractBuffer* getBuffer(BufferProperty bufProp,
+                            const ChunkKey& key,
+                            const size_t numBytes = 0) override {
+    return getFileMgr(key)->getBuffer(bufProp, key, numBytes);
   }
 
   void fetchBuffer(const ChunkKey& key,
@@ -144,6 +163,23 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   inline size_t getNumReaderThreads() { return num_reader_threads_; }
 
   size_t getNumChunks() override;
+
+#ifdef HAVE_DCPMM
+  void constructPersistentBuffers(FileMgr* fm);
+  int8_t* allocatePersistentBuffer(ChunkKey key,
+                                   size_t numBytes,
+                                   PersistentBufferDescriptor** desc);
+  void deletePersistentBuffer(PersistentBufferDescriptor* desc, int8_t* addr);
+  void shrinkPersistentBuffer(PersistentBufferDescriptor* desc, int8_t* addr);
+  int8_t* reallocatePersistentBuffer(ChunkKey key,
+                                     int8_t* addr,
+                                     size_t numBytes,
+                                     PersistentBufferDescriptor** desc);
+  bool isPersistentMemoryPresent(void) { return pmmStore_; }
+  size_t getPersistentBufferPageSize(void) {
+    return pmmBufferMgr_.getPersistentBufferPageSize();
+  }
+#endif /* HAVE_DCPMM */
 
  private:
   AbstractBufferMgr* findFileMgrUnlocked(const int32_t db_id, const int32_t tb_id);
@@ -212,6 +248,11 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   std::map<std::pair<int32_t, int32_t>, AbstractBufferMgr*> allFileMgrs_;
 
   mapd_shared_mutex fileMgrs_mutex_;
+#ifdef HAVE_DCPMM
+  bool pmmStore_;
+  std::string pmmStorePath_;
+  PersistentBufferMgr pmmBufferMgr_;
+#endif /* HAVE_DCPMM */
 };
 
 }  // namespace File_Namespace

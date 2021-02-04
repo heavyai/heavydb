@@ -107,7 +107,8 @@ void BufferMgr::clear() {
 }
 
 /// Throws a runtime_error if the Chunk already exists
-AbstractBuffer* BufferMgr::createBuffer(const ChunkKey& chunk_key,
+AbstractBuffer* BufferMgr::createBuffer(BufferProperty bufProp,
+                                        const ChunkKey& chunk_key,
                                         const size_t chunk_page_size,
                                         const size_t initial_size) {
   // LOG(INFO) << printMap();
@@ -712,7 +713,9 @@ void BufferMgr::checkpoint(const int db_id, const int tb_id) {
 
 /// Returns a pointer to the Buffer holding the chunk, if it exists; otherwise,
 /// throws a runtime_error.
-AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes) {
+AbstractBuffer* BufferMgr::getBuffer(BufferProperty bufProp,
+                                     const ChunkKey& key,
+                                     const size_t num_bytes) {
   std::lock_guard<std::mutex> lock(global_mutex_);  // granular lock
 
   std::unique_lock<std::mutex> sized_segs_lock(sized_segs_mutex_);
@@ -735,7 +738,7 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes
   } else {  // If wasn't in pool then we need to fetch it
     sized_segs_lock.unlock();
     // createChunk pins for us
-    AbstractBuffer* buffer = createBuffer(key, page_size_, num_bytes);
+    AbstractBuffer* buffer = createBuffer(bufProp, key, page_size_, num_bytes);
     try {
       parent_mgr_->fetchBuffer(
           key, buffer, num_bytes);  // this should put buffer in a BufferSegment
@@ -766,7 +769,7 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
   if (!found_buffer) {
     sized_segs_lock.unlock();
     CHECK(parent_mgr_ != 0);
-    buffer = createBuffer(key, page_size_, num_bytes);  // will pin buffer
+    buffer = createBuffer(CAPACITY, key, page_size_, num_bytes);  // will pin buffer
     try {
       parent_mgr_->fetchBuffer(key, buffer, num_bytes);
     } catch (std::runtime_error& error) {
@@ -798,7 +801,7 @@ AbstractBuffer* BufferMgr::putBuffer(const ChunkKey& key,
   chunk_index_lock.unlock();
   AbstractBuffer* buffer;
   if (!found_buffer) {
-    buffer = createBuffer(key, page_size_);
+    buffer = createBuffer(CAPACITY, key, page_size_);
   } else {
     buffer = buffer_it->second->buffer;
   }
@@ -837,7 +840,7 @@ int BufferMgr::getBufferId() {
 AbstractBuffer* BufferMgr::alloc(const size_t num_bytes) {
   std::lock_guard<std::mutex> lock(global_mutex_);
   ChunkKey chunk_key = {-1, getBufferId()};
-  return createBuffer(chunk_key, page_size_, num_bytes);
+  return createBuffer(CAPACITY, chunk_key, page_size_, num_bytes);
 }
 
 void BufferMgr::free(AbstractBuffer* buffer) {
