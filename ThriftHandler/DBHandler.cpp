@@ -326,6 +326,15 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     LOG(FATAL) << "Failed to initialize table functions factory: " << e.what();
   }
 
+  try {
+    auto udtfs = ThriftSerializers::to_thrift(
+        table_functions::TableFunctionsFactory::get_table_funcs(/*is_runtime=*/false));
+    std::vector<TUserDefinedFunction> udfs = {};
+    calcite_->setRuntimeExtensionFunctions(udfs, udtfs, /*is_runtime=*/false);
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Failed to register compile-time table functions: " << e.what();
+  }
+
   if (!data_mgr_->gpusPresent() && !cpu_mode_only_) {
     executor_device_type_ = ExecutorDeviceType::CPU;
     LOG(ERROR) << "No GPUs detected, falling back to CPU mode";
@@ -6222,111 +6231,6 @@ void DBHandler::get_device_parameters(std::map<std::string, std::string>& _retur
   EXPOSE_THRIFT_MAP(TOutputBufferSizeType);
 }
 
-ExtArgumentType mapfrom(const TExtArgumentType::type& t) {
-  switch (t) {
-    case TExtArgumentType::Int8:
-      return ExtArgumentType::Int8;
-    case TExtArgumentType::Int16:
-      return ExtArgumentType::Int16;
-    case TExtArgumentType::Int32:
-      return ExtArgumentType::Int32;
-    case TExtArgumentType::Int64:
-      return ExtArgumentType::Int64;
-    case TExtArgumentType::Float:
-      return ExtArgumentType::Float;
-    case TExtArgumentType::Double:
-      return ExtArgumentType::Double;
-    case TExtArgumentType::Void:
-      return ExtArgumentType::Void;
-    case TExtArgumentType::PInt8:
-      return ExtArgumentType::PInt8;
-    case TExtArgumentType::PInt16:
-      return ExtArgumentType::PInt16;
-    case TExtArgumentType::PInt32:
-      return ExtArgumentType::PInt32;
-    case TExtArgumentType::PInt64:
-      return ExtArgumentType::PInt64;
-    case TExtArgumentType::PFloat:
-      return ExtArgumentType::PFloat;
-    case TExtArgumentType::PDouble:
-      return ExtArgumentType::PDouble;
-    case TExtArgumentType::PBool:
-      return ExtArgumentType::PBool;
-    case TExtArgumentType::Bool:
-      return ExtArgumentType::Bool;
-    case TExtArgumentType::ArrayInt8:
-      return ExtArgumentType::ArrayInt8;
-    case TExtArgumentType::ArrayInt16:
-      return ExtArgumentType::ArrayInt16;
-    case TExtArgumentType::ArrayInt32:
-      return ExtArgumentType::ArrayInt32;
-    case TExtArgumentType::ArrayInt64:
-      return ExtArgumentType::ArrayInt64;
-    case TExtArgumentType::ArrayFloat:
-      return ExtArgumentType::ArrayFloat;
-    case TExtArgumentType::ArrayDouble:
-      return ExtArgumentType::ArrayDouble;
-    case TExtArgumentType::ArrayBool:
-      return ExtArgumentType::ArrayBool;
-    case TExtArgumentType::GeoPoint:
-      return ExtArgumentType::GeoPoint;
-    case TExtArgumentType::GeoLineString:
-      return ExtArgumentType::GeoLineString;
-    case TExtArgumentType::Cursor:
-      return ExtArgumentType::Cursor;
-    case TExtArgumentType::GeoPolygon:
-      return ExtArgumentType::GeoPolygon;
-    case TExtArgumentType::GeoMultiPolygon:
-      return ExtArgumentType::GeoMultiPolygon;
-    case TExtArgumentType::ColumnInt8:
-      return ExtArgumentType::ColumnInt8;
-    case TExtArgumentType::ColumnInt16:
-      return ExtArgumentType::ColumnInt16;
-    case TExtArgumentType::ColumnInt32:
-      return ExtArgumentType::ColumnInt32;
-    case TExtArgumentType::ColumnInt64:
-      return ExtArgumentType::ColumnInt64;
-    case TExtArgumentType::ColumnFloat:
-      return ExtArgumentType::ColumnFloat;
-    case TExtArgumentType::ColumnDouble:
-      return ExtArgumentType::ColumnDouble;
-    case TExtArgumentType::ColumnBool:
-      return ExtArgumentType::ColumnBool;
-    case TExtArgumentType::TextEncodingNone:
-      return ExtArgumentType::TextEncodingNone;
-    case TExtArgumentType::TextEncodingDict8:
-      return ExtArgumentType::TextEncodingDict8;
-    case TExtArgumentType::TextEncodingDict16:
-      return ExtArgumentType::TextEncodingDict16;
-    case TExtArgumentType::TextEncodingDict32:
-      return ExtArgumentType::TextEncodingDict32;
-  }
-  UNREACHABLE();
-  return ExtArgumentType{};
-}
-
-table_functions::OutputBufferSizeType mapfrom(const TOutputBufferSizeType::type& t) {
-  switch (t) {
-    case TOutputBufferSizeType::kConstant:
-      return table_functions::OutputBufferSizeType::kConstant;
-    case TOutputBufferSizeType::kUserSpecifiedConstantParameter:
-      return table_functions::OutputBufferSizeType::kUserSpecifiedConstantParameter;
-    case TOutputBufferSizeType::kUserSpecifiedRowMultiplier:
-      return table_functions::OutputBufferSizeType::kUserSpecifiedRowMultiplier;
-  }
-  UNREACHABLE();
-  return table_functions::OutputBufferSizeType{};
-}
-
-std::vector<ExtArgumentType> mapfrom(const std::vector<TExtArgumentType::type>& v) {
-  std::vector<ExtArgumentType> result;
-  std::transform(v.begin(),
-                 v.end(),
-                 std::back_inserter(result),
-                 [](TExtArgumentType::type c) -> ExtArgumentType { return mapfrom(c); });
-  return result;
-}
-
 void DBHandler::register_runtime_extension_functions(
     const TSessionId& session,
     const std::vector<TUserDefinedFunction>& udfs,
@@ -6369,15 +6273,17 @@ void DBHandler::register_runtime_extension_functions(
     table_functions::TableFunctionsFactory::add(
         it->name,
         table_functions::TableFunctionOutputRowSizer{
-            mapfrom(it->sizerType), static_cast<size_t>(it->sizerArgPos)},
-        mapfrom(it->inputArgTypes),
-        mapfrom(it->outputArgTypes),
+            ThriftSerializers::from_thrift(it->sizerType),
+            static_cast<size_t>(it->sizerArgPos)},
+        ThriftSerializers::from_thrift(it->inputArgTypes),
+        ThriftSerializers::from_thrift(it->outputArgTypes),
+        ThriftSerializers::from_thrift(it->sqlArgTypes),
         /*is_runtime =*/true);
   }
 
   /* Register extension functions with Calcite server */
   CHECK(calcite_);
-  calcite_->setRuntimeExtensionFunctions(udfs, udtfs);
+  calcite_->setRuntimeExtensionFunctions(udfs, udtfs, /*is_runtime =*/true);
 
   /* Update the extension function whitelist */
   std::string whitelist = calcite_->getRuntimeExtensionFunctionWhitelist();

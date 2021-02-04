@@ -29,6 +29,7 @@
 #include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/RelAlgExecutor.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
+#include "QueryEngine/ThriftSerializers.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/import_helpers.h"
@@ -140,6 +141,10 @@ QueryRunner::QueryRunner(const char* db_path,
   }
 
   table_functions::TableFunctionsFactory::init();
+  auto udtfs = ThriftSerializers::to_thrift(
+      table_functions::TableFunctionsFactory::get_table_funcs(/*is_runtime=*/false));
+  std::vector<TUserDefinedFunction> udfs = {};
+  g_calcite->setRuntimeExtensionFunctions(udfs, udtfs, /*is_runtime=*/false);
 
   std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr;
 #ifdef HAVE_CUDA

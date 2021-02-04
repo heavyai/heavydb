@@ -106,19 +106,17 @@ TEST_F(TableFunctions, BasicProjection) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out_add FROM TABLE(row_adder(1, cursor(SELECT d, d2 FROM tf_test)));",
-          dt);
+          "SELECT out0 FROM TABLE(row_adder(1, cursor(SELECT d, d2 FROM tf_test)));", dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out_add FROM TABLE(row_adder(4, cursor(SELECT d, d2 FROM tf_test)));",
-          dt);
+          "SELECT out0 FROM TABLE(row_adder(4, cursor(SELECT d, d2 FROM tf_test)));", dt);
       ASSERT_EQ(rows->rowCount(), size_t(20));
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out_add, out_sub FROM TABLE(row_addsub(1, cursor(SELECT d, d2 FROM "
+          "SELECT out0, out1 FROM TABLE(row_addsub(1, cursor(SELECT d, d2 FROM "
           "tf_test)));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));

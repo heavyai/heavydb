@@ -78,6 +78,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
   private String udfRTSigsJson = "";
   Map<String, ExtensionFunction> udfRTSigs = null;
 
+  Map<String, ExtensionFunction> udtfSigs = null;
+
   private SockTransportProperties skT;
   private Map<String, ExtensionFunction> extSigs = null;
   private String dataDir;
@@ -353,38 +355,51 @@ public class CalciteServerHandler implements CalciteServer.Iface {
   }
 
   @Override
-  public void setRuntimeExtensionFunctions(
-          List<TUserDefinedFunction> udfs, List<TUserDefinedTableFunction> udtfs) {
-    // Clean up previously defined Runtime UDFs
-    if (udfRTSigs != null) {
-      for (String name : udfRTSigs.keySet()) extSigs.remove(name);
-      udfRTSigsJson = "";
-      udfRTSigs.clear();
-    } else {
-      udfRTSigs = new HashMap<String, ExtensionFunction>();
-    }
-
-    for (TUserDefinedFunction udf : udfs) {
-      udfRTSigs.put(udf.name, toExtensionFunction(udf));
-    }
-
-    for (TUserDefinedTableFunction udtf : udtfs) {
-      udfRTSigs.put(udtf.name, toExtensionFunction(udtf));
-    }
-
-    // Avoid overwritting compiled and Loadtime UDFs:
-    for (String name : udfRTSigs.keySet()) {
-      if (extSigs.containsKey(name)) {
-        MAPDLOGGER.error("Extension function `" + name
-                + "` exists. Skipping runtime extenension function with the same name.");
-        udfRTSigs.remove(name);
+  public void setRuntimeExtensionFunctions(List<TUserDefinedFunction> udfs,
+          List<TUserDefinedTableFunction> udtfs,
+          boolean isruntime) {
+    if (isruntime) {
+      // Clean up previously defined Runtime UDFs
+      if (udfRTSigs != null) {
+        for (String name : udfRTSigs.keySet()) extSigs.remove(name);
+        udfRTSigsJson = "";
+        udfRTSigs.clear();
+      } else {
+        udfRTSigs = new HashMap<String, ExtensionFunction>();
       }
-    }
 
-    // udfRTSigsJson will contain only the signatures of UDFs:
-    udfRTSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(udfRTSigs);
-    // Expose RT UDFs to Calcite server:
-    extSigs.putAll(udfRTSigs);
+      for (TUserDefinedFunction udf : udfs) {
+        udfRTSigs.put(udf.name, toExtensionFunction(udf));
+      }
+
+      for (TUserDefinedTableFunction udtf : udtfs) {
+        udfRTSigs.put(udtf.name, toExtensionFunction(udtf));
+      }
+
+      // Avoid overwritting compiled and Loadtime UDFs:
+      for (String name : udfRTSigs.keySet()) {
+        if (extSigs.containsKey(name)) {
+          MAPDLOGGER.error("Extension function `" + name
+                  + "` exists. Skipping runtime extenension function with the same name.");
+          udfRTSigs.remove(name);
+        }
+      }
+      // udfRTSigsJson will contain only the signatures of UDFs:
+      udfRTSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(udfRTSigs);
+      // Expose RT UDFs to Calcite server:
+      extSigs.putAll(udfRTSigs);
+    } else {
+      // currently only LoadTime UDTFs can be registered via calcite thrift interface
+      if (udtfSigs == null) {
+        udtfSigs = new HashMap<String, ExtensionFunction>();
+      }
+
+      for (TUserDefinedTableFunction udtf : udtfs) {
+        udtfSigs.put(udtf.name, toExtensionFunction(udtf));
+      }
+
+      extSigs.putAll(udtfSigs);
+    }
 
     calciteParserFactory.updateOperatorTable();
   }

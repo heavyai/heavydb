@@ -30,7 +30,9 @@
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/Descriptors/CountDistinctDescriptor.h"
 #include "QueryEngine/Descriptors/Types.h"
+#include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/StringDictionaryGenerations.h"
+#include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/TargetMetaInfo.h"
 #include "Shared/ThriftTypesConvert.h"
 
@@ -358,6 +360,245 @@ inline CountDistinctDescriptor count_distinct_descriptor_from_thrift(
   count_distinct_descriptor.sub_bitmap_count =
       thrift_count_distinct_descriptor.sub_bitmap_count;
   return count_distinct_descriptor;
+}
+
+inline ExtArgumentType from_thrift(const TExtArgumentType::type& t) {
+  switch (t) {
+    case TExtArgumentType::Int8:
+      return ExtArgumentType::Int8;
+    case TExtArgumentType::Int16:
+      return ExtArgumentType::Int16;
+    case TExtArgumentType::Int32:
+      return ExtArgumentType::Int32;
+    case TExtArgumentType::Int64:
+      return ExtArgumentType::Int64;
+    case TExtArgumentType::Float:
+      return ExtArgumentType::Float;
+    case TExtArgumentType::Double:
+      return ExtArgumentType::Double;
+    case TExtArgumentType::Void:
+      return ExtArgumentType::Void;
+    case TExtArgumentType::PInt8:
+      return ExtArgumentType::PInt8;
+    case TExtArgumentType::PInt16:
+      return ExtArgumentType::PInt16;
+    case TExtArgumentType::PInt32:
+      return ExtArgumentType::PInt32;
+    case TExtArgumentType::PInt64:
+      return ExtArgumentType::PInt64;
+    case TExtArgumentType::PFloat:
+      return ExtArgumentType::PFloat;
+    case TExtArgumentType::PDouble:
+      return ExtArgumentType::PDouble;
+    case TExtArgumentType::PBool:
+      return ExtArgumentType::PBool;
+    case TExtArgumentType::Bool:
+      return ExtArgumentType::Bool;
+    case TExtArgumentType::ArrayInt8:
+      return ExtArgumentType::ArrayInt8;
+    case TExtArgumentType::ArrayInt16:
+      return ExtArgumentType::ArrayInt16;
+    case TExtArgumentType::ArrayInt32:
+      return ExtArgumentType::ArrayInt32;
+    case TExtArgumentType::ArrayInt64:
+      return ExtArgumentType::ArrayInt64;
+    case TExtArgumentType::ArrayFloat:
+      return ExtArgumentType::ArrayFloat;
+    case TExtArgumentType::ArrayDouble:
+      return ExtArgumentType::ArrayDouble;
+    case TExtArgumentType::ArrayBool:
+      return ExtArgumentType::ArrayBool;
+    case TExtArgumentType::GeoPoint:
+      return ExtArgumentType::GeoPoint;
+    case TExtArgumentType::GeoLineString:
+      return ExtArgumentType::GeoLineString;
+    case TExtArgumentType::Cursor:
+      return ExtArgumentType::Cursor;
+    case TExtArgumentType::GeoPolygon:
+      return ExtArgumentType::GeoPolygon;
+    case TExtArgumentType::GeoMultiPolygon:
+      return ExtArgumentType::GeoMultiPolygon;
+    case TExtArgumentType::ColumnInt8:
+      return ExtArgumentType::ColumnInt8;
+    case TExtArgumentType::ColumnInt16:
+      return ExtArgumentType::ColumnInt16;
+    case TExtArgumentType::ColumnInt32:
+      return ExtArgumentType::ColumnInt32;
+    case TExtArgumentType::ColumnInt64:
+      return ExtArgumentType::ColumnInt64;
+    case TExtArgumentType::ColumnFloat:
+      return ExtArgumentType::ColumnFloat;
+    case TExtArgumentType::ColumnDouble:
+      return ExtArgumentType::ColumnDouble;
+    case TExtArgumentType::ColumnBool:
+      return ExtArgumentType::ColumnBool;
+    case TExtArgumentType::TextEncodingNone:
+      return ExtArgumentType::TextEncodingNone;
+    case TExtArgumentType::TextEncodingDict8:
+      return ExtArgumentType::TextEncodingDict8;
+    case TExtArgumentType::TextEncodingDict16:
+      return ExtArgumentType::TextEncodingDict16;
+    case TExtArgumentType::TextEncodingDict32:
+      return ExtArgumentType::TextEncodingDict32;
+  }
+  UNREACHABLE();
+  return ExtArgumentType{};
+}
+
+inline TExtArgumentType::type to_thrift(const ExtArgumentType& t) {
+  switch (t) {
+    case ExtArgumentType::Int8:
+      return TExtArgumentType::Int8;
+    case ExtArgumentType::Int16:
+      return TExtArgumentType::Int16;
+    case ExtArgumentType::Int32:
+      return TExtArgumentType::Int32;
+    case ExtArgumentType::Int64:
+      return TExtArgumentType::Int64;
+    case ExtArgumentType::Float:
+      return TExtArgumentType::Float;
+    case ExtArgumentType::Double:
+      return TExtArgumentType::Double;
+    case ExtArgumentType::Void:
+      return TExtArgumentType::Void;
+    case ExtArgumentType::PInt8:
+      return TExtArgumentType::PInt8;
+    case ExtArgumentType::PInt16:
+      return TExtArgumentType::PInt16;
+    case ExtArgumentType::PInt32:
+      return TExtArgumentType::PInt32;
+    case ExtArgumentType::PInt64:
+      return TExtArgumentType::PInt64;
+    case ExtArgumentType::PFloat:
+      return TExtArgumentType::PFloat;
+    case ExtArgumentType::PDouble:
+      return TExtArgumentType::PDouble;
+    case ExtArgumentType::PBool:
+      return TExtArgumentType::PBool;
+    case ExtArgumentType::Bool:
+      return TExtArgumentType::Bool;
+    case ExtArgumentType::ArrayInt8:
+      return TExtArgumentType::ArrayInt8;
+    case ExtArgumentType::ArrayInt16:
+      return TExtArgumentType::ArrayInt16;
+    case ExtArgumentType::ArrayInt32:
+      return TExtArgumentType::ArrayInt32;
+    case ExtArgumentType::ArrayInt64:
+      return TExtArgumentType::ArrayInt64;
+    case ExtArgumentType::ArrayFloat:
+      return TExtArgumentType::ArrayFloat;
+    case ExtArgumentType::ArrayDouble:
+      return TExtArgumentType::ArrayDouble;
+    case ExtArgumentType::ArrayBool:
+      return TExtArgumentType::ArrayBool;
+    case ExtArgumentType::GeoPoint:
+      return TExtArgumentType::GeoPoint;
+    case ExtArgumentType::GeoLineString:
+      return TExtArgumentType::GeoLineString;
+    case ExtArgumentType::Cursor:
+      return TExtArgumentType::Cursor;
+    case ExtArgumentType::GeoPolygon:
+      return TExtArgumentType::GeoPolygon;
+    case ExtArgumentType::GeoMultiPolygon:
+      return TExtArgumentType::GeoMultiPolygon;
+    case ExtArgumentType::ColumnInt8:
+      return TExtArgumentType::ColumnInt8;
+    case ExtArgumentType::ColumnInt16:
+      return TExtArgumentType::ColumnInt16;
+    case ExtArgumentType::ColumnInt32:
+      return TExtArgumentType::ColumnInt32;
+    case ExtArgumentType::ColumnInt64:
+      return TExtArgumentType::ColumnInt64;
+    case ExtArgumentType::ColumnFloat:
+      return TExtArgumentType::ColumnFloat;
+    case ExtArgumentType::ColumnDouble:
+      return TExtArgumentType::ColumnDouble;
+    case ExtArgumentType::ColumnBool:
+      return TExtArgumentType::ColumnBool;
+    case ExtArgumentType::TextEncodingNone:
+      return TExtArgumentType::TextEncodingNone;
+    case ExtArgumentType::TextEncodingDict8:
+      return TExtArgumentType::TextEncodingDict8;
+    case ExtArgumentType::TextEncodingDict16:
+      return TExtArgumentType::TextEncodingDict16;
+    case ExtArgumentType::TextEncodingDict32:
+      return TExtArgumentType::TextEncodingDict32;
+  }
+  UNREACHABLE();
+  return TExtArgumentType::type{};
+}
+
+inline std::vector<ExtArgumentType> from_thrift(
+    const std::vector<TExtArgumentType::type>& v) {
+  std::vector<ExtArgumentType> result;
+  std::transform(
+      v.begin(),
+      v.end(),
+      std::back_inserter(result),
+      [](TExtArgumentType::type c) -> ExtArgumentType { return from_thrift(c); });
+  return result;
+}
+
+inline std::vector<TExtArgumentType::type> to_thrift(
+    const std::vector<ExtArgumentType>& v) {
+  std::vector<TExtArgumentType::type> result;
+  std::transform(
+      v.begin(),
+      v.end(),
+      std::back_inserter(result),
+      [](ExtArgumentType c) -> TExtArgumentType::type { return to_thrift(c); });
+  return result;
+}
+
+inline table_functions::OutputBufferSizeType from_thrift(
+    const TOutputBufferSizeType::type& t) {
+  switch (t) {
+    case TOutputBufferSizeType::kConstant:
+      return table_functions::OutputBufferSizeType::kConstant;
+    case TOutputBufferSizeType::kUserSpecifiedConstantParameter:
+      return table_functions::OutputBufferSizeType::kUserSpecifiedConstantParameter;
+    case TOutputBufferSizeType::kUserSpecifiedRowMultiplier:
+      return table_functions::OutputBufferSizeType::kUserSpecifiedRowMultiplier;
+  }
+  UNREACHABLE();
+  return table_functions::OutputBufferSizeType{};
+}
+
+inline TOutputBufferSizeType::type to_thrift(
+    const table_functions::OutputBufferSizeType& t) {
+  switch (t) {
+    case table_functions::OutputBufferSizeType::kConstant:
+      return TOutputBufferSizeType::kConstant;
+    case table_functions::OutputBufferSizeType::kUserSpecifiedConstantParameter:
+      return TOutputBufferSizeType::kUserSpecifiedConstantParameter;
+    case table_functions::OutputBufferSizeType::kUserSpecifiedRowMultiplier:
+      return TOutputBufferSizeType::kUserSpecifiedRowMultiplier;
+  }
+  UNREACHABLE();
+  return TOutputBufferSizeType::type{};
+}
+
+inline TUserDefinedTableFunction to_thrift(const table_functions::TableFunction& func) {
+  TUserDefinedTableFunction tfunc;
+  tfunc.name = func.getName();
+  tfunc.sizerType = to_thrift(func.getOutputRowSizeType());
+  tfunc.sizerArgPos = func.getOutputRowSizeParameter();
+  tfunc.inputArgTypes = to_thrift(func.getInputArgs());
+  tfunc.outputArgTypes = to_thrift(func.getOutputArgs());
+  tfunc.sqlArgTypes = to_thrift(func.getSqlArgs());
+  return tfunc;
+}
+
+inline std::vector<TUserDefinedTableFunction> to_thrift(
+    const std::vector<table_functions::TableFunction>& v) {
+  std::vector<TUserDefinedTableFunction> result;
+  std::transform(v.begin(),
+                 v.end(),
+                 std::back_inserter(result),
+                 [](table_functions::TableFunction c) -> TUserDefinedTableFunction {
+                   return to_thrift(c);
+                 });
+  return result;
 }
 
 }  // namespace ThriftSerializers

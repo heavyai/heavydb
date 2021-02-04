@@ -138,11 +138,13 @@ class TableFunction {
                 const TableFunctionOutputRowSizer output_sizer,
                 const std::vector<ExtArgumentType>& input_args,
                 const std::vector<ExtArgumentType>& output_args,
+                const std::vector<ExtArgumentType>& sql_args,
                 bool is_runtime)
       : name_(name)
       , output_sizer_(output_sizer)
       , input_args_(input_args)
       , output_args_(output_args)
+      , sql_args_(sql_args)
       , is_runtime_(is_runtime) {}
 
   std::vector<ExtArgumentType> getArgs(const bool ensure_column = false) const {
@@ -159,6 +161,8 @@ class TableFunction {
     return args;
   }
   const std::vector<ExtArgumentType>& getInputArgs() const { return input_args_; }
+  const std::vector<ExtArgumentType>& getOutputArgs() const { return output_args_; }
+  const std::vector<ExtArgumentType>& getSqlArgs() const { return sql_args_; }
   const ExtArgumentType getRet() const { return ExtArgumentType::Int32; }
 
   SQLTypeInfo getInputSQLType(const size_t idx) const;
@@ -200,6 +204,8 @@ class TableFunction {
     result += ExtensionFunctionsWhitelist::toString(input_args_);
     result += "], [";
     result += ExtensionFunctionsWhitelist::toString(output_args_);
+    result += "], [";
+    result += ExtensionFunctionsWhitelist::toString(sql_args_);
     result += "], is_runtime=" + std::string((is_runtime_ ? "true" : "false"));
     result += ", sizer=" + ::toString(output_sizer_);
     result += ")";
@@ -220,6 +226,7 @@ class TableFunction {
   const TableFunctionOutputRowSizer output_sizer_;
   const std::vector<ExtArgumentType> input_args_;
   const std::vector<ExtArgumentType> output_args_;
+  const std::vector<ExtArgumentType> sql_args_;
   const bool is_runtime_;
 };
 
@@ -229,10 +236,12 @@ class TableFunctionsFactory {
                   const TableFunctionOutputRowSizer sizer,
                   const std::vector<ExtArgumentType>& input_args,
                   const std::vector<ExtArgumentType>& output_args,
+                  const std::vector<ExtArgumentType>& sql_args,
                   bool is_runtime = false);
 
   static std::vector<TableFunction> get_table_funcs(const std::string& name,
                                                     const bool is_gpu);
+  static std::vector<TableFunction> get_table_funcs(const bool is_runtime = false);
   static void init();
   static void reset();
 

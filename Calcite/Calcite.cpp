@@ -676,10 +676,11 @@ std::string Calcite::getRuntimeExtensionFunctionWhitelist() {
 
 void Calcite::setRuntimeExtensionFunctions(
     const std::vector<TUserDefinedFunction>& udfs,
-    const std::vector<TUserDefinedTableFunction>& udtfs) {
+    const std::vector<TUserDefinedTableFunction>& udtfs,
+    bool isruntime) {
   if (server_available_) {
     auto clientP = getClient(remote_calcite_port_);
-    clientP.first->setRuntimeExtensionFunctions(udfs, udtfs);
+    clientP.first->setRuntimeExtensionFunctions(udfs, udtfs, isruntime);
     clientP.second->close();
   } else {
     LOG(FATAL) << "Not routing to Calcite, server is not up";

@@ -20,6 +20,9 @@
 #define EXTENSION_INLINE extern "C" ALWAYS_INLINE DEVICE
 #define EXTENSION_NOINLINE extern "C" NEVER_INLINE DEVICE
 
+/*
+  UDTF: row_copier(Column<double>, RowMultiplier) -> Column<double>
+*/
 EXTENSION_NOINLINE int32_t row_copier(const Column<double>& input_col,
                                       int copy_multiplier,
                                       Column<double>& output_col) {
@@ -51,6 +54,9 @@ EXTENSION_NOINLINE int32_t row_copier(const Column<double>& input_col,
   return output_row_count;
 }
 
+/*
+  UDTF: row_adder(RowMultiplier<1>, Cursor<ColumnDouble, ColumnDouble>) -> ColumnDouble
+*/
 EXTENSION_NOINLINE int32_t row_adder(const int copy_multiplier,
                                      const Column<double>& input_col1,
                                      const Column<double>& input_col2,
@@ -87,6 +93,11 @@ EXTENSION_NOINLINE int32_t row_adder(const int copy_multiplier,
   return output_row_count;
 }
 
+// clang-format off
+/*
+  UDTF: row_addsub(RowMultiplier, Cursor<double, double>) -> Column<double>, Column<double>
+*/
+// clang-format on
 EXTENSION_NOINLINE int32_t row_addsub(const int copy_multiplier,
                                       const Column<double>& input_col1,
                                       const Column<double>& input_col2,
@@ -121,6 +132,9 @@ EXTENSION_NOINLINE int32_t row_addsub(const int copy_multiplier,
   return output_row_count;
 }
 
+/*
+  UDTF: get_max_with_row_offset(Cursor<int>) -> Column<int>, Column<int>
+*/
 EXTENSION_NOINLINE int32_t get_max_with_row_offset(const Column<int>& input_col,
                                                    Column<int>& output_max_col,
                                                    Column<int>& output_max_row_col) {

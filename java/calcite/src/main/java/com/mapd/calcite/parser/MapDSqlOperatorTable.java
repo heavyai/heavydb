@@ -22,6 +22,7 @@ import com.mapd.parser.server.ExtensionFunction;
 
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.rel.type.RelDataTypeFactory.FieldInfoBuilder;
 import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlCallBinding;
@@ -167,17 +168,6 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     // using reflection when we are deserializing from JSON.
     // opTab.addOperator(new RampFunction());
     // opTab.addOperator(new DedupFunction());
-    opTab.addOperator(new RowCopier()); // UDTF prototype, copy column to output column
-    opTab.addOperator(new RowAdder()); // UDTF prototype, add two columns to output column
-    opTab.addOperator(
-            new RowAddSub()); // UDTF prototype, add two columns to output column
-    opTab.addOperator(new GetMaxWithRowOffset()); // UDTF prototype, constant sized with 1
-                                                  // output row, get max of column along
-                                                  // with row offset as two columns
-    opTab.addOperator(new DeviceSelectionUdtfAny());
-    opTab.addOperator(new DeviceSelectionUdtfCpu());
-    opTab.addOperator(new DeviceSelectionUdtfGpu());
-    opTab.addOperator(new DeviceSelectionUdtfBoth());
     opTab.addOperator(new MyUDFFunction());
     opTab.addOperator(new PgUnnest());
     opTab.addOperator(new Any());
@@ -266,7 +256,11 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         continue;
       }
       demangledNames.add(demangledNameArity);
-      opTab.addOperator(new ExtFunction(demangledName, extSig.getValue()));
+      if (extSig.getValue().isRowUdf()) {
+        opTab.addOperator(new ExtFunction(demangledName, extSig.getValue()));
+      } else {
+        opTab.addOperator(new ExtTableFunction(demangledName, extSig.getValue()));
+      }
     }
   }
 
@@ -357,233 +351,6 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.BIGINT);
-    }
-  }
-
-  /**
-   * Table-level functions
-   */
-  public static class RowCopier extends SqlFunction implements SqlTableFunction {
-    public RowCopier() {
-      super("ROW_COPIER",
-              SqlKind.OTHER_FUNCTION,
-              ReturnTypes.CURSOR,
-              null,
-              OperandTypes.family(signature()),
-              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
-    }
-
-    private static java.util.List<SqlTypeFamily> signature() {
-      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
-      sig_family.add(SqlTypeFamily.CURSOR);
-      sig_family.add(SqlTypeFamily.EXACT_NUMERIC);
-      return sig_family;
-    }
-
-    @Override
-    public SqlReturnTypeInference getRowTypeInference() {
-      // return this::inferReturnType;
-      return opBinding
-              -> opBinding.getTypeFactory()
-                         .builder()
-                         .add("OUT0", SqlTypeName.INTEGER)
-                         .build();
-    }
-  }
-
-  public static class RowAdder extends SqlFunction implements SqlTableFunction {
-    public RowAdder() {
-      super("ROW_ADDER",
-              SqlKind.OTHER_FUNCTION,
-              ReturnTypes.CURSOR,
-              null,
-              OperandTypes.family(signature()),
-              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
-    }
-
-    @Override
-    public SqlReturnTypeInference getRowTypeInference() {
-      // return this::inferReturnType;
-      return opBinding
-              -> opBinding.getTypeFactory()
-                         .builder()
-                         .add("out_add", SqlTypeName.DOUBLE)
-                         .build();
-    }
-
-    private static java.util.List<SqlTypeFamily> signature() {
-      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
-      sig_family.add(SqlTypeFamily.INTEGER);
-      sig_family.add(SqlTypeFamily.CURSOR);
-      return sig_family;
-    }
-  }
-
-  public static class RowAddSub extends SqlFunction implements SqlTableFunction {
-    public RowAddSub() {
-      super("ROW_ADDSUB",
-              SqlKind.OTHER_FUNCTION,
-              ReturnTypes.CURSOR,
-              null,
-              OperandTypes.family(signature()),
-              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
-    }
-
-    @Override
-    public SqlReturnTypeInference getRowTypeInference() {
-      // return this::inferReturnType;
-      return opBinding
-              -> opBinding.getTypeFactory()
-                         .builder()
-                         .add("out_add", SqlTypeName.DOUBLE)
-                         .add("out_sub", SqlTypeName.DOUBLE)
-                         .build();
-    }
-    private static java.util.List<SqlTypeFamily> signature() {
-      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
-      sig_family.add(SqlTypeFamily.INTEGER);
-      sig_family.add(SqlTypeFamily.CURSOR);
-      return sig_family;
-    }
-  }
-
-  public static class GetMaxWithRowOffset
-          extends SqlFunction implements SqlTableFunction {
-    public GetMaxWithRowOffset() {
-      super("GET_MAX_WITH_ROW_OFFSET",
-              SqlKind.OTHER_FUNCTION,
-              ReturnTypes.CURSOR,
-              null,
-              OperandTypes.family(signature()),
-              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
-    }
-
-    @Override
-    public SqlReturnTypeInference getRowTypeInference() {
-      // return this::inferReturnType;
-      return opBinding
-              -> opBinding.getTypeFactory()
-                         .builder()
-                         .add("out0", SqlTypeName.INTEGER)
-                         .add("out1", SqlTypeName.INTEGER)
-                         .build();
-    }
-
-    private static java.util.List<SqlTypeFamily> signature() {
-      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
-      sig_family.add(SqlTypeFamily.CURSOR);
-      return sig_family;
-    }
-  }
-
-  public static class DeviceSelectionUdtfAny
-          extends SqlFunction implements SqlTableFunction {
-    public DeviceSelectionUdtfAny() {
-      super("CT_DEVICE_SELECTION_UDTF_ANY",
-              SqlKind.OTHER_FUNCTION,
-              ReturnTypes.CURSOR,
-              null,
-              OperandTypes.family(signature()),
-              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
-    }
-
-    @Override
-    public SqlReturnTypeInference getRowTypeInference() {
-      // return this::inferReturnType;
-      return opBinding
-              -> opBinding.getTypeFactory()
-                         .builder()
-                         .add("out0", SqlTypeName.INTEGER)
-                         .build();
-    }
-    private static java.util.List<SqlTypeFamily> signature() {
-      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
-      sig_family.add(SqlTypeFamily.CURSOR);
-      return sig_family;
-    }
-  }
-
-  public static class DeviceSelectionUdtfCpu
-          extends SqlFunction implements SqlTableFunction {
-    public DeviceSelectionUdtfCpu() {
-      super("CT_DEVICE_SELECTION_UDTF_CPU",
-              SqlKind.OTHER_FUNCTION,
-              ReturnTypes.CURSOR,
-              null,
-              OperandTypes.family(signature()),
-              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
-    }
-
-    @Override
-    public SqlReturnTypeInference getRowTypeInference() {
-      // return this::inferReturnType;
-      return opBinding
-              -> opBinding.getTypeFactory()
-                         .builder()
-                         .add("out0", SqlTypeName.INTEGER)
-                         .build();
-    }
-
-    private static java.util.List<SqlTypeFamily> signature() {
-      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
-      sig_family.add(SqlTypeFamily.CURSOR);
-      return sig_family;
-    }
-  }
-
-  public static class DeviceSelectionUdtfGpu
-          extends SqlFunction implements SqlTableFunction {
-    public DeviceSelectionUdtfGpu() {
-      super("CT_DEVICE_SELECTION_UDTF_GPU",
-              SqlKind.OTHER_FUNCTION,
-              ReturnTypes.CURSOR,
-              null,
-              OperandTypes.family(signature()),
-              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
-    }
-
-    @Override
-    public SqlReturnTypeInference getRowTypeInference() {
-      // return this::inferReturnType;
-      return opBinding
-              -> opBinding.getTypeFactory()
-                         .builder()
-                         .add("out0", SqlTypeName.INTEGER)
-                         .build();
-    }
-
-    private static java.util.List<SqlTypeFamily> signature() {
-      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
-      sig_family.add(SqlTypeFamily.CURSOR);
-      return sig_family;
-    }
-  }
-
-  public static class DeviceSelectionUdtfBoth
-          extends SqlFunction implements SqlTableFunction {
-    public DeviceSelectionUdtfBoth() {
-      super("CT_DEVICE_SELECTION_UDTF_BOTH",
-              SqlKind.OTHER_FUNCTION,
-              ReturnTypes.CURSOR,
-              null,
-              OperandTypes.family(signature()),
-              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
-    }
-
-    @Override
-    public SqlReturnTypeInference getRowTypeInference() {
-      // return this::inferReturnType;
-      return opBinding
-              -> opBinding.getTypeFactory()
-                         .builder()
-                         .add("out0", SqlTypeName.INTEGER)
-                         .build();
-    }
-
-    private static java.util.List<SqlTypeFamily> signature() {
-      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
-      sig_family.add(SqlTypeFamily.CURSOR);
-      return sig_family;
     }
   }
 
@@ -2017,42 +1784,42 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               null,
               null,
               OperandTypes.family(sig.toSqlSignature()),
-              sig.isRowUdf() ? SqlFunctionCategory.SYSTEM
-                             : SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
-      isRowUdf = sig.isRowUdf();
-      if (isRowUdf) {
-        ret = sig.getSqlRet();
-        outs = null;
-      } else {
-        ret = null;
-        outs = sig.getSqlOuts();
-      }
+              SqlFunctionCategory.SYSTEM);
+      ret = sig.getSqlRet();
     }
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      if (isRowUdf) {
-        final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-        return typeFactory.createTypeWithNullability(
-                typeFactory.createSqlType(ret), true);
-      } else {
-        final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-        java.util.List<RelDataType> typeList = new java.util.ArrayList<RelDataType>();
-        java.util.List<java.lang.String> fieldNameList =
-                new java.util.ArrayList<java.lang.String>();
-
-        for (int out_idx = 0; out_idx < outs.size(); ++out_idx) {
-          // TODO: use the argument names of output columns as field names
-          fieldNameList.add("out" + out_idx);
-          typeList.add(typeFactory.createSqlType(outs.get(out_idx)));
-        }
-        return typeFactory.createStructType(typeList, fieldNameList);
-      }
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createTypeWithNullability(typeFactory.createSqlType(ret), true);
     }
 
-    private final boolean isRowUdf;
-    private final SqlTypeName ret; // used only by UDFs
-    private final List<SqlTypeName> outs; // used only by UDTFs
+    private final SqlTypeName ret;
+  }
+
+  static class ExtTableFunction extends SqlFunction implements SqlTableFunction {
+    ExtTableFunction(final String name, final ExtensionFunction sig) {
+      super(name,
+              SqlKind.OTHER_FUNCTION,
+              ReturnTypes.CURSOR,
+              null,
+              OperandTypes.family(sig.toSqlSignature()),
+              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
+      outs = sig.getSqlOuts();
+    }
+
+    @Override
+    public SqlReturnTypeInference getRowTypeInference() {
+      return opBinding -> {
+        FieldInfoBuilder ret = opBinding.getTypeFactory().builder();
+        for (int out_idx = 0; out_idx < outs.size(); ++out_idx) {
+          ret = ret.add("OUT" + out_idx, outs.get(out_idx));
+        }
+        return ret.build();
+      };
+    }
+
+    private final List<SqlTypeName> outs;
   }
 
   //
