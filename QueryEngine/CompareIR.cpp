@@ -536,7 +536,8 @@ llvm::Value* CodeGenerator::codegenQualifierCmp(const SQLOps optype,
     CHECK_EQ(kENCODING_NONE, target_ti.get_compression());
     fname += "_str";
   }
-  if (elem_ti.is_integer() || elem_ti.is_boolean() || elem_ti.is_string()) {
+  if (elem_ti.is_integer() || elem_ti.is_boolean() || elem_ti.is_string() ||
+      elem_ti.is_decimal()) {
     fname += ("_" + numeric_type_name(elem_ti));
   } else {
     CHECK(elem_ti.is_fp());
@@ -555,7 +556,8 @@ llvm::Value* CodeGenerator::codegenQualifierCmp(const SQLOps optype,
              elem_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true))),
          cgen_state_->inlineIntNull(elem_ti)});
   }
-  if (target_ti.is_integer() || target_ti.is_boolean() || target_ti.is_string()) {
+  if (target_ti.is_integer() || target_ti.is_boolean() || target_ti.is_string() ||
+      target_ti.is_decimal()) {
     fname += ("_" + numeric_type_name(target_ti));
   } else {
     CHECK(target_ti.is_fp());

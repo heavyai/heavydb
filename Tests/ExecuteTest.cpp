@@ -6312,6 +6312,12 @@ void import_array_test(const std::string& table_name) {
                                          std::to_string(row_idx + i + 1));
               }
               break;
+            case kDECIMAL:
+              for (size_t i = 0; i < 3; ++i) {
+                array_elems.emplace_back(std::to_string(11 * (row_idx + i + 1)) + "." +
+                                         std::to_string(row_idx + i + 1));
+              }
+              break;
             default:
               CHECK(false);
           }
@@ -7334,7 +7340,7 @@ TEST(Select, ArrayAnyAndAll) {
                                     dt)));
       power10 *= 10;
     }
-    for (const std::string float_type : {"float", "double"}) {
+    for (const std::string float_type : {"float", "double", "decimal"}) {
       ASSERT_EQ(
           int64_t(g_array_test_row_count),
           v<int64_t>(run_simple_agg(
@@ -21830,9 +21836,10 @@ int create_and_populate_tables(const bool use_temporary_tables,
     std::string columns_definition{
         "x int not null, arr_i16 smallint[], arr_i32 int[], arr_i64 bigint[], arr_str "
         "text[] encoding dict, arr_float float[], arr_double double[], arr_bool "
-        "boolean[], real_str text encoding none, arr3_i8 tinyint[3], arr3_i16 "
+        "boolean[], arr_decimal decimal(18,6)[], real_str text encoding none, arr3_i8 "
+        "tinyint[3], arr3_i16 "
         "smallint[3], arr3_i32 int[3], arr3_i64 bigint[3], arr3_float float[3], "
-        "arr3_double double[3], arr6_bool boolean[6]"};
+        "arr3_double double[3], arr6_bool boolean[6], arr3_decimal decimal(18,6)[3]"};
     const std::string create_array_test =
         build_create_table_statement(columns_definition,
                                      "array_test",
