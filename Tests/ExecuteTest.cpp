@@ -773,6 +773,41 @@ TEST(Insert, NullArrayNullEmpty) {
   }
 }
 
+TEST(Insert, IntArrayInsert) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS table_int_array;");
+    EXPECT_NO_THROW(run_ddl_statement("CREATE TABLE table_int_array (bi bigint[]);"));
+
+    vector<std::string> vals = {
+        "1", "33000", "650000", "1.2", "-7", "null", "5000000000"};
+    string arr;
+    for (size_t ol = 0; ol < vals.size(); ol++) {
+      arr = "";
+      for (size_t il = 0; il < vals.size(); il++) {
+        size_t pos = (ol + il) % vals.size();
+        arr.append(vals[pos]);
+        if (il < (vals.size() - 1)) {
+          arr.append(",");
+        }
+      }
+      string insString = "INSERT into table_int_array values ({" + arr + "});";
+      EXPECT_NO_THROW(run_multiple_agg(insString, dt));
+    }
+
+    EXPECT_ANY_THROW(
+        run_multiple_agg("INSERT into table_int_array values ({1,34,'roof'});", dt));
+
+    for (size_t ol = 0; ol < vals.size(); ol++) {
+      string selString =
+          "select sum(bi[" + std::to_string(ol + 1) + "]) from table_int_array;";
+      ASSERT_EQ(5000682995, v<int64_t>(run_simple_agg(selString, dt)));
+    }
+
+    run_ddl_statement("DROP TABLE IF EXISTS table_int_array;");
+  }
+}
+
 TEST(Insert, DictBoundary) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

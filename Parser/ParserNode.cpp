@@ -220,10 +220,6 @@ std::shared_ptr<Analyzer::Expr> ArrayLiteral::analyze(
     } else if (set_subtype) {
       ti.set_subtype(subtype);
       set_subtype = false;
-    } else {
-      if (ti.get_subtype() != subtype) {
-        throw std::runtime_error("ARRAY element literals should be of the same type.");
-      }
     }
     value_exprs.push_back(e);
   }
