@@ -863,7 +863,8 @@ std::shared_ptr<HashTable> BaselineJoinHashTable::initHashTableOnCpuFromCache(
   auto timer = DEBUG_TIMER(__func__);
   VLOG(1) << "Checking CPU hash table cache.";
   CHECK(hash_table_cache_);
-  return hash_table_cache_->get(key);
+  auto hash_table_opt = (hash_table_cache_->get(key));
+  return hash_table_opt ? *hash_table_opt : nullptr;
 }
 
 void BaselineJoinHashTable::putHashTableOnCpuToCache(
@@ -891,8 +892,9 @@ BaselineJoinHashTable::getApproximateTupleCountFromCache(
   }
 
   CHECK(hash_table_cache_);
-  auto hash_table = hash_table_cache_->get(key);
-  if (hash_table) {
+  auto hash_table_opt = hash_table_cache_->get(key);
+  if (hash_table_opt) {
+    auto hash_table = *hash_table_opt;
     return std::make_pair(hash_table->getEntryCount() / 2,
                           hash_table->getEmittedKeysCount());
   }

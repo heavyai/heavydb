@@ -155,6 +155,7 @@ class QueryRunner {
   size_t getEntryCntCachedBaselineHashTable(size_t idx);
   size_t getNumberOfCachedJoinHashTables();
   size_t getNumberOfCachedBaselineJoinHashTables();
+  size_t getNumberOfCachedOverlapsHashTables();
 
   void resizeDispatchQueue(const size_t num_executors);
 

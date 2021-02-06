@@ -655,7 +655,8 @@ std::shared_ptr<PerfectHashTable> PerfectJoinHashTable::initHashTableOnCpuFromCa
                                   num_elements,
                                   chunk_key,
                                   qual_bin_oper_->get_optype()};
-  return hash_table_cache_->get(cache_key);
+  auto hash_table_opt = (hash_table_cache_->get(cache_key));
+  return hash_table_opt ? *hash_table_opt : nullptr;
 }
 
 void PerfectJoinHashTable::putHashTableOnCpuToCache(const ChunkKey& chunk_key,

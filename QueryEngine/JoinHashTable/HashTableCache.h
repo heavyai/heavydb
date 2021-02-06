@@ -64,17 +64,17 @@ class HashTableCache {
   }
 
   // makes a copy
-  V get(const K& key) {
+  std::optional<V> get(const K& key) {
     std::lock_guard<std::mutex> guard(mutex_);
     for (const auto& kv : contents_) {
       if (kv.first == key) {
         return kv.second;
       }
     }
-    return nullptr;
+    return std::nullopt;
   }
 
- private:
+ protected:
   std::vector<std::pair<K, V>> contents_;
   std::mutex mutex_;
 };

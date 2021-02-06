@@ -385,11 +385,11 @@ void approximate_distinct_tuples_on_device_overlaps(uint8_t* hll_buffer,
                                                     const OverlapsKeyHandler* key_handler,
                                                     const int64_t num_elems);
 
-void compute_bucket_sizes(std::vector<double>& bucket_sizes_for_dimension,
-                          const JoinColumn& join_column,
-                          const JoinColumnTypeInfo& type_info,
-                          const double bucket_size_threshold,
-                          const int thread_count);
+void compute_bucket_sizes_on_cpu(std::vector<double>& bucket_sizes_for_dimension,
+                                 const JoinColumn& join_column,
+                                 const JoinColumnTypeInfo& type_info,
+                                 const double bucket_size_threshold,
+                                 const int thread_count);
 
 void compute_bucket_sizes_on_device(double* bucket_sizes_buffer,
                                     const JoinColumn* join_column,

@@ -42,33 +42,10 @@ struct HashTableCacheKey {
   const size_t num_elements;
   const std::vector<ChunkKey> chunk_keys;
   const SQLOps optype;
-  const boost::optional<double> overlaps_hashjoin_bucket_threshold;
 
   bool operator==(const struct HashTableCacheKey& that) const {
-    bool oeq;
-    if (overlaps_hashjoin_bucket_threshold && that.overlaps_hashjoin_bucket_threshold) {
-      oeq = (std::abs(*overlaps_hashjoin_bucket_threshold -
-                      *that.overlaps_hashjoin_bucket_threshold) <= 0.00000001);
-    } else {
-      oeq =
-          (overlaps_hashjoin_bucket_threshold == that.overlaps_hashjoin_bucket_threshold);
-    }
     return num_elements == that.num_elements && chunk_keys == that.chunk_keys &&
-           optype == that.optype && oeq;
-  }
-
-  bool operator<(const struct HashTableCacheKey& that) const {
-    bool oeq;
-    if (overlaps_hashjoin_bucket_threshold && that.overlaps_hashjoin_bucket_threshold) {
-      oeq = (std::abs(*overlaps_hashjoin_bucket_threshold -
-                      *that.overlaps_hashjoin_bucket_threshold) <= 0.00000001);
-    } else {
-      oeq =
-          (overlaps_hashjoin_bucket_threshold == that.overlaps_hashjoin_bucket_threshold);
-    }
-    return num_elements < that.num_elements && chunk_keys < that.chunk_keys &&
-           optype < that.optype && !oeq &&
-           overlaps_hashjoin_bucket_threshold < that.overlaps_hashjoin_bucket_threshold;
+           optype == that.optype;
   }
 };
 

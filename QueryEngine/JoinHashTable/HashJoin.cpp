@@ -28,6 +28,25 @@
 
 extern bool g_enable_overlaps_hashjoin;
 
+void ColumnsForDevice::setBucketInfo(
+    const std::vector<double>& bucket_sizes_for_dimension,
+    const std::vector<InnerOuter> inner_outer_pairs) {
+  join_buckets.clear();
+
+  CHECK_EQ(inner_outer_pairs.size(), join_columns.size());
+  CHECK_EQ(join_columns.size(), join_column_types.size());
+  for (size_t i = 0; i < join_columns.size(); i++) {
+    const auto& inner_outer_pair = inner_outer_pairs[i];
+    const auto inner_col = inner_outer_pair.first;
+    const auto& ti = inner_col->get_type_info();
+    const auto elem_ti = ti.get_elem_type();
+    CHECK(elem_ti.is_fp());
+
+    join_buckets.emplace_back(
+        JoinBucketInfo{bucket_sizes_for_dimension, elem_ti.get_type() == kDOUBLE});
+  }
+}
+
 //! fetchJoinColumn() calls ColumnFetcher::makeJoinColumn(), then copies the
 //! JoinColumn's col_chunks_buff memory onto the GPU if required by the
 //! effective_memory_level parameter. The dev_buff_owner parameter will

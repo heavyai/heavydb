@@ -660,6 +660,10 @@ size_t QueryRunner::getNumberOfCachedBaselineJoinHashTables() {
   return hash_table_cache->getNumberOfCachedHashTables();
 };
 
+size_t QueryRunner::getNumberOfCachedOverlapsHashTables() {
+  return OverlapsJoinHashTable::getCombinedHashTableCacheSize();
+}
+
 void QueryRunner::reset() {
   qr_instance_.reset(nullptr);
   calcite_shutdown_handler();

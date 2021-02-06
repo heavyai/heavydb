@@ -2051,11 +2051,11 @@ void approximate_distinct_tuples_overlaps(
       row_counts.begin(), row_counts.end(), row_counts.begin(), thread_count);
 }
 
-void compute_bucket_sizes(std::vector<double>& bucket_sizes_for_dimension,
-                          const JoinColumn& join_column,
-                          const JoinColumnTypeInfo& type_info,
-                          const double bucket_size_threshold,
-                          const int thread_count) {
+void compute_bucket_sizes_on_cpu(std::vector<double>& bucket_sizes_for_dimension,
+                                 const JoinColumn& join_column,
+                                 const JoinColumnTypeInfo& type_info,
+                                 const double bucket_size_threshold,
+                                 const int thread_count) {
   std::vector<std::vector<double>> bucket_sizes_for_threads;
   for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
     bucket_sizes_for_threads.emplace_back(bucket_sizes_for_dimension.size(),

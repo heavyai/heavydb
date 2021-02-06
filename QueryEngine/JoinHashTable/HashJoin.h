@@ -65,12 +65,17 @@ class FailedToJoinOnVirtualColumn : public HashJoinFail {
   FailedToJoinOnVirtualColumn() : HashJoinFail("Cannot join on rowid") {}
 };
 
+using InnerOuter = std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>;
+
 struct ColumnsForDevice {
   const std::vector<JoinColumn> join_columns;
   const std::vector<JoinColumnTypeInfo> join_column_types;
   const std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::vector<JoinBucketInfo> join_buckets;
   const std::vector<std::shared_ptr<void>> malloc_owner;
+
+  void setBucketInfo(const std::vector<double>& bucket_sizes_for_dimension,
+                     const std::vector<InnerOuter> inner_outer_pairs);
 };
 
 struct HashJoinMatchingSet {
@@ -78,8 +83,6 @@ struct HashJoinMatchingSet {
   llvm::Value* count;
   llvm::Value* slot;
 };
-
-using InnerOuter = std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>;
 
 struct CompositeKeyInfo {
   std::vector<const void*> sd_inner_proxy_per_key;
