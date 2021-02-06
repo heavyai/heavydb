@@ -579,7 +579,9 @@ public class SQLImporter {
         case java.sql.Types.CHAR:
         case java.sql.Types.LONGVARCHAR:
         case java.sql.Types.LONGNVARCHAR:
-          match = dstType == TDatumType.STR;
+          match = (dstType == TDatumType.STR || dstType == TDatumType.POINT
+                  || dstType == TDatumType.POLYGON || dstType == TDatumType.MULTIPOLYGON
+                  || dstType == TDatumType.LINESTRING);
           break;
         case java.sql.Types.OTHER:
           // NOTE: I ignore subtypes (geography vs geopetry vs none) here just because it
