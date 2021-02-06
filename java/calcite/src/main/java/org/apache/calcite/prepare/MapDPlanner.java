@@ -16,7 +16,6 @@
  */
 package org.apache.calcite.prepare;
 
-import com.google.common.collect.ImmutableList;
 import com.mapd.calcite.parser.MapDParserOptions;
 import com.mapd.calcite.parser.MapDSchema;
 import com.mapd.calcite.parser.ProjectProjectRemoveRule;
@@ -29,9 +28,6 @@ import org.apache.calcite.linq4j.function.Functions;
 import org.apache.calcite.plan.Context;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptCostImpl;
-import org.apache.calcite.plan.RelOptLattice;
-import org.apache.calcite.plan.RelOptMaterialization;
-import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.hep.HepPlanner;
 import org.apache.calcite.plan.hep.HepProgram;
 import org.apache.calcite.plan.hep.HepProgramBuilder;
@@ -40,30 +36,25 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.rel.externalize.MapDRelJsonReader;
-import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
 import org.apache.calcite.rel.rules.CoreRules;
 import org.apache.calcite.rel.rules.DynamicFilterJoinRule;
 import org.apache.calcite.rel.rules.FilterJoinRule;
-import org.apache.calcite.rel.rules.FilterMergeRule;
-import org.apache.calcite.rel.rules.FilterProjectTransposeRule;
+import org.apache.calcite.rel.rules.InjectFilterRule;
 import org.apache.calcite.rel.rules.OuterJoinOptViaNullRejectionRule;
-import org.apache.calcite.rel.rules.ProjectMergeRule;
 import org.apache.calcite.rel.rules.QueryOptimizationRules;
+import org.apache.calcite.rel.rules.Restriction;
 import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.advise.SqlAdvisor;
-import org.apache.calcite.sql.advise.SqlAdvisorValidator;
 import org.apache.calcite.sql.parser.SqlParseException;
-import org.apache.calcite.sql.validate.SqlConformance;
 import org.apache.calcite.sql.validate.SqlConformanceEnum;
 import org.apache.calcite.sql.validate.SqlMoniker;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.tools.FrameworkConfig;
-import org.apache.calcite.tools.Program;
-import org.apache.calcite.tools.Programs;
-import org.apache.calcite.tools.RelConversionException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
@@ -82,6 +73,8 @@ public class MapDPlanner extends PlannerImpl {
   FrameworkConfig config;
   private List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
           new ArrayList<>();
+  private Restriction restriction = null;
+  final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDPlanner.class);
 
   public MapDPlanner(FrameworkConfig config) {
     super(config);
@@ -177,9 +170,26 @@ public class MapDPlanner extends PlannerImpl {
   @Override
   public RelRoot rel(SqlNode sql) {
     RelRoot root = super.rel(sql);
+    if (restriction != null) {
+      root = applyInjectFilterRule(root, restriction);
+    }
     root = applyQueryOptimizationRules(root);
     root = applyFilterPushdown(root);
     return root;
+  }
+
+  private RelRoot applyInjectFilterRule(RelRoot root, Restriction restriction) {
+    // TODO consider doing these rules in one preplan pass
+
+    final InjectFilterRule injectFilterRule =
+            InjectFilterRule.Config.DEFAULT.toRule(restriction);
+
+    final HepProgram program =
+            HepProgram.builder().addRuleInstance(injectFilterRule).build();
+    HepPlanner prePlanner = new HepPlanner(program);
+    prePlanner.setRoot(root.rel);
+    final RelNode rootRelNode = prePlanner.findBestExp();
+    return root.withRel(rootRelNode);
   }
 
   private RelRoot applyFilterPushdown(RelRoot root) {
@@ -241,6 +251,10 @@ public class MapDPlanner extends PlannerImpl {
   public void setFilterPushDownInfo(
           final List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo) {
     this.filterPushDownInfo = filterPushDownInfo;
+  }
+
+  public void setRestriction(Restriction restriction) {
+    this.restriction = restriction;
   }
 }
 

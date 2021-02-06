@@ -244,8 +244,15 @@ public class TestServer {
       transport.open();
       TProtocol protocol = new TBinaryProtocol(transport);
       CalciteServer.Client client = new CalciteServer.Client(protocol);
-      TPlanResult algebra = client.process(
-              "user", "passwd", "SALES", query, new ArrayList<>(), false, false, false);
+      TPlanResult algebra = client.process("user",
+              "passwd",
+              "SALES",
+              query,
+              new ArrayList<>(),
+              false,
+              false,
+              false,
+              null);
       transport.close();
       try {
         assertEquals(algebra.plan_result, result);

@@ -29,11 +29,13 @@ import com.omnisci.thrift.calciteserver.TCompletionHintType;
 import com.omnisci.thrift.calciteserver.TExtArgumentType;
 import com.omnisci.thrift.calciteserver.TFilterPushDownInfo;
 import com.omnisci.thrift.calciteserver.TPlanResult;
+import com.omnisci.thrift.calciteserver.TRestriction;
 import com.omnisci.thrift.calciteserver.TUserDefinedFunction;
 import com.omnisci.thrift.calciteserver.TUserDefinedTableFunction;
 
 import org.apache.calcite.prepare.MapDPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
+import org.apache.calcite.rel.rules.Restriction;
 import org.apache.calcite.runtime.CalciteContextException;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.parser.SqlParseException;
@@ -138,7 +140,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
           java.util.List<TFilterPushDownInfo> thriftFilterPushDownInfo,
           boolean legacySyntax,
           boolean isExplain,
-          boolean isViewOptimize) throws InvalidParseRequest, TException {
+          boolean isViewOptimize,
+          TRestriction restriction) throws InvalidParseRequest, TException {
     long timer = System.currentTimeMillis();
     callCount++;
 
@@ -151,7 +154,11 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       MAPDLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-1, msg);
     }
-    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort);
+    Restriction rest = null;
+    if (restriction != null && !restriction.column.isEmpty()) {
+      rest = new Restriction(restriction.column, restriction.values);
+    }
+    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort, rest);
     MAPDLOGGER.debug("process was called User: " + user + " Catalog: " + catalog
             + " sql: " + queryText);
     parser.setUser(mapDUser);
@@ -321,7 +328,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       MAPDLOGGER.error(msg, ex);
       throw new TException(msg);
     }
-    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort);
+    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort, null);
     MAPDLOGGER.debug("getCompletionHints was called User: " + user
             + " Catalog: " + catalog + " sql: " + sql);
     parser.setUser(mapDUser);

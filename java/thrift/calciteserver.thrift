@@ -30,13 +30,19 @@ struct TFilterPushDownInfo {
   3: i32 input_next
 }
 
+struct TRestriction {
+  1: string column
+  2: list<string> values
+}
+
 service CalciteServer {
 
    void ping(),
    void shutdown(),
    TPlanResult process(1:string user 2:string passwd 3:string catalog 4:string sql_text
                        5:list<TFilterPushDownInfo> filterPushDownInfo 6:bool legacySyntax
-                       7:bool isexplain 8:bool isViewOptimize) throws (1:InvalidParseRequest parseErr),
+                       7:bool isexplain 8:bool isViewOptimize 9:TRestriction restriction)
+                      throws (1:InvalidParseRequest parseErr),
    string getExtensionFunctionWhitelist()
    string getUserDefinedFunctionWhitelist()
    string getRuntimeExtensionFunctionWhitelist()

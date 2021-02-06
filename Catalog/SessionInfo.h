@@ -31,6 +31,7 @@
 
 #include "Catalog/SysCatalog.h"
 #include "QueryEngine/CompilationOptions.h"
+#include "Shared/Restriction.h"
 #include "SqliteConnector/SqliteConnector.h"
 
 #include "LeafHostInfo.h"
@@ -86,11 +87,14 @@ class SessionInfo {
   void set_connection_info(const std::string& connection) {
     connection_info_ = connection;
   }
+  void set_restriction(std::shared_ptr<Restriction> r) { restriction_ = r; }
+  std::shared_ptr<Restriction> get_restriction_ptr() const { return restriction_; }
 
  private:
   std::shared_ptr<Catalog> catalog_;
   UserMetadata currentUser_;
   std::atomic<ExecutorDeviceType> executor_device_type_;
+  std::shared_ptr<Restriction> restriction_;
   const std::string session_id_;
   std::atomic<time_t> last_used_time_;  // for tracking active session duration
   std::atomic<time_t> start_time_;      // for invalidating session after tolerance period

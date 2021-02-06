@@ -531,6 +531,15 @@ void DBHandler::connect(TSessionId& session,
                          " is not allowed to access database " + dbname2 + ".");
   }
   connect_impl(session, passwd, dbname2, user_meta, cat, stdlog);
+
+  // TODO Fake restriction returned for my user
+  // next phase this info will come from the SAML login
+  // auto login_session = get_session_ptr(session, false);
+  // std::string col = "t1";
+  // std::vector<std::string> vals = {"a", "b", "c"};
+  // auto rest = std::make_shared<Restriction>(col, vals);
+  // login_session->set_restriction(rest);
+
   // if pki auth session will come back encrypted with user pubkey
   SysCatalog::instance().check_for_session_encryption(passwd, session);
 }

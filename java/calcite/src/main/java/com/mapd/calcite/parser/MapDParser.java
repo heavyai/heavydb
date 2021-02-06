@@ -79,8 +79,10 @@ import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlDataTypeSpec;
 import org.apache.calcite.sql.SqlDdl;
 import org.apache.calcite.sql.SqlDelete;
+import org.apache.calcite.sql.SqlDynamicParam;
 import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlIdentifier;
+import org.apache.calcite.sql.SqlIntervalQualifier;
 import org.apache.calcite.sql.SqlJoin;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlLiteral;
@@ -102,6 +104,7 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.type.SqlTypeUtil;
 import org.apache.calcite.sql.util.SqlBasicVisitor;
 import org.apache.calcite.sql.util.SqlShuttle;
+import org.apache.calcite.sql.util.SqlVisitor;
 import org.apache.calcite.sql.validate.SqlConformanceEnum;
 import org.apache.calcite.sql2rel.SqlToRelConverter;
 import org.apache.calcite.tools.FrameworkConfig;
@@ -363,7 +366,9 @@ public final class MapDParser {
                     .typeSystem(createTypeSystem())
                     .context(MAPD_CONNECTION_CONTEXT)
                     .build();
-    return new MapDPlanner(config);
+    MapDPlanner planner = new MapDPlanner(config);
+    planner.setRestriction(mapdUser.getRestriction());
+    return planner;
   }
 
   public void setUser(MapDUser mapdUser) {
@@ -377,7 +382,6 @@ public final class MapDParser {
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
     String res = processSql(sqlNode, parserOptions);
     SqlIdentifierCapturer capture = captureIdentifiers(sqlNode);
-
     return new Pair<String, SqlIdentifierCapturer>(res, capture);
   }
 

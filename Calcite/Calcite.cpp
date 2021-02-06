@@ -552,6 +552,12 @@ TPlanResult Calcite::processImpl(
   LOG(IR) << "SQL query\n" << sql_string << "\nEnd of SQL query";
   LOG(PTX) << "SQL query\n" << sql_string << "\nEnd of SQL query";
 
+  TRestriction restriction;
+  auto rest = user_session_info->get_restriction_ptr();
+  if (rest != nullptr) {
+    restriction.column = rest->column;
+    restriction.values = rest->values;
+  }
   TPlanResult ret;
   if (server_available_) {
     try {
@@ -570,7 +576,8 @@ TPlanResult Calcite::processImpl(
                                filter_push_down_info,
                                legacy_syntax,
                                is_explain,
-                               is_view_optimize);
+                               is_view_optimize,
+                               restriction);
         clientP.second->close();
       });
 
