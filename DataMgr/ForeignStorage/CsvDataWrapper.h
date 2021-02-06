@@ -97,31 +97,6 @@ class CsvDataWrapper : public ForeignDataWrapper {
                       int fragment_id);
 
   std::string getFilePath();
-  import_export::CopyParams validateAndGetCopyParams();
-  void validateFilePath();
-
-  /**
-   * Validates that the value of given table option has the expected number of characters.
-   * An exception is thrown if the number of characters do not match.
-   *
-   * @param option_name - name of table option whose value is validated and returned
-   * @param expected_num_chars - expected number of characters for option value
-   * @return value of the option if the number of characters match. Returns an
-   * empty string if table options do not contain provided option.
-   */
-  std::string validateAndGetStringWithLength(const std::string& option_name,
-                                             const size_t expected_num_chars);
-
-  /**
-   * Validates that the string value of given table option is either "true" or "false"
-   * (case insensitive). An exception is thrown if option value does not match one of
-   * the two possible values.
-   *
-   * @param option_name - name of table option whose value is validated and returned
-   * @return corresponding bool for option value. Returns an empty optional if table
-   * options do not contain provided option.
-   */
-  std::optional<bool> validateAndGetBoolValue(const std::string& option_name);
 
   void populateChunkMapForColumns(const std::set<const ColumnDescriptor*>& columns,
                                   const int fragment_id,
@@ -149,7 +124,7 @@ class CsvDataWrapper : public ForeignDataWrapper {
   size_t append_start_offset_;
   // Is this datawrapper restored from disk
   bool is_restored_;
-  static constexpr std::array<char const*, 11> supported_options_{"ARRAY_DELIMITER",
+  static constexpr std::array<char const*, 12> supported_options_{"ARRAY_DELIMITER",
                                                                   "ARRAY_MARKER",
                                                                   "BUFFER_SIZE",
                                                                   "DELIMITER",
@@ -159,6 +134,7 @@ class CsvDataWrapper : public ForeignDataWrapper {
                                                                   "LONLAT",
                                                                   "NULLS",
                                                                   "QUOTE",
-                                                                  "QUOTED"};
+                                                                  "QUOTED",
+                                                                  "S3_ACCESS_TYPE"};
 };
 }  // namespace foreign_storage

@@ -18,6 +18,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <regex>
 #include "DataMgr/ForeignStorage/CsvDataWrapper.h"
+#include "DataMgr/ForeignStorage/CsvShared.h"
 #include "DataMgr/ForeignStorage/ParquetDataWrapper.h"
 #include "Shared/DateTimeParser.h"
 
@@ -172,9 +173,18 @@ void ForeignTable::validateRefreshOptionValues() const {
 }
 
 void ForeignTable::validateDataWrapperOptions() const {
+  if (foreign_server->options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
+      ForeignServer::S3_STORAGE_TYPE) {
+    throw std::runtime_error(
+        "Cannot create S3 backed foreign table as AWS S3 support is currently disabled.");
+  }
   const auto wrapper_type = foreign_server->data_wrapper_type;
   if (wrapper_type == foreign_storage::DataWrapperType::CSV) {
-    foreign_storage::CsvDataWrapper::validateOptions(this);
+    if (Csv::validate_and_get_is_s3_select(this)) {
+      UNREACHABLE();
+    } else {
+      foreign_storage::CsvDataWrapper::validateOptions(this);
+    }
   } else if (wrapper_type == foreign_storage::DataWrapperType::PARQUET) {
     foreign_storage::ParquetDataWrapper::validateOptions(this);
   } else {

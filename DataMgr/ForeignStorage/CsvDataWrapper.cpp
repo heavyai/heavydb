@@ -24,6 +24,7 @@
 #include <rapidjson/document.h>
 #include <boost/filesystem.hpp>
 
+#include "CsvShared.h"
 #include "DataMgr/ForeignStorage/CsvFileBufferParser.h"
 #include "DataMgr/ForeignStorage/CsvReader.h"
 #include "DataMgr/ForeignStorage/ForeignTableSchema.h"
@@ -41,106 +42,13 @@ CsvDataWrapper::CsvDataWrapper(const ForeignTable* foreign_table)
     : db_id_(-1), foreign_table_(foreign_table), is_restored_(false) {}
 
 void CsvDataWrapper::validateOptions(const ForeignTable* foreign_table) {
-  CsvDataWrapper data_wrapper{foreign_table};
-  data_wrapper.validateAndGetCopyParams();
-  data_wrapper.validateFilePath();
+  foreign_storage::Csv::validate_options(foreign_table);
 }
 
 std::vector<std::string_view> CsvDataWrapper::getSupportedOptions() {
   return std::vector<std::string_view>{supported_options_.begin(),
                                        supported_options_.end()};
 }
-
-void CsvDataWrapper::validateFilePath() {
-  auto& server_options = foreign_table_->foreign_server->options;
-  if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
-      ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
-    ddl_utils::validate_allowed_file_path(foreign_table_->getFullFilePath(),
-                                          ddl_utils::DataTransferType::IMPORT);
-  }
-}
-
-import_export::CopyParams CsvDataWrapper::validateAndGetCopyParams() {
-  import_export::CopyParams copy_params{};
-  copy_params.plain_text = true;
-  if (const auto& value = validateAndGetStringWithLength("ARRAY_DELIMITER", 1);
-      !value.empty()) {
-    copy_params.array_delim = value[0];
-  }
-  if (const auto& value = validateAndGetStringWithLength("ARRAY_MARKER", 2);
-      !value.empty()) {
-    copy_params.array_begin = value[0];
-    copy_params.array_end = value[1];
-  }
-  if (auto it = foreign_table_->options.find("BUFFER_SIZE");
-      it != foreign_table_->options.end()) {
-    copy_params.buffer_size = std::stoi(it->second);
-  }
-  if (const auto& value = validateAndGetStringWithLength("DELIMITER", 1);
-      !value.empty()) {
-    copy_params.delimiter = value[0];
-  }
-  if (const auto& value = validateAndGetStringWithLength("ESCAPE", 1); !value.empty()) {
-    copy_params.escape = value[0];
-  }
-  auto has_header = validateAndGetBoolValue("HEADER");
-  if (has_header.has_value()) {
-    if (has_header.value()) {
-      copy_params.has_header = import_export::ImportHeaderRow::HAS_HEADER;
-    } else {
-      copy_params.has_header = import_export::ImportHeaderRow::NO_HEADER;
-    }
-  }
-  if (const auto& value = validateAndGetStringWithLength("LINE_DELIMITER", 1);
-      !value.empty()) {
-    copy_params.line_delim = value[0];
-  }
-  copy_params.lonlat = validateAndGetBoolValue("LONLAT").value_or(copy_params.lonlat);
-
-  if (auto it = foreign_table_->options.find("NULLS");
-      it != foreign_table_->options.end()) {
-    copy_params.null_str = it->second;
-  }
-  if (const auto& value = validateAndGetStringWithLength("QUOTE", 1); !value.empty()) {
-    copy_params.quote = value[0];
-  }
-  copy_params.quoted = validateAndGetBoolValue("QUOTED").value_or(copy_params.quoted);
-  return copy_params;
-}
-
-std::string CsvDataWrapper::validateAndGetStringWithLength(
-    const std::string& option_name,
-    const size_t expected_num_chars) {
-  if (auto it = foreign_table_->options.find(option_name);
-      it != foreign_table_->options.end()) {
-    if (it->second.length() != expected_num_chars) {
-      throw std::runtime_error{"Value of \"" + option_name +
-                               "\" foreign table option has the wrong number of "
-                               "characters. Expected " +
-                               std::to_string(expected_num_chars) + " character(s)."};
-    }
-    return it->second;
-  }
-  return "";
-}
-
-std::optional<bool> CsvDataWrapper::validateAndGetBoolValue(
-    const std::string& option_name) {
-  if (auto it = foreign_table_->options.find(option_name);
-      it != foreign_table_->options.end()) {
-    if (boost::iequals(it->second, "TRUE")) {
-      return true;
-    } else if (boost::iequals(it->second, "FALSE")) {
-      return false;
-    } else {
-      throw std::runtime_error{"Invalid boolean value specified for \"" + option_name +
-                               "\" foreign table option. "
-                               "Value must be either 'true' or 'false'."};
-    }
-  }
-  return std::nullopt;
-}
-
 namespace {
 std::set<const ColumnDescriptor*> get_columns(
     const std::map<ChunkKey, AbstractBuffer*>& buffers,
@@ -385,7 +293,7 @@ size_t get_thread_count(const import_export::CopyParams& copy_params,
 void CsvDataWrapper::populateChunks(
     std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
     int fragment_id) {
-  const auto copy_params = validateAndGetCopyParams();
+  const auto copy_params = Csv::validate_and_get_copy_params(foreign_table_);
 
   CHECK(!column_id_to_chunk_map.empty());
   const auto& file_regions = fragment_id_to_file_regions_map_[fragment_id];
@@ -963,7 +871,7 @@ void add_placeholder_metadata(
 void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) {
   auto timer = DEBUG_TIMER(__func__);
 
-  const auto copy_params = validateAndGetCopyParams();
+  const auto copy_params = Csv::validate_and_get_copy_params(foreign_table_);
   const auto file_path = foreign_table_->getFullFilePath();
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
   CHECK(catalog);
@@ -1163,7 +1071,7 @@ void CsvDataWrapper::restoreDataWrapperInternals(
 
   // Construct csv_reader with metadta
   CHECK(d.HasMember("reader_metadata"));
-  const auto copy_params = validateAndGetCopyParams();
+  const auto copy_params = Csv::validate_and_get_copy_params(foreign_table_);
   const auto csv_file_path = foreign_table_->getFullFilePath();
   auto& server_options = foreign_table_->foreign_server->options;
   if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==

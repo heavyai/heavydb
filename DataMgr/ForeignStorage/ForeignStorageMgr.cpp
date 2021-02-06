@@ -17,7 +17,7 @@
 #include "ForeignStorageMgr.h"
 
 #include "Catalog/ForeignTable.h"
-#include "CsvDataWrapper.h"
+#include "CsvShared.h"
 #include "ForeignStorageException.h"
 #include "ForeignTableSchema.h"
 #include "ParquetDataWrapper.h"
@@ -206,8 +206,7 @@ bool ForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chunk_key) 
 
     if (foreign_table->foreign_server->data_wrapper_type ==
         foreign_storage::DataWrapperType::CSV) {
-      data_wrapper_map_[table_key] =
-          std::make_shared<CsvDataWrapper>(db_id, foreign_table);
+      data_wrapper_map_[table_key] = Csv::get_csv_data_wrapper(db_id, foreign_table);
     } else if (foreign_table->foreign_server->data_wrapper_type ==
                foreign_storage::DataWrapperType::PARQUET) {
       data_wrapper_map_[table_key] =

@@ -22,6 +22,7 @@ set(datamgr_source_files
     ForeignStorage/ForeignStorageCache.cpp
     ForeignStorage/FsiJsonUtils.cpp
     ForeignStorage/CsvReader.cpp
+    ForeignStorage/CsvShared.cpp
     BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.cpp
     BufferMgr/GpuCudaBufferMgr/GpuCudaBuffer.cpp
     BufferMgr/CpuBufferMgr/CpuBufferMgr.cpp
@@ -41,6 +42,7 @@ if(ENABLE_AWS_S3)
   list(APPEND datamgr_source_files ForeignStorage/ee/CsvReaderS3.cpp)
   list(APPEND datamgr_source_files ForeignStorage/ee/S3Utils.cpp)
   list(APPEND datamgr_source_files ForeignStorage/ee/S3SelectClient.cpp)
+  list(APPEND datamgr_source_files ForeignStorage/ee/S3SelectDataWrapper.cpp)
 endif()
 endif()
 

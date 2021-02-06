@@ -1304,6 +1304,15 @@ TEST_F(CreateForeignTableTest, ServerPathMissingWrapperPathRelative) {
   sql("SELECT * FROM test_foreign_table;");
 }
 
+TEST_F(CreateForeignTableTest, S3SelectWrongServer) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
+                      "SERVER omnisci_local_csv WITH (S3_ACCESS_TYPE = 'S3_SELECT', "
+                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  queryAndAssertException(query,
+                          "Exception: S3_ACCESS_TYPE option only valid for tables using "
+                          "servers with STORAGE_TYPE = AWS_S3.");
+}
+
 class DropTableTest : public CreateAndDropTableDdlTest,
                       public testing::WithParamInterface<ddl_utils::TableType> {
  protected:
