@@ -41,7 +41,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Class ParseIRError" href="class_parse_i_r_error.html" />
-    <link rel="prev" title="Class OverflowOrUnderflow" href="class_overflow_or_underflow.html" /> 
+    <link rel="prev" title="Class OverlapsHashTableCache" href="class_overlaps_hash_table_cache.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev df15ae9
+                5.6.0dev 998c080
               </div>
             
           
@@ -515,6 +515,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_out_of_memory.html">Class OutOfMemory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_out_of_render_memory.html">Class OutOfRenderMemory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_overflow_or_underflow.html">Class OverflowOrUnderflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_overlaps_hash_table_cache.html">Class OverlapsHashTableCache</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class OverlapsJoinHashTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parse_i_r_error.html">Class ParseIRError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_add_column_stmt.html">Class Parser::AddColumnStmt</a></li>
@@ -1613,6 +1614,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_numeric_value_converter.html">Struct NumericValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_object_role_descriptor.html">Struct ObjectRoleDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_one_integer_column_row.html">Struct OneIntegerColumnRow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_overlaps_hash_table_cache_key.html">Struct OverlapsHashTableCacheKey</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_overlaps_join_conjunction.html">Struct OverlapsJoinConjunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_overlaps_key_handler.html">Struct OverlapsKeyHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_case_sensitive_validate.html">Struct Parser::CaseSensitiveValidate</a></li>
@@ -1711,6 +1713,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_data_source_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRDataSourceDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_feature_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRFeatureDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_spatial_reference_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRSpatialReferenceDeleter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_bucket_size_tuner.html">Struct anonymous_namespace{OverlapsJoinHashTable.cpp}::BucketSizeTuner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_executor_mutex_holder.html">Struct anonymous_namespace{RelAlgExecutor.cpp}::ExecutorMutexHolder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_lazy_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoLazyFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_query_output_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoQueryOutputFetchHandler</a></li>
@@ -1924,6 +1927,11 @@
 <span id="_CPPv3N21OverlapsJoinHashTable19getCacheInvalidatorEv"></span><span id="_CPPv2N21OverlapsJoinHashTable19getCacheInvalidatorEv"></span><span id="OverlapsJoinHashTable::getCacheInvalidator"></span><span class="target" id="class_overlaps_join_hash_table_1a1b4d5e9b8f52830f1d379cb8c1c17dee"></span><em class="property">static</em> auto <code class="sig-name descname">getCacheInvalidator</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable19getCacheInvalidatorEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4N21OverlapsJoinHashTable29getCombinedHashTableCacheSizeEv">
+<span id="_CPPv3N21OverlapsJoinHashTable29getCombinedHashTableCacheSizeEv"></span><span id="_CPPv2N21OverlapsJoinHashTable29getCombinedHashTableCacheSizeEv"></span><span id="OverlapsJoinHashTable::getCombinedHashTableCacheSize"></span><span class="target" id="class_overlaps_join_hash_table_1a2843f2b3e40928f140b3f98e9b886cce"></span><em class="property">static</em> size_t <code class="sig-name descname">getCombinedHashTableCacheSize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable29getCombinedHashTableCacheSizeEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Protected Functions</p>
@@ -1933,18 +1941,18 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N21OverlapsJoinHashTable14reifyForDeviceERK16ColumnsForDeviceK8HashTypeK6size_tK6size_tKiKN6logger8ThreadIdE">
-<span id="_CPPv3N21OverlapsJoinHashTable14reifyForDeviceERK16ColumnsForDeviceK8HashTypeK6size_tK6size_tKiKN6logger8ThreadIdE"></span><span id="_CPPv2N21OverlapsJoinHashTable14reifyForDeviceERK16ColumnsForDeviceK8HashTypeK6size_tK6size_tKiKN6logger8ThreadIdE"></span><span id="OverlapsJoinHashTable::reifyForDevice__ColumnsForDeviceCR.HashTypeC.sC.sC.iC.logger::ThreadIdC"></span><span class="target" id="class_overlaps_join_hash_table_1a9cf242bd29a0bbf05e54275996fb3dec"></span>void <code class="sig-name descname">reifyForDevice</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_columns_for_device.html#_CPPv416ColumnsForDevice" title="ColumnsForDevice">ColumnsForDevice</a> &amp;<em>columns_for_device</em>, <em class="property">const</em> HashType <em>layout</em>, <em class="property">const</em> size_t <em>entry_count</em>, <em class="property">const</em> size_t <em>emitted_keys_count</em>, <em class="property">const</em> int <em>device_id</em>, <em class="property">const</em> logger::ThreadId <em>parent_thread_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable14reifyForDeviceERK16ColumnsForDeviceK8HashTypeK6size_tK6size_tKiKN6logger8ThreadIdE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4N21OverlapsJoinHashTable15reifyWithLayoutEK8HashType">
 <span id="_CPPv3N21OverlapsJoinHashTable15reifyWithLayoutEK8HashType"></span><span id="_CPPv2N21OverlapsJoinHashTable15reifyWithLayoutEK8HashType"></span><span id="OverlapsJoinHashTable::reifyWithLayout__HashTypeC"></span><span class="target" id="class_overlaps_join_hash_table_1abded52a22694b727b129001a95f4b21e"></span>void <code class="sig-name descname">reifyWithLayout</code><span class="sig-paren">(</span><em class="property">const</em> HashType <em>layout</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable15reifyWithLayoutEK8HashType" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N21OverlapsJoinHashTable15calculateCountsE6size_tRKN20Fragmenter_Namespace9TableInfoERNSt6vectorI16ColumnsForDeviceEE">
-<span id="_CPPv3N21OverlapsJoinHashTable15calculateCountsE6size_tRKN20Fragmenter_Namespace9TableInfoERNSt6vectorI16ColumnsForDeviceEE"></span><span id="_CPPv2N21OverlapsJoinHashTable15calculateCountsE6size_tRKN20Fragmenter_Namespace9TableInfoERNSt6vectorI16ColumnsForDeviceEE"></span><span id="OverlapsJoinHashTable::calculateCounts__s.Fragmenter_Namespace::TableInfoCR.std::vector:ColumnsForDevice:R"></span><span class="target" id="class_overlaps_join_hash_table_1aae91a31317e314980b8122de57ddfa39"></span>std::pair&lt;size_t, size_t&gt; <code class="sig-name descname">calculateCounts</code><span class="sig-paren">(</span>size_t <em>shard_count</em>, <em class="property">const</em> Fragmenter_Namespace::<a class="reference internal" href="class_fragmenter___namespace_1_1_table_info.html#_CPPv4N20Fragmenter_Namespace9TableInfoE" title="Fragmenter_Namespace::TableInfo">TableInfo</a> &amp;<em>query_info</em>, std::vector&lt;<a class="reference internal" href="../struct/struct_columns_for_device.html#_CPPv416ColumnsForDevice" title="ColumnsForDevice">ColumnsForDevice</a>&gt; &amp;<em>columns_per_device</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable15calculateCountsE6size_tRKN20Fragmenter_Namespace9TableInfoERNSt6vectorI16ColumnsForDeviceEE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21OverlapsJoinHashTable9reifyImplERNSt6vectorI16ColumnsForDeviceEERKN20Fragmenter_Namespace9TableInfoEK8HashTypeK6size_tK6size_tK6size_t">
+<span id="_CPPv3N21OverlapsJoinHashTable9reifyImplERNSt6vectorI16ColumnsForDeviceEERKN20Fragmenter_Namespace9TableInfoEK8HashTypeK6size_tK6size_tK6size_t"></span><span id="_CPPv2N21OverlapsJoinHashTable9reifyImplERNSt6vectorI16ColumnsForDeviceEERKN20Fragmenter_Namespace9TableInfoEK8HashTypeK6size_tK6size_tK6size_t"></span><span id="OverlapsJoinHashTable::reifyImpl__std::vector:ColumnsForDevice:R.Fragmenter_Namespace::TableInfoCR.HashTypeC.sC.sC.sC"></span><span class="target" id="class_overlaps_join_hash_table_1a6f50b556c02022ac6f55fa6e169b6246"></span>void <code class="sig-name descname">reifyImpl</code><span class="sig-paren">(</span>std::vector&lt;<a class="reference internal" href="../struct/struct_columns_for_device.html#_CPPv416ColumnsForDevice" title="ColumnsForDevice">ColumnsForDevice</a>&gt; &amp;<em>columns_per_device</em>, <em class="property">const</em> Fragmenter_Namespace::<a class="reference internal" href="class_fragmenter___namespace_1_1_table_info.html#_CPPv4N20Fragmenter_Namespace9TableInfoE" title="Fragmenter_Namespace::TableInfo">TableInfo</a> &amp;<em>query_info</em>, <em class="property">const</em> HashType <em>layout</em>, <em class="property">const</em> size_t <em>shard_count</em>, <em class="property">const</em> size_t <em>entry_count</em>, <em class="property">const</em> size_t <em>emitted_keys_count</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable9reifyImplERNSt6vectorI16ColumnsForDeviceEERKN20Fragmenter_Namespace9TableInfoEK8HashTypeK6size_tK6size_tK6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N21OverlapsJoinHashTable14reifyForDeviceERK16ColumnsForDeviceK8HashTypeK6size_tK6size_tKiKN6logger8ThreadIdE">
+<span id="_CPPv3N21OverlapsJoinHashTable14reifyForDeviceERK16ColumnsForDeviceK8HashTypeK6size_tK6size_tKiKN6logger8ThreadIdE"></span><span id="_CPPv2N21OverlapsJoinHashTable14reifyForDeviceERK16ColumnsForDeviceK8HashTypeK6size_tK6size_tKiKN6logger8ThreadIdE"></span><span id="OverlapsJoinHashTable::reifyForDevice__ColumnsForDeviceCR.HashTypeC.sC.sC.iC.logger::ThreadIdC"></span><span class="target" id="class_overlaps_join_hash_table_1a9cf242bd29a0bbf05e54275996fb3dec"></span>void <code class="sig-name descname">reifyForDevice</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_columns_for_device.html#_CPPv416ColumnsForDevice" title="ColumnsForDevice">ColumnsForDevice</a> &amp;<em>columns_for_device</em>, <em class="property">const</em> HashType <em>layout</em>, <em class="property">const</em> size_t <em>entry_count</em>, <em class="property">const</em> size_t <em>emitted_keys_count</em>, <em class="property">const</em> int <em>device_id</em>, <em class="property">const</em> logger::ThreadId <em>parent_thread_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable14reifyForDeviceERK16ColumnsForDeviceK8HashTypeK6size_tK6size_tKiKN6logger8ThreadIdE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1958,13 +1966,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N21OverlapsJoinHashTable17computeBucketInfoERKNSt6vectorI10JoinColumnEERKNSt6vectorI18JoinColumnTypeInfoEEKi">
-<span id="_CPPv3N21OverlapsJoinHashTable17computeBucketInfoERKNSt6vectorI10JoinColumnEERKNSt6vectorI18JoinColumnTypeInfoEEKi"></span><span id="_CPPv2N21OverlapsJoinHashTable17computeBucketInfoERKNSt6vectorI10JoinColumnEERKNSt6vectorI18JoinColumnTypeInfoEEKi"></span><span id="OverlapsJoinHashTable::computeBucketInfo__std::vector:JoinColumn:CR.std::vector:JoinColumnTypeInfo:CR.iC"></span><span class="target" id="class_overlaps_join_hash_table_1ac0bbaf167a7e716fa7fbcf63bfaac8ec"></span>std::vector&lt;<a class="reference internal" href="../struct/struct_join_bucket_info.html#_CPPv414JoinBucketInfo" title="JoinBucketInfo">JoinBucketInfo</a>&gt; <code class="sig-name descname">computeBucketInfo</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_join_column.html#_CPPv410JoinColumn" title="JoinColumn">JoinColumn</a>&gt; &amp;<em>join_columns</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_join_column_type_info.html#_CPPv418JoinColumnTypeInfo" title="JoinColumnTypeInfo">JoinColumnTypeInfo</a>&gt; &amp;<em>join_column_types</em>, <em class="property">const</em> int <em>device_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable17computeBucketInfoERKNSt6vectorI10JoinColumnEERKNSt6vectorI18JoinColumnTypeInfoEEKi" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21OverlapsJoinHashTable21approximateTupleCountERKNSt6vectorI16ColumnsForDeviceEE">
+<span id="_CPPv3N21OverlapsJoinHashTable21approximateTupleCountERKNSt6vectorI16ColumnsForDeviceEE"></span><span id="_CPPv2N21OverlapsJoinHashTable21approximateTupleCountERKNSt6vectorI16ColumnsForDeviceEE"></span><span id="OverlapsJoinHashTable::approximateTupleCount__std::vector:ColumnsForDevice:CR"></span><span class="target" id="class_overlaps_join_hash_table_1ab3878cf161f207e23a152789c528499c"></span>std::pair&lt;size_t, size_t&gt; <code class="sig-name descname">approximateTupleCount</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_columns_for_device.html#_CPPv416ColumnsForDevice" title="ColumnsForDevice">ColumnsForDevice</a>&gt; &amp;<em>columns_per_device</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable21approximateTupleCountERKNSt6vectorI16ColumnsForDeviceEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK21OverlapsJoinHashTable21approximateTupleCountERKNSt6vectorI16ColumnsForDeviceEE">
-<span id="_CPPv3NK21OverlapsJoinHashTable21approximateTupleCountERKNSt6vectorI16ColumnsForDeviceEE"></span><span id="_CPPv2NK21OverlapsJoinHashTable21approximateTupleCountERKNSt6vectorI16ColumnsForDeviceEE"></span><span id="OverlapsJoinHashTable::approximateTupleCount__std::vector:ColumnsForDevice:CRC"></span><span class="target" id="class_overlaps_join_hash_table_1a597e3c3711725574b07356f1e9e56010"></span>std::pair&lt;size_t, size_t&gt; <code class="sig-name descname">approximateTupleCount</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_columns_for_device.html#_CPPv416ColumnsForDevice" title="ColumnsForDevice">ColumnsForDevice</a>&gt; &amp;<em>columns_per_device</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21OverlapsJoinHashTable21approximateTupleCountERKNSt6vectorI16ColumnsForDeviceEE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21OverlapsJoinHashTable22computeHashTableCountsEK6size_tRNSt6vectorI16ColumnsForDeviceEE">
+<span id="_CPPv3N21OverlapsJoinHashTable22computeHashTableCountsEK6size_tRNSt6vectorI16ColumnsForDeviceEE"></span><span id="_CPPv2N21OverlapsJoinHashTable22computeHashTableCountsEK6size_tRNSt6vectorI16ColumnsForDeviceEE"></span><span id="OverlapsJoinHashTable::computeHashTableCounts__sC.std::vector:ColumnsForDevice:R"></span><span class="target" id="class_overlaps_join_hash_table_1a3e2a2869178b73788896ddff294a0aab"></span>std::pair&lt;size_t, size_t&gt; <code class="sig-name descname">computeHashTableCounts</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>shard_count</em>, std::vector&lt;<a class="reference internal" href="../struct/struct_columns_for_device.html#_CPPv416ColumnsForDevice" title="ColumnsForDevice">ColumnsForDevice</a>&gt; &amp;<em>columns_per_device</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable22computeHashTableCountsEK6size_tRNSt6vectorI16ColumnsForDeviceEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2029,23 +2037,20 @@
 
 </div>
 <div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Protected Static Attributes</p>
-<dl class="member">
-<dt id="_CPPv4N21OverlapsJoinHashTable17auto_tuner_cache_E">
-<span id="_CPPv3N21OverlapsJoinHashTable17auto_tuner_cache_E"></span><span id="_CPPv2N21OverlapsJoinHashTable17auto_tuner_cache_E"></span><span id="OverlapsJoinHashTable::auto_tuner_cache___std::map:HashTableCacheKey.double:"></span><span class="target" id="class_overlaps_join_hash_table_1aeedbd7dec8ab38c8e07eee2399252097"></span>std::map&lt;<a class="reference internal" href="../struct/struct_hash_table_cache_key.html#_CPPv417HashTableCacheKey" title="HashTableCacheKey">HashTableCacheKey</a>, double&gt; <code class="sig-name descname">auto_tuner_cache_</code><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable17auto_tuner_cache_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N21OverlapsJoinHashTable23auto_tuner_cache_mutex_E">
-<span id="_CPPv3N21OverlapsJoinHashTable23auto_tuner_cache_mutex_E"></span><span id="_CPPv2N21OverlapsJoinHashTable23auto_tuner_cache_mutex_E"></span><span id="OverlapsJoinHashTable::auto_tuner_cache_mutex___std::mutex"></span><span class="target" id="class_overlaps_join_hash_table_1a02c16be2fffdca98d772baec372c1245"></span>std::mutex <code class="sig-name descname">auto_tuner_cache_mutex_</code><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable23auto_tuner_cache_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Types</p>
 <dl class="type">
 <dt id="_CPPv4N21OverlapsJoinHashTable19HashTableCacheValueE">
 <span id="_CPPv3N21OverlapsJoinHashTable19HashTableCacheValueE"></span><span id="_CPPv2N21OverlapsJoinHashTable19HashTableCacheValueE"></span><span class="target" id="class_overlaps_join_hash_table_1a88734bb30aa3576584f959de4ef9a960"></span><em class="property">using </em><code class="sig-name descname">HashTableCacheValue</code> = std::shared_ptr&lt;<a class="reference internal" href="class_hash_table.html#_CPPv49HashTable" title="HashTable">HashTable</a>&gt;<a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable19HashTableCacheValueE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="type">
+<dt id="_CPPv4N21OverlapsJoinHashTable15BucketThresholdE">
+<span id="_CPPv3N21OverlapsJoinHashTable15BucketThresholdE"></span><span id="_CPPv2N21OverlapsJoinHashTable15BucketThresholdE"></span><span class="target" id="class_overlaps_join_hash_table_1ac70306061f28be732533d8b1906e6b4e"></span><em class="property">using </em><code class="sig-name descname">BucketThreshold</code> = double<a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable15BucketThresholdE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="type">
+<dt id="_CPPv4N21OverlapsJoinHashTable11BucketSizesE">
+<span id="_CPPv3N21OverlapsJoinHashTable11BucketSizesE"></span><span id="_CPPv2N21OverlapsJoinHashTable11BucketSizesE"></span><span class="target" id="class_overlaps_join_hash_table_1ab5dcbea2854fc62fcd6797f78fde5821"></span><em class="property">using </em><code class="sig-name descname">BucketSizes</code> = std::vector&lt;double&gt;<a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable11BucketSizesE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2112,23 +2117,18 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N21OverlapsJoinHashTable27initHashTableOnCpuFromCacheERK17HashTableCacheKey">
-<span id="_CPPv3N21OverlapsJoinHashTable27initHashTableOnCpuFromCacheERK17HashTableCacheKey"></span><span id="_CPPv2N21OverlapsJoinHashTable27initHashTableOnCpuFromCacheERK17HashTableCacheKey"></span><span id="OverlapsJoinHashTable::initHashTableOnCpuFromCache__HashTableCacheKeyCR"></span><span class="target" id="class_overlaps_join_hash_table_1a898d8980d2fee43b7c619feeef38a5a6"></span>std::shared_ptr&lt;<a class="reference internal" href="class_hash_table.html#_CPPv49HashTable" title="HashTable">HashTable</a>&gt; <code class="sig-name descname">initHashTableOnCpuFromCache</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_hash_table_cache_key.html#_CPPv417HashTableCacheKey" title="HashTableCacheKey">HashTableCacheKey</a> &amp;<em>key</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable27initHashTableOnCpuFromCacheERK17HashTableCacheKey" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21OverlapsJoinHashTable27initHashTableOnCpuFromCacheERK25OverlapsHashTableCacheKey">
+<span id="_CPPv3N21OverlapsJoinHashTable27initHashTableOnCpuFromCacheERK25OverlapsHashTableCacheKey"></span><span id="_CPPv2N21OverlapsJoinHashTable27initHashTableOnCpuFromCacheERK25OverlapsHashTableCacheKey"></span><span id="OverlapsJoinHashTable::initHashTableOnCpuFromCache__OverlapsHashTableCacheKeyCR"></span><span class="target" id="class_overlaps_join_hash_table_1a5de4d448c1a9e013292faafe0494ed3b"></span>std::shared_ptr&lt;<a class="reference internal" href="class_hash_table.html#_CPPv49HashTable" title="HashTable">HashTable</a>&gt; <code class="sig-name descname">initHashTableOnCpuFromCache</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_overlaps_hash_table_cache_key.html#_CPPv425OverlapsHashTableCacheKey" title="OverlapsHashTableCacheKey">OverlapsHashTableCacheKey</a> &amp;<em>key</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable27initHashTableOnCpuFromCacheERK25OverlapsHashTableCacheKey" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK21OverlapsJoinHashTable33getApproximateTupleCountFromCacheERK17HashTableCacheKey">
-<span id="_CPPv3NK21OverlapsJoinHashTable33getApproximateTupleCountFromCacheERK17HashTableCacheKey"></span><span id="_CPPv2NK21OverlapsJoinHashTable33getApproximateTupleCountFromCacheERK17HashTableCacheKey"></span><span id="OverlapsJoinHashTable::getApproximateTupleCountFromCache__HashTableCacheKeyCRC"></span><span class="target" id="class_overlaps_join_hash_table_1a4a70468a0b27a1908475cc8ca78853a2"></span>std::pair&lt;std::optional&lt;size_t&gt;, size_t&gt; <code class="sig-name descname">getApproximateTupleCountFromCache</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_hash_table_cache_key.html#_CPPv417HashTableCacheKey" title="HashTableCacheKey">HashTableCacheKey</a> &amp;<em>key</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21OverlapsJoinHashTable33getApproximateTupleCountFromCacheERK17HashTableCacheKey" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21OverlapsJoinHashTable33getApproximateTupleCountFromCacheERK25OverlapsHashTableCacheKey">
+<span id="_CPPv3N21OverlapsJoinHashTable33getApproximateTupleCountFromCacheERK25OverlapsHashTableCacheKey"></span><span id="_CPPv2N21OverlapsJoinHashTable33getApproximateTupleCountFromCacheERK25OverlapsHashTableCacheKey"></span><span id="OverlapsJoinHashTable::getApproximateTupleCountFromCache__OverlapsHashTableCacheKeyCR"></span><span class="target" id="class_overlaps_join_hash_table_1a10c1c1cf8b426f52d773beb31afed84a"></span>std::optional&lt;std::pair&lt;size_t, size_t&gt;&gt; <code class="sig-name descname">getApproximateTupleCountFromCache</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_overlaps_hash_table_cache_key.html#_CPPv425OverlapsHashTableCacheKey" title="OverlapsHashTableCacheKey">OverlapsHashTableCacheKey</a> &amp;<em>key</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable33getApproximateTupleCountFromCacheERK25OverlapsHashTableCacheKey" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N21OverlapsJoinHashTable24putHashTableOnCpuToCacheERK17HashTableCacheKeyNSt10shared_ptrI9HashTableEE">
-<span id="_CPPv3N21OverlapsJoinHashTable24putHashTableOnCpuToCacheERK17HashTableCacheKeyNSt10shared_ptrI9HashTableEE"></span><span id="_CPPv2N21OverlapsJoinHashTable24putHashTableOnCpuToCacheERK17HashTableCacheKeyNSt10shared_ptrI9HashTableEE"></span><span id="OverlapsJoinHashTable::putHashTableOnCpuToCache__HashTableCacheKeyCR.std::shared_ptr:HashTable:"></span><span class="target" id="class_overlaps_join_hash_table_1af4026a1da02a6f3653bf32e9585f886b"></span>void <code class="sig-name descname">putHashTableOnCpuToCache</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_hash_table_cache_key.html#_CPPv417HashTableCacheKey" title="HashTableCacheKey">HashTableCacheKey</a> &amp;<em>key</em>, std::shared_ptr&lt;<a class="reference internal" href="class_hash_table.html#_CPPv49HashTable" title="HashTable">HashTable</a>&gt; <em>hash_table</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable24putHashTableOnCpuToCacheERK17HashTableCacheKeyNSt10shared_ptrI9HashTableEE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N21OverlapsJoinHashTable18computeBucketSizesERNSt6vectorIdEERK10JoinColumnRK18JoinColumnTypeInfoRKNSt6vectorI10InnerOuterEE">
-<span id="_CPPv3N21OverlapsJoinHashTable18computeBucketSizesERNSt6vectorIdEERK10JoinColumnRK18JoinColumnTypeInfoRKNSt6vectorI10InnerOuterEE"></span><span id="_CPPv2N21OverlapsJoinHashTable18computeBucketSizesERNSt6vectorIdEERK10JoinColumnRK18JoinColumnTypeInfoRKNSt6vectorI10InnerOuterEE"></span><span id="OverlapsJoinHashTable::computeBucketSizes__std::vector:double:R.JoinColumnCR.JoinColumnTypeInfoCR.std::vector:InnerOuter:CR"></span><span class="target" id="class_overlaps_join_hash_table_1a7c658ec9effcb97ec6326676edebc02c"></span>void <code class="sig-name descname">computeBucketSizes</code><span class="sig-paren">(</span>std::vector&lt;double&gt; &amp;<em>bucket_sizes_for_dimension</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_join_column.html#_CPPv410JoinColumn" title="JoinColumn">JoinColumn</a> &amp;<em>join_column</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_join_column_type_info.html#_CPPv418JoinColumnTypeInfo" title="JoinColumnTypeInfo">JoinColumnTypeInfo</a> &amp;<em>join_column_type</em>, <em class="property">const</em> std::vector&lt;InnerOuter&gt; &amp;<em>inner_outer_pairs</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable18computeBucketSizesERNSt6vectorIdEERK10JoinColumnRK18JoinColumnTypeInfoRKNSt6vectorI10InnerOuterEE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21OverlapsJoinHashTable24putHashTableOnCpuToCacheERK25OverlapsHashTableCacheKeyNSt10shared_ptrI9HashTableEE">
+<span id="_CPPv3N21OverlapsJoinHashTable24putHashTableOnCpuToCacheERK25OverlapsHashTableCacheKeyNSt10shared_ptrI9HashTableEE"></span><span id="_CPPv2N21OverlapsJoinHashTable24putHashTableOnCpuToCacheERK25OverlapsHashTableCacheKeyNSt10shared_ptrI9HashTableEE"></span><span id="OverlapsJoinHashTable::putHashTableOnCpuToCache__OverlapsHashTableCacheKeyCR.std::shared_ptr:HashTable:"></span><span class="target" id="class_overlaps_join_hash_table_1a516ab8c6e44e07dfb5006ff23e1353fb"></span>void <code class="sig-name descname">putHashTableOnCpuToCache</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_overlaps_hash_table_cache_key.html#_CPPv425OverlapsHashTableCacheKey" title="OverlapsHashTableCacheKey">OverlapsHashTableCacheKey</a> &amp;<em>key</em>, std::shared_ptr&lt;<a class="reference internal" href="class_hash_table.html#_CPPv49HashTable" title="HashTable">HashTable</a>&gt; <em>hash_table</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable24putHashTableOnCpuToCacheERK25OverlapsHashTableCacheKeyNSt10shared_ptrI9HashTableEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2185,11 +2185,6 @@
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N21OverlapsJoinHashTable35overlaps_hashjoin_bucket_threshold_E">
-<span id="_CPPv3N21OverlapsJoinHashTable35overlaps_hashjoin_bucket_threshold_E"></span><span id="_CPPv2N21OverlapsJoinHashTable35overlaps_hashjoin_bucket_threshold_E"></span><span id="OverlapsJoinHashTable::overlaps_hashjoin_bucket_threshold___double"></span><span class="target" id="class_overlaps_join_hash_table_1a0ceb976777c25f6e9be957a6c917b88b"></span>double <code class="sig-name descname">overlaps_hashjoin_bucket_threshold_</code> = {0.1}<a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable35overlaps_hashjoin_bucket_threshold_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
 <dt id="_CPPv4N21OverlapsJoinHashTable16layout_override_E">
 <span id="_CPPv3N21OverlapsJoinHashTable16layout_override_E"></span><span id="_CPPv2N21OverlapsJoinHashTable16layout_override_E"></span><span id="OverlapsJoinHashTable::layout_override___std::optional:HashType:"></span><span class="target" id="class_overlaps_join_hash_table_1a40724bef92dfef1729e04ee7682cf1a0"></span>std::optional&lt;HashType&gt; <code class="sig-name descname">layout_override_</code><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable16layout_override_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2209,7 +2204,12 @@
 <p class="breathe-sectiondef-title rubric">Private Static Attributes</p>
 <dl class="member">
 <dt id="_CPPv4N21OverlapsJoinHashTable17hash_table_cache_E">
-<span id="_CPPv3N21OverlapsJoinHashTable17hash_table_cache_E"></span><span id="_CPPv2N21OverlapsJoinHashTable17hash_table_cache_E"></span><span id="OverlapsJoinHashTable::hash_table_cache___std::unique_ptr:HashTableCache:HashTableCacheKey.OverlapsJoinHashTable::HashTableCacheValue::"></span><span class="target" id="class_overlaps_join_hash_table_1af41e2a07438fbf4e60efa5ed1921636b"></span>std::unique_ptr&lt;HashTableCache&lt;<a class="reference internal" href="../struct/struct_hash_table_cache_key.html#_CPPv417HashTableCacheKey" title="HashTableCacheKey">HashTableCacheKey</a>, <a class="reference internal" href="#_CPPv421OverlapsJoinHashTable" title="OverlapsJoinHashTable">OverlapsJoinHashTable</a>::<a class="reference internal" href="#_CPPv4N21OverlapsJoinHashTable19HashTableCacheValueE" title="OverlapsJoinHashTable::HashTableCacheValue">HashTableCacheValue</a>&gt;&gt; <code class="sig-name descname">hash_table_cache_</code> = std::make_unique&lt;HashTableCache&lt;<a class="reference internal" href="../struct/struct_hash_table_cache_key.html#_CPPv417HashTableCacheKey" title="HashTableCacheKey">HashTableCacheKey</a>, <a class="reference internal" href="#_CPPv421OverlapsJoinHashTable" title="OverlapsJoinHashTable">OverlapsJoinHashTable</a>::<a class="reference internal" href="#_CPPv4N21OverlapsJoinHashTable19HashTableCacheValueE" title="OverlapsJoinHashTable::HashTableCacheValue">HashTableCacheValue</a>&gt;&gt;()<a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable17hash_table_cache_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N21OverlapsJoinHashTable17hash_table_cache_E"></span><span id="_CPPv2N21OverlapsJoinHashTable17hash_table_cache_E"></span><span id="OverlapsJoinHashTable::hash_table_cache___std::unique_ptr:OverlapsHashTableCache:OverlapsHashTableCacheKey.OverlapsJoinHashTable::HashTableCacheValue::"></span><span class="target" id="class_overlaps_join_hash_table_1abab565a1cd3df05e9a8b3764878e66b4"></span>std::unique_ptr&lt;OverlapsHashTableCache&lt;<a class="reference internal" href="../struct/struct_overlaps_hash_table_cache_key.html#_CPPv425OverlapsHashTableCacheKey" title="OverlapsHashTableCacheKey">OverlapsHashTableCacheKey</a>, <a class="reference internal" href="#_CPPv421OverlapsJoinHashTable" title="OverlapsJoinHashTable">OverlapsJoinHashTable</a>::<a class="reference internal" href="#_CPPv4N21OverlapsJoinHashTable19HashTableCacheValueE" title="OverlapsJoinHashTable::HashTableCacheValue">HashTableCacheValue</a>&gt;&gt; <code class="sig-name descname">hash_table_cache_</code> = std::make_unique&lt;OverlapsHashTableCache&lt;<a class="reference internal" href="../struct/struct_overlaps_hash_table_cache_key.html#_CPPv425OverlapsHashTableCacheKey" title="OverlapsHashTableCacheKey">OverlapsHashTableCacheKey</a>, <a class="reference internal" href="#_CPPv421OverlapsJoinHashTable" title="OverlapsJoinHashTable">OverlapsJoinHashTable</a>::<a class="reference internal" href="#_CPPv4N21OverlapsJoinHashTable19HashTableCacheValueE" title="OverlapsJoinHashTable::HashTableCacheValue">HashTableCacheValue</a>&gt;&gt;()<a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable17hash_table_cache_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N21OverlapsJoinHashTable17auto_tuner_cache_E">
+<span id="_CPPv3N21OverlapsJoinHashTable17auto_tuner_cache_E"></span><span id="_CPPv2N21OverlapsJoinHashTable17auto_tuner_cache_E"></span><span id="OverlapsJoinHashTable::auto_tuner_cache___std::unique_ptr:HashTableCache:HashTableCacheKey.std::pair:OverlapsJoinHashTable::BucketThreshold.OverlapsJoinHashTable::BucketSizes:::"></span><span class="target" id="class_overlaps_join_hash_table_1a8a8e2f248d05633744dbe8753c0f4725"></span>std::unique_ptr&lt;HashTableCache&lt;<a class="reference internal" href="../struct/struct_hash_table_cache_key.html#_CPPv417HashTableCacheKey" title="HashTableCacheKey">HashTableCacheKey</a>, std::pair&lt;<a class="reference internal" href="#_CPPv421OverlapsJoinHashTable" title="OverlapsJoinHashTable">OverlapsJoinHashTable</a>::<a class="reference internal" href="#_CPPv4N21OverlapsJoinHashTable15BucketThresholdE" title="OverlapsJoinHashTable::BucketThreshold">BucketThreshold</a>, <a class="reference internal" href="#_CPPv421OverlapsJoinHashTable" title="OverlapsJoinHashTable">OverlapsJoinHashTable</a>::<a class="reference internal" href="#_CPPv4N21OverlapsJoinHashTable11BucketSizesE" title="OverlapsJoinHashTable::BucketSizes">BucketSizes</a>&gt;&gt;&gt; <code class="sig-name descname">auto_tuner_cache_</code> = std::make_unique&lt;HashTableCache&lt;<a class="reference internal" href="../struct/struct_hash_table_cache_key.html#_CPPv417HashTableCacheKey" title="HashTableCacheKey">HashTableCacheKey</a>, std::pair&lt;<a class="reference internal" href="#_CPPv421OverlapsJoinHashTable" title="OverlapsJoinHashTable">OverlapsJoinHashTable</a>::<a class="reference internal" href="#_CPPv4N21OverlapsJoinHashTable15BucketThresholdE" title="OverlapsJoinHashTable::BucketThreshold">BucketThreshold</a>, <a class="reference internal" href="#_CPPv421OverlapsJoinHashTable" title="OverlapsJoinHashTable">OverlapsJoinHashTable</a>::<a class="reference internal" href="#_CPPv4N21OverlapsJoinHashTable11BucketSizesE" title="OverlapsJoinHashTable::BucketSizes">BucketSizes</a>&gt;&gt;&gt;()<a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable17auto_tuner_cache_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2228,7 +2228,7 @@
         <a href="class_parse_i_r_error.html" class="btn btn-neutral float-right" title="Class ParseIRError" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="class_overflow_or_underflow.html" class="btn btn-neutral float-left" title="Class OverflowOrUnderflow" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="class_overlaps_hash_table_cache.html" class="btn btn-neutral float-left" title="Class OverlapsHashTableCache" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev df15ae9
+                5.6.0dev 998c080
               </div>
             
           
@@ -515,6 +515,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_out_of_memory.html">Class OutOfMemory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_out_of_render_memory.html">Class OutOfRenderMemory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_overflow_or_underflow.html">Class OverflowOrUnderflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_overlaps_hash_table_cache.html">Class OverlapsHashTableCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_overlaps_join_hash_table.html">Class OverlapsJoinHashTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parse_i_r_error.html">Class ParseIRError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_add_column_stmt.html">Class Parser::AddColumnStmt</a></li>
@@ -1613,6 +1614,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_numeric_value_converter.html">Struct NumericValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_object_role_descriptor.html">Struct ObjectRoleDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_one_integer_column_row.html">Struct OneIntegerColumnRow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_overlaps_hash_table_cache_key.html">Struct OverlapsHashTableCacheKey</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_overlaps_join_conjunction.html">Struct OverlapsJoinConjunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_overlaps_key_handler.html">Struct OverlapsKeyHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_case_sensitive_validate.html">Struct Parser::CaseSensitiveValidate</a></li>
@@ -1711,6 +1713,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_data_source_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRDataSourceDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_feature_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRFeatureDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_spatial_reference_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRSpatialReferenceDeleter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_bucket_size_tuner.html">Struct anonymous_namespace{OverlapsJoinHashTable.cpp}::BucketSizeTuner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_executor_mutex_holder.html">Struct anonymous_namespace{RelAlgExecutor.cpp}::ExecutorMutexHolder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_lazy_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoLazyFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_query_output_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoQueryOutputFetchHandler</a></li>
@@ -2003,47 +2006,6 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage14CsvDataWrapper24validateAndGetCopyParamsEv">
-<span id="_CPPv3N15foreign_storage14CsvDataWrapper24validateAndGetCopyParamsEv"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper24validateAndGetCopyParamsEv"></span><span id="foreign_storage::CsvDataWrapper::validateAndGetCopyParams"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1a715c2044da1b888db84e861ae958c1f9"></span>import_export::<a class="reference internal" href="../struct/structimport__export_1_1_copy_params.html#_CPPv4N13import_export10CopyParamsE" title="import_export::CopyParams">CopyParams</a> <code class="sig-name descname">validateAndGetCopyParams</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper24validateAndGetCopyParamsEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage14CsvDataWrapper16validateFilePathEv">
-<span id="_CPPv3N15foreign_storage14CsvDataWrapper16validateFilePathEv"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper16validateFilePathEv"></span><span id="foreign_storage::CsvDataWrapper::validateFilePath"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1a6e45ee2879d938ff26b700815807f02d"></span>void <code class="sig-name descname">validateFilePath</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper16validateFilePathEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage14CsvDataWrapper30validateAndGetStringWithLengthERKNSt6stringEK6size_t">
-<span id="_CPPv3N15foreign_storage14CsvDataWrapper30validateAndGetStringWithLengthERKNSt6stringEK6size_t"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper30validateAndGetStringWithLengthERKNSt6stringEK6size_t"></span><span id="foreign_storage::CsvDataWrapper::validateAndGetStringWithLength__ssCR.sC"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1a5896f07dc9c16737dcd50a6beb76f9ff"></span>std::string <code class="sig-name descname">validateAndGetStringWithLength</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>option_name</em>, <em class="property">const</em> size_t <em>expected_num_chars</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper30validateAndGetStringWithLengthERKNSt6stringEK6size_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Validates that the value of given table option has the expected number of characters. An exception is thrown if the number of characters do not match.</p>
-<p><dl class="simple">
-<dt><strong>Return</strong></dt><dd><p>value of the option if the number of characters match. Returns an empty string if table options do not contain provided option. </p>
-</dd>
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">option_name</span></code>: - name of table option whose value is validated and returned </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">expected_num_chars</span></code>: - expected number of characters for option value </p></li>
-</ul>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage14CsvDataWrapper23validateAndGetBoolValueERKNSt6stringE">
-<span id="_CPPv3N15foreign_storage14CsvDataWrapper23validateAndGetBoolValueERKNSt6stringE"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper23validateAndGetBoolValueERKNSt6stringE"></span><span id="foreign_storage::CsvDataWrapper::validateAndGetBoolValue__ssCR"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1a8e42b7362e2d8f489e8a6f826b5dc3a0"></span>std::optional&lt;bool&gt; <code class="sig-name descname">validateAndGetBoolValue</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>option_name</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper23validateAndGetBoolValueERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Validates that the string value of given table option is either “true” or “false” (case insensitive). An exception is thrown if option value does not match one of the two possible values.</p>
-<p><dl class="simple">
-<dt><strong>Return</strong></dt><dd><p>corresponding bool for option value. Returns an empty optional if table options do not contain provided option. </p>
-</dd>
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">option_name</span></code>: - name of table option whose value is validated and returned </p></li>
-</ul>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4N15foreign_storage14CsvDataWrapper26populateChunkMapForColumnsERKNSt3setIPK16ColumnDescriptorEEKiRKNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapIiN8Chunk_NS5ChunkEEE">
 <span id="_CPPv3N15foreign_storage14CsvDataWrapper26populateChunkMapForColumnsERKNSt3setIPK16ColumnDescriptorEEKiRKNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapIiN8Chunk_NS5ChunkEEE"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper26populateChunkMapForColumnsERKNSt3setIPK16ColumnDescriptorEEKiRKNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapIiN8Chunk_NS5ChunkEEE"></span><span id="foreign_storage::CsvDataWrapper::populateChunkMapForColumns__std::set:ColumnDescriptorCP:CR.iC.std::map:ChunkKey.AbstractBufferP:CR.std::map:i.Chunk_NS::Chunk:R"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1a5abb8802d53bf5ec8eb4d521ac7d3e20"></span>void <code class="sig-name descname">populateChunkMapForColumns</code><span class="sig-paren">(</span><em class="property">const</em> std::set&lt;<em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *&gt; &amp;<em>columns</em>, <em class="property">const</em> int <em>fragment_id</em>, <em class="property">const</em> std::map&lt;ChunkKey, AbstractBuffer *&gt; &amp;<em>buffers</em>, std::map&lt;int, Chunk_NS::<a class="reference internal" href="class_chunk___n_s_1_1_chunk.html#_CPPv4N8Chunk_NS5ChunkE" title="Chunk_NS::Chunk">Chunk</a>&gt; &amp;<em>column_id_to_chunk_map</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper26populateChunkMapForColumnsERKNSt3setIPK16ColumnDescriptorEEKiRKNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapIiN8Chunk_NS5ChunkEEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2116,7 +2078,7 @@
 <p class="breathe-sectiondef-title rubric">Private Static Attributes</p>
 <dl class="member">
 <dt id="_CPPv4N15foreign_storage14CsvDataWrapper18supported_options_E">
-<span id="_CPPv3N15foreign_storage14CsvDataWrapper18supported_options_E"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper18supported_options_E"></span><span id="foreign_storage::CsvDataWrapper::supported_options___std::array:cCP.11:"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1a7f5ac49f4a58a0e5cfc8b920836363a7"></span><em class="property">constexpr</em> std::array&lt;char <em class="property">const</em> *, 11&gt; <code class="sig-name descname">supported_options_</code>{&quot;ARRAY_DELIMITER&quot;, , , , , , , , , , }<a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper18supported_options_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N15foreign_storage14CsvDataWrapper18supported_options_E"></span><span id="_CPPv2N15foreign_storage14CsvDataWrapper18supported_options_E"></span><span id="foreign_storage::CsvDataWrapper::supported_options___std::array:cCP.12:"></span><span class="target" id="classforeign__storage_1_1_csv_data_wrapper_1ab781dd9f235795e5ee36fb5c2093bea2"></span><em class="property">constexpr</em> std::array&lt;char <em class="property">const</em> *, 12&gt; <code class="sig-name descname">supported_options_</code>{&quot;ARRAY_DELIMITER&quot;, , , , , , , , , , , }<a class="headerlink" href="#_CPPv4N15foreign_storage14CsvDataWrapper18supported_options_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
