@@ -227,6 +227,11 @@ class DBObject {
   void loadKey();
   void loadKey(const Catalog_Namespace::Catalog& catalog);
 
+  bool valid() {
+    return (objectType_ != AbstractDBObjectType && objectKey_.permissionType != -1 &&
+            objectKey_.dbId != -1);
+  }
+
  private:
   std::string objectName_;
   DBObjectType objectType_;

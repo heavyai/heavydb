@@ -62,7 +62,10 @@ class SessionInfo {
       , executor_device_type_(static_cast<ExecutorDeviceType>(s.executor_device_type_))
       , session_id_(s.session_id_)
       , public_session_id_(s.public_session_id_) {}
-  Catalog& getCatalog() const { return *catalog_; }
+  Catalog& getCatalog() const {
+    CHECK(catalog_);
+    return *catalog_;
+  }
   std::shared_ptr<Catalog> get_catalog_ptr() const { return catalog_; }
   void set_catalog_ptr(std::shared_ptr<Catalog> c) { catalog_ = c; }
   const UserMetadata& get_currentUser() const { return currentUser_; }

@@ -3693,9 +3693,12 @@ void DBHandler::replace_dashboard(const TSessionId& session,
                                   const std::string& dashboard_state,
                                   const std::string& image_hash,
                                   const std::string& dashboard_metadata) {
+  LOG(INFO) << "++++++++++ " << __func__ << " TOP";
+  ScopeGuard logguard = [f = __func__] { LOG(INFO) << "---------- " << f << " END"; };
   auto stdlog = STDLOG(get_session_ptr(session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
+  CHECK(session_ptr);
   check_read_only("replace_dashboard");
   auto& cat = session_ptr->getCatalog();
 
@@ -3723,6 +3726,7 @@ void DBHandler::replace_dashboard(const TSessionId& session,
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
+  LOG(INFO) << "---------- " << __func__ << " BOT";
 }
 
 void DBHandler::delete_dashboard(const TSessionId& session, const int32_t dashboard_id) {

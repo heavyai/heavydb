@@ -71,6 +71,7 @@
 #include "Shared/File.h"
 #include "Shared/StringTransform.h"
 #include "Shared/measure.h"
+#include "Shared/scope.h"
 #include "StringDictionary/StringDictionaryClient.h"
 
 #include "MapDRelease.h"
@@ -1256,13 +1257,18 @@ void Catalog::addFrontendViewToMap(DashboardDescriptor& vd) {
 }
 
 void Catalog::addFrontendViewToMapNoLock(DashboardDescriptor& vd) {
+  LOG(INFO) << "++++++++++ " << __func__ << " TOP";
+  ScopeGuard logguard = [f = __func__] { LOG(INFO) << "---------- " << f << " END"; };
   cat_write_lock write_lock(this);
   dashboardDescriptorMap_[std::to_string(vd.userId) + ":" + vd.dashboardName] =
       std::make_shared<DashboardDescriptor>(vd);
+  LOG(INFO) << "---------- " << __func__ << " BOT";
 }
 
 std::vector<DBObject> Catalog::parseDashboardObjects(const std::string& view_meta,
                                                      const int& user_id) {
+  LOG(INFO) << "++++++++++ " << __func__ << " TOP";
+  ScopeGuard logguard = [f = __func__] { LOG(INFO) << "---------- " << f << " END"; };
   std::vector<DBObject> objects;
   DBObjectKey key;
   key.dbId = currentDB_.dbId;
@@ -1288,21 +1294,26 @@ std::vector<DBObject> Catalog::parseDashboardObjects(const std::string& view_met
     objects.back().setObjectType(td->isView ? ViewDBObjectType : TableDBObjectType);
     objects.back().setName(td->tableName);
   }
+  LOG(INFO) << "---------- " << __func__ << " BOT";
   return objects;
 }
 
 void Catalog::createOrUpdateDashboardSystemRole(const std::string& view_meta,
                                                 const int32_t& user_id,
                                                 const std::string& dash_role_name) {
+  LOG(INFO) << "++++++++++ " << __func__ << " TOP";
+  ScopeGuard logguard = [f = __func__] { LOG(INFO) << "---------- " << f << " END"; };
   auto objects = parseDashboardObjects(view_meta, user_id);
   Role* rl = SysCatalog::instance().getRoleGrantee(dash_role_name);
   if (!rl) {
+    LOG(INFO) << ".......... Dashboard role does not exist: " << dash_role_name;
     // Dashboard role does not exist
     // create role and grant privileges
     // NOTE(wamsi): Transactionally unsafe
     SysCatalog::instance().createRole(dash_role_name, false);
     SysCatalog::instance().grantDBObjectPrivilegesBatch({dash_role_name}, objects, *this);
   } else {
+    LOG(INFO) << ".......... Dashboard role already exists: " << dash_role_name;
     // Dashboard system role already exists
     // Add/remove privileges on objects
     auto ex_objects = rl->getDbObjects(true);
@@ -1315,10 +1326,12 @@ void Catalog::createOrUpdateDashboardSystemRole(const std::string& view_meta,
       for (auto obj : objects) {
         found = key == obj.getObjectKey() ? true : false;
         if (found) {
+          LOG(INFO) << ".......... found";
           break;
         }
       }
       if (!found) {
+        LOG(INFO) << ".......... not found";
         // revoke privs on object since the object is no
         // longer used by the dashboard as source
         // NOTE(wamsi): Transactionally unsafe
@@ -1330,6 +1343,7 @@ void Catalog::createOrUpdateDashboardSystemRole(const std::string& view_meta,
     // NOTE(wamsi): Transactionally unsafe
     SysCatalog::instance().grantDBObjectPrivilegesBatch({dash_role_name}, objects, *this);
   }
+  LOG(INFO) << "---------- " << __func__ << " BOT";
 }
 
 void Catalog::addLinkToMap(LinkDescriptor& ld) {
@@ -3641,15 +3655,20 @@ int32_t Catalog::createDashboard(DashboardDescriptor& vd) {
 }
 
 void Catalog::replaceDashboard(DashboardDescriptor& vd) {
+  LOG(INFO) << "++++++++++ " << __func__ << " TOP";
+  ScopeGuard logguard = [f = __func__] { LOG(INFO) << "---------- " << f << " END"; };
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(getObjForLock());
 
+  CHECK(sqliteConnector_.getSqlitePtr());
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
+    LOG(INFO) << ".......... SELECT mapd_dashboards";
     sqliteConnector_.query_with_text_params(
         "SELECT id FROM mapd_dashboards WHERE id = ?",
         std::vector<std::string>{std::to_string(vd.dashboardId)});
     if (sqliteConnector_.getNumRows() > 0) {
+      LOG(INFO) << ".......... UPDATE mapd_dashboards";
       sqliteConnector_.query_with_text_params(
           "UPDATE mapd_dashboards SET name = ?, state = ?, image_hash = ?, metadata = ?, "
           "userid = ?, update_time = datetime('now') where id = ? ",
@@ -3666,15 +3685,18 @@ void Catalog::replaceDashboard(DashboardDescriptor& vd) {
                           std::to_string(vd.dashboardId) + " does not exist in db");
     }
   } catch (std::exception& e) {
+    LOG(INFO) << ".......... catch " << e.what();
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
 
   bool found{false};
+  LOG(INFO) << ".......... looking for dashboard id: " << vd.dashboardId;
   for (auto descp : dashboardDescriptorMap_) {
     auto dash = descp.second.get();
     if (dash->dashboardId == vd.dashboardId) {
+      LOG(INFO) << ".......... found";
       found = true;
       auto viewDescIt = dashboardDescriptorMap_.find(std::to_string(dash->userId) + ":" +
                                                      dash->dashboardName);
@@ -3686,6 +3708,7 @@ void Catalog::replaceDashboard(DashboardDescriptor& vd) {
                             std::to_string(dash->userId) + " dashboard " +
                             dash->dashboardName + " does not exist in map");
       }
+      LOG(INFO) << ".......... erasing";
       dashboardDescriptorMap_.erase(viewDescIt);
       break;
     }
@@ -3698,6 +3721,7 @@ void Catalog::replaceDashboard(DashboardDescriptor& vd) {
   }
 
   // now reload the object
+  LOG(INFO) << ".......... reloading";
   sqliteConnector_.query_with_text_params(
       "SELECT id, strftime('%Y-%m-%dT%H:%M:%SZ', update_time)  FROM "
       "mapd_dashboards "
@@ -3712,6 +3736,7 @@ void Catalog::replaceDashboard(DashboardDescriptor& vd) {
   // NOTE(wamsi): Transactionally unsafe
   createOrUpdateDashboardSystemRole(
       vd.dashboardMetadata, vd.userId, vd.dashboardSystemRoleName);
+  LOG(INFO) << "---------- " << __func__ << " BOT";
 }
 
 std::string Catalog::calculateSHA1(const std::string& data) {
