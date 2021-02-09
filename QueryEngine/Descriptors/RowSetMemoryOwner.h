@@ -152,7 +152,7 @@ class RowSetMemoryOwner : public SimpleAllocator, boost::noncopyable {
     col_buffers_.push_back(const_cast<void*>(col_buffer));
   }
 
-  ~RowSetMemoryOwner() {
+  virtual ~RowSetMemoryOwner() {
     for (auto count_distinct_set : count_distinct_sets_) {
       delete count_distinct_set;
     }
