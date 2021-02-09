@@ -136,8 +136,7 @@ class BufferMgr : public AbstractBufferMgr {  // implements
 #ifdef HAVE_DCPMM
   // back fill max_buffer_size_ and max_num_pages_
   void setMaxBufferSizeAndNumOfPages(size_t max_buffer_size) {
-    max_buffer_size_ = max_buffer_size;
-    max_num_pages_ = max_buffer_size_ / page_size_;
+    max_num_pages_per_slab_ = max_buffer_size / page_size_;
   }
 
   AbstractBuffer* createBuffer(BufferProperty bufProp,

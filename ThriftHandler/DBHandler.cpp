@@ -6508,12 +6508,12 @@ void DBHandler::convert_result_set(ExecutionResult& result,
 
   // omnisql only accepts column format as being 'VALID",
   //   assume that omnisci_server should only return column format
-  int32_t nRows = result.getDataPtr()->rowCount();
+  int32_t nRows = result.getTable()->rowCount();
 
   convert_rows(_return,
                qsp,
                result.getTargetsMeta(),
-               *result.getDataPtr(),
+               *result.getTable(),
                /*column_format=*/true,
                /*first_n=*/nRows,
                /*at_most_n=*/nRows);

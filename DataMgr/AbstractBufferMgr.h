@@ -97,6 +97,9 @@ class AbstractBufferMgr {
                                                const ChunkKey& keyPrefix) = 0;
 
   virtual bool isBufferOnDevice(const ChunkKey& key) = 0;
+#ifdef HAVE_DCPMM
+  virtual bool isBufferInPersistentMemory(const ChunkKey& key) = 0;
+#endif /* HAVE_DCPMM */
   virtual std::string printSlabs() = 0;
   virtual void clearSlabs() = 0;
   virtual size_t getMaxSize() = 0;
