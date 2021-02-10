@@ -39,7 +39,7 @@ class DictPayloadUnavailable : public std::runtime_error {
   DictPayloadUnavailable(const std::string& err) : std::runtime_error(err) {}
 };
 
-typedef uint32_t hash_t;
+using string_dict_hash_t = uint32_t;
 
 class StringDictionary {
  public:
@@ -138,7 +138,7 @@ class StringDictionary {
   };
 
   void processDictionaryFutures(
-      std::vector<std::future<std::vector<std::pair<hash_t, unsigned int>>>>&
+      std::vector<std::future<std::vector<std::pair<string_dict_hash_t, unsigned int>>>>&
           dictionary_futures);
   size_t getNumStringsFromStorage(const size_t storage_slots) const noexcept;
   bool fillRateIsHigh(const size_t num_strings) const noexcept;
@@ -149,11 +149,11 @@ class StringDictionary {
       const size_t storage_high_water_mark,
       const std::vector<String>& input_strings,
       const std::vector<size_t>& string_memory_ids,
-      const std::vector<hash_t>& input_strings_hashes) noexcept;
+      const std::vector<string_dict_hash_t>& input_strings_hashes) noexcept;
   int32_t getOrAddImpl(const std::string_view& str) noexcept;
   template <class String>
   void hashStrings(const std::vector<String>& string_vec,
-                   std::vector<hash_t>& hashes) const noexcept;
+                   std::vector<string_dict_hash_t>& hashes) const noexcept;
   template <class T, class String>
   void getOrAddBulkRemote(const std::vector<String>& string_vec, T* encoded_vec);
   int32_t getUnlocked(const std::string& str) const noexcept;
@@ -161,20 +161,21 @@ class StringDictionary {
   std::string getStringChecked(const int string_id) const noexcept;
   std::pair<char*, size_t> getStringBytesChecked(const int string_id) const noexcept;
   template <class String>
-  uint32_t computeBucket(const hash_t hash,
-                         const String& input_string,
-                         const std::vector<int32_t>& string_id_hash_table) const noexcept;
+  uint32_t computeBucket(
+      const string_dict_hash_t hash,
+      const String& input_string,
+      const std::vector<int32_t>& string_id_string_dict_hash_table) const noexcept;
   template <class String>
   uint32_t computeBucketFromStorageAndMemory(
-      const hash_t input_string_hash,
+      const string_dict_hash_t input_string_hash,
       const String& input_string,
-      const std::vector<int32_t>& string_id_hash_table,
+      const std::vector<int32_t>& string_id_string_dict_hash_table,
       const size_t storage_high_water_mark,
       const std::vector<String>& input_strings,
       const std::vector<size_t>& string_memory_ids) const noexcept;
   uint32_t computeUniqueBucketWithHash(
-      const hash_t hash,
-      const std::vector<int32_t>& string_id_hash_table) noexcept;
+      const string_dict_hash_t hash,
+      const std::vector<int32_t>& string_id_string_dict_hash_table) noexcept;
   void checkAndConditionallyIncreasePayloadCapacity(const size_t write_length);
   void checkAndConditionallyIncreaseOffsetCapacity(const size_t write_length);
 
@@ -204,8 +205,8 @@ class StringDictionary {
 
   size_t str_count_;
   size_t collisions_;
-  std::vector<int32_t> string_id_hash_table_;
-  std::vector<hash_t> hash_cache_;
+  std::vector<int32_t> string_id_string_dict_hash_table_;
+  std::vector<string_dict_hash_t> hash_cache_;
   std::vector<int32_t> sorted_cache;
   bool isTemp_;
   bool materialize_hashes_;
