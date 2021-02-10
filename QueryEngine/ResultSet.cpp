@@ -783,7 +783,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
 
     if (UNLIKELY(isNull(entry_ti, lhs_v, float_argument_input) &&
                  isNull(entry_ti, rhs_v, float_argument_input))) {
-      return false;
+      continue;
     }
     if (UNLIKELY(isNull(entry_ti, lhs_v, float_argument_input) &&
                  !isNull(entry_ti, rhs_v, float_argument_input))) {

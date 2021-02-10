@@ -2508,6 +2508,80 @@ TEST(Select, OrderBy) {
   }
 }
 
+TEST(Select, OrderByNull) {
+  for (auto const dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    char const* const prefix =
+        "SELECT t2.x, t0.x FROM coalesce_cols_test_2 t2 LEFT JOIN coalesce_cols_test_0 "
+        "t0 ON t2.x=t0.x ORDER BY t0.x ";
+    std::vector<std::string> const tests{
+        "ASC NULLS FIRST", "ASC NULLS LAST", "DESC NULLS FIRST", "DESC NULLS LAST"};
+    constexpr size_t NROWS = 20;
+    for (size_t t = 0; t < tests.size(); ++t) {
+      std::string const query = prefix + tests[t] + ", t2.x;";
+      auto rows = run_multiple_agg(query, dt);
+      EXPECT_EQ(rows->colCount(), 2u) << query;
+      EXPECT_EQ(rows->rowCount(), NROWS) << query;
+      for (size_t i = 0; i < NROWS; ++i) {
+        switch (t) {
+          case 0:
+            if (i < 10) {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i) + 10)
+                  << query << "i=" << i;
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 1, true)), NULL_INT)
+                  << query << "i=" << i;
+            } else {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i) - 10)
+                  << query << "i=" << i;
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 1, true)), int64_t(i) - 10)
+                  << query << "i=" << i;
+            }
+            break;
+          case 1:
+            EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i))
+                << query << "i=" << i;
+            if (i < 10) {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 1, true)), int64_t(i))
+                  << query << "i=" << i;
+            } else {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 1, true)), NULL_INT)
+                  << query << "i=" << i;
+            }
+            break;
+          case 2:
+            if (i < 10) {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i) + 10)
+                  << query << "i=" << i;
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 1, true)), NULL_INT)
+                  << query << "i=" << i;
+            } else {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), 19 - int64_t(i))
+                  << query << "i=" << i;
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 1, true)), 19 - int64_t(i))
+                  << query << "i=" << i;
+            }
+            break;
+          case 3:
+            if (i < 10) {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), 9 - int64_t(i))
+                  << query << "i=" << i;
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 1, true)), 9 - int64_t(i))
+                  << query << "i=" << i;
+            } else {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i))
+                  << query << "i=" << i;
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 1, true)), NULL_INT)
+                  << query << "i=" << i;
+            }
+            break;
+          default:
+            EXPECT_TRUE(false) << t;
+        }
+      }
+    }
+  }
+}
+
 TEST(Select, VariableLengthOrderBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
