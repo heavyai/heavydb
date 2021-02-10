@@ -885,6 +885,7 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnCpu(
   if (auto generic_hash_table = initHashTableOnCpuFromCache(cache_key)) {
     if (auto hash_table =
             std::dynamic_pointer_cast<BaselineHashTable>(generic_hash_table)) {
+      VLOG(1) << "Using cached CPU hash table for initialization.";
       // See if a hash table of a different layout was returned.
       // If it was OneToMany, we can reuse it on ManyToMany.
       if (layout == HashType::ManyToMany &&

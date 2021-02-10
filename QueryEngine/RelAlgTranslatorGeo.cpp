@@ -972,7 +972,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
     function_name = "ST_Intersects";
     negate_result = true;
   }
-  if (func_resolve(function_name, "ST_Contains"sv, "ST_Intersects"sv)) {
+  if (func_resolve(
+          function_name, "ST_Contains"sv, "ST_Intersects"sv, "ST_Approx_Overlaps"sv)) {
     with_bounds = true;
   }
 

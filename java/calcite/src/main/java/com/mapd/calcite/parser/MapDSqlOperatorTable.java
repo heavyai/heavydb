@@ -195,6 +195,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new ST_Contains());
     opTab.addOperator(new ST_Intersects());
     opTab.addOperator(new ST_Overlaps());
+    opTab.addOperator(new ST_Approx_Overlaps());
     opTab.addOperator(new ST_Disjoint());
     opTab.addOperator(new ST_Within());
     opTab.addOperator(new ST_DWithin());
@@ -912,6 +913,32 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   static class ST_Overlaps extends SqlFunction {
     ST_Overlaps() {
       super("ST_Overlaps",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 2;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> st_overlaps_sig =
+              new java.util.ArrayList<SqlTypeFamily>();
+      st_overlaps_sig.add(SqlTypeFamily.ANY);
+      st_overlaps_sig.add(SqlTypeFamily.ANY);
+      return st_overlaps_sig;
+    }
+  }
+
+  static class ST_Approx_Overlaps extends SqlFunction {
+    ST_Approx_Overlaps() {
+      super("ST_Approx_Overlaps",
               SqlKind.OTHER_FUNCTION,
               null,
               null,

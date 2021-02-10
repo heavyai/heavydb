@@ -736,6 +736,8 @@ static const std::unordered_set<std::string> overlaps_supported_functions = {
     "ST_Intersects_Polygon_MultiPolygon",
     "ST_Intersects_MultiPolygon_MultiPolygon",
     "ST_Intersects_MultiPolygon_Polygon",
+    "ST_Intersects_MultiPolygon_Point",
+    "ST_Approx_Overlaps_MultiPolygon_Point",
     "ST_Overlaps"};
 
 static const std::unordered_set<std::string> requires_many_to_many = {
@@ -861,7 +863,11 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
           kBOOLEAN, kOVERLAPS, kONE, rewritten_lhs, rewritten_rhs);
 
       VLOG(1) << "Successfully converted to overlaps join";
-      return OverlapsJoinConjunction{{expr}, {overlaps_oper}};
+      if (func_oper->getName() == "ST_Approx_Overlaps_MultiPolygon_Point"sv) {
+        return OverlapsJoinConjunction{{}, {overlaps_oper}};
+      } else {
+        return OverlapsJoinConjunction{{expr}, {overlaps_oper}};
+      }
     } else {
       VLOG(1) << "Overlaps join not enabled for " << func_oper->getName();
     }
