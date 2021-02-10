@@ -162,7 +162,7 @@ TEST(OVERLAPS_JOIN_PARAM, Check_Overlaps_Join_Hint) {
 
   {
     const auto wrong_q2 =
-        "SELECT /*+ overlaps_bucket_threshold(1.718) */ a.id FROM geospatial_test a "
+        "SELECT /*+ overlaps_bucket_threshold(91.718) */ a.id FROM geospatial_test a "
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto wrong_q2_hints = QR::get()->getParsedQueryHint(wrong_q2);

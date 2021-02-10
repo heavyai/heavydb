@@ -279,6 +279,10 @@ void CommandLineOptions::fillOptions() {
       po::value<size_t>(&g_overlaps_max_table_size_bytes)
           ->default_value(g_overlaps_max_table_size_bytes),
       "The maximum size in bytes of the hash table for an overlaps hash join.");
+  help_desc.add_options()("overlaps-target-entries-per-bin",
+                          po::value<double>(&g_overlaps_target_entries_per_bin)
+                              ->default_value(g_overlaps_target_entries_per_bin),
+                          "The target number of hash entries per bin for overlaps join");
   if (!dist_v5_) {
     help_desc.add_options()("port,p",
                             po::value<int>(&system_parameters.omnisci_server_port)

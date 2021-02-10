@@ -94,6 +94,7 @@ bool g_enable_columnar_output{false};
 bool g_enable_overlaps_hashjoin{true};
 bool g_enable_hashjoin_many_to_many{false};
 size_t g_overlaps_max_table_size_bytes{1024 * 1024 * 1024};
+double g_overlaps_target_entries_per_bin{1.3};
 bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
 size_t g_big_group_threshold{20000};

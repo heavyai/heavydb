@@ -34,6 +34,8 @@ Fragmenter_Namespace::TableInfo copy_table_info(
   return table_info_copy;
 }
 
+}  // namespace
+
 Fragmenter_Namespace::TableInfo build_table_info(
     const std::vector<const TableDescriptor*>& shard_tables) {
   size_t total_number_of_tuples{0};
@@ -51,8 +53,6 @@ Fragmenter_Namespace::TableInfo build_table_info(
   table_info_all_shards.setPhysicalNumTuples(total_number_of_tuples);
   return table_info_all_shards;
 }
-
-}  // namespace
 
 Fragmenter_Namespace::TableInfo InputTableInfoCache::getTableInfo(const int table_id) {
   const auto it = cache_.find(table_id);

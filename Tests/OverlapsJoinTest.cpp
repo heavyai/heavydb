@@ -426,6 +426,211 @@ TEST_F(OverlapsTest, EmptyPolyPolyJoin) {
   });
 }
 
+class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
+ public:
+  struct ExpectedValues {
+    size_t entry_count;
+    size_t emitted_keys_count;
+  };
+
+  static std::shared_ptr<OverlapsJoinHashTableMock> getInstance(
+      const std::shared_ptr<Analyzer::BinOper> condition,
+      const std::vector<InputTableInfo>& query_infos,
+      const Data_Namespace::MemoryLevel memory_level,
+      ColumnCacheMap& column_cache,
+      Executor* executor,
+      const int device_count,
+      const QueryHint& query_hint,
+      const std::vector<OverlapsJoinHashTableMock::ExpectedValues>& expected_values) {
+    auto hash_join = std::make_shared<OverlapsJoinHashTableMock>(condition,
+                                                                 query_infos,
+                                                                 memory_level,
+                                                                 column_cache,
+                                                                 executor,
+                                                                 device_count,
+                                                                 expected_values);
+    hash_join->registerQueryHint(query_hint);
+    hash_join->reifyWithLayout(HashType::OneToMany);
+    return hash_join;
+  }
+
+  OverlapsJoinHashTableMock(const std::shared_ptr<Analyzer::BinOper> condition,
+                            const std::vector<InputTableInfo>& query_infos,
+                            const Data_Namespace::MemoryLevel memory_level,
+                            ColumnCacheMap& column_cache,
+                            Executor* executor,
+                            const int device_count,
+                            const std::vector<ExpectedValues>& expected_values)
+      : OverlapsJoinHashTable(condition,
+                              query_infos,
+                              memory_level,
+                              column_cache,
+                              executor,
+                              normalize_column_pairs(condition.get(),
+                                                     *executor->getCatalog(),
+                                                     executor->getTemporaryTables()),
+                              device_count)
+      , expected_values_per_step_(expected_values) {}
+
+ protected:
+  void reifyImpl(std::vector<ColumnsForDevice>& columns_per_device,
+                 const Fragmenter_Namespace::TableInfo& query_info,
+                 const HashType layout,
+                 const size_t shard_count,
+                 const size_t entry_count,
+                 const size_t emitted_keys_count) final {
+    EXPECT_EQ(step_, expected_values_per_step_.size());
+    EXPECT_LT(step_ - 1, expected_values_per_step_.size());
+    auto& expected_values = expected_values_per_step_[step_ - 1];
+    EXPECT_EQ(entry_count, expected_values.entry_count);
+    EXPECT_EQ(emitted_keys_count, expected_values.emitted_keys_count);
+    return;
+  }
+
+  // returns entry_count, emitted_keys_count
+  std::pair<size_t, size_t> approximateTupleCount(
+      const std::vector<double>& bucket_sizes_for_dimension,
+      std::vector<ColumnsForDevice>& columns_per_device) final {
+    auto [entry_count, emitted_keys_count] = OverlapsJoinHashTable::approximateTupleCount(
+        bucket_sizes_for_dimension, columns_per_device);
+    return std::make_pair(entry_count, emitted_keys_count);
+  }
+
+  // returns entry_count, emitted_keys_count
+  std::pair<size_t, size_t> computeHashTableCounts(
+      const size_t shard_count,
+      const std::vector<double>& bucket_sizes_for_dimension,
+      std::vector<ColumnsForDevice>& columns_per_device) final {
+    auto [entry_count, emitted_keys_count] =
+        OverlapsJoinHashTable::computeHashTableCounts(
+            shard_count, bucket_sizes_for_dimension, columns_per_device);
+    EXPECT_LT(step_, expected_values_per_step_.size());
+    auto& expected_values = expected_values_per_step_[step_];
+    EXPECT_EQ(entry_count, expected_values.entry_count);
+    EXPECT_EQ(emitted_keys_count, expected_values.emitted_keys_count);
+    step_++;
+    return std::make_pair(entry_count, emitted_keys_count);
+  }
+
+  std::vector<ExpectedValues> expected_values_per_step_;
+  size_t step_{0};
+};
+
+class BucketSizeTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS bucket_size_poly;");
+    QR::get()->runDDLStatement("CREATE TABLE bucket_size_poly (poly MULTIPOLYGON);");
+    QR::get()->runSQL(
+        R"(INSERT INTO bucket_size_poly VALUES ('MULTIPOLYGON(((0 0, 0 2, 2 0, 2 2)))');)",
+        ExecutorDeviceType::CPU);
+    QR::get()->runSQL(
+        R"(INSERT INTO bucket_size_poly VALUES ('MULTIPOLYGON(((0 0, 0 2, 2 0, 2 2)))');)",
+        ExecutorDeviceType::CPU);
+    QR::get()->runSQL(
+        R"(INSERT INTO bucket_size_poly VALUES ('MULTIPOLYGON(((2 2, 2 4, 4 2, 4 4)))');)",
+        ExecutorDeviceType::CPU);
+    QR::get()->runSQL(
+        R"(INSERT INTO bucket_size_poly VALUES ('MULTIPOLYGON(((0 0, 0 50, 50 0, 50 50)))');)",
+        ExecutorDeviceType::CPU);
+
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS bucket_size_pt;");
+    QR::get()->runDDLStatement("CREATE TABLE bucket_size_pt (pt POINT);");
+  }
+
+  void TearDown() override {
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS bucket_size_poly;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS bucket_size_pt;");
+  }
+
+ public:
+  static std::pair<std::shared_ptr<Analyzer::BinOper>, std::vector<InputTableInfo>>
+  getOverlapsBuildInfo() {
+    auto catalog = QR::get()->getCatalog();
+    CHECK(catalog);
+
+    std::vector<InputTableInfo> query_infos;
+
+    const auto pts_td = catalog->getMetadataForTable("bucket_size_pt");
+    CHECK(pts_td);
+    const auto pts_cd = catalog->getMetadataForColumn(pts_td->tableId, "pt");
+    CHECK(pts_cd);
+    auto pt_col_var = std::make_shared<Analyzer::ColumnVar>(
+        pts_cd->columnType, pts_cd->tableId, pts_cd->columnId, 0);
+    query_infos.emplace_back(InputTableInfo{pts_td->tableId, build_table_info({pts_td})});
+
+    const auto poly_td = catalog->getMetadataForTable("bucket_size_poly");
+    CHECK(poly_td);
+    const auto poly_cd = catalog->getMetadataForColumn(poly_td->tableId, "poly");
+    CHECK(poly_cd);
+    const auto bounds_cd =
+        catalog->getMetadataForColumn(poly_td->tableId, poly_cd->columnId + 4);
+    CHECK(bounds_cd && bounds_cd->columnType.is_array());
+    auto poly_col_var = std::make_shared<Analyzer::ColumnVar>(
+        bounds_cd->columnType, poly_cd->tableId, bounds_cd->columnId, 1);
+    query_infos.emplace_back(
+        InputTableInfo{poly_td->tableId, build_table_info({poly_td})});
+
+    auto condition = std::make_shared<Analyzer::BinOper>(
+        kBOOLEAN, kOVERLAPS, kANY, pt_col_var, poly_col_var);
+    return std::make_pair(condition, query_infos);
+  }
+};
+
+TEST_F(BucketSizeTest, OverlapsTunerEarlyOut) {
+  // 3 steps, early out due to increasing keys per bin
+  auto catalog = QR::get()->getCatalog();
+  CHECK(catalog);
+  auto executor = QR::get()->getExecutor();
+  executor->setCatalog(catalog.get());
+
+  auto [condition, query_infos] = BucketSizeTest::getOverlapsBuildInfo();
+
+  ColumnCacheMap column_cache;
+  std::vector<OverlapsJoinHashTableMock::ExpectedValues> expected_values;
+  expected_values.emplace_back(OverlapsJoinHashTableMock::ExpectedValues{1340, 688});
+  expected_values.emplace_back(OverlapsJoinHashTableMock::ExpectedValues{1340, 688});
+
+  auto hash_table =
+      OverlapsJoinHashTableMock::getInstance(condition,
+                                             query_infos,
+                                             Data_Namespace::MemoryLevel::CPU_LEVEL,
+                                             column_cache,
+                                             executor.get(),
+                                             /*device_count=*/1,
+                                             QueryHint::defaults(),
+                                             expected_values);
+  CHECK(hash_table);
+}
+
+TEST_F(BucketSizeTest, OverlapsTooBig) {
+  auto catalog = QR::get()->getCatalog();
+  CHECK(catalog);
+  auto executor = QR::get()->getExecutor();
+  executor->setCatalog(catalog.get());
+
+  auto [condition, query_infos] = BucketSizeTest::getOverlapsBuildInfo();
+
+  ColumnCacheMap column_cache;
+  std::vector<OverlapsJoinHashTableMock::ExpectedValues> expected_values;
+  expected_values.emplace_back(OverlapsJoinHashTableMock::ExpectedValues{1340, 688});
+  expected_values.emplace_back(OverlapsJoinHashTableMock::ExpectedValues{1340, 688});
+
+  QueryHint hint;
+  hint.hint_delivered = true;
+  hint.overlaps_max_size = 2;
+  auto hash_table =
+      OverlapsJoinHashTableMock::getInstance(condition,
+                                             query_infos,
+                                             Data_Namespace::MemoryLevel::CPU_LEVEL,
+                                             column_cache,
+                                             executor.get(),
+                                             /*device_count=*/1,
+                                             hint,
+                                             expected_values);
+  CHECK(hash_table);
+}
+
 int main(int argc, char* argv[]) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

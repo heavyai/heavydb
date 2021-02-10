@@ -1868,7 +1868,7 @@ class RelAlgDagBuilder : public boost::noncopyable {
             CHECK(target->second.getListOptions().size() == 1);
             double overlaps_bucket_threshold =
                 std::stod(target->second.getListOptions()[0]);
-            if (overlaps_bucket_threshold >= 0.0 && overlaps_bucket_threshold <= 1.0) {
+            if (overlaps_bucket_threshold >= 0.0 && overlaps_bucket_threshold <= 90.0) {
               query_hint_.hint_delivered = true;
               query_hint_.overlaps_bucket_threshold = overlaps_bucket_threshold;
             } else {

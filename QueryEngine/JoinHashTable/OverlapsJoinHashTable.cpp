@@ -87,17 +87,10 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
   if (total_entries > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
     throw TooManyHashEntries();
   }
-  const auto shard_count = memory_level == Data_Namespace::GPU_LEVEL
-                               ? BaselineJoinHashTable::getShardCountForCondition(
-                                     condition.get(), executor, inner_outer_pairs)
-                               : 0;
-  const auto entries_per_device =
-      get_entries_per_device(total_entries, shard_count, device_count, memory_level);
+
   auto join_hash_table = std::make_shared<OverlapsJoinHashTable>(condition,
                                                                  query_infos,
                                                                  memory_level,
-                                                                 layout,
-                                                                 entries_per_device,
                                                                  column_cache,
                                                                  executor,
                                                                  inner_outer_pairs,
@@ -198,9 +191,19 @@ struct BucketSizeTuner {
       , step(step)
       , min_threshold(min_threshold) {}
 
-  bool operator()() {
+  bool operator()(const std::vector<double> last_iteration_bucket_sizes) {
     bucket_threshold /= step;
+    if (!last_iteration_bucket_sizes.empty() &&
+        last_iteration_bucket_sizes == previous_bucket_sizes) {
+      // abort the tuning if the bucket size does not change. note that this will always
+      // run at least two steps, as the first step will have no computed bucket sizes
+      VLOG(1) << "Aborting overlaps tuning as bucket size is no longer changing.";
+      return false;
+    }
     num_steps++;
+
+    previous_bucket_sizes = last_iteration_bucket_sizes;
+
     return bucket_threshold >= min_threshold;
   }
 
@@ -220,14 +223,6 @@ struct BucketSizeTuner {
                          columns_per_device.front().join_column_types[0],
                          inner_outer_pairs,
                          executor);
-
-    // re-compute bucket counts per device based on global bucket size
-    CHECK_EQ(columns_per_device.size(), size_t(device_count));
-    for (int device_id = 0; device_id < device_count; ++device_id) {
-      auto& columns_for_device = columns_per_device[device_id];
-      columns_for_device.setBucketInfo(bucket_sizes_for_dimension, inner_outer_pairs);
-    }
-
     return bucket_sizes_for_dimension;
   }
 
@@ -235,6 +230,8 @@ struct BucketSizeTuner {
   size_t num_steps{0};
   const double step;
   const double min_threshold;
+
+  std::vector<double> previous_bucket_sizes;
 };
 
 std::ostream& operator<<(std::ostream& os, const BucketSizeTuner& tuner) {
@@ -328,7 +325,7 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
     // compute bucket sizes based on the user provided threshold
     BucketSizeTuner tuner(
         *overlaps_threshold_override, /*step=*/1.0, /*min_threshold=*/0.0);
-    bucket_sizes_for_dimension_ =
+    auto bucket_sizes =
         tuner.computeBucketSizes(getEffectiveMemoryLevel(inner_outer_pairs_),
                                  columns_per_device,
                                  inner_outer_pairs_,
@@ -336,8 +333,8 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
                                  executor_);
 
     auto [entry_count, emitted_keys_count] =
-        computeHashTableCounts(shard_count, columns_per_device);
-
+        computeHashTableCounts(shard_count, bucket_sizes, columns_per_device);
+    setBucketSizeInfo(bucket_sizes, columns_per_device, device_count_);
     // reifyImpl will check the hash table cache for an appropriate hash table w/ those
     // bucket sizes (or within tolerances) if a hash table exists use it, otherwise build
     // one
@@ -357,27 +354,18 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
       overlaps_bucket_threshold = cached_bucket_threshold_opt->first;
       VLOG(1) << "Auto tuner using cached overlaps hash table size of: "
               << overlaps_bucket_threshold;
-      bucket_sizes_for_dimension_ = cached_bucket_threshold_opt->second;
+      auto bucket_sizes = cached_bucket_threshold_opt->second;
 
-      OverlapsHashTableCacheKey hash_table_cache_key(cache_key,
-                                                     bucket_sizes_for_dimension_);
+      OverlapsHashTableCacheKey hash_table_cache_key(cache_key, bucket_sizes);
       if (auto hash_table_cache_opt =
               hash_table_cache_->getWithKey(hash_table_cache_key)) {
         // if we already have a built hash table, we can skip the scans required for
         // computing bucket size and tuple count
         auto key = hash_table_cache_opt->first;
-        bucket_sizes_for_dimension_ =
-            key.bucket_sizes;  // reset as the hash table sizes can vary
+        // reset as the hash table sizes can vary a bit
+        setBucketSizeInfo(key.bucket_sizes, columns_per_device, device_count_);
         auto hash_table = hash_table_cache_opt->second;
         CHECK(hash_table);
-
-        // set bucket size information
-        CHECK_EQ(columns_per_device.size(), size_t(device_count_));
-        for (int device_id = 0; device_id < device_count_; ++device_id) {
-          auto& columns_for_device = columns_per_device[device_id];
-          columns_for_device.setBucketInfo(bucket_sizes_for_dimension_,
-                                           inner_outer_pairs_);
-        }
 
         VLOG(1) << "Using cached hash table bucket size";
 
@@ -393,7 +381,7 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
         BucketSizeTuner tuner(
             overlaps_bucket_threshold, /*step=*/1, /*min_threshold=*/0.0);
 
-        bucket_sizes_for_dimension_ =
+        auto bucket_sizes =
             tuner.computeBucketSizes(getEffectiveMemoryLevel(inner_outer_pairs_),
                                      columns_per_device,
                                      inner_outer_pairs_,
@@ -401,7 +389,9 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
                                      executor_);
 
         auto [entry_count, emitted_keys_count] =
-            computeHashTableCounts(shard_count, columns_per_device);
+            computeHashTableCounts(shard_count, bucket_sizes, columns_per_device);
+        setBucketSizeInfo(bucket_sizes, columns_per_device, device_count_);
+
         reifyImpl(columns_per_device,
                   query_info,
                   layout,
@@ -418,49 +408,79 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
       size_t entry_count{0};
       size_t emitted_keys_count{0};
       double chosen_overlaps_threshold{-1};
+      double last_keys_per_bin{-1};
+      const size_t max_hash_table_size_for_uncapped_min_keys_per_bin{2097152};  // 2MB
 
       BucketSizeTuner tuner(
-          /*initial_threshold=*/0.1, /*step=*/10.0, /*min_threshold=*/1e-5);
+          /*initial_threshold=*/1.0, /*step=*/2.0, /*min_threshold=*/1e-7);
       VLOG(1) << "Running overlaps join size auto tune with parameters: " << tuner;
 
-      while (tuner()) {
-        bucket_sizes_for_dimension_ =
+      std::vector<double> bucket_sizes;
+      while (tuner(bucket_sizes)) {
+        bucket_sizes =
             tuner.computeBucketSizes(getEffectiveMemoryLevel(inner_outer_pairs_),
                                      columns_per_device,
                                      inner_outer_pairs_,
                                      device_count_,
                                      executor_);
-        std::tie(entry_count, emitted_keys_count) =
-            computeHashTableCounts(shard_count, columns_per_device);
+        const auto [crt_entry_count, crt_emitted_keys_count] =
+            computeHashTableCounts(shard_count, bucket_sizes, columns_per_device);
 
-        size_t hash_table_size = calculateHashTableSize(
-            bucket_sizes_for_dimension_.size(), emitted_keys_count, entry_count);
-        VLOG(1) << "Tuner output: " << tuner << " giving entry_count: " << entry_count
-                << " hash table size " << hash_table_size;
-        if (hash_table_size > overlaps_max_table_size_bytes) {
-          VLOG(1) << "Reached hash table size limit of " << overlaps_max_table_size_bytes
-                  << ", rejecting threshold value and using previous threshold value "
-                  << chosen_overlaps_threshold;
-          tuner.bucket_threshold = chosen_overlaps_threshold;
-          bucket_sizes_for_dimension_ =
-              tuner.computeBucketSizes(getEffectiveMemoryLevel(inner_outer_pairs_),
-                                       columns_per_device,
-                                       inner_outer_pairs_,
-                                       device_count_,
-                                       executor_);
-          std::tie(entry_count, emitted_keys_count) =
-              computeHashTableCounts(shard_count, columns_per_device);
+        const size_t hash_table_size = calculateHashTableSize(
+            bucket_sizes.size(), crt_emitted_keys_count, crt_entry_count);
+        const double keys_per_bin = crt_emitted_keys_count / (crt_entry_count / 2.0);
+        VLOG(1) << "Tuner output: " << tuner << " giving entry_count: " << crt_entry_count
+                << ", emitted_keys " << crt_emitted_keys_count << ", hash table size "
+                << hash_table_size << ", keys per bin " << keys_per_bin;
 
-          size_t hash_table_size = calculateHashTableSize(
-              bucket_sizes_for_dimension_.size(), emitted_keys_count, entry_count);
-          VLOG(1) << "Final tuner output: " << tuner
-                  << " giving entry_count: " << entry_count << " hash table size "
-                  << hash_table_size;
+        // decision points for termination prior to reaching the minimum threshold
+        const bool previous_iteration_valid =
+            last_keys_per_bin > 0 && chosen_overlaps_threshold > 0;
+        const bool hash_table_too_big = hash_table_size > overlaps_max_table_size_bytes;
+        const bool keys_per_bin_increasing = keys_per_bin > last_keys_per_bin;
+        if (previous_iteration_valid && (hash_table_too_big || keys_per_bin_increasing)) {
+          if (hash_table_too_big) {
+            VLOG(1) << "Reached hash table size limit: " << overlaps_max_table_size_bytes
+                    << " with " << hash_table_size << " byte hash table, " << keys_per_bin
+                    << " keys per bin.";
+          } else if (keys_per_bin_increasing) {
+            VLOG(1) << "Keys per bin increasing from " << last_keys_per_bin << " to "
+                    << keys_per_bin;
+          }
+          VLOG(1) << "Using previous threshold value " << chosen_overlaps_threshold;
+          // reset bucket size info, as it will get overwriten with calculate counts above
+          setBucketSizeInfo(
+              bucket_sizes_for_dimension_, columns_per_device, device_count_);
           break;
         }
         chosen_overlaps_threshold = tuner.bucket_threshold;
+        last_keys_per_bin = keys_per_bin;
+        setBucketSizeInfo(bucket_sizes, columns_per_device, device_count_);
+        entry_count = crt_entry_count;
+        emitted_keys_count = crt_emitted_keys_count;
+        const bool keys_per_bin_under_threshold =
+            hash_table_size > max_hash_table_size_for_uncapped_min_keys_per_bin &&
+            keys_per_bin < g_overlaps_target_entries_per_bin;
+        if (keys_per_bin_under_threshold) {
+          VLOG(1) << "Hash table reached size " << hash_table_size << " over threshold "
+                  << max_hash_table_size_for_uncapped_min_keys_per_bin
+                  << " with keys per bin " << keys_per_bin << " under threshold "
+                  << g_overlaps_target_entries_per_bin
+                  << ". Terminating bucket size loop.";
+          break;
+        }
       }
-
+      const size_t hash_table_size = calculateHashTableSize(
+          bucket_sizes_for_dimension_.size(), emitted_keys_count, entry_count);
+      const double keys_per_bin = emitted_keys_count / (entry_count / 2.0);
+      VLOG(1) << "Final tuner output: " << tuner << " giving entry_count: " << entry_count
+              << ", emitted_keys_count " << emitted_keys_count << " hash table size "
+              << hash_table_size << ", keys per bin " << keys_per_bin;
+      CHECK(!bucket_sizes_for_dimension_.empty());
+      VLOG(1) << "Final bucket sizes: ";
+      for (size_t dim = 0; dim < bucket_sizes_for_dimension_.size(); dim++) {
+        VLOG(1) << "dim[" << dim << "]: " << 1.0 / bucket_sizes_for_dimension_[dim];
+      }
       CHECK_GE(chosen_overlaps_threshold, double(0));
       if (!cache_key_contains_intermediate_table(cache_key)) {
         auto cache_value =
@@ -533,10 +553,11 @@ ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDevice(
 
 std::pair<size_t, size_t> OverlapsJoinHashTable::computeHashTableCounts(
     const size_t shard_count,
+    const std::vector<double>& bucket_sizes_for_dimension,
     std::vector<ColumnsForDevice>& columns_per_device) {
-  CHECK(!bucket_sizes_for_dimension_.empty());
+  CHECK(!bucket_sizes_for_dimension.empty());
   const auto [tuple_count, emitted_keys_count] =
-      approximateTupleCount(columns_per_device);
+      approximateTupleCount(bucket_sizes_for_dimension, columns_per_device);
   const auto entry_count = 2 * std::max(tuple_count, size_t(1));
 
   return std::make_pair(
@@ -545,7 +566,8 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::computeHashTableCounts(
 }
 
 std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
-    const std::vector<ColumnsForDevice>& columns_per_device) {
+    const std::vector<double>& bucket_sizes_for_dimension,
+    std::vector<ColumnsForDevice>& columns_per_device) {
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
   CountDistinctDescriptor count_distinct_desc{
       CountDistinctImplType::Bitmap,
@@ -562,6 +584,15 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
   if (columns_per_device.front().join_columns.front().num_elems == 0) {
     return std::make_pair(0, 0);
   }
+
+  // TODO: state management in here should be revisited, but this should be safe enough
+  // for now
+  // re-compute bucket counts per device based on global bucket size
+  for (size_t device_id = 0; device_id < columns_per_device.size(); ++device_id) {
+    auto& columns_for_device = columns_per_device[device_id];
+    columns_for_device.setBucketInfo(bucket_sizes_for_dimension, inner_outer_pairs_);
+  }
+
   // Number of keys must match dimension of buckets
   CHECK_EQ(columns_per_device.front().join_columns.size(),
            columns_per_device.front().join_buckets.size());
@@ -574,7 +605,7 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
         columns_per_device.front().join_columns.front().num_elems,
         composite_key_info.cache_key_chunks,
         condition_->get_optype(),
-        bucket_sizes_for_dimension_};
+        bucket_sizes_for_dimension};
     const auto cached_count_info = getApproximateTupleCountFromCache(cache_key);
     if (cached_count_info) {
       VLOG(1) << "Using a cached tuple count: " << cached_count_info->first
@@ -702,11 +733,27 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
 #endif  // HAVE_CUDA
 }
 
+void OverlapsJoinHashTable::setBucketSizeInfo(
+    const std::vector<double>& bucket_sizes,
+    std::vector<ColumnsForDevice>& columns_per_device,
+    const size_t device_count) {
+  // set global bucket size
+  bucket_sizes_for_dimension_ = bucket_sizes;
+
+  // re-compute bucket counts per device based on global bucket size
+  CHECK_EQ(columns_per_device.size(), size_t(device_count));
+  for (size_t device_id = 0; device_id < device_count; ++device_id) {
+    auto& columns_for_device = columns_per_device[device_id];
+    columns_for_device.setBucketInfo(bucket_sizes_for_dimension_, inner_outer_pairs_);
+  }
+}
+
 size_t OverlapsJoinHashTable::getKeyComponentWidth() const {
   return 8;
 }
 
 size_t OverlapsJoinHashTable::getKeyComponentCount() const {
+  CHECK(!bucket_sizes_for_dimension_.empty());
   return bucket_sizes_for_dimension_.size();
 }
 

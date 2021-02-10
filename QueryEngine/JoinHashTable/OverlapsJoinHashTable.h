@@ -78,8 +78,6 @@ class OverlapsJoinHashTable : public HashJoin {
   OverlapsJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
                         const std::vector<InputTableInfo>& query_infos,
                         const Data_Namespace::MemoryLevel memory_level,
-                        HashType hash_layout_type,
-                        const size_t entry_count,
                         ColumnCacheMap& column_cache,
                         Executor* executor,
                         const std::vector<InnerOuter>& inner_outer_pairs,
@@ -132,12 +130,12 @@ class OverlapsJoinHashTable : public HashJoin {
 
   void reifyWithLayout(const HashType layout);
 
-  void reifyImpl(std::vector<ColumnsForDevice>& columns_per_device,
-                 const Fragmenter_Namespace::TableInfo& query_info,
-                 const HashType layout,
-                 const size_t shard_count,
-                 const size_t entry_count,
-                 const size_t emitted_keys_count);
+  virtual void reifyImpl(std::vector<ColumnsForDevice>& columns_per_device,
+                         const Fragmenter_Namespace::TableInfo& query_info,
+                         const HashType layout,
+                         const size_t shard_count,
+                         const size_t entry_count,
+                         const size_t emitted_keys_count);
 
   void reifyForDevice(const ColumnsForDevice& columns_for_device,
                       const HashType layout,
@@ -156,12 +154,19 @@ class OverlapsJoinHashTable : public HashJoin {
       DeviceAllocator* dev_buff_owner);
 
   // returns entry_count, emitted_keys_count
-  std::pair<size_t, size_t> approximateTupleCount(const std::vector<ColumnsForDevice>&);
+  virtual std::pair<size_t, size_t> approximateTupleCount(
+      const std::vector<double>& bucket_sizes_for_dimension,
+      std::vector<ColumnsForDevice>&);
 
   // returns entry_count, emitted_keys_count
-  std::pair<size_t, size_t> computeHashTableCounts(
+  virtual std::pair<size_t, size_t> computeHashTableCounts(
       const size_t shard_count,
+      const std::vector<double>& bucket_sizes_for_dimension,
       std::vector<ColumnsForDevice>& columns_per_device);
+
+  void setBucketSizeInfo(const std::vector<double>& bucket_sizes,
+                         std::vector<ColumnsForDevice>& columns_per_device,
+                         const size_t device_count);
 
   size_t getKeyComponentWidth() const;
 
