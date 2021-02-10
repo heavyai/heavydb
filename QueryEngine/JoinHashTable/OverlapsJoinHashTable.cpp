@@ -892,8 +892,8 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnCpu(
           hash_table->getLayout() == HashType::OneToMany) {
         // use the cached hash table
         layout_override_ = HashType::ManyToMany;
-        return hash_table;
       }
+      return hash_table;
     }
   }
   CHECK(layoutRequiresAdditionalBuffers(layout));
