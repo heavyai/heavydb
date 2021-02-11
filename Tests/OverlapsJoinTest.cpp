@@ -242,7 +242,8 @@ TEST_F(OverlapsTest, InnerJoinPolyInPointIntersects) {
       EXPECT_ANY_THROW(execSQL(sql, dt));
     } else {
       // Note(jclay): We return 0, postgis returns 4
-      ASSERT_EQ(static_cast<int64_t>(0), v<int64_t>(execSQL(sql, dt)));
+      // Note(adb): Now we return 3. Progress?
+      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
     }
   });
 }

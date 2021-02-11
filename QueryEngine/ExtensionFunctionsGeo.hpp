@@ -1,5 +1,8 @@
 #include "Geospatial/CompressionRuntime.h"
 
+// #define DEBUG_STMT(x) x;
+#define DEBUG_STMT(x)
+
 // Adjustable tolerance, determined by compression mode.
 // The criteria is to still recognize a compressed+decompressed number.
 // For example 1.0 longitude compressed with GEOINT32 and then decompressed
@@ -13,39 +16,40 @@ DEVICE ALWAYS_INLINE double tol(int32_t ic) {
 }
 
 // Combine tolerances for two-component calculations
-DEVICE ALWAYS_INLINE double tol(int32_t ic1, int32_t ic2) {
+DEVICE ALWAYS_INLINE double tol(const int32_t ic1, const int32_t ic2) {
   return fmax(tol(ic1), tol(ic2));
 }
 
-DEVICE ALWAYS_INLINE bool tol_zero(double x, double tolerance = TOLERANCE_DEFAULT) {
+DEVICE ALWAYS_INLINE bool tol_zero(const double x,
+                                   const double tolerance = TOLERANCE_DEFAULT) {
   return (-tolerance <= x) && (x <= tolerance);
 }
 
-DEVICE ALWAYS_INLINE bool tol_eq(double x,
-                                 double y,
-                                 double tolerance = TOLERANCE_DEFAULT) {
+DEVICE ALWAYS_INLINE bool tol_eq(const double x,
+                                 const double y,
+                                 const double tolerance = TOLERANCE_DEFAULT) {
   auto diff = x - y;
   return (-tolerance <= diff) && (diff <= tolerance);
 }
 
-DEVICE ALWAYS_INLINE bool tol_le(double x,
-                                 double y,
-                                 double tolerance = TOLERANCE_DEFAULT) {
+DEVICE ALWAYS_INLINE bool tol_le(const double x,
+                                 const double y,
+                                 const double tolerance = TOLERANCE_DEFAULT) {
   return x <= (y + tolerance);
 }
 
-DEVICE ALWAYS_INLINE bool tol_ge(double x,
-                                 double y,
-                                 double tolerance = TOLERANCE_DEFAULT) {
+DEVICE ALWAYS_INLINE bool tol_ge(const double x,
+                                 const double y,
+                                 const double tolerance = TOLERANCE_DEFAULT) {
   return (x + tolerance) >= y;
 }
 
-DEVICE ALWAYS_INLINE double decompress_coord(int8_t* data,
-                                             int32_t index,
-                                             int32_t ic,
-                                             bool x) {
+DEVICE ALWAYS_INLINE double decompress_coord(const int8_t* data,
+                                             const int32_t index,
+                                             const int32_t ic,
+                                             const bool x) {
   if (ic == COMPRESSION_GEOINT32) {
-    auto compressed_coords = reinterpret_cast<int32_t*>(data);
+    auto compressed_coords = reinterpret_cast<const int32_t*>(data);
     auto compressed_coord = compressed_coords[index];
     if (x) {
       return Geospatial::decompress_longitude_coord_geoint32(compressed_coord);
@@ -53,21 +57,21 @@ DEVICE ALWAYS_INLINE double decompress_coord(int8_t* data,
       return Geospatial::decompress_lattitude_coord_geoint32(compressed_coord);
     }
   }
-  auto double_coords = reinterpret_cast<double*>(data);
+  auto double_coords = reinterpret_cast<const double*>(data);
   return double_coords[index];
 }
 
-DEVICE ALWAYS_INLINE int32_t compression_unit_size(int32_t ic) {
+DEVICE ALWAYS_INLINE int32_t compression_unit_size(const int32_t ic) {
   if (ic == COMPRESSION_GEOINT32) {
     return 4;
   }
   return 8;
 }
 
-DEVICE ALWAYS_INLINE double transform_coord(double coord,
-                                            int32_t isr,
-                                            int32_t osr,
-                                            bool x) {
+DEVICE ALWAYS_INLINE double transform_coord(const double coord,
+                                            const int32_t isr,
+                                            const int32_t osr,
+                                            const bool x) {
   if (isr == 4326) {
     if (osr == 900913) {
       // WGS 84 --> Web Mercator
@@ -81,7 +85,9 @@ DEVICE ALWAYS_INLINE double transform_coord(double coord,
   return coord;
 }
 
-DEVICE ALWAYS_INLINE double transform_coord_x(double coord, int32_t isr, int32_t osr) {
+DEVICE ALWAYS_INLINE double transform_coord_x(const double coord,
+                                              const int32_t isr,
+                                              const int32_t osr) {
   if (isr == 4326) {
     if (osr == 900913) {
       // WGS 84 --> Web Mercator
@@ -91,7 +97,9 @@ DEVICE ALWAYS_INLINE double transform_coord_x(double coord, int32_t isr, int32_t
   return coord;
 }
 
-DEVICE ALWAYS_INLINE double transform_coord_y(double coord, int32_t isr, int32_t osr) {
+DEVICE ALWAYS_INLINE double transform_coord_y(const double coord,
+                                              const int32_t isr,
+                                              const int32_t osr) {
   if (isr == 4326) {
     if (osr == 900913) {
       // WGS 84 --> Web Mercator
@@ -102,11 +110,11 @@ DEVICE ALWAYS_INLINE double transform_coord_y(double coord, int32_t isr, int32_t
 }
 
 // X coord accessor handling on-the-fly decommpression and transforms
-DEVICE ALWAYS_INLINE double coord_x(int8_t* data,
-                                    int32_t index,
-                                    int32_t ic,
-                                    int32_t isr,
-                                    int32_t osr) {
+DEVICE ALWAYS_INLINE double coord_x(const int8_t* data,
+                                    const int32_t index,
+                                    const int32_t ic,
+                                    const int32_t isr,
+                                    const int32_t osr) {
   auto decompressed_coord_x = decompress_coord(data, index, ic, true);
   auto decompressed_transformed_coord_x =
       transform_coord(decompressed_coord_x, isr, osr, true);
@@ -114,11 +122,11 @@ DEVICE ALWAYS_INLINE double coord_x(int8_t* data,
 }
 
 // Y coord accessor handling on-the-fly decommpression and transforms
-DEVICE ALWAYS_INLINE double coord_y(int8_t* data,
-                                    int32_t index,
-                                    int32_t ic,
-                                    int32_t isr,
-                                    int32_t osr) {
+DEVICE ALWAYS_INLINE double coord_y(const int8_t* data,
+                                    const int32_t index,
+                                    const int32_t ic,
+                                    const int32_t isr,
+                                    const int32_t osr) {
   auto decompressed_coord_y = decompress_coord(data, index, ic, false);
   auto decompressed_transformed_coord_y =
       transform_coord(decompressed_coord_y, isr, osr, false);
@@ -471,6 +479,115 @@ double distance_ring_ring(int8_t* ring1,
   return min_distance;
 }
 
+/**
+ * Tests if a point is left, on, or to the right of a 2D line
+ * @return >0 if p is left of l, 0 if p is on l, and < 0 if p is right of l
+ */
+template <typename T>
+DEVICE ALWAYS_INLINE T
+is_left(const T lx0, const T ly0, const T lx1, const T ly1, const T px, const T py) {
+  return ((lx1 - lx0) * (py - ly0) - (px - lx0) * (ly1 - ly0));
+}
+
+template <typename T>
+DEVICE ALWAYS_INLINE bool tol_zero_template(const T x,
+                                            const T tolerance = TOLERANCE_DEFAULT) {
+  return (-tolerance <= x) && (x <= tolerance);
+}
+
+/**
+ * Computes whether the point p is inside the polygon poly using the winding number
+ * algorithm.
+ * The winding number algorithm efficiently computes the winding number, which is the
+ * number of revolutions made around a point P while traveling around the polygon. If
+ * the winding number is non-zero, then P must be inside the polygon. The actual algorithm
+ * loops over all edges in the polygon, and determines the location of  the crossing
+ * between a ray from the point P and each edge E of the polygon. In the implementation
+ * below, this crossing calculation is performed by assigning a fixed orientation to each
+ * edge, then computing the location of the point with respect to that edge. The parameter
+ * `include_point_on_edge` allows the algorithm to work for both point-inside-polygon, or
+ * point-on-polygon calculations. The original source and additional detail for this
+ * implementation is here: http://geomalgorithms.com/a03-_inclusion.html */
+template <typename T>
+DEVICE ALWAYS_INLINE bool point_in_polygon_winding_number(
+    const int8_t* poly,
+    const int32_t poly_num_coords,
+    const T px,
+    const T py,
+    const int32_t ic1,
+    const int32_t isr1,
+    const int32_t osr,
+    const bool include_point_on_edge) {
+  int32_t wn = 0;
+
+  DEBUG_STMT(printf("Poly num coords: %d\n", poly_num_coords));
+  const int64_t num_edges = poly_num_coords / 2;
+  for (int64_t edge = 0; edge < num_edges; edge++) {
+    DEBUG_STMT(printf("Edge %ld\n", edge));
+    // build the edge
+    const auto e0_index = edge % num_edges;
+    const auto e0x = static_cast<T>(coord_x(poly, e0_index * 2, ic1, isr1, osr));
+    const auto e0y = static_cast<T>(coord_y(poly, e0_index * 2 + 1, ic1, isr1, osr));
+    DEBUG_STMT(printf("edge 0: %ld : %f, %f\n", e0_index, e0x, e0y));
+
+    const auto e1_index = (edge + 1) % num_edges;
+    const auto e1x = static_cast<T>(coord_x(poly, e1_index * 2, ic1, isr1, osr));
+    const auto e1y = static_cast<T>(coord_y(poly, (e1_index * 2) + 1, ic1, isr1, osr));
+    DEBUG_STMT(printf("edge 1: %ld : %f, %f\n", e1_index, e1x, e1y));
+
+    const T xp = (px - e1x) * (e0y - e1y) - (py - e1y) * (e0x - e1x);
+    const T pt_vec_magnitude = (px - e0x) * (px - e0x) + (py - e0y) * (py - e0y);
+    const T edge_vec_magnitude = (e1x - e0x) * (e1x - e0x) + (e1y - e0y) * (e1y - e0y);
+
+    const T epsilon = 0.003 * edge_vec_magnitude;
+    DEBUG_STMT(printf("using epsilon value %e\n", epsilon));
+    if (tol_zero_template(xp, epsilon) && (pt_vec_magnitude <= edge_vec_magnitude)) {
+      DEBUG_STMT(printf("point is on edge: %e && %e <= %e\n",
+                        xp,
+                        pt_vec_magnitude,
+                        edge_vec_magnitude));
+      return include_point_on_edge;
+    }
+
+    if (e0y <= py) {
+      if (e1y > py) {
+        // upward crossing
+        DEBUG_STMT(printf("upward crossing\n"));
+        const auto is_left_val = is_left(e0x, e0y, e1x, e1y, px, py);
+        DEBUG_STMT(printf("Left val %f and tol zero left val %d\n",
+                          is_left_val,
+                          tol_zero_template(is_left_val, epsilon)));
+        if (is_left_val > T(0.) &&
+            !tol_zero_template(is_left_val, epsilon)) {  // p left of edge
+          // valid up intersection
+          DEBUG_STMT(printf("++wn\n"));
+          ++wn;
+        }
+      }
+    } else if (e1y <= py) {
+      // downward crossing
+      DEBUG_STMT(printf("downward crossing\n"));
+      const auto is_left_val = is_left(e0x, e0y, e1x, e1y, px, py);
+      DEBUG_STMT(printf("Left val %f and tol zero left val %d\n",
+                        is_left_val,
+                        tol_zero_template(is_left_val, epsilon)));
+
+      if (is_left_val < T(0.) &&
+          !tol_zero_template(is_left_val, epsilon)) {  // p right of edge
+
+        // valid down intersection
+        DEBUG_STMT(printf("--wn\n"));
+        --wn;
+      }
+    } else {
+      DEBUG_STMT(printf("no crossing\n"));
+    }
+  }
+  DEBUG_STMT(printf("wn: %d\n", wn));
+  // wn == 0 --> P is outside the polygon
+  return !(wn == 0);
+}
+
 // Checks if a simple polygon (no holes) contains a point.
 //
 // Poly coords are extracted from raw data, based on compression (ic1) and input/output
@@ -485,14 +602,13 @@ double distance_ring_ring(int8_t* ring1,
 // chance of error. No intersections means P is outside, irrespective of main probe's
 // result.
 //
-DEVICE
-bool polygon_contains_point(int8_t* poly,
-                            int32_t poly_num_coords,
-                            double px,
-                            double py,
-                            int32_t ic1,
-                            int32_t isr1,
-                            int32_t osr) {
+DEVICE ALWAYS_INLINE bool polygon_contains_point(const int8_t* poly,
+                                                 const int32_t poly_num_coords,
+                                                 const double px,
+                                                 const double py,
+                                                 const int32_t ic1,
+                                                 const int32_t isr1,
+                                                 const int32_t osr) {
   bool result = false;
   int xray_touch = 0;
   bool horizontal_edge = false;
@@ -631,10 +747,10 @@ bool polygon_contains_linestring(int8_t* poly,
   return true;
 }
 
-DEVICE ALWAYS_INLINE bool box_contains_point(double* bounds,
-                                             int64_t bounds_size,
-                                             double px,
-                                             double py) {
+DEVICE ALWAYS_INLINE bool box_contains_point(const double* bounds,
+                                             const int64_t bounds_size,
+                                             const double px,
+                                             const double py) {
   // TODO: mixed spatial references
   return (tol_ge(px, bounds[0]) && tol_ge(py, bounds[1]) && tol_le(px, bounds[2]) &&
           tol_le(py, bounds[3]));
@@ -3272,30 +3388,41 @@ bool ST_Contains_Polygon_Point(int8_t* poly_coords,
                                int32_t ic2,
                                int32_t isr2,
                                int32_t osr) {
-  double px = coord_x(p, 0, ic2, isr2, osr);
-  double py = coord_y(p, 1, ic2, isr2, osr);
-
+  const double px = coord_x(p, 0, ic2, isr2, osr);
+  const double py = coord_y(p, 1, ic2, isr2, osr);
+  DEBUG_STMT(printf("pt: %f, %f\n", px, py));
   if (poly_bounds) {
     if (!box_contains_point(poly_bounds, poly_bounds_size, px, py)) {
       return false;
     }
   }
 
-  auto poly_num_coords = poly_coords_size / compression_unit_size(ic1);
-  auto exterior_ring_num_coords = poly_num_coords;
-  if (poly_num_rings > 0) {
-    exterior_ring_num_coords = poly_ring_sizes[0] * 2;
-  }
+  const auto poly_num_coords = poly_coords_size / compression_unit_size(ic1);
+  auto exterior_ring_num_coords =
+      poly_num_rings > 0 ? poly_ring_sizes[0] * 2 : poly_num_coords;
 
   auto poly = poly_coords;
-  if (polygon_contains_point(poly, exterior_ring_num_coords, px, py, ic1, isr1, osr)) {
+  if (point_in_polygon_winding_number<double>(poly,
+                                              exterior_ring_num_coords,
+                                              px,
+                                              py,
+                                              ic1,
+                                              isr1,
+                                              osr,
+                                              /*include_point_on_edge=*/true)) {
     // Inside exterior ring
     poly += exterior_ring_num_coords * compression_unit_size(ic1);
     // Check that none of the polygon's holes contain that point
     for (auto r = 1; r < poly_num_rings; r++) {
       int64_t interior_ring_num_coords = poly_ring_sizes[r] * 2;
-      if (polygon_contains_point(
-              poly, interior_ring_num_coords, px, py, ic1, isr1, osr)) {
+      if (point_in_polygon_winding_number<double>(poly,
+                                                  interior_ring_num_coords,
+                                                  px,
+                                                  py,
+                                                  ic1,
+                                                  isr1,
+                                                  osr,
+                                                  /*include_point_on_edge=*/true)) {
         return false;
       }
       poly += interior_ring_num_coords * compression_unit_size(ic1);
@@ -3342,7 +3469,14 @@ bool ST_Contains_Polygon_LineString(int8_t* poly_coords,
         return false;
       }
     }
-    return polygon_contains_point(poly_coords, poly_num_coords, lx, ly, ic1, isr1, osr);
+    return point_in_polygon_winding_number<double>(poly_coords,
+                                                   poly_num_coords,
+                                                   lx,
+                                                   ly,
+                                                   ic1,
+                                                   isr1,
+                                                   osr,
+                                                   /*include_point_on_edge=*/true);
   }
 
   // Bail out if poly bounding box doesn't contain linestring bounding box
