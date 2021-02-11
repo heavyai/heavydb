@@ -120,6 +120,7 @@ VERS=1.0.6
 download ${HTTP_DEPS}/bzip2-$VERS.tar.gz
 extract bzip2-$VERS.tar.gz
 pushd bzip2-$VERS
+sed -i 's/O2 -g \$/O2 -g -fPIC \$/' Makefile
 makej
 make install PREFIX=$PREFIX
 popd
@@ -128,8 +129,8 @@ popd
 download_make_install ${HTTP_DEPS}/openssl-1.0.2u.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
 
 # libarchive
-download_make_install ${HTTP_DEPS}/xz-5.2.4.tar.xz "" "--disable-shared"
-download_make_install ${HTTP_DEPS}/libarchive-3.3.2.tar.gz "" "--without-openssl --disable-shared"
+CFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/xz-5.2.4.tar.xz "" "--disable-shared --with-pic"
+CFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libarchive-3.3.2.tar.gz "" "--without-openssl --disable-shared"
 
 CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.1.tar.gz # "" "--build=powerpc64le-unknown-linux-gnu"
 
@@ -172,18 +173,11 @@ popd
 VERS=0.3.5
 CXXFLAGS="-fPIC" download_make_install https://github.com/google/glog/archive/v$VERS.tar.gz glog-$VERS "--enable-shared=no" # --build=powerpc64le-unknown-linux-gnu"
 
-# folly
+# Libevent needed for folly
 VERS=2.1.10
 download_make_install https://github.com/libevent/libevent/releases/download/release-$VERS-stable/libevent-$VERS-stable.tar.gz
 
-VERS=2019.04.29.00
-download https://github.com/facebook/folly/archive/v$VERS.tar.gz
-extract v$VERS.tar.gz
-pushd folly-$VERS/build/
-CXXFLAGS="-fPIC -pthread" cmake -DCMAKE_INSTALL_PREFIX=$PREFIX ..
-makej
-make install
-popd
+install_folly
 
 # llvm
 # http://thrysoee.dk/editline/libedit-20170329-3.1.tar.gz

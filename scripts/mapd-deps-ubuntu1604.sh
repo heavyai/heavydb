@@ -140,14 +140,7 @@ make -j $(nproc)
 make install
 popd
 
-VERS=2019.04.29.00
-download https://github.com/facebook/folly/archive/v$VERS.tar.gz
-extract v$VERS.tar.gz
-pushd folly-$VERS/build/
-cmake -DCMAKE_INSTALL_PREFIX=$PREFIX ..
-makej
-make install
-popd
+install_folly
 
 download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
 

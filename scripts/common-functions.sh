@@ -19,6 +19,10 @@ function extract() {
     tar xvf "$1"
 }
 
+function cmake_build_and_install() {
+  cmake --build . --parallel && cmake --install .
+}
+
 function makej() {
   os=$(uname)
   if [ "$os" = "Darwin" ]; then
@@ -65,7 +69,7 @@ function install_cmake() {
   CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-${CMAKE_VERSION}.tar.gz
 }
 
-ARROW_VERSION=apache-arrow-1.0.1
+ARROW_VERSION=apache-arrow-2.0.0
 
 function install_arrow() {
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
@@ -139,16 +143,16 @@ function install_awscpp() {
     mkdir build
     cd build
     cmake \
+        -GNinja \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=$PREFIX \
-        -DBUILD_ONLY="s3;transfer;config" \
+        -DBUILD_ONLY="s3;transfer;config;sts;cognito-identity;identity-management" \
         -DBUILD_SHARED_LIBS=0 \
         -DCUSTOM_MEMORY_MANAGEMENT=0 \
         -DCPP_STANDARD=$CPP_STANDARD \
         -DENABLE_TESTING=off \
         ..
-    make $*
-    make_install
+    cmake_build_and_install
     popd
 }
 
@@ -233,6 +237,40 @@ function install_geos() {
     download_make_install ${HTTP_DEPS}/geos-${GEOS_VERSION}.tar.bz2 "" "--enable-shared --disable-static"
 
 }
+
+FOLLY_VERSION=2021.02.01.00
+FMT_VERSION=7.1.3
+function install_folly() {
+  # Folly depends on fmt
+  download https://github.com/fmtlib/fmt/archive/$FMT_VERSION.tar.gz
+  extract $FMT_VERSION.tar.gz
+  BUILD_DIR="fmt-$FMT_VERSION/build"
+  mkdir -p $BUILD_DIR
+  pushd $BUILD_DIR
+  cmake -GNinja \
+        -DCMAKE_CXX_FLAGS="-fPIC" \
+        -DFMT_DOC=OFF \
+        -DFMT_TEST=OFF \
+        -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+  cmake_build_and_install
+  popd
+
+  download https://github.com/facebook/folly/archive/v$FOLLY_VERSION.tar.gz
+  extract v$FOLLY_VERSION.tar.gz
+  pushd folly-$FOLLY_VERSION/build/
+
+  # jemalloc disabled due to issue with clang build on Ubuntu
+  # see: https://github.com/facebook/folly/issues/976
+  cmake -GNinja \
+        -DCMAKE_CXX_FLAGS="-fPIC -pthread" \
+        -DFOLLY_USE_JEMALLOC=OFF \
+        -DBUILD_SHARED_LIBS=on \
+        -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+  cmake_build_and_install
+
+  popd
+}
+
 
 RDKAFKA_VERSION=1.1.0
 
