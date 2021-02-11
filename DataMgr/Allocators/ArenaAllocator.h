@@ -47,11 +47,7 @@ class SysAllocator {
 #include <folly/Memory.h>
 #include <folly/memory/Arena.h>
 
-#ifdef FOLLY_2021
 using AllocatorType = char;
-#else
-using AllocatorType = void;
-#endif
 
 constexpr size_t kArenaBlockOverhead =
     folly::Arena< ::SysAllocator<AllocatorType> >::kBlockOverhead;
