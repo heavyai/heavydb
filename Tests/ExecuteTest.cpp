@@ -23,6 +23,7 @@
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/ResultSetReductionJIT.h"
 #include "../QueryRunner/QueryRunner.h"
+#include "../Shared/DateConverters.h"
 #include "../Shared/StringTransform.h"
 #include "../Shared/scope.h"
 #include "../SqliteConnector/SqliteConnector.h"
@@ -226,7 +227,8 @@ class SQLiteComparator {
                             const ExecutorDeviceType device_type) {
     const auto results =
         QR::get()->runSQL(query_string, device_type, g_hoist_literals, true);
-    const auto arrow_omnisci_results = result_set_arrow_loopback(nullptr, results);
+    const auto arrow_omnisci_results =
+        result_set_arrow_loopback(nullptr, results, device_type);
     compare_impl(
         arrow_omnisci_results.get(), sqlite_query_string, device_type, false, true);
   }
@@ -395,8 +397,15 @@ class SQLiteComparator {
                     << errmsg;
               } else {
                 if (is_arrow && omnisci_type == kDATE) {
-                  ASSERT_EQ(*omnisci_as_int_p, timegm(&tm_struct) * kMilliSecsPerSec)
-                      << errmsg;
+                  if (device_type == ExecutorDeviceType::CPU) {
+                    ASSERT_EQ(
+                        *omnisci_as_int_p,
+                        DateConverters::get_epoch_days_from_seconds(timegm(&tm_struct)))
+                        << errmsg;
+                  } else {
+                    ASSERT_EQ(*omnisci_as_int_p, timegm(&tm_struct) * kMilliSecsPerSec)
+                        << errmsg;
+                  }
                 } else {
                   ASSERT_EQ(*omnisci_as_int_p, dimen > 0 ? nsec : timegm(&tm_struct))
                       << errmsg;

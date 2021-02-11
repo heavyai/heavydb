@@ -17,6 +17,8 @@
 #include "../Shared/DateConverters.h"
 #include "ArrowResultSet.h"
 #include "Execute.h"
+#include "arrow/ipc/dictionary.h"
+#include "arrow/ipc/options.h"
 
 #ifndef _MSC_VER
 #include <sys/ipc.h>
@@ -47,6 +49,12 @@ using key_t = size_t;
 #endif  // HAVE_CUDA
 
 #define ARROW_RECORDBATCH_MAKE arrow::RecordBatch::Make
+
+#define ARROW_CONVERTER_DEBUG true
+
+#define ARROW_LOG(category) \
+  VLOG(1) << "[Arrow]"      \
+          << "[" << category "] "
 
 using namespace arrow;
 
@@ -327,23 +335,22 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
             const std::shared_ptr<Buffer>& serialized_schema,
             const std::shared_ptr<Buffer>& serialized_dict) -> ArrowResult {
       auto timer = DEBUG_TIMER("serialize batch to wire");
-      std::vector<char> schema_handle_data;
-      std::vector<char> record_handle_data;
       const int64_t total_size = schema_size + records_size + dict_size;
-      record_handle_data.insert(record_handle_data.end(),
-                                serialized_schema->data(),
-                                serialized_schema->data() + schema_size);
-
-      record_handle_data.insert(record_handle_data.end(),
-                                serialized_dict->data(),
-                                serialized_dict->data() + dict_size);
-
-      record_handle_data.resize(total_size);
+      std::vector<char> record_handle_data(total_size);
       auto serialized_records =
           arrow::MutableBuffer::Wrap(record_handle_data.data(), total_size);
 
+      ARROW_ASSIGN_OR_THROW(auto writer, Buffer::GetWriter(serialized_records));
+
+      ARROW_THROW_NOT_OK(writer->Write(
+          reinterpret_cast<const uint8_t*>(serialized_schema->data()), schema_size));
+
+      ARROW_THROW_NOT_OK(writer->Write(
+          reinterpret_cast<const uint8_t*>(serialized_dict->data()), dict_size));
+
       io::FixedSizeBufferWriter stream(
           SliceMutableBuffer(serialized_records, schema_size + dict_size));
+
       ARROW_THROW_NOT_OK(ipc::SerializeRecordBatch(
           *record_batch, arrow::ipc::IpcWriteOptions::Defaults(), &stream));
 
@@ -352,7 +359,7 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
               std::vector<char>(0),
               serialized_records->size(),
               std::string{""},
-              record_handle_data};
+              std::move(record_handle_data)};
     };
 
     const auto getShmResult =
@@ -395,12 +402,15 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
     std::shared_ptr<Buffer> serialized_schema;
     int64_t records_size = 0;
     int64_t schema_size = 0;
-    ipc::DictionaryMemo memo;
+    ipc::DictionaryFieldMapper mapper(*record_batch->schema());
     auto options = ipc::IpcWriteOptions::Defaults();
     auto dict_stream = arrow::io::BufferOutputStream::Create(1024).ValueOrDie();
 
-    ARROW_THROW_NOT_OK(CollectDictionaries(*record_batch, &memo));
-    for (auto& pair : memo.dictionaries()) {
+    ARROW_ASSIGN_OR_THROW(auto dictionaries, CollectDictionaries(*record_batch, mapper));
+
+    ARROW_LOG("CPU") << "found " << dictionaries.size() << " dictionaries";
+
+    for (auto& pair : dictionaries) {
       ipc::IpcPayload payload;
       int64_t dictionary_id = pair.first;
       const auto& dictionary = pair.second;
@@ -416,7 +426,7 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
 
     ARROW_ASSIGN_OR_THROW(
         serialized_schema,
-        ipc::SerializeSchema(*record_batch->schema(), nullptr, default_memory_pool()));
+        ipc::SerializeSchema(*record_batch->schema(), default_memory_pool()));
     schema_size = serialized_schema->size();
 
     ARROW_THROW_NOT_OK(ipc::GetRecordBatchSize(*record_batch, &records_size));
@@ -440,43 +450,47 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
   ARROW_THROW_NOT_OK(out_stream_result.status());
   auto out_stream = std::move(out_stream_result).ValueOrDie();
 
+  ipc::DictionaryFieldMapper mapper(*record_batch->schema());
   arrow::ipc::DictionaryMemo current_memo;
   arrow::ipc::DictionaryMemo serialized_memo;
 
   arrow::ipc::IpcPayload schema_payload;
   ARROW_THROW_NOT_OK(arrow::ipc::GetSchemaPayload(*record_batch->schema(),
                                                   arrow::ipc::IpcWriteOptions::Defaults(),
-                                                  &serialized_memo,
+                                                  mapper,
                                                   &schema_payload));
   int32_t schema_payload_length = 0;
   ARROW_THROW_NOT_OK(arrow::ipc::WriteIpcPayload(schema_payload,
                                                  arrow::ipc::IpcWriteOptions::Defaults(),
                                                  out_stream.get(),
                                                  &schema_payload_length));
+  ARROW_ASSIGN_OR_THROW(auto dictionaries, CollectDictionaries(*record_batch, mapper));
+  ARROW_LOG("GPU") << "Dictionary "
+                   << "found dicts: " << dictionaries.size();
 
-  ARROW_THROW_NOT_OK(CollectDictionaries(*record_batch, &current_memo));
+  ARROW_THROW_NOT_OK(
+      arrow::ipc::internal::CollectDictionaries(*record_batch, &current_memo));
 
   // now try a dictionary
   std::shared_ptr<arrow::Schema> dummy_schema;
   std::vector<std::shared_ptr<arrow::RecordBatch>> dict_batches;
-  for (int i = 0; i < record_batch->schema()->num_fields(); i++) {
-    auto field = record_batch->schema()->field(i);
-    if (field->type()->id() == arrow::Type::DICTIONARY) {
-      int64_t dict_id = -1;
-      ARROW_THROW_NOT_OK(current_memo.GetId(field.get(), &dict_id));
-      CHECK_GE(dict_id, 0);
-      std::shared_ptr<Array> dict;
-      ARROW_THROW_NOT_OK(current_memo.GetDictionary(dict_id, &dict));
-      CHECK(dict);
 
-      if (!dummy_schema) {
-        auto dummy_field = std::make_shared<arrow::Field>("", dict->type());
-        dummy_schema = std::make_shared<arrow::Schema>(
-            std::vector<std::shared_ptr<arrow::Field>>{dummy_field});
-      }
-      dict_batches.emplace_back(
-          arrow::RecordBatch::Make(dummy_schema, dict->length(), {dict}));
+  for (const auto& pair : dictionaries) {
+    ipc::IpcPayload payload;
+    const auto& dict_id = pair.first;
+    CHECK_GE(dict_id, 0);
+    ARROW_LOG("GPU") << "Dictionary "
+                     << "dict_id: " << dict_id;
+    const auto& dict = pair.second;
+    CHECK(dict);
+
+    if (!dummy_schema) {
+      auto dummy_field = std::make_shared<arrow::Field>("", dict->type());
+      dummy_schema = std::make_shared<arrow::Schema>(
+          std::vector<std::shared_ptr<arrow::Field>>{dummy_field});
     }
+    dict_batches.emplace_back(
+        arrow::RecordBatch::Make(dummy_schema, dict->length(), {dict}));
   }
 
   if (!dict_batches.empty()) {
@@ -528,16 +542,14 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
 
 ArrowResultSetConverter::SerializedArrowOutput
 ArrowResultSetConverter::getSerializedArrowOutput(
-    arrow::ipc::DictionaryMemo* memo) const {
+    arrow::ipc::DictionaryFieldMapper* mapper) const {
   auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<arrow::RecordBatch> arrow_copy = convertToArrow();
   std::shared_ptr<arrow::Buffer> serialized_records, serialized_schema;
 
-  ARROW_ASSIGN_OR_THROW(serialized_schema,
-                        arrow::ipc::SerializeSchema(
-                            *arrow_copy->schema(), memo, arrow::default_memory_pool()));
-
-  ARROW_THROW_NOT_OK(CollectDictionaries(*arrow_copy, memo));
+  ARROW_ASSIGN_OR_THROW(
+      serialized_schema,
+      arrow::ipc::SerializeSchema(*arrow_copy->schema(), arrow::default_memory_pool()));
 
   if (arrow_copy->num_rows()) {
     auto timer = DEBUG_TIMER("serialize records");
@@ -560,6 +572,12 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::convertToArrow() co
     const auto ti = results_->getColType(i);
     fields.push_back(makeField(col_names_.empty() ? "" : col_names_[i], ti));
   }
+#if ARROW_CONVERTER_DEBUG
+  VLOG(1) << "Arrow fields: ";
+  for (const auto& f : fields) {
+    VLOG(1) << "\t" << f->ToString(true);
+  }
+#endif
   return getArrowBatch(arrow::schema(fields));
 }
 
@@ -906,11 +924,16 @@ std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& sql_type,
       return decimal(sql_type.get_precision(), sql_type.get_scale());
     case kTIME:
       return time32(TimeUnit::SECOND);
-    case kDATE:
+    case kDATE: {
       // TODO(wamsi) : Remove date64() once date32() support is added in cuDF. date32()
       // Currently support for date32() is missing in cuDF.Hence, if client requests for
       // date on GPU, return date64() for the time being, till support is added.
-      return device_type == ExecutorDeviceType::GPU ? date64() : date32();
+      if (device_type == ExecutorDeviceType::GPU) {
+        return date64();
+      } else {
+        return date32();
+      }
+    }
     case kTIMESTAMP:
       switch (sql_type.get_precision()) {
         case 0:

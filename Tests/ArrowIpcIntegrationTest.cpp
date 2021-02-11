@@ -126,7 +126,7 @@ class ArrowOutput {
                               arrow::ipc::ReadSchema(*schema_message, &dict_memo));
 
         // read dictionaries
-        if (dict_memo.num_fields() > 0) {
+        if (dict_memo.fields().num_fields() > 0) {
           ARROW_ASSIGN_OR_THROW(
               gpu_dict_batch_reader,
               arrow::ipc::RecordBatchStreamReader::Open(std::move(message_reader)));
@@ -138,12 +138,15 @@ class ArrowOutput {
               ARROW_THROW_NOT_OK(gpu_dict_batch_reader->ReadNext(&tmp_record_batch));
 
               int64_t dict_id = -1;
-              ARROW_THROW_NOT_OK(dict_memo.GetId(field.get(), &dict_id));
+              ARROW_ASSIGN_OR_THROW(dict_id,
+                                    dict_memo.fields().GetFieldId({
+                                        static_cast<int>(i),
+                                    }));
               CHECK_GE(dict_id, 0);
 
               CHECK(!dict_memo.HasDictionary(dict_id));
               ARROW_THROW_NOT_OK(
-                  dict_memo.AddDictionary(dict_id, tmp_record_batch->column(0)));
+                  dict_memo.AddDictionary(dict_id, tmp_record_batch->column(0)->data()));
             }
           }
         }

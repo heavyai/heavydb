@@ -97,8 +97,11 @@ struct ArrowResult {
 class ArrowResultSet {
  public:
   ArrowResultSet(const std::shared_ptr<ResultSet>& rows,
-                 const std::vector<TargetMetaInfo>& targets_meta);
-  ArrowResultSet(const std::shared_ptr<ResultSet>& rows) : ArrowResultSet(rows, {}) {}
+                 const std::vector<TargetMetaInfo>& targets_meta,
+                 const ExecutorDeviceType device_type = ExecutorDeviceType::CPU);
+  ArrowResultSet(const std::shared_ptr<ResultSet>& rows,
+                 const ExecutorDeviceType device_type = ExecutorDeviceType::CPU)
+      : ArrowResultSet(rows, {}, device_type) {}
 
   ArrowResultSetRowIterator rowIterator(size_t from_index,
                                         bool translate_strings,
@@ -136,13 +139,15 @@ class ArrowResultSet {
       std::shared_ptr<Data_Namespace::DataMgr>& data_mgr);
 
  private:
-  void resultSetArrowLoopback();
+  void resultSetArrowLoopback(
+      const ExecutorDeviceType device_type = ExecutorDeviceType::CPU);
   template <typename Type, typename ArrayType>
   void appendValue(std::vector<TargetValue>& row,
                    const arrow::Array& column,
                    const Type null_val,
                    const size_t idx) const;
 
+  std::shared_ptr<ArrowResult> results_;
   std::shared_ptr<ResultSet> rows_;
   std::vector<TargetMetaInfo> targets_meta_;
   std::shared_ptr<arrow::RecordBatch> record_batch_;
@@ -170,7 +175,8 @@ std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(const ExecutionResult&
 // framework.
 std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
     const ExecutionResult* results,
-    const std::shared_ptr<ResultSet>& rows);
+    const std::shared_ptr<ResultSet>& rows,
+    const ExecutorDeviceType device_type = ExecutorDeviceType::CPU);
 
 class ArrowResultSetConverter {
  public:
@@ -218,7 +224,8 @@ class ArrowResultSetConverter {
     std::shared_ptr<arrow::Buffer> schema;
     std::shared_ptr<arrow::Buffer> records;
   };
-  SerializedArrowOutput getSerializedArrowOutput(arrow::ipc::DictionaryMemo* memo) const;
+  SerializedArrowOutput getSerializedArrowOutput(
+      arrow::ipc::DictionaryFieldMapper* mapper) const;
 
   void initializeColumnBuilder(ColumnBuilder& column_builder,
                                const SQLTypeInfo& col_type,
