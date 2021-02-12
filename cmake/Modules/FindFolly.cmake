@@ -63,6 +63,17 @@ find_library(Folly_DC_LIBRARY
   /usr/local/homebrew/lib
   /opt/local/lib)
 
+find_library(Folly_FMT_LIBRARY
+  NAMES fmt
+  HINTS
+  ENV LD_LIBRARY_PATH
+  ENV DYLD_LIBRARY_PATH
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /usr/local/homebrew/lib
+  /opt/local/lib)
+
 find_package(OpenSSL REQUIRED)
 
 if(Folly_USE_STATIC_LIBS)
@@ -70,9 +81,9 @@ if(Folly_USE_STATIC_LIBS)
 endif()
 
 # Set standard CMake FindPackage variables if found.
-set(Folly_LIBRARIES ${Folly_LIBRARY} ${Folly_DC_LIBRARY} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS})
+set(Folly_LIBRARIES ${Folly_LIBRARY} ${Folly_DC_LIBRARY} ${Folly_FMT_LIBRARY} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS})
 set(Folly_LIBRARY_DIRS ${Folly_LIBRARY_DIR})
 set(Folly_INCLUDE_DIRS ${Folly_LIBRARY_DIR}/../include)
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(Folly REQUIRED_VARS Folly_LIBRARY Folly_DC_LIBRARY)
+find_package_handle_standard_args(Folly REQUIRED_VARS Folly_LIBRARY Folly_DC_LIBRARY Folly_FMT_LIBRARY)

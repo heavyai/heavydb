@@ -259,12 +259,19 @@ function install_folly() {
   extract v$FOLLY_VERSION.tar.gz
   pushd folly-$FOLLY_VERSION/build/
 
+  source /etc/os-release
+  if [ "$ID" == "ubuntu"  ] ; then
+    FOLLY_SHARED=ON
+  else
+    FOLLY_SHARED=OFF
+  fi
+
   # jemalloc disabled due to issue with clang build on Ubuntu
   # see: https://github.com/facebook/folly/issues/976
   cmake -GNinja \
         -DCMAKE_CXX_FLAGS="-fPIC -pthread" \
         -DFOLLY_USE_JEMALLOC=OFF \
-        -DBUILD_SHARED_LIBS=on \
+        -DBUILD_SHARED_LIBS=${FOLLY_SHARED} \
         -DCMAKE_INSTALL_PREFIX=$PREFIX ..
   cmake_build_and_install
 
