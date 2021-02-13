@@ -16,7 +16,6 @@
 
 #include "Grantee.h"
 #include <stack>
-#include "Shared/scope.h"
 
 using std::runtime_error;
 using std::string;
@@ -91,8 +90,6 @@ bool Grantee::hasAnyPrivilegesOnDb(int32_t dbId, bool only_direct) const {
 }
 
 void Grantee::grantPrivileges(const DBObject& object) {
-  LOG(INFO) << "++++++++++ " << __func__ << " TOP";
-  ScopeGuard logguard = [f = __func__] { LOG(INFO) << "---------- " << f << " END"; };
   auto* dbObject = findDbObject(object.getObjectKey(), false);
   if (!dbObject) {  // not found
     effectivePrivileges_[object.getObjectKey()] = boost::make_unique<DBObject>(object);
@@ -106,7 +103,6 @@ void Grantee::grantPrivileges(const DBObject& object) {
     dbObject->grantPrivileges(object);
   }
   updatePrivileges();
-  LOG(INFO) << "---------- " << __func__ << " BOT";
 }
 
 void Grantee::renameDbObject(const DBObject& object) {
