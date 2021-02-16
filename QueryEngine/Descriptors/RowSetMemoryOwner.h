@@ -40,7 +40,7 @@ class ResultSet;
  * Handles allocations and outputs for all stages in a query, either explicitly or via a
  * managed allocator object
  */
-class RowSetMemoryOwner : public SimpleAllocator, boost::noncopyable {
+class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
  public:
   RowSetMemoryOwner(const size_t arena_block_size)
       : arena_block_size_(arena_block_size)
@@ -152,7 +152,7 @@ class RowSetMemoryOwner : public SimpleAllocator, boost::noncopyable {
     col_buffers_.push_back(const_cast<void*>(col_buffer));
   }
 
-  virtual ~RowSetMemoryOwner() {
+  ~RowSetMemoryOwner() {
     for (auto count_distinct_set : count_distinct_sets_) {
       delete count_distinct_set;
     }

@@ -29,6 +29,7 @@
 #include "DataMgr/Chunk/Chunk.h"
 #include "ResultSetBufferAccessors.h"
 #include "ResultSetStorage.h"
+#include "Shared/quantile.h"
 #include "TargetValue.h"
 
 #include <atomic>
@@ -410,6 +411,8 @@ class ResultSet {
                         const size_t target_idx,
                         const size_t slot_idx) const;
 
+  static double calculateQuantile(quantile::TDigest* const t_digest, double const q);
+
  private:
   void advanceCursorToNextEntry(ResultSetRowIterator& iter) const;
 
@@ -602,6 +605,8 @@ class ResultSet {
     const ResultSet* result_set_;
   };
 
+  using ApproxMedianBuffers = std::vector<std::vector<double>>;
+
   template <typename BUFFER_ITERATOR_TYPE>
   struct ResultSetComparator {
     using BufferIteratorType = BUFFER_ITERATOR_TYPE;
@@ -614,24 +619,30 @@ class ResultSet {
         , use_heap_(use_heap)
         , result_set_(result_set)
         , buffer_itr_(result_set)
-        , executor_(executor) {
+        , executor_(executor)
+        , approx_median_materialized_buffers_(materializeApproxMedianColumns()) {
       materializeCountDistinctColumns();
     }
 
     void materializeCountDistinctColumns();
+    ApproxMedianBuffers materializeApproxMedianColumns() const;
 
     std::vector<int64_t> materializeCountDistinctColumn(
+        const Analyzer::OrderEntry& order_entry) const;
+    ApproxMedianBuffers::value_type materializeApproxMedianColumn(
         const Analyzer::OrderEntry& order_entry) const;
 
     bool operator()(const uint32_t lhs, const uint32_t rhs) const;
 
     // TODO(adb): make order_entries_ a pointer
     const std::list<Analyzer::OrderEntry> order_entries_;
+    // Think use_heap = reverse_sort_order due to popping from a max-heap data structure.
     const bool use_heap_;
     const ResultSet* result_set_;
     const BufferIteratorType buffer_itr_;
     const Executor* executor_;
     std::vector<std::vector<int64_t>> count_distinct_materialized_buffers_;
+    const ApproxMedianBuffers approx_median_materialized_buffers_;
   };
 
   std::function<bool(const uint32_t, const uint32_t)> createComparator(

@@ -17,6 +17,9 @@
 #pragma once
 
 class SimpleAllocator {
+ protected:
+  ~SimpleAllocator() = default;
+
  public:
   virtual int8_t* allocate(const size_t num_bytes) = 0;
 };

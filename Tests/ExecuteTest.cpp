@@ -2339,9 +2339,85 @@ TEST(Select, ApproxMedianLargeInts) {
   }
 }
 
+TEST(Select, ApproxMedianSort) {
+  if (g_aggregator) {
+    LOG(WARNING) << "Skipping ApproxMedianSort tests in distributed mode.";
+  } else {
+    auto const dt = ExecutorDeviceType::CPU;
+    char const* const prefix =
+        "SELECT t2.x, APPROX_MEDIAN(t0.x) am FROM coalesce_cols_test_2 t2 LEFT JOIN "
+        "coalesce_cols_test_0 t0 ON t2.x=t0.x GROUP BY t2.x ORDER BY am ";
+    std::vector<std::string> const tests{
+        "ASC NULLS FIRST", "ASC NULLS LAST", "DESC NULLS FIRST", "DESC NULLS LAST"};
+    constexpr size_t NROWS = 20;
+    for (size_t t = 0; t < tests.size(); ++t) {
+      std::string const query = prefix + tests[t] + ", x;";
+      auto rows = run_multiple_agg(query, dt);
+      EXPECT_EQ(rows->colCount(), 2u) << query;
+      EXPECT_EQ(rows->rowCount(), NROWS) << query;
+      for (size_t i = 0; i < NROWS; ++i) {
+        switch (t) {
+          case 0:
+            if (i < 10) {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i) + 10)
+                  << query << "i=" << i;
+              EXPECT_EQ(v<double>(rows->getRowAt(i, 1, true)), NULL_DOUBLE)
+                  << query << "i=" << i;
+            } else {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i) - 10)
+                  << query << "i=" << i;
+              EXPECT_EQ(v<double>(rows->getRowAt(i, 1, true)), double(i) - 10)
+                  << query << "i=" << i;
+            }
+            break;
+          case 1:
+            EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i))
+                << query << "i=" << i;
+            if (i < 10) {
+              EXPECT_EQ(v<double>(rows->getRowAt(i, 1, true)), double(i))
+                  << query << "i=" << i;
+            } else {
+              EXPECT_EQ(v<double>(rows->getRowAt(i, 1, true)), NULL_DOUBLE)
+                  << query << "i=" << i;
+            }
+            break;
+          case 2:
+            if (i < 10) {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i) + 10)
+                  << query << "i=" << i;
+              EXPECT_EQ(v<double>(rows->getRowAt(i, 1, true)), NULL_DOUBLE)
+                  << query << "i=" << i;
+            } else {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), 19 - int64_t(i))
+                  << query << "i=" << i;
+              EXPECT_EQ(v<double>(rows->getRowAt(i, 1, true)), 19 - double(i))
+                  << query << "i=" << i;
+            }
+            break;
+          case 3:
+            if (i < 10) {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), 9 - int64_t(i))
+                  << query << "i=" << i;
+              EXPECT_EQ(v<double>(rows->getRowAt(i, 1, true)), 9 - double(i))
+                  << query << "i=" << i;
+            } else {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i))
+                  << query << "i=" << i;
+              EXPECT_EQ(v<double>(rows->getRowAt(i, 1, true)), NULL_DOUBLE)
+                  << query << "i=" << i;
+            }
+            break;
+          default:
+            EXPECT_TRUE(false) << t;
+        }
+      }
+    }
+  }
+}
+
 TEST(Select, ApproxMedianSubqueries) {
   if (g_aggregator) {
-    LOG(WARNING) << "Skipping ApproxMedianLargeInts tests in distributed mode.";
+    LOG(WARNING) << "Skipping ApproxMedianSubqueries tests in distributed mode.";
   } else {
     auto const dt = ExecutorDeviceType::CPU;
     const char* query =

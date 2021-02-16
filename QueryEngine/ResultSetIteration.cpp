@@ -32,7 +32,6 @@
 #include "RuntimeFunctions.h"
 #include "Shared/SqlTypesLayout.h"
 #include "Shared/likely.h"
-#include "Shared/quantile.h"
 #include "Shared/sqltypes.h"
 #include "TypePunning.h"
 
@@ -1718,17 +1717,6 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
   return TargetValue(nullptr);
 }
 
-namespace {
-double calculate_quantile(quantile::TDigest* const t_digest, double const q) {
-  static_assert(sizeof(int64_t) == sizeof(quantile::TDigest*));
-  CHECK(t_digest) << "t_digest=" << (void*)t_digest << ", q=" << q;
-  t_digest->mergeBuffer();
-  double const median = t_digest->quantile(q);
-  VLOG(2) << "median(" << median << ") t_digest->centroids()=" << t_digest->centroids();
-  return boost::math::isnan(median) ? NULL_DOUBLE : median;
-}
-}  // namespace
-
 // Reads an integer or a float from ptr based on the type and the byte width.
 TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
                                        const int8_t compact_sz,
@@ -1790,7 +1778,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
   }
   if (chosen_type.is_fp()) {
     if (target_info.agg_kind == kAPPROX_MEDIAN) {
-      return calculate_quantile(*reinterpret_cast<quantile::TDigest* const*>(ptr), 0.5);
+      return calculateQuantile(*reinterpret_cast<quantile::TDigest* const*>(ptr), 0.5);
     }
     switch (actual_compact_sz) {
       case 8: {

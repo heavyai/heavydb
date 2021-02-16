@@ -30,7 +30,6 @@
 #include "RuntimeFunctions.h"
 #include "Shared/SqlTypesLayout.h"
 #include "Shared/likely.h"
-#include "Shared/quantile.h"
 #include "Shared/thread_count.h"
 
 #include <llvm/ExecutionEngine/GenericValue.h>
