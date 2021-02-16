@@ -1,0 +1,9 @@
+Struct Restriction
+==================
+
+.. doxygenstruct:: Restriction
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

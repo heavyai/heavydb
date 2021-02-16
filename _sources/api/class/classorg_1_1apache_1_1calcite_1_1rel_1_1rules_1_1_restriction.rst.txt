@@ -1,0 +1,9 @@
+Class org::apache::calcite::rel::rules::Restriction
+===================================================
+
+.. doxygenclass:: org::apache::calcite::rel::rules::Restriction
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

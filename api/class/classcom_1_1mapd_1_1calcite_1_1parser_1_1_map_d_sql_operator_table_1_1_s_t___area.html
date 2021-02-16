@@ -41,7 +41,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Buffer" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___buffer.html" />
-    <link rel="prev" title="Class com::mapd::calcite::parser::MapDSqlOperatorTable::RegexpLike::EscapeOptional" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_regexp_like_1_1_escape_optional.html" /> 
+    <link rel="prev" title="Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Approx_Overlaps" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___approx___overlaps.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev cd4981d
+                5.6.0dev 94e8789
               </div>
             
           
@@ -848,6 +848,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_ramp_function.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::RampFunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_regexp_like.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::RegexpLike</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_regexp_like_1_1_escape_optional.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::RegexpLike::EscapeOptional</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___approx___overlaps.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Approx_Overlaps</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Area</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___buffer.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Buffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___centroid.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Centroid</a></li>
@@ -1399,8 +1400,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1externalize_1_1_map_d_rel_json_reader.html">Class org::apache::calcite::rel::externalize::MapDRelJsonReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1externalize_1_1_map_d_rel_json_writer.html">Class org::apache::calcite::rel::externalize::MapDRelJsonWriter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_dynamic_filter_join_rule.html">Class org::apache::calcite::rel::rules::DynamicFilterJoinRule</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_inject_filter_rule.html">Class org::apache::calcite::rel::rules::InjectFilterRule</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_outer_join_opt_via_null_rejection_rule.html">Class org::apache::calcite::rel::rules::OuterJoinOptViaNullRejectionRule</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_query_optimization_rules.html">Class org::apache::calcite::rel::rules::QueryOptimizationRules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_restriction.html">Class org::apache::calcite::rel::rules::Restriction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::Blackboard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_deferred_lookup.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::DeferredLookup</a></li>
@@ -1645,6 +1648,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_1_1_table_function_work_unit.html">Struct RelAlgExecutor::TableFunctionWorkUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_1_1_work_unit.html">Struct RelAlgExecutor::WorkUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_render_query_options.html">Struct RenderQueryOptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_restriction.html">Struct Restriction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_column_wise_target_accessor.html">Struct ResultSet::ColumnWiseTargetAccessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_query_execution_timings.html">Struct ResultSet::QueryExecutionTimings</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_result_set_comparator.html">Struct ResultSet::ResultSetComparator</a></li>
@@ -1924,7 +1928,7 @@
         <a href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___buffer.html" class="btn btn-neutral float-right" title="Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Buffer" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_regexp_like_1_1_escape_optional.html" class="btn btn-neutral float-left" title="Class com::mapd::calcite::parser::MapDSqlOperatorTable::RegexpLike::EscapeOptional" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___approx___overlaps.html" class="btn btn-neutral float-left" title="Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Approx_Overlaps" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   
