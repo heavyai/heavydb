@@ -103,6 +103,22 @@ TEST_F(DashboardBasicTest, CreateReplaceDelete) {
   ASSERT_EQ(getNumDashboards(), size_t(0));
 }
 
+TEST_F(DashboardBasicTest, ReplaceWithTableChange) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto db_id = db_handler->create_dashboard(
+      session_id, "testdb", "state", "image", "\"table\":\"omnisci_states\"");
+
+  db_handler->replace_dashboard(session_id,
+                                db_id,
+                                "testdb",
+                                "test_user",
+                                "state",
+                                "image",
+                                "\"table\":\"omnisci_counties\"");
+
+  db_handler->delete_dashboard(session_id, db_id);
+}
+
 struct TestPermissions {
   TDashboardPermissions permissions;
   std::map<std::string, AccessPrivileges> privileges;
