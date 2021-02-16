@@ -25,7 +25,10 @@
 #include "ParquetEncoder.h"
 #include "ParquetShared.h"
 
+extern size_t g_max_import_threads;
+
 namespace foreign_storage {
+
 /**
  * A lazy parquet to chunk loader
  */

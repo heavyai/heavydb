@@ -275,8 +275,7 @@ void ParquetDataWrapper::fetchChunkMetadata() {
       const auto& file_path = *all_file_paths.begin();
       CHECK_EQ(*processed_file_paths.begin(), file_path);
 
-      std::unique_ptr<parquet::arrow::FileReader> reader;
-      open_parquet_table(file_path, reader, file_system_);
+      auto reader = open_parquet_table(file_path, file_system_);
       size_t row_count = reader->parquet_reader()->metadata()->num_rows();
 
       if (row_count < total_row_count_) {
