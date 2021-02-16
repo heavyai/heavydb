@@ -2582,6 +2582,13 @@ TEST(Select, OrderBy) {
       c("SELECT x, y, SUM(f) FROM test WHERE f IS NOT NULL GROUP BY x, y ORDER BY 3 " +
             order + " LIMIT 1;",
         dt);
+      for (std::string nulls : {" NULLS LAST", " NULLS FIRST"}) {
+        char const* const prefix =
+            "SELECT t2.x, t0.x FROM coalesce_cols_test_2 t2 LEFT JOIN "
+            "coalesce_cols_test_0 t0 ON t2.x=t0.x ORDER BY t0.x ";
+        std::string query = prefix + order + nulls + ", t2.x ASC NULLS LAST;";
+        c(query, dt);
+      }
     }
     c("SELECT * FROM ( SELECT x, y FROM test ORDER BY x, y ASC NULLS FIRST LIMIT 10 ) t0 "
       "LIMIT 5;",
@@ -2590,80 +2597,6 @@ TEST(Select, OrderBy) {
     c(R"(SELECT str, COUNT(*) FROM test GROUP BY str ORDER BY 2 DESC NULLS FIRST LIMIT 50 OFFSET 10;)",
       R"(SELECT str, COUNT(*) FROM test GROUP BY str ORDER BY 2 DESC LIMIT 50 OFFSET 10;)",
       dt);
-  }
-}
-
-TEST(Select, OrderByNull) {
-  for (auto const dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    char const* const prefix =
-        "SELECT t2.x, t0.x FROM coalesce_cols_test_2 t2 LEFT JOIN coalesce_cols_test_0 "
-        "t0 ON t2.x=t0.x ORDER BY t0.x ";
-    std::vector<std::string> const tests{
-        "ASC NULLS FIRST", "ASC NULLS LAST", "DESC NULLS FIRST", "DESC NULLS LAST"};
-    constexpr size_t NROWS = 20;
-    for (size_t t = 0; t < tests.size(); ++t) {
-      std::string const query = prefix + tests[t] + ", t2.x;";
-      auto rows = run_multiple_agg(query, dt);
-      EXPECT_EQ(rows->colCount(), 2u) << query;
-      EXPECT_EQ(rows->rowCount(), NROWS) << query;
-      for (size_t i = 0; i < NROWS; ++i) {
-        switch (t) {
-          case 0:
-            if (i < 10) {
-              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i) + 10)
-                  << query << "i=" << i;
-              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 1, true)), NULL_INT)
-                  << query << "i=" << i;
-            } else {
-              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i) - 10)
-                  << query << "i=" << i;
-              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 1, true)), int64_t(i) - 10)
-                  << query << "i=" << i;
-            }
-            break;
-          case 1:
-            EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i))
-                << query << "i=" << i;
-            if (i < 10) {
-              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 1, true)), int64_t(i))
-                  << query << "i=" << i;
-            } else {
-              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 1, true)), NULL_INT)
-                  << query << "i=" << i;
-            }
-            break;
-          case 2:
-            if (i < 10) {
-              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i) + 10)
-                  << query << "i=" << i;
-              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 1, true)), NULL_INT)
-                  << query << "i=" << i;
-            } else {
-              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), 19 - int64_t(i))
-                  << query << "i=" << i;
-              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 1, true)), 19 - int64_t(i))
-                  << query << "i=" << i;
-            }
-            break;
-          case 3:
-            if (i < 10) {
-              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), 9 - int64_t(i))
-                  << query << "i=" << i;
-              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 1, true)), 9 - int64_t(i))
-                  << query << "i=" << i;
-            } else {
-              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i))
-                  << query << "i=" << i;
-              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 1, true)), NULL_INT)
-                  << query << "i=" << i;
-            }
-            break;
-          default:
-            EXPECT_TRUE(false) << t;
-        }
-      }
-    }
   }
 }
 
@@ -2763,7 +2696,7 @@ TEST(Select, GroupByPushDownFilterIntoExprRange) {
         size_t(1),
         rows->rowCount());  // Sqlite does not have a boolean type, so do this for now
     c("SELECT x, COUNT(*) AS n FROM test WHERE x > 7 GROUP BY x ORDER BY x", dt);
-    c("SELECT y, COUNT(*) AS n FROM test WHERE y <= 43 GROUP BY y ORDER BY n DESC", dt);
+    c("SELECT y, COUNT(*) AS n FROM test WHERE y < 43 GROUP BY y ORDER BY n DESC", dt);
     c("SELECT z, COUNT(*) AS n FROM test WHERE z <= 43 AND y > 10 GROUP BY z ORDER BY n "
       "DESC",
       dt);
@@ -19831,38 +19764,57 @@ TEST(Select, WindowFunctionCumeDist) {
   c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
 }
 
+// lag(expr, offset)
+// lead(expr, offset)
+// SQLite: "If the offset argument is provided, then it must be a non-negative integer."
+// https://www.sqlite.org/windowfunctions.html
+// OmniSci allows for offset < 0, so we swap LAG and LEAD and use -offset to test.
+// SQLite : ASC -> ASC NULLS FIRST
+// OmniSci: ASC -> ASC NULLS LAST
+// and vice-versa for DESC. To prevent conflict, add NULLS FIRST/LAST if there are NULLS.
 TEST(Select, WindowFunctionLag) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   // First test default lag (1)
   {
     std::string part1 =
-        "SELECT x, y, LAG(x + 5) OVER (PARTITION BY y ORDER BY x ASC) l FROM "
-        "test_window_func ORDER BY x ASC";
-    std::string part2 = ", y ASC, l ASC";
-    c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+        "SELECT x, y, LAG(x + 5) OVER (PARTITION BY y ORDER BY x ASC NULLS LAST) l FROM "
+        "test_window_func ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST, l ASC NULLS "
+        "FIRST;";
+    c(part1, dt);
   }
   {
     std::string part1 =
-        "SELECT x, LAG(y) OVER (PARTITION BY y ORDER BY x ASC) l FROM test_window_func "
-        "ORDER BY x ASC";
-    std::string part2 = ", l ASC";
-    c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+        "SELECT x, LAG(y) OVER (PARTITION BY y ORDER BY x ASC NULLS LAST) l FROM "
+        "test_window_func ORDER BY x ASC NULLS FIRST, l ASC NULLS FIRST;";
+    c(part1, dt);
   }
 
   for (int lag = -5; lag <= 5; ++lag) {
     {
       std::string part1 =
           "SELECT x, y, LAG(x + 5, " + std::to_string(lag) +
-          ") OVER (PARTITION BY y ORDER BY x ASC) l FROM test_window_func ORDER BY x ASC";
-      std::string part2 = ", y ASC, l ASC";
-      c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+          ") OVER (PARTITION BY y ORDER BY x ASC NULLS FIRST) l FROM test_window_func "
+          "ORDER BY x ASC NULLS LAST, y ASC NULLS LAST, l ASC NULLS LAST;";
+      if (lag < 0) {
+        std::string sqlite = boost::replace_first_copy(part1, "LAG", "LEAD");
+        boost::erase_first(sqlite, "-");
+        c(part1, sqlite, dt);
+      } else {
+        c(part1, dt);
+      }
     }
     {
       std::string part1 =
           "SELECT x, LAG(y, " + std::to_string(lag) +
-          ") OVER (PARTITION BY y ORDER BY x ASC) l FROM test_window_func ORDER BY x ASC";
-      std::string part2 = ", l ASC";
-      c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+          ") OVER (PARTITION BY y ORDER BY x ASC NULLS LAST) l FROM test_window_func "
+          "ORDER BY x ASC NULLS FIRST, l ASC NULLS FIRST;";
+      if (lag < 0) {
+        std::string sqlite = boost::replace_first_copy(part1, "LAG", "LEAD");
+        boost::erase_first(sqlite, "-");
+        c(part1, sqlite, dt);
+      } else {
+        c(part1, dt);
+      }
     }
   }
 }
@@ -19871,16 +19823,16 @@ TEST(Select, WindowFunctionFirst) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   {
     std::string part1 =
-        "SELECT x, y, FIRST_VALUE(x + 5) OVER (PARTITION BY y ORDER BY x ASC) f FROM "
-        "test_window_func ORDER BY x ASC";
-    std::string part2 = ", y ASC, f ASC;";
+        "SELECT x, y, FIRST_VALUE(x + 5) OVER (PARTITION BY y ORDER BY x ASC NULLS LAST) "
+        "f FROM test_window_func ORDER BY x ASC";
+    std::string part2 = ", y ASC NULLS LAST, f ASC;";
     c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
   }
   {
     std::string part1 =
         "SELECT x, FIRST_VALUE(y) OVER (PARTITION BY t ORDER BY x ASC) f FROM "
         "test_window_func ORDER BY x ASC";
-    std::string part2 = ", f ASC;";
+    std::string part2 = ", f ASC NULLS LAST;";
     c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
   }
 }
@@ -19890,14 +19842,14 @@ TEST(Select, WindowFunctionLead) {
   // First test default lead (1)
   {
     std::string part1 =
-        "SELECT x, y, LEAD(x) OVER (PARTITION BY y ORDER BY x DESC) l FROM "
+        "SELECT x, y, LEAD(x) OVER (PARTITION BY y ORDER BY x DESC NULLS FIRST) l FROM "
         "test_window_func ORDER BY x ASC";
-    std::string part2 = ", y ASC, l ASC";
+    std::string part2 = ", y ASC NULLS LAST, l ASC";
     c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
   }
   {
     std::string part1 =
-        "SELECT x, LEAD(y) OVER (PARTITION BY y ORDER BY x DESC) l FROM "
+        "SELECT x, LEAD(y) OVER (PARTITION BY y ORDER BY x DESC NULLS FIRST) l FROM "
         "test_window_func ORDER BY x ASC";
     std::string part2 = ", l ASC";
     c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
@@ -19905,18 +19857,30 @@ TEST(Select, WindowFunctionLead) {
 
   for (int lead = -5; lead <= 5; ++lead) {
     {
-      std::string part1 = "SELECT x, y, LEAD(x, " + std::to_string(lead) +
-                          ") OVER (PARTITION BY y ORDER BY x DESC) l FROM "
-                          "test_window_func ORDER BY x ASC";
-      std::string part2 = ", y ASC, l ASC";
-      c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+      std::string part1 =
+          "SELECT x, y, LEAD(x, " + std::to_string(lead) +
+          ") OVER (PARTITION BY y ORDER BY x DESC NULLS FIRST) l FROM test_window_func "
+          "ORDER BY x ASC NULLS FIRST, y ASC NULLS LAST, l ASC NULLS FIRST;";
+      if (lead < 0) {
+        std::string sqlite = boost::replace_first_copy(part1, "LEAD", "LAG");
+        boost::erase_first(sqlite, "-");
+        c(part1, sqlite, dt);
+      } else {
+        c(part1, dt);
+      }
     }
     {
-      std::string part1 = "SELECT x, LEAD(y, " + std::to_string(lead) +
-                          ") OVER (PARTITION BY y ORDER BY x DESC) l FROM "
-                          "test_window_func ORDER BY x ASC";
-      std::string part2 = ", l ASC";
-      c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+      std::string part1 =
+          "SELECT x, LEAD(y, " + std::to_string(lead) +
+          ") OVER (PARTITION BY y ORDER BY x DESC NULLS FIRST) l FROM test_window_func "
+          "ORDER BY x ASC NULLS FIRST, l ASC NULLS FIRST;";
+      if (lead < 0) {
+        std::string sqlite = boost::replace_first_copy(part1, "LEAD", "LAG");
+        boost::erase_first(sqlite, "-");
+        c(part1, sqlite, dt);
+      } else {
+        c(part1, dt);
+      }
     }
   }
 }
