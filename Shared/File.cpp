@@ -39,13 +39,18 @@ bool g_read_only{false};
 
 namespace File_Namespace {
 
+std::string get_data_file_path(const std::string& base_path,
+                               int file_id,
+                               size_t page_size) {
+  return base_path + "/" + std::to_string(file_id) + "." + std::to_string(page_size) +
+         std::string(MAPD_FILE_EXT);  // MAPD_FILE_EXT has preceding "."
+}
+
 FILE* create(const std::string& basePath,
              const int fileId,
              const size_t pageSize,
              const size_t numPages) {
-  std::string path(basePath + "/" + std::to_string(fileId) + "." +
-                   std::to_string(pageSize) +
-                   std::string(MAPD_FILE_EXT));  // MAPD_FILE_EXT has preceding "."
+  auto path = get_data_file_path(basePath, fileId, pageSize);
   if (numPages < 1 || pageSize < 1) {
     LOG(FATAL) << "Error trying to create file '" << path
                << "', Number of pages and page size must be positive integers. numPages "

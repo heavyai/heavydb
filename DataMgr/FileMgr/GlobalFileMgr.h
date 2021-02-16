@@ -46,6 +46,8 @@ struct FileMgrParams {
   int32_t max_rollback_epochs;
 };
 
+using FileMgrKey = std::pair<int32_t, int32_t>;
+
 /**
  * @class   GlobalFileMgr
  * @brief
@@ -145,6 +147,8 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
 
   size_t getNumChunks() override;
 
+  void compactDataFiles(const int32_t db_id, const int32_t tb_id);
+
  private:
   AbstractBufferMgr* findFileMgrUnlocked(const int32_t db_id, const int32_t tb_id);
   void deleteFileMgr(const int32_t db_id, const int32_t tb_id);
@@ -208,8 +212,9 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   bool dbConvert_;  /// true if conversion should be done between different
                     /// "omnisci_db_version_"
 
-  std::map<std::pair<int32_t, int32_t>, std::shared_ptr<FileMgr>> ownedFileMgrs_;
-  std::map<std::pair<int32_t, int32_t>, AbstractBufferMgr*> allFileMgrs_;
+  std::map<FileMgrKey, std::shared_ptr<FileMgr>> ownedFileMgrs_;
+  std::map<FileMgrKey, AbstractBufferMgr*> allFileMgrs_;
+  std::map<FileMgrKey, int32_t> max_rollback_epochs_per_table_;
 
   mapd_shared_mutex fileMgrs_mutex_;
 };

@@ -19,10 +19,14 @@
  * @brief Unit tests for FileMgr class.
  */
 
+#include <fstream>
+
 #include <gtest/gtest.h>
+
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
+#include "Shared/File.h"
 #include "TestHelpers.h"
 
 class FileMgrTest : public DBHandlerTestFixture {
@@ -461,6 +465,553 @@ TEST_F(FileMgrTest, capped_metadata) {
                 num_metadata_pages_expected);
     }
   }
+}
+
+class DataCompactionTest : public FileMgrTest {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("drop table if exists test_table;");
+  }
+
+  void TearDown() override {
+    sql("drop table test_table;");
+    File_Namespace::FileMgr::setNumPagesPerDataFile(
+        File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_DATA_FILE);
+    File_Namespace::FileMgr::setNumPagesPerMetadataFile(
+        File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_METADATA_FILE);
+    DBHandlerTestFixture::TearDown();
+  }
+
+  File_Namespace::FileMgr* getFileMgr() {
+    auto& data_mgr = getCatalog().getDataMgr();
+    auto td = getCatalog().getMetadataForTable("test_table", false);
+    return dynamic_cast<File_Namespace::FileMgr*>(data_mgr.getGlobalFileMgr()->getFileMgr(
+        getCatalog().getDatabaseId(), td->tableId));
+  }
+
+  ChunkKey getChunkKey(const std::string& column_name) {
+    auto td = getCatalog().getMetadataForTable("test_table", false);
+    auto cd = getCatalog().getMetadataForColumn(td->tableId, column_name);
+    return {getCatalog().getDatabaseId(), td->tableId, cd->columnId, 0};
+  }
+
+  void assertStorageStats(uint64_t metadata_file_count,
+                          std::optional<uint64_t> free_metadata_page_count,
+                          uint64_t data_file_count,
+                          std::optional<uint64_t> free_data_page_count) {
+    auto& catalog = getCatalog();
+    auto global_file_mgr = catalog.getDataMgr().getGlobalFileMgr();
+    auto td = catalog.getMetadataForTable("test_table", false);
+    auto stats = global_file_mgr->getStorageStats(catalog.getDatabaseId(), td->tableId);
+    EXPECT_EQ(metadata_file_count, stats.metadata_file_count);
+    ASSERT_EQ(free_metadata_page_count.has_value(),
+              stats.total_free_metadata_page_count.has_value());
+    if (free_metadata_page_count.has_value()) {
+      EXPECT_EQ(free_metadata_page_count.value(),
+                stats.total_free_metadata_page_count.value());
+    }
+
+    EXPECT_EQ(data_file_count, stats.data_file_count);
+    ASSERT_EQ(free_data_page_count.has_value(),
+              stats.total_free_data_page_count.has_value());
+    if (free_data_page_count.has_value()) {
+      EXPECT_EQ(free_data_page_count.value(), stats.total_free_data_page_count.value());
+    }
+  }
+
+  void assertChunkMetadata(AbstractBuffer* buffer, int32_t value) {
+    auto metadata = getMetadataForBuffer(buffer);
+    EXPECT_EQ(static_cast<size_t>(1), metadata->numElements);
+    EXPECT_EQ(sizeof(int32_t), metadata->numBytes);
+    EXPECT_FALSE(metadata->chunkStats.has_nulls);
+    EXPECT_EQ(value, metadata->chunkStats.min.intval);
+    EXPECT_EQ(value, metadata->chunkStats.max.intval);
+  }
+
+  void assertBufferValueAndMetadata(int32_t expected_value,
+                                    const std::string& column_name) {
+    auto chunk_key = getChunkKey(column_name);
+    auto file_mgr = getFileMgr();
+    auto buffer = file_mgr->getBuffer(chunk_key, sizeof(int32_t));
+    int32_t value;
+    buffer->read(reinterpret_cast<int8_t*>(&value), sizeof(int32_t));
+    EXPECT_EQ(expected_value, value);
+    assertChunkMetadata(buffer, expected_value);
+  }
+
+  AbstractBuffer* createBuffer(const std::string& column_name) {
+    auto chunk_key = getChunkKey(column_name);
+    auto buffer = getFileMgr()->createBuffer(chunk_key, DEFAULT_PAGE_SIZE, 0);
+    auto cd = getCatalog().getMetadataForColumn(chunk_key[CHUNK_KEY_TABLE_IDX],
+                                                chunk_key[CHUNK_KEY_COLUMN_IDX]);
+    buffer->initEncoder(cd->columnType);
+    return buffer;
+  }
+
+  void writeValue(AbstractBuffer* buffer, int32_t value) {
+    std::vector<int32_t> data{value};
+    writeData(buffer, data, 0);
+    getFileMgr()->checkpoint();
+  }
+
+  void writeMultipleValues(AbstractBuffer* buffer, int32_t start_value, int32_t count) {
+    for (int32_t i = 0; i < count; i++) {
+      writeValue(buffer, start_value + i);
+    }
+  }
+
+  void setMaxRollbackEpochs(int32_t max_rollback_epochs) {
+    auto td = getCatalog().getMetadataForTable("test_table", false);
+    auto& data_mgr = getCatalog().getDataMgr();
+    File_Namespace::FileMgrParams params;
+    params.max_rollback_epochs = 0;
+    data_mgr.getGlobalFileMgr()->setFileMgrParams(
+        getCatalog().getDatabaseId(), td->tableId, params);
+  }
+
+  void compactDataFiles() {
+    auto td = getCatalog().getMetadataForTable("test_table", false);
+    auto global_file_mgr = getCatalog().getDataMgr().getGlobalFileMgr();
+    global_file_mgr->compactDataFiles(getCatalog().getDatabaseId(), td->tableId);
+  }
+
+  void deleteFileMgr() {
+    auto td = getCatalog().getMetadataForTable("test_table", false);
+    auto global_file_mgr = getCatalog().getDataMgr().getGlobalFileMgr();
+    global_file_mgr->closeFileMgr(getCatalog().getDatabaseId(), td->tableId);
+  }
+
+  void deleteBuffer(const std::string& column_name) {
+    auto chunk_key = getChunkKey(column_name);
+    auto file_mgr = getFileMgr();
+    file_mgr->deleteBuffer(chunk_key);
+    file_mgr->checkpoint();
+  }
+};
+
+TEST_F(DataCompactionTest, DataFileCompaction) {
+  // One page per file for the data file (metadata file default
+  // configuration of 4096 pages remains the same), so each
+  // write creates a new data file.
+  File_Namespace::FileMgr::setNumPagesPerDataFile(1);
+
+  sql("create table test_table (i int);");
+  // No files and free pages at the beginning
+  assertStorageStats(0, {}, 0, {});
+
+  auto buffer = createBuffer("i");
+  writeValue(buffer, 1);
+  // One data file and one metadata file. Data file has no free pages,
+  // since the only page available has been used. Metadata file has
+  // default (4096) - 1 free pages
+  assertStorageStats(1, 4095, 1, 0);
+
+  writeValue(buffer, 2);
+  // Second data file created for new page
+  assertStorageStats(1, 4094, 2, 0);
+
+  writeValue(buffer, 3);
+  // Third data file created for new page
+  assertStorageStats(1, 4093, 3, 0);
+
+  // Verify buffer data and metadata are set as expected
+  assertBufferValueAndMetadata(3, "i");
+
+  // Setting max rollback epochs to 0 should free up
+  // oldest 2 pages
+  setMaxRollbackEpochs(0);
+  assertStorageStats(1, 4095, 3, 2);
+
+  // Verify buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(3, "i");
+
+  // Data compaction should result in removal of the
+  // 2 files with free pages
+  compactDataFiles();
+  assertStorageStats(1, 4095, 1, 0);
+
+  // Verify buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(3, "i");
+}
+
+TEST_F(DataCompactionTest, MetadataFileCompaction) {
+  // One page per file for the metadata file (data file default
+  // configuration of 256 pages remains the same), so each write
+  // creates a new metadata file.
+  File_Namespace::FileMgr::setNumPagesPerMetadataFile(1);
+
+  sql("create table test_table (i int);");
+  // No files and free pages at the beginning
+  assertStorageStats(0, {}, 0, {});
+
+  auto buffer = createBuffer("i");
+  writeValue(buffer, 1);
+  // One data file and one metadata file. Metadata file has no free pages,
+  // since the only page available has been used. Data file has
+  // default (256) - 1 free pages
+  assertStorageStats(1, 0, 1, 255);
+
+  writeValue(buffer, 2);
+  // Second metadata file created for new page
+  assertStorageStats(2, 0, 1, 254);
+
+  writeValue(buffer, 3);
+  // Third metadata file created for new page
+  assertStorageStats(3, 0, 1, 253);
+
+  // Verify buffer data and metadata are set as expected
+  assertBufferValueAndMetadata(3, "i");
+
+  // Setting max rollback epochs to 0 should free up
+  // oldest 2 pages
+  setMaxRollbackEpochs(0);
+  assertStorageStats(3, 2, 1, 255);
+
+  // Verify buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(3, "i");
+
+  // Data compaction should result in removal of the
+  // 2 files with free pages
+  compactDataFiles();
+  assertStorageStats(1, 0, 1, 255);
+
+  // Verify buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(3, "i");
+}
+
+TEST_F(DataCompactionTest, DataAndMetadataFileCompaction) {
+  // One page per file for the data and metadata files, so each
+  // write creates a new data and metadata file.
+  File_Namespace::FileMgr::setNumPagesPerDataFile(1);
+  File_Namespace::FileMgr::setNumPagesPerMetadataFile(1);
+
+  sql("create table test_table (i int);");
+  // No files and free pages at the beginning
+  assertStorageStats(0, {}, 0, {});
+
+  auto buffer = createBuffer("i");
+  writeValue(buffer, 1);
+  // One data file and one metadata file. Both files have no free pages,
+  // since the only page available has been used.
+  assertStorageStats(1, 0, 1, 0);
+
+  writeValue(buffer, 2);
+  // Second data and metadata file created for new page
+  assertStorageStats(2, 0, 2, 0);
+
+  writeValue(buffer, 3);
+  // Third data and metadata file created for new page
+  assertStorageStats(3, 0, 3, 0);
+
+  // Verify buffer data and metadata are set as expected
+  assertBufferValueAndMetadata(3, "i");
+
+  // Setting max rollback epochs to 0 should free up
+  // oldest 2 pages for both files
+  setMaxRollbackEpochs(0);
+  assertStorageStats(3, 2, 3, 2);
+
+  // Verify buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(3, "i");
+
+  // Data compaction should result in removal of the
+  // 4 files with free pages
+  compactDataFiles();
+  assertStorageStats(1, 0, 1, 0);
+
+  // Verify buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(3, "i");
+}
+
+TEST_F(DataCompactionTest, MultipleChunksPerFile) {
+  File_Namespace::FileMgr::setNumPagesPerDataFile(4);
+
+  sql("create table test_table (i int, i2 int);");
+  // No files and free pages at the beginning
+  assertStorageStats(0, {}, 0, {});
+
+  auto buffer_1 = createBuffer("i");
+  auto buffer_2 = createBuffer("i2");
+
+  writeValue(buffer_1, 1);
+  // One data file and one metadata file. Data file has 3 free pages.
+  // Metadata file has default (4096) - 1 free pages
+  assertStorageStats(1, 4095, 1, 3);
+
+  writeValue(buffer_2, 1);
+  assertStorageStats(1, 4094, 1, 2);
+
+  writeValue(buffer_2, 2);
+  assertStorageStats(1, 4093, 1, 1);
+
+  writeValue(buffer_2, 3);
+  assertStorageStats(1, 4092, 1, 0);
+
+  writeValue(buffer_2, 4);
+  // Second data file created for new page
+  assertStorageStats(1, 4091, 2, 3);
+
+  // Verify buffer data and metadata are set as expected
+  assertBufferValueAndMetadata(1, "i");
+  assertBufferValueAndMetadata(4, "i2");
+
+  // Setting max rollback epochs to 0 should free up
+  // oldest 3 pages for column "i2"
+  setMaxRollbackEpochs(0);
+
+  assertStorageStats(1, 4094, 2, 6);
+
+  // Verify buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(1, "i");
+  assertBufferValueAndMetadata(4, "i2");
+
+  // Data compaction should result in movement of a page from the
+  // last data page file to the first data page file and deletion
+  // of the last data page file
+  compactDataFiles();
+  assertStorageStats(1, 4094, 1, 2);
+
+  // Verify buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(1, "i");
+  assertBufferValueAndMetadata(4, "i2");
+}
+
+TEST_F(DataCompactionTest, SourceFilePagesCopiedOverMultipleDestinationFiles) {
+  File_Namespace::FileMgr::setNumPagesPerDataFile(4);
+
+  sql("create table test_table (i int, i2 int);");
+  // No files and free pages at the beginning
+  assertStorageStats(0, {}, 0, {});
+
+  auto buffer_1 = createBuffer("i");
+  auto buffer_2 = createBuffer("i2");
+
+  // First file has 2 pages for each buffer
+  writeMultipleValues(buffer_1, 1, 2);
+  writeMultipleValues(buffer_2, 1, 2);
+  assertStorageStats(1, 4092, 1, 0);
+
+  // Second file has 2 pages for each buffer
+  writeMultipleValues(buffer_1, 3, 2);
+  writeMultipleValues(buffer_2, 3, 2);
+  assertStorageStats(1, 4088, 2, 0);
+
+  // Third file has 2 pages for each buffer
+  writeMultipleValues(buffer_1, 5, 2);
+  writeMultipleValues(buffer_2, 5, 2);
+  assertStorageStats(1, 4084, 3, 0);
+
+  // Fourth file has 3 pages for buffer "i" and 1 for buffer "i2"
+  writeMultipleValues(buffer_1, 7, 3);
+  writeMultipleValues(buffer_2, 7, 1);
+  assertStorageStats(1, 4080, 4, 0);
+
+  // Verify buffer data and metadata are set as expected
+  assertBufferValueAndMetadata(9, "i");
+  assertBufferValueAndMetadata(7, "i2");
+
+  // Free the 7 pages used by buffer "i2" across the 4 files
+  deleteBuffer("i2");
+  assertStorageStats(1, 4087, 4, 7);
+
+  // Verify first buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(9, "i");
+
+  // Files 1, 2, and 3 each have 2 free pages (out of 4 total pages per file).
+  // File 4 has 1 free page. Used pages in file 1 should be copied over to
+  // files 4 and 3. File 1 should then be deleted.
+  compactDataFiles();
+  assertStorageStats(1, 4087, 3, 3);
+
+  // Verify first buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(9, "i");
+}
+
+TEST_F(DataCompactionTest, SingleDataAndMetadataPages) {
+  sql("create table test_table (i int);");
+  // No files and free pages at the beginning
+  assertStorageStats(0, {}, 0, {});
+
+  auto buffer = createBuffer("i");
+  writeMultipleValues(buffer, 1, 3);
+  assertStorageStats(1, 4093, 1, 253);
+
+  // Verify buffer data and metadata are set as expected
+  assertBufferValueAndMetadata(3, "i");
+
+  // Setting max rollback epochs to 0 should free up
+  // oldest 2 pages
+  setMaxRollbackEpochs(0);
+  assertStorageStats(1, 4095, 1, 255);
+
+  // Verify buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(3, "i");
+
+  // Data compaction should result in no changes to files
+  compactDataFiles();
+  assertStorageStats(1, 4095, 1, 255);
+
+  // Verify buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(3, "i");
+}
+
+TEST_F(DataCompactionTest, RecoveryFromCopyPageStatus) {
+  // One page per file for the data file (metadata file default
+  // configuration of 4096 pages remains the same), so each
+  // write creates a new data file.
+  File_Namespace::FileMgr::setNumPagesPerDataFile(1);
+
+  sql("create table test_table (i int);");
+  // No files and free pages at the beginning
+  assertStorageStats(0, {}, 0, {});
+
+  auto buffer = createBuffer("i");
+  writeMultipleValues(buffer, 1, 3);
+  assertStorageStats(1, 4093, 3, 0);
+
+  // Verify buffer data and metadata are set as expected
+  assertBufferValueAndMetadata(3, "i");
+
+  // Setting max rollback epochs to 0 should free up
+  // oldest 2 pages
+  setMaxRollbackEpochs(0);
+  assertStorageStats(1, 4095, 3, 2);
+
+  // Verify buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(3, "i");
+
+  // Creating a "pending_data_compaction_0" status file and re-initializing
+  // file mgr should result in (resumption of) data compaction and remove the
+  // 2 files with free pages
+  auto status_file_path =
+      getFileMgr()->getFilePath(File_Namespace::FileMgr::COPY_PAGES_STATUS);
+  deleteFileMgr();
+  std::ofstream status_file{status_file_path, std::ios::out | std::ios::binary};
+  status_file.close();
+
+  getFileMgr();
+  assertStorageStats(1, 4095, 1, 0);
+
+  // Verify buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(3, "i");
+}
+
+TEST_F(DataCompactionTest, RecoveryFromUpdatePageVisibiltyStatus) {
+  File_Namespace::FileMgr::setNumPagesPerDataFile(4);
+
+  sql("create table test_table (i int, i2 int);");
+  // No files and free pages at the beginning
+  assertStorageStats(0, {}, 0, {});
+
+  auto buffer_1 = createBuffer("i");
+  auto buffer_2 = createBuffer("i2");
+
+  writeMultipleValues(buffer_1, 1, 2);
+  assertStorageStats(1, 4094, 1, 2);
+
+  writeMultipleValues(buffer_2, 1, 3);
+  assertStorageStats(1, 4091, 2, 3);
+
+  // Verify buffer data and metadata are set as expected
+  assertBufferValueAndMetadata(2, "i");
+  assertBufferValueAndMetadata(3, "i2");
+
+  // Setting max rollback epochs to 0 should free up oldest
+  // page for chunk "i1" and oldest 2 pages for chunk "i2"
+  setMaxRollbackEpochs(0);
+  assertStorageStats(1, 4094, 2, 6);
+
+  // Verify buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(2, "i");
+  assertBufferValueAndMetadata(3, "i2");
+
+  // Creating a "pending_data_compaction_1" status file and re-initializing
+  // file mgr should result in (resumption of) data compaction,
+  // movement of a page for the last data page file to the first data
+  // page file, and deletion of the last data page file
+  auto status_file_path =
+      getFileMgr()->getFilePath(File_Namespace::FileMgr::COPY_PAGES_STATUS);
+  std::ofstream status_file{status_file_path, std::ios::out | std::ios::binary};
+  status_file.close();
+
+  auto file_mgr = getFileMgr();
+  auto buffer = std::make_unique<int8_t[]>(DEFAULT_PAGE_SIZE);
+
+  // Copy last page for "i2" chunk in last data file to first data file
+  int32_t source_file_id{2}, dest_file_id{0};
+  auto source_file_info = file_mgr->getFileInfoForFileId(source_file_id);
+  source_file_info->read(0, DEFAULT_PAGE_SIZE, buffer.get());
+
+  size_t offset{sizeof(File_Namespace::PageHeaderSizeType)};
+  auto destination_file_info = file_mgr->getFileInfoForFileId(dest_file_id);
+  destination_file_info->write(offset, DEFAULT_PAGE_SIZE - offset, buffer.get() + offset);
+  destination_file_info->syncToDisk();
+
+  File_Namespace::PageHeaderSizeType int_chunk_header_size{24};
+  std::vector<File_Namespace::PageMapping> page_mappings{
+      {source_file_id, 0, int_chunk_header_size, dest_file_id, 0}};
+  file_mgr->writePageMappingsToStatusFile(page_mappings);
+  file_mgr->renameCompactionStatusFile(
+      File_Namespace::FileMgr::COPY_PAGES_STATUS,
+      File_Namespace::FileMgr::UPDATE_PAGE_VISIBILITY_STATUS);
+  deleteFileMgr();
+
+  getFileMgr();
+  assertStorageStats(1, 4094, 1, 2);
+
+  // Verify buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(2, "i");
+  assertBufferValueAndMetadata(3, "i2");
+}
+
+TEST_F(DataCompactionTest, RecoveryFromDeleteEmptyFileStatus) {
+  File_Namespace::FileMgr::setNumPagesPerDataFile(4);
+
+  sql("create table test_table (i int, i2 int);");
+  // No files and free pages at the beginning
+  assertStorageStats(0, {}, 0, {});
+
+  auto buffer_1 = createBuffer("i");
+  auto buffer_2 = createBuffer("i2");
+
+  writeValue(buffer_1, 1);
+  // One data file and one metadata file. Data file has 3 free pages.
+  // Metadata file has default (4096) - 1 free pages
+  assertStorageStats(1, 4095, 1, 3);
+
+  writeMultipleValues(buffer_2, 1, 3);
+  assertStorageStats(1, 4092, 1, 0);
+
+  writeValue(buffer_2, 4);
+  // Second data file created for new page
+  assertStorageStats(1, 4091, 2, 3);
+
+  // Verify buffer data and metadata are set as expected
+  assertBufferValueAndMetadata(1, "i");
+  assertBufferValueAndMetadata(4, "i2");
+
+  // Delete chunks for "i2"
+  deleteBuffer("i2");
+  assertStorageStats(1, 4095, 2, 7);
+
+  // Verify first buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(1, "i");
+
+  // Creating a "pending_data_compaction_2" status file and re-initializing
+  // file mgr should result in (resumption of) data compaction and deletion
+  // of the last file that contains only free pages
+  auto status_file_path =
+      getFileMgr()->getFilePath(File_Namespace::FileMgr::DELETE_EMPTY_FILES_STATUS);
+  deleteFileMgr();
+  std::ofstream status_file{status_file_path, std::ios::out | std::ios::binary};
+  status_file.close();
+
+  getFileMgr();
+  assertStorageStats(1, 4095, 1, 3);
+
+  // Verify first buffer data and metadata are still set as expected
+  assertBufferValueAndMetadata(1, "i");
 }
 
 class MaxRollbackEpochTest : public FileMgrTest {

@@ -52,6 +52,13 @@ struct Page {
   Page() : fileId(-1), pageNum(0) {}
 
   inline bool isValid() { return fileId >= 0; }
+
+  bool operator<(const Page other) const {
+    if (fileId != other.fileId) {
+      return fileId < other.fileId;
+    }
+    return pageNum < other.pageNum;
+  }
 };
 
 /**
@@ -93,6 +100,9 @@ struct MultiPage {
 
   /// Pushes a new page with epoch value
   inline void push(const Page& page, const int epoch) {
+    if (!pageVersions.empty()) {
+      CHECK_GT(epoch, pageVersions.back().epoch);
+    }
     pageVersions.push_back({page, epoch});
   }
 

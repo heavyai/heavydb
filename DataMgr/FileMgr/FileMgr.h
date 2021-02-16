@@ -107,6 +107,36 @@ struct StorageStats {
   virtual ~StorageStats() = default;
 };
 
+struct OpenFilesResult {
+  std::vector<HeaderInfo> header_infos;
+  int32_t max_file_id;
+  std::string compaction_status_file_name;
+};
+
+// Page header size is serialized/deserialized as an int.
+using PageHeaderSizeType = int32_t;
+
+struct PageMapping {
+  PageMapping() {}
+
+  PageMapping(int32_t source_file_id,
+              size_t source_page_num,
+              PageHeaderSizeType source_page_header_size,
+              int32_t destination_file_id,
+              size_t destination_page_num)
+      : source_file_id(source_file_id)
+      , source_page_num(source_page_num)
+      , source_page_header_size(source_page_header_size)
+      , destination_file_id(destination_file_id)
+      , destination_page_num(destination_page_num) {}
+
+  int32_t source_file_id;
+  size_t source_page_num;
+  PageHeaderSizeType source_page_header_size;
+  int32_t destination_file_id;
+  size_t destination_page_num;
+};
+
 /**
  * @class   FileMgr
  * @brief
@@ -309,6 +339,32 @@ class FileMgr : public AbstractBufferMgr {  // implements
     return fileMgrKey_;
   }
 
+  inline boost::filesystem::path getFilePath(const std::string& file_name) {
+    return boost::filesystem::path(fileMgrBasePath_) / file_name;
+  }
+
+  // Visible for use in unit tests.
+  void writePageMappingsToStatusFile(const std::vector<PageMapping>& page_mappings);
+
+  // Visible for use in unit tests.
+  void renameCompactionStatusFile(const char* const from_status,
+                                  const char* const to_status);
+
+  void compactFiles();
+
+  static constexpr size_t DEFAULT_NUM_PAGES_PER_DATA_FILE{256};
+  static constexpr size_t DEFAULT_NUM_PAGES_PER_METADATA_FILE{4096};
+
+  // Name of files that indicate the different statuses/phases of data compaction.
+  static constexpr char const* COPY_PAGES_STATUS{"pending_data_compaction_0"};
+  static constexpr char const* UPDATE_PAGE_VISIBILITY_STATUS{"pending_data_compaction_1"};
+  static constexpr char const* DELETE_EMPTY_FILES_STATUS{"pending_data_compaction_2"};
+
+  // Methods that enable override of number of pages per data/metadata file
+  // for use in unit tests.
+  static void setNumPagesPerDataFile(size_t num_pages);
+  static void setNumPagesPerMetadataFile(size_t num_pages);
+
  protected:
   // For testing purposes only
   FileMgr(const int epoch);
@@ -317,11 +373,12 @@ class FileMgr : public AbstractBufferMgr {  // implements
   GlobalFileMgr* gfm_;  /// Global FileMgr
   std::pair<const int32_t, const int32_t> fileMgrKey_;
   int32_t maxRollbackEpochs_;
-  std::string fileMgrBasePath_;   /// The OS file system path containing files related to
-                                  /// this FileMgr
-  std::vector<FileInfo*> files_;  /// A vector of files accessible via a file identifier.
-  PageSizeFileMMap fileIndex_;    /// Maps page sizes to FileInfo objects.
-  size_t num_reader_threads_;     /// number of threads used when loading data
+  std::string fileMgrBasePath_;  /// The OS file system path containing files related to
+                                 /// this FileMgr
+  std::map<int32_t, FileInfo*>
+      files_;                   /// A map of files accessible via a file identifier.
+  PageSizeFileMMap fileIndex_;  /// Maps page sizes to FileInfo objects.
+  size_t num_reader_threads_;   /// number of threads used when loading data
   size_t defaultPageSize_;
   unsigned nextFileId_;  /// the index of the next file id
   Epoch epoch_;
@@ -342,6 +399,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
   mutable mapd_shared_mutex mutex_free_page_;
   std::vector<std::pair<FileInfo*, int32_t>> free_pages_;
   bool isFullyInitted_{false};
+
+  static size_t num_pages_per_data_file_;
+  static size_t num_pages_per_metadata_file_;
 
   /**
    * @brief Adds a file to the file manager repository.
@@ -388,6 +448,25 @@ class FileMgr : public AbstractBufferMgr {  // implements
   // Migration functions
   void migrateToLatestFileMgrVersion();
   void migrateEpochFileV0();
+
+  OpenFilesResult openFiles();
+
+  void clearFileInfos();
+
+  // Data compaction methods
+  void copySourcePageForCompaction(const Page& source_page,
+                                   FileInfo* destination_file_info,
+                                   std::vector<PageMapping>& page_mappings,
+                                   std::set<Page>& touched_pages);
+  int32_t copyPageWithoutHeaderSize(const Page& source_page,
+                                    const Page& destination_page);
+  void sortAndCopyFilePagesForCompaction(size_t page_size,
+                                         std::vector<PageMapping>& page_mappings,
+                                         std::set<Page>& touched_pages);
+  void updateMappedPagesVisibility(const std::vector<PageMapping>& page_mappings);
+  void deleteEmptyFiles();
+  void resumeFileCompaction(const std::string& status_file_name);
+  std::vector<PageMapping> readPageMappingsFromStatusFile();
 };
 
 }  // namespace File_Namespace

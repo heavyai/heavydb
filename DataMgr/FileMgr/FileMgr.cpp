@@ -24,6 +24,7 @@
 
 #include <fcntl.h>
 #include <algorithm>
+#include <fstream>
 #include <future>
 #include <string>
 #include <thread>
@@ -43,7 +44,6 @@ constexpr char LEGACY_EPOCH_FILENAME[] = "epoch";
 constexpr char EPOCH_FILENAME[] = "epoch_metadata";
 constexpr char DB_META_FILENAME[] = "dbmeta";
 constexpr char FILE_MGR_VERSION_FILENAME[] = "filemgr_version";
-
 constexpr int32_t INVALID_VERSION = -1;
 
 using namespace std;
@@ -123,8 +123,8 @@ FileMgr::~FileMgr() {
   for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
     delete chunkIt->second;
   }
-  for (auto file_info : files_) {
-    delete file_info;
+  for (auto file_info_entry : files_) {
+    delete file_info_entry.second;
   }
 
   if (epochFile_) {
@@ -193,6 +193,74 @@ FileMetadata FileMgr::getMetadataForFile(
   return fileMetadata;
 }
 
+namespace {
+bool is_compaction_status_file(const std::string& file_name) {
+  return (file_name == FileMgr::COPY_PAGES_STATUS ||
+          file_name == FileMgr::UPDATE_PAGE_VISIBILITY_STATUS ||
+          file_name == FileMgr::DELETE_EMPTY_FILES_STATUS);
+}
+}  // namespace
+
+OpenFilesResult FileMgr::openFiles() {
+  auto clock_begin = timer_start();
+  boost::filesystem::directory_iterator
+      end_itr;  // default construction yields past-the-end
+  OpenFilesResult result;
+  result.max_file_id = -1;
+  int32_t file_count = 0;
+  int32_t thread_count = std::thread::hardware_concurrency();
+  std::vector<std::future<std::vector<HeaderInfo>>> file_futures;
+  boost::filesystem::path path(fileMgrBasePath_);
+  for (boost::filesystem::directory_iterator file_it(path); file_it != end_itr;
+       ++file_it) {
+    FileMetadata file_metadata = getMetadataForFile(file_it);
+    if (file_metadata.is_data_file) {
+      result.max_file_id = std::max(result.max_file_id, file_metadata.file_id);
+      file_futures.emplace_back(std::async(std::launch::async, [file_metadata, this] {
+        std::vector<HeaderInfo> temp_header_vec;
+        openExistingFile(file_metadata.file_path,
+                         file_metadata.file_id,
+                         file_metadata.page_size,
+                         file_metadata.num_pages,
+                         temp_header_vec);
+        return temp_header_vec;
+      }));
+      file_count++;
+      if (file_count % thread_count == 0) {
+        processFileFutures(file_futures, result.header_infos);
+      }
+    }
+
+    if (is_compaction_status_file(file_it->path().filename().string())) {
+      CHECK(result.compaction_status_file_name.empty());
+      result.compaction_status_file_name = file_it->path().filename().string();
+    }
+  }
+
+  if (file_futures.size() > 0) {
+    processFileFutures(file_futures, result.header_infos);
+  }
+
+  int64_t queue_time_ms = timer_stop(clock_begin);
+  LOG(INFO) << "Completed Reading table's file metadata, Elapsed time : " << queue_time_ms
+            << "ms Epoch: " << epoch_.ceiling() << " files read: " << file_count
+            << " table location: '" << fileMgrBasePath_ << "'";
+  return result;
+}
+
+void FileMgr::clearFileInfos() {
+  for (auto file_info_entry : files_) {
+    auto file_info = file_info_entry.second;
+    if (file_info->f) {
+      close(file_info->f);
+      file_info->f = nullptr;
+    }
+    delete file_info;
+  }
+  files_.clear();
+  fileIndex_.clear();
+}
+
 void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride) {
   // if epochCeiling = -1 this means open from epoch file
 
@@ -201,63 +269,32 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
     if (epochOverride != -1) {  // if opening at specified epoch
       setEpoch(epochOverride);
     }
-    auto clock_begin = timer_start();
 
-    boost::filesystem::directory_iterator
-        endItr;  // default construction yields past-the-end
-    int32_t maxFileId = -1;
-    int32_t fileCount = 0;
-    int32_t threadCount = std::thread::hardware_concurrency();
-    std::vector<HeaderInfo> headerVec;
-    std::vector<std::future<std::vector<HeaderInfo>>> file_futures;
-    boost::filesystem::path path(fileMgrBasePath_);
-    for (boost::filesystem::directory_iterator fileIt(path); fileIt != endItr; ++fileIt) {
-      FileMetadata fileMetadata = getMetadataForFile(fileIt);
-      if (fileMetadata.is_data_file) {
-        maxFileId = std::max(maxFileId, fileMetadata.file_id);
-        file_futures.emplace_back(std::async(std::launch::async, [fileMetadata, this] {
-          std::vector<HeaderInfo> tempHeaderVec;
-          openExistingFile(fileMetadata.file_path,
-                           fileMetadata.file_id,
-                           fileMetadata.page_size,
-                           fileMetadata.num_pages,
-                           tempHeaderVec);
-          return tempHeaderVec;
-        }));
-        fileCount++;
-        if (fileCount % threadCount == 0) {
-          processFileFutures(file_futures, headerVec);
-        }
-      }
+    auto open_files_result = openFiles();
+    if (!open_files_result.compaction_status_file_name.empty()) {
+      resumeFileCompaction(open_files_result.compaction_status_file_name);
+      clearFileInfos();
+      open_files_result = openFiles();
+      CHECK(open_files_result.compaction_status_file_name.empty());
     }
-
-    if (file_futures.size() > 0) {
-      processFileFutures(file_futures, headerVec);
-    }
-    int64_t queue_time_ms = timer_stop(clock_begin);
-
-    LOG(INFO) << "Completed Reading table's file metadata, Elapsed time : "
-              << queue_time_ms << "ms Epoch: " << epoch_.ceiling()
-              << " files read: " << fileCount << " table location: '" << fileMgrBasePath_
-              << "'";
 
     /* Sort headerVec so that all HeaderInfos
      * from a chunk will be grouped together
      * and in order of increasing PageId
      * - Version Epoch */
-
-    std::sort(headerVec.begin(), headerVec.end(), headerCompare);
+    auto& header_vec = open_files_result.header_infos;
+    std::sort(header_vec.begin(), header_vec.end(), headerCompare);
 
     /* Goal of next section is to find sequences in the
      * sorted headerVec of the same ChunkId, which we
      * can then initiate a FileBuffer with */
 
-    VLOG(3) << "Number of Headers in Vector: " << headerVec.size();
-    if (headerVec.size() > 0) {
-      ChunkKey lastChunkKey = headerVec.begin()->chunkKey;
-      auto startIt = headerVec.begin();
+    VLOG(3) << "Number of Headers in Vector: " << header_vec.size();
+    if (header_vec.size() > 0) {
+      ChunkKey lastChunkKey = header_vec.begin()->chunkKey;
+      auto startIt = header_vec.begin();
 
-      for (auto headerIt = headerVec.begin() + 1; headerIt != headerVec.end();
+      for (auto headerIt = header_vec.begin() + 1; headerIt != header_vec.end();
            ++headerIt) {
         if (headerIt->chunkKey != lastChunkKey) {
           chunkIndex_[lastChunkKey] =
@@ -268,9 +305,9 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
       }
       // now need to insert last Chunk
       chunkIndex_[lastChunkKey] =
-          new FileBuffer(this, /*pageSize,*/ lastChunkKey, startIt, headerVec.end());
+          new FileBuffer(this, /*pageSize,*/ lastChunkKey, startIt, header_vec.end());
     }
-    nextFileId_ = maxFileId + 1;
+    nextFileId_ = open_files_result.max_file_id + 1;
     rollOffOldData(epoch(),
                    true /* shouldCheckpoint - only happens if data is rolled off */);
     incrementEpoch();
@@ -317,8 +354,10 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
 }
 
 namespace {
-bool is_metadata_file(size_t file_size, size_t page_size) {
-  return (file_size == (METADATA_PAGE_SIZE * MAX_FILE_N_METADATA_PAGES) &&
+bool is_metadata_file(size_t file_size,
+                      size_t page_size,
+                      size_t num_pages_per_metadata_file) {
+  return (file_size == (METADATA_PAGE_SIZE * num_pages_per_metadata_file) &&
           page_size == METADATA_PAGE_SIZE);
 }
 }  // namespace
@@ -343,7 +382,9 @@ StorageStats FileMgr::getStorageStats() {
            ++fileIt) {
         FileMetadata file_metadata = getMetadataForFile(fileIt);
         if (file_metadata.is_data_file) {
-          if (is_metadata_file(file_metadata.file_size, file_metadata.page_size)) {
+          if (is_metadata_file(file_metadata.file_size,
+                               file_metadata.page_size,
+                               num_pages_per_metadata_file_)) {
             storage_stats.metadata_file_count++;
             storage_stats.total_metadata_file_size += file_metadata.file_size;
             storage_stats.total_metadata_page_count += file_metadata.num_pages;
@@ -363,8 +404,10 @@ StorageStats FileMgr::getStorageStats() {
 
     // We already initialized this table so take the faster path of walking through the
     // FileInfo objects and getting metadata from there
-    for (const auto& file_info : files_) {
-      if (is_metadata_file(file_info->size(), file_info->pageSize)) {
+    for (const auto& file_info_entry : files_) {
+      const auto file_info = file_info_entry.second;
+      if (is_metadata_file(
+              file_info->size(), file_info->pageSize, num_pages_per_metadata_file_)) {
         storage_stats.metadata_file_count++;
         storage_stats.total_metadata_file_size +=
             file_info->pageSize * file_info->numPages;
@@ -526,7 +569,8 @@ void FileMgr::init(const std::string& dataPathToConvertFrom,
 }
 
 void FileMgr::closeRemovePhysical() {
-  for (auto file_info : files_) {
+  for (auto file_info_entry : files_) {
+    auto file_info = file_info_entry.second;
     if (file_info->f) {
       close(file_info->f);
       file_info->f = nullptr;
@@ -670,8 +714,8 @@ void FileMgr::checkpoint() {
   chunkIndexWriteLock.unlock();
 
   mapd_shared_lock<mapd_shared_mutex> read_lock(files_rw_mutex_);
-  for (auto fileIt = files_.begin(); fileIt != files_.end(); ++fileIt) {
-    int32_t status = (*fileIt)->syncToDisk();
+  for (auto file_info_entry : files_) {
+    int32_t status = file_info_entry.second->syncToDisk();
     if (status != 0) {
       LOG(FATAL) << "Could not sync file to disk";
     }
@@ -877,9 +921,9 @@ Page FileMgr::requestFreePage(size_t pageSize, const bool isMetadata) {
   // if here then we need to add a file
   FileInfo* fileInfo;
   if (isMetadata) {
-    fileInfo = createFile(pageSize, MAX_FILE_N_METADATA_PAGES);
+    fileInfo = createFile(pageSize, num_pages_per_metadata_file_);
   } else {
-    fileInfo = createFile(pageSize, MAX_FILE_N_PAGES);
+    fileInfo = createFile(pageSize, num_pages_per_data_file_);
   }
   pageNum = fileInfo->getFreePage();
   CHECK(pageNum != -1);
@@ -912,9 +956,9 @@ void FileMgr::requestFreePages(size_t numPagesRequested,
   while (numPagesNeeded > 0) {
     FileInfo* fileInfo;
     if (isMetadata) {
-      fileInfo = createFile(pageSize, MAX_FILE_N_METADATA_PAGES);
+      fileInfo = createFile(pageSize, num_pages_per_metadata_file_);
     } else {
-      fileInfo = createFile(pageSize, MAX_FILE_N_PAGES);
+      fileInfo = createFile(pageSize, num_pages_per_data_file_);
     }
     int32_t pageNum;
     do {
@@ -942,9 +986,6 @@ FileInfo* FileMgr::openExistingFile(const std::string& path,
 
   fInfo->openExistingFile(headerVec, epoch());
   mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
-  if (fileId >= static_cast<int32_t>(files_.size())) {
-    files_.resize(fileId + 1);
-  }
   files_[fileId] = fInfo;
   fileIndex_.insert(std::pair<size_t, int32_t>(pageSize, fileId));
   return fInfo;
@@ -972,15 +1013,15 @@ FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
 
   mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
   // update file manager data structures
-  files_.push_back(fInfo);
+  files_[fileId] = fInfo;
   fileIndex_.insert(std::pair<size_t, int32_t>(pageSize, fileId));
 
-  CHECK(files_.back() == fInfo);  // postcondition
   return fInfo;
 }
 
 FILE* FileMgr::getFileForFileId(const int32_t fileId) {
-  CHECK(fileId >= 0 && static_cast<size_t>(fileId) < files_.size());
+  CHECK(fileId >= 0);
+  CHECK(files_.find(fileId) != files_.end());
   return files_[fileId]->f;
 }
 
@@ -1010,8 +1051,9 @@ void FileMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadata
 size_t FileMgr::getNumUsedPages() const {
   size_t num_used_pages = 0;
   mapd_shared_lock<mapd_shared_mutex> read_lock(files_rw_mutex_);
-  for (const auto file : files_) {
-    num_used_pages += (file->numPages - file->freePages.size());
+  for (const auto file_info_entry : files_) {
+    num_used_pages +=
+        (file_info_entry.second->numPages - file_info_entry.second->freePages.size());
   }
   return num_used_pages;
 }
@@ -1179,8 +1221,8 @@ void FileMgr::removeTableRelatedDS(const int32_t db_id, const int32_t table_id) 
 
 uint64_t FileMgr::getTotalFileSize() const {
   uint64_t total_size = 0;
-  for (const auto& file : files_) {
-    total_size += file->size();
+  for (const auto& file_info_entry : files_) {
+    total_size += file_info_entry.second->size();
   }
   if (epochFile_) {
     total_size += fileSize(epochFile_);
@@ -1190,4 +1232,364 @@ uint64_t FileMgr::getTotalFileSize() const {
   }
   return total_size;
 }
+
+/**
+ * Resumes an interrupted file compaction process. This method would
+ * normally only be called when re-initializing the file manager
+ * after a crash occurred in the middle of file compaction.
+ */
+void FileMgr::resumeFileCompaction(const std::string& status_file_name) {
+  if (status_file_name == COPY_PAGES_STATUS) {
+    // Delete status file and restart data compaction process
+    auto file_path = getFilePath(status_file_name);
+    CHECK(boost::filesystem::exists(file_path));
+    boost::filesystem::remove(file_path);
+    compactFiles();
+  } else if (status_file_name == UPDATE_PAGE_VISIBILITY_STATUS) {
+    // Execute second and third phases of data compaction
+    mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
+    auto page_mappings = readPageMappingsFromStatusFile();
+    updateMappedPagesVisibility(page_mappings);
+    renameCompactionStatusFile(UPDATE_PAGE_VISIBILITY_STATUS, DELETE_EMPTY_FILES_STATUS);
+    deleteEmptyFiles();
+  } else if (status_file_name == DELETE_EMPTY_FILES_STATUS) {
+    // Execute last phase of data compaction
+    mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
+    deleteEmptyFiles();
+  } else {
+    UNREACHABLE() << "Unexpected status file name: " << status_file_name;
+  }
+}
+
+/**
+ * Compacts metadata and data file pages and deletes resulting empty
+ * files (if any exists). Compaction occurs in 3 idempotent phases
+ * in order to enable graceful recovery if a crash/process interruption
+ * occurs in the middle data compaction.
+ *
+ * Phase 1:
+ * Create a status file that indicates initiation of this phase. Sort
+ * metadata/data files in order of files with the lowest number of free
+ * pages to those with the highest number of free pages. Copy over used
+ * pages from files at the end of the sorted order (files with the
+ * highest number of free pages) to those at the beginning of the
+ * sorted order (files with the lowest number of free pages). Keep
+ * destination/copied to pages as free while copying. Keep track of
+ * copied source to destination page mapping. Write page mapping to
+ * the status file (to be used during crash recovery if needed).
+ *
+ * Phase 2:
+ * Rename status file to a file name that indicates initiation of this
+ * phase. Go through page mapping and mark source/copied from pages
+ * as free while making the destination/copied to pages as used.
+ *
+ * Phase 3:
+ * Rename status file to a file name that indicates initiation of this
+ * phase. Delete all empty files (files containing only free pages).
+ * Delete status file.
+ */
+void FileMgr::compactFiles() {
+  mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
+  if (files_.empty()) {
+    return;
+  }
+
+  auto copy_pages_status_file_path = getFilePath(COPY_PAGES_STATUS);
+  CHECK(!boost::filesystem::exists(copy_pages_status_file_path));
+  std::ofstream status_file{copy_pages_status_file_path,
+                            std::ios::out | std::ios::binary};
+  status_file.close();
+
+  std::vector<PageMapping> page_mappings;
+  std::set<Page> touched_pages;
+  sortAndCopyFilePagesForCompaction(DEFAULT_PAGE_SIZE, page_mappings, touched_pages);
+  sortAndCopyFilePagesForCompaction(METADATA_PAGE_SIZE, page_mappings, touched_pages);
+  writePageMappingsToStatusFile(page_mappings);
+  renameCompactionStatusFile(COPY_PAGES_STATUS, UPDATE_PAGE_VISIBILITY_STATUS);
+
+  updateMappedPagesVisibility(page_mappings);
+  renameCompactionStatusFile(UPDATE_PAGE_VISIBILITY_STATUS, DELETE_EMPTY_FILES_STATUS);
+
+  deleteEmptyFiles();
+}
+
+/**
+ * Sorts all files with the given page size in ascending order of number of
+ * free pages. Then copy over pages from files with more free pages to those
+ * with less free pages. Leave destination/copied to pages as free when copying.
+ * Record copied source and destination pages in page mapping.
+ */
+void FileMgr::sortAndCopyFilePagesForCompaction(size_t page_size,
+                                                std::vector<PageMapping>& page_mappings,
+                                                std::set<Page>& touched_pages) {
+  std::vector<FileInfo*> sorted_file_infos;
+  auto range = fileIndex_.equal_range(page_size);
+  for (auto it = range.first; it != range.second; it++) {
+    sorted_file_infos.emplace_back(files_[it->second]);
+  }
+  if (sorted_file_infos.empty()) {
+    return;
+  }
+
+  // Sort file infos in ascending order of free pages count i.e. from files with
+  // the least number of free pages to those with the highest number of free pages.
+  std::sort(sorted_file_infos.begin(),
+            sorted_file_infos.end(),
+            [](const FileInfo* file_1, const FileInfo* file_2) {
+              return file_1->freePages.size() < file_2->freePages.size();
+            });
+
+  size_t destination_index = 0, source_index = sorted_file_infos.size() - 1;
+
+  // For page copy destinations, skip files without free pages.
+  while (destination_index < source_index &&
+         sorted_file_infos[destination_index]->freePages.empty()) {
+    destination_index++;
+  }
+
+  // For page copy sources, skip files with only free pages.
+  while (destination_index < source_index &&
+         sorted_file_infos[source_index]->freePages.size() ==
+             sorted_file_infos[source_index]->numPages) {
+    source_index--;
+  }
+
+  std::set<size_t> source_used_pages;
+  CHECK(destination_index <= source_index);
+
+  // Get the total number of free pages available for compaction
+  int64_t total_free_pages{0};
+  for (size_t i = destination_index; i <= source_index; i++) {
+    total_free_pages += sorted_file_infos[i]->numFreePages();
+  }
+
+  while (destination_index < source_index) {
+    if (source_used_pages.empty()) {
+      // Populate source_used_pages with only used pages in the source file.
+      auto source_file_info = sorted_file_infos[source_index];
+      auto& free_pages = source_file_info->freePages;
+      for (size_t page_num = 0; page_num < source_file_info->numPages; page_num++) {
+        if (free_pages.find(page_num) == free_pages.end()) {
+          source_used_pages.emplace(page_num);
+        }
+      }
+
+      // Free pages of current source file will not be copy destinations
+      total_free_pages -= source_file_info->numFreePages();
+    }
+
+    // Exit early if there are not enough free pages to empty the next file
+    if (total_free_pages - static_cast<int64_t>(source_used_pages.size()) < 0) {
+      return;
+    }
+
+    // Copy pages from source files to destination files
+    auto dest_file_info = sorted_file_infos[destination_index];
+    while (!source_used_pages.empty() && !dest_file_info->freePages.empty()) {
+      // Get next page to copy
+      size_t source_page_num = *source_used_pages.begin();
+      source_used_pages.erase(source_page_num);
+
+      Page source_page{sorted_file_infos[source_index]->fileId, source_page_num};
+      copySourcePageForCompaction(source_page,
+                                  sorted_file_infos[destination_index],
+                                  page_mappings,
+                                  touched_pages);
+      total_free_pages--;
+    }
+
+    if (source_used_pages.empty()) {
+      source_index--;
+    }
+
+    if (dest_file_info->freePages.empty()) {
+      destination_index++;
+    }
+  }
+}
+
+/**
+ * Copies a used page (indicated by the top of the source_used_pages set)
+ * from the given source file to a free page in the given destination file.
+ * Source and destination pages are recorded in the given page_mappings
+ * vector after copying is done.
+ */
+void FileMgr::copySourcePageForCompaction(const Page& source_page,
+                                          FileInfo* destination_file_info,
+                                          std::vector<PageMapping>& page_mappings,
+                                          std::set<Page>& touched_pages) {
+  size_t destination_page_num = destination_file_info->getFreePage();
+  CHECK_NE(destination_page_num, static_cast<size_t>(-1));
+  Page destination_page{destination_file_info->fileId, destination_page_num};
+
+  // Assert that the same pages are not copied or overridden multiple times
+  CHECK(touched_pages.find(source_page) == touched_pages.end());
+  touched_pages.emplace(source_page);
+
+  CHECK(touched_pages.find(destination_page) == touched_pages.end());
+  touched_pages.emplace(destination_page);
+
+  auto header_size = copyPageWithoutHeaderSize(source_page, destination_page);
+  page_mappings.emplace_back(static_cast<size_t>(source_page.fileId),
+                             source_page.pageNum,
+                             header_size,
+                             static_cast<size_t>(destination_page.fileId),
+                             destination_page.pageNum);
+}
+
+/**
+ * Copies content of source_page to destination_page without copying
+ * over the source_page header size. The header size is instead
+ * returned by the method. Not copying over the header size
+ * enables a use case where destination_page has all the content of
+ * the source_page but is still marked as a free page.
+ */
+int32_t FileMgr::copyPageWithoutHeaderSize(const Page& source_page,
+                                           const Page& destination_page) {
+  FileInfo* source_file_info = files_[source_page.fileId];
+  CHECK(source_file_info);
+  CHECK_EQ(source_file_info->fileId, source_page.fileId);
+
+  FileInfo* destination_file_info = files_[destination_page.fileId];
+  CHECK(destination_file_info);
+  CHECK_EQ(destination_file_info->fileId, destination_page.fileId);
+  CHECK_EQ(source_file_info->pageSize, destination_file_info->pageSize);
+
+  auto page_size = source_file_info->pageSize;
+  auto buffer = std::make_unique<int8_t[]>(page_size);
+  size_t bytes_read =
+      source_file_info->read(source_page.pageNum * page_size, page_size, buffer.get());
+  CHECK_EQ(page_size, bytes_read);
+
+  auto header_size_offset = sizeof(int32_t);
+  size_t bytes_written = destination_file_info->write(
+      (destination_page.pageNum * page_size) + header_size_offset,
+      page_size - header_size_offset,
+      buffer.get() + header_size_offset);
+  CHECK_EQ(page_size - header_size_offset, bytes_written);
+  return reinterpret_cast<int32_t*>(buffer.get())[0];
+}
+
+/**
+ * Goes through the given page mapping and marks source/copied from pages as free
+ * while marking destination/copied to pages as used (by setting the header size).
+ */
+void FileMgr::updateMappedPagesVisibility(const std::vector<PageMapping>& page_mappings) {
+  for (const auto& page_mapping : page_mappings) {
+    auto destination_file = files_[page_mapping.destination_file_id];
+
+    // Set destination page header size
+    auto header_size = page_mapping.source_page_header_size;
+    CHECK_GT(header_size, 0);
+    destination_file->write(
+        page_mapping.destination_page_num * destination_file->pageSize,
+        sizeof(PageHeaderSizeType),
+        reinterpret_cast<int8_t*>(&header_size));
+    auto source_file = files_[page_mapping.source_file_id];
+
+    // Free source page
+    PageHeaderSizeType free_page_header_size{0};
+    source_file->write(page_mapping.source_page_num * source_file->pageSize,
+                       sizeof(PageHeaderSizeType),
+                       reinterpret_cast<int8_t*>(&free_page_header_size));
+    source_file->freePageDeferred(page_mapping.source_page_num);
+  }
+
+  for (auto file_info_entry : files_) {
+    int32_t status = file_info_entry.second->syncToDisk();
+    if (status != 0) {
+      LOG(FATAL) << "Could not sync file to disk";
+    }
+  }
+}
+
+/**
+ * Deletes files that contain only free pages. Also deletes the compaction
+ * status file.
+ */
+void FileMgr::deleteEmptyFiles() {
+  for (auto [file_id, file_info] : files_) {
+    CHECK_EQ(file_id, file_info->fileId);
+    if (file_info->freePages.size() == file_info->numPages) {
+      fclose(file_info->f);
+      file_info->f = nullptr;
+      auto file_path = get_data_file_path(fileMgrBasePath_, file_id, file_info->pageSize);
+      boost::filesystem::remove(file_path);
+    }
+  }
+
+  auto status_file_path = getFilePath(DELETE_EMPTY_FILES_STATUS);
+  CHECK(boost::filesystem::exists(status_file_path));
+  boost::filesystem::remove(status_file_path);
+}
+
+/**
+ * Serializes a page mapping vector to expected status file. Page
+ * mapping vector is serialized in the following format:
+ * [{page mapping vector size}, {page mapping vector data bytes ...}]
+ */
+void FileMgr::writePageMappingsToStatusFile(
+    const std::vector<PageMapping>& page_mappings) {
+  auto file_path = getFilePath(COPY_PAGES_STATUS);
+  CHECK(boost::filesystem::exists(file_path));
+  CHECK(boost::filesystem::is_empty(file_path));
+  std::ofstream status_file{file_path.string(), std::ios::out | std::ios::binary};
+  int64_t page_mappings_count = page_mappings.size();
+  status_file.write(reinterpret_cast<const char*>(&page_mappings_count), sizeof(int64_t));
+  status_file.write(reinterpret_cast<const char*>(page_mappings.data()),
+                    page_mappings_count * sizeof(PageMapping));
+  status_file.close();
+}
+
+/**
+ * Deserializes a page mapping vector from expected status file.
+ */
+std::vector<PageMapping> FileMgr::readPageMappingsFromStatusFile() {
+  auto file_path = getFilePath(UPDATE_PAGE_VISIBILITY_STATUS);
+  CHECK(boost::filesystem::exists(file_path));
+  std::ifstream status_file{file_path.string(),
+                            std::ios::in | std::ios::binary | std::ios::ate};
+  CHECK(status_file.is_open());
+  size_t file_size = status_file.tellg();
+  status_file.seekg(0, std::ios::beg);
+  CHECK_GE(file_size, sizeof(int64_t));
+
+  int64_t page_mappings_count;
+  status_file.read(reinterpret_cast<char*>(&page_mappings_count), sizeof(int64_t));
+  auto page_mappings_byte_size = file_size - sizeof(int64_t);
+  CHECK_EQ(page_mappings_byte_size % sizeof(PageMapping), static_cast<size_t>(0));
+  CHECK_EQ(static_cast<size_t>(page_mappings_count),
+           page_mappings_byte_size / sizeof(PageMapping));
+
+  std::vector<PageMapping> page_mappings(page_mappings_count);
+  status_file.read(reinterpret_cast<char*>(page_mappings.data()),
+                   page_mappings_byte_size);
+  status_file.close();
+  return page_mappings;
+}
+
+/**
+ * Renames a given status file name to a new given file name.
+ */
+void FileMgr::renameCompactionStatusFile(const char* const from_status,
+                                         const char* const to_status) {
+  auto from_status_file_path = getFilePath(from_status);
+  auto to_status_file_path = getFilePath(to_status);
+  CHECK(boost::filesystem::exists(from_status_file_path));
+  CHECK(!boost::filesystem::exists(to_status_file_path));
+  boost::filesystem::rename(from_status_file_path, to_status_file_path);
+}
+
+// Methods that enable override of number of pages per data/metadata files
+// for use in unit tests.
+void FileMgr::setNumPagesPerDataFile(size_t num_pages) {
+  num_pages_per_data_file_ = num_pages;
+}
+
+void FileMgr::setNumPagesPerMetadataFile(size_t num_pages) {
+  num_pages_per_metadata_file_ = num_pages;
+}
+
+size_t FileMgr::num_pages_per_data_file_{DEFAULT_NUM_PAGES_PER_DATA_FILE};
+size_t FileMgr::num_pages_per_metadata_file_{DEFAULT_NUM_PAGES_PER_METADATA_FILE};
 }  // namespace File_Namespace

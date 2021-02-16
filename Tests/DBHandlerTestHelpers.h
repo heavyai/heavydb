@@ -243,6 +243,9 @@ class DBHandlerTestFixture : public testing::Test {
 #endif
                                                 disk_cache_config);
       loginAdmin();
+
+      // Execute on CPU by default
+      db_handler_->set_execution_mode(session_id_, TExecuteMode::CPU);
     }
   }
   virtual void TearDown() override {}

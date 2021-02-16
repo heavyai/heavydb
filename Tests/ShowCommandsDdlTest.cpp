@@ -927,19 +927,21 @@ TEST_F(ShowCreateTableTest, ForeignTable_AllOptions) {
 }
 
 namespace {
-constexpr int64_t DEFAULT_DATA_FILE_SIZE{DEFAULT_PAGE_SIZE * MAX_FILE_N_PAGES};
-constexpr int64_t DEFAULT_METADATA_FILE_SIZE{METADATA_PAGE_SIZE *
-                                             MAX_FILE_N_METADATA_PAGES};
+const int64_t PAGES_PER_DATA_FILE =
+    File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_DATA_FILE;
+const int64_t PAGES_PER_METADATA_FILE =
+    File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_METADATA_FILE;
+const int64_t DEFAULT_DATA_FILE_SIZE{DEFAULT_PAGE_SIZE * PAGES_PER_DATA_FILE};
+const int64_t DEFAULT_METADATA_FILE_SIZE{METADATA_PAGE_SIZE * PAGES_PER_METADATA_FILE};
 }  // namespace
 
 class ShowDiskCacheUsageTest : public ShowTest {
  public:
   static inline constexpr int64_t epoch_file_size{2 * sizeof(int64_t)};
   static inline constexpr int64_t empty_mgr_size{0};
-  static inline constexpr int64_t meta_only_size{epoch_file_size +
-                                                 DEFAULT_METADATA_FILE_SIZE};
-  static inline constexpr int64_t minimum_total_size{DEFAULT_DATA_FILE_SIZE +
-                                                     meta_only_size};
+  static inline const int64_t meta_only_size{epoch_file_size +
+                                             DEFAULT_METADATA_FILE_SIZE};
+  static inline const int64_t minimum_total_size{DEFAULT_DATA_FILE_SIZE + meta_only_size};
   // TODO(Misiu): These can be made constexpr once c++20 is supported.
   static inline std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache/";
   static inline std::string foreign_table1{"foreign_table1"};
@@ -1236,23 +1238,23 @@ class ShowTableDetailsTest : public ShowTest,
       assertResultSetEqual({{i(0), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(max_rollback_epochs), i(epoch), i(epoch),
                              i(epoch_floor), i(epoch_floor), i(1), i(DEFAULT_METADATA_FILE_SIZE),
-                             i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - used_metadata_pages),
-                             i(1), i(DEFAULT_DATA_FILE_SIZE), i(MAX_FILE_N_PAGES),
-                             i(MAX_FILE_N_PAGES - used_data_pages)},
+                             i(PAGES_PER_METADATA_FILE), i(PAGES_PER_METADATA_FILE - used_metadata_pages),
+                             i(1), i(DEFAULT_DATA_FILE_SIZE), i(PAGES_PER_DATA_FILE),
+                             i(PAGES_PER_DATA_FILE - used_data_pages)},
                             {i(1), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(max_rollback_epochs), i(epoch), i(epoch),
                              i(epoch_floor), i(epoch_floor), i(1), i(DEFAULT_METADATA_FILE_SIZE),
-                             i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - used_metadata_pages),
-                             i(1), i(DEFAULT_DATA_FILE_SIZE), i(MAX_FILE_N_PAGES),
-                             i(MAX_FILE_N_PAGES - used_data_pages)}},
+                             i(PAGES_PER_METADATA_FILE), i(PAGES_PER_METADATA_FILE - used_metadata_pages),
+                             i(1), i(DEFAULT_DATA_FILE_SIZE), i(PAGES_PER_DATA_FILE),
+                             i(PAGES_PER_DATA_FILE - used_data_pages)}},
                            result);
     } else {
       assertResultSetEqual({{i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(max_rollback_epochs), i(epoch), i(epoch),
                              i(epoch_floor), i(epoch_floor), i(1), i(DEFAULT_METADATA_FILE_SIZE),
-                             i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - used_metadata_pages),
-                             i(1), i(DEFAULT_DATA_FILE_SIZE), i(MAX_FILE_N_PAGES),
-                             i(MAX_FILE_N_PAGES - used_data_pages)}},
+                             i(PAGES_PER_METADATA_FILE), i(PAGES_PER_METADATA_FILE - used_metadata_pages),
+                             i(1), i(DEFAULT_DATA_FILE_SIZE), i(PAGES_PER_DATA_FILE),
+                             i(PAGES_PER_DATA_FILE - used_data_pages)}},
                            result);
     }
     // clang-format on
@@ -1261,9 +1263,9 @@ class ShowTableDetailsTest : public ShowTest,
   void assertTablesWithContentResult(const TQueryResult result, int64_t data_page_size) {
     int64_t data_file_size;
     if (data_page_size == -1) {
-      data_file_size = DEFAULT_PAGE_SIZE * MAX_FILE_N_PAGES;
+      data_file_size = DEFAULT_PAGE_SIZE * PAGES_PER_DATA_FILE;
     } else {
-      data_file_size = data_page_size * MAX_FILE_N_PAGES;
+      data_file_size = data_page_size * PAGES_PER_DATA_FILE;
     }
 
     // clang-format off
@@ -1275,13 +1277,13 @@ class ShowTableDetailsTest : public ShowTest,
                             {i(0), i(2), "test_table_2", i(5), True, i(1), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
                              i(0), i(0), i(1), i(DEFAULT_METADATA_FILE_SIZE),
-                             i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - 4), i(1),
-                             i(data_file_size), i(MAX_FILE_N_PAGES), i(MAX_FILE_N_PAGES - 4)},
+                             i(PAGES_PER_METADATA_FILE), i(PAGES_PER_METADATA_FILE - 4), i(1),
+                             i(data_file_size), i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 4)},
                             {i(0), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
                              i(0), i(0), i(1), i(DEFAULT_METADATA_FILE_SIZE),
-                             i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - 2), i(1),
-                             i(data_file_size), i(MAX_FILE_N_PAGES), i(MAX_FILE_N_PAGES - 2)},
+                             i(PAGES_PER_METADATA_FILE), i(PAGES_PER_METADATA_FILE - 2), i(1),
+                             i(data_file_size), i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 2)},
                             {i(1), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
                              i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
@@ -1292,25 +1294,25 @@ class ShowTableDetailsTest : public ShowTest,
                             {i(1), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
                              i(0), i(0), i(1), i(DEFAULT_METADATA_FILE_SIZE),
-                             i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - 2), i(1),
-                             i(data_file_size), i(MAX_FILE_N_PAGES), i(MAX_FILE_N_PAGES - 2)}},
+                             i(PAGES_PER_METADATA_FILE), i(PAGES_PER_METADATA_FILE - 2), i(1),
+                             i(data_file_size), i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 2)}},
                            result);
     } else {
       assertResultSetEqual({{i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
                              i(0), i(0), i(1), i(DEFAULT_METADATA_FILE_SIZE),
-                             i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - 3), i(1),
-                             i(data_file_size), i(MAX_FILE_N_PAGES), i(MAX_FILE_N_PAGES - 3)},
+                             i(PAGES_PER_METADATA_FILE), i(PAGES_PER_METADATA_FILE - 3), i(1),
+                             i(data_file_size), i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 3)},
                             {i(2), "test_table_2", i(5), True, i(2), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
                              i(0), i(0), i(1), i(DEFAULT_METADATA_FILE_SIZE),
-                             i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - 4), i(1),
-                             i(data_file_size), i(MAX_FILE_N_PAGES), i(MAX_FILE_N_PAGES - 4)},
+                             i(PAGES_PER_METADATA_FILE), i(PAGES_PER_METADATA_FILE - 4), i(1),
+                             i(data_file_size), i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 4)},
                             {i(5), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
                              i(0), i(0), i(1), i(DEFAULT_METADATA_FILE_SIZE),
-                             i(MAX_FILE_N_METADATA_PAGES), i(MAX_FILE_N_METADATA_PAGES - 2), i(1),
-                             i(data_file_size), i(MAX_FILE_N_PAGES), i(MAX_FILE_N_PAGES - 2)}},
+                             i(PAGES_PER_METADATA_FILE), i(PAGES_PER_METADATA_FILE - 2), i(1),
+                             i(data_file_size), i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 2)}},
                            result);
     }
     // clang-format on
@@ -1319,7 +1321,7 @@ class ShowTableDetailsTest : public ShowTest,
   // In the case where table page size is set to METADATA_PAGE_SIZE, both
   // the data and metadata content are stored in the data files
   void assertTablesWithContentAndSamePageSizeResult(const TQueryResult result) {
-    int64_t data_file_size{METADATA_PAGE_SIZE * MAX_FILE_N_PAGES};
+    int64_t data_file_size{METADATA_PAGE_SIZE * PAGES_PER_DATA_FILE};
     // clang-format off
     if (isDistributedMode()) {
       assertResultSetEqual({{i(0), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
@@ -1329,11 +1331,11 @@ class ShowTableDetailsTest : public ShowTest,
                             {i(0), i(2), "test_table_2", i(5), True, i(1), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
                              i(0), i(0), i(0), i(0), i(0), i(0), i(1), i(data_file_size),
-                             i(MAX_FILE_N_PAGES), i(MAX_FILE_N_PAGES - 8)},
+                             i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 8)},
                             {i(0), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
                              i(0), i(0), i(0), i(0), i(0), i(0), i(1), i(data_file_size),
-                             i(MAX_FILE_N_PAGES), i(MAX_FILE_N_PAGES - 4)},
+                             i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 4)},
                             {i(1), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
                              i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
@@ -1344,21 +1346,21 @@ class ShowTableDetailsTest : public ShowTest,
                             {i(1), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
                              i(0), i(0), i(0), i(0), i(0), i(0), i(1), i(data_file_size),
-                             i(MAX_FILE_N_PAGES), i(MAX_FILE_N_PAGES - 4)}},
+                             i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 4)}},
                            result);
     } else {
       assertResultSetEqual({{i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
                              i(0), i(0), i(0), i(0), i(0), i(0), i(1), i(data_file_size),
-                             i(MAX_FILE_N_PAGES), i(MAX_FILE_N_PAGES - 6)},
+                             i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 6)},
                             {i(2), "test_table_2", i(5), True, i(2), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
                              i(0), i(0), i(0), i(0), i(0), i(0), i(1), i(data_file_size),
-                             i(MAX_FILE_N_PAGES), i(MAX_FILE_N_PAGES - 8)},
+                             i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 8)},
                             {i(5), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
                              i(0), i(0), i(0), i(0), i(0), i(0), i(1), i(data_file_size),
-                             i(MAX_FILE_N_PAGES), i(MAX_FILE_N_PAGES - 4)}},
+                             i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 4)}},
                            result);
     }
     // clang-format on

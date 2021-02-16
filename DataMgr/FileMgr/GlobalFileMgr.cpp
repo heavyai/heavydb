@@ -156,16 +156,20 @@ void GlobalFileMgr::setFileMgrParams(const int32_t db_id,
     deleteFileMgr(db_id, tb_id);
   }
   const auto file_mgr_key = std::make_pair(db_id, tb_id);
+  auto max_rollback_epochs =
+      (file_mgr_params.max_rollback_epochs >= 0 ? file_mgr_params.max_rollback_epochs
+                                                : -1);
   auto s = std::make_shared<FileMgr>(
       0,
       this,
       file_mgr_key,
-      file_mgr_params.max_rollback_epochs >= 0 ? file_mgr_params.max_rollback_epochs : -1,
+      max_rollback_epochs,
       num_reader_threads_,
       file_mgr_params.epoch != -1 ? file_mgr_params.epoch : epoch_,
       defaultPageSize_);
   CHECK(ownedFileMgrs_.insert(std::make_pair(file_mgr_key, s)).second);
   CHECK(allFileMgrs_.insert(std::make_pair(file_mgr_key, s.get())).second);
+  max_rollback_epochs_per_table_[{db_id, tb_id}] = max_rollback_epochs;
   return;
 }
 
@@ -192,10 +196,15 @@ AbstractBufferMgr* GlobalFileMgr::getFileMgr(const int32_t db_id, const int32_t 
                 .second);
       return foreign_buffer_manager;
     } else {
+      int32_t max_rollback_epochs{-1 /*DEFAULT_MAX_ROLLBACK_EPOCHS*/};
+      if (max_rollback_epochs_per_table_.find(file_mgr_key) !=
+          max_rollback_epochs_per_table_.end()) {
+        max_rollback_epochs = max_rollback_epochs_per_table_[file_mgr_key];
+      }
       auto s = std::make_shared<FileMgr>(0,
                                          this,
                                          file_mgr_key,
-                                         -1 /*DEFAULT_MAX_ROLLBACK_EPOCHS*/,
+                                         max_rollback_epochs,
                                          num_reader_threads_,
                                          epoch_,
                                          defaultPageSize_);
@@ -257,6 +266,7 @@ void GlobalFileMgr::removeTableRelatedDS(const int32_t db_id, const int32_t tb_i
   // remove table related in-memory DS only if directory was removed successfully
 
   deleteFileMgr(db_id, tb_id);
+  max_rollback_epochs_per_table_.erase({db_id, tb_id});
 }
 
 void GlobalFileMgr::setTableEpoch(const int32_t db_id,
@@ -306,6 +316,20 @@ StorageStats GlobalFileMgr::getStorageStats(const int32_t db_id, const int32_t t
   const auto basic_storage_stats = u->getStorageStats();
   u.reset();
   return basic_storage_stats;
+}
+
+void GlobalFileMgr::compactDataFiles(const int32_t db_id, const int32_t tb_id) {
+  auto file_mgr = dynamic_cast<File_Namespace::FileMgr*>(findFileMgr(db_id, tb_id));
+  {
+    mapd_unique_lock<mapd_shared_mutex> write_lock(fileMgrs_mutex_);
+    if (file_mgr) {
+      file_mgr->compactFiles();
+      deleteFileMgr(db_id, tb_id);
+    }
+  }
+
+  // Re-initialize file manager
+  getFileMgr(db_id, tb_id);
 }
 
 }  // namespace File_Namespace

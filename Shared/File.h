@@ -23,8 +23,6 @@
 #pragma once
 
 #define MAPD_FILE_EXT ".mapd"
-#define MAX_FILE_N_PAGES 256
-#define MAX_FILE_N_METADATA_PAGES 4096
 
 #include <cstdint>
 #include <cstdio>
@@ -34,6 +32,10 @@
 #include "Shared/types.h"
 
 namespace File_Namespace {
+
+std::string get_data_file_path(const std::string& base_path,
+                               int file_id,
+                               size_t page_size);
 
 FILE* create(const std::string& basePath,
              const int fileId,
