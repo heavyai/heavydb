@@ -1305,6 +1305,7 @@ void Catalog::createOrUpdateDashboardSystemRole(const std::string& view_meta,
   } else {
     // Dashboard system role already exists
     // Add/remove privileges on objects
+    std::set<DBObjectKey> revoke_keys;
     auto ex_objects = rl->getDbObjects(true);
     for (auto key : *ex_objects | boost::adaptors::map_keys) {
       if (key.permissionType != TableDBObjectType &&
@@ -1319,12 +1320,15 @@ void Catalog::createOrUpdateDashboardSystemRole(const std::string& view_meta,
         }
       }
       if (!found) {
-        // revoke privs on object since the object is no
-        // longer used by the dashboard as source
-        // NOTE(wamsi): Transactionally unsafe
-        SysCatalog::instance().revokeDBObjectPrivileges(
-            dash_role_name, *rl->findDbObject(key, true), *this);
+        revoke_keys.insert(key);
       }
+    }
+    for (auto& key : revoke_keys) {
+      // revoke privs on object since the object is no
+      // longer used by the dashboard as source
+      // NOTE(wamsi): Transactionally unsafe
+      SysCatalog::instance().revokeDBObjectPrivileges(
+          dash_role_name, *rl->findDbObject(key, true), *this);
     }
     // Update privileges on remaining objects
     // NOTE(wamsi): Transactionally unsafe
