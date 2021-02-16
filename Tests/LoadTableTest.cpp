@@ -424,7 +424,7 @@ class ArrowStreamBuilder {
     size_t length = columns_.empty() ? 0 : columns_[0]->length();
     auto records = arrow::RecordBatch::Make(schema_, length, columns_);
     auto out_stream = *arrow::io::BufferOutputStream::Create();
-    auto stream_writer = *arrow::ipc::NewStreamWriter(out_stream.get(), schema_);
+    auto stream_writer = *arrow::ipc::MakeStreamWriter(out_stream.get(), schema_);
     ARROW_THROW_NOT_OK(stream_writer->WriteRecordBatch(*records));
     ARROW_THROW_NOT_OK(stream_writer->Close());
     auto buffer = *out_stream->Finish();
