@@ -294,7 +294,7 @@ class GeoSpatialTestTablesFixture : public ::testing::TestWithParam<bool> {
   void SetUp() override { import_geospatial_test(/*with_temporary_tables=*/GetParam()); }
 
   void TearDown() override {
-    if (!g_keep_data) {
+    if (!GetParam() && !g_keep_data) {
       run_ddl_statement("DROP TABLE IF EXISTS geospatial_test;");
     }
   }
@@ -935,7 +935,7 @@ class GeoSpatialNullTablesFixture : public ::testing::TestWithParam<bool> {
   }
 
   void TearDown() override {
-    if (!g_keep_data) {
+    if (!GetParam() && !g_keep_data) {
       run_ddl_statement("DROP TABLE IF EXISTS geospatial_null_test;");
     }
   }
@@ -1014,9 +1014,9 @@ TEST_P(GeoSpatialNullTablesFixture, GeoWithNulls) {
     p_v = boost::get<void*>(&p);
     p_s = boost::get<std::string>(&p);
     ASSERT_TRUE(p_v && *p_v == nullptr && !p_s);
-    ASSERT_EQ(static_cast<int64_t>(1),
+    ASSERT_EQ(static_cast<int64_t>(0),
               v<int64_t>(run_simple_agg(
-                  "SELECT ST_Contains(poly,p) FROM geospatial_null_test WHERE id=1;",
+                  R"(SELECT ST_Contains(poly,p) FROM geospatial_null_test WHERE id=1;)",
                   dt,
                   false)));
     ASSERT_EQ(
@@ -1355,6 +1355,7 @@ TEST(GeoSpatial, Math) {
             R"(SELECT ST_Disjoint(ST_GeomFromText('POLYGON((3 3, 3 2, 2.1 2.1))'), ST_GeomFromText('MULTIPOLYGON(((5 5, 6 6, 5 6)), ((2 2, 0 1, -2 2, -2 0, 2 0, 2 2)))'));)",
             dt)));
 
+    // ST_Contains
     ASSERT_EQ(
         static_cast<int64_t>(1),  // polygon containing a point
         v<int64_t>(run_simple_agg(
@@ -1379,14 +1380,14 @@ TEST(GeoSpatial, Math) {
             dt)));
 
     ASSERT_EQ(
-        static_cast<int64_t>(1),  // point in polygon, on left edge
+        static_cast<int64_t>(0),  // point in polygon, on left edge
         v<int64_t>(run_simple_agg(
-            R"(SELECT ST_Contains(ST_GeomFromText('POLYGON((0 -1, 2 1, 0 1))'), ST_GeomFromText('POINT(0 0)'));)",
+            R"(SELECT ST_Contains(ST_GeomFromText('POLYGON((0 -1, 2 1, 0 1, 0 -1))'), ST_GeomFromText('POINT(0 0)'));)",
             dt)));
     ASSERT_EQ(
-        static_cast<int64_t>(1),  // point in polygon, on right edge
+        static_cast<int64_t>(0),  // point in polygon, on right edge
         v<int64_t>(run_simple_agg(
-            R"(SELECT ST_Contains(ST_GeomFromText('POLYGON((0 -1, 2 1, 0 1))'), ST_GeomFromText('POINT(1 0)'));)",
+            R"(SELECT ST_Contains(ST_GeomFromText('POLYGON((0 -1, 2 1, 0 1, 0 -1))'), ST_GeomFromText('POINT(1 0)'));)",
             dt)));
     ASSERT_EQ(
         static_cast<int64_t>(1),  // point in polygon, touch+leave
@@ -1459,6 +1460,33 @@ TEST(GeoSpatial, Math) {
         static_cast<int64_t>(1),  // linestring containing an extremely close point
         v<int64_t>(run_simple_agg(
             R"(SELECT ST_Contains(ST_GeomFromText('LINESTRING(1 -1.0000000001, 3 -1.0000000001)'), ST_GeomFromText('POINT(0.9999999992 -1)'));)",
+            dt)));
+
+    // Postgis compatibility
+    ASSERT_EQ(
+        static_cast<int64_t>(0),  // point on vertex of polygon
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_Contains(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POINT(0 0)'));)",
+            dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(1),  // point within polygon
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_Contains(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POINT(5 5)'));)",
+            dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(0),  // point outside polygon
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_Contains(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POINT(-1 0)'));)",
+            dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(0),  // point on edge of polygon
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_Contains(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POINT(0 5)'));)",
+            dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(0),  // point in line with polygon edge
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_Contains(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POINT(0 12)'));)",
             dt)));
 
     // ST_DWithin, ST_DFullyWithin
@@ -1937,7 +1965,7 @@ class GeoSpatialJoinTablesFixture : public ::testing::TestWithParam<bool> {
   }
 
   void TearDown() override {
-    if (!g_keep_data) {
+    if (!GetParam() && !g_keep_data) {
       run_ddl_statement("DROP TABLE IF EXISTS geospatial_test;");
       run_ddl_statement("DROP TABLE IF EXISTS geospatial_inner_join_test;");
     }
@@ -1971,7 +1999,7 @@ TEST_P(GeoSpatialJoinTablesFixture, GeoJoins) {
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
             "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
-            "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2 OFFSET 1;",
+            "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2;",
             dt,
             true,
             false))));
@@ -2007,53 +2035,45 @@ TEST_P(GeoSpatialJoinTablesFixture, GeoJoins) {
 
     // Test query rewrite for simple project
     ASSERT_NO_THROW(run_simple_agg(
-        "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
-        "b ON ST_Contains(b.poly, a.p);",
+        R"(SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);)",
         dt));
 
-    ASSERT_EQ(static_cast<int64_t>(0),
-              v<int64_t>(run_simple_agg(
-                  "SELECT a.id FROM geospatial_test a JOIN geospatial_inner_join_test "
-                  "b ON ST_Intersects(b.poly, a.poly) ORDER BY a.id;",
-                  dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(0),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT a.id FROM geospatial_test a JOIN geospatial_inner_join_test b ON ST_Intersects(b.poly, a.poly) ORDER BY a.id;)",
+            dt)));
 
     SKIP_ON_AGGREGATOR(ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
-            "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
-            "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2 ORDER BY 1 OFFSET 1;",
+            R"(SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p) WHERE b.id = 2 ORDER BY 1;)",
             dt))));
 
     ASSERT_EQ(
-        static_cast<int64_t>(3),
+        static_cast<int64_t>(2),
         v<int64_t>(run_simple_agg(
-            "SELECT count(*) FROM geospatial_test a INNER JOIN "
-            "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p) WHERE b.id = 4",
+            R"(SELECT count(*) FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p) WHERE b.id = 4)",
             dt)));
     // re-run to test hash join cache (currently CPU only)
     ASSERT_EQ(
-        static_cast<int64_t>(3),
+        static_cast<int64_t>(2),
         v<int64_t>(run_simple_agg(
-            "SELECT count(*) FROM geospatial_test a INNER JOIN "
-            "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p) WHERE b.id = 4",
+            R"(SELECT count(*) FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p) WHERE b.id = 4;)",
             dt)));
 
     // with compression
     SKIP_ON_AGGREGATOR(ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
-            "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
-            "b ON ST_Contains(ST_SetSRID(b.poly, 4326), a.gp4326) WHERE b.id = 2 ORDER "
-            "BY 1 "
-            "OFFSET 1;",
+            R"(SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON ST_Contains(ST_SetSRID(b.poly, 4326), a.gp4326) WHERE b.id = 2 ORDER BY 1;)",
             dt))));
 
-    ASSERT_EQ(static_cast<int64_t>(3),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(*) FROM geospatial_test a INNER JOIN "
-                  "geospatial_inner_join_test b ON ST_Contains(ST_SetSRID(b.poly, 4326), "
-                  "a.gp4326) WHERE b.id = 4;",
-                  dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(2),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON ST_Contains(ST_SetSRID(b.poly, 4326), a.gp4326) WHERE b.id = 4;)",
+            dt)));
   }
 }
 

@@ -639,20 +639,19 @@ TEST(Truncate, OverlapsJoinCacheInvalidationTest) {
             ExecutorDeviceType::CPU);
 
   run_query(
-      "INSERT INTO cache_invalid_poly VALUES ('MULTIPOLYGON(((0 0, 0 1, 1 0, 1 1)))');",
+      R"(INSERT INTO cache_invalid_poly VALUES ('MULTIPOLYGON(((0 0, 2 0, 2 2, 0 2, 0 0)))');)",
       ExecutorDeviceType::CPU);
 
   // GPU does not cache, run on CPU
   {
     auto result = QR::get()->runSQL(
-        "SELECT count(*) FROM cache_invalid_point a, cache_invalid_poly b WHERE "
-        "ST_Contains(b.poly, a.pt);",
+        R"(SELECT count(*) FROM cache_invalid_point a, cache_invalid_poly b WHERE ST_Contains(b.poly, a.pt);)",
         ExecutorDeviceType::CPU);
     EXPECT_EQ(size_t(1), result->rowCount());
     auto row = result->getNextRow(false, false);
     EXPECT_EQ(size_t(1), row.size());
     auto count = boost::get<int64_t>(boost::get<ScalarTargetValue>(row[0]));
-    EXPECT_EQ(2, count);
+    EXPECT_EQ(1, count);  // POINT(1 1)
   }
   EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(),
             size_t(2));  // bucket threshold and hash table
@@ -661,8 +660,7 @@ TEST(Truncate, OverlapsJoinCacheInvalidationTest) {
   EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), size_t(0));
 
   run_query(
-      "INSERT INTO cache_invalid_poly VALUES ('MULTIPOLYGON(((0 0, 0 0.5, 0.5 0, 0.5 "
-      "0.5)))');",
+      R"(INSERT INTO cache_invalid_poly VALUES ('MULTIPOLYGON(((0 0, 11 0, 11 11, 0 11, 0 0)))');)",
       ExecutorDeviceType::CPU);
 
   // user provided bucket threshold -- only one additional cache entry
@@ -676,7 +674,7 @@ TEST(Truncate, OverlapsJoinCacheInvalidationTest) {
     auto row = result->getNextRow(false, false);
     EXPECT_EQ(size_t(1), row.size());
     auto count = boost::get<int64_t>(boost::get<ScalarTargetValue>(row[0]));
-    EXPECT_EQ(1, count);
+    EXPECT_EQ(2, count);  // POINT(1 1) , POINT(10 10)
   }
   EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(),
             size_t(1));  // bucket threshold and hash table
