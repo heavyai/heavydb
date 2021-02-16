@@ -652,7 +652,7 @@ TEST(Truncate, OverlapsJoinCacheInvalidationTest) {
     auto row = result->getNextRow(false, false);
     EXPECT_EQ(size_t(1), row.size());
     auto count = boost::get<int64_t>(boost::get<ScalarTargetValue>(row[0]));
-    EXPECT_EQ(size_t(2), count);
+    EXPECT_EQ(2, count);
   }
   EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(),
             size_t(2));  // bucket threshold and hash table
@@ -676,7 +676,7 @@ TEST(Truncate, OverlapsJoinCacheInvalidationTest) {
     auto row = result->getNextRow(false, false);
     EXPECT_EQ(size_t(1), row.size());
     auto count = boost::get<int64_t>(boost::get<ScalarTargetValue>(row[0]));
-    EXPECT_EQ(size_t(1), count);
+    EXPECT_EQ(1, count);
   }
   EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(),
             size_t(1));  // bucket threshold and hash table
