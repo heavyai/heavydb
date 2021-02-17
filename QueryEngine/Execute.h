@@ -295,9 +295,9 @@ class ParseIRError : public std::runtime_error {
   ParseIRError(const std::string message) : std::runtime_error(message) {}
 };
 
-class SringConstInResultSet : public std::runtime_error {
+class StringConstInResultSet : public std::runtime_error {
  public:
-  SringConstInResultSet()
+  StringConstInResultSet()
       : std::runtime_error(
             "NONE ENCODED String types are not supported as input result set.") {}
 };

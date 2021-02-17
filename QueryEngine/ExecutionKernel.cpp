@@ -111,7 +111,7 @@ void ExecutionKernel::run(Executor* executor,
     throw QueryExecutionError(Executor::ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED, e.what());
   } catch (const TooManyLiterals& e) {
     throw QueryExecutionError(Executor::ERR_TOO_MANY_LITERALS, e.what());
-  } catch (const SringConstInResultSet& e) {
+  } catch (const StringConstInResultSet& e) {
     throw QueryExecutionError(Executor::ERR_STRING_CONST_IN_RESULTSET, e.what());
   } catch (const QueryExecutionError& e) {
     throw e;
