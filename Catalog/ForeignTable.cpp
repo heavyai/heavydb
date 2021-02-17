@@ -15,15 +15,14 @@
  */
 
 #include "ForeignTable.h"
-#include <boost/algorithm/string/predicate.hpp>
+
 #include <regex>
-#include "DataMgr/ForeignStorage/CsvDataWrapper.h"
-#include "DataMgr/ForeignStorage/CsvShared.h"
-#include "DataMgr/ForeignStorage/ParquetDataWrapper.h"
+
+#include "DataMgr/ForeignStorage/ForeignDataWrapperFactory.h"
 #include "Shared/DateTimeParser.h"
+#include "Shared/misc.h"
 
 bool g_enable_seconds_refresh{false};
-bool g_enable_s3_fsi{false};
 
 namespace foreign_storage {
 ForeignTable::ForeignTable()
@@ -32,18 +31,7 @@ ForeignTable::ForeignTable()
                         {foreign_storage::ForeignTable::REFRESH_UPDATE_TYPE_KEY,
                          foreign_storage::ForeignTable::ALL_REFRESH_UPDATE_TYPE}}) {}
 
-std::vector<std::string_view> ForeignTable::getSupportedDataWrapperOptions() const {
-  if (foreign_server->data_wrapper_type == foreign_storage::DataWrapperType::CSV) {
-    return foreign_storage::CsvDataWrapper::getSupportedOptions();
-  } else if (foreign_server->data_wrapper_type ==
-             foreign_storage::DataWrapperType::PARQUET) {
-    return foreign_storage::ParquetDataWrapper::getSupportedOptions();
-  }
-  return {};
-}
-
 void ForeignTable::validateOptionValues() const {
-  validateFilePathOptionKey();
   validateRefreshOptionValues();
   validateDataWrapperOptions();
 }
@@ -52,45 +40,6 @@ bool ForeignTable::isAppendMode() const {
   auto update_mode = options.find(REFRESH_UPDATE_TYPE_KEY);
   return (update_mode != options.end() &&
           update_mode->second == APPEND_REFRESH_UPDATE_TYPE);
-}
-
-std::string ForeignTable::getFullFilePath() const {
-  auto file_path = getOption(FILE_PATH_KEY);
-  std::optional<std::string> base_path{};
-  auto storage_type = foreign_server->getOption(ForeignServer::STORAGE_TYPE_KEY);
-  CHECK(storage_type);
-
-  if (*storage_type == ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
-    base_path = foreign_server->getOption(ForeignServer::BASE_PATH_KEY);
-  }
-
-  // If both base_path and file_path are present, then concatenate.  Otherwise we are just
-  // taking the one as the path.  One of the two must exist, or we have failed validation.
-  CHECK(file_path || base_path);
-  const std::string separator{boost::filesystem::path::preferred_separator};
-  return std::regex_replace(
-      (base_path ? *base_path + separator : "") + (file_path ? *file_path : ""),
-      std::regex{separator + "{2,}"},
-      separator);
-}
-
-// A valid path is a concatenation of the file_path and the base_path (for local storage).
-// One of the two must be present.
-void ForeignTable::validateFilePathOptionKey() const {
-  auto file_path = getOption(FILE_PATH_KEY);
-  auto storage_type = foreign_server->getOption(ForeignServer::STORAGE_TYPE_KEY);
-  CHECK(storage_type) << "No storage type found in parent server. Server \""
-                      << foreign_server->name << "\" is not valid.";
-
-  if (!file_path) {
-    if (*storage_type == ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
-      if (!foreign_server->getOption(ForeignServer::BASE_PATH_KEY)) {
-        throwFilePathError(ForeignServer::BASE_PATH_KEY);
-      }
-    } else {
-      UNREACHABLE() << "Unknown foreign storage type.";
-    }
-  }
 }
 
 void ForeignTable::initializeOptions() {
@@ -102,7 +51,7 @@ void ForeignTable::initializeOptions() {
 void ForeignTable::initializeOptions(const rapidjson::Value& options) {
   // Create the options map first because the json version is not guaranteed to be
   // upper-case, which we need to compare reliably with alterable_options.
-  auto options_map = create_options_map(options);
+  auto options_map = createOptionsMap(options);
   validateSupportedOptionKeys(options_map);
   populateOptionsMap(std::move(options_map));
   validateOptionValues();
@@ -110,9 +59,13 @@ void ForeignTable::initializeOptions(const rapidjson::Value& options) {
 
 // This function can't be static because it needs to know the data wrapper type.
 void ForeignTable::validateSupportedOptionKeys(const OptionsMap& options_map) const {
-  const auto data_wrapper_options = getSupportedDataWrapperOptions();
+  const auto& data_wrapper_options =
+      foreign_storage::ForeignDataWrapperFactory::createForValidation(
+          foreign_server->data_wrapper_type, this)
+          .getSupportedTableOptions();
   for (const auto& [key, value] : options_map) {
-    if (!contains(supported_options, key) && !contains(data_wrapper_options, key)) {
+    if (!shared::contains(supported_options, key) &&
+        !shared::contains(data_wrapper_options, key)) {
       throw std::runtime_error{"Invalid foreign table option \"" + key + "\"."};
     }
   }
@@ -173,26 +126,12 @@ void ForeignTable::validateRefreshOptionValues() const {
 }
 
 void ForeignTable::validateDataWrapperOptions() const {
-  if (foreign_server->options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
-      ForeignServer::S3_STORAGE_TYPE) {
-    throw std::runtime_error(
-        "Cannot create S3 backed foreign table as AWS S3 support is currently disabled.");
-  }
-  const auto wrapper_type = foreign_server->data_wrapper_type;
-  if (wrapper_type == foreign_storage::DataWrapperType::CSV) {
-    if (Csv::validate_and_get_is_s3_select(this)) {
-      UNREACHABLE();
-    } else {
-      foreign_storage::CsvDataWrapper::validateOptions(this);
-    }
-  } else if (wrapper_type == foreign_storage::DataWrapperType::PARQUET) {
-    foreign_storage::ParquetDataWrapper::validateOptions(this);
-  } else {
-    UNREACHABLE() << "Unknown data wrapper type";
-  }
+  foreign_storage::ForeignDataWrapperFactory::createForValidation(
+      foreign_server->data_wrapper_type, this)
+      .validateTableOptions(this);
 }
 
-OptionsMap ForeignTable::create_options_map(const rapidjson::Value& json_options) {
+OptionsMap ForeignTable::createOptionsMap(const rapidjson::Value& json_options) {
   OptionsMap options_map;
   CHECK(json_options.IsObject());
   for (const auto& member : json_options.GetObject()) {
@@ -207,21 +146,13 @@ OptionsMap ForeignTable::create_options_map(const rapidjson::Value& json_options
   return options_map;
 }
 
-void ForeignTable::validate_alter_options(const OptionsMap& options_map) {
+void ForeignTable::validateAlterOptions(const OptionsMap& options_map) {
   for (const auto& [key, value] : options_map) {
-    if (!contains(alterable_options, key)) {
+    if (!shared::contains(alterable_options, key)) {
       throw std::runtime_error{std::string("Altering foreign table option \"") + key +
                                "\" is not currently supported."};
     }
   }
-}
-
-void ForeignTable::throwFilePathError(const std::string_view& missing_path) const {
-  std::stringstream ss;
-  ss << "No file_path found for Foreign Table \"" << tableName
-     << "\". Table must have either set a \"" << FILE_PATH_KEY << "\" option, or its "
-     << "parent server must have set a \"" << missing_path << "\" option.";
-  throw std::runtime_error(ss.str());
 }
 
 }  // namespace foreign_storage

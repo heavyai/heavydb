@@ -28,17 +28,10 @@
 namespace foreign_storage {
 namespace Csv {
 
-// Construct data wrapper for foreign_table parameters
-std::unique_ptr<ForeignDataWrapper> get_csv_data_wrapper(
-    int db_id,
-    const ForeignTable* foreign_table);
-
 // Validate CSV Specific options
 void validate_options(const ForeignTable* foreign_table);
 
 import_export::CopyParams validate_and_get_copy_params(const ForeignTable* foreign_table);
-
-void validate_file_path(const ForeignTable* foreign_table);
 
 // Return true if this used s3 select to access underlying CSV
 bool validate_and_get_is_s3_select(const ForeignTable* foreign_table);

@@ -35,6 +35,8 @@ set(datamgr_source_files
     ForeignStorage/LazyParquetChunkLoader.cpp
     ForeignStorage/ParquetShared.cpp
     ForeignStorage/ForeignTableRefresh.cpp
+    ForeignStorage/AbstractFileStorageDataWrapper.cpp
+    ForeignStorage/ForeignDataWrapperFactory.cpp
 )
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")

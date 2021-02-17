@@ -143,6 +143,15 @@ inline uint64_t unsignedMod(int64_t num, int64_t den) {
   return mod;
 }
 
+template <typename T, typename U>
+inline bool contains(const T& container, const U& element) {
+  if (std::find(container.begin(), container.end(), element) == container.end()) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
 }  // namespace shared
 
 #endif  // SHARED_MISC_H

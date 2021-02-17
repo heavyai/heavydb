@@ -19,6 +19,7 @@
 #include <map>
 #include <vector>
 
+#include "AbstractFileStorageDataWrapper.h"
 #include "Catalog/Catalog.h"
 #include "Catalog/ForeignTable.h"
 #include "DataMgr/Chunk/Chunk.h"
@@ -63,8 +64,10 @@ struct FileRegion {
 
 using FileRegions = std::vector<FileRegion>;
 
-class CsvDataWrapper : public ForeignDataWrapper {
+class CsvDataWrapper : public AbstractFileStorageDataWrapper {
  public:
+  CsvDataWrapper();
+
   CsvDataWrapper(const int db_id, const ForeignTable* foreign_table);
 
   void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override;
@@ -73,9 +76,9 @@ class CsvDataWrapper : public ForeignDataWrapper {
       std::map<ChunkKey, AbstractBuffer*>& required_buffers,
       std::map<ChunkKey, AbstractBuffer*>& optional_buffers) override;
 
-  static void validateOptions(const ForeignTable* foreign_table);
+  void validateTableOptions(const ForeignTable* foreign_table) const override;
 
-  static std::vector<std::string_view> getSupportedOptions();
+  const std::set<std::string_view>& getSupportedTableOptions() const override;
 
   void serializeDataWrapperInternals(const std::string& file_path) const override;
 
@@ -96,8 +99,6 @@ class CsvDataWrapper : public ForeignDataWrapper {
   void populateChunks(std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
                       int fragment_id);
 
-  std::string getFilePath();
-
   void populateChunkMapForColumns(const std::set<const ColumnDescriptor*>& columns,
                                   const int fragment_id,
                                   const std::map<ChunkKey, AbstractBuffer*>& buffers,
@@ -106,6 +107,8 @@ class CsvDataWrapper : public ForeignDataWrapper {
   void updateMetadata(std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
                       int fragment_id);
 
+  std::set<std::string_view> getAllCsvTableOptions() const;
+
   std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
   std::map<int, FileRegions> fragment_id_to_file_regions_map_;
 
@@ -113,7 +116,6 @@ class CsvDataWrapper : public ForeignDataWrapper {
 
   const int db_id_;
   const ForeignTable* foreign_table_;
-  std::mutex file_access_mutex_;
 
   // Data needed for append workflow
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_encoder_buffers_;
@@ -124,17 +126,6 @@ class CsvDataWrapper : public ForeignDataWrapper {
   size_t append_start_offset_;
   // Is this datawrapper restored from disk
   bool is_restored_;
-  static constexpr std::array<char const*, 12> supported_options_{"ARRAY_DELIMITER",
-                                                                  "ARRAY_MARKER",
-                                                                  "BUFFER_SIZE",
-                                                                  "DELIMITER",
-                                                                  "ESCAPE",
-                                                                  "HEADER",
-                                                                  "LINE_DELIMITER",
-                                                                  "LONLAT",
-                                                                  "NULLS",
-                                                                  "QUOTE",
-                                                                  "QUOTED",
-                                                                  "S3_ACCESS_TYPE"};
+  static const std::set<std::string_view> csv_table_options_;
 };
 }  // namespace foreign_storage

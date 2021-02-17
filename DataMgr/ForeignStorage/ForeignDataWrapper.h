@@ -16,13 +16,15 @@
 
 #pragma once
 
-#include "Catalog/ColumnDescriptor.h"
-#include "Catalog/ForeignServer.h"
 #include "DataMgr/ChunkMetadata.h"
 #include "ForeignStorageBuffer.h"
 #include "Shared/types.h"
 
 namespace foreign_storage {
+struct ForeignServer;
+struct ForeignTable;
+struct UserMapping;
+
 class ForeignDataWrapper {
  public:
   ForeignDataWrapper() = default;
@@ -66,5 +68,34 @@ class ForeignDataWrapper {
 
   // For testing, is this data wrapper restored from disk
   virtual bool isRestored() const = 0;
+
+  /**
+   * Checks that the options for the given foreign server object are valid.
+   * @param foreign_server - foreign server object containing options to be validated
+   */
+  virtual void validateServerOptions(const ForeignServer* foreign_server) const = 0;
+
+  /**
+   * Checks that the options for the given foreign table object are valid.
+   * @param foreign_table - foreign table object containing options to be validated
+   */
+  virtual void validateTableOptions(const ForeignTable* foreign_table) const = 0;
+
+  /**
+   * Gets the set of supported table options for the data wrapper.
+   */
+  virtual const std::set<std::string_view>& getSupportedTableOptions() const = 0;
+
+  /**
+   * Checks that the options for the given user mapping object are valid.
+   * @param user_mapping - user mapping object containing options to be validated
+   */
+  virtual void validateUserMappingOptions(const UserMapping* user_mapping,
+                                          const ForeignServer* foreign_server) const = 0;
+
+  /**
+   * Gets the set of supported user mapping options for the data wrapper.
+   */
+  virtual const std::set<std::string_view>& getSupportedUserMappingOptions() const = 0;
 };
 }  // namespace foreign_storage

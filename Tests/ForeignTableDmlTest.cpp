@@ -3790,10 +3790,27 @@ class MockDataWrapper : public foreign_storage::MockForeignDataWrapper {
 
   bool isRestored() const override { return false; };
 
+  void validateServerOptions(const ForeignServer* foreign_server) const override {}
+
+  void validateTableOptions(const ForeignTable* foreign_table) const override {}
+
+  const std::set<std::string_view>& getSupportedTableOptions() const override {
+    return supported_table_options_;
+  }
+
+  void validateUserMappingOptions(const UserMapping* user_mapping,
+                                  const ForeignServer* foreign_server) const override {}
+
+  const std::set<std::string_view>& getSupportedUserMappingOptions() const override {
+    return supported_user_mapping_options_;
+  }
+
  private:
   std::shared_ptr<foreign_storage::ForeignDataWrapper> parent_data_wrapper_;
   std::atomic<bool> throw_on_metadata_scan_;
   std::atomic<bool> throw_on_chunk_fetch_;
+  std::set<std::string_view> supported_table_options_;
+  std::set<std::string_view> supported_user_mapping_options_;
 };
 
 class ScheduledRefreshTest : public RefreshTests {

@@ -16,11 +16,10 @@
 
 #include "ForeignStorageMgr.h"
 
-#include "Catalog/ForeignTable.h"
-#include "CsvShared.h"
+#include "AbstractFileStorageDataWrapper.h"
+#include "ForeignDataWrapperFactory.h"
 #include "ForeignStorageException.h"
 #include "ForeignTableSchema.h"
-#include "ParquetDataWrapper.h"
 
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
@@ -40,11 +39,11 @@ void ForeignStorageMgr::checkIfS3NeedsToBeEnabled(const ChunkKey& chunk_key) {
       Catalog_Namespace::SysCatalog::instance().getCatalog(chunk_key[CHUNK_KEY_DB_IDX]);
   CHECK(catalog);
   auto foreign_table = catalog->getForeignTableUnlocked(chunk_key[CHUNK_KEY_TABLE_IDX]);
-  auto storage_type_entry =
-      foreign_table->foreign_server->options.find(ForeignServer::STORAGE_TYPE_KEY);
+  auto storage_type_entry = foreign_table->foreign_server->options.find(
+      AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY);
   CHECK(storage_type_entry != foreign_table->foreign_server->options.end());
   bool is_s3_storage_type =
-      (storage_type_entry->second == ForeignServer::S3_STORAGE_TYPE);
+      (storage_type_entry->second == AbstractFileStorageDataWrapper::S3_STORAGE_TYPE);
   if (is_s3_storage_type) {
     throw ForeignStorageException{
         "Query cannot be executed for S3 backed foreign table because AWS S3 support is "
@@ -203,17 +202,8 @@ bool ForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chunk_key) 
     auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
     CHECK(catalog);
     auto foreign_table = catalog->getForeignTableUnlocked(chunk_key[CHUNK_KEY_TABLE_IDX]);
-
-    if (foreign_table->foreign_server->data_wrapper_type ==
-        foreign_storage::DataWrapperType::CSV) {
-      data_wrapper_map_[table_key] = Csv::get_csv_data_wrapper(db_id, foreign_table);
-    } else if (foreign_table->foreign_server->data_wrapper_type ==
-               foreign_storage::DataWrapperType::PARQUET) {
-      data_wrapper_map_[table_key] =
-          std::make_shared<ParquetDataWrapper>(db_id, foreign_table);
-    } else {
-      throw std::runtime_error("Unsupported data wrapper");
-    }
+    data_wrapper_map_[table_key] = ForeignDataWrapperFactory::create(
+        foreign_table->foreign_server->data_wrapper_type, db_id, foreign_table);
     return true;
   }
   return false;
@@ -413,7 +403,7 @@ std::map<ChunkKey, AbstractBuffer*> ForeignStorageMgr::allocateTempBuffersForChu
 }
 
 void ForeignStorageMgr::setColumnHints(
-    std::map<ChunkKey, std::vector<int>>& columns_per_table) {
+    std::map<ChunkKey, std::vector<int> >& columns_per_table) {
   std::shared_lock data_wrapper_lock(columns_hints_mutex_);
   columns_hints_per_table_ = columns_per_table;
 }

@@ -35,20 +35,28 @@
 #include "Utils/DdlUtils.h"
 
 namespace foreign_storage {
+CsvDataWrapper::CsvDataWrapper() : db_id_(-1), foreign_table_(nullptr) {}
+
 CsvDataWrapper::CsvDataWrapper(const int db_id, const ForeignTable* foreign_table)
     : db_id_(db_id), foreign_table_(foreign_table), is_restored_(false) {}
 
-CsvDataWrapper::CsvDataWrapper(const ForeignTable* foreign_table)
-    : db_id_(-1), foreign_table_(foreign_table), is_restored_(false) {}
-
-void CsvDataWrapper::validateOptions(const ForeignTable* foreign_table) {
-  foreign_storage::Csv::validate_options(foreign_table);
+void CsvDataWrapper::validateTableOptions(const ForeignTable* foreign_table) const {
+  AbstractFileStorageDataWrapper::validateTableOptions(foreign_table);
+  Csv::validate_options(foreign_table);
+}
+const std::set<std::string_view>& CsvDataWrapper::getSupportedTableOptions() const {
+  static const auto supported_table_options = getAllCsvTableOptions();
+  return supported_table_options;
 }
 
-std::vector<std::string_view> CsvDataWrapper::getSupportedOptions() {
-  return std::vector<std::string_view>{supported_options_.begin(),
-                                       supported_options_.end()};
+std::set<std::string_view> CsvDataWrapper::getAllCsvTableOptions() const {
+  std::set<std::string_view> supported_table_options(
+      AbstractFileStorageDataWrapper::getSupportedTableOptions().begin(),
+      AbstractFileStorageDataWrapper::getSupportedTableOptions().end());
+  supported_table_options.insert(csv_table_options_.begin(), csv_table_options_.end());
+  return supported_table_options;
 }
+
 namespace {
 std::set<const ColumnDescriptor*> get_columns(
     const std::map<ChunkKey, AbstractBuffer*>& buffers,
@@ -317,17 +325,20 @@ void CsvDataWrapper::populateChunks(
   rapidjson::Document d;
   auto& server_options = foreign_table_->foreign_server->options;
   csv_reader_->serialize(reader_metadata, d.GetAllocator());
-  const auto csv_file_path = foreign_table_->getFullFilePath();
+  const auto csv_file_path = getFullFilePath(foreign_table_);
 
   for (size_t i = 0; i < file_regions.size(); i += batch_size) {
-    parse_file_requests.emplace_back(
-        buffer_size, copy_params, db_id_, foreign_table_, column_filter_set);
+    parse_file_requests.emplace_back(buffer_size,
+                                     copy_params,
+                                     db_id_,
+                                     foreign_table_,
+                                     column_filter_set,
+                                     csv_file_path);
     auto start_index = i;
     auto end_index =
         std::min<size_t>(start_index + batch_size - 1, file_regions.size() - 1);
 
-    if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
-        ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
+    if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
       csv_readers.emplace_back(std::make_unique<LocalMultiFileReader>(
           csv_file_path, copy_params, reader_metadata));
     } else {
@@ -872,13 +883,12 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
   auto timer = DEBUG_TIMER(__func__);
 
   const auto copy_params = Csv::validate_and_get_copy_params(foreign_table_);
-  const auto file_path = foreign_table_->getFullFilePath();
+  const auto file_path = getFullFilePath(foreign_table_);
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
   CHECK(catalog);
   auto& server_options = foreign_table_->foreign_server->options;
   if (foreign_table_->isAppendMode() && csv_reader_ != nullptr) {
-    if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
-        ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
+    if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
       csv_reader_->checkForMoreRows(append_start_offset_);
     } else {
       UNREACHABLE();
@@ -886,8 +896,7 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
   } else {
     chunk_metadata_map_.clear();
     fragment_id_to_file_regions_map_.clear();
-    if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
-        ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
+    if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
       csv_reader_ = std::make_unique<LocalMultiFileReader>(file_path, copy_params);
     } else {
       UNREACHABLE();
@@ -930,8 +939,12 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
 
     std::vector<std::future<void>> futures{};
     for (size_t i = 0; i < thread_count; i++) {
-      multi_threading_params.request_pool.emplace(
-          buffer_size, copy_params, db_id_, foreign_table_, columns_to_scan);
+      multi_threading_params.request_pool.emplace(buffer_size,
+                                                  copy_params,
+                                                  db_id_,
+                                                  foreign_table_,
+                                                  columns_to_scan,
+                                                  getFullFilePath(foreign_table_));
 
       futures.emplace_back(std::async(std::launch::async,
                                       scan_metadata,
@@ -1072,10 +1085,9 @@ void CsvDataWrapper::restoreDataWrapperInternals(
   // Construct csv_reader with metadta
   CHECK(d.HasMember("reader_metadata"));
   const auto copy_params = Csv::validate_and_get_copy_params(foreign_table_);
-  const auto csv_file_path = foreign_table_->getFullFilePath();
+  const auto csv_file_path = getFullFilePath(foreign_table_);
   auto& server_options = foreign_table_->foreign_server->options;
-  if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
-      ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
+  if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
     csv_reader_ = std::make_unique<LocalMultiFileReader>(
         csv_file_path, copy_params, d["reader_metadata"]);
   } else {
@@ -1112,4 +1124,16 @@ bool CsvDataWrapper::isRestored() const {
   return is_restored_;
 }
 
+const std::set<std::string_view> CsvDataWrapper::csv_table_options_{"ARRAY_DELIMITER",
+                                                                    "ARRAY_MARKER",
+                                                                    "BUFFER_SIZE",
+                                                                    "DELIMITER",
+                                                                    "ESCAPE",
+                                                                    "HEADER",
+                                                                    "LINE_DELIMITER",
+                                                                    "LONLAT",
+                                                                    "NULLS",
+                                                                    "QUOTE",
+                                                                    "QUOTED",
+                                                                    "S3_ACCESS_TYPE"};
 }  // namespace foreign_storage

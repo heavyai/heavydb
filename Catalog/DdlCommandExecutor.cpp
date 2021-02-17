@@ -1413,9 +1413,9 @@ void AlterForeignTableCommand::alterOptions(
   const std::string& table_name = ddl_payload["tableName"].GetString();
   auto& cat = session_ptr_->getCatalog();
   auto new_options_map =
-      foreign_storage::ForeignTable::create_options_map(ddl_payload["options"]);
+      foreign_storage::ForeignTable::createOptionsMap(ddl_payload["options"]);
   foreign_table->validateSupportedOptionKeys(new_options_map);
-  foreign_storage::ForeignTable::validate_alter_options(new_options_map);
+  foreign_storage::ForeignTable::validateAlterOptions(new_options_map);
   cat.setForeignTableOptions(table_name, new_options_map, false);
 }
 

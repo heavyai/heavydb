@@ -58,6 +58,7 @@
 
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
+#include "DataMgr/ForeignStorage/AbstractFileStorageDataWrapper.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "Fragmenter/Fragmenter.h"
 #include "Fragmenter/SortedOrderFragmenter.h"
@@ -89,7 +90,7 @@ using std::vector;
 
 int g_test_against_columnId_gap{0};
 bool g_enable_fsi{false};
-extern bool g_enable_s3_fsi;
+bool g_enable_s3_fsi{false};
 extern bool g_cache_string_hash;
 
 // Serialize temp tables to a json file in the Catalogs directory for Calcite parsing
@@ -4100,24 +4101,23 @@ void Catalog::setForeignServerProperty(const std::string& server_name,
 }
 
 void Catalog::createDefaultServersIfNotExists() {
-  using foreign_storage::ForeignServer;
-  std::map<std::string, std::string, std::less<>> options;
-  options[std::string{ForeignServer::STORAGE_TYPE_KEY}] =
-      ForeignServer::LOCAL_FILE_STORAGE_TYPE;
+  foreign_storage::OptionsMap options;
+  options[foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY] =
+      foreign_storage::AbstractFileStorageDataWrapper::LOCAL_FILE_STORAGE_TYPE;
 
-  auto local_csv_server =
-      std::make_unique<ForeignServer>("omnisci_local_csv",
-                                      foreign_storage::DataWrapperType::CSV,
-                                      options,
-                                      OMNISCI_ROOT_USER_ID);
+  auto local_csv_server = std::make_unique<foreign_storage::ForeignServer>(
+      "omnisci_local_csv",
+      foreign_storage::DataWrapperType::CSV,
+      options,
+      OMNISCI_ROOT_USER_ID);
   local_csv_server->validate();
   createForeignServerNoLocks(std::move(local_csv_server), true);
 
-  auto local_parquet_server =
-      std::make_unique<ForeignServer>("omnisci_local_parquet",
-                                      foreign_storage::DataWrapperType::PARQUET,
-                                      options,
-                                      OMNISCI_ROOT_USER_ID);
+  auto local_parquet_server = std::make_unique<foreign_storage::ForeignServer>(
+      "omnisci_local_parquet",
+      foreign_storage::DataWrapperType::PARQUET,
+      options,
+      OMNISCI_ROOT_USER_ID);
   local_parquet_server->validate();
   createForeignServerNoLocks(std::move(local_parquet_server), true);
 }

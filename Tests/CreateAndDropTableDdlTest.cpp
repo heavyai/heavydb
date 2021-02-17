@@ -33,6 +33,7 @@
 #endif
 
 extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
 extern bool g_enable_calcite_ddl_parser;
 
 namespace bf = boost::filesystem;
@@ -1175,6 +1176,7 @@ class CreateForeignTableTest : public CreateAndDropTableDdlTest {
 
   void TearDown() override {
     g_enable_fsi = true;
+    g_enable_s3_fsi = false;
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
     sql("DROP SERVER IF EXISTS test_server;");
     CreateAndDropTableDdlTest::TearDown();
@@ -1308,9 +1310,10 @@ TEST_F(CreateForeignTableTest, S3SelectWrongServer) {
   std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
                       "SERVER omnisci_local_csv WITH (S3_ACCESS_TYPE = 'S3_SELECT', "
                       "file_path = '../../Tests/FsiDataFiles/0.csv');";
-  queryAndAssertException(query,
-                          "Exception: S3_ACCESS_TYPE option only valid for tables using "
-                          "servers with STORAGE_TYPE = AWS_S3.");
+  queryAndAssertException(
+      query,
+      "Exception: The \"S3_ACCESS_TYPE\" option is only valid for foreign tables using "
+      "servers with \"STORAGE_TYPE\" option value of \"AWS_S3\".");
 }
 
 class DropTableTest : public CreateAndDropTableDdlTest,

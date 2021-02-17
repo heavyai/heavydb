@@ -60,7 +60,7 @@ template <typename T>
 std::string join(T const& container, std::string const& delim) {
   std::stringstream ss;
   if (!container.empty()) {
-    ss << container.front();
+    ss << *container.cbegin();
     for (auto itr = std::next(container.cbegin()); itr != container.cend(); ++itr) {
       ss << delim << *itr;
     }

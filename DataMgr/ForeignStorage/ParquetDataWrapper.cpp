@@ -31,17 +31,6 @@
 namespace foreign_storage {
 
 namespace {
-template <typename T>
-std::pair<typename std::map<ChunkKey, T>::iterator,
-          typename std::map<ChunkKey, T>::iterator>
-prefix_range(std::map<ChunkKey, T>& map, const ChunkKey& chunk_key_prefix) {
-  ChunkKey chunk_key_prefix_sentinel = chunk_key_prefix;
-  chunk_key_prefix_sentinel.push_back(std::numeric_limits<int>::max());
-  auto begin = map.lower_bound(chunk_key_prefix);
-  auto end = map.upper_bound(chunk_key_prefix_sentinel);
-  return std::make_pair(begin, end);
-}
-
 void reduce_metadata(std::shared_ptr<ChunkMetadata> reduce_to,
                      std::shared_ptr<ChunkMetadata> reduce_from) {
   CHECK(reduce_to->sqlType == reduce_from->sqlType);
@@ -76,6 +65,8 @@ void reduce_metadata(std::shared_ptr<ChunkMetadata> reduce_to,
 
 }  // namespace
 
+ParquetDataWrapper::ParquetDataWrapper() : db_id_(-1), foreign_table_(nullptr) {}
+
 ParquetDataWrapper::ParquetDataWrapper(const int db_id, const ForeignTable* foreign_table)
     : db_id_(db_id)
     , foreign_table_(foreign_table)
@@ -86,43 +77,10 @@ ParquetDataWrapper::ParquetDataWrapper(const int db_id, const ForeignTable* fore
     , is_restored_(false)
     , schema_(std::make_unique<ForeignTableSchema>(db_id, foreign_table)) {
   auto& server_options = foreign_table->foreign_server->options;
-  if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
-      ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
+  if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
     file_system_ = std::make_shared<arrow::fs::LocalFileSystem>();
   } else {
     UNREACHABLE();
-  }
-}
-
-ParquetDataWrapper::ParquetDataWrapper(const ForeignTable* foreign_table)
-    : db_id_(-1), foreign_table_(foreign_table) {}
-
-void ParquetDataWrapper::validateOptions(const ForeignTable* foreign_table) {
-  for (const auto& entry : foreign_table->options) {
-    const auto& table_options = foreign_table->supported_options;
-    if (std::find(table_options.begin(), table_options.end(), entry.first) ==
-            table_options.end() &&
-        std::find(supported_options_.begin(), supported_options_.end(), entry.first) ==
-            supported_options_.end()) {
-      throw std::runtime_error{"Invalid foreign table option \"" + entry.first + "\"."};
-    }
-  }
-  ParquetDataWrapper data_wrapper{foreign_table};
-  data_wrapper.validateAndGetCopyParams();
-  data_wrapper.validateFilePath();
-}
-
-std::vector<std::string_view> ParquetDataWrapper::getSupportedOptions() {
-  return std::vector<std::string_view>{supported_options_.begin(),
-                                       supported_options_.end()};
-}
-
-void ParquetDataWrapper::validateFilePath() const {
-  auto& server_options = foreign_table_->foreign_server->options;
-  if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
-      ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
-    ddl_utils::validate_allowed_file_path(foreign_table_->getFullFilePath(),
-                                          ddl_utils::DataTransferType::IMPORT);
   }
 }
 
@@ -311,7 +269,7 @@ std::set<std::string> ParquetDataWrapper::getAllFilePaths() {
   auto timer = DEBUG_TIMER(__func__);
   std::set<std::string> file_paths;
   arrow::fs::FileSelector file_selector{};
-  std::string base_path = foreign_table_->getFullFilePath();
+  std::string base_path = getFullFilePath(foreign_table_);
   file_selector.base_dir = base_path;
   file_selector.recursive = true;
 
@@ -331,30 +289,6 @@ std::set<std::string> ParquetDataWrapper::getAllFilePaths() {
     }
   }
   return file_paths;
-}
-
-import_export::CopyParams ParquetDataWrapper::validateAndGetCopyParams() const {
-  import_export::CopyParams copy_params{};
-  // The file_type argument is never utilized in the context of FSI,
-  // for completeness, set the file_type
-  copy_params.file_type = import_export::FileType::PARQUET;
-  return copy_params;
-}
-
-std::string ParquetDataWrapper::validateAndGetStringWithLength(
-    const std::string& option_name,
-    const size_t expected_num_chars) const {
-  if (auto it = foreign_table_->options.find(option_name);
-      it != foreign_table_->options.end()) {
-    if (it->second.length() != expected_num_chars) {
-      throw std::runtime_error{"Value of \"" + option_name +
-                               "\" foreign table option has the wrong number of "
-                               "characters. Expected " +
-                               std::to_string(expected_num_chars) + " character(s)."};
-    }
-    return it->second;
-  }
-  return "";
 }
 
 void ParquetDataWrapper::metadataScanFiles(const std::set<std::string>& file_paths) {

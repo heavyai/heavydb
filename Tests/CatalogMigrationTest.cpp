@@ -24,6 +24,7 @@
 
 #include "Catalog/Catalog.h"
 #include "DBHandlerTestHelpers.h"
+#include "DataMgr/ForeignStorage/AbstractFileStorageDataWrapper.h"
 #include "SqliteConnector/SqliteConnector.h"
 #include "TestHelpers.h"
 
@@ -82,17 +83,17 @@ class FsiSchemaTest : public testing::Test {
     ASSERT_EQ(data_wrapper, foreign_server->data_wrapper_type);
     ASSERT_EQ(user_id, foreign_server->user_id);
 
-    ASSERT_TRUE(
-        foreign_server->options.find(foreign_storage::ForeignServer::STORAGE_TYPE_KEY) !=
-        foreign_server->options.end());
-    ASSERT_EQ(
-        foreign_storage::ForeignServer::LOCAL_FILE_STORAGE_TYPE,
-        foreign_server->options.find(foreign_storage::ForeignServer::STORAGE_TYPE_KEY)
-            ->second);
+    ASSERT_TRUE(foreign_server->options.find(
+                    foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY) !=
+                foreign_server->options.end());
+    ASSERT_EQ(foreign_storage::AbstractFileStorageDataWrapper::LOCAL_FILE_STORAGE_TYPE,
+              foreign_server->options
+                  .find(foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY)
+                  ->second);
 
-    ASSERT_TRUE(
-        foreign_server->options.find(foreign_storage::ForeignServer::BASE_PATH_KEY) ==
-        foreign_server->options.end());
+    ASSERT_TRUE(foreign_server->options.find(
+                    foreign_storage::AbstractFileStorageDataWrapper::BASE_PATH_KEY) ==
+                foreign_server->options.end());
 
     // check that server loaded from storage matches that in memory
     auto foreign_server_in_memory = catalog->getForeignServer(server_name);
@@ -104,15 +105,15 @@ class FsiSchemaTest : public testing::Test {
     ASSERT_EQ(foreign_server_in_memory->user_id, foreign_server->user_id);
 
     ASSERT_TRUE(foreign_server_in_memory->options.find(
-                    foreign_storage::ForeignServer::STORAGE_TYPE_KEY) !=
+                    foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY) !=
                 foreign_server_in_memory->options.end());
-    ASSERT_EQ(foreign_storage::ForeignServer::LOCAL_FILE_STORAGE_TYPE,
+    ASSERT_EQ(foreign_storage::AbstractFileStorageDataWrapper::LOCAL_FILE_STORAGE_TYPE,
               foreign_server_in_memory->options
-                  .find(foreign_storage::ForeignServer::STORAGE_TYPE_KEY)
+                  .find(foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY)
                   ->second);
 
     ASSERT_TRUE(foreign_server_in_memory->options.find(
-                    foreign_storage::ForeignServer::BASE_PATH_KEY) ==
+                    foreign_storage::AbstractFileStorageDataWrapper::BASE_PATH_KEY) ==
                 foreign_server_in_memory->options.end());
   }
 

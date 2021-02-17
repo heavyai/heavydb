@@ -257,13 +257,15 @@ struct ParseBufferRequest {
                      const import_export::CopyParams& copy_params,
                      int db_id,
                      const ForeignTable* foreign_table,
-                     std::set<int> column_filter_set)
+                     const std::set<int> column_filter_set,
+                     const std::string& full_path)
       : buffer(std::make_unique<char[]>(buffer_size))
       , buffer_size(buffer_size)
       , buffer_alloc_size(buffer_size)
       , copy_params(copy_params)
       , db_id(db_id)
-      , foreign_table_schema(std::make_unique<ForeignTableSchema>(db_id, foreign_table)) {
+      , foreign_table_schema(std::make_unique<ForeignTableSchema>(db_id, foreign_table))
+      , full_path(full_path) {
     // initialize import buffers from columns.
     for (const auto column : getColumns()) {
       if (column_filter_set.find(column->columnId) == column_filter_set.end()) {
@@ -307,9 +309,7 @@ struct ParseBufferRequest {
     return foreign_table_schema->getForeignTable()->maxFragRows;
   }
 
-  inline std::string getFilePath() const {
-    return foreign_table_schema->getForeignTable()->getFullFilePath();
-  }
+  inline std::string getFilePath() const { return full_path; }
 
   // These must be initialized at construction (before parsing).
   std::unique_ptr<char[]> buffer;
@@ -327,6 +327,7 @@ struct ParseBufferRequest {
   size_t first_row_index;
   size_t file_offset;
   size_t process_row_count;
+  std::string full_path;
 };
 
 struct ParseBufferResult {

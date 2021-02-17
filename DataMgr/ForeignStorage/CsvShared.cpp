@@ -64,19 +64,20 @@ bool validate_and_get_is_s3_select(const ForeignTable* foreign_table) {
 
   if (access_type != foreign_table->options.end()) {
     auto& server_options = foreign_table->foreign_server->options;
-    if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second !=
-        ForeignServer::S3_STORAGE_TYPE) {
-      throw std::runtime_error{std::string{S3_ACCESS_TYPE} +
-                               " option only valid for tables using servers with " +
-                               std::string{ForeignServer::STORAGE_TYPE_KEY} + " = " +
-                               std::string{ForeignServer::S3_STORAGE_TYPE} + "."};
+    if (server_options.find(AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY)->second !=
+        AbstractFileStorageDataWrapper::S3_STORAGE_TYPE) {
+      throw std::runtime_error{
+          "The \"" + std::string{S3_ACCESS_TYPE} +
+          "\" option is only valid for foreign tables using servers with \"" +
+          AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY + "\" option value of \"" +
+          AbstractFileStorageDataWrapper::S3_STORAGE_TYPE + "\"."};
     }
     if (access_type->second != S3_DIRECT && access_type->second != S3_SELECT) {
-      throw std::runtime_error{"Invalid value provided for the " +
-                               std::string{S3_ACCESS_TYPE} + " option. Value must be \"" +
-                               S3_DIRECT + "\" or \"" + S3_SELECT + "\"."};
+      throw std::runtime_error{
+          "Invalid value provided for the \"" + std::string{S3_ACCESS_TYPE} +
+          "\" option. Value must be one of the following: " + S3_DIRECT + ", " +
+          S3_SELECT + "."};
     }
-
     return (access_type->second == S3_SELECT);
   } else {
     return false;
@@ -86,16 +87,6 @@ bool validate_and_get_is_s3_select(const ForeignTable* foreign_table) {
 void validate_options(const ForeignTable* foreign_table) {
   validate_and_get_copy_params(foreign_table);
   validate_and_get_is_s3_select(foreign_table);
-  validate_file_path(foreign_table);
-}
-
-void validate_file_path(const ForeignTable* foreign_table) {
-  auto& server_options = foreign_table->foreign_server->options;
-  if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
-      ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
-    ddl_utils::validate_allowed_file_path(foreign_table->getFullFilePath(),
-                                          ddl_utils::DataTransferType::IMPORT);
-  }
 }
 
 import_export::CopyParams validate_and_get_copy_params(
@@ -153,17 +144,6 @@ import_export::CopyParams validate_and_get_copy_params(
   copy_params.quoted =
       validate_and_get_bool_value(foreign_table, "QUOTED").value_or(copy_params.quoted);
   return copy_params;
-}
-
-std::unique_ptr<ForeignDataWrapper> get_csv_data_wrapper(
-    int db_id,
-    const ForeignTable* foreign_table) {
-  if (validate_and_get_is_s3_select(foreign_table)) {
-    UNREACHABLE();
-    return nullptr;
-  } else {
-    return std::make_unique<CsvDataWrapper>(db_id, foreign_table);
-  }
 }
 
 }  // namespace Csv
