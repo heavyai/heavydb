@@ -91,7 +91,16 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   std::vector<const int8_t*> col_buf_ptrs;
   std::vector<int64_t> col_sizes;
   std::optional<size_t> output_column_size;
+
+  int col_index = -1;
+  // TODO: col_list_bufs are allocated on CPU memory, so UDTFs with column_list
+  // arguments are not supported on GPU atm.
+  std::vector<std::vector<const int8_t*>> col_list_bufs;
   for (const auto& input_expr : exe_unit.input_exprs) {
+    auto ti = input_expr->get_type_info();
+    if (!ti.is_column_list()) {
+      CHECK_EQ(col_index, -1);
+    }
     if (auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr)) {
       auto table_id = col_var->get_table_id();
       auto table_info_it = std::find_if(
@@ -110,14 +119,29 @@ ResultSetPtr TableFunctionExecutionContext::execute(
           /*thread_idx=*/0,
           chunks_owner,
           column_fetcher.columnarized_table_cache_);
-
       // We use the size of the first column to be the size of the output column
       if (!output_column_size) {
         output_column_size = buf_elem_count;
       }
-
+      if (ti.is_column_list()) {
+        if (col_index == -1) {
+          col_list_bufs.push_back({});
+          col_list_bufs.back().reserve(ti.get_dimension());
+        } else {
+          CHECK_EQ(col_sizes.back(), buf_elem_count);
+        }
+        col_index++;
+        col_list_bufs.back().push_back(col_buf);
+        // append col_buf to column_list col_buf
+        if (col_index + 1 == ti.get_dimension()) {
+          col_index = -1;
+        }
+        // columns in the same column_list point to column_list data
+        col_buf_ptrs.push_back((const int8_t*)col_list_bufs.back().data());
+      } else {
+        col_buf_ptrs.push_back(col_buf);
+      }
       col_sizes.push_back(buf_elem_count);
-      col_buf_ptrs.push_back(col_buf);
     } else if (const auto& constant_val = dynamic_cast<Analyzer::Constant*>(input_expr)) {
       // TODO(adb): Unify literal handling with rest of system, either in Codegen or as a
       // separate serialization component
@@ -179,7 +203,6 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   CHECK_EQ(col_buf_ptrs.size(), exe_unit.input_exprs.size());
   CHECK_EQ(col_sizes.size(), exe_unit.input_exprs.size());
   CHECK(output_column_size);
-
   switch (device_type) {
     case ExecutorDeviceType::CPU:
       return launchCpuCode(exe_unit,
@@ -245,6 +268,12 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   std::vector<int64_t*> output_col_buf_ptrs;
   for (size_t i = 0; i < num_out_columns; i++) {
     output_col_buf_ptrs.emplace_back(output_buffers_ptr + i * allocated_output_row_count);
+  }
+
+  if (allocated_output_row_count == 0) {
+    // don't bother executing the UDTF when the row count is zero
+    query_buffers->getResultSet(0)->updateStorageEntryCount(0);
+    return query_buffers->getResultSetOwned(0);
   }
 
   // execute

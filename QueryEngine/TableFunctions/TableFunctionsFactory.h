@@ -132,6 +132,28 @@ inline ExtArgumentType ext_arg_type_ensure_column(const ExtArgumentType ext_arg_
   }
 }
 
+inline ExtArgumentType ext_arg_type_ensure_column_list(
+    const ExtArgumentType ext_arg_type) {
+  switch (ext_arg_type) {
+    case ExtArgumentType::Int8:
+      return ExtArgumentType::ColumnListInt8;
+    case ExtArgumentType::Int16:
+      return ExtArgumentType::ColumnListInt16;
+    case ExtArgumentType::Int32:
+      return ExtArgumentType::ColumnListInt32;
+    case ExtArgumentType::Int64:
+      return ExtArgumentType::ColumnListInt64;
+    case ExtArgumentType::Float:
+      return ExtArgumentType::ColumnListFloat;
+    case ExtArgumentType::Double:
+      return ExtArgumentType::ColumnListDouble;
+    case ExtArgumentType::Bool:
+      return ExtArgumentType::ColumnListBool;
+    default:
+      return ext_arg_type;
+  }
+}
+
 class TableFunction {
  public:
   TableFunction(const std::string& name,
@@ -188,6 +210,27 @@ class TableFunction {
   OutputBufferSizeType getOutputRowSizeType() const { return output_sizer_.type; }
 
   size_t getOutputRowSizeParameter() const { return output_sizer_.val; }
+
+  size_t getOutputRowSizeParameter(const std::vector<SQLTypeInfo>& variant) const {
+    auto val = output_sizer_.val;
+    if (hasUserSpecifiedOutputSizeMultiplier()) {
+      size_t col_index = 0;
+      size_t func_arg_index = 0;
+      for (const auto& ti : variant) {
+        func_arg_index++;
+        if (ti.is_column_list()) {
+          col_index += ti.get_dimension();
+        } else {
+          col_index++;
+        }
+        if (func_arg_index == val) {
+          val = col_index;
+          break;
+        }
+      }
+    }
+    return val;
+  }
 
   bool isRuntime() const { return is_runtime_; }
 

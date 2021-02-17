@@ -70,7 +70,14 @@ public class ExtensionFunction {
     TextEncodingNone,
     TextEncodingDict8,
     TextEncodingDict16,
-    TextEncodingDict32
+    TextEncodingDict32,
+    ColumnListInt8,
+    ColumnListInt16,
+    ColumnListInt32,
+    ColumnListInt64,
+    ColumnListFloat,
+    ColumnListDouble,
+    ColumnListBool
   }
   ;
 
@@ -229,6 +236,20 @@ public class ExtensionFunction {
         return "text_encoding_dict16";
       case TextEncodingDict32:
         return "text_encoding_dict32";
+      case ColumnListInt8:
+        return "column_list_int8";
+      case ColumnListInt16:
+        return "column_list_int16";
+      case ColumnListInt32:
+        return "column_list_int32";
+      case ColumnListInt64:
+        return "column_list_int64";
+      case ColumnListFloat:
+        return "column_list_float";
+      case ColumnListDouble:
+        return "column_list_double";
+      case ColumnListBool:
+        return "column_list_bool";
     }
     MAPDLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
     assert false;
@@ -275,34 +296,51 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnBool;
   }
 
+  private static boolean isColumnListType(final ExtArgumentType type) {
+    return type == ExtArgumentType.ColumnListInt8
+            || type == ExtArgumentType.ColumnListInt16
+            || type == ExtArgumentType.ColumnListInt32
+            || type == ExtArgumentType.ColumnListInt64
+            || type == ExtArgumentType.ColumnListFloat
+            || type == ExtArgumentType.ColumnListDouble
+            || type == ExtArgumentType.ColumnListBool;
+  }
+
   private static ExtArgumentType getValueType(final ExtArgumentType type) {
     switch (type) {
       case PInt8:
       case ColumnInt8:
+      case ColumnListInt8:
       case Int8:
         return ExtArgumentType.Int8;
-      case ColumnInt16:
       case PInt16:
+      case ColumnInt16:
+      case ColumnListInt16:
       case Int16:
         return ExtArgumentType.Int16;
       case PInt32:
       case ColumnInt32:
+      case ColumnListInt32:
       case Int32:
         return ExtArgumentType.Int32;
       case PInt64:
       case ColumnInt64:
+      case ColumnListInt64:
       case Int64:
         return ExtArgumentType.Int64;
       case PFloat:
       case ColumnFloat:
+      case ColumnListFloat:
       case Float:
         return ExtArgumentType.Float;
       case PDouble:
       case ColumnDouble:
+      case ColumnListDouble:
       case Double:
         return ExtArgumentType.Double;
       case PBool:
       case ColumnBool:
+      case ColumnListBool:
       case Bool:
         return ExtArgumentType.Bool;
     }
@@ -355,6 +393,14 @@ public class ExtensionFunction {
       case TextEncodingDict16:
       case TextEncodingDict32:
         return SqlTypeName.VARCHAR; // ?
+      case ColumnListInt8:
+      case ColumnListInt16:
+      case ColumnListInt32:
+      case ColumnListInt64:
+      case ColumnListFloat:
+      case ColumnListDouble:
+      case ColumnListBool:
+        return SqlTypeName.COLUMN_LIST;
     }
     Set<SqlTypeName> allSqlTypeNames = EnumSet.allOf(SqlTypeName.class);
     MAPDLOGGER.error("toSqlTypeName: unknown type " + type + " to be mapped to {"

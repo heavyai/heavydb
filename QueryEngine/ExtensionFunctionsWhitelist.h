@@ -71,7 +71,14 @@ enum class ExtArgumentType {
   TextEncodingNone,
   TextEncodingDict8,
   TextEncodingDict16,
-  TextEncodingDict32
+  TextEncodingDict32,
+  ColumnListInt8,
+  ColumnListInt16,
+  ColumnListInt32,
+  ColumnListInt64,
+  ColumnListFloat,
+  ColumnListDouble,
+  ColumnListBool
 };
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type);

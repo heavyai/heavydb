@@ -165,3 +165,29 @@ EXTENSION_NOINLINE int32_t get_max_with_row_offset(const Column<int>& input_col,
 }
 
 #include "TableFunctionsTesting.hpp"
+
+/*
+  UDTF: column_list_get__cpu_(ColumnList<double>, int, RowMultiplier) -> Column<double>
+*/
+EXTENSION_NOINLINE int32_t column_list_get__cpu_(const ColumnList<double>& col_list,
+                                                 const int index,
+                                                 const int m,
+                                                 Column<double>& col) {
+  col = col_list(index);  // copy the data of col_list item to output column
+  return col.getSize();
+}
+
+// clang-format off
+/*
+  UDTF: column_list_first_last(ColumnList<double>, RowMultiplier) -> Column<double>,
+  Column<double>
+*/
+// clang-format on
+EXTENSION_NOINLINE int32_t column_list_first_last(const ColumnList<double>& col_list,
+                                                  const int m,
+                                                  Column<double>& col1,
+                                                  Column<double>& col2) {
+  col1 = col_list(0);
+  col2 = col_list(col_list.getLength() - 1);
+  return col1.getSize();
+}

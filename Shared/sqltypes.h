@@ -64,7 +64,8 @@ enum SQLTypes {
   kVOID = 26,
   kCURSOR = 27,
   kCOLUMN = 28,
-  kSQLTYPE_LAST = 29
+  kCOLUMN_LIST = 29,
+  kSQLTYPE_LAST = 30
 };
 
 #ifndef __CUDACC__
@@ -129,6 +130,8 @@ inline std::string toString(const SQLTypes& type) {
       return "CURSOR";
     case kCOLUMN:
       return "COLUMN";
+    case kCOLUMN_LIST:
+      return "COLUMN_LIST";
     case kSQLTYPE_LAST:
       break;
   }
@@ -440,6 +443,13 @@ class SQLTypeInfo {
       CHECK_LT(static_cast<int>(subtype), kSQLTYPE_LAST);
       return "COLUMN<" + type_name[static_cast<int>(subtype)] + ps + ">" + num_elems;
     }
+    if (type == kCOLUMN_LIST) {
+      auto elem_ti = get_elem_type();
+      auto num_elems =
+          (size > 0) ? "[" + std::to_string(size / elem_ti.get_size()) + "]" : "";
+      CHECK_LT(static_cast<int>(subtype), kSQLTYPE_LAST);
+      return "COLUMN_LIST<" + type_name[static_cast<int>(subtype)] + ps + ">" + num_elems;
+    }
     return type_name[static_cast<int>(type)] + ps;
   }
   inline std::string get_compression_name() const { return comp_name[(int)compression]; }
@@ -488,11 +498,14 @@ class SQLTypeInfo {
   inline bool is_fixlen_array() const { return type == kARRAY && size > 0; }
   inline bool is_timeinterval() const { return IS_INTERVAL(type); }
   inline bool is_geometry() const { return IS_GEO(type); }
-  inline bool is_column() const { return type == kCOLUMN; }  // rbc Column
+  inline bool is_column() const { return type == kCOLUMN; }            // rbc Column
+  inline bool is_column_list() const { return type == kCOLUMN_LIST; }  // rbc ColumnList
   inline bool is_bytes() const {
     return type == kTEXT && get_compression() == kENCODING_NONE;
   }  // rbc Bytes
-  inline bool is_buffer() const { return is_array() || is_column() || is_bytes(); }
+  inline bool is_buffer() const {
+    return is_array() || is_column() || is_column_list() || is_bytes();
+  }
   inline bool transforms() const {
     return IS_GEO(type) && get_output_srid() != get_input_srid();
   }
@@ -580,6 +593,8 @@ class SQLTypeInfo {
     } else if (type == kARRAY && new_type_info.get_type() == kARRAY) {
       return get_elem_type().is_castable(new_type_info.get_elem_type());
     } else if (type == kCOLUMN && new_type_info.get_type() == kCOLUMN) {
+      return get_elem_type().is_castable(new_type_info.get_elem_type());
+    } else if (type == kCOLUMN_LIST && new_type_info.get_type() == kCOLUMN_LIST) {
       return get_elem_type().is_castable(new_type_info.get_elem_type());
     } else {
       return false;
@@ -727,11 +742,12 @@ class SQLTypeInfo {
   inline bool is_timestamp() const { return type == kTIMESTAMP; }
 
  private:
-  SQLTypes type;             // type id
-  SQLTypes subtype;          // element type of arrays
-  int dimension;             // VARCHAR/CHAR length or NUMERIC/DECIMAL precision
-  int scale;                 // NUMERIC/DECIMAL scale
-  bool notnull;              // nullable?  a hint, not used for type checking
+  SQLTypes type;     // type id
+  SQLTypes subtype;  // element type of arrays or columns
+  int dimension;     // VARCHAR/CHAR length or NUMERIC/DECIMAL precision or COLUMN_LIST
+                     // length
+  int scale;         // NUMERIC/DECIMAL scale
+  bool notnull;      // nullable?  a hint, not used for type checking
   EncodingType compression;  // compression scheme
   int comp_param;            // compression parameter when applicable for certain schemes
   int size;                  // size of the type in bytes.  -1 for variable size
@@ -865,6 +881,7 @@ class SQLTypeInfo {
       case kPOLYGON:
       case kMULTIPOLYGON:
       case kCOLUMN:
+      case kCOLUMN_LIST:
         break;
       default:
         break;
@@ -952,4 +969,22 @@ inline int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti) {
     default:
       return nullptr;
   }
+}
+
+inline auto generate_array_type(const SQLTypes subtype) {
+  auto ti = SQLTypeInfo(kARRAY, false);
+  ti.set_subtype(subtype);
+  return ti;
+}
+
+inline auto generate_column_type(const SQLTypes subtype) {
+  auto ti = SQLTypeInfo(kCOLUMN, false);
+  ti.set_subtype(subtype);
+  return ti;
+}
+
+inline auto generate_column_list_type(const SQLTypes subtype) {
+  auto ti = SQLTypeInfo(kCOLUMN_LIST, false);
+  ti.set_subtype(subtype);
+  return ti;
 }

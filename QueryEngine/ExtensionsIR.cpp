@@ -110,6 +110,13 @@ llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type,
     case ExtArgumentType::ColumnDouble:
     case ExtArgumentType::ColumnFloat:
     case ExtArgumentType::TextEncodingNone:
+    case ExtArgumentType::ColumnListInt64:
+    case ExtArgumentType::ColumnListInt32:
+    case ExtArgumentType::ColumnListInt16:
+    case ExtArgumentType::ColumnListBool:
+    case ExtArgumentType::ColumnListInt8:
+    case ExtArgumentType::ColumnListDouble:
+    case ExtArgumentType::ColumnListFloat:
       return llvm::Type::getVoidTy(ctx);
     default:
       CHECK(false);
@@ -455,7 +462,7 @@ llvm::Value* CodeGenerator::endArgsNullcheck(
       const auto arr_null_bool =
           cgen_state_->ir_builder_.CreateStructGEP(arr_struct_ty, null_array_ptr, 2);
       cgen_state_->ir_builder_.CreateStore(
-          llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 1),
+          llvm::ConstantInt::get(get_int_type(8, cgen_state_->context_), 1),
           arr_null_bool);
 
       const auto arr_null_size =

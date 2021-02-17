@@ -205,6 +205,7 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
     case kMULTIPOLYGON:
       return 32;
     case kCOLUMN:
+    case kCOLUMN_LIST:
       return ti.get_elem_type().get_size() * 8;
     default:
       LOG(FATAL) << "Unhandled int_type: " << int_type;

@@ -31,6 +31,7 @@
 #include "../Analyzer/Analyzer.h"
 #include "../Shared/sqltypes.h"
 
+#include <tuple>
 #include <vector>
 
 namespace Analyzer {
@@ -53,12 +54,13 @@ ExtensionFunction bind_function(std::string name,
 ExtensionFunction bind_function(const Analyzer::FunctionOper* function_oper,
                                 const bool is_gpu);
 
-const table_functions::TableFunction bind_table_function(
-    std::string name,
-    Analyzer::ExpressionPtrVector input_args,
-    const bool is_gpu);
+const std::tuple<table_functions::TableFunction, std::vector<SQLTypeInfo>>
+bind_table_function(std::string name,
+                    Analyzer::ExpressionPtrVector input_args,
+                    const bool is_gpu);
 
 bool is_ext_arg_type_column(const ExtArgumentType ext_arg_type);
+bool is_ext_arg_type_column_list(const ExtArgumentType ext_arg_type);
 bool is_ext_arg_type_array(const ExtArgumentType ext_arg_type);
 bool is_ext_arg_type_geo(const ExtArgumentType ext_arg_type);
 bool is_ext_arg_type_pointer(const ExtArgumentType ext_arg_type);

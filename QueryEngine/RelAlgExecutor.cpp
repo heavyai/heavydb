@@ -3981,7 +3981,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       target_exprs_owned_.end(), input_exprs_owned.begin(), input_exprs_owned.end());
   const auto input_exprs = get_exprs_not_owned(input_exprs_owned);
 
-  const auto table_function_impl = [=]() {
+  const auto table_function_impl_and_type_infos = [=]() {
     if (is_gpu) {
       try {
         return bind_table_function(
@@ -4002,11 +4002,14 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       }
     }
   }();
+  const auto& table_function_impl = std::get<0>(table_function_impl_and_type_infos);
+  const auto& table_function_type_infos = std::get<1>(table_function_impl_and_type_infos);
 
   size_t output_row_sizing_param = 0;
   if (table_function_impl.hasUserSpecifiedOutputSizeMultiplier() ||
       table_function_impl.hasUserSpecifiedOutputSizeConstant()) {
-    const auto parameter_index = table_function_impl.getOutputRowSizeParameter();
+    const auto parameter_index =
+        table_function_impl.getOutputRowSizeParameter(table_function_type_infos);
     CHECK_GT(parameter_index, size_t(0));
     const auto parameter_expr = table_func->getTableFuncInputAt(parameter_index - 1);
     const auto parameter_expr_literal = dynamic_cast<const RexLiteral*>(parameter_expr);
@@ -4030,13 +4033,28 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   }
 
   std::vector<Analyzer::ColumnVar*> input_col_exprs;
-  size_t index = 0;
-  for (auto input_expr : input_exprs) {
-    if (auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr)) {
-      input_expr->set_type_info(table_function_impl.getInputSQLType(index));
+  size_t input_index = 0;
+  for (const auto& ti : table_function_type_infos) {
+    if (ti.is_column_list()) {
+      for (int i = 0; i < ti.get_dimension(); i++) {
+        auto& input_expr = input_exprs[input_index];
+        auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr);
+        CHECK(col_var);
+        input_expr->set_type_info(
+            ti);  // ti is shared in between all columns in the same column_list
+        input_col_exprs.push_back(col_var);
+        input_index++;
+      }
+    } else if (ti.is_column()) {
+      auto& input_expr = input_exprs[input_index];
+      auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr);
+      CHECK(col_var);
+      input_expr->set_type_info(ti);
       input_col_exprs.push_back(col_var);
+      input_index++;
+    } else {
+      input_index++;
     }
-    index++;
   }
   CHECK_EQ(input_col_exprs.size(), table_func->getColInputsSize());
   std::vector<Analyzer::Expr*> table_func_outputs;

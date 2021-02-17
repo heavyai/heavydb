@@ -516,6 +516,20 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.TextEncodingDict16;
       case TextEncodingDict32:
         return ExtensionFunction.ExtArgumentType.TextEncodingDict32;
+      case ColumnListInt8:
+        return ExtensionFunction.ExtArgumentType.ColumnListInt8;
+      case ColumnListInt16:
+        return ExtensionFunction.ExtArgumentType.ColumnListInt16;
+      case ColumnListInt32:
+        return ExtensionFunction.ExtArgumentType.ColumnListInt32;
+      case ColumnListInt64:
+        return ExtensionFunction.ExtArgumentType.ColumnListInt64;
+      case ColumnListFloat:
+        return ExtensionFunction.ExtArgumentType.ColumnListFloat;
+      case ColumnListDouble:
+        return ExtensionFunction.ExtArgumentType.ColumnListDouble;
+      case ColumnListBool:
+        return ExtensionFunction.ExtArgumentType.ColumnListBool;
       default:
         MAPDLOGGER.error("toExtArgumentType: unknown type " + type);
         return null;

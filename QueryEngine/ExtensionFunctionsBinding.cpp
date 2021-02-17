@@ -55,6 +55,29 @@ ExtArgumentType get_column_arg_elem_type(const ExtArgumentType ext_arg_column_ty
   return ExtArgumentType{};
 }
 
+ExtArgumentType get_column_list_arg_elem_type(
+    const ExtArgumentType ext_arg_column_list_type) {
+  switch (ext_arg_column_list_type) {
+    case ExtArgumentType::ColumnListInt8:
+      return ExtArgumentType::Int8;
+    case ExtArgumentType::ColumnListInt16:
+      return ExtArgumentType::Int16;
+    case ExtArgumentType::ColumnListInt32:
+      return ExtArgumentType::Int32;
+    case ExtArgumentType::ColumnListInt64:
+      return ExtArgumentType::Int64;
+    case ExtArgumentType::ColumnListFloat:
+      return ExtArgumentType::Float;
+    case ExtArgumentType::ColumnListDouble:
+      return ExtArgumentType::Double;
+    case ExtArgumentType::ColumnListBool:
+      return ExtArgumentType::Bool;
+    default:
+      UNREACHABLE();
+  }
+  return ExtArgumentType{};
+}
+
 ExtArgumentType get_array_arg_elem_type(const ExtArgumentType ext_arg_array_type) {
   switch (ext_arg_array_type) {
     case ExtArgumentType::ArrayInt8:
@@ -103,8 +126,11 @@ static int match_arguments(const SQLTypeInfo& arg_type,
       add 1000000 if type kinds differ (integer vs double, for instance)
 
    */
-  auto stype = sig_types[sig_pos];
   int max_pos = sig_types.size() - 1;
+  if (sig_pos > max_pos) {
+    return -1;
+  }
+  auto stype = sig_types[sig_pos];
   switch (arg_type.get_type()) {
     case kBOOLEAN:
       if (stype == ExtArgumentType::Bool) {
@@ -300,6 +326,23 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         }
       }
       break;
+    case kCOLUMN_LIST:
+      if (is_ext_arg_type_column_list(stype)) {
+        // column_list arguments must match exactly
+        const auto stype_ti =
+            ext_arg_type_to_type_info(get_column_list_arg_elem_type(stype));
+        if (arg_type.get_elem_type() == kBOOLEAN && stype_ti.get_type() == kTINYINT) {
+          /* Boolean column_list has the same low-level structure as Int8 column_list. */
+          penalty_score += 10000;
+          return 1;
+        } else if (arg_type.get_elem_type().get_type() == stype_ti.get_type()) {
+          penalty_score += 10000;
+          return 1;
+        } else {
+          return -1;
+        }
+      }
+      break;
     case kTEXT:
       switch (arg_type.get_compression()) {
         case kENCODING_NONE:
@@ -362,10 +405,11 @@ bool is_valid_identifier(std::string str) {
 }  // namespace
 
 template <typename T>
-T bind_function(std::string name,
-                Analyzer::ExpressionPtrVector func_args,
-                const std::vector<T>& ext_funcs,
-                const std::string processor) {
+std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
+    std::string name,
+    Analyzer::ExpressionPtrVector func_args,
+    const std::vector<T>& ext_funcs,
+    const std::string processor) {
   /* worker function
 
      Template type T must implement the following methods:
@@ -396,7 +440,6 @@ T bind_function(std::string name,
     It is assumed that function_oper and extension functions in
     ext_funcs have the same name.
    */
-
   if (!is_valid_identifier(name)) {
     throw NativeExecutionError(
         "Cannot bind function with invalid UDF/UDTF function name: " + name);
@@ -405,32 +448,112 @@ T bind_function(std::string name,
   int minimal_score = std::numeric_limits<int>::max();
   int index = -1;
   int optimal = -1;
+  int optimal_variant = -1;
 
-  std::vector<SQLTypeInfo> type_infos;
+  std::vector<SQLTypeInfo> type_infos_input;
   for (auto atype : func_args) {
     if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
       if (dynamic_cast<const Analyzer::ColumnVar*>(atype.get())) {
-        auto ti = SQLTypeInfo(
-            kCOLUMN, 0, 0, false, kENCODING_NONE, 0, atype->get_type_info().get_type());
-        type_infos.push_back(ti);
+        auto ti = generate_column_type(atype->get_type_info().get_type());
+        type_infos_input.push_back(ti);
         continue;
       }
     }
-    type_infos.push_back(atype->get_type_info());
+    type_infos_input.push_back(atype->get_type_info());
   }
 
+  // clang-format off
+  /*
+    Table functions may have arguments such as ColumnList that collect
+    neighboring columns with the same data type into a single object.
+    Here we compute all possible combinations of mapping a subset of
+    columns into columns sets. For example, if the types of function
+    arguments are (as given in func_args argument)
+
+      (Column<int>, Column<int>, Column<int>, int)
+
+    then the computed variants will be
+
+      (Column<int>, Column<int>, Column<int>, int)
+      (Column<int>, Column<int>, ColumnList[1]<int>, int)
+      (Column<int>, ColumnList[1]<int>, Column<int>, int)
+      (Column<int>, ColumnList[2]<int>, int)
+      (ColumnList[1]<int>, Column<int>, Column<int>, int)
+      (ColumnList[1]<int>, Column<int>, ColumnList[1]<int>, int)
+      (ColumnList[2]<int>, Column<int>, int)
+      (ColumnList[3]<int>, int)
+
+    where the integers in [..] indicate the number of collected
+    columns. In the SQLTypeInfo instance, this number is stored in the
+    SQLTypeInfo dimension attribute.
+
+    As an example, let us consider a SQL query containing the
+    following expression calling a UDTF foo:
+
+      table(foo(cursor(select a, b, c from tableofints), 1))
+
+    Here follows a list of table functions and the corresponding
+    optimal argument type variants that are computed for the given
+    query expression:
+
+    UDTF:  foo(ColumnList<int>, RowMultiplier) -> Column<int>
+           (ColumnList[3]<int>, int)               # a, b, c are all collected to column_list
+
+    UDTF:  foo(Column<int>, ColumnList<int>, RowMultiplier) -> Column<int>
+           (Column<int>, ColumnList[2]<int>, int)  # b and c are collected to column_list
+
+    UDTF:  foo(Column<int>, Column<int>, Column<int>, RowMultiplier) -> Column<int>
+           (Column<int>, Column<int>, Column<int>, int)
+   */
+  // clang-format on
+  std::vector<std::vector<SQLTypeInfo>> type_infos_variants;
+  for (auto ti : type_infos_input) {
+    if (type_infos_variants.begin() == type_infos_variants.end()) {
+      type_infos_variants.push_back({ti});
+      if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
+        if (ti.is_column()) {
+          auto mti = generate_column_list_type(ti.get_subtype());
+          mti.set_dimension(1);
+          type_infos_variants.push_back({mti});
+        }
+      }
+      continue;
+    }
+    std::vector<std::vector<SQLTypeInfo>> new_type_infos_variants;
+    for (auto& type_infos : type_infos_variants) {
+      if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
+        if (ti.is_column()) {
+          auto new_type_infos = type_infos;  // makes a copy
+          const auto& last = type_infos.back();
+          if (last.is_column_list() && last.get_subtype() == ti.get_subtype()) {
+            // last column_list consumes column argument if types match
+            new_type_infos.back().set_dimension(last.get_dimension() + 1);
+          } else {
+            // add column as column_list argument
+            auto mti = generate_column_list_type(ti.get_subtype());
+            mti.set_dimension(1);
+            new_type_infos.push_back(mti);
+          }
+          new_type_infos_variants.push_back(new_type_infos);
+        }
+      }
+      type_infos.push_back(ti);
+    }
+    type_infos_variants.insert(type_infos_variants.end(),
+                               new_type_infos_variants.begin(),
+                               new_type_infos_variants.end());
+  }
+  // Find extension function that gives the best match on the set of
+  // argument type variants:
   for (auto ext_func : ext_funcs) {
     index++;
     auto ext_func_args = ext_func.getInputArgs();
-    /* In general, `arg_types.size() <= ext_func_args.size()` because
-       non-scalar arguments (such as arrays and geo-objects) are
-       mapped to multiple `ext_func` arguments. */
-    if (func_args.size() <= ext_func_args.size()) {
-      /* argument type must fit into the corresponding signature
-         argument type, reject signature if not */
+    int index_variant = -1;
+    for (const auto& type_infos : type_infos_variants) {
+      index_variant++;
       int penalty_score = 0;
       int pos = 0;
-      for (auto ti : type_infos) {
+      for (const auto& ti : type_infos) {
         int offset = match_arguments(ti, pos, ext_func_args, penalty_score);
         if (offset < 0) {
           // atype does not match with ext_func argument
@@ -439,12 +562,14 @@ T bind_function(std::string name,
         }
         pos += offset;
       }
-      if (pos >= 0) {
+
+      if ((size_t)pos == ext_func_args.size()) {
         // prefer smaller return types
         penalty_score += ext_arg_type_to_type_info(ext_func.getRet()).get_logical_size();
         if (penalty_score < minimal_score) {
           optimal = index;
           minimal_score = penalty_score;
+          optimal_variant = index_variant;
         }
       }
     }
@@ -453,7 +578,7 @@ T bind_function(std::string name,
   if (optimal == -1) {
     /* no extension function found that argument types would match
        with types in `arg_types` */
-    auto sarg_types = ExtensionFunctionsWhitelist::toString(type_infos);
+    auto sarg_types = ExtensionFunctionsWhitelist::toString(type_infos_input);
     std::string message;
     if (!ext_funcs.size()) {
       message = "Function " + name + "(" + sarg_types + ") not supported.";
@@ -476,14 +601,14 @@ T bind_function(std::string name,
     }
     throw ExtensionFunctionBindingError(message);
   }
-  return ext_funcs[optimal];
+  return {ext_funcs[optimal], type_infos_variants[optimal_variant]};
 }
 
-const table_functions::TableFunction bind_table_function(
-    std::string name,
-    Analyzer::ExpressionPtrVector input_args,
-    const std::vector<table_functions::TableFunction>& table_funcs,
-    const bool is_gpu) {
+const std::tuple<table_functions::TableFunction, std::vector<SQLTypeInfo>>
+bind_table_function(std::string name,
+                    Analyzer::ExpressionPtrVector input_args,
+                    const std::vector<table_functions::TableFunction>& table_funcs,
+                    const bool is_gpu) {
   std::string processor = (is_gpu ? "GPU" : "CPU");
   return bind_function<table_functions::TableFunction>(
       name, input_args, table_funcs, processor);
@@ -502,13 +627,15 @@ ExtensionFunction bind_function(std::string name,
     ext_funcs = ExtensionFunctionsWhitelist::get_ext_funcs(name, is_gpu);
   }
   try {
-    return bind_function<ExtensionFunction>(name, func_args, ext_funcs, processor);
+    return std::get<0>(
+        bind_function<ExtensionFunction>(name, func_args, ext_funcs, processor));
   } catch (ExtensionFunctionBindingError& e) {
     if (is_gpu) {
       is_gpu = false;
       processor = "GPU|CPU";
       ext_funcs = ExtensionFunctionsWhitelist::get_ext_funcs(name, is_gpu);
-      return bind_function<ExtensionFunction>(name, func_args, ext_funcs, processor);
+      return std::get<0>(
+          bind_function<ExtensionFunction>(name, func_args, ext_funcs, processor));
     } else {
       throw;
     }
@@ -522,7 +649,8 @@ ExtensionFunction bind_function(std::string name,
   std::vector<ExtensionFunction> ext_funcs =
       ExtensionFunctionsWhitelist::get_ext_funcs(name, is_gpu);
   std::string processor = (is_gpu ? "GPU" : "CPU");
-  return bind_function<ExtensionFunction>(name, func_args, ext_funcs, processor);
+  return std::get<0>(
+      bind_function<ExtensionFunction>(name, func_args, ext_funcs, processor));
 }
 
 ExtensionFunction bind_function(const Analyzer::FunctionOper* function_oper,
@@ -536,10 +664,10 @@ ExtensionFunction bind_function(const Analyzer::FunctionOper* function_oper,
   return bind_function(name, func_args, is_gpu);
 }
 
-const table_functions::TableFunction bind_table_function(
-    std::string name,
-    Analyzer::ExpressionPtrVector input_args,
-    const bool is_gpu) {
+const std::tuple<table_functions::TableFunction, std::vector<SQLTypeInfo>>
+bind_table_function(std::string name,
+                    Analyzer::ExpressionPtrVector input_args,
+                    const bool is_gpu) {
   // used in RelAlgExecutor.cpp
   std::vector<table_functions::TableFunction> table_funcs =
       table_functions::TableFunctionsFactory::get_table_funcs(name, is_gpu);
@@ -571,6 +699,22 @@ bool is_ext_arg_type_column(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ColumnFloat:
     case ExtArgumentType::ColumnDouble:
     case ExtArgumentType::ColumnBool:
+      return true;
+
+    default:
+      return false;
+  }
+}
+
+bool is_ext_arg_type_column_list(const ExtArgumentType ext_arg_type) {
+  switch (ext_arg_type) {
+    case ExtArgumentType::ColumnListInt8:
+    case ExtArgumentType::ColumnListInt16:
+    case ExtArgumentType::ColumnListInt32:
+    case ExtArgumentType::ColumnListInt64:
+    case ExtArgumentType::ColumnListFloat:
+    case ExtArgumentType::ColumnListDouble:
+    case ExtArgumentType::ColumnListBool:
       return true;
 
     default:

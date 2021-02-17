@@ -26,9 +26,6 @@ namespace table_functions {
 namespace {
 
 SQLTypeInfo ext_arg_pointer_type_to_type_info(const ExtArgumentType ext_arg_type) {
-  auto generate_column_type = [](const auto& subtype) {
-    return SQLTypeInfo(kCOLUMN, 0, 0, false, kENCODING_NONE, 0, subtype);
-  };
   switch (ext_arg_type) {
     case ExtArgumentType::PInt8:
       return SQLTypeInfo(kTINYINT, false);
@@ -58,6 +55,20 @@ SQLTypeInfo ext_arg_pointer_type_to_type_info(const ExtArgumentType ext_arg_type
       return generate_column_type(kDOUBLE);
     case ExtArgumentType::ColumnBool:
       return generate_column_type(kBOOLEAN);
+    case ExtArgumentType::ColumnListInt8:
+      return generate_column_list_type(kTINYINT);
+    case ExtArgumentType::ColumnListInt16:
+      return generate_column_list_type(kSMALLINT);
+    case ExtArgumentType::ColumnListInt32:
+      return generate_column_list_type(kINT);
+    case ExtArgumentType::ColumnListInt64:
+      return generate_column_list_type(kBIGINT);
+    case ExtArgumentType::ColumnListFloat:
+      return generate_column_list_type(kFLOAT);
+    case ExtArgumentType::ColumnListDouble:
+      return generate_column_list_type(kDOUBLE);
+    case ExtArgumentType::ColumnListBool:
+      return generate_column_list_type(kBOOLEAN);
     default:
       LOG(WARNING) << "ext_arg_pointer_type_to_type_info: ExtArgumentType `"
                    << ExtensionFunctionsWhitelist::toString(ext_arg_type)
@@ -72,30 +83,37 @@ SQLTypeInfo ext_arg_type_to_type_info_output(const ExtArgumentType ext_arg_type)
   switch (ext_arg_type) {
     case ExtArgumentType::PInt8:
     case ExtArgumentType::ColumnInt8:
+    case ExtArgumentType::ColumnListInt8:
     case ExtArgumentType::Int8:
       return SQLTypeInfo(kTINYINT, false);
     case ExtArgumentType::PInt16:
     case ExtArgumentType::ColumnInt16:
+    case ExtArgumentType::ColumnListInt16:
     case ExtArgumentType::Int16:
       return SQLTypeInfo(kSMALLINT, false);
     case ExtArgumentType::PInt32:
     case ExtArgumentType::ColumnInt32:
+    case ExtArgumentType::ColumnListInt32:
     case ExtArgumentType::Int32:
       return SQLTypeInfo(kINT, false);
     case ExtArgumentType::PInt64:
     case ExtArgumentType::ColumnInt64:
+    case ExtArgumentType::ColumnListInt64:
     case ExtArgumentType::Int64:
       return SQLTypeInfo(kBIGINT, false);
     case ExtArgumentType::PFloat:
     case ExtArgumentType::ColumnFloat:
+    case ExtArgumentType::ColumnListFloat:
     case ExtArgumentType::Float:
       return SQLTypeInfo(kFLOAT, false);
     case ExtArgumentType::PDouble:
     case ExtArgumentType::ColumnDouble:
+    case ExtArgumentType::ColumnListDouble:
     case ExtArgumentType::Double:
       return SQLTypeInfo(kDOUBLE, false);
     case ExtArgumentType::PBool:
     case ExtArgumentType::ColumnBool:
+    case ExtArgumentType::ColumnListBool:
     case ExtArgumentType::Bool:
       return SQLTypeInfo(kBOOLEAN, false);
     default:

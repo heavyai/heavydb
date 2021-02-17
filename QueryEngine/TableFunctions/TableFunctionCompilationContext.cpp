@@ -148,6 +148,77 @@ llvm::Value* alloc_column(std::string col_name,
   }
 }
 
+llvm::Value* alloc_column_list(std::string col_list_name,
+                               const SQLTypeInfo& data_target_info,
+                               llvm::Value* data_ptrs,
+                               int length,
+                               llvm::Value* data_size,
+                               llvm::LLVMContext& ctx,
+                               llvm::IRBuilder<>& ir_builder) {
+  /*
+    Creates a new ColumnList instance of given element type and initialize
+    its members. If data ptr or size are unspecified (have nullptr
+    values) then the corresponding members are initialized with NULL
+    and -1, respectively.
+   */
+  llvm::Type* data_ptrs_llvm_type = llvm::Type::getInt8PtrTy(ctx);
+
+  llvm::StructType* col_list_struct_type =
+      llvm::StructType::get(ctx,
+                            {
+                                data_ptrs_llvm_type,         /* int8_t* ptrs */
+                                llvm::Type::getInt64Ty(ctx), /* int64_t length */
+                                llvm::Type::getInt64Ty(ctx)  /* int64_t size */
+                            });
+  auto col_list = ir_builder.CreateAlloca(col_list_struct_type);
+  col_list->setName(col_list_name);
+  auto col_list_ptr_ptr = ir_builder.CreateStructGEP(col_list_struct_type, col_list, 0);
+  auto col_list_length_ptr =
+      ir_builder.CreateStructGEP(col_list_struct_type, col_list, 1);
+  auto col_list_size_ptr = ir_builder.CreateStructGEP(col_list_struct_type, col_list, 2);
+
+  col_list_ptr_ptr->setName(col_list_name + ".ptrs");
+  col_list_length_ptr->setName(col_list_name + ".length");
+  col_list_size_ptr->setName(col_list_name + ".size");
+
+  CHECK(length >= 0);
+  auto const_length = llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), length, true);
+
+  if (data_ptrs != nullptr) {
+    if (data_ptrs->getType() == data_ptrs_llvm_type->getPointerElementType()) {
+      ir_builder.CreateStore(data_ptrs, col_list_ptr_ptr);
+    } else {
+      auto tmp = ir_builder.CreateBitCast(data_ptrs, data_ptrs_llvm_type);
+      ir_builder.CreateStore(tmp, col_list_ptr_ptr);
+    }
+  } else {
+    ir_builder.CreateStore(llvm::Constant::getNullValue(data_ptrs_llvm_type),
+                           col_list_ptr_ptr);
+  }
+
+  ir_builder.CreateStore(const_length, col_list_length_ptr);
+
+  if (data_size != nullptr) {
+    auto data_size_type = data_size->getType();
+    if (data_size_type->isPointerTy()) {
+      CHECK(data_size_type->getPointerElementType()->isIntegerTy(64));
+      auto size_val = ir_builder.CreateLoad(data_size);
+      ir_builder.CreateStore(size_val, col_list_size_ptr);
+    } else {
+      CHECK(data_size_type->isIntegerTy(64));
+      ir_builder.CreateStore(data_size, col_list_size_ptr);
+    }
+  } else {
+    auto const_minus1 = llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), -1, true);
+    ir_builder.CreateStore(const_minus1, col_list_size_ptr);
+  }
+
+  auto col_list_ptr = ir_builder.CreatePointerCast(
+      col_list_ptr_ptr, llvm::PointerType::get(llvm::Type::getInt8Ty(ctx), 0));
+  col_list_ptr->setName(col_list_name + "_ptrs");
+  return col_list_ptr;
+}
+
 }  // namespace
 
 TableFunctionCompilationContext::TableFunctionCompilationContext()
@@ -203,22 +274,29 @@ void TableFunctionCompilationContext::generateEntryPoint(
       exe_unit.input_exprs.size(), input_row_counts_arg, cgen_state->ir_builder_, ctx);
 
   // The column arguments of C++ UDTFs processed by clang must be
-  // passed by reference, see rbc issue 200.
+  // passed by reference, see rbc issues 200 and 289.
   auto pass_column_by_value = exe_unit.table_func.isRuntime();
   std::vector<llvm::Value*> func_args;
+  size_t func_arg_index = 0;
+  int col_index = -1;
   for (size_t i = 0; i < exe_unit.input_exprs.size(); i++) {
     const auto& expr = exe_unit.input_exprs[i];
     const auto& ti = expr->get_type_info();
+    if (col_index == -1) {
+      func_arg_index += 1;
+    }
     if (ti.is_fp()) {
       auto r = cgen_state->ir_builder_.CreateBitCast(
           col_heads[i], llvm::PointerType::get(get_fp_type(get_bit_width(ti), ctx), 0));
       func_args.push_back(cgen_state->ir_builder_.CreateLoad(r));
+      CHECK_EQ(col_index, -1);
     } else if (ti.is_integer()) {
       auto r = cgen_state->ir_builder_.CreateBitCast(
           col_heads[i], llvm::PointerType::get(get_int_type(get_bit_width(ti), ctx), 0));
       func_args.push_back(cgen_state->ir_builder_.CreateLoad(r));
+      CHECK_EQ(col_index, -1);
     } else if (ti.is_column()) {
-      auto col = alloc_column(std::string("input_col.") + std::to_string(i),
+      auto col = alloc_column(std::string("input_col.") + std::to_string(func_arg_index),
                               ti.get_elem_type(),
                               col_heads[i],
                               row_count_heads[i],
@@ -226,6 +304,23 @@ void TableFunctionCompilationContext::generateEntryPoint(
                               cgen_state_->ir_builder_,
                               pass_column_by_value);
       func_args.push_back(col);
+      CHECK_EQ(col_index, -1);
+    } else if (ti.is_column_list()) {
+      if (col_index == -1) {
+        auto col_list = alloc_column_list(
+            std::string("input_col_list.") + std::to_string(func_arg_index),
+            ti.get_elem_type(),
+            col_heads[i],
+            ti.get_dimension(),
+            row_count_heads[i],
+            ctx,
+            cgen_state_->ir_builder_);
+        func_args.push_back(col_list);
+      }
+      col_index++;
+      if (col_index + 1 == ti.get_dimension()) {
+        col_index = -1;
+      }
     } else {
       throw std::runtime_error(
           "Only integer and floating point columns or scalars are supported as inputs to "
@@ -240,7 +335,9 @@ void TableFunctionCompilationContext::generateEntryPoint(
         cgen_state->ir_builder_.CreateGEP(output_buffers_arg, cgen_state_->llInt(i)));
     const auto& expr = exe_unit.target_exprs[i];
     const auto& ti = expr->get_type_info();
-    CHECK(!ti.is_column());  // UDTF output column type is its data type
+    CHECK(!ti.is_column());       // UDTF output column type is its data type
+    CHECK(!ti.is_column_list());  // TODO: when UDTF outputs column_list, convert it to
+                                  // output columns
     auto col = alloc_column(std::string("output_col.") + std::to_string(i),
                             ti,
                             output_load,

@@ -157,11 +157,64 @@ struct Column {
   DEVICE bool isNull(int64_t index) const { return is_null(ptr[index]); }
   DEVICE void setNull(int64_t index) { set_null(ptr[index]); }
 
+  DEVICE Column<T>& operator=(const Column<T>& other) {
+    const auto& other_ptr = &other[0];
+    if (sz == other.getSize() && other_ptr != nullptr) {
+#ifndef __CUDACC__
+      memcpy(ptr, other_ptr, other.getSize() * sizeof(T));
+#else
+      assert(false);
+#endif
+    } else {
+      sz = -2;  // indicates a failure in copying other data
+    }
+    return *this;
+  }
+
 #ifdef HAVE_TOSTRING
 
   std::string toString() const {
-    return ::typeName(this) + "(ptr=" + ::toString((void*)ptr) +
+    return ::typeName(this) + "(ptr=" + ::toString(reinterpret_cast<void*>(ptr)) +
            ", sz=" + std::to_string(sz) + ")";
   }
+#endif
+};
+
+/*
+  ColumnList is an ordered list of Columns.
+*/
+template <typename T>
+struct ColumnList {
+  int8_t** ptrs;   // ptrs to columns data
+  int64_t length;  // the length of columns list
+  int64_t size;    // the size of columns
+
+  DEVICE int64_t getCols() const { return length; }
+  DEVICE int64_t getRows() const { return size; }
+
+  DEVICE int64_t getLength() const { return length; }
+  DEVICE int64_t getColumnSize() const { return size; }
+
+  // Column view of a list item
+  DEVICE Column<T> operator()(const int index) const {
+    if (index >= 0 && index < length)
+      return {reinterpret_cast<T*>(ptrs[index]), size};
+    else
+      return {nullptr, -1};
+  }
+
+#ifdef HAVE_TOSTRING
+
+  std::string toString() const {
+    std::string result = ::typeName(this) + "(ptrs=[";
+    for (int64_t index = 0; index < length; index++) {
+      result += ::toString(reinterpret_cast<void*>(ptrs[index])) +
+                (index < length - 1 ? ", " : "");
+    }
+    result +=
+        "], length=" + std::to_string(length) + ", size=" + std::to_string(size) + ")";
+    return result;
+  }
+
 #endif
 };

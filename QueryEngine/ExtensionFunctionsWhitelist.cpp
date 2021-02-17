@@ -197,6 +197,20 @@ std::string serialize_type(const ExtArgumentType type, bool byval = true) {
       return "text_encoding_dict16";
     case ExtArgumentType::TextEncodingDict32:
       return "text_encoding_dict32";
+    case ExtArgumentType::ColumnListInt8:
+      return "column_list_int8";
+    case ExtArgumentType::ColumnListInt16:
+      return "column_list_int16";
+    case ExtArgumentType::ColumnListInt32:
+      return "column_list_int32";
+    case ExtArgumentType::ColumnListInt64:
+      return "column_list_int64";
+    case ExtArgumentType::ColumnListFloat:
+      return "column_list_float";
+    case ExtArgumentType::ColumnListDouble:
+      return "column_list_double";
+    case ExtArgumentType::ColumnListBool:
+      return "column_list_bool";
     default:
       CHECK(false);
   }
@@ -219,18 +233,6 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
   /* This function is mostly used for scalar types.
      For non-scalar types, NULL is returned as a placeholder.
    */
-
-  auto generate_array_type = [](const auto subtype) {
-    auto ti = SQLTypeInfo(kARRAY, false);
-    ti.set_subtype(subtype);
-    return ti;
-  };
-
-  auto generate_column_type = [](const auto subtype) {
-    auto ti = SQLTypeInfo(kCOLUMN, false);
-    ti.set_subtype(subtype);
-    return ti;
-  };
 
   switch (ext_arg_type) {
     case ExtArgumentType::Bool:
@@ -281,6 +283,20 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::TextEncodingDict16:
     case ExtArgumentType::TextEncodingDict32:
       return SQLTypeInfo(kTEXT, false, kENCODING_DICT);
+    case ExtArgumentType::ColumnListInt8:
+      return generate_column_type(kTINYINT);
+    case ExtArgumentType::ColumnListInt16:
+      return generate_column_type(kSMALLINT);
+    case ExtArgumentType::ColumnListInt32:
+      return generate_column_type(kINT);
+    case ExtArgumentType::ColumnListInt64:
+      return generate_column_type(kBIGINT);
+    case ExtArgumentType::ColumnListFloat:
+      return generate_column_type(kFLOAT);
+    case ExtArgumentType::ColumnListDouble:
+      return generate_column_type(kDOUBLE);
+    case ExtArgumentType::ColumnListBool:
+      return generate_column_type(kBOOLEAN);
     default:
       LOG(FATAL) << "ExtArgumentType `" << serialize_type(ext_arg_type)
                  << "` cannot be converted to SQLTypeInfo.";
@@ -419,6 +435,20 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "TEXT ENCODING DICT(16)";
     case ExtArgumentType::TextEncodingDict32:
       return "TEXT ENCODING DICT(32)";
+    case ExtArgumentType::ColumnListInt8:
+      return "COLUMNLIST<TINYINT>";
+    case ExtArgumentType::ColumnListInt16:
+      return "COLUMNLIST<SMALLINT>";
+    case ExtArgumentType::ColumnListInt32:
+      return "COLUMNLIST<INT>";
+    case ExtArgumentType::ColumnListInt64:
+      return "COLUMNLIST<BIGINT>";
+    case ExtArgumentType::ColumnListFloat:
+      return "COLUMNLIST<FLOAT>";
+    case ExtArgumentType::ColumnListDouble:
+      return "COLUMNLIST<DOUBLE>";
+    case ExtArgumentType::ColumnListBool:
+      return "COLUMNLIST<BOOLEAN>";
     default:
       UNREACHABLE();
   }
@@ -605,6 +635,27 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "text_encoding_dict32") {
     return ExtArgumentType::TextEncodingDict32;
+  }
+  if (type_name == "column_list_int8") {
+    return ExtArgumentType::ColumnListInt8;
+  }
+  if (type_name == "column_list_int16") {
+    return ExtArgumentType::ColumnListInt16;
+  }
+  if (type_name == "column_list_int32") {
+    return ExtArgumentType::ColumnListInt32;
+  }
+  if (type_name == "column_list_int64") {
+    return ExtArgumentType::ColumnListInt64;
+  }
+  if (type_name == "column_list_float") {
+    return ExtArgumentType::ColumnListFloat;
+  }
+  if (type_name == "column_list_double") {
+    return ExtArgumentType::ColumnListDouble;
+  }
+  if (type_name == "column_list_bool") {
+    return ExtArgumentType::ColumnListBool;
   }
   CHECK(false);
   return ExtArgumentType::Int16;

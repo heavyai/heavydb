@@ -440,6 +440,20 @@ inline ExtArgumentType from_thrift(const TExtArgumentType::type& t) {
       return ExtArgumentType::TextEncodingDict16;
     case TExtArgumentType::TextEncodingDict32:
       return ExtArgumentType::TextEncodingDict32;
+    case TExtArgumentType::ColumnListInt8:
+      return ExtArgumentType::ColumnListInt8;
+    case TExtArgumentType::ColumnListInt16:
+      return ExtArgumentType::ColumnListInt16;
+    case TExtArgumentType::ColumnListInt32:
+      return ExtArgumentType::ColumnListInt32;
+    case TExtArgumentType::ColumnListInt64:
+      return ExtArgumentType::ColumnListInt64;
+    case TExtArgumentType::ColumnListFloat:
+      return ExtArgumentType::ColumnListFloat;
+    case TExtArgumentType::ColumnListDouble:
+      return ExtArgumentType::ColumnListDouble;
+    case TExtArgumentType::ColumnListBool:
+      return ExtArgumentType::ColumnListBool;
   }
   UNREACHABLE();
   return ExtArgumentType{};
@@ -523,6 +537,20 @@ inline TExtArgumentType::type to_thrift(const ExtArgumentType& t) {
       return TExtArgumentType::TextEncodingDict16;
     case ExtArgumentType::TextEncodingDict32:
       return TExtArgumentType::TextEncodingDict32;
+    case ExtArgumentType::ColumnListInt8:
+      return TExtArgumentType::ColumnListInt8;
+    case ExtArgumentType::ColumnListInt16:
+      return TExtArgumentType::ColumnListInt16;
+    case ExtArgumentType::ColumnListInt32:
+      return TExtArgumentType::ColumnListInt32;
+    case ExtArgumentType::ColumnListInt64:
+      return TExtArgumentType::ColumnListInt64;
+    case ExtArgumentType::ColumnListFloat:
+      return TExtArgumentType::ColumnListFloat;
+    case ExtArgumentType::ColumnListDouble:
+      return TExtArgumentType::ColumnListDouble;
+    case ExtArgumentType::ColumnListBool:
+      return TExtArgumentType::ColumnListBool;
   }
   UNREACHABLE();
   return TExtArgumentType::type{};

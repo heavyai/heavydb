@@ -635,7 +635,7 @@ public class SqlToRelConverter {
     if (r instanceof Delta) {
       return requiredCollation(((Delta) r).getInput());
     }
-    throw new AssertionError();
+    throw new AssertionError(r);
   }
 
   /**
