@@ -5506,10 +5506,6 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
           throw std::runtime_error("OPTIMIZE TABLE command is not supported on views.");
         }
 
-        // acquire write lock on table data
-        auto data_lock =
-            lockmgr::TableDataLockMgr::getWriteLockForTable(cat, td->tableName);
-
         auto executor = Executor::getExecutor(
             Executor::UNITARY_EXECUTOR_ID, "", "", system_parameters_);
         const TableOptimizer optimizer(td, executor.get(), cat);
