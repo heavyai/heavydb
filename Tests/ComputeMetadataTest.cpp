@@ -16,10 +16,11 @@
 
 #include "TestHelpers.h"
 
-#include "../Catalog/Catalog.h"
-#include "../QueryEngine/Execute.h"
-#include "../QueryEngine/TableOptimizer.h"
-#include "../QueryRunner/QueryRunner.h"
+#include "Catalog/Catalog.h"
+#include "DBHandlerTestHelpers.h"
+#include "QueryEngine/Execute.h"
+#include "QueryEngine/TableOptimizer.h"
+#include "QueryRunner/QueryRunner.h"
 
 #include <gtest/gtest.h>
 #include <string>
@@ -574,6 +575,28 @@ TEST_F(DeletedRowsMetadataUpdateTest, ComputeMetadataAfterDelete) {
   const auto td = catalog->getMetadataForTable("test_table");
   recompute_metadata(td, *catalog);
   sqlAndCompareResult("select * from test_table;", {3});
+}
+
+class OptimizeTableVacuumTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("drop table if exists test_table;");
+  }
+
+  void TearDown() override {
+    sql("drop table if exists test_table;");
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+TEST_F(OptimizeTableVacuumTest, TableWithDeletedRows) {
+  sql("create table test_table (i int);");
+  sql("insert into test_table values (10);");
+  sql("insert into test_table values (20);");
+  sql("insert into test_table values (30);");
+  sql("delete from test_table where i <= 20;");
+  sql("optimize table test_table with (vacuum = 'true');");
 }
 
 int main(int argc, char** argv) {

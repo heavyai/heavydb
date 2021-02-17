@@ -17,6 +17,7 @@
 #include "TableOptimizer.h"
 
 #include "Analyzer/Analyzer.h"
+#include "LockMgr/LockMgr.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
 #include "Shared/scope.h"
@@ -130,6 +131,9 @@ void TableOptimizer::recomputeMetadata() const {
   }
 
   auto& data_mgr = cat_.getDataMgr();
+
+  // acquire write lock on table data
+  auto data_lock = lockmgr::TableDataLockMgr::getWriteLockForTable(cat_, td_->tableName);
 
   for (const auto td : table_descriptors) {
     ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
