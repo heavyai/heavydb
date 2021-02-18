@@ -75,7 +75,8 @@ ParquetDataWrapper::ParquetDataWrapper(const int db_id, const ForeignTable* fore
     , total_row_count_(0)
     , last_row_group_(0)
     , is_restored_(false)
-    , schema_(std::make_unique<ForeignTableSchema>(db_id, foreign_table)) {
+    , schema_(std::make_unique<ForeignTableSchema>(db_id, foreign_table))
+    , file_reader_cache_(std::make_unique<FileReaderMap>()) {
   auto& server_options = foreign_table->foreign_server->options;
   if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
     file_system_ = std::make_shared<arrow::fs::LocalFileSystem>();
@@ -92,6 +93,7 @@ void ParquetDataWrapper::resetParquetMetadata() {
   last_fragment_index_ = 0;
   last_fragment_row_count_ = 0;
   total_row_count_ = 0;
+  file_reader_cache_->clear();
 }
 
 std::list<const ColumnDescriptor*> ParquetDataWrapper::getColumnsToInitialize(
@@ -228,12 +230,18 @@ void ParquetDataWrapper::fetchChunkMetadata() {
     }
 
     // Single file append
+    // If an append occurs with multiple files, then we assume any existing files have not
+    // been altered.  If an append occurs on a single file, then we check to see if it has
+    // changed.
     if (new_file_paths.empty() && all_file_paths.size() == 1) {
       CHECK_EQ(processed_file_paths.size(), static_cast<size_t>(1));
       const auto& file_path = *all_file_paths.begin();
       CHECK_EQ(*processed_file_paths.begin(), file_path);
 
-      auto reader = open_parquet_table(file_path, file_system_);
+      // Since an existing file is being appended to we need to update the cached
+      // FileReader as the existing one will be out of date.
+      (*file_reader_cache_)[file_path] = open_parquet_table(file_path, file_system_);
+      auto& reader = file_reader_cache_->at(file_path);
       size_t row_count = reader->parquet_reader()->metadata()->num_rows();
 
       if (row_count < total_row_count_) {
@@ -292,7 +300,7 @@ std::set<std::string> ParquetDataWrapper::getAllFilePaths() {
 }
 
 void ParquetDataWrapper::metadataScanFiles(const std::set<std::string>& file_paths) {
-  LazyParquetChunkLoader chunk_loader(file_system_);
+  LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get());
   auto row_group_metadata = chunk_loader.metadataScan(file_paths, *schema_);
   auto column_interval =
       Interval<ColumnType>{schema_->getLogicalAndPhysicalColumns().front()->columnId,
@@ -407,7 +415,7 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
     chunks.emplace_back(chunk);
   }
 
-  LazyParquetChunkLoader chunk_loader(file_system_);
+  LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get());
   auto metadata = chunk_loader.loadChunk(
       row_group_intervals, parquet_column_index, chunks, string_dictionary);
   auto fragmenter = foreign_table_->fragmenter;

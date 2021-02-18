@@ -962,88 +962,6 @@ void resize_values_buffer(const ColumnDescriptor* omnisci_column,
   values.resize(values_size);
 }
 
-std::list<std::unique_ptr<ChunkMetadata>> append_row_groups(
-    const std::vector<RowGroupInterval>& row_group_intervals,
-    const int parquet_column_index,
-    const ColumnDescriptor* column_descriptor,
-    std::list<Chunk_NS::Chunk>& chunks,
-    StringDictionary* string_dictionary,
-    std::shared_ptr<arrow::fs::FileSystem> file_system) {
-  auto timer = DEBUG_TIMER(__func__);
-  std::list<std::unique_ptr<ChunkMetadata>> chunk_metadata;
-  // `def_levels` and `rep_levels` below are used to store the read definition
-  // and repetition levels of the Dremel encoding implemented by the Parquet
-  // format
-  std::vector<int16_t> def_levels(LazyParquetChunkLoader::batch_reader_num_elements);
-  std::vector<int16_t> rep_levels(LazyParquetChunkLoader::batch_reader_num_elements);
-  std::vector<int8_t> values;
-
-  CHECK(!row_group_intervals.empty());
-  const auto& first_file_path = row_group_intervals.front().file_path;
-  auto first_file_reader = open_parquet_table(first_file_path, file_system);
-  auto first_parquet_column_descriptor =
-      get_column_descriptor(first_file_reader.get(), parquet_column_index);
-  resize_values_buffer(column_descriptor, first_parquet_column_descriptor, values);
-  auto encoder = create_parquet_encoder(column_descriptor,
-                                        first_parquet_column_descriptor,
-                                        chunks,
-                                        string_dictionary,
-                                        chunk_metadata);
-  CHECK(encoder.get());
-
-  for (const auto& row_group_interval : row_group_intervals) {
-    auto file_reader = open_parquet_table(row_group_interval.file_path, file_system);
-
-    auto [num_row_groups, num_columns] = get_parquet_table_size(file_reader);
-    CHECK(row_group_interval.start_index >= 0 &&
-          row_group_interval.end_index < num_row_groups);
-    CHECK(parquet_column_index >= 0 && parquet_column_index < num_columns);
-
-    parquet::ParquetFileReader* parquet_reader = file_reader->parquet_reader();
-    auto parquet_column_descriptor =
-        get_column_descriptor(file_reader.get(), parquet_column_index);
-    validate_equal_column_descriptor(first_parquet_column_descriptor,
-                                     parquet_column_descriptor,
-                                     first_file_path,
-                                     row_group_interval.file_path);
-
-    validate_max_repetition_and_definition_level(column_descriptor,
-                                                 parquet_column_descriptor);
-    int64_t values_read = 0;
-    for (int row_group_index = row_group_interval.start_index;
-         row_group_index <= row_group_interval.end_index;
-         ++row_group_index) {
-      auto group_reader = parquet_reader->RowGroup(row_group_index);
-      std::shared_ptr<parquet::ColumnReader> col_reader =
-          group_reader->Column(parquet_column_index);
-
-      try {
-        while (col_reader->HasNext()) {
-          int64_t levels_read =
-              parquet::ScanAllValues(LazyParquetChunkLoader::batch_reader_num_elements,
-                                     def_levels.data(),
-                                     rep_levels.data(),
-                                     reinterpret_cast<uint8_t*>(values.data()),
-                                     &values_read,
-                                     col_reader.get());
-          encoder->appendData(def_levels.data(),
-                              rep_levels.data(),
-                              values_read,
-                              levels_read,
-                              !col_reader->HasNext(),
-                              values.data());
-        }
-      } catch (const std::exception& error) {
-        throw ForeignStorageException(
-            std::string(error.what()) + " Row group: " + std::to_string(row_group_index) +
-            ", Parquet column: '" + col_reader->descr()->path()->ToDotString() +
-            "', Parquet file: '" + row_group_interval.file_path + "'");
-      }
-    }
-  }
-  return chunk_metadata;
-}
-
 bool validate_decimal_mapping(const ColumnDescriptor* omnisci_column,
                               const parquet::ColumnDescriptor* parquet_column) {
   if (auto decimal_logical_column = dynamic_cast<const parquet::DecimalLogicalType*>(
@@ -1379,7 +1297,7 @@ void validate_parquet_metadata(
 std::list<RowGroupMetadata> metadata_scan_rowgroup_interval(
     const std::map<int, std::shared_ptr<ParquetEncoder>>& encoder_map,
     const RowGroupInterval& row_group_interval,
-    const std::unique_ptr<parquet::arrow::FileReader>& reader,
+    const ReaderPtr& reader,
     const ForeignTableSchema& schema) {
   std::list<RowGroupMetadata> row_group_metadata;
   auto column_interval =
@@ -1422,7 +1340,7 @@ std::list<RowGroupMetadata> metadata_scan_rowgroup_interval(
 std::map<int, std::shared_ptr<ParquetEncoder>> populate_encoder_map(
     const Interval<ColumnType>& column_interval,
     const ForeignTableSchema& schema,
-    const std::unique_ptr<parquet::arrow::FileReader>& reader) {
+    const ReaderPtr& reader) {
   std::map<int, std::shared_ptr<ParquetEncoder>> encoder_map;
   auto file_metadata = reader->parquet_reader()->metadata();
   for (int column_id = column_interval.start; column_id <= column_interval.end;
@@ -1438,6 +1356,96 @@ std::map<int, std::shared_ptr<ParquetEncoder>> populate_encoder_map(
 }
 
 }  // namespace
+
+ReaderPtr& LazyParquetChunkLoader::openAndCacheParquetTable(const std::string& path) {
+  // TODO(Misiu): Replace with c++20 contains() when available.
+  if (file_reader_cache_->count(path) < 1) {
+    file_reader_cache_->emplace(path, open_parquet_table(path, file_system_));
+  }
+  return file_reader_cache_->at(path);
+}
+
+std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroups(
+    const std::vector<RowGroupInterval>& row_group_intervals,
+    const int parquet_column_index,
+    const ColumnDescriptor* column_descriptor,
+    std::list<Chunk_NS::Chunk>& chunks,
+    StringDictionary* string_dictionary) {
+  auto timer = DEBUG_TIMER(__func__);
+  std::list<std::unique_ptr<ChunkMetadata>> chunk_metadata;
+  // `def_levels` and `rep_levels` below are used to store the read definition
+  // and repetition levels of the Dremel encoding implemented by the Parquet
+  // format
+  std::vector<int16_t> def_levels(LazyParquetChunkLoader::batch_reader_num_elements);
+  std::vector<int16_t> rep_levels(LazyParquetChunkLoader::batch_reader_num_elements);
+  std::vector<int8_t> values;
+
+  CHECK(!row_group_intervals.empty());
+  const auto& first_file_path = row_group_intervals.front().file_path;
+  auto& first_file_reader = openAndCacheParquetTable(first_file_path);
+  auto first_parquet_column_descriptor =
+      get_column_descriptor(first_file_reader.get(), parquet_column_index);
+  resize_values_buffer(column_descriptor, first_parquet_column_descriptor, values);
+  auto encoder = create_parquet_encoder(column_descriptor,
+                                        first_parquet_column_descriptor,
+                                        chunks,
+                                        string_dictionary,
+                                        chunk_metadata);
+  CHECK(encoder.get());
+
+  for (const auto& row_group_interval : row_group_intervals) {
+    const auto& file_path = row_group_interval.file_path;
+    auto& file_reader = openAndCacheParquetTable(file_path);
+
+    auto [num_row_groups, num_columns] = get_parquet_table_size(file_reader);
+    CHECK(row_group_interval.start_index >= 0 &&
+          row_group_interval.end_index < num_row_groups);
+    CHECK(parquet_column_index >= 0 && parquet_column_index < num_columns);
+
+    parquet::ParquetFileReader* parquet_reader = file_reader->parquet_reader();
+    auto parquet_column_descriptor =
+        get_column_descriptor(file_reader.get(), parquet_column_index);
+    validate_equal_column_descriptor(first_parquet_column_descriptor,
+                                     parquet_column_descriptor,
+                                     first_file_path,
+                                     file_path);
+
+    validate_max_repetition_and_definition_level(column_descriptor,
+                                                 parquet_column_descriptor);
+    int64_t values_read = 0;
+    for (int row_group_index = row_group_interval.start_index;
+         row_group_index <= row_group_interval.end_index;
+         ++row_group_index) {
+      auto group_reader = parquet_reader->RowGroup(row_group_index);
+      std::shared_ptr<parquet::ColumnReader> col_reader =
+          group_reader->Column(parquet_column_index);
+
+      try {
+        while (col_reader->HasNext()) {
+          int64_t levels_read =
+              parquet::ScanAllValues(LazyParquetChunkLoader::batch_reader_num_elements,
+                                     def_levels.data(),
+                                     rep_levels.data(),
+                                     reinterpret_cast<uint8_t*>(values.data()),
+                                     &values_read,
+                                     col_reader.get());
+          encoder->appendData(def_levels.data(),
+                              rep_levels.data(),
+                              values_read,
+                              levels_read,
+                              !col_reader->HasNext(),
+                              values.data());
+        }
+      } catch (const std::exception& error) {
+        throw ForeignStorageException(
+            std::string(error.what()) + " Row group: " + std::to_string(row_group_index) +
+            ", Parquet column: '" + col_reader->descr()->path()->ToDotString() +
+            "', Parquet file: '" + file_path + "'");
+      }
+    }
+  }
+  return chunk_metadata;
+}
 
 bool LazyParquetChunkLoader::isColumnMappingSupported(
     const ColumnDescriptor* omnisci_column,
@@ -1476,8 +1484,9 @@ bool LazyParquetChunkLoader::isColumnMappingSupported(
 }
 
 LazyParquetChunkLoader::LazyParquetChunkLoader(
-    std::shared_ptr<arrow::fs::FileSystem> file_system)
-    : file_system_(file_system) {}
+    std::shared_ptr<arrow::fs::FileSystem> file_system,
+    FileReaderMap* file_map)
+    : file_system_(file_system), file_reader_cache_(file_map) {}
 
 std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::loadChunk(
     const std::vector<RowGroupInterval>& row_group_intervals,
@@ -1491,12 +1500,11 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::loadChunk(
   CHECK(buffer);
 
   try {
-    auto metadata = append_row_groups(row_group_intervals,
-                                      parquet_column_index,
-                                      column_descriptor,
-                                      chunks,
-                                      string_dictionary,
-                                      file_system_);
+    auto metadata = appendRowGroups(row_group_intervals,
+                                    parquet_column_index,
+                                    column_descriptor,
+                                    chunks,
+                                    string_dictionary);
     return metadata;
   } catch (const std::exception& error) {
     throw ForeignStorageException(error.what());
@@ -1517,7 +1525,7 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
   // The encoder map needs to be populated before we can start scanning rowgroups, so we
   // peel the first file_path out of the async loop below to perform population.
   const auto& first_path = *file_paths.begin();
-  auto first_reader = open_parquet_table(first_path, file_system_);
+  auto& first_reader = openAndCacheParquetTable(first_path);
   validate_parquet_metadata(
       first_reader->parquet_reader()->metadata(), first_path, schema);
   auto encoder_map = populate_encoder_map(column_interval, schema, first_reader);
@@ -1525,20 +1533,33 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
   auto row_group_metadata = metadata_scan_rowgroup_interval(
       encoder_map, {first_path, 0, num_row_groups - 1}, first_reader, schema);
 
-  auto paths_by_thread = partition_for_threads(file_paths, g_max_import_threads);
-  // Since we have already performed the first iteration, we should remove it from the
-  // thread groups so as not to process it twice.
-  if (!paths_by_thread.empty()) {
-    paths_by_thread.front().pop_front();
+  // We want each (filepath->FileReader) pair in the cache to be initialized before we
+  // multithread so that we are not adding keys in a concurrent environment, so we add
+  // cache entries for each path and initialize to an empty unique_ptr if the file has not
+  // yet been opened.
+  // Since we have already performed the first iteration, we skip it in the thread groups
+  // so as not to process it twice.
+  std::set<std::string> cache_subset;
+  for (auto path_it = ++(file_paths.begin()); path_it != file_paths.end(); ++path_it) {
+    if (file_reader_cache_->count(*path_it) < 1) {
+      file_reader_cache_->emplace(*path_it, ReaderPtr());
+    }
+    cache_subset.insert(*path_it);
   }
+
+  // Iterate asyncronously over any paths beyond the first.
+  auto paths_per_thread = partition_for_threads(cache_subset, g_max_import_threads);
   std::vector<std::future<std::list<RowGroupMetadata>>> futures;
-  for (const auto& paths : paths_by_thread) {
+  for (const auto& path_group : paths_per_thread) {
     futures.emplace_back(std::async(
         std::launch::async,
-        [&](const auto& path_group) {
+        [&](const auto& paths, const auto& file_reader_cache) {
           std::list<RowGroupMetadata> reduced_metadata;
-          for (const auto& path : path_group.get()) {
-            auto reader = open_parquet_table(path, file_system_);
+          for (const auto& path : paths.get()) {
+            auto& reader = file_reader_cache.get().at(path);
+            if (!reader) {
+              reader = open_parquet_table(path, file_system_);
+            }
             validate_equal_schema(first_reader.get(), reader.get(), first_path, path);
             validate_parquet_metadata(reader->parquet_reader()->metadata(), path, schema);
             const auto num_row_groups = get_parquet_table_size(reader).first;
@@ -1549,7 +1570,8 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
           }
           return reduced_metadata;
         },
-        std::ref(paths)));
+        std::ref(path_group),
+        std::ref(*file_reader_cache_)));
   }
 
   // Reduce all the row_group results.

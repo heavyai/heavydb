@@ -39,7 +39,8 @@ class LazyParquetChunkLoader {
   // Most filesystems use a default block size of 4096 bytes.
   const static int batch_reader_num_elements = 4096;
 
-  LazyParquetChunkLoader(std::shared_ptr<arrow::fs::FileSystem> file_system);
+  LazyParquetChunkLoader(std::shared_ptr<arrow::fs::FileSystem> file_system,
+                         FileReaderMap* file_reader_cache);
 
   /**
    * Load a number of row groups of a column in a parquet file into a chunk
@@ -93,8 +94,25 @@ class LazyParquetChunkLoader {
   static bool isColumnMappingSupported(const ColumnDescriptor* omnisci_column,
                                        const parquet::ColumnDescriptor* parquet_column);
 
+  /**
+   * A wrapper to open_parquet_table which caches/returns cached results.
+   *
+   * @param path - the path used to open the parquet table.
+   *
+   * @return a reference to the cached parquet file reader for the opened table.
+   */
+  ReaderPtr& openAndCacheParquetTable(const std::string& path);
+
  private:
   std::shared_ptr<arrow::fs::FileSystem> file_system_;
+  FileReaderMap* file_reader_cache_;
+
+  std::list<std::unique_ptr<ChunkMetadata>> appendRowGroups(
+      const std::vector<RowGroupInterval>& row_group_intervals,
+      const int parquet_column_index,
+      const ColumnDescriptor* column_descriptor,
+      std::list<Chunk_NS::Chunk>& chunks,
+      StringDictionary* string_dictionary);
 };
 
 }  // namespace foreign_storage

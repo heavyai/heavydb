@@ -22,10 +22,9 @@
 
 namespace foreign_storage {
 
-std::unique_ptr<parquet::arrow::FileReader> open_parquet_table(
-    const std::string& file_path,
-    std::shared_ptr<arrow::fs::FileSystem>& file_system) {
-  std::unique_ptr<parquet::arrow::FileReader> reader;
+ReaderPtr open_parquet_table(const std::string& file_path,
+                             std::shared_ptr<arrow::fs::FileSystem>& file_system) {
+  ReaderPtr reader;
   auto file_result = file_system->OpenInputFile(file_path);
   if (!file_result.ok()) {
     throw std::runtime_error{"Unable to access " + file_system->type_name() + " file: " +
@@ -36,8 +35,7 @@ std::unique_ptr<parquet::arrow::FileReader> open_parquet_table(
   return reader;
 }
 
-std::pair<int, int> get_parquet_table_size(
-    const std::unique_ptr<parquet::arrow::FileReader>& reader) {
+std::pair<int, int> get_parquet_table_size(const ReaderPtr& reader) {
   auto file_metadata = reader->parquet_reader()->metadata();
   const auto num_row_groups = file_metadata->num_row_groups();
   const auto num_columns = file_metadata->num_columns();
@@ -50,8 +48,7 @@ const parquet::ColumnDescriptor* get_column_descriptor(
   return reader->parquet_reader()->metadata()->schema()->Column(logical_column_index);
 }
 
-parquet::Type::type get_physical_type(std::unique_ptr<parquet::arrow::FileReader>& reader,
-                                      const int logical_column_index) {
+parquet::Type::type get_physical_type(ReaderPtr& reader, const int logical_column_index) {
   return reader->parquet_reader()
       ->metadata()
       ->schema()

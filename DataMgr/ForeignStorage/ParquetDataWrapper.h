@@ -91,5 +91,6 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
   bool is_restored_;
   std::unique_ptr<ForeignTableSchema> schema_;
   std::shared_ptr<arrow::fs::FileSystem> file_system_;
+  std::unique_ptr<FileReaderMap> file_reader_cache_;
 };
 }  // namespace foreign_storage
