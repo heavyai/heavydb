@@ -1060,6 +1060,22 @@ class Executor {
   // SQL queries take a shared lock, exclusive options (cache clear, memory clear) take a
   // write lock
   static mapd_shared_mutex execute_mutex_;
+
+  struct ExecutorMutexHolder {
+    mapd_shared_lock<mapd_shared_mutex> shared_lock;
+    mapd_unique_lock<mapd_shared_mutex> unique_lock;
+  };
+  inline ExecutorMutexHolder acquireExecuteMutex() {
+    ExecutorMutexHolder ret;
+    if (executor_id_ == Executor::UNITARY_EXECUTOR_ID) {
+      // Only one unitary executor can run at a time
+      ret.unique_lock = mapd_unique_lock<mapd_shared_mutex>(execute_mutex_);
+    } else {
+      ret.shared_lock = mapd_shared_lock<mapd_shared_mutex>(execute_mutex_);
+    }
+    return ret;
+  }
+
   static mapd_shared_mutex executors_cache_mutex_;
 
   // for now we use recycler_mutex only for cardinality_cache_

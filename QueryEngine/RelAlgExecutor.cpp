@@ -149,7 +149,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   query_dag_->resetQueryExecutionState();
   const auto& ra = query_dag_->getRootNode();
 
-  mapd_shared_lock<mapd_shared_mutex> lock(executor_->execute_mutex_);
+  auto lock = executor_->acquireExecuteMutex();
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto phys_inputs = get_physical_inputs(cat_, &ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
@@ -247,15 +247,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
   return run_query(co_cpu);
 }
 
-namespace {
-
-struct ExecutorMutexHolder {
-  mapd_shared_lock<mapd_shared_mutex> shared_lock;
-  mapd_unique_lock<mapd_shared_mutex> unique_lock;
-};
-
-}  // namespace
-
 ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptions& co,
                                                           const ExecutionOptions& eo,
                                                           const bool just_explain_plan,
@@ -323,15 +314,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       }
     }
   }
-  auto acquire_execute_mutex =
-      [&acquire_spin_lock](Executor* executor) -> ExecutorMutexHolder {
-    ExecutorMutexHolder ret;
-    if (executor->executor_id_ == Executor::UNITARY_EXECUTOR_ID) {
-      // Only one unitary executor can run at a time
-      ret.unique_lock = mapd_unique_lock<mapd_shared_mutex>(executor->execute_mutex_);
-    } else {
-      ret.shared_lock = mapd_shared_lock<mapd_shared_mutex>(executor->execute_mutex_);
-    }
+  auto acquire_execute_mutex = [&acquire_spin_lock](Executor * executor) -> auto {
+    auto ret = executor->acquireExecuteMutex();
     acquire_spin_lock = true;
     return ret;
   };
