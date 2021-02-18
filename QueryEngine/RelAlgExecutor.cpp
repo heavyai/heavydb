@@ -149,7 +149,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   query_dag_->resetQueryExecutionState();
   const auto& ra = query_dag_->getRootNode();
 
-  mapd_shared_lock<mapd_shared_mutex> lock(executor_->execute_mutex_);
+  auto lock = executor_->acquireExecuteMutex();
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto phys_inputs = get_physical_inputs(cat_, &ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
@@ -247,15 +247,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
   return run_query(co_cpu);
 }
 
-namespace {
-
-struct ExecutorMutexHolder {
-  mapd_shared_lock<mapd_shared_mutex> shared_lock;
-  mapd_unique_lock<mapd_shared_mutex> unique_lock;
-};
-
-}  // namespace
-
 ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptions& co,
                                                           const ExecutionOptions& eo,
                                                           const bool just_explain_plan,
@@ -333,20 +324,14 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     // right after acquiring spinlock to let other part of the code can know
     // whether there exists a running query on the executor
   }
-  auto aquire_execute_mutex = [](Executor* executor) -> ExecutorMutexHolder {
-    ExecutorMutexHolder ret;
-    if (executor->executor_id_ == Executor::UNITARY_EXECUTOR_ID) {
-      // Only one unitary executor can run at a time
-      ret.unique_lock = mapd_unique_lock<mapd_shared_mutex>(executor->execute_mutex_);
-    } else {
-      ret.shared_lock = mapd_shared_lock<mapd_shared_mutex>(executor->execute_mutex_);
-    }
+  auto acquire_execute_mutex = [](Executor * executor) -> auto {
+    auto ret = executor->acquireExecuteMutex();
     return ret;
   };
   // now we get the spinlock that means this query is ready to run by the executor
   // so we acquire executor lock in here to make sure that this executor holds
   // all necessary resources and at the same time protect them against other executor
-  auto lock = aquire_execute_mutex(executor_);
+  auto lock = acquire_execute_mutex(executor_);
   ScopeGuard clearRuntimeInterruptStatus = [this, &render_info, &eo] {
     // reset the runtime query interrupt status
     if (!render_info &&
