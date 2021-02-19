@@ -71,6 +71,30 @@ class RowDataProvider {
   virtual std::vector<TargetValue> getTranslatedEntryAt(const size_t index) const = 0;
 };
 
+struct UpdateValuesStats {
+  bool has_null{false};
+  double max_double{std::numeric_limits<double>::lowest()};
+  double min_double{std::numeric_limits<double>::max()};
+  int64_t max_int64t{std::numeric_limits<int64_t>::min()};
+  int64_t min_int64t{std::numeric_limits<int64_t>::max()};
+};
+
+/*
+ * @type ChunkUpdateStats
+ * @brief struct containing stats from a column chunk update.
+ * `new_values_stats` represents aggregate stats for the new
+ * values that were put into the chunk. `old_values_stats`
+ * represents aggregate stats for chunk values that were
+ * replaced.
+ */
+struct ChunkUpdateStats {
+  UpdateValuesStats new_values_stats;
+  UpdateValuesStats old_values_stats;
+  int64_t updated_rows_count{0};
+  int64_t fragment_rows_count{0};
+  std::shared_ptr<Chunk_NS::Chunk> chunk;
+};
+
 /*
  * @type AbstractFragmenter
  * @brief abstract base class for all table partitioners
@@ -126,7 +150,8 @@ class AbstractFragmenter {
    */
   virtual void updateChunkStats(
       const ColumnDescriptor* cd,
-      std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map) = 0;
+      std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map,
+      std::optional<Data_Namespace::MemoryLevel> memory_level) = 0;
 
   /**
    * @brief Retrieve the fragment info object for an individual fragment for editing.
@@ -147,15 +172,16 @@ class AbstractFragmenter {
   virtual size_t getNumRows() = 0;
   virtual void setNumRows(const size_t numTuples) = 0;
 
-  virtual void updateColumn(const Catalog_Namespace::Catalog* catalog,
-                            const TableDescriptor* td,
-                            const ColumnDescriptor* cd,
-                            const int fragment_id,
-                            const std::vector<uint64_t>& frag_offsets,
-                            const std::vector<ScalarTargetValue>& rhs_values,
-                            const SQLTypeInfo& rhs_type,
-                            const Data_Namespace::MemoryLevel memory_level,
-                            UpdelRoll& updel_roll) = 0;
+  virtual std::optional<ChunkUpdateStats> updateColumn(
+      const Catalog_Namespace::Catalog* catalog,
+      const TableDescriptor* td,
+      const ColumnDescriptor* cd,
+      const int fragment_id,
+      const std::vector<uint64_t>& frag_offsets,
+      const std::vector<ScalarTargetValue>& rhs_values,
+      const SQLTypeInfo& rhs_type,
+      const Data_Namespace::MemoryLevel memory_level,
+      UpdelRoll& updel_roll) = 0;
 
   virtual void updateColumns(const Catalog_Namespace::Catalog* catalog,
                              const TableDescriptor* td,
@@ -181,11 +207,7 @@ class AbstractFragmenter {
   virtual void updateColumnMetadata(const ColumnDescriptor* cd,
                                     FragmentInfo& fragment,
                                     std::shared_ptr<Chunk_NS::Chunk> chunk,
-                                    const bool null,
-                                    const double dmax,
-                                    const double dmin,
-                                    const int64_t lmax,
-                                    const int64_t lmin,
+                                    const UpdateValuesStats& update_values_stats,
                                     const SQLTypeInfo& rhs_type,
                                     UpdelRoll& updel_roll) = 0;
 

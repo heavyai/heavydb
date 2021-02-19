@@ -365,8 +365,7 @@ TEST_F(FileMgrTest, buffer_update_and_recovery) {
           getMetadataForBuffer(file_buffer);
       ASSERT_EQ(file_chunk_metadata->numElements, static_cast<size_t>(5));
       ASSERT_EQ(file_chunk_metadata->numBytes, static_cast<size_t>(20));
-      ASSERT_EQ(file_chunk_metadata->chunkStats.min.intval,
-                1);  // We don't currently narrow the metadata on a full rewrite
+      ASSERT_EQ(file_chunk_metadata->chunkStats.min.intval, 2);
       ASSERT_EQ(file_chunk_metadata->chunkStats.max.intval, 11);
       ASSERT_EQ(file_chunk_metadata->chunkStats.has_nulls, false);
     }
@@ -404,8 +403,7 @@ TEST_F(FileMgrTest, buffer_update_and_recovery) {
           getMetadataForBuffer(cpu_buffer);
       ASSERT_EQ(cpu_chunk_metadata->numElements, static_cast<size_t>(5));
       ASSERT_EQ(cpu_chunk_metadata->numBytes, static_cast<size_t>(20));
-      ASSERT_EQ(cpu_chunk_metadata->chunkStats.min.intval,
-                1);  // We don't currently narrow the metadata on a full rewrite
+      ASSERT_EQ(cpu_chunk_metadata->chunkStats.min.intval, 2);
       ASSERT_EQ(cpu_chunk_metadata->chunkStats.max.intval, 11);
       ASSERT_EQ(cpu_chunk_metadata->chunkStats.has_nulls, false);
     }

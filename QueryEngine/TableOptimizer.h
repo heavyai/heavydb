@@ -43,6 +43,13 @@ class TableOptimizer {
   void recomputeMetadata() const;
 
   /**
+   * @brief Recomputes column chunk metadata for the given set of fragments.
+   * The caller of this method is expected to have already acquired the
+   * executor lock.
+   */
+  void recomputeMetadataUnlocked(const ColumnToFragmentsMap& optimize_candidates) const;
+
+  /**
    * @brief Compacts fragments to remove deleted rows.
    * When a row is deleted, a boolean deleted system column is set to true. Vacuuming
    * removes all deleted rows from a fragment. Note that vacuuming is a checkpointing
@@ -52,6 +59,15 @@ class TableOptimizer {
   void vacuumDeletedRows() const;
 
  private:
+  void recomputeDeletedColumnMetadata(
+      const TableDescriptor* td,
+      std::unordered_map<int, size_t>& tuple_count_map) const;
+
+  void recomputeColumnMetadata(const TableDescriptor* td,
+                               const ColumnDescriptor* cd,
+                               const std::unordered_map<int, size_t>& tuple_count_map,
+                               std::optional<Data_Namespace::MemoryLevel> memory_level,
+                               const std::set<int>& fragment_ids) const;
   const TableDescriptor* td_;
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;

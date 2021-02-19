@@ -36,6 +36,8 @@
 
 extern bool g_enable_experimental_string_functions;
 
+bool g_enable_auto_metadata_update{true};
+
 namespace Fragmenter_Namespace {
 
 inline void wait_cleanup_threads(std::vector<std::future<void>>& threads) {
@@ -568,15 +570,79 @@ void InsertOrderFragmenter::updateColumns(
   deletedChunk->getBuffer()->setUpdated();
 }
 
-void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catalog,
-                                         const TableDescriptor* td,
-                                         const ColumnDescriptor* cd,
-                                         const int fragment_id,
-                                         const std::vector<uint64_t>& frag_offsets,
-                                         const std::vector<ScalarTargetValue>& rhs_values,
-                                         const SQLTypeInfo& rhs_type,
-                                         const Data_Namespace::MemoryLevel memory_level,
-                                         UpdelRoll& updel_roll) {
+namespace {
+inline void update_metadata(SQLTypeInfo const& ti,
+                            ChunkUpdateStats& update_stats,
+                            int64_t const updated_val,
+                            int64_t const old_val,
+                            NullSentinelSupplier s = NullSentinelSupplier()) {
+  if (ti.get_notnull()) {
+    set_minmax(update_stats.new_values_stats.min_int64t,
+               update_stats.new_values_stats.max_int64t,
+               updated_val);
+    set_minmax(update_stats.old_values_stats.min_int64t,
+               update_stats.old_values_stats.max_int64t,
+               old_val);
+  } else {
+    set_minmax(update_stats.new_values_stats.min_int64t,
+               update_stats.new_values_stats.max_int64t,
+               update_stats.new_values_stats.has_null,
+               updated_val,
+               s(ti, updated_val));
+    set_minmax(update_stats.old_values_stats.min_int64t,
+               update_stats.old_values_stats.max_int64t,
+               update_stats.old_values_stats.has_null,
+               old_val,
+               s(ti, old_val));
+  }
+}
+
+inline void update_metadata(SQLTypeInfo const& ti,
+                            ChunkUpdateStats& update_stats,
+                            double const updated_val,
+                            double const old_val,
+                            NullSentinelSupplier s = NullSentinelSupplier()) {
+  if (ti.get_notnull()) {
+    set_minmax(update_stats.new_values_stats.min_double,
+               update_stats.new_values_stats.max_double,
+               updated_val);
+    set_minmax(update_stats.old_values_stats.min_double,
+               update_stats.old_values_stats.max_double,
+               old_val);
+  } else {
+    set_minmax(update_stats.new_values_stats.min_double,
+               update_stats.new_values_stats.max_double,
+               update_stats.new_values_stats.has_null,
+               updated_val,
+               s(ti, updated_val));
+    set_minmax(update_stats.old_values_stats.min_double,
+               update_stats.old_values_stats.max_double,
+               update_stats.old_values_stats.has_null,
+               old_val,
+               s(ti, old_val));
+  }
+}
+
+inline void update_metadata(UpdateValuesStats& agg_stats,
+                            const UpdateValuesStats& new_stats) {
+  agg_stats.has_null = agg_stats.has_null || new_stats.has_null;
+  agg_stats.max_double = std::max<double>(agg_stats.max_double, new_stats.max_double);
+  agg_stats.min_double = std::min<double>(agg_stats.min_double, new_stats.min_double);
+  agg_stats.max_int64t = std::max<int64_t>(agg_stats.max_int64t, new_stats.max_int64t);
+  agg_stats.min_int64t = std::min<int64_t>(agg_stats.min_int64t, new_stats.min_int64t);
+}
+}  // namespace
+
+std::optional<ChunkUpdateStats> InsertOrderFragmenter::updateColumn(
+    const Catalog_Namespace::Catalog* catalog,
+    const TableDescriptor* td,
+    const ColumnDescriptor* cd,
+    const int fragment_id,
+    const std::vector<uint64_t>& frag_offsets,
+    const std::vector<ScalarTargetValue>& rhs_values,
+    const SQLTypeInfo& rhs_type,
+    const Data_Namespace::MemoryLevel memory_level,
+    UpdelRoll& updel_roll) {
   updel_roll.catalog = catalog;
   updel_roll.logicalTableId = catalog->getLogicalTableId(td->tableId);
   updel_roll.memoryLevel = memory_level;
@@ -585,7 +651,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
   const auto nrow = frag_offsets.size();
   const auto n_rhs_values = rhs_values.size();
   if (0 == nrow) {
-    return;
+    return {};
   }
   CHECK(nrow == n_rhs_values || 1 == n_rhs_values);
 
@@ -603,11 +669,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                                          chunk_meta_it->second->numBytes,
                                          chunk_meta_it->second->numElements);
 
-  std::vector<int8_t> has_null_per_thread(ncore, 0);
-  std::vector<double> max_double_per_thread(ncore, std::numeric_limits<double>::lowest());
-  std::vector<double> min_double_per_thread(ncore, std::numeric_limits<double>::max());
-  std::vector<int64_t> max_int64t_per_thread(ncore, std::numeric_limits<int64_t>::min());
-  std::vector<int64_t> min_int64t_per_thread(ncore, std::numeric_limits<int64_t>::max());
+  std::vector<ChunkUpdateStats> update_stats_per_thread(ncore);
 
   // parallel update elements
   std::vector<std::future<void>> threads;
@@ -630,15 +692,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
   }
   for (size_t rbegin = 0, c = 0; rbegin < nrow; ++c, rbegin += segsz) {
     threads.emplace_back(std::async(
-        std::launch::async,
-        [=,
-         &has_null_per_thread,
-         &min_int64t_per_thread,
-         &max_int64t_per_thread,
-         &min_double_per_thread,
-         &max_double_per_thread,
-         &frag_offsets,
-         &rhs_values] {
+        std::launch::async, [=, &update_stats_per_thread, &frag_offsets, &rhs_values] {
           SQLTypeInfo lhs_type = cd->columnType;
 
           // !! not sure if this is a undocumented convention or a bug, but for a sharded
@@ -703,19 +757,24 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
               if (lhs_type.is_string()) {
                 throw std::runtime_error("UPDATE does not support cast to string.");
               }
+              int64_t old_val;
+              get_scalar<int64_t>(data_ptr, lhs_type, old_val);
+              // Handle special case where date column with date in days encoding stores
+              // metadata in epoch seconds.
+              if (lhs_type.is_date_in_days()) {
+                old_val = DateConverters::get_epoch_seconds_from_days(old_val);
+              }
               put_scalar<int64_t>(data_ptr, lhs_type, v, cd->columnName, &rhs_type);
               if (lhs_type.is_decimal()) {
                 nullAwareDecimalOverflowValidator.validate<int64_t>(v);
                 int64_t decimal_val;
                 get_scalar<int64_t>(data_ptr, lhs_type, decimal_val);
-                tabulate_metadata(lhs_type,
-                                  min_int64t_per_thread[c],
-                                  max_int64t_per_thread[c],
-                                  has_null_per_thread[c],
-                                  (v == inline_int_null_value<int64_t>() &&
-                                   lhs_type.get_notnull() == false)
-                                      ? v
-                                      : decimal_val);
+                int64_t target_value = (v == inline_int_null_value<int64_t>() &&
+                                        lhs_type.get_notnull() == false)
+                                           ? v
+                                           : decimal_val;
+                update_metadata(
+                    lhs_type, update_stats_per_thread[c], target_value, old_val);
                 auto const positive_v_and_negative_d = (v >= 0) && (decimal_val < 0);
                 auto const negative_v_and_positive_d = (v < 0) && (decimal_val >= 0);
                 if (positive_v_and_negative_d || negative_v_and_positive_d) {
@@ -737,14 +796,12 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                   int64_t days;
                   get_scalar<int64_t>(data_ptr, lhs_type, days);
                   const auto seconds = DateConverters::get_epoch_seconds_from_days(days);
-                  tabulate_metadata(lhs_type,
-                                    min_int64t_per_thread[c],
-                                    max_int64t_per_thread[c],
-                                    has_null_per_thread[c],
-                                    (v == inline_int_null_value<int64_t>() &&
-                                     lhs_type.get_notnull() == false)
-                                        ? NullSentinelSupplier()(lhs_type, v)
-                                        : seconds);
+                  int64_t target_value = (v == inline_int_null_value<int64_t>() &&
+                                          lhs_type.get_notnull() == false)
+                                             ? NullSentinelSupplier()(lhs_type, v)
+                                             : seconds;
+                  update_metadata(
+                      lhs_type, update_stats_per_thread[c], target_value, old_val);
                 } else {
                   int64_t target_value;
                   if (rhs_type.is_decimal()) {
@@ -752,38 +809,33 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                   } else {
                     target_value = v;
                   }
-                  tabulate_metadata(lhs_type,
-                                    min_int64t_per_thread[c],
-                                    max_int64t_per_thread[c],
-                                    has_null_per_thread[c],
-                                    target_value);
+                  update_metadata(
+                      lhs_type, update_stats_per_thread[c], target_value, old_val);
                 }
               } else {
-                tabulate_metadata(
-                    lhs_type,
-                    min_double_per_thread[c],
-                    max_double_per_thread[c],
-                    has_null_per_thread[c],
-                    rhs_type.is_decimal() ? decimal_to_double(rhs_type, v) : v);
+                if (rhs_type.is_decimal()) {
+                  update_metadata(lhs_type,
+                                  update_stats_per_thread[c],
+                                  decimal_to_double(rhs_type, v),
+                                  double(old_val));
+                } else {
+                  update_metadata(lhs_type, update_stats_per_thread[c], v, old_val);
+                }
               }
             } else if (const auto vp = boost::get<double>(sv)) {
               auto v = *vp;
               if (lhs_type.is_string()) {
                 throw std::runtime_error("UPDATE does not support cast to string.");
               }
+              double old_val;
+              get_scalar<double>(data_ptr, lhs_type, old_val);
               put_scalar<double>(data_ptr, lhs_type, v, cd->columnName);
               if (lhs_type.is_integer()) {
-                tabulate_metadata(lhs_type,
-                                  min_int64t_per_thread[c],
-                                  max_int64t_per_thread[c],
-                                  has_null_per_thread[c],
-                                  int64_t(v));
+                update_metadata(
+                    lhs_type, update_stats_per_thread[c], int64_t(v), int64_t(old_val));
               } else if (lhs_type.is_fp()) {
-                tabulate_metadata(lhs_type,
-                                  min_double_per_thread[c],
-                                  max_double_per_thread[c],
-                                  has_null_per_thread[c],
-                                  double(v));
+                update_metadata(
+                    lhs_type, update_stats_per_thread[c], double(v), double(old_val));
               } else {
                 UNREACHABLE() << "Unexpected combination of a non-floating or integer "
                                  "LHS with a floating RHS.";
@@ -793,19 +845,14 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
               if (lhs_type.is_string()) {
                 throw std::runtime_error("UPDATE does not support cast to string.");
               }
+              float old_val;
+              get_scalar<float>(data_ptr, lhs_type, old_val);
               put_scalar<float>(data_ptr, lhs_type, v, cd->columnName);
               if (lhs_type.is_integer()) {
-                tabulate_metadata(lhs_type,
-                                  min_int64t_per_thread[c],
-                                  max_int64t_per_thread[c],
-                                  has_null_per_thread[c],
-                                  int64_t(v));
+                update_metadata(
+                    lhs_type, update_stats_per_thread[c], int64_t(v), int64_t(old_val));
               } else {
-                tabulate_metadata(lhs_type,
-                                  min_double_per_thread[c],
-                                  max_double_per_thread[c],
-                                  has_null_per_thread[c],
-                                  double(v));
+                update_metadata(lhs_type, update_stats_per_thread[c], double(v), old_val);
               }
             } else if (const auto vp = boost::get<NullableString>(sv)) {
               const auto s = boost::get<std::string>(vp);
@@ -816,12 +863,11 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                   std::unique_lock<std::mutex> lock(temp_mutex_);
                   sidx = stringDict->getOrAdd(sval);
                 }
+                int64_t old_val;
+                get_scalar<int64_t>(data_ptr, lhs_type, old_val);
                 put_scalar<int64_t>(data_ptr, lhs_type, sidx, cd->columnName);
-                tabulate_metadata(lhs_type,
-                                  min_int64t_per_thread[c],
-                                  max_int64t_per_thread[c],
-                                  has_null_per_thread[c],
-                                  int64_t(sidx));
+                update_metadata(
+                    lhs_type, update_stats_per_thread[c], int64_t(sidx), old_val);
               } else if (sval.size() > 0) {
                 auto dval = std::atof(sval.data());
                 if (lhs_type.is_boolean()) {
@@ -832,23 +878,21 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                       "string path.");
                 }
                 if (lhs_type.is_fp() || lhs_type.is_decimal()) {
+                  double old_val;
+                  get_scalar<double>(data_ptr, lhs_type, old_val);
                   put_scalar<double>(data_ptr, lhs_type, dval, cd->columnName);
-                  tabulate_metadata(lhs_type,
-                                    min_double_per_thread[c],
-                                    max_double_per_thread[c],
-                                    has_null_per_thread[c],
-                                    double(dval));
+                  update_metadata(
+                      lhs_type, update_stats_per_thread[c], double(dval), old_val);
                 } else {
+                  int64_t old_val;
+                  get_scalar<int64_t>(data_ptr, lhs_type, old_val);
                   put_scalar<int64_t>(data_ptr, lhs_type, dval, cd->columnName);
-                  tabulate_metadata(lhs_type,
-                                    min_int64t_per_thread[c],
-                                    max_int64t_per_thread[c],
-                                    has_null_per_thread[c],
-                                    int64_t(dval));
+                  update_metadata(
+                      lhs_type, update_stats_per_thread[c], int64_t(dval), old_val);
                 }
               } else {
                 put_null(data_ptr, lhs_type, cd->columnName);
-                has_null_per_thread[c] = true;
+                update_stats_per_thread[c].new_values_stats.has_null = true;
               }
             } else {
               CHECK(false);
@@ -867,48 +911,34 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
       const auto deleted_offsets = getVacuumOffsets(chunk);
       if (deleted_offsets.size() > 0) {
         compactRows(catalog, td, fragment_id, deleted_offsets, memory_level, updel_roll);
-        return;
+        return {};
       }
     }
   }
-  bool has_null_per_chunk{false};
-  double max_double_per_chunk{std::numeric_limits<double>::lowest()};
-  double min_double_per_chunk{std::numeric_limits<double>::max()};
-  int64_t max_int64t_per_chunk{std::numeric_limits<int64_t>::min()};
-  int64_t min_int64t_per_chunk{std::numeric_limits<int64_t>::max()};
+  ChunkUpdateStats update_stats;
   for (size_t c = 0; c < ncore; ++c) {
-    has_null_per_chunk = has_null_per_chunk || has_null_per_thread[c];
-    max_double_per_chunk =
-        std::max<double>(max_double_per_chunk, max_double_per_thread[c]);
-    min_double_per_chunk =
-        std::min<double>(min_double_per_chunk, min_double_per_thread[c]);
-    max_int64t_per_chunk =
-        std::max<int64_t>(max_int64t_per_chunk, max_int64t_per_thread[c]);
-    min_int64t_per_chunk =
-        std::min<int64_t>(min_int64t_per_chunk, min_int64t_per_thread[c]);
+    update_metadata(update_stats.new_values_stats,
+                    update_stats_per_thread[c].new_values_stats);
+    update_metadata(update_stats.old_values_stats,
+                    update_stats_per_thread[c].old_values_stats);
   }
-  updateColumnMetadata(cd,
-                       fragment,
-                       chunk,
-                       has_null_per_chunk,
-                       max_double_per_chunk,
-                       min_double_per_chunk,
-                       max_int64t_per_chunk,
-                       min_int64t_per_chunk,
-                       cd->columnType,
-                       updel_roll);
+
+  CHECK_GT(fragment.shadowNumTuples, size_t(0));
+  updateColumnMetadata(
+      cd, fragment, chunk, update_stats.new_values_stats, cd->columnType, updel_roll);
+  update_stats.updated_rows_count = nrow;
+  update_stats.fragment_rows_count = fragment.shadowNumTuples;
+  update_stats.chunk = chunk;
+  return update_stats;
 }
 
-void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
-                                                 FragmentInfo& fragment,
-                                                 std::shared_ptr<Chunk_NS::Chunk> chunk,
-                                                 const bool has_null_per_chunk,
-                                                 const double max_double_per_chunk,
-                                                 const double min_double_per_chunk,
-                                                 const int64_t max_int64t_per_chunk,
-                                                 const int64_t min_int64t_per_chunk,
-                                                 const SQLTypeInfo& rhs_type,
-                                                 UpdelRoll& updel_roll) {
+void InsertOrderFragmenter::updateColumnMetadata(
+    const ColumnDescriptor* cd,
+    FragmentInfo& fragment,
+    std::shared_ptr<Chunk_NS::Chunk> chunk,
+    const UpdateValuesStats& new_values_stats,
+    const SQLTypeInfo& rhs_type,
+    UpdelRoll& updel_roll) {
   auto td = updel_roll.catalog->getMetadataForTable(cd->tableId);
   auto key = std::make_pair(td, &fragment);
   std::lock_guard<std::mutex> lck(updel_roll.mutex);
@@ -938,16 +968,22 @@ void InsertOrderFragmenter::updateColumnMetadata(const ColumnDescriptor* cd,
   };
 
   if (is_integral(lhs_type) || (lhs_type.is_decimal() && rhs_type.is_decimal())) {
-    update_stats(min_int64t_per_chunk, max_int64t_per_chunk, has_null_per_chunk);
+    update_stats(new_values_stats.min_int64t,
+                 new_values_stats.max_int64t,
+                 new_values_stats.has_null);
   } else if (lhs_type.is_fp()) {
-    update_stats(min_double_per_chunk, max_double_per_chunk, has_null_per_chunk);
+    update_stats(new_values_stats.min_double,
+                 new_values_stats.max_double,
+                 new_values_stats.has_null);
   } else if (lhs_type.is_decimal()) {
-    update_stats((int64_t)(min_double_per_chunk * pow(10, lhs_type.get_scale())),
-                 (int64_t)(max_double_per_chunk * pow(10, lhs_type.get_scale())),
-                 has_null_per_chunk);
+    update_stats((int64_t)(new_values_stats.min_double * pow(10, lhs_type.get_scale())),
+                 (int64_t)(new_values_stats.max_double * pow(10, lhs_type.get_scale())),
+                 new_values_stats.has_null);
   } else if (!lhs_type.is_array() && !lhs_type.is_geometry() &&
              !(lhs_type.is_string() && kENCODING_DICT != lhs_type.get_compression())) {
-    update_stats(min_int64t_per_chunk, max_int64t_per_chunk, has_null_per_chunk);
+    update_stats(new_values_stats.min_int64t,
+                 new_values_stats.max_int64t,
+                 new_values_stats.has_null);
   }
   buffer->getEncoder()->getMetadata(chunkMetadata[cd->columnId]);
 }
@@ -1030,7 +1066,7 @@ const std::vector<uint64_t> InsertOrderFragmenter::getVacuumOffsets(
 template <typename T>
 static void set_chunk_stats(const SQLTypeInfo& col_type,
                             int8_t* data_addr,
-                            int8_t& has_null,
+                            bool& has_null,
                             T& min,
                             T& max) {
   T v;
@@ -1167,11 +1203,7 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
   auto chunks = getChunksForAllColumns(td, fragment, memory_level);
   const auto ncol = chunks.size();
 
-  std::vector<int8_t> has_null_per_thread(ncol, 0);
-  std::vector<double> max_double_per_thread(ncol, std::numeric_limits<double>::lowest());
-  std::vector<double> min_double_per_thread(ncol, std::numeric_limits<double>::max());
-  std::vector<int64_t> max_int64t_per_thread(ncol, std::numeric_limits<uint64_t>::min());
-  std::vector<int64_t> min_int64t_per_thread(ncol, std::numeric_limits<uint64_t>::max());
+  std::vector<ChunkUpdateStats> update_stats_per_thread(ncol);
 
   // parallel delete columns
   std::vector<std::future<void>> threads;
@@ -1190,48 +1222,41 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
     auto index_array = (StringOffsetT*)indices_addr;
     bool is_varlen = col_type.is_varlen_indeed();
 
-    auto fixlen_vacuum = [=,
-                          &has_null_per_thread,
-                          &max_double_per_thread,
-                          &min_double_per_thread,
-                          &min_int64t_per_thread,
-                          &max_int64t_per_thread,
-                          &updel_roll,
-                          &frag_offsets,
-                          &fragment] {
-      size_t nbytes_fix_data_to_keep;
-      nbytes_fix_data_to_keep = vacuum_fixlen_rows(fragment, chunk, frag_offsets);
+    auto fixlen_vacuum =
+        [=, &update_stats_per_thread, &updel_roll, &frag_offsets, &fragment] {
+          size_t nbytes_fix_data_to_keep;
+          nbytes_fix_data_to_keep = vacuum_fixlen_rows(fragment, chunk, frag_offsets);
 
-      data_buffer->getEncoder()->setNumElems(nrows_to_keep);
-      data_buffer->setSize(nbytes_fix_data_to_keep);
-      data_buffer->setUpdated();
+          data_buffer->getEncoder()->setNumElems(nrows_to_keep);
+          data_buffer->setSize(nbytes_fix_data_to_keep);
+          data_buffer->setUpdated();
 
-      set_chunk_metadata(catalog, fragment, chunk, nrows_to_keep, updel_roll);
+          set_chunk_metadata(catalog, fragment, chunk, nrows_to_keep, updel_roll);
 
-      auto daddr = data_addr;
-      auto element_size =
-          col_type.is_fixlen_array() ? col_type.get_size() : get_element_size(col_type);
-      for (size_t irow = 0; irow < nrows_to_keep; ++irow, daddr += element_size) {
-        if (col_type.is_fixlen_array()) {
-          auto encoder =
-              dynamic_cast<FixedLengthArrayNoneEncoder*>(data_buffer->getEncoder());
-          CHECK(encoder);
-          encoder->updateMetadata((int8_t*)daddr);
-        } else if (col_type.is_fp()) {
-          set_chunk_stats(col_type,
-                          data_addr,
-                          has_null_per_thread[ci],
-                          min_double_per_thread[ci],
-                          max_double_per_thread[ci]);
-        } else {
-          set_chunk_stats(col_type,
-                          data_addr,
-                          has_null_per_thread[ci],
-                          min_int64t_per_thread[ci],
-                          max_int64t_per_thread[ci]);
-        }
-      }
-    };
+          auto daddr = data_addr;
+          auto element_size = col_type.is_fixlen_array() ? col_type.get_size()
+                                                         : get_element_size(col_type);
+          for (size_t irow = 0; irow < nrows_to_keep; ++irow, daddr += element_size) {
+            if (col_type.is_fixlen_array()) {
+              auto encoder =
+                  dynamic_cast<FixedLengthArrayNoneEncoder*>(data_buffer->getEncoder());
+              CHECK(encoder);
+              encoder->updateMetadata((int8_t*)daddr);
+            } else if (col_type.is_fp()) {
+              set_chunk_stats(col_type,
+                              data_addr,
+                              update_stats_per_thread[ci].new_values_stats.has_null,
+                              update_stats_per_thread[ci].new_values_stats.min_double,
+                              update_stats_per_thread[ci].new_values_stats.max_double);
+            } else {
+              set_chunk_stats(col_type,
+                              data_addr,
+                              update_stats_per_thread[ci].new_values_stats.has_null,
+                              update_stats_per_thread[ci].new_values_stats.min_int64t,
+                              update_stats_per_thread[ci].new_values_stats.max_int64t);
+            }
+          }
+        };
 
     auto varlen_vacuum = [=, &updel_roll, &frag_offsets, &fragment] {
       size_t nbytes_var_data_to_keep;
@@ -1270,11 +1295,7 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
       updateColumnMetadata(cd,
                            fragment,
                            chunk,
-                           has_null_per_thread[ci],
-                           max_double_per_thread[ci],
-                           min_double_per_thread[ci],
-                           max_int64t_per_thread[ci],
-                           min_int64t_per_thread[ci],
+                           update_stats_per_thread[ci].new_values_stats,
                            cd->columnType,
                            updel_roll);
     }

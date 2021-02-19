@@ -35,17 +35,18 @@ T none_encoded_null_value() {
 template <typename T>
 class NoneEncoder : public Encoder {
  public:
-  NoneEncoder(Data_Namespace::AbstractBuffer* buffer)
-      : Encoder(buffer)
-      , dataMin(std::numeric_limits<T>::max())
-      , dataMax(std::numeric_limits<T>::lowest())
-      , has_nulls(false) {}
+  NoneEncoder(Data_Namespace::AbstractBuffer* buffer) : Encoder(buffer) {
+    resetChunkStats();
+  }
 
   std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
                                             const size_t num_elems_to_append,
                                             const SQLTypeInfo&,
                                             const bool replicating = false,
                                             const int64_t offset = -1) override {
+    if (offset == 0 && num_elems_to_append >= num_elems_) {
+      resetChunkStats();
+    }
     T* unencodedData = reinterpret_cast<T*>(src_data);
     std::vector<T> encoded_data;
     if (replicating) {
@@ -213,6 +214,12 @@ class NoneEncoder : public Encoder {
   bool has_nulls;
 
  private:
+  void resetChunkStats() {
+    dataMin = std::numeric_limits<T>::max();
+    dataMax = std::numeric_limits<T>::lowest();
+    has_nulls = false;
+  }
+
   T validateDataAndUpdateStats(const T& unencoded_data) {
     if (unencoded_data == none_encoded_null_value<T>()) {
       has_nulls = true;

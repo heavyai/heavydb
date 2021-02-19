@@ -94,9 +94,9 @@ class InsertOrderFragmenter : public AbstractFragmenter {
                                  const int fragment_id,
                                  const std::shared_ptr<ChunkMetadata> metadata) override;
 
-  void updateChunkStats(
-      const ColumnDescriptor* cd,
-      std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map) override;
+  void updateChunkStats(const ColumnDescriptor* cd,
+                        std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map,
+                        std::optional<Data_Namespace::MemoryLevel> memory_level) override;
 
   FragmentInfo* getFragmentInfo(const int fragment_id) const override;
 
@@ -112,15 +112,16 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   size_t getNumRows() override { return numTuples_; }
   void setNumRows(const size_t numTuples) override { numTuples_ = numTuples; }
 
-  void updateColumn(const Catalog_Namespace::Catalog* catalog,
-                    const TableDescriptor* td,
-                    const ColumnDescriptor* cd,
-                    const int fragment_id,
-                    const std::vector<uint64_t>& frag_offsets,
-                    const std::vector<ScalarTargetValue>& rhs_values,
-                    const SQLTypeInfo& rhs_type,
-                    const Data_Namespace::MemoryLevel memory_level,
-                    UpdelRoll& updel_roll) override;
+  std::optional<ChunkUpdateStats> updateColumn(
+      const Catalog_Namespace::Catalog* catalog,
+      const TableDescriptor* td,
+      const ColumnDescriptor* cd,
+      const int fragment_id,
+      const std::vector<uint64_t>& frag_offsets,
+      const std::vector<ScalarTargetValue>& rhs_values,
+      const SQLTypeInfo& rhs_type,
+      const Data_Namespace::MemoryLevel memory_level,
+      UpdelRoll& updel_roll) override;
 
   void updateColumns(const Catalog_Namespace::Catalog* catalog,
                      const TableDescriptor* td,
@@ -146,11 +147,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   void updateColumnMetadata(const ColumnDescriptor* cd,
                             FragmentInfo& fragment,
                             std::shared_ptr<Chunk_NS::Chunk> chunk,
-                            const bool null,
-                            const double dmax,
-                            const double dmin,
-                            const int64_t lmax,
-                            const int64_t lmin,
+                            const UpdateValuesStats& update_values_stats,
                             const SQLTypeInfo& rhs_type,
                             UpdelRoll& updel_roll) override;
 

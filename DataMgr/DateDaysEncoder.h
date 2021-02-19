@@ -29,11 +29,9 @@
 template <typename T, typename V>
 class DateDaysEncoder : public Encoder {
  public:
-  DateDaysEncoder(Data_Namespace::AbstractBuffer* buffer)
-      : Encoder(buffer)
-      , dataMin(std::numeric_limits<T>::max())
-      , dataMax(std::numeric_limits<T>::min())
-      , has_nulls(false) {}
+  DateDaysEncoder(Data_Namespace::AbstractBuffer* buffer) : Encoder(buffer) {
+    resetChunkStats();
+  }
 
   std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
                                             const size_t num_elems_to_append,
@@ -41,6 +39,9 @@ class DateDaysEncoder : public Encoder {
                                             const bool replicating = false,
                                             const int64_t offset = -1) override {
     CHECK(ti.is_date_in_days());
+    if (offset == 0 && num_elems_to_append >= num_elems_) {
+      resetChunkStats();
+    }
     T* unencoded_data = reinterpret_cast<T*>(src_data);
     auto encoded_data = std::make_unique<V[]>(num_elems_to_append);
     for (size_t i = 0; i < num_elems_to_append; ++i) {
@@ -175,6 +176,12 @@ class DateDaysEncoder : public Encoder {
   bool has_nulls;
 
  private:
+  void resetChunkStats() {
+    dataMin = std::numeric_limits<T>::max();
+    dataMax = std::numeric_limits<T>::lowest();
+    has_nulls = false;
+  }
+
   V encodeDataAndUpdateStats(const T& unencoded_data) {
     V encoded_data;
     if (unencoded_data == std::numeric_limits<V>::min()) {

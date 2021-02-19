@@ -21,6 +21,9 @@
 #include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
 #include "QueryEngine/ExecutionKernel.h"
 #include "QueryEngine/RelAlgExecutor.h"
+#include "QueryEngine/TableOptimizer.h"
+
+extern bool g_enable_auto_metadata_update;
 
 UpdateLogForFragment::UpdateLogForFragment(FragmentInfoType const& fragment_info,
                                            size_t const fragment_index,
@@ -128,6 +131,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
   }
   CHECK(query_mem_desc);
 
+  ColumnToFragmentsMap optimize_candidates;
   for (size_t fragment_index = 0; fragment_index < outer_fragments.size();
        ++fragment_index) {
     const int64_t crt_fragment_tuple_count =
@@ -136,9 +140,21 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
       // nothing to update
       continue;
     }
-
     SharedKernelContext shared_context(table_infos);
+    const auto& frag_offsets = shared_context.getFragOffsets();
+    auto skip_frag = skipFragment(ra_exe_unit.input_descs[0],
+                                  outer_fragments[fragment_index],
+                                  ra_exe_unit.simple_quals,
+                                  frag_offsets,
+                                  fragment_index);
+    if (skip_frag.first) {
+      VLOG(2) << "Update/delete skipping fragment with table id: "
+              << outer_fragments[fragment_index].physicalTableId
+              << ", fragment id: " << fragment_index;
+      continue;
+    }
     fragments[0] = {table_id, {fragment_index}};
+
     {
       ExecutionKernel current_fragment_kernel(ra_exe_unit,
                                               ExecutorDeviceType::CPU,
@@ -165,6 +181,13 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
     const auto& proj_fragment_result = proj_fragment_results[0];
     const auto proj_result_set = proj_fragment_result.first;
     CHECK(proj_result_set);
-    cb({outer_fragments[fragment_index], fragment_index, proj_result_set});
+    cb({outer_fragments[fragment_index], fragment_index, proj_result_set},
+       optimize_candidates);
+  }
+
+  if (g_enable_auto_metadata_update) {
+    auto td = cat.getMetadataForTable(table_id);
+    TableOptimizer table_optimizer{td, this, cat};
+    table_optimizer.recomputeMetadataUnlocked(optimize_candidates);
   }
 }

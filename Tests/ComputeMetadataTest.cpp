@@ -603,6 +603,10 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
+  // Disable automatic metadata update in order to ensure
+  // that metadata is not automatically updated for other
+  // tests that do and assert metadata updates.
+  g_enable_auto_metadata_update = false;
   QR::init(BASE_PATH);
 
   int err{0};

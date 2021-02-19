@@ -320,6 +320,7 @@ class SringConstInResultSet : public std::runtime_error {
 class ExtensionFunction;
 
 using RowDataProvider = Fragmenter_Namespace::RowDataProvider;
+using ColumnToFragmentsMap = std::map<const ColumnDescriptor*, std::set<int>>;
 
 class UpdateLogForFragment : public RowDataProvider {
  public:
@@ -348,7 +349,8 @@ class UpdateLogForFragment : public RowDataProvider {
 
   SQLTypeInfo getColumnType(const size_t col_idx) const;
 
-  using Callback = std::function<void(const UpdateLogForFragment&)>;
+  using Callback =
+      std::function<void(const UpdateLogForFragment&, ColumnToFragmentsMap&)>;
 
   auto getResultSet() const { return rs_; }
 
@@ -549,7 +551,8 @@ class Executor {
                                   const CompilationOptions& co,
                                   const ExecutionOptions& eo,
                                   const Catalog_Namespace::Catalog& cat,
-                                  PerFragmentCallBack& cb);
+                                  PerFragmentCallBack& cb,
+                                  const std::set<int>& fragment_ids);
 
   ResultSetPtr executeExplain(const QueryCompilationDescriptor&);
 
@@ -878,6 +881,9 @@ class Executor {
   std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> addDeletedColumn(
       const RelAlgExecutionUnit& ra_exe_unit,
       const CompilationOptions& co);
+
+  bool isFragmentFullyDeleted(const int table_id,
+                              const Fragmenter_Namespace::FragmentInfo& fragment);
 
   std::pair<bool, int64_t> skipFragment(
       const InputDescriptor& table_desc,

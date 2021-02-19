@@ -426,9 +426,9 @@ inline void set_minmax(T& min, T& max, T const val) {
 }
 
 template <typename T>
-inline void set_minmax(T& min, T& max, int8_t& null_flag, T const val, T null_sentinel) {
+inline void set_minmax(T& min, T& max, bool& null_flag, T const val, T null_sentinel) {
   if (val == null_sentinel) {
-    null_flag |= true;
+    null_flag = true;
   } else {
     if (val < min) {
       min = val;
@@ -436,22 +436,6 @@ inline void set_minmax(T& min, T& max, int8_t& null_flag, T const val, T null_se
     if (val > max) {
       max = val;
     }
-  }
-}
-
-template <typename TYPE_INFO,
-          typename T,
-          typename SENTINEL_SUPPLIER = NullSentinelSupplier>
-inline void tabulate_metadata(TYPE_INFO const& ti,
-                              T& min,
-                              T& max,
-                              int8_t& null_flag,
-                              T const val,
-                              SENTINEL_SUPPLIER s = SENTINEL_SUPPLIER()) {
-  if (ti.get_notnull()) {
-    set_minmax(min, max, val);
-  } else {
-    set_minmax(min, max, null_flag, val, s(ti, val));
   }
 }
 

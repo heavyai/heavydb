@@ -1570,7 +1570,8 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                                           const CompilationOptions& co,
                                           const ExecutionOptions& eo,
                                           const Catalog_Namespace::Catalog& cat,
-                                          PerFragmentCallBack& cb) {
+                                          PerFragmentCallBack& cb,
+                                          const std::set<int>& fragment_ids_param) {
   const auto [ra_exe_unit, deleted_cols_map] = addDeletedColumn(ra_exe_unit_in, co);
   ColumnCacheMap column_cache;
 
@@ -1602,16 +1603,27 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
   const auto table_id = ra_exe_unit.input_descs[0].getTableId();
   const auto& outer_fragments = table_info.info.fragments;
 
+  std::set<size_t> fragment_ids;
+  if (fragment_ids_param.empty()) {
+    // An empty `fragment_ids_param` set implies executing
+    // the query for all fragments in the table. In this
+    // case, populate `fragment_ids` with all fragment ids.
+    for (size_t i = 0; i < outer_fragments.size(); i++) {
+      fragment_ids.emplace(i);
+    }
+  } else {
+    fragment_ids.insert(fragment_ids_param.begin(), fragment_ids_param.end());
+  }
+
   {
     auto clock_begin = timer_start();
     std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);
     kernel_queue_time_ms_ += timer_stop(clock_begin);
 
-    for (size_t fragment_index = 0; fragment_index < outer_fragments.size();
-         ++fragment_index) {
+    for (auto fragment_id : fragment_ids) {
       // We may want to consider in the future allowing this to execute on devices other
       // than CPU
-      FragmentsList fragments_list{{table_id, {fragment_index}}};
+      FragmentsList fragments_list{{table_id, {fragment_id}}};
       ExecutionKernel kernel(ra_exe_unit,
                              co.device_type,
                              /*device_id=*/0,
@@ -1629,10 +1641,9 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
 
   const auto& all_fragment_results = kernel_context.getFragmentResults();
 
-  for (size_t fragment_index = 0; fragment_index < outer_fragments.size();
-       ++fragment_index) {
-    const auto fragment_results = all_fragment_results[fragment_index];
-    cb(fragment_results.first, outer_fragments[fragment_index]);
+  for (const auto& [result_set_ptr, result_fragment_ids] : all_fragment_results) {
+    CHECK_EQ(result_fragment_ids.size(), 1);
+    cb(result_set_ptr, outer_fragments[result_fragment_ids[0]]);
   }
 }
 
@@ -3344,6 +3355,39 @@ std::tuple<bool, int64_t, int64_t> get_hpt_overflow_underflow_safe_scaled_values
 
 }  // namespace
 
+bool Executor::isFragmentFullyDeleted(
+    const int table_id,
+    const Fragmenter_Namespace::FragmentInfo& fragment) {
+  // Skip temporary tables
+  if (table_id < 0) {
+    return false;
+  }
+
+  const auto td = catalog_->getMetadataForTable(fragment.physicalTableId);
+  CHECK(td);
+  const auto deleted_cd = catalog_->getDeletedColumnIfRowsDeleted(td);
+  if (!deleted_cd) {
+    return false;
+  }
+
+  const auto& chunk_type = deleted_cd->columnType;
+  CHECK(chunk_type.is_boolean());
+
+  const auto deleted_col_id = deleted_cd->columnId;
+  auto chunk_meta_it = fragment.getChunkMetadataMap().find(deleted_col_id);
+  CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
+
+  const int64_t chunk_min =
+      extract_min_stat(chunk_meta_it->second->chunkStats, chunk_type);
+  const int64_t chunk_max =
+      extract_max_stat(chunk_meta_it->second->chunkStats, chunk_type);
+  if (chunk_min == 1 && chunk_max == 1) {  // Delete chunk if metadata says full bytemap
+    // is true (signifying all rows deleted)
+    return true;
+  }
+  return false;
+}
+
 std::pair<bool, int64_t> Executor::skipFragment(
     const InputDescriptor& table_desc,
     const Fragmenter_Namespace::FragmentInfo& fragment,
@@ -3351,6 +3395,14 @@ std::pair<bool, int64_t> Executor::skipFragment(
     const std::vector<uint64_t>& frag_offsets,
     const size_t frag_idx) {
   const int table_id = table_desc.getTableId();
+
+  // First check to see if all of fragment is deleted, in which case we know we can skip
+  if (isFragmentFullyDeleted(table_id, fragment)) {
+    VLOG(2) << "Skipping deleted fragment with table id: " << fragment.physicalTableId
+            << ", fragment id: " << frag_idx;
+    return {true, -1};
+  }
+
   for (const auto& simple_qual : simple_quals) {
     const auto comp_expr =
         std::dynamic_pointer_cast<const Analyzer::BinOper>(simple_qual);

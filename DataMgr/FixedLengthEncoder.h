@@ -32,17 +32,21 @@
 template <typename T, typename V>
 class FixedLengthEncoder : public Encoder {
  public:
-  FixedLengthEncoder(Data_Namespace::AbstractBuffer* buffer)
-      : Encoder(buffer)
-      , dataMin(std::numeric_limits<T>::max())
-      , dataMax(std::numeric_limits<T>::min())
-      , has_nulls(false) {}
+  FixedLengthEncoder(Data_Namespace::AbstractBuffer* buffer) : Encoder(buffer) {
+    resetChunkStats();
+  }
 
   std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
                                             const size_t num_elems_to_append,
                                             const SQLTypeInfo& ti,
                                             const bool replicating = false,
                                             const int64_t offset = -1) override {
+    if (offset == 0 &&
+        num_elems_to_append >=
+            num_elems_) {  // we're rewriting entire buffer so fully recompute metadata
+      resetChunkStats();
+    }
+
     T* unencoded_data = reinterpret_cast<T*>(src_data);
     auto encoded_data = std::make_unique<V[]>(num_elems_to_append);
     for (size_t i = 0; i < num_elems_to_append; ++i) {
@@ -207,6 +211,12 @@ class FixedLengthEncoder : public Encoder {
   bool has_nulls;
 
  private:
+  void resetChunkStats() {
+    dataMin = std::numeric_limits<T>::max();
+    dataMax = std::numeric_limits<T>::lowest();
+    has_nulls = false;
+  }
+
   V encodeDataAndUpdateStats(const T& unencoded_data) {
     V encoded_data = static_cast<V>(unencoded_data);
     if (unencoded_data != encoded_data) {

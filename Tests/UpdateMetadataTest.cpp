@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 
-#include "TestHelpers.h"
-
-#include "../Catalog/Catalog.h"
-#include "../QueryEngine/Execute.h"
-#include "../QueryEngine/TableOptimizer.h"
-#include "../QueryRunner/QueryRunner.h"
-
-#include <gtest/gtest.h>
+#include <regex>
 #include <string>
 
+#include "Catalog/Catalog.h"
+#include "QueryEngine/Execute.h"
+#include "QueryEngine/TableOptimizer.h"
+#include "QueryRunner/QueryRunner.h"
+#include "Shared/DateTimeParser.h"
+#include "TestHelpers.h"
+
+#include <gtest/gtest.h>
 #include <boost/program_options.hpp>
 
 #ifndef BASE_PATH
@@ -1425,6 +1426,389 @@ TEST_F(MetadataUpdate, MetadataSmallIntEncodedNotNull) {
   });
 };
 
+class OpportunisticMetadataUpdateTest : public testing::TestWithParam<SQLTypeInfo> {
+ protected:
+  void SetUp() override {
+    run_ddl_statement("drop table if exists test_table;");
+    run_ddl_statement("drop table if exists test_table_2;");
+    g_enable_auto_metadata_update = true;
+  }
+
+  void TearDown() override {
+    run_ddl_statement("drop table if exists test_table;");
+    run_ddl_statement("drop table if exists test_table_2;");
+    g_enable_auto_metadata_update = false;
+  }
+
+  void createTableForDataType() {
+    std::string data_type;
+    if (GetParam().is_decimal()) {
+      data_type = "DECIMAL(2, 1)";
+    } else {
+      data_type = GetParam().get_type_name();
+    }
+    run_ddl_statement("create table test_table (i " + data_type + ");");
+  }
+
+  void insertRows() {
+    auto type = GetParam().get_type();
+    if (type == kINT) {
+      insertRows(int_rows_);
+    } else if (type == kFLOAT || type == kDOUBLE || type == kDECIMAL) {
+      insertRows(float_rows_);
+    } else if (type == kDATE) {
+      insertRows(date_rows_);
+    } else if (type == kTIME) {
+      insertRows(time_rows_);
+    } else if (type == kTIMESTAMP) {
+      insertRows(timestamp_rows_);
+    } else {
+      UNREACHABLE();
+    }
+  }
+
+  void insertRows(const std::array<std::string, 5>& rows) {
+    for (const auto& row : rows) {
+      query("insert into test_table values ('" + row + "');");
+    }
+  }
+
+  void insertIntRange(const int start,
+                      const int end,
+                      const std::string& table_name = "test_table") {
+    for (auto i = start; i <= end; i++) {
+      query("insert into " + table_name + " values (" + std::to_string(i) + ");");
+    }
+  }
+
+  std::string getRowValueAtIndex(int index) {
+    std::string value;
+    auto type = GetParam().get_type();
+    if (type == kINT) {
+      value = int_rows_[index];
+    } else if (type == kFLOAT || type == kDOUBLE || type == kDECIMAL) {
+      value = float_rows_[index];
+    } else if (type == kDATE) {
+      value = date_rows_[index];
+    } else if (type == kTIME) {
+      value = time_rows_[index];
+    } else if (type == kTIMESTAMP) {
+      value = timestamp_rows_[index];
+    } else {
+      UNREACHABLE();
+    }
+    return value;
+  }
+
+  std::string getLiteralValue(const std::string& value) {
+    if (GetParam().is_number()) {
+      return value;
+    } else {
+      return "'" + value + "'";
+    }
+  }
+
+  void assertExpectedChunkMetadata(size_t num_elements,
+                                   bool has_nulls,
+                                   int min,
+                                   int max) {
+    auto metadata_vec = get_metadata_vec("test_table", "i");
+    ASSERT_EQ(1U, metadata_vec.size());
+    assertExpectedChunkMetadata(
+        metadata_vec[0].second, num_elements, has_nulls, min, max);
+  }
+
+  void assertExpectedChunkMetadata(size_t num_elements,
+                                   bool has_nulls,
+                                   const std::string& min,
+                                   const std::string& max) {
+    auto metadata_vec = get_metadata_vec("test_table", "i");
+    ASSERT_EQ(1U, metadata_vec.size());
+    assertExpectedChunkMetadata(
+        metadata_vec[0].second, num_elements, has_nulls, min, max);
+  }
+
+  void assertExpectedChunkMetadata(std::shared_ptr<const ChunkMetadata> chunk_metadata,
+                                   size_t num_elements,
+                                   bool has_nulls,
+                                   int min,
+                                   int max) {
+    ASSERT_EQ(num_elements, chunk_metadata->numElements);
+    ASSERT_EQ(has_nulls, chunk_metadata->chunkStats.has_nulls);
+    ASSERT_EQ(min, chunk_metadata->chunkStats.min.intval);
+    ASSERT_EQ(max, chunk_metadata->chunkStats.max.intval);
+  }
+
+  void assertExpectedChunkMetadata(std::shared_ptr<const ChunkMetadata> chunk_metadata,
+                                   size_t num_elements,
+                                   bool has_nulls,
+                                   const std::string& min,
+                                   const std::string& max) {
+    ASSERT_EQ(num_elements, chunk_metadata->numElements);
+    ASSERT_EQ(has_nulls, chunk_metadata->chunkStats.has_nulls);
+
+    auto type = GetParam().get_type();
+    if (type == kINT) {
+      ASSERT_EQ(std::stoi(min), chunk_metadata->chunkStats.min.intval);
+      ASSERT_EQ(std::stoi(max), chunk_metadata->chunkStats.max.intval);
+    } else if (type == kFLOAT) {
+      ASSERT_EQ(std::stof(min), chunk_metadata->chunkStats.min.floatval);
+      ASSERT_EQ(std::stof(max), chunk_metadata->chunkStats.max.floatval);
+    } else if (type == kDOUBLE) {
+      ASSERT_EQ(std::stod(min), chunk_metadata->chunkStats.min.doubleval);
+      ASSERT_EQ(std::stod(max), chunk_metadata->chunkStats.max.doubleval);
+    } else if (type == kDECIMAL) {
+      // Remove floating point from number before integer comparison.
+      ASSERT_EQ(std::stoi(std::regex_replace(min, std::regex{"\\."}, "")),
+                chunk_metadata->chunkStats.min.bigintval);
+      ASSERT_EQ(std::stoi(std::regex_replace(max, std::regex{"\\."}, "")),
+                chunk_metadata->chunkStats.max.bigintval);
+    } else if (type == kDATE) {
+      ASSERT_EQ(dateTimeParse<kDATE>(min, 0), chunk_metadata->chunkStats.min.bigintval);
+      ASSERT_EQ(dateTimeParse<kDATE>(max, 0), chunk_metadata->chunkStats.max.bigintval);
+    } else if (type == kTIME) {
+      ASSERT_EQ(dateTimeParse<kTIME>(min, 0), chunk_metadata->chunkStats.min.bigintval);
+      ASSERT_EQ(dateTimeParse<kTIME>(max, 0), chunk_metadata->chunkStats.max.bigintval);
+    } else if (type == kTIMESTAMP) {
+      ASSERT_EQ(dateTimeParse<kTIMESTAMP>(min, 0),
+                chunk_metadata->chunkStats.min.bigintval);
+      ASSERT_EQ(dateTimeParse<kTIMESTAMP>(max, 0),
+                chunk_metadata->chunkStats.max.bigintval);
+    } else {
+      UNREACHABLE();
+    }
+  }
+
+  void assertExpectedChunkMetadata(std::shared_ptr<const ChunkMetadata> chunk_metadata,
+                                   size_t num_elements,
+                                   bool has_nulls,
+                                   float min,
+                                   float max) {
+    ASSERT_EQ(num_elements, chunk_metadata->numElements);
+    ASSERT_EQ(has_nulls, chunk_metadata->chunkStats.has_nulls);
+    ASSERT_EQ(min, chunk_metadata->chunkStats.min.floatval);
+    ASSERT_EQ(max, chunk_metadata->chunkStats.max.floatval);
+  }
+
+  void recomputeMetadata() {
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+    auto catalog = QR::get()->getCatalog();
+    auto td = catalog->getMetadataForTable("test_table");
+    TableOptimizer optimizer(td, executor.get(), *catalog);
+    optimizer.recomputeMetadata();
+  }
+
+  void setupTableWithMultipleFragments() {
+    run_ddl_statement(
+        "create table test_table (i float, t text) with (fragment_size = 3);");
+    query("insert into test_table values (1.5, 'a');");
+    query("insert into test_table values (2.5, 'b');");
+    query("insert into test_table values (3.5, 'c');");
+    query("insert into test_table values (4.5, 'd');");
+    query("insert into test_table values (5.5, 'e');");
+  }
+
+  void setupShardedTable() {
+    run_ddl_statement(
+        "create table test_table (i integer, i2 integer, shard key(i)) with (shard_count "
+        "= "
+        "2, fragment_size = 2);");
+
+    query("insert into test_table values (1, 1);");
+    query("insert into test_table values (1, 2);");
+    query("insert into test_table values (1, 3);");
+    query("insert into test_table values (1, 4);");
+
+    query("insert into test_table values (2, 1);");
+    query("insert into test_table values (2, 2);");
+    query("insert into test_table values (2, 3);");
+    query("insert into test_table values (2, 4);");
+  }
+
+  // Variables storing test row content for data type parameterized tests.
+  // Values are stored as strings in all cases for simplicity.
+  inline static const std::array<std::string, 5> int_rows_{"1", "2", "3", "4", "5"};
+  inline static const std::array<std::string, 5> float_rows_{"1.5",
+                                                             "2.5",
+                                                             "3.5",
+                                                             "4.5",
+                                                             "5.5"};
+  inline static const std::array<std::string, 5> date_rows_{"2021-01-01",
+                                                            "2021-02-01",
+                                                            "2021-03-01",
+                                                            "2021-04-01",
+                                                            "2021-05-01"};
+  inline static const std::array<std::string, 5> time_rows_{"00:00:00",
+                                                            "00:01:00",
+                                                            "00:02:00",
+                                                            "00:03:00",
+                                                            "00:04:00"};
+  inline static const std::array<std::string, 5> timestamp_rows_{"2021-02-09 00:00:00",
+                                                                 "2021-02-09 00:01:00",
+                                                                 "2021-02-09 00:02:00",
+                                                                 "2021-02-09 00:03:00",
+                                                                 "2021-02-09 00:04:00"};
+};
+
+TEST_P(OpportunisticMetadataUpdateTest, MinValueReplaced) {
+  createTableForDataType();
+  insertRows();
+
+  auto last_value = getRowValueAtIndex(4);
+  auto second_value = getRowValueAtIndex(1);
+  auto second_value_literal = getLiteralValue(second_value);
+  query("update test_table set i = " + second_value_literal +
+        " where i <= " + second_value_literal + ";");
+
+  // Min should now be the second value while the max remains the same.
+  assertExpectedChunkMetadata(5U, false, second_value, last_value);
+}
+
+TEST_P(OpportunisticMetadataUpdateTest, MaxValueReplaced) {
+  createTableForDataType();
+  insertRows();
+
+  auto first_value = getRowValueAtIndex(0);
+  auto fourth_value = getRowValueAtIndex(3);
+  auto fourth_value_literal = getLiteralValue(fourth_value);
+  query("update test_table set i = " + fourth_value_literal +
+        " where i >= " + fourth_value_literal + ";");
+
+  // Max should now be the fourth value while the min remains the same.
+  assertExpectedChunkMetadata(5U, false, first_value, fourth_value);
+}
+
+TEST_P(OpportunisticMetadataUpdateTest, DuplicateMinMax) {
+  createTableForDataType();
+  insertRows();
+  insertRows();
+
+  auto first_value = getRowValueAtIndex(0);
+  auto last_value = getRowValueAtIndex(4);
+  auto first_value_literal = getLiteralValue(first_value);
+  auto third_value_literal = getLiteralValue(getRowValueAtIndex(2));
+  auto last_value_literal = getLiteralValue(last_value);
+  query("update test_table set i = " + third_value_literal + " where (i = " +
+        first_value_literal + " or i = " + last_value_literal + ") and rowid < 5;");
+
+  // Max and min should remain the same.
+  assertExpectedChunkMetadata(10U, false, first_value, last_value);
+}
+
+TEST_P(OpportunisticMetadataUpdateTest, ReplacedValuesNotMinOrMax) {
+  createTableForDataType();
+  insertRows();
+
+  auto first_value = getRowValueAtIndex(0);
+  auto last_value = getRowValueAtIndex(4);
+  auto second_value_literal = getLiteralValue(getRowValueAtIndex(1));
+  auto third_value_literal = getLiteralValue(getRowValueAtIndex(2));
+  auto fourth_value_literal = getLiteralValue(getRowValueAtIndex(3));
+  query("update test_table set i = " + third_value_literal +
+        " where i = " + second_value_literal + " or i = " + fourth_value_literal + ";");
+
+  // Max and min should remain the same.
+  assertExpectedChunkMetadata(5U, false, first_value, last_value);
+}
+
+INSTANTIATE_TEST_SUITE_P(DataTypesTest,
+                         OpportunisticMetadataUpdateTest,
+                         testing::Values(SQLTypeInfo(kINT),
+                                         SQLTypeInfo(kFLOAT),
+                                         SQLTypeInfo(kDOUBLE),
+                                         SQLTypeInfo(kDECIMAL),
+                                         SQLTypeInfo(kDATE),
+                                         SQLTypeInfo(kTIME),
+                                         SQLTypeInfo(kTIMESTAMP)),
+                         [](const auto& param_info) {
+                           // Return type name string without parentheses.
+                           return std::regex_replace(
+                               param_info.param.get_type_name(), std::regex{"\\(.+"}, "");
+                         });
+
+TEST_F(OpportunisticMetadataUpdateTest, MultipleFragmentsAndColumns) {
+  setupTableWithMultipleFragments();
+
+  query("update test_table set i = i + 1, t = 'abc' where i = 1.5 or i = 4.5;");
+  auto metadata_vec = get_metadata_vec("test_table", "i");
+  ASSERT_EQ(2U, metadata_vec.size());
+
+  assertExpectedChunkMetadata(metadata_vec[0].second, 3U, false, 2.5f, 3.5f);
+  assertExpectedChunkMetadata(metadata_vec[1].second, 2U, false, 5.5f, 5.5f);
+}
+
+TEST_F(OpportunisticMetadataUpdateTest, DeletedRows) {
+  run_ddl_statement("create table test_table (i integer);");
+  insertIntRange(1, 5);
+
+  query("delete from test_table where i = 5;");
+  query("update test_table set i = i + 1 where i = 1;");
+  assertExpectedChunkMetadata(5U, false, 2, 4);
+}
+
+TEST_F(OpportunisticMetadataUpdateTest, NullValues) {
+  run_ddl_statement("create table test_table (i integer);");
+  insertIntRange(1, 5);
+
+  query("update test_table set i = null where i = 1 or i = 5;");
+  assertExpectedChunkMetadata(5U, true, 2, 4);
+}
+
+TEST_F(OpportunisticMetadataUpdateTest, DeletedFragment) {
+  setupTableWithMultipleFragments();
+  query("delete from test_table where i < 4;");
+
+  // Ensure metadata stats for the delete column is updated
+  recomputeMetadata();
+
+  query("update test_table set i = i + 1, t = 'abc' where i > 3;");
+
+  auto metadata_vec = get_metadata_vec("test_table", "i");
+  ASSERT_EQ(2U, metadata_vec.size());
+
+  auto chunk_metadata = metadata_vec[0].second;
+  assertExpectedChunkMetadata(metadata_vec[0].second, 3U, false, 1.5f, 3.5f);
+  assertExpectedChunkMetadata(metadata_vec[1].second, 2U, false, 5.5f, 6.5f);
+
+  auto catalog = QR::get()->getCatalog();
+  auto& data_manager = catalog->getDataMgr();
+
+  // Deleted chunk should not be loaded to CPU
+  ASSERT_FALSE(
+      data_manager.isBufferOnDevice(metadata_vec[0].first, MemoryLevel::CPU_LEVEL, 0));
+  ASSERT_TRUE(
+      data_manager.isBufferOnDevice(metadata_vec[1].first, MemoryLevel::CPU_LEVEL, 0));
+}
+
+TEST_F(OpportunisticMetadataUpdateTest, MultipleTables) {
+  run_ddl_statement("create table test_table (i integer);");
+  run_ddl_statement("create table test_table_2 (i integer);");
+  insertIntRange(1, 5);
+  insertIntRange(1, 5, "test_table_2");
+
+  query(
+      "update test_table set i = (select count(i) from test_table_2 where test_table.i < "
+      "test_table_2.i);");
+  assertExpectedChunkMetadata(5U, false, 0, 4);
+}
+
+TEST_F(OpportunisticMetadataUpdateTest, ShardedTable) {
+  setupShardedTable();
+
+  query("update test_table set i2 = i2 + 1 where i2 = 1 or i2 = 3;");
+  auto metadata_vec = get_metadata_vec("test_table_shard_#1", "i2");
+  ASSERT_EQ(2U, metadata_vec.size());
+
+  assertExpectedChunkMetadata(metadata_vec[0].second, 2U, false, 2, 2);
+  assertExpectedChunkMetadata(metadata_vec[1].second, 2U, false, 4, 4);
+
+  metadata_vec = get_metadata_vec("test_table_shard_#2", "i2");
+  ASSERT_EQ(2U, metadata_vec.size());
+
+  assertExpectedChunkMetadata(metadata_vec[0].second, 2U, false, 2, 2);
+  assertExpectedChunkMetadata(metadata_vec[1].second, 2U, false, 4, 4);
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   namespace po = boost::program_options;
@@ -1446,6 +1830,10 @@ int main(int argc, char** argv) {
     g_keep_test_data = true;
   }
 
+  // Disable automatic metadata update in order to ensure
+  // that metadata is not automatically updated for other
+  // tests that do and assert metadata updates.
+  g_enable_auto_metadata_update = false;
   QR::init(BASE_PATH);
 
   int err{0};

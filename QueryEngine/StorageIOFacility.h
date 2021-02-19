@@ -29,6 +29,78 @@
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"
 
+extern bool g_enable_auto_metadata_update;
+
+namespace {
+/**
+ * Checks to see if any of the updated values match the current min/max stat for the
+ * chunk.
+ */
+bool is_chunk_min_max_updated(const Fragmenter_Namespace::ChunkUpdateStats& update_stats,
+                              int64_t min,
+                              int64_t max) {
+  if (update_stats.old_values_stats.min_int64t <
+          update_stats.new_values_stats.min_int64t &&
+      update_stats.old_values_stats.min_int64t == min) {
+    return true;
+  }
+  if (update_stats.old_values_stats.max_int64t >
+          update_stats.new_values_stats.max_int64t &&
+      update_stats.old_values_stats.max_int64t == max) {
+    return true;
+  }
+  return false;
+}
+
+bool is_chunk_min_max_updated(const Fragmenter_Namespace::ChunkUpdateStats& update_stats,
+                              double min,
+                              double max) {
+  if (update_stats.old_values_stats.min_double <
+          update_stats.new_values_stats.min_double &&
+      update_stats.old_values_stats.min_double == min) {
+    return true;
+  }
+  if (update_stats.old_values_stats.max_double >
+          update_stats.new_values_stats.max_double &&
+      update_stats.old_values_stats.max_double == max) {
+    return true;
+  }
+  return false;
+}
+
+bool should_recompute_metadata(
+    const std::optional<Fragmenter_Namespace::ChunkUpdateStats>& update_stats) {
+  if (!g_enable_auto_metadata_update || !update_stats.has_value()) {
+    return false;
+  }
+
+  CHECK(update_stats->chunk);
+  CHECK(update_stats->chunk->getBuffer());
+  CHECK(update_stats->chunk->getBuffer()->getEncoder());
+
+  auto chunk_metadata = std::make_shared<ChunkMetadata>();
+  update_stats->chunk->getBuffer()->getEncoder()->getMetadata(chunk_metadata);
+  auto cd = update_stats.value().chunk->getColumnDesc();
+  if (cd->columnType.is_fp()) {
+    double min, max;
+    if (cd->columnType.get_type() == kDOUBLE) {
+      min = chunk_metadata->chunkStats.min.doubleval;
+      max = chunk_metadata->chunkStats.max.doubleval;
+    } else if (cd->columnType.get_type() == kFLOAT) {
+      min = chunk_metadata->chunkStats.min.floatval;
+      max = chunk_metadata->chunkStats.max.floatval;
+    } else {
+      UNREACHABLE();
+    }
+    return is_chunk_min_max_updated(update_stats.value(), min, max);
+  } else {
+    auto min = extract_min_stat(chunk_metadata->chunkStats, cd->columnType);
+    auto max = extract_max_stat(chunk_metadata->chunkStats, cd->columnType);
+    return is_chunk_min_max_updated(update_stats.value(), min, max);
+  }
+}
+}  // namespace
+
 class StorageIOFacility {
  public:
   using UpdateCallback = UpdateLogForFragment::Callback;
@@ -118,8 +190,9 @@ class StorageIOFacility {
     using RowProcessingFuturesVector = std::vector<std::future<uint64_t>>;
 
     if (update_parameters.isVarlenUpdateRequired()) {
-      auto callback =
-          [this, &update_parameters](UpdateLogForFragment const& update_log) -> void {
+      // TODO: Add support for opportunistic vacuuming
+      auto callback = [this, &update_parameters](UpdateLogForFragment const& update_log,
+                                                 ColumnToFragmentsMap&) -> void {
         std::vector<const ColumnDescriptor*> columnDescriptors;
         std::vector<TargetMetaInfo> sourceMetaInfos;
 
@@ -150,8 +223,8 @@ class StorageIOFacility {
       };
       return callback;
     } else if (update_parameters.tableIsTemporary()) {
-      auto callback =
-          [this, &update_parameters](UpdateLogForFragment const& update_log) -> void {
+      auto callback = [this, &update_parameters](UpdateLogForFragment const& update_log,
+                                                 ColumnToFragmentsMap&) -> void {
         auto rs = update_log.getResultSet();
         CHECK(rs->didOutputColumnar());
         CHECK(rs->isDirectColumnarConversionPossible());
@@ -224,8 +297,9 @@ class StorageIOFacility {
       };
       return callback;
     } else {
-      auto callback =
-          [this, &update_parameters](UpdateLogForFragment const& update_log) -> void {
+      auto callback = [this, &update_parameters](
+                          UpdateLogForFragment const& update_log,
+                          ColumnToFragmentsMap& optimize_candidates) -> void {
         auto entries_per_column = update_log.getEntryCount();
         auto rows_per_column = update_log.getRowCount();
         if (rows_per_column == 0) {
@@ -284,6 +358,11 @@ class StorageIOFacility {
           return (thread_index * complete_entry_block_size);
         };
 
+        auto const* table_descriptor =
+            catalog_.getMetadataForTable(update_log.getPhysicalTableId());
+        CHECK(table_descriptor);
+        auto fragment_id = update_log.getFragmentId();
+
         // Iterate over each column
         for (decltype(update_parameters.getUpdateColumnCount()) column_index = 0;
              column_index < update_parameters.getUpdateColumnCount();
@@ -329,23 +408,23 @@ class StorageIOFacility {
           CHECK(row_idx == rows_per_column);
 
           const auto table_id = update_log.getPhysicalTableId();
-          auto const* table_descriptor =
-              catalog_.getMetadataForTable(update_log.getPhysicalTableId());
-          CHECK(table_descriptor);
           const auto fragmenter = table_descriptor->fragmenter;
           CHECK(fragmenter);
           auto const* target_column = catalog_.getMetadataForColumn(
               table_id, update_parameters.getUpdateColumnNames()[column_index]);
-
-          fragmenter->updateColumn(&catalog_,
-                                   table_descriptor,
-                                   target_column,
-                                   update_log.getFragmentId(),
-                                   column_offsets,
-                                   scalar_target_values,
-                                   update_log.getColumnType(column_index),
-                                   Data_Namespace::MemoryLevel::CPU_LEVEL,
-                                   update_parameters.getTransactionTracker());
+          auto update_stats =
+              fragmenter->updateColumn(&catalog_,
+                                       table_descriptor,
+                                       target_column,
+                                       fragment_id,
+                                       column_offsets,
+                                       scalar_target_values,
+                                       update_log.getColumnType(column_index),
+                                       Data_Namespace::MemoryLevel::CPU_LEVEL,
+                                       update_parameters.getTransactionTracker());
+          if (should_recompute_metadata(update_stats)) {
+            optimize_candidates[target_column].emplace(fragment_id);
+          }
         }
       };
       return callback;
@@ -357,7 +436,8 @@ class StorageIOFacility {
     using RowProcessingFuturesVector = std::vector<std::future<uint64_t>>;
 
     if (delete_parameters.tableIsTemporary()) {
-      auto callback = [this](UpdateLogForFragment const& update_log) -> void {
+      auto callback = [this](UpdateLogForFragment const& update_log,
+                             ColumnToFragmentsMap&) -> void {
         auto rs = update_log.getResultSet();
         CHECK(rs->didOutputColumnar());
         CHECK(rs->isDirectColumnarConversionPossible());
@@ -428,8 +508,9 @@ class StorageIOFacility {
       };
       return callback;
     } else {
-      auto callback =
-          [this, &delete_parameters](UpdateLogForFragment const& update_log) -> void {
+      // TODO: Add support for opportunistic vacuuming
+      auto callback = [this, &delete_parameters](UpdateLogForFragment const& update_log,
+                                                 ColumnToFragmentsMap&) -> void {
         auto entries_per_column = update_log.getEntryCount();
         auto rows_per_column = update_log.getRowCount();
         if (rows_per_column == 0) {

@@ -293,7 +293,8 @@ void InsertOrderFragmenter::updateColumnChunkMetadata(
 
 void InsertOrderFragmenter::updateChunkStats(
     const ColumnDescriptor* cd,
-    std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map) {
+    std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map,
+    std::optional<Data_Namespace::MemoryLevel> memory_level) {
   // synchronize concurrent accesses to fragmentInfoVec_
   mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
   /**
@@ -322,7 +323,7 @@ void InsertOrderFragmenter::updateChunkStats(
       auto chunk = Chunk_NS::Chunk::getChunk(cd,
                                              &catalog_->getDataMgr(),
                                              chunk_key,
-                                             defaultInsertLevel_,
+                                             memory_level.value_or(defaultInsertLevel_),
                                              0,
                                              chunk_meta_it->second->numBytes,
                                              chunk_meta_it->second->numElements);

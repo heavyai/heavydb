@@ -143,198 +143,12 @@ void TableOptimizer::recomputeMetadata() const {
     const auto table_id = td->tableId;
 
     std::unordered_map</*fragment_id*/ int, size_t> tuple_count_map;
-
-    // Special case handle $deleted column if it exists
-    // whilst handling the delete column also capture
-    // the number of non deleted rows per fragment
-    if (td->hasDeletedCol) {
-      auto cd = cat_.getDeletedColumn(td);
-      const auto column_id = cd->columnId;
-
-      const auto input_col_desc =
-          std::make_shared<const InputColDescriptor>(column_id, table_id, 0);
-      const auto col_expr =
-          makeExpr<Analyzer::ColumnVar>(cd->columnType, table_id, column_id, 0);
-      const auto count_expr =
-          makeExpr<Analyzer::AggExpr>(cd->columnType, kCOUNT, col_expr, false, nullptr);
-
-      const auto ra_exe_unit = build_ra_exe_unit(input_col_desc, {count_expr.get()});
-      const auto table_infos = get_table_infos(ra_exe_unit, executor_);
-      CHECK_EQ(table_infos.size(), size_t(1));
-
-      const auto co = get_compilation_options(ExecutorDeviceType::CPU);
-      const auto eo = get_execution_options();
-
-      std::unordered_map</*fragment_id*/ int, ChunkStats> stats_map;
-
-      size_t total_num_tuples = 0;
-      Executor::PerFragmentCallBack compute_deleted_callback =
-          [&stats_map, &tuple_count_map, &total_num_tuples, cd](
-              ResultSetPtr results,
-              const Fragmenter_Namespace::FragmentInfo& fragment_info) {
-            // count number of tuples in $deleted as total number of tuples in table.
-            if (cd->isDeletedCol) {
-              total_num_tuples += fragment_info.getPhysicalNumTuples();
-            }
-            if (fragment_info.getPhysicalNumTuples() == 0) {
-              // TODO(adb): Should not happen, but just to be safe...
-              LOG(WARNING) << "Skipping completely empty fragment for column "
-                           << cd->columnName;
-              return;
-            }
-
-            const auto row = results->getNextRow(false, false);
-            CHECK_EQ(row.size(), size_t(1));
-
-            const auto& ti = cd->columnType;
-
-            auto chunk_metadata = std::make_shared<ChunkMetadata>();
-            chunk_metadata->sqlType = get_logical_type_info(ti);
-
-            const auto count_val = read_scalar_target_value<int64_t>(row[0]);
-            if (count_val == 0) {
-              // Assume chunk of all nulls, bail
-              return;
-            }
-
-            // min element 0 max element 1
-            std::vector<TargetValue> fakerow;
-
-            auto num_tuples = static_cast<size_t>(count_val);
-
-            // calculate min
-            if (num_tuples == fragment_info.getPhysicalNumTuples()) {
-              // nothing deleted
-              // min = false;
-              // max = false;
-              fakerow.emplace_back(TargetValue{int64_t(0)});
-              fakerow.emplace_back(TargetValue{int64_t(0)});
-            } else {
-              if (num_tuples == 0) {
-                // everything marked as delete
-                // min = true
-                // max = true
-                fakerow.emplace_back(TargetValue{int64_t(1)});
-                fakerow.emplace_back(TargetValue{int64_t(1)});
-              } else {
-                // some deleted
-                // min = false
-                // max = true;
-                fakerow.emplace_back(TargetValue{int64_t(0)});
-                fakerow.emplace_back(TargetValue{int64_t(1)});
-              }
-            }
-
-            // place manufacture min and max in fake row to use common infra
-            if (!set_metadata_from_results(*chunk_metadata, fakerow, ti, false)) {
-              LOG(WARNING) << "Unable to process new metadata values for column "
-                           << cd->columnName;
-              return;
-            }
-
-            stats_map.emplace(
-                std::make_pair(fragment_info.fragmentId, chunk_metadata->chunkStats));
-            tuple_count_map.emplace(std::make_pair(fragment_info.fragmentId, num_tuples));
-          };
-
-      executor_->executeWorkUnitPerFragment(
-          ra_exe_unit, table_infos[0], co, eo, cat_, compute_deleted_callback);
-
-      auto* fragmenter = td->fragmenter.get();
-      CHECK(fragmenter);
-      fragmenter->updateChunkStats(cd, stats_map);
-      fragmenter->setNumRows(total_num_tuples);
-    }  // finished special handling deleted column;
+    recomputeDeletedColumnMetadata(td, tuple_count_map);
 
     // TODO(adb): Support geo
     auto col_descs = cat_.getAllColumnMetadataForTable(table_id, false, false, false);
     for (const auto& cd : col_descs) {
-      const auto ti = cd->columnType;
-      const auto column_id = cd->columnId;
-
-      if (ti.is_varlen()) {
-        LOG(INFO) << "Skipping varlen column " << cd->columnName;
-        continue;
-      }
-
-      const auto input_col_desc =
-          std::make_shared<const InputColDescriptor>(column_id, table_id, 0);
-      const auto col_expr =
-          makeExpr<Analyzer::ColumnVar>(cd->columnType, table_id, column_id, 0);
-      auto max_expr =
-          makeExpr<Analyzer::AggExpr>(cd->columnType, kMAX, col_expr, false, nullptr);
-      auto min_expr =
-          makeExpr<Analyzer::AggExpr>(cd->columnType, kMIN, col_expr, false, nullptr);
-      auto count_expr =
-          makeExpr<Analyzer::AggExpr>(cd->columnType, kCOUNT, col_expr, false, nullptr);
-
-      if (ti.is_string()) {
-        const SQLTypeInfo fun_ti(kINT);
-        const auto fun_expr = makeExpr<Analyzer::KeyForStringExpr>(col_expr);
-        max_expr = makeExpr<Analyzer::AggExpr>(fun_ti, kMAX, fun_expr, false, nullptr);
-        min_expr = makeExpr<Analyzer::AggExpr>(fun_ti, kMIN, fun_expr, false, nullptr);
-      }
-      const auto ra_exe_unit = build_ra_exe_unit(
-          input_col_desc, {min_expr.get(), max_expr.get(), count_expr.get()});
-      const auto table_infos = get_table_infos(ra_exe_unit, executor_);
-      CHECK_EQ(table_infos.size(), size_t(1));
-
-      const auto co = get_compilation_options(ExecutorDeviceType::CPU);
-      const auto eo = get_execution_options();
-
-      std::unordered_map</*fragment_id*/ int, ChunkStats> stats_map;
-
-      Executor::PerFragmentCallBack compute_metadata_callback =
-          [&stats_map, &tuple_count_map, cd](
-              ResultSetPtr results,
-              const Fragmenter_Namespace::FragmentInfo& fragment_info) {
-            if (fragment_info.getPhysicalNumTuples() == 0) {
-              // TODO(adb): Should not happen, but just to be safe...
-              LOG(WARNING) << "Skipping completely empty fragment for column "
-                           << cd->columnName;
-              return;
-            }
-
-            const auto row = results->getNextRow(false, false);
-            CHECK_EQ(row.size(), size_t(3));
-
-            const auto& ti = cd->columnType;
-
-            auto chunk_metadata = std::make_shared<ChunkMetadata>();
-            chunk_metadata->sqlType = get_logical_type_info(ti);
-
-            const auto count_val = read_scalar_target_value<int64_t>(row[2]);
-            if (count_val == 0) {
-              // Assume chunk of all nulls, bail
-              return;
-            }
-
-            bool has_nulls = true;  // default to wide
-            auto tuple_count_itr = tuple_count_map.find(fragment_info.fragmentId);
-            if (tuple_count_itr != tuple_count_map.end()) {
-              has_nulls = !(static_cast<size_t>(count_val) == tuple_count_itr->second);
-            } else {
-              // no deleted column calc so use raw physical count
-              has_nulls = !(static_cast<size_t>(count_val) ==
-                            fragment_info.getPhysicalNumTuples());
-            }
-
-            if (!set_metadata_from_results(*chunk_metadata, row, ti, has_nulls)) {
-              LOG(WARNING) << "Unable to process new metadata values for column "
-                           << cd->columnName;
-              return;
-            }
-
-            stats_map.emplace(
-                std::make_pair(fragment_info.fragmentId, chunk_metadata->chunkStats));
-          };
-
-      executor_->executeWorkUnitPerFragment(
-          ra_exe_unit, table_infos[0], co, eo, cat_, compute_metadata_callback);
-
-      auto* fragmenter = td->fragmenter.get();
-      CHECK(fragmenter);
-      fragmenter->updateChunkStats(cd, stats_map);
+      recomputeColumnMetadata(td, cd, tuple_count_map, {}, {});
     }
     data_mgr.checkpoint(cat_.getCurrentDB().dbId, table_id);
     executor_->clearMetaInfoCache();
@@ -344,6 +158,224 @@ void TableOptimizer::recomputeMetadata() const {
   if (data_mgr.gpusPresent()) {
     data_mgr.clearMemory(Data_Namespace::MemoryLevel::GPU_LEVEL);
   }
+}
+
+void TableOptimizer::recomputeMetadataUnlocked(
+    const ColumnToFragmentsMap& optimize_candidates) const {
+  std::map<int, std::list<const ColumnDescriptor*>> columns_by_table_id;
+  for (const auto& entry : optimize_candidates) {
+    auto column_descriptor = entry.first;
+    columns_by_table_id[column_descriptor->tableId].emplace_back(column_descriptor);
+  }
+
+  for (const auto& [table_id, columns] : columns_by_table_id) {
+    auto td = cat_.getMetadataForTable(table_id);
+    std::unordered_map</*fragment_id*/ int, size_t> tuple_count_map;
+    recomputeDeletedColumnMetadata(td, tuple_count_map);
+    for (const auto cd : columns) {
+      CHECK(optimize_candidates.find(cd) != optimize_candidates.end());
+      recomputeColumnMetadata(td,
+                              cd,
+                              tuple_count_map,
+                              Data_Namespace::MemoryLevel::CPU_LEVEL,
+                              optimize_candidates.find(cd)->second);
+    }
+  }
+}
+
+// Special case handle $deleted column if it exists
+// whilst handling the delete column also capture
+// the number of non deleted rows per fragment
+void TableOptimizer::recomputeDeletedColumnMetadata(
+    const TableDescriptor* td,
+    std::unordered_map</*fragment_id*/ int, size_t>& tuple_count_map) const {
+  if (!td->hasDeletedCol) {
+    return;
+  }
+
+  auto cd = cat_.getDeletedColumn(td);
+  const auto column_id = cd->columnId;
+
+  const auto input_col_desc =
+      std::make_shared<const InputColDescriptor>(column_id, td->tableId, 0);
+  const auto col_expr =
+      makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, column_id, 0);
+  const auto count_expr =
+      makeExpr<Analyzer::AggExpr>(cd->columnType, kCOUNT, col_expr, false, nullptr);
+
+  const auto ra_exe_unit = build_ra_exe_unit(input_col_desc, {count_expr.get()});
+  const auto table_infos = get_table_infos(ra_exe_unit, executor_);
+  CHECK_EQ(table_infos.size(), size_t(1));
+
+  const auto co = get_compilation_options(ExecutorDeviceType::CPU);
+  const auto eo = get_execution_options();
+
+  std::unordered_map</*fragment_id*/ int, ChunkStats> stats_map;
+
+  size_t total_num_tuples = 0;
+  Executor::PerFragmentCallBack compute_deleted_callback =
+      [&stats_map, &tuple_count_map, &total_num_tuples, cd](
+          ResultSetPtr results, const Fragmenter_Namespace::FragmentInfo& fragment_info) {
+        // count number of tuples in $deleted as total number of tuples in table.
+        if (cd->isDeletedCol) {
+          total_num_tuples += fragment_info.getPhysicalNumTuples();
+        }
+        if (fragment_info.getPhysicalNumTuples() == 0) {
+          // TODO(adb): Should not happen, but just to be safe...
+          LOG(WARNING) << "Skipping completely empty fragment for column "
+                       << cd->columnName;
+          return;
+        }
+
+        const auto row = results->getNextRow(false, false);
+        CHECK_EQ(row.size(), size_t(1));
+
+        const auto& ti = cd->columnType;
+
+        auto chunk_metadata = std::make_shared<ChunkMetadata>();
+        chunk_metadata->sqlType = get_logical_type_info(ti);
+
+        const auto count_val = read_scalar_target_value<int64_t>(row[0]);
+
+        // min element 0 max element 1
+        std::vector<TargetValue> fakerow;
+
+        auto num_tuples = static_cast<size_t>(count_val);
+
+        // calculate min
+        if (num_tuples == fragment_info.getPhysicalNumTuples()) {
+          // nothing deleted
+          // min = false;
+          // max = false;
+          fakerow.emplace_back(TargetValue{int64_t(0)});
+          fakerow.emplace_back(TargetValue{int64_t(0)});
+        } else {
+          if (num_tuples == 0) {
+            // everything marked as delete
+            // min = true
+            // max = true
+            fakerow.emplace_back(TargetValue{int64_t(1)});
+            fakerow.emplace_back(TargetValue{int64_t(1)});
+          } else {
+            // some deleted
+            // min = false
+            // max = true;
+            fakerow.emplace_back(TargetValue{int64_t(0)});
+            fakerow.emplace_back(TargetValue{int64_t(1)});
+          }
+        }
+
+        // place manufacture min and max in fake row to use common infra
+        if (!set_metadata_from_results(*chunk_metadata, fakerow, ti, false)) {
+          LOG(WARNING) << "Unable to process new metadata values for column "
+                       << cd->columnName;
+          return;
+        }
+
+        stats_map.emplace(
+            std::make_pair(fragment_info.fragmentId, chunk_metadata->chunkStats));
+        tuple_count_map.emplace(std::make_pair(fragment_info.fragmentId, num_tuples));
+      };
+
+  executor_->executeWorkUnitPerFragment(
+      ra_exe_unit, table_infos[0], co, eo, cat_, compute_deleted_callback, {});
+
+  auto* fragmenter = td->fragmenter.get();
+  CHECK(fragmenter);
+  fragmenter->updateChunkStats(cd, stats_map, {});
+  fragmenter->setNumRows(total_num_tuples);
+}
+
+void TableOptimizer::recomputeColumnMetadata(
+    const TableDescriptor* td,
+    const ColumnDescriptor* cd,
+    const std::unordered_map</*fragment_id*/ int, size_t>& tuple_count_map,
+    std::optional<Data_Namespace::MemoryLevel> memory_level,
+    const std::set<int>& fragment_ids) const {
+  const auto ti = cd->columnType;
+  if (ti.is_varlen()) {
+    LOG(INFO) << "Skipping varlen column " << cd->columnName;
+    return;
+  }
+
+  const auto column_id = cd->columnId;
+  const auto input_col_desc =
+      std::make_shared<const InputColDescriptor>(column_id, td->tableId, 0);
+  const auto col_expr =
+      makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, column_id, 0);
+  auto max_expr =
+      makeExpr<Analyzer::AggExpr>(cd->columnType, kMAX, col_expr, false, nullptr);
+  auto min_expr =
+      makeExpr<Analyzer::AggExpr>(cd->columnType, kMIN, col_expr, false, nullptr);
+  auto count_expr =
+      makeExpr<Analyzer::AggExpr>(cd->columnType, kCOUNT, col_expr, false, nullptr);
+
+  if (ti.is_string()) {
+    const SQLTypeInfo fun_ti(kINT);
+    const auto fun_expr = makeExpr<Analyzer::KeyForStringExpr>(col_expr);
+    max_expr = makeExpr<Analyzer::AggExpr>(fun_ti, kMAX, fun_expr, false, nullptr);
+    min_expr = makeExpr<Analyzer::AggExpr>(fun_ti, kMIN, fun_expr, false, nullptr);
+  }
+  const auto ra_exe_unit = build_ra_exe_unit(
+      input_col_desc, {min_expr.get(), max_expr.get(), count_expr.get()});
+  const auto table_infos = get_table_infos(ra_exe_unit, executor_);
+  CHECK_EQ(table_infos.size(), size_t(1));
+
+  const auto co = get_compilation_options(ExecutorDeviceType::CPU);
+  const auto eo = get_execution_options();
+
+  std::unordered_map</*fragment_id*/ int, ChunkStats> stats_map;
+
+  Executor::PerFragmentCallBack compute_metadata_callback =
+      [&stats_map, &tuple_count_map, cd](
+          ResultSetPtr results, const Fragmenter_Namespace::FragmentInfo& fragment_info) {
+        if (fragment_info.getPhysicalNumTuples() == 0) {
+          // TODO(adb): Should not happen, but just to be safe...
+          LOG(WARNING) << "Skipping completely empty fragment for column "
+                       << cd->columnName;
+          return;
+        }
+
+        const auto row = results->getNextRow(false, false);
+        CHECK_EQ(row.size(), size_t(3));
+
+        const auto& ti = cd->columnType;
+
+        auto chunk_metadata = std::make_shared<ChunkMetadata>();
+        chunk_metadata->sqlType = get_logical_type_info(ti);
+
+        const auto count_val = read_scalar_target_value<int64_t>(row[2]);
+        if (count_val == 0) {
+          // Assume chunk of all nulls, bail
+          return;
+        }
+
+        bool has_nulls = true;  // default to wide
+        auto tuple_count_itr = tuple_count_map.find(fragment_info.fragmentId);
+        if (tuple_count_itr != tuple_count_map.end()) {
+          has_nulls = !(static_cast<size_t>(count_val) == tuple_count_itr->second);
+        } else {
+          // no deleted column calc so use raw physical count
+          has_nulls =
+              !(static_cast<size_t>(count_val) == fragment_info.getPhysicalNumTuples());
+        }
+
+        if (!set_metadata_from_results(*chunk_metadata, row, ti, has_nulls)) {
+          LOG(WARNING) << "Unable to process new metadata values for column "
+                       << cd->columnName;
+          return;
+        }
+
+        stats_map.emplace(
+            std::make_pair(fragment_info.fragmentId, chunk_metadata->chunkStats));
+      };
+
+  executor_->executeWorkUnitPerFragment(
+      ra_exe_unit, table_infos[0], co, eo, cat_, compute_metadata_callback, fragment_ids);
+
+  auto* fragmenter = td->fragmenter.get();
+  CHECK(fragmenter);
+  fragmenter->updateChunkStats(cd, stats_map, memory_level);
 }
 
 void TableOptimizer::vacuumDeletedRows() const {

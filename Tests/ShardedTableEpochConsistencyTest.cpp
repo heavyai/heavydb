@@ -262,7 +262,7 @@ class EpochRollbackTest : public EpochConsistencyTest,
   void sendFailedVarlenUpdateQuery() {
     if (isCheckpointError()) {
       queryAndAssertCheckpointError(
-          "update test_table set b = 110, c = 'test_110' where b = 100;");
+          "update test_table set b = 110, c = 'test_110' where b = 10;");
     } else {
       EXPECT_ANY_THROW(
           sql("update test_table set b = case when b = 10 then 10000 else b + 1 end, c = "
