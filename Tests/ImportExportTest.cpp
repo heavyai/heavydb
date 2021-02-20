@@ -676,6 +676,43 @@ TEST_F(ImportTestDate, ImportMixedDates) {
   run_mixed_dates_test();
 }
 
+class ImportTestInt : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    const char* create_table_date = R"(
+    CREATE TABLE inttable(
+      i int,
+      inn int not null,
+      i16 int encoding fixed(16),
+      i8 int encoding fixed(8),
+      s smallint,
+      snn smallint not null,
+      s8 smallint encoding fixed(8),
+      t tinyint,
+      tnn tinyint not null
+    );
+)";
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists inttable;"));
+    ASSERT_NO_THROW(run_ddl_statement(create_table_date));
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists inttable;"));
+  }
+};
+
+TEST_F(ImportTestInt, ImportInt) {
+  SKIP_ALL_ON_AGGREGATOR();  // global variable not available on leaf nodes
+  // this dataset tests that rows outside the allowed valus are rejected
+  // no rows should be added
+  ASSERT_NO_THROW(
+      run_ddl_statement("COPY inttable FROM "
+                        "'../../Tests/Import/datafiles/int_bad_test.txt';"));
+
+  auto rows = run_query("SELECT * FROM inttable;");
+  ASSERT_EQ(size_t(0), rows->entryCount());
+};
+
 class ImportTestLegacyDate : public ::testing::Test {
  protected:
   void SetUp() override {
