@@ -865,6 +865,28 @@ std::map<std::string, std::string> get_device_parameters(bool cpu_only) {
       std::make_pair("cpu_cores", std::to_string(llvm::sys::getHostNumPhysicalCores())));
   result.insert(std::make_pair("cpu_threads", std::to_string(cpu_threads())));
 
+  // https://en.cppreference.com/w/cpp/language/types
+  std::string sizeof_types;
+  sizeof_types += "bool:" + std::to_string(sizeof(bool)) + ";";
+  sizeof_types += "size_t:" + std::to_string(sizeof(size_t)) + ";";
+  sizeof_types += "ssize_t:" + std::to_string(sizeof(ssize_t)) + ";";
+  sizeof_types += "char:" + std::to_string(sizeof(char)) + ";";
+  sizeof_types += "uchar:" + std::to_string(sizeof(unsigned char)) + ";";
+  sizeof_types += "short:" + std::to_string(sizeof(short)) + ";";
+  sizeof_types += "ushort:" + std::to_string(sizeof(unsigned short int)) + ";";
+  sizeof_types += "int:" + std::to_string(sizeof(int)) + ";";
+  sizeof_types += "uint:" + std::to_string(sizeof(unsigned int)) + ";";
+  sizeof_types += "long:" + std::to_string(sizeof(long int)) + ";";
+  sizeof_types += "ulong:" + std::to_string(sizeof(unsigned long int)) + ";";
+  sizeof_types += "longlong:" + std::to_string(sizeof(long long int)) + ";";
+  sizeof_types += "ulonglong:" + std::to_string(sizeof(unsigned long long int)) + ";";
+  sizeof_types += "float:" + std::to_string(sizeof(float)) + ";";
+  sizeof_types += "double:" + std::to_string(sizeof(double)) + ";";
+  sizeof_types += "longdouble:" + std::to_string(sizeof(long double)) + ";";
+  sizeof_types += "voidptr:" + std::to_string(sizeof(void*)) + ";";
+
+  result.insert(std::make_pair("type_sizeof", sizeof_types));
+
   std::string null_values;
   null_values += "boolean1:" + std::to_string(serialized_null_value<bool>()) + ";";
   null_values += "boolean8:" + std::to_string(serialized_null_value<int8_t>()) + ";";
