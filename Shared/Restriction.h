@@ -24,6 +24,7 @@
  **/
 #pragma once
 
+#include <boost/algorithm/string.hpp>
 #include <cstdint>
 #include "Logger/Logger.h"
 
@@ -31,8 +32,16 @@ struct Restriction {
   std::string column;
   std::vector<std::string> values;
 
+  Restriction(){};
+
   Restriction(const std::string& c, const std::vector<std::string> v) {
     column = c;
     values = v;
   };
+
+  friend std::ostream& operator<<(std::ostream& out, const Restriction& restriction) {
+    out << "Restriction(" << restriction.column << " ["
+        << boost::algorithm::join(restriction.values, ",") << "])";
+    return out;
+  }
 };

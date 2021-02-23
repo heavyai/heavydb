@@ -52,7 +52,8 @@
 #include "LeafHostInfo.h"
 
 #include "../Calcite/Calcite.h"
-#include "../Shared/mapd_shared_mutex.h"
+#include "Shared/Restriction.h"
+#include "Shared/mapd_shared_mutex.h"
 
 const std::string OMNISCI_SYSTEM_CATALOG = "omnisci_system_catalog";
 const std::string OMNISCI_DEFAULT_DB = "omnisci";
@@ -96,9 +97,12 @@ struct UserMetadata {
   std::atomic<bool> isSuper{false};
   int32_t defaultDbId;
   bool can_login{true};
+  Restriction restriction;
 
   // Return a string that is safe to log for the username based on --log-user-id.
   std::string userLoggable() const;
+
+  void setRestriction(Restriction in_restriction) { restriction = in_restriction; }
 };
 
 /*
