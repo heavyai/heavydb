@@ -124,6 +124,23 @@ class QueryRunner {
   virtual void clearCpuMemory() const;
 
   virtual void runDDLStatement(const std::string&);
+
+  virtual std::shared_ptr<ResultSet> runSQL(const std::string& query_str,
+                                            CompilationOptions co,
+                                            ExecutionOptions eo);
+  virtual std::shared_ptr<ExecutionResult> runSelectQuery(const std::string& query_str,
+                                                          CompilationOptions co,
+                                                          ExecutionOptions eo);
+  static ExecutionOptions defaultExecutionOptionsForRunSQL(bool allow_loop_joins = true,
+                                                           bool just_explain = false);
+
+  // TODO: Refactor away functions such as runSQL() and runSelectQuery() with arbitrary
+  // parameters that grow over time. Instead, pass CompilationOptions and
+  // ExecutionOptions which can be extended without changing the function signatures.
+  // Why?
+  //  * Functions with a large number of parameters are hard to maintain and error-prone.
+  //  * "Default arguments are banned on virtual functions"
+  //    https://google.github.io/styleguide/cppguide.html#Default_Arguments
   virtual std::shared_ptr<ResultSet> runSQL(const std::string& query_str,
                                             const ExecutorDeviceType device_type,
                                             const bool hoist_literals = true,
@@ -141,6 +158,7 @@ class QueryRunner {
       const ExecutorDeviceType device_type,
       const double running_query_check_freq = 0.9,
       const unsigned pending_query_check_freq = 1000);
+
   virtual std::vector<std::shared_ptr<ResultSet>> runMultipleStatements(
       const std::string&,
       const ExecutorDeviceType);

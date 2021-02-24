@@ -298,16 +298,14 @@ void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
 }
 
 std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
-                                               const ExecutorDeviceType device_type,
-                                               const bool hoist_literals,
-                                               const bool allow_loop_joins) {
+                                               CompilationOptions co,
+                                               ExecutionOptions eo) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
 
   ParserWrapper pw{query_str};
   if (pw.isCalcitePathPermissable()) {
-    const auto execution_result =
-        runSelectQuery(query_str, device_type, hoist_literals, allow_loop_joins);
+    const auto execution_result = runSelectQuery(query_str, std::move(co), std::move(eo));
     VLOG(1) << session_info_->getCatalog().getDataMgr().getSystemMemoryUsage();
     return execution_result->getRows();
   }
@@ -325,6 +323,34 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
   CHECK(insert_values_stmt);
   insert_values_stmt->execute(*session_info_);
   return nullptr;
+}
+
+std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
+                                               const ExecutorDeviceType device_type,
+                                               const bool hoist_literals,
+                                               const bool allow_loop_joins) {
+  auto co = CompilationOptions::defaults(device_type);
+  co.hoist_literals = hoist_literals;
+  return runSQL(
+      query_str, std::move(co), defaultExecutionOptionsForRunSQL(allow_loop_joins));
+}
+
+ExecutionOptions QueryRunner::defaultExecutionOptionsForRunSQL(bool allow_loop_joins,
+                                                               bool just_explain) {
+  return {g_enable_columnar_output,
+          true,
+          just_explain,
+          allow_loop_joins,
+          false,
+          false,
+          false,
+          false,
+          10000,
+          false,
+          false,
+          g_gpu_mem_limit_percent,
+          false,
+          1000};
 }
 
 std::shared_ptr<Executor> QueryRunner::getExecutor() const {
@@ -550,54 +576,33 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
 
 }  // namespace
 
-std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(
-    const std::string& query_str,
-    const ExecutorDeviceType device_type,
-    const bool hoist_literals,
-    const bool allow_loop_joins,
-    const bool just_explain) {
+std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& query_str,
+                                                             CompilationOptions co,
+                                                             ExecutionOptions eo) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
   auto stdlog = STDLOG(query_state);
   if (g_enable_filter_push_down) {
     return run_select_query_with_filter_push_down(query_state->createQueryStateProxy(),
-                                                  device_type,
-                                                  hoist_literals,
-                                                  allow_loop_joins,
-                                                  just_explain,
+                                                  co.device_type,
+                                                  co.hoist_literals,
+                                                  eo.allow_loop_joins,
+                                                  eo.just_explain,
                                                   g_enable_filter_push_down);
   }
 
   const auto& cat = session_info_->getCatalog();
 
   std::shared_ptr<ExecutionResult> result;
-  auto query_launch_task =
-      std::make_shared<QueryDispatchQueue::Task>([&cat,
-                                                  &query_str,
-                                                  &device_type,
-                                                  &allow_loop_joins,
-                                                  &just_explain,
-                                                  &query_state,
-                                                  &result](const size_t worker_id) {
+  auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
+      [&cat, &query_str, &co, &eo, &query_state, &result](const size_t worker_id) {
         auto executor = Executor::getExecutor(worker_id);
-        CompilationOptions co = CompilationOptions::defaults(device_type);
+        // TODO The next line should be deleted since it overwrites co, but then
+        // NycTaxiTest.RunSelectsEncodingDictWhereGreater fails due to co not getting
+        // reset to its default values.
+        co = CompilationOptions::defaults(co.device_type);
         co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
-
-        ExecutionOptions eo = {g_enable_columnar_output,
-                               true,
-                               just_explain,
-                               allow_loop_joins,
-                               false,
-                               false,
-                               false,
-                               false,
-                               10000,
-                               false,
-                               false,
-                               g_gpu_mem_limit_percent,
-                               false,
-                               1000};
         auto calcite_mgr = cat.getCalciteMgr();
         const auto query_ra = calcite_mgr
                                   ->process(query_state->createQueryStateProxy(),
@@ -622,6 +627,19 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(
   result_future.get();
   CHECK(result);
   return result;
+}
+
+std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(
+    const std::string& query_str,
+    const ExecutorDeviceType device_type,
+    const bool hoist_literals,
+    const bool allow_loop_joins,
+    const bool just_explain) {
+  auto co = CompilationOptions::defaults(device_type);
+  co.hoist_literals = hoist_literals;
+  return runSelectQuery(query_str,
+                        std::move(co),
+                        defaultExecutionOptionsForRunSQL(allow_loop_joins, just_explain));
 }
 
 const int32_t* QueryRunner::getCachedJoinHashTable(size_t idx) {

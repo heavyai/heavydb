@@ -66,22 +66,21 @@ enum class ExecutorType { Native, Extern };
 
 struct ExecutionOptions {
   bool output_columnar_hint;
-  const bool allow_multifrag;
-  const bool just_explain;  // return the generated IR for the first step
-  const bool allow_loop_joins;
-  const bool with_watchdog;  // Per work unit, not global.
-  const bool jit_debug;
-  const bool just_validate;
-  const bool with_dynamic_watchdog;  // Per work unit, not global.
-  const unsigned
-      dynamic_watchdog_time_limit;  // Dynamic watchdog time limit, in milliseconds.
-  const bool find_push_down_candidates;
-  const bool just_calcite_explain;
-  const double gpu_input_mem_limit_percent;  // punt to CPU if input memory exceeds this
-  const bool allow_runtime_query_interrupt;
-  const unsigned pending_query_interrupt_freq;
+  bool allow_multifrag;
+  bool just_explain;  // return the generated IR for the first step
+  bool allow_loop_joins;
+  bool with_watchdog;  // Per work unit, not global.
+  bool jit_debug;
+  bool just_validate;
+  bool with_dynamic_watchdog;            // Per work unit, not global.
+  unsigned dynamic_watchdog_time_limit;  // Dynamic watchdog time limit, in milliseconds.
+  bool find_push_down_candidates;
+  bool just_calcite_explain;
+  double gpu_input_mem_limit_percent;  // punt to CPU if input memory exceeds this
+  bool allow_runtime_query_interrupt;
+  unsigned pending_query_interrupt_freq;
   ExecutorType executor_type = ExecutorType::Native;
-  const std::vector<size_t> outer_fragment_indices{};
+  std::vector<size_t> outer_fragment_indices{};
 
   static ExecutionOptions defaults() {
     return ExecutionOptions{false,
