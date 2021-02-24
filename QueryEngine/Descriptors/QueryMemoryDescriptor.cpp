@@ -915,6 +915,23 @@ size_t QueryMemoryDescriptor::getNextColOffInBytes(const int8_t* col_ptr,
   }
 }
 
+size_t QueryMemoryDescriptor::getNextColOffInBytesRowOnly(const int8_t* col_ptr,
+                                                          const size_t col_idx) const {
+  const auto chosen_bytes = getPaddedSlotWidthBytes(col_idx);
+  const auto total_slot_count = getSlotCount();
+  if (col_idx + 1 == total_slot_count) {
+    return static_cast<size_t>(align_to_int64(col_ptr + chosen_bytes) - col_ptr);
+  }
+
+  const auto next_chosen_bytes = getPaddedSlotWidthBytes(col_idx + 1);
+
+  if (next_chosen_bytes == sizeof(int64_t)) {
+    return static_cast<size_t>(align_to_int64(col_ptr + chosen_bytes) - col_ptr);
+  } else {
+    return chosen_bytes;
+  }
+}
+
 size_t QueryMemoryDescriptor::getBufferSizeBytes(
     const RelAlgExecutionUnit& ra_exe_unit,
     const unsigned thread_count,
