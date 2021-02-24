@@ -394,21 +394,21 @@ void QueryMemoryInitializer::initGroupByBuffer(
       actual_entry_count = n * thread_count;
       warp_size = 1;
     }
-    initGroups(query_mem_desc,
-               rows_ptr,
-               init_agg_vals_,
-               actual_entry_count,
-               warp_size,
-               executor);
+    initRowGroups(query_mem_desc,
+                  rows_ptr,
+                  init_agg_vals_,
+                  actual_entry_count,
+                  warp_size,
+                  executor);
   }
 }
 
-void QueryMemoryInitializer::initGroups(const QueryMemoryDescriptor& query_mem_desc,
-                                        int64_t* groups_buffer,
-                                        const std::vector<int64_t>& init_vals,
-                                        const int32_t groups_buffer_entry_count,
-                                        const size_t warp_size,
-                                        const Executor* executor) {
+void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_mem_desc,
+                                           int64_t* groups_buffer,
+                                           const std::vector<int64_t>& init_vals,
+                                           const int32_t groups_buffer_entry_count,
+                                           const size_t warp_size,
+                                           const Executor* executor) {
   const size_t key_count{query_mem_desc.getGroupbyColCount()};
   const size_t row_size{query_mem_desc.getRowSize()};
   const size_t col_base_off{query_mem_desc.getColOffInBytes(0)};
@@ -420,33 +420,61 @@ void QueryMemoryInitializer::initGroups(const QueryMemoryDescriptor& query_mem_d
   const auto query_mem_desc_fixedup =
       ResultSet::fixupQueryMemoryDescriptor(query_mem_desc);
 
-  if (query_mem_desc.hasKeylessHash()) {
-    CHECK(warp_size >= 1);
-    CHECK(key_count == 1 || warp_size == 1);
-    for (size_t warp_idx = 0; warp_idx < warp_size; ++warp_idx) {
-      for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count);
-           ++bin, buffer_ptr += row_size) {
-        initColumnPerRow(query_mem_desc_fixedup,
-                         &buffer_ptr[col_base_off],
-                         bin,
-                         init_vals,
-                         agg_bitmap_size,
-                         tdigest_deferred);
-      }
-    }
-    return;
-  }
+  if (!std::accumulate(agg_bitmap_size.begin(), agg_bitmap_size.end(), 0) &&
+      !std::accumulate(tdigest_deferred.begin(), tdigest_deferred.end(), 0)) {
+    std::vector<int8_t> sample_row(row_size - col_base_off);
 
-  for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count);
-       ++bin, buffer_ptr += row_size) {
-    result_set::fill_empty_key(
-        buffer_ptr, key_count, query_mem_desc.getEffectiveKeyWidth());
-    initColumnPerRow(query_mem_desc_fixedup,
-                     &buffer_ptr[col_base_off],
-                     bin,
-                     init_vals,
-                     agg_bitmap_size,
-                     tdigest_deferred);
+    initColumnsPerRow(query_mem_desc_fixedup,
+                      sample_row.data(),
+                      init_vals,
+                      agg_bitmap_size,
+                      tdigest_deferred);
+
+    if (query_mem_desc.hasKeylessHash()) {
+      CHECK(warp_size >= 1);
+      CHECK(key_count == 1 || warp_size == 1);
+      for (size_t warp_idx = 0; warp_idx < warp_size; ++warp_idx) {
+        for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count);
+             ++bin, buffer_ptr += row_size) {
+          memcpy(buffer_ptr + col_base_off, sample_row.data(), sample_row.size());
+        }
+      }
+      return;
+    }
+
+    for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count);
+         ++bin, buffer_ptr += row_size) {
+      memcpy(buffer_ptr + col_base_off, sample_row.data(), sample_row.size());
+      result_set::fill_empty_key(
+          buffer_ptr, key_count, query_mem_desc.getEffectiveKeyWidth());
+    }
+  } else {
+    if (query_mem_desc.hasKeylessHash()) {
+      CHECK(warp_size >= 1);
+      CHECK(key_count == 1 || warp_size == 1);
+      for (size_t warp_idx = 0; warp_idx < warp_size; ++warp_idx) {
+        for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count);
+             ++bin, buffer_ptr += row_size) {
+          initColumnsPerRow(query_mem_desc_fixedup,
+                            &buffer_ptr[col_base_off],
+                            init_vals,
+                            agg_bitmap_size,
+                            tdigest_deferred);
+        }
+      }
+      return;
+    }
+
+    for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count);
+         ++bin, buffer_ptr += row_size) {
+      result_set::fill_empty_key(
+          buffer_ptr, key_count, query_mem_desc.getEffectiveKeyWidth());
+      initColumnsPerRow(query_mem_desc_fixedup,
+                        &buffer_ptr[col_base_off],
+                        init_vals,
+                        agg_bitmap_size,
+                        tdigest_deferred);
+    }
   }
 }
 
@@ -527,16 +555,16 @@ void QueryMemoryInitializer::initColumnarGroups(
   }
 }
 
-void QueryMemoryInitializer::initColumnPerRow(const QueryMemoryDescriptor& query_mem_desc,
-                                              int8_t* row_ptr,
-                                              const size_t bin,
-                                              const std::vector<int64_t>& init_vals,
-                                              const std::vector<int64_t>& bitmap_sizes,
-                                              const std::vector<bool>& tdigest_deferred) {
+void QueryMemoryInitializer::initColumnsPerRow(
+    const QueryMemoryDescriptor& query_mem_desc,
+    int8_t* row_ptr,
+    const std::vector<int64_t>& init_vals,
+    const std::vector<int64_t>& bitmap_sizes,
+    const std::vector<bool>& tdigest_deferred) {
   int8_t* col_ptr = row_ptr;
   size_t init_vec_idx = 0;
   for (size_t col_idx = 0; col_idx < query_mem_desc.getSlotCount();
-       col_ptr += query_mem_desc.getNextColOffInBytes(col_ptr, bin, col_idx++)) {
+       col_ptr += query_mem_desc.getNextColOffInBytesRowOnly(col_ptr, col_idx++)) {
     const int64_t bm_sz{bitmap_sizes[col_idx]};
     int64_t init_val{0};
     if (bm_sz && query_mem_desc.isGroupBy()) {
