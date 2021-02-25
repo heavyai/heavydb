@@ -1778,7 +1778,10 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
   }
   if (chosen_type.is_fp()) {
     if (target_info.agg_kind == kAPPROX_MEDIAN) {
-      return calculateQuantile(*reinterpret_cast<quantile::TDigest* const*>(ptr), 0.5);
+      return *reinterpret_cast<double const*>(ptr) == NULL_DOUBLE
+                 ? NULL_DOUBLE  // sql_validate / just_validate
+                 : calculateQuantile(*reinterpret_cast<quantile::TDigest* const*>(ptr),
+                                     0.5);
     }
     switch (actual_compact_sz) {
       case 8: {

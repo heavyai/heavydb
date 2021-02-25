@@ -2417,6 +2417,23 @@ TEST(Select, ApproxMedianSubqueries) {
   }
 }
 
+// Immerse invokes sql_validate which requires testing.
+TEST(Select, ApproxMedianValidate) {
+  if (g_aggregator) {
+    LOG(WARNING) << "Skipping ApproxMedianValidate tests in distributed mode.";
+  } else {
+    auto const dt = ExecutorDeviceType::CPU;
+    auto eo = QR::defaultExecutionOptionsForRunSQL();
+    eo.just_validate = true;
+    char const* const query = "SELECT APPROX_MEDIAN(x) FROM test;";
+    std::shared_ptr<ResultSet> rows =
+        QR::get()->runSQL(query, CompilationOptions::defaults(dt), std::move(eo));
+    auto crt_row = rows->getNextRow(true, true);
+    CHECK_EQ(1u, crt_row.size()) << query;
+    EXPECT_EQ(NULL_DOUBLE, v<double>(crt_row[0]));
+  }
+}
+
 TEST(Select, ScanNoAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
