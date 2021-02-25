@@ -182,6 +182,8 @@ function install_llvm() {
     mkdir -p llvm-$VERS.src/tools/clang/tools
     mv clang-tools-extra-$VERS.src llvm-$VERS.src/tools/clang/tools/extra
 
+    # install spirv translator from github
+    git clone -b llvm_release_100 https://github.com/KhronosGroup/SPIRV-LLVM-Translator llvm-$VERS.src/projects/llvm-spirv
 
     rm -rf build.llvm-$VERS
     mkdir build.llvm-$VERS
@@ -192,7 +194,16 @@ function install_llvm() {
       LLVM_SHARED="-DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON"
     fi
 
-    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DLLVM_ENABLE_RTTI=on -DLLVM_USE_INTEL_JITEVENTS=on $LLVM_SHARED ../llvm-$VERS.src
+    cmake -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=$PREFIX \
+        -DLLVM_ENABLE_RTTI=on \
+        -DLLVM_USE_INTEL_JITEVENTS=on \
+        $LLVM_SHARED \
+        -DLLVM_ABI_BREAKING_CHECKS=FORCE_OFF \
+        -DLLVM_ENABLE_ABI_BREAKING_CHECKS=0 \
+        -DLLVM_SPIRV_INCLUDE_TESTS=OFF \
+        -DLLVM_USE_LINKER=gold \
+        ../llvm-$VERS.src
     makej
     make install
     popd
