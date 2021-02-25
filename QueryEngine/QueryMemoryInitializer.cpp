@@ -428,8 +428,11 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
   const auto query_mem_desc_fixedup =
       ResultSet::fixupQueryMemoryDescriptor(query_mem_desc);
 
+  // not COUNT DISTINCT / APPROX_COUNT_DISTINCT / APPROX_MEDIAN
+  // we fallback to default implementation in that cases
   if (!std::accumulate(agg_bitmap_size.begin(), agg_bitmap_size.end(), 0) &&
-      !std::accumulate(tdigest_deferred.begin(), tdigest_deferred.end(), 0)) {
+      !std::accumulate(tdigest_deferred.begin(), tdigest_deferred.end(), 0) &&
+      g_optimize_row_initialization) {
     std::vector<int8_t> sample_row(row_size - col_base_off);
 
     initColumnsPerRow(query_mem_desc_fixedup,

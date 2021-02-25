@@ -417,6 +417,11 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_enable_columnar_output)
           ->implicit_value(true),
       "Enable columnar output for intermediate/final query steps.");
+  developer_desc.add_options()("optimize-row-init",
+                               po::value<bool>(&g_optimize_row_initialization)
+                                   ->default_value(g_optimize_row_initialization)
+                                   ->implicit_value(true),
+                               "Optimize row initialization.");
   developer_desc.add_options()("enable-legacy-syntax",
                                po::value<bool>(&enable_legacy_syntax)
                                    ->default_value(enable_legacy_syntax)
