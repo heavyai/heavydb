@@ -789,6 +789,8 @@ void CommandLineOptions::validate() {
   if (vm.count("license-path")) {
     LOG(INFO) << "License key path set to '" << license_path << "'";
   }
+  g_read_only = read_only;
+  LOG(INFO) << " Server read-only mode is " << read_only;
   LOG(INFO) << " Watchdog is set to " << enable_watchdog;
   LOG(INFO) << " Dynamic Watchdog is set to " << enable_dynamic_watchdog;
   if (enable_dynamic_watchdog) {

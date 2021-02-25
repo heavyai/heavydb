@@ -110,11 +110,13 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec,
       chunkKey[0] = fileMgr->get_fileMgrKey().first;
       chunkKey[1] = fileMgr->get_fileMgrKey().second;
       // recover page in case a crash failed deletion of this page
-      if (ints[1] == DELETE_CONTINGENT || ints[1] == ROLLOFF_CONTINGENT) {
-        File_Namespace::write(f,
-                              pageNum * pageSize + sizeof(int32_t),
-                              2 * sizeof(int32_t),
-                              (int8_t*)&chunkKey[0]);
+      if (!g_read_only) {
+        if (ints[1] == DELETE_CONTINGENT || ints[1] == ROLLOFF_CONTINGENT) {
+          File_Namespace::write(f,
+                                pageNum * pageSize + sizeof(int32_t),
+                                2 * sizeof(int32_t),
+                                (int8_t*)&chunkKey[0]);
+        }
       }
 
       // Last two elements of header are always PageId and Version
@@ -149,15 +151,16 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec,
       if (versionEpoch > fileMgrEpoch) {
         // First write 0 to first four bytes of
         // header to mark as free
-        headerSize = 0;
-        File_Namespace::write(
-            f, pageNum * pageSize, sizeof(int32_t), (int8_t*)&headerSize);
-        // Now add page to free list
-        freePages.insert(pageNum);
+        if (!g_read_only) {
+          headerSize = 0;
+          File_Namespace::write(
+              f, pageNum * pageSize, sizeof(int32_t), (int8_t*)&headerSize);
+          // Now add page to free list
+          freePages.insert(pageNum);
+        }
         LOG(WARNING) << "Was not checkpointed: Chunk key: " << show_chunk(chunkKey)
                      << " Page id: " << pageId << " Epoch: " << versionEpoch
                      << " FileMgrEpoch " << fileMgrEpoch << endl;
-
       } else {  // page was checkpointed properly
         Page page(fileId, pageNum);
         headerVec.emplace_back(chunkKey, pageId, versionEpoch, page);

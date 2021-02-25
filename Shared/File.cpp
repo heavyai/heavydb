@@ -35,6 +35,8 @@
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_fs.h"
 
+bool g_read_only{false};
+
 namespace File_Namespace {
 
 FILE* create(const std::string& basePath,
@@ -68,6 +70,10 @@ FILE* create(const std::string& basePath,
 }
 
 FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
+  if (g_read_only) {
+    LOG(FATAL) << "Error trying to create file '" << fullPath
+               << "', not allowed read only ";
+  }
   FILE* f = omnisci::fopen(fullPath.c_str(), "w+b");
   if (f == nullptr) {
     LOG(FATAL) << "Error trying to create file '" << fullPath
@@ -87,7 +93,8 @@ FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
 
 FILE* open(int fileId) {
   std::string s(std::to_string(fileId) + std::string(MAPD_FILE_EXT));
-  FILE* f = omnisci::fopen(s.c_str(), "r+b");  // opens existing file for updates
+  FILE* f = omnisci::fopen(
+      s.c_str(), g_read_only ? "rb" : "r+b");  // opens existing file for updates
   if (f == nullptr) {
     LOG(FATAL) << "Error trying to open file '" << s
                << "', the error was: " << std::strerror(errno);
@@ -96,7 +103,8 @@ FILE* open(int fileId) {
 }
 
 FILE* open(const std::string& path) {
-  FILE* f = omnisci::fopen(path.c_str(), "r+b");  // opens existing file for updates
+  FILE* f = omnisci::fopen(
+      path.c_str(), g_read_only ? "rb" : "r+b");  // opens existing file for updates
   if (f == nullptr) {
     LOG(FATAL) << "Error trying to open file '" << path
                << "', the errno was: " << std::strerror(errno);
@@ -111,6 +119,9 @@ void close(FILE* f) {
 }
 
 bool removeFile(const std::string basePath, const std::string filename) {
+  if (g_read_only) {
+    LOG(FATAL) << "Error trying to remove file '" << filename << "', running readonly";
+  }
   const std::string filePath = basePath + filename;
   return remove(filePath.c_str()) == 0;
 }
@@ -124,6 +135,9 @@ size_t read(FILE* f, const size_t offset, const size_t size, int8_t* buf) {
 }
 
 size_t write(FILE* f, const size_t offset, const size_t size, int8_t* buf) {
+  if (g_read_only) {
+    LOG(FATAL) << "Error trying to write file '" << f << "', running readonly";
+  }
   // write size bytes from the buffer to the offset location in the file
   if (fseek(f, static_cast<long>(offset), SEEK_SET) != 0) {
     LOG(FATAL)
@@ -139,6 +153,9 @@ size_t write(FILE* f, const size_t offset, const size_t size, int8_t* buf) {
 }
 
 size_t append(FILE* f, const size_t size, int8_t* buf) {
+  if (g_read_only) {
+    LOG(FATAL) << "Error trying to append file '" << f << "', running readonly";
+  }
   return write(f, fileSize(f), size, buf);
 }
 
@@ -156,6 +173,9 @@ size_t readPartialPage(FILE* f,
 }
 
 size_t writePage(FILE* f, const size_t pageSize, const size_t pageNum, int8_t* buf) {
+  if (g_read_only) {
+    LOG(FATAL) << "Error trying to writePage file '" << f << "', running readonly";
+  }
   return write(f, pageNum * pageSize, pageSize, buf);
 }
 
@@ -165,10 +185,16 @@ size_t writePartialPage(FILE* f,
                         const size_t writeSize,
                         const size_t pageNum,
                         int8_t* buf) {
+  if (g_read_only) {
+    LOG(FATAL) << "Error trying to writePartialPage file '" << f << "', running readonly";
+  }
   return write(f, pageNum * pageSize + offset, writeSize, buf);
 }
 
 size_t appendPage(FILE* f, const size_t pageSize, int8_t* buf) {
+  if (g_read_only) {
+    LOG(FATAL) << "Error trying to appendPage file '" << f << "', running readonly";
+  }
   return write(f, fileSize(f), pageSize, buf);
 }
 
