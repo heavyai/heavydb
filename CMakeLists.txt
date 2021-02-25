@@ -219,6 +219,16 @@ if(ENABLE_FOLLY)
   endif()
 endif()
 
+option(ENABLE_MLPACK "Use mlpack" OFF)
+if(ENABLE_MLPACK)
+  find_package(OpenMP REQUIRED)
+  find_package(Armadillo REQUIRED)
+  find_package(Boost COMPONENTS serialization REQUIRED)
+  find_package(MLPACK REQUIRED)
+  include_directories(${MLPACK_INCLUDE_DIRS})
+  add_definitions("-DHAVE_MLPACK")
+endif()
+
 if(MSVC)
   include_directories(include_directories("${LIBS_PATH}/include/pdcurses"))
 else()
@@ -241,6 +251,10 @@ else()
   if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
   endif()
+endif()
+
+if (ENABLE_MLPACK)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}") 
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
@@ -647,6 +661,10 @@ list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
 
 if(ENABLE_FOLLY)
   list(APPEND MAPD_LIBRARIES ${Folly_LIBRARIES})
+endif()
+
+if(ENABLE_MLPACK)
+  list(APPEND MAPD_LIBRARIES ${MLPACK_LIBRARIES} ${ARMADILLO_LIBRARIES})
 endif()
 
 if(ENABLE_LICENSING_AWS)

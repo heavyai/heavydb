@@ -133,6 +133,7 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
 }  // namespace
 
 ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
+  auto timer = DEBUG_TIMER(__func__);
   rows->moveToBegin();
   std::vector<std::vector<std::unique_ptr<Encoder>>> dummy_encoders;
   const size_t worker_count =

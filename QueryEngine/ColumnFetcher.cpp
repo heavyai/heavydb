@@ -58,6 +58,7 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
     ColumnCacheMap& column_cache) {
   static std::mutex columnar_conversion_mutex;
+  auto timer = DEBUG_TIMER(__func__);
   if (fragment.isEmptyPhysicalFragment()) {
     return {nullptr, 0};
   }

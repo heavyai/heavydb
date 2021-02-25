@@ -271,6 +271,7 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   }
 
   // execute
+  auto timer = DEBUG_TIMER(__func__);
   const auto err = compilation_context->getFuncPtr()(
       byte_stream_ptr, col_sizes.data(), output_col_buf_ptrs.data(), &output_row_count);
   if (err) {

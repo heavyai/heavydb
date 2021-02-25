@@ -188,3 +188,5 @@ EXTENSION_NOINLINE int32_t column_list_first_last(const ColumnList<double>& col_
   col2 = col_list(col_list.getLength() - 1);
   return col1.getSize();
 }
+
+#include "MLFunctions.hpp"
