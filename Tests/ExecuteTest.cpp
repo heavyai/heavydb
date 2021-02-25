@@ -15852,8 +15852,8 @@ TEST(Update, ImplicitCastToNumericTypes) {
 
     EXPECT_ANY_THROW(
         run_multiple_agg("update inttest set i=cast( 'nonsense' as varchar );", dt));
-    run_multiple_agg("update inttest set i=cast( '128.90' as varchar );", dt);
-    EXPECT_EQ(int64_t(128), v<int64_t>(run_simple_agg("select i from inttest;", dt)));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update inttest set i=cast( '128.90' as varchar );", dt));
 
     run_multiple_agg("update inttest set i=cast( '2000-01-01 10:11:12' as timestamp );",
                      dt);
@@ -15890,8 +15890,8 @@ TEST(Update, ImplicitCastToNumericTypes) {
 
     EXPECT_ANY_THROW(
         run_multiple_agg("update sinttest set i=cast( 'nonsense' as varchar );", dt));
-    run_multiple_agg("update sinttest set i=cast( '128.90' as varchar );", dt);
-    EXPECT_EQ(int64_t(128), v<int64_t>(run_simple_agg("select i from sinttest;", dt)));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update sinttest set i=cast( '128.90' as varchar );", dt));
 
     run_multiple_agg("update sinttest set i=cast( '2000-01-01 10:11:12' as timestamp );",
                      dt);
@@ -15928,8 +15928,8 @@ TEST(Update, ImplicitCastToNumericTypes) {
 
     EXPECT_ANY_THROW(
         run_multiple_agg("update binttest set i=cast( 'nonsense' as varchar );", dt));
-    run_multiple_agg("update binttest set i=cast( '128.90' as varchar );", dt);
-    EXPECT_EQ(int64_t(128), v<int64_t>(run_simple_agg("select i from binttest;", dt)));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update binttest set i=cast( '128.90' as varchar );", dt));
 
     run_multiple_agg("update binttest set i=cast( '2000-01-01 10:11:12' as timestamp );",
                      dt);

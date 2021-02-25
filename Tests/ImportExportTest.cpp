@@ -681,13 +681,24 @@ class ImportTestInt : public ::testing::Test {
   void SetUp() override {
     const char* create_table_date = R"(
     CREATE TABLE inttable(
+      b bigint,
+      b32 bigint encoding fixed(32),
+      b16 bigint encoding fixed(16),
+      b8 bigint encoding fixed(8),
+      bnn bigint not null,
+      bnn32 bigint not null encoding fixed(32),
+      bnn16 bigint not null encoding fixed(16),
+      bnn8 bigint not null encoding fixed(8),
       i int,
-      inn int not null,
       i16 int encoding fixed(16),
       i8 int encoding fixed(8),
+      inn int not null,
+      inn16 int not null encoding fixed(16),
+      inn8 int not null encoding fixed(8),
       s smallint,
-      snn smallint not null,
       s8 smallint encoding fixed(8),
+      snn smallint not null,
+      snn8 smallint not null encoding fixed(8),
       t tinyint,
       tnn tinyint not null
     );
@@ -701,7 +712,7 @@ class ImportTestInt : public ::testing::Test {
   }
 };
 
-TEST_F(ImportTestInt, ImportInt) {
+TEST_F(ImportTestInt, ImportBadInt) {
   SKIP_ALL_ON_AGGREGATOR();  // global variable not available on leaf nodes
   // this dataset tests that rows outside the allowed valus are rejected
   // no rows should be added
@@ -711,6 +722,18 @@ TEST_F(ImportTestInt, ImportInt) {
 
   auto rows = run_query("SELECT * FROM inttable;");
   ASSERT_EQ(size_t(0), rows->entryCount());
+};
+
+TEST_F(ImportTestInt, ImportGoodInt) {
+  SKIP_ALL_ON_AGGREGATOR();  // global variable not available on leaf nodes
+  // this dataset tests that rows inside the allowed values are accepted
+  // all rows should be added
+  ASSERT_NO_THROW(
+      run_ddl_statement("COPY inttable FROM "
+                        "'../../Tests/Import/datafiles/int_good_test.txt';"));
+
+  auto rows = run_query("SELECT * FROM inttable;");
+  ASSERT_EQ(40u, rows->entryCount());
 };
 
 class ImportTestLegacyDate : public ::testing::Test {

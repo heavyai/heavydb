@@ -23,6 +23,7 @@
  **/
 
 #include <cassert>
+#include <charconv>
 #include <cstdio>
 #include <cstdlib>
 #include <stdexcept>
@@ -118,99 +119,63 @@ int64_t parse_numeric(const std::string_view s, SQLTypeInfo& ti) {
   return result * sign;
 }
 
-inline void ProcessInt(Datum& d, std::string_view s, SQLTypeInfo& ti) {
-  int32_t tmpint = std::stoi(std::string(s));
-  int32_t fieldSize;
+namespace {
 
-  // get details for checking
-  switch (ti.get_type()) {
-    case kINT:
-      // check for fixed encoding
-      if (ti.get_compression() == kENCODING_FIXED) {
-        fieldSize = ti.get_comp_param();
-      } else {
-        fieldSize = 32;
-      }
-      break;
-    case kSMALLINT:
-      // check for fixed encoding
-      if (ti.get_compression() == kENCODING_FIXED) {
-        fieldSize = ti.get_comp_param();
-      } else {
-        fieldSize = 16;
-      }
-      break;
-    case kTINYINT:
-      fieldSize = 8;
-      break;
-    default:
-      throw std::runtime_error("Internal error: invalid type in ProcessInt: " +
-                               ti.get_type_name());
-  }
-
-  // do a check
-  switch (fieldSize) {
-    case 32:
-      if (!ti.get_notnull()) {
-        // check for null in range
-        if (tmpint == NULL_INT) {
-          throw std::runtime_error("Integer " + std::string(s) +
-                                   " is out of range for nullable int");
-        }
-      }
-      break;
-    case 16:
-      if (ti.get_notnull()) {
-        if (tmpint <= static_cast<int32_t>(INT16_MAX) &&
-            tmpint >= static_cast<int32_t>(INT16_MIN)) {
-        } else {
-          throw std::runtime_error("Integer " + std::string(s) +
-                                   " is out of range for smallint");
-        }
-      } else {
-        if (tmpint <= static_cast<int32_t>(INT16_MAX) &&
-            tmpint > static_cast<int32_t>(NULL_SMALLINT)) {
-        } else {
-          throw std::runtime_error("Integer " + std::string(s) +
-                                   " is out of range for nullable smallint");
-        }
-      }
-      break;
-    case 8:
-      if (ti.get_notnull()) {
-        if (tmpint <= static_cast<int32_t>(INT8_MAX) &&
-            tmpint >= static_cast<int32_t>(INT8_MIN)) {
-        } else {
-          throw std::runtime_error("Integer " + std::string(s) +
-                                   " is out of range for tinyint");
-        }
-      } else {
-        if (tmpint <= static_cast<int32_t>(INT8_MAX) &&
-            tmpint > static_cast<int32_t>(NULL_TINYINT)) {
-        } else {
-          throw std::runtime_error("Integer " + std::string(s) +
-                                   " is out of range for nullable tinyint");
-        }
-      }
-      break;
-  }
-
-  // move data to destination
-  switch (ti.get_type()) {
-    case kINT:
-      d.intval = tmpint;
-      break;
-    case kSMALLINT:
-      d.smallintval = static_cast<uint16_t>(tmpint);
-      break;
-    case kTINYINT:
-      d.tinyintval = static_cast<uint8_t>(tmpint);
-      break;
-    default:
-      throw std::runtime_error("Internal error: invalid type in ProcessInt: " +
-                               ti.get_type_name());
-  }
+// Equal to NULL value for nullable types.
+template <typename T>
+T minValue(unsigned const fieldsize) {
+  static_assert(std::is_signed_v<T>);
+  return T(-1) << (fieldsize - 1);
 }
+
+template <typename T>
+T maxValue(unsigned const fieldsize) {
+  return ~minValue<T>(fieldsize);
+}
+
+std::string toString(SQLTypeInfo const& ti, unsigned const fieldsize) {
+  return ti.get_type_name() + '(' + std::to_string(fieldsize) + ')';
+}
+
+}  // namespace
+
+template <typename T>
+T parseInteger(std::string_view s, SQLTypeInfo const& ti) {
+  T retval{0};
+  unsigned const fieldsize =
+      ti.get_compression() == kENCODING_FIXED ? ti.get_comp_param() : 8 * sizeof(T);
+  auto [ptr, error_code] = std::from_chars(s.data(), s.data() + s.size(), retval);
+  if (ptr != s.data() + s.size()) {
+    throw std::runtime_error(std::string("Unexpected character \"") + *ptr +
+                             "\" encountered in " + ti.get_type_name() + " value " +
+                             std::string(s));
+  } else if (error_code != std::errc()) {
+    throw std::runtime_error("Integer " + std::string(s) + " is out of range for " +
+                             ti.get_type_name());
+  } else if (fieldsize < 8 * sizeof(T)) {
+    if (maxValue<T>(fieldsize) < retval) {
+      throw std::runtime_error("Integer " + std::string(s) +
+                               " exceeds maximum value for " + toString(ti, fieldsize));
+    } else if (ti.get_notnull()) {
+      if (retval < minValue<T>(fieldsize)) {
+        throw std::runtime_error("Integer " + std::string(s) +
+                                 " exceeds minimum value for " + toString(ti, fieldsize));
+      }
+    } else {
+      if (retval <= minValue<T>(fieldsize)) {
+        throw std::runtime_error("Integer " + std::string(s) +
+                                 " exceeds minimum value for nullable " +
+                                 toString(ti, fieldsize));
+      }
+    }
+  } else if (!ti.get_notnull() && retval == minValue<T>(fieldsize)) {
+    throw std::runtime_error("Integer " + std::string(s) +
+                             " exceeds minimum value for nullable " +
+                             toString(ti, fieldsize));
+  }
+  return retval;
+}
+
 /*
  * @brief convert string to a datum
  */
@@ -236,12 +201,16 @@ Datum StringToDatum(std::string_view s, SQLTypeInfo& ti) {
         d.bigintval = parse_numeric(s, ti);
         break;
       case kBIGINT:
-        d.bigintval = std::stoll(std::string(s));
+        d.bigintval = parseInteger<int64_t>(s, ti);
         break;
       case kINT:
+        d.intval = parseInteger<int32_t>(s, ti);
+        break;
       case kSMALLINT:
+        d.smallintval = parseInteger<int16_t>(s, ti);
+        break;
       case kTINYINT:
-        ProcessInt(d, s, ti);
+        d.tinyintval = parseInteger<int8_t>(s, ti);
         break;
       case kFLOAT:
         d.floatval = std::stof(std::string(s));
