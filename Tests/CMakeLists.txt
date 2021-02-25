@@ -27,6 +27,7 @@ add_executable(ForeignStorageCacheTest ForeignStorageCacheTest.cpp)
 add_executable(PersistentStorageTest PersistentStorageTest.cpp)
 add_executable(ShardedTableEpochConsistencyTest ShardedTableEpochConsistencyTest.cpp)
 add_executable(DiskCacheQueryTest DiskCacheQueryTest.cpp)
+add_executable(JSONTest JSONTest.cpp)
 
 if(ENABLE_CUDA)
   set(MAPD_DEFINITIONS -DHAVE_CUDA)
@@ -191,6 +192,7 @@ target_link_libraries(PersistentStorageTest gtest ${MAPD_LIBRARIES})
 target_link_libraries(ShardedTableEpochConsistencyTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(DiskCacheQueryTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(LoadTableTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(JSONTest gtest Logger Shared)
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS})
@@ -269,6 +271,7 @@ add_test(PersistentStorageTest PersistentStorageTest ${TEST_ARGS})
 add_test(ShardedTableEpochConsistencyTest ShardedTableEpochConsistencyTest ${TEST_ARGS})
 add_test(DiskCacheQueryTest DiskCacheQueryTest ${TEST_ARGS})
 add_test(LoadTableTest LoadTableTest ${TEST_ARGS})
+add_test(JSONTest JSONTest ${TEST_ARGS})
 
 if(ENABLE_CUDA)
   add_test(GpuSharedMemoryTest GpuSharedMemoryTest ${TEST_ARGS})
@@ -355,6 +358,7 @@ set(TEST_PROGRAMS
   ShardedTableEpochConsistencyTest
   DiskCacheQueryTest
   LoadTableTest
+  JSONTest
 )
 
 if(ENABLE_CUDA)
