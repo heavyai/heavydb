@@ -855,6 +855,7 @@ if("${MAPD_VERSION_EXTRA}" STREQUAL "dev")
 endif()
 
 set (OMNISCI_JDBC_JAR "omnisci-jdbc-${OMNISCI_JAR_RELEASE_VERSION}.jar")
+set (OMNISCI_UTILITY_JAR "omnisci-utility-${OMNISCI_JAR_RELEASE_VERSION}.jar")
 
 set(MVN_PATH_COMMAND "")
 if(MSVC) 
@@ -865,11 +866,11 @@ endif()
 
 add_custom_command(
   OUTPUT
-    ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
+    ${CMAKE_BINARY_DIR}/bin/${OMNISCI_UTILITY_JAR}
     ${CMAKE_BINARY_DIR}/bin/${OMNISCI_JDBC_JAR}
     ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar
     COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -l ${CMAKE_BINARY_DIR}/mvn_build.log -e clean install -Dthrift.version="${Thrift_VERSION}" -Dmaven.compiler.showDeprecation=true -Dmaven.compiler.showWarnings=true -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}" -Djava.net.preferIPv4Stack=true -Dmaven.wagon.http.retryHandler.count=3    
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapd/target/${OMNISCI_UTILITY_JAR} ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/omniscijdbc/target/${OMNISCI_JDBC_JAR} ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
@@ -884,7 +885,7 @@ add_custom_command(
     ${JAVA_FTL}
   )
 add_custom_target(mapd_java_components ALL DEPENDS
-  ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
+  ${CMAKE_BINARY_DIR}/bin/${OMNISCI_UTILITY_JAR}
   ${CMAKE_BINARY_DIR}/bin/${OMNISCI_JDBC_JAR}
   ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar)
 add_custom_target(mapd_java_clean
@@ -892,7 +893,7 @@ add_custom_target(mapd_java_clean
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   )
 add_dependencies(clean-all mapd_java_clean)
-install(FILES ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin COMPONENT "jar")
+install(FILES ${CMAKE_SOURCE_DIR}/java/mapd/target/${OMNISCI_UTILITY_JAR} DESTINATION bin COMPONENT "jar")
 install(FILES ${CMAKE_SOURCE_DIR}/java/omniscijdbc/target/${OMNISCI_JDBC_JAR} DESTINATION bin COMPONENT "jar")
 install(FILES ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin COMPONENT "jar")
 
