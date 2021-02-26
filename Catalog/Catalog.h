@@ -231,7 +231,8 @@ class Catalog final {
   const ColumnDescriptor* getShardColumnMetadataForTable(const TableDescriptor* td) const;
 
   std::vector<const TableDescriptor*> getPhysicalTablesDescriptors(
-      const TableDescriptor* logicalTableDesc) const;
+      const TableDescriptor* logical_table_desc,
+      bool populate_fragmenter = true) const;
 
   /**
    * Get names of all tables accessible to user.

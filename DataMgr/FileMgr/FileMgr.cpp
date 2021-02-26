@@ -316,6 +316,13 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
   isFullyInitted_ = true;
 }
 
+namespace {
+bool is_metadata_file(size_t file_size, size_t page_size) {
+  return (file_size == (METADATA_PAGE_SIZE * MAX_FILE_N_METADATA_PAGES) &&
+          page_size == METADATA_PAGE_SIZE);
+}
+}  // namespace
+
 StorageStats FileMgr::getStorageStats() {
   StorageStats storage_stats;
   mapd_shared_lock<mapd_shared_mutex> read_lock(files_rw_mutex_);
@@ -336,18 +343,14 @@ StorageStats FileMgr::getStorageStats() {
            ++fileIt) {
         FileMetadata file_metadata = getMetadataForFile(fileIt);
         if (file_metadata.is_data_file) {
-          if (file_metadata.page_size == METADATA_PAGE_SIZE) {
+          if (is_metadata_file(file_metadata.file_size, file_metadata.page_size)) {
             storage_stats.metadata_file_count++;
             storage_stats.total_metadata_file_size += file_metadata.file_size;
             storage_stats.total_metadata_page_count += file_metadata.num_pages;
-          } else if (file_metadata.page_size == defaultPageSize_) {
+          } else {
             storage_stats.data_file_count++;
             storage_stats.total_data_file_size += file_metadata.file_size;
             storage_stats.total_data_page_count += file_metadata.num_pages;
-          } else {
-            UNREACHABLE() << "Found file with unexpected page size. Page size: "
-                          << file_metadata.page_size
-                          << ", file path: " << file_metadata.file_path;
           }
         }
       }
@@ -355,33 +358,24 @@ StorageStats FileMgr::getStorageStats() {
   } else {
     storage_stats.epoch = lastCheckpointedEpoch();
     storage_stats.epoch_floor = epochFloor();
+    storage_stats.total_free_metadata_page_count = 0;
+    storage_stats.total_free_data_page_count = 0;
 
     // We already initialized this table so take the faster path of walking through the
     // FileInfo objects and getting metadata from there
     for (const auto& file_info : files_) {
-      if (file_info->pageSize == METADATA_PAGE_SIZE) {
+      if (is_metadata_file(file_info->size(), file_info->pageSize)) {
         storage_stats.metadata_file_count++;
         storage_stats.total_metadata_file_size +=
             file_info->pageSize * file_info->numPages;
         storage_stats.total_metadata_page_count += file_info->numPages;
-        if (storage_stats.total_free_metadata_page_count) {
-          storage_stats.total_free_metadata_page_count.value() +=
-              file_info->freePages.size();
-        } else {
-          storage_stats.total_free_metadata_page_count = file_info->freePages.size();
-        }
-      } else if (file_info->pageSize == defaultPageSize_) {
+        storage_stats.total_free_metadata_page_count.value() +=
+            file_info->freePages.size();
+      } else {
         storage_stats.data_file_count++;
         storage_stats.total_data_file_size += file_info->pageSize * file_info->numPages;
         storage_stats.total_data_page_count += file_info->numPages;
-        if (storage_stats.total_free_data_page_count) {
-          storage_stats.total_free_data_page_count.value() += file_info->freePages.size();
-        } else {
-          storage_stats.total_free_data_page_count = file_info->freePages.size();
-        }
-      } else {
-        UNREACHABLE() << "Found file with unexpected page size. Page size: "
-                      << file_info->pageSize;
+        storage_stats.total_free_data_page_count.value() += file_info->freePages.size();
       }
     }
   }

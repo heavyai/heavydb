@@ -3790,19 +3790,21 @@ const ColumnDescriptor* Catalog::getShardColumnMetadataForTable(
 }
 
 std::vector<const TableDescriptor*> Catalog::getPhysicalTablesDescriptors(
-    const TableDescriptor* logicalTableDesc) const {
+    const TableDescriptor* logical_table_desc,
+    bool populate_fragmenter) const {
   cat_read_lock read_lock(this);
   const auto physicalTableIt =
-      logicalToPhysicalTableMapById_.find(logicalTableDesc->tableId);
+      logicalToPhysicalTableMapById_.find(logical_table_desc->tableId);
   if (physicalTableIt == logicalToPhysicalTableMapById_.end()) {
-    return {logicalTableDesc};
+    return {logical_table_desc};
   }
 
   const auto physicalTablesIds = physicalTableIt->second;
   CHECK(!physicalTablesIds.empty());
   std::vector<const TableDescriptor*> physicalTables;
   for (size_t i = 0; i < physicalTablesIds.size(); i++) {
-    physicalTables.push_back(getMetadataForTable(physicalTablesIds[i]));
+    physicalTables.push_back(
+        getMetadataForTable(physicalTablesIds[i], populate_fragmenter));
   }
 
   return physicalTables;

@@ -105,7 +105,7 @@ AggregratedStorageStats get_agg_storage_stats(const TableDescriptor* td,
   const auto global_file_mgr = catalog->getDataMgr().getGlobalFileMgr();
   std::optional<AggregratedStorageStats> agg_storage_stats;
   if (td->nShards > 0) {
-    const auto physical_tables = catalog->getPhysicalTablesDescriptors(td);
+    const auto physical_tables = catalog->getPhysicalTablesDescriptors(td, false);
     CHECK_EQ(static_cast<size_t>(td->nShards), physical_tables.size());
 
     for (const auto physical_table : physical_tables) {
