@@ -93,9 +93,10 @@ FileBuffer::FileBuffer(FileMgr* fm,
   CHECK(fm_);
   calcHeaderBuffer();
   int32_t lastPageId = -1;
+  int32_t curPageId = 0;
   // Page lastMetadataPage;
   for (auto vecIt = headerStartIt; vecIt != headerEndIt; ++vecIt) {
-    int32_t curPageId = vecIt->pageId;
+    curPageId = vecIt->pageId;
 
     // We only want to read last metadata page
     if (curPageId == -1) {  // stats page
@@ -120,10 +121,10 @@ FileBuffer::FileBuffer(FileMgr* fm,
       }
       multiPages_.back().push(vecIt->page, vecIt->versionEpoch);
     }
-    if (curPageId == -1) {  // meaning there was only a metadata page
-      readMetadata(metadataPages_.current().page);
-      pageDataSize_ = pageSize_ - reservedHeaderSize_;
-    }
+  }
+  if (curPageId == -1) {  // meaning there was only a metadata page
+    readMetadata(metadataPages_.current().page);
+    pageDataSize_ = pageSize_ - reservedHeaderSize_;
   }
 }
 

@@ -252,7 +252,7 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
      * sorted headerVec of the same ChunkId, which we
      * can then initiate a FileBuffer with */
 
-    VLOG(4) << "Number of Headers in Vector: " << headerVec.size();
+    VLOG(3) << "Number of Headers in Vector: " << headerVec.size();
     if (headerVec.size() > 0) {
       ChunkKey lastChunkKey = headerVec.begin()->chunkKey;
       auto startIt = headerVec.begin();
