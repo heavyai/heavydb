@@ -853,7 +853,7 @@ static std::vector<std::string> stringify_privs(const std::vector<bool>& priv_ma
            {"create"s, "delete"s, "view"s, "edit"s}},
           {TDBObjectType::ViewDBObjectType,
            {"create"s, "drop"s, "select"s, "insert"s, "update"s, "delete"s}},
-          {TDBObjectType::ServerDBObjectType, {"create"s, "drop"s, "alter"s}}};
+          {TDBObjectType::ServerDBObjectType, {"create"s, "drop"s, "alter"s, "usage"s}}};
 
   const auto privilege_names = privilege_names_lookup.find(type);
 

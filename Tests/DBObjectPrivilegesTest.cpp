@@ -1525,6 +1525,17 @@ TEST_F(ServerObject, AccessWithGrantRevokeAllCompound) {
   EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), true);
   EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
 
+  // All users should still have SERVER_USAGE privileges, check that this is true
+  server_priv.reset();
+  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::SERVER_USAGE));
+  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
+  privObjects.clear();
+  privObjects.push_back(server_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
+
   // Revoke ALL_SERVER privileges
   server_priv.reset();
   ASSERT_NO_THROW(server_priv.add(AccessPrivileges::ALL_SERVER));
@@ -1550,6 +1561,17 @@ TEST_F(ServerObject, AccessWithGrantRevokeAllCompound) {
   // users no longer have the ALTER_SERVER privileges, check that this is true
   server_priv.reset();
   ASSERT_NO_THROW(server_priv.add(AccessPrivileges::ALTER_SERVER));
+  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
+  privObjects.clear();
+  privObjects.push_back(server_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
+  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), false);
+  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
+
+  // users no longer have the SERVER_USAGE privileges, check that this is true
+  server_priv.reset();
+  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::SERVER_USAGE));
   ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
   privObjects.clear();
   privObjects.push_back(server_object);
@@ -3385,7 +3407,7 @@ class ServerPrivApiTest : public DBHandlerTestFixture {
     assertExpectedDBObj(db_objs,
                         "super",
                         TDBObjectType::AbstractDBObjectType,
-                        {1, 1, 1},
+                        {1, 1, 1, 1},
                         "admin",
                         TDBObjectType::ServerDBObjectType);
   }
@@ -3401,7 +3423,7 @@ TEST_F(ServerPrivApiTest, CreateForGrantee) {
   assertExpectedDBObj(priv_objs,
                       "omnisci",
                       TDBObjectType::DatabaseDBObjectType,
-                      {1, 0, 0},
+                      {1, 0, 0, 0},
                       "test_user",
                       TDBObjectType::ServerDBObjectType);
 }
@@ -3416,7 +3438,7 @@ TEST_F(ServerPrivApiTest, DropForGrantee) {
   assertExpectedDBObj(priv_objs,
                       "omnisci",
                       TDBObjectType::DatabaseDBObjectType,
-                      {0, 1, 0},
+                      {0, 1, 0, 0},
                       "test_user",
                       TDBObjectType::ServerDBObjectType);
 }
@@ -3431,7 +3453,7 @@ TEST_F(ServerPrivApiTest, AlterForGrantee) {
   assertExpectedDBObj(priv_objs,
                       "omnisci",
                       TDBObjectType::DatabaseDBObjectType,
-                      {0, 0, 1},
+                      {0, 0, 1, 0},
                       "test_user",
                       TDBObjectType::ServerDBObjectType);
 }
@@ -3446,7 +3468,37 @@ TEST_F(ServerPrivApiTest, AlterOnServerGrantee) {
   assertExpectedDBObj(priv_objs,
                       "test_server",
                       TDBObjectType::ServerDBObjectType,
-                      {0, 0, 1},
+                      {0, 0, 1, 0},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, UsageForGrantee) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT SERVER USAGE ON DATABASE omnisci TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
+  ASSERT_EQ(priv_objs.size(), 2u);
+  assertDBAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "omnisci",
+                      TDBObjectType::DatabaseDBObjectType,
+                      {0, 0, 0, 1},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, UsageOnServerGrantee) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT USAGE ON SERVER test_server TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
+  ASSERT_EQ(priv_objs.size(), 2u);
+  assertDBAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "test_server",
+                      TDBObjectType::ServerDBObjectType,
+                      {0, 0, 0, 1},
                       "test_user",
                       TDBObjectType::ServerDBObjectType);
 }
@@ -3462,7 +3514,7 @@ TEST_F(ServerPrivApiTest, GetDBObjNonSuser) {
   assertExpectedDBObj(priv_objs,
                       "omnisci",
                       TDBObjectType::DatabaseDBObjectType,
-                      {1, 0, 0},
+                      {1, 0, 0, 0},
                       "test_user",
                       TDBObjectType::ServerDBObjectType);
 }
@@ -3488,7 +3540,7 @@ TEST_F(ServerPrivApiTest, AlterOnServerObjectPrivs) {
   assertExpectedDBObj(priv_objs,
                       "test_server",
                       TDBObjectType::ServerDBObjectType,
-                      {0, 0, 1},
+                      {0, 0, 1, 0},
                       "test_user",
                       TDBObjectType::ServerDBObjectType);
 }
@@ -3505,7 +3557,39 @@ TEST_F(ServerPrivApiTest, AlterOnServerObjectPrivsSuper) {
   assertExpectedDBObj(priv_objs,
                       "test_server",
                       TDBObjectType::ServerDBObjectType,
-                      {0, 0, 1},
+                      {0, 0, 1, 0},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+TEST_F(ServerPrivApiTest, UsageOnServerObjectPrivs) {
+  sql("GRANT USAGE ON SERVER test_server TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  login("test_user", "test_pass");
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  db_handler->get_db_object_privs(
+      priv_objs, session_id, "test_server", TDBObjectType::ServerDBObjectType);
+  ASSERT_EQ(priv_objs.size(), 1u);
+  assertExpectedDBObj(priv_objs,
+                      "test_server",
+                      TDBObjectType::ServerDBObjectType,
+                      {0, 0, 0, 1},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, UsageOnServerObjectPrivsSuper) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT USAGE ON SERVER test_server TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_object_privs(
+      priv_objs, session_id, "test_server", TDBObjectType::ServerDBObjectType);
+  ASSERT_EQ(priv_objs.size(), 2u);
+  // Suser access obj returned when calling as suser
+  assertSuperAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "test_server",
+                      TDBObjectType::ServerDBObjectType,
+                      {0, 0, 0, 1},
                       "test_user",
                       TDBObjectType::ServerDBObjectType);
 }

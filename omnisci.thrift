@@ -456,6 +456,7 @@ struct TServerPermissions {
   1: bool create_;
   2: bool drop_;
   3: bool alter_;
+  4: bool usage_;
 }
 
 union TDBObjectPermissions {

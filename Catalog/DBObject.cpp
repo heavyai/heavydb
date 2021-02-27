@@ -77,6 +77,8 @@ const AccessPrivileges AccessPrivileges::DROP_SERVER =
     AccessPrivileges(ServerPrivileges::DROP_SERVER);
 const AccessPrivileges AccessPrivileges::ALTER_SERVER =
     AccessPrivileges(ServerPrivileges::ALTER_SERVER);
+const AccessPrivileges AccessPrivileges::SERVER_USAGE =
+    AccessPrivileges(ServerPrivileges::SERVER_USAGE);
 
 std::string ObjectPermissionTypeToString(DBObjectType type) {
   switch (type) {

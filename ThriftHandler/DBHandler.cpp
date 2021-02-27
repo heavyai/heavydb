@@ -1584,6 +1584,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
       outObject.privs.push_back(ap.hasPermission(ServerPrivileges::CREATE_SERVER));
       outObject.privs.push_back(ap.hasPermission(ServerPrivileges::DROP_SERVER));
       outObject.privs.push_back(ap.hasPermission(ServerPrivileges::ALTER_SERVER));
+      outObject.privs.push_back(ap.hasPermission(ServerPrivileges::SERVER_USAGE));
 
       break;
     default:
@@ -1672,7 +1673,8 @@ bool DBHandler::has_server_permission(const AccessPrivileges& privs,
   auto perms = permissions.server_permissions_;
   if ((perms.create_ && !privs.hasPermission(ServerPrivileges::CREATE_SERVER)) ||
       (perms.drop_ && !privs.hasPermission(ServerPrivileges::DROP_SERVER)) ||
-      (perms.alter_ && !privs.hasPermission(ServerPrivileges::ALTER_SERVER))) {
+      (perms.alter_ && !privs.hasPermission(ServerPrivileges::ALTER_SERVER)) ||
+      (perms.usage_ && !privs.hasPermission(ServerPrivileges::SERVER_USAGE))) {
     return false;
   } else {
     return true;

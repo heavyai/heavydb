@@ -109,7 +109,7 @@ using namespace Parser;
 %token GEOGRAPHY GEOMETRY GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
 %token IS LANGUAGE LAST LENGTH LIKE LIMIT LINESTRING MOD MULTIPOLYGON NOW NULLX NUMERIC OF OFFSET ON OPEN OPTIMIZE
 %token OPTIMIZED OPTION ORDER PARAMETER POINT POLYGON PRECISION PRIMARY PRIVILEGES PROCEDURE
-%token SERVER SMALLINT SOME TABLE TEMPORARY TEXT THEN TIME TIMESTAMP TINYINT TO TRUNCATE UNION
+%token SERVER SMALLINT SOME TABLE TEMPORARY TEXT THEN TIME TIMESTAMP TINYINT TO TRUNCATE UNION USAGE
 %token PUBLIC REAL REFERENCES RENAME RESTORE REVOKE ROLE ROLLBACK SCHEMA SELECT SET SHARD SHARED SHOW
 %token UNIQUE UPDATE USER VALIDATE VALUES VIEW WHEN WHENEVER WHERE WITH WORK EDIT ACCESS DASHBOARD SQL EDITOR
 
@@ -1208,6 +1208,8 @@ privilege:
 	|	VIEW { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "VIEW"); }
 	|	EDIT { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "EDIT"); }
 	|	ACCESS { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "ACCESS"); }
+	|	USAGE { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "USAGE"); }
+	|	SERVER USAGE { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "SERVER USAGE"); }
 	|	ALTER SERVER { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "ALTER SERVER"); }
 	|	CREATE SERVER { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "CREATE SERVER"); }
 	|	CREATE TABLE { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "CREATE TABLE"); }

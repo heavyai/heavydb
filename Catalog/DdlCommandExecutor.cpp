@@ -914,6 +914,15 @@ void CreateForeignTableCommand::setTableDetails(const std::string& table_name,
         "\" does not exist."};
   }
 
+  // check server usage privileges
+  if (!isDefaultServer(server_name) &&
+      !session_ptr_->checkDBAccessPrivileges(DBObjectType::ServerDBObjectType,
+                                             AccessPrivileges::SERVER_USAGE,
+                                             server_name)) {
+    throw std::runtime_error(
+        "Current user does not have USAGE privilege on foreign server: " + server_name);
+  }
+
   if (ddl_payload.HasMember("options") && !ddl_payload["options"].IsNull()) {
     CHECK(ddl_payload["options"].IsObject());
     foreign_table.initializeOptions(ddl_payload["options"]);

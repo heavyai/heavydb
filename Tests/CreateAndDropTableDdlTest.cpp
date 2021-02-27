@@ -1172,13 +1172,16 @@ class CreateForeignTableTest : public CreateAndDropTableDdlTest {
   void SetUp() override {
     CreateAndDropTableDdlTest::SetUp();
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    dropTestUser();
   }
 
   void TearDown() override {
     g_enable_fsi = true;
     g_enable_s3_fsi = false;
+    loginAdmin();
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
     sql("DROP SERVER IF EXISTS test_server;");
+    dropTestUser();
     CreateAndDropTableDdlTest::TearDown();
   }
 };
@@ -1314,6 +1317,88 @@ TEST_F(CreateForeignTableTest, S3SelectWrongServer) {
       query,
       "Exception: The \"S3_ACCESS_TYPE\" option is only valid for foreign tables using "
       "servers with \"STORAGE_TYPE\" option value of \"AWS_S3\".");
+}
+
+TEST_F(CreateForeignTableTest, UnauthorizedServerUsage) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
+  createTestUser();
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server WITH (file_path = '../../Tests/FsiDataFiles/0.csv');",
+      "Exception: Current user does not have USAGE privilege on foreign server: "
+      "test_server");
+}
+
+TEST_F(CreateForeignTableTest, AuthorizedServerUsage) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
+  createTestUser();
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT USAGE ON SERVER test_server TO test_user;");
+  login("test_user", "test_pass");
+  sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server WITH (file_path = '" +
+      getTestFilePath() + "');");
+  sql("SELECT * FROM test_foreign_table;");
+}
+
+TEST_F(CreateForeignTableTest, AuthorizedDatabaseServerUser) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
+  createTestUser();
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT SERVER USAGE ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server WITH (file_path = '" +
+      getTestFilePath() + "');");
+  sql("SELECT * FROM test_foreign_table;");
+}
+
+TEST_F(CreateForeignTableTest, NonSuserServerOwnerUsage) {
+  createTestUser();
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
+  sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server WITH (file_path = '" +
+      getTestFilePath() + "');");
+  sql("SELECT * FROM test_foreign_table;");
+}
+
+TEST_F(CreateForeignTableTest, RevokedServerUsage) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
+  createTestUser();
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT USAGE ON SERVER test_server TO test_user;");
+  sql("REVOKE USAGE ON SERVER test_server FROM test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server WITH (file_path = '../../Tests/FsiDataFiles/0.csv');",
+      "Exception: Current user does not have USAGE privilege on foreign server: "
+      "test_server");
+}
+
+TEST_F(CreateForeignTableTest, RevokedDatabaseServerUsage) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
+  createTestUser();
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT SERVER USAGE ON DATABASE omnisci TO test_user;");
+  sql("REVOKE SERVER USAGE ON DATABASE omnisci FROM test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server WITH (file_path = '../../Tests/FsiDataFiles/0.csv');",
+      "Exception: Current user does not have USAGE privilege on foreign server: "
+      "test_server");
 }
 
 class DropTableTest : public CreateAndDropTableDdlTest,
