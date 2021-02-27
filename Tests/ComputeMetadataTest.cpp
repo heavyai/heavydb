@@ -588,6 +588,25 @@ class OptimizeTableVacuumTest : public DBHandlerTestFixture {
     sql("drop table if exists test_table;");
     DBHandlerTestFixture::TearDown();
   }
+
+  void assertUsedPageCount(int64_t used_data_page_count) {
+    TQueryResult result;
+    sql(result, "show table details test_table;");
+
+    ASSERT_EQ("total_data_page_count", result.row_set.row_desc[18].col_name);
+    auto total_data_page_count = result.row_set.columns[18].data.int_col[0];
+
+    ASSERT_EQ("total_free_data_page_count", result.row_set.row_desc[19].col_name);
+    auto total_free_data_page_count = result.row_set.columns[19].data.int_col[0];
+
+    ASSERT_EQ(used_data_page_count, total_data_page_count - total_free_data_page_count);
+  }
+
+  void insertRange(int start, int end) {
+    for (int value = start; value <= end; value++) {
+      sql("insert into test_table values (" + std::to_string(value) + ");");
+    }
+  }
 };
 
 TEST_F(OptimizeTableVacuumTest, TableWithDeletedRows) {
@@ -597,6 +616,44 @@ TEST_F(OptimizeTableVacuumTest, TableWithDeletedRows) {
   sql("insert into test_table values (30);");
   sql("delete from test_table where i <= 20;");
   sql("optimize table test_table with (vacuum = 'true');");
+}
+
+TEST_F(OptimizeTableVacuumTest, SingleChunkVersionAndDeletedFragment) {
+  sql("create table test_table (i int) with (fragment_size = 2, max_rollback_epochs = "
+      "0);");
+  insertRange(1, 3);
+
+  // 4 chunks (includes "$deleted" column chunks), each using one page
+  assertUsedPageCount(4);
+
+  sql("delete from test_table where i <= 2;");
+  assertUsedPageCount(4);
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  // 2 pages for the first fragment chunks should be rolled-off
+  assertUsedPageCount(2);
+
+  sqlAndCompareResult("select * from test_table;", {{i(3)}});
+}
+
+TEST_F(OptimizeTableVacuumTest, MultipleChunkVersionsAndDeletedFragment) {
+  // Create table with a page size that allows for a maximum of 2 integers per page
+  sql("create table test_table (i int) with (fragment_size = 2, max_rollback_epochs = "
+      "5);");
+  insertRange(1, 3);
+
+  // 4 chunks (includes "$deleted" column chunks), each using one page
+  assertUsedPageCount(4);
+
+  sql("delete from test_table where i <= 2;");
+  // Additional page for new "$deleted" column chunk that marks rows as deleted
+  assertUsedPageCount(5);
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  // All chunks/chunk pages are still kept
+  assertUsedPageCount(5);
+
+  sqlAndCompareResult("select * from test_table;", {{i(3)}});
 }
 
 int main(int argc, char** argv) {

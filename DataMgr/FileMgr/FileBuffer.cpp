@@ -209,6 +209,22 @@ void FileBuffer::freePagesBeforeEpoch(const int32_t targetEpoch) {
   for (auto& multiPage : multiPages_) {
     freePagesBeforeEpochForMultiPage(multiPage, targetEpoch, currentEpoch);
   }
+
+  // Check if all buffer pages can be freed
+  if (size_ == 0) {
+    size_t max_historical_buffer_size{0};
+    for (auto& epoch_page : metadataPages_.pageVersions) {
+      // Create buffer that is used to get the buffer size at the epoch version
+      FileBuffer buffer{fm_, pageSize_, chunkKey_};
+      buffer.readMetadata(epoch_page.page);
+      max_historical_buffer_size = std::max(max_historical_buffer_size, buffer.size());
+    }
+
+    // Free all pages, if none of the old chunk versions has any data
+    if (max_historical_buffer_size == 0) {
+      freePages();
+    }
+  }
 }
 
 struct readThreadDS {

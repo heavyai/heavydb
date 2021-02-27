@@ -463,6 +463,122 @@ TEST_F(FileMgrTest, capped_metadata) {
   }
 }
 
+class MaxRollbackEpochTest : public FileMgrTest {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("drop table if exists test_table;");
+    sql("create table test_table (i int);");
+  }
+
+  void TearDown() override {
+    sql("drop table test_table;");
+    DBHandlerTestFixture::TearDown();
+  }
+
+  File_Namespace::FileMgr* getFileMgr() {
+    auto& data_mgr = getCatalog().getDataMgr();
+    auto td = getCatalog().getMetadataForTable("test_table");
+    return dynamic_cast<File_Namespace::FileMgr*>(data_mgr.getGlobalFileMgr()->getFileMgr(
+        getCatalog().getDatabaseId(), td->tableId));
+  }
+
+  ChunkKey getChunkKey() {
+    auto td = getCatalog().getMetadataForTable("test_table");
+    auto cd = getCatalog().getMetadataForColumn(td->tableId, "i");
+    return {getCatalog().getDatabaseId(), td->tableId, cd->columnId, 0};
+  }
+
+  AbstractBuffer* createBuffer(size_t num_entries_per_page) {
+    auto chunk_key = getChunkKey();
+    constexpr size_t reserved_header_size{32};
+    auto buffer = getFileMgr()->createBuffer(
+        chunk_key, reserved_header_size + (num_entries_per_page * sizeof(int32_t)), 0);
+    auto cd = getCatalog().getMetadataForColumn(chunk_key[CHUNK_KEY_TABLE_IDX],
+                                                chunk_key[CHUNK_KEY_COLUMN_IDX]);
+    buffer->initEncoder(cd->columnType);
+    return buffer;
+  }
+
+  void setMaxRollbackEpochs(int32_t max_rollback_epochs) {
+    auto td = getCatalog().getMetadataForTable("test_table");
+    auto& data_mgr = getCatalog().getDataMgr();
+    File_Namespace::FileMgrParams params;
+    params.max_rollback_epochs = max_rollback_epochs;
+    data_mgr.getGlobalFileMgr()->setFileMgrParams(
+        getCatalog().getDatabaseId(), td->tableId, params);
+  }
+
+  void updateData(std::vector<int32_t>& values) {
+    auto& data_mgr = getCatalog().getDataMgr();
+    auto chunk_key = getChunkKey();
+    auto buffer_size = values.size() * sizeof(int32_t);
+    AbstractBuffer* buffer =
+        data_mgr.getChunkBuffer(chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL);
+    buffer->reserve(buffer_size);
+    memcpy(buffer->getMemoryPtr(), reinterpret_cast<int8_t*>(values.data()), buffer_size);
+    buffer->setSize(buffer_size);
+    buffer->setUpdated();
+    getFileMgr()->putBuffer(chunk_key, buffer, buffer_size);
+  }
+};
+
+TEST_F(MaxRollbackEpochTest, WriteEmptyBufferAndSingleEpochVersion) {
+  setMaxRollbackEpochs(0);
+  auto file_mgr = getFileMgr();
+
+  // Creates a buffer that allows for a maximum of 2 integers per page
+  auto buffer = createBuffer(2);
+
+  std::vector<int32_t> data{1, 2, 3, 4};
+  writeData(buffer, data, 0);
+  file_mgr->checkpoint();
+
+  // 2 pages should be used for the above 4 integers
+  auto stats = file_mgr->getStorageStats();
+  auto used_page_count =
+      stats.total_data_page_count - stats.total_free_data_page_count.value();
+  ASSERT_EQ(static_cast<uint64_t>(2), used_page_count);
+
+  data = {};
+  updateData(data);
+  file_mgr->checkpoint();
+
+  // Last 2 pages should be rolled-off. No page should be in use, since
+  // an empty buffer was written
+  stats = file_mgr->getStorageStats();
+  ASSERT_EQ(stats.total_data_page_count, stats.total_free_data_page_count.value());
+}
+
+TEST_F(MaxRollbackEpochTest, WriteEmptyBufferAndMultipleEpochVersions) {
+  setMaxRollbackEpochs(1);
+  auto file_mgr = getFileMgr();
+
+  // Creates a buffer that allows for a maximum of 2 integers per page
+  auto buffer = createBuffer(2);
+
+  std::vector<int32_t> data{1, 2, 3, 4};
+  writeData(buffer, data, 0);
+  file_mgr->checkpoint();
+
+  // 2 pages should be used for the above 4 integers
+  auto stats = file_mgr->getStorageStats();
+  auto used_page_count =
+      stats.total_data_page_count - stats.total_free_data_page_count.value();
+  ASSERT_EQ(static_cast<uint64_t>(2), used_page_count);
+
+  data = {};
+  updateData(data);
+  file_mgr->checkpoint();
+
+  // With a max_rollback_epochs of 1, the 2 previous pages should still
+  // be in use for the above 4 integers
+  stats = file_mgr->getStorageStats();
+  used_page_count =
+      stats.total_data_page_count - stats.total_free_data_page_count.value();
+  ASSERT_EQ(static_cast<uint64_t>(2), used_page_count);
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
