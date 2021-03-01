@@ -125,6 +125,12 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(REMOVE_ITEM THRIFT_HANDLER_TEST_LIBRARIES Licensing)
 endif()
 
+if(ENABLE_L0)
+  add_executable(L0BuildTest L0BuildTest.cpp)
+  target_include_directories(L0BuildTest PRIVATE ${LevelZero_INCLUDE_DIRS})
+  target_link_libraries(L0BuildTest ${LevelZero_LIBRARY} ${EXECUTE_TEST_LIBS})
+endif()
+
 target_link_libraries(ProfileTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ResultSetTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ColumnarResultsTest ${EXECUTE_TEST_LIBS})
@@ -289,6 +295,10 @@ if(ENABLE_CUDA)
   add_test(GpuSharedMemoryTest GpuSharedMemoryTest ${TEST_ARGS})
 elseif(ENABLE_DBE)
   add_test(EmbeddedDatabaseTest EmbeddedDatabaseTest ${TEST_ARGS})
+endif()
+
+if(ENABLE_L0)
+  add_test(L0BuildTest L0BuildTest ${TEST_ARGS})
 endif()
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
