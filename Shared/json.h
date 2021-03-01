@@ -167,8 +167,6 @@ class JSON final {
     return *this;
   }
 
-  JSON& operator=(JSON&&) = default;
-
   JSON& operator=(const std::string& item) {
     *vptr_ = rapidjson::Value().SetString(item, allo_);
     return *this;
