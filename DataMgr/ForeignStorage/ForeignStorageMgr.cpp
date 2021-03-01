@@ -41,7 +41,11 @@ void ForeignStorageMgr::checkIfS3NeedsToBeEnabled(const ChunkKey& chunk_key) {
   auto foreign_table = catalog->getForeignTableUnlocked(chunk_key[CHUNK_KEY_TABLE_IDX]);
   auto storage_type_entry = foreign_table->foreign_server->options.find(
       AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY);
-  CHECK(storage_type_entry != foreign_table->foreign_server->options.end());
+
+  if (storage_type_entry == foreign_table->foreign_server->options.end()) {
+    // Some FSI servers such as ODBC do not have a storage_type
+    return;
+  }
   bool is_s3_storage_type =
       (storage_type_entry->second == AbstractFileStorageDataWrapper::S3_STORAGE_TYPE);
   if (is_s3_storage_type) {

@@ -25,7 +25,6 @@
 
 #pragma once
 
-#include <gtest/gtest.h>
 #include "../Shared/mapd_shared_mutex.h"
 #include "DataMgr/AbstractBufferMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"

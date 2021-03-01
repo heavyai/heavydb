@@ -544,6 +544,7 @@ TEST_P(CacheControllingSelectQueryTest, DefaultLocalParquetServer) {
   sql(query);
   TQueryResult result;
   sql(result, "SELECT * FROM test_foreign_table;");
+
   assertResultSetEqual({{"a", i(1), 1.1},
                         {"aa", i(1), 1.1},
                         {"aa", i(2), 2.2},
