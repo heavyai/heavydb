@@ -90,6 +90,8 @@ bool should_recompute_metadata(
       min = chunk_metadata->chunkStats.min.floatval;
       max = chunk_metadata->chunkStats.max.floatval;
     } else {
+      min = 0;  // resolve compiler warning about uninitialized variables
+      max = -1;
       UNREACHABLE();
     }
     return is_chunk_min_max_updated(update_stats.value(), min, max);
