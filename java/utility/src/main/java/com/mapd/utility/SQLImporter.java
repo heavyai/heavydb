@@ -208,11 +208,18 @@ class SQLImporter_args {
                               .desc("Truncate table if it exists")
                               .longOpt("truncate")
                               .build());
+
     options.addOption(Option.builder("i")
                               .hasArg()
                               .desc("File containing init command for DB")
                               .longOpt("initializeFile")
                               .build());
+
+    options.addOption(
+            Option.builder("adtf")
+                    .desc("Allow double to float conversion, note precision will be reduced")
+                    .longOpt("AllowDoubleToFloat")
+                    .build());
   }
 
   private Option setOptionRequired(Option option) {
@@ -521,9 +528,9 @@ public class SQLImporter {
       if (!dstColumns.get(i - 1).getCol_name().equalsIgnoreCase(
                   srcColumns.getColumnName(i))) {
         LOGGER.error(
-                "Destination table does not have matching column in same order for column number"
+                "Destination table does not have matching column in same order for column number "
                 + i + " destination column name is " + dstColumns.get(i - 1).col_name
-                + " versus Select " + srcColumns.getColumnName(i));
+                + " versus target column " + srcColumns.getColumnName(i));
         exit(1);
       }
       TDatumType dstType = dstColumns.get(i - 1).getCol_type().getType();
@@ -558,6 +565,9 @@ public class SQLImporter {
           // Fall through and try double
         case java.sql.Types.DOUBLE:
           match |= dstType == TDatumType.DOUBLE;
+          if (cmd.hasOption("AllowDoubleToFloat")) {
+            match |= dstType == TDatumType.FLOAT;
+          }
           break;
         case java.sql.Types.TIME:
           match = dstType == TDatumType.TIME;
