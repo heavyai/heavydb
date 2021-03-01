@@ -18924,6 +18924,43 @@ TEST(Select, SampleRatio) {
   }
 }
 
+// Additional integer parsing tests in ImportTestInt.ImportBadInt and ImportGoodInt.
+TEST(Select, ParseIntegerExceptions) {
+  struct TestPair {
+    std::string query;
+    std::string exception;
+  };
+  std::vector<TestPair> const tests{
+      {"SELECT * FROM test WHERE ''=2147483647;",
+       "Invalid conversion from \"\" to INTEGER"},
+      {"SELECT * FROM test WHERE ''=2147483648;",
+       "Invalid conversion from \"\" to BIGINT"},
+      {"SELECT * FROM test WHERE '9223372036854775808'=9223372036854775807;",
+       "Integer 9223372036854775808 is out of range for BIGINT"},
+      {"SELECT * FROM test WHERE '1e3'=1;",
+       "Unexpected character \"e\" encountered in INTEGER value 1e3"}};
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (auto const& test : tests) {
+      try {
+        run_multiple_agg(test.query, dt);
+        EXPECT_TRUE(false) << "Exception expected for query: " << test.query;
+      } catch (std::runtime_error const& e) {
+        if (g_aggregator) {
+          EXPECT_EQ(
+              e.what(),
+              "TException - service has thrown: TOmniSciException(error_msg=Exception: " +
+                  test.exception + ')');
+        } else {
+          EXPECT_EQ(e.what(), test.exception);
+        }
+      } catch (...) {
+        EXPECT_TRUE(false) << "std::runtime_error expected for query: " << test.query;
+      }
+    }
+  }
+}
+
 class SubqueryTestEnv : public ::testing::Test {
  protected:
   void SetUp() override {

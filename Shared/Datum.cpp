@@ -26,6 +26,7 @@
 #include <charconv>
 #include <cstdio>
 #include <cstdlib>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -150,7 +151,11 @@ T parseInteger(std::string_view s, SQLTypeInfo const& ti) {
                              "\" encountered in " + ti.get_type_name() + " value " +
                              std::string(s));
   } else if (error_code != std::errc()) {
-    throw std::runtime_error("Integer " + std::string(s) + " is out of range for " +
+    if (error_code == std::errc::result_out_of_range) {
+      throw std::runtime_error("Integer " + std::string(s) + " is out of range for " +
+                               ti.get_type_name());
+    }
+    throw std::runtime_error("Invalid conversion from \"" + std::string(s) + "\" to " +
                              ti.get_type_name());
   } else if (fieldsize < 8 * sizeof(T)) {
     if (maxValue<T>(fieldsize) < retval) {
@@ -168,7 +173,7 @@ T parseInteger(std::string_view s, SQLTypeInfo const& ti) {
                                  toString(ti, fieldsize));
       }
     }
-  } else if (!ti.get_notnull() && retval == minValue<T>(fieldsize)) {
+  } else if (!ti.get_notnull() && retval == std::numeric_limits<T>::min()) {
     throw std::runtime_error("Integer " + std::string(s) +
                              " exceeds minimum value for nullable " +
                              toString(ti, fieldsize));
