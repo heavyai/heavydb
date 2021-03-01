@@ -969,6 +969,16 @@ TEST_F(SelectQueryTest, SchemaMismatch_CSV_Multithreaded) {
                           "columns, has 4): in file '" +
                               getDataFilesPath() + "0_255.csv'");
 }
+TEST_F(SelectQueryTest, ParseError) {
+  const auto& query = getCreateForeignTableQuery(
+      "(i INTEGER)", {{"buffer_size", "25"}}, "1badint", "csv");
+  sql(query);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table;",
+      "Exception: Parsing failure \"Invalid conversion from string to INTEGER\" in row "
+      "\"-a\" in file \"" +
+          getDataFilesPath() + "1badint.csv\"");
+}
 
 TEST_F(SelectQueryTest, ExistingTableWithFsiDisabled) {
   std::string query = "CREATE FOREIGN TABLE test_foreign_table (i INTEGER) "s +

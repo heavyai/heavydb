@@ -87,44 +87,10 @@ void CsvDataWrapper::populateChunkMapForColumns(
     const std::map<ChunkKey, AbstractBuffer*>& buffers,
     std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map) {
   for (const auto column : columns) {
-    ChunkKey data_chunk_key;
-    AbstractBuffer* data_buffer = nullptr;
-    AbstractBuffer* index_buffer = nullptr;
-    if (column->columnType.is_varlen_indeed()) {
-      data_chunk_key = {
-          db_id_, foreign_table_->tableId, column->columnId, fragment_id, 1};
-      ChunkKey index_chunk_key = {
-          db_id_, foreign_table_->tableId, column->columnId, fragment_id, 2};
-
-      CHECK(buffers.find(data_chunk_key) != buffers.end());
-      CHECK(buffers.find(index_chunk_key) != buffers.end());
-
-      data_buffer = buffers.find(data_chunk_key)->second;
-      index_buffer = buffers.find(index_chunk_key)->second;
-      CHECK_EQ(data_buffer->size(), static_cast<size_t>(0));
-      CHECK_EQ(index_buffer->size(), static_cast<size_t>(0));
-
-      size_t index_offset_size{0};
-      if (column->columnType.is_string() || column->columnType.is_geometry()) {
-        index_offset_size = sizeof(StringOffsetT);
-      } else if (column->columnType.is_array()) {
-        index_offset_size = sizeof(ArrayOffsetT);
-      } else {
-        UNREACHABLE();
-      }
-      CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
-      index_buffer->reserve(index_offset_size *
-                            (chunk_metadata_map_[data_chunk_key]->numElements + 1));
-    } else {
-      data_chunk_key = {db_id_, foreign_table_->tableId, column->columnId, fragment_id};
-      CHECK(buffers.find(data_chunk_key) != buffers.end());
-      data_buffer = buffers.find(data_chunk_key)->second;
-    }
-    data_buffer->reserve(chunk_metadata_map_[data_chunk_key]->numBytes);
-    column_id_to_chunk_map[column->columnId] = Chunk_NS::Chunk{column};
-    column_id_to_chunk_map[column->columnId].setBuffer(data_buffer);
-    column_id_to_chunk_map[column->columnId].setIndexBuffer(index_buffer);
-    column_id_to_chunk_map[column->columnId].initEncoder();
+    ChunkKey data_chunk_key = {
+        db_id_, foreign_table_->tableId, column->columnId, fragment_id};
+    column_id_to_chunk_map[column->columnId] =
+        Csv::make_chunk_for_column(data_chunk_key, chunk_metadata_map_, buffers);
   }
 }
 
@@ -1023,31 +989,6 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
       cache->cacheTableChunks(to_cache);
     }
   }
-}
-
-// Serialization functions for FileRegion
-void set_value(rapidjson::Value& json_val,
-               const FileRegion& file_region,
-               rapidjson::Document::AllocatorType& allocator) {
-  json_val.SetObject();
-  json_utils::add_value_to_object(
-      json_val, file_region.first_row_file_offset, "first_row_file_offset", allocator);
-  json_utils::add_value_to_object(
-      json_val, file_region.first_row_index, "first_row_index", allocator);
-  json_utils::add_value_to_object(
-      json_val, file_region.region_size, "region_size", allocator);
-  json_utils::add_value_to_object(
-      json_val, file_region.row_count, "row_count", allocator);
-}
-
-void get_value(const rapidjson::Value& json_val, FileRegion& file_region) {
-  CHECK(json_val.IsObject());
-  json_utils::get_value_from_object(
-      json_val, file_region.first_row_file_offset, "first_row_file_offset");
-  json_utils::get_value_from_object(
-      json_val, file_region.first_row_index, "first_row_index");
-  json_utils::get_value_from_object(json_val, file_region.region_size, "region_size");
-  json_utils::get_value_from_object(json_val, file_region.row_count, "row_count");
 }
 
 void CsvDataWrapper::serializeDataWrapperInternals(const std::string& file_path) const {

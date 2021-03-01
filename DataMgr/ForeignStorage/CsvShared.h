@@ -26,6 +26,48 @@
 #include "ImportExport/Importer.h"
 
 namespace foreign_storage {
+/**
+ * Data structure containing details about a CSV file region (subset of rows within a CSV
+ * file).
+ */
+struct FileRegion {
+  // Name of file containing region
+  std::string filename;
+  // Byte offset (within file) for the beginning of file region
+  size_t first_row_file_offset;
+  // Index of first row in file region relative to the first row/non-header line in the
+  // file
+  size_t first_row_index;
+  // Number of rows in file region
+  size_t row_count;
+  // Size of file region in bytes
+  size_t region_size;
+
+  FileRegion(std::string name,
+             size_t first_row_offset,
+             size_t first_row_idx,
+             size_t row_cnt,
+             size_t region_sz)
+      : filename(name)
+      , first_row_file_offset(first_row_offset)
+      , first_row_index(first_row_idx)
+      , row_count(row_cnt)
+      , region_size(region_sz) {}
+  FileRegion() {}
+  bool operator<(const FileRegion& other) const {
+    return first_row_file_offset < other.first_row_file_offset;
+  }
+};
+
+using FileRegions = std::vector<FileRegion>;
+
+// Serialization functions for FileRegion
+void set_value(rapidjson::Value& json_val,
+               const FileRegion& file_region,
+               rapidjson::Document::AllocatorType& allocator);
+
+void get_value(const rapidjson::Value& json_val, FileRegion& file_region);
+
 namespace Csv {
 
 // Validate CSV Specific options
@@ -35,6 +77,11 @@ import_export::CopyParams validate_and_get_copy_params(const ForeignTable* forei
 
 // Return true if this used s3 select to access underlying CSV
 bool validate_and_get_is_s3_select(const ForeignTable* foreign_table);
+
+Chunk_NS::Chunk make_chunk_for_column(
+    const ChunkKey& chunk_key,
+    std::map<ChunkKey, std::shared_ptr<ChunkMetadata>>& chunk_metadata_map,
+    const std::map<ChunkKey, AbstractBuffer*>& buffers);
 
 }  // namespace Csv
 }  // namespace foreign_storage

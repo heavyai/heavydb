@@ -16,10 +16,37 @@
 #include "CsvShared.h"
 #include "CsvDataWrapper.h"
 #include "DataMgr/ForeignStorage/ForeignTableSchema.h"
+#include "FsiJsonUtils.h"
 #include "ImportExport/CopyParams.h"
 #include "Utils/DdlUtils.h"
 
 namespace foreign_storage {
+
+// Serialization functions for FileRegion
+void set_value(rapidjson::Value& json_val,
+               const FileRegion& file_region,
+               rapidjson::Document::AllocatorType& allocator) {
+  json_val.SetObject();
+  json_utils::add_value_to_object(
+      json_val, file_region.first_row_file_offset, "first_row_file_offset", allocator);
+  json_utils::add_value_to_object(
+      json_val, file_region.first_row_index, "first_row_index", allocator);
+  json_utils::add_value_to_object(
+      json_val, file_region.region_size, "region_size", allocator);
+  json_utils::add_value_to_object(
+      json_val, file_region.row_count, "row_count", allocator);
+}
+
+void get_value(const rapidjson::Value& json_val, FileRegion& file_region) {
+  CHECK(json_val.IsObject());
+  json_utils::get_value_from_object(
+      json_val, file_region.first_row_file_offset, "first_row_file_offset");
+  json_utils::get_value_from_object(
+      json_val, file_region.first_row_index, "first_row_index");
+  json_utils::get_value_from_object(json_val, file_region.region_size, "region_size");
+  json_utils::get_value_from_object(json_val, file_region.row_count, "row_count");
+}
+
 namespace Csv {
 namespace {
 std::string validate_and_get_string_with_length(const ForeignTable* foreign_table,
@@ -146,6 +173,57 @@ import_export::CopyParams validate_and_get_copy_params(
   return copy_params;
 }
 
+Chunk_NS::Chunk make_chunk_for_column(
+    const ChunkKey& chunk_key,
+    std::map<ChunkKey, std::shared_ptr<ChunkMetadata>>& chunk_metadata_map,
+    const std::map<ChunkKey, AbstractBuffer*>& buffers) {
+  auto catalog =
+      Catalog_Namespace::SysCatalog::instance().getCatalog(chunk_key[CHUNK_KEY_DB_IDX]);
+  CHECK(catalog);
+
+  ChunkKey data_chunk_key = chunk_key;
+  AbstractBuffer* data_buffer = nullptr;
+  AbstractBuffer* index_buffer = nullptr;
+  const auto column = catalog->getMetadataForColumnUnlocked(
+      chunk_key[CHUNK_KEY_TABLE_IDX], chunk_key[CHUNK_KEY_COLUMN_IDX]);
+
+  if (column->columnType.is_varlen_indeed()) {
+    data_chunk_key.push_back(1);
+    ChunkKey index_chunk_key = chunk_key;
+    index_chunk_key.push_back(2);
+
+    CHECK(buffers.find(data_chunk_key) != buffers.end());
+    CHECK(buffers.find(index_chunk_key) != buffers.end());
+
+    data_buffer = buffers.find(data_chunk_key)->second;
+    index_buffer = buffers.find(index_chunk_key)->second;
+    CHECK_EQ(data_buffer->size(), static_cast<size_t>(0));
+    CHECK_EQ(index_buffer->size(), static_cast<size_t>(0));
+
+    size_t index_offset_size{0};
+    if (column->columnType.is_string() || column->columnType.is_geometry()) {
+      index_offset_size = sizeof(StringOffsetT);
+    } else if (column->columnType.is_array()) {
+      index_offset_size = sizeof(ArrayOffsetT);
+    } else {
+      UNREACHABLE();
+    }
+    CHECK(chunk_metadata_map.find(data_chunk_key) != chunk_metadata_map.end());
+    index_buffer->reserve(index_offset_size *
+                          (chunk_metadata_map.at(data_chunk_key)->numElements + 1));
+  } else {
+    data_chunk_key = chunk_key;
+    CHECK(buffers.find(data_chunk_key) != buffers.end());
+    data_buffer = buffers.find(data_chunk_key)->second;
+  }
+  data_buffer->reserve(chunk_metadata_map.at(data_chunk_key)->numBytes);
+
+  auto retval = Chunk_NS::Chunk{column};
+  retval.setBuffer(data_buffer);
+  retval.setIndexBuffer(index_buffer);
+  retval.initEncoder();
+  return retval;
+}
 }  // namespace Csv
 
 }  // namespace foreign_storage

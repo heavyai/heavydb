@@ -23,6 +23,7 @@ set(datamgr_source_files
     ForeignStorage/FsiJsonUtils.cpp
     ForeignStorage/CsvReader.cpp
     ForeignStorage/CsvShared.cpp
+    ForeignStorage/CsvFileBufferParser.cpp
     BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.cpp
     BufferMgr/GpuCudaBufferMgr/GpuCudaBuffer.cpp
     BufferMgr/CpuBufferMgr/CpuBufferMgr.cpp
