@@ -973,11 +973,11 @@ TEST_F(SelectQueryTest, ParseError) {
   const auto& query = getCreateForeignTableQuery(
       "(i INTEGER)", {{"buffer_size", "25"}}, "1badint", "csv");
   sql(query);
-  queryAndAssertException(
-      "SELECT * FROM test_foreign_table;",
-      "Exception: Parsing failure \"Invalid conversion from string to INTEGER\" in row "
-      "\"-a\" in file \"" +
-          getDataFilesPath() + "1badint.csv\"");
+  queryAndAssertException("SELECT * FROM test_foreign_table;",
+                          "Exception: Parsing failure \"Unexpected character \"-\" "
+                          "encountered in INTEGER value -a\" in row "
+                          "\"-a\" in file \"" +
+                              getDataFilesPath() + "1badint.csv\"");
 }
 
 TEST_F(SelectQueryTest, ExistingTableWithFsiDisabled) {
