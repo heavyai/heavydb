@@ -142,7 +142,7 @@ target_link_libraries(StringFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift Logger Shared ${Boost_LIBRARIES})
 target_link_libraries(DumpRestoreTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(SpirvBuildTest LLVMSPIRVLib ${EXECUTE_TEST_LIBS})
+target_link_libraries(SpirvBuildTest LLVMSPIRVLib ${THRIFT_HANDLER_TEST_LIBRARIES})  # quick fix for thrift link issue
 target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(GeospatialTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} bcrypt)
