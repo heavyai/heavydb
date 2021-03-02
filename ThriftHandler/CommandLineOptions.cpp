@@ -163,6 +163,11 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(enable_runtime_query_interrupt)
                               ->implicit_value(true),
                           "Enable runtime query interrupt.");
+  help_desc.add_options()("enable-non-kernel-time-query-interrupt",
+                          po::value<bool>(&enable_non_kernel_time_query_interrupt)
+                              ->default_value(enable_non_kernel_time_query_interrupt)
+                              ->implicit_value(true),
+                          "Enable non-kernel time query interrupt.");
   help_desc.add_options()("pending-query-interrupt-freq",
                           po::value<unsigned>(&pending_query_interrupt_freq)
                               ->default_value(pending_query_interrupt_freq)
@@ -803,6 +808,8 @@ void CommandLineOptions::validate() {
     LOG(INFO) << " A frequency of checking running query interrupt request is set to "
               << running_query_interrupt_freq << " (0.0 ~ 1.0)";
   }
+  LOG(INFO) << " Non-kernel time query interrupt is set to "
+            << enable_non_kernel_time_query_interrupt;
 
   LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
   LOG(INFO) << " LogUserId is set to " << Catalog_Namespace::g_log_user_id;
@@ -942,6 +949,7 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     g_enable_dynamic_watchdog = enable_dynamic_watchdog;
     g_dynamic_watchdog_time_limit = dynamic_watchdog_time_limit;
     g_enable_runtime_query_interrupt = enable_runtime_query_interrupt;
+    g_enable_non_kernel_time_query_interrupt = enable_non_kernel_time_query_interrupt;
     g_pending_query_interrupt_freq = pending_query_interrupt_freq;
     g_running_query_interrupt_freq = running_query_interrupt_freq;
     g_use_estimator_result_cache = use_estimator_result_cache;

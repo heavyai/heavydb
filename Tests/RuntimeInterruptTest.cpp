@@ -25,10 +25,12 @@
 #include "Catalog/Catalog.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/CompilationOptions.h"
+#include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/StringTransform.h"
+#include "Shared/scope.h"
 
 using QR = QueryRunner::QueryRunner;
 unsigned PENDING_QUERY_INTERRUPT_CHECK_FREQ = 10;
@@ -40,27 +42,30 @@ double RUNNING_QUERY_INTERRUPT_CHECK_FREQ = 0.9;
 
 bool g_cpu_only{false};
 // nested loop over 1M * 1M
-std::string test_query_large{"SELECT count(1) FROM t_large t1, t_large t2;"};
+std::string test_query_large{
+    "SELECT count(1) FROM t_large t1, t_large t2 where t1.x = t2.x;"};
 // nested loop over 100k * 100k
-std::string test_query_medium{"SELECT count(1) FROM t_medium t1, t_medium t2;"};
+std::string test_query_medium{
+    "SELECT count(1) FROM t_medium t1, t_medium t2 where t1.x = t2.x;"};
 // nested loop over 1k * 1k
-std::string test_query_small{"SELECT count(1) FROM t_small t1, t_small t2;"};
+std::string test_query_small{
+    "SELECT count(1) FROM t_small t1, t_small t2 where t1.x = t2.x;"};
 
 std::string pending_query_interrupted_msg =
     "Query execution has been interrupted (pending query)";
-std::string running_query_interrupted_msg = "Query execution has been interrupted";
+std::string running_query_interrupted_msg =
+    "Query execution failed with error Query execution has been interrupted";
 
 namespace {
 
 std::shared_ptr<ResultSet> run_query(const std::string& query_str,
-                                     std::shared_ptr<Executor> executor,
                                      const ExecutorDeviceType device_type,
                                      const std::string& session_id = "") {
   if (session_id.length() != 32) {
     LOG(ERROR) << "Incorrect or missing session info.";
   }
   return QR::get()->runSQLWithAllowingInterrupt(
-      query_str, executor, session_id, device_type, PENDING_QUERY_INTERRUPT_CHECK_FREQ);
+      query_str, session_id, device_type, 0.5, PENDING_QUERY_INTERRUPT_CHECK_FREQ);
 }
 
 inline void run_ddl_statement(const std::string& create_table_stmt) {
@@ -69,18 +74,44 @@ inline void run_ddl_statement(const std::string& create_table_stmt) {
 
 int create_and_populate_table() {
   try {
+    run_ddl_statement("DROP TABLE IF EXISTS t_very_large_agg;");
+    run_ddl_statement("DROP TABLE IF EXISTS t_very_large_parquet;");
+    run_ddl_statement("DROP TABLE IF EXISTS t_very_large_sharded;");
+    run_ddl_statement("DROP TABLE IF EXISTS t_very_large_csv;");
+    run_ddl_statement("DROP TABLE IF EXISTS t_very_large;");
     run_ddl_statement("DROP TABLE IF EXISTS t_large;");
     run_ddl_statement("DROP TABLE IF EXISTS t_medium;");
     run_ddl_statement("DROP TABLE IF EXISTS t_small;");
+    run_ddl_statement("DROP TABLE IF EXISTS t_geo");
+    run_ddl_statement("DROP TABLE IF EXISTS t_gdal");
+    run_ddl_statement(
+        "CREATE TABLE t_very_large_sharded (x int not null, y int not null, z int not "
+        "null, SHARD KEY (x)) WITH (shard_count = 4);");
+    run_ddl_statement(
+        "CREATE TABLE t_very_large_csv (x int not null, y int not null, z int not "
+        "null);");
+    run_ddl_statement(
+        "CREATE TABLE t_very_large_parquet (x int not null, y int not null, z int not "
+        "null);");
+    run_ddl_statement(
+        "CREATE TABLE t_very_large (x int not null, y int not null, z int not null);");
+    run_ddl_statement(
+        "CREATE TABLE t_very_large_agg (k1 int not null, k2 int not null, i int not "
+        "null) WITH (fragment_size = 1000000);");
     run_ddl_statement("CREATE TABLE t_large (x int not null);");
     run_ddl_statement("CREATE TABLE t_medium (x int not null);");
     run_ddl_statement("CREATE TABLE t_small (x int not null);");
+    const char* create_table_geo = "CREATE TABLE t_geo (p1 POINT);";
+    run_ddl_statement(create_table_geo);
+    run_ddl_statement(
+        "CREATE TABLE t_gdal (trip DOUBLE, omnisci_geo GEOMETRY(POINT, 4326) ENCODING "
+        "NONE);");
 
     // write a temporary datafile used in the test
     // because "INSERT INTO ..." stmt for this takes too much time
     // and add pre-generated dataset increases meaningless LOC of this test code
     const auto file_path_small =
-        boost::filesystem::path("../../Tests/Import/datafiles/interrupt_table_small.txt");
+        boost::filesystem::path("../../Tests/Import/datafiles/interrupt_table_small.csv");
     if (boost::filesystem::exists(file_path_small)) {
       boost::filesystem::remove(file_path_small);
     }
@@ -93,7 +124,7 @@ int create_and_populate_table() {
     small_out.close();
 
     const auto file_path_medium = boost::filesystem::path(
-        "../../Tests/Import/datafiles/interrupt_table_medium.txt");
+        "../../Tests/Import/datafiles/interrupt_table_medium.csv");
     if (boost::filesystem::exists(file_path_medium)) {
       boost::filesystem::remove(file_path_medium);
     }
@@ -106,7 +137,7 @@ int create_and_populate_table() {
     medium_out.close();
 
     const auto file_path_large =
-        boost::filesystem::path("../../Tests/Import/datafiles/interrupt_table_large.txt");
+        boost::filesystem::path("../../Tests/Import/datafiles/interrupt_table_large.csv");
     if (boost::filesystem::exists(file_path_large)) {
       boost::filesystem::remove(file_path_large);
     }
@@ -118,22 +149,142 @@ int create_and_populate_table() {
     }
     large_out.close();
 
+    const auto file_path_very_large = boost::filesystem::path(
+        "../../Tests/Import/datafiles/interrupt_table_very_large.csv");
+    if (boost::filesystem::exists(file_path_very_large)) {
+      boost::filesystem::remove(file_path_very_large);
+    }
+    std::ofstream very_large_out(file_path_very_large.string());
+    for (int i = 0; i < 10000000; i++) {
+      if (very_large_out.is_open()) {
+        very_large_out << "1,1,1\n2,2,2\n3,3,3\n4,4,4\n5,5,5\n";
+      }
+    }
+    very_large_out.close();
+
+    std::vector<std::string> geo_dataset;
+    geo_dataset.push_back("\"POINT(0 0)\"");
+    geo_dataset.push_back("\"POINT(1 0)\"");
+    geo_dataset.push_back("\"POINT(2 0)\"");
+    geo_dataset.push_back("\"POINT(3 0)\"");
+    geo_dataset.push_back("\"POINT(4 0)\"");
+    geo_dataset.push_back("\"POINT(5 0)\"");
+    geo_dataset.push_back("\"POINT(6 0)\"");
+    geo_dataset.push_back("\"POINT(7 0)\"");
+    geo_dataset.push_back("\"POINT(8 0)\"");
+    geo_dataset.push_back("\"POINT(9 0)\"");
+
+    const auto file_path_geo =
+        boost::filesystem::path("../../Tests/Import/datafiles/interrupt_table_geo.csv");
+    if (boost::filesystem::exists(file_path_geo)) {
+      boost::filesystem::remove(file_path_geo);
+    }
+
+    std::ofstream geo_out(file_path_geo.string());
+    geo_out << "\"point\"\n";
+    for (int i = 0; i < 10000; i++) {
+      for (auto& s : geo_dataset) {
+        geo_out << s << "\n";
+      }
+    }
+    geo_out.close();
+
+    std::vector<std::string> gdal_dataset;
+    gdal_dataset.push_back(
+        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 0.0 }, \"geometry\": { "
+        "\"type\": \"Point\", \"coordinates\": [ 0.0, 1.0 ] } },");
+    gdal_dataset.push_back(
+        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 1.0 }, \"geometry\": { "
+        "\"type\": \"Point\", \"coordinates\": [ 1.0, 2.0 ] } },");
+    gdal_dataset.push_back(
+        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 2.0 }, \"geometry\": { "
+        "\"type\": \"Point\", \"coordinates\": [ 2.0, 3.0 ] } },");
+    gdal_dataset.push_back(
+        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 3.0 }, \"geometry\": { "
+        "\"type\": \"Point\", \"coordinates\": [ 3.0, 4.0 ] } },");
+    gdal_dataset.push_back(
+        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 4.0 }, \"geometry\": { "
+        "\"type\": \"Point\", \"coordinates\": [ 4.0, 5.0 ] } },");
+    gdal_dataset.push_back(
+        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 5.0 }, \"geometry\": { "
+        "\"type\": \"Point\", \"coordinates\": [ 5.0, 6.0 ] } },");
+    gdal_dataset.push_back(
+        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 6.0 }, \"geometry\": { "
+        "\"type\": \"Point\", \"coordinates\": [ 6.0, 7.0 ] } },");
+    gdal_dataset.push_back(
+        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 7.0 }, \"geometry\": { "
+        "\"type\": \"Point\", \"coordinates\": [ 7.0, 8.0 ] } },");
+    gdal_dataset.push_back(
+        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 8.0 }, \"geometry\": { "
+        "\"type\": \"Point\", \"coordinates\": [ 8.0, 9.0 ] } },");
+    gdal_dataset.push_back(
+        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 9.0 }, \"geometry\": { "
+        "\"type\": \"Point\", \"coordinates\": [ 9.0, 0.0 ] } },");
+
+    const auto file_path_gdal = boost::filesystem::path(
+        "../../Tests/Import/datafiles/interrupt_table_gdal.geojson");
+    if (boost::filesystem::exists(file_path_gdal)) {
+      boost::filesystem::remove(file_path_gdal);
+    }
+
+    std::ofstream gdal_out(file_path_gdal.string());
+    gdal_out << "{\n"
+             << "\"type\": \"FeatureCollection\",\n"
+             << "\"name\": \"geospatial_point\",\n"
+             << "\"crs\": { \"type\": \"name\", \"properties\": { \"name\": "
+                "\"urn:ogc:def:crs:OGC:1.3:CRS84\" } },\n"
+             << "\"features\": [\n";
+    for (int i = 0; i < 10000; i++) {
+      for (auto& s : gdal_dataset) {
+        gdal_out << s << "\n";
+      }
+    }
+    gdal_out
+        << "{ \"type\": \"Feature\", \"properties\": { \"trip\": 10.0 }, \"geometry\": { "
+           "\"type\": \"Point\", \"coordinates\": [ 10.0, 9.0 ] } }\n";
+    gdal_out << "]\n"
+             << "}";
+    gdal_out.close();
+
+    const auto file_path_very_large_agg = boost::filesystem::path(
+        "../../Tests/Import/datafiles/interrupt_table_very_large_agg.csv");
+    if (boost::filesystem::exists(file_path_very_large_agg)) {
+      boost::filesystem::remove(file_path_very_large_agg);
+    }
+    std::ofstream very_large_agg_out(file_path_very_large_agg.string());
+    for (int i = 0; i < 10000000; i++) {
+      if (very_large_agg_out.is_open()) {
+        very_large_agg_out << rand() % 1000 << "," << rand() % 1000 << ","
+                           << rand() % 100000 << "\n";
+      }
+    }
+    very_large_agg_out.close();
+
     std::string import_small_table_str{
         "COPY t_small FROM "
-        "'../../Tests/Import/datafiles/interrupt_table_small.txt' WITH "
+        "'../../Tests/Import/datafiles/interrupt_table_small.csv' WITH "
         "(header='false')"};
     std::string import_medium_table_str{
         "COPY t_medium FROM "
-        "'../../Tests/Import/datafiles/interrupt_table_medium.txt' "
+        "'../../Tests/Import/datafiles/interrupt_table_medium.csv' "
         "WITH (header='false')"};
     std::string import_large_table_str{
         "COPY t_large FROM "
-        "'../../Tests/Import/datafiles/interrupt_table_large.txt' WITH "
+        "'../../Tests/Import/datafiles/interrupt_table_large.csv' WITH "
+        "(header='false')"};
+    std::string import_very_large_table_str{
+        "COPY t_very_large FROM "
+        "'../../Tests/Import/datafiles/interrupt_table_very_large.csv' WITH "
+        "(header='false')"};
+    std::string import_very_large_agg_table_str{
+        "COPY t_very_large_agg FROM "
+        "'../../Tests/Import/datafiles/interrupt_table_very_large_agg.csv' WITH "
         "(header='false')"};
     run_ddl_statement(import_small_table_str);
     run_ddl_statement(import_medium_table_str);
     run_ddl_statement(import_large_table_str);
-
+    run_ddl_statement(import_very_large_table_str);
+    run_ddl_statement(import_very_large_agg_table_str);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table";
     return -1;
@@ -143,12 +294,22 @@ int create_and_populate_table() {
 
 int drop_table() {
   try {
+    run_ddl_statement("DROP TABLE IF EXISTS t_very_large_csv;");
+    run_ddl_statement("DROP TABLE IF EXISTS t_very_large_parquet;");
+    run_ddl_statement("DROP TABLE IF EXISTS t_very_large_sharded;");
+    run_ddl_statement("DROP TABLE IF EXISTS t_very_large;");
     run_ddl_statement("DROP TABLE IF EXISTS t_large;");
     run_ddl_statement("DROP TABLE IF EXISTS t_medium;");
     run_ddl_statement("DROP TABLE IF EXISTS t_small;");
-    boost::filesystem::remove("../../Tests/Import/datafiles/interrupt_table_small.txt");
-    boost::filesystem::remove("../../Tests/Import/datafiles/interrupt_table_medium.txt");
-    boost::filesystem::remove("../../Tests/Import/datafiles/interrupt_table_large.txt");
+    // keep interrupt_table_very_large.parquet
+    boost::filesystem::remove("../../Tests/Import/datafiles/interrupt_table_small.csv");
+    boost::filesystem::remove("../../Tests/Import/datafiles/interrupt_table_medium.csv");
+    boost::filesystem::remove("../../Tests/Import/datafiles/interrupt_table_large.csv");
+    boost::filesystem::remove(
+        "../../Tests/Import/datafiles/interrupt_table_very_large.csv");
+    boost::filesystem::remove("../../Tests/Import/datafiles/interrupt_table_geo.csv");
+    boost::filesystem::remove(
+        "../../Tests/Import/datafiles/interrupt_table_very_large_agg.csv");
   } catch (...) {
     LOG(ERROR) << "Failed to drop table";
     return -1;
@@ -169,7 +330,7 @@ T v(const TargetValue& r) {
 
 TEST(Interrupt, Kill_RunningQuery) {
   auto dt = ExecutorDeviceType::CPU;
-  auto executor = QR::get()->getExecutor();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   bool startQueryExec = false;
   executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
                                         PENDING_QUERY_INTERRUPT_CHECK_FREQ);
@@ -181,7 +342,7 @@ TEST(Interrupt, Kill_RunningQuery) {
     auto query_thread1 = std::async(std::launch::async, [&] {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
-        res = run_query(test_query_large, executor, dt, query_session);
+        res = run_query(test_query_large, dt, query_session);
       } catch (...) {
         exception_ptr = std::current_exception();
       }
@@ -215,8 +376,80 @@ TEST(Interrupt, Kill_RunningQuery) {
     }
   } catch (const std::runtime_error& e) {
     std::string received_err_msg = e.what();
-    CHECK(running_query_interrupted_msg.compare(received_err_msg) == 0)
-        << received_err_msg;
+    auto check_interrupted_msg = received_err_msg.find("interrupted");
+    CHECK(check_interrupted_msg != std::string::npos) << received_err_msg;
+  }
+}
+
+TEST(Interrupt, Check_Query_Runs_After_Interruption) {
+  // this test checks whether we successfully clear the interrupt status
+  // after killing the running query
+  // so as to run the next query without any issue (that is issued due to the previous
+  // interruption status)
+  auto dt = ExecutorDeviceType::CPU;
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  bool startQueryExec = false;
+  executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
+                                        PENDING_QUERY_INTERRUPT_CHECK_FREQ);
+  std::shared_ptr<ResultSet> res1 = nullptr;
+  std::shared_ptr<ResultSet> res2 = nullptr;
+  std::exception_ptr exception_ptr1 = nullptr;
+  std::exception_ptr exception_ptr2 = nullptr;
+  try {
+    std::string query_session = generate_random_string(32);
+    // we first run the query as async function call
+    auto query_thread1 = std::async(std::launch::async, [&] {
+      std::shared_ptr<ResultSet> res = nullptr;
+      try {
+        res = run_query(test_query_large, dt, query_session);
+      } catch (...) {
+        exception_ptr1 = std::current_exception();
+      }
+      return res;
+    });
+
+    // wait until our server starts to process the first query
+    std::string curRunningSession = "";
+    while (!startQueryExec) {
+      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+      if (curRunningSession == query_session) {
+        startQueryExec = true;
+      }
+    }
+    // then, after query execution is started, we try to interrupt the running query
+    // by providing the interrupt signal with the running session info
+    executor->interrupt(query_session, query_session);
+    res1 = query_thread1.get();
+    if (exception_ptr1 != nullptr) {
+      startQueryExec = false;
+      auto query_thread2 = std::async(std::launch::async, [&] {
+        std::shared_ptr<ResultSet> res = nullptr;
+        try {
+          res = run_query(test_query_small, dt, query_session);
+        } catch (...) {
+          exception_ptr2 = std::current_exception();
+        }
+        return res;
+      });
+      res2 = query_thread2.get();
+      std::rethrow_exception(exception_ptr1);
+    }
+  } catch (const std::runtime_error& e) {
+    // the first SELECT query fails due to interruption
+    CHECK(exception_ptr1);
+    std::string received_err_msg = e.what();
+    auto check_interrupted_msg = received_err_msg.find("interrupted");
+    CHECK(check_interrupted_msg != std::string::npos) << received_err_msg;
+
+    // the second SELECT query that is fired after interrupting the first query
+    // should be successfully evaluated
+    CHECK(!exception_ptr2);
+    CHECK_EQ(1, (int64_t)res2.get()->rowCount());
+    auto crt_row = res2.get()->getNextRow(false, false);
+    auto ret_val = v<int64_t>(crt_row[0]);
+    CHECK_EQ((int64_t)1000 * 1000, ret_val);
   }
 }
 
@@ -225,7 +458,7 @@ TEST(Interrupt, Kill_PendingQuery) {
   std::future<std::shared_ptr<ResultSet>> query_thread1;
   std::future<std::shared_ptr<ResultSet>> query_thread2;
   QR::get()->resizeDispatchQueue(2);
-  auto executor = QR::get()->getExecutor();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
                                         PENDING_QUERY_INTERRUPT_CHECK_FREQ);
   bool startQueryExec = false;
@@ -240,7 +473,7 @@ TEST(Interrupt, Kill_PendingQuery) {
     query_thread1 = std::async(std::launch::async, [&] {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
-        res = run_query(test_query_medium, executor, dt, session1);
+        res = run_query(test_query_medium, dt, session1);
       } catch (...) {
         exception_ptr1 = std::current_exception();
       }
@@ -259,7 +492,7 @@ TEST(Interrupt, Kill_PendingQuery) {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
         // run pending query as async call
-        res = run_query(test_query_medium, executor, dt, session2);
+        res = run_query(test_query_medium, dt, session2);
       } catch (...) {
         exception_ptr2 = std::current_exception();
       }
@@ -267,8 +500,10 @@ TEST(Interrupt, Kill_PendingQuery) {
     });
     bool s2_enrolled = false;
     while (!s2_enrolled) {
-      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
-      s2_enrolled = executor->checkIsQuerySessionEnrolled(session2, session_read_lock);
+      {
+        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        s2_enrolled = executor->checkIsQuerySessionEnrolled(session2, session_read_lock);
+      }
       if (s2_enrolled) {
         break;
       }
@@ -293,9 +528,9 @@ TEST(Interrupt, Kill_PendingQuery) {
     // and compare thrown message to confirm that
     // this exception comes from our interrupt request
     std::string received_err_msg = e.what();
+    auto check_interrupted_msg = received_err_msg.find("interrupted");
+    CHECK(check_interrupted_msg != std::string::npos) << received_err_msg;
     std::cout << received_err_msg << "\n";
-    CHECK(pending_query_interrupted_msg.compare(received_err_msg) == 0)
-        << received_err_msg;
   }
   // check running query's result
   CHECK_EQ(1, (int64_t)res1.get()->rowCount());
@@ -309,7 +544,7 @@ TEST(Interrupt, Make_PendingQuery_Run) {
   std::future<std::shared_ptr<ResultSet>> query_thread1;
   std::future<std::shared_ptr<ResultSet>> query_thread2;
   QR::get()->resizeDispatchQueue(2);
-  auto executor = QR::get()->getExecutor();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
                                         PENDING_QUERY_INTERRUPT_CHECK_FREQ);
   bool startQueryExec = false;
@@ -324,7 +559,7 @@ TEST(Interrupt, Make_PendingQuery_Run) {
     query_thread1 = std::async(std::launch::async, [&] {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
-        res = run_query(test_query_large, executor, dt, session1);
+        res = run_query(test_query_large, dt, session1);
       } catch (...) {
         exception_ptr1 = std::current_exception();
       }
@@ -338,12 +573,13 @@ TEST(Interrupt, Make_PendingQuery_Run) {
       if (curRunningSession == session1) {
         startQueryExec = true;
       }
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     query_thread2 = std::async(std::launch::async, [&] {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
         // run pending query as async call
-        res = run_query(test_query_small, executor, dt, session2);
+        res = run_query(test_query_small, dt, session2);
       } catch (...) {
         exception_ptr2 = std::current_exception();
       }
@@ -371,8 +607,8 @@ TEST(Interrupt, Make_PendingQuery_Run) {
     // and compare thrown message to confirm that
     // this exception comes from our interrupt request
     std::string received_err_msg = e.what();
-    CHECK(running_query_interrupted_msg.compare(received_err_msg) == 0)
-        << received_err_msg;
+    auto check_interrupted_msg = received_err_msg.find("interrupted");
+    CHECK(check_interrupted_msg != std::string::npos) << received_err_msg;
   }
   // check running query's result
   CHECK_EQ(1, (int64_t)res2.get()->rowCount());
@@ -383,22 +619,18 @@ TEST(Interrupt, Make_PendingQuery_Run) {
 
 TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
   // Session1 fires four queries under four parallel executors
-  // Session2 submits a single query
   // Let say Session1's query Q1 runs, then remaining queries (Q2~Q4) become pending query
   // and they are waiting to get the executor lock that is held by 1
-  // At this time, Q5 of Session2 is waiting at the dispatch queue since
-  // there is no available executor at the dispatch queue
-  // Here, if we interrupt Session1 and let Q5 runs, we have to get the expected
-  // query result of Q5 and we also can see that Q1~Q4 are interrupted
+  // now this test checks an interrupt request on the Session1
+  // can kill not only running but also pending queries simultaneously
   auto dt = ExecutorDeviceType::CPU;
   std::future<std::shared_ptr<ResultSet>> query_thread1;
   std::future<std::shared_ptr<ResultSet>> query_thread2;
   std::future<std::shared_ptr<ResultSet>> query_thread3;
   std::future<std::shared_ptr<ResultSet>> query_thread4;
-  std::future<void> interrupt_signal_sender;
-  std::future<void> interrupt_checker;
+  std::future<std::shared_ptr<ResultSet>> query_thread5;
   QR::get()->resizeDispatchQueue(4);
-  auto executor = QR::get()->getExecutor();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
                                         PENDING_QUERY_INTERRUPT_CHECK_FREQ);
   bool startQueryExec = false;
@@ -407,10 +639,12 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
   std::exception_ptr exception_ptr2 = nullptr;
   std::exception_ptr exception_ptr3 = nullptr;
   std::exception_ptr exception_ptr4 = nullptr;
+  std::exception_ptr exception_ptr5 = nullptr;
   std::shared_ptr<ResultSet> res1 = nullptr;
   std::shared_ptr<ResultSet> res2 = nullptr;
   std::shared_ptr<ResultSet> res3 = nullptr;
   std::shared_ptr<ResultSet> res4 = nullptr;
+  std::shared_ptr<ResultSet> res5 = nullptr;
   std::future_status q1_status;
   std::future_status q2_status;
   std::future_status q3_status;
@@ -418,12 +652,11 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
 
   try {
     std::string session1 = generate_random_string(32);
-    std::string session2 = generate_random_string(32);
     // we first run the query as async function call
     query_thread1 = std::async(std::launch::async, [&] {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
-        res = run_query(test_query_large, executor, dt, session1);
+        res = run_query(test_query_large, dt, session1);
       } catch (...) {
         exception_ptr1 = std::current_exception();
       }
@@ -437,38 +670,40 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
       curRunningSession = executor->getCurrentQuerySession(session_read_lock);
       if (curRunningSession.compare(session1) == 0) {
         startQueryExec = true;
+        break;
       }
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     CHECK(startQueryExec);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
     query_thread2 = std::async(std::launch::async, [&] {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
         // run pending query as async call
-        res = run_query(test_query_small, executor, dt, session1);
+        res = run_query(test_query_small, dt, session1);
       } catch (...) {
         exception_ptr2 = std::current_exception();
       }
       return res;
     });
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
     query_thread3 = std::async(std::launch::async, [&] {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
         // run pending query as async call
-        res = run_query(test_query_small, executor, dt, session1);
+        res = run_query(test_query_small, dt, session1);
       } catch (...) {
         exception_ptr3 = std::current_exception();
       }
       return res;
     });
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
     query_thread4 = std::async(std::launch::async, [&] {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
         // run pending query as async call
-        res = run_query(test_query_small, executor, dt, session1);
+        res = run_query(test_query_small, dt, session1);
       } catch (...) {
         exception_ptr4 = std::current_exception();
       }
@@ -490,9 +725,8 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
       if (queue_size == 4) {
         ready_to_interrupt = true;
         break;
-      } else {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
       }
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     CHECK(ready_to_interrupt);
@@ -501,11 +735,8 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
 
     auto check_interrup_msg = [&catchInterruption](const std::string& msg,
                                                    bool is_pending_query) {
-      if (is_pending_query) {
-        CHECK(pending_query_interrupted_msg.compare(msg) == 0) << msg;
-      } else {
-        CHECK(running_query_interrupted_msg.compare(msg) == 0) << msg;
-      }
+      auto check_interrupted_msg = msg.find("interrupted");
+      CHECK(check_interrupted_msg != std::string::npos) << msg;
       catchInterruption.store(true);
     };
 
@@ -590,13 +821,740 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
       CHECK(!res2);  // for Q2 of Session1
       CHECK(!res3);  // for Q3 of Session1
       CHECK(!res4);  // for Q4 of Session1
+
+      // check the current queue is empty
+      // if so, it should be available to schedule the next query
+      std::string session2 = generate_random_string(32);
+      query_thread5 = std::async(std::launch::async, [&] {
+        std::shared_ptr<ResultSet> res = nullptr;
+        try {
+          res = run_query(test_query_small, dt, session2);
+        } catch (...) {
+          exception_ptr5 = std::current_exception();
+        }
+        return res;
+      });
+      res5 = query_thread5.get();
+      CHECK(!exception_ptr5);
+      CHECK_EQ(1, (int64_t)res5.get()->rowCount());
+      auto crt_row = res5.get()->getNextRow(false, false);
+      auto ret_val = v<int64_t>(crt_row[0]);
+      CHECK_EQ((int64_t)1000 * 1000, ret_val);
     }
+  }
+}
+
+TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV) {
+  std::atomic<bool> catchInterruption(false);
+  std::string import_very_large_table_str{
+      "COPY t_very_large_csv FROM "
+      "'../../Tests/Import/datafiles/interrupt_table_very_large.csv' WITH "
+      "(header='false')"};
+
+  auto check_interrup_msg = [&catchInterruption](const std::string& msg,
+                                                 bool is_pending_query) {
+    auto check_interrupted_msg = msg.find("interrupted");
+    CHECK(check_interrupted_msg != std::string::npos) << msg;
+    catchInterruption.store(true);
+  };
+
+  try {
+    std::string session1 = generate_random_string(32);
+    QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
+    bool detect_time_out = false;
+
+    auto interrupt_thread = std::async(std::launch::async, [&] {
+      // make sure our server recognizes a session for running query correctly
+      std::string curRunningSession{""};
+      bool startQueryExec = false;
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+      int cnt = 0;
+      while (cnt < 600) {
+        {
+          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+              executor->getSessionLock());
+          curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+        }
+        if (curRunningSession.compare(session1) == 0) {
+          startQueryExec = true;
+          break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        ++cnt;
+        if (cnt == 600) {
+          std::cout << "Detect timeout while performing COPY stmt on csv table"
+                    << std::endl;
+          detect_time_out = true;
+          return;
+        }
+      }
+      CHECK(startQueryExec);
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      executor->interrupt(session1, session1);
+      return;
+    });
+
+    try {
+      QR::get()->runDDLStatement(import_very_large_table_str);
+    } catch (const QueryExecutionError& e) {
+      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+        catchInterruption.store(true);
+      } else {
+        throw e;
+      }
+    } catch (const std::runtime_error& e) {
+      check_interrup_msg(e.what(), false);
+    } catch (...) {
+      throw;
+    }
+
+    if (catchInterruption.load()) {
+      std::cout << "Detect interrupt request while performing COPY stmt on csv table"
+                << std::endl;
+      std::shared_ptr<ResultSet> res = run_query(
+          "SELECT COUNT(1) FROM t_very_large_csv", ExecutorDeviceType::CPU, session1);
+      CHECK_EQ(1, (int64_t)res.get()->rowCount());
+      auto crt_row = res.get()->getNextRow(false, false);
+      auto ret_val = v<int64_t>(crt_row[0]);
+      CHECK_EQ((int64_t)0, ret_val);
+      return;
+    }
+    if (detect_time_out) {
+      return;
+    }
+  } catch (...) {
+    CHECK(false);
+  }
+}
+
+TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Parquet) {
+  std::atomic<bool> catchInterruption(false);
+  std::string import_very_large_parquet_table_str{
+      "COPY t_very_large_parquet FROM "
+      "'../../Tests/Import/datafiles/interrupt_table_very_large.parquet' WITH "
+      "(header='false', parquet='true')"};
+
+  try {
+    std::string session1 = generate_random_string(32);
+    QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
+    bool detect_time_out = false;
+    auto check_interrup_msg = [&catchInterruption](const std::string& msg,
+                                                   bool is_pending_query) {
+      auto check_interrupted_msg = msg.find("interrupted");
+      CHECK(check_interrupted_msg != std::string::npos) << msg;
+      catchInterruption.store(true);
+    };
+
+    auto interrupt_thread = std::async(std::launch::async, [&] {
+      std::string curRunningSession{""};
+      bool startQueryExec = false;
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+      int cnt = 0;
+      while (cnt < 600) {
+        {
+          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+              executor->getSessionLock());
+          curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+        }
+        if (curRunningSession.compare(session1) == 0) {
+          startQueryExec = true;
+          break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        ++cnt;
+        if (cnt == 600) {
+          std::cout << "Detect timeout while performing COPY stmt on parquet table"
+                    << std::endl;
+          detect_time_out = true;
+          return;
+        }
+      }
+      CHECK(startQueryExec);
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      executor->interrupt(session1, session1);
+      return;
+    });
+
+    try {
+      QR::get()->runDDLStatement(import_very_large_parquet_table_str);
+    } catch (const QueryExecutionError& e) {
+      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+        catchInterruption.store(true);
+      } else {
+        throw e;
+      }
+    } catch (const std::runtime_error& e) {
+      check_interrup_msg(e.what(), false);
+    } catch (...) {
+      throw;
+    }
+
+    if (catchInterruption.load()) {
+      std::cout << "Detect interrupt request while performing COPY stmt on parquet table"
+                << std::endl;
+      std::shared_ptr<ResultSet> res = run_query(
+          "SELECT COUNT(1) FROM t_very_large_parquet", ExecutorDeviceType::CPU, session1);
+      CHECK_EQ(1, (int64_t)res.get()->rowCount());
+      auto crt_row = res.get()->getNextRow(false, false);
+      auto ret_val = v<int64_t>(crt_row[0]);
+      CHECK_EQ((int64_t)0, ret_val);
+      return;
+    }
+    if (detect_time_out) {
+      return;
+    }
+  } catch (...) {
+    CHECK(false);
+  }
+}
+
+TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV_Sharded) {
+  std::atomic<bool> catchInterruption(false);
+  std::string import_very_large_sharded_table_str{
+      "COPY t_very_large_sharded FROM "
+      "'../../Tests/Import/datafiles/interrupt_table_very_large.csv' WITH "
+      "(header='false')"};
+
+  auto check_interrup_msg = [&catchInterruption](const std::string& msg,
+                                                 bool is_pending_query) {
+    auto check_interrupted_msg = msg.find("interrupted");
+    CHECK(check_interrupted_msg != std::string::npos) << msg;
+    catchInterruption.store(true);
+  };
+
+  try {
+    std::string session1 = generate_random_string(32);
+    QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
+    bool detect_time_out = false;
+
+    auto interrupt_thread = std::async(std::launch::async, [&] {
+      std::string curRunningSession{""};
+      bool startQueryExec = false;
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+      int cnt = 0;
+      while (cnt < 600) {
+        {
+          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+              executor->getSessionLock());
+          curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+        }
+        if (curRunningSession.compare(session1) == 0) {
+          startQueryExec = true;
+          break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        ++cnt;
+        if (cnt == 600) {
+          std::cout
+              << "Detect timeout while performing COPY stmt on the sharded csv table"
+              << std::endl;
+          detect_time_out = true;
+          return;
+        }
+      }
+      CHECK(startQueryExec);
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      executor->interrupt(session1, session1);
+      return;
+    });
+
+    try {
+      QR::get()->runDDLStatement(import_very_large_sharded_table_str);
+    } catch (const QueryExecutionError& e) {
+      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+        catchInterruption.store(true);
+      } else {
+        throw e;
+      }
+    } catch (const std::runtime_error& e) {
+      check_interrup_msg(e.what(), false);
+    } catch (...) {
+      throw;
+    }
+
+    if (catchInterruption.load()) {
+      std::cout << "Detect interrupt request while performing COPY stmt on the "
+                   "sharded csv table"
+                << std::endl;
+      std::shared_ptr<ResultSet> res = run_query(
+          "SELECT COUNT(1) FROM t_very_large_sharded", ExecutorDeviceType::CPU, session1);
+      CHECK_EQ(1, (int64_t)res.get()->rowCount());
+      auto crt_row = res.get()->getNextRow(false, false);
+      auto ret_val = v<int64_t>(crt_row[0]);
+      CHECK_EQ((int64_t)0, ret_val);
+      return;
+    }
+    if (detect_time_out) {
+      return;
+    }
+  } catch (...) {
+    CHECK(false);
+  }
+}
+
+TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_GDAL) {
+  std::atomic<bool> catchInterruption(false);
+  std::string import_gdal_table_str{
+      "COPY t_gdal FROM "
+      "'../../Tests/Import/datafiles/interrupt_table_gdal.geojson' WITH "
+      "(geo='true')"};
+
+  auto check_interrup_msg = [&catchInterruption](const std::string& msg,
+                                                 bool is_pending_query) {
+    auto expected_msg = "COPY statement has been interrupted";
+    CHECK(msg.compare(expected_msg) == 0) << msg;
+    catchInterruption.store(true);
+  };
+
+  try {
+    std::string session1 = generate_random_string(32);
+    bool detect_time_out = false;
+
+    auto interrupt_thread = std::async(std::launch::async, [&] {
+      std::string curRunningSession{""};
+      bool startQueryExec = false;
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+      int cnt = 0;
+      while (cnt < 600) {
+        {
+          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+              executor->getSessionLock());
+          curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+        }
+        if (curRunningSession.compare(session1) == 0) {
+          startQueryExec = true;
+          break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        ++cnt;
+        if (cnt == 600) {
+          std::cout << "Detect timeout while performing COPY stmt on gdal table"
+                    << std::endl;
+          detect_time_out = true;
+          return;
+        }
+      }
+      CHECK(startQueryExec);
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      executor->interrupt(session1, session1);
+      return;
+    });
+
+    try {
+      const auto file_path = boost::filesystem::path(
+          "../../Tests/Import/datafiles/interrupt_table_gdal.geojson");
+      QueryRunner::ImportDriver import_driver(QR::get()->getCatalog(),
+                                              QR::get()->getSession()->get_currentUser(),
+                                              ExecutorDeviceType::CPU,
+                                              session1);
+      import_driver.importGeoTable(file_path.string(), "t_gdal", false, false, false);
+    } catch (const QueryExecutionError& e) {
+      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+        catchInterruption.store(true);
+      } else {
+        throw e;
+      }
+    } catch (const std::runtime_error& e) {
+      check_interrup_msg(e.what(), false);
+    } catch (...) {
+      throw;
+    }
+
+    if (catchInterruption.load()) {
+      std::cout << "Detect interrupt request while performing COPY stmt on gdal table"
+                << std::endl;
+      std::shared_ptr<ResultSet> res =
+          run_query("SELECT COUNT(1) FROM t_gdal", ExecutorDeviceType::CPU, session1);
+      CHECK_EQ(1, (int64_t)res.get()->rowCount());
+      auto crt_row = res.get()->getNextRow(false, false);
+      auto ret_val = v<int64_t>(crt_row[0]);
+      CHECK_LT(ret_val, (int64_t)1000001);
+      return;
+    }
+    if (detect_time_out) {
+      return;
+    }
+  } catch (...) {
+    CHECK(false);
+  }
+}
+
+TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Geo) {
+  std::atomic<bool> catchInterruption(false);
+  std::string import_geo_table_str{
+      "COPY t_geo FROM "
+      "'../../Tests/Import/datafiles/interrupt_table_geo.csv';"};
+
+  auto check_interrup_msg = [&catchInterruption](const std::string& msg,
+                                                 bool is_pending_query) {
+    auto check_interrupted_msg = msg.find("interrupted");
+    CHECK(check_interrupted_msg != std::string::npos) << msg;
+    catchInterruption.store(true);
+  };
+
+  try {
+    std::string session1 = generate_random_string(32);
+    QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
+    bool detect_time_out = false;
+
+    auto interrupt_thread = std::async(std::launch::async, [&] {
+      std::string curRunningSession{""};
+      bool startQueryExec = false;
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+      int cnt = 0;
+      while (cnt < 600) {
+        {
+          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+              executor->getSessionLock());
+          curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+        }
+        if (curRunningSession.compare(session1) == 0) {
+          startQueryExec = true;
+          break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        ++cnt;
+        if (cnt == 600) {
+          std::cout << "Detect timeout while performing COPY stmt on geo table"
+                    << std::endl;
+          detect_time_out = true;
+          return;
+        }
+      }
+      CHECK(startQueryExec);
+      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+      executor->interrupt(session1, session1);
+      return;
+    });
+
+    try {
+      QR::get()->runDDLStatement(import_geo_table_str);
+    } catch (const QueryExecutionError& e) {
+      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+        catchInterruption.store(true);
+      } else {
+        throw e;
+      }
+    } catch (const std::runtime_error& e) {
+      check_interrup_msg(e.what(), false);
+    } catch (...) {
+      throw;
+    }
+
+    if (catchInterruption.load()) {
+      std::cout << "Detect interrupt request while performing COPY stmt on geo table"
+                << std::endl;
+      std::shared_ptr<ResultSet> res =
+          run_query("SELECT COUNT(1) FROM t_geo", ExecutorDeviceType::CPU, session1);
+      CHECK_EQ(1, (int64_t)res.get()->rowCount());
+      auto crt_row = res.get()->getNextRow(false, false);
+      auto ret_val = v<int64_t>(crt_row[0]);
+      CHECK_EQ((int64_t)0, ret_val);
+      return;
+    }
+    if (detect_time_out) {
+      return;
+    }
+  } catch (...) {
+    CHECK(false);
+  }
+}
+
+TEST(Non_Kernel_Time_Interrupt, Interrupt_CTAS) {
+  std::atomic<bool> catchInterruption(false);
+  try {
+    std::string session1 = generate_random_string(32);
+    QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
+
+    auto check_interrup_msg = [&catchInterruption](const std::string& msg,
+                                                   bool is_pending_query) {
+      std::cout << msg << std::endl;
+      std::string out_of_slot_msg{"Ran out of slots in the query output buffer"};
+      if (out_of_slot_msg.compare(msg) == 0) {
+        return;
+      }
+      auto check_interrupted_msg = msg.find("interrupted");
+      std::string expected_msg{
+          "Query execution has been interrupted while performing CTAS"};
+      CHECK((check_interrupted_msg != std::string::npos) ||
+            expected_msg.compare(msg) == 0)
+          << msg;
+      catchInterruption.store(true);
+    };
+
+    // do CTAS
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS t_CTAS;");
+    auto ctas_thread = std::async(std::launch::async, [&] {
+      try {
+        QR::get()->runDDLStatement(
+            "CREATE TABLE t_CTAS AS SELECT * FROM t_very_large WHERE x < 3;");
+      } catch (const QueryExecutionError& e) {
+        if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+          catchInterruption.store(true);
+        } else if (e.getErrorCode() < 0) {
+          std::cout << "Detect out of slot issue in the query output buffer while "
+                       "performing CTAS"
+                    << std::endl;
+          return;
+        } else {
+          throw e;
+        }
+      } catch (const std::runtime_error& e) {
+        check_interrup_msg(e.what(), false);
+      } catch (...) {
+        throw;
+      }
+      return;
+    });
+
+    std::string curRunningSession{""};
+    std::vector<QuerySessionStatus> query_status;
+    auto start_time = std::chrono::system_clock::now();
+    bool startCTAS = false;
+    bool detect_time_out = false;
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+    while (!startCTAS && !detect_time_out) {
+      {
+        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        query_status = executor->getQuerySessionInfo(session1, session_read_lock);
+      }
+      if (query_status.size() == 1) {
+        if (query_status[0].getQuerySession().compare(session1) != 0) {
+          CHECK(false);
+        }
+        auto query_str = query_status[0].getQueryStr();
+        if (query_str.find("INSERT_DATA") != std::string::npos) {
+          startCTAS = true;
+          executor->interrupt(session1, session1);
+          break;
+        }
+      }
+      auto end_time = std::chrono::system_clock::now();
+      auto cur_sec =
+          std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
+      if (cur_sec.count() > 60) {
+        detect_time_out = true;
+        std::cout << "Detect time_out while performing CTAS" << std::endl;
+        break;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    if (catchInterruption.load()) {
+      std::cout << "Detect interrupt request while performing CTAS" << std::endl;
+      // CTAS is interrupted and so the table is dropped
+      EXPECT_ANY_THROW(
+          run_query("SELECT COUNT(1) FROM t_CTAS", ExecutorDeviceType::CPU, session1));
+      return;
+    }
+    if (detect_time_out) {
+      return;
+    }
+  } catch (...) {
+    CHECK(false);
+  }
+}
+
+TEST(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
+  std::atomic<bool> catchInterruption(false);
+  try {
+    std::string session1 = generate_random_string(32);
+    QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
+
+    // do ITAS
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS t_ITAS;");
+    QR::get()->runDDLStatement("CREATE TABLE t_ITAS (x int not null);");
+
+    auto check_interrup_msg = [&catchInterruption](const std::string& msg,
+                                                   bool is_pending_query) {
+      std::cout << msg << std::endl;
+      std::string out_of_slot_msg{"Ran out of slots in the query output buffer"};
+      if (out_of_slot_msg.compare(msg) == 0) {
+        return;
+      }
+
+      auto check_interrupted_msg = msg.find("interrupted");
+      std::string expected_msg{
+          "Query execution has been interrupted while performing ITAS"};
+      CHECK((check_interrupted_msg != std::string::npos) ||
+            expected_msg.compare(msg) == 0)
+          << msg;
+      catchInterruption.store(true);
+    };
+
+    auto itas_thread = std::async(std::launch::async, [&] {
+      try {
+        QR::get()->runDDLStatement("INSERT INTO t_ITAS SELECT x FROM t_very_large");
+      } catch (const QueryExecutionError& e) {
+        if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+          catchInterruption.store(true);
+        } else if (e.getErrorCode() < 0) {
+          std::cout << "Detect out of slot issue in the query output buffer while "
+                       "performing ITAS"
+                    << std::endl;
+          return;
+        } else {
+          throw e;
+        }
+      } catch (const std::runtime_error& e) {
+        check_interrup_msg(e.what(), false);
+      } catch (...) {
+        throw;
+      }
+      return;
+    });
+
+    std::string curRunningSession{""};
+    std::vector<QuerySessionStatus> query_status;
+    auto start_time = std::chrono::system_clock::now();
+    bool startITAS = false;
+    bool detect_time_out = false;
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+    while (!startITAS && !detect_time_out) {
+      {
+        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        query_status = executor->getQuerySessionInfo(session1, session_read_lock);
+      }
+      if (query_status.size() == 1) {
+        if (query_status[0].getQuerySession().compare(session1) != 0) {
+          CHECK(false);
+        }
+        auto query_str = query_status[0].getQueryStr();
+        if (query_str.find("INSERT_DATA") != std::string::npos) {
+          startITAS = true;
+          std::this_thread::sleep_for(std::chrono::milliseconds(100));
+          executor->interrupt(session1, session1);
+          break;
+        }
+      }
+      auto end_time = std::chrono::system_clock::now();
+      auto cur_sec =
+          std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
+      if (cur_sec.count() > 60) {
+        std::cout << "Detect time_out while performing ITAS" << std::endl;
+        {
+          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+              executor->getSessionLock());
+          query_status = executor->getQuerySessionInfo(session1, session_read_lock);
+        }
+        detect_time_out = true;
+        executor->interrupt(session1, session1);
+        break;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    if (catchInterruption.load()) {
+      std::cout << "Detect interrupt request while performing ITAS" << std::endl;
+      std::shared_ptr<ResultSet> res =
+          run_query("SELECT COUNT(1) FROM t_ITAS", ExecutorDeviceType::CPU, session1);
+      CHECK_EQ(1, (int64_t)res.get()->rowCount());
+      auto crt_row = res.get()->getNextRow(false, false);
+      auto ret_val = v<int64_t>(crt_row[0]);
+      CHECK_EQ((int64_t)0, ret_val);
+      return;
+    }
+    if (detect_time_out) {
+      return;
+    }
+  } catch (...) {
+    CHECK(false);
+  }
+}
+
+TEST(Non_Kernel_Time_Interrupt, Interrupt_During_Reduction) {
+  std::atomic<bool> catchInterruption(false);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  bool keep_global_columnar_flag = g_enable_columnar_output;
+  g_enable_columnar_output = true;
+  ScopeGuard reset_flag = [keep_global_columnar_flag] {
+    g_enable_columnar_output = keep_global_columnar_flag;
+  };
+
+  auto check_interrup_msg = [&catchInterruption](const std::string& msg,
+                                                 bool is_pending_query) {
+    auto check_interrupted_msg = msg.find("interrupted");
+    std::string expected_msg{
+        "Query execution has interrupted during result set reduction"};
+    CHECK((check_interrupted_msg != std::string::npos) || expected_msg.compare(msg) == 0)
+        << msg;
+    catchInterruption.store(true);
+    std::cout << msg << std::endl;
+  };
+
+  try {
+    std::string session1 = generate_random_string(32);
+    QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
+    bool detect_time_out = false;
+
+    auto interrupt_thread = std::async(std::launch::async, [&] {
+      std::string curRunningSession{""};
+      bool startReduction = false;
+      QuerySessionStatus::QueryStatus qss = QuerySessionStatus::QueryStatus::UNDEFINED;
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+      int cnt = 0;
+      while (cnt < 6000) {
+        {
+          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+              executor->getSessionLock());
+          curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+          if (curRunningSession.compare(session1) == 0) {
+            qss = executor->getQuerySessionInfo(curRunningSession, session_read_lock)[0]
+                      .getQueryStatus();
+            if (qss == QuerySessionStatus::QueryStatus::RUNNING_REDUCTION) {
+              startReduction = true;
+              break;
+            }
+          }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        ++cnt;
+        if (cnt == 6000) {
+          std::cout << "Detect timeout while performing reduction" << std::endl;
+          detect_time_out = true;
+          return;
+        }
+      }
+      CHECK(startReduction);
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      executor->interrupt(session1, session1);
+      return;
+    });
+
+    try {
+      run_query("SELECT k1, k2, AVG(i) FROM t_very_large_agg GROUP BY k1, k2",
+                ExecutorDeviceType::CPU,
+                session1);
+    } catch (const QueryExecutionError& e) {
+      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+        // timing issue... the query is interrupted before entering the reduction
+        catchInterruption.store(true);
+      } else {
+        throw e;
+      }
+    } catch (const std::runtime_error& e) {
+      check_interrup_msg(e.what(), false);
+    } catch (...) {
+      throw;
+    }
+
+    if (catchInterruption.load()) {
+      std::cout << "Detect interrupt request while performing reduction" << std::endl;
+      return;
+    }
+    if (detect_time_out) {
+      return;
+    }
+  } catch (...) {
+    CHECK(false);
   }
 }
 
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);
+  g_enable_runtime_query_interrupt = true;
+  g_enable_non_kernel_time_query_interrupt = true;
 
   QR::init(BASE_PATH);
 

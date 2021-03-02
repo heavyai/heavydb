@@ -2739,7 +2739,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   CHECK(multifrag_query_func);
 
   if (co.device_type == ExecutorDeviceType::GPU && eo.allow_multifrag) {
-    insertErrorCodeChecker(multifrag_query_func, co.hoist_literals);
+    insertErrorCodeChecker(
+        multifrag_query_func, co.hoist_literals, eo.allow_runtime_query_interrupt);
   }
 
   bind_query(query_func,
@@ -2830,7 +2831,9 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       std::move(query_mem_desc));
 }
 
-void Executor::insertErrorCodeChecker(llvm::Function* query_func, bool hoist_literals) {
+void Executor::insertErrorCodeChecker(llvm::Function* query_func,
+                                      bool hoist_literals,
+                                      bool allow_runtime_query_interrupt) {
   auto query_stub_func_name =
       "query_stub" + std::string(hoist_literals ? "_hoisted_literals" : "");
   for (auto bb_it = query_func->begin(); bb_it != query_func->end(); ++bb_it) {
@@ -2869,7 +2872,7 @@ void Executor::insertErrorCodeChecker(llvm::Function* query_func, bool hoist_lit
         }
         CHECK(error_code_arg);
         llvm::Value* err_code = nullptr;
-        if (g_enable_runtime_query_interrupt) {
+        if (allow_runtime_query_interrupt) {
           // decide the final error code with a consideration of interrupt status
           auto& check_interrupt_br_instr = bb_it->back();
           auto interrupt_check_bb = llvm::BasicBlock::Create(

@@ -76,6 +76,7 @@ class CommandLineOptions {
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
   bool enable_runtime_query_interrupt = false;
+  bool enable_non_kernel_time_query_interrupt = true;
   bool use_estimator_result_cache = true;
   double running_query_interrupt_freq = 0.5;     // 0.0 ~ 1.0
   unsigned pending_query_interrupt_freq = 1000;  // in milliseconds
@@ -175,6 +176,7 @@ extern bool g_enable_direct_columnarization;
 extern bool g_enable_runtime_query_interrupt;
 extern unsigned g_pending_query_interrupt_freq;
 extern double g_running_query_interrupt_freq;
+extern bool g_enable_non_kernel_time_query_interrupt;
 extern size_t g_gpu_smem_threshold;
 extern bool g_enable_smem_non_grouped_agg;
 extern bool g_enable_smem_grouped_non_count_agg;

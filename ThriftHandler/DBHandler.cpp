@@ -576,7 +576,7 @@ void DBHandler::connect_impl(TSessionId& session,
     stdlog.setSessionInfo(session_ptr);
     session_ptr->set_connection_info(getConnectionInfo().toString());
     if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time
-                                // while doing warmup
+      // while doing warmup
       if (leaf_aggregator_.leafCount() > 0) {
         leaf_aggregator_.connect(*session_ptr, user_meta.userName, passwd, dbname);
         return;
@@ -672,7 +672,9 @@ void DBHandler::interrupt(const TSessionId& query_session,
   // between query_session (agg) and interrupt_session (leaf)
   auto stdlog = STDLOG(get_session_ptr(interrupt_session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
+  const auto allow_query_interrupt =
+      g_enable_runtime_query_interrupt || g_enable_non_kernel_time_query_interrupt;
+  if (g_enable_dynamic_watchdog || allow_query_interrupt) {
     // Shared lock to allow simultaneous interrupts of multiple sessions
     mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
 
@@ -696,7 +698,7 @@ void DBHandler::interrupt(const TSessionId& query_session,
     }
     executor->interrupt(query_session, interrupt_session);
 
-    LOG(INFO) << "User " << session_it->second->get_currentUser().userLoggable()
+    LOG(INFO) << "User " << session_it->second->get_currentUser().userName
               << " interrupted session with database " << dbname << std::endl;
   }
 }
@@ -1161,11 +1163,9 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
       }
       if (g_enable_runtime_query_interrupt) {
         auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-        auto submitted_time = std::chrono::system_clock::now();
-        query_state_proxy.getQueryState().setQuerySubmittedTime(submitted_time);
         executor->enrollQuerySession(session_ptr->get_session_id(),
                                      query_str,
-                                     submitted_time,
+                                     query_state->getQuerySubmittedTime(),
                                      Executor::UNITARY_EXECUTOR_ID,
                                      QuerySessionStatus::QueryStatus::PENDING_QUEUE);
       }
@@ -2336,6 +2336,40 @@ void DBHandler::clear_cpu_memory(const TSessionId& session) {
   }
 }
 
+void DBHandler::set_cur_session(const TSessionId& parent_session,
+                                const TSessionId& leaf_session,
+                                const std::string& start_time_str,
+                                const std::string& label) {
+  // internal API to manage query interruption in distributed mode
+  auto stdlog = STDLOG(get_session_ptr(leaf_session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  auto session_ptr = stdlog.getConstSessionInfo();
+
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  executor->enrollQuerySession(parent_session,
+                               label,
+                               start_time_str,
+                               Executor::UNITARY_EXECUTOR_ID,
+                               QuerySessionStatus::QueryStatus::RUNNING);
+  if (leaf_aggregator_.leafCount() > 0) {
+    leaf_aggregator_.set_cur_session(parent_session, start_time_str, label);
+  }
+}
+
+void DBHandler::invalidate_cur_session(const TSessionId& parent_session,
+                                       const TSessionId& leaf_session,
+                                       const std::string& start_time_str,
+                                       const std::string& label) {
+  // internal API to manage query interruption in distributed mode
+  auto stdlog = STDLOG(get_session_ptr(leaf_session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  executor->clearQuerySessionStatus(parent_session, start_time_str, false);
+  if (leaf_aggregator_.leafCount() > 0) {
+    leaf_aggregator_.invalidate_cur_session(parent_session, start_time_str, label);
+  }
+}
+
 TSessionId DBHandler::getInvalidSessionId() const {
   return INVALID_SESSION_ID;
 }
@@ -2568,7 +2602,7 @@ void DBHandler::load_table_binary(const TSessionId& session,
     }
     auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
         session_ptr->getCatalog(), table_name);
-    loader->load(import_buffers, rows_completed);
+    loader->load(import_buffers, rows.size(), session_ptr.get());
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
   }
@@ -2737,7 +2771,7 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session,
         << ". Issue at column : " << (col_idx + 1) << ". Import aborted";
     THROW_MAPD_EXCEPTION(oss.str());
   }
-  loader->load(import_buffers, num_rows);
+  loader->load(import_buffers, num_rows, session_ptr.get());
 }
 
 using RecordBatchVector = std::vector<std::shared_ptr<arrow::RecordBatch>>;
@@ -2849,7 +2883,7 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session,
     // other import paths
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
-  loader->load(import_buffers, num_rows);
+  loader->load(import_buffers, num_rows, session_ptr.get());
 }
 
 void DBHandler::load_table(const TSessionId& session,
@@ -2981,7 +3015,7 @@ void DBHandler::load_table(const TSessionId& session,
     }
     auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
         session_ptr->getCatalog(), table_name);
-    loader->load(import_buffers, rows_completed);
+    loader->load(import_buffers, rows_completed, session_ptr.get());
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
   }
@@ -4085,6 +4119,22 @@ void DBHandler::import_table(const TSessionId& session,
     LOG(INFO) << "import_table " << table_name << " from " << file_name_in;
 
     auto& cat = session_ptr->getCatalog();
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+    auto start_time = ::toString(std::chrono::system_clock::now());
+    if (g_enable_non_kernel_time_query_interrupt) {
+      executor->enrollQuerySession(session,
+                                   "IMPORT_TABLE",
+                                   start_time,
+                                   Executor::UNITARY_EXECUTOR_ID,
+                                   QuerySessionStatus::QueryStatus::RUNNING);
+    }
+
+    ScopeGuard clearInterruptStatus = [executor, &session, &start_time] {
+      // reset the runtime query interrupt status
+      if (g_enable_non_kernel_time_query_interrupt) {
+        executor->clearQuerySessionStatus(session, start_time, false);
+      }
+    };
     const auto td_with_lock =
         lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
             cat, table_name);
@@ -4127,7 +4177,7 @@ void DBHandler::import_table(const TSessionId& session,
       importer.reset(
           new import_export::Importer(cat, td, file_path.string(), copy_params));
     }
-    auto ms = measure<>::execution([&]() { importer->import(); });
+    auto ms = measure<>::execution([&]() { importer->import(session_ptr.get()); });
     std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
@@ -4195,7 +4245,24 @@ void DBHandler::import_geo_table(const TSessionId& session,
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("import_table");
+
   auto& cat = session_ptr->getCatalog();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto start_time = ::toString(std::chrono::system_clock::now());
+  if (g_enable_non_kernel_time_query_interrupt) {
+    executor->enrollQuerySession(session,
+                                 "IMPORT_GEO_TABLE",
+                                 start_time,
+                                 Executor::UNITARY_EXECUTOR_ID,
+                                 QuerySessionStatus::QueryStatus::RUNNING);
+  }
+
+  ScopeGuard clearInterruptStatus = [executor, &session, &start_time] {
+    // reset the runtime query interrupt status
+    if (g_enable_non_kernel_time_query_interrupt) {
+      executor->clearQuerySessionStatus(session, start_time, false);
+    }
+  };
 
   import_export::CopyParams copy_params = thrift_to_copyparams(cp);
 
@@ -4606,7 +4673,8 @@ void DBHandler::import_geo_table(const TSessionId& session,
       }
 
       // import
-      auto ms = measure<>::execution([&]() { importer->importGDAL(colname_to_src); });
+      auto ms = measure<>::execution(
+          [&]() { importer->importGDAL(colname_to_src, session_ptr.get()); });
       LOG(INFO) << "Import of Layer '" << layer_name << "' took " << (double)ms / 1000.0
                 << "s";
       total_import_ms += ms;
@@ -5008,6 +5076,7 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                                   .getConstSessionInfo()
                                   ->get_session_id()
                                   .empty(),
+                         g_running_query_interrupt_freq,
                          g_pending_query_interrupt_freq};
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
@@ -5086,6 +5155,7 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                                                .getConstSessionInfo()
                                                ->get_session_id()
                                                .empty(),
+      g_running_query_interrupt_freq,
       g_pending_query_interrupt_freq};
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
@@ -5469,11 +5539,10 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
     CHECK(dispatch_queue_);
     if (g_enable_runtime_query_interrupt && !session_ptr->get_session_id().empty()) {
       auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-      auto submitted_time = std::chrono::system_clock::now();
-      query_state_proxy.getQueryState().setQuerySubmittedTime(submitted_time);
+      auto submitted_time_str = query_state_proxy.getQueryState().getQuerySubmittedTime();
       executor->enrollQuerySession(session_ptr->get_session_id(),
                                    query_str,
-                                   submitted_time,
+                                   submitted_time_str,
                                    Executor::UNITARY_EXECUTOR_ID,
                                    QuerySessionStatus::QueryStatus::PENDING_QUEUE);
     }
@@ -5637,7 +5706,6 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
       if (parse_trees.size() != 1) {
         throw std::runtime_error("Can only run one INSERT INTO query at a time.");
       }
-
       _return.execution_time_ms +=
           measure<>::execution([&]() { stmtp->execute(*session_ptr); });
     }
@@ -5839,6 +5907,7 @@ void DBHandler::start_query(TPendingQuery& _return,
                             const TSessionId& leaf_session,
                             const TSessionId& parent_session,
                             const std::string& query_ra,
+                            const std::string& start_time_str,
                             const bool just_explain,
                             const std::vector<int64_t>& outer_fragment_indices) {
   auto stdlog = STDLOG(get_session_ptr(leaf_session));
@@ -5853,6 +5922,7 @@ void DBHandler::start_query(TPendingQuery& _return,
                                  leaf_session,
                                  parent_session,
                                  query_ra,
+                                 start_time_str,
                                  just_explain,
                                  outer_fragment_indices);
     } catch (std::exception& e) {
@@ -5865,14 +5935,16 @@ void DBHandler::start_query(TPendingQuery& _return,
 
 void DBHandler::execute_query_step(TStepResult& _return,
                                    const TPendingQuery& pending_query,
-                                   const TSubqueryId subquery_id) {
+                                   const TSubqueryId subquery_id,
+                                   const std::string& start_time_str) {
   if (!leaf_handler_) {
     THROW_MAPD_EXCEPTION("Distributed support is disabled.");
   }
   LOG(INFO) << "execute_query_step :  id:" << pending_query.id;
   auto time_ms = measure<>::execution([&]() {
     try {
-      leaf_handler_->execute_query_step(_return, pending_query, subquery_id);
+      leaf_handler_->execute_query_step(
+          _return, pending_query, subquery_id, start_time_str);
     } catch (std::exception& e) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
@@ -6381,9 +6453,6 @@ ExecutionResult DBHandler::getQueries(
   if (!session_ptr->get_currentUser().isSuper) {
     throw std::runtime_error(
         "SHOW QUERIES failed, because it can only be executed by super user.");
-  } else if (!g_enable_runtime_query_interrupt) {
-    throw std::runtime_error(
-        "SHOW QUERIES failed, because runtime query interrupt is disabled.");
   } else {
     mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
     std::vector<std::string> labels{"query_session_id",
@@ -6409,10 +6478,13 @@ ExecutionResult DBHandler::getQueries(
                                               jit_debug_ ? "mapdquery" : "",
                                               system_parameters_);
         CHECK(executor);
-        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
-        auto query_infos = executor->getQuerySessionInfo(
-            query_session_ptr->get_session_id(), session_read_lock);
-        session_read_lock.unlock();
+        std::vector<QuerySessionStatus> query_infos;
+        {
+          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+              executor->getSessionLock());
+          query_infos = executor->getQuerySessionInfo(query_session_ptr->get_session_id(),
+                                                      session_read_lock);
+        }
         // if there exists query info fired from this session we report it to user
         const std::string getQueryStatusStr[] = {
             "UNDEFINED", "PENDING_QUEUE", "PENDING_EXECUTOR", "RUNNING"};
@@ -6425,7 +6497,7 @@ ExecutionResult DBHandler::getQueries(
           logical_values.back().emplace_back(
               genLiteralStr(::toString(query_info.getExecutorId())));
           logical_values.back().emplace_back(
-              genLiteralStr(::toString(query_info.getQuerySubmittedTime())));
+              genLiteralStr(query_info.getQuerySubmittedTime()));
           logical_values.back().emplace_back(genLiteralStr(query_info.getQueryStr()));
           logical_values.back().emplace_back(
               genLiteralStr(query_session_ptr->get_currentUser().userName));
@@ -6479,19 +6551,24 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
   // 6. Interruption are implemented by throwing runtime_error that contains a visible
   // error message like "Query has been interrupted"
 
-  if (!g_enable_runtime_query_interrupt) {
-    // todo(yoonmin): change this to allow per-query interruptability
-    throw std::runtime_error("KILL QUERY failed: runtime query interrupt is disabled.");
+  if (!g_enable_runtime_query_interrupt && !g_enable_non_kernel_time_query_interrupt) {
+    // at least type of query interruption is enabled to allow kill query
+    // if non-kernel query interrupt is enabled but tries to kill that type's query?
+    // then the request is skipped
+    // todo(yoonmin): improve kill query cmd under both types of query
+    throw std::runtime_error(
+        "KILL QUERY failed: neither non-kernel time nor kernel-time query interrupt is "
+        "disabled.");
   }
   if (!session_info.get_currentUser().isSuper.load()) {
     throw std::runtime_error(
-        "KILL QUERY failed (only super user can interrupt the query via KILL QUERY "
-        "command)");
+        "KILL QUERY failed: only super user can interrupt the query via KILL QUERY "
+        "command.");
   }
   CHECK_EQ(target_session.length(), (unsigned long)8);
   bool found_valid_session = false;
   for (auto& kv : sessions_) {
-    if (kv.second->get_public_session_id() == target_session) {
+    if (kv.second->get_public_session_id().compare(target_session) == 0) {
       auto target_query_session = kv.second->get_session_id();
       auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                             jit_debug_ ? "/tmp" : "",
@@ -6507,7 +6584,7 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
     }
   }
   if (!found_valid_session) {
-    throw std::runtime_error("KILL QUERY failed (invalid query session is given)");
+    throw std::runtime_error("KILL QUERY failed: invalid query session is given.");
   }
 }
 

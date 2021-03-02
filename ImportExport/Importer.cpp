@@ -60,10 +60,13 @@
 #include "ImportExport/DelimitedParserUtils.h"
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_glob.h"
+#include "QueryEngine/ErrorHandling.h"
+#include "QueryEngine/Execute.h"
 #include "QueryEngine/TypePunning.h"
 #include "Shared/DateTimeParser.h"
 #include "Shared/SqlTypesLayout.h"
 #include "Shared/import_helpers.h"
+#include "Shared/likely.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
 #include "Shared/scope.h"
@@ -87,6 +90,15 @@ inline auto get_filesize(const std::string& file_path) {
 }
 
 namespace {
+bool checkInterrupt(const QuerySessionId& query_session, Executor* executor) {
+  if (g_enable_non_kernel_time_query_interrupt && !query_session.empty()) {
+    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+    const auto isInterrupted =
+        executor->checkIsQuerySessionInterrupted(query_session, session_read_lock);
+    return isInterrupted;
+  }
+  return false;
+}
 
 struct OGRDataSourceDeleter {
   void operator()(OGRDataSource* datasource) {
@@ -165,6 +177,7 @@ Importer::Importer(Loader* providedLoader, const std::string& f, const CopyParam
   p_file = nullptr;
   buffer[0] = nullptr;
   buffer[1] = nullptr;
+  interrupted = false;
   // we may be overallocating a little more memory here due to dropping phy cols.
   // it shouldn't be an issue because iteration of it is not supposed to go OOB.
   auto is_array = std::unique_ptr<bool[]>(new bool[loader->get_column_descs().size()]);
@@ -1814,10 +1827,13 @@ static ImportStatus import_thread_delimited(
     size_t end_pos,
     size_t total_size,
     const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap,
-    size_t first_row_index_this_buffer) {
+    size_t first_row_index_this_buffer,
+    const Catalog_Namespace::SessionInfo* session_info,
+    Executor* executor) {
   ImportStatus import_status;
   int64_t total_get_row_time_us = 0;
   int64_t total_str_to_val_time_us = 0;
+  auto query_session = session_info ? session_info->get_session_id() : "";
   CHECK(scratch_buffer);
   auto buffer = scratch_buffer.get();
   auto load_ms = measure<>::execution([]() {});
@@ -2087,7 +2103,15 @@ static ImportStatus import_thread_delimited(
               }
             }
           }
+          if (UNLIKELY((import_status.rows_completed & 0xFFFF) == 0 &&
+                       checkInterrupt(query_session, executor))) {
+            mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
+            import_status.interrupted = true;
+            throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+          }
           import_status.rows_completed++;
+        } catch (QueryExecutionError& e) {
+          throw e;
         } catch (const std::exception& e) {
           for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
             import_buffers[col_idx_to_pop]->pop_value();
@@ -2125,11 +2149,12 @@ static ImportStatus import_thread_delimited(
         us = measure<std::chrono::microseconds>::execution(
             [&] { execute_import_row(nullptr); });
       }
-      total_str_to_val_time_us += us;
     }  // end thread
+    total_str_to_val_time_us += us;
     if (import_status.rows_completed > 0) {
-      load_ms = measure<>::execution(
-          [&]() { importer->load(import_buffers, import_status.rows_completed); });
+      load_ms = measure<>::execution([&]() {
+        importer->load(import_buffers, import_status.rows_completed, session_info);
+      });
     }
   });
   if (DEBUG_TIMING && import_status.rows_completed > 0) {
@@ -2156,13 +2181,15 @@ static ImportStatus import_thread_shapefile(
     size_t numFeatures,
     const FieldNameToIndexMapType& fieldNameToIndexMap,
     const ColumnNameToSourceNameMapType& columnNameToSourceNameMap,
-    const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap) {
+    const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap,
+    const Catalog_Namespace::SessionInfo* session_info,
+    Executor* executor) {
   ImportStatus import_status;
   const CopyParams& copy_params = importer->get_copy_params();
   const std::list<const ColumnDescriptor*>& col_descs = importer->get_column_descs();
   std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers =
       importer->get_import_buffers(thread_id);
-
+  auto query_session = session_info ? session_info->get_session_id() : "";
   for (const auto& p : import_buffers) {
     p->clear();
   }
@@ -2171,7 +2198,6 @@ static ImportStatus import_thread_shapefile(
 
   // we create this on the fly based on the first feature's SR
   std::unique_ptr<OGRCoordinateTransformation> coordinate_transformation;
-
   for (size_t iFeature = 0; iFeature < numFeatures; iFeature++) {
     if (!features[iFeature]) {
       continue;
@@ -2210,6 +2236,10 @@ static ImportStatus import_thread_shapefile(
     auto execute_import_feature = [&](OGRGeometry* import_geometry) {
       size_t col_idx = 0;
       try {
+        if (UNLIKELY((import_status.rows_completed & 0xFFFF) == 0 &&
+                     checkInterrupt(query_session, executor))) {
+          throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+        }
         for (auto cd_it = col_descs.begin(); cd_it != col_descs.end(); cd_it++) {
           auto cd = *cd_it;
 
@@ -2457,6 +2487,10 @@ static ImportStatus import_thread_shapefile(
           }
         }
         import_status.rows_completed++;
+      } catch (QueryExecutionError& e) {
+        if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+          throw e;
+        }
       } catch (const std::exception& e) {
         for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
           import_buffers[col_idx_to_pop]->pop_value();
@@ -2466,18 +2500,27 @@ static ImportStatus import_thread_shapefile(
       }
     };
 
-    if (pGeometry && copy_params.geo_explode_collections) {
-      // explode and import
-      auto const [collection_idx_type_name, collection_child_type, collection_col_name] =
-          explode_collections_step1(col_descs);
-      explode_collections_step2(pGeometry,
-                                collection_child_type,
-                                collection_col_name,
-                                firstFeature + iFeature + 1,
-                                execute_import_feature);
-    } else {
-      // import non-collection or null feature just once
-      execute_import_feature(pGeometry);
+    try {
+      if (pGeometry && copy_params.geo_explode_collections) {
+        // explode and import
+        auto const [collection_idx_type_name,
+                    collection_child_type,
+                    collection_col_name] = explode_collections_step1(col_descs);
+        explode_collections_step2(pGeometry,
+                                  collection_child_type,
+                                  collection_col_name,
+                                  firstFeature + iFeature + 1,
+                                  execute_import_feature);
+      } else {
+        // import non-collection or null feature just once
+        execute_import_feature(pGeometry);
+      }
+    } catch (QueryExecutionError& e) {
+      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+        mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
+        import_status.interrupted = true;
+        return import_status;
+      }
     }
   }  // end features
 
@@ -2489,7 +2532,7 @@ static ImportStatus import_thread_shapefile(
   float load_ms = 0.0f;
   if (import_status.rows_completed > 0) {
     auto load_timer = timer_start();
-    importer->load(import_buffers, import_status.rows_completed);
+    importer->load(import_buffers, import_status.rows_completed, session_info);
     load_ms =
         float(
             timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(
@@ -2517,13 +2560,15 @@ static ImportStatus import_thread_shapefile(
 
 bool Loader::loadNoCheckpoint(
     const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-    size_t row_count) {
-  return loadImpl(import_buffers, row_count, false);
+    size_t row_count,
+    const Catalog_Namespace::SessionInfo* session_info) {
+  return loadImpl(import_buffers, row_count, false, session_info);
 }
 
 bool Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-                  size_t row_count) {
-  return loadImpl(import_buffers, row_count, true);
+                  size_t row_count,
+                  const Catalog_Namespace::SessionInfo* session_info) {
+  return loadImpl(import_buffers, row_count, true, session_info);
 }
 
 namespace {
@@ -2579,7 +2624,8 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
                                 std::vector<size_t>& all_shard_row_counts,
                                 const OneShardBuffers& import_buffers,
                                 const size_t row_count,
-                                const size_t shard_count) {
+                                const size_t shard_count,
+                                const Catalog_Namespace::SessionInfo* session_info) {
   all_shard_row_counts.resize(shard_count);
   for (size_t shard_idx = 0; shard_idx < shard_count; ++shard_idx) {
     all_shard_import_buffers.emplace_back();
@@ -2620,7 +2666,12 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
   // For ALTER ADD COLUMN, we replicate one default value to existing rows in
   // all shards, so the loop count is the number of shards.
   const auto loop_count = getReplicating() ? table_desc_->nShards : row_count;
+  Executor* executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto query_session = session_info ? session_info->get_session_id() : "";
   for (size_t i = 0; i < loop_count; ++i) {
+    if (UNLIKELY(checkInterrupt(query_session, executor))) {
+      throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+    }
     const size_t shard =
         getReplicating()
             ? i
@@ -2726,7 +2777,8 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
 bool Loader::loadImpl(
     const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
     size_t row_count,
-    bool checkpoint) {
+    bool checkpoint,
+    const Catalog_Namespace::SessionInfo* session_info) {
   if (load_callback_) {
     auto data_blocks = get_data_block_pointers(import_buffers);
     return load_callback_(import_buffers, data_blocks, row_count);
@@ -2739,7 +2791,8 @@ bool Loader::loadImpl(
                        all_shard_row_counts,
                        import_buffers,
                        row_count,
-                       shard_tables.size());
+                       shard_tables.size(),
+                       session_info);
     bool success = true;
     for (size_t shard_idx = 0; shard_idx < shard_tables.size(); ++shard_idx) {
       if (!all_shard_row_counts[shard_idx]) {
@@ -2748,11 +2801,12 @@ bool Loader::loadImpl(
       success = success && loadToShard(all_shard_import_buffers[shard_idx],
                                        all_shard_row_counts[shard_idx],
                                        shard_tables[shard_idx],
-                                       checkpoint);
+                                       checkpoint,
+                                       session_info);
     }
     return success;
   }
-  return loadToShard(import_buffers, row_count, table_desc_, checkpoint);
+  return loadToShard(import_buffers, row_count, table_desc_, checkpoint, session_info);
 }
 
 std::vector<DataBlockPtr> Loader::get_data_block_pointers(
@@ -2820,7 +2874,8 @@ bool Loader::loadToShard(
     const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
     size_t row_count,
     const TableDescriptor* shard_table,
-    bool checkpoint) {
+    bool checkpoint,
+    const Catalog_Namespace::SessionInfo* session_info) {
   std::unique_lock<std::mutex> loader_lock(loader_mutex_);
   // patch insert_data with new column
   if (this->getReplicating()) {
@@ -2892,8 +2947,11 @@ void Detector::init() {
   find_best_sqltypes_and_headers();
 }
 
-ImportStatus Detector::importDelimited(const std::string& file_path,
-                                       const bool decompressed) {
+ImportStatus Detector::importDelimited(
+    const std::string& file_path,
+    const bool decompressed,
+    const Catalog_Namespace::SessionInfo* session_info) {
+  // we do not check interrupt status for this detection
   if (!p_file) {
     p_file = fopen(file_path.c_str(), "rb");
   }
@@ -2956,7 +3014,7 @@ ImportStatus Detector::importDelimited(const std::string& file_path,
 
 void Detector::read_file() {
   // this becomes analogous to Importer::import()
-  (void)DataStreamSink::archivePlumber();
+  (void)DataStreamSink::archivePlumber(nullptr);
 }
 
 void Detector::detect_row_delimiter() {
@@ -3265,8 +3323,9 @@ std::vector<std::string> Detector::get_headers() {
 }
 
 void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-                    size_t row_count) {
-  if (!loader->loadNoCheckpoint(import_buffers, row_count)) {
+                    size_t row_count,
+                    const Catalog_Namespace::SessionInfo* session_info) {
+  if (!loader->loadNoCheckpoint(import_buffers, row_count, session_info)) {
     load_failed = true;
   }
 }
@@ -3303,7 +3362,8 @@ void Importer::checkpoint(
   }
 }
 
-ImportStatus DataStreamSink::archivePlumber() {
+ImportStatus DataStreamSink::archivePlumber(
+    const Catalog_Namespace::SessionInfo* session_info) {
   // in generalized importing scheme, reaching here file_path may
   // contain a file path, a url or a wildcard of file paths.
   // see CopyTableStmt::execute.
@@ -3331,12 +3391,21 @@ ImportStatus DataStreamSink::archivePlumber() {
   //       without the parameter, it means plain or compressed csv files.
   // note: .ORC and AVRO files should follow a similar path to Parquet?
   if (copy_params.file_type == FileType::PARQUET) {
-    import_parquet(file_paths);
+    import_parquet(file_paths, session_info);
   } else
 #endif
   {
-    import_compressed(file_paths);
+    import_compressed(file_paths, session_info);
   }
+
+  auto query_session = session_info ? session_info->get_session_id() : "";
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  if (checkInterrupt(query_session, executor)) {
+    // to catch the missing interrupted import
+    mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
+    import_status.interrupted = true;
+  }
+
   return import_status;
 }
 
@@ -3360,7 +3429,9 @@ inline auto open_parquet_table(const std::string& file_path,
   return std::make_tuple(num_row_groups, num_columns, num_rows);
 }
 
-void Detector::import_local_parquet(const std::string& file_path) {
+void Detector::import_local_parquet(const std::string& file_path,
+                                    const Catalog_Namespace::SessionInfo* session_info) {
+  /*Skip interrupt checking in detector*/
   std::shared_ptr<arrow::io::ReadableFile> infile;
   std::unique_ptr<parquet::arrow::FileReader> reader;
   std::shared_ptr<arrow::Table> table;
@@ -3476,7 +3547,8 @@ auto TypedImportBuffer::del_values(const SQLTypes type,
   }
 }
 
-void Importer::import_local_parquet(const std::string& file_path) {
+void Importer::import_local_parquet(const std::string& file_path,
+                                    const Catalog_Namespace::SessionInfo* session_info) {
   std::shared_ptr<arrow::io::ReadableFile> infile;
   std::unique_ptr<parquet::arrow::FileReader> reader;
   std::shared_ptr<arrow::Table> table;
@@ -3488,6 +3560,7 @@ void Importer::import_local_parquet(const std::string& file_path) {
   const auto& column_list = get_column_descs();
   // for now geo columns expect a wkt or wkb hex string
   std::vector<const ColumnDescriptor*> cds;
+  Executor* executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   int num_physical_cols = 0;
   for (auto& cd : column_list) {
     cds.push_back(cd);
@@ -3517,10 +3590,16 @@ void Importer::import_local_parquet(const std::string& file_path) {
     return physical_col_idx;
   };
   // load a file = nested iteration of row groups, row slices and logical columns
+  auto query_session = session_info ? session_info->get_session_id() : "";
   auto ms_load_a_file = measure<>::execution([&]() {
     for (int row_group = 0; row_group < num_row_groups && !load_failed; ++row_group) {
       // a sliced row group will be handled like a (logic) parquet file, with
       // a entirely clean set of bad_rows_tracker, import_buffers_vec, ... etc
+      if (UNLIKELY(checkInterrupt(query_session, executor))) {
+        mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
+        import_status.interrupted = true;
+        throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+      }
       import_buffers_vec.resize(num_slices);
       for (int slice = 0; slice < num_slices; slice++) {
         import_buffers_vec[slice].clear();
@@ -3556,6 +3635,11 @@ void Importer::import_local_parquet(const std::string& file_path) {
         const size_t slice_size = (array_size + num_slices - 1) / num_slices;
         ThreadController_NS::SimpleThreadController<void> thread_controller(num_slices);
         for (int slice = 0; slice < num_slices; ++slice) {
+          if (UNLIKELY(checkInterrupt(query_session, executor))) {
+            mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
+            import_status.interrupted = true;
+            throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+          }
           thread_controller.startThread([&, slice] {
             const auto slice_offset = slice % num_slices;
             ArraySliceRange slice_range(
@@ -3588,7 +3672,9 @@ void Importer::import_local_parquet(const std::string& file_path) {
       }
       // flush slices of this row group to chunks
       for (int slice = 0; slice < num_slices; ++slice) {
-        load(import_buffers_vec[slice], nrow_in_slice_successfully_loaded[slice]);
+        load(import_buffers_vec[slice],
+             nrow_in_slice_successfully_loaded[slice],
+             session_info);
       }
       // update import stats
       const auto nrow_original =
@@ -3632,7 +3718,8 @@ void Importer::import_local_parquet(const std::string& file_path) {
             << " took " << (double)ms_load_a_file / 1000.0 << " secs";
 }
 
-void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
+void DataStreamSink::import_parquet(std::vector<std::string>& file_paths,
+                                    const Catalog_Namespace::SessionInfo* session_info) {
   auto importer = dynamic_cast<Importer*>(this);
   auto table_epochs = importer ? importer->getLoader()->getTableEpochs()
                                : std::vector<Catalog_Namespace::TableEpochInfo>{};
@@ -3673,7 +3760,7 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
               us3arch
                   ? us3arch->land(objkey, teptr, nullptr != dynamic_cast<Detector*>(this))
                   : objkey;
-          import_local_parquet(file_path);
+          import_local_parquet(file_path, session_info);
           if (us3arch) {
             us3arch->vacuum(objkey);
           }
@@ -3686,12 +3773,21 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
         if (import_status.load_truncated) {
           break;
         }
+        if (import_status.interrupted) {
+          throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+        }
       }
     }
     // rethrow any exception happened herebefore
     if (teptr) {
       std::rethrow_exception(teptr);
     }
+  } catch (const QueryExecutionError& e) {
+    if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+      throw std::runtime_error(
+          "A query has been interrupted while performing data importing.");
+    }
+    throw e;
   } catch (...) {
     load_failed = true;
     if (!import_status.load_truncated) {
@@ -3705,7 +3801,9 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
 }
 #endif  // ENABLE_IMPORT_PARQUET
 
-void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
+void DataStreamSink::import_compressed(
+    std::vector<std::string>& file_paths,
+    const Catalog_Namespace::SessionInfo* session_info) {
 #ifdef _MSC_VER
   throw std::runtime_error("CSV Import not yet supported on Windows.");
 #else
@@ -3722,6 +3820,8 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
   // create a thread to read uncompressed byte stream out of pipe and
   // feed into importDelimited()
   ImportStatus ret;
+  auto query_session = session_info ? session_info->get_session_id() : "";
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   auto th_pipe_reader = std::thread([&]() {
     try {
       // importDelimited will read from FILE* p_file
@@ -3732,7 +3832,10 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
 
       // in future, depending on data types of this uncompressed stream
       // it can be feed into other function such like importParquet, etc
-      ret = importDelimited(file_path, true);
+      ret = importDelimited(file_path, true, session_info);
+      if (ret.interrupted || checkInterrupt(query_session, executor)) {
+        throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+      }
     } catch (...) {
       if (!teptr) {  // no replace
         teptr = std::current_exception();
@@ -3817,6 +3920,7 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
         // start reading uncompressed bytes of this archive from libarchive
         // note! this archive may contain more than one files!
         file_offsets.push_back(0);
+        size_t num_block_read = 0;
         while (!stop && !!(just_saw_archive_header = arch.read_next_header())) {
           bool insert_line_delim_after_this_file = false;
           while (!stop) {
@@ -3827,6 +3931,11 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
             if (offset > 0) {
               std::unique_lock<std::mutex> lock(file_offsets_mutex);
               file_offsets.back() = offset;
+            }
+            if (UNLIKELY((num_block_read & 0x7f) == 0) &&
+                checkInterrupt(query_session, executor)) {
+              stop = true;
+              break;
             }
             if (!ok) {
               break;
@@ -3896,7 +4005,9 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
                 insert_line_delim_after_this_file = (*plast != copy_params.line_delim);
               }
             }
+            ++num_block_read;
           }
+
           // if that file didn't end with a line delim, we insert one here to terminate
           // that file's stream use a loop for the same reason as above
           if (insert_line_delim_after_this_file) {
@@ -3955,14 +4066,18 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
 #endif
 }
 
-ImportStatus Importer::import() {
-  return DataStreamSink::archivePlumber();
+ImportStatus Importer::import(const Catalog_Namespace::SessionInfo* session_info) {
+  return DataStreamSink::archivePlumber(session_info);
 }
 
-ImportStatus Importer::importDelimited(const std::string& file_path,
-                                       const bool decompressed) {
+ImportStatus Importer::importDelimited(
+    const std::string& file_path,
+    const bool decompressed,
+    const Catalog_Namespace::SessionInfo* session_info) {
   bool load_truncated = false;
+  bool importer_interrupted = false;
   set_import_status(import_id, import_status);
+  auto query_session = session_info ? session_info->get_session_id() : "";
 
   if (!p_file) {
     p_file = fopen(file_path.c_str(), "rb");
@@ -4026,6 +4141,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
   ChunkKey chunkKey = {loader->getCatalog().getCurrentDB().dbId,
                        loader->getTableDesc()->tableId};
   auto table_epochs = loader->getTableEpochs();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   {
     std::list<std::future<ImportStatus>> threads;
 
@@ -4071,7 +4187,9 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
                                    end_pos,
                                    end_pos,
                                    columnIdToRenderGroupAnalyzerMap,
-                                   first_row_index_this_buffer));
+                                   first_row_index_this_buffer,
+                                   session_info,
+                                   executor));
 
       first_row_index_this_buffer += num_rows_this_buffer;
 
@@ -4083,7 +4201,6 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
              fread(scratch_buffer.get() + nresidual, 1, alloc_size - nresidual, p_file);
 
       begin_pos = 0;
-
       while (threads.size() > 0) {
         int nready = 0;
         for (std::list<std::future<ImportStatus>>::iterator it = threads.begin();
@@ -4093,6 +4210,13 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
               0);  //(std::distance(it, threads.end()) == 1? 1: 0);
           if (p.wait_for(span) == std::future_status::ready) {
             auto ret_import_status = p.get();
+            if (UNLIKELY(ret_import_status.interrupted)) {
+              mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
+              importer_interrupted = true;
+              import_status.interrupted = true;
+              set_import_status(import_id, import_status);
+              break;
+            }
             import_status += ret_import_status;
             // sum up current total file offsets
             size_t total_file_offset{0};
@@ -4137,8 +4261,13 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
         if (threads.size() < max_threads) {
           break;
         }
+        if (importer_interrupted) {
+          break;
+        }
       }
-
+      if (importer_interrupted) {
+        break;
+      }
       if (import_status.rows_rejected > copy_params.max_reject) {
         load_truncated = true;
         load_failed = true;
@@ -4159,6 +4288,10 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
     }
   }
 
+  if (importer_interrupted) {
+    return import_status;
+  }
+
   checkpoint(table_epochs);
 
   // must set import_status.load_truncated before closing this end of pipe
@@ -4166,7 +4299,6 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
   // exception
   mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
   import_status.load_truncated = load_truncated;
-
   fclose(p_file);
   p_file = nullptr;
   return import_status;
@@ -4742,12 +4874,11 @@ std::vector<Importer::GeoFileLayerInfo> Importer::gdalGetLayersInGeoFile(
   return layer_info;
 }
 
-ImportStatus Importer::importGDAL(
-    ColumnNameToSourceNameMapType columnNameToSourceNameMap) {
+ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSourceNameMap,
+                                  const Catalog_Namespace::SessionInfo* session_info) {
   // initial status
   bool load_truncated = false;
   set_import_status(import_id, import_status);
-
   OGRDataSourceUqPtr poDS(openGDALDataset(file_path, copy_params));
   if (poDS == nullptr) {
     throw std::runtime_error("openGDALDataset Error: Unable to open geo file " +
@@ -4796,6 +4927,28 @@ ImportStatus Importer::importGDAL(
 #endif
 
   VLOG(1) << "GDAL import # threads: " << max_threads;
+
+  // import geo table is specifically handled in both DBHandler and QueryRunner
+  // that is separate path against a normal SQL execution
+  // so we here explicitly enroll the import session to allow interruption
+  // while importing geo table
+  auto query_session = session_info ? session_info->get_session_id() : "";
+  auto query_submitted_time = ::toString(std::chrono::system_clock::now());
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  if (g_enable_non_kernel_time_query_interrupt && !query_session.empty()) {
+    executor->enrollQuerySession(query_session,
+                                 "Import Geo Table",
+                                 query_submitted_time,
+                                 Executor::UNITARY_EXECUTOR_ID,
+                                 QuerySessionStatus::QueryStatus::RUNNING);
+  }
+
+  ScopeGuard clearInterruptStatus = [executor, &query_session, &query_submitted_time] {
+    // reset the runtime query interrupt status
+    if (g_enable_non_kernel_time_query_interrupt && !query_session.empty()) {
+      executor->clearQuerySessionStatus(query_session, query_submitted_time, false);
+    }
+  };
 
   // make an import buffer for each thread
   CHECK_EQ(import_buffers_vec.size(), 0u);
@@ -4876,7 +5029,9 @@ ImportStatus Importer::importGDAL(
                                                      numFeaturesThisChunk,
                                                      fieldNameToIndexMap,
                                                      columnNameToSourceNameMap,
-                                                     columnIdToRenderGroupAnalyzerMap);
+                                                     columnIdToRenderGroupAnalyzerMap,
+                                                     session_info,
+                                                     executor.get());
     import_status += ret_import_status;
     import_status.rows_estimated = ((float)firstFeatureThisChunk / (float)numFeatures) *
                                    import_status.rows_completed;
@@ -4893,7 +5048,9 @@ ImportStatus Importer::importGDAL(
                                  numFeaturesThisChunk,
                                  fieldNameToIndexMap,
                                  columnNameToSourceNameMap,
-                                 columnIdToRenderGroupAnalyzerMap));
+                                 columnIdToRenderGroupAnalyzerMap,
+                                 session_info,
+                                 executor.get()));
 
     // let the threads run
     while (threads.size() > 0) {
@@ -4909,8 +5066,12 @@ ImportStatus Importer::importGDAL(
           import_status.rows_estimated =
               ((float)firstFeatureThisChunk / (float)numFeatures) *
               import_status.rows_completed;
+          if (ret_import_status.interrupted) {
+            import_status.interrupted = true;
+            set_import_status(import_id, import_status);
+            break;
+          }
           set_import_status(import_id, import_status);
-
           // recall thread_id for reuse
           stack_thread_ids.push(ret_import_status.thread_id);
 
@@ -4919,6 +5080,10 @@ ImportStatus Importer::importGDAL(
         } else {
           ++it;
         }
+      }
+
+      if (import_status.interrupted) {
+        throw std::runtime_error("COPY statement has been interrupted");
       }
 
       if (nready == 0) {

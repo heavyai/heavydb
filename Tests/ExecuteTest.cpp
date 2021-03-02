@@ -6470,7 +6470,7 @@ void import_array_test(const std::string& table_name) {
       }
     }
   }
-  loader->load(import_buffers, g_array_test_row_count);
+  loader->load(import_buffers, g_array_test_row_count, nullptr);
 }
 
 void import_gpu_sort_test() {

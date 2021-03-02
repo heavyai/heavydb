@@ -76,10 +76,18 @@ set(parser_source_files
 add_library(ParserGenerated ${ParserPatched} ${ScannerPatched})
 add_library(Parser ${CMAKE_CURRENT_BINARY_DIR}/parser.h ${parser_source_files})
 
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+    include_directories(Distributed/ee)
+endif()
+
 add_dependencies(PatchParser ParserFiles)
 add_dependencies(PatchScanner ScannerFiles)
 
 add_dependencies(Parser PatchParser PatchScanner)
 
-target_link_libraries(Parser ParserGenerated QueryState ImportExport Shared Analyzer QueryEngine Catalog TableArchiver DataMgr LockMgr)
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+    target_link_libraries(Parser ParserGenerated QueryState ImportExport Shared Analyzer QueryEngine Catalog TableArchiver DataMgr LockMgr Distributed)
+else()
+    target_link_libraries(Parser ParserGenerated QueryState ImportExport Shared Analyzer QueryEngine Catalog TableArchiver DataMgr LockMgr)
+endif()
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})

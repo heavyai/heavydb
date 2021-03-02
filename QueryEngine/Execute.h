@@ -81,33 +81,38 @@ using InterruptFlagMap = std::map<QuerySessionId, bool>;
 class QuerySessionStatus {
   // A class that is used to describe the query session's info
  public:
-  enum QueryStatus { UNDEFINED = 0, PENDING_QUEUE, PENDING_EXECUTOR, RUNNING };
+  /* todo(yoonmin): support more query status
+   * i.e., RUNNING_SORT, RUNNING_CARD_EST, CLEANUP, ... */
+  enum QueryStatus {
+    UNDEFINED = 0,
+    PENDING_QUEUE,
+    PENDING_EXECUTOR,
+    RUNNING,
+    RUNNING_REDUCTION
+  };
 
-  QuerySessionStatus(
-      const QuerySessionId& query_session,
-      const std::string& query_str,
-      const std::chrono::time_point<std::chrono::system_clock> submitted_time)
+  QuerySessionStatus(const QuerySessionId& query_session,
+                     const std::string& query_str,
+                     const std::string& submitted_time)
       : query_session_(query_session)
       , executor_id_(0)
       , query_str_(query_str)
       , submitted_time_(submitted_time)
       , query_status_(QueryStatus::UNDEFINED) {}
-  QuerySessionStatus(
-      const QuerySessionId& query_session,
-      const size_t executor_id,
-      const std::string& query_str,
-      const std::chrono::time_point<std::chrono::system_clock> submitted_time)
+  QuerySessionStatus(const QuerySessionId& query_session,
+                     const size_t executor_id,
+                     const std::string& query_str,
+                     const std::string& submitted_time)
       : query_session_(query_session)
       , executor_id_(executor_id)
       , query_str_(query_str)
       , submitted_time_(submitted_time)
       , query_status_(QueryStatus::UNDEFINED) {}
-  QuerySessionStatus(
-      const QuerySessionId& query_session,
-      const size_t executor_id,
-      const std::string& query_str,
-      const std::chrono::time_point<std::chrono::system_clock> submitted_time,
-      const QuerySessionStatus::QueryStatus& query_status)
+  QuerySessionStatus(const QuerySessionId& query_session,
+                     const size_t executor_id,
+                     const std::string& query_str,
+                     const std::string& submitted_time,
+                     const QuerySessionStatus::QueryStatus& query_status)
       : query_session_(query_session)
       , executor_id_(executor_id)
       , query_str_(query_str)
@@ -117,9 +122,7 @@ class QuerySessionStatus {
   const QuerySessionId getQuerySession() { return query_session_; }
   const std::string getQueryStr() { return query_str_; }
   const size_t getExecutorId() { return executor_id_; }
-  const std::chrono::time_point<std::chrono::system_clock> getQuerySubmittedTime() {
-    return submitted_time_;
-  }
+  const std::string& getQuerySubmittedTime() { return submitted_time_; }
   const QuerySessionStatus::QueryStatus getQueryStatus() { return query_status_; }
   void setQueryStatus(const QuerySessionStatus::QueryStatus& status) {
     query_status_ = status;
@@ -133,12 +136,13 @@ class QuerySessionStatus {
   const QuerySessionId query_session_;
   size_t executor_id_;
   const std::string query_str_;
-  const std::chrono::time_point<std::chrono::system_clock> submitted_time_;
+  const std::string submitted_time_;
   // Currently we use three query status:
   // 1) PENDING_IN_QUEUE: a task is submitted to the dispatch_queue but hangs due to no
   // existing worker (= executor) 2) PENDING_IN_EXECUTOR: a task is assigned to the
   // specific executor but waits to get the resource to run 3) RUNNING: a task is assigned
   // to the specific executor and its execution has been successfully started
+  // 4) RUNNING_REDUCTION: a task is in the reduction phase
   QuerySessionStatus::QueryStatus query_status_;
 };
 using QuerySessionMap =
@@ -431,8 +435,8 @@ class Executor {
 
   void registerActiveModule(void* module, const int device_id) const;
   void unregisterActiveModule(void* module, const int device_id) const;
-  void interrupt(const std::string& query_session = "",
-                 const std::string& interrupt_session = "");
+  void interrupt(const QuerySessionId& query_session = "",
+                 const QuerySessionId& interrupt_session = "");
   void resetInterrupt();
 
   // only for testing usage
@@ -617,7 +621,8 @@ class Executor {
                           std::list<ChunkIter>&,
                           std::list<std::shared_ptr<Chunk_NS::Chunk>>&,
                           DeviceAllocator* device_allocator,
-                          const size_t thread_idx);
+                          const size_t thread_idx,
+                          const bool allow_runtime_interrupt);
 
   FetchResult fetchUnionChunks(const ColumnFetcher&,
                                const RelAlgExecutionUnit& ra_exe_unit,
@@ -629,7 +634,8 @@ class Executor {
                                std::list<ChunkIter>&,
                                std::list<std::shared_ptr<Chunk_NS::Chunk>>&,
                                DeviceAllocator* device_allocator,
-                               const size_t thread_idx);
+                               const size_t thread_idx,
+                               const bool allow_runtime_interrupt);
 
   std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>>
   getRowCountAndOffsetForAllFrags(
@@ -672,6 +678,7 @@ class Executor {
                                  const int64_t limit,
                                  const uint32_t start_rowid,
                                  const uint32_t num_tables,
+                                 const bool allow_runtime_interrupt,
                                  RenderInfo* render_info);
   int32_t executePlanWithoutGroupBy(
       const RelAlgExecutionUnit& ra_exe_unit,
@@ -688,6 +695,7 @@ class Executor {
       const int device_id,
       const uint32_t start_rowid,
       const uint32_t num_tables,
+      const bool allow_runtime_interrupt,
       RenderInfo* render_info);
 
  public:  // Temporary, ask saman about this
@@ -801,7 +809,9 @@ class Executor {
                                    ExecutorDeviceType device_type,
                                    const std::vector<InputTableInfo>& input_table_infos);
 
-  void insertErrorCodeChecker(llvm::Function* query_func, bool hoist_literals);
+  void insertErrorCodeChecker(llvm::Function* query_func,
+                              bool hoist_literals,
+                              bool allow_runtime_query_interrupt);
 
   void preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,
                           const std::vector<InputTableInfo>& query_infos);
@@ -895,34 +905,39 @@ class Executor {
 
   QuerySessionId& getCurrentQuerySession(mapd_shared_lock<mapd_shared_mutex>& read_lock);
   size_t getRunningExecutorId(mapd_shared_lock<mapd_shared_mutex>& read_lock);
+  void setCurrentQuerySession(const QuerySessionId& query_session,
+                              mapd_unique_lock<mapd_shared_mutex>& write_lock);
+  void setRunningExecutorId(const size_t id,
+                            mapd_unique_lock<mapd_shared_mutex>& write_lock);
   bool checkCurrentQuerySession(const std::string& candidate_query_session,
                                 mapd_shared_lock<mapd_shared_mutex>& read_lock);
   void invalidateRunningQuerySession(mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  bool addToQuerySessionList(
-      const QuerySessionId& query_session,
-      const std::string& query_str,
-      const std::chrono::time_point<std::chrono::system_clock> submitted,
-      const size_t executor_id,
-      const QuerySessionStatus::QueryStatus query_status,
-      mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  bool removeFromQuerySessionList(
-      const QuerySessionId& query_session,
-      const std::chrono::time_point<std::chrono::system_clock> submitted,
-      mapd_unique_lock<mapd_shared_mutex>& write_lock);
+  bool addToQuerySessionList(const QuerySessionId& query_session,
+                             const std::string& query_str,
+                             const std::string& submitted,
+                             const size_t executor_id,
+                             const QuerySessionStatus::QueryStatus query_status,
+                             mapd_unique_lock<mapd_shared_mutex>& write_lock);
+  bool removeFromQuerySessionList(const QuerySessionId& query_session,
+                                  const std::string& submitted_time_str,
+                                  mapd_unique_lock<mapd_shared_mutex>& write_lock);
   void setQuerySessionAsInterrupted(const QuerySessionId& query_session,
                                     mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  bool checkIsQuerySessionInterrupted(const QuerySessionId& query_session,
+  void resetQuerySessionInterruptFlag(const std::string& query_session,
+                                      mapd_unique_lock<mapd_shared_mutex>& write_lock);
+  bool checkIsQuerySessionInterrupted(const std::string& query_session,
                                       mapd_shared_lock<mapd_shared_mutex>& read_lock);
+  bool checkIsRunningQuerySessionInterrupted();
   bool checkIsQuerySessionEnrolled(const QuerySessionId& query_session,
                                    mapd_shared_lock<mapd_shared_mutex>& read_lock);
   bool updateQuerySessionStatusWithLock(
       const QuerySessionId& query_session,
-      const std::chrono::time_point<std::chrono::system_clock> submitted,
+      const std::string& submitted_time_str,
       const QuerySessionStatus::QueryStatus updated_query_status,
       mapd_unique_lock<mapd_shared_mutex>& write_lock);
   bool updateQuerySessionExecutorAssignment(
       const QuerySessionId& query_session,
-      const std::chrono::time_point<std::chrono::system_clock> submitted,
+      const std::string& submitted_time_str,
       const size_t executor_id,
       mapd_unique_lock<mapd_shared_mutex>& write_lock);
   std::vector<QuerySessionStatus> getQuerySessionInfo(
@@ -931,25 +946,24 @@ class Executor {
 
   mapd_shared_mutex& getSessionLock();
   CurrentQueryStatus attachExecutorToQuerySession(
-      std::shared_ptr<const query_state::QueryState>& query_state);
+      const QuerySessionId& query_session_id,
+      const std::string& query_str,
+      const std::string& query_submitted_time);
   void checkPendingQueryStatus(const QuerySessionId& query_session);
-  void clearQuerySessionStatus(
-      const QuerySessionId& query_session,
-      const std::chrono::time_point<std::chrono::system_clock> submitted,
-      bool acquire_spin_lock);
+  void clearQuerySessionStatus(const QuerySessionId& query_session,
+                               const std::string& submitted_time_str,
+                               const bool acquire_spin_lock);
   void updateQuerySessionStatus(
       std::shared_ptr<const query_state::QueryState>& query_state,
       const QuerySessionStatus::QueryStatus new_query_status);
-  void updateQuerySessionStatus(
-      const QuerySessionId& query_session,
-      const std::chrono::time_point<std::chrono::system_clock> submitted,
-      const QuerySessionStatus::QueryStatus new_query_status);
-  void enrollQuerySession(
-      const QuerySessionId& query_session,
-      const std::string& query_str,
-      const std::chrono::time_point<std::chrono::system_clock> submitted,
-      const size_t executor_id,
-      const QuerySessionStatus::QueryStatus query_session_status);
+  void updateQuerySessionStatus(const QuerySessionId& query_session,
+                                const std::string& submitted_time_str,
+                                const QuerySessionStatus::QueryStatus new_query_status);
+  void enrollQuerySession(const QuerySessionId& query_session,
+                          const std::string& query_str,
+                          const std::string& submitted_time_str,
+                          const size_t executor_id,
+                          const QuerySessionStatus::QueryStatus query_session_status);
 
   // true when we have matched cardinality, and false otherwise
   using CachedCardinality = std::pair<bool, size_t>;
@@ -1066,7 +1080,7 @@ class Executor {
   static mapd_shared_mutex executors_cache_mutex_;
 
   // for now we use recycler_mutex only for cardinality_cache_
-  // and will expand its coverage for more interesting caches for query excution
+  // and will expand its coverage for more interesting caches for query execution
   static mapd_shared_mutex recycler_mutex_;
   static std::unordered_map<std::string, size_t> cardinality_cache_;
 

@@ -245,6 +245,14 @@ class DBHandler : public OmniSciIf {
                   const std::string& memory_level) override;
   void clear_cpu_memory(const TSessionId& session) override;
   void clear_gpu_memory(const TSessionId& session) override;
+  void set_cur_session(const TSessionId& parent_session,
+                       const TSessionId& leaf_session,
+                       const std::string& start_time_str,
+                       const std::string& label) override;
+  void invalidate_cur_session(const TSessionId& parent_session,
+                              const TSessionId& leaf_session,
+                              const std::string& start_time_str,
+                              const std::string& label) override;
   void set_table_epoch(const TSessionId& session,
                        const int db_id,
                        const int table_id,
@@ -443,11 +451,13 @@ class DBHandler : public OmniSciIf {
                    const TSessionId& leaf_session,
                    const TSessionId& parent_session,
                    const std::string& query_ra,
+                   const std::string& start_time_str,
                    const bool just_explain,
                    const std::vector<int64_t>& outer_fragment_indices) override;
   void execute_query_step(TStepResult& _return,
                           const TPendingQuery& pending_query,
-                          const TSubqueryId subquery_id) override;
+                          const TSubqueryId subquery_id,
+                          const std::string& start_time_str) override;
   void broadcast_serialized_rows(const TSerializedRows& serialized_rows,
                                  const TRowDescriptor& row_desc,
                                  const TQueryId query_id,

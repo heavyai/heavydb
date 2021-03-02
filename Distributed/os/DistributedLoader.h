@@ -31,7 +31,8 @@ class DistributedLoader : public import_export::Loader {
 
   bool load(const std::vector<std::unique_ptr<import_export::TypedImportBuffer>>&
                 import_buffers,
-            const size_t row_count) override {
+            const size_t row_count,
+            const Catalog_Namespace::SessionInfo* session_info) override {
     CHECK(false);
     return false;
   }

@@ -23,6 +23,7 @@
 #include "QueryState.h"
 #include "Catalog/Catalog.h"
 #include "Catalog/SessionInfo.h"
+#include "Shared/toString.h"
 
 #include <algorithm>
 #include <iomanip>
@@ -59,7 +60,8 @@ QueryState::QueryState(
     , session_data_(session_info ? boost::make_optional<SessionData>(session_info)
                                  : boost::none)
     , query_str_(std::move(query_str))
-    , logged_(false) {}
+    , logged_(false)
+    , submitted_(std::move(::toString(std::chrono::system_clock::now()))) {}
 
 QueryStateProxy QueryState::createQueryStateProxy() {
   return createQueryStateProxy(events_.end());
@@ -85,6 +87,15 @@ std::shared_ptr<Catalog_Namespace::SessionInfo const> QueryState::getConstSessio
     // This can happen for a query on a database that is simultaneously dropped.
     throw std::runtime_error("session_info requested but has expired.");
   }
+}
+
+void QueryState::setQuerySubmittedTime(const std::string& t) {
+  std::lock_guard<std::mutex> lock(events_mutex_);
+  submitted_ = t;
+}
+const std::string QueryState::getQuerySubmittedTime() const {
+  std::lock_guard<std::mutex> lock(events_mutex_);
+  return submitted_;
 }
 
 // Assumes query_state_ is not null, and events_mutex_ is locked for this.

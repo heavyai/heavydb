@@ -68,6 +68,7 @@ class MapDLeafHandler {
                    const TSessionId& leaf_session,
                    const TSessionId& parent_session,
                    const std::string& query_ra,
+                   const std::string& start_time_str,
                    const bool just_explain,
                    const std::vector<int64_t>& outer_fragment_indices) {
     CHECK(false);
@@ -75,7 +76,8 @@ class MapDLeafHandler {
 
   void execute_query_step(TStepResult& _return,
                           const TPendingQuery& pending_query,
-                          const TSubqueryId subquery_id) {
+                          const TSubqueryId subquery_id,
+                          const std::string& start_time_str) {
     CHECK(false);
   }
 

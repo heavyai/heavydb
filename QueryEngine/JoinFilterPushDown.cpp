@@ -169,7 +169,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
                                        /*find_push_down_candidates=*/false,
                                        /*just_calcite_explain=*/false,
                                        eo.gpu_input_mem_limit_percent,
-                                       eo.allow_runtime_query_interrupt};
+                                       eo.allow_runtime_query_interrupt,
+                                       eo.running_query_interrupt_freq,
+                                       eo.pending_query_interrupt_freq};
 
     // Dispatch the subqueries first
     for (auto subquery : subqueries) {

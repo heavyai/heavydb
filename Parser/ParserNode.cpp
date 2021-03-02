@@ -55,6 +55,7 @@
 #include "LockMgr/LockMgr.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/CalciteDeserializerUtils.h"
+#include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/JsonAccessors.h"
@@ -89,6 +90,16 @@ using DataframeDefFuncPtr =
                          const std::list<ColumnDescriptor>& columns)>;
 
 namespace Parser {
+bool checkInterrupt(const QuerySessionId& query_session, Executor* executor) {
+  if (g_enable_non_kernel_time_query_interrupt) {
+    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+    const auto isInterrupted =
+        executor->checkIsQuerySessionInterrupted(query_session, session_read_lock);
+    return isInterrupted;
+  }
+  return false;
+}
+
 std::shared_ptr<Analyzer::Expr> NullLiteral::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
@@ -2551,7 +2562,8 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                                         const std::string select_stmt,
                                         std::vector<TargetMetaInfo>& targets,
                                         bool validate_only = false,
-                                        std::vector<size_t> outer_fragment_indices = {}) {
+                                        std::vector<size_t> outer_fragment_indices = {},
+                                        bool allow_interrupt = false) {
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
 
@@ -2569,7 +2581,10 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
       calcite_mgr
           ->process(query_state_proxy, pg_shim(select_stmt), {}, true, false, false, true)
           .plan_result;
-  RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
+  RelAlgExecutor ra_executor(executor.get(),
+                             catalog,
+                             query_ra,
+                             query_state_proxy.getQueryState().shared_from_this());
   CompilationOptions co = CompilationOptions::defaults(device_type);
   const auto& query_hints = ra_executor.getParsedQueryHints();
   if (query_hints.cpu_mode) {
@@ -2589,9 +2604,10 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                          10000,
                          false,
                          false,
-                         0.9,
-                         false,
                          1000,
+                         allow_interrupt,
+                         g_running_query_interrupt_freq,
+                         g_pending_query_interrupt_freq,
                          ExecutorType::Native,
                          outer_fragment_indices};
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
@@ -2636,25 +2652,48 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
                            false};
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
-  ExecutionOptions eo = {
-      false, true, false, true, false, false, false, false, 10000, false, false, 0.9};
+  ExecutionOptions eo = {false,
+                         true,
+                         false,
+                         true,
+                         false,
+                         false,
+                         false,
+                         false,
+                         10000,
+                         false,
+                         false,
+                         0.9,
+                         false};
   return ra_executor.getOuterFragmentCount(co, eo);
 }
 
 AggregatedResult LocalConnector::query(QueryStateProxy query_state_proxy,
                                        std::string& sql_query_string,
                                        std::vector<size_t> outer_frag_indices,
-                                       bool validate_only) {
-  auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
+                                       bool validate_only,
+                                       bool allow_interrupt) {
   // TODO(PS): Should we be using the shimmed query in getResultSet?
   std::string pg_shimmed_select_query = pg_shim(sql_query_string);
 
   std::vector<TargetMetaInfo> target_metainfos;
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
+  auto query_session = session ? session->get_session_id() : "";
+  auto query_submitted_time = query_state_proxy.getQueryState().getQuerySubmittedTime();
+  if (allow_interrupt && !validate_only && !query_session.empty()) {
+    executor->enrollQuerySession(query_session,
+                                 sql_query_string,
+                                 query_submitted_time,
+                                 Executor::UNITARY_EXECUTOR_ID,
+                                 QuerySessionStatus::QueryStatus::PENDING_EXECUTOR);
+  }
   auto result_rows = getResultSet(query_state_proxy,
                                   sql_query_string,
                                   target_metainfos,
                                   validate_only,
-                                  outer_frag_indices);
+                                  outer_frag_indices,
+                                  allow_interrupt);
   AggregatedResult res = {result_rows, target_metainfos};
   return res;
 }
@@ -2662,8 +2701,10 @@ AggregatedResult LocalConnector::query(QueryStateProxy query_state_proxy,
 std::vector<AggregatedResult> LocalConnector::query(
     QueryStateProxy query_state_proxy,
     std::string& sql_query_string,
-    std::vector<size_t> outer_frag_indices) {
-  auto res = query(query_state_proxy, sql_query_string, outer_frag_indices, false);
+    std::vector<size_t> outer_frag_indices,
+    bool allow_interrupt) {
+  auto res = query(
+      query_state_proxy, sql_query_string, outer_frag_indices, false, allow_interrupt);
   return {res};
 }
 
@@ -2738,7 +2779,8 @@ std::list<ColumnDescriptor> LocalConnector::getColumnDescriptors(AggregatedResul
 
 void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy,
                                                const TableDescriptor* td,
-                                               bool validate_table) {
+                                               bool validate_table,
+                                               bool for_CTAS) {
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
   foreign_storage::validate_non_foreign_table_write(td);
@@ -2793,7 +2835,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
     // only validate the select query so we get the target types
     // correctly, but do not populate the result set
-    auto result = local_connector.query(query_state_proxy, select_query_, {}, true);
+    auto result = local_connector.query(query_state_proxy, select_query_, {}, true, true);
     auto source_column_descriptors = local_connector.getColumnDescriptors(result, false);
 
     std::vector<const ColumnDescriptor*> target_column_descriptors =
@@ -2910,12 +2952,13 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
   Fragmenter_Namespace::InsertDataLoader insertDataLoader(*leafs_connector_);
   auto target_column_descriptors = get_target_column_descriptors(td);
-
   auto outer_frag_count =
       leafs_connector_->getOuterFragmentCount(query_state_proxy, select_query_);
 
   size_t outer_frag_end = outer_frag_count == 0 ? 1 : outer_frag_count;
-
+  auto query_session = session ? session->get_session_id() : "";
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  std::string work_type_str = for_CTAS ? "CTAS" : "ITAS";
   try {
     for (size_t outer_frag_idx = 0; outer_frag_idx < outer_frag_end; outer_frag_idx++) {
       std::vector<size_t> allowed_outer_fragment_indices;
@@ -2925,11 +2968,39 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
       }
 
       const auto query_clock_begin = timer_start();
-      std::vector<AggregatedResult> query_results = leafs_connector_->query(
-          query_state_proxy, select_query_, allowed_outer_fragment_indices);
+      std::vector<AggregatedResult> query_results =
+          leafs_connector_->query(query_state_proxy,
+                                  select_query_,
+                                  allowed_outer_fragment_indices,
+                                  g_enable_non_kernel_time_query_interrupt);
       total_source_query_time_ms += timer_stop(query_clock_begin);
 
+      auto start_time = query_state_proxy.getQueryState().getQuerySubmittedTime();
+      auto query_str = "INSERT_DATA for " + work_type_str;
+      if (g_enable_non_kernel_time_query_interrupt) {
+        // In the clean-up phase of the query execution for collecting aggregated result
+        // of SELECT query, we remove its query session info, so we need to enroll the
+        // session info again
+        executor->enrollQuerySession(query_session,
+                                     query_str,
+                                     start_time,
+                                     Executor::UNITARY_EXECUTOR_ID,
+                                     QuerySessionStatus::QueryStatus::RUNNING);
+      }
+
+      ScopeGuard clearInterruptStatus = [executor, &query_session, &start_time] {
+        // this data population is non-kernel operation, so we manually cleanup
+        // the query session info in the cleanup phase
+        if (g_enable_non_kernel_time_query_interrupt) {
+          executor->clearQuerySessionStatus(query_session, start_time, false);
+        }
+      };
+
       for (auto& res : query_results) {
+        if (UNLIKELY(checkInterrupt(query_session, executor))) {
+          throw std::runtime_error(
+              "Query execution has been interrupted while performing " + work_type_str);
+        }
         auto result_rows = res.rs;
         result_rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
         const auto num_rows = result_rows->rowCount();
@@ -2963,61 +3034,99 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
         std::atomic<size_t> row_idx{0};
 
-        auto convert_function = [&result_rows,
-                                 &value_converters,
-                                 &row_idx,
-                                 &num_rows_to_process,
-                                 &thread_start_idx,
-                                 &thread_end_idx](const int thread_id) {
-          const int num_cols = value_converters.size();
-          const size_t start = thread_start_idx[thread_id];
-          const size_t end = thread_end_idx[thread_id];
-          size_t idx = 0;
-          for (idx = start; idx < end; ++idx) {
-            const auto result_row = result_rows->getRowAtNoTranslations(idx);
-            if (!result_row.empty()) {
-              size_t target_row = row_idx.fetch_add(1);
-
-              if (target_row >= num_rows_to_process) {
-                break;
-              }
-
-              for (unsigned int col = 0; col < num_cols; col++) {
-                const auto& mapd_variant = result_row[col];
-                value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
-              }
-            }
-          }
-
-          thread_start_idx[thread_id] = idx;
-        };
-
-        auto single_threaded_convert_function = [&result_rows,
-                                                 &value_converters,
-                                                 &row_idx,
-                                                 &num_rows_to_process,
-                                                 &thread_start_idx,
-                                                 &thread_end_idx](const int thread_id) {
-          const int num_cols = value_converters.size();
-          const size_t start = thread_start_idx[thread_id];
-          const size_t end = thread_end_idx[thread_id];
-          size_t idx = 0;
-          for (idx = start; idx < end; ++idx) {
+        auto do_work = [&result_rows, &num_rows_to_process, &value_converters, &row_idx](
+                           size_t& idx, const size_t end, const size_t num_cols) {
+          const auto result_row = result_rows->getRowAtNoTranslations(idx);
+          if (!result_row.empty()) {
             size_t target_row = row_idx.fetch_add(1);
-
             if (target_row >= num_rows_to_process) {
-              break;
+              idx = end;
+              return;
             }
-            const auto result_row = result_rows->getNextRow(false, false);
-            CHECK(!result_row.empty());
             for (unsigned int col = 0; col < num_cols; col++) {
               const auto& mapd_variant = result_row[col];
               value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
             }
           }
-
-          thread_start_idx[thread_id] = idx;
         };
+
+        auto convert_function = [&thread_start_idx,
+                                 &thread_end_idx,
+                                 &value_converters,
+                                 &executor,
+                                 &query_session,
+                                 &work_type_str,
+                                 &do_work](const int thread_id) {
+          const int num_cols = value_converters.size();
+          const size_t start = thread_start_idx[thread_id];
+          const size_t end = thread_end_idx[thread_id];
+          size_t idx = 0;
+          if (g_enable_non_kernel_time_query_interrupt) {
+            size_t local_idx = 0;
+            for (idx = start; idx < end; ++idx, ++local_idx) {
+              if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
+                           checkInterrupt(query_session, executor))) {
+                throw std::runtime_error(
+                    "Query execution has been interrupted while performing " +
+                    work_type_str);
+              }
+              do_work(idx, end, num_cols);
+            }
+          } else {
+            for (idx = start; idx < end; ++idx) {
+              do_work(idx, end, num_cols);
+            }
+          }
+        };
+
+        auto single_threaded_value_converter =
+            [&row_idx, &num_rows_to_process, &value_converters, &result_rows](
+                size_t& idx, const size_t end, const size_t num_cols) {
+              size_t target_row = row_idx.fetch_add(1);
+              if (target_row >= num_rows_to_process) {
+                idx = end;
+                return;
+              }
+              const auto result_row = result_rows->getNextRow(false, false);
+              CHECK(!result_row.empty());
+              for (unsigned int col = 0; col < num_cols; col++) {
+                const auto& mapd_variant = result_row[col];
+                value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
+              }
+            };
+
+        auto single_threaded_convert_function =
+            [&result_rows,
+             &value_converters,
+             &row_idx,
+             &num_rows_to_process,
+             &thread_start_idx,
+             &thread_end_idx,
+             &executor,
+             &query_session,
+             &work_type_str,
+             &single_threaded_value_converter](const int thread_id) {
+              const int num_cols = value_converters.size();
+              const size_t start = thread_start_idx[thread_id];
+              const size_t end = thread_end_idx[thread_id];
+              size_t idx = 0;
+              if (g_enable_non_kernel_time_query_interrupt) {
+                size_t local_idx = 0;
+                for (idx = start; idx < end; ++idx, ++local_idx) {
+                  if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
+                               checkInterrupt(query_session, executor))) {
+                    throw std::runtime_error(
+                        "Query execution has been interrupted while performing " +
+                        work_type_str);
+                  }
+                  single_threaded_value_converter(idx, end, num_cols);
+                }
+              } else {
+                for (idx = start; idx < end; ++idx) {
+                  single_threaded_value_converter(idx, end, num_cols);
+                }
+              }
+            };
 
         if (can_go_parallel) {
           const size_t entryCount = result_rows->entryCount();
@@ -3030,16 +3139,9 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
             thread_start_idx[i] = start_entry;
             thread_end_idx[i] = end_entry;
           }
-
         } else {
           thread_start_idx[0] = 0;
           thread_end_idx[0] = result_rows->entryCount();
-        }
-
-        std::shared_ptr<Executor> executor;
-
-        if (g_enable_experimental_string_functions) {
-          executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
         }
 
         while (start_row < num_rows) {
@@ -3087,23 +3189,22 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           }
 
           // finalize the insert data
-          {
-            auto finalizer_func =
-                [](std::unique_ptr<TargetValueConverter>::pointer targetValueConverter) {
-                  targetValueConverter->finalizeDataBlocksForInsertData();
-                };
-            std::vector<std::future<void>> worker_threads;
-            for (auto& converterPtr : value_converters) {
-              worker_threads.push_back(
-                  std::async(std::launch::async, finalizer_func, converterPtr.get()));
-            }
+          auto finalizer_func =
+              [](std::unique_ptr<TargetValueConverter>::pointer targetValueConverter) {
+                targetValueConverter->finalizeDataBlocksForInsertData();
+              };
 
-            for (auto& child : worker_threads) {
-              child.wait();
-            }
-            for (auto& child : worker_threads) {
-              child.get();
-            }
+          std::vector<std::future<void>> worker_threads;
+          for (auto& converterPtr : value_converters) {
+            worker_threads.push_back(
+                std::async(std::launch::async, finalizer_func, converterPtr.get()));
+          }
+
+          for (auto& child : worker_threads) {
+            child.wait();
+          }
+          for (auto& child : worker_threads) {
+            child.get();
           }
 
           Fragmenter_Namespace::InsertData insert_data;
@@ -3113,6 +3214,12 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           insert_data.numRows = num_rows_to_process;
 
           for (int col_idx = 0; col_idx < target_column_descriptors.size(); col_idx++) {
+            if (UNLIKELY(g_enable_non_kernel_time_query_interrupt &&
+                         checkInterrupt(query_session, executor))) {
+              throw std::runtime_error(
+                  "Query execution has been interrupted while performing " +
+                  work_type_str);
+            }
             value_converters[col_idx]->addDataBlocksToInsertData(insert_data);
           }
           total_target_value_translate_time_ms += timer_stop(translate_clock_begin);
@@ -3158,7 +3265,6 @@ void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& 
       &session_copy, boost::null_deleter());
   auto query_state = query_state::QueryState::create(session_ptr, select_query_);
   auto stdlog = STDLOG(query_state);
-
   auto& catalog = session_ptr->getCatalog();
 
   const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
@@ -3217,8 +3323,11 @@ void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& 
   }
 
   const TableDescriptor* td = catalog.getMetadataForTable(table_name_);
-
-  populateData(query_state->createQueryStateProxy(), td, true);
+  try {
+    populateData(query_state->createQueryStateProxy(), td, true, false);
+  } catch (...) {
+    throw;
+  }
 }
 
 void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -3227,7 +3336,6 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
       &session_copy, boost::null_deleter());
   auto query_state = query_state::QueryState::create(session_ptr, select_query_);
   auto stdlog = STDLOG(query_state);
-
   LocalConnector local_connector;
   auto& catalog = session.getCatalog();
   bool create_table = nullptr == leafs_connector_;
@@ -3273,7 +3381,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     // correctly, but do not populate the result set
     // we currently have exclusive access to the system so this is safe
     auto validate_result = local_connector.query(
-        query_state->createQueryStateProxy(), select_query_, {}, true);
+        query_state->createQueryStateProxy(), select_query_, {}, true, false);
 
     const auto column_descriptors_for_create =
         local_connector.getColumnDescriptors(validate_result, true);
@@ -3407,7 +3515,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   const TableDescriptor* td = catalog.getMetadataForTable(table_name_);
 
   try {
-    populateData(query_state->createQueryStateProxy(), td, false);
+    populateData(query_state->createQueryStateProxy(), td, false, true);
   } catch (...) {
     if (!g_cluster) {
       const TableDescriptor* created_td = catalog.getMetadataForTable(table_name_);
@@ -3769,7 +3877,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       }
     }
 
-    if (!loader->loadNoCheckpoint(import_buffers, nrows)) {
+    if (!loader->loadNoCheckpoint(import_buffers, nrows, &session)) {
       throw std::runtime_error("loadNoCheckpoint failed!");
     }
     catalog.roll(true);
@@ -4301,14 +4409,48 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
 
       // regular import
       auto importer = importer_factory(catalog, td, file_path, copy_params);
+      auto start_time = ::toString(std::chrono::system_clock::now());
+      auto prev_table_epoch = importer->getLoader()->getTableEpochs();
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+      auto query_session = session.get_session_id();
+      auto query_str = "COPYING " + td->tableName;
+      if (g_enable_non_kernel_time_query_interrupt) {
+        executor->enrollQuerySession(query_session,
+                                     query_str,
+                                     start_time,
+                                     Executor::UNITARY_EXECUTOR_ID,
+                                     QuerySessionStatus::QueryStatus::RUNNING);
+      }
+
+      ScopeGuard clearInterruptStatus =
+          [executor, &query_str, &query_session, &start_time, &importer] {
+            // reset the runtime query interrupt status
+            if (g_enable_non_kernel_time_query_interrupt) {
+              executor->clearQuerySessionStatus(query_session, start_time, false);
+            }
+          };
+
       auto ms = measure<>::execution([&]() {
-        auto res = importer->import();
-        rows_completed += res.rows_completed;
-        rows_rejected += res.rows_rejected;
-        load_truncated = res.load_truncated;
+        try {
+          auto res = importer->import(&session);
+          if (res.interrupted) {
+            throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+          }
+          rows_completed += res.rows_completed;
+          rows_rejected += res.rows_rejected;
+          load_truncated = res.load_truncated;
+        } catch (QueryExecutionError& e) {
+          if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+            importer->getLoader()->setTableEpochs(prev_table_epoch);
+            executor->resetInterrupt();
+            throw std::runtime_error("COPY statement has been interrupted");
+          }
+          throw e;
+        } catch (...) {
+          throw;
+        }
       });
       total_time += ms;
-
       // results
       if (load_truncated || rows_rejected > copy_params.max_reject) {
         LOG(ERROR) << "COPY exited early due to reject records count during multi file "
@@ -4335,7 +4477,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
 
   return_message.reset(new std::string(tr));
   LOG(INFO) << tr;
-}
+}  // namespace Parser
 
 // CREATE ROLE payroll_dept_role;
 void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -4794,7 +4936,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   // get column info
   auto column_info_result =
-      local_connector.query(query_state_proxy, *select_stmt, {}, true);
+      local_connector.query(query_state_proxy, *select_stmt, {}, true, false);
 
   // create exporter for requested file type
   auto query_exporter = import_export::QueryExporter::create(file_type);
@@ -4827,7 +4969,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
     // run the query
     std::vector<AggregatedResult> query_results = leafs_connector_->query(
-        query_state_proxy, *select_stmt, allowed_outer_fragment_indices);
+        query_state_proxy, *select_stmt, allowed_outer_fragment_indices, false);
 
     // export the results
     query_exporter->exportResults(query_results);

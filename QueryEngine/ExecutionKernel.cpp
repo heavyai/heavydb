@@ -167,7 +167,8 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                     *chunk_iterators_ptr,
                                                     chunks,
                                                     device_allocator.get(),
-                                                    thread_idx)
+                                                    thread_idx,
+                                                    eo.allow_runtime_query_interrupt)
                        : executor->fetchChunks(column_fetcher,
                                                ra_exe_unit_,
                                                chosen_device_id,
@@ -178,7 +179,8 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                *chunk_iterators_ptr,
                                                chunks,
                                                device_allocator.get(),
-                                               thread_idx);
+                                               thread_idx,
+                                               eo.allow_runtime_query_interrupt);
     if (fetch_result.num_rows.empty()) {
       return;
     }
@@ -299,6 +301,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                               chosen_device_id,
                                               start_rowid,
                                               ra_exe_unit_.input_descs.size(),
+                                              eo.allow_runtime_query_interrupt,
                                               do_render ? render_info_ : nullptr);
   } else {
     if (ra_exe_unit_.union_all) {
@@ -321,6 +324,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                            ra_exe_unit_.scan_limit,
                                            start_rowid,
                                            ra_exe_unit_.input_descs.size(),
+                                           eo.allow_runtime_query_interrupt,
                                            do_render ? render_info_ : nullptr);
   }
   if (device_results_) {

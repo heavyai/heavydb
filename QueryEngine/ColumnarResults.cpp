@@ -16,7 +16,10 @@
 
 #include "ColumnarResults.h"
 #include "Descriptors/RowSetMemoryOwner.h"
+#include "ErrorHandling.h"
+#include "Execute.h"
 #include "Shared/Intervals.h"
+#include "Shared/likely.h"
 #include "Shared/thread_count.h"
 
 #include <atomic>
@@ -153,45 +156,80 @@ std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
 void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& rows,
                                                             const size_t num_columns) {
   std::atomic<size_t> row_idx{0};
-  const auto do_work = [num_columns, this](const std::vector<TargetValue>& crt_row,
-                                           const size_t row_idx) {
-    for (size_t i = 0; i < num_columns; ++i) {
-      writeBackCell(crt_row[i], row_idx, i);
-    }
-  };
   if (isParallelConversion()) {
     const size_t worker_count = cpu_threads();
     std::vector<std::future<void>> conversion_threads;
+    const auto do_work = [num_columns, &row_idx, &rows, this](size_t i) {
+      const auto crt_row = rows.getRowAtNoTranslations(i);
+      auto cur_row_idx = row_idx.fetch_add(1);
+      for (size_t i = 0; i < num_columns; ++i) {
+        writeBackCell(crt_row[i], cur_row_idx, i);
+      }
+    };
     for (auto interval : makeIntervals(size_t(0), rows.entryCount(), worker_count)) {
       conversion_threads.push_back(std::async(
           std::launch::async,
-          [&rows, &do_work, &row_idx](const size_t start, const size_t end) {
-            for (size_t i = start; i < end; ++i) {
-              const auto crt_row = rows.getRowAtNoTranslations(i);
-              if (!crt_row.empty()) {
-                do_work(crt_row, row_idx.fetch_add(1));
+          [&do_work](const size_t start, const size_t end) {
+            if (g_enable_non_kernel_time_query_interrupt) {
+              size_t local_idx = 0;
+              for (size_t i = start; i < end; ++i, ++local_idx) {
+                if (UNLIKELY((local_idx & 0xFFFF) == 0 && check_interrupt())) {
+                  throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+                }
+                do_work(i);
+              }
+            } else {
+              for (size_t i = start; i < end; ++i) {
+                do_work(i);
               }
             }
           },
           interval.begin,
           interval.end));
     }
-    for (auto& child : conversion_threads) {
-      child.wait();
+
+    try {
+      for (auto& child : conversion_threads) {
+        child.wait();
+      }
+    } catch (QueryExecutionError& e) {
+      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+        throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+      }
+      throw e;
+    } catch (...) {
+      throw;
     }
 
     num_rows_ = row_idx;
     rows.setCachedRowCount(num_rows_);
     return;
   }
-  while (true) {
+  bool done = false;
+  const auto do_work = [num_columns, &row_idx, &rows, &done, this]() {
     const auto crt_row = rows.getNextRow(false, false);
     if (crt_row.empty()) {
-      break;
+      done = true;
+      return;
     }
-    do_work(crt_row, row_idx);
+    for (size_t i = 0; i < num_columns; ++i) {
+      writeBackCell(crt_row[i], row_idx, i);
+    }
     ++row_idx;
+  };
+  if (g_enable_non_kernel_time_query_interrupt) {
+    while (!done) {
+      if (UNLIKELY((row_idx & 0xFFFF) == 0 && check_interrupt())) {
+        throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+      }
+      do_work();
+    }
+  } else {
+    while (!done) {
+      do_work();
+    }
   }
+
   rows.moveToBegin();
 }
 
@@ -401,10 +439,10 @@ void ColumnarResults::materializeAllLazyColumns(
     const ResultSet& rows,
     const size_t num_columns) {
   CHECK(isDirectColumnarConversionPossible());
-  const auto do_work_just_lazy_columns = [num_columns, this](
-                                             const std::vector<TargetValue>& crt_row,
+  const auto do_work_just_lazy_columns = [num_columns, &rows, this](
                                              const size_t row_idx,
                                              const std::vector<bool>& targets_to_skip) {
+    const auto crt_row = rows.getRowAtNoTranslations(row_idx, targets_to_skip);
     for (size_t i = 0; i < num_columns; ++i) {
       if (!targets_to_skip.empty() && !targets_to_skip[i]) {
         writeBackCell(crt_row[i], row_idx, i);
@@ -442,17 +480,35 @@ void ColumnarResults::materializeAllLazyColumns(
           std::launch::async,
           [&rows, &do_work_just_lazy_columns, &targets_to_skip](const size_t start,
                                                                 const size_t end) {
-            for (size_t i = start; i < end; ++i) {
-              const auto crt_row = rows.getRowAtNoTranslations(i, targets_to_skip);
-              do_work_just_lazy_columns(crt_row, i, targets_to_skip);
+            if (g_enable_non_kernel_time_query_interrupt) {
+              size_t local_idx = 0;
+              for (size_t i = start; i < end; ++i, ++local_idx) {
+                if (UNLIKELY((local_idx & 0xFFFF) == 0 && check_interrupt())) {
+                  throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+                }
+                do_work_just_lazy_columns(i, targets_to_skip);
+              }
+            } else {
+              for (size_t i = start; i < end; ++i) {
+                do_work_just_lazy_columns(i, targets_to_skip);
+              }
             }
           },
           interval.begin,
           interval.end));
     }
 
-    for (auto& child : conversion_threads) {
-      child.wait();
+    try {
+      for (auto& child : conversion_threads) {
+        child.wait();
+      }
+    } catch (QueryExecutionError& e) {
+      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+        throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+      }
+      throw e;
+    } catch (...) {
+      throw;
     }
   }
 }
@@ -508,20 +564,37 @@ void ColumnarResults::locateAndCountEntries(const ResultSet& rows,
   CHECK(rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash ||
         rows.getQueryDescriptionType() == QueryDescriptionType::GroupByBaselineHash);
   CHECK_EQ(num_threads, non_empty_per_thread.size());
-  auto locate_and_count_func =
-      [&rows, &bitmap, &non_empty_per_thread](
-          size_t start_index, size_t end_index, size_t thread_idx) {
-        size_t total_non_empty = 0;
-        size_t local_idx = 0;
-        for (size_t entry_idx = start_index; entry_idx < end_index;
-             entry_idx++, local_idx++) {
-          if (!rows.isRowAtEmpty(entry_idx)) {
-            total_non_empty++;
-            bitmap.set(local_idx, thread_idx, true);
-          }
+  auto do_work = [&rows, &bitmap](size_t& total_non_empty,
+                                  const size_t local_idx,
+                                  const size_t entry_idx,
+                                  const size_t thread_idx) {
+    if (!rows.isRowAtEmpty(entry_idx)) {
+      total_non_empty++;
+      bitmap.set(local_idx, thread_idx, true);
+    }
+  };
+  auto locate_and_count_func = [&do_work, &non_empty_per_thread](size_t start_index,
+                                                                 size_t end_index,
+                                                                 size_t thread_idx) {
+    size_t total_non_empty = 0;
+    size_t local_idx = 0;
+    if (g_enable_non_kernel_time_query_interrupt) {
+      for (size_t entry_idx = start_index; entry_idx < end_index;
+           entry_idx++, local_idx++) {
+        if (UNLIKELY((local_idx & 0xFFFF) == 0 && check_interrupt())) {
+          throw QueryExecutionError(Executor::ERR_INTERRUPTED);
         }
-        non_empty_per_thread[thread_idx] = total_non_empty;
-      };
+        do_work(total_non_empty, local_idx, entry_idx, thread_idx);
+      }
+      non_empty_per_thread[thread_idx] = total_non_empty;
+    } else {
+      for (size_t entry_idx = start_index; entry_idx < end_index;
+           entry_idx++, local_idx++) {
+        do_work(total_non_empty, local_idx, entry_idx, thread_idx);
+      }
+      non_empty_per_thread[thread_idx] = total_non_empty;
+    }
+  };
 
   std::vector<std::future<void>> conversion_threads;
   for (size_t thread_idx = 0; thread_idx < num_threads; thread_idx++) {
@@ -531,8 +604,17 @@ void ColumnarResults::locateAndCountEntries(const ResultSet& rows,
         std::launch::async, locate_and_count_func, start_entry, end_entry, thread_idx));
   }
 
-  for (auto& child : conversion_threads) {
-    child.wait();
+  try {
+    for (auto& child : conversion_threads) {
+      child.wait();
+    }
+  } catch (QueryExecutionError& e) {
+    if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+      throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+    }
+    throw e;
+  } catch (...) {
+    throw;
   }
 }
 
@@ -619,53 +701,70 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
       initAllConversionFunctions(rows, slot_idx_per_target_idx, targets_to_skip);
   CHECK_EQ(write_functions.size(), num_columns);
   CHECK_EQ(read_functions.size(), num_columns);
+  auto do_work = [this,
+                  &bitmap,
+                  &rows,
+                  &slot_idx_per_target_idx,
+                  &global_offsets,
+                  &targets_to_skip,
+                  &num_columns,
+                  &write_functions = write_functions,
+                  &read_functions = read_functions](size_t& non_empty_idx,
+                                                    const size_t total_non_empty,
+                                                    const size_t local_idx,
+                                                    size_t& entry_idx,
+                                                    const size_t thread_idx,
+                                                    const size_t end_idx) {
+    if (non_empty_idx >= total_non_empty) {
+      // all non-empty entries has been written back
+      entry_idx = end_idx;
+    }
+    const size_t output_buffer_row_idx = global_offsets[thread_idx] + non_empty_idx;
+    if (bitmap.get(local_idx, thread_idx)) {
+      // targets that are recovered from the result set iterators:
+      const auto crt_row = rows.getRowAtNoTranslations(entry_idx, targets_to_skip);
+      for (size_t column_idx = 0; column_idx < num_columns; ++column_idx) {
+        if (!targets_to_skip.empty() && !targets_to_skip[column_idx]) {
+          writeBackCell(crt_row[column_idx], output_buffer_row_idx, column_idx);
+        }
+      }
+      // targets that are copied directly without any translation/decoding from
+      // result set
+      for (size_t column_idx = 0; column_idx < num_columns; column_idx++) {
+        if (!targets_to_skip.empty() && !targets_to_skip[column_idx]) {
+          continue;
+        }
+        write_functions[column_idx](rows,
+                                    entry_idx,
+                                    output_buffer_row_idx,
+                                    column_idx,
+                                    slot_idx_per_target_idx[column_idx],
+                                    read_functions[column_idx]);
+      }
+      non_empty_idx++;
+    }
+  };
 
-  auto compact_buffer_func = [this,
-                              &rows,
-                              &bitmap,
-                              &global_offsets,
-                              &non_empty_per_thread,
-                              &num_columns,
-                              &targets_to_skip,
-                              &slot_idx_per_target_idx,
-                              &write_functions = write_functions,
-                              &read_functions = read_functions](const size_t start_index,
-                                                                const size_t end_index,
-                                                                const size_t thread_idx) {
+  auto compact_buffer_func = [&non_empty_per_thread, &do_work](const size_t start_index,
+                                                               const size_t end_index,
+                                                               const size_t thread_idx) {
     const size_t total_non_empty = non_empty_per_thread[thread_idx];
     size_t non_empty_idx = 0;
     size_t local_idx = 0;
-    for (size_t entry_idx = start_index; entry_idx < end_index;
-         entry_idx++, local_idx++) {
-      if (non_empty_idx >= total_non_empty) {
-        // all non-empty entries has been written back
-        break;
+    if (g_enable_non_kernel_time_query_interrupt) {
+      for (size_t entry_idx = start_index; entry_idx < end_index;
+           entry_idx++, local_idx++) {
+        if (UNLIKELY((local_idx & 0xFFFF) == 0 && check_interrupt())) {
+          throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+        }
+        do_work(
+            non_empty_idx, total_non_empty, local_idx, entry_idx, thread_idx, end_index);
       }
-      const size_t output_buffer_row_idx = global_offsets[thread_idx] + non_empty_idx;
-      if (bitmap.get(local_idx, thread_idx)) {
-        // targets that are recovered from the result set iterators:
-        const auto crt_row = rows.getRowAtNoTranslations(entry_idx, targets_to_skip);
-        for (size_t column_idx = 0; column_idx < num_columns; ++column_idx) {
-          if (!targets_to_skip.empty() && !targets_to_skip[column_idx]) {
-            writeBackCell(crt_row[column_idx], output_buffer_row_idx, column_idx);
-          }
-        }
-        // targets that are copied directly without any translation/decoding from
-        // result set
-        for (size_t column_idx = 0; column_idx < num_columns; column_idx++) {
-          if (!targets_to_skip.empty() && !targets_to_skip[column_idx]) {
-            continue;
-          }
-          write_functions[column_idx](rows,
-                                      entry_idx,
-                                      output_buffer_row_idx,
-                                      column_idx,
-                                      slot_idx_per_target_idx[column_idx],
-                                      read_functions[column_idx]);
-        }
-        non_empty_idx++;
-      } else {
-        continue;
+    } else {
+      for (size_t entry_idx = start_index; entry_idx < end_index;
+           entry_idx++, local_idx++) {
+        do_work(
+            non_empty_idx, total_non_empty, local_idx, entry_idx, thread_idx, end_index);
       }
     }
   };
@@ -678,8 +777,17 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
         std::launch::async, compact_buffer_func, start_entry, end_entry, thread_idx));
   }
 
-  for (auto& child : compaction_threads) {
-    child.wait();
+  try {
+    for (auto& child : compaction_threads) {
+      child.wait();
+    }
+  } catch (QueryExecutionError& e) {
+    if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+      throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+    }
+    throw e;
+  } catch (...) {
+    throw;
   }
 }
 
@@ -707,39 +815,56 @@ void ColumnarResults::compactAndCopyEntriesWithoutTargetSkipping(
       initAllConversionFunctions(rows, slot_idx_per_target_idx);
   CHECK_EQ(write_functions.size(), num_columns);
   CHECK_EQ(read_functions.size(), num_columns);
-
-  auto compact_buffer_func = [&rows,
-                              &bitmap,
-                              &global_offsets,
-                              &non_empty_per_thread,
-                              &num_columns,
-                              &slot_idx_per_target_idx,
-                              &write_functions = write_functions,
-                              &read_functions = read_functions](const size_t start_index,
-                                                                const size_t end_index,
-                                                                const size_t thread_idx) {
+  auto do_work = [&rows,
+                  &bitmap,
+                  &global_offsets,
+                  &num_columns,
+                  &slot_idx_per_target_idx,
+                  &write_functions = write_functions,
+                  &read_functions = read_functions](size_t& entry_idx,
+                                                    size_t& non_empty_idx,
+                                                    const size_t total_non_empty,
+                                                    const size_t local_idx,
+                                                    const size_t thread_idx,
+                                                    const size_t end_idx) {
+    if (non_empty_idx >= total_non_empty) {
+      // all non-empty entries has been written back
+      entry_idx = end_idx;
+      return;
+    }
+    const size_t output_buffer_row_idx = global_offsets[thread_idx] + non_empty_idx;
+    if (bitmap.get(local_idx, thread_idx)) {
+      for (size_t column_idx = 0; column_idx < num_columns; column_idx++) {
+        write_functions[column_idx](rows,
+                                    entry_idx,
+                                    output_buffer_row_idx,
+                                    column_idx,
+                                    slot_idx_per_target_idx[column_idx],
+                                    read_functions[column_idx]);
+      }
+      non_empty_idx++;
+    }
+  };
+  auto compact_buffer_func = [&non_empty_per_thread, &do_work](const size_t start_index,
+                                                               const size_t end_index,
+                                                               const size_t thread_idx) {
     const size_t total_non_empty = non_empty_per_thread[thread_idx];
     size_t non_empty_idx = 0;
     size_t local_idx = 0;
-    for (size_t entry_idx = start_index; entry_idx < end_index;
-         entry_idx++, local_idx++) {
-      if (non_empty_idx >= total_non_empty) {
-        // all non-empty entries has been written back
-        break;
-      }
-      const size_t output_buffer_row_idx = global_offsets[thread_idx] + non_empty_idx;
-      if (bitmap.get(local_idx, thread_idx)) {
-        for (size_t column_idx = 0; column_idx < num_columns; column_idx++) {
-          write_functions[column_idx](rows,
-                                      entry_idx,
-                                      output_buffer_row_idx,
-                                      column_idx,
-                                      slot_idx_per_target_idx[column_idx],
-                                      read_functions[column_idx]);
+    if (g_enable_non_kernel_time_query_interrupt) {
+      for (size_t entry_idx = start_index; entry_idx < end_index;
+           entry_idx++, local_idx++) {
+        if (UNLIKELY((local_idx & 0xFFFF) == 0 && check_interrupt())) {
+          throw QueryExecutionError(Executor::ERR_INTERRUPTED);
         }
-        non_empty_idx++;
-      } else {
-        continue;
+        do_work(
+            entry_idx, non_empty_idx, total_non_empty, local_idx, thread_idx, end_index);
+      }
+    } else {
+      for (size_t entry_idx = start_index; entry_idx < end_index;
+           entry_idx++, local_idx++) {
+        do_work(
+            entry_idx, non_empty_idx, total_non_empty, local_idx, thread_idx, end_index);
       }
     }
   };
@@ -752,8 +877,17 @@ void ColumnarResults::compactAndCopyEntriesWithoutTargetSkipping(
         std::launch::async, compact_buffer_func, start_entry, end_entry, thread_idx));
   }
 
-  for (auto& child : compaction_threads) {
-    child.wait();
+  try {
+    for (auto& child : compaction_threads) {
+      child.wait();
+    }
+  } catch (QueryExecutionError& e) {
+    if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+      throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+    }
+    throw e;
+  } catch (...) {
+    throw;
   }
 }
 

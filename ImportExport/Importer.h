@@ -553,10 +553,12 @@ class Loader {
   }
 
   virtual bool load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-                    const size_t row_count);
+                    const size_t row_count,
+                    const Catalog_Namespace::SessionInfo* session_info);
   virtual bool loadNoCheckpoint(
       const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-      const size_t row_count);
+      const size_t row_count,
+      const Catalog_Namespace::SessionInfo* session_info);
   virtual void checkpoint();
   virtual std::vector<Catalog_Namespace::TableEpochInfo> getTableEpochs() const;
   virtual void setTableEpochs(
@@ -572,14 +574,16 @@ class Loader {
   virtual bool loadImpl(
       const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
       size_t row_count,
-      bool checkpoint);
+      bool checkpoint,
+      const Catalog_Namespace::SessionInfo* session_info);
 
   using OneShardBuffers = std::vector<std::unique_ptr<TypedImportBuffer>>;
   void distributeToShards(std::vector<OneShardBuffers>& all_shard_import_buffers,
                           std::vector<size_t>& all_shard_row_counts,
                           const OneShardBuffers& import_buffers,
                           const size_t row_count,
-                          const size_t shard_count);
+                          const size_t shard_count,
+                          const Catalog_Namespace::SessionInfo* session_info);
 
   Catalog_Namespace::Catalog& catalog_;
   const TableDescriptor* table_desc_;
@@ -594,7 +598,8 @@ class Loader {
   bool loadToShard(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
                    size_t row_count,
                    const TableDescriptor* shard_table,
-                   bool checkpoint);
+                   bool checkpoint,
+                   const Catalog_Namespace::SessionInfo* session_info);
 
   bool replicating_ = false;
   std::mutex loader_mutex_;
@@ -609,6 +614,7 @@ struct ImportStatus {
   std::chrono::duration<size_t, std::milli> elapsed;
   bool load_truncated;
   int thread_id;  // to recall thread_id after thread exit
+  bool interrupted;
   ImportStatus()
       : start(std::chrono::steady_clock::now())
       , rows_completed(0)
@@ -616,7 +622,8 @@ struct ImportStatus {
       , rows_rejected(0)
       , elapsed(0)
       , load_truncated(0)
-      , thread_id(0) {}
+      , thread_id(0)
+      , interrupted(0) {}
 
   ImportStatus& operator+=(const ImportStatus& is) {
     rows_completed += is.rows_completed;
@@ -632,17 +639,23 @@ class DataStreamSink {
   DataStreamSink(const CopyParams& copy_params, const std::string file_path)
       : copy_params(copy_params), file_path(file_path) {}
   virtual ~DataStreamSink() {}
-  virtual ImportStatus importDelimited(const std::string& file_path,
-                                       const bool decompressed) = 0;
+  virtual ImportStatus importDelimited(
+      const std::string& file_path,
+      const bool decompressed,
+      const Catalog_Namespace::SessionInfo* session_info) = 0;
 #ifdef ENABLE_IMPORT_PARQUET
-  virtual void import_parquet(std::vector<std::string>& file_paths);
-  virtual void import_local_parquet(const std::string& file_path) = 0;
+  virtual void import_parquet(std::vector<std::string>& file_paths,
+                              const Catalog_Namespace::SessionInfo* session_info);
+  virtual void import_local_parquet(
+      const std::string& file_path,
+      const Catalog_Namespace::SessionInfo* session_info) = 0;
 #endif
   const CopyParams& get_copy_params() const { return copy_params; }
-  void import_compressed(std::vector<std::string>& file_paths);
+  void import_compressed(std::vector<std::string>& file_paths,
+                         const Catalog_Namespace::SessionInfo* session_info);
 
  protected:
-  ImportStatus archivePlumber();
+  ImportStatus archivePlumber(const Catalog_Namespace::SessionInfo* session_info);
 
   CopyParams copy_params;
   const std::string file_path;
@@ -662,7 +675,8 @@ class Detector : public DataStreamSink {
     init();
   };
 #ifdef ENABLE_IMPORT_PARQUET
-  void import_local_parquet(const std::string& file_path) override;
+  void import_local_parquet(const std::string& file_path,
+                            const Catalog_Namespace::SessionInfo* session_info) override;
 #endif
   static SQLTypes detect_sqltype(const std::string& str);
   std::vector<std::string> get_headers();
@@ -696,8 +710,10 @@ class Detector : public DataStreamSink {
   bool detect_headers(const std::vector<SQLTypes>& first_types,
                       const std::vector<SQLTypes>& rest_types);
   void find_best_sqltypes_and_headers();
-  ImportStatus importDelimited(const std::string& file_path,
-                               const bool decompressed) override;
+  ImportStatus importDelimited(
+      const std::string& file_path,
+      const bool decompressed,
+      const Catalog_Namespace::SessionInfo* session_info) override;
   std::string raw_data;
   boost::filesystem::path file_path;
   std::chrono::duration<double> timeout{1};
@@ -735,16 +751,20 @@ class Importer : public DataStreamSink {
            const CopyParams& p);
   Importer(Loader* providedLoader, const std::string& f, const CopyParams& p);
   ~Importer() override;
-  ImportStatus import();
-  ImportStatus importDelimited(const std::string& file_path,
-                               const bool decompressed) override;
-  ImportStatus importGDAL(std::map<std::string, std::string> colname_to_src);
+  ImportStatus import(const Catalog_Namespace::SessionInfo* session_info);
+  ImportStatus importDelimited(
+      const std::string& file_path,
+      const bool decompressed,
+      const Catalog_Namespace::SessionInfo* session_info) override;
+  ImportStatus importGDAL(std::map<std::string, std::string> colname_to_src,
+                          const Catalog_Namespace::SessionInfo* session_info);
   const CopyParams& get_copy_params() const { return copy_params; }
   const std::list<const ColumnDescriptor*>& get_column_descs() const {
     return loader->get_column_descs();
   }
   void load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-            size_t row_count);
+            size_t row_count,
+            const Catalog_Namespace::SessionInfo* session_info);
   std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>>& get_import_buffers_vec() {
     return import_buffers_vec;
   }
@@ -753,7 +773,8 @@ class Importer : public DataStreamSink {
   }
   const bool* get_is_array() const { return is_array_a.get(); }
 #ifdef ENABLE_IMPORT_PARQUET
-  void import_local_parquet(const std::string& file_path) override;
+  void import_local_parquet(const std::string& file_path,
+                            const Catalog_Namespace::SessionInfo* session_info) override;
 #endif
   static ImportStatus get_import_status(const std::string& id);
   static void set_import_status(const std::string& id, const ImportStatus is);
@@ -823,6 +844,8 @@ class Importer : public DataStreamSink {
   std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> import_buffers_vec;
   std::unique_ptr<Loader> loader;
   std::unique_ptr<bool[]> is_array_a;
+  static std::mutex init_gdal_mutex;
+  bool interrupted;
 };
 
 std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(

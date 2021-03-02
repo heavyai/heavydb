@@ -46,7 +46,9 @@ void Executor::unregisterActiveModule(void* module, const int device_id) const {
 
 void Executor::interrupt(const std::string& query_session,
                          const std::string& interrupt_session) {
-  if (g_enable_runtime_query_interrupt) {
+  const auto allow_interrupt =
+      g_enable_runtime_query_interrupt || g_enable_non_kernel_time_query_interrupt;
+  if (allow_interrupt) {
     bool is_running_query = false;
     {
       // here we validate the requested query session is valid (is already enrolled)
@@ -68,6 +70,7 @@ void Executor::interrupt(const std::string& query_session,
     {
       // We have to cover interrupt request from *any* session because we don't know
       // whether the request is for the running query or pending query
+      // or for non-kernel time interrupt
       // (or just false alarm that indicates unregistered session in a queue).
       // So we try to set a session has been interrupted once we confirm
       // the session has been enrolled and is not interrupted at this moment
@@ -87,7 +90,10 @@ void Executor::interrupt(const std::string& query_session,
   // It is also possible that user forces to use CPU-mode even if the user has GPU(s).
   // In this case, we should not execute the code in below to avoid runtime failure
   auto cuda_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr().getCudaMgr();
-  if (cuda_mgr && (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt)) {
+  if (cuda_mgr && (g_enable_dynamic_watchdog || allow_interrupt)) {
+    // we additionally allow sending interrupt signal for
+    // `g_enable_non_kernel_time_query_interrupt` especially for CTAS/ITAS queries: data
+    // population happens on CPU but select_query can be processed via GPU
     CHECK_GE(cuda_mgr->getDeviceCount(), 1);
     std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
     VLOG(1) << "Executor " << this << ": Interrupting Active Modules: mask 0x" << std::hex
@@ -139,7 +145,7 @@ void Executor::interrupt(const std::string& query_session,
           }
         }
 
-        if (g_enable_runtime_query_interrupt) {
+        if (allow_interrupt) {
           CUdeviceptr runtime_interrupt_flag;
           size_t runtime_interrupt_flag_size;
           auto status = cuModuleGetGlobal(&runtime_interrupt_flag,
@@ -197,7 +203,7 @@ void Executor::interrupt(const std::string& query_session,
     dynamic_watchdog_init(static_cast<unsigned>(DW_ABORT));
   }
 
-  if (g_enable_runtime_query_interrupt && CPU_execution_mode) {
+  if (allow_interrupt && CPU_execution_mode) {
     // turn interrupt flag on for CPU mode
     VLOG(1) << "Try to interrupt the running query on CPU";
     check_interrupt_init(static_cast<unsigned>(INT_ABORT));
@@ -208,10 +214,11 @@ void Executor::resetInterrupt() {
 #ifdef HAVE_CUDA
   std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
 #endif
-
+  const auto allow_interrupt =
+      g_enable_runtime_query_interrupt || g_enable_non_kernel_time_query_interrupt;
   if (g_enable_dynamic_watchdog) {
     dynamic_watchdog_init(static_cast<unsigned>(DW_RESET));
-  } else if (g_enable_runtime_query_interrupt) {
+  } else if (allow_interrupt) {
     check_interrupt_init(static_cast<unsigned>(INT_RESET));
   }
 

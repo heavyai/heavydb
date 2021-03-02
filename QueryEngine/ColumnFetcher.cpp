@@ -18,6 +18,7 @@
 
 #include <memory>
 
+#include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
 
 namespace {
@@ -68,6 +69,7 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
       get_column_descriptor_maybe(hash_col.get_column_id(), table_id, catalog);
   CHECK(!cd || !(cd->isVirtualCol));
   const int8_t* col_buff = nullptr;
+
   if (cd) {  // real table
     ChunkKey chunk_key{catalog.getCurrentDB().dbId,
                        fragment.physicalTableId,
@@ -149,6 +151,9 @@ JoinColumn ColumnFetcher::makeJoinColumn(
   size_t num_elems = 0;
   size_t num_chunks = 0;
   for (auto& frag : fragments) {
+    if (g_enable_non_kernel_time_query_interrupt && check_interrupt()) {
+      throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+    }
     auto [col_buff, elem_count] = getOneColumnFragment(
         executor,
         hash_col,
@@ -276,6 +281,9 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
     auto column_it = columnarized_scan_table_cache_.find(col_desc);
     if (column_it == columnarized_scan_table_cache_.end()) {
       for (size_t frag_id = 0; frag_id < frag_count; ++frag_id) {
+        if (g_enable_non_kernel_time_query_interrupt && check_interrupt()) {
+          throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+        }
         std::list<std::shared_ptr<Chunk_NS::Chunk>> chunk_holder;
         std::list<ChunkIter> chunk_iter_holder;
         const auto& fragment = (*fragments)[frag_id];

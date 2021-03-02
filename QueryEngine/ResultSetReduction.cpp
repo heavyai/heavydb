@@ -170,7 +170,10 @@ void run_reduction_code(const ReductionCode& reduction_code,
     if (err == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES) {
       throw std::runtime_error("Multiple distinct values encountered");
     }
-
+    if (err == Executor::ERR_INTERRUPTED) {
+      throw std::runtime_error(
+          "Query execution has interrupted during result set reduction");
+    }
     throw std::runtime_error(
         "Query execution has exceeded the time limit or was interrupted during result "
         "set reduction");
@@ -422,11 +425,9 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
           this_crt_col_ptr, query_mem_desc_, target_slot_idx);
       const auto that_next_col_ptr = advance_to_next_columnar_target_buff(
           that_crt_col_ptr, query_mem_desc_, target_slot_idx);
-
-      for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
-        check_watchdog(entry_idx);
+      auto do_work = [&](const size_t entry_idx) {
         if (isEmptyEntryColumnar(entry_idx, that_buff)) {
-          continue;
+          return;
         }
         if (LIKELY(!query_mem_desc_.hasKeylessHash())) {
           // copy the key from right hand side
@@ -459,6 +460,22 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
                       that,
                       slots_for_col.front(),
                       serialized_varlen_buffer);
+      };
+      if (g_enable_non_kernel_time_query_interrupt) {
+        for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
+          if (UNLIKELY((entry_idx & 0xFFFF) == 0 && check_interrupt())) {
+            throw std::runtime_error(
+                "Query execution has interrupted during result set reduction");
+          }
+          do_work(entry_idx);
+        }
+      } else {
+        for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
+          if (g_enable_dynamic_watchdog) {
+            check_watchdog(entry_idx);
+          }
+          do_work(entry_idx);
+        }
       }
 
       this_crt_col_ptr = this_next_col_ptr;
@@ -806,7 +823,9 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                                               const size_t that_entry_idx,
                                               const size_t that_entry_count,
                                               const ResultSetStorage& that) const {
-  check_watchdog(that_entry_idx);
+  if (g_enable_dynamic_watchdog) {
+    check_watchdog(that_entry_idx);
+  }
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   CHECK(query_mem_desc_.getQueryDescriptionType() ==
         QueryDescriptionType::GroupByBaselineHash);

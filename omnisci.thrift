@@ -549,6 +549,8 @@ service OmniSci {
   list<TNodeMemoryInfo> get_memory(1: TSessionId session, 2: string memory_level) throws (1: TOmniSciException e)
   void clear_cpu_memory(1: TSessionId session) throws (1: TOmniSciException e)
   void clear_gpu_memory(1: TSessionId session) throws (1: TOmniSciException e)
+  void set_cur_session(1: TSessionId parent_session, 2: TSessionId leaf_session, 3: string start_time_str, 4: string label) throws (1: TOmniSciException e)
+  void invalidate_cur_session(1: TSessionId parent_session, 2: TSessionId leaf_session, 3: string start_time_str, 4: string label) throws (1: TOmniSciException e)
   void set_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id 4: i32 new_epoch) throws (1: TOmniSciException e)
   void set_table_epoch_by_name (1: TSessionId session 2: string table_name 3: i32 new_epoch) throws (1: TOmniSciException e)
   i32 get_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id);
@@ -598,8 +600,8 @@ service OmniSci {
   # distributed
   i64 query_get_outer_fragment_count(1: TSessionId session, 2: string query) throws(1: TOmniSciException e)
   TTableMeta check_table_consistency(1: TSessionId session, 2: i32 table_id) throws (1: TOmniSciException e)
-  TPendingQuery start_query(1: TSessionId leaf_session, 2: TSessionId parent_session, 3: string query_ra, 4: bool just_explain, 5: list<i64> outer_fragment_indices) throws (1: TOmniSciException e)
-  TStepResult execute_query_step(1: TPendingQuery pending_query, 2: TSubqueryId subquery_id) throws (1: TOmniSciException e)
+  TPendingQuery start_query(1: TSessionId leaf_session, 2: TSessionId parent_session, 3: string query_ra, 4: string start_time_str, 5: bool just_explain, 6: list<i64> outer_fragment_indices) throws (1: TOmniSciException e)
+  TStepResult execute_query_step(1: TPendingQuery pending_query, 2: TSubqueryId subquery_id, 3: string start_time_str) throws (1: TOmniSciException e)
   void broadcast_serialized_rows(1: serialized_result_set.TSerializedRows serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id, 4: TSubqueryId subquery_id, 5: bool is_final_subquery_result) throws (1: TOmniSciException e)
   TPendingRenderQuery start_render_query(1: TSessionId session, 2: i64 widget_id, 3: i16 node_idx, 4: string vega_json) throws (1: TOmniSciException e)
   TRenderStepResult execute_next_render_step(1: TPendingRenderQuery pending_render, 2: TRenderAggDataMap merged_data) throws (1: TOmniSciException e)

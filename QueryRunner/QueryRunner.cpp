@@ -263,7 +263,7 @@ QueryHint QueryRunner::getParsedQueryHint(const std::string& query_str) {
                                       false,
                                       true)
                             .plan_result;
-  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
+  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra, query_state);
   const auto& query_hints = ra_executor.getParsedQueryHints();
   return query_hints;
 }
@@ -364,7 +364,6 @@ std::shared_ptr<Executor> QueryRunner::getExecutor() const {
 
 std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
     const std::string& query_str,
-    std::shared_ptr<Executor> executor,
     const std::string& session_id,
     const ExecutorDeviceType device_type,
     const double running_query_check_freq,
@@ -374,7 +373,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
   auto session_info =
       std::make_shared<Catalog_Namespace::SessionInfo>(session_info_->get_catalog_ptr(),
                                                        session_info_->get_currentUser(),
-                                                       ExecutorDeviceType::GPU,
+                                                       device_type,
                                                        session_id);
   auto query_state = create_query_state(session_info, query_str);
   auto stdlog = STDLOG(query_state);
@@ -383,7 +382,13 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
 
   std::shared_ptr<ExecutionResult> result;
   auto query_launch_task = std::make_shared<QueryDispatchQueue::Task>(
-      [&cat, &query_ra, &device_type, &query_state, &result](const size_t worker_id) {
+      [&cat,
+       &query_ra,
+       &device_type,
+       &query_state,
+       &result,
+       &running_query_check_freq,
+       &pending_query_check_freq](const size_t worker_id) {
         auto executor = Executor::getExecutor(worker_id);
         CompilationOptions co = CompilationOptions::defaults(device_type);
         co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
@@ -401,7 +406,8 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
                                false,
                                g_gpu_mem_limit_percent,
                                true,
-                               1000};
+                               running_query_check_freq,
+                               pending_query_check_freq};
         {
           // async query initiation for interrupt test
           // incurs data race warning in TSAN since
@@ -427,16 +433,12 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
         result = std::make_shared<ExecutionResult>(
             ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
       });
-  {
-    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-    auto submitted_time = std::chrono::system_clock::now();
-    query_state->setQuerySubmittedTime(submitted_time);
-    executor->enrollQuerySession(session_id,
-                                 query_str,
-                                 submitted_time,
-                                 Executor::UNITARY_EXECUTOR_ID,
-                                 QuerySessionStatus::QueryStatus::PENDING_QUEUE);
-  }
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  executor->enrollQuerySession(session_id,
+                               query_str,
+                               query_state->getQuerySubmittedTime(),
+                               Executor::UNITARY_EXECUTOR_ID,
+                               QuerySessionStatus::QueryStatus::PENDING_QUEUE);
   CHECK(dispatch_queue_);
   dispatch_queue_->submit(query_launch_task, /*is_update_delete=*/false);
   auto result_future = query_launch_task->get_future();
@@ -515,8 +517,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
                          with_filter_push_down,
                          false,
                          g_gpu_mem_limit_percent,
-                         false,
-                         1000};
+                         false};
   auto calcite_mgr = cat.getCalciteMgr();
   const auto query_ra = calcite_mgr
                             ->process(query_state_proxy,
@@ -565,7 +566,9 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
                                        /*find_push_down_candidates=*/false,
                                        /*just_calcite_explain=*/false,
                                        eo.gpu_input_mem_limit_percent,
-                                       eo.allow_runtime_query_interrupt};
+                                       eo.allow_runtime_query_interrupt,
+                                       eo.running_query_interrupt_freq,
+                                       eo.pending_query_interrupt_freq};
     auto new_ra_executor = RelAlgExecutor(executor.get(), cat, new_query_ra);
     return std::make_shared<ExecutionResult>(
         new_ra_executor.executeRelAlgQuery(co, eo_modified, false, nullptr));
@@ -689,8 +692,10 @@ void QueryRunner::reset() {
 
 ImportDriver::ImportDriver(std::shared_ptr<Catalog_Namespace::Catalog> cat,
                            const Catalog_Namespace::UserMetadata& user,
-                           const ExecutorDeviceType dt)
-    : QueryRunner(std::make_unique<Catalog_Namespace::SessionInfo>(cat, user, dt, "")) {}
+                           const ExecutorDeviceType dt,
+                           const std::string session_id)
+    : QueryRunner(
+          std::make_unique<Catalog_Namespace::SessionInfo>(cat, user, dt, session_id)) {}
 
 void ImportDriver::importGeoTable(const std::string& file_path,
                                   const std::string& table_name,
@@ -785,7 +790,8 @@ void ImportDriver::importGeoTable(const std::string& file_path,
   }
 
   import_export::Importer importer(cat, td, file_path, copy_params);
-  auto ms = measure<>::execution([&]() { importer.importGDAL(colname_to_src); });
+  auto ms = measure<>::execution(
+      [&]() { importer.importGDAL(colname_to_src, session_info_.get()); });
   LOG(INFO) << "Import Time for " << table_name << ": " << (double)ms / 1000.0 << " s";
 }
 

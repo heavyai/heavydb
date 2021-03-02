@@ -264,8 +264,16 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   if (g_enable_dynamic_watchdog) {
     executor_->resetInterrupt();
   }
-  std::string query_session = "";
-  std::string query_str = "N/A";
+  std::string query_session{""};
+  std::string query_str{"N/A"};
+  std::string query_submitted_time{""};
+  // gather necessary query's info
+  if (query_state_ != nullptr && query_state_->getConstSessionInfo() != nullptr) {
+    query_session = query_state_->getConstSessionInfo()->get_session_id();
+    query_str = query_state_->getQueryStr();
+    query_submitted_time = query_state_->getQuerySubmittedTime();
+  }
+
   bool acquire_spin_lock = false;
   auto validate_or_explain_query =
       just_explain_plan || eo.just_validate || eo.just_explain || eo.just_calcite_explain;
@@ -274,12 +282,13 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
                                             &render_info,
                                             &eo,
                                             &acquire_spin_lock,
+                                            &query_submitted_time,
                                             &validate_or_explain_query] {
     // reset the runtime query interrupt status after the end of query execution
     if (!render_info && !query_session.empty() && eo.allow_runtime_query_interrupt &&
         !validate_or_explain_query) {
       executor_->clearQuerySessionStatus(
-          query_session, query_state_->getQuerySubmittedTime(), acquire_spin_lock);
+          query_session, query_submitted_time, acquire_spin_lock);
     }
   };
 
@@ -288,8 +297,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     // within the dispatch queue is now scheduled to the specific executor
     // (not UNITARY_EXECUTOR)
     // so we update the query session's status with the executor that takes this query
-    std::tie(query_session, query_str) =
-        executor_->attachExecutorToQuerySession(query_state_);
+    std::tie(query_session, query_str) = executor_->attachExecutorToQuerySession(
+        query_session, query_str, query_submitted_time);
 
     // For now we can run a single query at a time, so if other query is already
     // executed by different executor (i.e., when we turn on parallel executor),
@@ -313,11 +322,14 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
         std::this_thread::sleep_for(
             std::chrono::milliseconds(g_pending_query_interrupt_freq));
       }
+      acquire_spin_lock = true;
+      // now the query is going to be executed, so update the status as "RUNNING"
+      executor_->updateQuerySessionStatus(query_state_,
+                                          QuerySessionStatus::QueryStatus::RUNNING);
     }
   }
-  auto acquire_execute_mutex = [&acquire_spin_lock](Executor * executor) -> auto {
+  auto acquire_execute_mutex = [](Executor * executor) -> auto {
     auto ret = executor->acquireExecuteMutex();
-    acquire_spin_lock = true;
     return ret;
   };
   // now we get the spinlock that means this query is ready to run by the executor
@@ -344,9 +356,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     } catch (...) {
       throw std::runtime_error("Checking pending query status failed: unknown error");
     }
-    // now the query is going to be executed, so update the status as "RUNNING"
-    executor_->updateQuerySessionStatus(query_state_,
-                                        QuerySessionStatus::QueryStatus::RUNNING);
   }
 
   // Notify foreign tables to load prior to caching
@@ -512,6 +521,7 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
             eo.just_calcite_explain,
             eo.gpu_input_mem_limit_percent,
             eo.allow_runtime_query_interrupt,
+            eo.running_query_interrupt_freq,
             eo.pending_query_interrupt_freq,
             eo.executor_type,
         };
@@ -668,6 +678,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       eo.just_calcite_explain,
       eo.gpu_input_mem_limit_percent,
       eo.allow_runtime_query_interrupt,
+      eo.running_query_interrupt_freq,
       eo.pending_query_interrupt_freq,
       eo.executor_type,
       step_idx == 0 ? eo.outer_fragment_indices : std::vector<size_t>()};
@@ -2489,6 +2500,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
         eo.just_calcite_explain,
         eo.gpu_input_mem_limit_percent,
         eo.allow_runtime_query_interrupt,
+        eo.running_query_interrupt_freq,
         eo.pending_query_interrupt_freq,
         eo.executor_type,
     };
@@ -3036,7 +3048,8 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                    false,
                                    false,
                                    eo.gpu_input_mem_limit_percent,
-                                   false,
+                                   eo.allow_runtime_query_interrupt,
+                                   eo.running_query_interrupt_freq,
                                    eo.pending_query_interrupt_freq,
                                    eo.executor_type,
                                    eo.outer_fragment_indices};
@@ -3140,6 +3153,9 @@ void RelAlgExecutor::handlePersistentError(const int32_t error_code) {
           "Query ran out of GPU memory, unable to automatically retry on CPU");
     }
     return;
+  }
+  if (error_code == Executor::ERR_INTERRUPTED) {
+    Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID)->resetInterrupt();
   }
   throw std::runtime_error(getErrorMessageFromCode(error_code));
 }

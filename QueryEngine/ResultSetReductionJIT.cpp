@@ -43,6 +43,8 @@ namespace {
 
 // Error code to be returned when the watchdog timer triggers during the reduction.
 const int32_t WATCHDOG_ERROR{-1};
+// Error code to be returned when the interrupt is triggered during the reduction.
+const int32_t INTERRUPT_ERROR{10};
 // Use the interpreter, not the JIT, for a number of entries lower than the threshold.
 const size_t INTERP_THRESHOLD{25};
 
@@ -498,6 +500,14 @@ extern "C" void get_group_value_reduction_rt(int8_t* groups_buffer,
 extern "C" uint8_t check_watchdog_rt(const size_t sample_seed) {
   if (UNLIKELY(g_enable_dynamic_watchdog && (sample_seed & 0x3F) == 0 &&
                dynamic_watchdog())) {
+    return true;
+  }
+  return false;
+}
+
+extern "C" uint8_t check_interrupt_rt(const size_t sample_seed) {
+  // this func is called iff we enable runtime query interrupt
+  if (UNLIKELY((sample_seed & 0xFFFF) == 0 && check_interrupt())) {
     return true;
   }
   return false;
@@ -983,22 +993,24 @@ void generate_loop_body(For* for_loop,
                         Value* serialized_varlen_buffer) {
   const auto that_entry_idx = for_loop->add<BinaryOperator>(
       BinaryOperator::BinaryOp::Add, for_loop->iter(), start_index, "that_entry_idx");
-  const auto watchdog_sample_seed =
+  const auto sample_seed =
       for_loop->add<Cast>(Cast::CastOp::SExt, that_entry_idx, Type::Int64, "");
-  const auto watchdog_triggered =
-      for_loop->add<ExternalCall>("check_watchdog_rt",
-                                  Type::Int8,
-                                  std::vector<const Value*>{watchdog_sample_seed},
-                                  "");
-  const auto watchdog_triggered_bool =
-      for_loop->add<ICmp>(ICmp::Predicate::NE,
-                          watchdog_triggered,
-                          ir_reduce_loop->addConstant<ConstantInt>(0, Type::Int8),
-                          "");
-  for_loop->add<ReturnEarly>(
-      watchdog_triggered_bool,
-      ir_reduce_loop->addConstant<ConstantInt>(WATCHDOG_ERROR, Type::Int32),
-      "");
+  if (g_enable_dynamic_watchdog || g_enable_non_kernel_time_query_interrupt) {
+    const auto checker_rt_name =
+        g_enable_dynamic_watchdog ? "check_watchdog_rt" : "check_interrupt_rt";
+    const auto error_code = g_enable_dynamic_watchdog ? WATCHDOG_ERROR : INTERRUPT_ERROR;
+    const auto checker_triggered = for_loop->add<ExternalCall>(
+        checker_rt_name, Type::Int8, std::vector<const Value*>{sample_seed}, "");
+    const auto interrupt_triggered_bool =
+        for_loop->add<ICmp>(ICmp::Predicate::NE,
+                            checker_triggered,
+                            ir_reduce_loop->addConstant<ConstantInt>(0, Type::Int8),
+                            "");
+    for_loop->add<ReturnEarly>(
+        interrupt_triggered_bool,
+        ir_reduce_loop->addConstant<ConstantInt>(error_code, Type::Int32),
+        "");
+  }
   const auto reduce_rc =
       for_loop->add<Call>(ir_reduce_one_entry_idx,
                           std::vector<const Value*>{this_buff,

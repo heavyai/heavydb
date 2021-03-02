@@ -115,9 +115,22 @@ class QueryRunner {
   std::shared_ptr<Catalog_Namespace::SessionInfo> getSession() const {
     return session_info_;
   }
+
+  void addSessionId(const std::string& session_id,
+                    ExecutorDeviceType device_type = ExecutorDeviceType::GPU) {
+    session_info_ =
+        std::make_unique<Catalog_Namespace::SessionInfo>(session_info_->get_catalog_ptr(),
+                                                         session_info_->get_currentUser(),
+                                                         device_type,
+                                                         session_id);
+  }
+
+  void clearSessionId() { session_info_ = nullptr; }
+
   std::shared_ptr<Catalog_Namespace::Catalog> getCatalog() const;
   std::shared_ptr<Calcite> getCalcite() const;
   std::shared_ptr<Executor> getExecutor() const;
+  Catalog_Namespace::UserMetadata& getUserMetadata() const;
 
   bool gpusPresent() const;
   virtual void clearGpuMemory() const;
@@ -153,7 +166,6 @@ class QueryRunner {
       const bool just_explain = false);
   virtual std::shared_ptr<ResultSet> runSQLWithAllowingInterrupt(
       const std::string& query_str,
-      std::shared_ptr<Executor> executor,
       const std::string& session_id,
       const ExecutorDeviceType device_type,
       const double running_query_check_freq = 0.9,
@@ -212,7 +224,8 @@ class ImportDriver : public QueryRunner {
  public:
   ImportDriver(std::shared_ptr<Catalog_Namespace::Catalog> cat,
                const Catalog_Namespace::UserMetadata& user,
-               const ExecutorDeviceType dt = ExecutorDeviceType::GPU);
+               const ExecutorDeviceType dt = ExecutorDeviceType::GPU,
+               const std::string session_id = "");
 
   void importGeoTable(const std::string& file_path,
                       const std::string& table_name,

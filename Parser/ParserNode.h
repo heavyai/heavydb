@@ -1005,7 +1005,8 @@ struct DistributedConnector
                                        std::string& sql_query_string) = 0;
   virtual std::vector<AggregatedResult> query(QueryStateProxy,
                                               std::string& sql_query_string,
-                                              std::vector<size_t> outer_frag_indices) = 0;
+                                              std::vector<size_t> outer_frag_indices,
+                                              bool allow_interrupt) = 0;
   virtual void checkpoint(const Catalog_Namespace::SessionInfo& parent_session_info,
                           int tableId) = 0;
   virtual void rollback(const Catalog_Namespace::SessionInfo& parent_session_info,
@@ -1020,10 +1021,12 @@ struct LocalConnector : public DistributedConnector {
   AggregatedResult query(QueryStateProxy,
                          std::string& sql_query_string,
                          std::vector<size_t> outer_frag_indices,
-                         bool validate_only);
+                         bool validate_only,
+                         bool allow_interrupt);
   std::vector<AggregatedResult> query(QueryStateProxy,
                                       std::string& sql_query_string,
-                                      std::vector<size_t> outer_frag_indices) override;
+                                      std::vector<size_t> outer_frag_indices,
+                                      bool allow_interrupt) override;
   size_t leafCount() override { return 1; };
   void insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
                         const size_t leaf_idx,
@@ -1094,7 +1097,10 @@ class InsertIntoTableAsSelectStmt : public DDLStmt {
     delete select_query;
   }
 
-  void populateData(QueryStateProxy, const TableDescriptor* td, bool validate_table);
+  void populateData(QueryStateProxy,
+                    const TableDescriptor* td,
+                    bool validate_table,
+                    bool for_CTAS = false);
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
   std::string& get_table() { return table_name_; }
