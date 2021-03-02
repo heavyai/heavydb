@@ -49,6 +49,7 @@ class QueryMemoryInitializer {
                          RenderInfo* render_info,
                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                          DeviceAllocator* gpu_allocator,
+                         const size_t thread_idx,
                          const Executor* executor);
 
   // Table functions execution constructor
@@ -229,6 +230,8 @@ class QueryMemoryInitializer {
 
   DeviceAllocator* device_allocator_{nullptr};
   std::vector<Data_Namespace::AbstractBuffer*> temporary_buffers_;
+
+  const size_t thread_idx_;
 
   friend class Executor;  // Accesses result_sets_
   friend class QueryExecutionContext;

@@ -44,6 +44,7 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
                                  const ResultSet& rows,
                                  const size_t num_columns,
                                  const std::vector<SQLTypeInfo>& target_types,
+                                 const size_t thread_idx,
                                  const bool is_parallel_execution_enforced)
     : column_buffers_(num_columns)
     , num_rows_(result_set::use_parallel_algorithms(rows) ||
@@ -54,7 +55,8 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
     , parallel_conversion_(is_parallel_execution_enforced
                                ? true
                                : result_set::use_parallel_algorithms(rows))
-    , direct_columnar_conversion_(rows.isDirectColumnarConversionPossible()) {
+    , direct_columnar_conversion_(rows.isDirectColumnarConversionPossible())
+    , thread_idx_(thread_idx) {
   auto timer = DEBUG_TIMER(__func__);
   column_buffers_.resize(num_columns);
   for (size_t i = 0; i < num_columns; ++i) {
@@ -67,8 +69,8 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
     }
     if (!isDirectColumnarConversionPossible() ||
         !rows.isZeroCopyColumnarConversionPossible(i)) {
-      column_buffers_[i] =
-          row_set_mem_owner->allocate(num_rows_ * target_types[i].get_size());
+      column_buffers_[i] = row_set_mem_owner->allocate(
+          num_rows_ * target_types[i].get_size(), thread_idx_);
     }
   }
 
@@ -82,12 +84,14 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
 ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                  const int8_t* one_col_buffer,
                                  const size_t num_rows,
-                                 const SQLTypeInfo& target_type)
+                                 const SQLTypeInfo& target_type,
+                                 const size_t thread_idx)
     : column_buffers_(1)
     , num_rows_(num_rows)
     , target_types_{target_type}
     , parallel_conversion_(false)
-    , direct_columnar_conversion_(false) {
+    , direct_columnar_conversion_(false)
+    , thread_idx_(thread_idx) {
   auto timer = DEBUG_TIMER(__func__);
   const bool is_varlen =
       target_type.is_array() ||
@@ -97,7 +101,8 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
     throw ColumnarConversionNotSupported();
   }
   const auto buf_size = num_rows * target_type.get_size();
-  column_buffers_[0] = reinterpret_cast<int8_t*>(row_set_mem_owner->allocate(buf_size));
+  column_buffers_[0] =
+      reinterpret_cast<int8_t*>(row_set_mem_owner->allocate(buf_size, thread_idx_));
   memcpy(((void*)column_buffers_[0]), one_col_buffer, buf_size);
 }
 

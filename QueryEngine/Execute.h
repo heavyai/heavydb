@@ -243,18 +243,6 @@ inline const SQLTypeInfo get_column_type(const int col_id,
   return temp->getColType(col_id);
 }
 
-template <typename PtrTy>
-inline const ColumnarResults* rows_to_columnar_results(
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const PtrTy& result,
-    const int number) {
-  std::vector<SQLTypeInfo> col_types;
-  for (size_t i = 0; i < result->colCount(); ++i) {
-    col_types.push_back(get_logical_type_info(result->getColType(i)));
-  }
-  return new ColumnarResults(row_set_mem_owner, *result, number, col_types);
-}
-
 // TODO(alex): Adjust interfaces downstream and make this not needed.
 inline std::vector<Analyzer::Expr*> get_exprs_not_owned(
     const std::vector<std::shared_ptr<Analyzer::Expr>>& exprs) {
@@ -263,15 +251,6 @@ inline std::vector<Analyzer::Expr*> get_exprs_not_owned(
     exprs_not_owned.push_back(expr.get());
   }
   return exprs_not_owned;
-}
-
-inline const ColumnarResults* columnarize_result(
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const ResultSetPtr& result,
-    const int frag_id) {
-  INJECT_TIMER(columnarize_result);
-  CHECK_EQ(0, frag_id);
-  return rows_to_columnar_results(row_set_mem_owner, result, result->colCount());
 }
 
 class CompilationRetryNoLazyFetch : public std::runtime_error {
@@ -637,7 +616,8 @@ class Executor {
                           const Catalog_Namespace::Catalog&,
                           std::list<ChunkIter>&,
                           std::list<std::shared_ptr<Chunk_NS::Chunk>>&,
-                          DeviceAllocator* device_allocator);
+                          DeviceAllocator* device_allocator,
+                          const size_t thread_idx);
 
   FetchResult fetchUnionChunks(const ColumnFetcher&,
                                const RelAlgExecutionUnit& ra_exe_unit,
@@ -648,7 +628,8 @@ class Executor {
                                const Catalog_Namespace::Catalog&,
                                std::list<ChunkIter>&,
                                std::list<std::shared_ptr<Chunk_NS::Chunk>>&,
-                               DeviceAllocator* device_allocator);
+                               DeviceAllocator* device_allocator,
+                               const size_t thread_idx);
 
   std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>>
   getRowCountAndOffsetForAllFrags(

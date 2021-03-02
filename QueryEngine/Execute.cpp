@@ -1635,7 +1635,7 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                              ExecutorDispatchMode::KernelPerFragment,
                              /*render_info=*/nullptr,
                              /*rowid_lookup_key=*/-1);
-      kernel.run(this, kernel_context);
+      kernel.run(this, 0, kernel_context);
     }
   }
 
@@ -1727,7 +1727,8 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
       if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
         CHECK(row_set_mem_owner);
         auto count_distinct_buffer = row_set_mem_owner->allocateCountDistinctBuffer(
-            count_distinct_desc.bitmapPaddedSizeBytes());
+            count_distinct_desc.bitmapPaddedSizeBytes(),
+            /*thread_idx=*/0);  // TODO: can we detect thread idx here?
         entry.push_back(reinterpret_cast<int64_t>(count_distinct_buffer));
         continue;
       }
@@ -2138,15 +2139,18 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
 
   THREAD_POOL thread_pool;
   VLOG(1) << "Launching " << kernels.size() << " kernels for query.";
+  size_t kernel_idx = 1;
   for (auto& kernel : kernels) {
     thread_pool.spawn(
         [this, &shared_context, parent_thread_id = logger::thread_id()](
-            ExecutionKernel* kernel) {
+            ExecutionKernel* kernel, const size_t crt_kernel_idx) {
           CHECK(kernel);
           DEBUG_TIMER_NEW_THREAD(parent_thread_id);
-          kernel->run(this, shared_context);
+          const size_t thread_idx = crt_kernel_idx % cpu_threads();
+          kernel->run(this, thread_idx, shared_context);
         },
-        kernel.get());
+        kernel.get(),
+        kernel_idx++);
   }
   thread_pool.join();
 }
@@ -2367,7 +2371,8 @@ FetchResult Executor::fetchChunks(
     const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks,
-    DeviceAllocator* device_allocator) {
+    DeviceAllocator* device_allocator,
+    const size_t thread_idx) {
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(fetchChunks);
   const auto& col_global_ids = ra_exe_unit.input_col_descs;
@@ -2422,8 +2427,12 @@ FetchResult Executor::fetchChunks(
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
       if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
-        frag_col_buffers[it->second] = column_fetcher.getResultSetColumn(
-            col_id.get(), memory_level_for_column, device_id, device_allocator);
+        frag_col_buffers[it->second] =
+            column_fetcher.getResultSetColumn(col_id.get(),
+                                              memory_level_for_column,
+                                              device_id,
+                                              device_allocator,
+                                              thread_idx);
       } else {
         if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
           frag_col_buffers[it->second] =
@@ -2432,7 +2441,8 @@ FetchResult Executor::fetchChunks(
                                                         all_tables_fragments,
                                                         memory_level_for_column,
                                                         device_id,
-                                                        device_allocator);
+                                                        device_allocator,
+                                                        thread_idx);
         } else {
           frag_col_buffers[it->second] =
               column_fetcher.getOneTableColumnFragment(table_id,
@@ -2466,7 +2476,8 @@ FetchResult Executor::fetchUnionChunks(
     const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks,
-    DeviceAllocator* device_allocator) {
+    DeviceAllocator* device_allocator,
+    const size_t thread_idx) {
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(fetchUnionChunks);
 
@@ -2553,8 +2564,12 @@ FetchResult Executor::fetchUnionChunks(
           memory_level_for_column = Data_Namespace::CPU_LEVEL;
         }
         if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
-          frag_col_buffers[it->second] = column_fetcher.getResultSetColumn(
-              col_id.get(), memory_level_for_column, device_id, device_allocator);
+          frag_col_buffers[it->second] =
+              column_fetcher.getResultSetColumn(col_id.get(),
+                                                memory_level_for_column,
+                                                device_id,
+                                                device_allocator,
+                                                thread_idx);
         } else {
           if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
             frag_col_buffers[it->second] =
@@ -2563,7 +2578,8 @@ FetchResult Executor::fetchUnionChunks(
                                                           all_tables_fragments,
                                                           memory_level_for_column,
                                                           device_id,
-                                                          device_allocator);
+                                                          device_allocator,
+                                                          thread_idx);
           } else {
             frag_col_buffers[it->second] =
                 column_fetcher.getOneTableColumnFragment(table_id,
@@ -3649,7 +3665,8 @@ TableGenerations Executor::computeTableGenerations(
 void Executor::setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs,
                             const std::unordered_set<int>& phys_table_ids) {
   CHECK(catalog_);
-  row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+  row_set_mem_owner_ =
+      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(), cpu_threads());
   row_set_mem_owner_->setDictionaryGenerations(
       computeStringDictionaryGenerations(phys_inputs));
   agg_col_range_cache_ = computeColRangesCache(phys_inputs);

@@ -20,6 +20,26 @@
 
 #include "QueryEngine/Execute.h"
 
+namespace {
+
+inline const ColumnarResults* columnarize_result(
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const ResultSetPtr& result,
+    const size_t thread_idx,
+    const int frag_id) {
+  INJECT_TIMER(columnarize_result);
+  CHECK_EQ(0, frag_id);
+
+  std::vector<SQLTypeInfo> col_types;
+  for (size_t i = 0; i < result->colCount(); ++i) {
+    col_types.push_back(get_logical_type_info(result->getColType(i)));
+  }
+  return new ColumnarResults(
+      row_set_mem_owner, *result, result->colCount(), col_types, thread_idx);
+}
+
+}  // namespace
+
 ColumnFetcher::ColumnFetcher(Executor* executor, const ColumnCacheMap& column_cache)
     : executor_(executor), columnarized_table_cache_(column_cache) {}
 
@@ -33,6 +53,7 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
     const Data_Namespace::MemoryLevel effective_mem_lvl,
     const int device_id,
     DeviceAllocator* device_allocator,
+    const size_t thread_idx,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
     ColumnCacheMap& column_cache) {
   static std::mutex columnar_conversion_mutex;
@@ -81,6 +102,7 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
                            std::shared_ptr<const ColumnarResults>(columnarize_result(
                                executor->row_set_mem_owner_,
                                get_temporary_table(executor->temporary_tables_, table_id),
+                               thread_idx,
                                frag_id))));
       }
       col_frag = column_cache[table_id][frag_id].get();
@@ -112,6 +134,7 @@ JoinColumn ColumnFetcher::makeJoinColumn(
     const Data_Namespace::MemoryLevel effective_mem_lvl,
     const int device_id,
     DeviceAllocator* device_allocator,
+    const size_t thread_idx,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
     std::vector<std::shared_ptr<void>>& malloc_owner,
     ColumnCacheMap& column_cache) {
@@ -133,6 +156,7 @@ JoinColumn ColumnFetcher::makeJoinColumn(
         effective_mem_lvl,
         effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id,
         device_allocator,
+        thread_idx,
         chunks_owner,
         column_cache);
     if (col_buff != nullptr) {
@@ -237,7 +261,8 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
     const std::map<int, const TableFragments*>& all_tables_fragments,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_id,
-    DeviceAllocator* device_allocator) const {
+    DeviceAllocator* device_allocator,
+    const size_t thread_idx) const {
   const auto fragments_it = all_tables_fragments.find(table_id);
   CHECK(fragments_it != all_tables_fragments.end());
   const auto fragments = fragments_it->second;
@@ -272,7 +297,8 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
             std::make_unique<ColumnarResults>(executor_->row_set_mem_owner_,
                                               col_buffer,
                                               fragment.getNumTuples(),
-                                              chunk_meta_it->second->sqlType));
+                                              chunk_meta_it->second->sqlType,
+                                              thread_idx));
       }
       auto merged_results =
           ColumnarResults::mergeResults(executor_->row_set_mem_owner_, column_frags);
@@ -294,7 +320,8 @@ const int8_t* ColumnFetcher::getResultSetColumn(
     const InputColDescriptor* col_desc,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_id,
-    DeviceAllocator* device_allocator) const {
+    DeviceAllocator* device_allocator,
+    const size_t thread_idx) const {
   CHECK(col_desc);
   const auto table_id = col_desc->getScanDesc().getTableId();
   return getResultSetColumn(get_temporary_table(executor_->temporary_tables_, table_id),
@@ -302,7 +329,8 @@ const int8_t* ColumnFetcher::getResultSetColumn(
                             col_desc->getColId(),
                             memory_level,
                             device_id,
-                            device_allocator);
+                            device_allocator,
+                            thread_idx);
 }
 
 const int8_t* ColumnFetcher::transferColumnIfNeeded(
@@ -334,7 +362,8 @@ const int8_t* ColumnFetcher::getResultSetColumn(
     const int col_id,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_id,
-    DeviceAllocator* device_allocator) const {
+    DeviceAllocator* device_allocator,
+    const size_t thread_idx) const {
   const ColumnarResults* result{nullptr};
   {
     std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex_);
@@ -345,10 +374,10 @@ const int8_t* ColumnFetcher::getResultSetColumn(
     auto& frag_id_to_result = columnarized_table_cache_[table_id];
     int frag_id = 0;
     if (frag_id_to_result.empty() || !frag_id_to_result.count(frag_id)) {
-      frag_id_to_result.insert(
-          std::make_pair(frag_id,
-                         std::shared_ptr<const ColumnarResults>(columnarize_result(
-                             executor_->row_set_mem_owner_, buffer, frag_id))));
+      frag_id_to_result.insert(std::make_pair(
+          frag_id,
+          std::shared_ptr<const ColumnarResults>(columnarize_result(
+              executor_->row_set_mem_owner_, buffer, thread_idx, frag_id))));
     }
     CHECK_NE(size_t(0), columnarized_table_cache_.count(table_id));
     result = columnarized_table_cache_[table_id][frag_id].get();

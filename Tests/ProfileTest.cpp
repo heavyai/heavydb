@@ -1310,7 +1310,8 @@ TEST(Reduction, Baseline) {
 #else
   const bool has_multi_gpus = false;
 #endif  // HAVE_CUDA
-  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(g_arena_block_size);
+  const auto row_set_mem_owner =
+      std::make_shared<RowSetMemoryOwner>(g_arena_block_size, /*num_worker_threads=*/1);
   std::vector<std::unique_ptr<ResultSet>> results;
   for (size_t i = 0; i < result_count; ++i) {
     auto rs = std::make_unique<ResultSet>(
@@ -1575,7 +1576,8 @@ TEST(Reduction, PerfectHash) {
 #else
   const bool has_multi_gpus = false;
 #endif  // HAVE_CUDA
-  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(g_arena_block_size);
+  const auto row_set_mem_owner =
+      std::make_shared<RowSetMemoryOwner>(g_arena_block_size, /*num_threads=*/1);
   std::vector<std::unique_ptr<ResultSet>> results;
   for (size_t i = 0; i < result_count; ++i) {
     auto rs = std::make_unique<ResultSet>(

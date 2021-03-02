@@ -172,7 +172,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
       std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);
       kernel_queue_time_ms_ += timer_stop(clock_begin);
 
-      current_fragment_kernel.run(this, shared_context);
+      current_fragment_kernel.run(this, 0, shared_context);
     }
     const auto& proj_fragment_results = shared_context.getFragmentResults();
     if (proj_fragment_results.empty()) {

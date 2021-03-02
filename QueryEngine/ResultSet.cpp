@@ -196,8 +196,8 @@ ExecutorDeviceType ResultSet::getDeviceType() const {
 const ResultSetStorage* ResultSet::allocateStorage() const {
   CHECK(!storage_);
   CHECK(row_set_mem_owner_);
-  auto buff =
-      row_set_mem_owner_->allocate(query_mem_desc_.getBufferSizeBytes(device_type_));
+  auto buff = row_set_mem_owner_->allocate(
+      query_mem_desc_.getBufferSizeBytes(device_type_), /*thread_idx=*/0);
   storage_.reset(
       new ResultSetStorage(targets_, query_mem_desc_, buff, /*buff_is_provided=*/true));
   return storage_.get();
@@ -217,8 +217,8 @@ const ResultSetStorage* ResultSet::allocateStorage(
     const std::vector<int64_t>& target_init_vals) const {
   CHECK(!storage_);
   CHECK(row_set_mem_owner_);
-  auto buff =
-      row_set_mem_owner_->allocate(query_mem_desc_.getBufferSizeBytes(device_type_));
+  auto buff = row_set_mem_owner_->allocate(
+      query_mem_desc_.getBufferSizeBytes(device_type_), /*thread_idx=*/0);
   storage_.reset(
       new ResultSetStorage(targets_, query_mem_desc_, buff, /*buff_is_provided=*/true));
   storage_->target_init_vals_ = target_init_vals;

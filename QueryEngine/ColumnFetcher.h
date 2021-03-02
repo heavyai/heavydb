@@ -56,6 +56,7 @@ class ColumnFetcher {
       const Data_Namespace::MemoryLevel effective_mem_lvl,
       const int device_id,
       DeviceAllocator* device_allocator,
+      const size_t thread_idx,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
       ColumnCacheMap& column_cache);
 
@@ -67,6 +68,7 @@ class ColumnFetcher {
       const Data_Namespace::MemoryLevel effective_mem_lvl,
       const int device_id,
       DeviceAllocator* device_allocator,
+      const size_t thread_idx,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
       std::vector<std::shared_ptr<void>>& malloc_owner,
       ColumnCacheMap& column_cache);
@@ -88,12 +90,14 @@ class ColumnFetcher {
       const std::map<int, const TableFragments*>& all_tables_fragments,
       const Data_Namespace::MemoryLevel memory_level,
       const int device_id,
-      DeviceAllocator* device_allocator) const;
+      DeviceAllocator* device_allocator,
+      const size_t thread_idx) const;
 
   const int8_t* getResultSetColumn(const InputColDescriptor* col_desc,
                                    const Data_Namespace::MemoryLevel memory_level,
                                    const int device_id,
-                                   DeviceAllocator* device_allocator) const;
+                                   DeviceAllocator* device_allocator,
+                                   const size_t thread_idx) const;
 
  private:
   static const int8_t* transferColumnIfNeeded(
@@ -109,7 +113,8 @@ class ColumnFetcher {
                                    const int col_id,
                                    const Data_Namespace::MemoryLevel memory_level,
                                    const int device_id,
-                                   DeviceAllocator* device_allocator) const;
+                                   DeviceAllocator* device_allocator,
+                                   const size_t thread_idx) const;
 
   Executor* executor_;
   using CacheKey = std::vector<int>;

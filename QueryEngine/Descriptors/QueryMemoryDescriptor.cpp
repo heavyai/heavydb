@@ -627,6 +627,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool output_columnar,
     const bool sort_on_gpu,
+    const size_t thread_idx,
     RenderInfo* render_info) const {
   auto timer = DEBUG_TIMER(__func__);
   if (frag_offsets.empty()) {
@@ -645,6 +646,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
                                 row_set_mem_owner,
                                 output_columnar,
                                 sort_on_gpu,
+                                thread_idx,
                                 render_info));
 }
 

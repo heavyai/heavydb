@@ -21,5 +21,5 @@ class SimpleAllocator {
   ~SimpleAllocator() = default;
 
  public:
-  virtual int8_t* allocate(const size_t num_bytes) = 0;
+  virtual int8_t* allocate(const size_t num_bytes, const size_t thread_idx = 0) = 0;
 };

@@ -107,6 +107,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
                                                  : Data_Namespace::MemoryLevel::GPU_LEVEL,
           device_id,
           device_allocator.get(),
+          /*thread_idx=*/0,
           chunks_owner,
           column_fetcher.columnarized_table_cache_);
 

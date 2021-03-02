@@ -138,7 +138,8 @@ void TableOptimizer::recomputeMetadata() const {
   for (const auto td : table_descriptors) {
     ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
     // We can use a smaller block size here, since we won't be running projection queries
-    executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(1000000000);
+    executor_->row_set_mem_owner_ =
+        std::make_shared<RowSetMemoryOwner>(1000000000, /*num_threads=*/1);
     executor_->catalog_ = &cat_;
     const auto table_id = td->tableId;
 

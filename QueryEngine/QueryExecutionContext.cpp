@@ -39,6 +39,7 @@ QueryExecutionContext::QueryExecutionContext(
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool output_columnar,
     const bool sort_on_gpu,
+    const size_t thread_idx,
     RenderInfo* render_info)
     : query_mem_desc_(query_mem_desc)
     , executor_(executor)
@@ -69,6 +70,7 @@ QueryExecutionContext::QueryExecutionContext(
                                                             render_info,
                                                             row_set_mem_owner,
                                                             gpu_allocator_.get(),
+                                                            thread_idx,
                                                             executor);
 }
 
