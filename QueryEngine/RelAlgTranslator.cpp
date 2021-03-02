@@ -1274,6 +1274,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateItem(
       base->get_type_info().get_elem_type(), false, kARRAY_AT, kONE, base, index);
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentDate() const {
+  constexpr bool is_null = false;
+  Datum datum{.bigintval = now_ - now_ % (24 * 60 * 60)};  // Assumes 0 < now_.
+  return makeExpr<Analyzer::Constant>(kDATE, is_null, datum);
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentTimestamp() const {
   return Parser::TimestampLiteral::get(now_);
 }
@@ -1437,6 +1443,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   }
   if (rex_function->getName() == "ITEM"sv) {
     return translateItem(rex_function);
+  }
+  if (rex_function->getName() == "CURRENT_DATE"sv) {
+    return translateCurrentDate();
   }
   if (rex_function->getName() == "CURRENT_TIMESTAMP"sv) {
     return translateCurrentTimestamp();

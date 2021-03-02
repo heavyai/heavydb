@@ -3647,10 +3647,33 @@ TEST(Select, Time) {
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m < NOW();", dt)));
     ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE o IS NULL OR o < CURRENT_DATE;", dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(2 * g_num_rows),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test WHERE o IS NULL OR o < CURRENT_DATE();", dt)));
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
+              v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE m < CURRENT_TIMESTAMP;", dt)));
     ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE m < CURRENT_TIMESTAMP();", dt)));
+    ASSERT_TRUE(v<int64_t>(
+        run_simple_agg("SELECT CURRENT_DATE = CAST(CURRENT_TIMESTAMP AS DATE);", dt)));
+    ASSERT_TRUE(
+        v<int64_t>(run_simple_agg("SELECT DATEADD('day', -1, CURRENT_TIMESTAMP) < "
+                                  "CURRENT_DATE AND CURRENT_DATE <= CURRENT_TIMESTAMP;",
+                                  dt)));
+    ASSERT_TRUE(v<int64_t>(run_simple_agg(
+        "SELECT CAST(CURRENT_DATE AS TIMESTAMP) <= CURRENT_TIMESTAMP;", dt)));
+    ASSERT_TRUE(v<int64_t>(run_simple_agg(
+        "SELECT EXTRACT(YEAR FROM CURRENT_DATE) = EXTRACT(YEAR FROM CURRENT_TIMESTAMP)"
+        " AND EXTRACT(MONTH FROM CURRENT_DATE) = EXTRACT(MONTH FROM CURRENT_TIMESTAMP)"
+        " AND EXTRACT(DAY FROM CURRENT_DATE) = EXTRACT(DAY FROM CURRENT_TIMESTAMP)"
+        " AND EXTRACT(HOUR FROM CURRENT_DATE) = 0"
+        " AND EXTRACT(MINUTE FROM CURRENT_DATE) = 0"
+        " AND EXTRACT(SECOND FROM CURRENT_DATE) = 0;",
+        dt)));
     ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE m > timestamp(0) '2014-12-13T000000';",
