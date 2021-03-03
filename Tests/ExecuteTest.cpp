@@ -3674,6 +3674,12 @@ TEST(Select, Time) {
         " AND EXTRACT(MINUTE FROM CURRENT_DATE) = 0"
         " AND EXTRACT(SECOND FROM CURRENT_DATE) = 0;",
         dt)));
+    ASSERT_TRUE(v<int64_t>(run_simple_agg(
+        "SELECT EXTRACT(HOUR FROM CURRENT_TIME()) = EXTRACT(HOUR FROM CURRENT_TIMESTAMP)"
+        " AND EXTRACT(MINUTE FROM CURRENT_TIME) = EXTRACT(MINUTE FROM CURRENT_TIMESTAMP)"
+        " AND EXTRACT(SECOND FROM CURRENT_TIME) = EXTRACT(SECOND FROM CURRENT_TIMESTAMP)"
+        ";",
+        dt)));
     ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE m > timestamp(0) '2014-12-13T000000';",

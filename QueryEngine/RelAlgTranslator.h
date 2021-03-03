@@ -124,6 +124,8 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateCurrentDate() const;
 
+  std::shared_ptr<Analyzer::Expr> translateCurrentTime() const;
+
   std::shared_ptr<Analyzer::Expr> translateCurrentTimestamp() const;
 
   std::shared_ptr<Analyzer::Expr> translateDatetime(const RexFunctionOperator*) const;
