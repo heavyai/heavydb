@@ -1217,6 +1217,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoComparison(
     return nullptr;
   }
   if (rex_function->getName() == "ST_Distance"sv && rex_operator->getOperator() == kLE) {
+    // TODO: fixup
+    return nullptr;
+    /*
     auto ti = rex_operator->getType();
     std::vector<std::unique_ptr<const RexScalar>> st_dwithin_operands;
     st_dwithin_operands.emplace_back(rex_function->getOperandAndRelease(0));
@@ -1225,6 +1228,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoComparison(
     std::unique_ptr<RexFunctionOperator> st_dwithin(
         new RexFunctionOperator("ST_DWithin", st_dwithin_operands, ti));
     return translateTernaryGeoFunction(st_dwithin.get());
+    */
   }
 
   return nullptr;
