@@ -1,0 +1,9 @@
+Class foreign_storage::ForeignDataWrapperFactory
+================================================
+
+.. doxygenclass:: foreign_storage::ForeignDataWrapperFactory
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

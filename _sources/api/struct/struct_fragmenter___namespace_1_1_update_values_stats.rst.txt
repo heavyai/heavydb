@@ -1,0 +1,9 @@
+Struct Fragmenter_Namespace::UpdateValuesStats
+==============================================
+
+.. doxygenstruct:: Fragmenter_Namespace::UpdateValuesStats
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct Executor::ExecutorMutexHolder
+====================================
+
+.. doxygenstruct:: Executor::ExecutorMutexHolder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class bench_update::OmniSciCon
+==============================
+
+.. doxygenclass:: bench_update::OmniSciCon
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

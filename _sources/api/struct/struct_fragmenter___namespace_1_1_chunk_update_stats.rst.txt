@@ -1,0 +1,9 @@
+Struct Fragmenter_Namespace::ChunkUpdateStats
+=============================================
+
+.. doxygenstruct:: Fragmenter_Namespace::ChunkUpdateStats
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
