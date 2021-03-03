@@ -2280,14 +2280,24 @@ TEST(Select, ApproxCountDistinct) {
 
 // Additional unit tests for APPROX_MEDIAN are in Quantile/.
 TEST(Select, ApproxMedianSanity) {
+  auto dt = ExecutorDeviceType::CPU;
+  auto approx_median = [dt](std::string const col) {
+    std::string const query = "SELECT APPROX_MEDIAN(" + col + ") FROM test;";
+    return v<double>(run_simple_agg(query, dt));
+  };
   if (g_aggregator) {
-    LOG(WARNING) << "Skipping ApproxMedianSanity tests in distributed mode.";
+    try {
+      approx_median("w");
+      EXPECT_TRUE(false) << "Exception expected for approx_median query.";
+    } catch (std::runtime_error const& e) {
+      EXPECT_EQ(std::string(e.what()),
+                "TException - service has thrown: TOmniSciException(error_msg=Exception: "
+                "APPROX_MEDIAN is not supported in distributed mode at this time."
+                ")");
+    } catch (...) {
+      EXPECT_TRUE(false) << "std::runtime_error expected for approx_median query.";
+    }
   } else {
-    auto dt = ExecutorDeviceType::CPU;
-    auto approx_median = [dt](std::string const col) {
-      std::string const query = "SELECT APPROX_MEDIAN(" + col + ") FROM test;";
-      return v<double>(run_simple_agg(query, dt));
-    };
     EXPECT_EQ(-7.5, approx_median("w"));
     EXPECT_EQ(7.0, approx_median("x"));
     EXPECT_EQ(42.5, approx_median("y"));

@@ -245,6 +245,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
             "1 and 100");
       }
     }
+    if (g_cluster && agg_kind == kAPPROX_MEDIAN) {
+      throw std::runtime_error(
+          "APPROX_MEDIAN is not supported in distributed mode at this time.");
+    }
     const auto& arg_ti = arg_expr->get_type_info();
     if (!is_agg_supported_for_type(agg_kind, arg_ti)) {
       throw std::runtime_error("Aggregate on " + arg_ti.get_type_name() +
