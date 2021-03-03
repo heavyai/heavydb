@@ -2958,6 +2958,9 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_u
                                    column_cache);
   } catch (const foreign_storage::ForeignStorageException& error) {
     throw error;
+  } catch (const QueryMustRunOnCpu&) {
+    // force a retry of the top level query on CPU
+    throw;
   } catch (const std::exception& e) {
     LOG(WARNING) << "Failed to run pre-flight filtered count with error " << e.what();
     return std::nullopt;
