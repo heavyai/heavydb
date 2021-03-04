@@ -125,6 +125,12 @@ class RaExecutionSequence {
   RaExecutionDesc* next();
 
   /**
+   * Return the previous execution descriptor in the sequence. If the sequence is made up
+   * of 0 or 1 descriptors, returns nullptr.
+   */
+  RaExecutionDesc* prev();
+
+  /**
    * Returns the index of the next execution descriptor in the graph. If after_broadcast
    * is true, returns the index of the first execution descriptor after the next global
    * broadcast. Returns std::nullopt if no execution descriptors remain in the graph.

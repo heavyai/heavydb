@@ -240,6 +240,18 @@ RaExecutionDesc* RaExecutionSequence::next() {
   return nullptr;
 }
 
+RaExecutionDesc* RaExecutionSequence::prev() {
+  if (descs_.empty()) {
+    return nullptr;
+  }
+  if (descs_.size() == 1) {
+    return nullptr;
+  }
+  CHECK_GE(descs_.size(), size_t(2));
+  auto itr = descs_.rbegin();
+  return (++itr)->get();
+}
+
 std::optional<size_t> RaExecutionSequence::nextStepId(const bool after_broadcast) const {
   if (after_broadcast) {
     if (current_vertex_ == ordering_.size()) {
