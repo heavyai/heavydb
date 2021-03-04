@@ -7710,7 +7710,7 @@ TEST(Select, ScalarSubquery) {
     ScopeGuard reset_watchdog_state = [&save_watchdog] {
       g_enable_watchdog = save_watchdog;
     };
-    SKIP_ON_AGGREGATOR(
+    THROW_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test GROUP BY x, y HAVING (SELECT str FROM test GROUP BY "
           "str HAVING length(str) = 3 ORDER BY str LIMIT 1) = 'bar';",
           dt));
@@ -8270,7 +8270,7 @@ TEST(Select, Joins_ImplicitJoins) {
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x;", dt);
     c("SELECT COUNT(*) FROM test, hash_join_test WHERE test.t = hash_join_test.t;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x < test_inner.x + 1;", dt);
-    SKIP_ON_AGGREGATOR(
+    THROW_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str = test_inner.str;",
           dt));
     c("SELECT test_inner.x, COUNT(*) AS n FROM test, test_inner WHERE test.x = "
@@ -8310,11 +8310,11 @@ TEST(Select, Joins_ImplicitJoins) {
       "'foo';",
       dt);
 
-    SKIP_ON_AGGREGATOR(
+    THROW_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt));
-    SKIP_ON_AGGREGATOR(
+    THROW_ON_AGGREGATOR(
         c("SELECT SUM(b.y) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt));
-    SKIP_ON_AGGREGATOR(
+    THROW_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.str = b.str;", dt));
     c("SELECT COUNT(*) FROM test, test_inner WHERE (test.x = test_inner.x AND test.y = "
       "42 AND test_inner.str = 'foo') "
@@ -8329,7 +8329,7 @@ TEST(Select, Joins_ImplicitJoins) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, join_test "
                                         "WHERE test.rowid = join_test.rowid;",
                                         dt)));
-    SKIP_ON_AGGREGATOR(
+    SKIP_ON_AGGREGATOR(  // no guarantee of equivalent rowid
         ASSERT_EQ(7,
                   v<int64_t>(run_simple_agg("SELECT test.x FROM test, test_inner WHERE "
                                             "test.x = test_inner.x AND test.rowid = 9;",
@@ -8470,11 +8470,9 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
     ScopeGuard reset = [watchdog_state] { g_enable_watchdog = watchdog_state; };
     g_enable_watchdog = false;
     // TODO: crashes with transient_int_to_str_.end() failure in StringDictionaryProxy
-    SKIP_ON_AGGREGATOR(
-        c("SELECT str FROM test JOIN (SELECT 'foo' AS val, 12345 AS cnt) subq ON "
-          "test.str = "
-          "subq.val;",
-          dt));
+    SKIP_ON_AGGREGATOR(c(
+        R"(SELECT str FROM test JOIN (SELECT 'foo' AS val, 12345 AS cnt) subq ON test.str = subq.val;)",
+        dt));
   }
 }
 
@@ -9034,13 +9032,13 @@ TEST(Select, Joins_LeftJoin_Filters) {
       "ON a.x = b.x ORDER BY a.x, "
       "b.str;",
       dt);
+    // Bad join ordering
     SKIP_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7;",
           dt));
-    SKIP_ON_AGGREGATOR(
-        c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7 "
-          "ORDER BY a.x, b.str;",
-          dt));
+    SKIP_ON_AGGREGATOR(c(
+        R"(SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7 ORDER BY a.x, b.str;)",
+        dt));
     THROW_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x WHERE a.x = 7;",
           dt));
@@ -9682,6 +9680,8 @@ TEST(Select, Joins_ComplexQueries) {
     c("SELECT * FROM (SELECT test.x, test.y, d, f FROM test JOIN test_inner ON "
       "test.x = test_inner.x ORDER BY f ASC LIMIT 4) ORDER BY d DESC;",
       dt);
+    c(R"(SELECT c.x, count(*) as total FROM (SELECT x, y FROM test WHERE x < 8) c JOIN test_inner ON UNLIKELY(ROUND(c.x, 1) = test_inner.x) GROUP BY c.x;)",
+      dt);
   }
 }
 
@@ -9764,8 +9764,6 @@ TEST(Select, Joins_OneOuterExpression) {
 }
 
 TEST(Select, Joins_Subqueries) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (g_enable_columnar_output) {
     // TODO(adb): fixup these tests under columnar
     return;
@@ -9775,11 +9773,9 @@ TEST(Select, Joins_Subqueries) {
     SKIP_NO_GPU();
 
     // Subquery loop join
-    {
+    THROW_ON_AGGREGATOR({
       auto result_rows = run_multiple_agg(
-          "SELECT t, n FROM (SELECT UNNEST(arr_str) as t, COUNT(*) as n FROM  array_test "
-          "GROUP BY t ORDER BY n DESC), unnest_join_test WHERE t <> x ORDER BY t "
-          "LIMIT 1;",
+          R"(SELECT t, n FROM (SELECT UNNEST(arr_str) as t, COUNT(*) as n FROM  array_test GROUP BY t ORDER BY n DESC), unnest_join_test WHERE t <> x ORDER BY t LIMIT 1;)",
           dt);
 
       ASSERT_EQ(size_t(1), result_rows->rowCount());
@@ -9787,10 +9783,10 @@ TEST(Select, Joins_Subqueries) {
       ASSERT_EQ(size_t(2), crt_row.size());
       ASSERT_EQ("aa", boost::get<std::string>(v<NullableString>(crt_row[0])));
       ASSERT_EQ(1, v<int64_t>(crt_row[1]));
-    }
+    })
 
     // Subquery equijoin requiring string translation
-    {
+    SKIP_ON_AGGREGATOR({
       const auto table_reordering_state = g_from_table_reordering;
       g_from_table_reordering = false;  // disable from table reordering
       ScopeGuard reset_from_table_reordering_state = [&table_reordering_state] {
@@ -9817,7 +9813,7 @@ TEST(Select, Joins_Subqueries) {
         "'hello' ELSE str END str1, COUNT(*) n FROM test GROUP BY str ORDER BY str ASC), "
         "table_inner WHERE str1 = table_inner.str2 ORDER BY str1;",
         dt);
-    }
+    })
   }
 }
 
@@ -16989,12 +16985,12 @@ TEST(Delete, Joins_ImplicitJoins) {
       "test_inner.x;",
       dt);
     c("SELECT bar.str FROM test, bar WHERE test.str = bar.str;", dt);
-    SKIP_ON_AGGREGATOR(ASSERT_EQ(
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(  // rowid not supported in distributed
         int64_t(3),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;",
             dt))));
-    SKIP_ON_AGGREGATOR(
+    SKIP_ON_AGGREGATOR(  // rowid not supported in distributed
         ASSERT_EQ(7,
                   v<int64_t>(run_simple_agg("SELECT test.x FROM test, test_inner WHERE "
                                             "test.x = test_inner.x AND test.rowid = 9;",

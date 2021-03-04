@@ -308,6 +308,12 @@ size_t RaExecutionSequence::stepsToNextBroadcast() const {
     if (joins_.count(vert)) {
       auto join_node = dynamic_cast<const RelLeftDeepInnerJoin*>(node);
       CHECK(join_node);
+      for (size_t i = 0; i < join_node->inputCount(); i++) {
+        const auto input = join_node->getInput(i);
+        if (dynamic_cast<const RelScan*>(input)) {
+          return steps_to_next_broadcast;
+        }
+      }
       if (crt_vertex < ordering_.size() - 1) {
         // Force the parent node of the RelLeftDeepInnerJoin to run on the aggregator.
         // Note that crt_vertex has already been incremented once above for the join node
