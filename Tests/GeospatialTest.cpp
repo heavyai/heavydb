@@ -762,11 +762,11 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
                                         "ST_Within('POINT(0.1 0.1)', poly);",
                                         dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(gpoly4326, "
-                  "ST_GeomFromText('POINT(0.1 0.1)', 4326));",
-                  dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(gpoly4326, ST_GeomFromText('POINT(0.1 0.1)', 4326));)",
+            dt)));
     ASSERT_EQ(
         static_cast<int64_t>(7),
         v<int64_t>(run_simple_agg(

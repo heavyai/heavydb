@@ -182,7 +182,7 @@ add_custom_command(
     DEPENDS RuntimeFunctions.h RuntimeFunctions.cpp DecodersImpl.h JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
     COMMAND ${llvm_clangpp_cmd}
-    ARGS -std=c++14 ${RT_OPT_FLAGS} -c -emit-llvm
+    ARGS -std=c++17 ${RT_OPT_FLAGS} -c -emit-llvm
     ${CLANG_SDK_INC}
     ${CLANG_CRT_INC}
     ${MAPD_DEFINITIONS}
@@ -209,7 +209,7 @@ add_custom_command(
     DEPENDS ExtensionFunctions.hpp ExtensionFunctionsGeo.hpp ExtensionFunctionsArray.hpp ExtensionFunctionsTesting.hpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast.raw
     COMMAND ${llvm_clangpp_cmd}
-    ARGS -DNO_BOOST -std=c++14 -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color -Wno-return-type-c-linkage
+    ARGS -DNO_BOOST -std=c++17 -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color -Wno-return-type-c-linkage
     -I ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast.raw)
 
 add_custom_command(
@@ -281,7 +281,7 @@ add_custom_command(
         -fatbin
         -rdc=true
         ${CUDA_COMPILATION_ARCH}
-        -std=c++14
+        -std=c++17
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu
     )
@@ -294,7 +294,7 @@ add_custom_command(
         -I ${CMAKE_SOURCE_DIR}
         ${MAPD_HOST_COMPILER_FLAG}
         -Xcompiler -fPIC
-        -std=c++14
+        -std=c++17
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         ${CUDA_COMPILATION_ARCH}
@@ -313,7 +313,7 @@ add_custom_command(
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         ${CUDA_COMPILATION_ARCH}
-        -std=c++14
+        -std=c++17
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/InPlaceSortImpl.cu
     )
@@ -326,7 +326,7 @@ add_custom_command(
         -I ${CMAKE_SOURCE_DIR}
         ${MAPD_HOST_COMPILER_FLAG}
         -Xcompiler -fPIC
-        -std=c++14
+        -std=c++17
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         ${CUDA_COMPILATION_ARCH}
@@ -344,7 +344,7 @@ add_custom_command(
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         ${CUDA_COMPILATION_ARCH}
-        -std=c++14
+        -std=c++17
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuInitGroups.cu
     )
@@ -360,7 +360,7 @@ add_custom_command(
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         ${CUDA_COMPILATION_ARCH}
-        -std=c++14
+        -std=c++17
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/JoinHashTable/Runtime/HashJoinRuntimeGpu.cu
     )

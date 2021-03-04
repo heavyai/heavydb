@@ -727,6 +727,8 @@ namespace {
 static const std::unordered_set<std::string> overlaps_supported_functions = {
     "ST_Contains_MultiPolygon_Point",
     "ST_Contains_Polygon_Point",
+    "ST_cContains_MultiPolygon_Point",  // compressed coords version
+    "ST_cContains_Polygon_Point",
     "ST_Contains_Polygon_Polygon",
     "ST_Contains_Polygon_MultiPolygon",
     "ST_Contains_MultiPolygon_MultiPolygon",

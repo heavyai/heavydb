@@ -1,5 +1,12 @@
 #include "Geospatial/CompressionRuntime.h"
 
+#ifndef __CUDACC__
+#include "Shared/likely.h"
+#else
+#define LIKELY
+#define UNLIKELY
+#endif
+
 // #define DEBUG_STMT(x) x;
 #define DEBUG_STMT(x)
 
@@ -131,6 +138,12 @@ DEVICE ALWAYS_INLINE double coord_y(const int8_t* data,
   auto decompressed_transformed_coord_y =
       transform_coord(decompressed_coord_y, isr, osr, false);
   return decompressed_transformed_coord_y;
+}
+
+// coord accessor for compressed coords at location index
+DEVICE ALWAYS_INLINE int32_t compressed_coord(const int8_t* data, const int32_t index) {
+  const auto compressed_coords = reinterpret_cast<const int32_t*>(data);
+  return compressed_coords[index];
 }
 
 // Cartesian distance between points, squared
@@ -492,8 +505,13 @@ is_left(const T lx0, const T ly0, const T lx1, const T ly1, const T px, const T 
 template <typename T>
 DEVICE ALWAYS_INLINE bool tol_zero_template(const T x,
                                             const T tolerance = TOLERANCE_DEFAULT) {
+  if constexpr (!std::is_floating_point<T>::value) {
+    return x == 0;  // assume integer 0s are always 0
+  }
   return (-tolerance <= x) && (x <= tolerance);
 }
+
+enum class EdgeBehavior { kIncludePointOnEdge, kExcludePointOnEdge };
 
 /**
  * Computes whether the point p is inside the polygon poly using the winding number
@@ -508,45 +526,82 @@ DEVICE ALWAYS_INLINE bool tol_zero_template(const T x,
  * `include_point_on_edge` allows the algorithm to work for both point-inside-polygon, or
  * point-on-polygon calculations. The original source and additional detail for this
  * implementation is here: http://geomalgorithms.com/a03-_inclusion.html */
-template <typename T>
-DEVICE ALWAYS_INLINE bool point_in_polygon_winding_number(
-    const int8_t* poly,
-    const int32_t poly_num_coords,
-    const T px,
-    const T py,
-    const int32_t ic1,
-    const int32_t isr1,
-    const int32_t osr,
-    const bool include_point_on_edge) {
+template <typename T, EdgeBehavior TEdgeBehavior>
+DEVICE ALWAYS_INLINE bool point_in_polygon_winding_number(const int8_t* poly,
+                                                          const int32_t poly_num_coords,
+                                                          const T px,
+                                                          const T py,
+                                                          const int32_t ic1,
+                                                          const int32_t isr1,
+                                                          const int32_t osr) {
   int32_t wn = 0;
+
+  constexpr bool include_point_on_edge =
+      TEdgeBehavior == EdgeBehavior::kIncludePointOnEdge;
+
+  auto get_x_coord = [=](const auto data, const auto index) -> T {
+    if constexpr (std::is_floating_point<T>::value) {
+      return coord_x(data, index, ic1, isr1, osr);
+    } else {
+      return compressed_coord(data, index);
+    }
+    return T{};  // https://stackoverflow.com/a/64561686/2700898
+  };
+
+  auto get_y_coord = [=](const auto data, const auto index) -> T {
+    if constexpr (std::is_floating_point<T>::value) {
+      return coord_y(data, index, ic1, isr1, osr);
+    } else {
+      return compressed_coord(data, index);
+    }
+    return T{};  // https://stackoverflow.com/a/64561686/2700898
+  };
 
   DEBUG_STMT(printf("Poly num coords: %d\n", poly_num_coords));
   const int64_t num_edges = poly_num_coords / 2;
-  for (int64_t edge = 0; edge < num_edges; edge++) {
+
+  int64_t e0_index = 0;
+  T e0x = get_x_coord(poly, e0_index * 2);
+  T e0y = get_y_coord(poly, (e0_index * 2) + 1);
+
+  int64_t e1_index;
+  T e1x, e1y;
+
+  for (int64_t edge = 1; edge <= num_edges; edge++) {
     DEBUG_STMT(printf("Edge %ld\n", edge));
     // build the edge
-    const auto e0_index = edge % num_edges;
-    const auto e0x = static_cast<T>(coord_x(poly, e0_index * 2, ic1, isr1, osr));
-    const auto e0y = static_cast<T>(coord_y(poly, e0_index * 2 + 1, ic1, isr1, osr));
-    DEBUG_STMT(printf("edge 0: %ld : %f, %f\n", e0_index, e0x, e0y));
+    e1_index = edge % num_edges;
+    e1x = get_x_coord(poly, e1_index * 2);
+    e1y = get_y_coord(poly, (e1_index * 2) + 1);
 
-    const auto e1_index = (edge + 1) % num_edges;
-    const auto e1x = static_cast<T>(coord_x(poly, e1_index * 2, ic1, isr1, osr));
-    const auto e1y = static_cast<T>(coord_y(poly, (e1_index * 2) + 1, ic1, isr1, osr));
-    DEBUG_STMT(printf("edge 1: %ld : %f, %f\n", e1_index, e1x, e1y));
+    DEBUG_STMT(printf("edge 0: %ld : %f, %f\n", e0_index, (double)e0x, (double)e0y));
+    DEBUG_STMT(printf("edge 1: %ld : %f, %f\n", e1_index, (double)e1x, (double)e1y));
 
-    const T xp = (px - e1x) * (e0y - e1y) - (py - e1y) * (e0x - e1x);
-    const T pt_vec_magnitude = (px - e0x) * (px - e0x) + (py - e0y) * (py - e0y);
-    const T edge_vec_magnitude = (e1x - e0x) * (e1x - e0x) + (e1y - e0y) * (e1y - e0y);
+    auto get_epsilon = [=]() -> T {
+      if constexpr (std::is_floating_point<T>::value) {
+        const T edge_vec_magnitude =
+            (e1x - e0x) * (e1x - e0x) + (e1y - e0y) * (e1y - e0y);
+        return 0.003 * edge_vec_magnitude;
+      } else {
+        return T(0);
+      }
+      return T{};  // https://stackoverflow.com/a/64561686/2700898
+    };
 
-    const T epsilon = 0.003 * edge_vec_magnitude;
-    DEBUG_STMT(printf("using epsilon value %e\n", epsilon));
-    if (tol_zero_template(xp, epsilon) && (pt_vec_magnitude <= edge_vec_magnitude)) {
-      DEBUG_STMT(printf("point is on edge: %e && %e <= %e\n",
-                        xp,
-                        pt_vec_magnitude,
-                        edge_vec_magnitude));
-      return include_point_on_edge;
+    const T epsilon = get_epsilon();
+    DEBUG_STMT(printf("using epsilon value %e\n", (double)epsilon));
+
+    if constexpr (include_point_on_edge) {
+      const T xp = (px - e1x) * (e0y - e1y) - (py - e1y) * (e0x - e1x);
+      const T pt_vec_magnitude = (px - e0x) * (px - e0x) + (py - e0y) * (py - e0y);
+      const T edge_vec_magnitude = (e1x - e0x) * (e1x - e0x) + (e1y - e0y) * (e1y - e0y);
+      if (tol_zero_template(xp, epsilon) && (pt_vec_magnitude <= edge_vec_magnitude)) {
+        DEBUG_STMT(printf("point is on edge: %e && %e <= %e\n",
+                          (double)xp,
+                          (double)pt_vec_magnitude,
+                          (double)edge_vec_magnitude));
+        return include_point_on_edge;
+      }
     }
 
     if (e0y <= py) {
@@ -555,10 +610,12 @@ DEVICE ALWAYS_INLINE bool point_in_polygon_winding_number(
         DEBUG_STMT(printf("upward crossing\n"));
         const auto is_left_val = is_left(e0x, e0y, e1x, e1y, px, py);
         DEBUG_STMT(printf("Left val %f and tol zero left val %d\n",
-                          is_left_val,
+                          (double)is_left_val,
                           tol_zero_template(is_left_val, epsilon)));
-        if (is_left_val > T(0.) &&
-            !tol_zero_template(is_left_val, epsilon)) {  // p left of edge
+        if (UNLIKELY(tol_zero_template(is_left_val, epsilon))) {
+          // p is on the edge
+          return include_point_on_edge;
+        } else if (is_left_val > T(0)) {  // p left of edge
           // valid up intersection
           DEBUG_STMT(printf("++wn\n"));
           ++wn;
@@ -569,19 +626,21 @@ DEVICE ALWAYS_INLINE bool point_in_polygon_winding_number(
       DEBUG_STMT(printf("downward crossing\n"));
       const auto is_left_val = is_left(e0x, e0y, e1x, e1y, px, py);
       DEBUG_STMT(printf("Left val %f and tol zero left val %d\n",
-                        is_left_val,
+                        (double)is_left_val,
                         tol_zero_template(is_left_val, epsilon)));
-
-      if (is_left_val < T(0.) &&
-          !tol_zero_template(is_left_val, epsilon)) {  // p right of edge
-
+      if (UNLIKELY(tol_zero_template(is_left_val, epsilon))) {
+        // p is on the edge
+        return include_point_on_edge;
+      } else if (is_left_val < T(0)) {  // p right of edge
         // valid down intersection
         DEBUG_STMT(printf("--wn\n"));
         --wn;
       }
-    } else {
-      DEBUG_STMT(printf("no crossing\n"));
     }
+
+    e0_index = e1_index;
+    e0x = e1x;
+    e0y = e1y;
   }
   DEBUG_STMT(printf("wn: %d\n", wn));
   // wn == 0 --> P is outside the polygon
@@ -3374,6 +3433,7 @@ bool ST_Contains_LineString_Polygon(int8_t* l,
   return false;
 }
 
+template <typename T, EdgeBehavior TEdgeBehavior>
 DEVICE ALWAYS_INLINE bool Contains_Polygon_Point_Impl(const int8_t* poly_coords,
                                                       const int64_t poly_coords_size,
                                                       const int32_t* poly_ring_sizes,
@@ -3386,45 +3446,54 @@ DEVICE ALWAYS_INLINE bool Contains_Polygon_Point_Impl(const int8_t* poly_coords,
                                                       const int32_t isr1,
                                                       const int32_t ic2,
                                                       const int32_t isr2,
-                                                      const int32_t osr,
-                                                      const bool include_point_on_edge) {
-  const double px = coord_x(p, 0, ic2, isr2, osr);
-  const double py = coord_y(p, 1, ic2, isr2, osr);
-  DEBUG_STMT(printf("pt: %f, %f\n", px, py));
+                                                      const int32_t osr) {
   if (poly_bounds) {
-    if (!box_contains_point(poly_bounds, poly_bounds_size, px, py)) {
+    // TODO: codegen
+    if (!box_contains_point(poly_bounds,
+                            poly_bounds_size,
+                            coord_x(p, 0, ic2, isr2, osr),
+                            coord_y(p, 1, ic2, isr2, osr))) {
+      DEBUG_STMT(printf("Bounding box does not contain point, exiting.\n"));
       return false;
     }
   }
+
+  auto get_x_coord = [=]() -> T {
+    if constexpr (std::is_floating_point<T>::value) {
+      return coord_x(p, 0, ic2, isr2, osr);
+    } else {
+      return compressed_coord(p, 0);
+    }
+    return T{};  // https://stackoverflow.com/a/64561686/2700898
+  };
+
+  auto get_y_coord = [=]() -> T {
+    if constexpr (std::is_floating_point<T>::value) {
+      return coord_y(p, 1, ic2, isr2, osr);
+    } else {
+      return compressed_coord(p, 1);
+    }
+    return T{};  // https://stackoverflow.com/a/64561686/2700898
+  };
+
+  const T px = get_x_coord();
+  const T py = get_y_coord();
+  DEBUG_STMT(printf("pt: %f, %f\n", (double)px, (double)py));
 
   const auto poly_num_coords = poly_coords_size / compression_unit_size(ic1);
   auto exterior_ring_num_coords =
       poly_num_rings > 0 ? poly_ring_sizes[0] * 2 : poly_num_coords;
 
   auto poly = poly_coords;
-  if (point_in_polygon_winding_number<double>(
-          poly,
-          exterior_ring_num_coords,
-          px,
-          py,
-          ic1,
-          isr1,
-          osr,
-          /*include_point_on_edge=*/include_point_on_edge)) {
+  if (point_in_polygon_winding_number<T, TEdgeBehavior>(
+          poly, exterior_ring_num_coords, px, py, ic1, isr1, osr)) {
     // Inside exterior ring
     poly += exterior_ring_num_coords * compression_unit_size(ic1);
     // Check that none of the polygon's holes contain that point
     for (auto r = 1; r < poly_num_rings; r++) {
-      int64_t interior_ring_num_coords = poly_ring_sizes[r] * 2;
-      if (point_in_polygon_winding_number<double>(
-              poly,
-              interior_ring_num_coords,
-              px,
-              py,
-              ic1,
-              isr1,
-              osr,
-              /*include_point_on_edge=*/include_point_on_edge)) {
+      const int64_t interior_ring_num_coords = poly_ring_sizes[r] * 2;
+      if (point_in_polygon_winding_number<T, TEdgeBehavior>(
+              poly, interior_ring_num_coords, px, py, ic1, isr1, osr)) {
         return false;
       }
       poly += interior_ring_num_coords * compression_unit_size(ic1);
@@ -3447,20 +3516,49 @@ EXTENSION_NOINLINE bool ST_Contains_Polygon_Point(const int8_t* poly_coords,
                                                   const int32_t ic2,
                                                   const int32_t isr2,
                                                   const int32_t osr) {
-  return Contains_Polygon_Point_Impl(poly_coords,
-                                     poly_coords_size,
-                                     poly_ring_sizes,
-                                     poly_num_rings,
-                                     poly_bounds,
-                                     poly_bounds_size,
-                                     p,
-                                     psize,
-                                     ic1,
-                                     isr1,
-                                     ic2,
-                                     isr2,
-                                     osr,
-                                     /*include_point_on_edge=*/false);
+  return Contains_Polygon_Point_Impl<double, EdgeBehavior::kExcludePointOnEdge>(
+      poly_coords,
+      poly_coords_size,
+      poly_ring_sizes,
+      poly_num_rings,
+      poly_bounds,
+      poly_bounds_size,
+      p,
+      psize,
+      ic1,
+      isr1,
+      ic2,
+      isr2,
+      osr);
+}
+
+EXTENSION_NOINLINE bool ST_cContains_Polygon_Point(const int8_t* poly_coords,
+                                                   const int64_t poly_coords_size,
+                                                   const int32_t* poly_ring_sizes,
+                                                   const int64_t poly_num_rings,
+                                                   const double* poly_bounds,
+                                                   const int64_t poly_bounds_size,
+                                                   const int8_t* p,
+                                                   const int64_t psize,
+                                                   const int32_t ic1,
+                                                   const int32_t isr1,
+                                                   const int32_t ic2,
+                                                   const int32_t isr2,
+                                                   const int32_t osr) {
+  return Contains_Polygon_Point_Impl<int64_t, EdgeBehavior::kExcludePointOnEdge>(
+      poly_coords,
+      poly_coords_size,
+      poly_ring_sizes,
+      poly_num_rings,
+      poly_bounds,
+      poly_bounds_size,
+      p,
+      psize,
+      ic1,
+      isr1,
+      ic2,
+      isr2,
+      osr);
 }
 
 EXTENSION_NOINLINE
@@ -3500,14 +3598,9 @@ bool ST_Contains_Polygon_LineString(int8_t* poly_coords,
         return false;
       }
     }
-    return point_in_polygon_winding_number<double>(poly_coords,
-                                                   poly_num_coords,
-                                                   lx,
-                                                   ly,
-                                                   ic1,
-                                                   isr1,
-                                                   osr,
-                                                   /*include_point_on_edge=*/true);
+    // TODO: should be exclude
+    return point_in_polygon_winding_number<double, EdgeBehavior::kIncludePointOnEdge>(
+        poly_coords, poly_num_coords, lx, ly, ic1, isr1, osr);
   }
 
   // Bail out if poly bounding box doesn't contain linestring bounding box
@@ -3575,6 +3668,75 @@ bool ST_Contains_Polygon_Polygon(int8_t* poly1_coords,
                                         osr);
 }
 
+template <typename T, EdgeBehavior TEdgeBehavior>
+DEVICE ALWAYS_INLINE bool Contains_MultiPolygon_Point_Impl(
+    const int8_t* mpoly_coords,
+    const int64_t mpoly_coords_size,
+    const int32_t* mpoly_ring_sizes,
+    const int64_t mpoly_num_rings,
+    const int32_t* mpoly_poly_sizes,
+    const int64_t mpoly_num_polys,
+    const double* mpoly_bounds,
+    const int64_t mpoly_bounds_size,
+    const int8_t* p,
+    const int64_t psize,
+    const int32_t ic1,
+    const int32_t isr1,
+    const int32_t ic2,
+    const int32_t isr2,
+    const int32_t osr) {
+  if (mpoly_num_polys <= 0) {
+    return false;
+  }
+
+  // TODO: mpoly_bounds could contain individual bounding boxes too:
+  // first two points - box for the entire multipolygon, then a pair for each polygon
+  if (mpoly_bounds) {
+    if (!box_contains_point(mpoly_bounds,
+                            mpoly_bounds_size,
+                            coord_x(p, 0, ic2, isr2, osr),
+                            coord_y(p, 1, ic2, isr2, osr))) {
+      return false;
+    }
+  }
+
+  // Set specific poly pointers as we move through the coords/ringsizes/polyrings
+  // arrays.
+  auto next_poly_coords = mpoly_coords;
+  auto next_poly_ring_sizes = mpoly_ring_sizes;
+
+  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
+    const auto poly_coords = next_poly_coords;
+    const auto poly_ring_sizes = next_poly_ring_sizes;
+    const auto poly_num_rings = mpoly_poly_sizes[poly];
+    // Count number of coords in all of poly's rings, advance ring size pointer.
+    int32_t poly_num_coords = 0;
+    for (auto ring = 0; ring < poly_num_rings; ring++) {
+      poly_num_coords += 2 * *next_poly_ring_sizes++;
+    }
+    const auto poly_coords_size = poly_num_coords * compression_unit_size(ic1);
+    next_poly_coords += poly_coords_size;
+    // TODO: pass individual bounding boxes for each polygon
+    if (Contains_Polygon_Point_Impl<T, TEdgeBehavior>(poly_coords,
+                                                      poly_coords_size,
+                                                      poly_ring_sizes,
+                                                      poly_num_rings,
+                                                      nullptr,
+                                                      0,
+                                                      p,
+                                                      psize,
+                                                      ic1,
+                                                      isr1,
+                                                      ic2,
+                                                      isr2,
+                                                      osr)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 EXTENSION_NOINLINE
 bool ST_Contains_MultiPolygon_Point(int8_t* mpoly_coords,
                                     int64_t mpoly_coords_size,
@@ -3591,56 +3753,55 @@ bool ST_Contains_MultiPolygon_Point(int8_t* mpoly_coords,
                                     int32_t ic2,
                                     int32_t isr2,
                                     int32_t osr) {
-  if (mpoly_num_polys <= 0) {
-    return false;
-  }
+  return Contains_MultiPolygon_Point_Impl<double, EdgeBehavior::kExcludePointOnEdge>(
+      mpoly_coords,
+      mpoly_coords_size,
+      mpoly_ring_sizes,
+      mpoly_num_rings,
+      mpoly_poly_sizes,
+      mpoly_num_polys,
+      mpoly_bounds,
+      mpoly_bounds_size,
+      p,
+      psize,
+      ic1,
+      isr1,
+      ic2,
+      isr2,
+      osr);
+}
 
-  double px = coord_x(p, 0, ic2, isr2, osr);
-  double py = coord_y(p, 1, ic2, isr2, osr);
-
-  // TODO: mpoly_bounds could contain individual bounding boxes too:
-  // first two points - box for the entire multipolygon, then a pair for each polygon
-  if (mpoly_bounds) {
-    if (!box_contains_point(mpoly_bounds, mpoly_bounds_size, px, py)) {
-      return false;
-    }
-  }
-
-  // Set specific poly pointers as we move through the coords/ringsizes/polyrings arrays.
-  auto next_poly_coords = mpoly_coords;
-  auto next_poly_ring_sizes = mpoly_ring_sizes;
-
-  for (auto poly = 0; poly < mpoly_num_polys; poly++) {
-    auto poly_coords = next_poly_coords;
-    auto poly_ring_sizes = next_poly_ring_sizes;
-    auto poly_num_rings = mpoly_poly_sizes[poly];
-    // Count number of coords in all of poly's rings, advance ring size pointer.
-    int32_t poly_num_coords = 0;
-    for (auto ring = 0; ring < poly_num_rings; ring++) {
-      poly_num_coords += 2 * *next_poly_ring_sizes++;
-    }
-    auto poly_coords_size = poly_num_coords * compression_unit_size(ic1);
-    next_poly_coords += poly_coords_size;
-    // TODO: pass individual bounding boxes for each polygon
-    if (Contains_Polygon_Point_Impl(poly_coords,
-                                    poly_coords_size,
-                                    poly_ring_sizes,
-                                    poly_num_rings,
-                                    nullptr,
-                                    0,
-                                    p,
-                                    psize,
-                                    ic1,
-                                    isr1,
-                                    ic2,
-                                    isr2,
-                                    osr,
-                                    /*include_point_on_edge=*/false)) {
-      return true;
-    }
-  }
-
-  return false;
+EXTENSION_NOINLINE bool ST_cContains_MultiPolygon_Point(int8_t* mpoly_coords,
+                                                        int64_t mpoly_coords_size,
+                                                        int32_t* mpoly_ring_sizes,
+                                                        int64_t mpoly_num_rings,
+                                                        int32_t* mpoly_poly_sizes,
+                                                        int64_t mpoly_num_polys,
+                                                        double* mpoly_bounds,
+                                                        int64_t mpoly_bounds_size,
+                                                        int8_t* p,
+                                                        int64_t psize,
+                                                        int32_t ic1,
+                                                        int32_t isr1,
+                                                        int32_t ic2,
+                                                        int32_t isr2,
+                                                        int32_t osr) {
+  return Contains_MultiPolygon_Point_Impl<int64_t, EdgeBehavior::kExcludePointOnEdge>(
+      mpoly_coords,
+      mpoly_coords_size,
+      mpoly_ring_sizes,
+      mpoly_num_rings,
+      mpoly_poly_sizes,
+      mpoly_num_polys,
+      mpoly_bounds,
+      mpoly_bounds_size,
+      p,
+      psize,
+      ic1,
+      isr1,
+      ic2,
+      isr2,
+      osr);
 }
 
 EXTENSION_NOINLINE
@@ -3815,20 +3976,20 @@ bool ST_Intersects_Point_Polygon(int8_t* p,
                                  int32_t ic2,
                                  int32_t isr2,
                                  int32_t osr) {
-  return Contains_Polygon_Point_Impl(poly,
-                                     polysize,
-                                     poly_ring_sizes,
-                                     poly_num_rings,
-                                     poly_bounds,
-                                     poly_bounds_size,
-                                     p,
-                                     psize,
-                                     ic2,
-                                     isr2,
-                                     ic1,
-                                     isr1,
-                                     osr,
-                                     /*include_point_on_edge=*/true);
+  return Contains_Polygon_Point_Impl<double, EdgeBehavior::kIncludePointOnEdge>(
+      poly,
+      polysize,
+      poly_ring_sizes,
+      poly_num_rings,
+      poly_bounds,
+      poly_bounds_size,
+      p,
+      psize,
+      ic2,
+      isr2,
+      ic1,
+      isr1,
+      osr);
 }
 
 EXTENSION_INLINE
@@ -3958,20 +4119,20 @@ bool ST_Intersects_LineString_Polygon(int8_t* l,
     }
     auto p = l + li * compression_unit_size(ic1);
     auto psize = 2 * compression_unit_size(ic1);
-    return Contains_Polygon_Point_Impl(poly,
-                                       polysize,
-                                       poly_ring_sizes,
-                                       poly_num_rings,
-                                       poly_bounds,
-                                       poly_bounds_size,
-                                       p,
-                                       psize,
-                                       ic2,
-                                       isr2,
-                                       ic1,
-                                       isr1,
-                                       osr,
-                                       /*include_point_on_edge=*/true);
+    return Contains_Polygon_Point_Impl<double, EdgeBehavior::kIncludePointOnEdge>(
+        poly,
+        polysize,
+        poly_ring_sizes,
+        poly_num_rings,
+        poly_bounds,
+        poly_bounds_size,
+        p,
+        psize,
+        ic2,
+        isr2,
+        ic1,
+        isr1,
+        osr);
   }
 
   if (lbounds && poly_bounds) {
@@ -4091,20 +4252,20 @@ bool ST_Intersects_Polygon_Point(int8_t* poly,
                                  int32_t ic2,
                                  int32_t isr2,
                                  int32_t osr) {
-  return Contains_Polygon_Point_Impl(poly,
-                                     polysize,
-                                     poly_ring_sizes,
-                                     poly_num_rings,
-                                     poly_bounds,
-                                     poly_bounds_size,
-                                     p,
-                                     psize,
-                                     ic1,
-                                     isr1,
-                                     ic2,
-                                     isr2,
-                                     osr,
-                                     /*include_point_on_edge=*/true);
+  return Contains_Polygon_Point_Impl<double, EdgeBehavior::kIncludePointOnEdge>(
+      poly,
+      polysize,
+      poly_ring_sizes,
+      poly_num_rings,
+      poly_bounds,
+      poly_bounds_size,
+      p,
+      psize,
+      ic1,
+      isr1,
+      ic2,
+      isr2,
+      osr);
 }
 
 EXTENSION_INLINE
@@ -4244,21 +4405,22 @@ bool ST_Intersects_MultiPolygon_Point(int8_t* mpoly_coords,
                                       int32_t ic2,
                                       int32_t isr2,
                                       int32_t osr) {
-  return ST_Contains_MultiPolygon_Point(mpoly_coords,
-                                        mpoly_coords_size,
-                                        mpoly_ring_sizes,
-                                        mpoly_num_rings,
-                                        mpoly_poly_sizes,
-                                        mpoly_num_polys,
-                                        mpoly_bounds,
-                                        mpoly_bounds_size,
-                                        p,
-                                        psize,
-                                        ic1,
-                                        isr1,
-                                        ic2,
-                                        isr2,
-                                        osr);
+  return Contains_MultiPolygon_Point_Impl<double, EdgeBehavior::kIncludePointOnEdge>(
+      mpoly_coords,
+      mpoly_coords_size,
+      mpoly_ring_sizes,
+      mpoly_num_rings,
+      mpoly_poly_sizes,
+      mpoly_num_polys,
+      mpoly_bounds,
+      mpoly_bounds_size,
+      p,
+      psize,
+      ic1,
+      isr1,
+      ic2,
+      isr2,
+      osr);
 }
 
 EXTENSION_INLINE

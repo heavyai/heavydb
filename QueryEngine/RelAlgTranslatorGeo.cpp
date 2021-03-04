@@ -1018,6 +1018,21 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
     throw QueryNotSupported(rex_function->getName() + " cannot accept different SRIDs");
   }
 
+  if (function_name == "ST_Contains"sv) {
+    const bool lhs_is_literal =
+        geoargs1.size() == 1 &&
+        std::dynamic_pointer_cast<const Analyzer::Constant>(geoargs1.front()) != nullptr;
+    const bool lhs_is_point = arg1_ti.get_type() == kPOINT;
+    if (!lhs_is_literal && lhs_is_point &&
+        arg0_ti.get_compression() == kENCODING_GEOINT &&
+        arg0_ti.get_input_srid() == arg0_ti.get_output_srid() &&
+        arg0_ti.get_compression() == arg1_ti.get_compression() &&
+        arg1_ti.get_input_srid() == arg1_ti.get_output_srid()) {
+      // use the compressed version of ST_Contains
+      function_name = "ST_cContains";
+    }
+  }
+
   std::string specialized_geofunc{function_name + suffix(arg0_ti.get_type()) +
                                   suffix(arg1_ti.get_type())};
 
