@@ -63,6 +63,7 @@
 #include "Shared/StringTransform.h"
 #include "Shared/measure.h"
 #include "Shared/shard_key.h"
+#include "Shared/thread_count.h"
 #include "TableArchiver/TableArchiver.h"
 #include "Utils/FsiUtils.h"
 
@@ -2955,7 +2956,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
         TargetValueConverterFactory factory;
 
-        const int num_worker_threads = std::thread::hardware_concurrency();
+        const int num_worker_threads = cpu_threads();
 
         std::vector<size_t> thread_start_idx(num_worker_threads),
             thread_end_idx(num_worker_threads);

@@ -23,6 +23,7 @@
  **/
 
 #include "Shared/Compressor.h"
+#include "Shared/thread_count.h"
 
 #include <cstdint>
 #include <memory>
@@ -41,7 +42,7 @@ BloscCompressor::BloscCompressor() {
   // We use maximum number of threads here since with tests we found that compression
   // speed gets lear scalling with corresponding to the number of threads being used.
 
-  blosc_set_nthreads(std::thread::hardware_concurrency());
+  blosc_set_nthreads(cpu_threads());
 
   // We chosse faster compressor, accepting slightly lower compression ratio
   // https://lz4.github.io/lz4/

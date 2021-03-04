@@ -67,6 +67,7 @@
 #include "QueryEngine/ThriftSerializers.h"
 #include "Shared/ArrowUtil.h"
 #include "Shared/StringTransform.h"
+#include "Shared/thread_count.h"
 #include "Shared/import_helpers.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
@@ -771,7 +772,7 @@ void DBHandler::get_hardware_info(TClusterHardwareInfo& _return,
   }
 
   // start  hardware/OS dependent code
-  ret.num_cpu_hw = std::thread::hardware_concurrency();
+  ret.num_cpu_hw = cpu_threads();
   // ^ This might return diffrent results in case of hyper threading
   // end hardware/OS dependent code
 

@@ -38,6 +38,7 @@
 #include "Shared/File.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/measure.h"
+#include "Shared/thread_count.h"
 
 constexpr char LEGACY_EPOCH_FILENAME[] = "epoch";
 constexpr char EPOCH_FILENAME[] = "epoch_metadata";
@@ -207,7 +208,8 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
         endItr;  // default construction yields past-the-end
     int32_t maxFileId = -1;
     int32_t fileCount = 0;
-    int32_t threadCount = std::thread::hardware_concurrency();
+    int32_t threadCount = cpu_threads();
+  
     std::vector<HeaderInfo> headerVec;
     std::vector<std::future<std::vector<HeaderInfo>>> file_futures;
     boost::filesystem::path path(fileMgrBasePath_);
@@ -302,7 +304,7 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
 
   /* define number of reader threads to be used */
   size_t num_hardware_based_threads =
-      std::thread::hardware_concurrency();  // # of threads is based on # of cores on the
+      cpu_threads();                        // # of threads is based on # of cores on the
                                             // host
   if (num_reader_threads == 0) {            // # of threads has not been defined by user
     num_reader_threads_ = num_hardware_based_threads;
@@ -420,7 +422,7 @@ void FileMgr::init(const std::string& dataPathToConvertFrom,
         endItr;  // default construction yields past-the-end
     int32_t maxFileId = -1;
     int32_t fileCount = 0;
-    int32_t threadCount = std::thread::hardware_concurrency();
+    int32_t threadCount = cpu_threads();
     std::vector<HeaderInfo> headerVec;
     std::vector<std::future<std::vector<HeaderInfo>>> file_futures;
     for (boost::filesystem::directory_iterator fileIt(path); fileIt != endItr; ++fileIt) {

@@ -25,6 +25,7 @@
 #include "MapDRelease.h"
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "Shared/Compressor.h"
+#include "Shared/thread_count.h"
 #include "StringDictionary/StringDictionary.h"
 #include "Utils/DdlUtils.h"
 
@@ -126,6 +127,10 @@ void CommandLineOptions::fillOptions() {
       "exit-after-warmup",
       po::value<bool>(&exit_after_warmup)->default_value(false)->implicit_value(true),
       "Exit after OmniSci warmup queries.");
+  help_desc.add_options()("max-num-threads",
+                          po::value<unsigned>(&g_cpu_threads_override)
+                              ->default_value(std::thread::hardware_concurrency()),
+                          "Set maximum number of threads");
   help_desc.add_options()("dynamic-watchdog-time-limit",
                           po::value<unsigned>(&dynamic_watchdog_time_limit)
                               ->default_value(dynamic_watchdog_time_limit)

@@ -23,5 +23,5 @@ extern unsigned g_cpu_threads_override;
 
 inline int cpu_threads() {
   auto ov = g_cpu_threads_override;
-  return (ov <= 0) ? std::max(2 * std::thread::hardware_concurrency(), 1U) : ov;
+  return (ov <= 0) ? std::max(std::thread::hardware_concurrency(), 1U) : ov;
 }

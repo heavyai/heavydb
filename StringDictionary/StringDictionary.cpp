@@ -15,6 +15,7 @@
  */
 
 #include "StringDictionary/StringDictionary.h"
+#include "Shared/thread_count.h"
 
 #include <tbb/parallel_for.h>
 #include <boost/filesystem/operations.hpp>
@@ -168,7 +169,8 @@ StringDictionary::StringDictionary(const std::string& folder,
       mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
 
       uint32_t thread_inits = 0;
-      const auto thread_count = std::thread::hardware_concurrency();
+      const auto thread_count = cpu_threads();
+
       const uint32_t items_per_thread = std::max<uint32_t>(
           2000, std::min<uint32_t>(200000, (str_count / thread_count) + 1));
       std::vector<std::future<std::vector<std::pair<string_dict_hash_t, unsigned int>>>>
@@ -1495,7 +1497,7 @@ void StringDictionary::populate_string_array_ids(
     }
   };
 
-  const int num_worker_threads = std::thread::hardware_concurrency();
+  const int num_worker_threads = cpu_threads();
 
   if (source_array_ids.size() / num_worker_threads > 10) {
     std::vector<std::future<void>> worker_threads;
