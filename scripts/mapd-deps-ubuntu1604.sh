@@ -157,6 +157,9 @@ install_go
 # librdkafka
 install_rdkafka
 
+# libuv
+install_libuv
+
 VERS=3.0.2
 wget --continue https://github.com/cginternals/glbinding/archive/v$VERS.tar.gz
 tar xvf v$VERS.tar.gz

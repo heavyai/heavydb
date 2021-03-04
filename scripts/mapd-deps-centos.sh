@@ -275,6 +275,9 @@ install_awscpp -j $(nproc)
 # Apache Arrow (see common-functions.sh)
 install_arrow
 
+# libuv
+install_libuv
+
 # glslang (with spirv-tools)
 VERS=8.13.3743 # stable 4/27/20
 rm -rf glslang

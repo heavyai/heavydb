@@ -385,6 +385,10 @@ set (CUDA_COMPILATION_ARCH
   -gencode=arch=compute_75,code=compute_75
 )
 
+# Allow explicit include statements to access third party headers directly.
+# Ex: raft/canonical/include/raft.h
+include_directories(ThirdParty/)
+
 # EGL
 include_directories(ThirdParty/egl)
 
@@ -450,6 +454,12 @@ add_subdirectory(ThirdParty/linenoise)
 # SQLite
 include_directories(ThirdParty/sqlite3)
 add_subdirectory(ThirdParty/sqlite3)
+
+# raft/canonical
+option(ENABLE_CANONICAL_RAFT "Enable Canonical Raft" OFF)
+if(ENABLE_CANONICAL_RAFT)
+  add_subdirectory(ThirdParty/raft/canonical)
+endif()
 
 # rdkafka
 find_package(RdKafka REQUIRED)
@@ -653,6 +663,10 @@ if(ENABLE_LICENSING_AWS)
 endif()
 
 list(APPEND MAPD_LIBRARIES ${TBB_LIBS})
+
+if(ENABLE_CANONICAL_RAFT)
+  list(APPEND MAPD_LIBRARIES raft_canonical)
+endif()
 
 option(ENABLE_TESTS "Build unit tests" ON)
 if (ENABLE_TESTS)

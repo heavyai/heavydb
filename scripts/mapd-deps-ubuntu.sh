@@ -201,6 +201,9 @@ popd
 # librdkafka
 install_rdkafka
 
+# libuv
+install_libuv
+
 # glslang (with spirv-tools)
 VERS=8.13.3743 # stable 4/27/20
 rm -rf glslang

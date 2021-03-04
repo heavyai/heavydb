@@ -358,3 +358,18 @@ function install_tbb() {
   cp -R include/tbb $PREFIX/include
   popd
 }
+
+LIBUV_VERSION=1.41.0
+
+function install_libuv() {
+  download https://dist.libuv.org/dist/v${LIBUV_VERSION}/libuv-v${LIBUV_VERSION}.tar.gz
+  extract libuv-v${LIBUV_VERSION}.tar.gz
+  pushd libuv-v${LIBUV_VERSION}
+  mkdir -p build
+  pushd build
+  cmake -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+  makej
+  make_install
+  popd
+  popd
+}

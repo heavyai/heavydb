@@ -26,6 +26,7 @@ brew install ninja
 brew install snappy
 brew install double-conversion
 brew install llvm
+brew install libuv
 
 function build_pin_dep {
   brew unpin $1 || true

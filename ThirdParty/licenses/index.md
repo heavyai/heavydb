@@ -144,3 +144,6 @@ uber-go/multierr | [MIT](<https://github.com/uber-go/multierr/blob/master/LICENS
 uber-go/zap | [MIT](<https://github.com/uber-go/zap/blob/master/LICENSE.txt>) | Distributed consensus |
 --- | --- | --- |
 geos | [LGPLv2.1](<https://github.com/libgeos/geos/blob/master/COPYING>) | Geo support, dynamic linked |
+--- | --- | --- |
+Canonical Raft | [LGPLv3](<https://github.com/canonical/raft/blob/master/LICENSE>) | Distributed consensus |
+libuv | [MIT](<https://github.com/libuv/libuv/blob/v1.x/LICENSE>) | Distributed consensus |

@@ -30,6 +30,7 @@ yay -S \
     intel-tbb \
     jdk-openjdk \
     librdkafka \
+    libuv \
     llvm \
     lz4 \
     maven \
