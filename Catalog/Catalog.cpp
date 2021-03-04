@@ -4272,7 +4272,7 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
     CHECK(sort_cd);
     with_options.push_back("SORT_COLUMN='" + sort_cd->columnName + "'");
   }
-  if (td->maxRollbackEpochs >= 0) {
+  if (td->maxRollbackEpochs != DEFAULT_MAX_ROLLBACK_EPOCHS) {
     with_options.push_back("MAX_ROLLBACK_EPOCHS=" +
                            std::to_string(td->maxRollbackEpochs));
   }
