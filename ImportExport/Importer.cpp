@@ -1879,7 +1879,8 @@ static ImportStatus import_thread_delimited(
                                                        importer->get_is_array(),
                                                        row,
                                                        tmp_buffers,
-                                                       try_single_thread);
+                                                       try_single_thread,
+                                                       true);
         });
         total_get_row_time_us += us;
       } else {
@@ -1890,7 +1891,8 @@ static ImportStatus import_thread_delimited(
                                                      importer->get_is_array(),
                                                      row,
                                                      tmp_buffers,
-                                                     try_single_thread);
+                                                     try_single_thread,
+                                                     true);
       }
       row_index_plus_one++;
       // Each POINT could consume two separate coords instead of a single WKT
@@ -3056,8 +3058,15 @@ void Detector::split_raw_data() {
   for (const char* p = buf; p < buf_end; p++) {
     std::vector<std::string> row;
     std::vector<std::unique_ptr<char[]>> tmp_buffers;
-    p = import_export::delimited_parser::get_row(
-        p, buf_end, buf_end, copy_params, nullptr, row, tmp_buffers, try_single_thread);
+    p = import_export::delimited_parser::get_row(p,
+                                                 buf_end,
+                                                 buf_end,
+                                                 copy_params,
+                                                 nullptr,
+                                                 row,
+                                                 tmp_buffers,
+                                                 try_single_thread,
+                                                 true);
     raw_rows.push_back(row);
     if (try_single_thread) {
       break;
@@ -3069,8 +3078,15 @@ void Detector::split_raw_data() {
     for (const char* p = buf; p < buf_end; p++) {
       std::vector<std::string> row;
       std::vector<std::unique_ptr<char[]>> tmp_buffers;
-      p = import_export::delimited_parser::get_row(
-          p, buf_end, buf_end, copy_params, nullptr, row, tmp_buffers, try_single_thread);
+      p = import_export::delimited_parser::get_row(p,
+                                                   buf_end,
+                                                   buf_end,
+                                                   copy_params,
+                                                   nullptr,
+                                                   row,
+                                                   tmp_buffers,
+                                                   try_single_thread,
+                                                   true);
       raw_rows.push_back(row);
     }
   }

@@ -332,7 +332,8 @@ ParseBufferResult parse_buffer(ParseBufferRequest& request,
                                                  array_flags.get(),
                                                  row,
                                                  tmp_buffers,
-                                                 try_single_thread);
+                                                 try_single_thread,
+                                                 !columns_are_pre_filtered);
 
     row_index_plus_one++;
     validate_expected_column_count(row, num_cols, point_cols, file_path);
