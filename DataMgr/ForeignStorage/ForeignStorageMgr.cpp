@@ -82,31 +82,26 @@ void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
   chunk_keys.erase(chunk_key);
 
   // Use hints to prefetch other chunks in fragment
-  std::map<ChunkKey, AbstractBuffer*> optional_buffers;
-  auto catalog =
-      Catalog_Namespace::SysCatalog::instance().getCatalog(chunk_key[CHUNK_KEY_DB_IDX]);
-  CHECK(catalog);
-  auto foreign_table = catalog->getForeignTableUnlocked(chunk_key[CHUNK_KEY_TABLE_IDX]);
-  if (foreign_table->foreign_server->data_wrapper_type ==
-      foreign_storage::DataWrapperType::CSV)  // optimization only useful for column
-                                              // oriented formats
-  {
-    std::set<ChunkKey> optional_chunk_keys;
-    getOptionalChunkKeySet(
-        optional_chunk_keys, chunk_key, get_keys_set_from_table(chunk_key));
+  ChunkToBufferMap optional_buffers;
+
+  // Use hints to prefetch other chunks in fragment into cache
+  auto& data_wrapper = *getDataWrapper(chunk_key);
+  if (data_wrapper.isInterColumnParallelismEnabled()) {
+    std::set<ChunkKey> optional_keys;
+    getOptionalChunkKeySet(optional_keys, chunk_key, get_keys_set_from_table(chunk_key));
     {
       std::shared_lock temp_chunk_buffer_map_lock(temp_chunk_buffer_map_mutex_);
       // Erase anything already in temp_chunk_buffer_map_
-      for (auto it = optional_chunk_keys.begin(); it != optional_chunk_keys.end();) {
+      for (auto it = optional_keys.begin(); it != optional_keys.end();) {
         if (temp_chunk_buffer_map_.find(*it) != temp_chunk_buffer_map_.end()) {
-          it = optional_chunk_keys.erase(it);
+          it = optional_keys.erase(it);
         } else {
           ++it;
         }
       }
     }
-    if (optional_chunk_keys.size()) {
-      optional_buffers = allocateTempBuffersForChunks(optional_chunk_keys);
+    if (optional_keys.size()) {
+      optional_buffers = allocateTempBuffersForChunks(optional_keys);
     }
   }
 
@@ -394,9 +389,9 @@ std::vector<ChunkKey> get_keys_vec_from_table(const ChunkKey& destination_chunk_
   return chunk_keys;
 }
 
-std::map<ChunkKey, AbstractBuffer*> ForeignStorageMgr::allocateTempBuffersForChunks(
+ChunkToBufferMap ForeignStorageMgr::allocateTempBuffersForChunks(
     const std::set<ChunkKey>& chunk_keys) {
-  std::map<ChunkKey, AbstractBuffer*> chunk_buffer_map;
+  ChunkToBufferMap chunk_buffer_map;
   std::lock_guard temp_chunk_buffer_map_lock(temp_chunk_buffer_map_mutex_);
   for (const auto& chunk_key : chunk_keys) {
     temp_chunk_buffer_map_[chunk_key] = std::make_unique<ForeignStorageBuffer>();

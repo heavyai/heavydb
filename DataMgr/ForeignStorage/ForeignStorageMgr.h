@@ -104,8 +104,7 @@ class ForeignStorageMgr : public AbstractBufferMgr {
                                              AbstractBuffer* destination_buffer,
                                              const size_t num_bytes);
   void createAndPopulateDataWrapperIfNotExists(const ChunkKey& chunk_key);
-  std::map<ChunkKey, AbstractBuffer*> allocateTempBuffersForChunks(
-      const std::set<ChunkKey>& chunk_keys);
+  ChunkToBufferMap allocateTempBuffersForChunks(const std::set<ChunkKey>& chunk_keys);
   void clearTempChunkBufferMapEntriesForTable(const ChunkKey& table_key);
   void clearTempChunkBufferMapEntriesForTableUnlocked(const ChunkKey& table_key);
 

@@ -3771,9 +3771,8 @@ class MockDataWrapper : public foreign_storage::MockForeignDataWrapper {
     }
   }
 
-  void populateChunkBuffers(
-      std::map<ChunkKey, AbstractBuffer*>& required_buffers,
-      std::map<ChunkKey, AbstractBuffer*>& optional_buffers) override {
+  void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
+                            const ChunkToBufferMap& optional_buffers) override {
     if (throw_on_chunk_fetch_) {
       throw std::runtime_error{"populateChunkBuffers mock exception"};
     } else {

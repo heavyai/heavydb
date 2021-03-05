@@ -38,9 +38,8 @@ class CsvDataWrapper : public AbstractFileStorageDataWrapper {
 
   void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override;
 
-  void populateChunkBuffers(
-      std::map<ChunkKey, AbstractBuffer*>& required_buffers,
-      std::map<ChunkKey, AbstractBuffer*>& optional_buffers) override;
+  void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
+                            const ChunkToBufferMap& optional_buffers) override;
 
   void validateTableOptions(const ForeignTable* foreign_table) const override;
 
@@ -51,6 +50,8 @@ class CsvDataWrapper : public AbstractFileStorageDataWrapper {
   void restoreDataWrapperInternals(const std::string& file_path,
                                    const ChunkMetadataVector& chunk_metadata) override;
   bool isRestored() const override;
+
+  bool isInterColumnParallelismEnabled() const override { return true; }
 
  private:
   CsvDataWrapper(const ForeignTable* foreign_table);
@@ -67,7 +68,7 @@ class CsvDataWrapper : public AbstractFileStorageDataWrapper {
 
   void populateChunkMapForColumns(const std::set<const ColumnDescriptor*>& columns,
                                   const int fragment_id,
-                                  const std::map<ChunkKey, AbstractBuffer*>& buffers,
+                                  const ChunkToBufferMap& buffers,
                                   std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map);
 
   void updateMetadata(std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,

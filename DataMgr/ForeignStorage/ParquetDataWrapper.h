@@ -39,9 +39,8 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
 
   void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override;
 
-  void populateChunkBuffers(
-      std::map<ChunkKey, AbstractBuffer*>& required_buffers,
-      std::map<ChunkKey, AbstractBuffer*>& optional_buffers) override;
+  void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
+                            const ChunkToBufferMap& optional_buffers) override;
 
   void serializeDataWrapperInternals(const std::string& file_path) const override;
 
@@ -51,18 +50,19 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
 
   bool isRestored() const override;
 
+  bool isInterColumnParallelismEnabled() const override { return true; }
+
  private:
   std::list<const ColumnDescriptor*> getColumnsToInitialize(
       const Interval<ColumnType>& column_interval);
   void initializeChunkBuffers(const int fragment_index,
                               const Interval<ColumnType>& column_interval,
-                              std::map<ChunkKey, AbstractBuffer*>& required_buffers,
+                              const ChunkToBufferMap& required_buffers,
                               const bool reserve_buffers_and_set_stats = false);
   void fetchChunkMetadata();
-  void loadBuffersUsingLazyParquetChunkLoader(
-      const int logical_column_id,
-      const int fragment_id,
-      std::map<ChunkKey, AbstractBuffer*>& required_buffers);
+  void loadBuffersUsingLazyParquetChunkLoader(const int logical_column_id,
+                                              const int fragment_id,
+                                              const ChunkToBufferMap& required_buffers);
 
   std::set<std::string> getProcessedFilePaths();
   std::set<std::string> getAllFilePaths();

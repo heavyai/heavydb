@@ -24,6 +24,7 @@ namespace foreign_storage {
 struct ForeignServer;
 struct ForeignTable;
 struct UserMapping;
+using ChunkToBufferMap = std::map<ChunkKey, AbstractBuffer*>;
 
 class ForeignDataWrapper {
  public:
@@ -48,9 +49,8 @@ class ForeignDataWrapper {
    * row wise data formats)
    */
 
-  virtual void populateChunkBuffers(
-      std::map<ChunkKey, AbstractBuffer*>& required_buffers,
-      std::map<ChunkKey, AbstractBuffer*>& optional_buffers) = 0;
+  virtual void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
+                                    const ChunkToBufferMap& optional_buffers) = 0;
 
   /**
    * Serialize internal state of wrapper into file at given path if implemented
@@ -97,5 +97,7 @@ class ForeignDataWrapper {
    * Gets the set of supported user mapping options for the data wrapper.
    */
   virtual const std::set<std::string_view>& getSupportedUserMappingOptions() const = 0;
+
+  virtual bool isInterColumnParallelismEnabled() const { return false; }
 };
 }  // namespace foreign_storage

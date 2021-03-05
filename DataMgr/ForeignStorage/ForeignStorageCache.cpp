@@ -69,7 +69,6 @@ void ForeignStorageCache::deleteBufferIfExists(const ChunkKey& chunk_key) {
 }
 
 void ForeignStorageCache::cacheChunk(const ChunkKey& chunk_key, AbstractBuffer* buffer) {
-  auto timer = DEBUG_TIMER(__func__);
   write_lock meta_lock(metadata_mutex_);
   write_lock chunk_lock(chunks_mutex_);
   // We should only be caching buffers that are in sync with storage.
@@ -103,7 +102,6 @@ void ForeignStorageCache::cacheTableChunks(const std::vector<ChunkKey>& chunk_ke
 }
 
 AbstractBuffer* ForeignStorageCache::getCachedChunkIfExists(const ChunkKey& chunk_key) {
-  auto timer = DEBUG_TIMER(__func__);
   {
     read_lock lock(chunks_mutex_);
     // We do this instead of calling getBuffer so that we don't create a fileMgr if the
@@ -116,7 +114,6 @@ AbstractBuffer* ForeignStorageCache::getCachedChunkIfExists(const ChunkKey& chun
 }
 
 bool ForeignStorageCache::isMetadataCached(const ChunkKey& chunk_key) const {
-  auto timer = DEBUG_TIMER(__func__);
   read_lock lock(metadata_mutex_);
   return (cached_metadata_.find(chunk_key) != cached_metadata_.end());
 }
@@ -243,7 +240,6 @@ void ForeignStorageCache::getCachedMetadataVecForKeyPrefix(
 
 bool ForeignStorageCache::hasCachedMetadataForKeyPrefix(
     const ChunkKey& chunk_prefix) const {
-  auto timer = DEBUG_TIMER(__func__);
   read_lock lock(metadata_mutex_);
   // We don't use iterateOvermatchingPrefix() here because we want to exit early if
   // possible.
@@ -311,10 +307,9 @@ std::vector<ChunkKey> ForeignStorageCache::getCachedChunksForKeyPrefix(
   return ret_vec;
 }
 
-std::map<ChunkKey, AbstractBuffer*> ForeignStorageCache::getChunkBuffersForCaching(
+ChunkToBufferMap ForeignStorageCache::getChunkBuffersForCaching(
     const std::vector<ChunkKey>& chunk_keys) const {
-  auto timer = DEBUG_TIMER(__func__);
-  std::map<ChunkKey, AbstractBuffer*> chunk_buffer_map;
+  ChunkToBufferMap chunk_buffer_map;
   read_lock lock(chunks_mutex_);
   for (const auto& chunk_key : chunk_keys) {
     CHECK(cached_chunks_.find(chunk_key) == cached_chunks_.end());
@@ -332,7 +327,6 @@ std::map<ChunkKey, AbstractBuffer*> ForeignStorageCache::getChunkBuffersForCachi
 // Private functions.  Locks should be acquired in the public interface before calling
 // these functions.
 void ForeignStorageCache::eraseChunk(const ChunkKey& chunk_key) {
-  auto timer = DEBUG_TIMER(__func__);
   if (cached_chunks_.find(chunk_key) == cached_chunks_.end()) {
     return;
   }
@@ -344,7 +338,6 @@ void ForeignStorageCache::eraseChunk(const ChunkKey& chunk_key) {
 
 std::set<ChunkKey>::iterator ForeignStorageCache::evictChunkByIterator(
     const std::set<ChunkKey>::iterator& chunk_it) {
-  auto timer = DEBUG_TIMER(__func__);
   File_Namespace::FileBuffer* file_buffer =
       static_cast<File_Namespace::FileBuffer*>(global_file_mgr_->getBuffer(*chunk_it));
   file_buffer->freeChunkPages();
@@ -352,7 +345,6 @@ std::set<ChunkKey>::iterator ForeignStorageCache::evictChunkByIterator(
 }
 
 std::string ForeignStorageCache::dumpCachedChunkEntries() const {
-  auto timer = DEBUG_TIMER(__func__);
   std::string ret_string = "Cached chunks:\n";
   for (const auto& chunk_key : cached_chunks_) {
     ret_string += "  " + show_chunk(chunk_key) + "\n";
@@ -361,7 +353,6 @@ std::string ForeignStorageCache::dumpCachedChunkEntries() const {
 }
 
 std::string ForeignStorageCache::dumpCachedMetadataEntries() const {
-  auto timer = DEBUG_TIMER(__func__);
   std::string ret_string = "Cached ChunkMetadata:\n";
   for (const auto& meta_key : cached_metadata_) {
     ret_string += "  " + show_chunk(meta_key) + "\n";

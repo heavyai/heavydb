@@ -78,7 +78,7 @@ class ForeignStorageCache {
   void clear();
   std::vector<ChunkKey> getCachedChunksForKeyPrefix(const ChunkKey&) const;
   bool recoverCacheForTable(ChunkMetadataVector&, const ChunkKey&);
-  std::map<ChunkKey, AbstractBuffer*> getChunkBuffersForCaching(
+  ChunkToBufferMap getChunkBuffersForCaching(
       const std::vector<ChunkKey>& chunk_keys) const;
 
   // Get a chunk buffer for writing to disk prior to metadata creation/caching

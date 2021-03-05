@@ -116,7 +116,7 @@ std::list<const ColumnDescriptor*> ParquetDataWrapper::getColumnsToInitialize(
 void ParquetDataWrapper::initializeChunkBuffers(
     const int fragment_index,
     const Interval<ColumnType>& column_interval,
-    std::map<ChunkKey, AbstractBuffer*>& required_buffers,
+    const ChunkToBufferMap& required_buffers,
     const bool reserve_buffers_and_set_stats) {
   for (const auto column : getColumnsToInitialize(column_interval)) {
     Chunk_NS::Chunk chunk{column};
@@ -124,20 +124,20 @@ void ParquetDataWrapper::initializeChunkBuffers(
     if (column->columnType.is_varlen_indeed()) {
       data_chunk_key = {
           db_id_, foreign_table_->tableId, column->columnId, fragment_index, 1};
-      auto data_buffer = required_buffers[data_chunk_key];
-      CHECK(data_buffer);
+      CHECK(required_buffers.find(data_chunk_key) != required_buffers.end());
+      auto data_buffer = required_buffers.at(data_chunk_key);
       chunk.setBuffer(data_buffer);
 
       ChunkKey index_chunk_key{
           db_id_, foreign_table_->tableId, column->columnId, fragment_index, 2};
-      auto index_buffer = required_buffers[index_chunk_key];
-      CHECK(index_buffer);
+      CHECK(required_buffers.find(index_chunk_key) != required_buffers.end());
+      auto index_buffer = required_buffers.at(index_chunk_key);
       chunk.setIndexBuffer(index_buffer);
     } else {
       data_chunk_key = {
           db_id_, foreign_table_->tableId, column->columnId, fragment_index};
-      auto data_buffer = required_buffers[data_chunk_key];
-      CHECK(data_buffer);
+      CHECK(required_buffers.find(data_chunk_key) != required_buffers.end());
+      auto data_buffer = required_buffers.at(data_chunk_key);
       chunk.setBuffer(data_buffer);
     }
     chunk.initEncoder();
@@ -363,7 +363,7 @@ void ParquetDataWrapper::populateChunkMetadata(
 void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
     const int logical_column_id,
     const int fragment_id,
-    std::map<ChunkKey, AbstractBuffer*>& required_buffers) {
+    const ChunkToBufferMap& required_buffers) {
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
   CHECK(catalog);
   const ColumnDescriptor* logical_column =
@@ -375,7 +375,7 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
       logical_column_id + logical_column->columnType.get_physical_cols()};
   initializeChunkBuffers(fragment_id, column_interval, required_buffers, true);
 
-  const auto& row_group_intervals = fragment_to_row_group_interval_map_[fragment_id];
+  const auto& row_group_intervals = fragment_to_row_group_interval_map_.at(fragment_id);
 
   const bool is_dictionary_encoded_string_column =
       logical_column->columnType.is_dict_encoded_string() ||
@@ -398,18 +398,15 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
     if (column_descriptor->columnType.is_varlen_indeed()) {
       ChunkKey data_chunk_key = {
           db_id_, foreign_table_->tableId, column_id, fragment_id, 1};
-      auto buffer = required_buffers[data_chunk_key];
-      CHECK(buffer);
+      auto buffer = required_buffers.at(data_chunk_key);
       chunk.setBuffer(buffer);
       ChunkKey index_chunk_key = {
           db_id_, foreign_table_->tableId, column_id, fragment_id, 2};
-      auto index_buffer = required_buffers[index_chunk_key];
-      CHECK(index_buffer);
+      auto index_buffer = required_buffers.at(index_chunk_key);
       chunk.setIndexBuffer(index_buffer);
     } else {
       ChunkKey chunk_key = {db_id_, foreign_table_->tableId, column_id, fragment_id};
-      auto buffer = required_buffers[chunk_key];
-      CHECK(buffer);
+      auto buffer = required_buffers.at(chunk_key);
       chunk.setBuffer(buffer);
     }
     chunks.emplace_back(chunk);
@@ -429,7 +426,7 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
         data_chunk_key.emplace_back(1);
       }
       CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
-      auto cached_metadata = chunk_metadata_map_[data_chunk_key];
+      auto cached_metadata = chunk_metadata_map_.at(data_chunk_key);
       auto updated_metadata = std::make_shared<ChunkMetadata>();
       *updated_metadata = *cached_metadata;
       // for certain types, update the metadata statistics
@@ -441,29 +438,38 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
         updated_metadata->chunkStats.min = chunk_metadata_ptr->chunkStats.min;
       }
       CHECK(required_buffers.find(data_chunk_key) != required_buffers.end());
-      updated_metadata->numBytes = required_buffers[data_chunk_key]->size();
+      updated_metadata->numBytes = required_buffers.at(data_chunk_key)->size();
       fragmenter->updateColumnChunkMetadata(column, fragment_id, updated_metadata);
     }
   }
 }
 
-void ParquetDataWrapper::populateChunkBuffers(
-    std::map<ChunkKey, AbstractBuffer*>& required_buffers,
-    std::map<ChunkKey, AbstractBuffer*>& optional_buffers) {
+void ParquetDataWrapper::populateChunkBuffers(const ChunkToBufferMap& required_buffers,
+                                              const ChunkToBufferMap& optional_buffers) {
   CHECK(!required_buffers.empty());
   auto fragment_id = required_buffers.begin()->first[CHUNK_KEY_FRAGMENT_IDX];
-
+  ChunkToBufferMap buffers;
+  buffers.insert(required_buffers.begin(), required_buffers.end());
+  buffers.insert(optional_buffers.begin(), optional_buffers.end());
   std::set<int> logical_column_ids;
-  for (const auto& [chunk_key, buffer] : required_buffers) {
-    CHECK_EQ(fragment_id, chunk_key[CHUNK_KEY_FRAGMENT_IDX]);
+  for (const auto& [chunk_key, buffer] : buffers) {
     CHECK_EQ(buffer->size(), static_cast<size_t>(0));
-    const auto column_id =
-        schema_->getLogicalColumn(chunk_key[CHUNK_KEY_COLUMN_IDX])->columnId;
-    logical_column_ids.emplace(column_id);
+    auto col_id = schema_->getLogicalColumn(chunk_key[CHUNK_KEY_COLUMN_IDX])->columnId;
+    logical_column_ids.emplace(col_id);
   }
 
-  for (const auto column_id : logical_column_ids) {
-    loadBuffersUsingLazyParquetChunkLoader(column_id, fragment_id, required_buffers);
+  auto cols_per_thread = partition_for_threads(logical_column_ids, g_max_import_threads);
+  std::vector<std::future<void>> futures;
+  for (const auto& column_set : cols_per_thread) {
+    futures.emplace_back(std::async(std::launch::async, [&, column_set, this] {
+      for (const auto col_id : column_set) {
+        loadBuffersUsingLazyParquetChunkLoader(col_id, fragment_id, buffers);
+      }
+    }));
+  }
+
+  for (auto& future : futures) {
+    future.get();
   }
 }
 

@@ -43,39 +43,31 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
 
   // TODO: Populate optional buffers as part of CSV performance improvement
   std::vector<ChunkKey> chunk_keys = get_keys_vec_from_table(chunk_key);
-  std::vector<ChunkKey> optional_chunk_keys;
-  std::map<ChunkKey, AbstractBuffer*> optional_buffers;
+  std::vector<ChunkKey> optional_keys;
+  ChunkToBufferMap optional_buffers;
 
   // Use hints to prefetch other chunks in fragment into cache
-  auto catalog =
-      Catalog_Namespace::SysCatalog::instance().getCatalog(chunk_key[CHUNK_KEY_DB_IDX]);
-  CHECK(catalog);
-  auto foreign_table = catalog->getForeignTableUnlocked(chunk_key[CHUNK_KEY_TABLE_IDX]);
-  if (foreign_table->foreign_server->data_wrapper_type ==
-      foreign_storage::DataWrapperType::CSV)  // optimization only useful for column based
-                                              // formats
-  {
-    std::set<ChunkKey> optional_chunk_key_set;
-    getOptionalChunkKeySet(
-        optional_chunk_key_set, chunk_key, get_keys_set_from_table(chunk_key));
-    for (const auto& key : optional_chunk_key_set) {
+  auto& data_wrapper = *getDataWrapper(chunk_key);
+  if (data_wrapper.isInterColumnParallelismEnabled()) {
+    std::set<ChunkKey> optional_set;
+    getOptionalChunkKeySet(optional_set, chunk_key, get_keys_set_from_table(chunk_key));
+    for (const auto& key : optional_set) {
       if (disk_cache_->getCachedChunkIfExists(key) == nullptr) {
-        optional_chunk_keys.emplace_back(key);
+        optional_keys.emplace_back(key);
       }
     }
 
-    if (optional_chunk_keys.size()) {
-      optional_buffers = disk_cache_->getChunkBuffersForCaching(optional_chunk_keys);
+    if (optional_keys.size()) {
+      optional_buffers = disk_cache_->getChunkBuffersForCaching(optional_keys);
     }
   }
 
-  std::map<ChunkKey, AbstractBuffer*> required_buffers =
-      disk_cache_->getChunkBuffersForCaching(chunk_keys);
+  ChunkToBufferMap required_buffers = disk_cache_->getChunkBuffersForCaching(chunk_keys);
   CHECK(required_buffers.find(chunk_key) != required_buffers.end());
-  getDataWrapper(chunk_key)->populateChunkBuffers(required_buffers, optional_buffers);
+  data_wrapper.populateChunkBuffers(required_buffers, optional_buffers);
   disk_cache_->cacheTableChunks(chunk_keys);
-  if (optional_chunk_keys.size()) {
-    disk_cache_->cacheTableChunks(optional_chunk_keys);
+  if (optional_keys.size()) {
+    disk_cache_->cacheTableChunks(optional_keys);
   }
 
   AbstractBuffer* buffer = required_buffers.at(chunk_key);
@@ -189,7 +181,7 @@ void CachingForeignStorageMgr::refreshChunksInCacheByFragment(
   }
   // Iterate through previously cached chunks and re-cache them. Caching is
   // done one fragment at a time, for all applicable chunks in the fragment.
-  std::map<ChunkKey, AbstractBuffer*> optional_buffers;
+  ChunkToBufferMap optional_buffers;
   std::vector<ChunkKey> chunk_keys_to_be_cached;
   auto fragment_id = old_chunk_keys[0][CHUNK_KEY_FRAGMENT_IDX];
   const ChunkKey table_key{get_table_key(old_chunk_keys[0])};

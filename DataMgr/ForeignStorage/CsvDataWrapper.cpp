@@ -59,7 +59,7 @@ std::set<std::string_view> CsvDataWrapper::getAllCsvTableOptions() const {
 
 namespace {
 std::set<const ColumnDescriptor*> get_columns(
-    const std::map<ChunkKey, AbstractBuffer*>& buffers,
+    const ChunkToBufferMap& buffers,
     std::shared_ptr<Catalog_Namespace::Catalog> catalog,
     const int32_t table_id,
     const int fragment_id) {
@@ -84,7 +84,7 @@ bool skip_metadata_scan(const ColumnDescriptor* column) {
 void CsvDataWrapper::populateChunkMapForColumns(
     const std::set<const ColumnDescriptor*>& columns,
     const int fragment_id,
-    const std::map<ChunkKey, AbstractBuffer*>& buffers,
+    const ChunkToBufferMap& buffers,
     std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map) {
   for (const auto column : columns) {
     ChunkKey data_chunk_key = {
@@ -94,9 +94,8 @@ void CsvDataWrapper::populateChunkMapForColumns(
   }
 }
 
-void CsvDataWrapper::populateChunkBuffers(
-    std::map<ChunkKey, AbstractBuffer*>& required_buffers,
-    std::map<ChunkKey, AbstractBuffer*>& optional_buffers) {
+void CsvDataWrapper::populateChunkBuffers(const ChunkToBufferMap& required_buffers,
+                                          const ChunkToBufferMap& optional_buffers) {
   auto timer = DEBUG_TIMER(__func__);
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
   CHECK(catalog);
