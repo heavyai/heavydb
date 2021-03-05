@@ -132,7 +132,7 @@ class DateDaysOverflowValidator {
     }
     if (days < min_) {
       throw std::runtime_error("Date encoding underflow: Epoch days " +
-                               std::to_string(days) + " less than minumum capacity " +
+                               std::to_string(days) + " less than minimum capacity " +
                                std::to_string(min_));
     }
   }
