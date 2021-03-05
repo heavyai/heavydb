@@ -1878,10 +1878,12 @@ class ExportTest : public ::testing::Test {
 
   void removeAllFilesFromExport() {
     boost::filesystem::path path_to_remove(BASE_PATH "/mapd_export/");
-    for (boost::filesystem::directory_iterator end_dir_it, it(path_to_remove);
-         it != end_dir_it;
-         ++it) {
-      boost::filesystem::remove_all(it->path());
+    if (boost::filesystem::exists(path_to_remove)) {
+      for (boost::filesystem::directory_iterator end_dir_it, it(path_to_remove);
+           it != end_dir_it;
+           ++it) {
+        boost::filesystem::remove_all(it->path());
+      }
     }
   }
 

@@ -819,7 +819,8 @@ void CommandLineOptions::validate() {
 
   LOG(INFO) << "Allowed import paths is set to " << allowed_import_paths;
   LOG(INFO) << "Allowed export paths is set to " << allowed_export_paths;
-  ddl_utils::FilePathWhitelist::initialize(allowed_import_paths, allowed_export_paths);
+  ddl_utils::FilePathWhitelist::initialize(
+      base_path, allowed_import_paths, allowed_export_paths);
 
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_catalogs");
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_data");

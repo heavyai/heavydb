@@ -89,6 +89,9 @@ QueryRunner* QueryRunner::init(const char* db_path,
                                const int reserved_gpu_mem,
                                const bool create_user,
                                const bool create_db) {
+  // Whitelist root path for tests by default
+  ddl_utils::FilePathWhitelist::clear();
+  ddl_utils::FilePathWhitelist::initialize(db_path, "[\"/\"]", "[\"/\"]");
   LOG_IF(FATAL, !leaf_servers.empty()) << "Distributed test runner not supported.";
   CHECK(leaf_servers.empty());
   qr_instance_.reset(new QueryRunner(db_path,

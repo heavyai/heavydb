@@ -640,7 +640,6 @@ void validate_allowed_file_path(const std::string& file_path,
 void set_whitelisted_paths(const std::string& config_key,
                            const std::string& config_value,
                            std::vector<std::string>& whitelisted_paths) {
-  CHECK(whitelisted_paths.empty());
   rapidjson::Document whitelisted_root_paths;
   whitelisted_root_paths.Parse(config_value);
   if (!whitelisted_root_paths.IsArray()) {
@@ -661,8 +660,19 @@ void set_whitelisted_paths(const std::string& config_key,
             << shared::printContainer(whitelisted_paths);
 }
 
-void FilePathWhitelist::initialize(const std::string& allowed_import_paths,
+void FilePathWhitelist::initialize(const std::string& data_dir,
+                                   const std::string& allowed_import_paths,
                                    const std::string& allowed_export_paths) {
+  CHECK(!data_dir.empty());
+  CHECK(boost::filesystem::is_directory(data_dir));
+
+  auto data_dir_path = boost::filesystem::canonical(data_dir);
+  CHECK(whitelisted_import_paths_.empty());
+  whitelisted_import_paths_.emplace_back((data_dir_path / "mapd_import").string());
+
+  CHECK(whitelisted_export_paths_.empty());
+  whitelisted_export_paths_.emplace_back((data_dir_path / "mapd_export").string());
+
   if (!allowed_import_paths.empty()) {
     set_whitelisted_paths(
         "allowed-import-paths", allowed_import_paths, whitelisted_import_paths_);
@@ -676,14 +686,6 @@ void FilePathWhitelist::initialize(const std::string& allowed_import_paths,
 void FilePathWhitelist::validateWhitelistedFilePath(
     const std::vector<std::string>& expanded_file_paths,
     const DataTransferType data_transfer_type) {
-  // Skip validation if no whitelist configuration is provided.
-  if ((data_transfer_type == DataTransferType::IMPORT &&
-       whitelisted_import_paths_.empty()) ||
-      (data_transfer_type == DataTransferType::EXPORT &&
-       whitelisted_export_paths_.empty())) {
-    return;
-  }
-
   for (const auto& path : expanded_file_paths) {
     if (data_transfer_type == DataTransferType::IMPORT) {
       validate_expanded_file_path(path, whitelisted_import_paths_);

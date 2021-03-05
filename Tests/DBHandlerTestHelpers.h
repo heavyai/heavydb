@@ -16,6 +16,10 @@
 
 #pragma once
 
+#ifndef BASE_PATH
+#define BASE_PATH "./tmp"
+#endif
+
 #include <gtest/gtest.h>
 #include <boost/format.hpp>
 #include <boost/optional.hpp>
@@ -181,6 +185,10 @@ class DBHandlerTestFixture : public testing::Test {
   static void createDBHandler(DiskCacheLevel cache_level = DiskCacheLevel::fsi) {
     if (!db_handler_) {
       setupSignalHandler();
+
+      // Whitelist root path for tests by default
+      ddl_utils::FilePathWhitelist::clear();
+      ddl_utils::FilePathWhitelist::initialize(BASE_PATH, "[\"/\"]", "[\"/\"]");
 
       // Based on default values observed from starting up an OmniSci DB server.
       const bool cpu_only{false};
