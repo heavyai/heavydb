@@ -422,8 +422,8 @@ void add_file_region(std::map<int, FileRegions>& fragment_id_to_file_regions_map
                      const csv_file_buffer_parser::ParseBufferResult& result,
                      const std::string& file_path) {
   fragment_id_to_file_regions_map[fragment_id].emplace_back(
-      FileRegion(file_path,
-                 result.row_offsets.front(),
+      // file naming is handled by CsvReader
+      FileRegion(result.row_offsets.front(),
                  first_row_index,
                  result.row_count,
                  result.row_offsets.back() - result.row_offsets.front()));
