@@ -155,4 +155,10 @@ void ForeignTable::validateAlterOptions(const OptionsMap& options_map) {
   }
 }
 
+void ForeignTable::validateSchema(const std::list<ColumnDescriptor>& columns) const {
+  foreign_storage::ForeignDataWrapperFactory::createForValidation(
+      foreign_server->data_wrapper_type, this)
+      .validateSchema(columns);
+}
+
 }  // namespace foreign_storage

@@ -115,6 +115,11 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
    */
   static void validateAlterOptions(const OptionsMap& options_map);
 
+  /**
+    @brief Verifies the schema is supported by this foreign table
+   */
+  void validateSchema(const std::list<ColumnDescriptor>& columns) const;
+
  private:
   void validateDataWrapperOptions() const;
   void validateRefreshOptionValues() const;

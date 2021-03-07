@@ -878,7 +878,7 @@ ExecutionResult CreateForeignTableCommand::execute() {
   foreign_storage::ForeignTable foreign_table{};
   std::list<ColumnDescriptor> columns{};
   setColumnDetails(columns);
-  setTableDetails(table_name, foreign_table, columns.size());
+  setTableDetails(table_name, foreign_table, columns);
   catalog.createTable(foreign_table, columns, {}, true);
 
   // TODO (max): It's transactionally unsafe, should be fixed: we may create object w/o
@@ -892,10 +892,11 @@ ExecutionResult CreateForeignTableCommand::execute() {
   return ExecutionResult();
 }
 
-void CreateForeignTableCommand::setTableDetails(const std::string& table_name,
-                                                TableDescriptor& td,
-                                                const size_t column_count) {
-  ddl_utils::set_default_table_attributes(table_name, td, column_count);
+void CreateForeignTableCommand::setTableDetails(
+    const std::string& table_name,
+    TableDescriptor& td,
+    const std::list<ColumnDescriptor>& columns) {
+  ddl_utils::set_default_table_attributes(table_name, td, columns.size());
   td.userId = session_ptr_->get_currentUser().userId;
   td.storageType = StorageType::FOREIGN_TABLE;
   td.hasDeletedCol = false;
@@ -932,6 +933,7 @@ void CreateForeignTableCommand::setTableDetails(const std::string& table_name,
     // paired option ("base_path") exists in the server.
     foreign_table.initializeOptions();
   }
+  foreign_table.validateSchema(columns);
 
   if (const auto it = foreign_table.options.find("FRAGMENT_SIZE");
       it != foreign_table.options.end()) {

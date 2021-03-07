@@ -99,7 +99,7 @@ class CreateForeignTableCommand : public DdlCommand {
  private:
   void setTableDetails(const std::string& table_name,
                        TableDescriptor& td,
-                       const size_t column_count);
+                       const std::list<ColumnDescriptor>& columns);
   void setColumnDetails(std::list<ColumnDescriptor>& columns);
 };
 

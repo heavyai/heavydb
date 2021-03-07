@@ -1169,6 +1169,7 @@ INSTANTIATE_TEST_SUITE_P(
     });
 
 class CreateForeignTableTest : public CreateAndDropTableDdlTest {
+ protected:
   void SetUp() override {
     CreateAndDropTableDdlTest::SetUp();
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");

@@ -20,6 +20,7 @@
 #include "ForeignStorageBuffer.h"
 #include "Shared/types.h"
 
+struct ColumnDescriptor;
 namespace foreign_storage {
 struct ForeignServer;
 struct ForeignTable;
@@ -99,5 +100,11 @@ class ForeignDataWrapper {
   virtual const std::set<std::string_view>& getSupportedUserMappingOptions() const = 0;
 
   virtual bool isInterColumnParallelismEnabled() const { return false; }
+
+  /**
+    Verifies the schema is supported by this foreign table
+    * @param columns - column descriptors for this table
+   */
+  virtual void validateSchema(const std::list<ColumnDescriptor>& columns) const {};
 };
 }  // namespace foreign_storage
