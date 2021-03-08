@@ -71,19 +71,30 @@ void AbstractFileStorageDataWrapper::validateFilePath(const ForeignTable* foreig
   }
 }
 
+namespace {
+std::string append_file_path(const std::optional<std::string>& base,
+                             const std::optional<std::string>& subdirectory) {
+  const std::string separator{boost::filesystem::path::preferred_separator};
+  return std::regex_replace(
+      (base ? *base + separator : "") + (subdirectory ? *subdirectory : ""),
+      std::regex{separator + "{2,}"},
+      separator);
+}
+}  // namespace
+
 /**
   @brief Returns the path to the source file/dir of the table.  Depending on options
   this may result from a concatenation of server and table path options.
 */
 std::string AbstractFileStorageDataWrapper::getFullFilePath(
     const ForeignTable* foreign_table) {
-  auto options_container = dynamic_cast<const OptionsContainer*>(foreign_table);
-  auto file_path = options_container->getOption(FILE_PATH_KEY);
+  auto file_path = foreign_table->getOption(FILE_PATH_KEY);
   std::optional<std::string> base_path{};
   auto foreign_server = foreign_table->foreign_server;
   auto storage_type = foreign_server->getOption(STORAGE_TYPE_KEY);
   CHECK(storage_type);
 
+  const std::string separator{boost::filesystem::path::preferred_separator};
   if (*storage_type == LOCAL_FILE_STORAGE_TYPE) {
     base_path = foreign_server->getOption(BASE_PATH_KEY);
   }
@@ -91,11 +102,7 @@ std::string AbstractFileStorageDataWrapper::getFullFilePath(
   // If both base_path and file_path are present, then concatenate.  Otherwise we are just
   // taking the one as the path.  One of the two must exist, or we have failed validation.
   CHECK(file_path || base_path);
-  const std::string separator{boost::filesystem::path::preferred_separator};
-  return std::regex_replace(
-      (base_path ? *base_path + separator : "") + (file_path ? *file_path : ""),
-      std::regex{separator + "{2,}"},
-      separator);
+  return append_file_path(base_path, file_path);
 }
 
 namespace {
@@ -114,8 +121,7 @@ void throw_file_path_error(const std::string_view& missing_path,
 // One of the two must be present.
 void AbstractFileStorageDataWrapper::validateFilePathOptionKey(
     const ForeignTable* foreign_table) {
-  auto options_container = dynamic_cast<const OptionsContainer*>(foreign_table);
-  auto file_path = options_container->getOption(FILE_PATH_KEY);
+  auto file_path = foreign_table->getOption(FILE_PATH_KEY);
   auto foreign_server = foreign_table->foreign_server;
   auto storage_type = foreign_server->getOption(STORAGE_TYPE_KEY);
   CHECK(storage_type) << "No storage type found in parent server. Server \""
