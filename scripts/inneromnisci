@@ -64,9 +64,11 @@ while (( $# )); do
             fi
             ;;
         --non-interactive)
-            NON_INTERACTIVE=true ;;
+            INSERT_SAMPLE_DATA=false ;;
         --disable-open-frontend)
             DISABLE_OPEN_FRONTEND=true ;;
+        --sample-data)
+            INSERT_SAMPLE_DATA=true ;;
         --verbose)
             VERBOSE="--verbose" ;;
         *)
@@ -83,16 +85,6 @@ echo "Calcite TCP:  localhost:${MAPD_CALCITE_PORT}"
 if [ ! -d $MAPD_DATA/mapd_data ]; then
     mkdir -p $MAPD_DATA
     ./bin/initdb -f --data $MAPD_DATA
-
-    if [ ! "$NON_INTERACTIVE" = true ]; then
-        echo "Download and insert sample data? Y/n"
-        read choice
-        if [ -z "$choice" ]; then choice="Y"; fi
-        case $choice in
-            [yY]* )
-                INSERT_SAMPLE_DATA=true;;
-        esac
-    fi
 fi
 
 VMAJOR=${BASH_VERSINFO[0]}
@@ -107,7 +99,7 @@ fi
 PID1=$!
 echo "- omnisci_server $PID1 started"
 
-if [ "$INSERT_SAMPLE_DATA" = true ] && [ ! "$NON_INTERACTIVE" = true ]; then
+if [ "$INSERT_SAMPLE_DATA" = true ]; then
     echo "- waiting 5s before inserting sample data"
     sleep 5
     . "$DIR/insert_sample_data"
