@@ -113,12 +113,17 @@ inline bool table_is_temporary(const TableDescriptor* const td) {
 }
 
 struct TableDescriptorUpdateParams {
-  int32_t maxRollbackEpochs;
+  int32_t max_rollback_epochs;
+  int64_t max_rows;
 
   TableDescriptorUpdateParams(const TableDescriptor* td)
-      : maxRollbackEpochs(td->maxRollbackEpochs) {}
+      : max_rollback_epochs(td->maxRollbackEpochs), max_rows(td->maxRows) {}
+
   bool operator==(const TableDescriptor* td) {
-    if (maxRollbackEpochs != td->maxRollbackEpochs) {
+    if (max_rollback_epochs != td->maxRollbackEpochs) {
+      return false;
+    }
+    if (max_rows != td->maxRows) {
       return false;
     }
     // Add more tests for additional params as needed

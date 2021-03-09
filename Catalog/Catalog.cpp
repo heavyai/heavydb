@@ -2848,12 +2848,20 @@ void Catalog::alterPhysicalTableMetadata(
 
   TableDescriptor* mutable_td = getMutableMetadataForTableUnlocked(td->tableId);
   CHECK(mutable_td);
-  if (td->maxRollbackEpochs != table_update_params.maxRollbackEpochs) {
+  if (td->maxRollbackEpochs != table_update_params.max_rollback_epochs) {
     sqliteConnector_.query_with_text_params(
         "UPDATE mapd_tables SET max_rollback_epochs = ? WHERE tableid = ?",
-        std::vector<std::string>{std::to_string(table_update_params.maxRollbackEpochs),
+        std::vector<std::string>{std::to_string(table_update_params.max_rollback_epochs),
                                  std::to_string(td->tableId)});
-    mutable_td->maxRollbackEpochs = table_update_params.maxRollbackEpochs;
+    mutable_td->maxRollbackEpochs = table_update_params.max_rollback_epochs;
+  }
+
+  if (td->maxRows != table_update_params.max_rows) {
+    sqliteConnector_.query_with_text_params(
+        "UPDATE mapd_tables SET max_rows = ? WHERE tableid = ?",
+        std::vector<std::string>{std::to_string(table_update_params.max_rows),
+                                 std::to_string(td->tableId)});
+    mutable_td->maxRows = table_update_params.max_rows;
   }
 }
 
@@ -2896,7 +2904,7 @@ void Catalog::setMaxRollbackEpochs(const int32_t table_id,
   CHECK(td);             // Existence should have already been checked in
                          // ParserNode::AlterTableParmStmt
   TableDescriptorUpdateParams table_update_params(td);
-  table_update_params.maxRollbackEpochs = max_rollback_epochs;
+  table_update_params.max_rollback_epochs = max_rollback_epochs;
   if (table_update_params == td) {  // Operator is overloaded to test for equality
     LOG(INFO) << "Setting max_rollback_epochs for table " << table_id
               << " to existing value, skipping operation";
@@ -2910,6 +2918,24 @@ void Catalog::setMaxRollbackEpochs(const int32_t table_id,
   // upgradeable Should be safe as we have schema lock on this table
   /// read_lock.unlock();
   alterTableMetadata(td, table_update_params);
+}
+
+void Catalog::setMaxRows(const int32_t table_id, const int64_t max_rows) {
+  if (max_rows < 0) {
+    throw std::runtime_error("Max rows cannot be a negative number.");
+  }
+  const auto td = getMetadataForTable(table_id);
+  CHECK(td);
+  TableDescriptorUpdateParams table_update_params(td);
+  table_update_params.max_rows = max_rows;
+  if (table_update_params == td) {
+    LOG(INFO) << "Max rows value of " << max_rows
+              << " is the same as the existing value. Skipping update.";
+    return;
+  }
+  alterTableMetadata(td, table_update_params);
+  CHECK(td->fragmenter);
+  td->fragmenter->dropFragmentsToSize(max_rows);
 }
 
 void Catalog::setTableFileMgrParams(

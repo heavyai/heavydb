@@ -64,7 +64,7 @@ add_executable(StorageTest StorageTest.cpp PopulateTableRandom.cpp ScanTable.cpp
 add_executable(StoragePerfTest StoragePerfTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 add_executable(ImportExportTest ImportExportTest.cpp)
 add_executable(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest.cpp)
-add_executable(AlterColumnTest AlterColumnTest.cpp)
+add_executable(AlterTableDdlTest AlterTableDdlTest.cpp)
 add_executable(UpdelStorageTest UpdelStorageTest.cpp)
 add_executable(ComputeMetadataTest ComputeMetadataTest.cpp)
 add_executable(BumpAllocatorTest BumpAllocatorTest.cpp)
@@ -136,7 +136,7 @@ target_link_libraries(GeospatialTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} bcrypt)
 target_link_libraries(ImportExportTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrowCsvForeignStorageTest gtest ${EXECUTE_TEST_LIBS})
-target_link_libraries(AlterColumnTest gtest ${EXECUTE_TEST_LIBS})
+target_link_libraries(AlterTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(UpdelStorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ComputeMetadataTest ${THRIFT_HANDLER_TEST_LIBRARIES})
@@ -214,7 +214,7 @@ add_test(DumpRestoreTest DumpRestoreTest ${TEST_ARGS})
 add_test(UpdelStorageTest UpdelStorageTest ${TEST_ARGS})
 add_test(ImportExportTest ImportExportTest ${TEST_ARGS})
 add_test(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest ${TEST_ARGS})
-add_test(AlterColumnTest AlterColumnTest ${TEST_ARGS})
+add_test(AlterTableDdlTest AlterTableDdlTest ${TEST_ARGS})
 add_test(UtilTest UtilTest ${TEST_ARGS})
 add_test(ExecuteTest ExecuteTest ${TEST_ARGS})
 add_test(NAME ExecuteTestTemporaryTables COMMAND ExecuteTest ${TEST_ARGS} "--use-temporary-tables")
@@ -315,7 +315,7 @@ set(TEST_PROGRAMS
   StorageTest
   ImportExportTest
   ArrowCsvForeignStorageTest
-  AlterColumnTest
+  AlterTableDdlTest
   UpdelStorageTest
   ComputeMetadataTest
   BumpAllocatorTest

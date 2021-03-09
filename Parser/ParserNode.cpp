@@ -3998,10 +3998,11 @@ void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  enum TableParamType { MaxRollbackEpochs, Epoch };
+  enum TableParamType { MaxRollbackEpochs, Epoch, MaxRows };
   static const std::unordered_map<std::string, TableParamType> param_map = {
       {"max_rollback_epochs", TableParamType::MaxRollbackEpochs},
-      {"epoch", TableParamType::Epoch}};
+      {"epoch", TableParamType::Epoch},
+      {"max_rows", TableParamType::MaxRows}};
   // Below is to ensure that executor is not currently executing on table when we might be
   // changing it's storage. Question: will/should catalog write lock take care of this?
   const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
@@ -4024,14 +4025,13 @@ void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session)
   }
   check_alter_table_privilege(session, td);
 
-  // Only allow max_rollback_epochs for now
   std::string param_name(*param->get_name());
   boost::algorithm::to_lower(param_name);
   const IntLiteral* val_int_literal = dynamic_cast<const IntLiteral*>(param->get_value());
   if (val_int_literal == nullptr) {
     throw std::runtime_error("Table parameters should be integers.");
   }
-  const int32_t param_val = val_int_literal->get_intval();
+  const int64_t param_val = val_int_literal->get_intval();
 
   const auto param_it = param_map.find(param_name);
   if (param_it == param_map.end()) {
@@ -4044,6 +4044,15 @@ void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session)
     }
     case Epoch: {
       catalog.setTableEpoch(catalog.getDatabaseId(), td->tableId, param_val);
+      break;
+    }
+    case MaxRows: {
+      catalog.setMaxRows(td->tableId, param_val);
+      break;
+    }
+    default: {
+      UNREACHABLE() << "Unexpected TableParamType value: " << param_it->second
+                    << ", key: " << param_it->first;
     }
   }
 }

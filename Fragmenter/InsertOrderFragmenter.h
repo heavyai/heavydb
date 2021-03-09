@@ -240,6 +240,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
 
  private:
   bool isAddingNewColumns(const InsertData& insert_data) const;
+  void dropFragmentsToSizeNoInsertLock(const size_t max_rows);
 };
 
 }  // namespace Fragmenter_Namespace

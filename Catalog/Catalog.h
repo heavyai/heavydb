@@ -263,6 +263,7 @@ class Catalog final {
   int32_t getTableEpoch(const int32_t db_id, const int32_t table_id) const;
   void setTableEpoch(const int db_id, const int table_id, const int new_epoch);
   void setMaxRollbackEpochs(const int32_t table_id, const int32_t max_rollback_epochs);
+  void setMaxRows(const int32_t table_id, const int64_t max_rows);
 
   std::vector<TableEpochInfo> getTableEpochs(const int32_t db_id,
                                              const int32_t table_id) const;

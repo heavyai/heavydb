@@ -219,7 +219,12 @@ void InsertOrderFragmenter::getChunkMetadata() {
   }
 }
 
-void InsertOrderFragmenter::dropFragmentsToSize(const size_t maxRows) {
+void InsertOrderFragmenter::dropFragmentsToSize(const size_t max_rows) {
+  mapd_unique_lock<mapd_shared_mutex> insert_lock(insertMutex_);
+  dropFragmentsToSizeNoInsertLock(max_rows);
+}
+
+void InsertOrderFragmenter::dropFragmentsToSizeNoInsertLock(const size_t max_rows) {
   // not safe to call from outside insertData
   // b/c depends on insertLock around numTuples_
 
@@ -228,10 +233,10 @@ void InsertOrderFragmenter::dropFragmentsToSize(const size_t maxRows) {
     return;
   }
 
-  if (numTuples_ > maxRows) {
+  if (numTuples_ > max_rows) {
     size_t preNumTuples = numTuples_;
     vector<int> dropFragIds;
-    size_t targetRows = maxRows * DROP_FRAGMENT_FACTOR;
+    size_t targetRows = max_rows * DROP_FRAGMENT_FACTOR;
     while (numTuples_ > targetRows) {
       CHECK_GT(fragmentInfoVec_.size(), size_t(0));
       size_t numFragTuples = fragmentInfoVec_[0]->getPhysicalNumTuples();
@@ -242,7 +247,7 @@ void InsertOrderFragmenter::dropFragmentsToSize(const size_t maxRows) {
     }
     deleteFragments(dropFragIds);
     LOG(INFO) << "dropFragmentsToSize, numTuples pre: " << preNumTuples
-              << " post: " << numTuples_ << " maxRows: " << maxRows;
+              << " post: " << numTuples_ << " maxRows: " << max_rows;
   }
 }
 
@@ -715,7 +720,7 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insert_data) {
     }
   }
   numTuples_ += insert_data.numRows;
-  dropFragmentsToSize(maxRows_);
+  dropFragmentsToSizeNoInsertLock(maxRows_);
 }
 
 FragmentInfo* InsertOrderFragmenter::createNewFragment(

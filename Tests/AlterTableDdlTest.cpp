@@ -21,6 +21,7 @@
 #include "boost/filesystem.hpp"
 
 #include "Catalog/Catalog.h"
+#include "DBHandlerTestHelpers.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/Importer.h"
@@ -434,6 +435,78 @@ TEST(AlterColumnTest5, Drop_table_by_unauthorized_user) {
 }
 
 }  // namespace
+
+class AlterTableSetMaxRowsTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("drop table if exists test_table;");
+  }
+
+  void TearDown() override {
+    sql("drop table if exists test_table;");
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void insertRange(size_t start, size_t end) {
+    for (size_t i = start; i <= end; i++) {
+      sql("insert into test_table values (" + std::to_string(i) + ");");
+    }
+  }
+
+  void assertMaxRows(int64_t max_rows) {
+    auto td = getCatalog().getMetadataForTable("test_table", false);
+    ASSERT_EQ(max_rows, td->maxRows);
+  }
+};
+
+TEST_F(AlterTableSetMaxRowsTest, MaxRowsLessThanTableRows) {
+  sql("create table test_table (i integer) with (fragment_size = 2);");
+  insertRange(1, 5);
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
+  sql("alter table test_table set max_rows = 4;");
+  assertMaxRows(4);
+
+  // Oldest fragment is deleted, so last 3 rows should remain.
+  sqlAndCompareResult("select * from test_table;", {{i(3)}, {i(4)}, {i(5)}});
+}
+
+TEST_F(AlterTableSetMaxRowsTest, MaxRowsLessThanTableRowsAndSingleFragment) {
+  sql("create table test_table (i integer) with (fragment_size = 10);");
+  insertRange(1, 5);
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
+  sql("alter table test_table set max_rows = 4;");
+  assertMaxRows(4);
+
+  // max_rows should not delete the only fragment in a table
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
+}
+
+TEST_F(AlterTableSetMaxRowsTest, MaxRowsGreaterThanTableRows) {
+  sql("create table test_table (i integer) with (fragment_size = 2);");
+  insertRange(1, 5);
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
+  sql("alter table test_table set max_rows = 10;");
+  assertMaxRows(10);
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
+}
+
+TEST_F(AlterTableSetMaxRowsTest, NegativeMaxRows) {
+  sql("create table test_table (i integer) with (fragment_size = 2);");
+  insertRange(1, 5);
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
+  queryAndAssertException("alter table test_table set max_rows = -1;",
+                          "Exception: Max rows cannot be a negative number.");
+  assertMaxRows(DEFAULT_MAX_ROWS);
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
+}
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
