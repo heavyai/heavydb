@@ -62,14 +62,15 @@ SQLTypeInfo UpdateLogForFragment::getColumnType(const size_t col_idx) const {
   return rs_->getColType(col_idx);
 }
 
-void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
-                             const std::vector<InputTableInfo>& table_infos,
-                             const CompilationOptions& co,
-                             const ExecutionOptions& eo,
-                             const Catalog_Namespace::Catalog& cat,
-                             std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                             const UpdateLogForFragment::Callback& cb,
-                             const bool is_agg) {
+TableUpdateMetadata Executor::executeUpdate(
+    const RelAlgExecutionUnit& ra_exe_unit_in,
+    const std::vector<InputTableInfo>& table_infos,
+    const CompilationOptions& co,
+    const ExecutionOptions& eo,
+    const Catalog_Namespace::Catalog& cat,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const UpdateLogForFragment::Callback& cb,
+    const bool is_agg) {
   CHECK(cb);
   VLOG(1) << "Executor " << executor_id_
           << " is executing update/delete work unit:" << ra_exe_unit_in;
@@ -95,7 +96,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
   }
 
   if (outer_fragments.empty()) {
-    return;
+    return {};
   }
 
   const auto max_tuple_count_fragment_it = std::max_element(
@@ -131,7 +132,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
   }
   CHECK(query_mem_desc);
 
-  ColumnToFragmentsMap optimize_candidates;
+  TableUpdateMetadata table_update_metadata;
   for (size_t fragment_index = 0; fragment_index < outer_fragments.size();
        ++fragment_index) {
     const int64_t crt_fragment_tuple_count =
@@ -182,12 +183,13 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
     const auto proj_result_set = proj_fragment_result.first;
     CHECK(proj_result_set);
     cb({outer_fragments[fragment_index], fragment_index, proj_result_set},
-       optimize_candidates);
+       table_update_metadata);
   }
 
   if (g_enable_auto_metadata_update) {
     auto td = cat.getMetadataForTable(table_id);
     TableOptimizer table_optimizer{td, this, cat};
-    table_optimizer.recomputeMetadataUnlocked(optimize_candidates);
+    table_optimizer.recomputeMetadataUnlocked(table_update_metadata);
   }
+  return table_update_metadata;
 }

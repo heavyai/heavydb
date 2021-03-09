@@ -19,6 +19,13 @@
 #include "Catalog/Catalog.h"
 
 class Executor;
+struct TableUpdateMetadata;
+
+struct DeletedColumnStats {
+  size_t total_row_count{0};
+  std::unordered_map<int, size_t> visible_row_count_per_fragment;
+  std::unordered_map<int, ChunkStats> chunk_stats_per_fragment;
+};
 
 /**
  * @brief Driver for running cleanup processes on a table.
@@ -47,7 +54,7 @@ class TableOptimizer {
    * The caller of this method is expected to have already acquired the
    * executor lock.
    */
-  void recomputeMetadataUnlocked(const ColumnToFragmentsMap& optimize_candidates) const;
+  void recomputeMetadataUnlocked(const TableUpdateMetadata& table_update_metadata) const;
 
   /**
    * @brief Compacts fragments to remove deleted rows.
@@ -58,10 +65,17 @@ class TableOptimizer {
    */
   void vacuumDeletedRows() const;
 
+  /**
+   * Vacuums fragments with a deleted rows percentage that exceeds the configured minimum
+   * vacuum selectivity threshold.
+   */
+  void vacuumFragmentsAboveMinSelectivity(
+      const TableUpdateMetadata& table_update_metadata) const;
+
  private:
-  void recomputeDeletedColumnMetadata(
+  DeletedColumnStats recomputeDeletedColumnMetadata(
       const TableDescriptor* td,
-      std::unordered_map<int, size_t>& tuple_count_map) const;
+      const std::set<size_t>& fragment_indexes = {}) const;
 
   void recomputeColumnMetadata(const TableDescriptor* td,
                                const ColumnDescriptor* cd,
@@ -72,7 +86,17 @@ class TableOptimizer {
   std::set<size_t> getFragmentIndexes(const TableDescriptor* td,
                                       const std::set<int>& fragment_ids) const;
 
+  void vacuumFragments(const TableDescriptor* td,
+                       const std::set<int>& fragment_ids = {}) const;
+
+  DeletedColumnStats getDeletedColumnStats(
+      const TableDescriptor* td,
+      const std::set<size_t>& fragment_indexes) const;
+
   const TableDescriptor* td_;
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;
+
+  // We can use a smaller block size here, since we won't be running projection queries
+  static constexpr size_t ROW_SET_SIZE{1000000000};
 };

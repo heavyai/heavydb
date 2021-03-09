@@ -3954,7 +3954,7 @@ void Catalog::checkpoint(const int logicalTableId) const {
   }
 }
 
-void Catalog::checkpointWithAutoRollback(const int logical_table_id) {
+void Catalog::checkpointWithAutoRollback(const int logical_table_id) const {
   auto table_epochs = getTableEpochs(getDatabaseId(), logical_table_id);
   try {
     checkpoint(logical_table_id);
@@ -4010,52 +4010,6 @@ std::string Catalog::generatePhysicalTableName(const std::string& logicalTableNa
   std::string physicalTableName =
       logicalTableName + physicalTableNameTag_ + std::to_string(shardNumber);
   return (physicalTableName);
-}
-
-void Catalog::vacuumDeletedRows(const int logicalTableId) const {
-  // shard here to serve request from TableOptimizer and elsewhere
-  const auto td = getMetadataForTable(logicalTableId);
-  const auto shards = getPhysicalTablesDescriptors(td);
-  for (const auto shard : shards) {
-    vacuumDeletedRows(shard);
-  }
-}
-
-void Catalog::vacuumDeletedRows(const TableDescriptor* td) const {
-  // "if not a table that supports delete return nullptr,  nothing more to do"
-  const ColumnDescriptor* cd = getDeletedColumn(td);
-  if (nullptr == cd) {
-    return;
-  }
-  // vacuum chunks which show sign of deleted rows in metadata
-  ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId, cd->columnId};
-  ChunkMetadataVector chunkMetadataVec;
-  dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, chunkKeyPrefix);
-  for (auto cm : chunkMetadataVec) {
-    // "delete has occured"
-    if (cm.second->chunkStats.max.tinyintval == 1) {
-      UpdelRoll updel_roll;
-      updel_roll.catalog = this;
-      updel_roll.logicalTableId = getLogicalTableId(td->tableId);
-      updel_roll.memoryLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
-      updel_roll.table_descriptor = td;
-      const auto cd = getMetadataForColumn(td->tableId, cm.first[2]);
-      const auto chunk = Chunk_NS::Chunk::getChunk(cd,
-                                                   &getDataMgr(),
-                                                   cm.first,
-                                                   updel_roll.memoryLevel,
-                                                   0,
-                                                   cm.second->numBytes,
-                                                   cm.second->numElements);
-      td->fragmenter->compactRows(this,
-                                  td,
-                                  cm.first[3],
-                                  td->fragmenter->getVacuumOffsets(chunk),
-                                  updel_roll.memoryLevel,
-                                  updel_roll);
-      updel_roll.stageUpdate();
-    }
-  }
 }
 
 void Catalog::buildForeignServerMap() {

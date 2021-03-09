@@ -123,6 +123,8 @@ class StringNoneEncoder : public Encoder {
     return true;
   }
 
+  void resetChunkStats() override { has_nulls = false; }
+
  private:
   AbstractBuffer* index_buf;
   StringOffsetT last_offset;

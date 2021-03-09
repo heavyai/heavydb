@@ -171,17 +171,17 @@ class DateDaysEncoder : public Encoder {
     return true;
   }
 
-  T dataMin;
-  T dataMax;
-  bool has_nulls;
-
- private:
-  void resetChunkStats() {
+  void resetChunkStats() override {
     dataMin = std::numeric_limits<T>::max();
     dataMax = std::numeric_limits<T>::lowest();
     has_nulls = false;
   }
 
+  T dataMin;
+  T dataMax;
+  bool has_nulls;
+
+ private:
   V encodeDataAndUpdateStats(const T& unencoded_data) {
     V encoded_data;
     if (unencoded_data == std::numeric_limits<V>::min()) {

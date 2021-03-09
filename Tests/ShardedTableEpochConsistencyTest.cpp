@@ -86,7 +86,7 @@ class EpochConsistencyTest : public DBHandlerTestFixture {
 
   void setUpTestTableWithInconsistentEpochs(const std::string& db_name = {}) {
     sql("create table test_table(a int, b tinyint, c text encoding none, shard key(a)) "
-        "with (shard_count = 2);");
+        "with (shard_count = 2, max_rollback_epochs = 25);");
     sql("copy test_table from '" + getGoodFilePath() + "';");
     assertTableEpochs({1, 1});
     assertInitialImportResultSet();
@@ -430,7 +430,8 @@ TEST_P(EpochRollbackTest, Update) {
 
   // Ensure that a subsequent update query still works as expected
   sql("update test_table set b = b + 1 where b = 10 or b = 20;");
-  assertTableEpochs({2, 3});
+  // 1 checkpoint for update and 1 checkpoint for automatic vacuum
+  assertTableEpochs({3, 4});
 
   // clang-format off
   sqlAndCompareResult("select * from test_table order by a, b;",
@@ -458,7 +459,8 @@ TEST_P(EpochRollbackTest, VarlenUpdate) {
 
   // Ensure that a subsequent update query still works as expected
   sql("update test_table set b = 110, c = 'test_110' where b = 10;");
-  assertTableEpochs({2, 3});
+  // 1 checkpoint for update and 1 checkpoint for automatic vacuum
+  assertTableEpochs({3, 4});
 
   // clang-format off
   sqlAndCompareResult("select * from test_table order by a, b;",
@@ -485,7 +487,8 @@ TEST_P(EpochRollbackTest, Delete) {
 
   // Ensure that a delete query still works as expected
   sql("delete from test_table where b = 10 or b = 20;");
-  assertTableEpochs({2, 3});
+  // 1 checkpoint for update and 1 checkpoint for automatic vacuum
+  assertTableEpochs({3, 4});
 
   // clang-format off
   sqlAndCompareResult("select * from test_table order by a, b;",
@@ -559,7 +562,8 @@ TEST_F(EpochLevelingTest, Update) {
   assertTableEpochs({1, 1, 1, 1});
 
   sql("update test_table set b = b + 1 where b = 1;");
-  assertTableEpochs({2, 2, 2, 2});
+  // 1 checkpoint for update and 1 checkpoint for automatic vacuum
+  assertTableEpochs({3, 3, 3, 3});
 
   // clang-format off
   sqlAndCompareResult("select * from test_table order by a, b;",
@@ -577,7 +581,8 @@ TEST_F(EpochLevelingTest, VarlenUpdate) {
   assertTableEpochs({1, 1, 1, 1});
 
   sql("update test_table set b = 110, c = 'test_110' where b = 10;");
-  assertTableEpochs({2, 2, 2, 2});
+  // 1 checkpoint for update and 1 checkpoint for automatic vacuum
+  assertTableEpochs({3, 3, 3, 3});
 
   // clang-format off
   sqlAndCompareResult("select * from test_table order by a, b;",
@@ -593,7 +598,8 @@ TEST_F(EpochLevelingTest, UpdateQueryButDataNotChanged) {
   assertTableEpochs({1, 1, 1, 1});
 
   sql("update test_table set b = b + 1 where b = 1000;");
-  assertTableEpochs({2, 2, 2, 2});
+  // 1 checkpoint for update and 1 checkpoint for automatic vacuum
+  assertTableEpochs({3, 3, 3, 3});
   assertInitialImportResultSet();
 }
 
@@ -603,13 +609,24 @@ TEST_F(EpochLevelingTest, Delete) {
   assertTableEpochs({1, 1, 1, 1});
 
   sql("delete from test_table where b = 10 or b = 20;");
-  assertTableEpochs({2, 2, 2, 2});
+  // 1 checkpoint for delete and 1 checkpoint for automatic vacuum
+  assertTableEpochs({3, 3, 3, 3});
 
   // clang-format off
   sqlAndCompareResult("select * from test_table order by a, b;",
                       {{i(1), i(1), "test_1"},
                        {i(2), i(2), "test_2"}});
   // clang-format on
+}
+
+TEST_F(EpochLevelingTest, DeleteQueryButNoDataDeleted) {
+  sql("copy test_table from '" + getGoodFilePath() + "';");
+  assertTableEpochs({1, 1, 1, 1});
+
+  sql("delete from test_table where b = 1000;");
+  // 1 checkpoint for update and 1 checkpoint for automatic vacuum
+  assertTableEpochs({3, 3, 3, 3});
+  assertInitialImportResultSet();
 }
 
 TEST_F(EpochLevelingTest, InsertTableAsSelect) {
@@ -640,11 +657,12 @@ TEST_F(EpochLevelingTest, Optimize) {
   assertTableEpochs({1, 1, 1, 1});
 
   sql("delete from test_table where mod(b, 2) = 0;");
-  assertTableEpochs({2, 2, 2, 2});
+  // 1 checkpoint for update and 1 checkpoint for automatic vacuum
+  assertTableEpochs({3, 3, 3, 3});
 
   sql("optimize table test_table with (vacuum = 'true');");
   // Vacuum does a checkpoint and metadata re-computation does another checkpoint
-  assertTableEpochs({4, 4, 4, 4});
+  assertTableEpochs({5, 5, 5, 5});
 
   // clang-format off
   // Assert subsequent query returns expected result

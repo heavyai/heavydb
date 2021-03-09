@@ -1099,6 +1099,9 @@ static void set_chunk_metadata(const Catalog_Namespace::Catalog* catalog,
   chunkMetadata[cd->columnId]->numBytes = data_buffer->size();
   if (updel_roll.dirtyChunks.count(chunk.get()) == 0) {
     updel_roll.dirtyChunks.emplace(chunk.get(), chunk);
+    ChunkKey chunk_key{
+        catalog->getDatabaseId(), cd->tableId, cd->columnId, fragment.fragmentId};
+    updel_roll.dirtyChunkeys.emplace(chunk_key);
   }
 }
 
@@ -1347,6 +1350,7 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
           auto daddr = data_addr;
           auto element_size = col_type.is_fixlen_array() ? col_type.get_size()
                                                          : get_element_size(col_type);
+          data_buffer->getEncoder()->resetChunkStats();
           for (size_t irow = 0; irow < nrows_to_keep; ++irow, daddr += element_size) {
             if (col_type.is_fixlen_array()) {
               auto encoder =
@@ -1355,13 +1359,13 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
               encoder->updateMetadata((int8_t*)daddr);
             } else if (col_type.is_fp()) {
               set_chunk_stats(col_type,
-                              data_addr,
+                              daddr,
                               update_stats_per_thread[ci].new_values_stats.has_null,
                               update_stats_per_thread[ci].new_values_stats.min_double,
                               update_stats_per_thread[ci].new_values_stats.max_double);
             } else {
               set_chunk_stats(col_type,
-                              data_addr,
+                              daddr,
                               update_stats_per_thread[ci].new_values_stats.has_null,
                               update_stats_per_thread[ci].new_values_stats.min_int64t,
                               update_stats_per_thread[ci].new_values_stats.max_int64t);
@@ -1406,6 +1410,14 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
     auto chunk = chunks[ci];
     auto cd = chunk->getColumnDesc();
     if (!cd->columnType.is_fixlen_array()) {
+      // For DATE_IN_DAYS encoded columns, data is stored in days but the metadata is
+      // stored in seconds. Do the metadata conversion here before updating the chunk
+      // stats.
+      if (cd->columnType.is_date_in_days()) {
+        auto& stats = update_stats_per_thread[ci].new_values_stats;
+        stats.min_int64t = DateConverters::get_epoch_seconds_from_days(stats.min_int64t);
+        stats.max_int64t = DateConverters::get_epoch_seconds_from_days(stats.max_int64t);
+      }
       updateColumnMetadata(cd,
                            fragment,
                            chunk,

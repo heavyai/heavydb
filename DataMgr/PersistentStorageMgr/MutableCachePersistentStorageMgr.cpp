@@ -31,7 +31,7 @@ AbstractBuffer* MutableCachePersistentStorageMgr::createBuffer(
     const size_t initial_size) {
   auto buf = PersistentStorageMgr::createBuffer(chunk_key, page_size, initial_size);
   if (isChunkPrefixCacheable(chunk_key)) {
-    cached_buffer_map_.emplace(chunk_key, buf);
+    cached_chunk_keys_.emplace(chunk_key);
   }
   return buf;
 }
@@ -42,7 +42,7 @@ void MutableCachePersistentStorageMgr::deleteBuffer(const ChunkKey& chunk_key,
   // not be deleting buffers for them.
   CHECK(!isForeignStorage(chunk_key));
   disk_cache_->deleteBufferIfExists(chunk_key);
-  cached_buffer_map_.erase(chunk_key);
+  cached_chunk_keys_.erase(chunk_key);
   PersistentStorageMgr::deleteBuffer(chunk_key, purge);
 }
 
@@ -54,10 +54,10 @@ void MutableCachePersistentStorageMgr::deleteBuffersWithPrefix(
 
   ChunkKey upper_prefix(chunk_key_prefix);
   upper_prefix.push_back(std::numeric_limits<int>::max());
-  auto end_it = cached_buffer_map_.upper_bound(static_cast<const ChunkKey>(upper_prefix));
-  for (auto&& chunk_it = cached_buffer_map_.lower_bound(chunk_key_prefix);
-       chunk_it != end_it;) {
-    chunk_it = cached_buffer_map_.erase(chunk_it);
+  auto end_it = cached_chunk_keys_.upper_bound(static_cast<const ChunkKey>(upper_prefix));
+  for (auto&& chunk_key_it = cached_chunk_keys_.lower_bound(chunk_key_prefix);
+       chunk_key_it != end_it;) {
+    chunk_key_it = cached_chunk_keys_.erase(chunk_key_it);
   }
   PersistentStorageMgr::deleteBuffersWithPrefix(chunk_key_prefix, purge);
 }
@@ -71,8 +71,8 @@ AbstractBuffer* MutableCachePersistentStorageMgr::putBuffer(const ChunkKey& chun
 }
 
 void MutableCachePersistentStorageMgr::checkpoint() {
-  for (auto& [key, buf] : cached_buffer_map_) {
-    if (buf->isDirty()) {
+  for (auto& key : cached_chunk_keys_) {
+    if (global_file_mgr_->getBuffer(key)->isDirty()) {
       foreign_storage::ForeignStorageBuffer temp_buf;
       global_file_mgr_->fetchBuffer(key, &temp_buf, 0);
       disk_cache_->cacheChunk(key, &temp_buf);
@@ -85,13 +85,14 @@ void MutableCachePersistentStorageMgr::checkpoint(const int db_id, const int tb_
   ChunkKey chunk_prefix{db_id, tb_id};
   ChunkKey upper_prefix(chunk_prefix);
   upper_prefix.push_back(std::numeric_limits<int>::max());
-  auto end_it = cached_buffer_map_.upper_bound(static_cast<const ChunkKey>(upper_prefix));
-  for (auto&& chunk_it = cached_buffer_map_.lower_bound(chunk_prefix); chunk_it != end_it;
-       ++chunk_it) {
-    if (chunk_it->second->isDirty()) {
+  auto end_it = cached_chunk_keys_.upper_bound(static_cast<const ChunkKey>(upper_prefix));
+  for (auto&& chunk_key_it = cached_chunk_keys_.lower_bound(chunk_prefix);
+       chunk_key_it != end_it;
+       ++chunk_key_it) {
+    if (global_file_mgr_->getBuffer(*chunk_key_it)->isDirty()) {
       foreign_storage::ForeignStorageBuffer temp_buf;
-      global_file_mgr_->fetchBuffer(chunk_it->first, &temp_buf, 0);
-      disk_cache_->cacheChunk(chunk_it->first, &temp_buf);
+      global_file_mgr_->fetchBuffer(*chunk_key_it, &temp_buf, 0);
+      disk_cache_->cacheChunk(*chunk_key_it, &temp_buf);
     }
   }
   PersistentStorageMgr::global_file_mgr_->checkpoint(db_id, tb_id);
@@ -103,8 +104,9 @@ void MutableCachePersistentStorageMgr::removeTableRelatedDS(const int db_id,
   const ChunkKey table_key{db_id, table_id};
   ChunkKey upper_prefix(table_key);
   upper_prefix.push_back(std::numeric_limits<int>::max());
-  auto end_it = cached_buffer_map_.upper_bound(static_cast<const ChunkKey>(upper_prefix));
-  for (auto&& chunk_it = cached_buffer_map_.lower_bound(table_key); chunk_it != end_it;) {
-    chunk_it = cached_buffer_map_.erase(chunk_it);
+  auto end_it = cached_chunk_keys_.upper_bound(static_cast<const ChunkKey>(upper_prefix));
+  for (auto&& chunk_key_it = cached_chunk_keys_.lower_bound(table_key);
+       chunk_key_it != end_it;) {
+    chunk_key_it = cached_chunk_keys_.erase(chunk_key_it);
   }
 }

@@ -209,17 +209,17 @@ class NoneEncoder : public Encoder {
     has_nulls = castedEncoder->has_nulls;
   }
 
-  T dataMin;
-  T dataMax;
-  bool has_nulls;
-
- private:
-  void resetChunkStats() {
+  void resetChunkStats() override {
     dataMin = std::numeric_limits<T>::max();
     dataMax = std::numeric_limits<T>::lowest();
     has_nulls = false;
   }
 
+  T dataMin;
+  T dataMax;
+  bool has_nulls;
+
+ private:
   T validateDataAndUpdateStats(const T& unencoded_data) {
     if (unencoded_data == none_encoded_null_value<T>()) {
       has_nulls = true;

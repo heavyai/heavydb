@@ -23,6 +23,9 @@
 #include "Shared/misc.h"
 #include "Shared/scope.h"
 
+// By default, when rows are deleted, vacuum fragments with a least 10% deleted rows
+float g_vacuum_min_selectivity{0.1};
+
 TableOptimizer::TableOptimizer(const TableDescriptor* td,
                                Executor* executor,
                                const Catalog_Namespace::Catalog& cat)
@@ -115,7 +118,7 @@ inline ExecutionOptions get_execution_options() {
 }  // namespace
 
 void TableOptimizer::recomputeMetadata() const {
-  INJECT_TIMER(optimizeMetadata);
+  auto timer = DEBUG_TIMER(__func__);
   mapd_unique_lock<mapd_shared_mutex> lock(executor_->execute_mutex_);
 
   LOG(INFO) << "Recomputing metadata for " << td_->tableName;
@@ -138,19 +141,16 @@ void TableOptimizer::recomputeMetadata() const {
 
   for (const auto td : table_descriptors) {
     ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
-    // We can use a smaller block size here, since we won't be running projection queries
     executor_->row_set_mem_owner_ =
-        std::make_shared<RowSetMemoryOwner>(1000000000, /*num_threads=*/1);
+        std::make_shared<RowSetMemoryOwner>(ROW_SET_SIZE, /*num_threads=*/1);
     executor_->catalog_ = &cat_;
     const auto table_id = td->tableId;
-
-    std::unordered_map</*fragment_id*/ int, size_t> tuple_count_map;
-    recomputeDeletedColumnMetadata(td, tuple_count_map);
+    auto stats = recomputeDeletedColumnMetadata(td);
 
     // TODO(adb): Support geo
     auto col_descs = cat_.getAllColumnMetadataForTable(table_id, false, false, false);
     for (const auto& cd : col_descs) {
-      recomputeColumnMetadata(td, cd, tuple_count_map, {}, {});
+      recomputeColumnMetadata(td, cd, stats.visible_row_count_per_fragment, {}, {});
     }
     data_mgr.checkpoint(cat_.getCurrentDB().dbId, table_id);
     executor_->clearMetaInfoCache();
@@ -163,24 +163,24 @@ void TableOptimizer::recomputeMetadata() const {
 }
 
 void TableOptimizer::recomputeMetadataUnlocked(
-    const ColumnToFragmentsMap& optimize_candidates) const {
+    const TableUpdateMetadata& table_update_metadata) const {
+  auto timer = DEBUG_TIMER(__func__);
   std::map<int, std::list<const ColumnDescriptor*>> columns_by_table_id;
-  for (const auto& entry : optimize_candidates) {
+  auto& columns_for_update = table_update_metadata.columns_for_metadata_update;
+  for (const auto& entry : columns_for_update) {
     auto column_descriptor = entry.first;
     columns_by_table_id[column_descriptor->tableId].emplace_back(column_descriptor);
   }
 
   for (const auto& [table_id, columns] : columns_by_table_id) {
     auto td = cat_.getMetadataForTable(table_id);
-    std::unordered_map</*fragment_id*/ int, size_t> tuple_count_map;
-    recomputeDeletedColumnMetadata(td, tuple_count_map);
+    auto stats = recomputeDeletedColumnMetadata(td);
     for (const auto cd : columns) {
-      CHECK(optimize_candidates.find(cd) != optimize_candidates.end());
-      auto fragment_indexes =
-          getFragmentIndexes(td, optimize_candidates.find(cd)->second);
+      CHECK(columns_for_update.find(cd) != columns_for_update.end());
+      auto fragment_indexes = getFragmentIndexes(td, columns_for_update.find(cd)->second);
       recomputeColumnMetadata(td,
                               cd,
-                              tuple_count_map,
+                              stats.visible_row_count_per_fragment,
                               Data_Namespace::MemoryLevel::CPU_LEVEL,
                               fragment_indexes);
     }
@@ -190,11 +190,27 @@ void TableOptimizer::recomputeMetadataUnlocked(
 // Special case handle $deleted column if it exists
 // whilst handling the delete column also capture
 // the number of non deleted rows per fragment
-void TableOptimizer::recomputeDeletedColumnMetadata(
+DeletedColumnStats TableOptimizer::recomputeDeletedColumnMetadata(
     const TableDescriptor* td,
-    std::unordered_map</*fragment_id*/ int, size_t>& tuple_count_map) const {
+    const std::set<size_t>& fragment_indexes) const {
   if (!td->hasDeletedCol) {
-    return;
+    return {};
+  }
+
+  auto stats = getDeletedColumnStats(td, fragment_indexes);
+  auto* fragmenter = td->fragmenter.get();
+  CHECK(fragmenter);
+  auto cd = cat_.getDeletedColumn(td);
+  fragmenter->updateChunkStats(cd, stats.chunk_stats_per_fragment, {});
+  fragmenter->setNumRows(stats.total_row_count);
+  return stats;
+}
+
+DeletedColumnStats TableOptimizer::getDeletedColumnStats(
+    const TableDescriptor* td,
+    const std::set<size_t>& fragment_indexes) const {
+  if (!td->hasDeletedCol) {
+    return {};
   }
 
   auto cd = cat_.getDeletedColumn(td);
@@ -214,15 +230,13 @@ void TableOptimizer::recomputeDeletedColumnMetadata(
   const auto co = get_compilation_options(ExecutorDeviceType::CPU);
   const auto eo = get_execution_options();
 
-  std::unordered_map</*fragment_id*/ int, ChunkStats> stats_map;
-
-  size_t total_num_tuples = 0;
+  DeletedColumnStats deleted_column_stats;
   Executor::PerFragmentCallBack compute_deleted_callback =
-      [&stats_map, &tuple_count_map, &total_num_tuples, cd](
+      [&deleted_column_stats, cd](
           ResultSetPtr results, const Fragmenter_Namespace::FragmentInfo& fragment_info) {
         // count number of tuples in $deleted as total number of tuples in table.
         if (cd->isDeletedCol) {
-          total_num_tuples += fragment_info.getPhysicalNumTuples();
+          deleted_column_stats.total_row_count += fragment_info.getPhysicalNumTuples();
         }
         if (fragment_info.getPhysicalNumTuples() == 0) {
           // TODO(adb): Should not happen, but just to be safe...
@@ -276,18 +290,20 @@ void TableOptimizer::recomputeDeletedColumnMetadata(
           return;
         }
 
-        stats_map.emplace(
+        deleted_column_stats.chunk_stats_per_fragment.emplace(
             std::make_pair(fragment_info.fragmentId, chunk_metadata->chunkStats));
-        tuple_count_map.emplace(std::make_pair(fragment_info.fragmentId, num_tuples));
+        deleted_column_stats.visible_row_count_per_fragment.emplace(
+            std::make_pair(fragment_info.fragmentId, num_tuples));
       };
 
-  executor_->executeWorkUnitPerFragment(
-      ra_exe_unit, table_infos[0], co, eo, cat_, compute_deleted_callback, {});
-
-  auto* fragmenter = td->fragmenter.get();
-  CHECK(fragmenter);
-  fragmenter->updateChunkStats(cd, stats_map, {});
-  fragmenter->setNumRows(total_num_tuples);
+  executor_->executeWorkUnitPerFragment(ra_exe_unit,
+                                        table_infos[0],
+                                        co,
+                                        eo,
+                                        cat_,
+                                        compute_deleted_callback,
+                                        fragment_indexes);
+  return deleted_column_stats;
 }
 
 void TableOptimizer::recomputeColumnMetadata(
@@ -404,21 +420,131 @@ std::set<size_t> TableOptimizer::getFragmentIndexes(
 }
 
 void TableOptimizer::vacuumDeletedRows() const {
+  auto timer = DEBUG_TIMER(__func__);
   const auto table_id = td_->tableId;
   const auto db_id = cat_.getDatabaseId();
   const auto table_epochs = cat_.getTableEpochs(db_id, table_id);
+  const auto shards = cat_.getPhysicalTablesDescriptors(td_);
   try {
-    cat_.vacuumDeletedRows(table_id);
+    for (const auto shard : shards) {
+      vacuumFragments(shard);
+    }
     cat_.checkpoint(table_id);
   } catch (...) {
     cat_.setTableEpochsLogExceptions(db_id, table_epochs);
     throw;
   }
 
-  auto shards = cat_.getPhysicalTablesDescriptors(td_);
   for (auto shard : shards) {
     cat_.removeFragmenterForTable(shard->tableId);
     cat_.getDataMgr().getGlobalFileMgr()->compactDataFiles(cat_.getDatabaseId(),
                                                            shard->tableId);
+  }
+}
+
+void TableOptimizer::vacuumFragments(const TableDescriptor* td,
+                                     const std::set<int>& fragment_ids) const {
+  // "if not a table that supports delete return,  nothing more to do"
+  const ColumnDescriptor* cd = cat_.getDeletedColumn(td);
+  if (nullptr == cd) {
+    return;
+  }
+  // vacuum chunks which show sign of deleted rows in metadata
+  ChunkKey chunk_key_prefix = {cat_.getDatabaseId(), td->tableId, cd->columnId};
+  ChunkMetadataVector chunk_metadata_vec;
+  cat_.getDataMgr().getChunkMetadataVecForKeyPrefix(chunk_metadata_vec, chunk_key_prefix);
+  for (auto& [chunk_key, chunk_metadata] : chunk_metadata_vec) {
+    auto fragment_id = chunk_key[CHUNK_KEY_FRAGMENT_IDX];
+    // If delete has occurred, only vacuum fragments that are in the fragment_ids set.
+    // Empty fragment_ids set implies all fragments.
+    if (chunk_metadata->chunkStats.max.tinyintval == 1 &&
+        (fragment_ids.empty() || shared::contains(fragment_ids, fragment_id))) {
+      UpdelRoll updel_roll;
+      updel_roll.catalog = &cat_;
+      updel_roll.logicalTableId = cat_.getLogicalTableId(td->tableId);
+      updel_roll.memoryLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
+      updel_roll.table_descriptor = td;
+      CHECK_EQ(cd->columnId, chunk_key[CHUNK_KEY_COLUMN_IDX]);
+      const auto chunk = Chunk_NS::Chunk::getChunk(cd,
+                                                   &cat_.getDataMgr(),
+                                                   chunk_key,
+                                                   updel_roll.memoryLevel,
+                                                   0,
+                                                   chunk_metadata->numBytes,
+                                                   chunk_metadata->numElements);
+      td->fragmenter->compactRows(&cat_,
+                                  td,
+                                  fragment_id,
+                                  td->fragmenter->getVacuumOffsets(chunk),
+                                  updel_roll.memoryLevel,
+                                  updel_roll);
+      updel_roll.stageUpdate();
+    }
+  }
+}
+
+void TableOptimizer::vacuumFragmentsAboveMinSelectivity(
+    const TableUpdateMetadata& table_update_metadata) const {
+  if (td_->persistenceLevel != Data_Namespace::MemoryLevel::DISK_LEVEL) {
+    return;
+  }
+  auto timer = DEBUG_TIMER(__func__);
+  const auto db_id = cat_.getDatabaseId();
+  const auto table_epochs = cat_.getTableEpochs(db_id, td_->tableId);
+  std::set<const TableDescriptor*> vacuumed_tables;
+  try {
+    for (const auto& [table_id, fragment_ids] :
+         table_update_metadata.fragments_with_deleted_rows) {
+      auto td = cat_.getMetadataForTable(table_id);
+      // Skip automatic vacuuming for tables with uncapped epoch
+      if (td->maxRollbackEpochs == -1) {
+        continue;
+      }
+
+      DeletedColumnStats deleted_column_stats;
+      {
+        mapd_unique_lock<mapd_shared_mutex> executor_lock(executor_->execute_mutex_);
+        ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
+        executor_->row_set_mem_owner_ =
+            std::make_shared<RowSetMemoryOwner>(ROW_SET_SIZE, /*num_threads=*/1);
+        deleted_column_stats =
+            getDeletedColumnStats(td, getFragmentIndexes(td, fragment_ids));
+        executor_->clearMetaInfoCache();
+      }
+
+      std::set<int32_t> filtered_fragment_ids;
+      for (const auto [fragment_id, visible_row_count] :
+           deleted_column_stats.visible_row_count_per_fragment) {
+        auto total_row_count =
+            td->fragmenter->getFragmentInfo(fragment_id)->getPhysicalNumTuples();
+        float deleted_row_count = total_row_count - visible_row_count;
+        if ((deleted_row_count / total_row_count) >= g_vacuum_min_selectivity) {
+          filtered_fragment_ids.emplace(fragment_id);
+        }
+      }
+
+      if (!filtered_fragment_ids.empty()) {
+        vacuumFragments(td, filtered_fragment_ids);
+        vacuumed_tables.emplace(td);
+        VLOG(1) << "Auto-vacuumed fragments: "
+                << shared::printContainer(filtered_fragment_ids)
+                << ", table id: " << td->tableId;
+      }
+    }
+
+    // Always checkpoint in order to ensure that epochs are uniformly incremented in
+    // distributed mode.
+    cat_.checkpoint(td_->tableId);
+  } catch (...) {
+    cat_.setTableEpochsLogExceptions(db_id, table_epochs);
+    throw;
+  }
+
+  // Reset fragmenters for vacuumed tables in order to ensure that their metadata is in
+  // sync
+  for (auto table : vacuumed_tables) {
+    cat_.removeFragmenterForTable(table->tableId);
+    cat_.getMetadataForTable(table->tableId);
+    CHECK(table->fragmenter);
   }
 }

@@ -1722,13 +1722,12 @@ TEST_F(MaxRollbackEpochsTest, CreateTableDefaultValue) {
   ASSERT_EQ(table->maxRollbackEpochs, DEFAULT_MAX_ROLLBACK_EPOCHS);
 
   // Sanity test to ensure that default max_rollback_epoch is in effect
-  sql("INSERT INTO test_table VALUES (10);");
-  for (int i = 1; i < DEFAULT_MAX_ROLLBACK_EPOCHS; i++) {
-    sql("UPDATE test_table SET col1 = col1 + 10;");
+  for (int i = 0; i < DEFAULT_MAX_ROLLBACK_EPOCHS; i++) {
+    sql("INSERT INTO test_table VALUES (10);");
   }
   assertEpochCeilingAndFloor(DEFAULT_MAX_ROLLBACK_EPOCHS, 0);
 
-  sql("UPDATE test_table SET col1 = col1 + 10;");
+  sql("INSERT INTO test_table VALUES (10);");
   assertEpochCeilingAndFloor(DEFAULT_MAX_ROLLBACK_EPOCHS + 1, 1);
 }
 
