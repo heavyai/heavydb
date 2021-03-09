@@ -115,9 +115,23 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
            "\"root-path-1\", \"root-path-2\", ... ]";
   }
 
+  void initializeWhitelist() {
+    std::string allowed_import_paths, allowed_export_paths;
+    namespace po = boost::program_options;
+    po::options_description desc{};
+    desc.add_options()("allowed-import-paths",
+                       po::value<std::string>(&allowed_import_paths));
+    desc.add_options()("allowed-export-paths",
+                       po::value<std::string>(&allowed_export_paths));
+    po::variables_map vm;
+    po::store(po::parse_config_file<char>(CONFIG_FILE_PATH.c_str(), desc, true), vm);
+    po::notify(vm);
+    ddl_utils::FilePathWhitelist::initialize(allowed_import_paths, allowed_export_paths);
+  }
+
   void initializeWhitelistAndAssertException(const std::string& error_message) {
     try {
-      ddl_utils::FilePathWhitelist::initializeFromConfigFile(CONFIG_FILE_PATH);
+      initializeWhitelist();
       FAIL() << "An exception should have been thrown for this test case.";
     } catch (const std::runtime_error& e) {
       ASSERT_EQ(error_message, e.what());
@@ -130,14 +144,14 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
 
 TEST_P(FilePathWhitelistTest, WhitelistedPath) {
   setServerConfig("test_config.conf");
-  ddl_utils::FilePathWhitelist::initializeFromConfigFile(CONFIG_FILE_PATH);
+  initializeWhitelist();
   std::string file_path = getWhitelistedFilePath();
   EXPECT_NO_THROW(sql(getQuery(file_path)));
 }
 
 TEST_P(FilePathWhitelistTest, NonWhitelistedPath) {
   setServerConfig("test_config.conf");
-  ddl_utils::FilePathWhitelist::initializeFromConfigFile(CONFIG_FILE_PATH);
+  initializeWhitelist();
   std::string file_path =
       boost::filesystem::canonical(
           "../../Tests/Import/datafiles/with_quoted_fields_doublequotes.csv")
@@ -180,12 +194,6 @@ TEST_P(FilePathWhitelistTest, NonExistentWhitelistedRootPath) {
   setServerConfig("non_existent_root_path.conf");
   initializeWhitelistAndAssertException(
       "Whitelisted root path \"./nonexistent_path\" does not exist.");
-}
-
-TEST_P(FilePathWhitelistTest, NonExistentConfigPath) {
-  boost::filesystem::remove(CONFIG_FILE_PATH);
-  initializeWhitelistAndAssertException("Configuration file at \"" + CONFIG_FILE_PATH +
-                                        "\" does not exist.");
 }
 
 TEST_P(FilePathWhitelistTest, BlacklistedPath) {

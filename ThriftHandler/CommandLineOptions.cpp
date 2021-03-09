@@ -391,6 +391,14 @@ void CommandLineOptions::fillOptions() {
                               ->implicit_value(true),
                           "Lookup the origin of inbound connections by IP address/DNS "
                           "name, and print this information as part of stdlog.");
+  help_desc.add_options()(
+      "allowed-import-paths",
+      po::value<std::string>(&allowed_import_paths),
+      "List of allowed root paths that can be used in import operations.");
+  help_desc.add_options()(
+      "allowed-export-paths",
+      po::value<std::string>(&allowed_export_paths),
+      "List of allowed root paths that can be used in export operations.");
   help_desc.add(log_options_.get_options());
 }
 
@@ -691,11 +699,7 @@ std::stringstream sanitize_config_file(std::ifstream& in) {
   std::stringstream ss;
   std::string line;
   while (std::getline(in, line)) {
-    // Skip config file only options
-    if (!boost::starts_with(line, "allowed-import-paths") &&
-        !boost::starts_with(line, "allowed-export-paths")) {
-      ss << line << "\n";
-    }
+    ss << line << "\n";
     if (line == "[web]") {
       break;
     }
@@ -813,7 +817,9 @@ void CommandLineOptions::validate() {
   LOG(INFO) << " Maximum Idle session duration " << idle_session_duration;
   LOG(INFO) << " Maximum active session duration " << max_session_duration;
 
-  ddl_utils::FilePathWhitelist::initializeFromConfigFile(system_parameters.config_file);
+  LOG(INFO) << "Allowed import paths is set to " << allowed_import_paths;
+  LOG(INFO) << "Allowed export paths is set to " << allowed_export_paths;
+  ddl_utils::FilePathWhitelist::initialize(allowed_import_paths, allowed_export_paths);
 
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_catalogs");
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_data");

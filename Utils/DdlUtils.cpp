@@ -657,39 +657,19 @@ void set_whitelisted_paths(const std::string& config_key,
     whitelisted_paths.emplace_back(
         boost::filesystem::canonical(root_path.GetString()).string());
   }
-  LOG(INFO) << config_key << " " << shared::printContainer(whitelisted_paths);
+  LOG(INFO) << "Parsed " << config_key << ": "
+            << shared::printContainer(whitelisted_paths);
 }
 
-void FilePathWhitelist::initializeFromConfigFile(const std::string& server_config_path) {
-  if (server_config_path.empty()) {
-    return;
-  }
-
-  if (!boost::filesystem::exists(server_config_path)) {
-    throw std::runtime_error{"Configuration file at \"" + server_config_path +
-                             "\" does not exist."};
-  }
-
-  std::string import_config_key{"allowed-import-paths"};
-  std::string export_config_key{"allowed-export-paths"};
-  std::string import_config_value, export_config_value;
-
-  namespace po = boost::program_options;
-  po::options_description desc{};
-  desc.add_options()(import_config_key.c_str(),
-                     po::value<std::string>(&import_config_value));
-  desc.add_options()(export_config_key.c_str(),
-                     po::value<std::string>(&export_config_value));
-  po::variables_map vm;
-  po::store(po::parse_config_file<char>(server_config_path.c_str(), desc, true), vm);
-  po::notify(vm);
-  if (vm.count(import_config_key)) {
+void FilePathWhitelist::initialize(const std::string& allowed_import_paths,
+                                   const std::string& allowed_export_paths) {
+  if (!allowed_import_paths.empty()) {
     set_whitelisted_paths(
-        import_config_key, import_config_value, whitelisted_import_paths_);
+        "allowed-import-paths", allowed_import_paths, whitelisted_import_paths_);
   }
-  if (vm.count(export_config_key)) {
+  if (!allowed_export_paths.empty()) {
     set_whitelisted_paths(
-        export_config_key, export_config_value, whitelisted_export_paths_);
+        "allowed-export-paths", allowed_export_paths, whitelisted_export_paths_);
   }
 }
 
