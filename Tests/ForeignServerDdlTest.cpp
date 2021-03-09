@@ -186,6 +186,12 @@ TEST_F(CreateForeignServerTest, InvalidDataWrapper) {
   queryAndAssertException(query, error_message);
 }
 
+TEST_F(CreateForeignServerTest, MissingWithClause) {
+  std::string query{"CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_parquet;"};
+  queryAndAssertException(
+      query, "Exception: Foreign server options must contain \"STORAGE_TYPE\".");
+}
+
 class DropForeignServerTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {

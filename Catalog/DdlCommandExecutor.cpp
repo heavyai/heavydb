@@ -461,8 +461,9 @@ CreateForeignServerCommand::CreateForeignServerCommand(
   CHECK(ddl_payload["serverName"].IsString());
   CHECK(ddl_payload.HasMember("dataWrapper"));
   CHECK(ddl_payload["dataWrapper"].IsString());
-  CHECK(ddl_payload.HasMember("options"));
-  CHECK(ddl_payload["options"].IsObject());
+  if (ddl_payload.HasMember("options")) {
+    CHECK(ddl_payload["options"].IsObject());
+  }
   CHECK(ddl_payload.HasMember("ifNotExists"));
   CHECK(ddl_payload["ifNotExists"].IsBool());
 }
@@ -496,7 +497,9 @@ ExecutionResult CreateForeignServerCommand::execute() {
   foreign_server->data_wrapper_type = to_upper(ddl_payload["dataWrapper"].GetString());
   foreign_server->name = server_name;
   foreign_server->user_id = current_user.userId;
-  foreign_server->populateOptionsMap(ddl_payload["options"]);
+  if (ddl_payload.HasMember("options")) {
+    foreign_server->populateOptionsMap(ddl_payload["options"]);
+  }
   foreign_server->validate();
 
   auto& catalog = session_ptr_->getCatalog();
