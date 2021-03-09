@@ -28,6 +28,8 @@
 #define BASE_PATH "./tmp"
 #endif
 
+extern float g_vacuum_min_selectivity;
+
 namespace {
 
 #define ASSERT_METADATA(type, tag)                                   \
@@ -149,6 +151,7 @@ static const std::string g_table_name{"metadata_test"};
 }  // namespace
 
 class MultiFragMetadataUpdate : public DBHandlerTestFixture {
+ protected:
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
     EXPECT_NO_THROW(sql("DROP TABLE IF EXISTS " + g_table_name + ";"));
@@ -257,6 +260,12 @@ TEST_F(MultiFragMetadataUpdate, NoChanges) {
 
 class MetadataUpdate : public DBHandlerTestFixture,
                        public testing::WithParamInterface<bool> {
+ protected:
+  static void SetUpTestSuite() {
+    g_enable_auto_metadata_update = false;
+    g_vacuum_min_selectivity = 1.1;
+  }
+
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
     auto is_sharded = GetParam();
@@ -495,17 +504,22 @@ TEST_P(MetadataUpdate, AlterAfterEmptied) {
                       check_fragment_metadata(12,
                                               std::numeric_limits<int32_t>::max(),
                                               std::numeric_limits<int32_t>::lowest(),
-                                              true));
+                                              false));
   // test ADD multiple columns
   EXPECT_NO_THROW(
       sql("ALTER TABLE " + g_table_name + " ADD (c88 int default 88, cnn int);"));
-  run_op_per_fragment(cat, td, check_fragment_metadata(13, 88, 88, false));
+  run_op_per_fragment(cat,
+                      td,
+                      check_fragment_metadata(13,
+                                              std::numeric_limits<int32_t>::max(),
+                                              std::numeric_limits<int32_t>::lowest(),
+                                              false));
   run_op_per_fragment(cat,
                       td,
                       check_fragment_metadata(14,
                                               std::numeric_limits<int32_t>::max(),
                                               std::numeric_limits<int32_t>::lowest(),
-                                              true));
+                                              false));
 }
 
 INSTANTIATE_TEST_SUITE_P(ShardedAndNonShardedTable,
@@ -546,6 +560,8 @@ TEST_F(DeletedRowsMetadataUpdateTest, ComputeMetadataAfterDelete) {
 
 class OptimizeTableVacuumTest : public DBHandlerTestFixture {
  protected:
+  static void SetUpTestSuite() { g_vacuum_min_selectivity = 1.1; }
+
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
     sql("drop table if exists test_table;");
@@ -667,7 +683,7 @@ TEST_F(OptimizeTableVacuumTest, UpdateAndCompactTableData) {
   File_Namespace::FileMgr::setNumPagesPerMetadataFile(1);
   File_Namespace::FileMgr::setNumPagesPerDataFile(1);
 
-  sql("create table test_table (i int);");
+  sql("create table test_table (i int) with (max_rollback_epochs = 25);");
   sql("insert into test_table values (10);");
   // 2 chunk page writes and 2 metadata page writes. One for
   // the "i" column and a second for the "$deleted" column
@@ -700,7 +716,8 @@ TEST_F(OptimizeTableVacuumTest, InsertAndCompactTableData) {
   File_Namespace::FileMgr::setNumPagesPerMetadataFile(1);
   File_Namespace::FileMgr::setNumPagesPerDataFile(1);
 
-  sql("create table test_table (i int) with (fragment_size = 2);");
+  sql("create table test_table (i int) with (fragment_size = 2, max_rollback_epochs = "
+      "25);");
   insertRange(1, 3, 1);
   // 4 chunk page writes. 2 for the "i" column and "$deleted" column each.
   // 6 metadata page writes for each insert (3 inserts for 2 columns).
@@ -733,7 +750,8 @@ TEST_F(OptimizeTableVacuumTest, UpdateAndCompactShardedTableData) {
   File_Namespace::FileMgr::setNumPagesPerMetadataFile(1);
   File_Namespace::FileMgr::setNumPagesPerDataFile(1);
 
-  sql("create table test_table (i int, f float, shard key(i)) with (shard_count = 4);");
+  sql("create table test_table (i int, f float, shard key(i)) with (shard_count = 4, "
+      "max_rollback_epochs = 25);");
   insertRange(1, 4, 2);
   // 12 chunk page writes and 12 metadata page writes. Each shard with
   // 3 metadata/data page writes for columns "i", "f", and "$deleted".
@@ -804,7 +822,7 @@ TEST_F(OptimizeTableVacuumTest, MultiplePagesPerFile) {
   File_Namespace::FileMgr::setNumPagesPerMetadataFile(4);
   File_Namespace::FileMgr::setNumPagesPerDataFile(2);
 
-  sql("create table test_table (i int);");
+  sql("create table test_table (i int) with (max_rollback_epochs = 25);");
   sql("insert into test_table values (10);");
   // 2 chunk page writes and 2 metadata page writes. One for
   // the "i" column and a second for the "$deleted" column
@@ -1097,6 +1115,625 @@ TEST_F(VarLenColumnUpdateTest, ChunkUpdateReusesDataPage) {
   // new row.
   sql("update test_table set t = 'e' where t = 'a';");
   sqlAndCompareResult("select * from test_table;", {{i(3), "b"}, {i(2), "e"}});
+}
+
+class OpportunisticVacuumingTest : public OptimizeTableVacuumTest {
+ protected:
+  void SetUp() override {
+    OptimizeTableVacuumTest::SetUp();
+    sql("drop table if exists test_table;");
+    g_vacuum_min_selectivity = 0.1;
+  }
+
+  void TearDown() override {
+    sql("drop table if exists test_table;");
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void insertRange(int start, int end, const std::string& str_value) {
+    for (int value = start; value <= end; value++) {
+      auto number_str = std::to_string(value);
+      sql("insert into test_table values (" + number_str + ", '" + str_value +
+          number_str + "');");
+    }
+  }
+
+  void assertChunkContentAndMetadata(int32_t fragment_id,
+                                     const std::vector<int32_t>& values,
+                                     bool has_nulls = false,
+                                     const std::string& table_name = "test_table") {
+    auto [chunk, chunk_metadata] = getChunkAndMetadata("i", fragment_id, table_name);
+    auto buffer = chunk.getBuffer();
+    ASSERT_EQ(values.size() * sizeof(int32_t), buffer->size());
+    assertCommonChunkMetadata(buffer, values.size(), has_nulls);
+
+    if (!values.empty()) {
+      auto min = *std::min_element(values.begin(), values.end());
+      auto max = *std::max_element(values.begin(), values.end());
+      assertMinAndMax(min, max, chunk_metadata);
+
+      std::vector<int32_t> actual_values(values.size());
+      buffer->read(reinterpret_cast<int8_t*>(actual_values.data()), buffer->size());
+      EXPECT_EQ(values, actual_values);
+    }
+  }
+
+  void assertTextChunkContentAndMetadata(int32_t fragment_id,
+                                         const std::vector<std::string>& values,
+                                         bool has_nulls = false,
+                                         const std::string& table_name = "test_table") {
+    auto [chunk, chunk_metadata] = getChunkAndMetadata("t", fragment_id, table_name);
+    auto data_buffer = chunk.getBuffer();
+    assertCommonChunkMetadata(data_buffer, values.size(), has_nulls);
+
+    auto index_buffer = chunk.getIndexBuf();
+    if (values.empty()) {
+      EXPECT_EQ(static_cast<size_t>(0), data_buffer->size());
+      EXPECT_EQ(static_cast<size_t>(0), index_buffer->size());
+    } else {
+      ASSERT_EQ(index_buffer->size() % sizeof(int32_t), static_cast<size_t>(0));
+      std::vector<int32_t> index_values(index_buffer->size() / sizeof(int32_t));
+      ASSERT_EQ(values.size() + 1, index_values.size());
+      index_buffer->read(reinterpret_cast<int8_t*>(index_values.data()),
+                         index_buffer->size());
+
+      std::string data_values(data_buffer->size(), '\0');
+      data_buffer->read(reinterpret_cast<int8_t*>(data_values.data()),
+                        data_buffer->size());
+
+      int32_t cumulative_length{0};
+      for (size_t i = 0; i < values.size(); i++) {
+        EXPECT_EQ(cumulative_length, index_values[i]);
+        cumulative_length += values[i].size();
+        EXPECT_EQ(
+            values[i],
+            data_values.substr(index_values[i], index_values[i + 1] - index_values[i]));
+      }
+      EXPECT_EQ(cumulative_length, index_values[values.size()]);
+    }
+  }
+
+  void assertCommonChunkMetadata(AbstractBuffer* buffer,
+                                 size_t num_elements,
+                                 bool has_nulls) {
+    ASSERT_TRUE(buffer->hasEncoder());
+    std::shared_ptr<ChunkMetadata> chunk_metadata = std::make_shared<ChunkMetadata>();
+    buffer->getEncoder()->getMetadata(chunk_metadata);
+    EXPECT_EQ(buffer->size(), chunk_metadata->numBytes);
+    EXPECT_EQ(num_elements, chunk_metadata->numElements);
+    EXPECT_EQ(has_nulls, chunk_metadata->chunkStats.has_nulls);
+  }
+
+  void assertShardChunkContentAndMetadata(int32_t shard_index,
+                                          int32_t fragment_id,
+                                          const std::vector<int32_t>& values) {
+    assertChunkContentAndMetadata(
+        fragment_id, values, false, getShardTableName(shard_index));
+  }
+
+  void assertShardTextChunkContent(int32_t shard_index,
+                                   int32_t fragment_id,
+                                   const std::vector<std::string>& values) {
+    assertTextChunkContentAndMetadata(
+        fragment_id, values, false, getShardTableName(shard_index));
+  }
+
+  void assertFragmentRowCount(size_t row_count) {
+    auto td = getCatalog().getMetadataForTable("test_table");
+    ASSERT_TRUE(td->fragmenter != nullptr);
+    ASSERT_EQ(row_count, td->fragmenter->getNumRows());
+  }
+
+  void assertShardFragmentRowCount(int32_t shard_index, size_t row_count) {
+    auto td = getCatalog().getMetadataForTable(getShardTableName(shard_index));
+    ASSERT_TRUE(td->fragmenter != nullptr);
+    ASSERT_EQ(row_count, td->fragmenter->getNumRows());
+  }
+
+  void assertMinAndMax(int32_t min,
+                       int32_t max,
+                       std::shared_ptr<ChunkMetadata> chunk_metadata) {
+    EXPECT_EQ(min, chunk_metadata->chunkStats.min.intval);
+    EXPECT_EQ(max, chunk_metadata->chunkStats.max.intval);
+  }
+
+  void assertMinAndMax(int64_t min,
+                       int64_t max,
+                       std::shared_ptr<ChunkMetadata> chunk_metadata) {
+    EXPECT_EQ(min, chunk_metadata->chunkStats.min.bigintval);
+    EXPECT_EQ(max, chunk_metadata->chunkStats.max.bigintval);
+  }
+
+  void assertMinAndMax(float min,
+                       float max,
+                       std::shared_ptr<ChunkMetadata> chunk_metadata) {
+    EXPECT_EQ(min, chunk_metadata->chunkStats.min.floatval);
+    EXPECT_EQ(max, chunk_metadata->chunkStats.max.floatval);
+  }
+
+  void assertMinAndMax(double min,
+                       double max,
+                       std::shared_ptr<ChunkMetadata> chunk_metadata) {
+    EXPECT_EQ(min, chunk_metadata->chunkStats.min.doubleval);
+    EXPECT_EQ(max, chunk_metadata->chunkStats.max.doubleval);
+  }
+
+  std::pair<Chunk_NS::Chunk, std::shared_ptr<ChunkMetadata>> getChunkAndMetadata(
+      const std::string& column_name,
+      int32_t fragment_id,
+      const std::string& table_name = "test_table") {
+    auto& catalog = getCatalog();
+    auto& data_mgr = catalog.getDataMgr();
+    auto td = catalog.getMetadataForTable(table_name);
+    auto cd = catalog.getMetadataForColumn(td->tableId, column_name);
+    Chunk_NS::Chunk chunk;
+    ChunkKey chunk_key{catalog.getDatabaseId(), td->tableId, cd->columnId, fragment_id};
+    if (cd->columnType.is_varlen_indeed()) {
+      chunk_key.emplace_back(2);
+      chunk.setIndexBuffer(data_mgr.getChunkBuffer(chunk_key, MemoryLevel::DISK_LEVEL));
+      chunk_key.back() = 1;
+    }
+    chunk.setBuffer(data_mgr.getChunkBuffer(chunk_key, MemoryLevel::DISK_LEVEL));
+    CHECK(chunk.getBuffer()->hasEncoder());
+    std::shared_ptr<ChunkMetadata> chunk_metadata = std::make_shared<ChunkMetadata>();
+    chunk.getBuffer()->getEncoder()->getMetadata(chunk_metadata);
+    return {chunk, chunk_metadata};
+  }
+
+  std::shared_ptr<StringDictionary> getStringDictionary(const std::string& column_name) {
+    auto& catalog = getCatalog();
+    auto td = catalog.getMetadataForTable("test_table");
+    auto cd = catalog.getMetadataForColumn(td->tableId, column_name);
+    CHECK(cd->columnType.is_dict_encoded_string());
+    auto dict_metadata = catalog.getMetadataForDict(cd->columnType.get_comp_param());
+    CHECK(dict_metadata);
+    return dict_metadata->stringDict;
+  }
+
+  using DataTypesTestRow = std::
+      tuple<int16_t, std::string, std::string, float, double, std::string, std::string>;
+
+  void assertFragmentMetadataForDataTypesTest(const std::vector<DataTypesTestRow>& rows,
+                                              int32_t fragment_id,
+                                              bool has_nulls) {
+    // Assert metadata for "i" chunk
+    assertCommonChunkMetadata(
+        rows, "i", fragment_id, has_nulls, sizeof(int16_t) * rows.size());
+    assertMinMaxMetadata<int16_t, 0>(rows, "i", fragment_id, NULL_SMALLINT);
+
+    // Assert metadata for "t" chunk
+    assertCommonChunkMetadata(
+        rows, "t", fragment_id, has_nulls, sizeof(int32_t) * rows.size());
+    auto string_dictionary = getStringDictionary("t");
+    assertMinMaxMetadata<int32_t, 1, true>(
+        rows,
+        "t",
+        fragment_id,
+        NULL_INT,
+        [string_dictionary](const std::string& str_value) {
+          return string_dictionary->getIdOfString(str_value);
+        });
+
+    // Assert metadata for "t_none" chunk
+    size_t chunk_size{0};
+    for (const auto& row : rows) {
+      chunk_size += std::get<2>(row).size();
+    }
+    assertCommonChunkMetadata(rows, "t_none", fragment_id, has_nulls, chunk_size);
+    // Skip min/max metadata check for none encoded string column, since this metadata is
+    // not updated
+
+    // Assert metadata for "f" chunk
+    assertCommonChunkMetadata(
+        rows, "f", fragment_id, has_nulls, sizeof(float) * rows.size());
+    assertMinMaxMetadata<float, 3>(rows, "f", fragment_id, NULL_FLOAT);
+
+    // Assert metadata for "d_arr" chunk
+    assertCommonChunkMetadata(
+        rows, "d_arr", fragment_id, has_nulls, sizeof(double) * rows.size());
+    assertMinMaxMetadata<double, 4>(rows, "d_arr", fragment_id, NULL_DOUBLE);
+
+    // Assert metadata for "tm_arr" chunk
+    assertCommonChunkMetadata(
+        rows, "tm_arr", fragment_id, has_nulls, sizeof(int64_t) * rows.size());
+    // Skip min/max metadata check for variable length array column, since this metadata
+    // is not updated
+
+    // Assert metadata for "dt" chunk
+    assertCommonChunkMetadata(
+        rows, "dt", fragment_id, has_nulls, sizeof(int32_t) * rows.size());
+    assertMinMaxMetadata<int64_t, 6, true>(
+        rows, "dt", fragment_id, NULL_INT, [](const std::string& str_value) {
+          SQLTypeInfo type{kDATE, false};
+          return StringToDatum(str_value, type).bigintval;
+        });
+  }
+
+  void assertCommonChunkMetadata(const std::vector<DataTypesTestRow>& rows,
+                                 const std::string& column_name,
+                                 int32_t fragment_id,
+                                 bool has_nulls,
+                                 size_t expected_chunk_size) {
+    auto [chunk, chunk_metadata] = getChunkAndMetadata(column_name, fragment_id);
+    ASSERT_EQ(expected_chunk_size, chunk.getBuffer()->size());
+    assertCommonChunkMetadata(chunk.getBuffer(), rows.size(), has_nulls);
+  }
+
+  template <typename EncodedType, int32_t column_index, bool convert_input = false>
+  void assertMinMaxMetadata(
+      const std::vector<DataTypesTestRow>& rows,
+      const std::string& column_name,
+      int32_t fragment_id,
+      EncodedType null_sentinel,
+      std::function<EncodedType(const std::string&)> type_converter = nullptr) {
+    auto chunk_metadata = getChunkAndMetadata(column_name, fragment_id).second;
+    auto [min, max] = getMinAndMax<EncodedType, column_index, convert_input>(
+        rows, null_sentinel, type_converter);
+    assertMinAndMax(min, max, chunk_metadata);
+  }
+
+  template <typename EncodedType, int32_t column_index, bool convert_input>
+  std::pair<EncodedType, EncodedType> getMinAndMax(
+      const std::vector<DataTypesTestRow>& rows,
+      EncodedType null_sentinel,
+      std::function<EncodedType(const std::string&)> type_converter) {
+    EncodedType min{std::numeric_limits<EncodedType>::max()},
+        max{std::numeric_limits<EncodedType>::lowest()};
+    for (const auto& row : rows) {
+      if constexpr (convert_input) {
+        auto str_value = std::get<column_index>(row);
+        if (!str_value.empty()) {
+          auto value = type_converter(str_value);
+          min = std::min(min, value);
+          max = std::max(max, value);
+        }
+      } else {
+        auto value = std::get<column_index>(row);
+        if (value != null_sentinel) {
+          min = std::min(min, value);
+          max = std::max(max, value);
+        }
+      }
+    }
+    return {min, max};
+  }
+
+  std::string getShardTableName(int32_t shard_index) {
+    auto& catalog = getCatalog();
+    auto td = catalog.getMetadataForTable("test_table");
+    CHECK_GT(td->nShards, 0);
+    CHECK_LT(shard_index, td->nShards);
+
+    auto shards = catalog.getPhysicalTablesDescriptors(td);
+    CHECK_EQ(static_cast<size_t>(td->nShards), shards.size());
+    return shards[shard_index]->tableName;
+  }
+};
+
+TEST_F(OpportunisticVacuumingTest, DeletedFragment) {
+  sql("create table test_table (i int) with (fragment_size = 3, "
+      "max_rollback_epochs = 25);");
+  OptimizeTableVacuumTest::insertRange(1, 5);
+
+  assertChunkContentAndMetadata(0, {1, 2, 3});
+  assertChunkContentAndMetadata(1, {4, 5});
+
+  sql("delete from test_table where i <= 3;");
+
+  assertChunkContentAndMetadata(0, {});
+  assertChunkContentAndMetadata(1, {4, 5});
+  assertFragmentRowCount(2);
+  sqlAndCompareResult("select * from test_table;", {{i(4)}, {i(5)}});
+}
+
+TEST_F(OpportunisticVacuumingTest,
+       DeleteQueryAndPercentDeletedRowsBelowSelectivityThreshold) {
+  sql("create table test_table (i int) with (fragment_size = 5, "
+      "max_rollback_epochs = 25);");
+  OptimizeTableVacuumTest::insertRange(1, 10);
+
+  assertChunkContentAndMetadata(0, {1, 2, 3, 4, 5});
+  assertChunkContentAndMetadata(1, {6, 7, 8, 9, 10});
+
+  g_vacuum_min_selectivity = 0.45;
+  sql("delete from test_table where i <= 2 or i >= 9;");
+
+  assertChunkContentAndMetadata(0, {1, 2, 3, 4, 5});
+  assertChunkContentAndMetadata(1, {6, 7, 8, 9, 10});
+  assertFragmentRowCount(10);
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(3)}, {i(4)}, {i(5)}, {i(6)}, {i(7)}, {i(8)}});
+}
+
+TEST_F(OpportunisticVacuumingTest,
+       DeleteQueryAndPercentDeletedRowsAboveSelectivityThreshold) {
+  sql("create table test_table (i int) with (fragment_size = 5, "
+      "max_rollback_epochs = 25);");
+  OptimizeTableVacuumTest::insertRange(1, 10);
+
+  assertChunkContentAndMetadata(0, {1, 2, 3, 4, 5});
+  assertChunkContentAndMetadata(1, {6, 7, 8, 9, 10});
+
+  g_vacuum_min_selectivity = 0.35;
+  sql("delete from test_table where i <= 2 or i >= 9;");
+
+  assertChunkContentAndMetadata(0, {3, 4, 5});
+  assertChunkContentAndMetadata(1, {6, 7, 8});
+  assertFragmentRowCount(6);
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(3)}, {i(4)}, {i(5)}, {i(6)}, {i(7)}, {i(8)}});
+}
+
+TEST_F(OpportunisticVacuumingTest,
+       DeleteQueryAndPercentDeletedRowsAboveSelectivityThresholdAndUncappedEpoch) {
+  sql("create table test_table (i int) with (fragment_size = 5);");
+  getCatalog().setUncappedTableEpoch("test_table");
+  OptimizeTableVacuumTest::insertRange(1, 10);
+
+  assertChunkContentAndMetadata(0, {1, 2, 3, 4, 5});
+  assertChunkContentAndMetadata(1, {6, 7, 8, 9, 10});
+
+  g_vacuum_min_selectivity = 0.35;
+  sql("delete from test_table where i <= 2 or i >= 9;");
+
+  assertChunkContentAndMetadata(0, {1, 2, 3, 4, 5});
+  assertChunkContentAndMetadata(1, {6, 7, 8, 9, 10});
+  assertFragmentRowCount(10);
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(3)}, {i(4)}, {i(5)}, {i(6)}, {i(7)}, {i(8)}});
+}
+
+TEST_F(OpportunisticVacuumingTest, DeleteOnShardedTable) {
+  sql("create table test_table (i int, shard key(i)) with (fragment_size = 2, "
+      "shard_count = 2, max_rollback_epochs = 25);");
+  OptimizeTableVacuumTest::insertRange(1, 6);
+
+  assertShardChunkContentAndMetadata(0, 0, {2, 4});
+  assertShardChunkContentAndMetadata(0, 1, {6});
+
+  assertShardChunkContentAndMetadata(1, 0, {1, 3});
+  assertShardChunkContentAndMetadata(1, 1, {5});
+
+  sql("delete from test_table where i <= 4;");
+
+  assertShardChunkContentAndMetadata(0, 0, {});
+  assertShardChunkContentAndMetadata(0, 1, {6});
+  assertShardFragmentRowCount(0, 1);
+
+  assertShardChunkContentAndMetadata(1, 0, {});
+  assertShardChunkContentAndMetadata(1, 1, {5});
+  assertShardFragmentRowCount(1, 1);
+
+  sqlAndCompareResult("select * from test_table;", {{i(6)}, {i(5)}});
+}
+
+TEST_F(OpportunisticVacuumingTest, VarLenColumnUpdateAndEntireFragmentUpdated) {
+  sql("create table test_table (i int, t text encoding none) with (fragment_size = 3, "
+      "max_rollback_epochs = 25);");
+  insertRange(1, 5, "abc");
+
+  assertChunkContentAndMetadata(0, {1, 2, 3});
+  assertChunkContentAndMetadata(1, {4, 5});
+
+  assertTextChunkContentAndMetadata(0, {"abc1", "abc2", "abc3"});
+  assertTextChunkContentAndMetadata(1, {"abc4", "abc5"});
+
+  sql("update test_table set t = 'test_val' where i <= 3;");
+
+  // When a variable length column is updated, the entire row is marked as deleted and a
+  // new row with updated values is appended to the end of the table.
+  assertChunkContentAndMetadata(0, {});
+  assertChunkContentAndMetadata(1, {4, 5, 1});
+  assertChunkContentAndMetadata(2, {2, 3});
+
+  assertTextChunkContentAndMetadata(0, {});
+  assertTextChunkContentAndMetadata(1, {"abc4", "abc5", "test_val"});
+  assertTextChunkContentAndMetadata(2, {"test_val", "test_val"});
+
+  assertFragmentRowCount(5);
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(4), "abc4"},
+                       {i(5), "abc5"},
+                       {i(1), "test_val"},
+                       {i(2), "test_val"},
+                       {i(3), "test_val"}});
+}
+
+TEST_F(OpportunisticVacuumingTest,
+       VarLenColumnUpdateAndPercentDeletedRowsBelowSelectivityThreshold) {
+  sql("create table test_table (i int, t text encoding none) with (fragment_size = 5, "
+      "max_rollback_epochs = 25);");
+  insertRange(1, 10, "abc");
+
+  assertChunkContentAndMetadata(0, {1, 2, 3, 4, 5});
+  assertChunkContentAndMetadata(1, {6, 7, 8, 9, 10});
+
+  assertTextChunkContentAndMetadata(0, {"abc1", "abc2", "abc3", "abc4", "abc5"});
+  assertTextChunkContentAndMetadata(1, {"abc6", "abc7", "abc8", "abc9", "abc10"});
+
+  g_vacuum_min_selectivity = 0.45;
+  sql("update test_table set t = 'test_val' where i <= 2 or i >= 9;");
+
+  // When a variable length column is updated, the entire row is marked as deleted and a
+  // new row with updated values is appended to the end of the table.
+  assertChunkContentAndMetadata(0, {1, 2, 3, 4, 5});
+  assertChunkContentAndMetadata(1, {6, 7, 8, 9, 10});
+  assertChunkContentAndMetadata(2, {1, 2, 9, 10});
+
+  assertTextChunkContentAndMetadata(0, {"abc1", "abc2", "abc3", "abc4", "abc5"});
+  assertTextChunkContentAndMetadata(1, {"abc6", "abc7", "abc8", "abc9", "abc10"});
+  assertTextChunkContentAndMetadata(2, {"test_val", "test_val", "test_val", "test_val"});
+
+  assertFragmentRowCount(14);
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(3), "abc3"},
+                       {i(4), "abc4"},
+                       {i(5), "abc5"},
+                       {i(6), "abc6"},
+                       {i(7), "abc7"},
+                       {i(8), "abc8"},
+                       {i(1), "test_val"},
+                       {i(2), "test_val"},
+                       {i(9), "test_val"},
+                       {i(10), "test_val"}});
+}
+
+TEST_F(OpportunisticVacuumingTest,
+       VarLenColumnUpdateAndPercentDeletedRowsAboveSelectivityThreshold) {
+  sql("create table test_table (i int, t text encoding none) with (fragment_size = 5, "
+      "max_rollback_epochs = 25);");
+  insertRange(1, 10, "abc");
+
+  assertChunkContentAndMetadata(0, {1, 2, 3, 4, 5});
+  assertChunkContentAndMetadata(1, {6, 7, 8, 9, 10});
+
+  assertTextChunkContentAndMetadata(0, {"abc1", "abc2", "abc3", "abc4", "abc5"});
+  assertTextChunkContentAndMetadata(1, {"abc6", "abc7", "abc8", "abc9", "abc10"});
+
+  g_vacuum_min_selectivity = 0.35;
+  sql("update test_table set t = 'test_val' where i <= 2 or i >= 9;");
+
+  // When a variable length column is updated, the entire row is marked as deleted and a
+  // new row with updated values is appended to the end of the table.
+  assertChunkContentAndMetadata(0, {3, 4, 5});
+  assertChunkContentAndMetadata(1, {6, 7, 8});
+  assertChunkContentAndMetadata(2, {1, 2, 9, 10});
+
+  assertTextChunkContentAndMetadata(0, {"abc3", "abc4", "abc5"});
+  assertTextChunkContentAndMetadata(1, {"abc6", "abc7", "abc8"});
+  assertTextChunkContentAndMetadata(2, {"test_val", "test_val", "test_val", "test_val"});
+
+  assertFragmentRowCount(10);
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(3), "abc3"},
+                       {i(4), "abc4"},
+                       {i(5), "abc5"},
+                       {i(6), "abc6"},
+                       {i(7), "abc7"},
+                       {i(8), "abc8"},
+                       {i(1), "test_val"},
+                       {i(2), "test_val"},
+                       {i(9), "test_val"},
+                       {i(10), "test_val"}});
+}
+
+TEST_F(OpportunisticVacuumingTest, VarlenColumnUpdateOnShardedTable) {
+  sql("create table test_table (i int, t text encoding none, shard key(i)) with "
+      "(fragment_size = 2, shard_count = 2, max_rollback_epochs = 25);");
+  insertRange(1, 6, "abc");
+
+  assertShardChunkContentAndMetadata(0, 0, {2, 4});
+  assertShardChunkContentAndMetadata(0, 1, {6});
+  assertShardTextChunkContent(0, 0, {"abc2", "abc4"});
+  assertShardTextChunkContent(0, 1, {"abc6"});
+
+  assertShardChunkContentAndMetadata(1, 0, {1, 3});
+  assertShardChunkContentAndMetadata(1, 1, {5});
+  assertShardTextChunkContent(1, 0, {"abc1", "abc3"});
+  assertShardTextChunkContent(1, 1, {"abc5"});
+
+  sql("update test_table set t = 'test_val' where i <= 4;");
+
+  // When a variable length column is updated, the entire row is marked as deleted and a
+  // new row with updated values is appended to the end of the table.
+  assertShardChunkContentAndMetadata(0, 0, {});
+  assertShardChunkContentAndMetadata(0, 1, {6, 2});
+  assertShardChunkContentAndMetadata(0, 2, {4});
+  assertShardTextChunkContent(0, 0, {});
+  assertShardTextChunkContent(0, 1, {"abc6", "test_val"});
+  assertShardTextChunkContent(0, 2, {"test_val"});
+  assertShardFragmentRowCount(0, 3);
+
+  assertShardChunkContentAndMetadata(1, 0, {});
+  assertShardChunkContentAndMetadata(1, 1, {5, 1});
+  assertShardChunkContentAndMetadata(1, 2, {3});
+  assertShardTextChunkContent(1, 0, {});
+  assertShardTextChunkContent(1, 1, {"abc5", "test_val"});
+  assertShardTextChunkContent(1, 2, {"test_val"});
+  assertShardFragmentRowCount(1, 3);
+
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(6), "abc6"},
+                       {i(2), "test_val"},
+                       {i(4), "test_val"},
+                       {i(5), "abc5"},
+                       {i(1), "test_val"},
+                       {i(3), "test_val"}});
+}
+
+TEST_F(OpportunisticVacuumingTest, DifferentDataTypesMetadataUpdate) {
+  sql("create table test_table (i integer encoding fixed(16), t text, "
+      "t_none text encoding none, f float, d_arr double[1], tm_arr timestamp[], "
+      "dt date) with (fragment_size = 2, max_rollback_epochs = 25);");
+  sql("insert into test_table values (1, 'test_1', 'test_1', 1.5, {10.5}, "
+      "{'2021-01-01 00:10:00'}, '2021-01-01');");
+  sql("insert into test_table values (2, 'test_2', 'test_2', 2.5, {20.5}, "
+      "{'2021-02-01 00:10:00'}, '2021-02-01');");
+  sql("insert into test_table values (3, 'test_3', 'test_3', 3.5, {30.5}, "
+      "{'2021-03-01 00:10:00'}, '2021-03-01');");
+  sql("insert into test_table values (4, 'test_4', 'test_4', 4.5, {40.5}, "
+      "{'2021-04-01 00:10:00'}, '2021-04-01');");
+  sql("insert into test_table values (5, 'test_5', 'test_5', 5.5, {50.5}, "
+      "{'2021-05-01 00:10:00'}, '2021-05-01');");
+
+  assertFragmentMetadataForDataTypesTest(
+      {{1, "test_1", "test_1", 1.5f, 10.5, "2021-01-01 00:10:00", "2021-01-01"},
+       {2, "test_2", "test_2", 2.5f, 20.5, "2021-02-01 00:10:00", "2021-02-01"}},
+      0,
+      false);
+  assertFragmentMetadataForDataTypesTest(
+      {{3, "test_3", "test_3", 3.5f, 30.5, "2021-03-01 00:10:00", "2021-03-01"},
+       {4, "test_4", "test_4", 4.5f, 40.5, "2021-04-01 00:10:00", "2021-04-01"}},
+      1,
+      false);
+  assertFragmentMetadataForDataTypesTest(
+      {{5, "test_5", "test_5", 5.5f, 50.5, "2021-05-01 00:10:00", "2021-05-01"}},
+      2,
+      false);
+
+  // Increase values
+  sql("update test_table set i = 10, t = 'test_10', t_none = 'test_10', f = 100.5, "
+      "d_arr = ARRAY[1000.5], tm_arr = ARRAY['2021-10-10 00:10:00'], "
+      "dt = '2021-10-10' where i = 2;");
+
+  // Set values to null
+  sql("update test_table set i = null, t = null, t_none = null, f = null, "
+      "d_arr = ARRAY[null], tm_arr = null, dt = null where i = 3;");
+
+  // Decrease values
+  sql("update test_table set i = 0, t = 'test', t_none = 'test', f = 0.5, "
+      "d_arr = ARRAY[1.5], tm_arr = ARRAY['2020-01-01 00:10:00'], "
+      "dt = '2020-01-01' where i = 5;");
+
+  // When a variable length column is updated, the entire row is marked as deleted and a
+  // new row with updated values is appended to the end of the table.
+  assertFragmentMetadataForDataTypesTest(
+      {{1, "test_1", "test_1", 1.5f, 10.5, "2021-01-01 00:10:00", "2021-01-01"}},
+      0,
+      false);
+  assertFragmentMetadataForDataTypesTest(
+      {{4, "test_4", "test_4", 4.5f, 40.5, "2021-04-01 00:10:00", "2021-04-01"}},
+      1,
+      false);
+  assertFragmentMetadataForDataTypesTest(
+      {{10, "test_10", "test_10", 100.5f, 1000.5, "2021-10-10 00:10:00", "2021-10-10"}},
+      2,
+      false);
+  assertFragmentMetadataForDataTypesTest(
+      {{NULL_SMALLINT, "", "", NULL_FLOAT, NULL_DOUBLE, "", ""},
+       {0, "test", "test", 0.5f, 1.5, "2020-01-01 00:10:00", "2020-01-01"}},
+      3,
+      true);
+
+  // clang-format off
+  sqlAndCompareResult(
+      "select * from test_table order by i;",
+      {{i(0), "test", "test", 0.5f, array({1.5}), array({"2020-01-01 00:10:00"}), "2020-01-01"},
+       {i(1), "test_1", "test_1", 1.5f, array({10.5}), array({"2021-01-01 00:10:00"}), "2021-01-01"},
+       {i(4), "test_4", "test_4", 4.5f, array({40.5}), array({"2021-04-01 00:10:00"}), "2021-04-01"},
+       {i(10), "test_10", "test_10", 100.5f, array({1000.5}), array({"2021-10-10 00:10:00"}), "2021-10-10"},
+       {Null_i, Null, Null, NULL_FLOAT, array({NULL_DOUBLE}), array({}), Null}});
+  // clang-format on
 }
 
 int main(int argc, char** argv) {

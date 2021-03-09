@@ -305,7 +305,13 @@ class SringConstInResultSet : public std::runtime_error {
 class ExtensionFunction;
 
 using RowDataProvider = Fragmenter_Namespace::RowDataProvider;
-using ColumnToFragmentsMap = std::map<const ColumnDescriptor*, std::set<int>>;
+using ColumnToFragmentsMap = std::map<const ColumnDescriptor*, std::set<int32_t>>;
+using TableToFragmentIds = std::map<int32_t, std::set<int32_t>>;
+
+struct TableUpdateMetadata {
+  ColumnToFragmentsMap columns_for_metadata_update;
+  TableToFragmentIds fragments_with_deleted_rows;
+};
 
 class UpdateLogForFragment : public RowDataProvider {
  public:
@@ -334,8 +340,7 @@ class UpdateLogForFragment : public RowDataProvider {
 
   SQLTypeInfo getColumnType(const size_t col_idx) const;
 
-  using Callback =
-      std::function<void(const UpdateLogForFragment&, ColumnToFragmentsMap&)>;
+  using Callback = std::function<void(const UpdateLogForFragment&, TableUpdateMetadata&)>;
 
   auto getResultSet() const { return rs_; }
 
@@ -464,14 +469,14 @@ class Executor {
                                const bool has_cardinality_estimation,
                                ColumnCacheMap& column_cache);
 
-  void executeUpdate(const RelAlgExecutionUnit& ra_exe_unit,
-                     const std::vector<InputTableInfo>& table_infos,
-                     const CompilationOptions& co,
-                     const ExecutionOptions& eo,
-                     const Catalog_Namespace::Catalog& cat,
-                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                     const UpdateLogForFragment::Callback& cb,
-                     const bool is_agg);
+  TableUpdateMetadata executeUpdate(const RelAlgExecutionUnit& ra_exe_unit,
+                                    const std::vector<InputTableInfo>& table_infos,
+                                    const CompilationOptions& co,
+                                    const ExecutionOptions& eo,
+                                    const Catalog_Namespace::Catalog& cat,
+                                    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                    const UpdateLogForFragment::Callback& cb,
+                                    const bool is_agg);
 
  private:
   void clearMetaInfoCache();

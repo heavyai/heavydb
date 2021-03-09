@@ -58,7 +58,7 @@ struct FileInfo {
   FILE* f;                     /// file stream object for the represented file
   size_t pageSize;             /// the fixed size of each page in the file
   size_t numPages;             /// the number of pages in the file
-  bool isDirty;                // True if writes have occured since last sync
+  bool isDirty{false};         // True if writes have occured since last sync
   std::set<size_t> freePages;  /// set of page numbers of free pages
   std::mutex freePagesMutex_;
   std::mutex readWriteMutex_;

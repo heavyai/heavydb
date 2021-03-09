@@ -135,7 +135,7 @@ class StorageIOFacility {
                                   Data_Namespace::MemoryLevel::DISK_LEVEL) {
         // If commitUpdate() did not checkpoint, then we need to checkpoint here in order
         // to ensure that epochs are uniformly incremented in distributed mode.
-        catalog.checkpoint(table_descriptor_->tableId);
+        catalog.checkpointWithAutoRollback(table_descriptor_->tableId);
       }
     }
 
@@ -197,9 +197,9 @@ class StorageIOFacility {
     using RowProcessingFuturesVector = std::vector<std::future<uint64_t>>;
 
     if (update_parameters.isVarlenUpdateRequired()) {
-      // TODO: Add support for opportunistic vacuuming
-      auto callback = [this, &update_parameters](UpdateLogForFragment const& update_log,
-                                                 ColumnToFragmentsMap&) -> void {
+      auto callback = [this, &update_parameters](
+                          UpdateLogForFragment const& update_log,
+                          TableUpdateMetadata& table_update_metadata) -> void {
         std::vector<const ColumnDescriptor*> columnDescriptors;
         std::vector<TargetMetaInfo> sourceMetaInfos;
 
@@ -227,11 +227,13 @@ class StorageIOFacility {
             Data_Namespace::MemoryLevel::CPU_LEVEL,
             update_parameters.getTransactionTracker(),
             executor_);
+        table_update_metadata.fragments_with_deleted_rows[td->tableId].emplace(
+            update_log.getFragmentId());
       };
       return callback;
     } else if (update_parameters.tableIsTemporary()) {
       auto callback = [this, &update_parameters](UpdateLogForFragment const& update_log,
-                                                 ColumnToFragmentsMap&) -> void {
+                                                 TableUpdateMetadata&) -> void {
         auto rs = update_log.getResultSet();
         CHECK(rs->didOutputColumnar());
         CHECK(rs->isDirectColumnarConversionPossible());
@@ -306,7 +308,7 @@ class StorageIOFacility {
     } else {
       auto callback = [this, &update_parameters](
                           UpdateLogForFragment const& update_log,
-                          ColumnToFragmentsMap& optimize_candidates) -> void {
+                          TableUpdateMetadata& table_update_metadata) -> void {
         auto entries_per_column = update_log.getEntryCount();
         auto rows_per_column = update_log.getRowCount();
         if (rows_per_column == 0) {
@@ -430,7 +432,8 @@ class StorageIOFacility {
                                        Data_Namespace::MemoryLevel::CPU_LEVEL,
                                        update_parameters.getTransactionTracker());
           if (should_recompute_metadata(update_stats)) {
-            optimize_candidates[target_column].emplace(fragment_id);
+            table_update_metadata.columns_for_metadata_update[target_column].emplace(
+                fragment_id);
           }
         }
       };
@@ -444,7 +447,7 @@ class StorageIOFacility {
 
     if (delete_parameters.tableIsTemporary()) {
       auto callback = [this](UpdateLogForFragment const& update_log,
-                             ColumnToFragmentsMap&) -> void {
+                             TableUpdateMetadata&) -> void {
         auto rs = update_log.getResultSet();
         CHECK(rs->didOutputColumnar());
         CHECK(rs->isDirectColumnarConversionPossible());
@@ -515,9 +518,9 @@ class StorageIOFacility {
       };
       return callback;
     } else {
-      // TODO: Add support for opportunistic vacuuming
-      auto callback = [this, &delete_parameters](UpdateLogForFragment const& update_log,
-                                                 ColumnToFragmentsMap&) -> void {
+      auto callback = [this, &delete_parameters](
+                          UpdateLogForFragment const& update_log,
+                          TableUpdateMetadata& table_update_metadata) -> void {
         auto entries_per_column = update_log.getEntryCount();
         auto rows_per_column = update_log.getRowCount();
         if (rows_per_column == 0) {
@@ -610,6 +613,8 @@ class StorageIOFacility {
                                  update_log.getColumnType(0),
                                  Data_Namespace::MemoryLevel::CPU_LEVEL,
                                  delete_parameters.getTransactionTracker());
+        table_update_metadata.fragments_with_deleted_rows[table_descriptor->tableId]
+            .emplace(update_log.getFragmentId());
       };
       return callback;
     }

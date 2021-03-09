@@ -1834,6 +1834,8 @@ int main(int argc, char** argv) {
   // that metadata is not automatically updated for other
   // tests that do and assert metadata updates.
   g_enable_auto_metadata_update = false;
+  g_vacuum_min_selectivity = 1.1;
+
   QR::init(BASE_PATH);
 
   int err{0};

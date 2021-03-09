@@ -225,6 +225,11 @@ class Encoder {
     return false;
   }
 
+  /**
+   * Resets chunk metadata stats to their default values.
+   */
+  virtual void resetChunkStats() = 0;
+
   size_t getNumElems() const { return num_elems_; }
   void setNumElems(const size_t num_elems) { num_elems_ = num_elems; }
 

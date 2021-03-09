@@ -229,6 +229,11 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     return true;
   }
 
+  void resetChunkStats() override {
+    has_nulls = false;
+    initialized = false;
+  }
+
   Datum elem_min;
   Datum elem_max;
   bool has_nulls;

@@ -1648,10 +1648,10 @@ TEST_F(ShowTableDetailsTest, MaxRollbackEpochsUpdates) {
   for (int i = 0; i < 2; i++) {
     sql("update test_table_1 set c1 = c1 + 1 where c1 >= 10;");
   }
-  assertMaxRollbackUpdateResult(15, 8, 5, 4, 0);
+  assertMaxRollbackUpdateResult(15, 8, 5, 6, 0);
 
   sql("alter table test_table_1 set max_rollback_epochs = 1;");
-  assertMaxRollbackUpdateResult(1, 4, 4, 5, 3);
+  assertMaxRollbackUpdateResult(1, 3, 3, 7, 5);
 }
 
 TEST_F(ShowTableDetailsTest, CommandWithTableNames) {

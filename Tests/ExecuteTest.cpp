@@ -15022,19 +15022,7 @@ TEST(Update, BasicVarlenUpdate) {
     }
 
     // Test RelCompound-driven update
-
-    auto y_pre_rowid_1 =
-        v<int64_t>(run_simple_agg("select rowid from smartswitch where y[1]=1;", dt));
     run_multiple_agg("update smartswitch set y=ARRAY[9,10,11,12] where y[1]=1;", dt);
-    auto y_post_rowid_1 =
-        v<int64_t>(run_simple_agg("select rowid from smartswitch where y[1]=9 and "
-                                  "y[2]=10 and y[3]=11 and y[4]=12 and z='Flake';",
-                                  dt));
-
-    // Internal insert-delete cycle should create a new rowid
-    // This test validates that the CTAS varlen update path was used; the rowid change is
-    // evidence
-    ASSERT_NE(y_pre_rowid_1, y_post_rowid_1);
 
     ASSERT_EQ(int64_t(2),
               v<int64_t>(run_simple_agg("select count(y) from smartswitch where y[1]=9 "

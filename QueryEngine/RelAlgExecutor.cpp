@@ -33,6 +33,7 @@
 #include "QueryEngine/RelAlgTranslator.h"
 #include "QueryEngine/ResultSetBuilder.h"
 #include "QueryEngine/RexVisitor.h"
+#include "QueryEngine/TableOptimizer.h"
 #include "QueryEngine/WindowContext.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/measure.h"
@@ -1518,16 +1519,19 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
           dynamic_cast<UpdateTransactionParameters*>(dml_transaction_parameters_.get());
       CHECK(update_transaction_parameters);
       auto update_callback = yieldUpdateCallback(*update_transaction_parameters);
-      executor_->executeUpdate(ra_exe_unit,
-                               table_infos,
-                               co_project,
-                               eo,
-                               cat_,
-                               executor_->row_set_mem_owner_,
-                               update_callback,
-                               is_aggregate);
-      post_execution_callback_ = [this]() {
+      auto table_update_metadata = executor_->executeUpdate(ra_exe_unit,
+                                                            table_infos,
+                                                            co_project,
+                                                            eo,
+                                                            cat_,
+                                                            executor_->row_set_mem_owner_,
+                                                            update_callback,
+                                                            is_aggregate);
+      post_execution_callback_ = [table_update_metadata, this]() {
         dml_transaction_parameters_->finalizeTransaction(cat_);
+        TableOptimizer table_optimizer{
+            dml_transaction_parameters_->getTableDescriptor(), executor_, cat_};
+        table_optimizer.vacuumFragmentsAboveMinSelectivity(table_update_metadata);
       };
     };
 
@@ -1631,16 +1635,20 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
             CHECK_EQ(exe_unit.target_exprs.size(), size_t(1));
           }
 
-          executor_->executeUpdate(exe_unit,
-                                   table_infos,
-                                   co_delete,
-                                   eo,
-                                   cat_,
-                                   executor_->row_set_mem_owner_,
-                                   delete_callback,
-                                   is_aggregate);
-          post_execution_callback_ = [this]() {
+          auto table_update_metadata =
+              executor_->executeUpdate(exe_unit,
+                                       table_infos,
+                                       co_delete,
+                                       eo,
+                                       cat_,
+                                       executor_->row_set_mem_owner_,
+                                       delete_callback,
+                                       is_aggregate);
+          post_execution_callback_ = [table_update_metadata, this]() {
             dml_transaction_parameters_->finalizeTransaction(cat_);
+            TableOptimizer table_optimizer{
+                dml_transaction_parameters_->getTableDescriptor(), executor_, cat_};
+            table_optimizer.vacuumFragmentsAboveMinSelectivity(table_update_metadata);
           };
         };
 

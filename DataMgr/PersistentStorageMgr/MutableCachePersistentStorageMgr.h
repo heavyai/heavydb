@@ -40,5 +40,5 @@ class MutableCachePersistentStorageMgr : public PersistentStorageMgr {
   void removeTableRelatedDS(const int db_id, const int table_id) override;
 
  private:
-  std::map<const ChunkKey, AbstractBuffer*> cached_buffer_map_;
+  std::set<ChunkKey> cached_chunk_keys_;
 };

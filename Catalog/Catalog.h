@@ -288,12 +288,10 @@ class Catalog final {
   void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
   int getLogicalTableId(const int physicalTableId) const;
   void checkpoint(const int logicalTableId) const;
-  void checkpointWithAutoRollback(const int logical_table_id);
+  void checkpointWithAutoRollback(const int logical_table_id) const;
   std::string name() const { return getCurrentDB().dbName; }
   void eraseDBData();
   void eraseTablePhysicalData(const TableDescriptor* td);
-  void vacuumDeletedRows(const TableDescriptor* td) const;
-  void vacuumDeletedRows(const int logicalTableId) const;
   void setForReload(const int32_t tableId);
 
   std::vector<std::string> getTableDataDirectories(const TableDescriptor* td) const;

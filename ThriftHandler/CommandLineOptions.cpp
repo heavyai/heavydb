@@ -721,6 +721,15 @@ void CommandLineOptions::fillAdvancedOptions() {
       po::value<size_t>(&g_parallel_top_max)->default_value(g_parallel_top_max),
       "For ResultSets requiring a heap sort, the maximum number of rows allowed by "
       "watchdog.");
+  developer_desc.add_options()("vacuum-min-selectivity",
+                               po::value<float>(&g_vacuum_min_selectivity)
+                                   ->default_value(g_vacuum_min_selectivity),
+                               "Minimum selectivity for automatic vacuuming. "
+                               "This specifies the percentage (with a value of 0 "
+                               "implying 0% and a value of 1 implying 100%) of "
+                               "deleted rows in a fragment at which to perform "
+                               "automatic vacuuming. A number greater than 1 can "
+                               "be used to disable automatic vacuuming.");
 }
 
 namespace {
@@ -901,6 +910,11 @@ void CommandLineOptions::validate() {
   addOptionalFileToBlacklist(system_parameters.ssl_key_file);
   addOptionalFileToBlacklist(system_parameters.ssl_trust_ca_file);
   addOptionalFileToBlacklist(cluster_file);
+
+  if (g_vacuum_min_selectivity < 0) {
+    throw std::runtime_error{"vacuum-min-selectivity cannot be less than 0."};
+  }
+  LOG(INFO) << "Vacuum Min Selectivity: " << g_vacuum_min_selectivity;
 }
 
 boost::optional<int> CommandLineOptions::parse_command_line(
