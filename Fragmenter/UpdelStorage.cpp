@@ -559,14 +559,10 @@ void InsertOrderFragmenter::updateColumns(
   }
   deletedChunk->getBuffer()->getEncoder()->updateStats(static_cast<int64_t>(true), false);
 
-  auto& shadowDeletedChunkMeta =
-      fragment.shadowChunkMetadataMap[deletedChunk->getColumnDesc()->columnId];
-  if (shadowDeletedChunkMeta->numElements >
-      deletedChunk->getBuffer()->getEncoder()->getNumElems()) {
-    // the append will have populated shadow meta data, otherwise use existing num
-    // elements
-    deletedChunk->getBuffer()->getEncoder()->setNumElems(
-        shadowDeletedChunkMeta->numElements);
+  if (fragment.shadowNumTuples > deletedChunk->getBuffer()->getEncoder()->getNumElems()) {
+    // An append to the same fragment will increase shadowNumTuples.
+    // Update NumElems in this case. Otherwise, use existing NumElems.
+    deletedChunk->getBuffer()->getEncoder()->setNumElems(fragment.shadowNumTuples);
   }
   deletedChunk->getBuffer()->setUpdated();
 }
