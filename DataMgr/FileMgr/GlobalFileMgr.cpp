@@ -196,7 +196,7 @@ AbstractBufferMgr* GlobalFileMgr::getFileMgr(const int32_t db_id, const int32_t 
                 .second);
       return foreign_buffer_manager;
     } else {
-      int32_t max_rollback_epochs{-1};
+      int32_t max_rollback_epochs{-1 /*DEFAULT_MAX_ROLLBACK_EPOCHS*/};
       if (max_rollback_epochs_per_table_.find(file_mgr_key) !=
           max_rollback_epochs_per_table_.end()) {
         max_rollback_epochs = max_rollback_epochs_per_table_[file_mgr_key];

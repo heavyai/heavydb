@@ -272,8 +272,7 @@ class MetadataUpdate : public DBHandlerTestFixture,
                         " (x INT, y INT NOT NULL, z INT "
                         "ENCODING FIXED(8), a DOUBLE, b FLOAT, d DATE, dd DATE "
                         "ENCODING FIXED(16), c TEXT ENCODING DICT(32), skey int" +
-                        phrase_shard_key +
-                        ") WITH (FRAGMENT_SIZE=5, max_rollback_epochs = 25" +
+                        phrase_shard_key + ") WITH (FRAGMENT_SIZE=5" +
                         phrase_shard_count + ");"));
 
     TestHelpers::ValuesGenerator gen(g_table_name);
@@ -771,7 +770,7 @@ TEST_F(OptimizeTableVacuumTest, InsertAndCompactShardedTableData) {
   File_Namespace::FileMgr::setNumPagesPerDataFile(1);
 
   sql("create table test_table (i int, shard key(i)) with (fragment_size = 2, "
-      "shard_count = 4, max_rollback_epochs = 25);");
+      "shard_count = 4);");
   insertRange(1, 12, 1);
   // 4 chunk page writes per shard. 2 for the "i" column and "$deleted"
   // column each. 6 metadata page writes per shard for each insert.

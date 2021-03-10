@@ -686,8 +686,7 @@ TEST_F(SetTableEpochsTest, CappedAlter) {
     }
   };
 
-  sql("create table test_table(a int, shard key(a)) with (shard_count = 2, "
-      "max_rollback_epochs = 25);");
+  sql("create table test_table(a int, shard key(a)) with (shard_count =2);");
 
   doInserts();
   assertTableEpochs({row_count, row_count});

@@ -711,7 +711,7 @@ TEST_P(CreateTableTest, ArrayTypes) {
   std::string query = getCreateTableQuery(
       GetParam(),
       "test_table",
-      R"((t TINYINT[], t2 TINYINT[1], i INTEGER[], i2 INTEGER[1], bint BIGINT[], bint2 BIGINT[1],
+      R"((t TINYINT[], t2 TINYINT[1], i INTEGER[], i2 INTEGER[1], bint BIGINT[], bint2 BIGINT[1], 
       txt TEXT[] ENCODING DICT(32), txt2 TEXT[1] ENCODING DICT(32), f FLOAT[], f2 FLOAT[1], d DOUBLE[], d2 DOUBLE[1], dc DECIMAL(18,6)[], dc2 DECIMAL(18,6)[1], b BOOLEAN[], b2 BOOLEAN[1], dt DATE[], dt2 DATE[1], tm TIME[], tm2 TIME[1], tp TIMESTAMP[], tp2 TIMESTAMP[1], tp3 TIMESTAMP(3)[], tp4 TIMESTAMP(9)[1]))");
   sql(query);
 
@@ -1688,48 +1688,6 @@ TEST_F(CreateShardedTableTest, ShardedTableName) {
   ASSERT_EQ(2, physical_tables[1]->nShards);
   ASSERT_EQ(1, physical_tables[1]->shard);
   ASSERT_EQ("test_table_shard_#2", physical_tables[1]->tableName);
-}
-
-class MaxRollbackEpochsTest : public CreateAndDropTableDdlTest {
- protected:
-  void SetUp() override {
-    CreateAndDropTableDdlTest::SetUp();
-    sql("DROP TABLE IF EXISTS test_table;");
-  }
-
-  void TearDown() override {
-    sql("DROP TABLE IF EXISTS test_table;");
-    CreateAndDropTableDdlTest::TearDown();
-  }
-
-  void assertEpochCeilingAndFloor(int64_t epoch_ceiling, int64_t epoch_floor) {
-    TQueryResult result;
-    sql(result, "show table details test_table;");
-
-    ASSERT_EQ("max_epoch", result.row_set.row_desc[9].col_name);
-    ASSERT_EQ(epoch_ceiling, result.row_set.columns[9].data.int_col[0]);
-
-    ASSERT_EQ("min_epoch_floor", result.row_set.row_desc[10].col_name);
-    ASSERT_EQ(epoch_floor, result.row_set.columns[10].data.int_col[0]);
-  }
-};
-
-TEST_F(MaxRollbackEpochsTest, CreateTableDefaultValue) {
-  sql("CREATE TABLE test_table (col1 INTEGER);");
-
-  auto& catalog = getCatalog();
-  auto table = catalog.getMetadataForTable("test_table", false);
-  ASSERT_EQ(table->maxRollbackEpochs, DEFAULT_MAX_ROLLBACK_EPOCHS);
-
-  // Sanity test to ensure that default max_rollback_epoch is in effect
-  sql("INSERT INTO test_table VALUES (10);");
-  for (int i = 1; i < DEFAULT_MAX_ROLLBACK_EPOCHS; i++) {
-    sql("UPDATE test_table SET col1 = col1 + 10;");
-  }
-  assertEpochCeilingAndFloor(DEFAULT_MAX_ROLLBACK_EPOCHS, 0);
-
-  sql("UPDATE test_table SET col1 = col1 + 10;");
-  assertEpochCeilingAndFloor(DEFAULT_MAX_ROLLBACK_EPOCHS + 1, 1);
 }
 
 int main(int argc, char** argv) {
