@@ -345,19 +345,11 @@ void CommandLineOptions::fillOptions() {
                           po::value<std::string>(&disk_cache_config.path),
                           "Specify the path for the disk cache.");
 
-#ifdef ENABLE_GENERAL_DISK_CACHE
   help_desc.add_options()(
       "disk-cache-level",
       po::value<std::string>(&(disk_cache_level))->default_value("foreign_tables"),
       "Specify level of disk cache. Valid options are 'foreign_tables', "
       "'local_tables', 'none', and 'all'.");
-#else
-  help_desc.add_options()(
-      "disk-cache-level",
-      po::value<std::string>(&(disk_cache_level))->default_value("foreign_tables"),
-      "Specify level of disk cache. Valid options are 'foreign_tables' "
-      "and 'none'.");
-#endif  // ENABLE_GENERAL_DISK_CACHE
 
   help_desc.add_options()(
       "enable-interoperability",
@@ -836,29 +828,20 @@ void CommandLineOptions::validate() {
       LOG(INFO) << "Cannot enable disk cache for fsi when fsi is disabled.  Defaulted to "
                    "disk cache disabled";
     }
-#ifdef ENABLE_GENERAL_DISK_CACHE
   } else if (disk_cache_level == "all") {
     disk_cache_config.enabled_level = DiskCacheLevel::all;
     LOG(INFO) << "Disk cache enabled for all tables";
   } else if (disk_cache_level == "local_tables") {
     disk_cache_config.enabled_level = DiskCacheLevel::non_fsi;
     LOG(INFO) << "Disk cache enabled for non-FSI tables";
-#endif  // ENABLE_GENERAL_DISK_CACHE
   } else if (disk_cache_level == "none") {
     disk_cache_config.enabled_level = DiskCacheLevel::none;
     LOG(INFO) << "Disk cache disabled";
   } else {
-#ifdef ENABLE_GENERAL_DISK_CACHE
     throw std::runtime_error{
         "Unexpected \"disk-cache-level\" value: " + disk_cache_level +
         ". Valid options are 'foreign_tables', "
         "'local_tables', 'none', and 'all'."};
-#else
-    throw std::runtime_error{
-        "Unexpected \"disk-cache-level\" value: " + disk_cache_level +
-        ". Valid options are 'foreign_tables' and "
-        "'none'."};
-#endif  // ENABLE_GENERAL_DISK_CACHE
   }
 
   if (disk_cache_config.path.empty()) {
