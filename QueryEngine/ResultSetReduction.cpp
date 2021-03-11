@@ -377,9 +377,17 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
 
 namespace {
 
-ALWAYS_INLINE void check_watchdog(const size_t sample_seed) {
-  if (UNLIKELY(g_enable_dynamic_watchdog && (sample_seed & 0x3F) == 0 &&
-               dynamic_watchdog())) {
+ALWAYS_INLINE void check_watchdog() {
+  if (UNLIKELY(dynamic_watchdog())) {
+    // TODO(alex): distinguish between the deadline and interrupt
+    throw std::runtime_error(
+        "Query execution has exceeded the time limit or was interrupted during result "
+        "set reduction");
+  }
+}
+
+ALWAYS_INLINE void check_watchdog_with_seed(const size_t sample_seed) {
+  if (UNLIKELY((sample_seed & 0x3F) == 0 && dynamic_watchdog())) {
     // TODO(alex): distinguish between the deadline and interrupt
     throw std::runtime_error(
         "Query execution has exceeded the time limit or was interrupted during result "
@@ -417,7 +425,13 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
       // should better codify and store this information in the future
       two_slot_target = true;
     }
-
+    if (UNLIKELY(g_enable_non_kernel_time_query_interrupt && check_interrupt())) {
+      throw std::runtime_error(
+          "Query execution was interrupted during result set reduction");
+    }
+    if (g_enable_dynamic_watchdog) {
+      check_watchdog();
+    }
     for (size_t target_slot_idx = slots_for_col.front();
          target_slot_idx < slots_for_col.back() + 1;
          target_slot_idx += 2) {
@@ -425,9 +439,9 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
           this_crt_col_ptr, query_mem_desc_, target_slot_idx);
       const auto that_next_col_ptr = advance_to_next_columnar_target_buff(
           that_crt_col_ptr, query_mem_desc_, target_slot_idx);
-      auto do_work = [&](const size_t entry_idx) {
+      for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
         if (isEmptyEntryColumnar(entry_idx, that_buff)) {
-          return;
+          continue;
         }
         if (LIKELY(!query_mem_desc_.hasKeylessHash())) {
           // copy the key from right hand side
@@ -460,22 +474,6 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
                       that,
                       slots_for_col.front(),
                       serialized_varlen_buffer);
-      };
-      if (g_enable_non_kernel_time_query_interrupt) {
-        for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
-          if (UNLIKELY((entry_idx & 0xFFFF) == 0 && check_interrupt())) {
-            throw std::runtime_error(
-                "Query execution has interrupted during result set reduction");
-          }
-          do_work(entry_idx);
-        }
-      } else {
-        for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
-          if (g_enable_dynamic_watchdog) {
-            check_watchdog(entry_idx);
-          }
-          do_work(entry_idx);
-        }
       }
 
       this_crt_col_ptr = this_next_col_ptr;
@@ -824,7 +822,7 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                                               const size_t that_entry_count,
                                               const ResultSetStorage& that) const {
   if (g_enable_dynamic_watchdog) {
-    check_watchdog(that_entry_idx);
+    check_watchdog_with_seed(that_entry_idx);
   }
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   CHECK(query_mem_desc_.getQueryDescriptionType() ==
