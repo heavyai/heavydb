@@ -159,11 +159,13 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
   if (isParallelConversion()) {
     const size_t worker_count = cpu_threads();
     std::vector<std::future<void>> conversion_threads;
-    const auto do_work = [num_columns, &row_idx, &rows, this](size_t i) {
+    const auto do_work = [num_columns, &rows, &row_idx, this](const size_t i) {
       const auto crt_row = rows.getRowAtNoTranslations(i);
-      auto cur_row_idx = row_idx.fetch_add(1);
-      for (size_t i = 0; i < num_columns; ++i) {
-        writeBackCell(crt_row[i], cur_row_idx, i);
+      if (!crt_row.empty()) {
+        auto cur_row_idx = row_idx.fetch_add(1);
+        for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+          writeBackCell(crt_row[col_idx], cur_row_idx, col_idx);
+        }
       }
     };
     for (auto interval : makeIntervals(size_t(0), rows.entryCount(), worker_count)) {
@@ -586,14 +588,13 @@ void ColumnarResults::locateAndCountEntries(const ResultSet& rows,
         }
         do_work(total_non_empty, local_idx, entry_idx, thread_idx);
       }
-      non_empty_per_thread[thread_idx] = total_non_empty;
     } else {
       for (size_t entry_idx = start_index; entry_idx < end_index;
            entry_idx++, local_idx++) {
         do_work(total_non_empty, local_idx, entry_idx, thread_idx);
       }
-      non_empty_per_thread[thread_idx] = total_non_empty;
     }
+    non_empty_per_thread[thread_idx] = total_non_empty;
   };
 
   std::vector<std::future<void>> conversion_threads;

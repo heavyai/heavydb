@@ -28,6 +28,7 @@
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
 #include "QueryEngine/RuntimeFunctions.h"
+#include "QueryRunner/QueryRunner.h"
 #include "StringDictionary/StringDictionary.h"
 #include "Tests/TestHelpers.h"
 
@@ -36,7 +37,28 @@
 #include <queue>
 #include <random>
 
+#ifndef BASE_PATH
+#define BASE_PATH "./tmp"
+#endif
+
+using QR = QueryRunner::QueryRunner;
+
 extern bool g_is_test_env;
+
+bool skip_tests(const ExecutorDeviceType device_type) {
+#ifdef HAVE_CUDA
+  return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
+#else
+  return device_type == ExecutorDeviceType::GPU;
+#endif
+}
+
+#define SKIP_NO_GPU()                                        \
+  if (skip_tests(dt)) {                                      \
+    CHECK(dt == ExecutorDeviceType::GPU);                    \
+    LOG(WARNING) << "GPU not available, skipping GPU tests"; \
+    continue;                                                \
+  }
 
 TEST(Construct, Allocate) {
   std::vector<TargetInfo> target_infos;
@@ -3068,11 +3090,74 @@ TEST(ReduceRandomGroups, BaselineHashColumnar_Large_NullVal_0075) {
       target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
 }
 
+TEST(ResultsetConversion, EnforceParallelColumnarConversion) {
+  // if we try to columnarize intermediate result which 1) is not truncated and
+  // has more than 20000 rows, i.e., rows.entryCount() >= 20000, then
+  // we trigger parallel columnarize conversion for SELECT query
+  // so, the purpose of this test is to check
+  // whether the large columnar conversion is done correctly
+
+  // load 50M rows - single-frag
+  QR::get()->runDDLStatement("DROP TABLE IF EXISTS t_large;");
+  QR::get()->runDDLStatement(
+      "CREATE TABLE t_large (x int not null, y int not null, z int not null) with "
+      "(fragment_size = 100000000);");
+  std::string import_large_t{
+      "COPY t_large FROM "
+      "'../../Tests/Import/datafiles/interrupt_table_very_large.parquet' WITH "
+      "(header='false', parquet='true')"};
+  QR::get()->runDDLStatement(import_large_t);
+
+  // load 50M rows - two frags (use default frag size)
+  QR::get()->runDDLStatement("DROP TABLE IF EXISTS t_large_multi_frag;");
+  QR::get()->runDDLStatement(
+      "CREATE TABLE t_large_multi_frag (x int not null, y int not null, z int not "
+      "null);");
+  std::string import_large_t_multi_frag{
+      "COPY t_large_multi_frag FROM "
+      "'../../Tests/Import/datafiles/interrupt_table_very_large.parquet' WITH "
+      "(header='false', parquet='true')"};
+  QR::get()->runDDLStatement(import_large_t_multi_frag);
+
+  QR::get()->runDDLStatement("DROP TABLE IF EXISTS t_small;");
+  QR::get()->runDDLStatement(
+      "CREATE TABLE t_small (x int not null, y int not null, z int not null);");
+  QR::get()->runSQL(
+      "INSERT INTO t_small VALUES(1, 1, 1);", ExecutorDeviceType::CPU, false);
+  int64_t answer = 9999999;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    // single-frag test
+    std::shared_ptr<ResultSet> res1 = QR::get()->runSQL(
+        "SELECT COUNT(1) FROM (SELECT x FROM t_large WHERE x < 2) t, t_small r where t.x "
+        "= r.x",
+        dt,
+        false);
+    EXPECT_EQ(1, (int64_t)res1.get()->rowCount());
+    const auto crt_row1 = res1.get()->getNextRow(false, false);
+    EXPECT_EQ(answer, v<int64_t>(crt_row1[0]));
+
+    // multi-frag test
+    std::shared_ptr<ResultSet> res2 = QR::get()->runSQL(
+        "SELECT COUNT(1) FROM (SELECT x FROM t_large_multi_frag WHERE x < 2) t, t_small "
+        "r where t.x = r.x",
+        dt,
+        false);
+    EXPECT_EQ(1, (int64_t)res2.get()->rowCount());
+    const auto crt_row2 = res2.get()->getNextRow(false, false);
+    EXPECT_EQ(answer, v<int64_t>(crt_row1[0]));
+  }
+}
+
 int main(int argc, char** argv) {
   g_is_test_env = true;
 
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
+
+  QR::init(BASE_PATH);
 
   int err{0};
   try {
@@ -3081,5 +3166,6 @@ int main(int argc, char** argv) {
     LOG(ERROR) << e.what();
   }
   ResultSetReductionJIT::clearCache();
+  QR::reset();
   return err;
 }
