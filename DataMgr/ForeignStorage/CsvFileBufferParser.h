@@ -93,6 +93,13 @@ inline bool skip_column_import(ParseBufferRequest& request, int column_idx) {
   return request.import_buffers[column_idx] == nullptr;
 }
 
+void parse_and_validate_expected_column_count(
+    const std::string& row,
+    const import_export::CopyParams& copy_params,
+    size_t num_cols,
+    int point_cols,
+    const std::string& file_name);
+
 /**
  * Parses a given CSV file buffer and returns data blocks for each column in the
  * file along with metadata related to rows and row offsets within the buffer.

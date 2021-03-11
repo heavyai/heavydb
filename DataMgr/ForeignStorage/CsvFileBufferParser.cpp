@@ -409,6 +409,34 @@ ParseBufferResult parse_buffer(ParseBufferRequest& request,
   }
   return result;
 }
+/**
+ * Takes a single row and verifies number of columns is valid for num_cols and point_cols
+ * (number of point columns)
+ */
+void parse_and_validate_expected_column_count(
+    const std::string& row,
+    const import_export::CopyParams& copy_params,
+    size_t num_cols,
+    int point_cols,
+    const std::string& file_name) {
+  bool is_array = false;
+  bool try_single_thread = false;
+  std::vector<std::unique_ptr<char[]>> tmp_buffers;
+  std::vector<std::string_view> fields;
+  // parse columns in row into fields (other return values are intentionally ignored)
+  import_export::delimited_parser::get_row(row.c_str(),
+                                           row.c_str() + row.size(),
+                                           row.c_str() + row.size(),
+                                           copy_params,
+                                           &is_array,
+                                           fields,
+                                           tmp_buffers,
+                                           try_single_thread,
+                                           false  // Don't filter empty lines
+  );
+  // Check we have right number of columns
+  validate_expected_column_count(fields, num_cols, point_cols, file_name);
+}
 
 }  // namespace csv_file_buffer_parser
 }  // namespace foreign_storage
