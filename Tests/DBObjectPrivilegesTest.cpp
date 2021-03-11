@@ -2374,6 +2374,9 @@ TEST(SysCatalog, RenameDatabase_PrivsTest) {
   EXPECT_NO_THROW(
       rom_qr->runDDLStatement("ALTER DATABASE Ferengi RENAME TO grandnagus;"));
 
+  // Clear session (similar to what is done in DBHandler after a database rename).
+  rom_qr->clearSessionId();
+
   rename_successful = true;
 
   Catalog_Namespace::UserMetadata user_meta3;

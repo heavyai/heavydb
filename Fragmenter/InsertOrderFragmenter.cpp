@@ -119,12 +119,10 @@ void InsertOrderFragmenter::conditionallyInstantiateFileMgrWithParams() {
   if (defaultInsertLevel_ == Data_Namespace::MemoryLevel::DISK_LEVEL) {
     const TableDescriptor* td =
         catalog_->getMetadataForTable(physicalTableId_, false /*populateFragmenter*/);
-    if (td->maxRollbackEpochs != DEFAULT_MAX_ROLLBACK_EPOCHS) {
-      File_Namespace::FileMgrParams fileMgrParams;
-      fileMgrParams.max_rollback_epochs = td->maxRollbackEpochs;
-      dataMgr_->getGlobalFileMgr()->setFileMgrParams(
-          chunkKeyPrefix_[0], chunkKeyPrefix_[1], fileMgrParams);
-    }
+    File_Namespace::FileMgrParams fileMgrParams;
+    fileMgrParams.max_rollback_epochs = td->maxRollbackEpochs;
+    dataMgr_->getGlobalFileMgr()->setFileMgrParams(
+        chunkKeyPrefix_[0], chunkKeyPrefix_[1], fileMgrParams);
   }
 }
 

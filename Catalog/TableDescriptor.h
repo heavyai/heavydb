@@ -39,7 +39,7 @@ struct StorageType {
  *
  */
 
-#define DEFAULT_MAX_ROLLBACK_EPOCHS -1
+#define DEFAULT_MAX_ROLLBACK_EPOCHS 3
 struct TableDescriptor {
   int32_t tableId; /**< tableId starts at 0 for valid tables. */
   int32_t shard;
@@ -87,7 +87,7 @@ struct TableDescriptor {
       , sortedColumnId(0)
       , persistenceLevel(Data_Namespace::MemoryLevel::DISK_LEVEL)
       , hasDeletedCol(true)
-      , maxRollbackEpochs(-1)
+      , maxRollbackEpochs(DEFAULT_MAX_ROLLBACK_EPOCHS)
       , mutex_(std::make_shared<std::mutex>()) {}
 
   virtual ~TableDescriptor() = default;
