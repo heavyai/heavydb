@@ -719,7 +719,7 @@ TEST_F(OptimizeTableVacuumTest, InsertAndCompactTableData) {
   // Compaction deletes the 4 free pages from above in
   // addition to the 2 freed pages.
   sql("optimize table test_table with (vacuum = 'true');");
-  assertFileAndFreePageCount(2, 0, 2, 0);
+  assertFileAndFreePageCount(4, 0, 2, 0);
 
   // Verify that subsequent queries work as expected
   sqlAndCompareResult("select * from test_table;", {{i(3)}});
@@ -791,7 +791,7 @@ TEST_F(OptimizeTableVacuumTest, InsertAndCompactShardedTableData) {
   // (8 total). Compaction deletes the 16 free pages from above
   // in addition to the 8 freed pages.
   sql("optimize table test_table with (vacuum = 'true');");
-  assertFileAndFreePageCount(8, 0, 8, 0);
+  assertFileAndFreePageCount(16, 0, 8, 0);
 
   // Verify that subsequent queries work as expected
   sqlAndCompareResult("select * from test_table order by i;",

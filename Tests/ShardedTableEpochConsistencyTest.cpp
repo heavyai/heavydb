@@ -879,6 +879,60 @@ TEST_F(EpochValidationTest, DifferentTableTypes) {
   sqlAndCompareResult(getValidateStatement(), {{getSuccessfulValidationResult()}});
 }
 
+class EmptyChunkRolloffTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("drop table if exists test_table;");
+  }
+
+  void TearDown() override {
+    sql("drop table if exists test_table;");
+    DBHandlerTestFixture::SetUp();
+  }
+
+  void clearFragmenters() {
+    auto& catalog = getCatalog();
+    auto td = catalog.getMetadataForTable("test_table");
+    auto physical_tables = catalog.getPhysicalTablesDescriptors(td);
+    for (auto table : physical_tables) {
+      catalog.removeFragmenterForTable(table->tableId);
+    }
+  }
+};
+
+TEST_F(EmptyChunkRolloffTest, NonShardedTable) {
+  sql("create table test_table (i integer, t text encoding none) with "
+      "(max_rollback_epochs = 0);");
+  sql("insert into test_table values (1, null);");
+
+  // Force roll-off
+  sql("update test_table set i = i + 1;");
+
+  sqlAndCompareResult("select * from test_table order by i;", {{i(2), Null}});
+  clearFragmenters();
+  sqlAndCompareResult("select * from test_table order by i;", {{i(2), Null}});
+}
+
+TEST_F(EmptyChunkRolloffTest, ShardedTable) {
+  sql("create table test_table (i integer, i2 integer, t text encoding none, shard "
+      "key(i)) with (max_rollback_epochs = 0, shard_count = 4);");
+  for (int i = 1; i <= 4; i++) {
+    sql("insert into test_table values (" + std::to_string(i) + ", 1, null);");
+  }
+
+  // Force roll-off
+  sql("update test_table set i2 = i + 1;");
+
+  sqlAndCompareResult(
+      "select * from test_table order by i;",
+      {{i(1), i(2), Null}, {i(2), i(3), Null}, {i(3), i(4), Null}, {i(4), i(5), Null}});
+  clearFragmenters();
+  sqlAndCompareResult(
+      "select * from test_table order by i;",
+      {{i(1), i(2), Null}, {i(2), i(3), Null}, {i(3), i(4), Null}, {i(4), i(5), Null}});
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
 

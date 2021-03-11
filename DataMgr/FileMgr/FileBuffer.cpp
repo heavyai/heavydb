@@ -220,9 +220,9 @@ void FileBuffer::freePagesBeforeEpoch(const int32_t targetEpoch) {
       max_historical_buffer_size = std::max(max_historical_buffer_size, buffer.size());
     }
 
-    // Free all pages, if none of the old chunk versions has any data
+    // Free all chunk pages, if none of the old chunk versions has any data
     if (max_historical_buffer_size == 0) {
-      freePages();
+      freeChunkPages();
     }
   }
 }
