@@ -121,6 +121,7 @@ outputs:
         - xz
         - zlib
         - arrow-cpp =2.0
+        - libthrift<0.14.1  # ref: modin gh-2840
         - tbb {{ tbb }}
         - {{ pin_subpackage('omniscidb-common', exact=True) }}
       run_constrained:
@@ -221,6 +222,7 @@ outputs:
       run:
         - python
         - pyarrow =2.0
+        - libthrift<0.14.1  # ref: modin gh-2840
         - tbb4py {{ tbb }}
         - {{ pin_subpackage('omniscidbe', exact=True) }}
         - {{ pin_subpackage('omniscidb-common', exact=True) }}
