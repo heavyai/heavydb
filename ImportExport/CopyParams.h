@@ -61,6 +61,7 @@ struct CopyParams {
   // s3/parquet related params
   std::string s3_access_key;  // per-query credentials to override the
   std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
+  std::string s3_session_token = "";
   std::string s3_region;
   std::string s3_endpoint;
   // kafka related params

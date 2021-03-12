@@ -92,7 +92,8 @@ void S3Archive::init_for_read() {
 
     if (!s3_access_key.empty() && !s3_secret_key.empty()) {
       s3_client.reset(new Aws::S3::S3Client(
-          Aws::Auth::AWSCredentials(s3_access_key, s3_secret_key), s3_config));
+          Aws::Auth::AWSCredentials(s3_access_key, s3_secret_key, s3_session_token),
+          s3_config));
     } else {
       s3_client.reset(new Aws::S3::S3Client(
           std::make_shared<Aws::Auth::AnonymousAWSCredentialsProvider>(), s3_config));

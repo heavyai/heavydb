@@ -4201,6 +4201,13 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
           throw std::runtime_error("Option s3_secret_key must be a string.");
         }
         copy_params.s3_secret_key = *str_literal->get_stringval();
+      } else if (boost::iequals(*p->get_name(), "s3_session_token")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option s3_session_token must be a string.");
+        }
+        copy_params.s3_session_token = *str_literal->get_stringval();
       } else if (boost::iequals(*p->get_name(), "s3_region")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());

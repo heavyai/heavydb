@@ -50,6 +50,10 @@ class S3Archive : public Archive {
     if (0 != (env = getenv("AWS_SECRET_ACCESS_KEY"))) {
       s3_secret_key = env;
     }
+    if (0 != (env = getenv("AWS_SESSION_TOKEN"))) {
+      s3_session_token = env;
+    }
+
     if (0 != (env = getenv("AWS_ENDPOINT"))) {
       s3_endpoint = env;
     }
@@ -58,12 +62,14 @@ class S3Archive : public Archive {
   S3Archive(const std::string& url,
             const std::string& s3_access_key,
             const std::string& s3_secret_key,
+            const std::string& s3_session_token,
             const std::string& s3_region,
             const std::string& s3_endpoint,
             const bool plain_text)
       : S3Archive(url, plain_text) {
     this->s3_access_key = s3_access_key;
     this->s3_secret_key = s3_secret_key;
+    this->s3_session_token = s3_session_token;
     this->s3_region = s3_region;
     this->s3_endpoint = s3_endpoint;
 
@@ -119,6 +125,7 @@ class S3Archive : public Archive {
 #endif                        // HAVE_AWS_S3
   std::string s3_access_key;  // per-query credentials to override the
   std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
+  std::string s3_session_token;
   std::string s3_region;
   std::string s3_endpoint;
   std::string s3_temp_dir;
@@ -135,11 +142,17 @@ class S3ParquetArchive : public S3Archive {
   S3ParquetArchive(const std::string& url,
                    const std::string& s3_access_key,
                    const std::string& s3_secret_key,
+                   const std::string& s3_session_token,
                    const std::string& s3_region,
                    const std::string& s3_endpoint,
                    const bool plain_text)
-      : S3Archive(url, s3_access_key, s3_secret_key, s3_region, s3_endpoint, plain_text) {
-  }
+      : S3Archive(url,
+                  s3_access_key,
+                  s3_secret_key,
+                  s3_session_token,
+                  s3_region,
+                  s3_endpoint,
+                  plain_text) {}
 };
 
 #endif /* ARCHIVE_S3ARCHIVE_H_ */

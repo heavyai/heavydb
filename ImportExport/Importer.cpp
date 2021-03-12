@@ -3740,6 +3740,7 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths,
         us3arch.reset(new S3ParquetArchive(file_path,
                                            copy_params.s3_access_key,
                                            copy_params.s3_secret_key,
+                                           copy_params.s3_session_token,
                                            copy_params.s3_region,
                                            copy_params.s3_endpoint,
                                            copy_params.plain_text));
@@ -3871,6 +3872,7 @@ void DataStreamSink::import_compressed(
           us3arch.reset(new S3Archive(file_path,
                                       copy_params.s3_access_key,
                                       copy_params.s3_secret_key,
+                                      copy_params.s3_session_token,
                                       copy_params.s3_region,
                                       copy_params.s3_endpoint,
                                       copy_params.plain_text));
