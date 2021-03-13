@@ -51,7 +51,11 @@ class CsvDataWrapper : public AbstractFileStorageDataWrapper {
                                    const ChunkMetadataVector& chunk_metadata) override;
   bool isRestored() const override;
 
-  bool isInterColumnParallelismEnabled() const override { return true; }
+  ParallelismLevel getCachedParallelismLevel() const override { return INTRA_FRAGMENT; }
+
+  ParallelismLevel getNonCachedParallelismLevel() const override {
+    return INTRA_FRAGMENT;
+  }
 
  private:
   CsvDataWrapper(const ForeignTable* foreign_table);

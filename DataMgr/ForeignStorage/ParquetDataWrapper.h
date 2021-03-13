@@ -31,6 +31,7 @@
 #include "LazyParquetChunkLoader.h"
 
 namespace foreign_storage {
+
 class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
  public:
   ParquetDataWrapper();
@@ -50,7 +51,11 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
 
   bool isRestored() const override;
 
-  bool isInterColumnParallelismEnabled() const override { return true; }
+  ParallelismLevel getCachedParallelismLevel() const override { return INTER_FRAGMENT; }
+
+  ParallelismLevel getNonCachedParallelismLevel() const override {
+    return INTRA_FRAGMENT;
+  }
 
  private:
   std::list<const ColumnDescriptor*> getColumnsToInitialize(

@@ -86,9 +86,12 @@ void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
 
   // Use hints to prefetch other chunks in fragment into cache
   auto& data_wrapper = *getDataWrapper(chunk_key);
-  if (data_wrapper.isInterColumnParallelismEnabled()) {
-    std::set<ChunkKey> optional_keys;
-    getOptionalChunkKeySet(optional_keys, chunk_key, get_keys_set_from_table(chunk_key));
+  std::set<ChunkKey> optional_keys;
+  getOptionalChunkKeySet(optional_keys,
+                         chunk_key,
+                         get_keys_set_from_table(chunk_key),
+                         data_wrapper.getNonCachedParallelismLevel());
+  if (optional_keys.size()) {
     {
       std::shared_lock temp_chunk_buffer_map_lock(temp_chunk_buffer_map_mutex_);
       // Erase anything already in temp_chunk_buffer_map_
@@ -401,21 +404,33 @@ ChunkToBufferMap ForeignStorageMgr::allocateTempBuffersForChunks(
   return chunk_buffer_map;
 }
 
-void ForeignStorageMgr::setColumnHints(
-    std::map<ChunkKey, std::vector<int> >& columns_per_table) {
-  std::shared_lock data_wrapper_lock(columns_hints_mutex_);
-  columns_hints_per_table_ = columns_per_table;
+void ForeignStorageMgr::setParallelismHints(
+    const std::map<ChunkKey, std::set<ParallelismHint>>& hints_per_table) {
+  std::shared_lock data_wrapper_lock(parallelism_hints_mutex_);
+  parallelism_hints_per_table_ = hints_per_table;
 }
 
 void ForeignStorageMgr::getOptionalChunkKeySet(
     std::set<ChunkKey>& optional_chunk_keys,
     const ChunkKey& chunk_key,
-    const std::set<ChunkKey>& required_chunk_keys) {
-  std::shared_lock data_wrapper_lock(columns_hints_mutex_);
-  for (const int column_id : columns_hints_per_table_[get_table_key(chunk_key)]) {
-    ChunkKey optional_chunk_key = get_table_key(chunk_key);
-    optional_chunk_key.push_back(column_id);
-    optional_chunk_key.push_back(chunk_key[CHUNK_KEY_FRAGMENT_IDX]);
+    const std::set<ChunkKey>& required_chunk_keys,
+    const ForeignDataWrapper::ParallelismLevel parallelism_level) {
+  if (parallelism_level == ForeignDataWrapper::NONE) {
+    return;
+  }
+  std::shared_lock data_wrapper_lock(parallelism_hints_mutex_);
+  for (const auto& hint : parallelism_hints_per_table_[get_table_key(chunk_key)]) {
+    const auto& [column_id, fragment_id] = hint;
+    ChunkKey optional_chunk_key_key = get_table_key(chunk_key);
+    optional_chunk_key_key.push_back(column_id);
+    auto optional_chunk_key = optional_chunk_key_key;
+    if (parallelism_level == ForeignDataWrapper::INTRA_FRAGMENT) {
+      optional_chunk_key.push_back(chunk_key[CHUNK_KEY_FRAGMENT_IDX]);
+    } else if (parallelism_level == ForeignDataWrapper::INTER_FRAGMENT) {
+      optional_chunk_key.push_back(fragment_id);
+    } else {
+      UNREACHABLE();
+    }
     std::set<ChunkKey> keys = get_keys_set_from_table(optional_chunk_key);
     for (const auto& key : keys) {
       if (required_chunk_keys.find(key) == required_chunk_keys.end()) {

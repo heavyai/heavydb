@@ -99,12 +99,43 @@ class ForeignDataWrapper {
    */
   virtual const std::set<std::string_view>& getSupportedUserMappingOptions() const = 0;
 
-  virtual bool isInterColumnParallelismEnabled() const { return false; }
-
   /**
     Verifies the schema is supported by this foreign table
     * @param columns - column descriptors for this table
    */
   virtual void validateSchema(const std::list<ColumnDescriptor>& columns) const {};
+
+  /**
+   * ParallelismLevel describes the desired level of parallelism of the data
+   * wrapper. This level controls which `optional_buffers` are passed to
+   * `populateChunkBuffers` with the following behaviour:
+   *
+   * NONE - no additional optional buffers are passed in
+   *
+   * INTRA_FRAGMENT - additional optional buffers which are in the same fragment as the
+   * required buffers
+   *
+   * INTER_FRAGMENT - additional optional buffers which may be in
+   * different fragments than those of the required buffers
+   *
+   * Note, the optional buffers are passed in with the intention of
+   * allowing the data wrapper to employ parallelism in retrieving them. Each subsequent
+   * level allows for a greater degree of parallelism but does not have to be supported.
+   */
+  enum ParallelismLevel { NONE, INTRA_FRAGMENT, INTER_FRAGMENT };
+
+  /**
+   * Gets the desired level of parallelism for the data wrapper when a cache is
+   * in use. This affects the optional buffers that the data wrapper is made
+   * aware of during data requests.
+   */
+  virtual ParallelismLevel getCachedParallelismLevel() const { return NONE; }
+
+  /**
+   * Gets the desired level of parallelism for the data wrapper when no cache
+   * is in use. This affects the optional buffers that the data wrapper is made
+   * aware of during data requests.
+   */
+  virtual ParallelismLevel getNonCachedParallelismLevel() const { return NONE; }
 };
 }  // namespace foreign_storage

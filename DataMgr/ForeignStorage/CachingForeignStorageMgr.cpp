@@ -48,18 +48,19 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
 
   // Use hints to prefetch other chunks in fragment into cache
   auto& data_wrapper = *getDataWrapper(chunk_key);
-  if (data_wrapper.isInterColumnParallelismEnabled()) {
-    std::set<ChunkKey> optional_set;
-    getOptionalChunkKeySet(optional_set, chunk_key, get_keys_set_from_table(chunk_key));
-    for (const auto& key : optional_set) {
-      if (disk_cache_->getCachedChunkIfExists(key) == nullptr) {
-        optional_keys.emplace_back(key);
-      }
+  std::set<ChunkKey> optional_set;
+  getOptionalChunkKeySet(optional_set,
+                         chunk_key,
+                         get_keys_set_from_table(chunk_key),
+                         data_wrapper.getCachedParallelismLevel());
+  for (const auto& key : optional_set) {
+    if (disk_cache_->getCachedChunkIfExists(key) == nullptr) {
+      optional_keys.emplace_back(key);
     }
+  }
 
-    if (optional_keys.size()) {
-      optional_buffers = disk_cache_->getChunkBuffersForCaching(optional_keys);
-    }
+  if (optional_keys.size()) {
+    optional_buffers = disk_cache_->getChunkBuffersForCaching(optional_keys);
   }
 
   ChunkToBufferMap required_buffers = disk_cache_->getChunkBuffersForCaching(chunk_keys);

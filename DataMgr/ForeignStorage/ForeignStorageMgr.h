@@ -95,7 +95,9 @@ class ForeignStorageMgr : public AbstractBufferMgr {
 
   virtual void refreshTable(const ChunkKey& table_key, const bool evict_cached_entries);
 
-  void setColumnHints(std::map<ChunkKey, std::vector<int>>& columns_per_table);
+  using ParallelismHint = std::pair<int, int>;
+  void setParallelismHints(
+      const std::map<ChunkKey, std::set<ParallelismHint>>& hints_per_table);
 
  protected:
   bool createDataWrapperIfNotExists(const ChunkKey& chunk_key);
@@ -108,9 +110,11 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   void clearTempChunkBufferMapEntriesForTable(const ChunkKey& table_key);
   void clearTempChunkBufferMapEntriesForTableUnlocked(const ChunkKey& table_key);
 
-  void getOptionalChunkKeySet(std::set<ChunkKey>& optional_chunk_keys,
-                              const ChunkKey& chunk_key,
-                              const std::set<ChunkKey>& required_chunk_keys);
+  void getOptionalChunkKeySet(
+      std::set<ChunkKey>& optional_chunk_keys,
+      const ChunkKey& chunk_key,
+      const std::set<ChunkKey>& required_chunk_keys,
+      const ForeignDataWrapper::ParallelismLevel parallelism_level);
 
   static void checkIfS3NeedsToBeEnabled(const ChunkKey& chunk_key);
 
@@ -122,8 +126,8 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   std::map<ChunkKey, std::unique_ptr<AbstractBuffer>> temp_chunk_buffer_map_;
   std::shared_mutex temp_chunk_buffer_map_mutex_;
 
-  std::shared_mutex columns_hints_mutex_;
-  std::map<ChunkKey, std::vector<int>> columns_hints_per_table_;
+  std::shared_mutex parallelism_hints_mutex_;
+  std::map<ChunkKey, std::set<ParallelismHint>> parallelism_hints_per_table_;
 };
 
 std::vector<ChunkKey> get_keys_vec_from_table(const ChunkKey& destination_chunk_key);

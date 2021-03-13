@@ -16,6 +16,7 @@
 
 #include "RelAlgExecutor.h"
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
+#include "DataMgr/ForeignStorage/MetadataPlaceholder.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/CalciteDeserializerUtils.h"
 #include "QueryEngine/CardinalityEstimator.h"
@@ -71,56 +72,63 @@ std::unordered_set<PhysicalInput> get_physical_inputs(
   return phys_inputs2;
 }
 
-bool is_metadata_placeholder(const ChunkMetadata& metadata) {
-  // Only supported type for now
-  CHECK(metadata.sqlType.is_dict_encoded_type());
-  return metadata.chunkStats.min.intval > metadata.chunkStats.max.intval;
-}
-
-void prepare_foreign_table_for_execution(const RelAlgNode& ra_node, int database_id) {
-  // Iterate through ra_node inputs for types that need to be loaded pre-execution
-  // If they do not have valid metadata, load them into CPU memory to generate
-  // the metadata and leave them ready to be used by the query
-  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(database_id);
-  CHECK(catalog);
-  // provide ForeignStorageMgr with all columns needed for this node
-  std::map<ChunkKey, std::vector<int>> columns_per_table;
+void set_parallelism_hints(const RelAlgNode& ra_node,
+                           const Catalog_Namespace::Catalog& catalog) {
+  std::map<ChunkKey, std::set<foreign_storage::ForeignStorageMgr::ParallelismHint>>
+      parallelism_hints_per_table;
   for (const auto& physical_input : get_physical_inputs(&ra_node)) {
     int table_id = physical_input.table_id;
-    auto table = catalog->getMetadataForTable(table_id, false);
+    auto table = catalog.getMetadataForTable(table_id, false);
     if (table && table->storageType == StorageType::FOREIGN_TABLE) {
-      int col_id = catalog->getColumnIdBySpi(table_id, physical_input.col_id);
-      columns_per_table[{database_id, table_id}].push_back(col_id);
+      int col_id = catalog.getColumnIdBySpi(table_id, physical_input.col_id);
+      const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
+      auto foreign_table = catalog.getForeignTable(table_id);
+      for (const auto& fragment :
+           foreign_table->fragmenter->getFragmentsForQuery().fragments) {
+        Chunk_NS::Chunk chunk{col_desc};
+        ChunkKey chunk_key = {
+            catalog.getDatabaseId(), table_id, col_id, fragment.fragmentId};
+        // do not include chunk hints that are in CPU memory
+        if (!chunk.isChunkOnDevice(
+                &catalog.getDataMgr(), chunk_key, Data_Namespace::CPU_LEVEL, 0)) {
+          parallelism_hints_per_table[{catalog.getDatabaseId(), table_id}].insert(
+              foreign_storage::ForeignStorageMgr::ParallelismHint{col_id,
+                                                                  fragment.fragmentId});
+        }
+      }
     }
   }
-  if (columns_per_table.size() > 0) {
-    CHECK(catalog->getDataMgr().getPersistentStorageMgr()->getForeignStorageMgr() !=
-          nullptr);
-    catalog->getDataMgr()
-        .getPersistentStorageMgr()
-        ->getForeignStorageMgr()
-        ->setColumnHints(columns_per_table);
+  if (!parallelism_hints_per_table.empty()) {
+    auto foreign_storage_mgr =
+        catalog.getDataMgr().getPersistentStorageMgr()->getForeignStorageMgr();
+    CHECK(foreign_storage_mgr);
+    foreign_storage_mgr->setParallelismHints(parallelism_hints_per_table);
   }
+}
+
+void prepare_string_dictionaries(const RelAlgNode& ra_node,
+                                 const Catalog_Namespace::Catalog& catalog) {
   for (const auto& physical_input : get_physical_inputs(&ra_node)) {
     int table_id = physical_input.table_id;
-    auto table = catalog->getMetadataForTable(table_id, false);
+    auto table = catalog.getMetadataForTable(table_id, false);
     if (table && table->storageType == StorageType::FOREIGN_TABLE) {
-      int col_id = catalog->getColumnIdBySpi(table_id, physical_input.col_id);
-      const auto col_desc = catalog->getMetadataForColumn(table_id, col_id);
-      auto foreign_table = catalog->getForeignTable(table_id);
+      int col_id = catalog.getColumnIdBySpi(table_id, physical_input.col_id);
+      const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
+      auto foreign_table = catalog.getForeignTable(table_id);
       if (col_desc->columnType.is_dict_encoded_type()) {
         CHECK(foreign_table->fragmenter != nullptr);
         for (const auto& fragment :
              foreign_table->fragmenter->getFragmentsForQuery().fragments) {
-          ChunkKey chunk_key = {database_id, table_id, col_id, fragment.fragmentId};
+          ChunkKey chunk_key = {
+              catalog.getDatabaseId(), table_id, col_id, fragment.fragmentId};
           const ChunkMetadataMap& metadata_map = fragment.getChunkMetadataMap();
           CHECK(metadata_map.find(col_id) != metadata_map.end());
-          if (is_metadata_placeholder(*(metadata_map.at(col_id)))) {
+          if (foreign_storage::is_metadata_placeholder(*(metadata_map.at(col_id)))) {
             // When this goes out of scope it will stay in CPU cache but become
             // evictable
             std::shared_ptr<Chunk_NS::Chunk> chunk =
                 Chunk_NS::Chunk::getChunk(col_desc,
-                                          &(catalog->getDataMgr()),
+                                          &(catalog.getDataMgr()),
                                           chunk_key,
                                           Data_Namespace::CPU_LEVEL,
                                           0,
@@ -131,6 +139,15 @@ void prepare_foreign_table_for_execution(const RelAlgNode& ra_node, int database
       }
     }
   }
+}
+
+void prepare_foreign_table_for_execution(const RelAlgNode& ra_node,
+                                         const Catalog_Namespace::Catalog& catalog) {
+  // Iterate through ra_node inputs for types that need to be loaded pre-execution
+  // If they do not have valid metadata, load them into CPU memory to generate
+  // the metadata and leave them ready to be used by the query
+  set_parallelism_hints(ra_node, catalog);
+  prepare_string_dictionaries(ra_node, catalog);
 }
 
 }  // namespace
@@ -359,7 +376,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   }
 
   // Notify foreign tables to load prior to caching
-  prepare_foreign_table_for_execution(ra, cat_.getDatabaseId());
+  prepare_foreign_table_for_execution(ra, cat_);
 
   int64_t queue_time_ms = timer_stop(clock_begin);
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
@@ -684,7 +701,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       step_idx == 0 ? eo.outer_fragment_indices : std::vector<size_t>()};
 
   // Notify foreign tables to load prior to execution
-  prepare_foreign_table_for_execution(*body, cat_.getDatabaseId());
+  prepare_foreign_table_for_execution(*body, cat_);
 
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
