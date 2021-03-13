@@ -84,21 +84,14 @@ class TimestampBoundsValidator {
 
  public:
   template <typename D>
-  static void validateValue(const D& data_value,
-                            const D& display_data_value,
-                            const SQLTypeInfo& column_type) {
+  static void validateValue(const D& data_value, const SQLTypeInfo& column_type) {
     if (!valueWithinBounds(data_value, column_type)) {
       auto [min_allowed_value, max_allowed_value] = getMinMaxBoundsAsStrings(column_type);
       throw_parquet_metadata_out_of_bounds_error(
           min_allowed_value,
           max_allowed_value,
-          datetime_to_string(display_data_value, column_type));
+          datetime_to_string(data_value, column_type));
     }
-  }
-
-  template <typename D>
-  static void validateValue(const D& data_value, const SQLTypeInfo& column_type) {
-    validateValue(data_value, data_value, column_type);
   }
 
  private:

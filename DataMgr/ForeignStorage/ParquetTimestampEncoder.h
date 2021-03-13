@@ -57,10 +57,10 @@ class ParquetTimestampEncoder : public TypedParquetInPlaceEncoder<V, T>,
     auto [unencoded_stats_min, unencoded_stats_max] =
         TypedParquetInPlaceEncoder<V, T>::getUnencodedStats(stats);
     if (column_type.is_timestamp()) {
-      TimestampBoundsValidator<T>::validateValue(
-          unencoded_stats_max, convert(unencoded_stats_max), column_type);
-      TimestampBoundsValidator<T>::validateValue(
-          unencoded_stats_min, convert(unencoded_stats_min), column_type);
+      TimestampBoundsValidator<T>::validateValue(convert(unencoded_stats_max),
+                                                 column_type);
+      TimestampBoundsValidator<T>::validateValue(convert(unencoded_stats_min),
+                                                 column_type);
     } else if (column_type.is_date()) {
       DateInSecondsBoundsValidator<T>::validateValue(convert(unencoded_stats_max),
                                                      column_type);

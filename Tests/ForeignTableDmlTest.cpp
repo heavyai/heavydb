@@ -5129,7 +5129,7 @@ TEST_F(ParquetCoercionTest, UnsignedInt8ToTinyInt) {
 TEST_F(ParquetCoercionTest, TimestampMilliToTimestampFixedLengthEncoded32) {
   createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)",
                                  "ParquetCoercionTypes/coercible_timestamp_milli");
-  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970 00:00:00"}});
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"2020-03-02 09:59:58"}});
 }
 
 TEST_F(ParquetCoercionTest,
@@ -5146,7 +5146,7 @@ TEST_F(ParquetCoercionTest,
 TEST_F(ParquetCoercionTest, TimestampMicroToTimestampFixedLengthEncoded32) {
   createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)",
                                  "ParquetCoercionTypes/coercible_timestamp_micro");
-  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970 00:00:00"}});
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"2020-03-02 09:59:58"}});
 }
 
 TEST_F(ParquetCoercionTest,
@@ -5163,7 +5163,7 @@ TEST_F(ParquetCoercionTest,
 TEST_F(ParquetCoercionTest, TimestampNanoToTimestampFixedLengthEncoded32) {
   createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)",
                                  "ParquetCoercionTypes/coercible_timestamp_nano");
-  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970 00:00:00"}});
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"2020-03-02 09:59:58"}});
 }
 
 TEST_F(ParquetCoercionTest, TimestampNanoToTimestampFixedLengthEncoded32InformationLoss) {
@@ -5261,37 +5261,37 @@ TEST_F(ParquetCoercionTest, DateToDateFixedLengthEncoded16InformationLoss) {
 TEST_F(ParquetCoercionTest, TimestampMilliToDateFixedLengthEncoded16) {
   createForeignTableWithCoercion("DATE ENCODING DAYS (16)",
                                  "ParquetCoercionTypes/coercible_timestamp_milli");
-  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970"}});
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"03/02/2020"}});
 }
 
 TEST_F(ParquetCoercionTest, TimestampMicroToDateFixedLengthEncoded16) {
   createForeignTableWithCoercion("DATE ENCODING DAYS (16)",
                                  "ParquetCoercionTypes/coercible_timestamp_micro");
-  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970"}});
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"03/02/2020"}});
 }
 
 TEST_F(ParquetCoercionTest, TimestampNanoToDateFixedLengthEncoded16) {
   createForeignTableWithCoercion("DATE ENCODING DAYS (16)",
                                  "ParquetCoercionTypes/coercible_timestamp_nano");
-  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970"}});
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"03/02/2020"}});
 }
 
 TEST_F(ParquetCoercionTest, TimestampMilliToDateFixedLengthEncoded32) {
   createForeignTableWithCoercion("DATE ENCODING DAYS (32)",
                                  "ParquetCoercionTypes/coercible_timestamp_milli");
-  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970"}});
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"03/02/2020"}});
 }
 
 TEST_F(ParquetCoercionTest, TimestampMicroToDateFixedLengthEncoded32) {
   createForeignTableWithCoercion("DATE ENCODING DAYS (32)",
                                  "ParquetCoercionTypes/coercible_timestamp_micro");
-  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970"}});
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"03/02/2020"}});
 }
 
 TEST_F(ParquetCoercionTest, TimestampNanoToDateFixedLengthEncoded32) {
   createForeignTableWithCoercion("DATE ENCODING DAYS (32)",
                                  "ParquetCoercionTypes/coercible_timestamp_nano");
-  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970"}});
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"03/02/2020"}});
 }
 
 TEST_F(ParquetCoercionTest, TimestampMilliToDateFixedLengthEncoded16InformationLoss) {
