@@ -480,8 +480,8 @@ void ColumnarResults::materializeAllLazyColumns(
     for (auto interval : makeIntervals(size_t(0), rows.entryCount(), worker_count)) {
       conversion_threads.push_back(std::async(
           std::launch::async,
-          [&rows, &do_work_just_lazy_columns, &targets_to_skip](const size_t start,
-                                                                const size_t end) {
+          [&do_work_just_lazy_columns, &targets_to_skip](const size_t start,
+                                                         const size_t end) {
             if (g_enable_non_kernel_time_query_interrupt) {
               size_t local_idx = 0;
               for (size_t i = start; i < end; ++i, ++local_idx) {

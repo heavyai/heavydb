@@ -3099,10 +3099,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
             };
 
         auto single_threaded_convert_function =
-            [&result_rows,
-             &value_converters,
-             &row_idx,
-             &num_rows_to_process,
+            [&value_converters,
              &thread_start_idx,
              &thread_end_idx,
              &executor,
