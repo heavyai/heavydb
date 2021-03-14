@@ -16,6 +16,7 @@
 
 #include "ParquetDataWrapper.h"
 
+#include <queue>
 #include <regex>
 
 #include <arrow/filesystem/localfs.h>
