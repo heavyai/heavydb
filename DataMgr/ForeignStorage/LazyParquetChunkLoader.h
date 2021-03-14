@@ -94,15 +94,6 @@ class LazyParquetChunkLoader {
   static bool isColumnMappingSupported(const ColumnDescriptor* omnisci_column,
                                        const parquet::ColumnDescriptor* parquet_column);
 
-  /**
-   * A wrapper to open_parquet_table which caches/returns cached results.
-   *
-   * @param path - the path used to open the parquet table.
-   *
-   * @return a reference to the cached parquet file reader for the opened table.
-   */
-  ReaderPtr& openAndCacheParquetTable(const std::string& path);
-
  private:
   std::shared_ptr<arrow::fs::FileSystem> file_system_;
   FileReaderMap* file_reader_cache_;
@@ -114,5 +105,4 @@ class LazyParquetChunkLoader {
       std::list<Chunk_NS::Chunk>& chunks,
       StringDictionary* string_dictionary);
 };
-
 }  // namespace foreign_storage

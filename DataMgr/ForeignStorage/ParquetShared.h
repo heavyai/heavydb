@@ -25,11 +25,12 @@
 
 #include "Catalog/ColumnDescriptor.h"
 #include "DataMgr/ChunkMetadata.h"
+#include "Shared/mapd_shared_mutex.h"
 
 namespace foreign_storage {
 
-using ReaderPtr = std::unique_ptr<parquet::arrow::FileReader>;
-using FileReaderMap = std::map<const std::string, ReaderPtr>;
+using UniqueReaderPtr = std::unique_ptr<parquet::arrow::FileReader>;
+using ReaderPtr = parquet::arrow::FileReader*;
 
 /*
   Splits up a set of items to be processed into multiple partitions, with the intention
@@ -61,8 +62,8 @@ struct RowGroupMetadata {
   std::list<std::shared_ptr<ChunkMetadata>> column_chunk_metadata;
 };
 
-ReaderPtr open_parquet_table(const std::string& file_path,
-                             std::shared_ptr<arrow::fs::FileSystem>& file_system);
+UniqueReaderPtr open_parquet_table(const std::string& file_path,
+                                   std::shared_ptr<arrow::fs::FileSystem>& file_system);
 
 std::pair<int, int> get_parquet_table_size(const ReaderPtr& reader);
 
@@ -82,4 +83,39 @@ std::unique_ptr<ColumnDescriptor> get_sub_type_column_descriptor(
 std::shared_ptr<parquet::Statistics> validate_and_get_column_metadata_statistics(
     const parquet::ColumnChunkMetaData* column_metadata);
 
+// A cache for parquet FileReaders which locks access for parallel use.
+class FileReaderMap {
+ public:
+  const ReaderPtr getOrInsert(const std::string& path,
+                              std::shared_ptr<arrow::fs::FileSystem>& file_system) {
+    mapd_unique_lock<std::mutex> cache_lock(mutex_);
+    if (map_.count(path) < 1 || !(map_.at(path))) {
+      map_[path] = open_parquet_table(path, file_system);
+    }
+    return map_.at(path).get();
+  }
+
+  const ReaderPtr insert(const std::string& path,
+                         std::shared_ptr<arrow::fs::FileSystem>& file_system) {
+    mapd_unique_lock<std::mutex> cache_lock(mutex_);
+    map_[path] = open_parquet_table(path, file_system);
+    return map_.at(path).get();
+  }
+
+  void initializeIfEmpty(const std::string& path) {
+    mapd_unique_lock<std::mutex> cache_lock(mutex_);
+    if (map_.count(path) < 1) {
+      map_.emplace(path, UniqueReaderPtr());
+    }
+  }
+
+  void clear() {
+    mapd_unique_lock<std::mutex> cache_lock(mutex_);
+    map_.clear();
+  }
+
+ private:
+  mutable std::mutex mutex_;
+  std::map<const std::string, UniqueReaderPtr> map_;
+};
 }  // namespace foreign_storage

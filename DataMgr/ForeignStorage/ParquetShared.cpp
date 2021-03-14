@@ -22,9 +22,9 @@
 
 namespace foreign_storage {
 
-ReaderPtr open_parquet_table(const std::string& file_path,
-                             std::shared_ptr<arrow::fs::FileSystem>& file_system) {
-  ReaderPtr reader;
+UniqueReaderPtr open_parquet_table(const std::string& file_path,
+                                   std::shared_ptr<arrow::fs::FileSystem>& file_system) {
+  UniqueReaderPtr reader;
   auto file_result = file_system->OpenInputFile(file_path);
   if (!file_result.ok()) {
     throw std::runtime_error{"Unable to access " + file_system->type_name() + " file: " +

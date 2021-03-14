@@ -330,8 +330,7 @@ void ParquetDataWrapper::fetchChunkMetadata() {
 
       // Since an existing file is being appended to we need to update the cached
       // FileReader as the existing one will be out of date.
-      (*file_reader_cache_)[file_path] = open_parquet_table(file_path, file_system_);
-      auto& reader = file_reader_cache_->at(file_path);
+      auto reader = file_reader_cache_->insert(file_path, file_system_);
       size_t row_count = reader->parquet_reader()->metadata()->num_rows();
 
       if (row_count < total_row_count_) {
