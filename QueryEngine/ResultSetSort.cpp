@@ -89,7 +89,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
   const auto key_bytewidth = query_mem_desc_.getEffectiveKeyWidth();
   if (step > 1) {
     std::vector<std::future<void>> top_futures;
-    std::vector<std::vector<uint32_t>> strided_permutations(step);
+    std::vector<Permutation> strided_permutations(step);
     for (size_t start = 0; start < step; ++start) {
       top_futures.emplace_back(std::async(
           std::launch::async,
@@ -138,7 +138,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
       permutation_.insert(
           permutation_.end(), strided_permutation.begin(), strided_permutation.end());
     }
-    auto compare = createComparator(order_entries, true, executor);
+    auto compare = createComparator(order_entries, true, permutation_, executor);
     topPermutation(permutation_, top_n, compare);
     return;
   } else {

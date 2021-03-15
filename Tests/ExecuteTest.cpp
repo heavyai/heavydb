@@ -57,6 +57,7 @@ extern bool g_use_tbb_pool;
 extern unsigned g_trivial_loop_join_threshold;
 extern bool g_enable_overlaps_hashjoin;
 extern double g_gpu_mem_limit_percent;
+extern size_t g_parallel_top_min;
 
 extern bool g_enable_window_functions;
 extern bool g_enable_calcite_view_optimize;
@@ -7637,17 +7638,30 @@ TEST(Select, GpuSort) {
 }
 
 TEST(Select, SpeculativeTopNSort) {
+  ScopeGuard reset = [orig = g_parallel_top_min] { g_parallel_top_min = orig; };
+  size_t test_values[]{size_t(0), g_parallel_top_min};
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT x, COUNT(*) AS val FROM gpu_sort_test GROUP BY x ORDER BY val DESC LIMIT "
-      "2;",
-      dt);
-    c("SELECT x from (SELECT COUNT(*) AS val, x FROM gpu_sort_test GROUP BY x ORDER BY "
-      "val ASC LIMIT 3);",
-      dt);
-    c("SELECT val from (SELECT y, COUNT(*) AS val FROM gpu_sort_test GROUP BY y ORDER BY "
-      "val DESC LIMIT 3);",
-      dt);
+    for (auto parallel_top_min : test_values) {
+      g_parallel_top_min = parallel_top_min;
+      c("SELECT x, COUNT(*) AS val FROM gpu_sort_test GROUP BY x ORDER BY val DESC LIMIT "
+        "2;",
+        dt);
+      c("SELECT x from (SELECT COUNT(*) AS val, x FROM gpu_sort_test GROUP BY x ORDER BY "
+        "val ASC LIMIT 3);",
+        dt);
+      c("SELECT val from (SELECT y, COUNT(*) AS val FROM gpu_sort_test GROUP BY y ORDER "
+        "BY val DESC LIMIT 3);",
+        dt);
+      c("SELECT w, APPROX_COUNT_DISTINCT(x) acd FROM test GROUP BY w ORDER BY acd LIMIT "
+        "2;",
+        "SELECT w, COUNT(DISTINCT x) acd FROM test GROUP BY w ORDER BY acd LIMIT 2;",
+        dt);
+      c("SELECT w, APPROX_COUNT_DISTINCT(x) acd FROM test GROUP BY w ORDER BY acd DESC "
+        "LIMIT 2;",
+        "SELECT w, COUNT(DISTINCT x) acd FROM test GROUP BY w ORDER BY acd DESC LIMIT 2;",
+        dt);
+    }
   }
 }
 

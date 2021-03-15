@@ -45,6 +45,8 @@ extern bool g_enable_calcite_ddl_parser;
 extern bool g_enable_seconds_refresh;
 extern size_t g_approx_quantile_buffer;
 extern size_t g_approx_quantile_centroids;
+extern size_t g_parallel_top_min;
+extern size_t g_parallel_top_max;
 
 namespace Catalog_Namespace {
 extern bool g_log_user_id;
@@ -697,6 +699,16 @@ void CommandLineOptions::fillAdvancedOptions() {
                                    ->default_value(g_enable_auto_metadata_update)
                                    ->implicit_value(true),
                                "Enable automatic metadata update.");
+  developer_desc.add_options()(
+      "parallel-top-min",
+      po::value<size_t>(&g_parallel_top_min)->default_value(g_parallel_top_min),
+      "For ResultSets requiring a heap sort, the number of rows necessary to trigger "
+      "parallelTop() to sort.");
+  developer_desc.add_options()(
+      "parallel-top-max",
+      po::value<size_t>(&g_parallel_top_max)->default_value(g_parallel_top_max),
+      "For ResultSets requiring a heap sort, the maximum number of rows allowed by "
+      "watchdog.");
 }
 
 namespace {
@@ -1048,9 +1060,10 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   LOG(INFO) << " OmniSci Calcite Port  " << system_parameters.calcite_port;
   LOG(INFO) << " Enable Calcite view optimize "
             << system_parameters.enable_calcite_view_optimize;
-
   LOG(INFO) << " Allow Local Auth Fallback: "
             << (authMetadata.allowLocalAuthFallback ? "enabled" : "disabled");
+  LOG(INFO) << " ParallelTop min threshold: " << g_parallel_top_min;
+  LOG(INFO) << " ParallelTop watchdog max: " << g_parallel_top_max;
 
   boost::algorithm::trim_if(authMetadata.distinguishedName, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.uri, boost::is_any_of("\"'"));

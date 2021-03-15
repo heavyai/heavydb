@@ -44,6 +44,9 @@
 
 extern bool g_use_tbb_pool;
 
+size_t g_parallel_top_min = 100e3;
+size_t g_parallel_top_max = 20e6;  // In effect only with g_enable_watchdog.
+
 void ResultSet::keepFirstN(const size_t n) {
   CHECK_EQ(-1, cached_row_count_);
   keep_first_ = n;
@@ -528,26 +531,27 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
   CHECK(permutation_.empty());
 
   const bool use_heap{order_entries.size() == 1 && top_n};
-  if (use_heap && entryCount() > 100000) {
-    if (g_enable_watchdog && (entryCount() > 20000000)) {
+  if (use_heap && g_parallel_top_min < entryCount()) {
+    // Top sort
+    if (g_enable_watchdog && g_parallel_top_max < entryCount()) {
       throw WatchdogException("Sorting the result would be too slow");
     }
     parallelTop(order_entries, top_n, executor);
-    return;
-  }
 
-  if (g_enable_watchdog && (entryCount() > Executor::baseline_threshold)) {
-    throw WatchdogException("Sorting the result would be too slow");
-  }
-
-  permutation_ = initPermutationBuffer(0, 1);
-
-  auto compare = createComparator(order_entries, use_heap, executor);
-
-  if (use_heap) {
-    topPermutation(permutation_, top_n, compare);
   } else {
-    sortPermutation(compare);
+    // Full sort
+    if (g_enable_watchdog && Executor::baseline_threshold < entryCount()) {
+      throw WatchdogException("Sorting the result would be too slow");
+    }
+
+    permutation_ = initPermutationBuffer(0, 1);
+    auto compare = createComparator(order_entries, use_heap, permutation_, executor);
+
+    if (use_heap) {
+      topPermutation(permutation_, top_n, compare);
+    } else {
+      sortPermutation(compare);
+    }
   }
 }
 
@@ -569,13 +573,14 @@ void ResultSet::baselineSort(const std::list<Analyzer::OrderEntry>& order_entrie
 }
 #endif  // HAVE_CUDA
 
-std::vector<uint32_t> ResultSet::initPermutationBuffer(const size_t start,
-                                                       const size_t step) {
+// Required: start < step
+Permutation ResultSet::initPermutationBuffer(const size_t start,
+                                             const size_t step) const {
   auto timer = DEBUG_TIMER(__func__);
   CHECK_NE(size_t(0), step);
-  std::vector<uint32_t> permutation;
+  Permutation permutation;
   const auto total_entries = query_mem_desc_.getEntryCount();
-  permutation.reserve(total_entries / step);
+  permutation.reserve((total_entries + (step - start - 1)) / step);
   for (size_t i = start; i < total_entries; i += step) {
     const auto storage_lookup_result = findStorage(i);
     const auto lhs_storage = storage_lookup_result.storage_ptr;
@@ -588,16 +593,24 @@ std::vector<uint32_t> ResultSet::initPermutationBuffer(const size_t start,
   return permutation;
 }
 
-const std::vector<uint32_t>& ResultSet::getPermutationBuffer() const {
+const Permutation& ResultSet::getPermutationBuffer() const {
   return permutation_;
 }
+
+namespace {
+template <typename NESTED_CONTAINER>
+size_t sumSizes(NESTED_CONTAINER const& nc) {
+  auto const sum_sizes = [](auto acc, auto const& c) { return acc + c.size(); };
+  return std::accumulate(nc.cbegin(), nc.cend(), size_t(0), sum_sizes);
+}
+}  // namespace
 
 void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries,
                             const size_t top_n,
                             const Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
   const size_t step = cpu_threads();
-  std::vector<std::vector<uint32_t>> strided_permutations(step);
+  std::vector<Permutation> strided_permutations(step);
   std::vector<std::future<void>> init_futures;
   for (size_t start = 0; start < step; ++start) {
     init_futures.emplace_back(
@@ -611,13 +624,14 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   for (auto& init_future : init_futures) {
     init_future.get();
   }
-  auto compare = createComparator(order_entries, true, executor);
   std::vector<std::future<void>> top_futures;
+  top_futures.reserve(strided_permutations.size());
   for (auto& strided_permutation : strided_permutations) {
-    top_futures.emplace_back(
-        std::async(std::launch::async, [&strided_permutation, &compare, top_n] {
-          topPermutation(strided_permutation, top_n, compare);
-        }));
+    top_futures.emplace_back(std::async(std::launch::async, [&, executor, top_n] {
+      const auto compare =
+          createComparator(order_entries, true, strided_permutation, executor);
+      topPermutation(strided_permutation, top_n, compare);
+    }));
   }
   for (auto& top_future : top_futures) {
     top_future.wait();
@@ -625,11 +639,14 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   for (auto& top_future : top_futures) {
     top_future.get();
   }
-  permutation_.reserve(strided_permutations.size() * top_n);
+
+  permutation_.reserve(sumSizes(strided_permutations));
   for (const auto& strided_permutation : strided_permutations) {
     permutation_.insert(
         permutation_.end(), strided_permutation.begin(), strided_permutation.end());
   }
+
+  const auto compare = createComparator(order_entries, true, permutation_, executor);
   topPermutation(permutation_, top_n, compare);
 }
 
@@ -697,7 +714,7 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeCountDistinctCo
   std::vector<int64_t> count_distinct_materialized_buffer(num_storage_entries);
   const CountDistinctDescriptor count_distinct_descriptor =
       result_set_->query_mem_desc_.getCountDistinctDescriptor(order_entry.tle_no - 1);
-  const size_t num_non_empty_entries = result_set_->permutation_.size();
+  const size_t num_non_empty_entries = permutation_.size();
   const size_t worker_count = cpu_threads();
   // TODO(tlm): Allow use of tbb after we determine how to easily encapsulate the choice
   // between thread pool types
@@ -715,7 +732,7 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeCountDistinctCo
                const CountDistinctDescriptor& count_distinct_descriptor,
                std::vector<int64_t>& count_distinct_materialized_buffer) {
           for (size_t i = start; i < end; ++i) {
-            const uint32_t permuted_idx = result_set_->permutation_[i];
+            const PermutationIdx permuted_idx = permutation_[i];
             const auto storage_lookup_result = result_set_->findStorage(permuted_idx);
             const auto storage = storage_lookup_result.storage_ptr;
             const auto off = storage_lookup_result.fixedup_entry_idx;
@@ -749,12 +766,12 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeApproxMedianCol
     const Analyzer::OrderEntry& order_entry) const {
   ResultSet::ApproxMedianBuffers::value_type materialized_buffer(
       result_set_->query_mem_desc_.getEntryCount());
-  const size_t size = result_set_->permutation_.size();
+  const size_t size = permutation_.size();
   const size_t worker_count = cpu_threads();
   const auto work = [this, &order_entry, &materialized_buffer](const size_t start,
                                                                const size_t end) {
     for (size_t i = start; i < end; ++i) {
-      const uint32_t permuted_idx = result_set_->permutation_[i];
+      const PermutationIdx permuted_idx = permutation_[i];
       const auto storage_lookup_result = result_set_->findStorage(permuted_idx);
       const auto storage = storage_lookup_result.storage_ptr;
       const auto off = storage_lookup_result.fixedup_entry_idx;
@@ -776,8 +793,8 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeApproxMedianCol
 
 template <typename BUFFER_ITERATOR_TYPE>
 bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
-    const uint32_t lhs,
-    const uint32_t rhs) const {
+    const PermutationIdx lhs,
+    const PermutationIdx rhs) const {
   // NB: The compare function must define a strict weak ordering, otherwise
   // std::sort will trigger a segmentation fault (or corrupt memory).
   const auto lhs_storage_lookup_result = result_set_->findStorage(lhs);
@@ -815,6 +832,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
     if (UNLIKELY(is_distinct_target(agg_info))) {
       CHECK_LT(materialized_count_distinct_buffer_idx,
                count_distinct_materialized_buffers_.size());
+
       const auto& count_distinct_materialized_buffer =
           count_distinct_materialized_buffers_[materialized_count_distinct_buffer_idx];
       const auto lhs_sz = count_distinct_materialized_buffer[lhs];
@@ -924,13 +942,14 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
   return false;
 }
 
-void ResultSet::topPermutation(
-    std::vector<uint32_t>& to_sort,
-    const size_t n,
-    const std::function<bool(const uint32_t, const uint32_t)> compare) {
+// Input: unordered vector of indicies to_sort.
+// Output: top n elements saved in to_sort.
+void ResultSet::topPermutation(Permutation& to_sort,
+                               const size_t n,
+                               const Comparator compare) {
   auto timer = DEBUG_TIMER(__func__);
   std::make_heap(to_sort.begin(), to_sort.end(), compare);
-  std::vector<uint32_t> permutation_top;
+  Permutation permutation_top;
   permutation_top.reserve(n);
   for (size_t i = 0; i < n && !to_sort.empty(); ++i) {
     permutation_top.push_back(to_sort.front());
@@ -940,8 +959,7 @@ void ResultSet::topPermutation(
   to_sort.swap(permutation_top);
 }
 
-void ResultSet::sortPermutation(
-    const std::function<bool(const uint32_t, const uint32_t)> compare) {
+void ResultSet::sortPermutation(const Comparator compare) {
   auto timer = DEBUG_TIMER(__func__);
   std::sort(permutation_.begin(), permutation_.end(), compare);
 }
