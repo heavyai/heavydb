@@ -542,7 +542,7 @@ void ParquetDataWrapper::populateChunkBuffers(const ChunkToBufferMap& required_b
 
   CHECK(!buffers_to_load.empty());
 
-  std::set<std::pair<int, int>> col_frag_hints;
+  std::set<ForeignStorageMgr::ParallelismHint> col_frag_hints;
   std::set<int> dict_encoded_columns_for_preload;
   for (const auto& [chunk_key, buffer] : buffers_to_load) {
     CHECK_EQ(buffer->size(), static_cast<size_t>(0));

@@ -18,6 +18,7 @@
 
 #include "Catalog/ForeignTable.h"
 #include "CsvDataWrapper.h"
+#include "ForeignStorageException.h"
 #include "ForeignTableSchema.h"
 #include "ParquetDataWrapper.h"
 
@@ -31,6 +32,31 @@ const std::string wrapper_file_name = "/wrapper_metadata.json";
 CachingForeignStorageMgr::CachingForeignStorageMgr(ForeignStorageCache* cache)
     : ForeignStorageMgr(), disk_cache_(cache) {
   CHECK(disk_cache_);
+}
+
+void CachingForeignStorageMgr::populateChunkBuffersSafely(
+    ForeignDataWrapper& data_wrapper,
+    ChunkToBufferMap& required_buffers,
+    ChunkToBufferMap& optional_buffers) {
+  try {
+    data_wrapper.populateChunkBuffers(required_buffers, optional_buffers);
+  } catch (const std::runtime_error& error) {
+    // clear any partially loaded but failed chunks (there may be some
+    // fully-loaded chunks as well but they will be cleared conservatively
+    // anyways)
+    for (const auto& [chunk_key, buffer] : required_buffers) {
+      if (auto file_buffer = dynamic_cast<File_Namespace::FileBuffer*>(buffer)) {
+        file_buffer->freeChunkPages();
+      }
+    }
+    for (const auto& [chunk_key, buffer] : optional_buffers) {
+      if (auto file_buffer = dynamic_cast<File_Namespace::FileBuffer*>(buffer)) {
+        file_buffer->freeChunkPages();
+      }
+    }
+
+    throw ForeignStorageException(error.what());
+  }
 }
 
 void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
@@ -65,7 +91,7 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
 
   ChunkToBufferMap required_buffers = disk_cache_->getChunkBuffersForCaching(chunk_keys);
   CHECK(required_buffers.find(chunk_key) != required_buffers.end());
-  data_wrapper.populateChunkBuffers(required_buffers, optional_buffers);
+  populateChunkBuffersSafely(data_wrapper, required_buffers, optional_buffers);
   disk_cache_->cacheTableChunks(chunk_keys);
   if (optional_keys.size()) {
     disk_cache_->cacheTableChunks(optional_keys);
@@ -196,8 +222,8 @@ void CachingForeignStorageMgr::refreshChunksInCacheByFragment(
         if (chunk_keys_in_fragment.size() > 0) {
           auto required_buffers =
               disk_cache_->getChunkBuffersForCaching(chunk_keys_in_fragment);
-          getDataWrapper(table_key)->populateChunkBuffers(required_buffers,
-                                                          optional_buffers);
+          populateChunkBuffersSafely(
+              *getDataWrapper(table_key), required_buffers, optional_buffers);
           chunk_keys_in_fragment.clear();
         }
         // At this point, cache buffers for refreshable chunks in the last fragment
@@ -236,7 +262,8 @@ void CachingForeignStorageMgr::refreshChunksInCacheByFragment(
   if (chunk_keys_in_fragment.size() > 0) {
     auto required_buffers =
         disk_cache_->getChunkBuffersForCaching(chunk_keys_in_fragment);
-    getDataWrapper(table_key)->populateChunkBuffers(required_buffers, optional_buffers);
+    populateChunkBuffersSafely(
+        *getDataWrapper(table_key), required_buffers, optional_buffers);
   }
   if (chunk_keys_to_be_cached.size() > 0) {
     disk_cache_->cacheTableChunks(chunk_keys_to_be_cached);

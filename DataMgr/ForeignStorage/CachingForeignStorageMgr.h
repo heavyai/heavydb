@@ -48,6 +48,9 @@ class CachingForeignStorageMgr : public ForeignStorageMgr {
   void refreshChunksInCacheByFragment(const std::vector<ChunkKey>& old_chunk_keys,
                                       int last_frag_id);
   void createOrRecoverDataWrapperIfNotExists(const ChunkKey& chunk_key);
+  void populateChunkBuffersSafely(ForeignDataWrapper& data_wrapper,
+                                  ChunkToBufferMap& required_buffers,
+                                  ChunkToBufferMap& optional_buffers);
   ForeignStorageCache* disk_cache_;
 };
 
