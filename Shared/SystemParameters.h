@@ -26,6 +26,9 @@
 #include <string>
 
 struct SystemParameters {
+  bool cpu_only = false;            // cpu-only execution
+  int num_gpus = -1;                // number of gpus to use
+  int start_gpu = 0;                // first gpu to use
   size_t cuda_block_size = 0;       // block size for the kernel execution
   size_t cuda_grid_size = 0;        // grid size for the kernel execution
   size_t calcite_max_mem = 1024;    // max memory for calcite jvm in MB
@@ -67,6 +70,7 @@ struct SystemParameters {
       5000;  // calcite send/receive timeout (connect timeout hard coded to 2s)
   size_t calcite_keepalive = false;  // calcite keepalive connection
   int num_executors = 1;
+  int num_sessions = -1;  // maximum number of user sessions
 
   SystemParameters() : cuda_block_size(0), cuda_grid_size(0), calcite_max_mem(1024) {}
 };

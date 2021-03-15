@@ -53,7 +53,6 @@ CudaMgr::CudaMgr(const int num_gpus, const int start_gpu)
   checkError(cuDeviceGetCount(&device_count_));
 
   if (num_gpus > 0) {  // numGpus <= 0 will just use number of gpus found
-    CHECK_LE(num_gpus + start_gpu_, device_count_);
     device_count_ = std::min(device_count_, num_gpus);
   } else {
     // if we are using all gpus we cannot start on a gpu other than 0

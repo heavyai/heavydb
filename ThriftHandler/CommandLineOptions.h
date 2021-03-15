@@ -51,7 +51,6 @@ class CommandLineOptions {
   std::string cluster_topology_file = {"cluster_topology.conf"};
   std::string license_path = {""};
   std::string encryption_key_store_path = {};
-  bool cpu_only = false;
   bool verbose_logging = false;
   bool jit_debug = false;
   bool intel_jit_profile = false;
@@ -83,12 +82,6 @@ class CommandLineOptions {
   unsigned dynamic_watchdog_time_limit = 10000;
   std::string disk_cache_level = "";
 
-  /**
-   * Can be used to override the number of gpus detected on the system
-   * -1 means do not override
-   */
-  int num_gpus = -1;
-  int start_gpu = 0;
   /**
    * Number of threads used when loading data
    */

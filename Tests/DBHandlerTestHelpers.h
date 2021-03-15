@@ -191,7 +191,6 @@ class DBHandlerTestFixture : public testing::Test {
       ddl_utils::FilePathWhitelist::initialize(BASE_PATH, "[\"/\"]", "[\"/\"]");
 
       // Based on default values observed from starting up an OmniSci DB server.
-      const bool cpu_only{false};
       const bool allow_multifrag{true};
       const bool jit_debug{false};
       const bool intel_jit_profile{false};
@@ -204,8 +203,6 @@ class DBHandlerTestFixture : public testing::Test {
       const size_t render_mem_bytes{500000000};
       const size_t max_concurrent_render_sessions{500};
       const bool render_compositor_use_last_gpu{false};
-      const int num_gpus{-1};
-      const int start_gpu{0};
       const size_t reserved_gpu_mem{134217728};
       const size_t num_reader_threads{0};
       const bool legacy_syntax{true};
@@ -220,7 +217,6 @@ class DBHandlerTestFixture : public testing::Test {
       db_handler_ = std::make_unique<DBHandler>(db_leaves_,
                                                 string_leaves_,
                                                 BASE_PATH,
-                                                cpu_only,
                                                 allow_multifrag,
                                                 jit_debug,
                                                 intel_jit_profile,
@@ -232,8 +228,6 @@ class DBHandlerTestFixture : public testing::Test {
                                                 render_oom_retry_threshold,
                                                 render_mem_bytes,
                                                 max_concurrent_render_sessions,
-                                                num_gpus,
-                                                start_gpu,
                                                 reserved_gpu_mem,
                                                 render_compositor_use_last_gpu,
                                                 num_reader_threads,

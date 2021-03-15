@@ -170,6 +170,19 @@ SessionMap::iterator DBHandler::get_session_it_unsafe(
   return session_it;
 }
 
+template <>
+void DBHandler::expire_idle_sessions_unsafe(
+    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+  for (auto session_pair : sessions_) {
+    auto session_it = get_session_from_map(session_pair.first, sessions_);
+    try {
+      check_session_exp_unsafe(session_it);
+    } catch (const ForceDisconnect& e) {
+      disconnect_impl(session_it, write_lock);
+    }
+  }
+}
+
 #ifdef ENABLE_GEOS
 extern std::unique_ptr<std::string> g_libgeos_so_filename;
 #endif
@@ -177,7 +190,6 @@ extern std::unique_ptr<std::string> g_libgeos_so_filename;
 DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
                      const std::vector<LeafHostInfo>& string_leaves,
                      const std::string& base_data_path,
-                     const bool cpu_only,
                      const bool allow_multifrag,
                      const bool jit_debug,
                      const bool intel_jit_profile,
@@ -189,13 +201,11 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
                      const int render_oom_retry_threshold,
                      const size_t render_mem_bytes,
                      const size_t max_concurrent_render_sessions,
-                     const int num_gpus,
-                     const int start_gpu,
                      const size_t reserved_gpu_mem,
                      const bool render_compositor_use_last_gpu,
                      const size_t num_reader_threads,
                      const AuthMetadata& authMetadata,
-                     const SystemParameters& system_parameters,
+                     SystemParameters& system_parameters,
                      const bool legacy_syntax,
                      const int idle_session_duration,
                      const int max_session_duration,
@@ -208,6 +218,7 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
 #endif
                      const DiskCacheConfig& disk_cache_config)
     : leaf_aggregator_(db_leaves)
+    , db_leaves_(db_leaves)
     , string_leaves_(string_leaves)
     , base_data_path_(base_data_path)
     , random_gen_(std::random_device{}())
@@ -225,45 +236,76 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     , super_user_rights_(false)
     , idle_session_duration_(idle_session_duration * 60)
     , max_session_duration_(max_session_duration * 60)
-    , runtime_udf_registration_enabled_(enable_runtime_udf_registration) {
+    , runtime_udf_registration_enabled_(enable_runtime_udf_registration)
+
+    , enable_rendering_(enable_rendering)
+    , renderer_use_vulkan_driver_(renderer_use_vulkan_driver)
+    , enable_auto_clear_render_mem_(enable_auto_clear_render_mem)
+    , render_oom_retry_threshold_(render_oom_retry_threshold)
+    , max_concurrent_render_sessions_(max_concurrent_render_sessions)
+    , reserved_gpu_mem_(reserved_gpu_mem)
+    , render_compositor_use_last_gpu_(render_compositor_use_last_gpu)
+    , render_mem_bytes_(render_mem_bytes)
+    , num_reader_threads_(num_reader_threads)
+#ifdef ENABLE_GEOS
+    , libgeos_so_filename_(libgeos_so_filename)
+#endif
+    , disk_cache_config_(disk_cache_config)
+    , udf_filename_(udf_filename)
+    , clang_path_(clang_path)
+    , clang_options_(clang_options)
+
+{
   LOG(INFO) << "OmniSci Server " << MAPD_RELEASE;
+  initialize();
+}
+
+void DBHandler::initialize() {
+  if (!initialized_) {
+    initialized_ = true;
+  } else {
+    THROW_MAPD_EXCEPTION(
+        "Server already initialized; service restart required to activate any new "
+        "entitlements.");
+    return;
+  }
+
+  if (system_parameters_.cpu_only || system_parameters_.num_gpus == 0) {
+    executor_device_type_ = ExecutorDeviceType::CPU;
+    cpu_mode_only_ = true;
+  } else {
+#ifdef HAVE_CUDA
+    executor_device_type_ = ExecutorDeviceType::GPU;
+    cpu_mode_only_ = false;
+#else
+    executor_device_type_ = ExecutorDeviceType::CPU;
+    LOG(ERROR) << "This build isn't CUDA enabled, will run on CPU";
+    cpu_mode_only_ = true;
+#endif
+  }
+
   // Register foreign storage interfaces here
   registerArrowCsvForeignStorage();
-  bool is_rendering_enabled = enable_rendering;
 
-  try {
-    if (cpu_only) {
-      is_rendering_enabled = false;
-      executor_device_type_ = ExecutorDeviceType::CPU;
-      cpu_mode_only_ = true;
-    } else {
-#ifdef HAVE_CUDA
-      executor_device_type_ = ExecutorDeviceType::GPU;
-      cpu_mode_only_ = false;
-#else
-      executor_device_type_ = ExecutorDeviceType::CPU;
-      LOG(ERROR) << "This build isn't CUDA enabled, will run on CPU";
-      cpu_mode_only_ = true;
-      is_rendering_enabled = false;
-#endif
-    }
-  } catch (const std::exception& e) {
-    LOG(FATAL) << "Failed to executor device type: " << e.what();
+  bool is_rendering_enabled = enable_rendering_;
+  if (system_parameters_.num_gpus == 0) {
+    is_rendering_enabled = false;
   }
 
   const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
   // calculate the total amount of memory we need to reserve from each gpu that the Buffer
   // manage cannot ask for
-  size_t total_reserved = reserved_gpu_mem;
+  size_t total_reserved = reserved_gpu_mem_;
   if (is_rendering_enabled) {
-    total_reserved += render_mem_bytes;
+    total_reserved += render_mem_bytes_;
   }
 
   std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr;
 #ifdef HAVE_CUDA
   if (!cpu_mode_only_ || is_rendering_enabled) {
     try {
-      cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(num_gpus, start_gpu);
+      cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(
+          system_parameters_.num_gpus, system_parameters_.start_gpu);
     } catch (const std::exception& e) {
       LOG(ERROR) << "Unable to instantiate CudaMgr, falling back to CPU-only mode. "
                  << e.what();
@@ -275,12 +317,12 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
 
   try {
     data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(),
-                                                system_parameters,
+                                                system_parameters_,
                                                 std::move(cuda_mgr),
                                                 !cpu_mode_only_,
                                                 total_reserved,
-                                                num_reader_threads,
-                                                disk_cache_config));
+                                                num_reader_threads_,
+                                                disk_cache_config_));
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize data manager: " << e.what();
   }
@@ -288,12 +330,12 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
   std::string udf_ast_filename("");
 
   try {
-    if (!udf_filename.empty()) {
+    if (!udf_filename_.empty()) {
       const auto cuda_mgr = data_mgr_->getCudaMgr();
       const CudaMgr_Namespace::NvidiaDeviceArch device_arch =
           cuda_mgr ? cuda_mgr->getDeviceArch()
                    : CudaMgr_Namespace::NvidiaDeviceArch::Kepler;
-      UdfCompiler compiler(udf_filename, device_arch, clang_path, clang_options);
+      UdfCompiler compiler(udf_filename_, device_arch, clang_path_, clang_options_);
       int compile_result = compiler.compileUdf();
 
       if (compile_result == 0) {
@@ -306,14 +348,14 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
 
   try {
     calcite_ =
-        std::make_shared<Calcite>(system_parameters, base_data_path_, udf_ast_filename);
+        std::make_shared<Calcite>(system_parameters_, base_data_path_, udf_ast_filename);
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize Calcite server: " << e.what();
   }
 
   try {
     ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
-    if (!udf_filename.empty()) {
+    if (!udf_filename_.empty()) {
       ExtensionFunctionsWhitelist::addUdfs(calcite_->getUserDefinedFunctionWhitelist());
     }
   } catch (const std::exception& e) {
@@ -353,10 +395,10 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
   try {
     SysCatalog::instance().init(base_data_path_,
                                 data_mgr_,
-                                authMetadata,
+                                authMetadata_,
                                 calcite_,
                                 false,
-                                !db_leaves.empty(),
+                                !db_leaves_.empty(),
                                 string_leaves_);
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize system catalog: " << e.what();
@@ -368,9 +410,9 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
   if (is_rendering_enabled) {
     try {
       render_handler_.reset(new RenderHandler(this,
-                                              render_mem_bytes,
-                                              max_concurrent_render_sessions,
-                                              render_compositor_use_last_gpu,
+                                              render_mem_bytes_,
+                                              max_concurrent_render_sessions_,
+                                              render_compositor_use_last_gpu_,
                                               false,
                                               0,
                                               false,
@@ -395,8 +437,8 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
   }
 
 #ifdef ENABLE_GEOS
-  if (!libgeos_so_filename.empty()) {
-    g_libgeos_so_filename.reset(new std::string(libgeos_so_filename));
+  if (!libgeos_so_filename_.empty()) {
+    g_libgeos_so_filename.reset(new std::string(libgeos_so_filename_));
     LOG(INFO) << "Overriding default geos library with '" + *g_libgeos_so_filename + "'";
   }
 #endif
@@ -570,6 +612,14 @@ void DBHandler::connect_impl(TSessionId& session,
   // TODO(sy): Is there any reason to have dbname as a parameter
   // here when the cat parameter already provides cat->name()?
   // Should dbname and cat->name() ever differ?
+  {
+    mapd_unique_lock<mapd_shared_mutex> write_lock(sessions_mutex_);
+    expire_idle_sessions_unsafe(write_lock);
+    if (system_parameters_.num_sessions > 0 &&
+        sessions_.size() + 1 > static_cast<size_t>(system_parameters_.num_sessions)) {
+      THROW_MAPD_EXCEPTION("Too many active sessions");
+    }
+  }
   {
     mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
     auto session_ptr = create_new_session(session, dbname, user_meta, cat);

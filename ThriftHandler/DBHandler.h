@@ -159,7 +159,6 @@ class DBHandler : public OmniSciIf {
   DBHandler(const std::vector<LeafHostInfo>& db_leaves,
             const std::vector<LeafHostInfo>& string_leaves,
             const std::string& base_data_path,
-            const bool cpu_only,
             const bool allow_multifrag,
             const bool jit_debug,
             const bool intel_jit_profile,
@@ -171,13 +170,11 @@ class DBHandler : public OmniSciIf {
             const int render_oom_retry_threshold,
             const size_t render_mem_bytes,
             const size_t max_concurrent_render_sessions,
-            const int num_gpus,
-            const int start_gpu,
             const size_t reserved_gpu_mem,
             const bool render_compositor_use_last_gpu,
             const size_t num_reader_threads,
             const AuthMetadata& authMetadata,
-            const SystemParameters& system_parameters,
+            SystemParameters& system_parameters,
             const bool legacy_syntax,
             const int idle_session_duration,
             const int max_session_duration,
@@ -189,7 +186,7 @@ class DBHandler : public OmniSciIf {
             const std::string& libgeos_so_filename,
 #endif
             const DiskCacheConfig& disk_cache_config);
-
+  void initialize();
   ~DBHandler() override;
 
   static inline size_t max_bytes_for_thrift() { return 2 * 1000 * 1000 * 1000L; }
@@ -540,7 +537,8 @@ class DBHandler : public OmniSciIf {
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
 
   LeafAggregator leaf_aggregator_;
-  const std::vector<LeafHostInfo> string_leaves_;
+  std::vector<LeafHostInfo> db_leaves_;
+  std::vector<LeafHostInfo> string_leaves_;
   const std::string base_data_path_;
   boost::filesystem::path import_path_;
   ExecutorDeviceType executor_device_type_;
@@ -556,7 +554,7 @@ class DBHandler : public OmniSciIf {
   std::mutex render_mutex_;
   int64_t start_time_;
   const AuthMetadata& authMetadata_;
-  const SystemParameters& system_parameters_;
+  SystemParameters& system_parameters_;
   std::unique_ptr<RenderHandler> render_handler_;
   std::unique_ptr<MapDAggHandler> agg_handler_;
   std::unique_ptr<MapDLeafHandler> leaf_handler_;
@@ -581,6 +579,7 @@ class DBHandler : public OmniSciIf {
                             const bool with_table_locks = true);
 
  private:
+  std::atomic<bool> initialized_{false};
   std::shared_ptr<Catalog_Namespace::SessionInfo> create_new_session(
       TSessionId& session,
       const std::string& dbname,
@@ -629,6 +628,8 @@ class DBHandler : public OmniSciIf {
   template <typename SESSION_MAP_LOCK>
   SessionMap::iterator get_session_it_unsafe(const TSessionId& session,
                                              SESSION_MAP_LOCK& lock);
+  template <typename SESSION_MAP_LOCK>
+  void expire_idle_sessions_unsafe(SESSION_MAP_LOCK& lock);
   static void value_to_thrift_column(const TargetValue& tv,
                                      const SQLTypeInfo& ti,
                                      TColumn& column);
@@ -819,6 +820,23 @@ class DBHandler : public OmniSciIf {
   const int max_session_duration_;   // max duration of session
 
   const bool runtime_udf_registration_enabled_;
+
+  const bool enable_rendering_;
+  const bool renderer_use_vulkan_driver_;
+  const bool enable_auto_clear_render_mem_;
+  const int render_oom_retry_threshold_;
+  const size_t max_concurrent_render_sessions_;
+  const size_t reserved_gpu_mem_;
+  const bool render_compositor_use_last_gpu_;
+  const size_t render_mem_bytes_;
+  const size_t num_reader_threads_;
+#ifdef ENABLE_GEOS
+  const std::string& libgeos_so_filename_;
+#endif
+  const DiskCacheConfig& disk_cache_config_;
+  const std::string& udf_filename_;
+  const std::string& clang_path_;
+  const std::vector<std::string>& clang_options_;
 
   struct GeoCopyFromState {
     std::string geo_copy_from_table;

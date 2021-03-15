@@ -100,10 +100,11 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(system_parameters.cpu_buffer_mem_bytes),
                           "Size of memory reserved for CPU buffers, in bytes.");
 
-  help_desc.add_options()(
-      "cpu-only",
-      po::value<bool>(&cpu_only)->default_value(cpu_only)->implicit_value(true),
-      "Run on CPU only, even if GPUs are available.");
+  help_desc.add_options()("cpu-only",
+                          po::value<bool>(&system_parameters.cpu_only)
+                              ->default_value(system_parameters.cpu_only)
+                              ->implicit_value(true),
+                          "Run on CPU only, even if GPUs are available.");
   help_desc.add_options()("cuda-block-size",
                           po::value<size_t>(&system_parameters.cuda_block_size)
                               ->default_value(system_parameters.cuda_block_size),
@@ -264,6 +265,10 @@ void CommandLineOptions::fillOptions() {
       "max-session-duration",
       po::value<int>(&max_session_duration)->default_value(max_session_duration),
       "Maximum duration of active session.");
+  help_desc.add_options()("num-sessions",
+                          po::value<int>(&system_parameters.num_sessions)
+                              ->default_value(system_parameters.num_sessions),
+                          "Maximum number of active session.");
   help_desc.add_options()(
       "null-div-by-zero",
       po::value<bool>(&g_null_div_by_zero)
@@ -295,7 +300,8 @@ void CommandLineOptions::fillOptions() {
                             "TCP Port number.");
   }
   help_desc.add_options()("num-gpus",
-                          po::value<int>(&num_gpus)->default_value(num_gpus),
+                          po::value<int>(&system_parameters.num_gpus)
+                              ->default_value(system_parameters.num_gpus),
                           "Number of gpus to use.");
   help_desc.add_options()(
       "read-only",
@@ -310,7 +316,8 @@ void CommandLineOptions::fillOptions() {
       "be using the GPU concurrent with OmniSciDB.");
 
   help_desc.add_options()("start-gpu",
-                          po::value<int>(&start_gpu)->default_value(start_gpu),
+                          po::value<int>(&system_parameters.start_gpu)
+                              ->default_value(system_parameters.start_gpu),
                           "First gpu to use.");
   help_desc.add_options()("trivial-loop-join-threshold",
                           po::value<unsigned>(&g_trivial_loop_join_threshold)
@@ -814,8 +821,9 @@ void CommandLineOptions::validate() {
 
   LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
   LOG(INFO) << " LogUserId is set to " << Catalog_Namespace::g_log_user_id;
-  LOG(INFO) << " Maximum Idle session duration " << idle_session_duration;
+  LOG(INFO) << " Maximum idle session duration " << idle_session_duration;
   LOG(INFO) << " Maximum active session duration " << max_session_duration;
+  LOG(INFO) << " Maximum number of sessions " << system_parameters.num_sessions;
 
   LOG(INFO) << "Allowed import paths is set to " << allowed_import_paths;
   LOG(INFO) << "Allowed export paths is set to " << allowed_export_paths;
