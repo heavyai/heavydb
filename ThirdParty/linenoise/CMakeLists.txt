@@ -99,22 +99,3 @@ target_link_libraries(
   example
   linenoise
 )
-
-# packaging
-include(CPack)
-
-if (MSVC)
-else ()
-  set(CPACK_SET_DESTDIR ON)
-endif ()
-
-set(CPACK_PACKAGE_VENDOR  "ArangoDB GmbH")
-set(CPACK_PACKAGE_CONTACT "info@arangodb.com")
-set(CPACK_PACKAGE_VERSION "${LINENOISE_VERSION}")
-
-set(CPACK_RESOURCE_FILE_LICENSE "${PROJECT_SOURCE_DIR}/LICENSE")
-
-set(CPACK_STRIP_FILES "ON")
-
-set(CPACK_PACKAGE_NAME "linenoise")
-set(CPACK_DEBIAN_PACKAGE_SECTION "utilities")
