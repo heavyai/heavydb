@@ -1,4 +1,21 @@
+/*
+ * Copyright 2021 OmniSci, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.calcite.prepare;
+
+import com.google.common.collect.ImmutableList;
 
 import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlDataTypeSpec;
@@ -16,6 +33,8 @@ import org.apache.calcite.sql.SqlUpdate;
 import org.apache.calcite.sql.SqlWith;
 import org.apache.calcite.sql.SqlWithItem;
 import org.apache.calcite.sql.parser.SqlParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -32,19 +51,21 @@ import java.util.concurrent.ConcurrentHashMap;
  * used in a query.
  */
 public class SqlIdentifierCapturer {
+  final static Logger MAPDLOGGER = LoggerFactory.getLogger(SqlIdentifierCapturer.class);
+
   private static final Map<Class<?>, Set<Method>> GETTERS_CACHE =
           new ConcurrentHashMap<>();
 
   private IdentityHashMap<SqlNode, SqlNode> visitedNodes = new IdentityHashMap<>();
 
-  private Stack<Set<String>> currentList = new Stack<>();
+  private Stack<Set<ImmutableList<String>>> currentList = new Stack<>();
 
-  public final Set<String> selects = new HashSet<>();
-  public final Set<String> inserts = new HashSet<>();
-  public final Set<String> updates = new HashSet<>();
-  public final Set<String> deletes = new HashSet<>();
+  public final Set<ImmutableList<String>> selects = new HashSet<>();
+  public final Set<ImmutableList<String>> inserts = new HashSet<>();
+  public final Set<ImmutableList<String>> updates = new HashSet<>();
+  public final Set<ImmutableList<String>> deletes = new HashSet<>();
 
-  private final Set<String> ignore = new HashSet<>();
+  private final Set<ImmutableList<String>> ignore = new HashSet<>();
 
   { currentList.push(ignore); }
 
@@ -70,8 +91,8 @@ public class SqlIdentifierCapturer {
     }
 
     if (root instanceof SqlIdentifier) {
-      // only the last element!
-      currentList.peek().add(((SqlIdentifier) root).names.reverse().get(0));
+      // we need all the hierachy now to deal with multischema
+      currentList.peek().add(((SqlIdentifier) root).names.reverse());
       return;
     }
 
@@ -151,7 +172,7 @@ public class SqlIdentifierCapturer {
 
       for (SqlNode node : with.withList) {
         SqlWithItem item = (SqlWithItem) node;
-        selects.remove(item.name.getSimple());
+        selects.remove(((SqlIdentifier) item.name).names.reverse());
       }
     }
 

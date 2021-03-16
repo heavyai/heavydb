@@ -1552,6 +1552,7 @@ TEST_F(DropTableTypeMismatchTest, View_DropCommandForOtherTableTypes) {
 
   sql("DROP VIEW test_view;");
   ASSERT_EQ(nullptr, getCatalog().getMetadataForTable("test_view", false));
+  sql("DROP TABLE test_table");
 }
 
 TEST_F(DropTableTypeMismatchTest, ForeignTable_DropCommandForOtherTableTypes) {

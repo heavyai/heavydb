@@ -3319,9 +3319,9 @@ void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& 
                                            false,
                                            true);
 
-  tables.insert(tables.end(),
-                result.resolved_accessed_objects.tables_selected_from.begin(),
-                result.resolved_accessed_objects.tables_selected_from.end());
+  for (auto& tab : result.resolved_accessed_objects.tables_selected_from) {
+    tables.emplace_back(tab[0]);
+  }
   tables.emplace_back(table_name_);
 
   // force sort into tableid order in case of name change to guarantee fixed order of
@@ -3406,8 +3406,11 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
                                              false,
                                              true);
 
-    select_tables.insert(result.resolved_accessed_objects.tables_selected_from.begin(),
-                         result.resolved_accessed_objects.tables_selected_from.end());
+    // TODO 12 Apr 2021 MAT schema change need to keep schema in future
+    // just keeping it moving for now
+    for (auto& tab : result.resolved_accessed_objects.tables_selected_from) {
+      select_tables.insert(tab[0]);
+    }
 
     // only validate the select query so we get the target types
     // correctly, but do not populate the result set

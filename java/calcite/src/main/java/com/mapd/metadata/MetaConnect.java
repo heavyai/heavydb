@@ -27,6 +27,7 @@ import com.mapd.calcite.parser.MapDView;
 import com.mapd.common.SockTransportProperties;
 import com.omnisci.thrift.server.OmniSci;
 import com.omnisci.thrift.server.TColumnType;
+import com.omnisci.thrift.server.TDBInfo;
 import com.omnisci.thrift.server.TDatumType;
 import com.omnisci.thrift.server.TEncodingType;
 import com.omnisci.thrift.server.TOmniSciException;
@@ -52,6 +53,7 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -66,7 +68,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MetaConnect {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MetaConnect.class);
   private final String dataDir;
-  private final String db;
+  private final String default_db;
   private final MapDUser currentUser;
   private final int mapdPort;
   private Connection catConn;
@@ -95,7 +97,7 @@ public class MetaConnect {
   private static final int KMULTIPOLYGON = 21;
   private static final int KTINYINT = 22;
 
-  private static volatile Map<String, Set<String>> MAPD_DATABASE_TO_TABLES =
+  private static volatile Map<String, Set<String>> DATABASE_TO_TABLES =
           new ConcurrentHashMap<>();
   private static volatile Map<List<String>, Table> MAPD_TABLE_DETAILS =
           new ConcurrentHashMap<>();
@@ -105,34 +107,62 @@ public class MetaConnect {
           String dataDir,
           MapDUser currentMapDUser,
           MapDParser parser,
-          SockTransportProperties skT) {
+          SockTransportProperties skT,
+          String db) {
     this.dataDir = dataDir;
-    if (currentMapDUser != null) {
-      this.db = currentMapDUser.getDB();
+    if (db != null) {
+      this.default_db = db;
     } else {
-      this.db = null;
+      if (currentMapDUser != null) {
+        this.default_db = currentMapDUser.getDB();
+      } else {
+        this.default_db = null;
+      }
     }
     this.currentUser = currentMapDUser;
     this.mapdPort = mapdPort;
     this.parser = parser;
     this.sock_transport_properties = skT;
+
+    // check to see if we have a populated DATABASE_TO_TABLES structure
+    // first time in we need to make sure this gets populated
+    if (DATABASE_TO_TABLES.size() == 0) {
+      // get all databases
+      populateDatabases();
+    }
   }
 
-  private void connectToDBCatalog() {
+  public MetaConnect(int mapdPort,
+          String dataDir,
+          MapDUser currentMapDUser,
+          MapDParser parser,
+          SockTransportProperties skT) {
+    this(mapdPort, dataDir, currentMapDUser, parser, skT, null);
+  }
+
+  public List<String> getDatabases() {
+    List<String> dbList = new ArrayList<String>(DATABASE_TO_TABLES.size());
+    for (String db : DATABASE_TO_TABLES.keySet()) {
+      dbList.add(db);
+    }
+    return dbList;
+  }
+
+  private void connectToCatalog(String catalog) {
     try {
       // try {
       Class.forName("org.sqlite.JDBC");
     } catch (ClassNotFoundException ex) {
-      String err = "Could not find class for metadata connection; DB: '" + db
+      String err = "Could not find class for metadata connection; DB: '" + catalog
               + "' data dir '" + dataDir + "', error was " + ex.getMessage();
       MAPDLOGGER.error(err);
       throw new RuntimeException(err);
     }
-    String connectURL = "jdbc:sqlite:" + dataDir + "/mapd_catalogs/" + db;
+    String connectURL = "jdbc:sqlite:" + dataDir + "/mapd_catalogs/" + catalog;
     try {
       catConn = DriverManager.getConnection(connectURL);
     } catch (SQLException ex) {
-      String err = "Could not establish a connection for metadata; DB: '" + db
+      String err = "Could not establish a connection for metadata; DB: '" + catalog
               + "' data dir '" + dataDir + "', error was " + ex.getMessage();
       MAPDLOGGER.error(err);
       throw new RuntimeException(err);
@@ -140,21 +170,28 @@ public class MetaConnect {
     MAPDLOGGER.debug("Opened database successfully");
   }
 
-  private void disconnectFromDBCatalog() {
+  private void disconnectFromCatalog() {
     try {
       catConn.close();
     } catch (SQLException ex) {
-      String err = "Could not disconnect for metadata; DB: '" + db + "' data dir '"
-              + dataDir + "', error was " + ex.getMessage();
+      String err = "Could not disconnect from metadata "
+              + " data dir '" + dataDir + "', error was " + ex.getMessage();
       MAPDLOGGER.error(err);
       throw new RuntimeException(err);
     }
   }
 
+  private void connectToDBCatalog() {
+    connectToCatalog(default_db);
+  }
+
   public Table getTable(String tableName) {
-    List<String> dbTable = ImmutableList.of(db.toUpperCase(), tableName.toUpperCase());
+    List<String> dbTable =
+            ImmutableList.of(default_db.toUpperCase(), tableName.toUpperCase());
     Table cTable = MAPD_TABLE_DETAILS.get(dbTable);
     if (cTable != null) {
+      MAPDLOGGER.debug("Metaconnect DB " + default_db + " get table " + tableName
+              + " details " + cTable);
       return cTable;
     }
 
@@ -164,18 +201,23 @@ public class MetaConnect {
       MAPDLOGGER.debug("Processing a table");
       Table rTable = new MapDTable(td);
       MAPD_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
+      MAPDLOGGER.debug("Metaconnect DB " + default_db + " get table " + tableName
+              + " details " + rTable + " Not in buffer");
       return rTable;
     } else {
       MAPDLOGGER.debug("Processing a view");
       Table rTable = new MapDView(getViewSql(tableName), td, parser);
       MAPD_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
+      MAPDLOGGER.debug("Metaconnect DB " + default_db + " get view " + tableName
+              + " details " + rTable + " Not in buffer");
       return rTable;
     }
   }
 
   public Set<String> getTables() {
-    Set<String> mSet = MAPD_DATABASE_TO_TABLES.get(db.toUpperCase());
-    if (mSet != null) {
+    Set<String> mSet = DATABASE_TO_TABLES.get(default_db.toUpperCase());
+    if (mSet != null && mSet.size() > 0) {
+      MAPDLOGGER.debug("Metaconnect DB getTables " + default_db + " tables " + mSet);
       return mSet;
     }
 
@@ -183,8 +225,10 @@ public class MetaConnect {
       // use sql
       connectToDBCatalog();
       Set<String> ts = getTables_SQL();
-      disconnectFromDBCatalog();
-      MAPD_DATABASE_TO_TABLES.putIfAbsent(db.toUpperCase(), ts);
+      disconnectFromCatalog();
+      DATABASE_TO_TABLES.put(default_db.toUpperCase(), ts);
+      MAPDLOGGER.debug(
+              "Metaconnect DB getTables " + default_db + " tables " + ts + " from catDB");
       return ts;
     }
     // use thrift direct to local server
@@ -196,15 +240,17 @@ public class MetaConnect {
       protocol = new TBinaryProtocol(transport);
 
       OmniSci.Client client = new OmniSci.Client(protocol);
-
-      List<String> tablesList = client.get_tables(currentUser.getSession());
+      List<String> tablesList =
+              client.get_tables_for_database(currentUser.getSession(), default_db);
       Set<String> ts = new HashSet<String>(tablesList.size());
       for (String tableName : tablesList) {
         ts.add(tableName);
       }
 
       transport.close();
-      MAPD_DATABASE_TO_TABLES.putIfAbsent(db.toUpperCase(), ts);
+      DATABASE_TO_TABLES.put(default_db.toUpperCase(), ts);
+      MAPDLOGGER.debug("Metaconnect DB getTables " + default_db + " tables " + ts
+              + " from server");
       return ts;
 
     } catch (TTransportException ex) {
@@ -244,11 +290,12 @@ public class MetaConnect {
       MAPDLOGGER.error(err);
       throw new RuntimeException(err);
     }
-    disconnectFromDBCatalog();
+    disconnectFromCatalog();
 
     try {
       // open temp table json file
-      final String filePath = dataDir + "/mapd_catalogs/" + db + "_temp_tables.json";
+      final String filePath =
+              dataDir + "/mapd_catalogs/" + default_db + "_temp_tables.json";
       MAPDLOGGER.debug("Opening temp table file at " + filePath);
       String tempTablesJsonStr;
       try {
@@ -287,7 +334,7 @@ public class MetaConnect {
       // use sql
       connectToDBCatalog();
       TTableDetails td = get_table_detail_SQL(tableName);
-      disconnectFromDBCatalog();
+      disconnectFromCatalog();
       return td;
     }
     // use thrift direct to local server
@@ -300,10 +347,8 @@ public class MetaConnect {
       protocol = new TBinaryProtocol(transport);
 
       OmniSci.Client client = new OmniSci.Client(protocol);
-
-      TTableDetails td =
-              client.get_internal_table_details(currentUser.getSession(), tableName);
-
+      TTableDetails td = client.get_internal_table_details_for_database(
+              currentUser.getSession(), tableName, default_db);
       transport.close();
 
       return td;
@@ -349,7 +394,8 @@ public class MetaConnect {
       try {
         return get_table_detail_JSON(tableName);
       } catch (Exception e) {
-        String err = "Table '" + tableName + "' does not exist for DB '" + db + "'";
+        String err =
+                "Table '" + tableName + "' does not exist for DB '" + default_db + "'";
         MAPDLOGGER.error(err);
         throw new RuntimeException(err);
       }
@@ -448,7 +494,8 @@ public class MetaConnect {
     td.getRow_descIterator();
 
     // open table json file
-    final String filePath = dataDir + "/mapd_catalogs/" + db + "_temp_tables.json";
+    final String filePath =
+            dataDir + "/mapd_catalogs/" + default_db + "_temp_tables.json";
     MAPDLOGGER.debug("Opening temp table file at " + filePath);
 
     String tempTablesJsonStr;
@@ -560,8 +607,8 @@ public class MetaConnect {
       rs.close();
       stmt.close();
     } catch (Exception e) {
-      String err = "Error trying to read from metadata table mapd_tables;DB: " + db
-              + " data dir " + dataDir + ", error was " + e.getMessage();
+      String err = "Error trying to read from metadata table mapd_tables;DB: "
+              + default_db + " data dir " + dataDir + ", error was " + e.getMessage();
       MAPDLOGGER.error(err);
       throw new RuntimeException(err);
     } finally {
@@ -617,7 +664,7 @@ public class MetaConnect {
       // use sql
       connectToDBCatalog();
       sqlText = getViewSqlViaSql(getTableId(tableName));
-      disconnectFromDBCatalog();
+      disconnectFromCatalog();
     } else {
       // use thrift direct to local server
       try {
@@ -629,9 +676,8 @@ public class MetaConnect {
         protocol = new TBinaryProtocol(transport);
 
         OmniSci.Client client = new OmniSci.Client(protocol);
-
-        TTableDetails td = client.get_table_details(currentUser.getSession(), tableName);
-
+        TTableDetails td = client.get_table_details_for_database(
+                currentUser.getSession(), tableName, default_db);
         transport.close();
 
         sqlText = td.getView_sql();
@@ -731,6 +777,85 @@ public class MetaConnect {
     }
   }
 
+  private void populateDatabases() {
+    // TODO 13 Mar 2021 MAT
+    // this probably has to come across from the server on first start up rather
+    // than lazy instantiation here
+    // as a user may not be able to see all schemas and this sets it for the life
+    // of the server.
+    // Proceeding this way as a WIP
+    if (mapdPort == 0) {
+      // seems to be a condition that is expected
+      // for FSI testing
+      return;
+    }
+    if (mapdPort == -1) {
+      // use sql
+      connectToCatalog("omnisci_system_catalog"); // hardcoded sys catalog
+      Set<String> dbNames = getDatabases_SQL();
+      disconnectFromCatalog();
+      for (String dbName : dbNames) {
+        Set<String> ts = new HashSet<String>();
+        DATABASE_TO_TABLES.putIfAbsent(dbName, ts);
+      }
+      return;
+    }
+    // use thrift direct to local server
+    try {
+      TProtocol protocol = null;
+      TTransport transport =
+              sock_transport_properties.openClientTransport("localhost", mapdPort);
+      if (!transport.isOpen()) transport.open();
+      protocol = new TBinaryProtocol(transport);
+
+      OmniSci.Client client = new OmniSci.Client(protocol);
+
+      List<TDBInfo> dbList = client.get_databases(currentUser.getSession());
+      for (TDBInfo dbInfo : dbList) {
+        Set<String> ts = new HashSet<String>();
+        DATABASE_TO_TABLES.putIfAbsent(dbInfo.db_name, ts);
+      }
+      transport.close();
+
+    } catch (TTransportException ex) {
+      MAPDLOGGER.error("TTransportException on port [" + mapdPort + "]");
+      MAPDLOGGER.error(ex.toString());
+      throw new RuntimeException(ex.toString());
+    } catch (TOmniSciException ex) {
+      MAPDLOGGER.error(ex.toString());
+      throw new RuntimeException(ex.toString());
+    } catch (TException ex) {
+      MAPDLOGGER.error(ex.toString());
+      throw new RuntimeException(ex.toString());
+    }
+  }
+
+  private Set<String> getDatabases_SQL() {
+    Set<String> dbSet = new HashSet<String>();
+    Statement stmt = null;
+    ResultSet rs = null;
+    String sqlText = "";
+    try {
+      stmt = catConn.createStatement();
+
+      // get the tables
+      rs = stmt.executeQuery("SELECT name FROM mapd_databases ");
+      while (rs.next()) {
+        dbSet.add(rs.getString("name"));
+        /*--*/
+        MAPDLOGGER.debug("Object name = " + rs.getString("name"));
+      }
+      rs.close();
+      stmt.close();
+
+    } catch (Exception e) {
+      String err = "error trying to get all the databases, error was " + e.getMessage();
+      MAPDLOGGER.error(err);
+      throw new RuntimeException(err);
+    }
+    return dbSet;
+  }
+
   public void updateMetaData(String schema, String table) {
     // Check if table is specified, if not we are dropping an entire DB so need to
     // remove all
@@ -741,7 +866,8 @@ public class MetaConnect {
       Set<List<String>> all = new HashSet<>(MAPD_TABLE_DETAILS.keySet());
       for (List<String> keys : all) {
         if (keys.get(0).equals(schema.toUpperCase())) {
-          MAPDLOGGER.debug("removing schema " + keys.get(0) + " table " + keys.get(1));
+          MAPDLOGGER.debug(
+                  "removing all for schema " + keys.get(0) + " table " + keys.get(1));
           MAPD_TABLE_DETAILS.remove(keys);
         }
       }
@@ -763,8 +889,16 @@ public class MetaConnect {
         }
       }
     }
-    // now remove schema
-    MAPDLOGGER.debug("removing schema " + schema.toUpperCase());
-    MAPD_DATABASE_TO_TABLES.remove(schema.toUpperCase());
+    // Could be a removal or an add request for a DB
+    Set<String> mSet = DATABASE_TO_TABLES.get(schema.toUpperCase());
+    if (mSet != null) {
+      MAPDLOGGER.debug("removing schema " + schema.toUpperCase());
+      DATABASE_TO_TABLES.remove(schema.toUpperCase());
+    } else {
+      // add a empty database descriptor for new DB, it will be lazily populated when
+      // required
+      Set<String> ts = new HashSet<String>();
+      DATABASE_TO_TABLES.putIfAbsent(schema.toUpperCase(), ts);
+    }
   }
 }

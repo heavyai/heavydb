@@ -220,6 +220,9 @@ class DBHandler : public OmniSciIf {
   bool hasTableAccessPrivileges(const TableDescriptor* td,
                                 const Catalog_Namespace::SessionInfo& session_info);
   void get_tables(std::vector<std::string>& _return, const TSessionId& session) override;
+  void get_tables_for_database(std::vector<std::string>& _return,
+                               const TSessionId& session,
+                               const std::string& database_name) override;
   void get_physical_tables(std::vector<std::string>& _return,
                            const TSessionId& session) override;
   void get_views(std::vector<std::string>& _return, const TSessionId& session) override;
@@ -228,9 +231,17 @@ class DBHandler : public OmniSciIf {
   void get_table_details(TTableDetails& _return,
                          const TSessionId& session,
                          const std::string& table_name) override;
+  void get_table_details_for_database(TTableDetails& _return,
+                                      const TSessionId& session,
+                                      const std::string& table_name,
+                                      const std::string& database_name) override;
   void get_internal_table_details(TTableDetails& _return,
                                   const TSessionId& session,
                                   const std::string& table_name) override;
+  void get_internal_table_details_for_database(TTableDetails& _return,
+                                               const TSessionId& session,
+                                               const std::string& table_name,
+                                               const std::string& database_name) override;
   void get_users(std::vector<std::string>& _return, const TSessionId& session) override;
   void get_databases(std::vector<TDBInfo>& _return, const TSessionId& session) override;
 
@@ -626,12 +637,14 @@ class DBHandler : public OmniSciIf {
                                    const std::string& table_name);
   void get_tables_impl(std::vector<std::string>& table_names,
                        const Catalog_Namespace::SessionInfo&,
-                       const GetTablesType get_tables_type);
+                       const GetTablesType get_tables_type,
+                       const std::string& database_name = {});
   void get_table_details_impl(TTableDetails& _return,
                               query_state::StdLog& stdlog,
                               const std::string& table_name,
                               const bool get_system,
-                              const bool get_physical);
+                              const bool get_physical,
+                              const std::string& database_name = {});
   void check_read_only(const std::string& str);
   void check_session_exp_unsafe(const SessionMap::iterator& session_it);
   void validateGroups(const std::vector<std::string>& groups);

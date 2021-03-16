@@ -1607,6 +1607,7 @@ void DBHandler::get_completion_hints_unsorted(std::vector<TCompletionHint>& hint
   const auto& session_info = *stdlog.getConstSessionInfo();
   try {
     get_tables_impl(visible_tables, session_info, GET_PHYSICAL_TABLES_AND_VIEWS);
+
     // Filter out keywords suggested by Calcite which we don't support.
     hints = just_whitelisted_keyword_hints(
         calcite_->getCompletionHints(session_info, visible_tables, sql, cursor));
@@ -2250,6 +2251,16 @@ void DBHandler::get_internal_table_details(TTableDetails& _return,
   get_table_details_impl(_return, stdlog, table_name, true, false);
 }
 
+void DBHandler::get_internal_table_details_for_database(
+    TTableDetails& _return,
+    const TSessionId& session,
+    const std::string& table_name,
+    const std::string& database_name) {
+  auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  get_table_details_impl(_return, stdlog, table_name, true, false, database_name);
+}
+
 void DBHandler::get_table_details(TTableDetails& _return,
                                   const TSessionId& session,
                                   const std::string& table_name) {
@@ -2258,14 +2269,26 @@ void DBHandler::get_table_details(TTableDetails& _return,
   get_table_details_impl(_return, stdlog, table_name, false, false);
 }
 
+void DBHandler::get_table_details_for_database(TTableDetails& _return,
+                                               const TSessionId& session,
+                                               const std::string& table_name,
+                                               const std::string& database_name) {
+  auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  get_table_details_impl(_return, stdlog, table_name, false, false, database_name);
+}
+
 void DBHandler::get_table_details_impl(TTableDetails& _return,
                                        query_state::StdLog& stdlog,
                                        const std::string& table_name,
                                        const bool get_system,
-                                       const bool get_physical) {
+                                       const bool get_physical,
+                                       const std::string& database_name) {
   try {
     auto session_info = stdlog.getSessionInfo();
-    auto& cat = session_info->getCatalog();
+    auto& cat = (database_name.empty())
+                    ? session_info->getCatalog()
+                    : *SysCatalog::instance().getCatalog(database_name);
     const auto td_with_lock =
         lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
             cat, table_name, false);
@@ -2386,9 +2409,16 @@ bool DBHandler::hasTableAccessPrivileges(
 
 void DBHandler::get_tables_impl(std::vector<std::string>& table_names,
                                 const Catalog_Namespace::SessionInfo& session_info,
-                                const GetTablesType get_tables_type) {
-  table_names = session_info.getCatalog().getTableNamesForUser(
-      session_info.get_currentUser(), get_tables_type);
+                                const GetTablesType get_tables_type,
+                                const std::string& database_name) {
+  if (database_name.empty()) {
+    table_names = session_info.getCatalog().getTableNamesForUser(
+        session_info.get_currentUser(), get_tables_type);
+  } else {
+    auto request_cat = SysCatalog::instance().getCatalog(database_name);
+    table_names = request_cat->getTableNamesForUser(session_info.get_currentUser(),
+                                                    get_tables_type);
+  }
 }
 
 void DBHandler::get_tables(std::vector<std::string>& table_names,
@@ -2397,6 +2427,18 @@ void DBHandler::get_tables(std::vector<std::string>& table_names,
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   get_tables_impl(
       table_names, *stdlog.getConstSessionInfo(), GET_PHYSICAL_TABLES_AND_VIEWS);
+}
+
+void DBHandler::get_tables_for_database(std::vector<std::string>& table_names,
+                                        const TSessionId& session,
+                                        const std::string& database_name) {
+  auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+
+  get_tables_impl(table_names,
+                  *stdlog.getConstSessionInfo(),
+                  GET_PHYSICAL_TABLES_AND_VIEWS,
+                  database_name);
 }
 
 void DBHandler::get_physical_tables(std::vector<std::string>& table_names,
@@ -6207,8 +6249,8 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
     process_calcite_request();
     lockmgr::LockedTableDescriptors locks;
     if (acquire_locks) {
-      std::set<std::string> write_only_tables;
-      std::vector<std::string> tables;
+      std::set<std::vector<std::string>> write_only_tables;
+      std::vector<std::vector<std::string>> tables;
 
       tables.insert(tables.end(),
                     result.resolved_accessed_objects.tables_updated_in.begin(),
@@ -6234,12 +6276,13 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
       // then, obtain table data locks
       // force sort into tableid order in case of name change to guarantee fixed order of
       // mutex access
-      std::sort(tables.begin(),
-                tables.end(),
-                [&cat](const std::string& a, const std::string& b) {
-                  return cat->getMetadataForTable(a, false)->tableId <
-                         cat->getMetadataForTable(b, false)->tableId;
-                });
+      std::sort(
+          tables.begin(),
+          tables.end(),
+          [&cat](const std::vector<std::string>& a, const std::vector<std::string>& b) {
+            return cat->getMetadataForTable(a[0], false)->tableId <
+                   cat->getMetadataForTable(b[0], false)->tableId;
+          });
       // In the case of self-join and possibly other cases, we will
       // have duplicate tables. Ensure we only take one for locking below.
       tables.erase(unique(tables.begin(), tables.end()), tables.end());
@@ -6247,7 +6290,7 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
         locks.emplace_back(
             std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
                 lockmgr::TableSchemaLockContainer<
-                    lockmgr::ReadLock>::acquireTableDescriptor(*cat.get(), table)));
+                    lockmgr::ReadLock>::acquireTableDescriptor(*cat.get(), table[0])));
         if (write_only_tables.count(table)) {
           // Aquire an insert data lock for updates/deletes, consistent w/ insert. The
           // table data lock will be aquired in the fragmenter during checkpoint.

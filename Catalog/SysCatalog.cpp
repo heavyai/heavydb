@@ -2497,7 +2497,12 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const std::string& dbName) {
   if (cat_map_.find(cata, dbName)) {
     return cata->second;
   } else {
-    return nullptr;
+    Catalog_Namespace::DBMetadata db_meta;
+    if (getMetadataForDB(dbName, db_meta)) {
+      return getCatalog(db_meta, false);
+    } else {
+      return nullptr;
+    }
   }
 }
 
@@ -2513,14 +2518,16 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const int32_t db_id) {
 }
 
 std::shared_ptr<Catalog> SysCatalog::getCatalog(const DBMetadata& curDB, bool is_new_db) {
-  auto cat = getCatalog(curDB.dbName);
-  if (cat) {
-    return cat;
+  {
+    dbid_to_cat_map::const_accessor cata;
+    if (cat_map_.find(cata, curDB.dbName)) {
+      return cata->second;
+    }
   }
 
   // Catalog doesnt exist
   // has to be made outside of lock as migration uses cat
-  cat = std::make_shared<Catalog>(
+  auto cat = std::make_shared<Catalog>(
       basePath_, curDB, dataMgr_, string_dict_hosts_, calciteMgr_, is_new_db);
 
   dbid_to_cat_map::accessor cata;

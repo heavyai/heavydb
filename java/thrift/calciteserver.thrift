@@ -9,10 +9,10 @@ exception InvalidParseRequest {
 }
 
 struct TAccessedQueryObjects {
-  1: list<string> tables_selected_from;
-  2: list<string> tables_inserted_into;
-  3: list<string> tables_updated_in;
-  4: list<string> tables_deleted_from;
+  1: list<list<string>> tables_selected_from;
+  2: list<list<string>> tables_inserted_into;
+  3: list<list<string>> tables_updated_in;
+  4: list<list<string>> tables_deleted_from;
 }
 
 struct TPlanResult {

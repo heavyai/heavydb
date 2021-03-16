@@ -419,17 +419,18 @@ void Calcite::updateMetadata(std::string catalog, std::string table) {
 }
 
 void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info,
-                              std::vector<std::string> tableOrViewNames,
+                              std::vector<std::vector<std::string>> tableOrViewNames,
                               AccessPrivileges tablePrivs,
                               AccessPrivileges viewPrivs) {
+  // TODO MAT this needs to be able to check privileges from other catalogs
   Catalog_Namespace::Catalog& catalog = session_info.getCatalog();
 
   for (auto tableOrViewName : tableOrViewNames) {
     const TableDescriptor* tableMeta =
-        catalog.getMetadataForTable(tableOrViewName, false);
+        catalog.getMetadataForTable(tableOrViewName[0], false);
 
     if (!tableMeta) {
-      throw std::runtime_error("unknown table of view: " + tableOrViewName);
+      throw std::runtime_error("unknown table of view: " + tableOrViewName[0]);
     }
 
     DBObjectKey key;
@@ -442,14 +443,16 @@ void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info
     std::vector<DBObject> privObjects{dbobject};
 
     if (!privs.hasAny()) {
-      throw std::runtime_error("Operation not supported for object " + tableOrViewName);
+      throw std::runtime_error("Operation not supported for object " +
+                               tableOrViewName[0]);
     }
 
     if (!Catalog_Namespace::SysCatalog::instance().checkPrivileges(
             session_info.get_currentUser(), privObjects)) {
       throw std::runtime_error("Violation of access privileges: user " +
                                session_info.get_currentUser().userLoggable() +
-                               " has no proper privileges for object " + tableOrViewName);
+                               " has no proper privileges for object " +
+                               tableOrViewName[0]);
     }
   }
 }

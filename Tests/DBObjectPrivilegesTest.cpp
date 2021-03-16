@@ -1162,12 +1162,12 @@ TEST_F(ViewObject, CalciteViewResolution) {
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_deleted_from.size(), (size_t)0);
-  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from[0], "bill_table");
+  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from[0][0], "bill_table");
   EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.resolved_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.resolved_accessed_objects.tables_updated_in.size(), (size_t)0);
   EXPECT_EQ(result.resolved_accessed_objects.tables_deleted_from.size(), (size_t)0);
-  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0], "bill_table");
+  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0][0], "bill_table");
 
   auto query_state2 =
       QR::create_query_state(QR::get()->getSession(), "select * from bill_view");
@@ -1182,12 +1182,12 @@ TEST_F(ViewObject, CalciteViewResolution) {
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_deleted_from.size(), (size_t)0);
-  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from[0], "bill_view");
+  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from[0][0], "bill_view");
   EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.resolved_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.resolved_accessed_objects.tables_updated_in.size(), (size_t)0);
   EXPECT_EQ(result.resolved_accessed_objects.tables_deleted_from.size(), (size_t)0);
-  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0], "bill_table");
+  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0][0], "bill_table");
 
   auto query_state3 =
       QR::create_query_state(QR::get()->getSession(), "select * from bill_view_outer");
@@ -1202,12 +1202,13 @@ TEST_F(ViewObject, CalciteViewResolution) {
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_deleted_from.size(), (size_t)0);
-  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from[0], "bill_view_outer");
+  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from[0][0],
+            "bill_view_outer");
   EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.resolved_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.resolved_accessed_objects.tables_updated_in.size(), (size_t)0);
   EXPECT_EQ(result.resolved_accessed_objects.tables_deleted_from.size(), (size_t)0);
-  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0], "bill_table");
+  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0][0], "bill_table");
 }
 
 TEST_F(DashboardObject, AccessDefaultsTest) {
