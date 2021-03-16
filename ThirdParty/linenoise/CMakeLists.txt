@@ -82,20 +82,3 @@ add_library(
   src/linenoise.cpp
   src/wcwidth.cpp
 )
-
-# install
-install(TARGETS linenoise DESTINATION lib)
-
-# headers
-install(FILES include/linenoise.h DESTINATION include)
-
-# build example
-add_executable(
-  example
-  tst/example.c
-)
-
-target_link_libraries(
-  example
-  linenoise
-)
