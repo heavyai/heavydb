@@ -805,7 +805,8 @@ declare i64* @get_bin_from_k_heap_double(i64*, i32, i32, i32, i1, i1, i1, double
 
 #ifdef HAVE_CUDA
 std::string extension_function_decls(const std::unordered_set<std::string>& udf_decls) {
-  const auto decls = ExtensionFunctionsWhitelist::getLLVMDeclarations(udf_decls);
+  const auto decls =
+      ExtensionFunctionsWhitelist::getLLVMDeclarations(udf_decls, /*is_gpu=*/true);
   return boost::algorithm::join(decls, "\n");
 }
 
