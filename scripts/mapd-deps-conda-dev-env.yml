@@ -22,7 +22,7 @@ dependencies:
   - sysroot_linux-64 >=2.14
   - arrow-cpp  2.0
   - pyarrow    2.0
-  - pandas     1.1.5
+  - pandas     1.2.3
   - thrift-cpp  0.13.*
   - thrift      0.13.*
   - llvmdev     9.*
