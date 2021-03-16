@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev a575cb2
+                5.6.0dev 6152f67
               </div>
             
           
@@ -491,6 +491,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_instruction.html">Class Instruction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_intervals.html">Class Intervals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_intervals_1_1_iterator.html">Class Intervals::Iterator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_j_s_o_n.html">Class JSON</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_join_covered_qual_visitor.html">Class JoinCoveredQualVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_join_loop.html">Class JoinLoop</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_join_target_rebaser.html">Class JoinTargetRebaser</a></li>
@@ -1910,7 +1911,7 @@
 <dl class="class">
 <dt id="_CPPv416RelAlgDagBuilder">
 <span id="_CPPv316RelAlgDagBuilder"></span><span id="_CPPv216RelAlgDagBuilder"></span><span id="RelAlgDagBuilder"></span><span class="target" id="class_rel_alg_dag_builder"></span><em class="property">class </em><code class="sig-name descname">RelAlgDagBuilder</code> : <em class="property">public</em> noncopyable<a class="headerlink" href="#_CPPv416RelAlgDagBuilder" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Builder class to create an in-memory, easy-to-navigate relational algebra DAG interpreted from a JSON representation from <a class="reference internal" href="class_calcite.html#class_calcite"><span class="std std-ref">Calcite</span></a>. Also, applies high level optimizations which can be expressed through relational algebra extended with <a class="reference internal" href="class_rel_compound.html#class_rel_compound"><span class="std std-ref">RelCompound</span></a>. The <a class="reference internal" href="class_rel_compound.html#class_rel_compound"><span class="std std-ref">RelCompound</span></a> node is an equivalent representation for sequences of <a class="reference internal" href="class_rel_filter.html#class_rel_filter"><span class="std std-ref">RelFilter</span></a>, <a class="reference internal" href="class_rel_project.html#class_rel_project"><span class="std std-ref">RelProject</span></a> and <a class="reference internal" href="class_rel_aggregate.html#class_rel_aggregate"><span class="std std-ref">RelAggregate</span></a> nodes. This coalescing minimizes the amount of intermediate buffers required to evaluate a query. Lower level optimizations are taken care by lower levels, mainly <a class="reference internal" href="class_rel_alg_translator.html#class_rel_alg_translator"><span class="std std-ref">RelAlgTranslator</span></a> and the IR code generation. </p>
+<dd><p>Builder class to create an in-memory, easy-to-navigate relational algebra DAG interpreted from a <a class="reference internal" href="class_j_s_o_n.html#class_j_s_o_n"><span class="std std-ref">JSON</span></a> representation from <a class="reference internal" href="class_calcite.html#class_calcite"><span class="std std-ref">Calcite</span></a>. Also, applies high level optimizations which can be expressed through relational algebra extended with <a class="reference internal" href="class_rel_compound.html#class_rel_compound"><span class="std std-ref">RelCompound</span></a>. The <a class="reference internal" href="class_rel_compound.html#class_rel_compound"><span class="std std-ref">RelCompound</span></a> node is an equivalent representation for sequences of <a class="reference internal" href="class_rel_filter.html#class_rel_filter"><span class="std std-ref">RelFilter</span></a>, <a class="reference internal" href="class_rel_project.html#class_rel_project"><span class="std std-ref">RelProject</span></a> and <a class="reference internal" href="class_rel_aggregate.html#class_rel_aggregate"><span class="std std-ref">RelAggregate</span></a> nodes. This coalescing minimizes the amount of intermediate buffers required to evaluate a query. Lower level optimizations are taken care by lower levels, mainly <a class="reference internal" href="class_rel_alg_translator.html#class_rel_alg_translator"><span class="std std-ref">RelAlgTranslator</span></a> and the IR code generation. </p>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
@@ -1921,9 +1922,9 @@
 <dl class="function">
 <dt id="_CPPv4N16RelAlgDagBuilder16RelAlgDagBuilderERKNSt6stringERKN17Catalog_Namespace7CatalogEPK10RenderInfo">
 <span id="_CPPv3N16RelAlgDagBuilder16RelAlgDagBuilderERKNSt6stringERKN17Catalog_Namespace7CatalogEPK10RenderInfo"></span><span id="_CPPv2N16RelAlgDagBuilder16RelAlgDagBuilderERKNSt6stringERKN17Catalog_Namespace7CatalogEPK10RenderInfo"></span><span id="RelAlgDagBuilder::RelAlgDagBuilder__ssCR.Catalog_Namespace::CatalogCR.RenderInfoCP"></span><span class="target" id="class_rel_alg_dag_builder_1ab7f41fe478c71c81a881fd4da9e5424a"></span><code class="sig-name descname">RelAlgDagBuilder</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_ra</em>, <em class="property">const</em> Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7CatalogE" title="Catalog_Namespace::Catalog">Catalog</a> &amp;<em>cat</em>, <em class="property">const</em> <a class="reference internal" href="class_render_info.html#_CPPv410RenderInfo" title="RenderInfo">RenderInfo</a> *<em>render_info</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16RelAlgDagBuilder16RelAlgDagBuilderERKNSt6stringERKN17Catalog_Namespace7CatalogEPK10RenderInfo" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Constructs a RelAlg DAG from a JSON representation. <dl class="simple">
+<dd><p>Constructs a RelAlg DAG from a <a class="reference internal" href="class_j_s_o_n.html#class_j_s_o_n"><span class="std std-ref">JSON</span></a> representation. <dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">query_ra</span></code>: A JSON string representation of an RA tree from <a class="reference internal" href="class_calcite.html#class_calcite"><span class="std std-ref">Calcite</span></a>. </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">query_ra</span></code>: A <a class="reference internal" href="class_j_s_o_n.html#class_j_s_o_n"><span class="std std-ref">JSON</span></a> string representation of an RA tree from <a class="reference internal" href="class_calcite.html#class_calcite"><span class="std std-ref">Calcite</span></a>. </p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cat</span></code>: DB catalog for the current user. </p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">render_opts</span></code>: Additional build options for render queries. </p></li>
 </ul>
@@ -1938,7 +1939,7 @@
 <dd><p>Constructs a sub-DAG for any subqueries. Should only be called during DAG building. <dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">root_dag_builder</span></code>: The root DAG builder. The root stores pointers to all subqueries. </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">query_ast</span></code>: The current JSON node to build a DAG for. </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">query_ast</span></code>: The current <a class="reference internal" href="class_j_s_o_n.html#class_j_s_o_n"><span class="std std-ref">JSON</span></a> node to build a DAG for. </p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cat</span></code>: DB catalog for the current user. </p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">render_opts</span></code>: Additional build options for render queries. </p></li>
 </ul>
