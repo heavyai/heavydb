@@ -144,7 +144,8 @@ class ExtensionFunctionsWhitelist {
   static std::string toStringSQL(const ExtArgumentType& sig_type);
 
   static std::vector<std::string> getLLVMDeclarations(
-      const std::unordered_set<std::string>& udf_decls);
+      const std::unordered_set<std::string>& udf_decls,
+      const bool is_gpu = false);
 
  private:
   static void addCommon(

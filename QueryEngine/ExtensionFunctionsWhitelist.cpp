@@ -472,7 +472,8 @@ std::string ExtensionFunction::toStringSQL() const {
 
 // Converts the extension function signatures to their LLVM representation.
 std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
-    const std::unordered_set<std::string>& udf_decls) {
+    const std::unordered_set<std::string>& udf_decls,
+    const bool is_gpu) {
   std::vector<std::string> declarations;
   for (const auto& kv : functions_) {
     const auto& signatures = kv.second;
@@ -505,6 +506,9 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
   for (const auto& kv : table_functions::TableFunctionsFactory::functions_) {
     if (kv.second.isRuntime()) {
       // Runtime UDTFs are defined in LLVM/NVVM IR module
+      continue;
+    }
+    if (!((is_gpu && kv.second.isGPU()) || (!is_gpu && kv.second.isCPU()))) {
       continue;
     }
     std::string decl_prefix{"declare " + serialize_type(ExtArgumentType::Int32) + " @" +
