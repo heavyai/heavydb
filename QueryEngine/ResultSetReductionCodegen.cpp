@@ -314,6 +314,7 @@ void translate_for(const For* for_loop,
       nullptr,
       nullptr,
       nullptr,
+      nullptr,
       "reduction_loop");
   const auto bb_loop_body = JoinLoop::codegen(
       {join_loop},

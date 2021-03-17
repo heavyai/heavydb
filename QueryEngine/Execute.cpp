@@ -91,6 +91,7 @@ float g_filter_push_down_low_frac{-1.0f};
 float g_filter_push_down_high_frac{-1.0f};
 size_t g_filter_push_down_passing_row_ubound{0};
 bool g_enable_columnar_output{false};
+bool g_enable_left_join_filter_hoisting{true};
 bool g_optimize_row_initialization{true};
 bool g_enable_overlaps_hashjoin{true};
 bool g_enable_hashjoin_many_to_many{false};
