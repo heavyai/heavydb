@@ -118,7 +118,7 @@ int bcrypt_gensalt(int factor, char salt[BCRYPT_HASHSIZE])
 	char *aux;
 
 	// Note: Windows does not have /dev/urandom sadly.
-#ifdef _WIN32 || _WIN64
+#if defined(_WIN32) || defined(_WIN64)
 	HCRYPTPROV p;
 	ULONG     i;
 
