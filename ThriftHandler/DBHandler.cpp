@@ -173,12 +173,40 @@ SessionMap::iterator DBHandler::get_session_it_unsafe(
 template <>
 void DBHandler::expire_idle_sessions_unsafe(
     mapd_unique_lock<mapd_shared_mutex>& write_lock) {
+  std::vector<std::string> expired_sessions;
   for (auto session_pair : sessions_) {
     auto session_it = get_session_from_map(session_pair.first, sessions_);
     try {
       check_session_exp_unsafe(session_it);
     } catch (const ForceDisconnect& e) {
-      disconnect_impl(session_it, write_lock);
+      expired_sessions.emplace_back(session_it->second->get_session_id());
+    }
+  }
+
+  for (auto session_id : expired_sessions) {
+    if (leaf_aggregator_.leafCount() > 0) {
+      try {
+        leaf_aggregator_.disconnect(session_id);
+      } catch (TOmniSciException& toe) {
+        LOG(INFO) << " Problem disconnecting from leaves : " << toe.what();
+      } catch (std::exception& e) {
+        LOG(INFO)
+            << " Problem disconnecting from leaves, check leaf logs for additonal info";
+      }
+    }
+    sessions_.erase(session_id);
+  }
+  if (render_handler_) {
+    write_lock.unlock();
+    for (auto session_id : expired_sessions) {
+      // NOTE: the render disconnect is done after the session lock is released to
+      // avoid a deadlock. See: https://omnisci.atlassian.net/browse/BE-3324
+      // This out-of-scope solution is a compromise for now until a better session
+      // handling/locking mechanism is developed for the renderer. Note as well that the
+      // session_id cannot be immediately reused. If a render request were to slip in
+      // after the lock is released and before the render disconnect could cause a
+      // problem.
+      render_handler_->disconnect(session_id);
     }
   }
 }
