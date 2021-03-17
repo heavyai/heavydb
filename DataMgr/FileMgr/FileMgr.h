@@ -38,13 +38,12 @@
 #include "DataMgr/FileMgr/FileBuffer.h"
 #include "DataMgr/FileMgr/FileInfo.h"
 #include "DataMgr/FileMgr/Page.h"
+#include "Fragmenter/FragmentDefaultValues.h"
 #include "Shared/mapd_shared_mutex.h"
 
 using namespace Data_Namespace;
 
 namespace File_Namespace {
-
-#define DEFAULT_PAGE_SIZE 2097152
 
 class GlobalFileMgr;  // forward declaration
 /**
