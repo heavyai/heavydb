@@ -618,7 +618,6 @@ TEST_F(BucketSizeTest, OverlapsTooBig) {
   expected_values.emplace_back(OverlapsJoinHashTableMock::ExpectedValues{1340, 688});
 
   QueryHint hint;
-  hint.hint_delivered = true;
   hint.overlaps_max_size = 2;
   auto hash_table =
       OverlapsJoinHashTableMock::getInstance(condition,

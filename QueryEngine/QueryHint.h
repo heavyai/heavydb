@@ -17,45 +17,37 @@
 #ifndef OMNISCI_QUERYHINT_H
 #define OMNISCI_QUERYHINT_H
 
+#include <optional>
+
+#include <boost/algorithm/string.hpp>
+
 #include "ThriftHandler/CommandLineOptions.h"
 
 struct QueryHint {
-  // for each hint "H", we first define its value as the corresponding system-defined
-  // default value "D"
-  // After then, if we detect at least one hint is registered (via hint_delivered),
-  // we can compare the value btw. "H" and "D" during the query compilation step that H
-  // is involved and then use the "H" iff "H" != "D"
-  // since that indicates user-given hint is delivered
-  // (otherwise, "H" should be the equal to "D")
-  // note that we should check if H is valid W.R.T the proper value range
-  // i.e., if H is valid in 0.0 ~ 1.0, then we check that at the point
-  // when we decide to use H, and use D iff given H does not have a valid value
-  QueryHint()
-      : hint_delivered(false)
-      , cpu_mode(false)
-      , overlaps_bucket_threshold(0.1)
-      , overlaps_max_size(g_overlaps_max_table_size_bytes)
-      , overlaps_allow_gpu_build(false) {}
+  // for each hint "H", we represent it as optional instance
+  // and consider a user is given H via an input query
+  // iff H has a valid value, i.e., H.get() returns a valid hint value
+  // and at the same time H.has_value() returns true
+  // otherwise, i.e., H.has_value() returns false, we consider
+  // the H is not given from the user
+  QueryHint() : registered_hint(OMNISCI_SUPPORTED_HINT_CLASS.size(), false) {}
 
   QueryHint& operator=(const QueryHint& other) {
-    hint_delivered = other.hint_delivered;
     cpu_mode = other.cpu_mode;
     overlaps_bucket_threshold = other.overlaps_bucket_threshold;
     overlaps_max_size = other.overlaps_max_size;
     overlaps_allow_gpu_build = other.overlaps_allow_gpu_build;
+    registered_hint = other.registered_hint;
     return *this;
   }
 
   QueryHint(const QueryHint& other) {
-    hint_delivered = other.hint_delivered;
     cpu_mode = other.cpu_mode;
     overlaps_bucket_threshold = other.overlaps_bucket_threshold;
     overlaps_max_size = other.overlaps_max_size;
     overlaps_allow_gpu_build = other.overlaps_allow_gpu_build;
+    registered_hint = other.registered_hint;
   }
-
-  // set true if at least one query hint is delivered
-  bool hint_delivered;
 
   // general query execution
   bool cpu_mode;
@@ -65,13 +57,62 @@ struct QueryHint {
   size_t overlaps_max_size;
   bool overlaps_allow_gpu_build;
 
-  std::unordered_map<std::string, int> OMNISCI_SUPPORTED_HINT_CLASS = {
+  std::unordered_map<std::string, size_t> OMNISCI_SUPPORTED_HINT_CLASS = {
       {"cpu_mode", 0},
       {"overlaps_bucket_threshold", 1},
       {"overlaps_max_size", 2},
       {"overlaps_allow_gpu_build", 3}};
 
+  std::vector<bool> registered_hint;
+
   static QueryHint defaults() { return QueryHint(); }
+
+ public:
+  bool isAnyQueryHintDelivered() const {
+    for (auto& kv : OMNISCI_SUPPORTED_HINT_CLASS) {
+      if (registered_hint[kv.second]) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void registerHint(const std::string& hint_name) {
+    const auto hint_class = getHintClass(hint_name);
+    if (hint_class >= 0 && hint_class < OMNISCI_SUPPORTED_HINT_CLASS.size()) {
+      registered_hint[hint_class] = true;
+    }
+  }
+
+  void registerHint(const size_t hint_class) {
+    if (hint_class >= 0 && hint_class < OMNISCI_SUPPORTED_HINT_CLASS.size()) {
+      registered_hint[hint_class] = true;
+    }
+  }
+
+  const bool isHintRegistered(const std::string& hint_name) const {
+    const auto hint_class = getHintClass(hint_name);
+    if (hint_class >= 0 && hint_class < OMNISCI_SUPPORTED_HINT_CLASS.size()) {
+      return registered_hint[hint_class];
+    }
+    return false;
+  }
+
+  const bool isHintRegistered(const size_t hint_class) const {
+    if (hint_class >= 0 && hint_class < OMNISCI_SUPPORTED_HINT_CLASS.size()) {
+      return registered_hint[hint_class];
+    }
+    return false;
+  }
+
+  const size_t getHintClass(const std::string& hint_name) const {
+    const auto lowered_hint_name = boost::algorithm::to_lower_copy(hint_name);
+    auto it = OMNISCI_SUPPORTED_HINT_CLASS.find(lowered_hint_name);
+    if (it != OMNISCI_SUPPORTED_HINT_CLASS.end()) {
+      return it->second;
+    }
+    return SIZE_MAX;
+  }
 };
 
 #endif  // OMNISCI_QUERYHINT_H

@@ -95,7 +95,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
                                                                  executor,
                                                                  inner_outer_pairs,
                                                                  device_count);
-  if (query_hint.hint_delivered) {
+  if (query_hint.isAnyQueryHintDelivered()) {
     join_hash_table->registerQueryHint(query_hint);
   }
   try {
@@ -255,31 +255,31 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
     return;
   }
 
-  const double default_overlaps_bucket_threshold = 0.1;
   auto overlaps_max_table_size_bytes = g_overlaps_max_table_size_bytes;
   std::optional<double> overlaps_threshold_override;
   auto query_hint = getRegisteredQueryHint();
-  if (query_hint.hint_delivered) {
-    if (query_hint.overlaps_bucket_threshold != default_overlaps_bucket_threshold) {
-      VLOG(1) << "Setting overlaps bucket threshold "
-                 "\'overlaps_hashjoin_bucket_threshold\' via "
-                 "query hint: "
-              << query_hint.overlaps_bucket_threshold;
-      overlaps_threshold_override = query_hint.overlaps_bucket_threshold;
-    }
-    if (query_hint.overlaps_max_size != overlaps_max_table_size_bytes) {
-      std::ostringstream oss;
-      oss << "User requests to change a threshold \'overlaps_max_table_size_bytes\' via "
+  if (query_hint.isHintRegistered("overlaps_bucket_threshold")) {
+    VLOG(1) << "Setting overlaps bucket threshold "
+               "\'overlaps_hashjoin_bucket_threshold\' via "
+               "query hint: "
+            << query_hint.overlaps_bucket_threshold;
+    overlaps_threshold_override = query_hint.overlaps_bucket_threshold;
+  }
+  if (query_hint.isHintRegistered("overlaps_max_size")) {
+    std::ostringstream oss;
+    oss << "User requests to change a threshold \'overlaps_max_table_size_bytes\' via "
+           "query hint: "
+        << overlaps_max_table_size_bytes << " -> " << query_hint.overlaps_max_size;
+    if (!overlaps_threshold_override.has_value()) {
+      oss << "Enable user-given threshold \'overlaps_max_table_size_bytes\' via "
              "query hint: "
           << overlaps_max_table_size_bytes << " -> " << query_hint.overlaps_max_size;
-      if (!overlaps_threshold_override.has_value()) {
-        overlaps_max_table_size_bytes = query_hint.overlaps_max_size;
-      } else {
-        oss << ", but is skipped since the query hint also changes the threshold "
-               "\'overlaps_hashjoin_bucket_threshold\'";
-      }
-      VLOG(1) << oss.str();
+      overlaps_max_table_size_bytes = query_hint.overlaps_max_size;
+    } else {
+      oss << ", but is skipped since the query hint also changes the threshold "
+             "\'overlaps_hashjoin_bucket_threshold\'";
     }
+    VLOG(1) << oss.str();
   }
 
   std::vector<ColumnsForDevice> columns_per_device;
@@ -1331,7 +1331,8 @@ std::set<DecodedJoinHashBufferEntry> OverlapsJoinHashTable::toSet(
 Data_Namespace::MemoryLevel OverlapsJoinHashTable::getEffectiveMemoryLevel(
     const std::vector<InnerOuter>& inner_outer_pairs) const {
   // always build on CPU
-  if (query_hint_.hint_delivered && query_hint_.overlaps_allow_gpu_build) {
+  if (query_hint_.isHintRegistered("overlaps_allow_gpu_build") &&
+      query_hint_.overlaps_allow_gpu_build) {
     return memory_level_;
   }
   return Data_Namespace::MemoryLevel::CPU_LEVEL;
