@@ -178,8 +178,8 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
     EXPECT_EQ(table_name, td->tableName);
     EXPECT_EQ(Fragmenter_Namespace::FragmenterType::INSERT_ORDER, td->fragType);
     EXPECT_EQ(max_fragment_size, td->maxFragRows);
-    EXPECT_EQ(DEFAULT_MAX_CHUNK_SIZE, td->maxChunkSize);
-    EXPECT_EQ(DEFAULT_PAGE_SIZE, td->fragPageSize);
+    EXPECT_EQ(size_t(DEFAULT_MAX_CHUNK_SIZE), size_t(td->maxChunkSize));
+    EXPECT_EQ(size_t(DEFAULT_PAGE_SIZE), size_t(td->fragPageSize));
     EXPECT_EQ(DEFAULT_MAX_ROWS, td->maxRows);
     EXPECT_EQ(user_id, td->userId);
     EXPECT_EQ(Data_Namespace::MemoryLevel::DISK_LEVEL, td->persistenceLevel);
