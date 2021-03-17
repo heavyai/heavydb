@@ -777,6 +777,14 @@ class Executor {
                                        const ExecutionOptions& eo,
                                        const std::vector<InputTableInfo>& query_infos,
                                        ColumnCacheMap& column_cache);
+  // Create a callback which hoists left hand side filters above the join for left joins,
+  // eliminating extra computation of the probe and matches if the row does not pass the
+  // filters
+  JoinLoop::HoistedFiltersCallback buildHoistLeftHandSideFiltersCb(
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const size_t level_idx,
+      const int inner_table_id,
+      const CompilationOptions& co);
   // Create a callback which generates code which returns true iff the row on the given
   // level is deleted.
   std::function<llvm::Value*(const std::vector<llvm::Value*>&, llvm::Value*)>

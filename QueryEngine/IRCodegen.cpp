@@ -23,6 +23,8 @@
 
 // Driver methods for the IR generation.
 
+extern bool g_enable_left_join_filter_hoisting;
+
 std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
                                                  const bool fetch_columns,
                                                  const CompilationOptions& co) {
@@ -343,6 +345,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
           return left_join_cond;
         };
     if (current_level_hash_table) {
+      const auto hoisted_filters_cb = buildHoistLeftHandSideFiltersCb(
+          ra_exe_unit, level_idx, current_level_hash_table->getInnerTableId(), co);
       if (current_level_hash_table->getHashType() == HashType::OneToOne) {
         join_loops.emplace_back(
             /*kind=*/JoinLoopKind::Singleton,
@@ -360,6 +364,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             /*found_outer_matches=*/current_level_join_conditions.type == JoinType::LEFT
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
                 : nullptr,
+            /*hoisted_filters=*/hoisted_filters_cb,
             /*is_deleted=*/is_deleted_cb);
       } else {
         join_loops.emplace_back(
@@ -384,6 +389,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             /*found_outer_matches=*/current_level_join_conditions.type == JoinType::LEFT
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
                 : nullptr,
+            /*hoisted_filters=*/hoisted_filters_cb,
             /*is_deleted=*/is_deleted_cb);
       }
       ++current_hash_table_idx;
@@ -438,10 +444,139 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
           current_level_join_conditions.type == JoinType::LEFT
               ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
               : nullptr,
+          /*hoisted_filters=*/nullptr,
           /*is_deleted=*/is_deleted_cb);
     }
   }
   return join_loops;
+}
+
+namespace {
+
+class ExprTableIdVisitor : public ScalarExprVisitor<std::set<int>> {
+ protected:
+  std::set<int> visitColumnVar(const Analyzer::ColumnVar* col_expr) const final {
+    return {col_expr->get_table_id()};
+  }
+
+  std::set<int> visitFunctionOper(const Analyzer::FunctionOper* func_expr) const final {
+    std::set<int> ret;
+    for (size_t i = 0; i < func_expr->getArity(); i++) {
+      ret = aggregateResult(ret, visit(func_expr->getArg(i)));
+    }
+    return ret;
+  }
+
+  std::set<int> visitBinOper(const Analyzer::BinOper* bin_oper) const final {
+    std::set<int> ret;
+    ret = aggregateResult(ret, visit(bin_oper->get_left_operand()));
+    return aggregateResult(ret, visit(bin_oper->get_right_operand()));
+  }
+
+  std::set<int> visitUOper(const Analyzer::UOper* u_oper) const final {
+    return visit(u_oper->get_operand());
+  }
+
+  std::set<int> aggregateResult(const std::set<int>& aggregate,
+                                const std::set<int>& next_result) const final {
+    auto ret = aggregate;  // copy
+    for (const auto& el : next_result) {
+      ret.insert(el);
+    }
+    return ret;
+  }
+};
+
+}  // namespace
+
+JoinLoop::HoistedFiltersCallback Executor::buildHoistLeftHandSideFiltersCb(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const size_t level_idx,
+    const int inner_table_id,
+    const CompilationOptions& co) {
+  if (!g_enable_left_join_filter_hoisting) {
+    return nullptr;
+  }
+
+  const auto& current_level_join_conditions = ra_exe_unit.join_quals[level_idx];
+  if (current_level_join_conditions.type == JoinType::LEFT) {
+    const auto& condition = current_level_join_conditions.quals.front();
+    const auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(condition.get());
+    CHECK(bin_oper) << condition->toString();
+    const auto rhs =
+        dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_right_operand());
+    const auto lhs =
+        dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_left_operand());
+    if (lhs && rhs && lhs->get_table_id() != rhs->get_table_id()) {
+      const Analyzer::ColumnVar* selected_lhs{nullptr};
+      // grab the left hand side column -- this is somewhat similar to normalize column
+      // pair, and a better solution may be to hoist that function out of the join
+      // framework and normalize columns at the top of build join loops
+      if (lhs->get_table_id() == inner_table_id) {
+        selected_lhs = rhs;
+      } else if (rhs->get_table_id() == inner_table_id) {
+        selected_lhs = lhs;
+      }
+      if (selected_lhs) {
+        std::list<std::shared_ptr<Analyzer::Expr>> hoisted_quals;
+        // get all LHS-only filters
+        auto should_hoist_qual = [&hoisted_quals, &selected_lhs](const auto& qual,
+                                                                 const int table_id) {
+          CHECK(qual);
+
+          ExprTableIdVisitor visitor;
+          const auto table_ids = visitor.visit(qual.get());
+          if (table_ids.size() == 1 && table_ids.find(table_id) != table_ids.end()) {
+            hoisted_quals.push_back(qual);
+          }
+        };
+        for (const auto& qual : ra_exe_unit.simple_quals) {
+          should_hoist_qual(qual, selected_lhs->get_table_id());
+        }
+        for (const auto& qual : ra_exe_unit.quals) {
+          should_hoist_qual(qual, selected_lhs->get_table_id());
+        }
+
+        // build the filters callback and return it
+        if (!hoisted_quals.empty()) {
+          return [this, hoisted_quals, co](llvm::BasicBlock* true_bb,
+                                           llvm::BasicBlock* exit_bb,
+                                           const std::string& loop_name,
+                                           llvm::Function* parent_func,
+                                           CgenState* cgen_state) -> llvm::BasicBlock* {
+            AUTOMATIC_IR_METADATA(cgen_state);
+
+            llvm::IRBuilder<>& builder = cgen_state->ir_builder_;
+            auto& context = builder.getContext();
+
+            const auto filter_bb =
+                llvm::BasicBlock::Create(context,
+                                         "hoisted_left_join_filters_" + loop_name,
+                                         parent_func,
+                                         /*insert_before=*/true_bb);
+            builder.SetInsertPoint(filter_bb);
+
+            llvm::Value* filter_lv = cgen_state_->llBool(true);
+            CodeGenerator code_generator(this);
+            CHECK(plan_state_);
+            for (const auto& qual : hoisted_quals) {
+              VLOG(1) << "Generating code for hoisted left hand side qualifier "
+                      << qual->toString();
+              CHECK(plan_state_->hoisted_filters_.insert(qual).second);
+              auto cond = code_generator.toBool(
+                  code_generator.codegen(qual.get(), true, co).front());
+              filter_lv = builder.CreateAnd(filter_lv, cond);
+            }
+            CHECK(filter_lv->getType()->isIntegerTy(1));
+
+            builder.CreateCondBr(filter_lv, true_bb, exit_bb);
+            return filter_bb;
+          };
+        }
+      }
+    }
+  }
+  return nullptr;
 }
 
 std::function<llvm::Value*(const std::vector<llvm::Value*>&, llvm::Value*)>
@@ -686,6 +821,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
   CodeGenerator code_generator(this);
   const auto loops_entry_bb = JoinLoop::codegen(
       join_loops,
+      /*body_codegen=*/
       [this,
        query_func,
        &query_mem_desc,
@@ -712,7 +848,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
         }
         return loop_body_bb;
       },
-      code_generator.posArg(nullptr),
+      /*outer_iter=*/code_generator.posArg(nullptr),
       exit_bb,
       cgen_state_.get());
   cgen_state_->ir_builder_.SetInsertPoint(entry_bb);

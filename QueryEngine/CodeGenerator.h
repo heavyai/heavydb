@@ -106,7 +106,8 @@ class CodeGenerator {
 
   static bool prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
                               std::vector<Analyzer::Expr*>& primary_quals,
-                              std::vector<Analyzer::Expr*>& deferred_quals);
+                              std::vector<Analyzer::Expr*>& deferred_quals,
+                              const PlanState::HoistedFiltersSet& hoisted_quals);
 
   struct ExecutorRequired : public std::runtime_error {
     ExecutorRequired()

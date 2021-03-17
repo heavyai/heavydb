@@ -3006,8 +3006,8 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
   // generate the code for the filter
   std::vector<Analyzer::Expr*> primary_quals;
   std::vector<Analyzer::Expr*> deferred_quals;
-  bool short_circuited =
-      CodeGenerator::prioritizeQuals(ra_exe_unit, primary_quals, deferred_quals);
+  bool short_circuited = CodeGenerator::prioritizeQuals(
+      ra_exe_unit, primary_quals, deferred_quals, plan_state_->hoisted_filters_);
   if (short_circuited) {
     VLOG(1) << "Prioritized " << std::to_string(primary_quals.size()) << " quals, "
             << "short-circuited and deferred " << std::to_string(deferred_quals.size())

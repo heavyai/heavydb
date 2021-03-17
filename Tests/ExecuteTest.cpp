@@ -53,6 +53,7 @@ extern bool g_allow_cpu_retry;
 extern bool g_enable_watchdog;
 extern bool g_skip_intermediate_count;
 extern bool g_use_tbb_pool;
+extern bool g_enable_left_join_filter_hoisting;
 
 extern unsigned g_trivial_loop_join_threshold;
 extern bool g_enable_overlaps_hashjoin;
@@ -9083,6 +9084,50 @@ TEST(Select, Joins_InnerJoin_Filters) {
         c("SELECT COUNT(*) FROM test t1 JOIN test t2 ON t1.x = t2.x WHERE t1.null_str = "
           "t2.null_str;",
           dt));  // test must be replicated
+  }
+}
+
+TEST(Select, Joins_LeftJoinFiltered) {
+  // unable to flip the flag on the leaf nodes, and we are interested in codegen which
+  // should be mode agnostic
+  SKIP_ALL_ON_AGGREGATOR();
+
+  const bool left_join_hoisting_state = g_enable_left_join_filter_hoisting;
+  ScopeGuard reset = [left_join_hoisting_state] {
+    g_enable_left_join_filter_hoisting = left_join_hoisting_state;
+  };
+
+  for (bool enable_filter_hoisting : {false, true}) {
+    g_enable_left_join_filter_hoisting = enable_filter_hoisting;
+
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+
+      const std::string query =
+          R"(SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test.x = test_inner.x WHERE test.y > 42;)";
+      c(query, dt);
+
+      const auto query_explain_result =
+          QR::get()->runSelectQuery(query,
+                                    dt,
+                                    /*hoist_literals=*/true,
+                                    /*allow_loop_joins=*/false,
+                                    /*just_explain=*/true);
+      const auto explain_result = query_explain_result->getRows();
+      EXPECT_EQ(size_t(1), explain_result->rowCount());
+      const auto crt_row = explain_result->getNextRow(true, true);
+      EXPECT_EQ(size_t(1), crt_row.size());
+      const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
+      const auto n = explain_str.find("hoisted_left_join_filters_");
+      const bool condition = n == std::string::npos;
+      if (enable_filter_hoisting) {
+        // expect a match
+        EXPECT_FALSE(condition);
+      } else {
+        // expect no match
+        EXPECT_TRUE(condition);
+      }
+    }
   }
 }
 

@@ -42,6 +42,7 @@ struct PlanState {
   using TableId = int;
   using ColumnId = int;
   using DeletedColumnsMap = std::unordered_map<TableId, const ColumnDescriptor*>;
+  using HoistedFiltersSet = std::unordered_set<std::shared_ptr<Analyzer::Expr>>;
 
   PlanState(const bool allow_lazy_fetch,
             const std::vector<InputTableInfo>& query_infos,
@@ -55,6 +56,7 @@ struct PlanState {
 
   std::vector<int64_t> init_agg_vals_;
   std::vector<Analyzer::Expr*> target_exprs_;
+  HoistedFiltersSet hoisted_filters_;
   std::unordered_map<InputColDescriptor, size_t> global_to_local_col_ids_;
   std::set<std::pair<TableId, ColumnId>> columns_to_fetch_;
   std::set<std::pair<TableId, ColumnId>> columns_to_not_fetch_;
