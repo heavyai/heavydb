@@ -626,7 +626,6 @@ TEST_F(BucketSizeTest, OverlapsTooBig) {
       2, 4});  // step 3 (hash table not getting smaller, bails)
 
   QueryHint hint;
-  hint.hint_delivered = true;
   hint.overlaps_max_size = 2;
   hint.registerHint("overlaps_max_size");
   EXPECT_ANY_THROW(

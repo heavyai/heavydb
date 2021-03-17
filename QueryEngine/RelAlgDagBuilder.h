@@ -34,6 +34,7 @@
 #include "QueryEngine/Rendering/RenderInfo.h"
 #include "QueryEngine/TargetMetaInfo.h"
 #include "QueryEngine/TypePunning.h"
+#include "QueryHint.h"
 #include "Shared/toString.h"
 #include "Utils/FsiUtils.h"
 
@@ -1859,7 +1860,7 @@ class RelAlgDagBuilder : public boost::noncopyable {
         int target_hint_num = kv.second;
         switch (target_hint_num) {
           case 0: {  // cpu_mode
-            query_hint_.hint_delivered = true;
+            query_hint_.registerHint(kv.first);
             query_hint_.cpu_mode = true;
             VLOG(1) << "A user forces to run the query on the CPU execution mode";
             break;
@@ -1869,12 +1870,12 @@ class RelAlgDagBuilder : public boost::noncopyable {
             double overlaps_bucket_threshold =
                 std::stod(target->second.getListOptions()[0]);
             if (overlaps_bucket_threshold >= 0.0 && overlaps_bucket_threshold <= 90.0) {
-              query_hint_.hint_delivered = true;
+              query_hint_.registerHint(kv.first);
               query_hint_.overlaps_bucket_threshold = overlaps_bucket_threshold;
             } else {
               VLOG(1) << "Skip the given query hint \"overlaps_bucket_threshold\" ("
                       << overlaps_bucket_threshold
-                      << ") : the hint value should be within 0.0 ~ 1.0";
+                      << ") : the hint value should be within 0.0 ~ 90.0";
             }
             break;
           }
@@ -1884,7 +1885,7 @@ class RelAlgDagBuilder : public boost::noncopyable {
             int overlaps_max_size;
             ss >> overlaps_max_size;
             if (overlaps_max_size >= 0) {
-              query_hint_.hint_delivered = true;
+              query_hint_.registerHint(kv.first);
               query_hint_.overlaps_max_size = (size_t)overlaps_max_size;
             } else {
               VLOG(1) << "Skip the query hint \"overlaps_max_size\" ("
@@ -1894,7 +1895,7 @@ class RelAlgDagBuilder : public boost::noncopyable {
             break;
           }
           case 3: {  // overlaps_allow_gpu_build
-            query_hint_.hint_delivered = true;
+            query_hint_.registerHint(kv.first);
             query_hint_.overlaps_allow_gpu_build = true;
             VLOG(1) << "Allowing GPU hash table build for overlaps join.";
             break;

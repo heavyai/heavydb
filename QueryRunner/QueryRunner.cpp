@@ -430,7 +430,8 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
         }
         auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra, query_state);
         const auto& query_hints = ra_executor.getParsedQueryHints();
-        if (query_hints.cpu_mode) {
+        const bool cpu_mode_enabled = query_hints.isHintRegistered("cpu_mode");
+        if (cpu_mode_enabled) {
           co.device_type = ExecutorDeviceType::CPU;
         }
         result = std::make_shared<ExecutionResult>(
@@ -533,7 +534,8 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
                             .plan_result;
   auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
   const auto& query_hints = ra_executor.getParsedQueryHints();
-  if (query_hints.cpu_mode) {
+  const bool cpu_mode_enabled = query_hints.isHintRegistered("cpu_mode");
+  if (cpu_mode_enabled) {
     co.device_type = ExecutorDeviceType::CPU;
   }
   auto result = std::make_shared<ExecutionResult>(
@@ -621,7 +623,8 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
                                   .plan_result;
         auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
         const auto& query_hints = ra_executor.getParsedQueryHints();
-        if (query_hints.cpu_mode) {
+        const bool cpu_mode_enabled = query_hints.isHintRegistered("cpu_mode");
+        if (cpu_mode_enabled) {
           co.device_type = ExecutorDeviceType::CPU;
         }
         result = std::make_shared<ExecutionResult>(
