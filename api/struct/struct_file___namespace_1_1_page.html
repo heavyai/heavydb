@@ -40,8 +40,8 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Struct File_Namespace::StorageStats" href="struct_file___namespace_1_1_storage_stats.html" />
-    <link rel="prev" title="Struct File_Namespace::MultiPage" href="struct_file___namespace_1_1_multi_page.html" /> 
+    <link rel="next" title="Struct File_Namespace::PageMapping" href="struct_file___namespace_1_1_page_mapping.html" />
+    <link rel="prev" title="Struct File_Namespace::OpenFilesResult" href="struct_file___namespace_1_1_open_files_result.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev 6152f67
+                5.6.0dev 3f85c14
               </div>
             
           
@@ -1048,6 +1048,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_date_in_seconds_bounds_validator.html">Class foreign_storage::DateInSecondsBoundsValidator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_file_reader_map.html">Class foreign_storage::FileReaderMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_float_point_validator.html">Class foreign_storage::FloatPointValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_foreign_data_wrapper.html">Class foreign_storage::ForeignDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_foreign_data_wrapper_factory.html">Class foreign_storage::ForeignDataWrapperFactory</a></li>
@@ -1480,6 +1481,7 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_column.html">Struct Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_column_list.html">Struct ColumnList</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_columns_for_device.html">Struct ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_compilation_options.html">Struct CompilationOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_compilation_result.html">Struct CompilationResult</a></li>
@@ -1526,7 +1528,9 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_file___namespace_1_1_file_mgr_params.html">Struct File_Namespace::FileMgrParams</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_file___namespace_1_1_header_info.html">Struct File_Namespace::HeaderInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_file___namespace_1_1_multi_page.html">Struct File_Namespace::MultiPage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_file___namespace_1_1_open_files_result.html">Struct File_Namespace::OpenFilesResult</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Struct File_Namespace::Page</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_file___namespace_1_1_page_mapping.html">Struct File_Namespace::PageMapping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_file___namespace_1_1_storage_stats.html">Struct File_Namespace::StorageStats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_file___namespace_1_1read_thread_d_s.html">Struct File_Namespace::readThreadDS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_filter_selectivity.html">Struct FilterSelectivity</a></li>
@@ -1747,6 +1751,8 @@
 <li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1_parse_file_region_result.html">Struct foreign_storage::ParseFileRegionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1_row_group_interval.html">Struct foreign_storage::RowGroupInterval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1_row_group_metadata.html">Struct foreign_storage::RowGroupMetadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1anonymous__namespace_02_parquet_data_wrapper_8cpp_03_1_1_thread_partitioner.html">Struct foreign_storage::anonymous_namespace{ParquetDataWrapper.cpp}::ThreadPartitioner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1anonymous__namespace_02_parquet_data_wrapper_8cpp_03_1_1_thread_partitioner_1_1_thread_partition.html">Struct foreign_storage::anonymous_namespace{ParquetDataWrapper.cpp}::ThreadPartitioner::ThreadPartition</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_request.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferRequest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_result.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structimport__export_1_1_bad_rows_tracker.html">Struct import_export::BadRowsTracker</a></li>
@@ -1933,6 +1939,11 @@
 <span id="_CPPv3N14File_Namespace4Page7isValidEv"></span><span id="_CPPv2N14File_Namespace4Page7isValidEv"></span><span id="File_Namespace::Page::isValid"></span><span class="target" id="struct_file___namespace_1_1_page_1af1dacbeaf6447714a90ab4c465dc5131"></span>bool <code class="sig-name descname">isValid</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14File_Namespace4Page7isValidEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4NK14File_Namespace4PageltEK4Page">
+<span id="_CPPv3NK14File_Namespace4PageltEK4Page"></span><span id="_CPPv2NK14File_Namespace4PageltEK4Page"></span><span id="File_Namespace::Page::lt-operator__PageCC"></span><span class="target" id="struct_file___namespace_1_1_page_1ad3b6f05ab701edeb86afd502dfc4ca57"></span>bool <code class="sig-name descname">operator&lt;</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv4N14File_Namespace4PageE" title="File_Namespace::Page">Page</a> <em>other</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK14File_Namespace4PageltEK4Page" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Members</p>
@@ -1960,10 +1971,10 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="struct_file___namespace_1_1_storage_stats.html" class="btn btn-neutral float-right" title="Struct File_Namespace::StorageStats" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="struct_file___namespace_1_1_page_mapping.html" class="btn btn-neutral float-right" title="Struct File_Namespace::PageMapping" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="struct_file___namespace_1_1_multi_page.html" class="btn btn-neutral float-left" title="Struct File_Namespace::MultiPage" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="struct_file___namespace_1_1_open_files_result.html" class="btn btn-neutral float-left" title="Struct File_Namespace::OpenFilesResult" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

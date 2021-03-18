@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev 6152f67
+                5.6.0dev 3f85c14
               </div>
             
           
@@ -1048,6 +1048,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_date_in_seconds_bounds_validator.html">Class foreign_storage::DateInSecondsBoundsValidator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader_map.html">Class foreign_storage::FileReaderMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_float_point_validator.html">Class foreign_storage::FloatPointValidator</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class foreign_storage::ForeignDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper_factory.html">Class foreign_storage::ForeignDataWrapperFactory</a></li>
@@ -1480,6 +1481,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column.html">Struct Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_list.html">Struct ColumnList</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_columns_for_device.html">Struct ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_result.html">Struct CompilationResult</a></li>
@@ -1526,7 +1528,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_file_mgr_params.html">Struct File_Namespace::FileMgrParams</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_header_info.html">Struct File_Namespace::HeaderInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_multi_page.html">Struct File_Namespace::MultiPage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_open_files_result.html">Struct File_Namespace::OpenFilesResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_page.html">Struct File_Namespace::Page</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_page_mapping.html">Struct File_Namespace::PageMapping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_storage_stats.html">Struct File_Namespace::StorageStats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1read_thread_d_s.html">Struct File_Namespace::readThreadDS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_filter_selectivity.html">Struct FilterSelectivity</a></li>
@@ -1747,6 +1751,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_parse_file_region_result.html">Struct foreign_storage::ParseFileRegionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_interval.html">Struct foreign_storage::RowGroupInterval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_metadata.html">Struct foreign_storage::RowGroupMetadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1anonymous__namespace_02_parquet_data_wrapper_8cpp_03_1_1_thread_partitioner.html">Struct foreign_storage::anonymous_namespace{ParquetDataWrapper.cpp}::ThreadPartitioner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1anonymous__namespace_02_parquet_data_wrapper_8cpp_03_1_1_thread_partitioner_1_1_thread_partition.html">Struct foreign_storage::anonymous_namespace{ParquetDataWrapper.cpp}::ThreadPartitioner::ThreadPartition</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_request.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferRequest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_result.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structimport__export_1_1_bad_rows_tracker.html">Struct import_export::BadRowsTracker</a></li>
@@ -1913,6 +1919,35 @@
 <span id="_CPPv3N15foreign_storage18ForeignDataWrapperE"></span><span id="_CPPv2N15foreign_storage18ForeignDataWrapperE"></span><span id="foreign_storage::ForeignDataWrapper"></span><span class="target" id="classforeign__storage_1_1_foreign_data_wrapper"></span><em class="property">class </em><code class="sig-name descname">ForeignDataWrapper</code><a class="headerlink" href="#_CPPv4N15foreign_storage18ForeignDataWrapperE" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Subclassed by <a class="reference internal" href="classforeign__storage_1_1_abstract_file_storage_data_wrapper.html#classforeign__storage_1_1_abstract_file_storage_data_wrapper"><span class="std std-ref">foreign_storage::AbstractFileStorageDataWrapper</span></a>, <a class="reference internal" href="classforeign__storage_1_1_mock_foreign_data_wrapper.html#classforeign__storage_1_1_mock_foreign_data_wrapper"><span class="std std-ref">foreign_storage::MockForeignDataWrapper</span></a></p>
 <div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Types</p>
+<dl class="enum">
+<dt id="_CPPv4N15foreign_storage18ForeignDataWrapper16ParallelismLevelE">
+<span id="_CPPv3N15foreign_storage18ForeignDataWrapper16ParallelismLevelE"></span><span id="_CPPv2N15foreign_storage18ForeignDataWrapper16ParallelismLevelE"></span><span class="target" id="classforeign__storage_1_1_foreign_data_wrapper_1a011338ef35e4a48201ece5cc5b079e58"></span><em class="property">enum </em><code class="sig-name descname">ParallelismLevel</code><a class="headerlink" href="#_CPPv4N15foreign_storage18ForeignDataWrapper16ParallelismLevelE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>ParallelismLevel describes the desired level of parallelism of the data wrapper. This level controls which <code class="docutils literal notranslate"><span class="pre">optional_buffers</span></code> are passed to <code class="docutils literal notranslate"><span class="pre">populateChunkBuffers</span></code> with the following behaviour:</p>
+<p>NONE - no additional optional buffers are passed in</p>
+<p>INTRA_FRAGMENT - additional optional buffers which are in the same fragment as the required buffers</p>
+<p>INTER_FRAGMENT - additional optional buffers which may be in different fragments than those of the required buffers</p>
+<p>Note, the optional buffers are passed in with the intention of allowing the data wrapper to employ parallelism in retrieving them. Each subsequent level allows for a greater degree of parallelism but does not have to be supported. </p>
+<p><em>Values:</em></p>
+<dl class="enumerator">
+<dt id="_CPPv4N15foreign_storage18ForeignDataWrapper4NONEE">
+<span id="_CPPv3N15foreign_storage18ForeignDataWrapper4NONEE"></span><span id="_CPPv2N15foreign_storage18ForeignDataWrapper4NONEE"></span><span class="target" id="classforeign__storage_1_1_foreign_data_wrapper_1a011338ef35e4a48201ece5cc5b079e58ab1edd7170ba5c4cff0b24bfd0a43e53e"></span><code class="sig-name descname">NONE</code><a class="headerlink" href="#_CPPv4N15foreign_storage18ForeignDataWrapper4NONEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N15foreign_storage18ForeignDataWrapper14INTRA_FRAGMENTE">
+<span id="_CPPv3N15foreign_storage18ForeignDataWrapper14INTRA_FRAGMENTE"></span><span id="_CPPv2N15foreign_storage18ForeignDataWrapper14INTRA_FRAGMENTE"></span><span class="target" id="classforeign__storage_1_1_foreign_data_wrapper_1a011338ef35e4a48201ece5cc5b079e58ae286a557f76dc6bff007ab41c84d2dfb"></span><code class="sig-name descname">INTRA_FRAGMENT</code><a class="headerlink" href="#_CPPv4N15foreign_storage18ForeignDataWrapper14INTRA_FRAGMENTE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N15foreign_storage18ForeignDataWrapper14INTER_FRAGMENTE">
+<span id="_CPPv3N15foreign_storage18ForeignDataWrapper14INTER_FRAGMENTE"></span><span id="_CPPv2N15foreign_storage18ForeignDataWrapper14INTER_FRAGMENTE"></span><span class="target" id="classforeign__storage_1_1_foreign_data_wrapper_1a011338ef35e4a48201ece5cc5b079e58a89178d6240c86bf6564e9bfd52553051"></span><code class="sig-name descname">INTER_FRAGMENT</code><a class="headerlink" href="#_CPPv4N15foreign_storage18ForeignDataWrapper14INTER_FRAGMENTE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
 <dt id="_CPPv4N15foreign_storage18ForeignDataWrapper18ForeignDataWrapperEv">
@@ -1938,8 +1973,8 @@
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage18ForeignDataWrapper20populateChunkBuffersERNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapI8ChunkKeyP14AbstractBufferEE">
-<span id="_CPPv3N15foreign_storage18ForeignDataWrapper20populateChunkBuffersERNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapI8ChunkKeyP14AbstractBufferEE"></span><span id="_CPPv2N15foreign_storage18ForeignDataWrapper20populateChunkBuffersERNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapI8ChunkKeyP14AbstractBufferEE"></span><span id="foreign_storage::ForeignDataWrapper::populateChunkBuffers__std::map:ChunkKey.AbstractBufferP:R.std::map:ChunkKey.AbstractBufferP:R"></span><span class="target" id="classforeign__storage_1_1_foreign_data_wrapper_1a6f2cdaec8c9f72677ceee1ffe0ce8095"></span><em class="property">virtual</em> void <code class="sig-name descname">populateChunkBuffers</code><span class="sig-paren">(</span>std::map&lt;ChunkKey, AbstractBuffer *&gt; &amp;<em>required_buffers</em>, std::map&lt;ChunkKey, AbstractBuffer *&gt; &amp;<em>optional_buffers</em><span class="sig-paren">)</span> = 0<a class="headerlink" href="#_CPPv4N15foreign_storage18ForeignDataWrapper20populateChunkBuffersERNSt3mapI8ChunkKeyP14AbstractBufferEERNSt3mapI8ChunkKeyP14AbstractBufferEE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N15foreign_storage18ForeignDataWrapper20populateChunkBuffersERK16ChunkToBufferMapRK16ChunkToBufferMap">
+<span id="_CPPv3N15foreign_storage18ForeignDataWrapper20populateChunkBuffersERK16ChunkToBufferMapRK16ChunkToBufferMap"></span><span id="_CPPv2N15foreign_storage18ForeignDataWrapper20populateChunkBuffersERK16ChunkToBufferMapRK16ChunkToBufferMap"></span><span id="foreign_storage::ForeignDataWrapper::populateChunkBuffers__ChunkToBufferMapCR.ChunkToBufferMapCR"></span><span class="target" id="classforeign__storage_1_1_foreign_data_wrapper_1a69e36efb8d017d272a7d3f05e58a68bc"></span><em class="property">virtual</em> void <code class="sig-name descname">populateChunkBuffers</code><span class="sig-paren">(</span><em class="property">const</em> ChunkToBufferMap &amp;<em>required_buffers</em>, <em class="property">const</em> ChunkToBufferMap &amp;<em>optional_buffers</em><span class="sig-paren">)</span> = 0<a class="headerlink" href="#_CPPv4N15foreign_storage18ForeignDataWrapper20populateChunkBuffersERK16ChunkToBufferMapRK16ChunkToBufferMap" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Populates given chunk buffers identified by chunk keys. All provided chunk buffers are expected to be for the same fragment.</p>
 <p><dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
@@ -2027,6 +2062,30 @@
 <dt id="_CPPv4NK15foreign_storage18ForeignDataWrapper30getSupportedUserMappingOptionsEv">
 <span id="_CPPv3NK15foreign_storage18ForeignDataWrapper30getSupportedUserMappingOptionsEv"></span><span id="_CPPv2NK15foreign_storage18ForeignDataWrapper30getSupportedUserMappingOptionsEv"></span><span id="foreign_storage::ForeignDataWrapper::getSupportedUserMappingOptionsC"></span><span class="target" id="classforeign__storage_1_1_foreign_data_wrapper_1a2408013fb6503dcb2683491520321179"></span><em class="property">virtual</em> <em class="property">const</em> std::set&lt;std::string_view&gt; &amp;<code class="sig-name descname">getSupportedUserMappingOptions</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em> = 0<a class="headerlink" href="#_CPPv4NK15foreign_storage18ForeignDataWrapper30getSupportedUserMappingOptionsEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Gets the set of supported user mapping options for the data wrapper. </p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK15foreign_storage18ForeignDataWrapper14validateSchemaERKNSt4listI16ColumnDescriptorEE">
+<span id="_CPPv3NK15foreign_storage18ForeignDataWrapper14validateSchemaERKNSt4listI16ColumnDescriptorEE"></span><span id="_CPPv2NK15foreign_storage18ForeignDataWrapper14validateSchemaERKNSt4listI16ColumnDescriptorEE"></span><span id="foreign_storage::ForeignDataWrapper::validateSchema__std::list:ColumnDescriptor:CRC"></span><span class="target" id="classforeign__storage_1_1_foreign_data_wrapper_1a31382e1339667fb15d85940680a8f2e5"></span><em class="property">virtual</em> void <code class="sig-name descname">validateSchema</code><span class="sig-paren">(</span><em class="property">const</em> std::list&lt;<a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a>&gt; &amp;<em>columns</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage18ForeignDataWrapper14validateSchemaERKNSt4listI16ColumnDescriptorEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Verifies the schema is supported by this foreign table <dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">columns</span></code>: - column descriptors for this table </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK15foreign_storage18ForeignDataWrapper25getCachedParallelismLevelEv">
+<span id="_CPPv3NK15foreign_storage18ForeignDataWrapper25getCachedParallelismLevelEv"></span><span id="_CPPv2NK15foreign_storage18ForeignDataWrapper25getCachedParallelismLevelEv"></span><span id="foreign_storage::ForeignDataWrapper::getCachedParallelismLevelC"></span><span class="target" id="classforeign__storage_1_1_foreign_data_wrapper_1a68010dfbda41e6dbb2103a9687c8d635"></span><em class="property">virtual</em> <a class="reference internal" href="#_CPPv4N15foreign_storage18ForeignDataWrapper16ParallelismLevelE" title="foreign_storage::ForeignDataWrapper::ParallelismLevel">ParallelismLevel</a> <code class="sig-name descname">getCachedParallelismLevel</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage18ForeignDataWrapper25getCachedParallelismLevelEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Gets the desired level of parallelism for the data wrapper when a cache is in use. This affects the optional buffers that the data wrapper is made aware of during data requests. </p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK15foreign_storage18ForeignDataWrapper28getNonCachedParallelismLevelEv">
+<span id="_CPPv3NK15foreign_storage18ForeignDataWrapper28getNonCachedParallelismLevelEv"></span><span id="_CPPv2NK15foreign_storage18ForeignDataWrapper28getNonCachedParallelismLevelEv"></span><span id="foreign_storage::ForeignDataWrapper::getNonCachedParallelismLevelC"></span><span class="target" id="classforeign__storage_1_1_foreign_data_wrapper_1a31b5367c72a14a8c0dfb5b9ae0d1ec4b"></span><em class="property">virtual</em> <a class="reference internal" href="#_CPPv4N15foreign_storage18ForeignDataWrapper16ParallelismLevelE" title="foreign_storage::ForeignDataWrapper::ParallelismLevel">ParallelismLevel</a> <code class="sig-name descname">getNonCachedParallelismLevel</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage18ForeignDataWrapper28getNonCachedParallelismLevelEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Gets the desired level of parallelism for the data wrapper when no cache is in use. This affects the optional buffers that the data wrapper is made aware of during data requests. </p>
 </dd></dl>
 
 </div>

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev 6152f67
+                5.6.0dev 3f85c14
               </div>
             
           
@@ -1048,6 +1048,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_date_in_seconds_bounds_validator.html">Class foreign_storage::DateInSecondsBoundsValidator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader_map.html">Class foreign_storage::FileReaderMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_float_point_validator.html">Class foreign_storage::FloatPointValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper.html">Class foreign_storage::ForeignDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper_factory.html">Class foreign_storage::ForeignDataWrapperFactory</a></li>
@@ -1480,6 +1481,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column.html">Struct Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_list.html">Struct ColumnList</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_columns_for_device.html">Struct ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_result.html">Struct CompilationResult</a></li>
@@ -1526,7 +1528,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_file_mgr_params.html">Struct File_Namespace::FileMgrParams</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_header_info.html">Struct File_Namespace::HeaderInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_multi_page.html">Struct File_Namespace::MultiPage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_open_files_result.html">Struct File_Namespace::OpenFilesResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_page.html">Struct File_Namespace::Page</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_page_mapping.html">Struct File_Namespace::PageMapping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_storage_stats.html">Struct File_Namespace::StorageStats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1read_thread_d_s.html">Struct File_Namespace::readThreadDS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_filter_selectivity.html">Struct FilterSelectivity</a></li>
@@ -1747,6 +1751,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_parse_file_region_result.html">Struct foreign_storage::ParseFileRegionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_interval.html">Struct foreign_storage::RowGroupInterval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_metadata.html">Struct foreign_storage::RowGroupMetadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1anonymous__namespace_02_parquet_data_wrapper_8cpp_03_1_1_thread_partitioner.html">Struct foreign_storage::anonymous_namespace{ParquetDataWrapper.cpp}::ThreadPartitioner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1anonymous__namespace_02_parquet_data_wrapper_8cpp_03_1_1_thread_partitioner_1_1_thread_partition.html">Struct foreign_storage::anonymous_namespace{ParquetDataWrapper.cpp}::ThreadPartitioner::ThreadPartition</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_request.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferRequest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_result.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structimport__export_1_1_bad_rows_tracker.html">Struct import_export::BadRowsTracker</a></li>
@@ -1920,8 +1926,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N9S3Archive9S3ArchiveERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringEKb">
-<span id="_CPPv3N9S3Archive9S3ArchiveERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringEKb"></span><span id="_CPPv2N9S3Archive9S3ArchiveERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringEKb"></span><span id="S3Archive::S3Archive__ssCR.ssCR.ssCR.ssCR.ssCR.bC"></span><span class="target" id="class_s3_archive_1adc89c185ced10ef3f4d3335f1877b232"></span><code class="sig-name descname">S3Archive</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>url</em>, <em class="property">const</em> std::string &amp;<em>s3_access_key</em>, <em class="property">const</em> std::string &amp;<em>s3_secret_key</em>, <em class="property">const</em> std::string &amp;<em>s3_region</em>, <em class="property">const</em> std::string &amp;<em>s3_endpoint</em>, <em class="property">const</em> bool <em>plain_text</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9S3Archive9S3ArchiveERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringEKb" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N9S3Archive9S3ArchiveERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringEKb">
+<span id="_CPPv3N9S3Archive9S3ArchiveERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringEKb"></span><span id="_CPPv2N9S3Archive9S3ArchiveERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringEKb"></span><span id="S3Archive::S3Archive__ssCR.ssCR.ssCR.ssCR.ssCR.ssCR.bC"></span><span class="target" id="class_s3_archive_1a96c5bd22be7daca65e7d28443cbb560f"></span><code class="sig-name descname">S3Archive</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>url</em>, <em class="property">const</em> std::string &amp;<em>s3_access_key</em>, <em class="property">const</em> std::string &amp;<em>s3_secret_key</em>, <em class="property">const</em> std::string &amp;<em>s3_session_token</em>, <em class="property">const</em> std::string &amp;<em>s3_region</em>, <em class="property">const</em> std::string &amp;<em>s3_endpoint</em>, <em class="property">const</em> bool <em>plain_text</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9S3Archive9S3ArchiveERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringEKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1965,6 +1971,11 @@
 <dl class="member">
 <dt id="_CPPv4N9S3Archive13s3_secret_keyE">
 <span id="_CPPv3N9S3Archive13s3_secret_keyE"></span><span id="_CPPv2N9S3Archive13s3_secret_keyE"></span><span id="S3Archive::s3_secret_key__ss"></span><span class="target" id="class_s3_archive_1a9f30c13e562ee20d2943b05d1fc8cb3a"></span>std::string <code class="sig-name descname">s3_secret_key</code><a class="headerlink" href="#_CPPv4N9S3Archive13s3_secret_keyE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N9S3Archive16s3_session_tokenE">
+<span id="_CPPv3N9S3Archive16s3_session_tokenE"></span><span id="_CPPv2N9S3Archive16s3_session_tokenE"></span><span id="S3Archive::s3_session_token__ss"></span><span class="target" id="class_s3_archive_1a21a07622c5a9650116cce2b576ac1987"></span>std::string <code class="sig-name descname">s3_session_token</code><a class="headerlink" href="#_CPPv4N9S3Archive16s3_session_tokenE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

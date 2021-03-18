@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev 6152f67
+                5.6.0dev 3f85c14
               </div>
             
           
@@ -1048,6 +1048,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_date_in_seconds_bounds_validator.html">Class foreign_storage::DateInSecondsBoundsValidator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader_map.html">Class foreign_storage::FileReaderMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_float_point_validator.html">Class foreign_storage::FloatPointValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper.html">Class foreign_storage::ForeignDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper_factory.html">Class foreign_storage::ForeignDataWrapperFactory</a></li>
@@ -1480,6 +1481,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column.html">Struct Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_list.html">Struct ColumnList</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_columns_for_device.html">Struct ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_result.html">Struct CompilationResult</a></li>
@@ -1526,7 +1528,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_file_mgr_params.html">Struct File_Namespace::FileMgrParams</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_header_info.html">Struct File_Namespace::HeaderInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_multi_page.html">Struct File_Namespace::MultiPage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_open_files_result.html">Struct File_Namespace::OpenFilesResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_page.html">Struct File_Namespace::Page</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_page_mapping.html">Struct File_Namespace::PageMapping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_storage_stats.html">Struct File_Namespace::StorageStats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1read_thread_d_s.html">Struct File_Namespace::readThreadDS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_filter_selectivity.html">Struct FilterSelectivity</a></li>
@@ -1747,6 +1751,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_parse_file_region_result.html">Struct foreign_storage::ParseFileRegionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_interval.html">Struct foreign_storage::RowGroupInterval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_metadata.html">Struct foreign_storage::RowGroupMetadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1anonymous__namespace_02_parquet_data_wrapper_8cpp_03_1_1_thread_partitioner.html">Struct foreign_storage::anonymous_namespace{ParquetDataWrapper.cpp}::ThreadPartitioner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1anonymous__namespace_02_parquet_data_wrapper_8cpp_03_1_1_thread_partitioner_1_1_thread_partition.html">Struct foreign_storage::anonymous_namespace{ParquetDataWrapper.cpp}::ThreadPartitioner::ThreadPartition</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_request.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferRequest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_result.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structimport__export_1_1_bad_rows_tracker.html">Struct import_export::BadRowsTracker</a></li>
@@ -1942,14 +1948,14 @@
 
 <dl class="function">
 <dt id="_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter10insertDataER10InsertData">
-<span id="_CPPv3N20Fragmenter_Namespace21InsertOrderFragmenter10insertDataER10InsertData"></span><span id="_CPPv2N20Fragmenter_Namespace21InsertOrderFragmenter10insertDataER10InsertData"></span><span id="Fragmenter_Namespace::InsertOrderFragmenter::insertData__InsertDataR"></span><span class="target" id="class_fragmenter___namespace_1_1_insert_order_fragmenter_1ad5e16995cf8868fd53b8ce36b17cc8bf"></span>void <code class="sig-name descname">insertData</code><span class="sig-paren">(</span><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_insert_data.html#_CPPv4N20Fragmenter_Namespace10InsertDataE" title="Fragmenter_Namespace::InsertData">InsertData</a> &amp;<em>insertDataStruct</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter10insertDataER10InsertData" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N20Fragmenter_Namespace21InsertOrderFragmenter10insertDataER10InsertData"></span><span id="_CPPv2N20Fragmenter_Namespace21InsertOrderFragmenter10insertDataER10InsertData"></span><span id="Fragmenter_Namespace::InsertOrderFragmenter::insertData__InsertDataR"></span><span class="target" id="class_fragmenter___namespace_1_1_insert_order_fragmenter_1af202be583b26820984f73dea13ddfddb"></span>void <code class="sig-name descname">insertData</code><span class="sig-paren">(</span><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_insert_data.html#_CPPv4N20Fragmenter_Namespace10InsertDataE" title="Fragmenter_Namespace::InsertData">InsertData</a> &amp;<em>insert_data_struct</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter10insertDataER10InsertData" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>appends data onto the most recently occuring fragment, creating a new one if necessary </p>
 <p></p>
 </dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter22insertDataNoCheckpointER10InsertData">
-<span id="_CPPv3N20Fragmenter_Namespace21InsertOrderFragmenter22insertDataNoCheckpointER10InsertData"></span><span id="_CPPv2N20Fragmenter_Namespace21InsertOrderFragmenter22insertDataNoCheckpointER10InsertData"></span><span id="Fragmenter_Namespace::InsertOrderFragmenter::insertDataNoCheckpoint__InsertDataR"></span><span class="target" id="class_fragmenter___namespace_1_1_insert_order_fragmenter_1ae38f1412a6f46c5a4befa88fa1f72d41"></span>void <code class="sig-name descname">insertDataNoCheckpoint</code><span class="sig-paren">(</span><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_insert_data.html#_CPPv4N20Fragmenter_Namespace10InsertDataE" title="Fragmenter_Namespace::InsertData">InsertData</a> &amp;<em>insertDataStruct</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter22insertDataNoCheckpointER10InsertData" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N20Fragmenter_Namespace21InsertOrderFragmenter22insertDataNoCheckpointER10InsertData"></span><span id="_CPPv2N20Fragmenter_Namespace21InsertOrderFragmenter22insertDataNoCheckpointER10InsertData"></span><span id="Fragmenter_Namespace::InsertOrderFragmenter::insertDataNoCheckpoint__InsertDataR"></span><span class="target" id="class_fragmenter___namespace_1_1_insert_order_fragmenter_1a18bfc08aa7ba1130d3fdb7fd64d32c00"></span>void <code class="sig-name descname">insertDataNoCheckpoint</code><span class="sig-paren">(</span><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_insert_data.html#_CPPv4N20Fragmenter_Namespace10InsertDataE" title="Fragmenter_Namespace::InsertData">InsertData</a> &amp;<em>insert_data_struct</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter22insertDataNoCheckpointER10InsertData" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Given data wrapped in an <a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_insert_data.html#struct_fragmenter___namespace_1_1_insert_data"><span class="std std-ref">InsertData</span></a> struct, inserts it into the correct partitions No locks and checkpoints taken needs to be managed externally. </p>
 </dd></dl>
 
@@ -2096,12 +2102,12 @@
 
 <dl class="function">
 <dt id="_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter14insertDataImplER10InsertData">
-<span id="_CPPv3N20Fragmenter_Namespace21InsertOrderFragmenter14insertDataImplER10InsertData"></span><span id="_CPPv2N20Fragmenter_Namespace21InsertOrderFragmenter14insertDataImplER10InsertData"></span><span id="Fragmenter_Namespace::InsertOrderFragmenter::insertDataImpl__InsertDataR"></span><span class="target" id="class_fragmenter___namespace_1_1_insert_order_fragmenter_1a62c0ac5984879e6ba85fb1383eb48914"></span>void <code class="sig-name descname">insertDataImpl</code><span class="sig-paren">(</span><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_insert_data.html#_CPPv4N20Fragmenter_Namespace10InsertDataE" title="Fragmenter_Namespace::InsertData">InsertData</a> &amp;<em>insertDataStruct</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter14insertDataImplER10InsertData" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N20Fragmenter_Namespace21InsertOrderFragmenter14insertDataImplER10InsertData"></span><span id="_CPPv2N20Fragmenter_Namespace21InsertOrderFragmenter14insertDataImplER10InsertData"></span><span id="Fragmenter_Namespace::InsertOrderFragmenter::insertDataImpl__InsertDataR"></span><span class="target" id="class_fragmenter___namespace_1_1_insert_order_fragmenter_1acd38c3ed06b09515b9c66c043b211f95"></span>void <code class="sig-name descname">insertDataImpl</code><span class="sig-paren">(</span><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_insert_data.html#_CPPv4N20Fragmenter_Namespace10InsertDataE" title="Fragmenter_Namespace::InsertData">InsertData</a> &amp;<em>insert_data</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter14insertDataImplER10InsertData" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter13replicateDataERK10InsertData">
-<span id="_CPPv3N20Fragmenter_Namespace21InsertOrderFragmenter13replicateDataERK10InsertData"></span><span id="_CPPv2N20Fragmenter_Namespace21InsertOrderFragmenter13replicateDataERK10InsertData"></span><span id="Fragmenter_Namespace::InsertOrderFragmenter::replicateData__InsertDataCR"></span><span class="target" id="class_fragmenter___namespace_1_1_insert_order_fragmenter_1a45ef90ad81edfceec8663423acf61dbd"></span>void <code class="sig-name descname">replicateData</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_insert_data.html#_CPPv4N20Fragmenter_Namespace10InsertDataE" title="Fragmenter_Namespace::InsertData">InsertData</a> &amp;<em>insertDataStruct</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter13replicateDataERK10InsertData" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter10addColumnsERK10InsertData">
+<span id="_CPPv3N20Fragmenter_Namespace21InsertOrderFragmenter10addColumnsERK10InsertData"></span><span id="_CPPv2N20Fragmenter_Namespace21InsertOrderFragmenter10addColumnsERK10InsertData"></span><span id="Fragmenter_Namespace::InsertOrderFragmenter::addColumns__InsertDataCR"></span><span class="target" id="class_fragmenter___namespace_1_1_insert_order_fragmenter_1a31e323292787093ce268a5f793cefe55"></span>void <code class="sig-name descname">addColumns</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_insert_data.html#_CPPv4N20Fragmenter_Namespace10InsertDataE" title="Fragmenter_Namespace::InsertData">InsertData</a> &amp;<em>insertDataStruct</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter10addColumnsERK10InsertData" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2247,6 +2253,19 @@
 <dl class="member">
 <dt id="_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter11temp_mutex_E">
 <span id="_CPPv3N20Fragmenter_Namespace21InsertOrderFragmenter11temp_mutex_E"></span><span id="_CPPv2N20Fragmenter_Namespace21InsertOrderFragmenter11temp_mutex_E"></span><span id="Fragmenter_Namespace::InsertOrderFragmenter::temp_mutex___std::mutex"></span><span class="target" id="class_fragmenter___namespace_1_1_insert_order_fragmenter_1a3d97864ef2e1922cacd88562646269b3"></span>std::mutex <code class="sig-name descname">temp_mutex_</code><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter11temp_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Private Functions</p>
+<dl class="function">
+<dt id="_CPPv4NK20Fragmenter_Namespace21InsertOrderFragmenter18isAddingNewColumnsERK10InsertData">
+<span id="_CPPv3NK20Fragmenter_Namespace21InsertOrderFragmenter18isAddingNewColumnsERK10InsertData"></span><span id="_CPPv2NK20Fragmenter_Namespace21InsertOrderFragmenter18isAddingNewColumnsERK10InsertData"></span><span id="Fragmenter_Namespace::InsertOrderFragmenter::isAddingNewColumns__InsertDataCRC"></span><span class="target" id="class_fragmenter___namespace_1_1_insert_order_fragmenter_1a628307402c474f1785374b502e3aee54"></span>bool <code class="sig-name descname">isAddingNewColumns</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_insert_data.html#_CPPv4N20Fragmenter_Namespace10InsertDataE" title="Fragmenter_Namespace::InsertData">InsertData</a> &amp;<em>insert_data</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK20Fragmenter_Namespace21InsertOrderFragmenter18isAddingNewColumnsERK10InsertData" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter31dropFragmentsToSizeNoInsertLockEK6size_t">
+<span id="_CPPv3N20Fragmenter_Namespace21InsertOrderFragmenter31dropFragmentsToSizeNoInsertLockEK6size_t"></span><span id="_CPPv2N20Fragmenter_Namespace21InsertOrderFragmenter31dropFragmentsToSizeNoInsertLockEK6size_t"></span><span id="Fragmenter_Namespace::InsertOrderFragmenter::dropFragmentsToSizeNoInsertLock__sC"></span><span class="target" id="class_fragmenter___namespace_1_1_insert_order_fragmenter_1a6d68ed9b36ae23148f95ac5f4a54ea70"></span>void <code class="sig-name descname">dropFragmentsToSizeNoInsertLock</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>max_rows</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter31dropFragmentsToSizeNoInsertLockEK6size_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

@@ -1,0 +1,9 @@
+Struct foreign_storage::anonymous_namespace{ParquetDataWrapper.cpp}::ThreadPartitioner
+======================================================================================
+
+.. doxygenstruct:: foreign_storage::anonymous_namespace{ParquetDataWrapper.cpp}::ThreadPartitioner
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

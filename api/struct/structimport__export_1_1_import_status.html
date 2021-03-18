@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev 6152f67
+                5.6.0dev 3f85c14
               </div>
             
           
@@ -1048,6 +1048,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_date_in_seconds_bounds_validator.html">Class foreign_storage::DateInSecondsBoundsValidator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_file_reader_map.html">Class foreign_storage::FileReaderMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_float_point_validator.html">Class foreign_storage::FloatPointValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_foreign_data_wrapper.html">Class foreign_storage::ForeignDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_foreign_data_wrapper_factory.html">Class foreign_storage::ForeignDataWrapperFactory</a></li>
@@ -1480,6 +1481,7 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_column.html">Struct Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_column_list.html">Struct ColumnList</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_columns_for_device.html">Struct ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_compilation_options.html">Struct CompilationOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_compilation_result.html">Struct CompilationResult</a></li>
@@ -1526,7 +1528,9 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_file___namespace_1_1_file_mgr_params.html">Struct File_Namespace::FileMgrParams</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_file___namespace_1_1_header_info.html">Struct File_Namespace::HeaderInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_file___namespace_1_1_multi_page.html">Struct File_Namespace::MultiPage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_file___namespace_1_1_open_files_result.html">Struct File_Namespace::OpenFilesResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_file___namespace_1_1_page.html">Struct File_Namespace::Page</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_file___namespace_1_1_page_mapping.html">Struct File_Namespace::PageMapping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_file___namespace_1_1_storage_stats.html">Struct File_Namespace::StorageStats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_file___namespace_1_1read_thread_d_s.html">Struct File_Namespace::readThreadDS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_filter_selectivity.html">Struct FilterSelectivity</a></li>
@@ -1747,6 +1751,8 @@
 <li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1_parse_file_region_result.html">Struct foreign_storage::ParseFileRegionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1_row_group_interval.html">Struct foreign_storage::RowGroupInterval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1_row_group_metadata.html">Struct foreign_storage::RowGroupMetadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1anonymous__namespace_02_parquet_data_wrapper_8cpp_03_1_1_thread_partitioner.html">Struct foreign_storage::anonymous_namespace{ParquetDataWrapper.cpp}::ThreadPartitioner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1anonymous__namespace_02_parquet_data_wrapper_8cpp_03_1_1_thread_partitioner_1_1_thread_partition.html">Struct foreign_storage::anonymous_namespace{ParquetDataWrapper.cpp}::ThreadPartitioner::ThreadPartition</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_request.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferRequest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_result.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structimport__export_1_1_bad_rows_tracker.html">Struct import_export::BadRowsTracker</a></li>
@@ -1957,18 +1963,18 @@
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N13import_export12ImportStatus14load_truncatedE">
-<span id="_CPPv3N13import_export12ImportStatus14load_truncatedE"></span><span id="_CPPv2N13import_export12ImportStatus14load_truncatedE"></span><span id="import_export::ImportStatus::load_truncated__b"></span><span class="target" id="structimport__export_1_1_import_status_1ae098465f1a9eec3676708466299e2187"></span>bool <code class="sig-name descname">load_truncated</code><a class="headerlink" href="#_CPPv4N13import_export12ImportStatus14load_truncatedE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N13import_export12ImportStatus11load_failedE">
+<span id="_CPPv3N13import_export12ImportStatus11load_failedE"></span><span id="_CPPv2N13import_export12ImportStatus11load_failedE"></span><span id="import_export::ImportStatus::load_failed__b"></span><span class="target" id="structimport__export_1_1_import_status_1a0694f575ba9c025d9288029d5f885175"></span>bool <code class="sig-name descname">load_failed</code> = false<a class="headerlink" href="#_CPPv4N13import_export12ImportStatus11load_failedE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N13import_export12ImportStatus8load_msgE">
+<span id="_CPPv3N13import_export12ImportStatus8load_msgE"></span><span id="_CPPv2N13import_export12ImportStatus8load_msgE"></span><span id="import_export::ImportStatus::load_msg__ss"></span><span class="target" id="structimport__export_1_1_import_status_1a94dc75893218e03aa4c85e1d721382c2"></span>std::string <code class="sig-name descname">load_msg</code><a class="headerlink" href="#_CPPv4N13import_export12ImportStatus8load_msgE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
 <dt id="_CPPv4N13import_export12ImportStatus9thread_idE">
 <span id="_CPPv3N13import_export12ImportStatus9thread_idE"></span><span id="_CPPv2N13import_export12ImportStatus9thread_idE"></span><span id="import_export::ImportStatus::thread_id__i"></span><span class="target" id="structimport__export_1_1_import_status_1accdb2f72b39da7cbebf35b0d1a089da4"></span>int <code class="sig-name descname">thread_id</code><a class="headerlink" href="#_CPPv4N13import_export12ImportStatus9thread_idE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N13import_export12ImportStatus11interruptedE">
-<span id="_CPPv3N13import_export12ImportStatus11interruptedE"></span><span id="_CPPv2N13import_export12ImportStatus11interruptedE"></span><span id="import_export::ImportStatus::interrupted__b"></span><span class="target" id="structimport__export_1_1_import_status_1a87354239088a0a7c80e3fc2a3c025b43"></span>bool <code class="sig-name descname">interrupted</code><a class="headerlink" href="#_CPPv4N13import_export12ImportStatus11interruptedE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

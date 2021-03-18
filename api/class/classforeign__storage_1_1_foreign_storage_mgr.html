@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev 6152f67
+                5.6.0dev 3f85c14
               </div>
             
           
@@ -1048,6 +1048,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_date_in_seconds_bounds_validator.html">Class foreign_storage::DateInSecondsBoundsValidator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader_map.html">Class foreign_storage::FileReaderMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_float_point_validator.html">Class foreign_storage::FloatPointValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper.html">Class foreign_storage::ForeignDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper_factory.html">Class foreign_storage::ForeignDataWrapperFactory</a></li>
@@ -1480,6 +1481,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column.html">Struct Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_list.html">Struct ColumnList</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_columns_for_device.html">Struct ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_result.html">Struct CompilationResult</a></li>
@@ -1526,7 +1528,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_file_mgr_params.html">Struct File_Namespace::FileMgrParams</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_header_info.html">Struct File_Namespace::HeaderInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_multi_page.html">Struct File_Namespace::MultiPage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_open_files_result.html">Struct File_Namespace::OpenFilesResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_page.html">Struct File_Namespace::Page</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_page_mapping.html">Struct File_Namespace::PageMapping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_storage_stats.html">Struct File_Namespace::StorageStats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1read_thread_d_s.html">Struct File_Namespace::readThreadDS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_filter_selectivity.html">Struct FilterSelectivity</a></li>
@@ -1747,6 +1751,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_parse_file_region_result.html">Struct foreign_storage::ParseFileRegionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_interval.html">Struct foreign_storage::RowGroupInterval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_metadata.html">Struct foreign_storage::RowGroupMetadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1anonymous__namespace_02_parquet_data_wrapper_8cpp_03_1_1_thread_partitioner.html">Struct foreign_storage::anonymous_namespace{ParquetDataWrapper.cpp}::ThreadPartitioner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1anonymous__namespace_02_parquet_data_wrapper_8cpp_03_1_1_thread_partitioner_1_1_thread_partition.html">Struct foreign_storage::anonymous_namespace{ParquetDataWrapper.cpp}::ThreadPartitioner::ThreadPartition</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_request.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferRequest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_result.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structimport__export_1_1_bad_rows_tracker.html">Struct import_export::BadRowsTracker</a></li>
@@ -1913,6 +1919,14 @@
 <span id="_CPPv3N15foreign_storage17ForeignStorageMgrE"></span><span id="_CPPv2N15foreign_storage17ForeignStorageMgrE"></span><span id="foreign_storage::ForeignStorageMgr"></span><span class="target" id="classforeign__storage_1_1_foreign_storage_mgr"></span><em class="property">class </em><code class="sig-name descname">ForeignStorageMgr</code> : <em class="property">public</em> <a class="reference internal" href="class_abstract_buffer_mgr.html#_CPPv417AbstractBufferMgr" title="AbstractBufferMgr">AbstractBufferMgr</a><a class="headerlink" href="#_CPPv4N15foreign_storage17ForeignStorageMgrE" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Subclassed by <a class="reference internal" href="classforeign__storage_1_1_caching_foreign_storage_mgr.html#classforeign__storage_1_1_caching_foreign_storage_mgr"><span class="std std-ref">foreign_storage::CachingForeignStorageMgr</span></a></p>
 <div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Types</p>
+<dl class="type">
+<dt id="_CPPv4N15foreign_storage17ForeignStorageMgr15ParallelismHintE">
+<span id="_CPPv3N15foreign_storage17ForeignStorageMgr15ParallelismHintE"></span><span id="_CPPv2N15foreign_storage17ForeignStorageMgr15ParallelismHintE"></span><span class="target" id="classforeign__storage_1_1_foreign_storage_mgr_1a58f29f5afca70f15261f60c28e00dfe2"></span><em class="property">using </em><code class="sig-name descname">ParallelismHint</code> = std::pair&lt;int, int&gt;<a class="headerlink" href="#_CPPv4N15foreign_storage17ForeignStorageMgr15ParallelismHintE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
 <dt id="_CPPv4N15foreign_storage17ForeignStorageMgr17ForeignStorageMgrEv">
@@ -2050,8 +2064,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage17ForeignStorageMgr14setColumnHintsERNSt3mapI8ChunkKeyNSt6vectorIiEEEE">
-<span id="_CPPv3N15foreign_storage17ForeignStorageMgr14setColumnHintsERNSt3mapI8ChunkKeyNSt6vectorIiEEEE"></span><span id="_CPPv2N15foreign_storage17ForeignStorageMgr14setColumnHintsERNSt3mapI8ChunkKeyNSt6vectorIiEEEE"></span><span id="foreign_storage::ForeignStorageMgr::setColumnHints__std::map:ChunkKey.std::vector:i::R"></span><span class="target" id="classforeign__storage_1_1_foreign_storage_mgr_1a4507f42a008fcb5939bee47566913ce7"></span>void <code class="sig-name descname">setColumnHints</code><span class="sig-paren">(</span>std::map&lt;ChunkKey, std::vector&lt;int&gt;&gt; &amp;<em>columns_per_table</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage17ForeignStorageMgr14setColumnHintsERNSt3mapI8ChunkKeyNSt6vectorIiEEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N15foreign_storage17ForeignStorageMgr19setParallelismHintsERKNSt3mapI8ChunkKeyNSt3setI15ParallelismHintEEEE">
+<span id="_CPPv3N15foreign_storage17ForeignStorageMgr19setParallelismHintsERKNSt3mapI8ChunkKeyNSt3setI15ParallelismHintEEEE"></span><span id="_CPPv2N15foreign_storage17ForeignStorageMgr19setParallelismHintsERKNSt3mapI8ChunkKeyNSt3setI15ParallelismHintEEEE"></span><span id="foreign_storage::ForeignStorageMgr::setParallelismHints__std::map:ChunkKey.std::set:ParallelismHint::CR"></span><span class="target" id="classforeign__storage_1_1_foreign_storage_mgr_1aec92a29e8a63eb3de0c0ff919af3c6d3"></span>void <code class="sig-name descname">setParallelismHints</code><span class="sig-paren">(</span><em class="property">const</em> std::map&lt;ChunkKey, std::set&lt;<a class="reference internal" href="#_CPPv4N15foreign_storage17ForeignStorageMgr15ParallelismHintE" title="foreign_storage::ForeignStorageMgr::ParallelismHint">ParallelismHint</a>&gt;&gt; &amp;<em>hints_per_table</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage17ForeignStorageMgr19setParallelismHintsERKNSt3mapI8ChunkKeyNSt3setI15ParallelismHintEEEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2079,7 +2093,7 @@
 
 <dl class="function">
 <dt id="_CPPv4N15foreign_storage17ForeignStorageMgr28allocateTempBuffersForChunksERKNSt3setI8ChunkKeyEE">
-<span id="_CPPv3N15foreign_storage17ForeignStorageMgr28allocateTempBuffersForChunksERKNSt3setI8ChunkKeyEE"></span><span id="_CPPv2N15foreign_storage17ForeignStorageMgr28allocateTempBuffersForChunksERKNSt3setI8ChunkKeyEE"></span><span id="foreign_storage::ForeignStorageMgr::allocateTempBuffersForChunks__std::set:ChunkKey:CR"></span><span class="target" id="classforeign__storage_1_1_foreign_storage_mgr_1af9f037f5fea602747f6026c530cf7e2f"></span>std::map&lt;ChunkKey, AbstractBuffer *&gt; <code class="sig-name descname">allocateTempBuffersForChunks</code><span class="sig-paren">(</span><em class="property">const</em> std::set&lt;ChunkKey&gt; &amp;<em>chunk_keys</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage17ForeignStorageMgr28allocateTempBuffersForChunksERKNSt3setI8ChunkKeyEE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N15foreign_storage17ForeignStorageMgr28allocateTempBuffersForChunksERKNSt3setI8ChunkKeyEE"></span><span id="_CPPv2N15foreign_storage17ForeignStorageMgr28allocateTempBuffersForChunksERKNSt3setI8ChunkKeyEE"></span><span id="foreign_storage::ForeignStorageMgr::allocateTempBuffersForChunks__std::set:ChunkKey:CR"></span><span class="target" id="classforeign__storage_1_1_foreign_storage_mgr_1a4f4e3fbd70f61a5ee7860df910b7319b"></span>ChunkToBufferMap <code class="sig-name descname">allocateTempBuffersForChunks</code><span class="sig-paren">(</span><em class="property">const</em> std::set&lt;ChunkKey&gt; &amp;<em>chunk_keys</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage17ForeignStorageMgr28allocateTempBuffersForChunksERKNSt3setI8ChunkKeyEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2093,8 +2107,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage17ForeignStorageMgr22getOptionalChunkKeySetERNSt3setI8ChunkKeyEERK8ChunkKeyRKNSt3setI8ChunkKeyEE">
-<span id="_CPPv3N15foreign_storage17ForeignStorageMgr22getOptionalChunkKeySetERNSt3setI8ChunkKeyEERK8ChunkKeyRKNSt3setI8ChunkKeyEE"></span><span id="_CPPv2N15foreign_storage17ForeignStorageMgr22getOptionalChunkKeySetERNSt3setI8ChunkKeyEERK8ChunkKeyRKNSt3setI8ChunkKeyEE"></span><span id="foreign_storage::ForeignStorageMgr::getOptionalChunkKeySet__std::set:ChunkKey:R.ChunkKeyCR.std::set:ChunkKey:CR"></span><span class="target" id="classforeign__storage_1_1_foreign_storage_mgr_1a26821d403174585d5bc2cc36ae4fcc06"></span>void <code class="sig-name descname">getOptionalChunkKeySet</code><span class="sig-paren">(</span>std::set&lt;ChunkKey&gt; &amp;<em>optional_chunk_keys</em>, <em class="property">const</em> ChunkKey &amp;<em>chunk_key</em>, <em class="property">const</em> std::set&lt;ChunkKey&gt; &amp;<em>required_chunk_keys</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage17ForeignStorageMgr22getOptionalChunkKeySetERNSt3setI8ChunkKeyEERK8ChunkKeyRKNSt3setI8ChunkKeyEE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N15foreign_storage17ForeignStorageMgr22getOptionalChunkKeySetERNSt3setI8ChunkKeyEERK8ChunkKeyRKNSt3setI8ChunkKeyEEKN18ForeignDataWrapper16ParallelismLevelE">
+<span id="_CPPv3N15foreign_storage17ForeignStorageMgr22getOptionalChunkKeySetERNSt3setI8ChunkKeyEERK8ChunkKeyRKNSt3setI8ChunkKeyEEKN18ForeignDataWrapper16ParallelismLevelE"></span><span id="_CPPv2N15foreign_storage17ForeignStorageMgr22getOptionalChunkKeySetERNSt3setI8ChunkKeyEERK8ChunkKeyRKNSt3setI8ChunkKeyEEKN18ForeignDataWrapper16ParallelismLevelE"></span><span id="foreign_storage::ForeignStorageMgr::getOptionalChunkKeySet__std::set:ChunkKey:R.ChunkKeyCR.std::set:ChunkKey:CR.ForeignDataWrapper::ParallelismLevelC"></span><span class="target" id="classforeign__storage_1_1_foreign_storage_mgr_1ab2239b4a5273423017027a6431c2399a"></span>void <code class="sig-name descname">getOptionalChunkKeySet</code><span class="sig-paren">(</span>std::set&lt;ChunkKey&gt; &amp;<em>optional_chunk_keys</em>, <em class="property">const</em> ChunkKey &amp;<em>chunk_key</em>, <em class="property">const</em> std::set&lt;ChunkKey&gt; &amp;<em>required_chunk_keys</em>, <em class="property">const</em> <a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper.html#_CPPv4N15foreign_storage18ForeignDataWrapperE" title="foreign_storage::ForeignDataWrapper">ForeignDataWrapper</a>::<a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper.html#_CPPv4N15foreign_storage18ForeignDataWrapper16ParallelismLevelE" title="foreign_storage::ForeignDataWrapper::ParallelismLevel">ParallelismLevel</a> <em>parallelism_level</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage17ForeignStorageMgr22getOptionalChunkKeySetERNSt3setI8ChunkKeyEERK8ChunkKeyRKNSt3setI8ChunkKeyEEKN18ForeignDataWrapper16ParallelismLevelE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2121,13 +2135,13 @@
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N15foreign_storage17ForeignStorageMgr20columns_hints_mutex_E">
-<span id="_CPPv3N15foreign_storage17ForeignStorageMgr20columns_hints_mutex_E"></span><span id="_CPPv2N15foreign_storage17ForeignStorageMgr20columns_hints_mutex_E"></span><span id="foreign_storage::ForeignStorageMgr::columns_hints_mutex___std::shared_mutex"></span><span class="target" id="classforeign__storage_1_1_foreign_storage_mgr_1a92721da3c1a6db49f2de23e16e3be21a"></span>std::shared_mutex <code class="sig-name descname">columns_hints_mutex_</code><a class="headerlink" href="#_CPPv4N15foreign_storage17ForeignStorageMgr20columns_hints_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N15foreign_storage17ForeignStorageMgr24parallelism_hints_mutex_E">
+<span id="_CPPv3N15foreign_storage17ForeignStorageMgr24parallelism_hints_mutex_E"></span><span id="_CPPv2N15foreign_storage17ForeignStorageMgr24parallelism_hints_mutex_E"></span><span id="foreign_storage::ForeignStorageMgr::parallelism_hints_mutex___std::shared_mutex"></span><span class="target" id="classforeign__storage_1_1_foreign_storage_mgr_1a0a8936a6ff268dbfeb78768fa74b312c"></span>std::shared_mutex <code class="sig-name descname">parallelism_hints_mutex_</code><a class="headerlink" href="#_CPPv4N15foreign_storage17ForeignStorageMgr24parallelism_hints_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N15foreign_storage17ForeignStorageMgr24columns_hints_per_table_E">
-<span id="_CPPv3N15foreign_storage17ForeignStorageMgr24columns_hints_per_table_E"></span><span id="_CPPv2N15foreign_storage17ForeignStorageMgr24columns_hints_per_table_E"></span><span id="foreign_storage::ForeignStorageMgr::columns_hints_per_table___std::map:ChunkKey.std::vector:i::"></span><span class="target" id="classforeign__storage_1_1_foreign_storage_mgr_1af5942f240d1608ba0fa166f6193d1dfd"></span>std::map&lt;ChunkKey, std::vector&lt;int&gt;&gt; <code class="sig-name descname">columns_hints_per_table_</code><a class="headerlink" href="#_CPPv4N15foreign_storage17ForeignStorageMgr24columns_hints_per_table_E" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N15foreign_storage17ForeignStorageMgr28parallelism_hints_per_table_E">
+<span id="_CPPv3N15foreign_storage17ForeignStorageMgr28parallelism_hints_per_table_E"></span><span id="_CPPv2N15foreign_storage17ForeignStorageMgr28parallelism_hints_per_table_E"></span><span id="foreign_storage::ForeignStorageMgr::parallelism_hints_per_table___std::map:ChunkKey.std::set:ParallelismHint::"></span><span class="target" id="classforeign__storage_1_1_foreign_storage_mgr_1a6cad3052b9bb12a1c4057ec88688aa91"></span>std::map&lt;ChunkKey, std::set&lt;<a class="reference internal" href="#_CPPv4N15foreign_storage17ForeignStorageMgr15ParallelismHintE" title="foreign_storage::ForeignStorageMgr::ParallelismHint">ParallelismHint</a>&gt;&gt; <code class="sig-name descname">parallelism_hints_per_table_</code><a class="headerlink" href="#_CPPv4N15foreign_storage17ForeignStorageMgr28parallelism_hints_per_table_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

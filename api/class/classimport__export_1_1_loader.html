@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev 6152f67
+                5.6.0dev 3f85c14
               </div>
             
           
@@ -1048,6 +1048,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_date_in_seconds_bounds_validator.html">Class foreign_storage::DateInSecondsBoundsValidator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader_map.html">Class foreign_storage::FileReaderMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_float_point_validator.html">Class foreign_storage::FloatPointValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper.html">Class foreign_storage::ForeignDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper_factory.html">Class foreign_storage::ForeignDataWrapperFactory</a></li>
@@ -1480,6 +1481,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column.html">Struct Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_list.html">Struct ColumnList</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_columns_for_device.html">Struct ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_result.html">Struct CompilationResult</a></li>
@@ -1526,7 +1528,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_file_mgr_params.html">Struct File_Namespace::FileMgrParams</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_header_info.html">Struct File_Namespace::HeaderInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_multi_page.html">Struct File_Namespace::MultiPage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_open_files_result.html">Struct File_Namespace::OpenFilesResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_page.html">Struct File_Namespace::Page</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_page_mapping.html">Struct File_Namespace::PageMapping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_storage_stats.html">Struct File_Namespace::StorageStats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1read_thread_d_s.html">Struct File_Namespace::readThreadDS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_filter_selectivity.html">Struct FilterSelectivity</a></li>
@@ -1747,6 +1751,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_parse_file_region_result.html">Struct foreign_storage::ParseFileRegionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_interval.html">Struct foreign_storage::RowGroupInterval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_metadata.html">Struct foreign_storage::RowGroupMetadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1anonymous__namespace_02_parquet_data_wrapper_8cpp_03_1_1_thread_partitioner.html">Struct foreign_storage::anonymous_namespace{ParquetDataWrapper.cpp}::ThreadPartitioner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1anonymous__namespace_02_parquet_data_wrapper_8cpp_03_1_1_thread_partitioner_1_1_thread_partition.html">Struct foreign_storage::anonymous_namespace{ParquetDataWrapper.cpp}::ThreadPartitioner::ThreadPartition</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_request.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferRequest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_result.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structimport__export_1_1_bad_rows_tracker.html">Struct import_export::BadRowsTracker</a></li>
@@ -1970,18 +1976,23 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N13import_export6Loader14setReplicatingEKb">
-<span id="_CPPv3N13import_export6Loader14setReplicatingEKb"></span><span id="_CPPv2N13import_export6Loader14setReplicatingEKb"></span><span id="import_export::Loader::setReplicating__bC"></span><span class="target" id="classimport__export_1_1_loader_1afcd4e7e759bf1cc59ff54a3f7d877651"></span>void <code class="sig-name descname">setReplicating</code><span class="sig-paren">(</span><em class="property">const</em> bool <em>replicating</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export6Loader14setReplicatingEKb" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N13import_export6Loader16setAddingColumnsEKb">
+<span id="_CPPv3N13import_export6Loader16setAddingColumnsEKb"></span><span id="_CPPv2N13import_export6Loader16setAddingColumnsEKb"></span><span id="import_export::Loader::setAddingColumns__bC"></span><span class="target" id="classimport__export_1_1_loader_1abe16813c19476bf8ec6054272f2142eb"></span>void <code class="sig-name descname">setAddingColumns</code><span class="sig-paren">(</span><em class="property">const</em> bool <em>adding_columns</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export6Loader16setAddingColumnsEKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK13import_export6Loader14getReplicatingEv">
-<span id="_CPPv3NK13import_export6Loader14getReplicatingEv"></span><span id="_CPPv2NK13import_export6Loader14getReplicatingEv"></span><span id="import_export::Loader::getReplicatingC"></span><span class="target" id="classimport__export_1_1_loader_1aa41700b4da4b68711be51dc55a4c2962"></span>bool <code class="sig-name descname">getReplicating</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13import_export6Loader14getReplicatingEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK13import_export6Loader15isAddingColumnsEv">
+<span id="_CPPv3NK13import_export6Loader15isAddingColumnsEv"></span><span id="_CPPv2NK13import_export6Loader15isAddingColumnsEv"></span><span id="import_export::Loader::isAddingColumnsC"></span><span class="target" id="classimport__export_1_1_loader_1a582e58420d9718c4f2d4c08cb7f9f61d"></span>bool <code class="sig-name descname">isAddingColumns</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13import_export6Loader15isAddingColumnsEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N13import_export6Loader11dropColumnsERKNSt6vectorIiEE">
 <span id="_CPPv3N13import_export6Loader11dropColumnsERKNSt6vectorIiEE"></span><span id="_CPPv2N13import_export6Loader11dropColumnsERKNSt6vectorIiEE"></span><span id="import_export::Loader::dropColumns__std::vector:i:CR"></span><span class="target" id="classimport__export_1_1_loader_1aea2d078030bafa8ef7ff14083efce22e"></span>void <code class="sig-name descname">dropColumns</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;int&gt; &amp;<em>columns</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export6Loader11dropColumnsERKNSt6vectorIiEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N13import_export6Loader15getErrorMessageEv">
+<span id="_CPPv3N13import_export6Loader15getErrorMessageEv"></span><span id="_CPPv2N13import_export6Loader15getErrorMessageEv"></span><span id="import_export::Loader::getErrorMessage"></span><span class="target" id="classimport__export_1_1_loader_1ac7831dbcc2b72ef3f0d96c7dc03a9db6"></span>std::string <code class="sig-name descname">getErrorMessage</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export6Loader15getErrorMessageEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2055,26 +2066,41 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
 <dl class="function">
-<dt id="_CPPv4N13import_export6Loader23get_data_block_pointersERKNSt6vectorINSt10unique_ptrI17TypedImportBufferEEEE">
-<span id="_CPPv3N13import_export6Loader23get_data_block_pointersERKNSt6vectorINSt10unique_ptrI17TypedImportBufferEEEE"></span><span id="_CPPv2N13import_export6Loader23get_data_block_pointersERKNSt6vectorINSt10unique_ptrI17TypedImportBufferEEEE"></span><span id="import_export::Loader::get_data_block_pointers__std::vector:std::unique_ptr:TypedImportBuffer::CR"></span><span class="target" id="classimport__export_1_1_loader_1a014c43af108907df91b7057a992cb399"></span>std::vector&lt;<a class="reference internal" href="../union/union_data_block_ptr.html#_CPPv412DataBlockPtr" title="DataBlockPtr">DataBlockPtr</a>&gt; <code class="sig-name descname">get_data_block_pointers</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;std::unique_ptr&lt;<a class="reference internal" href="classimport__export_1_1_typed_import_buffer.html#_CPPv4N13import_export17TypedImportBufferE" title="import_export::TypedImportBuffer">TypedImportBuffer</a>&gt;&gt; &amp;<em>import_buffers</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export6Loader23get_data_block_pointersERKNSt6vectorINSt10unique_ptrI17TypedImportBufferEEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N13import_export6Loader11loadToShardERKNSt6vectorINSt10unique_ptrI17TypedImportBufferEEEE6size_tPK15TableDescriptorbPKN17Catalog_Namespace11SessionInfoE">
+<span id="_CPPv3N13import_export6Loader11loadToShardERKNSt6vectorINSt10unique_ptrI17TypedImportBufferEEEE6size_tPK15TableDescriptorbPKN17Catalog_Namespace11SessionInfoE"></span><span id="_CPPv2N13import_export6Loader11loadToShardERKNSt6vectorINSt10unique_ptrI17TypedImportBufferEEEE6size_tPK15TableDescriptorbPKN17Catalog_Namespace11SessionInfoE"></span><span id="import_export::Loader::loadToShard__std::vector:std::unique_ptr:TypedImportBuffer::CR.s.TableDescriptorCP.b.Catalog_Namespace::SessionInfoCP"></span><span class="target" id="classimport__export_1_1_loader_1a269b32cf4e5d92eaeb3cb1b60a8a1bcc"></span>bool <code class="sig-name descname">loadToShard</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;std::unique_ptr&lt;<a class="reference internal" href="classimport__export_1_1_typed_import_buffer.html#_CPPv4N13import_export17TypedImportBufferE" title="import_export::TypedImportBuffer">TypedImportBuffer</a>&gt;&gt; &amp;<em>import_buffers</em>, size_t <em>row_count</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *<em>shard_table</em>, bool <em>checkpoint</em>, <em class="property">const</em> Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_session_info.html#_CPPv4N17Catalog_Namespace11SessionInfoE" title="Catalog_Namespace::SessionInfo">SessionInfo</a> *<em>session_info</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export6Loader11loadToShardERKNSt6vectorINSt10unique_ptrI17TypedImportBufferEEEE6size_tPK15TableDescriptorbPKN17Catalog_Namespace11SessionInfoE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N13import_export6Loader11loadToShardERKNSt6vectorINSt10unique_ptrI17TypedImportBufferEEEE6size_tPK15TableDescriptorbPKN17Catalog_Namespace11SessionInfoE">
-<span id="_CPPv3N13import_export6Loader11loadToShardERKNSt6vectorINSt10unique_ptrI17TypedImportBufferEEEE6size_tPK15TableDescriptorbPKN17Catalog_Namespace11SessionInfoE"></span><span id="_CPPv2N13import_export6Loader11loadToShardERKNSt6vectorINSt10unique_ptrI17TypedImportBufferEEEE6size_tPK15TableDescriptorbPKN17Catalog_Namespace11SessionInfoE"></span><span id="import_export::Loader::loadToShard__std::vector:std::unique_ptr:TypedImportBuffer::CR.s.TableDescriptorCP.b.Catalog_Namespace::SessionInfoCP"></span><span class="target" id="classimport__export_1_1_loader_1a269b32cf4e5d92eaeb3cb1b60a8a1bcc"></span>bool <code class="sig-name descname">loadToShard</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;std::unique_ptr&lt;<a class="reference internal" href="classimport__export_1_1_typed_import_buffer.html#_CPPv4N13import_export17TypedImportBufferE" title="import_export::TypedImportBuffer">TypedImportBuffer</a>&gt;&gt; &amp;<em>import_buffers</em>, size_t <em>row_count</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *<em>shard_table</em>, bool <em>checkpoint</em>, <em class="property">const</em> Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_session_info.html#_CPPv4N17Catalog_Namespace11SessionInfoE" title="Catalog_Namespace::SessionInfo">SessionInfo</a> *<em>session_info</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export6Loader11loadToShardERKNSt6vectorINSt10unique_ptrI17TypedImportBufferEEEE6size_tPK15TableDescriptorbPKN17Catalog_Namespace11SessionInfoE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N13import_export6Loader28distributeToShardsNewColumnsERNSt6vectorI15OneShardBuffersEERNSt6vectorI6size_tEERK15OneShardBuffersK6size_tK6size_tPKN17Catalog_Namespace11SessionInfoE">
+<span id="_CPPv3N13import_export6Loader28distributeToShardsNewColumnsERNSt6vectorI15OneShardBuffersEERNSt6vectorI6size_tEERK15OneShardBuffersK6size_tK6size_tPKN17Catalog_Namespace11SessionInfoE"></span><span id="_CPPv2N13import_export6Loader28distributeToShardsNewColumnsERNSt6vectorI15OneShardBuffersEERNSt6vectorI6size_tEERK15OneShardBuffersK6size_tK6size_tPKN17Catalog_Namespace11SessionInfoE"></span><span id="import_export::Loader::distributeToShardsNewColumns__std::vector:OneShardBuffers:R.std::vector:s:R.OneShardBuffersCR.sC.sC.Catalog_Namespace::SessionInfoCP"></span><span class="target" id="classimport__export_1_1_loader_1ac0c15980ba4727fa4b4d907a51a1b1d2"></span>void <code class="sig-name descname">distributeToShardsNewColumns</code><span class="sig-paren">(</span>std::vector&lt;<a class="reference internal" href="#_CPPv4N13import_export6Loader15OneShardBuffersE" title="import_export::Loader::OneShardBuffers">OneShardBuffers</a>&gt; &amp;<em>all_shard_import_buffers</em>, std::vector&lt;size_t&gt; &amp;<em>all_shard_row_counts</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv4N13import_export6Loader15OneShardBuffersE" title="import_export::Loader::OneShardBuffers">OneShardBuffers</a> &amp;<em>import_buffers</em>, <em class="property">const</em> size_t <em>row_count</em>, <em class="property">const</em> size_t <em>shard_count</em>, <em class="property">const</em> Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_session_info.html#_CPPv4N17Catalog_Namespace11SessionInfoE" title="Catalog_Namespace::SessionInfo">SessionInfo</a> *<em>session_info</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export6Loader28distributeToShardsNewColumnsERNSt6vectorI15OneShardBuffersEERNSt6vectorI6size_tEERK15OneShardBuffersK6size_tK6size_tPKN17Catalog_Namespace11SessionInfoE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N13import_export6Loader33distributeToShardsExistingColumnsERNSt6vectorI15OneShardBuffersEERNSt6vectorI6size_tEERK15OneShardBuffersK6size_tK6size_tPKN17Catalog_Namespace11SessionInfoE">
+<span id="_CPPv3N13import_export6Loader33distributeToShardsExistingColumnsERNSt6vectorI15OneShardBuffersEERNSt6vectorI6size_tEERK15OneShardBuffersK6size_tK6size_tPKN17Catalog_Namespace11SessionInfoE"></span><span id="_CPPv2N13import_export6Loader33distributeToShardsExistingColumnsERNSt6vectorI15OneShardBuffersEERNSt6vectorI6size_tEERK15OneShardBuffersK6size_tK6size_tPKN17Catalog_Namespace11SessionInfoE"></span><span id="import_export::Loader::distributeToShardsExistingColumns__std::vector:OneShardBuffers:R.std::vector:s:R.OneShardBuffersCR.sC.sC.Catalog_Namespace::SessionInfoCP"></span><span class="target" id="classimport__export_1_1_loader_1aa239ccc81d31364421ee971d48d76eb3"></span>void <code class="sig-name descname">distributeToShardsExistingColumns</code><span class="sig-paren">(</span>std::vector&lt;<a class="reference internal" href="#_CPPv4N13import_export6Loader15OneShardBuffersE" title="import_export::Loader::OneShardBuffers">OneShardBuffers</a>&gt; &amp;<em>all_shard_import_buffers</em>, std::vector&lt;size_t&gt; &amp;<em>all_shard_row_counts</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv4N13import_export6Loader15OneShardBuffersE" title="import_export::Loader::OneShardBuffers">OneShardBuffers</a> &amp;<em>import_buffers</em>, <em class="property">const</em> size_t <em>row_count</em>, <em class="property">const</em> size_t <em>shard_count</em>, <em class="property">const</em> Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_session_info.html#_CPPv4N17Catalog_Namespace11SessionInfoE" title="Catalog_Namespace::SessionInfo">SessionInfo</a> *<em>session_info</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export6Loader33distributeToShardsExistingColumnsERNSt6vectorI15OneShardBuffersEERNSt6vectorI6size_tEERK15OneShardBuffersK6size_tK6size_tPKN17Catalog_Namespace11SessionInfoE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N13import_export6Loader12fillShardRowEK6size_tR15OneShardBuffersRK15OneShardBuffers">
+<span id="_CPPv3N13import_export6Loader12fillShardRowEK6size_tR15OneShardBuffersRK15OneShardBuffers"></span><span id="_CPPv2N13import_export6Loader12fillShardRowEK6size_tR15OneShardBuffersRK15OneShardBuffers"></span><span id="import_export::Loader::fillShardRow__sC.OneShardBuffersR.OneShardBuffersCR"></span><span class="target" id="classimport__export_1_1_loader_1a0d9f244bdf301d7bdb49bc7e8535ebce"></span>void <code class="sig-name descname">fillShardRow</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>row_index</em>, <a class="reference internal" href="#_CPPv4N13import_export6Loader15OneShardBuffersE" title="import_export::Loader::OneShardBuffers">OneShardBuffers</a> &amp;<em>shard_output_buffers</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv4N13import_export6Loader15OneShardBuffersE" title="import_export::Loader::OneShardBuffers">OneShardBuffers</a> &amp;<em>import_buffers</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export6Loader12fillShardRowEK6size_tR15OneShardBuffersRK15OneShardBuffers" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Members</p>
 <dl class="member">
-<dt id="_CPPv4N13import_export6Loader12replicating_E">
-<span id="_CPPv3N13import_export6Loader12replicating_E"></span><span id="_CPPv2N13import_export6Loader12replicating_E"></span><span id="import_export::Loader::replicating___b"></span><span class="target" id="classimport__export_1_1_loader_1a74cd975ab7ec39f9003b624872628f3e"></span>bool <code class="sig-name descname">replicating_</code> = false<a class="headerlink" href="#_CPPv4N13import_export6Loader12replicating_E" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N13import_export6Loader15adding_columns_E">
+<span id="_CPPv3N13import_export6Loader15adding_columns_E"></span><span id="_CPPv2N13import_export6Loader15adding_columns_E"></span><span id="import_export::Loader::adding_columns___b"></span><span class="target" id="classimport__export_1_1_loader_1ad9abd7784202f0ba56d4021710c6abaa"></span>bool <code class="sig-name descname">adding_columns_</code> = false<a class="headerlink" href="#_CPPv4N13import_export6Loader15adding_columns_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
 <dt id="_CPPv4N13import_export6Loader13loader_mutex_E">
 <span id="_CPPv3N13import_export6Loader13loader_mutex_E"></span><span id="_CPPv2N13import_export6Loader13loader_mutex_E"></span><span id="import_export::Loader::loader_mutex___std::mutex"></span><span class="target" id="classimport__export_1_1_loader_1ae1511195b29a28a51482b92c551be0ba"></span>std::mutex <code class="sig-name descname">loader_mutex_</code><a class="headerlink" href="#_CPPv4N13import_export6Loader13loader_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N13import_export6Loader10error_msg_E">
+<span id="_CPPv3N13import_export6Loader10error_msg_E"></span><span id="_CPPv2N13import_export6Loader10error_msg_E"></span><span id="import_export::Loader::error_msg___ss"></span><span class="target" id="classimport__export_1_1_loader_1acd2ace1c15022e9b35b4b18fbcad738c"></span>std::string <code class="sig-name descname">error_msg_</code><a class="headerlink" href="#_CPPv4N13import_export6Loader10error_msg_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
