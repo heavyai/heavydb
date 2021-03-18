@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.6.0dev 3f85c14
+                5.7.0dev 13832c5
               </div>
             
           
@@ -446,6 +446,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_fixed_width_real.html">Class FixedWidthReal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_fixed_width_small_date.html">Class FixedWidthSmallDate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_fixed_width_unsigned.html">Class FixedWidthUnsigned</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_flex_lexer.html">Class FlexLexer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_for.html">Class For</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_foreign_storage_buffer.html">Class ForeignStorageBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_foreign_storage_buffer_mgr.html">Class ForeignStorageBufferMgr</a></li>
@@ -700,6 +701,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_row_to_column_loader.html">Class RowToColumnLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_s3_archive.html">Class S3Archive</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_s3_parquet_archive.html">Class S3ParquetArchive</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_s_q_l_lexer.html">Class SQLLexer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_s_q_l_type_info.html">Class SQLTypeInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_saml_server.html">Class SamlServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_scalar_code_generator.html">Class ScalarCodeGenerator</a></li>
@@ -1440,6 +1442,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classthreadpool_1_1_futures_thread_pool.html">Class threadpool::FuturesThreadPool</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classthreadpool_1_1_futures_thread_pool_3_01_t_00_01std_1_1enable__if__t_3_01std_1_1is__object_3_01_t_01_4_1_1value_01_4_01_4.html">Class threadpool::FuturesThreadPool&lt; T, std::enable_if_t&lt; std::is_object&lt; T &gt;::value &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classthreadpool_1_1_futures_thread_pool_base.html">Class threadpool::FuturesThreadPoolBase</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classyy_flex_lexer.html">Class yyFlexLexer</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="api/structlist.html">Struct list</a><ul>
@@ -1800,6 +1803,8 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structstd_1_1tuple__size_3_01boost_1_1tuples_1_1cons_3_01_t_00_01_u_01_4_01_4.html">Struct std::tuple_size&lt; boost::tuples::cons&lt; T, U &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structstuff.html">Struct stuff</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structtable__functions_1_1_table_function_output_row_sizer.html">Struct table_functions::TableFunctionOutputRowSizer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/structyy__buffer__state.html">Struct yy_buffer_state</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/structyy__trans__info.html">Struct yy_trans_info</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="api/unionlist.html">Union list</a><ul>
@@ -1807,6 +1812,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/union/union_datum.html">Union Datum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/union/union_reduction_interpreter_1_1_eval_value.html">Union ReductionInterpreter::EvalValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/union/uniondouble__sort_1_1_variant.html">Union double_sort::Variant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/union/unionyy___parser__stype.html">Union yy_Parser_stype</a></li>
 </ul>
 </li>
 </ul>
@@ -1934,6 +1940,7 @@
  | <a href="#U"><strong>U</strong></a>
  | <a href="#V"><strong>V</strong></a>
  | <a href="#W"><strong>W</strong></a>
+ | <a href="#Y"><strong>Y</strong></a>
  
 </div>
 <h2 id="A">A</h2>
@@ -2119,7 +2126,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_agg_expr.html#_CPPv4N8Analyzer7AggExpr3argE">Analyzer::AggExpr::arg (C++ member)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_agg_expr.html#_CPPv4NK8Analyzer7AggExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::AggExpr::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_agg_expr.html#_CPPv4NK8Analyzer7AggExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::AggExpr::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_agg_expr.html#_CPPv4NK8Analyzer7AggExpr15collect_rte_idxERNSt3setIiEE">Analyzer::AggExpr::collect_rte_idx (C++ function)</a>
 </li>
@@ -2185,7 +2192,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_bin_oper.html#_CPPv4NK8Analyzer7BinOper14check_group_byERKNSt4listINSt10shared_ptrIN8Analyzer4ExprEEEEE">Analyzer::BinOper::check_group_by (C++ function)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_bin_oper.html#_CPPv4NK8Analyzer7BinOper18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::BinOper::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_bin_oper.html#_CPPv4NK8Analyzer7BinOper18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::BinOper::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_bin_oper.html#_CPPv4NK8Analyzer7BinOper15collect_rte_idxERNSt3setIiEE">Analyzer::BinOper::collect_rte_idx (C++ function)</a>
 </li>
@@ -2241,7 +2248,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_cardinality_expr.html#_CPPv4N8Analyzer15CardinalityExpr15CardinalityExprENSt10shared_ptrIN8Analyzer4ExprEEE">Analyzer::CardinalityExpr::CardinalityExpr (C++ function)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_cardinality_expr.html#_CPPv4NK8Analyzer15CardinalityExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::CardinalityExpr::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_cardinality_expr.html#_CPPv4NK8Analyzer15CardinalityExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::CardinalityExpr::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_cardinality_expr.html#_CPPv4NK8Analyzer15CardinalityExpr15collect_rte_idxERNSt3setIiEE">Analyzer::CardinalityExpr::collect_rte_idx (C++ function)</a>
 </li>
@@ -2273,7 +2280,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_case_expr.html#_CPPv4NK8Analyzer8CaseExpr14check_group_byERKNSt4listINSt10shared_ptrIN8Analyzer4ExprEEEEE">Analyzer::CaseExpr::check_group_by (C++ function)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_case_expr.html#_CPPv4NK8Analyzer8CaseExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::CaseExpr::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_case_expr.html#_CPPv4NK8Analyzer8CaseExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::CaseExpr::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_case_expr.html#_CPPv4NK8Analyzer8CaseExpr15collect_rte_idxERNSt3setIiEE">Analyzer::CaseExpr::collect_rte_idx (C++ function)</a>
 </li>
@@ -2311,7 +2318,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_char_length_expr.html#_CPPv4N8Analyzer14CharLengthExpr14CharLengthExprENSt10shared_ptrIN8Analyzer4ExprEEEb">Analyzer::CharLengthExpr::CharLengthExpr (C++ function)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_char_length_expr.html#_CPPv4NK8Analyzer14CharLengthExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::CharLengthExpr::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_char_length_expr.html#_CPPv4NK8Analyzer14CharLengthExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::CharLengthExpr::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_char_length_expr.html#_CPPv4NK8Analyzer14CharLengthExpr15collect_rte_idxERNSt3setIiEE">Analyzer::CharLengthExpr::collect_rte_idx (C++ function)</a>
 </li>
@@ -2341,7 +2348,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_column_var.html#_CPPv4NK8Analyzer9ColumnVar14check_group_byERKNSt4listINSt10shared_ptrIN8Analyzer4ExprEEEEE">Analyzer::ColumnVar::check_group_by (C++ function)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_column_var.html#_CPPv4NK8Analyzer9ColumnVar18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::ColumnVar::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_column_var.html#_CPPv4NK8Analyzer9ColumnVar18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::ColumnVar::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_column_var.html#_CPPv4NK8Analyzer9ColumnVar15collect_rte_idxERNSt3setIiEE">Analyzer::ColumnVar::collect_rte_idx (C++ function)</a>
 </li>
@@ -2401,7 +2408,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_dateadd_expr.html#_CPPv4NK8Analyzer11DateaddExpr14check_group_byERKNSt4listINSt10shared_ptrIN8Analyzer4ExprEEEEE">Analyzer::DateaddExpr::check_group_by (C++ function)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_dateadd_expr.html#_CPPv4NK8Analyzer11DateaddExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::DateaddExpr::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_dateadd_expr.html#_CPPv4NK8Analyzer11DateaddExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::DateaddExpr::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_dateadd_expr.html#_CPPv4NK8Analyzer11DateaddExpr15collect_rte_idxERNSt3setIiEE">Analyzer::DateaddExpr::collect_rte_idx (C++ function)</a>
 </li>
@@ -2439,7 +2446,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_datediff_expr.html#_CPPv4NK8Analyzer12DatediffExpr14check_group_byERKNSt4listINSt10shared_ptrIN8Analyzer4ExprEEEEE">Analyzer::DatediffExpr::check_group_by (C++ function)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_datediff_expr.html#_CPPv4NK8Analyzer12DatediffExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::DatediffExpr::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_datediff_expr.html#_CPPv4NK8Analyzer12DatediffExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::DatediffExpr::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_datediff_expr.html#_CPPv4NK8Analyzer12DatediffExpr15collect_rte_idxERNSt3setIiEE">Analyzer::DatediffExpr::collect_rte_idx (C++ function)</a>
 </li>
@@ -2477,7 +2484,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_datetrunc_expr.html#_CPPv4NK8Analyzer13DatetruncExpr14check_group_byERKNSt4listINSt10shared_ptrIN8Analyzer4ExprEEEEE">Analyzer::DatetruncExpr::check_group_by (C++ function)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_datetrunc_expr.html#_CPPv4NK8Analyzer13DatetruncExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::DatetruncExpr::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_datetrunc_expr.html#_CPPv4NK8Analyzer13DatetruncExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::DatetruncExpr::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_datetrunc_expr.html#_CPPv4NK8Analyzer13DatetruncExpr15collect_rte_idxERNSt3setIiEE">Analyzer::DatetruncExpr::collect_rte_idx (C++ function)</a>
 </li>
@@ -2533,7 +2540,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_expr.html#_CPPv4NK8Analyzer4Expr14check_group_byERKNSt4listINSt10shared_ptrIN8Analyzer4ExprEEEEE">Analyzer::Expr::check_group_by (C++ function)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_expr.html#_CPPv4NK8Analyzer4Expr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::Expr::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_expr.html#_CPPv4NK8Analyzer4Expr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::Expr::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_expr.html#_CPPv4NK8Analyzer4Expr15collect_rte_idxERNSt3setIiEE">Analyzer::Expr::collect_rte_idx (C++ function)</a>
 </li>
@@ -2713,7 +2720,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_in_values.html#_CPPv4N8Analyzer8InValues3argE">Analyzer::InValues::arg (C++ member)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_in_values.html#_CPPv4NK8Analyzer8InValues18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::InValues::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_in_values.html#_CPPv4NK8Analyzer8InValues18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::InValues::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_in_values.html#_CPPv4NK8Analyzer8InValues15collect_rte_idxERNSt3setIiEE">Analyzer::InValues::collect_rte_idx (C++ function)</a>
 </li>
@@ -2747,7 +2754,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_key_for_string_expr.html#_CPPv4N8Analyzer16KeyForStringExpr3argE">Analyzer::KeyForStringExpr::arg (C++ member)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_key_for_string_expr.html#_CPPv4NK8Analyzer16KeyForStringExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::KeyForStringExpr::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_key_for_string_expr.html#_CPPv4NK8Analyzer16KeyForStringExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::KeyForStringExpr::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_key_for_string_expr.html#_CPPv4NK8Analyzer16KeyForStringExpr15collect_rte_idxERNSt3setIiEE">Analyzer::KeyForStringExpr::collect_rte_idx (C++ function)</a>
 </li>
@@ -2783,7 +2790,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4N8Analyzer8LikeExpr3argE">Analyzer::LikeExpr::arg (C++ member)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::LikeExpr::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::LikeExpr::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr15collect_rte_idxERNSt3setIiEE">Analyzer::LikeExpr::collect_rte_idx (C++ function)</a>
 </li>
@@ -2831,7 +2838,7 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_analyzer_1_1_likelihood_expr.html#_CPPv4N8Analyzer14LikelihoodExpr3argE">Analyzer::LikelihoodExpr::arg (C++ member)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_likelihood_expr.html#_CPPv4NK8Analyzer14LikelihoodExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::LikelihoodExpr::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_likelihood_expr.html#_CPPv4NK8Analyzer14LikelihoodExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::LikelihoodExpr::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_likelihood_expr.html#_CPPv4NK8Analyzer14LikelihoodExpr15collect_rte_idxERNSt3setIiEE">Analyzer::LikelihoodExpr::collect_rte_idx (C++ function)</a>
 </li>
@@ -2865,7 +2872,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_lower_expr.html#_CPPv4N8Analyzer9LowerExpr3argE">Analyzer::LowerExpr::arg (C++ member)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_lower_expr.html#_CPPv4NK8Analyzer9LowerExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::LowerExpr::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_lower_expr.html#_CPPv4NK8Analyzer9LowerExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::LowerExpr::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_lower_expr.html#_CPPv4NK8Analyzer9LowerExpr15collect_rte_idxERNSt3setIiEE">Analyzer::LowerExpr::collect_rte_idx (C++ function)</a>
 </li>
@@ -3067,7 +3074,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_regexp_expr.html#_CPPv4N8Analyzer10RegexpExpr3argE">Analyzer::RegexpExpr::arg (C++ member)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_regexp_expr.html#_CPPv4NK8Analyzer10RegexpExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::RegexpExpr::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_regexp_expr.html#_CPPv4NK8Analyzer10RegexpExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::RegexpExpr::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_regexp_expr.html#_CPPv4NK8Analyzer10RegexpExpr15collect_rte_idxERNSt3setIiEE">Analyzer::RegexpExpr::collect_rte_idx (C++ function)</a>
 </li>
@@ -3105,7 +3112,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4N8Analyzer15SampleRatioExpr3argE">Analyzer::SampleRatioExpr::arg (C++ member)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4NK8Analyzer15SampleRatioExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::SampleRatioExpr::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4NK8Analyzer15SampleRatioExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::SampleRatioExpr::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_sample_ratio_expr.html#_CPPv4NK8Analyzer15SampleRatioExpr15collect_rte_idxERNSt3setIiEE">Analyzer::SampleRatioExpr::collect_rte_idx (C++ function)</a>
 </li>
@@ -3135,7 +3142,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_subquery.html#_CPPv4N8Analyzer8Subquery8add_castERK11SQLTypeInfo">Analyzer::Subquery::add_cast (C++ function)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_subquery.html#_CPPv4NK8Analyzer8Subquery18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::Subquery::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_subquery.html#_CPPv4NK8Analyzer8Subquery18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::Subquery::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_subquery.html#_CPPv4NK8Analyzer8Subquery15collect_rte_idxERNSt3setIiEE">Analyzer::Subquery::collect_rte_idx (C++ function)</a>
 </li>
@@ -3197,7 +3204,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_u_oper.html#_CPPv4NK8Analyzer5UOper14check_group_byERKNSt4listINSt10shared_ptrIN8Analyzer4ExprEEEEE">Analyzer::UOper::check_group_by (C++ function)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_u_oper.html#_CPPv4NK8Analyzer5UOper18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">Analyzer::UOper::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_u_oper.html#_CPPv4NK8Analyzer5UOper18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::UOper::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_u_oper.html#_CPPv4NK8Analyzer5UOper15collect_rte_idxERNSt3setIiEE">Analyzer::UOper::collect_rte_idx (C++ function)</a>
 </li>
@@ -5471,12 +5478,12 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator32codegenFixedLengthColVarInWindowEPKN8Analyzer9ColumnVarEPN4llvm5ValueEPN4llvm5ValueE">CodeGenerator::codegenFixedLengthColVarInWindow (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator14codegenFpArithEPKN8Analyzer7BinOperEPN4llvm5ValueEPN4llvm5ValueE">CodeGenerator::codegenFpArith (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator19codegenFunctionOperEPKN8Analyzer12FunctionOperERK18CompilationOptions">CodeGenerator::codegenFunctionOper (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator27codegenFunctionOperCastArgsEPKN8Analyzer12FunctionOperEPK17ExtensionFunctionRKNSt6vectorIPN4llvm5ValueEEERKNSt6vectorI6size_tEERKNSt13unordered_mapIPN4llvm5ValueEPN4llvm5ValueEEERK18CompilationOptions">CodeGenerator::codegenFunctionOperCastArgs (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator26codegenFunctionOperNullArgEPKN8Analyzer12FunctionOperERKNSt6vectorIPN4llvm5ValueEEE">CodeGenerator::codegenFunctionOperNullArg (C++ function)</a>
@@ -6275,8 +6282,6 @@
 </li>
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions10compressorE">CommandLineOptions::compressor (C++ member)</a>
 </li>
-      <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions8cpu_onlyE">CommandLineOptions::cpu_only (C++ member)</a>
-</li>
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions9db_leavesE">CommandLineOptions::db_leaves (C++ member)</a>
 </li>
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions13db_query_fileE">CommandLineOptions::db_query_file (C++ member)</a>
@@ -6343,8 +6348,6 @@
 </li>
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions13nodeIds_tokenE">CommandLineOptions::nodeIds_token (C++ member)</a>
 </li>
-      <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions8num_gpusE">CommandLineOptions::num_gpus (C++ member)</a>
-</li>
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions18num_reader_threadsE">CommandLineOptions::num_reader_threads (C++ member)</a>
 </li>
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions18parse_command_lineEiPPCKcKb">CommandLineOptions::parse_command_line (C++ function)</a>
@@ -6366,8 +6369,6 @@
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions16reserved_gpu_memE">CommandLineOptions::reserved_gpu_mem (C++ member)</a>
 </li>
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions28running_query_interrupt_freqE">CommandLineOptions::running_query_interrupt_freq (C++ member)</a>
-</li>
-      <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions9start_gpuE">CommandLineOptions::start_gpu (C++ member)</a>
 </li>
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions13string_leavesE">CommandLineOptions::string_leaves (C++ member)</a>
 </li>
@@ -7223,6 +7224,10 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler10checkpointERK10TSessionIdK7int32_t">DBHandler::checkpoint (C++ function)</a>
 </li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler14clang_options_E">DBHandler::clang_options_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler11clang_path_E">DBHandler::clang_path_ (C++ member)</a>
+</li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler16clear_cpu_memoryERK10TSessionId">DBHandler::clear_cpu_memory (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler16clear_gpu_memoryERK10TSessionId">DBHandler::clear_gpu_memory (C++ function)</a>
@@ -7263,7 +7268,9 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler9data_mgr_E">DBHandler::data_mgr_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler9DBHandlerERKNSt6vectorI12LeafHostInfoEERKNSt6vectorI12LeafHostInfoEERKNSt6stringEKbKbKbKbKbKbKbKbKbKiK6size_tK6size_tKiKiK6size_tKbK6size_tRK12AuthMetadataRK16SystemParametersKbKiKiKbRKNSt6stringERKNSt6stringERKNSt6vectorINSt6stringEEERK15DiskCacheConfig">DBHandler::DBHandler (C++ function)</a>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler10db_leaves_E">DBHandler::db_leaves_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler9DBHandlerERKNSt6vectorI12LeafHostInfoEERKNSt6vectorI12LeafHostInfoEERKNSt6stringEKbKbKbKbKbKbKbKbKiK6size_tK6size_tK6size_tKbK6size_tRK12AuthMetadataR16SystemParametersKbKiKiKbRKNSt6stringERKNSt6stringERKNSt6vectorINSt6stringEEERK15DiskCacheConfig">DBHandler::DBHandler (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler13deallocate_dfERK10TSessionIdRK10TDataFrameKN11TDeviceType4typeEK7int32_t">DBHandler::deallocate_df (C++ function)</a>
 </li>
@@ -7277,9 +7284,15 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler15disconnect_implERKN10SessionMap8iteratorER16mapd_unique_lockI17mapd_shared_mutexE">DBHandler::disconnect_impl (C++ function)</a>
 </li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler18disk_cache_config_E">DBHandler::disk_cache_config_ (C++ member)</a>
+</li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler15dispatch_queue_E">DBHandler::dispatch_queue_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler18emergency_shutdownEv">DBHandler::emergency_shutdown (C++ function)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler29enable_auto_clear_render_mem_E">DBHandler::enable_auto_clear_render_mem_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler17enable_rendering_E">DBHandler::enable_rendering_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler34execute_distributed_copy_statementEPN6Parser13CopyTableStmtERKN17Catalog_Namespace11SessionInfoE">DBHandler::execute_distributed_copy_statement (C++ function)</a>
 </li>
@@ -7296,6 +7309,8 @@
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler10executeDdlER12TQueryResultRKNSt6stringENSt10shared_ptrIKN17Catalog_Namespace11SessionInfoEEE">DBHandler::executeDdl (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler21executor_device_type_E">DBHandler::executor_device_type_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4I0EN9DBHandler27expire_idle_sessions_unsafeEvR16SESSION_MAP_LOCK">DBHandler::expire_idle_sessions_unsafe (C++ function)</a>, <a href="api/class/class_d_b_handler.html#_CPPv4IEN9DBHandler27expire_idle_sessions_unsafeEvR16mapd_unique_lockI17mapd_shared_mutexE">[1]</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler26fill_column_names_by_tableERNSt6vectorINSt6stringEEERN11query_state6StdLogE">DBHandler::fill_column_names_by_table (C++ function)</a>
 </li>
@@ -7439,12 +7454,12 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler8has_roleERK10TSessionIdRKNSt6stringERKNSt6stringE">DBHandler::has_role (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler21has_server_permissionERK16AccessPrivilegesRK20TDBObjectPermissions">DBHandler::has_server_permission (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler20has_table_permissionERK16AccessPrivilegesRK20TDBObjectPermissions">DBHandler::has_table_permission (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler19has_view_permissionERK16AccessPrivilegesRK20TDBObjectPermissions">DBHandler::has_view_permission (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler24hasTableAccessPrivilegesEPK15TableDescriptorRKN17Catalog_Namespace11SessionInfoE">DBHandler::hasTableAccessPrivileges (C++ function)</a>
@@ -7458,6 +7473,10 @@
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler12import_tableERK10TSessionIdRKNSt6stringERKNSt6stringERK11TCopyParams">DBHandler::import_table (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler19import_table_statusER13TImportStatusRK10TSessionIdRKNSt6stringE">DBHandler::import_table_status (C++ function)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler10initializeEv">DBHandler::initialize (C++ function)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler12initialized_E">DBHandler::initialized_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler11insert_dataERK10TSessionIdRK11TInsertData">DBHandler::insert_data (C++ function)</a>
 </li>
@@ -7497,7 +7516,11 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler20max_bytes_for_thriftEv">DBHandler::max_bytes_for_thrift (C++ function)</a>
 </li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler31max_concurrent_render_sessions_E">DBHandler::max_concurrent_render_sessions_ (C++ member)</a>
+</li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler21max_session_duration_E">DBHandler::max_session_duration_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler19num_reader_threads_E">DBHandler::num_reader_threads_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler11parse_to_raE15QueryStateProxyRKNSt6stringERKNSt6vectorI19TFilterPushDownInfoEEKbK16SystemParametersb">DBHandler::parse_to_ra (C++ function)</a>
 </li>
@@ -7521,15 +7544,25 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler28removeInMemoryCalciteSessionERKNSt6stringE">DBHandler::removeInMemoryCalciteSession (C++ function)</a>
 </li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler31render_compositor_use_last_gpu_E">DBHandler::render_compositor_use_last_gpu_ (C++ member)</a>
+</li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler15render_handler_E">DBHandler::render_handler_ (C++ member)</a>
 </li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler17render_mem_bytes_E">DBHandler::render_mem_bytes_ (C++ member)</a>
+</li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler13render_mutex_E">DBHandler::render_mutex_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler27render_oom_retry_threshold_E">DBHandler::render_oom_retry_threshold_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler14render_rel_algER13TRenderResultRKNSt6stringERKNSt6stringERKN17Catalog_Namespace11SessionInfoERKNSt6stringEKb">DBHandler::render_rel_alg (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler11render_vegaER13TRenderResultRK10TSessionIdK7int64_tRKNSt6stringEK7int32_tRKNSt6stringE">DBHandler::render_vega (C++ function)</a>
 </li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler27renderer_use_vulkan_driver_E">DBHandler::renderer_use_vulkan_driver_ (C++ member)</a>
+</li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler17replace_dashboardERK10TSessionIdK7int32_tRKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringERKNSt6stringE">DBHandler::replace_dashboard (C++ function)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler17reserved_gpu_mem_E">DBHandler::reserved_gpu_mem_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler33runtime_udf_registration_enabled_E">DBHandler::runtime_udf_registration_enabled_ (C++ member)</a>
 </li>
@@ -7590,6 +7623,8 @@
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler18system_parameters_E">DBHandler::system_parameters_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler20thrift_to_copyparamsERK11TCopyParams">DBHandler::thrift_to_copyparams (C++ function)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler13udf_filename_E">DBHandler::udf_filename_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler13unescape_charENSt6stringE">DBHandler::unescape_char (C++ function)</a>
 </li>
@@ -8993,7 +9028,7 @@
 </li>
       <li><a href="api/class/class_extension_functions_whitelist.html#_CPPv4N27ExtensionFunctionsWhitelist7get_udfERKNSt6stringE">ExtensionFunctionsWhitelist::get_udf (C++ function)</a>
 </li>
-      <li><a href="api/class/class_extension_functions_whitelist.html#_CPPv4N27ExtensionFunctionsWhitelist19getLLVMDeclarationsERKNSt13unordered_setINSt6stringEEE">ExtensionFunctionsWhitelist::getLLVMDeclarations (C++ function)</a>
+      <li><a href="api/class/class_extension_functions_whitelist.html#_CPPv4N27ExtensionFunctionsWhitelist19getLLVMDeclarationsERKNSt13unordered_setINSt6stringEEEKb">ExtensionFunctionsWhitelist::getLLVMDeclarations (C++ function)</a>
 </li>
       <li><a href="api/class/class_extension_functions_whitelist.html#_CPPv4N27ExtensionFunctionsWhitelist17rt_udf_functions_E">ExtensionFunctionsWhitelist::rt_udf_functions_ (C++ member)</a>
 </li>
@@ -9047,7 +9082,7 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_extract_expr.html#_CPPv4NK11ExtractExpr14check_group_byERKNSt4listINSt10shared_ptrIN8Analyzer4ExprEEEEE">ExtractExpr::check_group_by (C++ function)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_extract_expr.html#_CPPv4NK11ExtractExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)(const  ColumnVar  *, const  ColumnVar  *)EEEb">ExtractExpr::collect_column_var (C++ function)</a>
+      <li><a href="api/class/class_analyzer_1_1_extract_expr.html#_CPPv4NK11ExtractExpr18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">ExtractExpr::collect_column_var (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_extract_expr.html#_CPPv4NK11ExtractExpr15collect_rte_idxERNSt3setIiEE">ExtractExpr::collect_rte_idx (C++ function)</a>
 </li>
@@ -9823,6 +9858,40 @@
 </li>
       <li><a href="api/class/class_fixed_width_unsigned.html#_CPPv4N18FixedWidthUnsigned18FixedWidthUnsignedEK6size_t">FixedWidthUnsigned::FixedWidthUnsigned (C++ function)</a>
 </li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv49FlexLexer">FlexLexer (C++ class)</a>
+</li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv4NK9FlexLexer5debugEv">FlexLexer::debug (C++ function)</a>
+</li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv4NK9FlexLexer6linenoEv">FlexLexer::lineno (C++ function)</a>
+</li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexer9set_debugEi">FlexLexer::set_debug (C++ function)</a>
+</li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexer14switch_streamsEPNSt7istreamEPNSt7ostreamE">FlexLexer::switch_streams (C++ function)</a>, <a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexer14switch_streamsERNSt7istreamERNSt7ostreamE">[1]</a>
+</li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexer16yy_create_bufferEPNSt7istreamEi">FlexLexer::yy_create_buffer (C++ function)</a>, <a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexer16yy_create_bufferERNSt7istreamEi">[1]</a>
+</li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexer16yy_delete_bufferEP15yy_buffer_state">FlexLexer::yy_delete_buffer (C++ function)</a>
+</li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexer13yy_flex_debugE">FlexLexer::yy_flex_debug (C++ member)</a>
+</li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexer19yy_switch_to_bufferEP15yy_buffer_state">FlexLexer::yy_switch_to_buffer (C++ function)</a>
+</li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv4NK9FlexLexer6YYLengEv">FlexLexer::YYLeng (C++ function)</a>
+</li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexer6yylengE">FlexLexer::yyleng (C++ member)</a>
+</li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexer5yylexEPNSt7istreamEPNSt7ostreamE">FlexLexer::yylex (C++ function)</a>, <a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexer5yylexERNSt7istreamERNSt7ostreamE">[1]</a>, <a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexer5yylexEv">[2]</a>
+</li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexer8yylinenoE">FlexLexer::yylineno (C++ member)</a>
+</li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexer9yyrestartEPNSt7istreamE">FlexLexer::yyrestart (C++ function)</a>, <a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexer9yyrestartERNSt7istreamE">[1]</a>
+</li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv4NK9FlexLexer6YYTextEv">FlexLexer::YYText (C++ function)</a>
+</li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexer6yytextE">FlexLexer::yytext (C++ member)</a>
+</li>
+      <li><a href="api/class/class_flex_lexer.html#_CPPv4N9FlexLexerD0Ev">FlexLexer::~FlexLexer (C++ function)</a>
+</li>
       <li><a href="api/class/class_for.html#_CPPv43For">For (C++ class)</a>
 </li>
       <li><a href="api/class/class_for.html#_CPPv4I0DpEN3For3addEP5ValueDpRR4Args">For::add (C++ function)</a>
@@ -10401,6 +10470,8 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr28parallelism_hints_per_table_E">foreign_storage::ForeignStorageMgr::parallelism_hints_per_table_ (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr15ParallelismHintE">foreign_storage::ForeignStorageMgr::ParallelismHint (C++ type)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr10printSlabsEv">foreign_storage::ForeignStorageMgr::printSlabs (C++ function)</a>
@@ -10417,8 +10488,6 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr22temp_chunk_buffer_map_E">foreign_storage::ForeignStorageMgr::temp_chunk_buffer_map_ (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr28temp_chunk_buffer_map_mutex_E">foreign_storage::ForeignStorageMgr::temp_chunk_buffer_map_mutex_ (C++ member)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTableE">foreign_storage::ForeignTable (C++ class)</a>
@@ -17727,7 +17796,11 @@
 </li>
       <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint8defaultsEv">QueryHint::defaults (C++ function)</a>
 </li>
-      <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint14hint_deliveredE">QueryHint::hint_delivered (C++ member)</a>
+      <li><a href="api/struct/struct_query_hint.html#_CPPv4NK9QueryHint12getHintClassERKNSt6stringE">QueryHint::getHintClass (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_query_hint.html#_CPPv4NK9QueryHint23isAnyQueryHintDeliveredEv">QueryHint::isAnyQueryHintDelivered (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_query_hint.html#_CPPv4NK9QueryHint16isHintRegisteredEK6size_t">QueryHint::isHintRegistered (C++ function)</a>, <a href="api/struct/struct_query_hint.html#_CPPv4NK9QueryHint16isHintRegisteredERKNSt6stringE">[1]</a>
 </li>
       <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHintaSERK9QueryHint">QueryHint::operator= (C++ function)</a>
 </li>
@@ -17738,6 +17811,10 @@
       <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint17overlaps_max_sizeE">QueryHint::overlaps_max_size (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint9QueryHintERK9QueryHint">QueryHint::QueryHint (C++ function)</a>, <a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint9QueryHintEv">[1]</a>
+</li>
+      <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint15registered_hintE">QueryHint::registered_hint (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint12registerHintEK6size_t">QueryHint::registerHint (C++ function)</a>, <a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint12registerHintERKNSt6stringE">[1]</a>
 </li>
       <li><a href="api/struct/struct_query_info.html#_CPPv49QueryInfo">QueryInfo (C++ class)</a>
 </li>
@@ -17765,12 +17842,12 @@
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor27count_distinct_descriptors_E">QueryMemoryDescriptor::count_distinct_descriptors_ (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor30countDescriptorsLogicallyEmptyERK24CountDistinctDescriptors">QueryMemoryDescriptor::countDescriptorsLogicallyEmpty (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor38countDistinctDescriptorsLogicallyEmptyEv">QueryMemoryDescriptor::countDistinctDescriptorsLogicallyEmpty (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor17didOutputColumnarEv">QueryMemoryDescriptor::didOutputColumnar (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor12entry_count_E">QueryMemoryDescriptor::entry_count_ (C++ member)</a>
@@ -18306,6 +18383,8 @@
       <li><a href="api/class/class_reduction_interpreter.html#_CPPv4N20ReductionInterpreter9EvalValue11mutable_ptrE">ReductionInterpreter::EvalValue::mutable_ptr (C++ member)</a>, <a href="api/union/union_reduction_interpreter_1_1_eval_value.html#_CPPv4N20ReductionInterpreter9EvalValue11mutable_ptrE">[1]</a>
 </li>
       <li><a href="api/class/class_reduction_interpreter.html#_CPPv4N20ReductionInterpreter9EvalValue3ptrE">ReductionInterpreter::EvalValue::ptr (C++ member)</a>, <a href="api/union/union_reduction_interpreter_1_1_eval_value.html#_CPPv4N20ReductionInterpreter9EvalValue3ptrE">[1]</a>
+</li>
+      <li><a href="api/class/class_reduction_interpreter.html#_CPPv4I0EN20ReductionInterpreter13MakeEvalValueE9EvalValueRK1T">ReductionInterpreter::MakeEvalValue (C++ function)</a>
 </li>
       <li><a href="api/class/class_reduction_interpreter.html#_CPPv4N20ReductionInterpreter3runEPK8FunctionRKNSt6vectorI9EvalValueEE">ReductionInterpreter::run (C++ function)</a>, <a href="api/class/class_reduction_interpreter.html#_CPPv4N20ReductionInterpreter3runERKNSt6vectorINSt10unique_ptrI11InstructionEEEERKNSt6vectorI9EvalValueEE">[1]</a>
 </li>
@@ -19399,10 +19478,10 @@
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4NK10RenderInfo22queryRanWithInSituDataEv">RenderInfo::queryRanWithInSituData (C++ function)</a>
 </li>
-      <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo24render_allocator_map_ptrE">RenderInfo::render_allocator_map_ptr (C++ member)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo24render_allocator_map_ptrE">RenderInfo::render_allocator_map_ptr (C++ member)</a>
+</li>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo18render_query_opts_E">RenderInfo::render_query_opts_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo14render_sessionE">RenderInfo::render_session (C++ member)</a>
@@ -19493,8 +19572,6 @@
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4NK9ResultSet8colCountEv">ResultSet::colCount (C++ function)</a>
 </li>
-      <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet23column_wise_comparator_E">ResultSet::column_wise_comparator_ (C++ member)</a>
-</li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet24ColumnWiseTargetAccessorE">ResultSet::ColumnWiseTargetAccessor (C++ class)</a>, <a href="api/struct/struct_result_set_1_1_column_wise_target_accessor.html#_CPPv4N9ResultSet24ColumnWiseTargetAccessorE">[1]</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet24ColumnWiseTargetAccessor24ColumnWiseTargetAccessorEPK9ResultSet">ResultSet::ColumnWiseTargetAccessor::ColumnWiseTargetAccessor (C++ function)</a>, <a href="api/struct/struct_result_set_1_1_column_wise_target_accessor.html#_CPPv4N9ResultSet24ColumnWiseTargetAccessor24ColumnWiseTargetAccessorEPK9ResultSet">[1]</a>
@@ -19513,7 +19590,7 @@
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4NK9ResultSet24create_active_buffer_setER9BufferSet">ResultSet::create_active_buffer_set (C++ function)</a>
 </li>
-      <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet16createComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK8Executor">ResultSet::createComparator (C++ function)</a>
+      <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet16createComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbRK11PermutationPK8Executor">ResultSet::createComparator (C++ function)</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet17crt_row_buff_idx_E">ResultSet::crt_row_buff_idx_ (C++ member)</a>
 </li>
@@ -19669,7 +19746,7 @@
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4NK9ResultSet17initializeStorageEv">ResultSet::initializeStorage (C++ function)</a>
 </li>
-      <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet21initPermutationBufferEK6size_tK6size_t">ResultSet::initPermutationBuffer (C++ function)</a>
+      <li><a href="api/class/class_result_set.html#_CPPv4NK9ResultSet21initPermutationBufferEK6size_tK6size_t">ResultSet::initPermutationBuffer (C++ function)</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4NK9ResultSet34isDirectColumnarConversionPossibleEv">ResultSet::isDirectColumnarConversionPossible (C++ function)</a>
 </li>
@@ -19751,13 +19828,15 @@
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet19ResultSetComparator31materializeCountDistinctColumnsEv">ResultSet::ResultSetComparator::materializeCountDistinctColumns (C++ function)</a>, <a href="api/struct/struct_result_set_1_1_result_set_comparator.html#_CPPv4N9ResultSet19ResultSetComparator31materializeCountDistinctColumnsEv">[1]</a>
 </li>
-      <li><a href="api/class/class_result_set.html#_CPPv4NK9ResultSet19ResultSetComparatorclEK8uint32_tK8uint32_t">ResultSet::ResultSetComparator::operator() (C++ function)</a>, <a href="api/struct/struct_result_set_1_1_result_set_comparator.html#_CPPv4NK9ResultSet19ResultSetComparatorclEK8uint32_tK8uint32_t">[1]</a>
+      <li><a href="api/class/class_result_set.html#_CPPv4NK9ResultSet19ResultSetComparatorclEK14PermutationIdxK14PermutationIdx">ResultSet::ResultSetComparator::operator() (C++ function)</a>, <a href="api/struct/struct_result_set_1_1_result_set_comparator.html#_CPPv4NK9ResultSet19ResultSetComparatorclEK14PermutationIdxK14PermutationIdx">[1]</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet19ResultSetComparator14order_entries_E">ResultSet::ResultSetComparator::order_entries_ (C++ member)</a>, <a href="api/struct/struct_result_set_1_1_result_set_comparator.html#_CPPv4N9ResultSet19ResultSetComparator14order_entries_E">[1]</a>
 </li>
+      <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet19ResultSetComparator12permutation_E">ResultSet::ResultSetComparator::permutation_ (C++ member)</a>, <a href="api/struct/struct_result_set_1_1_result_set_comparator.html#_CPPv4N9ResultSet19ResultSetComparator12permutation_E">[1]</a>
+</li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet19ResultSetComparator11result_set_E">ResultSet::ResultSetComparator::result_set_ (C++ member)</a>, <a href="api/struct/struct_result_set_1_1_result_set_comparator.html#_CPPv4N9ResultSet19ResultSetComparator11result_set_E">[1]</a>
 </li>
-      <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet19ResultSetComparator19ResultSetComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK9ResultSetPK8Executor">ResultSet::ResultSetComparator::ResultSetComparator (C++ function)</a>, <a href="api/struct/struct_result_set_1_1_result_set_comparator.html#_CPPv4N9ResultSet19ResultSetComparator19ResultSetComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK9ResultSetPK8Executor">[1]</a>
+      <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet19ResultSetComparator19ResultSetComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK9ResultSetRK11PermutationPK8Executor">ResultSet::ResultSetComparator::ResultSetComparator (C++ function)</a>, <a href="api/struct/struct_result_set_1_1_result_set_comparator.html#_CPPv4N9ResultSet19ResultSetComparator19ResultSetComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK9ResultSetRK11PermutationPK8Executor">[1]</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet19ResultSetComparator9use_heap_E">ResultSet::ResultSetComparator::use_heap_ (C++ member)</a>, <a href="api/struct/struct_result_set_1_1_result_set_comparator.html#_CPPv4N9ResultSet19ResultSetComparator9use_heap_E">[1]</a>
 </li>
@@ -19766,8 +19845,6 @@
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet20row_iteration_mutex_E">ResultSet::row_iteration_mutex_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet18row_set_mem_owner_E">ResultSet::row_set_mem_owner_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet20row_wise_comparator_E">ResultSet::row_wise_comparator_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4NK9ResultSet8rowCountEKb">ResultSet::rowCount (C++ function)</a>
 </li>
@@ -19821,7 +19898,7 @@
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet4sortERKNSt4listIN8Analyzer10OrderEntryEEEK6size_tPK8Executor">ResultSet::sort (C++ function)</a>
 </li>
-      <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet15sortPermutationEKNSt8functionIFbK8uint32_tK8uint32_tEEE">ResultSet::sortPermutation (C++ function)</a>
+      <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet15sortPermutationEK10Comparator">ResultSet::sortPermutation (C++ function)</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet8storage_E">ResultSet::storage_ (C++ member)</a>
 </li>
@@ -19849,7 +19926,7 @@
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet8timings_E">ResultSet::timings_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet14topPermutationERNSt6vectorI8uint32_tEEK6size_tKNSt8functionIFbK8uint32_tK8uint32_tEEE">ResultSet::topPermutation (C++ function)</a>
+      <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet14topPermutationER11PermutationK6size_tK10Comparator">ResultSet::topPermutation (C++ function)</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4N9ResultSet11unserializeERK15TSerializedRowsPK8Executor">ResultSet::unserialize (C++ function)</a>
 </li>
@@ -21079,6 +21156,20 @@
 </li>
       <li><a href="api/class/class_sqlite_mem_database.html#_CPPv4N17SqliteMemDatabaseD0Ev">SqliteMemDatabase::~SqliteMemDatabase (C++ function)</a>
 </li>
+      <li><a href="api/class/class_s_q_l_lexer.html#_CPPv48SQLLexer">SQLLexer (C++ class)</a>
+</li>
+      <li><a href="api/class/class_s_q_l_lexer.html#_CPPv4N8SQLLexer24parsed_node_list_tokens_E">SQLLexer::parsed_node_list_tokens_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_s_q_l_lexer.html#_CPPv4N8SQLLexer19parsed_node_tokens_E">SQLLexer::parsed_node_tokens_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_s_q_l_lexer.html#_CPPv4N8SQLLexer23parsed_str_list_tokens_E">SQLLexer::parsed_str_list_tokens_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_s_q_l_lexer.html#_CPPv4N8SQLLexer18parsed_str_tokens_E">SQLLexer::parsed_str_tokens_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_s_q_l_lexer.html#_CPPv4N8SQLLexer8SQLLexerER15YY_Parser_STYPE">SQLLexer::SQLLexer (C++ function)</a>, <a href="api/class/class_s_q_l_lexer.html#_CPPv4N8SQLLexer8SQLLexerER15YY_Parser_STYPE">[1]</a>
+</li>
+      <li><a href="api/class/class_s_q_l_lexer.html#_CPPv4N8SQLLexer6yylvalE">SQLLexer::yylval (C++ member)</a>
+</li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv411SQLTypeInfo">SQLTypeInfo (C++ class)</a>
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo9comp_nameE">SQLTypeInfo::comp_name (C++ member)</a>
@@ -21193,10 +21284,10 @@
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo11SQLTypeInfoE8SQLTypes">SQLTypeInfo::SQLTypeInfo (C++ function)</a>, <a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo11SQLTypeInfoE8SQLTypesb">[1]</a>, <a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo11SQLTypeInfoE8SQLTypesb12EncodingType">[2]</a>, <a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo11SQLTypeInfoE8SQLTypesii">[3]</a>, <a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo11SQLTypeInfoE8SQLTypesiib">[4]</a>, <a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo11SQLTypeInfoE8SQLTypesiib12EncodingTypei8SQLTypes">[5]</a>, <a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo11SQLTypeInfoEv">[6]</a>
 </li>
-      <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo7subtypeE">SQLTypeInfo::subtype (C++ member)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo7subtypeE">SQLTypeInfo::subtype (C++ member)</a>
+</li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo9to_stringEv">SQLTypeInfo::to_string (C++ function)</a>
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo10transformsEv">SQLTypeInfo::transforms (C++ function)</a>
@@ -21749,6 +21840,8 @@
 </li>
       <li><a href="api/struct/struct_system_parameters.html#_CPPv4N16SystemParameters20cpu_buffer_mem_bytesE">SystemParameters::cpu_buffer_mem_bytes (C++ member)</a>
 </li>
+      <li><a href="api/struct/struct_system_parameters.html#_CPPv4N16SystemParameters8cpu_onlyE">SystemParameters::cpu_only (C++ member)</a>
+</li>
       <li><a href="api/struct/struct_system_parameters.html#_CPPv4N16SystemParameters15cuda_block_sizeE">SystemParameters::cuda_block_size (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_system_parameters.html#_CPPv4N16SystemParameters14cuda_grid_sizeE">SystemParameters::cuda_grid_size (C++ member)</a>
@@ -21779,6 +21872,10 @@
 </li>
       <li><a href="api/struct/struct_system_parameters.html#_CPPv4N16SystemParameters13num_executorsE">SystemParameters::num_executors (C++ member)</a>
 </li>
+      <li><a href="api/struct/struct_system_parameters.html#_CPPv4N16SystemParameters8num_gpusE">SystemParameters::num_gpus (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_system_parameters.html#_CPPv4N16SystemParameters12num_sessionsE">SystemParameters::num_sessions (C++ member)</a>
+</li>
       <li><a href="api/struct/struct_system_parameters.html#_CPPv4N16SystemParameters19omnisci_server_portE">SystemParameters::omnisci_server_port (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_system_parameters.html#_CPPv4N16SystemParameters13ssl_cert_fileE">SystemParameters::ssl_cert_file (C++ member)</a>
@@ -21796,6 +21893,8 @@
       <li><a href="api/struct/struct_system_parameters.html#_CPPv4N16SystemParameters18ssl_trust_passwordE">SystemParameters::ssl_trust_password (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_system_parameters.html#_CPPv4N16SystemParameters15ssl_trust_storeE">SystemParameters::ssl_trust_store (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_system_parameters.html#_CPPv4N16SystemParameters9start_gpuE">SystemParameters::start_gpu (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_system_parameters.html#_CPPv4N16SystemParameters16SystemParametersEv">SystemParameters::SystemParameters (C++ function)</a>
 </li>
@@ -22776,6 +22875,178 @@
       <li><a href="api/class/class_window_project_node_context.html#_CPPv4N24WindowProjectNodeContext16window_contexts_E">WindowProjectNodeContext::window_contexts_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_worker.html#_CPPv46Worker">Worker (C++ class)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="Y">Y</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/struct/structyy__buffer__state.html#_CPPv415yy_buffer_state">yy_buffer_state (C++ class)</a>
+</li>
+      <li><a href="api/struct/structyy__buffer__state.html#_CPPv4N15yy_buffer_state9yy_at_bolE">yy_buffer_state::yy_at_bol (C++ member)</a>
+</li>
+      <li><a href="api/struct/structyy__buffer__state.html#_CPPv4N15yy_buffer_state12yy_bs_columnE">yy_buffer_state::yy_bs_column (C++ member)</a>
+</li>
+      <li><a href="api/struct/structyy__buffer__state.html#_CPPv4N15yy_buffer_state12yy_bs_linenoE">yy_buffer_state::yy_bs_lineno (C++ member)</a>
+</li>
+      <li><a href="api/struct/structyy__buffer__state.html#_CPPv4N15yy_buffer_state10yy_buf_posE">yy_buffer_state::yy_buf_pos (C++ member)</a>
+</li>
+      <li><a href="api/struct/structyy__buffer__state.html#_CPPv4N15yy_buffer_state11yy_buf_sizeE">yy_buffer_state::yy_buf_size (C++ member)</a>
+</li>
+      <li><a href="api/struct/structyy__buffer__state.html#_CPPv4N15yy_buffer_state16yy_buffer_statusE">yy_buffer_state::yy_buffer_status (C++ member)</a>
+</li>
+      <li><a href="api/struct/structyy__buffer__state.html#_CPPv4N15yy_buffer_state9yy_ch_bufE">yy_buffer_state::yy_ch_buf (C++ member)</a>
+</li>
+      <li><a href="api/struct/structyy__buffer__state.html#_CPPv4N15yy_buffer_state14yy_fill_bufferE">yy_buffer_state::yy_fill_buffer (C++ member)</a>
+</li>
+      <li><a href="api/struct/structyy__buffer__state.html#_CPPv4N15yy_buffer_state13yy_input_fileE">yy_buffer_state::yy_input_file (C++ member)</a>
+</li>
+      <li><a href="api/struct/structyy__buffer__state.html#_CPPv4N15yy_buffer_state17yy_is_interactiveE">yy_buffer_state::yy_is_interactive (C++ member)</a>
+</li>
+      <li><a href="api/struct/structyy__buffer__state.html#_CPPv4N15yy_buffer_state16yy_is_our_bufferE">yy_buffer_state::yy_is_our_buffer (C++ member)</a>
+</li>
+      <li><a href="api/struct/structyy__buffer__state.html#_CPPv4N15yy_buffer_state10yy_n_charsE">yy_buffer_state::yy_n_chars (C++ member)</a>
+</li>
+      <li><a href="api/union/unionyy___parser__stype.html#_CPPv415yy_Parser_stype">yy_Parser_stype (C++ union)</a>
+</li>
+      <li><a href="api/union/unionyy___parser__stype.html#_CPPv4N15yy_Parser_stype7boolvalE">yy_Parser_stype::boolval (C++ member)</a>
+</li>
+      <li><a href="api/union/unionyy___parser__stype.html#_CPPv4N15yy_Parser_stype9doublevalE">yy_Parser_stype::doubleval (C++ member)</a>
+</li>
+      <li><a href="api/union/unionyy___parser__stype.html#_CPPv4N15yy_Parser_stype8floatvalE">yy_Parser_stype::floatval (C++ member)</a>
+</li>
+      <li><a href="api/union/unionyy___parser__stype.html#_CPPv4N15yy_Parser_stype6intvalE">yy_Parser_stype::intval (C++ member)</a>
+</li>
+      <li><a href="api/union/unionyy___parser__stype.html#_CPPv4N15yy_Parser_stype7listvalE">yy_Parser_stype::listval (C++ member)</a>
+</li>
+      <li><a href="api/union/unionyy___parser__stype.html#_CPPv4N15yy_Parser_stype7nodevalE">yy_Parser_stype::nodeval (C++ member)</a>
+</li>
+      <li><a href="api/union/unionyy___parser__stype.html#_CPPv4N15yy_Parser_stype5opvalE">yy_Parser_stype::opval (C++ member)</a>
+</li>
+      <li><a href="api/union/unionyy___parser__stype.html#_CPPv4N15yy_Parser_stype7qualvalE">yy_Parser_stype::qualval (C++ member)</a>
+</li>
+      <li><a href="api/union/unionyy___parser__stype.html#_CPPv4N15yy_Parser_stype8slistvalE">yy_Parser_stype::slistval (C++ member)</a>
+</li>
+      <li><a href="api/union/unionyy___parser__stype.html#_CPPv4N15yy_Parser_stype9stringvalE">yy_Parser_stype::stringval (C++ member)</a>
+</li>
+      <li><a href="api/struct/structyy__trans__info.html#_CPPv413yy_trans_info">yy_trans_info (C++ class)</a>
+</li>
+      <li><a href="api/struct/structyy__trans__info.html#_CPPv4N13yy_trans_info6yy_nxtE">yy_trans_info::yy_nxt (C++ member)</a>
+</li>
+      <li><a href="api/struct/structyy__trans__info.html#_CPPv4N13yy_trans_info9yy_verifyE">yy_trans_info::yy_verify (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv411yyFlexLexer">yyFlexLexer (C++ class)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer11ctor_commonEv">yyFlexLexer::ctor_common (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer10LexerErrorEPKc">yyFlexLexer::LexerError (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer10LexerInputEPci">yyFlexLexer::LexerInput (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer11LexerOutputEPKci">yyFlexLexer::LexerOutput (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer14switch_streamsEPNSt7istreamEPNSt7ostreamE">yyFlexLexer::switch_streams (C++ function)</a>, <a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer14switch_streamsERNSt7istreamERNSt7ostreamE">[1]</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer15yy_buffer_stackE">yyFlexLexer::yy_buffer_stack (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer19yy_buffer_stack_maxE">yyFlexLexer::yy_buffer_stack_max (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer19yy_buffer_stack_topE">yyFlexLexer::yy_buffer_stack_top (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer10yy_c_buf_pE">yyFlexLexer::yy_c_buf_p (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer16yy_create_bufferEPNSt7istreamEi">yyFlexLexer::yy_create_buffer (C++ function)</a>, <a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer16yy_create_bufferERNSt7istreamEi">[1]</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer16yy_delete_bufferEP15yy_buffer_state">yyFlexLexer::yy_delete_buffer (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer27yy_did_buffer_switch_on_eofE">yyFlexLexer::yy_did_buffer_switch_on_eof (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer15yy_flush_bufferEP15yy_buffer_state">yyFlexLexer::yy_flush_buffer (C++ function)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer10yy_full_lpE">yyFlexLexer::yy_full_lp (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer13yy_full_matchE">yyFlexLexer::yy_full_match (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer13yy_full_stateE">yyFlexLexer::yy_full_state (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer18yy_get_next_bufferEv">yyFlexLexer::yy_get_next_buffer (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer21yy_get_previous_stateEv">yyFlexLexer::yy_get_previous_state (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer12yy_hold_charE">yyFlexLexer::yy_hold_char (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer7yy_initE">yyFlexLexer::yy_init (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer14yy_init_bufferEP15yy_buffer_stateRNSt7istreamE">yyFlexLexer::yy_init_buffer (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer22yy_last_accepting_cposE">yyFlexLexer::yy_last_accepting_cpos (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer23yy_last_accepting_stateE">yyFlexLexer::yy_last_accepting_state (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer20yy_load_buffer_stateEv">yyFlexLexer::yy_load_buffer_state (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer26yy_looking_for_trail_beginE">yyFlexLexer::yy_looking_for_trail_begin (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer5yy_lpE">yyFlexLexer::yy_lp (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer12yy_more_flagE">yyFlexLexer::yy_more_flag (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer11yy_more_lenE">yyFlexLexer::yy_more_len (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer14yy_more_offsetE">yyFlexLexer::yy_more_offset (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer10yy_n_charsE">yyFlexLexer::yy_n_chars (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer12yy_pop_stateEv">yyFlexLexer::yy_pop_state (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer19yy_prev_more_offsetE">yyFlexLexer::yy_prev_more_offset (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer13yy_push_stateEi">yyFlexLexer::yy_push_state (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer8yy_startE">yyFlexLexer::yy_start (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer14yy_start_stackE">yyFlexLexer::yy_start_stack (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer20yy_start_stack_depthE">yyFlexLexer::yy_start_stack_depth (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer18yy_start_stack_ptrE">yyFlexLexer::yy_start_stack_ptr (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer12yy_state_bufE">yyFlexLexer::yy_state_buf (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer12yy_state_ptrE">yyFlexLexer::yy_state_ptr (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer19yy_switch_to_bufferEP15yy_buffer_state">yyFlexLexer::yy_switch_to_buffer (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer12yy_top_stateEv">yyFlexLexer::yy_top_state (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer16yy_try_NUL_transE13yy_state_type">yyFlexLexer::yy_try_NUL_trans (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer21yyensure_buffer_stackEv">yyFlexLexer::yyensure_buffer_stack (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer11yyFlexLexerEPNSt7istreamEPNSt7ostreamE">yyFlexLexer::yyFlexLexer (C++ function)</a>, <a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer11yyFlexLexerERNSt7istreamERNSt7ostreamE">[1]</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer4yyinE">yyFlexLexer::yyin (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer7yyinputEv">yyFlexLexer::yyinput (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer5yylexEv">yyFlexLexer::yylex (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer5yyoutE">yyFlexLexer::yyout (C++ member)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer18yypop_buffer_stateEv">yyFlexLexer::yypop_buffer_state (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer19yypush_buffer_stateEP15yy_buffer_state">yyFlexLexer::yypush_buffer_state (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer9yyrestartEPNSt7istreamE">yyFlexLexer::yyrestart (C++ function)</a>, <a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer9yyrestartERNSt7istreamE">[1]</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer7yyunputEiPc">yyFlexLexer::yyunput (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexer6yywrapEv">yyFlexLexer::yywrap (C++ function)</a>
+</li>
+      <li><a href="api/class/classyy_flex_lexer.html#_CPPv4N11yyFlexLexerD0Ev">yyFlexLexer::~yyFlexLexer (C++ function)</a>
 </li>
   </ul></td>
 </tr></table>

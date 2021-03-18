@@ -1,0 +1,9 @@
+Class yyFlexLexer
+=================
+
+.. doxygenclass:: yyFlexLexer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

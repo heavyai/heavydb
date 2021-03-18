@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev 3f85c14
+                5.7.0dev 13832c5
               </div>
             
           
@@ -447,6 +447,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_fixed_width_real.html">Class FixedWidthReal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_fixed_width_small_date.html">Class FixedWidthSmallDate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_fixed_width_unsigned.html">Class FixedWidthUnsigned</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_flex_lexer.html">Class FlexLexer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_for.html">Class For</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_foreign_storage_buffer.html">Class ForeignStorageBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_foreign_storage_buffer_mgr.html">Class ForeignStorageBufferMgr</a></li>
@@ -701,6 +702,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_row_to_column_loader.html">Class RowToColumnLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_s3_archive.html">Class S3Archive</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_s3_parquet_archive.html">Class S3ParquetArchive</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_s_q_l_lexer.html">Class SQLLexer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_s_q_l_type_info.html">Class SQLTypeInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_saml_server.html">Class SamlServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_code_generator.html">Class ScalarCodeGenerator</a></li>
@@ -1441,6 +1443,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classthreadpool_1_1_futures_thread_pool.html">Class threadpool::FuturesThreadPool</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classthreadpool_1_1_futures_thread_pool_3_01_t_00_01std_1_1enable__if__t_3_01std_1_1is__object_3_01_t_01_4_1_1value_01_4_01_4.html">Class threadpool::FuturesThreadPool&lt; T, std::enable_if_t&lt; std::is_object&lt; T &gt;::value &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classthreadpool_1_1_futures_thread_pool_base.html">Class threadpool::FuturesThreadPoolBase</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classyy_flex_lexer.html">Class yyFlexLexer</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../structlist.html">Struct list</a><ul>
@@ -1801,6 +1804,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1tuple__size_3_01boost_1_1tuples_1_1cons_3_01_t_00_01_u_01_4_01_4.html">Struct std::tuple_size&lt; boost::tuples::cons&lt; T, U &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstuff.html">Struct stuff</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structtable__functions_1_1_table_function_output_row_sizer.html">Struct table_functions::TableFunctionOutputRowSizer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structyy__buffer__state.html">Struct yy_buffer_state</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structyy__trans__info.html">Struct yy_trans_info</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../unionlist.html">Union list</a><ul>
@@ -1808,6 +1813,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../union/union_datum.html">Union Datum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../union/union_reduction_interpreter_1_1_eval_value.html">Union ReductionInterpreter::EvalValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../union/uniondouble__sort_1_1_variant.html">Union double_sort::Variant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../union/unionyy___parser__stype.html">Union yy_Parser_stype</a></li>
 </ul>
 </li>
 </ul>
@@ -2240,7 +2246,7 @@
 
 <dl class="function">
 <dt id="_CPPv4NK9ResultSet20getPermutationBufferEv">
-<span id="_CPPv3NK9ResultSet20getPermutationBufferEv"></span><span id="_CPPv2NK9ResultSet20getPermutationBufferEv"></span><span id="ResultSet::getPermutationBufferC"></span><span class="target" id="class_result_set_1a9da3ed1ef70cd6b8576722ec4b0ca1a4"></span><em class="property">const</em> std::vector&lt;uint32_t&gt; &amp;<code class="sig-name descname">getPermutationBuffer</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9ResultSet20getPermutationBufferEv" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3NK9ResultSet20getPermutationBufferEv"></span><span id="_CPPv2NK9ResultSet20getPermutationBufferEv"></span><span id="ResultSet::getPermutationBufferC"></span><span class="target" id="class_result_set_1ab6f7babf51d8c86e8362d7cc67e678da"></span><em class="property">const</em> Permutation &amp;<code class="sig-name descname">getPermutationBuffer</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9ResultSet20getPermutationBufferEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2545,18 +2551,18 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N9ResultSet16createComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK8Executor">
-<span id="_CPPv3N9ResultSet16createComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK8Executor"></span><span id="_CPPv2N9ResultSet16createComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK8Executor"></span><span id="ResultSet::createComparator__std::list:Analyzer::OrderEntry:CR.bC.ExecutorCP"></span><span class="target" id="class_result_set_1a477ef073e030fc4e9857ab6d82c70ef9"></span>std::function&lt;bool<span class="sig-paren">(</span><em class="property">const</em> uint32_t, <em class="property">const</em> uint32_t<span class="sig-paren">)</span>&gt; <code class="sig-name descname">createComparator</code><span class="sig-paren">(</span><em class="property">const</em> std::list&lt;Analyzer::<a class="reference internal" href="../struct/struct_analyzer_1_1_order_entry.html#_CPPv4N8Analyzer10OrderEntryE" title="Analyzer::OrderEntry">OrderEntry</a>&gt; &amp;<em>order_entries</em>, <em class="property">const</em> bool <em>use_heap</em>, <em class="property">const</em> <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9ResultSet16createComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK8Executor" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N9ResultSet16createComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbRK11PermutationPK8Executor">
+<span id="_CPPv3N9ResultSet16createComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbRK11PermutationPK8Executor"></span><span id="_CPPv2N9ResultSet16createComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbRK11PermutationPK8Executor"></span><span id="ResultSet::createComparator__std::list:Analyzer::OrderEntry:CR.bC.PermutationCR.ExecutorCP"></span><span class="target" id="class_result_set_1a96bfaeae8ec24103fc3daea61c426f44"></span>Comparator <code class="sig-name descname">createComparator</code><span class="sig-paren">(</span><em class="property">const</em> std::list&lt;Analyzer::<a class="reference internal" href="../struct/struct_analyzer_1_1_order_entry.html#_CPPv4N8Analyzer10OrderEntryE" title="Analyzer::OrderEntry">OrderEntry</a>&gt; &amp;<em>order_entries</em>, <em class="property">const</em> bool <em>use_heap</em>, <em class="property">const</em> Permutation &amp;<em>permutation</em>, <em class="property">const</em> <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9ResultSet16createComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbRK11PermutationPK8Executor" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N9ResultSet15sortPermutationEKNSt8functionIFbK8uint32_tK8uint32_tEEE">
-<span id="_CPPv3N9ResultSet15sortPermutationEKNSt8functionIFbK8uint32_tK8uint32_tEEE"></span><span id="_CPPv2N9ResultSet15sortPermutationEKNSt8functionIFbK8uint32_tK8uint32_tEEE"></span><span class="target" id="class_result_set_1a77be11ecdc07395f9e680b917608ab6e"></span>void <code class="sig-name descname">sortPermutation</code><span class="sig-paren">(</span><em class="property">const</em> std::function&lt;bool<span class="sig-paren">(</span><em class="property">const</em> uint32_t, <em class="property">const</em> uint32_t<span class="sig-paren">)</span>&gt; <em>compare</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9ResultSet15sortPermutationEKNSt8functionIFbK8uint32_tK8uint32_tEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N9ResultSet15sortPermutationEK10Comparator">
+<span id="_CPPv3N9ResultSet15sortPermutationEK10Comparator"></span><span id="_CPPv2N9ResultSet15sortPermutationEK10Comparator"></span><span id="ResultSet::sortPermutation__ComparatorC"></span><span class="target" id="class_result_set_1acf9264e65d08467c4197230b13d911e0"></span>void <code class="sig-name descname">sortPermutation</code><span class="sig-paren">(</span><em class="property">const</em> Comparator <em>compare</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9ResultSet15sortPermutationEK10Comparator" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N9ResultSet21initPermutationBufferEK6size_tK6size_t">
-<span id="_CPPv3N9ResultSet21initPermutationBufferEK6size_tK6size_t"></span><span id="_CPPv2N9ResultSet21initPermutationBufferEK6size_tK6size_t"></span><span id="ResultSet::initPermutationBuffer__sC.sC"></span><span class="target" id="class_result_set_1ac4dcd63b8391611339290284448d29a8"></span>std::vector&lt;uint32_t&gt; <code class="sig-name descname">initPermutationBuffer</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>start</em>, <em class="property">const</em> size_t <em>step</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9ResultSet21initPermutationBufferEK6size_tK6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK9ResultSet21initPermutationBufferEK6size_tK6size_t">
+<span id="_CPPv3NK9ResultSet21initPermutationBufferEK6size_tK6size_t"></span><span id="_CPPv2NK9ResultSet21initPermutationBufferEK6size_tK6size_t"></span><span id="ResultSet::initPermutationBuffer__sC.sCC"></span><span class="target" id="class_result_set_1ab78b7ba9b8b84dfff144c4c601a7d3a4"></span>Permutation <code class="sig-name descname">initPermutationBuffer</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>start</em>, <em class="property">const</em> size_t <em>step</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9ResultSet21initPermutationBufferEK6size_tK6size_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2684,7 +2690,7 @@
 
 <dl class="member">
 <dt id="_CPPv4N9ResultSet12permutation_E">
-<span id="_CPPv3N9ResultSet12permutation_E"></span><span id="_CPPv2N9ResultSet12permutation_E"></span><span id="ResultSet::permutation___std::vector:uint32_t:"></span><span class="target" id="class_result_set_1a4853cc9d9664106be4d02c5e4d8f3992"></span>std::vector&lt;uint32_t&gt; <code class="sig-name descname">permutation_</code><a class="headerlink" href="#_CPPv4N9ResultSet12permutation_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N9ResultSet12permutation_E"></span><span id="_CPPv2N9ResultSet12permutation_E"></span><span id="ResultSet::permutation___Permutation"></span><span class="target" id="class_result_set_1a6059730420f94873d8ef623e5c916dde"></span>Permutation <code class="sig-name descname">permutation_</code><a class="headerlink" href="#_CPPv4N9ResultSet12permutation_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
@@ -2802,16 +2808,6 @@
 <span id="_CPPv3N9ResultSet16geo_return_type_E"></span><span id="_CPPv2N9ResultSet16geo_return_type_E"></span><span id="ResultSet::geo_return_type___GeoReturnType"></span><span class="target" id="class_result_set_1a101bb264abd99f3c459d3f24f7c55244"></span><a class="reference internal" href="#_CPPv4N9ResultSet13GeoReturnTypeE" title="ResultSet::GeoReturnType">GeoReturnType</a> <code class="sig-name descname">geo_return_type_</code><a class="headerlink" href="#_CPPv4N9ResultSet16geo_return_type_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
-<dl class="member">
-<dt id="_CPPv4N9ResultSet20row_wise_comparator_E">
-<span id="_CPPv3N9ResultSet20row_wise_comparator_E"></span><span id="_CPPv2N9ResultSet20row_wise_comparator_E"></span><span id="ResultSet::row_wise_comparator___std::unique_ptr:ResultSetComparator:RowWiseTargetAccessor::"></span><span class="target" id="class_result_set_1a9bbe61c350ce993c6aa847876cf0cb55"></span>std::unique_ptr&lt;ResultSetComparator&lt;<a class="reference internal" href="#_CPPv4N9ResultSet21RowWiseTargetAccessorE" title="ResultSet::RowWiseTargetAccessor">RowWiseTargetAccessor</a>&gt;&gt; <code class="sig-name descname">row_wise_comparator_</code><a class="headerlink" href="#_CPPv4N9ResultSet20row_wise_comparator_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N9ResultSet23column_wise_comparator_E">
-<span id="_CPPv3N9ResultSet23column_wise_comparator_E"></span><span id="_CPPv2N9ResultSet23column_wise_comparator_E"></span><span id="ResultSet::column_wise_comparator___std::unique_ptr:ResultSetComparator:ColumnWiseTargetAccessor::"></span><span class="target" id="class_result_set_1a175379a7b3e5b72d938bfacca9e6f5a2"></span>std::unique_ptr&lt;ResultSetComparator&lt;<a class="reference internal" href="#_CPPv4N9ResultSet24ColumnWiseTargetAccessorE" title="ResultSet::ColumnWiseTargetAccessor">ColumnWiseTargetAccessor</a>&gt;&gt; <code class="sig-name descname">column_wise_comparator_</code><a class="headerlink" href="#_CPPv4N9ResultSet23column_wise_comparator_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Static Functions</p>
@@ -2821,8 +2817,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N9ResultSet14topPermutationERNSt6vectorI8uint32_tEEK6size_tKNSt8functionIFbK8uint32_tK8uint32_tEEE">
-<span id="_CPPv3N9ResultSet14topPermutationERNSt6vectorI8uint32_tEEK6size_tKNSt8functionIFbK8uint32_tK8uint32_tEEE"></span><span id="_CPPv2N9ResultSet14topPermutationERNSt6vectorI8uint32_tEEK6size_tKNSt8functionIFbK8uint32_tK8uint32_tEEE"></span><span class="target" id="class_result_set_1a649315474ecee52cf72cc596fc305cfd"></span>void <code class="sig-name descname">topPermutation</code><span class="sig-paren">(</span>std::vector&lt;uint32_t&gt; &amp;<em>to_sort</em>, <em class="property">const</em> size_t <em>n</em>, <em class="property">const</em> std::function&lt;bool<span class="sig-paren">(</span><em class="property">const</em> uint32_t, <em class="property">const</em> uint32_t<span class="sig-paren">)</span>&gt; <em>compare</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9ResultSet14topPermutationERNSt6vectorI8uint32_tEEK6size_tKNSt8functionIFbK8uint32_tK8uint32_tEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N9ResultSet14topPermutationER11PermutationK6size_tK10Comparator">
+<span id="_CPPv3N9ResultSet14topPermutationER11PermutationK6size_tK10Comparator"></span><span id="_CPPv2N9ResultSet14topPermutationER11PermutationK6size_tK10Comparator"></span><span id="ResultSet::topPermutation__PermutationR.sC.ComparatorC"></span><span class="target" id="class_result_set_1ad08cca2e13f0cfb8d3c83640d0dd79cf"></span>void <code class="sig-name descname">topPermutation</code><span class="sig-paren">(</span>Permutation &amp;<em>to_sort</em>, <em class="property">const</em> size_t <em>n</em>, <em class="property">const</em> Comparator <em>compare</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9ResultSet14topPermutationER11PermutationK6size_tK10Comparator" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2922,8 +2918,8 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N9ResultSet19ResultSetComparator19ResultSetComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK9ResultSetPK8Executor">
-<span id="_CPPv3N9ResultSet19ResultSetComparator19ResultSetComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK9ResultSetPK8Executor"></span><span id="_CPPv2N9ResultSet19ResultSetComparator19ResultSetComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK9ResultSetPK8Executor"></span><span id="ResultSet::ResultSetComparator::ResultSetComparator__std::list:Analyzer::OrderEntry:CR.bC.ResultSetCP.ExecutorCP"></span><span class="target" id="struct_result_set_1_1_result_set_comparator_1a7718f3931e6cea520883701569fec98a"></span><code class="sig-name descname">ResultSetComparator</code><span class="sig-paren">(</span><em class="property">const</em> std::list&lt;Analyzer::<a class="reference internal" href="../struct/struct_analyzer_1_1_order_entry.html#_CPPv4N8Analyzer10OrderEntryE" title="Analyzer::OrderEntry">OrderEntry</a>&gt; &amp;<em>order_entries</em>, <em class="property">const</em> bool <em>use_heap</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv49ResultSet" title="ResultSet">ResultSet</a> *<em>result_set</em>, <em class="property">const</em> <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9ResultSet19ResultSetComparator19ResultSetComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK9ResultSetPK8Executor" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N9ResultSet19ResultSetComparator19ResultSetComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK9ResultSetRK11PermutationPK8Executor">
+<span id="_CPPv3N9ResultSet19ResultSetComparator19ResultSetComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK9ResultSetRK11PermutationPK8Executor"></span><span id="_CPPv2N9ResultSet19ResultSetComparator19ResultSetComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK9ResultSetRK11PermutationPK8Executor"></span><span id="ResultSet::ResultSetComparator::ResultSetComparator__std::list:Analyzer::OrderEntry:CR.bC.ResultSetCP.PermutationCR.ExecutorCP"></span><span class="target" id="struct_result_set_1_1_result_set_comparator_1ad0edeabd78bf163397f6e4e3c287d268"></span><code class="sig-name descname">ResultSetComparator</code><span class="sig-paren">(</span><em class="property">const</em> std::list&lt;Analyzer::<a class="reference internal" href="../struct/struct_analyzer_1_1_order_entry.html#_CPPv4N8Analyzer10OrderEntryE" title="Analyzer::OrderEntry">OrderEntry</a>&gt; &amp;<em>order_entries</em>, <em class="property">const</em> bool <em>use_heap</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv49ResultSet" title="ResultSet">ResultSet</a> *<em>result_set</em>, <em class="property">const</em> Permutation &amp;<em>permutation</em>, <em class="property">const</em> <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9ResultSet19ResultSetComparator19ResultSetComparatorERKNSt4listIN8Analyzer10OrderEntryEEEKbPK9ResultSetRK11PermutationPK8Executor" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2947,8 +2943,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK9ResultSet19ResultSetComparatorclEK8uint32_tK8uint32_t">
-<span id="_CPPv3NK9ResultSet19ResultSetComparatorclEK8uint32_tK8uint32_t"></span><span id="_CPPv2NK9ResultSet19ResultSetComparatorclEK8uint32_tK8uint32_t"></span><span id="ResultSet::ResultSetComparator::call-operator__uint32_tC.uint32_tCC"></span><span class="target" id="struct_result_set_1_1_result_set_comparator_1af5626ca94437cf2b994114ab991cfc5e"></span>bool <code class="sig-name descname">operator()</code><span class="sig-paren">(</span><em class="property">const</em> uint32_t <em>lhs</em>, <em class="property">const</em> uint32_t <em>rhs</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9ResultSet19ResultSetComparatorclEK8uint32_tK8uint32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK9ResultSet19ResultSetComparatorclEK14PermutationIdxK14PermutationIdx">
+<span id="_CPPv3NK9ResultSet19ResultSetComparatorclEK14PermutationIdxK14PermutationIdx"></span><span id="_CPPv2NK9ResultSet19ResultSetComparatorclEK14PermutationIdxK14PermutationIdx"></span><span id="ResultSet::ResultSetComparator::call-operator__PermutationIdxC.PermutationIdxCC"></span><span class="target" id="struct_result_set_1_1_result_set_comparator_1ab815613376699664e7b221ee78f8ec0f"></span>bool <code class="sig-name descname">operator()</code><span class="sig-paren">(</span><em class="property">const</em> PermutationIdx <em>lhs</em>, <em class="property">const</em> PermutationIdx <em>rhs</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9ResultSet19ResultSetComparatorclEK14PermutationIdxK14PermutationIdx" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2956,7 +2952,7 @@
 <p class="breathe-sectiondef-title rubric">Public Members</p>
 <dl class="member">
 <dt id="_CPPv4N9ResultSet19ResultSetComparator14order_entries_E">
-<span id="_CPPv3N9ResultSet19ResultSetComparator14order_entries_E"></span><span id="_CPPv2N9ResultSet19ResultSetComparator14order_entries_E"></span><span id="ResultSet::ResultSetComparator::order_entries___std::list:Analyzer::OrderEntry:C"></span><span class="target" id="struct_result_set_1_1_result_set_comparator_1a09d791e267027407f1a2d3158ae18bbd"></span><em class="property">const</em> std::list&lt;Analyzer::<a class="reference internal" href="../struct/struct_analyzer_1_1_order_entry.html#_CPPv4N8Analyzer10OrderEntryE" title="Analyzer::OrderEntry">OrderEntry</a>&gt; <code class="sig-name descname">order_entries_</code><a class="headerlink" href="#_CPPv4N9ResultSet19ResultSetComparator14order_entries_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N9ResultSet19ResultSetComparator14order_entries_E"></span><span id="_CPPv2N9ResultSet19ResultSetComparator14order_entries_E"></span><span id="ResultSet::ResultSetComparator::order_entries___std::list:Analyzer::OrderEntry:CR"></span><span class="target" id="struct_result_set_1_1_result_set_comparator_1afa8456a6d04a5d8cf07936b28ed1634d"></span><em class="property">const</em> std::list&lt;Analyzer::<a class="reference internal" href="../struct/struct_analyzer_1_1_order_entry.html#_CPPv4N8Analyzer10OrderEntryE" title="Analyzer::OrderEntry">OrderEntry</a>&gt; &amp;<code class="sig-name descname">order_entries_</code><a class="headerlink" href="#_CPPv4N9ResultSet19ResultSetComparator14order_entries_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
@@ -2967,6 +2963,11 @@
 <dl class="member">
 <dt id="_CPPv4N9ResultSet19ResultSetComparator11result_set_E">
 <span id="_CPPv3N9ResultSet19ResultSetComparator11result_set_E"></span><span id="_CPPv2N9ResultSet19ResultSetComparator11result_set_E"></span><span id="ResultSet::ResultSetComparator::result_set___ResultSetCP"></span><span class="target" id="struct_result_set_1_1_result_set_comparator_1ab43c51a6535c3aba81c634f200d1d5d1"></span><em class="property">const</em> <a class="reference internal" href="#_CPPv49ResultSet" title="ResultSet">ResultSet</a> *<code class="sig-name descname">result_set_</code><a class="headerlink" href="#_CPPv4N9ResultSet19ResultSetComparator11result_set_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N9ResultSet19ResultSetComparator12permutation_E">
+<span id="_CPPv3N9ResultSet19ResultSetComparator12permutation_E"></span><span id="_CPPv2N9ResultSet19ResultSetComparator12permutation_E"></span><span id="ResultSet::ResultSetComparator::permutation___PermutationCR"></span><span class="target" id="struct_result_set_1_1_result_set_comparator_1a5e7cff99e784e0e18f1a79b5c8eaced2"></span><em class="property">const</em> Permutation &amp;<code class="sig-name descname">permutation_</code><a class="headerlink" href="#_CPPv4N9ResultSet19ResultSetComparator12permutation_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

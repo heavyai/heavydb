@@ -1,0 +1,5 @@
+Union yy_Parser_stype
+=====================
+
+.. doxygenunion:: yy_Parser_stype
+   :project: OmniSciDB

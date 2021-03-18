@@ -1,0 +1,9 @@
+Class SQLLexer
+==============
+
+.. doxygenclass:: SQLLexer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

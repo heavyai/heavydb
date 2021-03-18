@@ -1,0 +1,9 @@
+Struct yy_buffer_state
+======================
+
+.. doxygenstruct:: yy_buffer_state
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct yy_trans_info
+====================
+
+.. doxygenstruct:: yy_trans_info
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

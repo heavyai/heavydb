@@ -41,7 +41,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Class SamlServer" href="class_saml_server.html" />
-    <link rel="prev" title="Class S3ParquetArchive" href="class_s3_parquet_archive.html" /> 
+    <link rel="prev" title="Class SQLLexer" href="class_s_q_l_lexer.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.6.0dev 3f85c14
+                5.7.0dev 13832c5
               </div>
             
           
@@ -447,6 +447,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_fixed_width_real.html">Class FixedWidthReal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_fixed_width_small_date.html">Class FixedWidthSmallDate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_fixed_width_unsigned.html">Class FixedWidthUnsigned</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_flex_lexer.html">Class FlexLexer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_for.html">Class For</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_foreign_storage_buffer.html">Class ForeignStorageBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_foreign_storage_buffer_mgr.html">Class ForeignStorageBufferMgr</a></li>
@@ -701,6 +702,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_row_to_column_loader.html">Class RowToColumnLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_s3_archive.html">Class S3Archive</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_s3_parquet_archive.html">Class S3ParquetArchive</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_s_q_l_lexer.html">Class SQLLexer</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class SQLTypeInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_saml_server.html">Class SamlServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_code_generator.html">Class ScalarCodeGenerator</a></li>
@@ -1441,6 +1443,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classthreadpool_1_1_futures_thread_pool.html">Class threadpool::FuturesThreadPool</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classthreadpool_1_1_futures_thread_pool_3_01_t_00_01std_1_1enable__if__t_3_01std_1_1is__object_3_01_t_01_4_1_1value_01_4_01_4.html">Class threadpool::FuturesThreadPool&lt; T, std::enable_if_t&lt; std::is_object&lt; T &gt;::value &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classthreadpool_1_1_futures_thread_pool_base.html">Class threadpool::FuturesThreadPoolBase</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classyy_flex_lexer.html">Class yyFlexLexer</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../structlist.html">Struct list</a><ul>
@@ -1801,6 +1804,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1tuple__size_3_01boost_1_1tuples_1_1cons_3_01_t_00_01_u_01_4_01_4.html">Struct std::tuple_size&lt; boost::tuples::cons&lt; T, U &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstuff.html">Struct stuff</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structtable__functions_1_1_table_function_output_row_sizer.html">Struct table_functions::TableFunctionOutputRowSizer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structyy__buffer__state.html">Struct yy_buffer_state</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structyy__trans__info.html">Struct yy_trans_info</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../unionlist.html">Union list</a><ul>
@@ -1808,6 +1813,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../union/union_datum.html">Union Datum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../union/union_reduction_interpreter_1_1_eval_value.html">Union ReductionInterpreter::EvalValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../union/uniondouble__sort_1_1_variant.html">Union double_sort::Variant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../union/unionyy___parser__stype.html">Union yy_Parser_stype</a></li>
 </ul>
 </li>
 </ul>
@@ -2226,12 +2232,12 @@
 
 <dl class="function">
 <dt>
-<span class="target" id="class_s_q_l_type_info_1a06effd9a9f9baf0d08544c9c2e8cdd52"></span><code class="sig-name descname">HOST DEVICE bool SQLTypeInfo::operator!=(const  SQLTypeInfo  &amp; rhs) const</code></dt>
+<span class="target" id="class_s_q_l_type_info_1a06effd9a9f9baf0d08544c9c2e8cdd52"></span><code class="sig-name descname">HOST DEVICE bool SQLTypeInfo::operator!=(const   SQLTypeInfo  &amp; rhs) const</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="class_s_q_l_type_info_1af1771495ad3368673567a6efd6ca701b"></span><code class="sig-name descname">HOST DEVICE bool SQLTypeInfo::operator==(const  SQLTypeInfo  &amp; rhs) const</code></dt>
+<span class="target" id="class_s_q_l_type_info_1af1771495ad3368673567a6efd6ca701b"></span><code class="sig-name descname">HOST DEVICE bool SQLTypeInfo::operator==(const   SQLTypeInfo  &amp; rhs) const</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2241,7 +2247,7 @@
 
 <dl class="function">
 <dt>
-<span class="target" id="class_s_q_l_type_info_1a85a47d5b266e7b58b0bfea57156d4d78"></span><code class="sig-name descname">HOST DEVICE void SQLTypeInfo::operator=(const  SQLTypeInfo  &amp; rhs)</code></dt>
+<span class="target" id="class_s_q_l_type_info_1a85a47d5b266e7b58b0bfea57156d4d78"></span><code class="sig-name descname">HOST DEVICE void SQLTypeInfo::operator=(const   SQLTypeInfo  &amp; rhs)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2251,22 +2257,22 @@
 
 <dl class="function">
 <dt>
-<span class="target" id="class_s_q_l_type_info_1a3463edf21d696a0d77de18ec0ea96ba8"></span><code class="sig-name descname">HOST DEVICE bool SQLTypeInfo::is_null(const  Datum  &amp; d) const</code></dt>
+<span class="target" id="class_s_q_l_type_info_1a3463edf21d696a0d77de18ec0ea96ba8"></span><code class="sig-name descname">HOST DEVICE bool SQLTypeInfo::is_null(const   Datum  &amp; d) const</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="class_s_q_l_type_info_1a5a58e10a9bc46e2fd3370bc0c2cd8c30"></span><code class="sig-name descname">HOST DEVICE bool SQLTypeInfo::is_null(const int8_t * val) const</code></dt>
+<span class="target" id="class_s_q_l_type_info_1a5a58e10a9bc46e2fd3370bc0c2cd8c30"></span><code class="sig-name descname">HOST DEVICE bool SQLTypeInfo::is_null(const  int8_t * val) const</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="class_s_q_l_type_info_1a0f031b1c6711f6762625b9117afb9a6d"></span><code class="sig-name descname">HOST DEVICE bool SQLTypeInfo::is_null_fixlen_array(const int8_t * val, int array_size) const</code></dt>
+<span class="target" id="class_s_q_l_type_info_1a0f031b1c6711f6762625b9117afb9a6d"></span><code class="sig-name descname">HOST DEVICE bool SQLTypeInfo::is_null_fixlen_array(const  int8_t * val, int array_size) const</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="class_s_q_l_type_info_1aa0b10e1e6fb70158d86bdfa67cadd924"></span><code class="sig-name descname">HOST DEVICE bool SQLTypeInfo::is_null_point_coord_array(const int8_t * val, int array_size) const</code></dt>
+<span class="target" id="class_s_q_l_type_info_1aa0b10e1e6fb70158d86bdfa67cadd924"></span><code class="sig-name descname">HOST DEVICE bool SQLTypeInfo::is_null_point_coord_array(const  int8_t * val, int array_size) const</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2379,7 +2385,7 @@
         <a href="class_saml_server.html" class="btn btn-neutral float-right" title="Class SamlServer" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="class_s3_parquet_archive.html" class="btn btn-neutral float-left" title="Class S3ParquetArchive" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="class_s_q_l_lexer.html" class="btn btn-neutral float-left" title="Class SQLLexer" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   
