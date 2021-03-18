@@ -115,6 +115,11 @@ std::string strip(std::string_view str);
 bool remove_unquoted_newlines_linefeeds_and_tabs_from_sql_string(
     std::string& str) noexcept;
 
+//! simple sanitize string (replace control characters with space)
+#ifndef __CUDACC__
+std::string simple_sanitize(const std::string& str);
+#endif  // __CUDACC__
+
 #ifndef __CUDACC__
 //! Quote a string while escaping any existing quotes in the string.
 std::string get_quoted_string(const std::string& filename,

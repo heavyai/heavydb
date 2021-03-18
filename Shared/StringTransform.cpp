@@ -232,3 +232,13 @@ std::string get_quoted_string(const std::string& filename, char quote, char esca
   return ss.str();
 }
 #endif  // __CUDACC__
+
+#ifndef __CUDACC__
+std::string simple_sanitize(const std::string& str) {
+  auto sanitized_str{str};
+  for (auto& c : sanitized_str) {
+    c = (c < 32) ? ' ' : c;
+  }
+  return sanitized_str;
+}
+#endif  // __CUDACC__
