@@ -99,6 +99,17 @@ class ColumnFetcher {
                                    DeviceAllocator* device_allocator,
                                    const size_t thread_idx) const;
 
+  const int8_t* linearizeColumnFragments(
+      const int table_id,
+      const int col_id,
+      const std::map<int, const TableFragments*>& all_tables_fragments,
+      std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
+      std::list<ChunkIter>& chunk_iter_holder,
+      const Data_Namespace::MemoryLevel memory_level,
+      const int device_id,
+      DeviceAllocator* device_allocator,
+      const size_t thread_idx) const;
+
  private:
   static const int8_t* transferColumnIfNeeded(
       const ColumnarResults* columnar_results,
@@ -107,6 +118,18 @@ class ColumnFetcher {
       const Data_Namespace::MemoryLevel memory_level,
       const int device_id,
       DeviceAllocator* device_allocator);
+
+  void addMergedChunk(const InputColDescriptor col_desc,
+                      const int device_id,
+                      std::shared_ptr<Chunk_NS::Chunk> chunk_ptr,
+                      int8_t* chunk_iter_ptr) const;
+
+  const int8_t* getChunkiter(const InputColDescriptor col_desc,
+                             const int device_id = 0) const;
+
+  ChunkIter prepareChunkIter(AbstractBuffer* merged,
+                             ChunkIter& chunk_iter,
+                             const size_t total_num_tuples) const;
 
   const int8_t* getResultSetColumn(const ResultSetPtr& buffer,
                                    const int table_id,
@@ -118,7 +141,7 @@ class ColumnFetcher {
 
   Executor* executor_;
   using CacheKey = std::vector<int>;
-  mutable std::mutex columnar_conversion_mutex_;
+  mutable std::mutex columnar_fetch_mutex_;
   mutable ColumnCacheMap columnarized_table_cache_;
   mutable std::unordered_map<
       InputColDescriptor,
@@ -126,6 +149,12 @@ class ColumnFetcher {
       columnarized_ref_table_cache_;
   mutable std::unordered_map<InputColDescriptor, std::unique_ptr<const ColumnarResults>>
       columnarized_scan_table_cache_;
+  using DeviceMergedChunkMap = std::unordered_map<int, std::shared_ptr<Chunk_NS::Chunk>>;
+  mutable std::unordered_map<InputColDescriptor, DeviceMergedChunkMap>
+      linearized_multi_frag_table_cache_;
+  using DeviceMergedChunkIterMap = std::unordered_map<int, int8_t*>;
+  mutable std::unordered_map<InputColDescriptor, DeviceMergedChunkIterMap>
+      linearized_multi_frag_chunk_iter_cache_;
 
   friend class QueryCompilationDescriptor;
   friend class TableFunctionExecutionContext;  // TODO(adb)

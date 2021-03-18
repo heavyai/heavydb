@@ -97,7 +97,7 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
     , thread_idx_(thread_idx) {
   auto timer = DEBUG_TIMER(__func__);
   const bool is_varlen =
-      target_type.is_array() ||
+      target_type.is_varlen_array() ||
       (target_type.is_string() && target_type.get_compression() == kENCODING_NONE) ||
       target_type.is_geometry();
   if (is_varlen) {

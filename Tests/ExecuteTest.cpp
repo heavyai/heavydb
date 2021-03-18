@@ -8355,6 +8355,117 @@ TEST(Select, Joins_Arrays) {
   }
 }
 
+TEST(Select, Joins_Fixed_Size_Array_Multi_Frag) {
+  run_ddl_statement("DROP TABLE IF EXISTS mf_f_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_d_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_i_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_bi_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_ti_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_si_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_t_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS sharded_mf_i_arr");
+
+  run_ddl_statement(
+      "CREATE TABLE mf_f_arr (c2 FLOAT[2], c3 FLOAT[3], c4 FLOAT[4]) WITH (fragment_size "
+      "= 2);");
+  run_ddl_statement(
+      "CREATE TABLE mf_d_arr (c2 DOUBLE[2], c3 DOUBLE[3], c4 DOUBLE[4]) WITH "
+      "(fragment_size = 2);");
+  run_ddl_statement(
+      "CREATE TABLE mf_i_arr (c2 INT[2], c3 INT[3], c4 INT[4]) WITH (fragment_size = "
+      "2);");
+  run_ddl_statement(
+      "CREATE TABLE mf_bi_arr (c2 BIGINT[2], c3 BIGINT[3], c4 BIGINT[4]) WITH "
+      "(fragment_size = 2);");
+  run_ddl_statement(
+      "CREATE TABLE mf_ti_arr (c2 TINYINT[2], c3 TINYINT[3], c4 TINYINT[4]) WITH "
+      "(fragment_size = 2);");
+  run_ddl_statement(
+      "CREATE TABLE mf_si_arr (c2 SMALLINT[2], c3 SMALLINT[3], c4 SMALLINT[4]) WITH "
+      "(fragment_size = 2);");
+  run_ddl_statement(
+      "CREATE TABLE mf_t_arr (t2 TEXT[2] ENCODING DICT(32)) with (fragment_size = 2);");
+  run_ddl_statement(
+      "CREATE TABLE sharded_mf_i_arr (x INT, c2 INT[2], c3 INT[3], c4 INT[4], SHARD KEY "
+      "(x)) WITH (shard_count = 2, fragment_size = 1);");
+
+  auto insert_values = [&](const std::string& table_name) {
+    for (int i = 1; i < 6; i++) {
+      std::ostringstream oss;
+      oss << "INSERT INTO " << table_name << " VALUES (";
+      if (table_name.compare("sharded_mf_i_arr") == 0) {
+        oss << i << ", ";
+      }
+      oss << "{" << i << ", " << i + 1 << "}, ";
+      oss << "{" << i << ", " << i + 1 << ", " << i + 2 << "}, ";
+      oss << "{" << i << ", " << i + 1 << ", " << i + 2 << ", " << i + 3 << "});";
+      run_multiple_agg(oss.str(), ExecutorDeviceType::CPU);
+    }
+  };
+
+  insert_values("mf_f_arr");
+  insert_values("mf_d_arr");
+  insert_values("mf_i_arr");
+  insert_values("mf_bi_arr");
+  insert_values("mf_ti_arr");
+  insert_values("mf_si_arr");
+  insert_values("sharded_mf_i_arr");
+
+  run_multiple_agg("INSERT INTO mf_t_arr VALUES ({'1', '22'});", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO mf_t_arr VALUES ({'2', '33'});", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO mf_t_arr VALUES ({'3', '44'});", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO mf_t_arr VALUES ({'4', '55'});", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO mf_t_arr VALUES ({'5', '66'});", ExecutorDeviceType::CPU);
+
+  auto test_query = [&](const std::string& table_name, ExecutorDeviceType dt) {
+    std::ostringstream oss;
+    oss << "SELECT COUNT(1) FROM " << table_name << " t1, " << table_name << " t2 WHERE ";
+    auto common_part = oss.str();
+    auto q1{common_part + "t1.c2[1] = t2.c2[1];"};
+    ASSERT_EQ(int64_t(5), v<int64_t>(run_simple_agg(q1, dt)));
+
+    auto q2{common_part + "t1.c3[1] = t2.c3[1];"};
+    ASSERT_EQ(int64_t(5), v<int64_t>(run_simple_agg(q2, dt)));
+
+    auto q3{common_part + "t1.c4[1] = t2.c4[1];"};
+    ASSERT_EQ(int64_t(5), v<int64_t>(run_simple_agg(q3, dt)));
+
+    auto q4{common_part + "t1.c2[2] = t2.c2[2] and t1.c2[1] = t1.c2[1];"};
+    ASSERT_EQ(int64_t(5), v<int64_t>(run_simple_agg(q4, dt)));
+
+    auto q5{common_part + "t1.c3[2] = t2.c3[2] and t1.c3[1] = t1.c3[1];"};
+    ASSERT_EQ(int64_t(5), v<int64_t>(run_simple_agg(q5, dt)));
+
+    auto q6{common_part + "t1.c4[2] = t2.c4[2] and t1.c4[1] = t1.c4[1];"};
+    ASSERT_EQ(int64_t(5), v<int64_t>(run_simple_agg(q6, dt)));
+  };
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    test_query("mf_f_arr", dt);
+    test_query("mf_d_arr", dt);
+    test_query("mf_i_arr", dt);
+    test_query("mf_bi_arr", dt);
+    test_query("mf_ti_arr", dt);
+    test_query("mf_si_arr", dt);
+    test_query("sharded_mf_i_arr", dt);
+    ASSERT_EQ(
+        int64_t(5),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(1) FROM mf_t_arr r1, mf_t_arr r2 WHERE r1.t2[1] = r2.t2[1]",
+            dt)));
+  }
+
+  run_ddl_statement("DROP TABLE IF EXISTS mf_f_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_d_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_i_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_bi_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_ti_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_si_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS sharded_mf_i_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_t_arr");
+}
+
 TEST(Select, Joins_ShardedEmptyTable) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

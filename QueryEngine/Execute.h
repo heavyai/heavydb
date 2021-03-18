@@ -521,6 +521,11 @@ class Executor {
                              const RelAlgExecutionUnit& ra_exe_unit,
                              const FragmentsList& selected_fragments) const;
 
+  bool needLinearizeAllFragments(const ColumnDescriptor* cd,
+                                 const InputColDescriptor& inner_col_desc,
+                                 const RelAlgExecutionUnit& ra_exe_unit,
+                                 const FragmentsList& selected_fragments) const;
+
   using PerFragmentCallBack =
       std::function<void(ResultSetPtr, const Fragmenter_Namespace::FragmentInfo&)>;
 

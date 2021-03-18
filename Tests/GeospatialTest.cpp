@@ -287,6 +287,31 @@ void import_geospatial_null_test(const bool use_temporary_tables) {
   }
 }
 
+void import_geospatial_multi_frag_test(const bool use_temporary_tables) {
+  const std::string geospatial_multi_frag_test(
+      "DROP TABLE IF EXISTS geospatial_multi_frag_test;");
+  run_ddl_statement(geospatial_multi_frag_test);
+  const auto create_ddl = build_create_table_statement(
+      "pt geometry(point, 4326), pt_none geometry(point, 4326) encoding none, pt_comp "
+      "geometry(point, 4326) encoding compressed(32)",
+      "geospatial_multi_frag_test",
+      {"", 0},
+      {},
+      2,
+      /*use_temporary_tables=*/use_temporary_tables,
+      /*deleted_support=*/true,
+      /*is_replicated=*/false);
+  run_ddl_statement(create_ddl);
+  TestHelpers::ValuesGenerator gen("geospatial_multi_frag_test");
+  for (size_t i = 0; i < 11; ++i) {
+    const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
+                            ")'"};
+    run_multiple_agg(gen(point, point, point), ExecutorDeviceType::CPU);
+  }
+  run_multiple_agg("insert into geospatial_multi_frag_test values ('', '', '')",
+                   ExecutorDeviceType::CPU);
+}
+
 }  // namespace
 
 class GeoSpatialTestTablesFixture : public ::testing::TestWithParam<bool> {
@@ -2079,6 +2104,116 @@ TEST_P(GeoSpatialJoinTablesFixture, GeoJoins) {
 
 INSTANTIATE_TEST_SUITE_P(GeospatialJoinTests,
                          GeoSpatialJoinTablesFixture,
+                         ::testing::Values(true, false));
+
+class GeoSpatialMultiFragTestTablesFixture : public ::testing::TestWithParam<bool> {
+ protected:
+  void SetUp() override {
+    import_geospatial_multi_frag_test(/*with_temporary_tables=*/GetParam());
+  }
+
+  void TearDown() override {
+    if (!GetParam() && !g_keep_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS geospatial_multi_frag_test;");
+    }
+  }
+};
+
+TEST_P(GeoSpatialMultiFragTestTablesFixture, LoopJoin) {
+  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
+  g_enable_overlaps_hashjoin = false;
+  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state] {
+    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
+  };
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    ASSERT_EQ(
+        static_cast<int64_t>(109),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM geospatial_multi_frag_test t1, geospatial_multi_frag_test t2 WHERE ST_DISTANCE(t1.pt, t2.pt) < 10;)",
+            dt)));
+
+    ASSERT_EQ(
+        static_cast<int64_t>(109),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM geospatial_multi_frag_test t1, geospatial_multi_frag_test t2 WHERE ST_DISTANCE(t1.pt_none, t2.pt_none) < 10;)",
+            dt)));
+
+    ASSERT_EQ(
+        static_cast<int64_t>(109),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM geospatial_multi_frag_test t1, geospatial_multi_frag_test t2 WHERE ST_DISTANCE(t1.pt_comp, t2.pt_comp) < 10;)",
+            dt)));
+
+    ASSERT_EQ(
+        static_cast<int64_t>(65),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM geospatial_multi_frag_test t1, geospatial_multi_frag_test t2 WHERE ST_DISTANCE(t1.pt, t2.pt) < 5;)",
+            dt)));
+
+    ASSERT_EQ(
+        static_cast<int64_t>(65),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM geospatial_multi_frag_test t1, geospatial_multi_frag_test t2 WHERE ST_DISTANCE(t1.pt_none, t2.pt_none) < 5;)",
+            dt)));
+
+    ASSERT_EQ(
+        static_cast<int64_t>(65),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM geospatial_multi_frag_test t1, geospatial_multi_frag_test t2 WHERE ST_DISTANCE(t1.pt_comp, t2.pt_comp) < 5;)",
+            dt)));
+
+    ASSERT_EQ(
+        static_cast<int64_t>(11),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM geospatial_multi_frag_test t1, geospatial_multi_frag_test t2 WHERE ST_DISTANCE(t1.pt, t2.pt) < 1;)",
+            dt)));
+
+    ASSERT_EQ(
+        static_cast<int64_t>(11),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM geospatial_multi_frag_test t1, geospatial_multi_frag_test t2 WHERE ST_DISTANCE(t1.pt_none, t2.pt_none) < 1;)",
+            dt)));
+
+    ASSERT_EQ(
+        static_cast<int64_t>(11),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM geospatial_multi_frag_test t1, geospatial_multi_frag_test t2 WHERE ST_DISTANCE(t1.pt_comp, t2.pt_comp) < 1;)",
+            dt)));
+
+    // valid rows: { pt(1 1), pt(2 2), ..., pt(10 10) }
+    // invalid rows: { pt(0 0), pt(null null) }
+    // expected rows in the resultset:
+    // row 1 ~ 10:  zero          | 10 valid rows
+    // row 11 ~ 20: 10 valid rows | zero
+    // row 21:      zero          | null
+    // row 22:      null          | zero
+    // row 23:      null          | null
+    // total 23 rows
+    ASSERT_EQ(
+        static_cast<int64_t>(23),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM geospatial_multi_frag_test t1, geospatial_multi_frag_test t2 WHERE ST_DISTANCE(t1.pt, t2.pt) is null;)",
+            dt)));
+
+    ASSERT_EQ(
+        static_cast<int64_t>(23),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM geospatial_multi_frag_test t1, geospatial_multi_frag_test t2 WHERE ST_DISTANCE(t1.pt_none, t2.pt_none) is null;)",
+            dt)));
+
+    ASSERT_EQ(
+        static_cast<int64_t>(23),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM geospatial_multi_frag_test t1, geospatial_multi_frag_test t2 WHERE ST_DISTANCE(t1.pt_comp, t2.pt_comp) is null;)",
+            dt)));
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(GeospatialMultiFragExecutionTests,
+                         GeoSpatialMultiFragTestTablesFixture,
                          ::testing::Values(true, false));
 
 int main(int argc, char** argv) {

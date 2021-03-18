@@ -2382,6 +2382,19 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
   return fragments.size() > 1;
 }
 
+bool Executor::needLinearizeAllFragments(const ColumnDescriptor* cd,
+                                         const InputColDescriptor& inner_col_desc,
+                                         const RelAlgExecutionUnit& ra_exe_unit,
+                                         const FragmentsList& selected_fragments) const {
+  const int nest_level = inner_col_desc.getScanDesc().getNestLevel();
+  const int table_id = inner_col_desc.getScanDesc().getTableId();
+  CHECK_LT(static_cast<size_t>(nest_level), selected_fragments.size());
+  CHECK_EQ(table_id, selected_fragments[nest_level].table_id);
+  const auto& fragments = selected_fragments[nest_level].fragment_ids;
+  auto need_linearize = cd->columnType.is_fixlen_array();
+  return table_id > 0 && need_linearize && fragments.size() > 1;
+}
+
 std::ostream& operator<<(std::ostream& os, FetchResult const& fetch_result) {
   return os << "col_buffers" << shared::printContainer(fetch_result.col_buffers)
             << " num_rows" << shared::printContainer(fetch_result.num_rows)
@@ -2473,14 +2486,31 @@ FetchResult Executor::fetchChunks(
                                               thread_idx);
       } else {
         if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
-          frag_col_buffers[it->second] =
-              column_fetcher.getAllTableColumnFragments(table_id,
+          // determine if we need special treatment to linearlize multi-frag table
+          // i.e., a column that is classified as varlen type, i.e., array
+          // for now, we only support fixed-length array that contains
+          // geo point coordianates but we can support more types in this way
+          if (needLinearizeAllFragments(cd, *col_id, ra_exe_unit, selected_fragments)) {
+            frag_col_buffers[it->second] =
+                column_fetcher.linearizeColumnFragments(table_id,
                                                         col_id->getColId(),
                                                         all_tables_fragments,
+                                                        chunks,
+                                                        chunk_iterators,
                                                         memory_level_for_column,
                                                         device_id,
                                                         device_allocator,
                                                         thread_idx);
+          } else {
+            frag_col_buffers[it->second] =
+                column_fetcher.getAllTableColumnFragments(table_id,
+                                                          col_id->getColId(),
+                                                          all_tables_fragments,
+                                                          memory_level_for_column,
+                                                          device_id,
+                                                          device_allocator,
+                                                          thread_idx);
+          }
         } else {
           frag_col_buffers[it->second] =
               column_fetcher.getOneTableColumnFragment(table_id,
