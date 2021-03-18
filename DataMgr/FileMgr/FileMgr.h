@@ -44,7 +44,7 @@ using namespace Data_Namespace;
 
 namespace File_Namespace {
 
-#define DEFAULT_PAGE_SIZE 2097152
+#define DEFAULT_PAGE_SIZE 2097152ULL
 
 class GlobalFileMgr;  // forward declaration
 /**
