@@ -133,7 +133,7 @@ inline ColumnType get_join_column_type_kind(const SQLTypeInfo& ti) {
 }
 
 struct JoinBucketInfo {
-  std::vector<double> bucket_sizes_for_dimension;
+  std::vector<double> inverse_bucket_sizes_for_dimension;
   bool is_double;  // TODO(adb): assume float otherwise (?)
 };
 
@@ -388,12 +388,12 @@ void approximate_distinct_tuples_on_device_overlaps(uint8_t* hll_buffer,
 void compute_bucket_sizes_on_cpu(std::vector<double>& bucket_sizes_for_dimension,
                                  const JoinColumn& join_column,
                                  const JoinColumnTypeInfo& type_info,
-                                 const double bucket_size_threshold,
+                                 const std::vector<double>& bucket_size_thresholds,
                                  const int thread_count);
 
 void compute_bucket_sizes_on_device(double* bucket_sizes_buffer,
                                     const JoinColumn* join_column,
                                     const JoinColumnTypeInfo* type_info,
-                                    const double bucket_sz_threshold);
+                                    const double* bucket_size_thresholds);
 
 #endif  // QUERYENGINE_HASHJOINRUNTIME_H

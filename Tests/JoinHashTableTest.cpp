@@ -468,15 +468,14 @@ TEST(Build, GeoOneToMany1) {
     // | geo one-to-many | keys * (0,2) * * * (1,1) * * * (0,1) (2,1) (2,0) (2,2) (1,2)
     // (0,0) * * (1,0) | offsets * 0 * * * 1 * * * 5 7 9 10 11 13 * * 14 | counts * 1 * *
     // * 4 * * * 2 2 1 1 2 1 * * 2 | payloads 2 0 2 1 3 0 2 1 3 1 3 2 3 0 0 1 |
-    const DecodedJoinHashBufferSet s1 = {{{0}, {0}},
-                                         {{0}, {0, 2}},
-                                         {{0}, {2}},
-                                         {{1}, {0, 1}},
-                                         {{1}, {0, 1, 2, 3}},
-                                         {{1}, {2, 3}},
-                                         {{2}, {1}},
-                                         {{2}, {1, 3}},
-                                         {{2}, {3}}};
+    // TODO: Fixup above comment to match below
+    const DecodedJoinHashBufferSet s1 = {
+        {{0}, {0}},    {{0}, {0, 2}}, {{0}, {2}},    {{1}, {0}},          {{1}, {0, 2}},
+        {{1}, {2}},    {{2}, {0}},    {{2}, {0, 2}}, {{2}, {2}},          {{3}, {0}},
+        {{3}, {0, 2}}, {{3}, {2}},    {{4}, {0, 1}}, {{4}, {0, 1, 2, 3}}, {{4}, {2, 3}},
+        {{5}, {1}},    {{5}, {1, 3}}, {{5}, {3}},    {{6}, {1}},          {{6}, {1, 3}},
+        {{6}, {3}},    {{7}, {1}},    {{7}, {1, 3}}, {{7}, {3}},          {{8}, {1}},
+        {{8}, {1, 3}}, {{8}, {3}}};
 
     sql(R"(
       drop table if exists my_points;
@@ -489,10 +488,10 @@ TEST(Build, GeoOneToMany1) {
       insert into my_points values ('point(5 25)');
       insert into my_points values ('point(10 5)');
 
-      insert into my_grid values ('multipolygon(((0 0,10 0,10 10,0 10,0 0)))');
-      insert into my_grid values ('multipolygon(((10 0,20 0,20 10,10 10,10 0)))');
-      insert into my_grid values ('multipolygon(((0 10,10 10,10 20,0 20,0 10)))');
-      insert into my_grid values ('multipolygon(((10 10,20 10,20 20,10 20,10 10)))');
+      insert into my_grid values ('multipolygon(((0 0,1 0,1 1,0 1,0 0)))');
+      insert into my_grid values ('multipolygon(((1 0,2 0,2 1,1 1,1 0)))');
+      insert into my_grid values ('multipolygon(((0 1,1 1,1 2,0 2,0 1)))');
+      insert into my_grid values ('multipolygon(((1 1,2 1,2 2,1 2,1 1)))');
     )");
 
     auto a1 = getSyntheticColumnVar("my_points", "locations", 0, executor.get());

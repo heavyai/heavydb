@@ -1205,7 +1205,7 @@ template <size_t N>
 GLOBAL void SUFFIX(compute_bucket_sizes_impl)(double* bucket_sizes_for_thread,
                                               const JoinColumn* join_column,
                                               const JoinColumnTypeInfo* type_info,
-                                              const double bucket_sz_threshold
+                                              const double* bucket_size_thresholds
 #ifndef __CUDACC__
                                               ,
                                               const int32_t cpu_thread_idx,
@@ -1230,11 +1230,11 @@ GLOBAL void SUFFIX(compute_bucket_sizes_impl)(double* bucket_sizes_for_thread,
     for (size_t j = 0; j < N; j++) {
       const auto diff = bounds[j + N] - bounds[j];
 #ifdef __CUDACC__
-      if (diff > bucket_sz_threshold) {
+      if (diff > bucket_size_thresholds[j]) {
         atomicMin(&bucket_sizes_for_thread[j], diff);
       }
 #else
-      if (diff > bucket_sz_threshold && diff < bucket_sizes_for_thread[j]) {
+      if (diff < bucket_size_thresholds[j] && diff > bucket_sizes_for_thread[j]) {
         bucket_sizes_for_thread[j] = diff;
       }
 #endif
@@ -1768,27 +1768,27 @@ void fill_one_to_many_baseline_hash_table(
   std::vector<std::future<void>> counter_threads;
   for (size_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
     if (join_buckets_per_key.size() > 0) {
-      counter_threads.push_back(
-          std::async(std::launch::async,
-                     [count_buff,
-                      composite_key_dict,
-                      &hash_entry_count,
-                      &join_buckets_per_key,
-                      &join_column_per_key,
-                      cpu_thread_idx,
-                      cpu_thread_count] {
-                       const auto key_handler = OverlapsKeyHandler(
-                           join_buckets_per_key[0].bucket_sizes_for_dimension.size(),
-                           &join_column_per_key[0],
-                           join_buckets_per_key[0].bucket_sizes_for_dimension.data());
-                       count_matches_baseline(count_buff,
-                                              composite_key_dict,
-                                              hash_entry_count,
-                                              &key_handler,
-                                              join_column_per_key[0].num_elems,
-                                              cpu_thread_idx,
-                                              cpu_thread_count);
-                     }));
+      counter_threads.push_back(std::async(
+          std::launch::async,
+          [count_buff,
+           composite_key_dict,
+           &hash_entry_count,
+           &join_buckets_per_key,
+           &join_column_per_key,
+           cpu_thread_idx,
+           cpu_thread_count] {
+            const auto key_handler = OverlapsKeyHandler(
+                join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.size(),
+                &join_column_per_key[0],
+                join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.data());
+            count_matches_baseline(count_buff,
+                                   composite_key_dict,
+                                   hash_entry_count,
+                                   &key_handler,
+                                   join_column_per_key[0].num_elems,
+                                   cpu_thread_idx,
+                                   cpu_thread_count);
+          }));
     } else {
       counter_threads.push_back(std::async(
           std::launch::async,
@@ -1849,30 +1849,30 @@ void fill_one_to_many_baseline_hash_table(
   std::vector<std::future<void>> rowid_threads;
   for (size_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
     if (join_buckets_per_key.size() > 0) {
-      rowid_threads.push_back(
-          std::async(std::launch::async,
-                     [buff,
-                      composite_key_dict,
-                      hash_entry_count,
-                      invalid_slot_val,
-                      &join_column_per_key,
-                      &join_buckets_per_key,
-                      cpu_thread_idx,
-                      cpu_thread_count] {
-                       const auto key_handler = OverlapsKeyHandler(
-                           join_buckets_per_key[0].bucket_sizes_for_dimension.size(),
-                           &join_column_per_key[0],
-                           join_buckets_per_key[0].bucket_sizes_for_dimension.data());
-                       SUFFIX(fill_row_ids_baseline)
-                       (buff,
-                        composite_key_dict,
-                        hash_entry_count,
-                        invalid_slot_val,
-                        &key_handler,
-                        join_column_per_key[0].num_elems,
-                        cpu_thread_idx,
-                        cpu_thread_count);
-                     }));
+      rowid_threads.push_back(std::async(
+          std::launch::async,
+          [buff,
+           composite_key_dict,
+           hash_entry_count,
+           invalid_slot_val,
+           &join_column_per_key,
+           &join_buckets_per_key,
+           cpu_thread_idx,
+           cpu_thread_count] {
+            const auto key_handler = OverlapsKeyHandler(
+                join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.size(),
+                &join_column_per_key[0],
+                join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.data());
+            SUFFIX(fill_row_ids_baseline)
+            (buff,
+             composite_key_dict,
+             hash_entry_count,
+             invalid_slot_val,
+             &key_handler,
+             join_column_per_key[0].num_elems,
+             cpu_thread_idx,
+             cpu_thread_count);
+          }));
     } else {
       rowid_threads.push_back(std::async(std::launch::async,
                                          [buff,
@@ -2031,9 +2031,9 @@ void approximate_distinct_tuples_overlaps(
           auto hll_buffer = hll_buffer_all_cpus + thread_idx * padded_size_bytes;
 
           const auto key_handler = OverlapsKeyHandler(
-              join_buckets_per_key[0].bucket_sizes_for_dimension.size(),
+              join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.size(),
               &join_column_per_key[0],
-              join_buckets_per_key[0].bucket_sizes_for_dimension.data());
+              join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.data());
           approximate_distinct_tuples_impl(hll_buffer,
                                            row_counts.data(),
                                            b,
@@ -2054,12 +2054,11 @@ void approximate_distinct_tuples_overlaps(
 void compute_bucket_sizes_on_cpu(std::vector<double>& bucket_sizes_for_dimension,
                                  const JoinColumn& join_column,
                                  const JoinColumnTypeInfo& type_info,
-                                 const double bucket_size_threshold,
+                                 const std::vector<double>& bucket_size_thresholds,
                                  const int thread_count) {
   std::vector<std::vector<double>> bucket_sizes_for_threads;
   for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-    bucket_sizes_for_threads.emplace_back(bucket_sizes_for_dimension.size(),
-                                          std::numeric_limits<double>::max());
+    bucket_sizes_for_threads.emplace_back(bucket_sizes_for_dimension.size(), 0.0);
   }
   std::vector<std::future<void>> threads;
   for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
@@ -2068,7 +2067,7 @@ void compute_bucket_sizes_on_cpu(std::vector<double>& bucket_sizes_for_dimension
                                  bucket_sizes_for_threads[thread_idx].data(),
                                  &join_column,
                                  &type_info,
-                                 bucket_size_threshold,
+                                 bucket_size_thresholds.data(),
                                  thread_idx,
                                  thread_count));
   }
@@ -2078,7 +2077,7 @@ void compute_bucket_sizes_on_cpu(std::vector<double>& bucket_sizes_for_dimension
 
   for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
     for (size_t i = 0; i < bucket_sizes_for_dimension.size(); i++) {
-      if (bucket_sizes_for_threads[thread_idx][i] < bucket_sizes_for_dimension[i]) {
+      if (bucket_sizes_for_threads[thread_idx][i] > bucket_sizes_for_dimension[i]) {
         bucket_sizes_for_dimension[i] = bucket_sizes_for_threads[thread_idx][i];
       }
     }

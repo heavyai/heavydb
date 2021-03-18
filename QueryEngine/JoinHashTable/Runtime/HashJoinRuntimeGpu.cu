@@ -562,7 +562,7 @@ void approximate_distinct_tuples_on_device(uint8_t* hll_buffer,
 void compute_bucket_sizes_on_device(double* bucket_sizes_buffer,
                                     const JoinColumn* join_column,
                                     const JoinColumnTypeInfo* type_info,
-                                    const double bucket_sz_threshold) {
+                                    const double* bucket_sz_threshold) {
   cuda_kernel_launch_wrapper(compute_bucket_sizes_impl_gpu<2>,
                              bucket_sizes_buffer,
                              join_column,
