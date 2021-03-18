@@ -480,9 +480,8 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
                  const size_t shard_count,
                  const size_t entry_count,
                  const size_t emitted_keys_count) final {
-    EXPECT_EQ(step_, expected_values_per_step_.size());
-    EXPECT_LT(step_ - 1, expected_values_per_step_.size());
-    auto& expected_values = expected_values_per_step_[step_ - 1];
+    EXPECT_LE(step_, expected_values_per_step_.size());
+    auto& expected_values = expected_values_per_step_.back();
     EXPECT_EQ(entry_count, expected_values.entry_count);
     EXPECT_EQ(emitted_keys_count, expected_values.emitted_keys_count);
     return;
@@ -579,7 +578,7 @@ class BucketSizeTest : public ::testing::Test {
 };
 
 TEST_F(BucketSizeTest, OverlapsTunerEarlyOut) {
-  // 3 steps, early out due to increasing keys per bin
+  // 2 steps, early out due to increasing keys per bin
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
   auto executor = QR::get()->getExecutor();
@@ -589,8 +588,12 @@ TEST_F(BucketSizeTest, OverlapsTunerEarlyOut) {
 
   ColumnCacheMap column_cache;
   std::vector<OverlapsJoinHashTableMock::ExpectedValues> expected_values;
-  expected_values.emplace_back(OverlapsJoinHashTableMock::ExpectedValues{1340, 688});
-  expected_values.emplace_back(OverlapsJoinHashTableMock::ExpectedValues{1340, 688});
+  expected_values.emplace_back(
+      OverlapsJoinHashTableMock::ExpectedValues{8, 7});  // step 1
+  expected_values.emplace_back(
+      OverlapsJoinHashTableMock::ExpectedValues{1340, 688});  // step 2
+  expected_values.emplace_back(OverlapsJoinHashTableMock::ExpectedValues{
+      1340, 688});  // increasing keys per bin, stop at step 2
 
   auto hash_table =
       OverlapsJoinHashTableMock::getInstance(condition,
@@ -614,12 +617,18 @@ TEST_F(BucketSizeTest, OverlapsTooBig) {
 
   ColumnCacheMap column_cache;
   std::vector<OverlapsJoinHashTableMock::ExpectedValues> expected_values;
-  expected_values.emplace_back(OverlapsJoinHashTableMock::ExpectedValues{1340, 688});
-  expected_values.emplace_back(OverlapsJoinHashTableMock::ExpectedValues{1340, 688});
+  // runs 8 back tuner steps after initial size too big failure
+  expected_values.emplace_back(
+      OverlapsJoinHashTableMock::ExpectedValues{8, 7});  // step 1
+  expected_values.emplace_back(
+      OverlapsJoinHashTableMock::ExpectedValues{2, 4});  // step 2 (reversal)
+  expected_values.emplace_back(OverlapsJoinHashTableMock::ExpectedValues{
+      2, 4});  // step 3 (hash table not getting smaller, bails)
 
   QueryHint hint;
   hint.overlaps_max_size = 2;
-  auto hash_table =
+  hint.registerHint("overlaps_max_size");
+  EXPECT_ANY_THROW(
       OverlapsJoinHashTableMock::getInstance(condition,
                                              query_infos,
                                              Data_Namespace::MemoryLevel::CPU_LEVEL,
@@ -627,8 +636,7 @@ TEST_F(BucketSizeTest, OverlapsTooBig) {
                                              executor.get(),
                                              /*device_count=*/1,
                                              hint,
-                                             expected_values);
-  CHECK(hash_table);
+                                             expected_values));
 }
 
 int main(int argc, char* argv[]) {

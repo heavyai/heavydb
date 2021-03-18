@@ -25,15 +25,15 @@ struct OverlapsHashTableCacheKey {
   const size_t num_elements;
   const std::vector<ChunkKey> chunk_keys;
   const SQLOps optype;
-  const std::vector<double> bucket_sizes;
+  const std::vector<double> inverse_bucket_sizes;
 
   bool operator==(const struct OverlapsHashTableCacheKey& that) const {
-    if (bucket_sizes.size() != that.bucket_sizes.size()) {
+    if (inverse_bucket_sizes.size() != that.inverse_bucket_sizes.size()) {
       return false;
     }
-    for (size_t i = 0; i < bucket_sizes.size(); i++) {
+    for (size_t i = 0; i < inverse_bucket_sizes.size(); i++) {
       // bucket sizes within 10^-4 are considered close enough
-      if (std::abs(bucket_sizes[i] - that.bucket_sizes[i]) > 1e-4) {
+      if (std::abs(inverse_bucket_sizes[i] - that.inverse_bucket_sizes[i]) > 1e-4) {
         return false;
       }
     }
@@ -44,19 +44,19 @@ struct OverlapsHashTableCacheKey {
   OverlapsHashTableCacheKey(const size_t num_elements,
                             const std::vector<ChunkKey>& chunk_keys,
                             const SQLOps& optype,
-                            const std::vector<double> bucket_sizes)
+                            const std::vector<double> inverse_bucket_sizes)
       : num_elements(num_elements)
       , chunk_keys(chunk_keys)
       , optype(optype)
-      , bucket_sizes(bucket_sizes) {}
+      , inverse_bucket_sizes(inverse_bucket_sizes) {}
 
   // "copy" constructor
   OverlapsHashTableCacheKey(const HashTableCacheKey& that,
-                            const std::vector<double>& bucket_sizes)
+                            const std::vector<double>& inverse_bucket_sizes)
       : num_elements(that.num_elements)
       , chunk_keys(that.chunk_keys)
       , optype(that.optype)
-      , bucket_sizes(bucket_sizes) {}
+      , inverse_bucket_sizes(inverse_bucket_sizes) {}
 };
 
 template <class K, class V>
@@ -155,18 +155,18 @@ class OverlapsJoinHashTable : public HashJoin {
 
   // returns entry_count, emitted_keys_count
   virtual std::pair<size_t, size_t> approximateTupleCount(
-      const std::vector<double>& bucket_sizes_for_dimension,
+      const std::vector<double>& inverse_bucket_sizes_for_dimension,
       std::vector<ColumnsForDevice>&);
 
   // returns entry_count, emitted_keys_count
   virtual std::pair<size_t, size_t> computeHashTableCounts(
       const size_t shard_count,
-      const std::vector<double>& bucket_sizes_for_dimension,
+      const std::vector<double>& inverse_bucket_sizes_for_dimension,
       std::vector<ColumnsForDevice>& columns_per_device);
 
-  void setBucketSizeInfo(const std::vector<double>& bucket_sizes,
-                         std::vector<ColumnsForDevice>& columns_per_device,
-                         const size_t device_count);
+  void setInverseBucketSizeInfo(const std::vector<double>& inverse_bucket_sizes,
+                                std::vector<ColumnsForDevice>& columns_per_device,
+                                const size_t device_count);
 
   size_t getKeyComponentWidth() const;
 
@@ -324,7 +324,7 @@ class OverlapsJoinHashTable : public HashJoin {
   std::vector<InnerOuter> inner_outer_pairs_;
   const int device_count_;
 
-  std::vector<double> bucket_sizes_for_dimension_;
+  std::vector<double> inverse_bucket_sizes_for_dimension_;
 
   std::optional<HashType>
       layout_override_;  // allows us to use a 1:many hash table for many:many

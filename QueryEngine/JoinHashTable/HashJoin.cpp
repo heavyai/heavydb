@@ -29,7 +29,7 @@
 extern bool g_enable_overlaps_hashjoin;
 
 void ColumnsForDevice::setBucketInfo(
-    const std::vector<double>& bucket_sizes_for_dimension,
+    const std::vector<double>& inverse_bucket_sizes_for_dimension,
     const std::vector<InnerOuter> inner_outer_pairs) {
   join_buckets.clear();
 
@@ -42,8 +42,8 @@ void ColumnsForDevice::setBucketInfo(
     const auto elem_ti = ti.get_elem_type();
     CHECK(elem_ti.is_fp());
 
-    join_buckets.emplace_back(
-        JoinBucketInfo{bucket_sizes_for_dimension, elem_ti.get_type() == kDOUBLE});
+    join_buckets.emplace_back(JoinBucketInfo{inverse_bucket_sizes_for_dimension,
+                                             elem_ti.get_type() == kDOUBLE});
   }
 }
 

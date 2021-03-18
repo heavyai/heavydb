@@ -65,6 +65,14 @@ class FailedToJoinOnVirtualColumn : public HashJoinFail {
   FailedToJoinOnVirtualColumn() : HashJoinFail("Cannot join on rowid") {}
 };
 
+class OverlapsHashTableTooBig : public HashJoinFail {
+ public:
+  OverlapsHashTableTooBig(const size_t overlaps_hash_table_max_bytes)
+      : HashJoinFail(
+            "Could not create overlaps hash table with less than max allowed size of " +
+            std::to_string(overlaps_hash_table_max_bytes) + " bytes") {}
+};
+
 using InnerOuter = std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>;
 
 struct ColumnsForDevice {
