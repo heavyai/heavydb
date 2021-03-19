@@ -381,13 +381,19 @@ void TableOptimizer::recomputeColumnMetadata(
 
 void TableOptimizer::vacuumDeletedRows() const {
   const auto table_id = td_->tableId;
-  cat_.vacuumDeletedRows(table_id);
-  cat_.checkpoint(table_id);
+  const auto db_id = cat_.getDatabaseId();
+  const auto table_epochs = cat_.getTableEpochs(db_id, table_id);
+  try {
+    cat_.vacuumDeletedRows(table_id);
+    cat_.checkpoint(table_id);
+  } catch (...) {
+    cat_.setTableEpochsLogExceptions(db_id, table_epochs);
+    throw;
+  }
 
   auto shards = cat_.getPhysicalTablesDescriptors(td_);
   for (auto shard : shards) {
-    const_cast<Catalog_Namespace::Catalog&>(cat_).removeFragmenterForTable(
-        shard->tableId);
+    cat_.removeFragmenterForTable(shard->tableId);
     cat_.getDataMgr().getGlobalFileMgr()->compactDataFiles(cat_.getDatabaseId(),
                                                            shard->tableId);
   }

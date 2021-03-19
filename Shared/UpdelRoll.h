@@ -65,9 +65,17 @@ struct UpdelRoll {
   Data_Namespace::MemoryLevel memoryLevel{Data_Namespace::MemoryLevel::CPU_LEVEL};
 
   bool is_varlen_update = false;
+  const TableDescriptor* table_descriptor{nullptr};
 
   void cancelUpdate();
   void commitUpdate();
+
+  // Writes chunks at the CPU memory level to storage without checkpointing at the storage
+  // level.
+  void stageUpdate();
+
+ private:
+  void updateFragmenterAndCleanupChunks();
 };
 
 #endif

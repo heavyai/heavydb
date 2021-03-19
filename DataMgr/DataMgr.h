@@ -196,6 +196,7 @@ class DataMgr {
   const std::map<ChunkKey, File_Namespace::FileBuffer*>& getChunkMap();
   void checkpoint(const int db_id,
                   const int tb_id);  // checkpoint for individual table of DB
+  void checkpoint(const int db_id, const int table_id, const MemoryLevel memory_level);
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                        const ChunkKey& keyPrefix);
   inline bool gpusPresent() { return hasGpus_; }

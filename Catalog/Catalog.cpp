@@ -2826,14 +2826,14 @@ void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) 
                 << physical_tb_id << " back to new epoch " << new_epoch;
       // Should have table lock from caller so safe to do this after, avoids
       // having to repopulate data on error
-      removeChunks(physical_tb_id);
+      removeChunksUnlocked(physical_tb_id);
       dataMgr_->getGlobalFileMgr()->setFileMgrParams(
           db_id, physical_tb_id, file_mgr_params);
     }
   } else {  // not shared
     // Should have table lock from caller so safe to do this after, avoids
     // having to repopulate data on error
-    removeChunks(table_id);
+    removeChunksUnlocked(table_id);
     dataMgr_->getGlobalFileMgr()->setFileMgrParams(db_id, table_id, file_mgr_params);
   }
 }
@@ -2963,12 +2963,12 @@ void Catalog::setTableFileMgrParams(
       const int32_t physical_tb_id = physical_tables[i];
       const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
       CHECK(phys_td);
-      removeChunks(physical_tb_id);
+      removeChunksUnlocked(physical_tb_id);
       dataMgr_->getGlobalFileMgr()->setFileMgrParams(
           db_id, physical_tb_id, file_mgr_params);
     }
   } else {  // not shared
-    removeChunks(table_id);
+    removeChunksUnlocked(table_id);
     dataMgr_->getGlobalFileMgr()->setFileMgrParams(db_id, table_id, file_mgr_params);
   }
 }
@@ -3002,7 +3002,7 @@ std::vector<TableEpochInfo> Catalog::getTableEpochs(const int32_t db_id,
 }
 
 void Catalog::setTableEpochs(const int32_t db_id,
-                             const std::vector<TableEpochInfo>& table_epochs) {
+                             const std::vector<TableEpochInfo>& table_epochs) const {
   const auto td = getMetadataForTable(table_epochs[0].table_id, false);
   CHECK(td);
   File_Namespace::FileMgrParams file_mgr_params;
@@ -3010,7 +3010,7 @@ void Catalog::setTableEpochs(const int32_t db_id,
 
   cat_read_lock read_lock(this);
   for (const auto& table_epoch_info : table_epochs) {
-    removeChunks(table_epoch_info.table_id);
+    removeChunksUnlocked(table_epoch_info.table_id);
     file_mgr_params.epoch = table_epoch_info.table_epoch;
     dataMgr_->getGlobalFileMgr()->setFileMgrParams(
         db_id, table_epoch_info.table_id, file_mgr_params);
@@ -3040,7 +3040,7 @@ std::string table_epochs_to_string(const std::vector<TableEpochInfo>& table_epoc
 
 void Catalog::setTableEpochsLogExceptions(
     const int32_t db_id,
-    const std::vector<TableEpochInfo>& table_epochs) {
+    const std::vector<TableEpochInfo>& table_epochs) const {
   try {
     setTableEpochs(db_id, table_epochs);
   } catch (std::exception& e) {
@@ -3399,7 +3399,7 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
   }
 }
 
-void Catalog::removeFragmenterForTable(const int table_id) {
+void Catalog::removeFragmenterForTable(const int table_id) const {
   cat_write_lock write_lock(this);
   auto td = getMetadataForTable(table_id, false);
   if (td->fragmenter != nullptr) {
@@ -3411,7 +3411,7 @@ void Catalog::removeFragmenterForTable(const int table_id) {
 }
 
 // used by rollback_table_epoch to clean up in memory artifacts after a rollback
-void Catalog::removeChunks(const int table_id) {
+void Catalog::removeChunksUnlocked(const int table_id) const {
   auto td = getMetadataForTable(table_id);
   CHECK(td);
 
@@ -4046,6 +4046,7 @@ void Catalog::vacuumDeletedRows(const TableDescriptor* td) const {
       updel_roll.catalog = this;
       updel_roll.logicalTableId = getLogicalTableId(td->tableId);
       updel_roll.memoryLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
+      updel_roll.table_descriptor = td;
       const auto cd = getMetadataForColumn(td->tableId, cm.first[2]);
       const auto chunk = Chunk_NS::Chunk::getChunk(cd,
                                                    &getDataMgr(),
@@ -4060,7 +4061,7 @@ void Catalog::vacuumDeletedRows(const TableDescriptor* td) const {
                                   td->fragmenter->getVacuumOffsets(chunk),
                                   updel_roll.memoryLevel,
                                   updel_roll);
-      updel_roll.commitUpdate();
+      updel_roll.stageUpdate();
     }
   }
 }

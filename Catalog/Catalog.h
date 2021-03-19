@@ -149,8 +149,7 @@ class Catalog final {
                     const std::string& newColumnName);
   void addColumn(const TableDescriptor& td, ColumnDescriptor& cd);
   void dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd);
-  void removeChunks(const int table_id);
-  void removeFragmenterForTable(const int table_id);
+  void removeFragmenterForTable(const int table_id) const;
 
   const std::map<int, const ColumnDescriptor*> getDictionaryToColumnMapping();
 
@@ -268,10 +267,10 @@ class Catalog final {
   std::vector<TableEpochInfo> getTableEpochs(const int32_t db_id,
                                              const int32_t table_id) const;
   void setTableEpochs(const int32_t db_id,
-                      const std::vector<TableEpochInfo>& table_epochs);
+                      const std::vector<TableEpochInfo>& table_epochs) const;
 
   void setTableEpochsLogExceptions(const int32_t db_id,
-                                   const std::vector<TableEpochInfo>& table_epochs);
+                                   const std::vector<TableEpochInfo>& table_epochs) const;
 
   int getDatabaseId() const { return currentDB_.dbId; }
   SqliteConnector& getSqliteConnector() { return sqliteConnector_; }
@@ -620,6 +619,7 @@ class Catalog final {
       const std::string& tableName) const;
 
   const Catalog* getObjForLock();
+  void removeChunksUnlocked(const int table_id) const;
 
  public:
   mutable std::mutex sqliteMutex_;
