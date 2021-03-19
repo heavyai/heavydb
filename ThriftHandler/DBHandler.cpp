@@ -5740,10 +5740,16 @@ void DBHandler::sql_execute_impl(TQueryResult& _return,
   };
 
   for (const auto& stmt : parse_trees) {
-    auto select_stmt = dynamic_cast<Parser::SelectStmt*>(stmt.get());
-    if (!select_stmt) {
-      check_read_only("Non-SELECT statements");
+    if (DBHandler::read_only_) {
+      // a limited set of commands are available in read-only mode
+      auto select_stmt = dynamic_cast<Parser::SelectStmt*>(stmt.get());
+      auto show_create_stmt = dynamic_cast<Parser::ShowCreateTableStmt*>(stmt.get());
+      if (!select_stmt && !show_create_stmt) {
+        THROW_MAPD_EXCEPTION(
+            "Only read-only SQL commands are supported in read only mode.");
+      }
     }
+
     auto ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
     if (!handle_ddl(ddl)) {
       auto stmtp = dynamic_cast<Parser::InsertValuesStmt*>(stmt.get());
