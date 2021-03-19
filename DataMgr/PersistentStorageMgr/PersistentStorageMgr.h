@@ -27,12 +27,10 @@ class PersistentStorageMgr : public AbstractBufferMgr {
  public:
   static PersistentStorageMgr* createPersistentStorageMgr(
       const std::string& data_dir,
-      std::shared_ptr<ForeignStorageInterface> fsi,
       const size_t num_reader_threads,
       const DiskCacheConfig& disk_cache_config);
 
   PersistentStorageMgr(const std::string& data_dir,
-                       std::shared_ptr<ForeignStorageInterface> fsi,
                        const size_t num_reader_threads,
                        const DiskCacheConfig& disk_cache_config);
 
@@ -71,6 +69,10 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   foreign_storage::ForeignStorageMgr* getForeignStorageMgr() const;
   foreign_storage::ForeignStorageCache* getDiskCache() const;
   inline const DiskCacheConfig getDiskCacheConfig() const { return disk_cache_config_; }
+  inline const std::shared_ptr<ForeignStorageInterface> getForeignStorageInterface()
+      const {
+    return fsi_;
+  }
 
  protected:
   bool isForeignStorage(const ChunkKey& chunk_key) const;

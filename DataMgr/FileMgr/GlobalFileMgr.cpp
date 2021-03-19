@@ -31,6 +31,7 @@
 #include <utility>
 #include <vector>
 
+#include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "Shared/File.h"
 
@@ -332,5 +333,4 @@ void GlobalFileMgr::compactDataFiles(const int32_t db_id, const int32_t tb_id) {
   // Re-initialize file manager
   getFileMgr(db_id, tb_id);
 }
-
 }  // namespace File_Namespace

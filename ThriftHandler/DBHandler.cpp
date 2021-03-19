@@ -41,7 +41,6 @@
 #include "Catalog/DdlCommandExecutor.h"
 #include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "DataMgr/ForeignStorage/DummyForeignStorage.h"
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "DistributedHandler.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Geospatial/GDAL.h"
@@ -245,8 +244,7 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
                      const std::string& libgeos_so_filename,
 #endif
                      const DiskCacheConfig& disk_cache_config,
-                     const bool is_new_db,
-                     std::shared_ptr<ForeignStorageInterface> fsi)
+                     const bool is_new_db)
     : leaf_aggregator_(db_leaves)
     , db_leaves_(db_leaves)
     , string_leaves_(string_leaves)
@@ -287,10 +285,10 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
 
 {
   LOG(INFO) << "OmniSci Server " << MAPD_RELEASE;
-  initialize();
+  initialize(is_new_db);
 }
 
-void DBHandler::initialize() {
+void DBHandler::initialize(const bool is_new_db) {
   if (!initialized_) {
     initialized_ = true;
   } else {
@@ -313,9 +311,6 @@ void DBHandler::initialize() {
     cpu_mode_only_ = true;
 #endif
   }
-
-  // Register foreign storage interfaces here
-  registerArrowCsvForeignStorage();
 
   bool is_rendering_enabled = enable_rendering_;
   if (system_parameters_.num_gpus == 0) {
@@ -424,12 +419,11 @@ void DBHandler::initialize() {
 
   try {
     SysCatalog::instance().init(base_data_path_,
-                                fsi_,
                                 data_mgr_,
                                 authMetadata_,
                                 calcite_,
                                 is_new_db,
-                                !db_leaves.empty(),
+                                !db_leaves_.empty(),
                                 string_leaves_);
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize system catalog: " << e.what();

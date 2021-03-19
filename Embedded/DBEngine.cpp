@@ -18,7 +18,6 @@
 #include <boost/filesystem.hpp>
 #include <stdexcept>
 #include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "Fragmenter/FragmentDefaultValues.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/parser.h"
@@ -147,16 +146,11 @@ class DBEngineImpl : public DBEngine {
     prog_config_opts.system_parameters.omnisci_server_port = -1;
     prog_config_opts.system_parameters.calcite_keepalive = true;
 
-    fsi_.reset(new ForeignStorageInterface());
-    registerArrowForeignStorage(fsi_);
-    registerArrowCsvForeignStorage(fsi_);
-
     try {
       db_handler_ =
           mapd::make_shared<DBHandler>(prog_config_opts.db_leaves,
                                        prog_config_opts.string_leaves,
                                        prog_config_opts.base_path,
-                                       prog_config_opts.cpu_only,
                                        prog_config_opts.allow_multifrag,
                                        prog_config_opts.jit_debug,
                                        prog_config_opts.intel_jit_profile,
@@ -168,8 +162,6 @@ class DBEngineImpl : public DBEngine {
                                        prog_config_opts.render_oom_retry_threshold,
                                        prog_config_opts.render_mem_bytes,
                                        prog_config_opts.max_concurrent_render_sessions,
-                                       prog_config_opts.num_gpus,
-                                       prog_config_opts.start_gpu,
                                        prog_config_opts.reserved_gpu_mem,
                                        prog_config_opts.render_compositor_use_last_gpu,
                                        prog_config_opts.num_reader_threads,
@@ -186,8 +178,7 @@ class DBEngineImpl : public DBEngine {
                                        prog_config_opts.libgeos_so_filename,
 #endif
                                        prog_config_opts.disk_cache_config,
-                                       is_new_db,
-                                       fsi_);
+                                       is_new_db);
     } catch (const std::exception& e) {
       LOG(FATAL) << "Failed to initialize database handler: " << e.what();
     }
@@ -337,39 +328,6 @@ class DBEngineImpl : public DBEngine {
     return result;
   }
 
-  void createUser(const std::string& user_name, const std::string& password) {
-    Catalog_Namespace::UserMetadata user;
-    auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-    if (!sys_cat.getMetadataForUser(user_name, user)) {
-      sys_cat.createUser(user_name, password, false, "", true);
-    }
-  }
-
-  void dropUser(const std::string& user_name) {
-    Catalog_Namespace::UserMetadata user;
-    auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-    if (!sys_cat.getMetadataForUser(user_name, user)) {
-      sys_cat.dropUser(user_name);
-    }
-  }
-
-  void createDatabase(const std::string& db_name) {
-    Catalog_Namespace::DBMetadata db;
-    auto user = db_handler_->get_session_copy(session_id_).get_currentUser();
-    auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-    if (!sys_cat.getMetadataForDB(db_name, db)) {
-      sys_cat.createDatabase(db_name, user.userId);
-    }
-  }
-
-  void dropDatabase(const std::string& db_name) {
-    Catalog_Namespace::DBMetadata db;
-    auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-    if (sys_cat.getMetadataForDB(db_name, db)) {
-      sys_cat.dropDatabase(db);
-    }
-  }
-
   bool setDatabase(std::string& db_name) {
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
     auto& user = db_handler_->get_session_copy(session_id_).get_currentUser();
@@ -385,18 +343,12 @@ class DBEngineImpl : public DBEngine {
 
  protected:
   void reset() {
-    std::weak_ptr<ForeignStorageInterface> weak_fsi = fsi_;
     if (db_handler_) {
       db_handler_->disconnect(session_id_);
       db_handler_->shutdown();
     }
     Catalog_Namespace::SysCatalog::destroy();
-    /////    Catalog_Namespace::Catalog::clear();
     db_handler_.reset();
-    fsi_.reset();
-
-    // By that moment FSI should be destroyed.
-    CHECK(!weak_fsi.lock());
 
     logger::shutdown();
     if (is_temp_db_) {
@@ -474,7 +426,6 @@ class DBEngineImpl : public DBEngine {
  private:
   std::string base_path_;
   std::string session_id_;
-  std::shared_ptr<ForeignStorageInterface> fsi_;
   mapd::shared_ptr<DBHandler> db_handler_;
   bool is_temp_db_;
   std::string udf_filename_;
@@ -539,26 +490,6 @@ std::vector<std::string> DBEngine::getTables() {
 std::vector<ColumnDetails> DBEngine::getTableDetails(const std::string& table_name) {
   DBEngineImpl* engine = getImpl(this);
   return engine->getTableDetails(table_name);
-}
-
-void DBEngine::createUser(const std::string& user_name, const std::string& password) {
-  DBEngineImpl* engine = getImpl(this);
-  engine->createUser(user_name, password);
-}
-
-void DBEngine::dropUser(const std::string& user_name) {
-  DBEngineImpl* engine = getImpl(this);
-  engine->dropUser(user_name);
-}
-
-void DBEngine::createDatabase(const std::string& db_name) {
-  DBEngineImpl* engine = getImpl(this);
-  engine->createDatabase(db_name);
-}
-
-void DBEngine::dropDatabase(const std::string& db_name) {
-  DBEngineImpl* engine = getImpl(this);
-  engine->dropDatabase(db_name);
 }
 
 bool DBEngine::setDatabase(std::string& db_name) {

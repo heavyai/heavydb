@@ -148,7 +148,6 @@ class CommonFileOperations {
 class SysCatalog : private CommonFileOperations {
  public:
   void init(const std::string& basePath,
-            std::shared_ptr<ForeignStorageInterface> fsi,
             std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
             const AuthMetadata& authMetadata,
             std::shared_ptr<Calcite> calcite,
@@ -318,7 +317,6 @@ class SysCatalog : private CommonFileOperations {
                                       std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
                                       const std::vector<LeafHostInfo>& string_dict_hosts,
                                       std::shared_ptr<Calcite> calcite,
-                                      std::shared_ptr<ForeignStorageInterface> fsi,
                                       bool is_new_db);
 
   void removeCatalog(const std::string& dbName);
@@ -418,7 +416,6 @@ class SysCatalog : private CommonFileOperations {
   ObjectRoleDescriptorMap objectDescriptorMap_;
   std::unique_ptr<SqliteConnector> sqliteConnector_;
 
-  std::shared_ptr<ForeignStorageInterface> fsi_;
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
   std::unique_ptr<PkiServer> pki_server_;
   const AuthMetadata* authMetadata_;

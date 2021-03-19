@@ -95,28 +95,28 @@ class CreateForeignServerTest : public DBHandlerTestFixture {
 
 TEST_F(CreateForeignServerTest, AllValidParameters) {
   sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-      "WITH (storage_type = 'LOCAL_FILE', base_path = './test_path/');");
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   assertExpectedForeignServer();
 }
 
 TEST_F(CreateForeignServerTest, AllValidParametersAndReadFromCache) {
   sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-      "WITH (storage_type = 'LOCAL_FILE', base_path = './test_path/');");
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   assertExpectedForeignServer();
 }
 
 TEST_F(CreateForeignServerTest, ExistingServerWithIfNotExists) {
   sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-      "WITH (storage_type = 'LOCAL_FILE', base_path = './test_path/');");
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   sql("CREATE SERVER IF NOT EXISTS test_server FOREIGN DATA WRAPPER omnisci_csv "
-      "WITH (storage_type = 'LOCAL_FILE', base_path = './test_path/');");
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   assertExpectedForeignServer();
 }
 
 TEST_F(CreateForeignServerTest, ExistingServerWithoutIfNotExists) {
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
-      "(storage_type = 'LOCAL_FILE', base_path = './test_path/');"};
+      "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   sql(query);
   queryAndAssertException(
       query, "Exception: A foreign server with name \"test_server\" already exists.");
@@ -125,7 +125,7 @@ TEST_F(CreateForeignServerTest, ExistingServerWithoutIfNotExists) {
 TEST_F(CreateForeignServerTest, OmniSciPrefix) {
   std::string query{
       "CREATE SERVER omnisci_server FOREIGN DATA WRAPPER omnisci_csv WITH "
-      "(storage_type = 'LOCAL_FILE', base_path = './test_path/');"};
+      "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   queryAndAssertException(query,
                           "Exception: Server names cannot start with \"omnisci\".");
 }
@@ -133,7 +133,7 @@ TEST_F(CreateForeignServerTest, OmniSciPrefix) {
 TEST_F(CreateForeignServerTest, MissingStorageType) {
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
-      "(base_path = './test_path/');"};
+      "(base_path = '/test_path/');"};
   queryAndAssertException(
       query, "Exception: Foreign server options must contain \"STORAGE_TYPE\".");
 }
@@ -148,8 +148,7 @@ TEST_F(CreateForeignServerTest, MissingBasePath) {
 TEST_F(CreateForeignServerTest, InvalidOption) {
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
-      "(invalid_key = 'value', storage_type = 'LOCAL_FILE', base_path = "
-      "'./test_path/');"};
+      "(invalid_key = 'value', storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   std::string error_message{
       "Exception: Invalid foreign server option \"INVALID_KEY\". "
       "Option must be one of the following: " +
@@ -160,7 +159,7 @@ TEST_F(CreateForeignServerTest, InvalidOption) {
 TEST_F(CreateForeignServerTest, InvalidStorageType) {
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
-      "(storage_type = 'INVALID_TYPE', base_path = './test_path/');"};
+      "(storage_type = 'INVALID_TYPE', base_path = '/test_path/');"};
   std::string error_message{
       "Exception: Invalid \"STORAGE_TYPE\" option value. Value must be one of the "
       "following: " +
@@ -171,7 +170,7 @@ TEST_F(CreateForeignServerTest, InvalidStorageType) {
 TEST_F(CreateForeignServerTest, FsiDisabled) {
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
-      "(storage_type = 'LOCAL_FILE', base_path = './test_path/');"};
+      "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   g_enable_fsi = false;
   queryAndAssertException(query, "Exception: Syntax error at: SERVER");
 }
@@ -179,7 +178,7 @@ TEST_F(CreateForeignServerTest, FsiDisabled) {
 TEST_F(CreateForeignServerTest, InvalidDataWrapper) {
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER invalid_wrapper WITH "
-      "(storage_type = 'LOCAL_FILE', base_path = './test_path/');"};
+      "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   std::string error_message{
       "Exception: Invalid data wrapper type \"INVALID_WRAPPER\". "
       "Data wrapper type must be one of the following: " +
@@ -200,7 +199,7 @@ class DropForeignServerTest : public DBHandlerTestFixture {
     DBHandlerTestFixture::SetUp();
     dropTestTable();
     sql("CREATE SERVER IF NOT EXISTS test_server FOREIGN DATA WRAPPER omnisci_csv "
-        "WITH (storage_type = 'LOCAL_FILE', base_path = './test_path/');");
+        "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   }
 
   void TearDown() override {
@@ -313,7 +312,7 @@ class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
 
   void createTestServer() {
     sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-        "WITH (storage_type = 'LOCAL_FILE', base_path = './test_path/');");
+        "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   }
 
   void dropServer() { sql("DROP SERVER IF EXISTS test_server;"); }
@@ -338,7 +337,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, CreateServerWithoutPrivilege) {
   login("test_user", "test_pass");
   queryAndAssertException(
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-      "WITH (storage_type = 'LOCAL_FILE', base_path = './test_path/');",
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');",
       "Exception: Server test_server will not be created. "
       "User has no create privileges.");
 }
@@ -454,7 +453,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, CreateServerWithGrantThenRevokePrivilege)
   login("test_user", "test_pass");
   queryAndAssertException(
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-      "WITH (storage_type = 'LOCAL_FILE', base_path = './test_path/');",
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');",
       "Exception: Server test_server will not be created. "
       "User has no create privileges.");
 }
@@ -547,7 +546,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantAllRevokeCreateServerCreateServer) {
   login("test_user", "test_pass");
   queryAndAssertException(
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-      "WITH (storage_type = 'LOCAL_FILE', base_path = './test_path/');",
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');",
       "Exception: Server test_server will not be created. "
       "User has no create privileges.");
 }
@@ -560,7 +559,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantCreateServerRevokeAllCreateServer) {
   login("test_user", "test_pass");
   queryAndAssertException(
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-      "WITH (storage_type = 'LOCAL_FILE', base_path = './test_path/');",
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');",
       "Exception: Server test_server will not be created. "
       "User has no create privileges.");
 }
@@ -752,11 +751,11 @@ TEST_F(ShowForeignServerTest, SHOW_TIMESTAMP_EQ) {
     TQueryResult result;
     std::string query{
         "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
-        "(storage_type = 'LOCAL_FILE', base_path = './test_path/');"};
+        "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
     sql(result, query);
   }
   std::string options_json =
-      "{\"BASE_PATH\":\"./test_path/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}";
+      "{\"BASE_PATH\":\"/test_path/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}";
 
   time_t created_at;
   {
@@ -799,11 +798,11 @@ TEST_F(ShowForeignServerTest, SHOW_ADD_DROP) {
     TQueryResult result;
     std::string query{
         "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
-        "(storage_type = 'LOCAL_FILE', base_path = './test_path/');"};
+        "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
     sql(result, query);
   }
   std::string options_json =
-      "{\"BASE_PATH\":\"./test_path/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}";
+      "{\"BASE_PATH\":\"/test_path/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}";
   {
     TQueryResult result;
     std::string query{"SHOW SERVERS;"};
@@ -942,7 +941,7 @@ class AlterForeignServerTest : public DBHandlerTestFixture {
 
   void createTestServer() {
     sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-        "WITH (storage_type = 'LOCAL_FILE', base_path = './test_path/');");
+        "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   }
 
   void dropServers() {
@@ -951,7 +950,7 @@ class AlterForeignServerTest : public DBHandlerTestFixture {
   }
 
   const std::map<std::string, std::string, std::less<>> DEFAULT_OPTIONS{
-      {"base_path", "./test_path/"},
+      {"base_path", "/test_path/"},
       {"storage_type", "LOCAL_FILE"},
   };
 
@@ -1120,7 +1119,7 @@ TEST_F(AlterForeignServerTest, RenameToExistingServer) {
   createTestServer();
   sql("CREATE SERVER renamed_server FOREIGN DATA WRAPPER omnisci_csv "
       "WITH (storage_type = 'LOCAL_FILE', base_path = "
-      "'./another_test_path/');");
+      "'/another_test_path/');");
   queryAndAssertException("ALTER SERVER test_server RENAME TO renamed_server;",
                           "Exception: Foreign server with name \"test_server"
                           "\" can not be renamed to \"renamed_server\"."
@@ -1166,7 +1165,7 @@ TEST_F(AlterForeignServerTest, InvalidStorageType) {
   createTestServer();
   std::string query{
       "ALTER SERVER test_server SET "
-      "(storage_type = 'INVALID_TYPE', base_path = './test_path/');"};
+      "(storage_type = 'INVALID_TYPE', base_path = '/test_path/');"};
   std::string error_message{
       "Exception: Invalid \"STORAGE_TYPE\" option value. Value must be one of the "
       "following: " +

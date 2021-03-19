@@ -218,8 +218,8 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
 
 class ForeignStorageInterface {
  public:
-  ForeignStorageInterface();
-  ~ForeignStorageInterface();
+  ForeignStorageInterface() {}
+  ~ForeignStorageInterface() {}
 
   ForeignStorageInterface(const ForeignStorageInterface& other) = delete;
   ForeignStorageInterface(ForeignStorageInterface&& other) = delete;
@@ -249,6 +249,4 @@ class ForeignStorageInterface {
       table_persistent_storage_interface_map_;
   std::map<std::pair<int, int>, std::unique_ptr<ForeignStorageBufferMgr>> managers_map_;
   std::mutex persistent_storage_interfaces_mutex_;
-
-  static std::atomic<int> object_cnt_;
 };

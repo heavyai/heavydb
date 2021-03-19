@@ -567,9 +567,7 @@ int main(int argc, char** argv) {
 
   logger::init(log_options);
 
-  auto fsi = std::make_shared<ForeignStorageInterface>();
-  QR::init(BASE_PATH, fsi, {}, {});
-  registerArrowCsvForeignStorage(fsi);
+  QR::init(BASE_PATH, {}, {});
   int err{0};
   try {
     err = RUN_ALL_TESTS();

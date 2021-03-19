@@ -16,6 +16,28 @@
 
 #include "DBETypes.h"
 
+namespace {
+void checkColumnRange(size_t index, size_t count) {
+  if (index >= count) {
+    throw std::out_of_range("Column index " + std::to_string(index) +
+                            " is out of range: 0.." + std::to_string(count - 1));
+  }
+}
+
+template <typename T>
+void getFieldValue(T& result, TargetValue* field) {
+  ScalarTargetValue* scalar_value = boost::get<ScalarTargetValue>(field);
+  if (!scalar_value) {
+    throw std::runtime_error("Unsupported field type");
+  }
+  T* result_ptr = boost::get<T>(scalar_value);
+  if (!result_ptr) {
+    throw std::runtime_error("Null field");
+  }
+  result = *result_ptr;
+}
+}  // namespace
+
 namespace EmbeddedDatabase {
 
 /** ColumnDetails methods */
@@ -53,49 +75,37 @@ Row::Row() {}
 Row::Row(std::vector<TargetValue>& row) : row_(std::move(row)) {}
 
 int64_t Row::getInt(size_t col_num) {
-  if (col_num < row_.size()) {
-    const auto scalar_value = boost::get<ScalarTargetValue>(&row_[col_num]);
-    const auto value = boost::get<int64_t>(scalar_value);
-    return *value;
-  }
-  return 0;
+  int64_t value;
+  checkColumnRange(col_num, row_.size());
+  getFieldValue(value, &row_[col_num]);
+  return value;
 }
 
 float Row::getFloat(size_t col_num) {
-  if (col_num < row_.size()) {
-    if (ScalarTargetValue* scalar_value = boost::get<ScalarTargetValue>(&row_[col_num])) {
-      if (float* value = boost::get<float>(scalar_value)) {
-        return *value;
-      }
-    }
-  }
-  return 0.;
+  float value;
+  checkColumnRange(col_num, row_.size());
+  getFieldValue(value, &row_[col_num]);
+  return value;
 }
 
 double Row::getDouble(size_t col_num) {
-  if (col_num < row_.size()) {
-    if (ScalarTargetValue* scalar_value = boost::get<ScalarTargetValue>(&row_[col_num])) {
-      if (double* value = boost::get<double>(scalar_value)) {
-        return *value;
-      }
-    }
-  }
-  return 0.;
+  double value;
+  checkColumnRange(col_num, row_.size());
+  getFieldValue(value, &row_[col_num]);
+  return value;
 }
 
 std::string Row::getStr(size_t col_num) {
-  if (col_num < row_.size()) {
-    const auto scalar_value = boost::get<ScalarTargetValue>(&row_[col_num]);
-    auto value = boost::get<NullableString>(scalar_value);
-    bool is_null = !value || boost::get<void*>(value);
-    if (is_null) {
-      return "Empty";
-    } else {
-      auto value_notnull = boost::get<std::string>(value);
-      return *value_notnull;
-    }
+  checkColumnRange(col_num, row_.size());
+  const auto scalar_value = boost::get<ScalarTargetValue>(&row_[col_num]);
+  auto value = boost::get<NullableString>(scalar_value);
+  if (!value || boost::get<void*>(value)) {
+    return "";
   }
-  return "Out of range";
+  if (auto str = boost::get<std::string>(value)) {
+    return *str;
+  }
+  return "";
 }
 
 ColumnType sqlToColumnType(const SQLTypes& type) {

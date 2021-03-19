@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "ThriftHandler/DBHandler.h"
 
 #ifdef HAVE_THRIFT_THREADFACTORY

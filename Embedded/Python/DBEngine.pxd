@@ -35,10 +35,10 @@ cdef extern from "DBETypes.h" namespace 'EmbeddedDatabase':
         ColumnDetails(string,ColumnType,ColumnEncoding,bool,bool,int,int,int)
 
     cdef cppclass Row:
-        int64_t getInt(size_t col)
-        float getFloat(size_t col)
-        double getDouble(size_t col)
-        string getStr(size_t col)
+        int64_t getInt(size_t col) except +
+        float getFloat(size_t col) except +
+        double getDouble(size_t col) except +
+        string getStr(size_t col) except +
 
 cdef extern from "DBEngine.h" namespace 'EmbeddedDatabase':
     cdef cppclass Cursor:
@@ -55,10 +55,6 @@ cdef extern from "DBEngine.h" namespace 'EmbeddedDatabase':
         vector[string] getTables() except +
         vector[ColumnDetails] getTableDetails(string) except +
         void importArrowTable(string, shared_ptr[CTable]&, uint64_t) except +
-        void createUser(string user_name, string password) except +
-        void dropUser(string user_name) except +
-        void createDatabase(string db_name) except +
-        void dropDatabase(string db_name) except +
         bool setDatabase(string db_name) except +
         bool login(string db_name, string user_name, string password) except +
         @staticmethod

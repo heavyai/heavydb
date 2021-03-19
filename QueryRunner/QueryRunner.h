@@ -64,11 +64,9 @@ class QueryRunner {
                            const int reserved_gpu_mem = 256 << 20);
 
   static QueryRunner* init(const char* db_path,
-                           std::shared_ptr<ForeignStorageInterface> fsi,
                            const std::vector<LeafHostInfo>& string_servers,
                            const std::vector<LeafHostInfo>& leaf_servers) {
     return QueryRunner::init(db_path,
-                             fsi,
                              std::string{OMNISCI_ROOT_USER},
                              "HyperInteractive",
                              std::string{OMNISCI_DEFAULT_DB},
@@ -77,7 +75,6 @@ class QueryRunner {
   }
 
   static QueryRunner* init(const char* db_path,
-                           std::shared_ptr<ForeignStorageInterface> fsi,
                            const std::string& user,
                            const std::string& pass,
                            const std::string& db_name,
@@ -194,7 +191,6 @@ class QueryRunner {
 
  protected:
   QueryRunner(const char* db_path,
-              std::shared_ptr<ForeignStorageInterface> fsi,
               const std::string& user,
               const std::string& pass,
               const std::string& db_name,
@@ -211,6 +207,7 @@ class QueryRunner {
 
   std::shared_ptr<Catalog_Namespace::SessionInfo> session_info_;
   std::unique_ptr<QueryDispatchQueue> dispatch_queue_;
+  std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
 };
 
 class ImportDriver : public QueryRunner {

@@ -21,8 +21,6 @@
 
 #include <gtest/gtest.h>
 #include "DBHandlerTestHelpers.h"
-#include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "Shared/File.h"
 #include "TestHelpers.h"
 
@@ -31,7 +29,6 @@
 #endif
 
 extern bool g_enable_fsi;
-std::shared_ptr<ForeignStorageInterface> fsi;
 
 class ShowUserSessionsTest : public DBHandlerTestFixture {
  public:
@@ -49,7 +46,6 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
   }
 
   static void SetUpTestSuite() {
-    setupFSI(fsi);
     createDBHandler();
     users_ = {"user1", "user2"};
     superusers_ = {"super1", "super2"};
@@ -1108,7 +1104,7 @@ class ShowDiskCacheUsageForNormalTableTest : public ShowDiskCacheUsageTest {
       getCatalog().removeFragmenterForTable(table_it->tableId);
     }
     getCatalog().getDataMgr().resetPersistentStorage(
-        {cache_path_, cache_level}, 0, fsi, getSystemParameters());
+        {cache_path_, cache_level}, 0, getSystemParameters());
   }
 };
 
@@ -1680,8 +1676,6 @@ TEST_F(ShowTableDetailsTest, ViewSpecified) {
 
 int main(int argc, char** argv) {
   g_enable_fsi = true;
-  fsi.reset(new ForeignStorageInterface());
-  registerArrowCsvForeignStorage(fsi);
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   DBHandlerTestFixture::initTestArgs(argc, argv);
@@ -1692,7 +1686,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-  fsi.reset();
   g_enable_fsi = false;
   return err;
 }

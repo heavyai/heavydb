@@ -413,19 +413,19 @@ TEST_F(ForeignStorageCacheFileTest, FileCreation) {
 
 TEST_F(ForeignStorageCacheFileTest, CustomPath) {
   cache_path_ = "./test_foreign_data_cache";
-  PersistentStorageMgr psm(data_path, fsi, 0, {cache_path_, DiskCacheLevel::fsi});
+  PersistentStorageMgr psm(data_path, 0, {cache_path_, DiskCacheLevel::fsi});
   ASSERT_EQ(psm.getDiskCache()->getGlobalFileMgr()->getBasePath(), cache_path_ + "/");
 }
 
 TEST_F(ForeignStorageCacheFileTest, InitializeSansCache) {
   cache_path_ = "./test_foreign_data_cache";
-  PersistentStorageMgr psm(data_path, fsi, 0, {cache_path_});
+  PersistentStorageMgr psm(data_path, 0, {cache_path_});
   ASSERT_EQ(psm.getDiskCache(), nullptr);
 }
 
 TEST_F(ForeignStorageCacheFileTest, EnableCache) {
   cache_path_ = "./test_foreign_data_cache";
-  PersistentStorageMgr psm(data_path, fsi, 0, {cache_path_, DiskCacheLevel::fsi});
+  PersistentStorageMgr psm(data_path, 0, {cache_path_, DiskCacheLevel::fsi});
   ASSERT_NE(psm.getDiskCache(), nullptr);
 }
 

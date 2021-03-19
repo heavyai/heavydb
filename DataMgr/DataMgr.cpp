@@ -23,8 +23,6 @@
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
 #include "CudaMgr/CudaMgr.h"
-#include "DataMgr/ForeignStorage/ForeignStorageCache.h"
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "FileMgr/GlobalFileMgr.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
 
@@ -43,7 +41,6 @@ extern bool g_enable_fsi;
 namespace Data_Namespace {
 
 DataMgr::DataMgr(const std::string& dataDir,
-                 std::shared_ptr<ForeignStorageInterface> fsi,
                  const SystemParameters& system_parameters,
                  std::unique_ptr<CudaMgr_Namespace::CudaMgr> cudaMgr,
                  const bool useGpus,
@@ -71,7 +68,7 @@ DataMgr::DataMgr(const std::string& dataDir,
     hasGpus_ = false;
   }
 
-  populateMgrs(system_parameters, numReaderThreads, fsi, cache_config);
+  populateMgrs(system_parameters, numReaderThreads, cache_config);
   createTopLevelMetadata();
 }
 
@@ -167,7 +164,6 @@ size_t DataMgr::getTotalSystemMemory() {
 // This function exists for testing purposes so that we can test a reset of the cache.
 void DataMgr::resetPersistentStorage(const DiskCacheConfig& cache_config,
                                      const size_t num_reader_threads,
-                                     std::shared_ptr<ForeignStorageInterface> fsi,
                                      const SystemParameters& sys_params) {
   int numLevels = bufferMgrs_.size();
   for (int level = numLevels - 1; level >= 0; --level) {
@@ -176,18 +172,17 @@ void DataMgr::resetPersistentStorage(const DiskCacheConfig& cache_config,
     }
   }
   bufferMgrs_.clear();
-  populateMgrs(sys_params, num_reader_threads, fsi, cache_config);
+  populateMgrs(sys_params, num_reader_threads, cache_config);
   createTopLevelMetadata();
 }
 
 void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                            const size_t userSpecifiedNumReaderThreads,
-                           std::shared_ptr<ForeignStorageInterface> fsi,
                            const DiskCacheConfig& cache_config) {
   // no need for locking, as this is only called in the constructor
   bufferMgrs_.resize(2);
   bufferMgrs_[0].push_back(PersistentStorageMgr::createPersistentStorageMgr(
-      dataDir_, fsi, userSpecifiedNumReaderThreads, cache_config));
+      dataDir_, userSpecifiedNumReaderThreads, cache_config));
 
   levelSizes_.push_back(1);
   size_t page_size{512};
@@ -535,6 +530,11 @@ File_Namespace::GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
       dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
   CHECK(global_file_mgr);
   return global_file_mgr;
+}
+
+std::shared_ptr<ForeignStorageInterface> DataMgr::getForeignStorageInterface() const {
+  return dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])
+      ->getForeignStorageInterface();
 }
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem_info) {

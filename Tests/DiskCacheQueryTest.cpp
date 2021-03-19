@@ -24,7 +24,6 @@
 
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -36,8 +35,6 @@ std::string test_binary_file_path;
 namespace bf = boost::filesystem;
 using path = bf::path;
 
-std::shared_ptr<ForeignStorageInterface> fsi;
-
 static const std::string default_table_name = "test_table";
 
 class TableTest : public DBHandlerTestFixture {
@@ -48,7 +45,6 @@ class TableTest : public DBHandlerTestFixture {
   inline static PersistentStorageMgr* psm_;
 
   static void SetUpTestSuite() {
-    setupFSI(fsi);
     DBHandlerTestFixture::createDBHandler(DiskCacheLevel::all);
     cat_ = &getCatalog();
     ASSERT_NE(cat_, nullptr);
@@ -100,7 +96,7 @@ class TableTest : public DBHandlerTestFixture {
       cat_->removeFragmenterForTable(table_it->tableId);
     }
     cat_->getDataMgr().resetPersistentStorage(
-        {psm_->getDiskCacheConfig().path, cache_level}, 0, fsi, getSystemParameters());
+        {psm_->getDiskCacheConfig().path, cache_level}, 0, getSystemParameters());
     psm_ = cat_->getDataMgr().getPersistentStorageMgr();
     cache_ = psm_->getDiskCache();
   }
@@ -190,7 +186,6 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   g_enable_fsi = true;
-  fsi.reset(new ForeignStorageInterface());
 
   // get dirname of test binary
   test_binary_file_path = bf::canonical(argv[0]).parent_path().string();
@@ -201,7 +196,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-  fsi.reset();
   g_enable_fsi = false;
   return err;
 }

@@ -18,7 +18,6 @@
 
 #include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "DistributedLoader.h"
 #include "Geospatial/Transforms.h"
 #include "ImportExport/CopyParams.h"
@@ -83,7 +82,6 @@ QueryRunner* QueryRunner::init(const char* db_path,
                                const size_t max_gpu_mem,
                                const int reserved_gpu_mem) {
   return QueryRunner::init(db_path,
-                           std::make_shared<ForeignStorageInterface>(),
                            std::string{OMNISCI_ROOT_USER},
                            "HyperInteractive",
                            std::string{OMNISCI_DEFAULT_DB},
@@ -96,7 +94,6 @@ QueryRunner* QueryRunner::init(const char* db_path,
 }
 
 QueryRunner* QueryRunner::init(const char* db_path,
-                               std::shared_ptr<ForeignStorageInterface> fsi,
                                const std::string& user,
                                const std::string& pass,
                                const std::string& db_name,
@@ -114,7 +111,6 @@ QueryRunner* QueryRunner::init(const char* db_path,
   LOG_IF(FATAL, !leaf_servers.empty()) << "Distributed test runner not supported.";
   CHECK(leaf_servers.empty());
   qr_instance_.reset(new QueryRunner(db_path,
-                                     fsi,
                                      user,
                                      pass,
                                      db_name,
@@ -130,7 +126,6 @@ QueryRunner* QueryRunner::init(const char* db_path,
 }
 
 QueryRunner::QueryRunner(const char* db_path,
-                         std::shared_ptr<ForeignStorageInterface> fsi,
                          const std::string& user_name,
                          const std::string& passwd,
                          const std::string& db_name,
@@ -144,7 +139,6 @@ QueryRunner::QueryRunner(const char* db_path,
                          const bool create_db)
     : dispatch_queue_(std::make_unique<QueryDispatchQueue>(1)) {
   g_serialize_temp_tables = true;
-
   boost::filesystem::path base_path{db_path};
   CHECK(boost::filesystem::exists(base_path));
   auto system_db_file = base_path / "mapd_catalogs" / OMNISCI_DEFAULT_DB;
@@ -182,19 +176,18 @@ QueryRunner::QueryRunner(const char* db_path,
   mapd_params.gpu_buffer_mem_bytes = max_gpu_mem;
   mapd_params.aggregator = !leaf_servers.empty();
 
-  auto data_mgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(),
-                                                            fsi,
-                                                            mapd_params,
-                                                            std::move(cuda_mgr),
-                                                            uses_gpus,
-                                                            reserved_gpu_mem,
-                                                            0,
-                                                            disk_cache_config);
+  //  auto data_mgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(),
+  data_mgr_.reset(new Data_Namespace::DataMgr(data_dir.string(),
+                                              mapd_params,
+                                              std::move(cuda_mgr),
+                                              uses_gpus,
+                                              reserved_gpu_mem,
+                                              0,
+                                              disk_cache_config));
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
 
   sys_cat.init(base_path.string(),
-               fsi,
-               data_mgr,
+               data_mgr_,
                {},
                g_calcite,
                false,
@@ -217,7 +210,7 @@ QueryRunner::QueryRunner(const char* db_path,
   CHECK(sys_cat.getMetadataForDB(db_name, db));
   CHECK(user.isSuper || (user.userId == db.dbOwner));
   auto cat = sys_cat.getCatalog(
-      base_path.string(), db, data_mgr, string_servers, g_calcite, fsi, create_db);
+      base_path.string(), db, data_mgr_, string_servers, g_calcite, create_db);
   session_info_ = std::make_unique<Catalog_Namespace::SessionInfo>(
       cat, user, ExecutorDeviceType::GPU, "");
 }

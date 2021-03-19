@@ -25,7 +25,6 @@
 
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "DataMgr/ForeignStorage/ForeignTableRefresh.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
@@ -38,8 +37,6 @@
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
 extern bool g_enable_seconds_refresh;
-
-std::shared_ptr<ForeignStorageInterface> fsi;
 
 std::string test_binary_file_path;
 
@@ -55,7 +52,6 @@ static const std::string default_file_name = "temp_file";
  */
 class ForeignTableTest : public DBHandlerTestFixture {
  protected:
-  static void SetUpTestSuite() { setupFSI(fsi); }
   void SetUp() override { DBHandlerTestFixture::SetUp(); }
   void TearDown() override { DBHandlerTestFixture::TearDown(); }
   static std::string getCreateForeignTableQuery(const std::string& columns,
@@ -291,7 +287,7 @@ class CacheControllingSelectQueryTest
       getCatalog().removeFragmenterForTable(table_it->tableId);
     }
     getCatalog().getDataMgr().resetPersistentStorage(
-        {cache_path_, cache_level}, 0, fsi, getSystemParameters());
+        {cache_path_, cache_level}, 0, getSystemParameters());
   }
 
   void SetUp() override {
@@ -357,7 +353,7 @@ class RecoverCacheQueryTest : public ForeignTableTest {
       cat_->removeFragmenterForTable(table_it->tableId);
     }
     cat_->getDataMgr().resetPersistentStorage(
-        {cache_path_, cache_level}, 0, fsi, getSystemParameters());
+        {cache_path_, cache_level}, 0, getSystemParameters());
     psm_ = cat_->getDataMgr().getPersistentStorageMgr();
     cache_ = psm_->getDiskCache();
   }
@@ -5387,7 +5383,6 @@ int main(int argc, char** argv) {
   g_enable_fsi = true;
   g_enable_s3_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
-  fsi.reset(new ForeignStorageInterface());
   testing::InitGoogleTest(&argc, argv);
 
   // get dirname of test binary
@@ -5400,7 +5395,6 @@ int main(int argc, char** argv) {
     LOG(ERROR) << e.what();
   }
 
-  fsi.reset();
   g_enable_fsi = false;
   return err;
 }

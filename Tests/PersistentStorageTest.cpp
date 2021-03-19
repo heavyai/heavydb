@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "DataMgr/PersistentStorageMgr/MutableCachePersistentStorageMgr.h"
 #include "DataMgr/PersistentStorageMgr/PersistentStorageMgr.h"
 #include "DataMgrTestHelpers.h"
@@ -26,7 +25,6 @@
 
 const std::string data_path = "./tmp/mapd_data";
 extern bool g_enable_fsi;
-std::shared_ptr<ForeignStorageInterface> fsi;
 
 using namespace foreign_storage;
 using namespace File_Namespace;
@@ -39,18 +37,17 @@ class PersistentStorageMgrTest : public testing::Test {
 };
 
 TEST_F(PersistentStorageMgrTest, DiskCache_CustomPath) {
-  PersistentStorageMgr psm(data_path, fsi, 0, {cache_path_, DiskCacheLevel::fsi});
+  PersistentStorageMgr psm(data_path, 0, {cache_path_, DiskCacheLevel::fsi});
   ASSERT_EQ(psm.getDiskCache()->getGlobalFileMgr()->getBasePath(), cache_path_ + "/");
 }
 
 TEST_F(PersistentStorageMgrTest, DiskCache_InitializeWithoutCache) {
-  PersistentStorageMgr psm(data_path, fsi, 0, {});
+  PersistentStorageMgr psm(data_path, 0, {});
   ASSERT_EQ(psm.getDiskCache(), nullptr);
 }
 
 TEST_F(PersistentStorageMgrTest, MutableDiskCache_CustomPath) {
-  MutableCachePersistentStorageMgr psm(
-      data_path, fsi, 0, {cache_path_, DiskCacheLevel::all});
+  MutableCachePersistentStorageMgr psm(data_path, 0, {cache_path_, DiskCacheLevel::all});
   ASSERT_EQ(psm.getDiskCache()->getGlobalFileMgr()->getBasePath(), cache_path_ + "/");
 }
 
@@ -58,16 +55,14 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   g_enable_fsi = true;
-  fsi.reset(new ForeignStorageInterface());
-
   int err{0};
+
   try {
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
 
-  fsi.reset();
   g_enable_fsi = false;
   return err;
 }

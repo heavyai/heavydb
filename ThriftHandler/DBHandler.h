@@ -187,7 +187,7 @@ class DBHandler : public OmniSciIf {
 #endif
             const DiskCacheConfig& disk_cache_config,
             const bool is_new_db);
-  void initialize();
+  void initialize(const bool is_new_db);
   ~DBHandler() override;
 
   static inline size_t max_bytes_for_thrift() { return 2 * 1000 * 1000 * 1000LL; }
@@ -542,7 +542,6 @@ class DBHandler : public OmniSciIf {
                         const std::string& username,
                         const std::string& dbname);
 
-  std::shared_ptr<ForeignStorageInterface> fsi_;
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
 
   LeafAggregator leaf_aggregator_;
