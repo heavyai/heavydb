@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 13832c5
+                5.7.0dev 94aeaff
               </div>
             
           
@@ -518,6 +518,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_out_of_render_memory.html">Class OutOfRenderMemory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_overflow_or_underflow.html">Class OverflowOrUnderflow</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_overlaps_hash_table_cache.html">Class OverlapsHashTableCache</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_overlaps_hash_table_too_big.html">Class OverlapsHashTableTooBig</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_overlaps_join_hash_table.html">Class OverlapsJoinHashTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parse_i_r_error.html">Class ParseIRError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_add_column_stmt.html">Class Parser::AddColumnStmt</a></li>
@@ -778,6 +779,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_from_table_reordering_8cpp_03_1_1_scheduling_dependency_tracking.html">Class anonymous_namespace{FromTableReordering.cpp}::SchedulingDependencyTracking</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_join_filter_push_down_8cpp_03_1_1_bind_filter_to_outermost_visitor.html">Class anonymous_namespace{JoinFilterPushDown.cpp}::BindFilterToOutermostVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_join_filter_push_down_8cpp_03_1_1_collect_input_columns_visitor.html">Class anonymous_namespace{JoinFilterPushDown.cpp}::CollectInputColumnsVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_bucket_size_tuner.html">Class anonymous_namespace{OverlapsJoinHashTable.cpp}::BucketSizeTuner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rel_alg_physical_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RelAlgPhysicalInputsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rel_alg_physical_table_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RelAlgPhysicalTableInputsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rex_physical_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RexPhysicalInputsVisitor</a></li>
@@ -1731,7 +1733,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_data_source_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRDataSourceDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_feature_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRFeatureDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_spatial_reference_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRSpatialReferenceDeleter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_bucket_size_tuner.html">Struct anonymous_namespace{OverlapsJoinHashTable.cpp}::BucketSizeTuner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_hash_table_props.html">Struct anonymous_namespace{OverlapsJoinHashTable.cpp}::HashTableProps</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_tuning_state.html">Struct anonymous_namespace{OverlapsJoinHashTable.cpp}::TuningState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_lazy_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoLazyFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_query_output_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoQueryOutputFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_target_value_builder.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoTargetValueBuilder</a></li>
@@ -1945,6 +1948,11 @@
 <span id="_CPPv3NK13ColumnFetcher18getResultSetColumnEPK18InputColDescriptorKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_t"></span><span id="_CPPv2NK13ColumnFetcher18getResultSetColumnEPK18InputColDescriptorKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_t"></span><span id="ColumnFetcher::getResultSetColumn__InputColDescriptorCP.Data_Namespace::MemoryLevelC.iC.DeviceAllocatorP.sCC"></span><span class="target" id="class_column_fetcher_1a80a67f9a9b2a3bd82db9bcc8c18c6cdc"></span><em class="property">const</em> int8_t *<code class="sig-name descname">getResultSetColumn</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="class_input_col_descriptor.html#_CPPv418InputColDescriptor" title="InputColDescriptor">InputColDescriptor</a> *<em>col_desc</em>, <em class="property">const</em> Data_Namespace::MemoryLevel <em>memory_level</em>, <em class="property">const</em> int <em>device_id</em>, <a class="reference internal" href="class_device_allocator.html#_CPPv415DeviceAllocator" title="DeviceAllocator">DeviceAllocator</a> *<em>device_allocator</em>, <em class="property">const</em> size_t <em>thread_idx</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13ColumnFetcher18getResultSetColumnEPK18InputColDescriptorKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4NK13ColumnFetcher24linearizeColumnFragmentsEKiKiRKNSt3mapIiPK14TableFragmentsEERNSt4listINSt10shared_ptrIN8Chunk_NS5ChunkEEEEERNSt4listI9ChunkIterEEKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_t">
+<span id="_CPPv3NK13ColumnFetcher24linearizeColumnFragmentsEKiKiRKNSt3mapIiPK14TableFragmentsEERNSt4listINSt10shared_ptrIN8Chunk_NS5ChunkEEEEERNSt4listI9ChunkIterEEKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_t"></span><span id="_CPPv2NK13ColumnFetcher24linearizeColumnFragmentsEKiKiRKNSt3mapIiPK14TableFragmentsEERNSt4listINSt10shared_ptrIN8Chunk_NS5ChunkEEEEERNSt4listI9ChunkIterEEKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_t"></span><span id="ColumnFetcher::linearizeColumnFragments__iC.iC.std::map:i.TableFragmentsCP:CR.std::list:std::shared_ptr:Chunk_NS::Chunk::R.std::list:ChunkIter:R.Data_Namespace::MemoryLevelC.iC.DeviceAllocatorP.sCC"></span><span class="target" id="class_column_fetcher_1aec2a138818cd4a21c34458dda4610aa6"></span><em class="property">const</em> int8_t *<code class="sig-name descname">linearizeColumnFragments</code><span class="sig-paren">(</span><em class="property">const</em> int <em>table_id</em>, <em class="property">const</em> int <em>col_id</em>, <em class="property">const</em> std::map&lt;int, <em class="property">const</em> TableFragments *&gt; &amp;<em>all_tables_fragments</em>, std::list&lt;std::shared_ptr&lt;Chunk_NS::<a class="reference internal" href="class_chunk___n_s_1_1_chunk.html#_CPPv4N8Chunk_NS5ChunkE" title="Chunk_NS::Chunk">Chunk</a>&gt;&gt; &amp;<em>chunk_holder</em>, std::list&lt;<a class="reference internal" href="class_chunk_iter.html#_CPPv49ChunkIter" title="ChunkIter">ChunkIter</a>&gt; &amp;<em>chunk_iter_holder</em>, <em class="property">const</em> Data_Namespace::MemoryLevel <em>memory_level</em>, <em class="property">const</em> int <em>device_id</em>, <a class="reference internal" href="class_device_allocator.html#_CPPv415DeviceAllocator" title="DeviceAllocator">DeviceAllocator</a> *<em>device_allocator</em>, <em class="property">const</em> size_t <em>thread_idx</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13ColumnFetcher24linearizeColumnFragmentsEKiKiRKNSt3mapIiPK14TableFragmentsEERNSt4listINSt10shared_ptrIN8Chunk_NS5ChunkEEEEERNSt4listI9ChunkIterEEKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Static Functions</p>
@@ -1970,9 +1978,34 @@
 <span id="_CPPv3N13ColumnFetcher8CacheKeyE"></span><span id="_CPPv2N13ColumnFetcher8CacheKeyE"></span><span class="target" id="class_column_fetcher_1a64c4d7f86654789fb35e3261bcc94ce6"></span><em class="property">using </em><code class="sig-name descname">CacheKey</code> = std::vector&lt;int&gt;<a class="headerlink" href="#_CPPv4N13ColumnFetcher8CacheKeyE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="type">
+<dt id="_CPPv4N13ColumnFetcher20DeviceMergedChunkMapE">
+<span id="_CPPv3N13ColumnFetcher20DeviceMergedChunkMapE"></span><span id="_CPPv2N13ColumnFetcher20DeviceMergedChunkMapE"></span><span class="target" id="class_column_fetcher_1a216c31a74633f1c1d8d6d6374f3d4068"></span><em class="property">using </em><code class="sig-name descname">DeviceMergedChunkMap</code> = std::unordered_map&lt;int, std::shared_ptr&lt;Chunk_NS::<a class="reference internal" href="class_chunk___n_s_1_1_chunk.html#_CPPv4N8Chunk_NS5ChunkE" title="Chunk_NS::Chunk">Chunk</a>&gt;&gt;<a class="headerlink" href="#_CPPv4N13ColumnFetcher20DeviceMergedChunkMapE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="type">
+<dt id="_CPPv4N13ColumnFetcher24DeviceMergedChunkIterMapE">
+<span id="_CPPv3N13ColumnFetcher24DeviceMergedChunkIterMapE"></span><span id="_CPPv2N13ColumnFetcher24DeviceMergedChunkIterMapE"></span><span class="target" id="class_column_fetcher_1af077d3cc4c1b4b473939d7c28656955f"></span><em class="property">using </em><code class="sig-name descname">DeviceMergedChunkIterMap</code> = std::unordered_map&lt;int, int8_t *&gt;<a class="headerlink" href="#_CPPv4N13ColumnFetcher24DeviceMergedChunkIterMapE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
+<dl class="function">
+<dt id="_CPPv4NK13ColumnFetcher14addMergedChunkEK18InputColDescriptorKiNSt10shared_ptrIN8Chunk_NS5ChunkEEEP6int8_t">
+<span id="_CPPv3NK13ColumnFetcher14addMergedChunkEK18InputColDescriptorKiNSt10shared_ptrIN8Chunk_NS5ChunkEEEP6int8_t"></span><span id="_CPPv2NK13ColumnFetcher14addMergedChunkEK18InputColDescriptorKiNSt10shared_ptrIN8Chunk_NS5ChunkEEEP6int8_t"></span><span id="ColumnFetcher::addMergedChunk__InputColDescriptorC.iC.std::shared_ptr:Chunk_NS::Chunk:.int8_tPC"></span><span class="target" id="class_column_fetcher_1a4c14c296ae6ef093e3efa20d8ae5d232"></span>void <code class="sig-name descname">addMergedChunk</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="class_input_col_descriptor.html#_CPPv418InputColDescriptor" title="InputColDescriptor">InputColDescriptor</a> <em>col_desc</em>, <em class="property">const</em> int <em>device_id</em>, std::shared_ptr&lt;Chunk_NS::<a class="reference internal" href="class_chunk___n_s_1_1_chunk.html#_CPPv4N8Chunk_NS5ChunkE" title="Chunk_NS::Chunk">Chunk</a>&gt; <em>chunk_ptr</em>, int8_t *<em>chunk_iter_ptr</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13ColumnFetcher14addMergedChunkEK18InputColDescriptorKiNSt10shared_ptrIN8Chunk_NS5ChunkEEEP6int8_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK13ColumnFetcher12getChunkiterEK18InputColDescriptorKi">
+<span id="_CPPv3NK13ColumnFetcher12getChunkiterEK18InputColDescriptorKi"></span><span id="_CPPv2NK13ColumnFetcher12getChunkiterEK18InputColDescriptorKi"></span><span id="ColumnFetcher::getChunkiter__InputColDescriptorC.iCC"></span><span class="target" id="class_column_fetcher_1a60904cbbf1738b1878b2b79b60157420"></span><em class="property">const</em> int8_t *<code class="sig-name descname">getChunkiter</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="class_input_col_descriptor.html#_CPPv418InputColDescriptor" title="InputColDescriptor">InputColDescriptor</a> <em>col_desc</em>, <em class="property">const</em> int <em>device_id</em> = 0<span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13ColumnFetcher12getChunkiterEK18InputColDescriptorKi" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK13ColumnFetcher16prepareChunkIterEP14AbstractBufferR9ChunkIterK6size_t">
+<span id="_CPPv3NK13ColumnFetcher16prepareChunkIterEP14AbstractBufferR9ChunkIterK6size_t"></span><span id="_CPPv2NK13ColumnFetcher16prepareChunkIterEP14AbstractBufferR9ChunkIterK6size_t"></span><span id="ColumnFetcher::prepareChunkIter__AbstractBufferP.ChunkIterR.sCC"></span><span class="target" id="class_column_fetcher_1a55fa73385dc2f4e29ed37236bb3b4fac"></span><a class="reference internal" href="class_chunk_iter.html#_CPPv49ChunkIter" title="ChunkIter">ChunkIter</a> <code class="sig-name descname">prepareChunkIter</code><span class="sig-paren">(</span>AbstractBuffer *<em>merged</em>, <a class="reference internal" href="class_chunk_iter.html#_CPPv49ChunkIter" title="ChunkIter">ChunkIter</a> &amp;<em>chunk_iter</em>, <em class="property">const</em> size_t <em>total_num_tuples</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13ColumnFetcher16prepareChunkIterEP14AbstractBufferR9ChunkIterK6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 <dl class="function">
 <dt id="_CPPv4NK13ColumnFetcher18getResultSetColumnERK12ResultSetPtrKiKiKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_t">
 <span id="_CPPv3NK13ColumnFetcher18getResultSetColumnERK12ResultSetPtrKiKiKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_t"></span><span id="_CPPv2NK13ColumnFetcher18getResultSetColumnERK12ResultSetPtrKiKiKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_t"></span><span id="ColumnFetcher::getResultSetColumn__ResultSetPtrCR.iC.iC.Data_Namespace::MemoryLevelC.iC.DeviceAllocatorP.sCC"></span><span class="target" id="class_column_fetcher_1a47d6a65f344acee671b69fa0acc133a0"></span><em class="property">const</em> int8_t *<code class="sig-name descname">getResultSetColumn</code><span class="sig-paren">(</span><em class="property">const</em> ResultSetPtr &amp;<em>buffer</em>, <em class="property">const</em> int <em>table_id</em>, <em class="property">const</em> int <em>col_id</em>, <em class="property">const</em> Data_Namespace::MemoryLevel <em>memory_level</em>, <em class="property">const</em> int <em>device_id</em>, <a class="reference internal" href="class_device_allocator.html#_CPPv415DeviceAllocator" title="DeviceAllocator">DeviceAllocator</a> *<em>device_allocator</em>, <em class="property">const</em> size_t <em>thread_idx</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13ColumnFetcher18getResultSetColumnERK12ResultSetPtrKiKiKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_t" title="Permalink to this definition">¶</a><br /></dt>
@@ -1987,8 +2020,8 @@
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N13ColumnFetcher26columnar_conversion_mutex_E">
-<span id="_CPPv3N13ColumnFetcher26columnar_conversion_mutex_E"></span><span id="_CPPv2N13ColumnFetcher26columnar_conversion_mutex_E"></span><span id="ColumnFetcher::columnar_conversion_mutex___std::mutex"></span><span class="target" id="class_column_fetcher_1aeafe0cf82c3f5ae92c721d63fae071b3"></span>std::mutex <code class="sig-name descname">columnar_conversion_mutex_</code><a class="headerlink" href="#_CPPv4N13ColumnFetcher26columnar_conversion_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N13ColumnFetcher21columnar_fetch_mutex_E">
+<span id="_CPPv3N13ColumnFetcher21columnar_fetch_mutex_E"></span><span id="_CPPv2N13ColumnFetcher21columnar_fetch_mutex_E"></span><span id="ColumnFetcher::columnar_fetch_mutex___std::mutex"></span><span class="target" id="class_column_fetcher_1aa44aa81cfc8d60100971804004a4dcb0"></span>std::mutex <code class="sig-name descname">columnar_fetch_mutex_</code><a class="headerlink" href="#_CPPv4N13ColumnFetcher21columnar_fetch_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
@@ -2004,6 +2037,16 @@
 <dl class="member">
 <dt id="_CPPv4N13ColumnFetcher30columnarized_scan_table_cache_E">
 <span id="_CPPv3N13ColumnFetcher30columnarized_scan_table_cache_E"></span><span id="_CPPv2N13ColumnFetcher30columnarized_scan_table_cache_E"></span><span id="ColumnFetcher::columnarized_scan_table_cache___std::unordered_map:InputColDescriptor.std::unique_ptr:ColumnarResultsC::"></span><span class="target" id="class_column_fetcher_1a19052bba5364715562e448ee808e55ca"></span>std::unordered_map&lt;<a class="reference internal" href="class_input_col_descriptor.html#_CPPv418InputColDescriptor" title="InputColDescriptor">InputColDescriptor</a>, std::unique_ptr&lt;<em class="property">const</em> <a class="reference internal" href="class_columnar_results.html#_CPPv415ColumnarResults" title="ColumnarResults">ColumnarResults</a>&gt;&gt; <code class="sig-name descname">columnarized_scan_table_cache_</code><a class="headerlink" href="#_CPPv4N13ColumnFetcher30columnarized_scan_table_cache_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N13ColumnFetcher34linearized_multi_frag_table_cache_E">
+<span id="_CPPv3N13ColumnFetcher34linearized_multi_frag_table_cache_E"></span><span id="_CPPv2N13ColumnFetcher34linearized_multi_frag_table_cache_E"></span><span id="ColumnFetcher::linearized_multi_frag_table_cache___std::unordered_map:InputColDescriptor.DeviceMergedChunkMap:"></span><span class="target" id="class_column_fetcher_1a2ab3e3eb458fedebf22b2af4cc3e8970"></span>std::unordered_map&lt;<a class="reference internal" href="class_input_col_descriptor.html#_CPPv418InputColDescriptor" title="InputColDescriptor">InputColDescriptor</a>, <a class="reference internal" href="#_CPPv4N13ColumnFetcher20DeviceMergedChunkMapE" title="ColumnFetcher::DeviceMergedChunkMap">DeviceMergedChunkMap</a>&gt; <code class="sig-name descname">linearized_multi_frag_table_cache_</code><a class="headerlink" href="#_CPPv4N13ColumnFetcher34linearized_multi_frag_table_cache_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N13ColumnFetcher39linearized_multi_frag_chunk_iter_cache_E">
+<span id="_CPPv3N13ColumnFetcher39linearized_multi_frag_chunk_iter_cache_E"></span><span id="_CPPv2N13ColumnFetcher39linearized_multi_frag_chunk_iter_cache_E"></span><span id="ColumnFetcher::linearized_multi_frag_chunk_iter_cache___std::unordered_map:InputColDescriptor.DeviceMergedChunkIterMap:"></span><span class="target" id="class_column_fetcher_1a3c9743fadfd6c4460a3d4725b756e567"></span>std::unordered_map&lt;<a class="reference internal" href="class_input_col_descriptor.html#_CPPv418InputColDescriptor" title="InputColDescriptor">InputColDescriptor</a>, <a class="reference internal" href="#_CPPv4N13ColumnFetcher24DeviceMergedChunkIterMapE" title="ColumnFetcher::DeviceMergedChunkIterMap">DeviceMergedChunkIterMap</a>&gt; <code class="sig-name descname">linearized_multi_frag_chunk_iter_cache_</code><a class="headerlink" href="#_CPPv4N13ColumnFetcher39linearized_multi_frag_chunk_iter_cache_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

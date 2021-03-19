@@ -1,0 +1,9 @@
+Class OverlapsHashTableTooBig
+=============================
+
+.. doxygenclass:: OverlapsHashTableTooBig
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

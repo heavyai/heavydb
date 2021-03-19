@@ -1,0 +1,9 @@
+Struct anonymous_namespace{OverlapsJoinHashTable.cpp}::TuningState
+==================================================================
+
+.. doxygenstruct:: anonymous_namespace{OverlapsJoinHashTable.cpp}::TuningState
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

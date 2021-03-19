@@ -1,0 +1,9 @@
+Class anonymous_namespace{OverlapsJoinHashTable.cpp}::BucketSizeTuner
+=====================================================================
+
+.. doxygenclass:: anonymous_namespace{OverlapsJoinHashTable.cpp}::BucketSizeTuner
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

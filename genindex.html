@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.7.0dev 13832c5
+                5.7.0dev 94aeaff
               </div>
             
           
@@ -517,6 +517,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_out_of_render_memory.html">Class OutOfRenderMemory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_overflow_or_underflow.html">Class OverflowOrUnderflow</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_overlaps_hash_table_cache.html">Class OverlapsHashTableCache</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_overlaps_hash_table_too_big.html">Class OverlapsHashTableTooBig</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_overlaps_join_hash_table.html">Class OverlapsJoinHashTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parse_i_r_error.html">Class ParseIRError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_add_column_stmt.html">Class Parser::AddColumnStmt</a></li>
@@ -777,6 +778,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classanonymous__namespace_02_from_table_reordering_8cpp_03_1_1_scheduling_dependency_tracking.html">Class anonymous_namespace{FromTableReordering.cpp}::SchedulingDependencyTracking</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classanonymous__namespace_02_join_filter_push_down_8cpp_03_1_1_bind_filter_to_outermost_visitor.html">Class anonymous_namespace{JoinFilterPushDown.cpp}::BindFilterToOutermostVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classanonymous__namespace_02_join_filter_push_down_8cpp_03_1_1_collect_input_columns_visitor.html">Class anonymous_namespace{JoinFilterPushDown.cpp}::CollectInputColumnsVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_bucket_size_tuner.html">Class anonymous_namespace{OverlapsJoinHashTable.cpp}::BucketSizeTuner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rel_alg_physical_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RelAlgPhysicalInputsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rel_alg_physical_table_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RelAlgPhysicalTableInputsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rex_physical_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RexPhysicalInputsVisitor</a></li>
@@ -1730,7 +1732,8 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_data_source_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRDataSourceDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_feature_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRFeatureDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_spatial_reference_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRSpatialReferenceDeleter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/struct/structanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_bucket_size_tuner.html">Struct anonymous_namespace{OverlapsJoinHashTable.cpp}::BucketSizeTuner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/structanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_hash_table_props.html">Struct anonymous_namespace{OverlapsJoinHashTable.cpp}::HashTableProps</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/structanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_tuning_state.html">Struct anonymous_namespace{OverlapsJoinHashTable.cpp}::TuningState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_lazy_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoLazyFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_query_output_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoQueryOutputFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_target_value_builder.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoTargetValueBuilder</a></li>
@@ -5478,8 +5481,6 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator32codegenFixedLengthColVarInWindowEPKN8Analyzer9ColumnVarEPN4llvm5ValueEPN4llvm5ValueE">CodeGenerator::codegenFixedLengthColVarInWindow (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator14codegenFpArithEPKN8Analyzer7BinOperEPN4llvm5ValueEPN4llvm5ValueE">CodeGenerator::codegenFpArith (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator19codegenFunctionOperEPKN8Analyzer12FunctionOperERK18CompilationOptions">CodeGenerator::codegenFunctionOper (C++ function)</a>
@@ -5488,6 +5489,8 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator26codegenFunctionOperNullArgEPKN8Analyzer12FunctionOperERKNSt6vectorIPN4llvm5ValueEEE">CodeGenerator::codegenFunctionOperNullArg (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator41codegenFunctionOperWithCustomTypeHandlingEPKN8Analyzer34FunctionOperWithCustomTypeHandlingERK18CompilationOptions">CodeGenerator::codegenFunctionOperWithCustomTypeHandling (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator14codegenGeoArgsERKNSt6vectorINSt10shared_ptrIN8Analyzer4ExprEEEEERK18CompilationOptions">CodeGenerator::codegenGeoArgs (C++ function)</a>
@@ -5814,9 +5817,11 @@
 </li>
       <li><a href="api/class/class_column_fetcher.html#_CPPv413ColumnFetcher">ColumnFetcher (C++ class)</a>
 </li>
+      <li><a href="api/class/class_column_fetcher.html#_CPPv4NK13ColumnFetcher14addMergedChunkEK18InputColDescriptorKiNSt10shared_ptrIN8Chunk_NS5ChunkEEEP6int8_t">ColumnFetcher::addMergedChunk (C++ function)</a>
+</li>
       <li><a href="api/class/class_column_fetcher.html#_CPPv4N13ColumnFetcher8CacheKeyE">ColumnFetcher::CacheKey (C++ type)</a>
 </li>
-      <li><a href="api/class/class_column_fetcher.html#_CPPv4N13ColumnFetcher26columnar_conversion_mutex_E">ColumnFetcher::columnar_conversion_mutex_ (C++ member)</a>
+      <li><a href="api/class/class_column_fetcher.html#_CPPv4N13ColumnFetcher21columnar_fetch_mutex_E">ColumnFetcher::columnar_fetch_mutex_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_column_fetcher.html#_CPPv4N13ColumnFetcher29columnarized_ref_table_cache_E">ColumnFetcher::columnarized_ref_table_cache_ (C++ member)</a>
 </li>
@@ -5826,9 +5831,15 @@
 </li>
       <li><a href="api/class/class_column_fetcher.html#_CPPv4N13ColumnFetcher13ColumnFetcherEP8ExecutorRK14ColumnCacheMap">ColumnFetcher::ColumnFetcher (C++ function)</a>
 </li>
+      <li><a href="api/class/class_column_fetcher.html#_CPPv4N13ColumnFetcher24DeviceMergedChunkIterMapE">ColumnFetcher::DeviceMergedChunkIterMap (C++ type)</a>
+</li>
+      <li><a href="api/class/class_column_fetcher.html#_CPPv4N13ColumnFetcher20DeviceMergedChunkMapE">ColumnFetcher::DeviceMergedChunkMap (C++ type)</a>
+</li>
       <li><a href="api/class/class_column_fetcher.html#_CPPv4N13ColumnFetcher9executor_E">ColumnFetcher::executor_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_column_fetcher.html#_CPPv4NK13ColumnFetcher26getAllTableColumnFragmentsEKiKiRKNSt3mapIiPK14TableFragmentsEEKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_t">ColumnFetcher::getAllTableColumnFragments (C++ function)</a>
+</li>
+      <li><a href="api/class/class_column_fetcher.html#_CPPv4NK13ColumnFetcher12getChunkiterEK18InputColDescriptorKi">ColumnFetcher::getChunkiter (C++ function)</a>
 </li>
       <li><a href="api/class/class_column_fetcher.html#_CPPv4N13ColumnFetcher20getOneColumnFragmentEP8ExecutorRKN8Analyzer9ColumnVarERKN20Fragmenter_Namespace12FragmentInfoEKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_tRNSt6vectorINSt10shared_ptrIN8Chunk_NS5ChunkEEEEER14ColumnCacheMap">ColumnFetcher::getOneColumnFragment (C++ function)</a>
 </li>
@@ -5836,7 +5847,15 @@
 </li>
       <li><a href="api/class/class_column_fetcher.html#_CPPv4NK13ColumnFetcher18getResultSetColumnEPK18InputColDescriptorKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_t">ColumnFetcher::getResultSetColumn (C++ function)</a>, <a href="api/class/class_column_fetcher.html#_CPPv4NK13ColumnFetcher18getResultSetColumnERK12ResultSetPtrKiKiKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_t">[1]</a>
 </li>
+      <li><a href="api/class/class_column_fetcher.html#_CPPv4NK13ColumnFetcher24linearizeColumnFragmentsEKiKiRKNSt3mapIiPK14TableFragmentsEERNSt4listINSt10shared_ptrIN8Chunk_NS5ChunkEEEEERNSt4listI9ChunkIterEEKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_t">ColumnFetcher::linearizeColumnFragments (C++ function)</a>
+</li>
+      <li><a href="api/class/class_column_fetcher.html#_CPPv4N13ColumnFetcher39linearized_multi_frag_chunk_iter_cache_E">ColumnFetcher::linearized_multi_frag_chunk_iter_cache_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_column_fetcher.html#_CPPv4N13ColumnFetcher34linearized_multi_frag_table_cache_E">ColumnFetcher::linearized_multi_frag_table_cache_ (C++ member)</a>
+</li>
       <li><a href="api/class/class_column_fetcher.html#_CPPv4N13ColumnFetcher14makeJoinColumnEP8ExecutorRKN8Analyzer9ColumnVarERKNSt6vectorIN20Fragmenter_Namespace12FragmentInfoEEEKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocatorK6size_tRNSt6vectorINSt10shared_ptrIN8Chunk_NS5ChunkEEEEERNSt6vectorINSt10shared_ptrIvEEEER14ColumnCacheMap">ColumnFetcher::makeJoinColumn (C++ function)</a>
+</li>
+      <li><a href="api/class/class_column_fetcher.html#_CPPv4NK13ColumnFetcher16prepareChunkIterEP14AbstractBufferR9ChunkIterK6size_t">ColumnFetcher::prepareChunkIter (C++ function)</a>
 </li>
       <li><a href="api/class/class_column_fetcher.html#_CPPv4N13ColumnFetcher22transferColumnIfNeededEPK15ColumnarResultsKiPN14Data_Namespace7DataMgrEKN14Data_Namespace11MemoryLevelEKiP15DeviceAllocator">ColumnFetcher::transferColumnIfNeeded (C++ function)</a>
 </li>
@@ -8648,10 +8667,10 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor8ExecutorEK10ExecutorIdK6size_tK6size_tK6size_tRKNSt6stringERKNSt6stringE">Executor::Executor (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor12executor_id_E">Executor::executor_id_ (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor23executor_session_mutex_E">Executor::executor_session_mutex_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor10ExecutorIdE">Executor::ExecutorId (C++ type)</a>
@@ -8797,6 +8816,8 @@
       <li><a href="api/class/class_executor.html#_CPPv4NK8Executor14maxGpuSlabSizeEv">Executor::maxGpuSlabSize (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4NK8Executor21needFetchAllFragmentsERK18InputColDescriptorRK19RelAlgExecutionUnitRK13FragmentsList">Executor::needFetchAllFragments (C++ function)</a>
+</li>
+      <li><a href="api/class/class_executor.html#_CPPv4NK8Executor25needLinearizeAllFragmentsEPK16ColumnDescriptorRK18InputColDescriptorRK19RelAlgExecutionUnitRK13FragmentsList">Executor::needLinearizeAllFragments (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor20nukeCacheOfExecutorsEv">Executor::nukeCacheOfExecutors (C++ function)</a>
 </li>
@@ -13618,7 +13639,7 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/struct_join_bucket_info.html#_CPPv414JoinBucketInfo">JoinBucketInfo (C++ class)</a>
 </li>
-      <li><a href="api/struct/struct_join_bucket_info.html#_CPPv4N14JoinBucketInfo26bucket_sizes_for_dimensionE">JoinBucketInfo::bucket_sizes_for_dimension (C++ member)</a>
+      <li><a href="api/struct/struct_join_bucket_info.html#_CPPv4N14JoinBucketInfo34inverse_bucket_sizes_for_dimensionE">JoinBucketInfo::inverse_bucket_sizes_for_dimension (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_join_bucket_info.html#_CPPv4N14JoinBucketInfo9is_doubleE">JoinBucketInfo::is_double (C++ member)</a>
 </li>
@@ -15094,10 +15115,10 @@
 </li>
       <li><a href="api/class/classomnisci_1_1thrift_1_1_omni_sci_1_1start__query__args.html#_CPPv4N7omnisci6thrift7OmniSci16start_query_argsE">omnisci::thrift::OmniSci::start_query_args (C++ class)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classomnisci_1_1thrift_1_1_omni_sci_1_1start__query__result.html#_CPPv4N7omnisci6thrift7OmniSci18start_query_resultE">omnisci::thrift::OmniSci::start_query_result (C++ class)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classomnisci_1_1thrift_1_1_omni_sci_1_1start__render__query__args.html#_CPPv4N7omnisci6thrift7OmniSci23start_render_query_argsE">omnisci::thrift::OmniSci::start_render_query_args (C++ class)</a>
 </li>
       <li><a href="api/class/classomnisci_1_1thrift_1_1_omni_sci_1_1start__render__query__result.html#_CPPv4N7omnisci6thrift7OmniSci25start_render_query_resultE">omnisci::thrift::OmniSci::start_render_query_result (C++ class)</a>
@@ -15270,7 +15291,7 @@
 </li>
       <li><a href="api/class/classomnisci_1_1_u_u_i_d.html#_CPPv4ltRK4UUIDRK4UUID">operator&lt; (C++ function)</a>
 </li>
-      <li><a href="api/class/class_date_time_parser.html#_CPPv4lsRNSt7ostreamERK8DateTime">operator&lt;&lt; (C++ function)</a>, <a href="api/struct/struct_date_time_parser_1_1_date_time.html#_CPPv4lsRNSt7ostreamERK8DateTime">[1]</a>, <a href="api/struct/struct_restriction.html#_CPPv4lsRNSt7ostreamERK11Restriction">[2]</a>, <a href="api/struct/structquantile_1_1detail_1_1_centroids.html#_CPPv4I00ElsRNSt7ostreamERNSt7ostreamERK9CentroidsI9RealType210IndexType2E">[3]</a>
+      <li><a href="api/class/class_date_time_parser.html#_CPPv4lsRNSt7ostreamERK8DateTime">operator&lt;&lt; (C++ function)</a>, <a href="api/class/classanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_bucket_size_tuner.html#_CPPv4lsRNSt7ostreamERK15BucketSizeTuner">[1]</a>, <a href="api/struct/struct_date_time_parser_1_1_date_time.html#_CPPv4lsRNSt7ostreamERK8DateTime">[2]</a>, <a href="api/struct/struct_restriction.html#_CPPv4lsRNSt7ostreamERK11Restriction">[3]</a>, <a href="api/struct/structquantile_1_1detail_1_1_centroids.html#_CPPv4I00ElsRNSt7ostreamERNSt7ostreamERK9CentroidsI9RealType210IndexType2E">[4]</a>
 </li>
       <li><a href="api/class/class_sys_allocator.html#_CPPv4eqRK4SelfRK4Self">operator== (C++ function)</a>, <a href="api/class/classomnisci_1_1_u_u_i_d.html#_CPPv4eqRK4UUIDRK4UUID">[1]</a>
 </li>
@@ -15342,9 +15363,9 @@
 </li>
       <li><a href="api/struct/struct_overlaps_hash_table_cache_key.html#_CPPv425OverlapsHashTableCacheKey">OverlapsHashTableCacheKey (C++ class)</a>
 </li>
-      <li><a href="api/struct/struct_overlaps_hash_table_cache_key.html#_CPPv4N25OverlapsHashTableCacheKey12bucket_sizesE">OverlapsHashTableCacheKey::bucket_sizes (C++ member)</a>
-</li>
       <li><a href="api/struct/struct_overlaps_hash_table_cache_key.html#_CPPv4N25OverlapsHashTableCacheKey10chunk_keysE">OverlapsHashTableCacheKey::chunk_keys (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_overlaps_hash_table_cache_key.html#_CPPv4N25OverlapsHashTableCacheKey20inverse_bucket_sizesE">OverlapsHashTableCacheKey::inverse_bucket_sizes (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_overlaps_hash_table_cache_key.html#_CPPv4N25OverlapsHashTableCacheKey12num_elementsE">OverlapsHashTableCacheKey::num_elements (C++ member)</a>
 </li>
@@ -15353,6 +15374,10 @@
       <li><a href="api/struct/struct_overlaps_hash_table_cache_key.html#_CPPv4N25OverlapsHashTableCacheKey6optypeE">OverlapsHashTableCacheKey::optype (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_overlaps_hash_table_cache_key.html#_CPPv4N25OverlapsHashTableCacheKey25OverlapsHashTableCacheKeyEK6size_tRKNSt6vectorI8ChunkKeyEERK6SQLOpsKNSt6vectorIdEE">OverlapsHashTableCacheKey::OverlapsHashTableCacheKey (C++ function)</a>, <a href="api/struct/struct_overlaps_hash_table_cache_key.html#_CPPv4N25OverlapsHashTableCacheKey25OverlapsHashTableCacheKeyERK17HashTableCacheKeyRKNSt6vectorIdEE">[1]</a>
+</li>
+      <li><a href="api/class/class_overlaps_hash_table_too_big.html#_CPPv423OverlapsHashTableTooBig">OverlapsHashTableTooBig (C++ class)</a>
+</li>
+      <li><a href="api/class/class_overlaps_hash_table_too_big.html#_CPPv4N23OverlapsHashTableTooBig23OverlapsHashTableTooBigEK6size_t">OverlapsHashTableTooBig::OverlapsHashTableTooBig (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_overlaps_join_conjunction.html#_CPPv423OverlapsJoinConjunction">OverlapsJoinConjunction (C++ class)</a>
 </li>
@@ -15365,8 +15390,6 @@
       <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable21approximateTupleCountERKNSt6vectorIdEERNSt6vectorI16ColumnsForDeviceEE">OverlapsJoinHashTable::approximateTupleCount (C++ function)</a>
 </li>
       <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable17auto_tuner_cache_E">OverlapsJoinHashTable::auto_tuner_cache_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable27bucket_sizes_for_dimension_E">OverlapsJoinHashTable::bucket_sizes_for_dimension_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable11BucketSizesE">OverlapsJoinHashTable::BucketSizes (C++ type)</a>
 </li>
@@ -15444,6 +15467,8 @@
 </li>
       <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable18inner_outer_pairs_E">OverlapsJoinHashTable::inner_outer_pairs_ (C++ member)</a>
 </li>
+      <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable35inverse_bucket_sizes_for_dimension_E">OverlapsJoinHashTable::inverse_bucket_sizes_for_dimension_ (C++ member)</a>
+</li>
       <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable16layout_override_E">OverlapsJoinHashTable::layout_override_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable13memory_level_E">OverlapsJoinHashTable::memory_level_ (C++ member)</a>
@@ -15470,7 +15495,7 @@
 </li>
       <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable15reifyWithLayoutEK8HashType">OverlapsJoinHashTable::reifyWithLayout (C++ function)</a>
 </li>
-      <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable17setBucketSizeInfoERKNSt6vectorIdEERNSt6vectorI16ColumnsForDeviceEEK6size_t">OverlapsJoinHashTable::setBucketSizeInfo (C++ function)</a>
+      <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable24setInverseBucketSizeInfoERKNSt6vectorIdEERNSt6vectorI16ColumnsForDeviceEEK6size_t">OverlapsJoinHashTable::setInverseBucketSizeInfo (C++ function)</a>
 </li>
       <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4NK21OverlapsJoinHashTable10shardCountEv">OverlapsJoinHashTable::shardCount (C++ function)</a>
 </li>
