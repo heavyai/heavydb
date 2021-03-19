@@ -185,7 +185,7 @@ download_make_install ${HTTP_DEPS}/libedit-20170329-3.1.tar.gz
 # (see common-functions.sh)
 install_llvm
 
-VERS=7.69.0
+VERS=7.75.0
 # https://curl.haxx.se/download/curl-$VERS.tar.xz
 download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps"
 
