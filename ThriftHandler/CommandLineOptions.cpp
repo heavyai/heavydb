@@ -843,6 +843,7 @@ void CommandLineOptions::validate() {
       base_path, allowed_import_paths, allowed_export_paths);
 
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_catalogs");
+  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/temporary/mapd_catalogs");
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_data");
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_log");
   g_enable_s3_fsi = false;

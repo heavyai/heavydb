@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cassert>
 #include <exception>
+#include <filesystem>
 #include <list>
 #include <memory>
 #include <random>
@@ -58,8 +59,11 @@ using std::vector;
 
 using namespace std::string_literals;
 
+std::string g_base_path;
+
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
+extern bool g_read_only;
 
 namespace {
 
@@ -68,6 +72,41 @@ std::string hash_with_bcrypt(const std::string& pwd) {
   CHECK(bcrypt_gensalt(-1, salt) == 0);
   CHECK(bcrypt_hashpw(pwd.c_str(), salt, hash) == 0);
   return std::string(hash, BCRYPT_HASHSIZE);
+}
+
+// This catalog copy must take place before any other catalog accesses.
+std::filesystem::path copy_catalog_if_read_only(std::filesystem::path base_data_path) {
+  std::filesystem::path catalog_base_data_path;
+
+  // For a read-only server, make a temporary copy of mapd_catalogs.
+  // This catalog copy must take place before any other catalog accesses.
+  if (!g_read_only) {
+    // Catalog directory mapd_catalogs will be in the normal location.
+    catalog_base_data_path = base_data_path;
+  } else {
+    // Catalog directory mapd_catalogs will be in a temporary location.
+    catalog_base_data_path = base_data_path / "temporary";
+
+    // Delete the temporary directory if it exists.
+    // The name "temporary" is hardcoded so nobody should object to its deletion!
+    CHECK_NE(catalog_base_data_path.string().find("temporary"), std::string::npos);
+    CHECK_NE(catalog_base_data_path, base_data_path);
+    if (std::filesystem::exists(catalog_base_data_path)) {
+      std::filesystem::remove_all(catalog_base_data_path);
+    }
+    std::filesystem::create_directories(catalog_base_data_path);
+
+    // Make the temporary copy of the catalog.
+    const auto normal_catalog_path = base_data_path / "mapd_catalogs";
+    const auto temporary_catalog_path = catalog_base_data_path / "mapd_catalogs";
+    LOG(INFO) << "copying catalog from " << normal_catalog_path << " to "
+              << temporary_catalog_path << " for read-only server";
+    std::filesystem::copy(normal_catalog_path,
+                          temporary_catalog_path,
+                          std::filesystem::copy_options::recursive);
+  }
+
+  return catalog_base_data_path;
 }
 
 }  // namespace
@@ -126,7 +165,7 @@ void SysCatalog::init(const std::string& basePath,
     sys_write_lock write_lock(this);
     sys_sqlite_lock sqlite_lock(this);
 
-    basePath_ = basePath;
+    basePath_ = copy_catalog_if_read_only(basePath).string();
     dataMgr_ = dataMgr;
     authMetadata_ = &authMetadata;
     pki_server_.reset(new PkiServer(*authMetadata_));
@@ -758,7 +797,7 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
   }
   Catalog_Namespace::DBMetadata db_meta;
   getMetadataWithDefaultDB(dbname, username, db_meta, user_meta);
-  return getCatalog(basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
+  return getCatalog(db_meta, false);
 }
 
 // loginImpl() with no EE code and no SAML code
@@ -779,8 +818,7 @@ std::shared_ptr<Catalog> SysCatalog::switchDatabase(std::string& dbname,
 
   // NOTE(max): register database in Catalog that early to allow ldap
   // and saml create default user and role privileges on databases
-  auto cat =
-      getCatalog(basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
+  auto cat = getCatalog(db_meta, false);
 
   DBObject dbObject(dbname, DatabaseDBObjectType);
   dbObject.loadKey();
@@ -885,8 +923,7 @@ std::vector<std::shared_ptr<Catalog>> SysCatalog::getCatalogsForAllDbs() {
   std::vector<std::shared_ptr<Catalog>> catalogs{};
   const auto& db_metadata_list = getAllDBMetadata();
   for (const auto& db_metadata : db_metadata_list) {
-    catalogs.emplace_back(getCatalog(
-        basePath_, db_metadata, dataMgr_, string_dict_hosts_, calciteMgr_, false));
+    catalogs.emplace_back(getCatalog(db_metadata, false));
   }
   return catalogs;
 }
@@ -1148,7 +1185,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
         name);
     CHECK(getMetadataForDB(name, db));
 
-    cat = getCatalog(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, true);
+    cat = getCatalog(db, true);
 
     if (owner != OMNISCI_ROOT_USER_ID) {
       DBObject object(name, DBObjectType::DatabaseDBObjectType);
@@ -1166,7 +1203,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
 
   // force a migration on the new database
   removeCatalog(name);
-  cat = getCatalog(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, false);
+  cat = getCatalog(db, false);
 
   if (g_enable_fsi) {
     try {
@@ -1181,7 +1218,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
 void SysCatalog::dropDatabase(const DBMetadata& db) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
-  auto cat = getCatalog(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, false);
+  auto cat = getCatalog(db, false);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     // remove this database ID from any users that have it set as their default database
@@ -2472,13 +2509,7 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const int32_t db_id) {
   return nullptr;
 }
 
-std::shared_ptr<Catalog> SysCatalog::getCatalog(
-    const string& basePath,
-    const DBMetadata& curDB,
-    std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-    const std::vector<LeafHostInfo>& string_dict_hosts,
-    std::shared_ptr<Calcite> calcite,
-    bool is_new_db) {
+std::shared_ptr<Catalog> SysCatalog::getCatalog(const DBMetadata& curDB, bool is_new_db) {
   auto cat = getCatalog(curDB.dbName);
   if (cat) {
     return cat;
@@ -2487,7 +2518,7 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(
   // Catalog doesnt exist
   // has to be made outside of lock as migration uses cat
   cat = std::make_shared<Catalog>(
-      basePath, curDB, dataMgr, string_dict_hosts, calcite, is_new_db);
+      basePath_, curDB, dataMgr_, string_dict_hosts_, calciteMgr_, is_new_db);
 
   dbid_to_cat_map::accessor cata;
 

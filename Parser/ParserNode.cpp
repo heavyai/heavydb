@@ -4899,8 +4899,6 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto stdlog = STDLOG(query_state);
   auto query_state_proxy = query_state->createQueryStateProxy();
 
-  auto& catalog = session.getCatalog();
-
   LocalConnector local_connector;
 
   if (!leafs_connector_) {
@@ -4923,8 +4921,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Invalid file path for COPY TO");
   } else if (!boost::filesystem::path(*file_path).is_absolute()) {
     std::string file_name = boost::filesystem::path(*file_path).filename().string();
-    std::string file_dir =
-        catalog.getBasePath() + "/mapd_export/" + session.get_session_id() + "/";
+    std::string file_dir = g_base_path + "/mapd_export/" + session.get_session_id() + "/";
     if (!boost::filesystem::exists(file_dir)) {
       if (!boost::filesystem::create_directories(file_dir)) {
         throw std::runtime_error("Directory " + file_dir + " cannot be created.");

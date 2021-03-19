@@ -27,3 +27,6 @@ target_link_libraries(Catalog SqliteConnector StringDictionary Fragmenter Migrat
 if(ENABLE_KRB5)
   target_link_libraries(Catalog krb5_gss)
 endif()
+if((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.1) OR ${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
+  target_link_libraries(Catalog stdc++fs)
+endif()
