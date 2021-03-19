@@ -1301,18 +1301,17 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
 
 }  // namespace Fragmenter_Namespace
 
-void UpdelRoll::commitUpdate() {
+bool UpdelRoll::commitUpdate() {
   if (nullptr == catalog) {
-    return;
+    return false;
   }
   const auto td = catalog->getMetadataForTable(logicalTableId);
   CHECK(td);
   ChunkKey chunk_key{catalog->getDatabaseId(), td->tableId};
   const auto table_lock = lockmgr::TableDataLockMgr::getWriteLockForTable(chunk_key);
 
-  // Checkpoint all shards. Otherwise, epochs can go out of sync. Also, for distributed
-  // mode, do not checkpoint here, since the aggregator handles checkpointing.
-  if (!g_cluster && td->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
+  // Checkpoint all shards. Otherwise, epochs can go out of sync.
+  if (td->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
     auto table_epochs = catalog->getTableEpochs(catalog->getDatabaseId(), logicalTableId);
     try {
       // `checkpointWithAutoRollback` is not called here because, if a failure occurs,
@@ -1325,6 +1324,7 @@ void UpdelRoll::commitUpdate() {
     }
   }
   updateFragmenterAndCleanupChunks();
+  return true;
 }
 
 void UpdelRoll::stageUpdate() {

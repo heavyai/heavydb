@@ -120,31 +120,39 @@ class StorageIOFacility {
 
   class TransactionParameters {
    public:
-    TransactionParameters(const bool table_is_temporary)
-        : table_is_temporary_(table_is_temporary) {}
+    TransactionParameters(const TableDescriptorType* table_descriptor)
+        : table_descriptor_(table_descriptor)
+        , table_is_temporary_(table_is_temporary(table_descriptor)) {}
 
     virtual ~TransactionParameters() = default;
 
     typename StorageIOFacility::TransactionLog& getTransactionTracker() {
       return transaction_tracker_;
     }
-    void finalizeTransaction() { transaction_tracker_.commitUpdate(); }
+    void finalizeTransaction(const Catalog_Namespace::Catalog& catalog) {
+      auto update_occurred = transaction_tracker_.commitUpdate();
+      if (!update_occurred && table_descriptor_->persistenceLevel ==
+                                  Data_Namespace::MemoryLevel::DISK_LEVEL) {
+        // If commitUpdate() did not checkpoint, then we need to checkpoint here in order
+        // to ensure that epochs are uniformly incremented in distributed mode.
+        catalog.checkpoint(table_descriptor_->tableId);
+      }
+    }
 
     auto tableIsTemporary() const { return table_is_temporary_; }
 
-   protected:
-    bool table_is_temporary_;
+    auto const* getTableDescriptor() const { return table_descriptor_; }
 
    private:
     typename StorageIOFacility::TransactionLog transaction_tracker_;
+    TableDescriptorType const* table_descriptor_;
+    bool table_is_temporary_;
   };
 
   struct DeleteTransactionParameters : public TransactionParameters {
    public:
-    DeleteTransactionParameters(const bool table_is_temporary)
-        : TransactionParameters(table_is_temporary) {}
-
-    auto tableIsTemporary() const { return table_is_temporary_; }
+    DeleteTransactionParameters(const TableDescriptorType* table_descriptor)
+        : TransactionParameters(table_descriptor) {}
 
    private:
     DeleteTransactionParameters(DeleteTransactionParameters const& other) = delete;
@@ -154,18 +162,16 @@ class StorageIOFacility {
 
   class UpdateTransactionParameters : public TransactionParameters {
    public:
-    UpdateTransactionParameters(TableDescriptorType const* table_desc,
+    UpdateTransactionParameters(TableDescriptorType const* table_descriptor,
                                 UpdateTargetColumnNamesList const& update_column_names,
                                 UpdateTargetTypeList const& target_types,
                                 bool varlen_update_required)
-        : TransactionParameters(table_is_temporary(table_desc))
-        , table_descriptor_(table_desc)
+        : TransactionParameters(table_descriptor)
         , update_column_names_(update_column_names)
         , targets_meta_(target_types)
         , varlen_update_required_(varlen_update_required) {}
 
     auto getUpdateColumnCount() const { return update_column_names_.size(); }
-    auto const* getTableDescriptor() const { return table_descriptor_; }
     auto const& getTargetsMetaInfo() const { return targets_meta_; }
     auto getTargetsMetaInfoSize() const { return targets_meta_.size(); }
     auto const& getUpdateColumnNames() const { return update_column_names_; }
@@ -176,7 +182,6 @@ class StorageIOFacility {
     UpdateTransactionParameters& operator=(UpdateTransactionParameters const& other) =
         delete;
 
-    TableDescriptorType const* table_descriptor_;
     UpdateTargetColumnNamesList update_column_names_;
     UpdateTargetTypeList const& targets_meta_;
     bool varlen_update_required_ = false;

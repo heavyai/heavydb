@@ -68,7 +68,10 @@ struct UpdelRoll {
   const TableDescriptor* table_descriptor{nullptr};
 
   void cancelUpdate();
-  void commitUpdate();
+
+  // Commits/checkpoints data and metadata updates. A boolean that indicates whether or
+  // not data update actually occurred is returned.
+  bool commitUpdate();
 
   // Writes chunks at the CPU memory level to storage without checkpointing at the storage
   // level.
