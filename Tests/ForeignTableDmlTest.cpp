@@ -3935,7 +3935,7 @@ class ScheduledRefreshTest : public RefreshTests {
   inline static std::atomic<bool> is_program_running_;
 };
 
-TEST_F(ScheduledRefreshTest, BatchMode) {
+TEST_F(ScheduledRefreshTest, DISABLED_BatchMode) {
   setTestFile("0.csv");
   auto query = getCreateScheduledRefreshTableQuery("1S");
   sql(query);
@@ -3947,7 +3947,7 @@ TEST_F(ScheduledRefreshTest, BatchMode) {
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}});
 }
 
-TEST_F(ScheduledRefreshTest, AppendMode) {
+TEST_F(ScheduledRefreshTest, DISABLED_AppendMode) {
   setTestFile("1.csv");
   auto query = getCreateScheduledRefreshTableQuery("1S", "append");
   sql(query);
@@ -3959,7 +3959,7 @@ TEST_F(ScheduledRefreshTest, AppendMode) {
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}, {i(2)}});
 }
 
-TEST_F(ScheduledRefreshTest, OnlyStartDateTime) {
+TEST_F(ScheduledRefreshTest, DISABLED_OnlyStartDateTime) {
   stopScheduler();
   setTestFile("0.csv");
   auto query = getCreateScheduledRefreshTableQuery("", "all");
@@ -3979,7 +3979,7 @@ TEST_F(ScheduledRefreshTest, StartDateTimeInThePast) {
       query, "Exception: REFRESH_START_DATE_TIME cannot be a past date time.");
 }
 
-TEST_F(ScheduledRefreshTest, SecondsInterval) {
+TEST_F(ScheduledRefreshTest, DISABLED_SecondsInterval) {
   stopScheduler();
   auto start_time = getCurrentTime();
   setTestFile("0.csv");
@@ -3998,7 +3998,7 @@ TEST_F(ScheduledRefreshTest, SecondsInterval) {
       next_refresh_time, start_time, refresh_end_time + interval_duration);
 }
 
-TEST_F(ScheduledRefreshTest, HoursInterval) {
+TEST_F(ScheduledRefreshTest, DISABLED_HoursInterval) {
   stopScheduler();
   auto start_time = getCurrentTime();
   setTestFile("0.csv");
@@ -4017,7 +4017,7 @@ TEST_F(ScheduledRefreshTest, HoursInterval) {
       next_refresh_time, start_time, refresh_end_time + interval_duration);
 }
 
-TEST_F(ScheduledRefreshTest, DaysInterval) {
+TEST_F(ScheduledRefreshTest, DISABLED_DaysInterval) {
   stopScheduler();
   auto start_time = getCurrentTime();
   setTestFile("0.csv");
@@ -4079,7 +4079,7 @@ TEST_F(ScheduledRefreshTest, InvalidStartDateTime) {
                           "Exception: Invalid TIMESTAMP string (INVALID_DATE_TIME)");
 }
 
-TEST_F(ScheduledRefreshTest, SchedulerStop) {
+TEST_F(ScheduledRefreshTest, DISABLED_SchedulerStop) {
   setTestFile("0.csv");
   auto query = getCreateScheduledRefreshTableQuery("1S");
   sql(query);
