@@ -1722,6 +1722,12 @@ extern "C" void agg_count_distinct_skip_val(int64_t* agg,
   }
 }
 
+extern "C" void agg_approx_median(int64_t* agg, const double val) {
+  auto* t_digest = reinterpret_cast<quantile::TDigest*>(*agg);
+  t_digest->allocate();
+  t_digest->add(val);
+}
+
 void GroupByAndAggregate::codegenCountDistinct(
     const size_t target_idx,
     const Analyzer::Expr* target_expr,
@@ -1822,7 +1828,8 @@ void GroupByAndAggregate::codegenApproxMedian(const size_t target_idx,
     auto const agg_info = get_target_info(target_expr, g_bigint_count);
     agg_args.back() = executor_->castToFP(agg_args.back(), arg_ti, agg_info.sql_type);
   }
-  emitCall("agg_approx_median", agg_args);
+  cs->emitExternalCall(
+      "agg_approx_median", llvm::Type::getVoidTy(cs->context_), agg_args);
   if (nullable) {
     irb.CreateBr(skip);
     cs->current_func_->getBasicBlockList().push_back(skip);
