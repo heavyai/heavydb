@@ -66,6 +66,10 @@ class EpochConsistencyTest : public DBHandlerTestFixture {
     return "../../Tests/Import/datafiles/sharded_example_2.csv";
   }
 
+  std::string getShardedMultiFragmentFilePath() {
+    return "../../Tests/Import/datafiles/sharded_2_col_1_20.csv";
+  }
+
   void assertTableEpochs(const std::vector<int32_t>& expected_table_epochs) {
     auto [db_handler, session_id] = getDbHandlerAndSessionId();
     const auto& catalog = getCatalog();
@@ -593,6 +597,31 @@ TEST_F(EpochLevelingTest, InsertTableAsSelect) {
                        {i(1), i(10), "test_10"},
                        {i(2), i(2), "test_2"},
                        {i(2), i(20), "test_20"}});
+  // clang-format on
+}
+
+TEST_F(EpochLevelingTest, Optimize) {
+  sql("drop table if exists test_table;");
+  sql("create table test_table(a int, b int, shard key(a)) "
+      "with (shard_count = 4, fragment_size = 2);");
+  assertTableEpochs({0, 0, 0, 0});
+
+  sql("copy test_table from '" + getShardedMultiFragmentFilePath() + "';");
+  assertTableEpochs({1, 1, 1, 1});
+
+  sql("delete from test_table where mod(b, 2) = 0;");
+  assertTableEpochs({2, 2, 2, 2});
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  // Vacuum does a checkpoint and metadata re-computation does another checkpoint
+  assertTableEpochs({4, 4, 4, 4});
+
+  // clang-format off
+  // Assert subsequent query returns expected result
+  sqlAndCompareResult("select * from test_table order by a;",
+                      {{i(1), i(1)}, {i(3), i(3)}, {i(5), i(5)}, {i(7), i(7)},
+                       {i(9), i(9)}, {i(11), i(11)}, {i(13), i(13)},
+                       {i(15), i(15)}, {i(17), i(17)}, {i(19), i(19)}});
   // clang-format on
 }
 

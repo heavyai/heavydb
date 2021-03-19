@@ -496,6 +496,16 @@ void DataMgr::checkpoint(const int db_id, const int tb_id) {
   }
 }
 
+void DataMgr::checkpoint(const int db_id,
+                         const int table_id,
+                         const MemoryLevel memory_level) {
+  CHECK_LT(static_cast<size_t>(memory_level), bufferMgrs_.size());
+  CHECK_LT(static_cast<size_t>(memory_level), levelSizes_.size());
+  for (int device_id = 0; device_id < levelSizes_[memory_level]; device_id++) {
+    bufferMgrs_[memory_level][device_id]->checkpoint(db_id, table_id);
+  }
+}
+
 void DataMgr::checkpoint() {
   // TODO(adb): SAA
   for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {

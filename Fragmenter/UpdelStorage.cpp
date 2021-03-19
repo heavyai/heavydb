@@ -1320,12 +1320,32 @@ void UpdelRoll::commitUpdate() {
       catalog->checkpoint(logicalTableId);
     } catch (...) {
       dirtyChunks.clear();
-      const_cast<Catalog_Namespace::Catalog*>(catalog)->setTableEpochsLogExceptions(
-          catalog->getDatabaseId(), table_epochs);
+      catalog->setTableEpochsLogExceptions(catalog->getDatabaseId(), table_epochs);
       throw;
     }
   }
+  updateFragmenterAndCleanupChunks();
+}
 
+void UpdelRoll::stageUpdate() {
+  CHECK(catalog);
+  auto db_id = catalog->getDatabaseId();
+  CHECK(table_descriptor);
+  auto table_id = table_descriptor->tableId;
+  CHECK_EQ(memoryLevel, Data_Namespace::MemoryLevel::CPU_LEVEL);
+  CHECK_EQ(table_descriptor->persistenceLevel, Data_Namespace::MemoryLevel::DISK_LEVEL);
+  const auto table_lock =
+      lockmgr::TableDataLockMgr::getWriteLockForTable({db_id, logicalTableId});
+  try {
+    catalog->getDataMgr().checkpoint(db_id, table_id, memoryLevel);
+  } catch (...) {
+    dirtyChunks.clear();
+    throw;
+  }
+  updateFragmenterAndCleanupChunks();
+}
+
+void UpdelRoll::updateFragmenterAndCleanupChunks() {
   // for each dirty fragment
   for (auto& cm : chunkMetadata) {
     cm.first.first->fragmenter->updateMetadata(catalog, cm.first, *this);
@@ -1353,8 +1373,7 @@ void UpdelRoll::cancelUpdate() {
     auto table_epochs = catalog->getTableEpochs(databaseId, logicalTableId);
 
     dirtyChunks.clear();
-    const_cast<Catalog_Namespace::Catalog*>(catalog)->setTableEpochs(databaseId,
-                                                                     table_epochs);
+    catalog->setTableEpochs(databaseId, table_epochs);
   } else {
     const auto td = catalog->getMetadataForTable(logicalTableId);
     CHECK(td);
