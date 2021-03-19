@@ -813,6 +813,63 @@ TEST_F(ShowCreateTableTest, Other) {
   }
 }
 
+TEST_F(ShowCreateTableTest, SharedComplex) {
+  {
+    sql("DROP TABLE IF EXISTS showcreatetabletest1;");
+    sql("DROP TABLE IF EXISTS renamedcreatetabletest1;");
+    sql("DROP TABLE IF EXISTS showcreatetabletest2;");
+    sql("DROP TABLE IF EXISTS showcreatetabletest3;");
+
+    sql("CREATE TABLE showcreatetabletest1 (\n  t1 TEXT ENCODING DICT(16));");
+    std::string sqltext =
+        "CREATE TABLE showcreatetabletest2 (\n  t2 TEXT,\n  SHARED DICTIONARY (t2) "
+        "REFERENCES showcreatetabletest1(t1));";
+    sql(sqltext);
+    {
+      TQueryResult result;
+      sql(result, "SHOW CREATE TABLE showcreatetabletest2;");
+      EXPECT_EQ(sqltext, result.row_set.columns[0].data.str_col[0]);
+    }
+    sql("CREATE TABLE showcreatetabletest3 (\n  t3 TEXT,\n SHARED DICTIONARY (t3) "
+        "REFERENCES showcreatetabletest2(t2));");
+
+    sql("ALTER TABLE showcreatetabletest1 RENAME TO renamedcreatetabletest1;");
+
+    {
+      TQueryResult result;
+      sql(result, "SHOW CREATE TABLE showcreatetabletest3;");
+      EXPECT_EQ(
+          "CREATE TABLE showcreatetabletest3 (\n  t3 TEXT,\n  SHARED DICTIONARY (t3) "
+          "REFERENCES renamedcreatetabletest1(t1));",
+          result.row_set.columns[0].data.str_col[0]);
+    }
+    sql("DROP TABLE IF EXISTS renamedcreatetabletest1;");
+
+    {
+      TQueryResult result;
+      sql(result, "SHOW CREATE TABLE showcreatetabletest2;");
+      EXPECT_EQ("CREATE TABLE showcreatetabletest2 (\n  t2 TEXT ENCODING DICT(16));",
+                result.row_set.columns[0].data.str_col[0]);
+    }
+    {
+      TQueryResult result;
+      sql(result, "SHOW CREATE TABLE showcreatetabletest3;");
+      EXPECT_EQ(
+          "CREATE TABLE showcreatetabletest3 (\n  t3 TEXT,\n  SHARED DICTIONARY (t3) "
+          "REFERENCES showcreatetabletest2(t2));",
+          result.row_set.columns[0].data.str_col[0]);
+    }
+    sql("DROP TABLE IF EXISTS showcreatetabletest2;");
+    {
+      TQueryResult result;
+      sql(result, "SHOW CREATE TABLE showcreatetabletest3;");
+      EXPECT_EQ("CREATE TABLE showcreatetabletest3 (\n  t3 TEXT ENCODING DICT(16));",
+                result.row_set.columns[0].data.str_col[0]);
+    }
+    sql("DROP TABLE IF EXISTS showcreatetabletest3;");
+  }
+}
+
 TEST_F(ShowCreateTableTest, TextArray) {
   sql("CREATE TABLE showcreatetabletest (t1 TEXT[], t2 TEXT[5]);");
   sqlAndCompareResult("SHOW CREATE TABLE showcreatetabletest;",
@@ -833,7 +890,8 @@ TEST_F(ShowCreateTableTest, TimestampArray) {
 
 TEST_F(ShowCreateTableTest, TimestampEncoding) {
   // Timestamp encoding accepts a shorthand syntax (see above). Ensure the output of the
-  // SHOW CREATE TABLE command using the short hand syntax can be passed back in as input.
+  // SHOW CREATE TABLE command using the short hand syntax can be passed back in as
+  // input.
   sql("CREATE TABLE showcreatetabletest (tp TIMESTAMP(0), tpe TIMESTAMP(0) ENCODING "
       "FIXED(32));");
   sqlAndCompareResult("SHOW CREATE TABLE showcreatetabletest;",
@@ -866,10 +924,13 @@ TEST_F(ShowCreateTableTest, ForeignTable_Defaults) {
 }
 
 TEST_F(ShowCreateTableTest, ForeignTable_WithEncodings) {
-  sql("CREATE FOREIGN TABLE test_foreign_table(bint BIGINT ENCODING FIXED(16), i INTEGER "
-      "ENCODING FIXED(8), sint SMALLINT ENCODING FIXED(8), t1 TEXT ENCODING DICT(16), t2 "
+  sql("CREATE FOREIGN TABLE test_foreign_table(bint BIGINT ENCODING FIXED(16), i "
+      "INTEGER "
+      "ENCODING FIXED(8), sint SMALLINT ENCODING FIXED(8), t1 TEXT ENCODING DICT(16), "
+      "t2 "
       "TEXT ENCODING NONE, tm TIME ENCODING FIXED(32), tstamp TIMESTAMP(3), tstamp2 "
-      "TIMESTAMP ENCODING FIXED(32), dt DATE ENCODING DAYS(16), p GEOMETRY(POINT, 4326), "
+      "TIMESTAMP ENCODING FIXED(32), dt DATE ENCODING DAYS(16), p GEOMETRY(POINT, "
+      "4326), "
       "l GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32), "
       "poly GEOMETRY(POLYGON, 4326) ENCODING NONE, "
       "mpoly GEOMETRY(MULTIPOLYGON, 900913)) "
@@ -878,9 +939,11 @@ TEST_F(ShowCreateTableTest, ForeignTable_WithEncodings) {
       getTestFilePath() + "');");
   sqlAndCompareResult(
       "SHOW CREATE TABLE test_foreign_table;",
-      {{"CREATE FOREIGN TABLE test_foreign_table (\n  bint BIGINT ENCODING FIXED(16),\n  "
+      {{"CREATE FOREIGN TABLE test_foreign_table (\n  bint BIGINT ENCODING "
+        "FIXED(16),\n  "
         "i INTEGER ENCODING FIXED(8),\n  sint SMALLINT ENCODING FIXED(8),\n  t1 TEXT "
-        "ENCODING DICT(16),\n  t2 TEXT ENCODING NONE,\n  tm TIME ENCODING FIXED(32),\n  "
+        "ENCODING DICT(16),\n  t2 TEXT ENCODING NONE,\n  tm TIME ENCODING FIXED(32),\n "
+        " "
         "tstamp TIMESTAMP(3),\n  tstamp2 TIMESTAMP(0) ENCODING FIXED(32),\n  dt DATE "
         "ENCODING DAYS(16),\n  p GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32),\n  l "
         "GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32),\n  poly GEOMETRY(POLYGON, "
@@ -1389,7 +1452,8 @@ TEST_F(ShowTableDetailsTest, EmptyTables) {
   sql("create table test_table_1 (c1 int, c2 text);");
   sql("create table test_table_2 (c1 int, c2 text, c3 double, shard key(c1)) with "
       "(shard_count = 2, max_rows = 10);");
-  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED', fragment_size "
+  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED', "
+      "fragment_size "
       "= 5);");
 
   TQueryResult result;
@@ -1640,7 +1704,8 @@ TEST_F(ShowTableDetailsTest, FsiTableSpecified) {
     GTEST_SKIP() << "Foreign tables are currently not supported in distributed mode";
   }
 
-  sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER omnisci_local_csv WITH "
+  sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER omnisci_local_csv "
+      "WITH "
       "(file_path = '" +
       boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
 

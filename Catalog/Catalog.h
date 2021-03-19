@@ -574,6 +574,10 @@ class Catalog final {
   ColumnDescriptorsForRoll columnDescriptorsForRoll;
 
  private:
+  void gatherAdditionalInfo(std::vector<std::string>& additional_info,
+                            std::set<std::string>& shared_dict_column_names,
+                            const TableDescriptor* td) const;
+  std::string quoteIfRequired(const std::string& column_name) const;
   DeletedColumnPerTableMap deletedColumnPerTable_;
   void adjustAlteredTableFiles(
       const std::string& temp_data_dir,
