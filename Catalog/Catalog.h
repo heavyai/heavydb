@@ -220,7 +220,7 @@ class Catalog final {
   const DBMetadata& getCurrentDB() const { return currentDB_; }
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
   std::shared_ptr<Calcite> getCalciteMgr() const { return calciteMgr_; }
-  const std::string& getBasePath() const { return basePath_; }
+  const std::string& getCatalogBasePath() const { return basePath_; }
 
   const DictDescriptor* getMetadataForDict(int dict_ref, bool loadDict = true) const;
   const DictDescriptor* getMetadataForDictUnlocked(int dict_ref, bool loadDict) const;

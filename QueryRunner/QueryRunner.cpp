@@ -171,7 +171,8 @@ QueryRunner::QueryRunner(const char* db_path,
 
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
 
-  sys_cat.init(base_path.string(),
+  g_base_path = base_path.string();
+  sys_cat.init(g_base_path,
                data_mgr,
                {},
                g_calcite,
@@ -194,8 +195,8 @@ QueryRunner::QueryRunner(const char* db_path,
   }
   CHECK(sys_cat.getMetadataForDB(db_name, db));
   CHECK(user.isSuper || (user.userId == db.dbOwner));
-  auto cat = sys_cat.getCatalog(
-      base_path.string(), db, data_mgr, string_servers, g_calcite, create_db);
+  auto cat = sys_cat.getCatalog(db, create_db);
+  CHECK(cat);
   session_info_ = std::make_unique<Catalog_Namespace::SessionInfo>(
       cat, user, ExecutorDeviceType::GPU, "");
 }

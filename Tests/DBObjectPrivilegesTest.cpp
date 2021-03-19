@@ -2285,7 +2285,7 @@ TEST(SysCatalog, RenameDatabase_ExistingDB) {
 
 TEST(SysCatalog, RenameDatabase_FailedCopy) {
   using namespace std::string_literals;
-  auto trash_file_path = sys_cat.getBasePath() + "/mapd_catalogs/trash";
+  auto trash_file_path = sys_cat.getCatalogBasePath() + "/mapd_catalogs/trash";
 
   ScopeGuard s = [&trash_file_path] {
     boost::filesystem::remove(trash_file_path);

@@ -421,6 +421,7 @@ void DBHandler::initialize() {
   }
 
   try {
+    g_base_path = base_data_path_;
     SysCatalog::instance().init(base_data_path_,
                                 data_mgr_,
                                 authMetadata_,

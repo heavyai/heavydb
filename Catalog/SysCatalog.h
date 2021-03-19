@@ -64,6 +64,8 @@ const std::string OMNISCI_ROOT_PASSWD_DEFAULT = "HyperInteractive";
 
 class Calcite;
 
+extern std::string g_base_path;
+
 namespace Catalog_Namespace {
 
 /*
@@ -190,7 +192,7 @@ class SysCatalog : private CommonFileOperations {
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
   Calcite& getCalciteMgr() const { return *calciteMgr_; }
-  const std::string& getBasePath() const { return basePath_; }
+  const std::string& getCatalogBasePath() const { return basePath_; }
   SqliteConnector* getSqliteConnector() { return sqliteConnector_.get(); }
   std::list<DBMetadata> getAllDBMetadata();
   std::list<UserMetadata> getAllUserMetadata();
@@ -308,12 +310,7 @@ class SysCatalog : private CommonFileOperations {
 
   std::shared_ptr<Catalog> getCatalog(const std::string& dbName);
   std::shared_ptr<Catalog> getCatalog(const int32_t db_id);
-  std::shared_ptr<Catalog> getCatalog(const std::string& basePath,
-                                      const DBMetadata& curDB,
-                                      std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-                                      const std::vector<LeafHostInfo>& string_dict_hosts,
-                                      std::shared_ptr<Calcite> calcite,
-                                      bool is_new_db);
+  std::shared_ptr<Catalog> getCatalog(const DBMetadata& curDB, bool is_new_db);
 
   void removeCatalog(const std::string& dbName);
 

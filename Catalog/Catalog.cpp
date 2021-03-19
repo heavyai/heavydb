@@ -536,8 +536,8 @@ void Catalog::updateDictionaryNames() {
         std::string dictName = sqliteConnector_.getData<string>(r, 1);
 
         std::string oldName =
-            basePath_ + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
-        std::string newName = basePath_ + "/mapd_data/DB_" +
+            g_base_path + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
+        std::string newName = g_base_path + "/mapd_data/DB_" +
                               std::to_string(currentDB_.dbId) + "_DICT_" +
                               std::to_string(dictId);
 
@@ -912,7 +912,7 @@ void Catalog::buildMaps() {
     int dictNBits = sqliteConnector_.getData<int>(r, 2);
     bool is_shared = sqliteConnector_.getData<bool>(r, 3);
     int refcount = sqliteConnector_.getData<int>(r, 4);
-    std::string fname = basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) +
+    std::string fname = g_base_path + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) +
                         "_DICT_" + std::to_string(dictId);
     DictRef dict_ref(currentDB_.dbId, dictId);
     DictDescriptor* dd = new DictDescriptor(
@@ -1813,7 +1813,7 @@ void Catalog::delDictionary(const ColumnDescriptor& cd) {
   const DictRef dictRef(currentDB_.dbId, dictId);
   sqliteConnector_.query_with_text_param("DELETE FROM mapd_dictionaries WHERE dictid = ?",
                                          std::to_string(dictId));
-  File_Namespace::renameForDelete(basePath_ + "/mapd_data/DB_" +
+  File_Namespace::renameForDelete(g_base_path + "/mapd_data/DB_" +
                                   std::to_string(currentDB_.dbId) + "_DICT_" +
                                   std::to_string(dictId));
 
@@ -3256,7 +3256,7 @@ void Catalog::setColumnDictionary(ColumnDescriptor& cd,
     dictName = td.tableName + "_" + cd.columnName + "_dict" + std::to_string(dictId);
     sqliteConnector_.query_with_text_param(
         "UPDATE mapd_dictionaries SET name = ? WHERE name = 'Initial_key'", dictName);
-    folderPath = basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) +
+    folderPath = g_base_path + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) +
                  "_DICT_" + std::to_string(dictId);
   }
   DictDescriptor dd(currentDB_.dbId,
