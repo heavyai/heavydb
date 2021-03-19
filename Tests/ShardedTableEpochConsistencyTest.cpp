@@ -415,6 +415,13 @@ TEST_P(EpochRollbackTest, InsertOnReplicatedTable) {
 }
 
 TEST_P(EpochRollbackTest, Update) {
+  // The checkpoint error case exercises the same path as the query error case in
+  // distributed mode. Specifically, both come back as exceptions when
+  // `execute_query_step` is called on leaf nodes.
+  if (isDistributedMode() && isCheckpointError()) {
+    GTEST_SKIP();
+  }
+
   setUpTestTableWithInconsistentEpochs();
   loginTestUser();
 
@@ -436,6 +443,13 @@ TEST_P(EpochRollbackTest, Update) {
 
 // Updates execute different code paths when variable length columns are updated
 TEST_P(EpochRollbackTest, VarlenUpdate) {
+  // The checkpoint error case exercises the same path as the query error case in
+  // distributed mode. Specifically, both come back as exceptions when
+  // `execute_query_step` is called on leaf nodes.
+  if (isDistributedMode() && isCheckpointError()) {
+    GTEST_SKIP();
+  }
+
   setUpTestTableWithInconsistentEpochs();
   loginTestUser();
 
@@ -456,6 +470,13 @@ TEST_P(EpochRollbackTest, VarlenUpdate) {
 }
 
 TEST_P(EpochRollbackTest, Delete) {
+  // The checkpoint error case exercises the same path as the query error case in
+  // distributed mode. Specifically, both come back as exceptions when
+  // `execute_query_step` is called on leaf nodes.
+  if (isDistributedMode() && isCheckpointError()) {
+    GTEST_SKIP();
+  }
+
   setUpTestTableWithInconsistentEpochs();
   loginTestUser();
 
@@ -565,6 +586,15 @@ TEST_F(EpochLevelingTest, VarlenUpdate) {
                        {i(2), i(2), "test_2"},
                        {i(2), i(20), "test_20"}});
   // clang-format on
+}
+
+TEST_F(EpochLevelingTest, UpdateQueryButDataNotChanged) {
+  sql("copy test_table from '" + getGoodFilePath() + "';");
+  assertTableEpochs({1, 1, 1, 1});
+
+  sql("update test_table set b = b + 1 where b = 1000;");
+  assertTableEpochs({2, 2, 2, 2});
+  assertInitialImportResultSet();
 }
 
 TEST_F(EpochLevelingTest, Delete) {

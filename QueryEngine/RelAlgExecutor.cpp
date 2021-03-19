@@ -1527,7 +1527,7 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
                                update_callback,
                                is_aggregate);
       post_execution_callback_ = [this]() {
-        dml_transaction_parameters_->finalizeTransaction();
+        dml_transaction_parameters_->finalizeTransaction(cat_);
       };
     };
 
@@ -1614,8 +1614,8 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
     auto execute_delete_ra_exe_unit =
         [this, &table_infos, &table_descriptor, &eo_in, &co](const auto& exe_unit,
                                                              const bool is_aggregate) {
-          dml_transaction_parameters_ = std::make_unique<DeleteTransactionParameters>(
-              table_is_temporary(table_descriptor));
+          dml_transaction_parameters_ =
+              std::make_unique<DeleteTransactionParameters>(table_descriptor);
           auto delete_params = dynamic_cast<DeleteTransactionParameters*>(
               dml_transaction_parameters_.get());
           CHECK(delete_params);
@@ -1640,7 +1640,7 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
                                    delete_callback,
                                    is_aggregate);
           post_execution_callback_ = [this]() {
-            dml_transaction_parameters_->finalizeTransaction();
+            dml_transaction_parameters_->finalizeTransaction(cat_);
           };
         };
 
