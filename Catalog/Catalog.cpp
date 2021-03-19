@@ -4306,36 +4306,6 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
   return os.str();
 }
 
-namespace {
-
-void unserialize_key_metainfo(std::vector<std::string>& shared_dicts,
-                              std::set<std::string>& shared_dict_column_names,
-                              const std::string keyMetainfo) {
-  rapidjson::Document document;
-  document.Parse(keyMetainfo.c_str());
-  CHECK(!document.HasParseError());
-  CHECK(document.IsArray());
-  for (auto it = document.Begin(); it != document.End(); ++it) {
-    const auto& key_with_spec_json = *it;
-    CHECK(key_with_spec_json.IsObject());
-    const std::string type = key_with_spec_json["type"].GetString();
-    const std::string name = key_with_spec_json["name"].GetString();
-    auto key_with_spec = type + " (" + name + ")";
-    if (type == "SHARED DICTIONARY") {
-      shared_dict_column_names.insert(name);
-      key_with_spec += " REFERENCES ";
-      const std::string foreign_table = key_with_spec_json["foreign_table"].GetString();
-      const std::string foreign_column = key_with_spec_json["foreign_column"].GetString();
-      key_with_spec += foreign_table + "(" + foreign_column + ")";
-    } else {
-      CHECK(type == "SHARD KEY");
-    }
-    shared_dicts.push_back(key_with_spec);
-  }
-}
-
-}  // namespace
-
 #include "Parser/ReservedKeywords.h"
 
 //! returns true if the string contains one or more spaces
@@ -4379,9 +4349,11 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
     return os.str();
   }
   // scan column defines
-  std::vector<std::string> shared_dicts;
+  std::vector<std::string> additional_info;
   std::set<std::string> shared_dict_column_names;
-  unserialize_key_metainfo(shared_dicts, shared_dict_column_names, td->keyMetainfo);
+
+  gatherAdditionalInfo(additional_info, shared_dict_column_names, td);
+
   // gather column defines
   const auto cds = getAllColumnMetadataForTable(td->tableId, false, false, false);
   std::map<const std::string, const ColumnDescriptor*> dict_root_cds;
@@ -4401,14 +4373,7 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
         os << "\n  ";
       }
       // column name
-      bool column_name_needs_quotes = is_reserved_sql_keyword(cd->columnName) ||
-                                      contains_spaces(cd->columnName) ||
-                                      contains_sql_reserved_chars(cd->columnName);
-      if (!column_name_needs_quotes) {
-        os << cd->columnName;
-      } else {
-        os << "\"" << cd->columnName << "\"";
-      }
+      os << quoteIfRequired(cd->columnName);
       // CHAR is perculiar... better dump it as TEXT(32) like \d does
       if (ti.get_type() == SQLTypes::kCHAR) {
         os << " "
@@ -4447,7 +4412,7 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
     }
   }
   // gather SHARED DICTIONARYs
-  if (shared_dicts.size()) {
+  if (additional_info.size()) {
     std::string comma;
     if (!multiline_formatting) {
       comma = ", ";
@@ -4455,7 +4420,7 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
       comma = ",\n  ";
     }
     os << comma;
-    os << boost::algorithm::join(shared_dicts, comma);
+    os << boost::algorithm::join(additional_info, comma);
   }
   os << ")";
 
@@ -4620,4 +4585,82 @@ void Catalog::setForeignTableProperty(const foreign_storage::ForeignTable* table
                              table->tableName + "\" is not found."};
   }
 }
+
+std::string Catalog::quoteIfRequired(const std::string& column_name) const {
+  if (is_reserved_sql_keyword(column_name) || contains_spaces(column_name) ||
+      contains_sql_reserved_chars(column_name)) {
+    return get_quoted_string(column_name, '"', '"');
+  } else {
+    return column_name;
+  }
+}
+
+// this will gather information that represents the shared dictionary columns
+// as they are on the table NOW not at original creation
+void Catalog::gatherAdditionalInfo(std::vector<std::string>& additional_info,
+                                   std::set<std::string>& shared_dict_column_names,
+                                   const TableDescriptor* td) const {
+  if (td->nShards > 0) {
+    ColumnIdKey columnIdKey(td->tableId, td->shardedColumnId);
+    auto scd = columnDescriptorMapById_.find(columnIdKey)->second;
+    CHECK(scd);
+    std::string txt = "SHARD KEY (" + quoteIfRequired(scd->columnName) + ")";
+    additional_info.emplace_back(txt);
+  }
+  const auto cds = getAllColumnMetadataForTable(td->tableId, false, false, false);
+  for (const auto cd : cds) {
+    if (!(cd->isSystemCol || cd->isVirtualCol)) {
+      const SQLTypeInfo& ti = cd->columnType;
+      if (ti.get_compression() != kENCODING_DICT) {
+        continue;
+      }
+      auto dictId = ti.get_comp_param();
+
+      // now we need to check how many other users have this dictionary
+
+      DictRef dict_ref(currentDB_.dbId, dictId);
+      const auto dictIt = dictDescriptorMapByRef_.find(dict_ref);
+      if (dictIt == dictDescriptorMapByRef_.end()) {
+        LOG(ERROR) << "missing dictionary " << dictId << " for table " << td->tableName;
+        continue;
+      }
+
+      const auto& dd = dictIt->second;
+      if (dd->refcount > 1) {
+        auto lowest_table = td->tableId;
+        auto lowest_column = cd->columnId;
+        std::string lowest_column_name;
+        // we have multiple tables using this dictionary
+        // find the other occurances and keep the "lowest"
+        for (auto const& [key, val] : columnDescriptorMap_) {
+          if (val->columnType.get_compression() == kENCODING_DICT &&
+              val->columnType.get_comp_param() == dictId &&
+              !(val->tableId == td->tableId && val->columnId == cd->columnId)) {
+            if (val->tableId < lowest_table) {
+              lowest_table = val->tableId;
+              lowest_column = val->columnId;
+              lowest_column_name = val->columnName;
+            }
+            if (val->columnId < lowest_column) {
+              lowest_column = val->columnId;
+              lowest_column_name = val->columnName;
+            }
+          }
+        }
+        if (lowest_table != td->tableId || lowest_column != cd->columnId) {
+          // we are referencing a different tables dictionary
+          auto lowest_td = tableDescriptorMapById_.find(lowest_table)->second;
+          CHECK(lowest_td);
+          std::string txt = "SHARED DICTIONARY (" + quoteIfRequired(cd->columnName) +
+                            ") REFERENCES " + lowest_td->tableName + "(" +
+                            quoteIfRequired(lowest_column_name) + ")";
+
+          additional_info.emplace_back(txt);
+          shared_dict_column_names.insert(cd->columnName);
+        }
+      }
+    }
+  }
+}
+
 }  // namespace Catalog_Namespace
