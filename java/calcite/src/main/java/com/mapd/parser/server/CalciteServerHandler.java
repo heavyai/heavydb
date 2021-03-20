@@ -182,18 +182,19 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     TAccessedQueryObjects primaryAccessedObjects = new TAccessedQueryObjects();
     TAccessedQueryObjects resolvedAccessedObjects = new TAccessedQueryObjects();
     try {
+      final List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
+              new ArrayList<>();
+      for (final TFilterPushDownInfo req : thriftFilterPushDownInfo) {
+        filterPushDownInfo.add(new MapDParserOptions.FilterPushDownInfo(
+                req.input_prev, req.input_start, req.input_next));
+      }
+      MapDParserOptions parserOptions = new MapDParserOptions(
+              filterPushDownInfo, legacySyntax, isExplain, isViewOptimize);
+
       if (!isRAQuery) {
-        final List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
-                new ArrayList<>();
-        for (final TFilterPushDownInfo req : thriftFilterPushDownInfo) {
-          filterPushDownInfo.add(new MapDParserOptions.FilterPushDownInfo(
-                  req.input_prev, req.input_start, req.input_next));
-        }
         Pair<String, SqlIdentifierCapturer> res;
         SqlNode node;
         try {
-          MapDParserOptions parserOptions = new MapDParserOptions(
-                  filterPushDownInfo, legacySyntax, isExplain, isViewOptimize);
           res = parser.process(queryText, parserOptions);
           jsonResult = res.left;
           capturer = res.right;
@@ -222,7 +223,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
           throw ex;
         }
       } else {
-        jsonResult = parser.optimizeRAQuery(queryText);
+        jsonResult = parser.optimizeRAQuery(queryText, parserOptions);
       }
     } catch (SqlParseException ex) {
       String msg = "Parse failed: " + ex.getMessage();

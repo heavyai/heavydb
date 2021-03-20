@@ -442,6 +442,11 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(allow_multifrag)
           ->implicit_value(true),
       "Enable execution over multiple fragments in a single round-trip to GPU.");
+  developer_desc.add_options()("enable-lazy-fetch",
+                               po::value<bool>(&g_enable_lazy_fetch)
+                                   ->default_value(g_enable_lazy_fetch)
+                                   ->implicit_value(true),
+                               "Enable lazy fetch columns in query results.");
   developer_desc.add_options()(
       "enable-shared-mem-group-by",
       po::value<bool>(&g_enable_smem_group_by)

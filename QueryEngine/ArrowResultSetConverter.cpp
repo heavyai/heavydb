@@ -60,6 +60,18 @@ using namespace arrow;
 
 namespace {
 
+/* We can create Arrow buffers which refer memory owned by ResultSet.
+   For safe memory access we should keep a ResultSetPtr to keep
+   data live while buffer lives. Use this custom buffer for that. */
+class ResultSetBuffer : public Buffer {
+ public:
+  ResultSetBuffer(const uint8_t* buf, size_t size, ResultSetPtr rs)
+      : Buffer(buf, size), _rs(rs) {}
+
+ private:
+  ResultSetPtr _rs;
+};
+
 inline SQLTypes get_dict_index_type(const SQLTypeInfo& ti) {
   CHECK(ti.is_dict_encoded_string());
   switch (ti.get_size()) {
@@ -166,28 +178,35 @@ using null_type_t = typename null_type<TYPE>::type;
 template <typename C_TYPE, typename ARROW_TYPE = typename CTypeTraits<C_TYPE>::ArrowType>
 void convert_column(ResultSetPtr result,
                     size_t col,
-                    std::unique_ptr<int8_t[]>& values,
-                    std::unique_ptr<uint8_t[]>& is_valid,
                     size_t entry_count,
                     std::shared_ptr<Array>& out) {
   CHECK(sizeof(C_TYPE) == result->getColType(col).get_size());
-  CHECK(!values);
-  CHECK(!is_valid);
 
-  const int8_t* data_ptr;
+  std::shared_ptr<arrow::Buffer> values;
+  std::shared_ptr<arrow::Buffer> is_valid;
+  const int64_t buf_size = entry_count * sizeof(C_TYPE);
   if (result->isZeroCopyColumnarConversionPossible(col)) {
-    data_ptr = result->getColumnarBuffer(col);
+    values.reset(new ResultSetBuffer(
+        reinterpret_cast<const uint8_t*>(result->getColumnarBuffer(col)),
+        buf_size,
+        result));
   } else {
-    values.reset(new int8_t[entry_count * sizeof(C_TYPE)]);
-    result->copyColumnIntoBuffer(col, values.get(), entry_count * sizeof(C_TYPE));
-    data_ptr = values.get();
+    auto res = arrow::AllocateBuffer(buf_size);
+    CHECK(res.ok());
+    values = std::move(res).ValueOrDie();
+    result->copyColumnIntoBuffer(
+        col, reinterpret_cast<int8_t*>(values->mutable_data()), buf_size);
   }
 
   int64_t null_count = 0;
-  is_valid.reset(new uint8_t[(entry_count + 7) / 8]);
+  auto res = arrow::AllocateBuffer((entry_count + 7) / 8);
+  CHECK(res.ok());
+  is_valid = std::move(res).ValueOrDie();
+
+  auto is_valid_data = is_valid->mutable_data();
 
   const null_type_t<C_TYPE>* vals =
-      reinterpret_cast<const null_type_t<C_TYPE>*>(data_ptr);
+      reinterpret_cast<const null_type_t<C_TYPE>*>(values->data());
   null_type_t<C_TYPE> null_val = null_type<C_TYPE>::value;
 
   size_t unroll_count = entry_count & 0xFFFFFFFFFFFFFFF8ULL;
@@ -218,7 +237,7 @@ void convert_column(ResultSetPtr result,
     valid = vals[i + 7] != null_val;
     valid_byte |= valid << 7;
     null_count += !valid;
-    is_valid[i >> 3] = valid_byte;
+    is_valid_data[i >> 3] = valid_byte;
   }
   if (unroll_count != entry_count) {
     uint8_t valid_byte = 0;
@@ -227,7 +246,7 @@ void convert_column(ResultSetPtr result,
       valid_byte |= valid << (i & 7);
       null_count += !valid;
     }
-    is_valid[unroll_count >> 3] = valid_byte;
+    is_valid_data[unroll_count >> 3] = valid_byte;
   }
 
   if (!null_count) {
@@ -236,14 +255,10 @@ void convert_column(ResultSetPtr result,
 
   // TODO: support date/time + scaling
   // TODO: support booleans
-  std::shared_ptr<Buffer> data(new Buffer(reinterpret_cast<const uint8_t*>(data_ptr),
-                                          entry_count * sizeof(C_TYPE)));
   if (null_count) {
-    std::shared_ptr<Buffer> null_bitmap(
-        new Buffer(is_valid.get(), (entry_count + 7) / 8));
-    out.reset(new NumericArray<ARROW_TYPE>(entry_count, data, null_bitmap, null_count));
+    out.reset(new NumericArray<ARROW_TYPE>(entry_count, values, is_valid, null_count));
   } else {
-    out.reset(new NumericArray<ARROW_TYPE>(entry_count, data));
+    out.reset(new NumericArray<ARROW_TYPE>(entry_count, values));
   }
 }
 
@@ -701,9 +716,7 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
     return seg_row_count;
   };
 
-  auto convert_columns = [&](std::vector<std::unique_ptr<int8_t[]>>& values,
-                             std::vector<std::unique_ptr<uint8_t[]>>& is_valid,
-                             std::vector<std::shared_ptr<arrow::Array>>& result,
+  auto convert_columns = [&](std::vector<std::shared_ptr<arrow::Array>>& result,
                              const std::vector<bool>& non_lazy_cols,
                              const size_t start_col,
                              const size_t end_col) {
@@ -715,28 +728,22 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
       const auto& column = builders[col];
       switch (column.physical_type) {
         case kTINYINT:
-          convert_column<int8_t>(
-              results_, col, values[col], is_valid[col], entry_count, result[col]);
+          convert_column<int8_t>(results_, col, entry_count, result[col]);
           break;
         case kSMALLINT:
-          convert_column<int16_t>(
-              results_, col, values[col], is_valid[col], entry_count, result[col]);
+          convert_column<int16_t>(results_, col, entry_count, result[col]);
           break;
         case kINT:
-          convert_column<int32_t>(
-              results_, col, values[col], is_valid[col], entry_count, result[col]);
+          convert_column<int32_t>(results_, col, entry_count, result[col]);
           break;
         case kBIGINT:
-          convert_column<int64_t>(
-              results_, col, values[col], is_valid[col], entry_count, result[col]);
+          convert_column<int64_t>(results_, col, entry_count, result[col]);
           break;
         case kFLOAT:
-          convert_column<float>(
-              results_, col, values[col], is_valid[col], entry_count, result[col]);
+          convert_column<float>(results_, col, entry_count, result[col]);
           break;
         case kDOUBLE:
-          convert_column<double>(
-              results_, col, values[col], is_valid[col], entry_count, result[col]);
+          convert_column<double>(results_, col, entry_count, result[col]);
           break;
         default:
           throw std::runtime_error(column.col_type.get_type_name() +
@@ -793,8 +800,6 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
       non_lazy_col_pos.emplace_back(col_count);
     }
 
-    values_.resize(col_count);
-    is_valid_.resize(col_count);
     std::vector<std::future<void>> child_threads;
     size_t num_threads =
         std::min(multithreaded ? (size_t)cpu_threads() : (size_t)1, non_lazy_col_count);
@@ -810,8 +815,6 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
           non_lazy_col_pos.empty() ? end_col : non_lazy_col_pos[end_col];
       child_threads.push_back(std::async(std::launch::async,
                                          convert_columns,
-                                         std::ref(values_),
-                                         std::ref(is_valid_),
                                          std::ref(result_columns),
                                          non_lazy_cols,
                                          phys_start_col,

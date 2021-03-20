@@ -221,16 +221,3 @@ void ForeignStorageInterface::registerTable(Catalog_Namespace::Catalog* catalog,
                                      cols,
                                      lookupBufferManager(db_id, table_id));
 }
-
-void ForeignStorageInterface::destroy() {
-  persistent_storage_interfaces_.clear();
-  managers_map_.clear();
-}
-
-std::unordered_map<std::string, std::unique_ptr<PersistentForeignStorageInterface>>
-    ForeignStorageInterface::persistent_storage_interfaces_;
-std::map<std::pair<int, int>, PersistentForeignStorageInterface*>
-    ForeignStorageInterface::table_persistent_storage_interface_map_;
-std::map<std::pair<int, int>, std::unique_ptr<ForeignStorageBufferMgr>>
-    ForeignStorageInterface::managers_map_;
-std::mutex ForeignStorageInterface::persistent_storage_interfaces_mutex_;

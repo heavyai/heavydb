@@ -15,6 +15,7 @@
  */
 
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
+#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "DataMgr/ForeignStorage/ForeignStorageMgr.h"
 #include "DataMgr/PersistentStorageMgr/PersistentStorageMgr.h"
 #include "DataMgrTestHelpers.h"
@@ -25,6 +26,7 @@
 #include "Catalog/Catalog.h"
 
 extern bool g_enable_fsi;
+std::shared_ptr<ForeignStorageInterface> fsi;
 
 using namespace foreign_storage;
 using namespace File_Namespace;
@@ -128,7 +130,7 @@ class ForeignStorageCacheUnitTest : public testing::Test {
   static void reinitializeCache(std::unique_ptr<ForeignStorageCache>& cache,
                                 File_Namespace::GlobalFileMgr*& gfm,
                                 const DiskCacheConfig& config) {
-    cache = std::make_unique<ForeignStorageCache>(config);
+    cache = std::make_unique<ForeignStorageCache>(config, fsi);
     gfm = cache->getGlobalFileMgr();
   }
 
@@ -386,7 +388,7 @@ TEST_F(ForeignStorageCacheFileTest, FileCreation) {
   cache_path_ = "./test_foreign_data_cache";
   boost::filesystem::remove_all(cache_path_);
   {
-    ForeignStorageCache cache{{cache_path_, DiskCacheLevel::fsi}};
+    ForeignStorageCache cache{{cache_path_, DiskCacheLevel::fsi}, fsi};
     auto* gfm = cache.getGlobalFileMgr();
     ASSERT_TRUE(boost::filesystem::exists(cache_path_));
     ASSERT_FALSE(boost::filesystem::exists(cache_path_ + "/table_1_1"));
@@ -435,7 +437,7 @@ TEST_F(ForeignStorageCacheFileTest, FileBlocksPath) {
   tmp_file << "1";
   tmp_file.close();
   try {
-    ForeignStorageCache cache{{cache_path_, DiskCacheLevel::fsi}};
+    ForeignStorageCache cache{{cache_path_, DiskCacheLevel::fsi}, fsi};
     FAIL() << "An exception should have been thrown for this testcase";
   } catch (std::runtime_error& e) {
     ASSERT_EQ(e.what(),
@@ -449,13 +451,14 @@ TEST_F(ForeignStorageCacheFileTest, ExistingDir) {
   cache_path_ = "./test_foreign_data_cache";
   boost::filesystem::remove_all(cache_path_);
   boost::filesystem::create_directory(cache_path_);
-  ForeignStorageCache cache{{cache_path_, DiskCacheLevel::fsi}};
+  ForeignStorageCache cache{{cache_path_, DiskCacheLevel::fsi}, fsi};
 }
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   g_enable_fsi = true;
+  fsi.reset(new ForeignStorageInterface());
 
   int err{0};
   try {
@@ -464,6 +467,7 @@ int main(int argc, char** argv) {
     LOG(ERROR) << e.what();
   }
 
+  fsi.reset();
   g_enable_fsi = false;
   return err;
 }

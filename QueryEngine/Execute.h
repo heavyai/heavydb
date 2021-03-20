@@ -371,7 +371,7 @@ class Executor {
       const ExecutorId id,
       const std::string& debug_dir = "",
       const std::string& debug_file = "",
-      const SystemParameters system_parameters = SystemParameters());
+      const SystemParameters& system_parameters = SystemParameters());
 
   static void nukeCacheOfExecutors() {
     mapd_unique_lock<mapd_shared_mutex> flush_lock(

@@ -16,6 +16,7 @@
 
 #include "PersistentStorageMgr.h"
 #include "Catalog/Catalog.h"
+#include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "DataMgr/ForeignStorage/CachingForeignStorageMgr.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "MutableCachePersistentStorageMgr.h"
@@ -34,16 +35,17 @@ PersistentStorageMgr* PersistentStorageMgr::createPersistentStorageMgr(
 PersistentStorageMgr::PersistentStorageMgr(const std::string& data_dir,
                                            const size_t num_reader_threads,
                                            const DiskCacheConfig& disk_cache_config)
-    : AbstractBufferMgr(0)
-    , global_file_mgr_(
-          std::make_unique<File_Namespace::GlobalFileMgr>(0,
-                                                          data_dir,
-                                                          num_reader_threads))
-    , disk_cache_config_(disk_cache_config) {
-  disk_cache_ =
-      disk_cache_config_.isEnabled()
-          ? std::make_unique<foreign_storage::ForeignStorageCache>(disk_cache_config)
-          : nullptr;
+    : AbstractBufferMgr(0), disk_cache_config_(disk_cache_config) {
+  fsi_ = std::make_shared<ForeignStorageInterface>();
+  ::registerArrowForeignStorage(fsi_);
+  ::registerArrowCsvForeignStorage(fsi_);
+
+  global_file_mgr_ = std::make_unique<File_Namespace::GlobalFileMgr>(
+      0, fsi_, data_dir, num_reader_threads);
+  disk_cache_ = disk_cache_config_.isEnabled()
+                    ? std::make_unique<foreign_storage::ForeignStorageCache>(
+                          disk_cache_config, fsi_)
+                    : nullptr;
   foreign_storage_mgr_ =
       disk_cache_config_.isEnabledForFSI()
           ? std::make_unique<foreign_storage::CachingForeignStorageMgr>(disk_cache_.get())
@@ -235,8 +237,8 @@ foreign_storage::ForeignStorageCache* PersistentStorageMgr::getDiskCache() const
 bool PersistentStorageMgr::isChunkPrefixCacheable(const ChunkKey& chunk_prefix) const {
   CHECK(has_table_prefix(chunk_prefix));
   // If this is an Arrow FSI table then we can't cache it.
-  if (ForeignStorageInterface::lookupBufferManager(chunk_prefix[CHUNK_KEY_DB_IDX],
-                                                   chunk_prefix[CHUNK_KEY_TABLE_IDX])) {
+  if (fsi_->lookupBufferManager(chunk_prefix[CHUNK_KEY_DB_IDX],
+                                chunk_prefix[CHUNK_KEY_TABLE_IDX])) {
     return false;
   }
   return ((disk_cache_config_.isEnabledForMutableTables() &&

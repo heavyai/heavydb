@@ -16,43 +16,44 @@
 
 #pragma once
 
-#include <iostream>
-#include <memory>
-#include <string>
-#include <type_traits>
-#include <vector>
-#include "QueryEngine/TargetValue.h"
+#include <arrow/table.h>
+#include "DBETypes.h"
 
 namespace EmbeddedDatabase {
 
-class Row {
- public:
-  Row();
-  Row(std::vector<TargetValue>& row);
-  int64_t getInt(size_t col_num);
-  double getDouble(size_t col_num);
-  std::string getStr(size_t col_num);
-
- private:
-  std::vector<TargetValue> row_;
-};
-
 class Cursor {
  public:
+  virtual ~Cursor() {}
   size_t getColCount();
   size_t getRowCount();
   Row getNextRow();
-  int getColType(uint32_t col_num);
+  ColumnType getColType(uint32_t col_num);
+  std::shared_ptr<arrow::RecordBatch> getArrowRecordBatch();
+
+ protected:
+  Cursor() {}
+  Cursor(const Cursor&) = delete;
+  Cursor& operator=(const Cursor&) = delete;
 };
 
 class DBEngine {
  public:
-  void reset();
-  void executeDDL(std::string query);
-  Cursor* executeDML(std::string query);
-  static DBEngine* create(std::string path);
+  virtual ~DBEngine() {}
+  void executeDDL(const std::string& query);
+  std::shared_ptr<Cursor> executeDML(const std::string& query);
+  std::shared_ptr<Cursor> executeRA(const std::string& query);
+  void importArrowTable(const std::string& name,
+                        std::shared_ptr<arrow::Table>& table,
+                        uint64_t fragment_size = 0);
+  static std::shared_ptr<DBEngine> create(const std::string& cmd_line);
+  std::vector<std::string> getTables();
+  std::vector<ColumnDetails> getTableDetails(const std::string& table_name);
+  bool setDatabase(std::string& db_name);
+  bool login(std::string& db_name, std::string& user_name, const std::string& password);
 
  protected:
   DBEngine() {}
+  DBEngine(const DBEngine&) = delete;
+  DBEngine& operator=(const DBEngine&) = delete;
 };
 }  // namespace EmbeddedDatabase

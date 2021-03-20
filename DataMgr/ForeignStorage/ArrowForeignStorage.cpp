@@ -857,9 +857,8 @@ void releaseArrowTable(std::string name) {
   ArrowForeignStorage::tables.erase(name);
 }
 
-void registerArrowForeignStorage() {
-  ForeignStorageInterface::registerPersistentStorageInterface(
-      std::make_unique<ArrowForeignStorage>());
+void registerArrowForeignStorage(std::shared_ptr<ForeignStorageInterface> fsi) {
+  fsi->registerPersistentStorageInterface(std::make_unique<ArrowForeignStorage>());
 }
 
 class ArrowCsvForeignStorage : public ArrowForeignStorageBase {
@@ -1022,7 +1021,6 @@ std::string ArrowCsvForeignStorage::getType() const {
   return "CSV";
 }
 
-void registerArrowCsvForeignStorage() {
-  ForeignStorageInterface::registerPersistentStorageInterface(
-      std::make_unique<ArrowCsvForeignStorage>());
+void registerArrowCsvForeignStorage(std::shared_ptr<ForeignStorageInterface> fsi) {
+  fsi->registerPersistentStorageInterface(std::make_unique<ArrowCsvForeignStorage>());
 }

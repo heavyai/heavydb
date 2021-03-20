@@ -23,7 +23,6 @@
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
 #include "CudaMgr/CudaMgr.h"
-#include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "FileMgr/GlobalFileMgr.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
 
@@ -541,6 +540,11 @@ File_Namespace::GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
       dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
   CHECK(global_file_mgr);
   return global_file_mgr;
+}
+
+std::shared_ptr<ForeignStorageInterface> DataMgr::getForeignStorageInterface() const {
+  return dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])
+      ->getForeignStorageInterface();
 }
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem_info) {

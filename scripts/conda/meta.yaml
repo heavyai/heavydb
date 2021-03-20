@@ -1,0 +1,252 @@
+{% set version = GIT_DESCRIBE_TAG %}
+{% set number = GIT_DESCRIBE_NUMBER|int %}
+{% set build_ext = "cpu" %}
+{% set build_string = "{}_{}_{}".format(PKG_HASH, GIT_DESCRIBE_HASH, number) %}
+
+package:
+  name: omniscidb
+  version: {{ version }}
+
+source:
+  path: ../..
+
+build:
+  number: {{ number }}
+  string: h{{ build_string }}
+  script_env:
+    - http_proxy
+    - https_proxy
+
+requirements:
+  build:
+    - {{ compiler('cxx') }}
+    - clangdev <11
+    - clangxx <11
+    - cmake >=3.16
+    - llvmdev <11
+    - make
+    - maven
+    # new tbb needs glibc >= 2.14
+    - sysroot_linux-64 >=2.14 # [linux]
+  host:
+    - numpy
+    - cython
+    - arrow-cpp =2.0
+    - bisonpp
+    - blosc
+    - boost-cpp {{ boost_cpp }}
+    - clangdev <11
+    - double-conversion
+    - flex
+    - gflags
+    - glog
+    - llvmdev <11
+    - llvm <11
+    - libarchive
+    - libgdal
+    - libkml
+    - libpng
+    # for some reason, librdkafka 1.4+ triggers dependency conflicts
+    - librdkafka <1.4
+    - ncurses
+    - openldap
+    - openssl
+    - snappy
+    - thrift-cpp
+    - tbb-devel {{ tbb }}
+  # no need in run: section when using multiple outputs
+
+outputs:
+  - name: omniscidb-common
+    script: install-omniscidb-common.sh
+    requirements:
+      build:
+        - cmake >=3.16  # there is no building, just copying
+      run:             # common part of run requirements for other packages
+        - boost-cpp {{ boost_cpp }}
+        - bzip2
+        - blosc
+        # omnscidb Load-time UDF support calls clang++
+        - gxx_{{ target_platform }} 8.*
+        - double-conversion
+        - libgdal
+        - libkml
+        - libpng
+        - libarchive
+        - libclang-cpp <11
+        - ncurses
+        - openjdk 8.*
+        - xz
+        - zlib
+        - arrow-cpp =2.0
+        - tbb {{ tbb }}
+        - llvm <11
+
+    about:
+      home: https://www.omnisci.com/
+      license: Apache-2.0
+      license_family: APACHE
+      license_file: LICENSE.md
+      summary: 'Common parts for the OmniSci database'
+      doc_url: https://www.omnisci.com/docs/latest/
+      dev_url: https://github.com/omnisci/omniscidb
+      description: |
+        <strong>LEGAL NOTICE: Use of this software package is subject to the
+        software license agreement (as set forth above, in the license section of
+        the installed Conda package and/or the README file) and all notices,
+        disclaimers or license terms for third party or open source software
+        included in or with the software.</strong>
+        <br/><br/>
+        EULA: <a href="https://github.com/omnisci/omniscidb/blob/master/LICENSE.md" target="_blank">Apache-2.0</a>
+        <br/><br/>
+
+  - name: omniscidb-cpu
+    script: install-omniscidb-cpu.sh
+    requirements:
+      build:
+        - cmake >=3.16  # there is no building, just copying
+      run:
+        - boost-cpp {{ boost_cpp }}
+        - bzip2
+        - blosc
+        # omnscidb Load-time UDF support calls clang++
+        - gxx_{{ target_platform }}
+        - double-conversion
+        - libgdal
+        - libkml
+        - libpng
+        - libarchive
+        - ncurses
+        - openjdk 8.*
+        - xz
+        - zlib
+        - arrow-cpp =2.0
+        - tbb {{ tbb }}
+        - {{ pin_subpackage('omniscidb-common', exact=True) }}
+      run_constrained:
+        - arrow-cpp-proc * {{ build_ext }}
+    test:
+      commands:
+        - omnisql -v
+        - which omnisci_initdb
+        - which omnisci_server
+    about:
+      home: https://www.omnisci.com/
+      license: Apache-2.0
+      license_family: APACHE
+      license_file: LICENSE.md
+      summary: 'The OmniSci database server for CPU'
+      doc_url: https://www.omnisci.com/docs/latest/
+      dev_url: https://github.com/omnisci/omniscidb
+      description: |
+        <strong>LEGAL NOTICE: Use of this software package is subject to the
+        software license agreement (as set forth above, in the license section of
+        the installed Conda package and/or the README file) and all notices,
+        disclaimers or license terms for third party or open source software
+        included in or with the software.</strong>
+        <br/><br/>
+        EULA: <a href="https://github.com/omnisci/omniscidb/blob/master/LICENSE.md" target="_blank">Apache-2.0</a>
+        <br/><br/>
+
+  - name: omniscidbe
+    script: install-omniscidbe.sh
+    requirements:
+      build:
+        - cmake >=3.16
+      run:
+        - {{ pin_subpackage('omniscidb-common', exact=True) }}
+    about:
+      home: https://www.omnisci.com/
+      license: Apache-2.0
+      license_family: APACHE
+      license_file: LICENSE.md
+      summary: 'The OmniSci database as a library'
+      doc_url: https://www.omnisci.com/docs/latest/
+      dev_url: https://github.com/omnisci/omniscidb
+      description: |
+        <strong>LEGAL NOTICE: Use of this software package is subject to the
+        software license agreement (as set forth above, in the license section of
+        the installed Conda package and/or the README file) and all notices,
+        disclaimers or license terms for third party or open source software
+        included in or with the software.</strong>
+        <br/><br/>
+        EULA: <a href="https://github.com/omnisci/omniscidb/blob/master/LICENSE.md" target="_blank">Apache-2.0</a>
+        <br/><br/>
+
+
+  - name: omniscidbe4py
+    script: install-omniscidbe4py.sh
+    build:
+      string: py{{ py }}h{{ build_string }}
+    requirements:
+      build:
+        - {{ compiler('cxx') }}   # this section really builds
+        - clangdev <11
+        - clangxx <11
+        - cmake >=3.16
+        - llvmdev <11
+        - make
+        - maven
+        # new tbb needs glibc >= 2.14
+        - sysroot_linux-64 >=2.14 # [linux]
+      host:
+        - arrow-cpp =2.0
+        - bisonpp
+        - blosc
+        - boost-cpp {{ boost_cpp }}
+        - clangdev <11
+        - double-conversion
+        - flex
+        - gflags
+        - glog
+        - llvmdev <11
+        - llvm <11
+        - libarchive
+        - libgdal
+        - libkml
+        - libpng
+        # for some reason, librdkafka 1.4+ triggers dependency conflicts
+        - librdkafka <1.4
+        - ncurses
+        - openldap
+        - openssl
+        - snappy
+        - thrift-cpp
+        - tbb-devel {{ tbb }}
+        - python
+        - cython
+        - numpy
+        - pyarrow =2.0
+        - {{ pin_subpackage('omniscidbe', exact=True) }}
+      run:
+        - python
+        - pyarrow =2.0
+        - tbb4py {{ tbb }}
+        - {{ pin_subpackage('omniscidbe', exact=True) }}
+        - {{ pin_subpackage('omniscidb-common', exact=True) }}
+    test:
+      imports:
+        - dbe
+    about:
+      home: https://www.omnisci.com/
+      license: Apache-2.0
+      license_family: APACHE
+      license_file: LICENSE.md
+      summary: 'The OmniSci database library for Python'
+      doc_url: https://www.omnisci.com/docs/latest/
+      dev_url: https://github.com/omnisci/omniscidb
+      description: |
+        <strong>LEGAL NOTICE: Use of this software package is subject to the
+        software license agreement (as set forth above, in the license section of
+        the installed Conda package and/or the README file) and all notices,
+        disclaimers or license terms for third party or open source software
+        included in or with the software.</strong>
+        <br/><br/>
+        EULA: <a href="https://github.com/omnisci/omniscidb/blob/master/LICENSE.md" target="_blank">Apache-2.0</a>
+        <br/><br/>
+
+extra:
+  recipe-maintainers:
+    - xmnlab
+    - pearu
+    - andrewseidl

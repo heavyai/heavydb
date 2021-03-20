@@ -61,18 +61,7 @@ class QueryRunner {
   static QueryRunner* init(const char* db_path,
                            const std::string& udf_filename = "",
                            const size_t max_gpu_mem = 0,  // use all available mem
-                           const int reserved_gpu_mem = 256 << 20) {
-    return QueryRunner::init(db_path,
-                             std::string{OMNISCI_ROOT_USER},
-                             "HyperInteractive",
-                             std::string{OMNISCI_DEFAULT_DB},
-                             {},
-                             {},
-                             udf_filename,
-                             true,
-                             max_gpu_mem,
-                             reserved_gpu_mem);
-  }
+                           const int reserved_gpu_mem = 256 << 20);
 
   static QueryRunner* init(const char* db_path,
                            const std::vector<LeafHostInfo>& string_servers,
@@ -218,6 +207,7 @@ class QueryRunner {
 
   std::shared_ptr<Catalog_Namespace::SessionInfo> session_info_;
   std::unique_ptr<QueryDispatchQueue> dispatch_queue_;
+  std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
 };
 
 class ImportDriver : public QueryRunner {

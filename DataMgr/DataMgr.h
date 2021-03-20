@@ -206,6 +206,7 @@ class DataMgr {
 
   CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cudaMgr_.get(); }
   File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;
+  std::shared_ptr<ForeignStorageInterface> getForeignStorageInterface() const;
 
   // database_id, table_id, column_id, fragment_id
   std::vector<int> levelSizes_;

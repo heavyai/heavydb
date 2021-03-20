@@ -19,6 +19,7 @@
 #include "../AbstractBufferMgr.h"
 #include "Catalog/Catalog.h"
 
+#include <atomic>
 #include <unordered_map>
 
 struct ForeignStorageColumnBuffer {
@@ -217,30 +218,35 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
 
 class ForeignStorageInterface {
  public:
-  static Data_Namespace::AbstractBufferMgr* lookupBufferManager(const int db_id,
-                                                                const int table_id);
+  ForeignStorageInterface() {}
+  ~ForeignStorageInterface() {}
 
-  static void registerPersistentStorageInterface(
+  ForeignStorageInterface(const ForeignStorageInterface& other) = delete;
+  ForeignStorageInterface(ForeignStorageInterface&& other) = delete;
+
+  ForeignStorageInterface& operator=(const ForeignStorageInterface& other) = delete;
+  ForeignStorageInterface& operator=(ForeignStorageInterface&& other) = delete;
+
+  Data_Namespace::AbstractBufferMgr* lookupBufferManager(const int db_id,
+                                                         const int table_id);
+
+  void registerPersistentStorageInterface(
       std::unique_ptr<PersistentForeignStorageInterface> persistent_foreign_storage);
 
-  static void destroy();
-
   //! prepare table options and modify columns
-  static void prepareTable(const int db_id,
-                           TableDescriptor& td,
-                           std::list<ColumnDescriptor>& cols);
+  void prepareTable(const int db_id,
+                    TableDescriptor& td,
+                    std::list<ColumnDescriptor>& cols);
   //! ids are created
-  static void registerTable(Catalog_Namespace::Catalog* catalog,
-                            const TableDescriptor& td,
-                            const std::list<ColumnDescriptor>& cols);
+  void registerTable(Catalog_Namespace::Catalog* catalog,
+                     const TableDescriptor& td,
+                     const std::list<ColumnDescriptor>& cols);
 
  private:
-  static std::unordered_map<std::string,
-                            std::unique_ptr<PersistentForeignStorageInterface>>
+  std::unordered_map<std::string, std::unique_ptr<PersistentForeignStorageInterface>>
       persistent_storage_interfaces_;
-  static std::map<std::pair<int, int>, PersistentForeignStorageInterface*>
+  std::map<std::pair<int, int>, PersistentForeignStorageInterface*>
       table_persistent_storage_interface_map_;
-  static std::map<std::pair<int, int>, std::unique_ptr<ForeignStorageBufferMgr>>
-      managers_map_;
-  static std::mutex persistent_storage_interfaces_mutex_;
+  std::map<std::pair<int, int>, std::unique_ptr<ForeignStorageBufferMgr>> managers_map_;
+  std::mutex persistent_storage_interfaces_mutex_;
 };

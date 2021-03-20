@@ -2161,7 +2161,7 @@ void Catalog::createTable(
     if (td.persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
       throw std::runtime_error("Only temporary tables can be backed by foreign storage.");
     }
-    ForeignStorageInterface::prepareTable(getCurrentDB().dbId, td, cds);
+    dataMgr_->getForeignStorageInterface()->prepareTable(getCurrentDB().dbId, td, cds);
   }
 
   for (auto cd : cds) {
@@ -2352,7 +2352,7 @@ void Catalog::createTable(
     addTableToMap(&td, cds, dds);
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
     if (!td.storageType.empty() && td.storageType != StorageType::FOREIGN_TABLE) {
-      ForeignStorageInterface::registerTable(this, td, cds);
+      dataMgr_->getForeignStorageInterface()->registerTable(this, td, cds);
     }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");

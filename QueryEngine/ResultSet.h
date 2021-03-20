@@ -314,6 +314,13 @@ class ResultSet {
   void setValidationOnlyRes();
   bool isValidationOnlyRes() const;
 
+  std::string getExplanation() const {
+    if (just_explain_) {
+      return explanation_;
+    }
+    return {};
+  }
+
   bool isGeoColOnGpu(const size_t col_idx) const;
   int getDeviceId() const;
 

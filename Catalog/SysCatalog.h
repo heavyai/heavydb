@@ -290,9 +290,13 @@ class SysCatalog : private CommonFileOperations {
                                  const std::vector<std::string> grantees);
   bool isAggregator() const { return aggregator_; }
   static SysCatalog& instance() {
-    static SysCatalog sys_cat{};
-    return sys_cat;
+    if (!instance_) {
+      instance_.reset(new SysCatalog());
+    }
+    return *instance_;
   }
+
+  static void destroy() { instance_.reset(); }
 
   void populateRoleDbObjects(const std::vector<DBObject>& objects);
   std::string name() const { return OMNISCI_DEFAULT_DB; }
@@ -314,6 +318,8 @@ class SysCatalog : private CommonFileOperations {
 
   void removeCatalog(const std::string& dbName);
 
+  virtual ~SysCatalog();
+
  private:
   using GranteeMap = std::map<std::string, Grantee*>;
   using ObjectRoleDescriptorMap = std::multimap<std::string, ObjectRoleDescriptor*>;
@@ -326,7 +332,6 @@ class SysCatalog : private CommonFileOperations {
       , thread_holding_sqlite_lock(std::thread::id())
       , thread_holding_write_lock(std::thread::id())
       , dummyCatalog_(std::make_shared<Catalog>()) {}
-  virtual ~SysCatalog();
 
   void initDB();
   void buildRoleMap();
@@ -421,6 +426,8 @@ class SysCatalog : private CommonFileOperations {
   // std::map<std::string, std::shared_ptr<Catalog>> cat_map_;
   using dbid_to_cat_map = tbb::concurrent_hash_map<std::string, std::shared_ptr<Catalog>>;
   dbid_to_cat_map cat_map_;
+
+  static std::unique_ptr<SysCatalog> instance_;
 
  public:
   mutable std::mutex sqliteMutex_;

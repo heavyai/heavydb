@@ -51,11 +51,12 @@ void set_metadata_for_buffer(AbstractBuffer* buffer, ChunkMetadata* meta) {
 }
 }  // namespace
 
-ForeignStorageCache::ForeignStorageCache(const DiskCacheConfig& config)
+ForeignStorageCache::ForeignStorageCache(const DiskCacheConfig& config,
+                                         std::shared_ptr<ForeignStorageInterface> fsi)
     : num_chunks_added_(0), num_metadata_added_(0) {
   validatePath(config.path);
   global_file_mgr_ = std::make_unique<File_Namespace::GlobalFileMgr>(
-      0, config.path, config.num_reader_threads);
+      0, fsi, config.path, config.num_reader_threads);
 }
 
 void ForeignStorageCache::deleteBufferIfExists(const ChunkKey& chunk_key) {

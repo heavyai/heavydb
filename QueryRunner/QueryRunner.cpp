@@ -78,6 +78,22 @@ std::unique_ptr<QueryRunner> QueryRunner::qr_instance_ = nullptr;
 query_state::QueryStates QueryRunner::query_states_;
 
 QueryRunner* QueryRunner::init(const char* db_path,
+                               const std::string& udf_filename,
+                               const size_t max_gpu_mem,
+                               const int reserved_gpu_mem) {
+  return QueryRunner::init(db_path,
+                           std::string{OMNISCI_ROOT_USER},
+                           "HyperInteractive",
+                           std::string{OMNISCI_DEFAULT_DB},
+                           {},
+                           {},
+                           udf_filename,
+                           true,
+                           max_gpu_mem,
+                           reserved_gpu_mem);
+}
+
+QueryRunner* QueryRunner::init(const char* db_path,
                                const std::string& user,
                                const std::string& pass,
                                const std::string& db_name,
@@ -123,7 +139,6 @@ QueryRunner::QueryRunner(const char* db_path,
                          const bool create_db)
     : dispatch_queue_(std::make_unique<QueryDispatchQueue>(1)) {
   g_serialize_temp_tables = true;
-
   boost::filesystem::path base_path{db_path};
   CHECK(boost::filesystem::exists(base_path));
   auto system_db_file = base_path / "mapd_catalogs" / OMNISCI_DEFAULT_DB;
@@ -161,19 +176,19 @@ QueryRunner::QueryRunner(const char* db_path,
   mapd_params.gpu_buffer_mem_bytes = max_gpu_mem;
   mapd_params.aggregator = !leaf_servers.empty();
 
-  auto data_mgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(),
-                                                            mapd_params,
-                                                            std::move(cuda_mgr),
-                                                            uses_gpus,
-                                                            reserved_gpu_mem,
-                                                            0,
-                                                            disk_cache_config);
+  data_mgr_.reset(new Data_Namespace::DataMgr(data_dir.string(),
+                                              mapd_params,
+                                              std::move(cuda_mgr),
+                                              uses_gpus,
+                                              reserved_gpu_mem,
+                                              0,
+                                              disk_cache_config));
 
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
 
   g_base_path = base_path.string();
   sys_cat.init(g_base_path,
-               data_mgr,
+               data_mgr_,
                {},
                g_calcite,
                false,

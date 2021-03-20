@@ -243,7 +243,8 @@ class DBHandlerTestFixture : public testing::Test {
 #ifdef ENABLE_GEOS
                                                 libgeos_so_filename_,
 #endif
-                                                disk_cache_config);
+                                                disk_cache_config,
+                                                false);
       loginAdmin();
 
       // Execute on CPU by default

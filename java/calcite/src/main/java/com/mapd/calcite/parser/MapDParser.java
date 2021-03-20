@@ -18,6 +18,7 @@ package com.mapd.calcite.parser;
 import static org.apache.calcite.sql.parser.SqlParserPos.ZERO;
 
 import com.google.common.collect.ImmutableList;
+import com.mapd.calcite.parser.MapDParserOptions.FilterPushDownInfo;
 import com.mapd.common.SockTransportProperties;
 import com.mapd.parser.extension.ddl.ExtendedSqlParser;
 import com.mapd.parser.extension.ddl.JsonSerializableDdl;
@@ -385,10 +386,13 @@ public final class MapDParser {
     return new Pair<String, SqlIdentifierCapturer>(res, capture);
   }
 
-  public String optimizeRAQuery(String query) throws IOException {
+  public String optimizeRAQuery(String query, final MapDParserOptions parserOptions)
+          throws IOException {
     MapDSchema schema =
             new MapDSchema(dataDir, this, mapdPort, mapdUser, sock_transport_properties);
     MapDPlanner planner = getPlanner(true, true);
+
+    planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
     RelRoot optRel = planner.optimizeRaQuery(query, schema);
     optRel = replaceIsTrue(planner.getTypeFactory(), optRel);
     return MapDSerializer.toString(optRel.project());

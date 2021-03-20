@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.prepare;
 
+import com.google.common.collect.ImmutableSet;
 import com.mapd.calcite.parser.MapDParserOptions;
 import com.mapd.calcite.parser.MapDSchema;
 import com.mapd.calcite.parser.ProjectProjectRemoveRule;
@@ -28,6 +29,7 @@ import org.apache.calcite.linq4j.function.Functions;
 import org.apache.calcite.plan.Context;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptCostImpl;
+import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.hep.HepPlanner;
 import org.apache.calcite.plan.hep.HepProgram;
 import org.apache.calcite.plan.hep.HepProgramBuilder;
@@ -36,6 +38,7 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.rel.externalize.MapDRelJsonReader;
+import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
 import org.apache.calcite.rel.rules.CoreRules;
 import org.apache.calcite.rel.rules.DynamicFilterJoinRule;
 import org.apache.calcite.rel.rules.FilterJoinRule;
@@ -64,10 +67,9 @@ import java.util.List;
 import java.util.Properties;
 
 /**
- * Customised version of the PlannerImpl for MapD.
- * Used to be a copy of PlannerImpl,
- * refactored now to use inheritance to minimize maintenance efforts.
- * Implementation of {@link org.apache.calcite.tools.Planner}.
+ * Customised version of the PlannerImpl for MapD. Used to be a copy of
+ * PlannerImpl, refactored now to use inheritance to minimize maintenance
+ * efforts. Implementation of {@link org.apache.calcite.tools.Planner}.
  */
 public class MapDPlanner extends PlannerImpl {
   FrameworkConfig config;
@@ -222,6 +224,16 @@ public class MapDPlanner extends PlannerImpl {
     return root.withRel(rootRelNode);
   }
 
+  private RelRoot applyOptimizationsRules(RelRoot root, ImmutableSet<RelOptRule> rules) {
+    HepProgramBuilder programBuilder = new HepProgramBuilder();
+    for (RelOptRule rule : rules) {
+      programBuilder.addRuleInstance(rule);
+    }
+    HepPlanner hepPlanner = new HepPlanner(programBuilder.build());
+    hepPlanner.setRoot(root.rel);
+    return root.withRel(hepPlanner.findBestExp());
+  }
+
   public RelRoot optimizeRaQuery(String query, MapDSchema schema) throws IOException {
     ready();
     RexBuilder builder = new RexBuilder(getTypeFactory());
@@ -230,22 +242,23 @@ public class MapDPlanner extends PlannerImpl {
     MapDRelJsonReader reader = new MapDRelJsonReader(cluster, catalogReader, schema);
 
     RelRoot relR = RelRoot.of(reader.read(query), SqlKind.SELECT);
-    applyQueryOptimizationRules(relR);
-    applyFilterPushdown(relR);
 
-    HepProgramBuilder hepBuilder = new HepProgramBuilder();
-    hepBuilder.addRuleInstance(CoreRules.JOIN_PROJECT_BOTH_TRANSPOSE_INCLUDE_OUTER);
-    hepBuilder.addRuleInstance(CoreRules.FILTER_MERGE);
-    hepBuilder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
-    hepBuilder.addRuleInstance(CoreRules.PROJECT_MERGE);
-    hepBuilder.addRuleInstance(ProjectProjectRemoveRule.INSTANCE);
+    if (restriction != null) {
+      relR = applyInjectFilterRule(relR, restriction);
+    }
 
-    HepPlanner hepPlanner = new HepPlanner(hepBuilder.build());
-    final RelNode root = relR.project();
-    hepPlanner.setRoot(root);
-    final RelNode newRel = hepPlanner.findBestExp();
-
-    return RelRoot.of(newRel, relR.kind);
+    relR = applyQueryOptimizationRules(relR);
+    relR = applyFilterPushdown(relR);
+    relR = applyOptimizationsRules(relR,
+            ImmutableSet.of(CoreRules.JOIN_PROJECT_BOTH_TRANSPOSE_INCLUDE_OUTER,
+                    CoreRules.FILTER_REDUCE_EXPRESSIONS,
+                    ProjectProjectRemoveRule.INSTANCE,
+                    CoreRules.PROJECT_FILTER_TRANSPOSE));
+    relR = applyOptimizationsRules(relR, ImmutableSet.of(CoreRules.PROJECT_MERGE));
+    relR = applyOptimizationsRules(relR,
+            ImmutableSet.of(
+                    CoreRules.FILTER_PROJECT_TRANSPOSE, CoreRules.PROJECT_REMOVE));
+    return RelRoot.of(relR.project(), relR.kind);
   }
 
   public void setFilterPushDownInfo(

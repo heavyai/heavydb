@@ -69,6 +69,10 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   foreign_storage::ForeignStorageMgr* getForeignStorageMgr() const;
   foreign_storage::ForeignStorageCache* getDiskCache() const;
   inline const DiskCacheConfig getDiskCacheConfig() const { return disk_cache_config_; }
+  inline const std::shared_ptr<ForeignStorageInterface> getForeignStorageInterface()
+      const {
+    return fsi_;
+  }
 
  protected:
   bool isForeignStorage(const ChunkKey& chunk_key) const;
@@ -80,4 +84,5 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   std::unique_ptr<foreign_storage::ForeignStorageMgr> foreign_storage_mgr_;
   std::unique_ptr<foreign_storage::ForeignStorageCache> disk_cache_;
   DiskCacheConfig disk_cache_config_;
+  std::shared_ptr<ForeignStorageInterface> fsi_;
 };

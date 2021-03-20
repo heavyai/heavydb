@@ -66,6 +66,20 @@ class ExecutionResult {
            ::toString(targets_meta_) + ")";
   }
 
+  enum RType { QueryResult, SimpleResult, Explaination, CalciteDdl };
+
+  std::string getExplanation();
+  void updateResultSet(const std::string& query_ra, RType type, bool success = true);
+  RType getResultType() const { return type_; }
+  void setResultType(RType type) { type_ = type; }
+  int64_t getExecutionTime() const { return execution_time_ms_; }
+  void setExecutionTime(int64_t execution_time_ms) {
+    execution_time_ms_ = execution_time_ms;
+  }
+  void addExecutionTime(int64_t execution_time_ms) {
+    execution_time_ms_ += execution_time_ms;
+  }
+
  private:
   ResultSetPtr result_;
   std::vector<TargetMetaInfo> targets_meta_;
@@ -73,6 +87,10 @@ class ExecutionResult {
   std::vector<PushedDownFilterInfo> pushed_down_filter_info_;
   // whether or not it was allowed to look for filters to push down
   bool filter_push_down_enabled_;
+
+  bool success_;
+  uint64_t execution_time_ms_;
+  RType type_;
 };
 
 class RelAlgNode;
