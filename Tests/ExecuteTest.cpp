@@ -5083,6 +5083,31 @@ TEST(Select, Time) {
                                   "test WHERE (m >= TIMESTAMP(3) '1970-01-01 "
                                   "00:00:00.000') GROUP BY key0 ORDER BY key0 LIMIT 1;",
                                   dt)));
+
+    // test first weekday option
+    bool prev_monday_first_weekday = g_monday_first_weekday;
+    g_monday_first_weekday = true;
+    // Monday
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("SELECT EXTRACT(DOW FROM CAST('2008-03-03 "
+                                        "20:00:11' AS TIMESTAMP)) FROM test limit 1;",
+                                        dt)));
+    // Wednesday
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg("SELECT EXTRACT(DOW FROM CAST('2021-01-27 "
+                                        "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
+                                        dt)));
+    // Saturday
+    ASSERT_EQ(5,
+              v<int64_t>(run_simple_agg("SELECT EXTRACT(DOW FROM CAST('2020-11-14 "
+                                        "14:47:12' AS TIMESTAMP)) FROM test limit 1;",
+                                        dt)));
+    // Sunday
+    ASSERT_EQ(6,
+              v<int64_t>(run_simple_agg("SELECT EXTRACT(DOW FROM CAST('2020-09-27 "
+                                        "21:30:12' AS TIMESTAMP)) FROM test limit 1;",
+                                        dt)));
+    g_monday_first_weekday = prev_monday_first_weekday;
   }
 }
 

@@ -127,6 +127,7 @@ bool g_enable_smem_non_grouped_agg{
             // non-grouped aggregates
 bool g_is_test_env{false};  // operating under a unit test environment. Currently only
                             // limits the allocation for the output buffer arena
+bool g_monday_first_weekday{false};
 
 size_t g_approx_quantile_buffer{1000};
 size_t g_approx_quantile_centroids{300};

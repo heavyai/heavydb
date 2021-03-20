@@ -72,7 +72,7 @@ extern "C" ALWAYS_INLINE DEVICE int64_t extract_nanosecond(const int64_t lcltime
 // First day of epoch is Thursday, so + 4 to have Sunday=0.
 extern "C" ALWAYS_INLINE DEVICE int64_t extract_dow(const int64_t lcltime) {
   int64_t const days_past_epoch = floor_div(lcltime, kSecsPerDay);
-  return unsigned_mod(days_past_epoch + 4, kDaysPerWeek);
+  return unsigned_mod(days_past_epoch + 4 - g_monday_first_weekday, kDaysPerWeek);
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t extract_quarterday(const int64_t lcltime) {
