@@ -34,6 +34,7 @@ zlib | [zlib](<http://zlib.net/zlib_license.html>) | PNG support |
 glslang | [BSD BSD-like MIT](https://github.com/KhronosGroup/glslang/blob/master/LICENSE.txt) | Rendering support
 spirv-tools | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Tools/blob/master/LICENSE) | Rendering support
 spirv-cross | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Cross/blob/master/LICENSE) | Rendering support
+Vulkan Memory Allocator | [MIT](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/blob/master/LICENSE.txt) | Rendering support
 --- | --- | --- |
 gdal | [MIT](<http://svn.osgeo.org/gdal/trunk/gdal/LICENSE.TXT>) | GDAL, Geospatial import |
 libexpat | [MIT](<https://github.com/LuaDist/libexpat/blob/master/COPYING>) | GDAL, KML import |
