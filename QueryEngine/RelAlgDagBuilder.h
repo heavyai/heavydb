@@ -1023,8 +1023,10 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
 
   void injectOffsetInFragmentExpr() const {
     RexFunctionOperator::ConstRexScalarPtrVector transient_vector;
-    scalar_exprs_.emplace_back(std::make_unique<RexFunctionOperator const>(
-        std::string("OFFSET_IN_FRAGMENT"), transient_vector, SQLTypeInfo(kINT, false)));
+    scalar_exprs_.emplace_back(
+        std::make_unique<RexFunctionOperator const>(std::string("OFFSET_IN_FRAGMENT"),
+                                                    transient_vector,
+                                                    SQLTypeInfo(kBIGINT, false)));
     fields_.emplace_back("EXPR$DELETE_OFFSET_IN_FRAGMENT");
   }
 

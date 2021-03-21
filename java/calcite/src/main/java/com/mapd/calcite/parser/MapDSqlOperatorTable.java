@@ -1698,7 +1698,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 0;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+      return typeFactory.createSqlType(SqlTypeName.BIGINT);
     }
   }
 

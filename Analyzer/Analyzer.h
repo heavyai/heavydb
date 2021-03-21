@@ -1398,7 +1398,7 @@ class FunctionOperWithCustomTypeHandling : public FunctionOper {
  */
 class OffsetInFragment : public Expr {
  public:
-  OffsetInFragment() : Expr(SQLTypeInfo(kINT, true)){};
+  OffsetInFragment() : Expr(SQLTypeInfo(kBIGINT, true)){};
 
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
 

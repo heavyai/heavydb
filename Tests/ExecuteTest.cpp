@@ -522,6 +522,12 @@ void c_arrow(const std::string& query_string, const ExecutorDeviceType device_ty
     return;                                                       \
   }
 
+#define SKIP_IF_SHARDED()                                       \
+  if (g_shard_count) {                                          \
+    LOG(ERROR) << "Tests not valid when using sharded tables."; \
+    return;                                                     \
+  }
+
 bool validate_statement_syntax(const std::string& stmt) {
   SQLParser parser;
   list<std::unique_ptr<Parser::Stmt>> parse_trees;
@@ -19274,6 +19280,49 @@ TEST(Select, SampleRatio) {
     EXPECT_NO_THROW(run_multiple_agg("SELECT sample_ratio(d) FROM test LIMIT 1;", dt));
     EXPECT_NO_THROW(
         run_multiple_agg("SELECT sample_ratio(arr_i64[0]) FROM array_test LIMIT 1;", dt));
+  }
+}
+
+TEST(Select, OffsetInFragment) {
+  // Skip test in sharded/distributed situations, as otherwise we have to replicate much
+  // of logic of how we shard strings to compute the number rows of test table that will
+  // be distributed to each shard
+  // TODO: consider creating simple integer sharded table specific for this test
+  SKIP_IF_SHARDED();
+  SKIP_ALL_ON_AGGREGATOR();
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // With fragment_size of 2, we should have 10 frags
+    EXPECT_EQ(10,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE offset_in_fragment() = 1;", dt)));
+    EXPECT_EQ(
+        10,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test WHERE offset_in_fragment() = CAST(1 AS INT);",
+            dt)));
+    EXPECT_EQ(10,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE offset_in_fragment() < 1;", dt)));
+    EXPECT_EQ(20,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE offset_in_fragment() <= 1;", dt)));
+    EXPECT_EQ(
+        10,
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE offset_in_fragment() "
+                                  "<= 1 AND offset_in_fragment() != 0;",
+                                  dt)));
+    EXPECT_EQ(
+        1,
+        v<int64_t>(run_simple_agg("SELECT CAST(AVG(offset_in_fragment()) AS BIGINT) FROM "
+                                  "test WHERE offset_in_fragment() > 0;",
+                                  dt)));
+    const auto num_rows = v<int64_t>(run_simple_agg(
+        "SELECT COUNT(*) FROM (SELECT COUNT(*) FROM test WHERE offset_in_fragment() <= "
+        "10 GROUP BY MOD(offset_in_fragment(), 2));",
+        dt));
+    EXPECT_EQ(num_rows, 2);
   }
 }
 
