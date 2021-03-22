@@ -1,0 +1,9 @@
+Struct anonymous_namespace{toString.h}::get_has_toString
+========================================================
+
+.. doxygenstruct:: anonymous_namespace{toString.h}::get_has_toString
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 94aeaff
+                5.7.0dev 8903cc0
               </div>
             
           
@@ -414,6 +414,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_drop_foreign_server_command.html">Class DropForeignServerCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_drop_foreign_table_command.html">Class DropForeignTableCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_dummy_persistent_foreign_storage.html">Class DummyPersistentForeignStorage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_column_details.html">Class EmbeddedDatabase::ColumnDetails</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_cursor.html">Class EmbeddedDatabase::Cursor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_cursor_impl.html">Class EmbeddedDatabase::CursorImpl</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class EmbeddedDatabase::DBEngine</a></li>
@@ -767,6 +768,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_bench_analyzer.html">Class analyze_benchmark::BenchAnalyzer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_benchmark_loader.html">Class analyze_benchmark::BenchmarkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_pretty_print.html">Class analyze_benchmark::PrettyPrint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_arrow_result_set_converter_8cpp_03_1_1_result_set_buffer.html">Class anonymous_namespace{ArrowResultSetConverter.cpp}::ResultSetBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_arrow_result_set_converter_8cpp_03_1_1null__type.html">Class anonymous_namespace{ArrowResultSetConverter.cpp}::null_type</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_ddl_command_data_impl.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::DdlCommandDataImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_json_column_encoding.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::JsonColumnEncoding</a></li>
@@ -1742,6 +1744,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_typed_data_accessors_8h_03_1_1_null_sentinel_supplier_1_1_int_selector.html">Struct anonymous_namespace{TypedDataAccessors.h}::NullSentinelSupplier::IntSelector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_types_8cpp_03_1_1_bounding_box.html">Struct anonymous_namespace{Types.cpp}::BoundingBox</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_types_8cpp_03_1_1_coords.html">Struct anonymous_namespace{Types.cpp}::Coords</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1get__has__to_string.html">Struct anonymous_namespace{toString.h}::get_has_toString</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1has__to_string.html">Struct anonymous_namespace{toString.h}::has_toString</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1has__to_string_3_01_t_00_01decltype_07std_1_1dec934f37e70248688d220a4ef1ce6df4f0.html">Struct anonymous_namespace{toString.h}::has_toString&lt; T, decltype(std::declval&lt; T &gt;().toString(), void())&gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdict__ref__t.html">Struct dict_ref_t</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdouble__sort_1_1_iterator.html">Struct double_sort::Iterator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdouble__sort_1_1_value.html">Struct double_sort::Value</a></li>
@@ -1930,35 +1935,58 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N16EmbeddedDatabase8DBEngine5resetEv">
-<span id="_CPPv3N16EmbeddedDatabase8DBEngine5resetEv"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngine5resetEv"></span><span id="EmbeddedDatabase::DBEngine::reset"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1ae0c7740315fdc694377d6d9d89668078"></span>void <code class="sig-name descname">reset</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngine5resetEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N16EmbeddedDatabase8DBEngineD0Ev">
+<span id="_CPPv3N16EmbeddedDatabase8DBEngineD0Ev"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngineD0Ev"></span><span id="EmbeddedDatabase::DBEngine::~DBEngine"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1ab570e2615fa8dfa27b9cf4a6f653152b"></span><em class="property">virtual</em> <code class="sig-name descname">~DBEngine</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngineD0Ev" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N16EmbeddedDatabase8DBEngine10executeDDLENSt6stringE">
-<span id="_CPPv3N16EmbeddedDatabase8DBEngine10executeDDLENSt6stringE"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngine10executeDDLENSt6stringE"></span><span id="EmbeddedDatabase::DBEngine::executeDDL__ss"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1a62777162dbe9c6518063d54865eda73e"></span>void <code class="sig-name descname">executeDDL</code><span class="sig-paren">(</span>std::string <em>query</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngine10executeDDLENSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N16EmbeddedDatabase8DBEngine10executeDDLERKNSt6stringE">
+<span id="_CPPv3N16EmbeddedDatabase8DBEngine10executeDDLERKNSt6stringE"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngine10executeDDLERKNSt6stringE"></span><span id="EmbeddedDatabase::DBEngine::executeDDL__ssCR"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1a5140fffa590096df99ee1387a7f0f3b7"></span>void <code class="sig-name descname">executeDDL</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngine10executeDDLERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p><a class="reference internal" href="#class_embedded_database_1_1_d_b_engine"><span class="std std-ref">DBEngine</span></a> external methods </p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N16EmbeddedDatabase8DBEngine10executeDMLERKNSt6stringE">
+<span id="_CPPv3N16EmbeddedDatabase8DBEngine10executeDMLERKNSt6stringE"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngine10executeDMLERKNSt6stringE"></span><span id="EmbeddedDatabase::DBEngine::executeDML__ssCR"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1a2bf584d11c05f4ac2c5ff459b7359230"></span>std::shared_ptr&lt;<a class="reference internal" href="class_embedded_database_1_1_cursor.html#_CPPv4N16EmbeddedDatabase6CursorE" title="EmbeddedDatabase::Cursor">Cursor</a>&gt; <code class="sig-name descname">executeDML</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngine10executeDMLERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N16EmbeddedDatabase8DBEngine10executeDMLENSt6stringE">
-<span id="_CPPv3N16EmbeddedDatabase8DBEngine10executeDMLENSt6stringE"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngine10executeDMLENSt6stringE"></span><span id="EmbeddedDatabase::DBEngine::executeDML__ss"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1aa4aeb64e8ecdcf593644689722f39afb"></span><a class="reference internal" href="class_embedded_database_1_1_cursor.html#_CPPv4N16EmbeddedDatabase6CursorE" title="EmbeddedDatabase::Cursor">Cursor</a> *<code class="sig-name descname">executeDML</code><span class="sig-paren">(</span>std::string <em>query</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngine10executeDMLENSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N16EmbeddedDatabase8DBEngine9executeRAERKNSt6stringE">
+<span id="_CPPv3N16EmbeddedDatabase8DBEngine9executeRAERKNSt6stringE"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngine9executeRAERKNSt6stringE"></span><span id="EmbeddedDatabase::DBEngine::executeRA__ssCR"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1a236860fab64d9bc4776ab9ebe5dc13cb"></span>std::shared_ptr&lt;<a class="reference internal" href="class_embedded_database_1_1_cursor.html#_CPPv4N16EmbeddedDatabase6CursorE" title="EmbeddedDatabase::Cursor">Cursor</a>&gt; <code class="sig-name descname">executeRA</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngine9executeRAERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N16EmbeddedDatabase8DBEngine16importArrowTableERKNSt6stringERNSt10shared_ptrIN5arrow5TableEEE8uint64_t">
+<span id="_CPPv3N16EmbeddedDatabase8DBEngine16importArrowTableERKNSt6stringERNSt10shared_ptrIN5arrow5TableEEE8uint64_t"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngine16importArrowTableERKNSt6stringERNSt10shared_ptrIN5arrow5TableEEE8uint64_t"></span><span id="EmbeddedDatabase::DBEngine::importArrowTable__ssCR.std::shared_ptr:arrow::Table:R.uint64_t"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1a1012638154c7db886147a50b5aee0b9c"></span>void <code class="sig-name descname">importArrowTable</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>name</em>, std::shared_ptr&lt;arrow::Table&gt; &amp;<em>table</em>, uint64_t <em>fragment_size</em> = 0<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngine16importArrowTableERKNSt6stringERNSt10shared_ptrIN5arrow5TableEEE8uint64_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N16EmbeddedDatabase8DBEngine9getTablesEv">
+<span id="_CPPv3N16EmbeddedDatabase8DBEngine9getTablesEv"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngine9getTablesEv"></span><span id="EmbeddedDatabase::DBEngine::getTables"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1a705ca694d3bf76695f3eff617bb65143"></span>std::vector&lt;std::string&gt; <code class="sig-name descname">getTables</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngine9getTablesEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N16EmbeddedDatabase8DBEngine15getTableDetailsERKNSt6stringE">
+<span id="_CPPv3N16EmbeddedDatabase8DBEngine15getTableDetailsERKNSt6stringE"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngine15getTableDetailsERKNSt6stringE"></span><span id="EmbeddedDatabase::DBEngine::getTableDetails__ssCR"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1ac00249b8e5b392e21d62ce342c15e82e"></span>std::vector&lt;<a class="reference internal" href="class_embedded_database_1_1_column_details.html#_CPPv4N16EmbeddedDatabase13ColumnDetailsE" title="EmbeddedDatabase::ColumnDetails">ColumnDetails</a>&gt; <code class="sig-name descname">getTableDetails</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>table_name</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngine15getTableDetailsERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N16EmbeddedDatabase8DBEngine11setDatabaseERNSt6stringE">
+<span id="_CPPv3N16EmbeddedDatabase8DBEngine11setDatabaseERNSt6stringE"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngine11setDatabaseERNSt6stringE"></span><span id="EmbeddedDatabase::DBEngine::setDatabase__ssR"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1a19e1ea49d497822987d12a3a1a3e7275"></span>bool <code class="sig-name descname">setDatabase</code><span class="sig-paren">(</span>std::string &amp;<em>db_name</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngine11setDatabaseERNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N16EmbeddedDatabase8DBEngine5loginERNSt6stringERNSt6stringERKNSt6stringE">
+<span id="_CPPv3N16EmbeddedDatabase8DBEngine5loginERNSt6stringERNSt6stringERKNSt6stringE"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngine5loginERNSt6stringERNSt6stringERKNSt6stringE"></span><span id="EmbeddedDatabase::DBEngine::login__ssR.ssR.ssCR"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1ae71f45a6bb6b8467c9eae22e52f99b2e"></span>bool <code class="sig-name descname">login</code><span class="sig-paren">(</span>std::string &amp;<em>db_name</em>, std::string &amp;<em>user_name</em>, <em class="property">const</em> std::string &amp;<em>password</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngine5loginERNSt6stringERNSt6stringERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Static Functions</p>
 <dl class="function">
-<dt id="_CPPv4N16EmbeddedDatabase8DBEngine6createENSt6stringE">
-<span id="_CPPv3N16EmbeddedDatabase8DBEngine6createENSt6stringE"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngine6createENSt6stringE"></span><span id="EmbeddedDatabase::DBEngine::create__ss"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1a39f7827dcfc9faeb1a1e62f550436bdf"></span><a class="reference internal" href="#_CPPv4N16EmbeddedDatabase8DBEngineE" title="EmbeddedDatabase::DBEngine">DBEngine</a> *<code class="sig-name descname">create</code><span class="sig-paren">(</span>std::string <em>path</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngine6createENSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Creates <a class="reference internal" href="#class_embedded_database_1_1_d_b_engine"><span class="std std-ref">DBEngine</span></a> instance</p>
-<p><dl class="simple">
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">sPath</span></code>: Path to the existing database </p></li>
-</ul>
-</dd>
-</dl>
-</p>
-</dd></dl>
+<dt id="_CPPv4N16EmbeddedDatabase8DBEngine6createERKNSt6stringE">
+<span id="_CPPv3N16EmbeddedDatabase8DBEngine6createERKNSt6stringE"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngine6createERKNSt6stringE"></span><span id="EmbeddedDatabase::DBEngine::create__ssCR"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1a724a9fa29842bd5de4bcd86dd790ea7b"></span>std::shared_ptr&lt;<a class="reference internal" href="#_CPPv4N16EmbeddedDatabase8DBEngineE" title="EmbeddedDatabase::DBEngine">DBEngine</a>&gt; <code class="sig-name descname">create</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>cmd_line</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngine6createERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">
@@ -1966,6 +1994,16 @@
 <dl class="function">
 <dt id="_CPPv4N16EmbeddedDatabase8DBEngine8DBEngineEv">
 <span id="_CPPv3N16EmbeddedDatabase8DBEngine8DBEngineEv"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngine8DBEngineEv"></span><span id="EmbeddedDatabase::DBEngine::DBEngine"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1a9934a1231be57c80bd827211916e0d69"></span><code class="sig-name descname">DBEngine</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngine8DBEngineEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N16EmbeddedDatabase8DBEngine8DBEngineERK8DBEngine">
+<span id="_CPPv3N16EmbeddedDatabase8DBEngine8DBEngineERK8DBEngine"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngine8DBEngineERK8DBEngine"></span><span id="EmbeddedDatabase::DBEngine::DBEngine__DBEngineCR"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1a4fa0dbc7ca616d71271aaf5e078da455"></span><code class="sig-name descname">DBEngine</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv4N16EmbeddedDatabase8DBEngine8DBEngineEv" title="EmbeddedDatabase::DBEngine::DBEngine">DBEngine</a>&amp;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngine8DBEngineERK8DBEngine" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N16EmbeddedDatabase8DBEngineaSERK8DBEngine">
+<span id="_CPPv3N16EmbeddedDatabase8DBEngineaSERK8DBEngine"></span><span id="_CPPv2N16EmbeddedDatabase8DBEngineaSERK8DBEngine"></span><span id="EmbeddedDatabase::DBEngine::assign-operator__DBEngineCR"></span><span class="target" id="class_embedded_database_1_1_d_b_engine_1a4b70a187dd4481492740190f54b32ae5"></span><a class="reference internal" href="#_CPPv4N16EmbeddedDatabase8DBEngineE" title="EmbeddedDatabase::DBEngine">DBEngine</a> &amp;<code class="sig-name descname">operator=</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv4N16EmbeddedDatabase8DBEngineE" title="EmbeddedDatabase::DBEngine">DBEngine</a>&amp;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase8DBEngineaSERK8DBEngine" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

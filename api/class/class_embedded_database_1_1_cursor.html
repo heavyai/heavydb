@@ -41,7 +41,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Class EmbeddedDatabase::CursorImpl" href="class_embedded_database_1_1_cursor_impl.html" />
-    <link rel="prev" title="Class DummyPersistentForeignStorage" href="class_dummy_persistent_foreign_storage.html" /> 
+    <link rel="prev" title="Class EmbeddedDatabase::ColumnDetails" href="class_embedded_database_1_1_column_details.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 94aeaff
+                5.7.0dev 8903cc0
               </div>
             
           
@@ -414,6 +414,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_drop_foreign_server_command.html">Class DropForeignServerCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_drop_foreign_table_command.html">Class DropForeignTableCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_dummy_persistent_foreign_storage.html">Class DummyPersistentForeignStorage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_column_details.html">Class EmbeddedDatabase::ColumnDetails</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class EmbeddedDatabase::Cursor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_cursor_impl.html">Class EmbeddedDatabase::CursorImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_d_b_engine.html">Class EmbeddedDatabase::DBEngine</a></li>
@@ -767,6 +768,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_bench_analyzer.html">Class analyze_benchmark::BenchAnalyzer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_benchmark_loader.html">Class analyze_benchmark::BenchmarkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_pretty_print.html">Class analyze_benchmark::PrettyPrint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_arrow_result_set_converter_8cpp_03_1_1_result_set_buffer.html">Class anonymous_namespace{ArrowResultSetConverter.cpp}::ResultSetBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_arrow_result_set_converter_8cpp_03_1_1null__type.html">Class anonymous_namespace{ArrowResultSetConverter.cpp}::null_type</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_ddl_command_data_impl.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::DdlCommandDataImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_json_column_encoding.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::JsonColumnEncoding</a></li>
@@ -1742,6 +1744,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_typed_data_accessors_8h_03_1_1_null_sentinel_supplier_1_1_int_selector.html">Struct anonymous_namespace{TypedDataAccessors.h}::NullSentinelSupplier::IntSelector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_types_8cpp_03_1_1_bounding_box.html">Struct anonymous_namespace{Types.cpp}::BoundingBox</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_types_8cpp_03_1_1_coords.html">Struct anonymous_namespace{Types.cpp}::Coords</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1get__has__to_string.html">Struct anonymous_namespace{toString.h}::get_has_toString</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1has__to_string.html">Struct anonymous_namespace{toString.h}::has_toString</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1has__to_string_3_01_t_00_01decltype_07std_1_1dec934f37e70248688d220a4ef1ce6df4f0.html">Struct anonymous_namespace{toString.h}::has_toString&lt; T, decltype(std::declval&lt; T &gt;().toString(), void())&gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdict__ref__t.html">Struct dict_ref_t</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdouble__sort_1_1_iterator.html">Struct double_sort::Iterator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdouble__sort_1_1_value.html">Struct double_sort::Value</a></li>
@@ -1930,9 +1935,15 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
+<dt id="_CPPv4N16EmbeddedDatabase6CursorD0Ev">
+<span id="_CPPv3N16EmbeddedDatabase6CursorD0Ev"></span><span id="_CPPv2N16EmbeddedDatabase6CursorD0Ev"></span><span id="EmbeddedDatabase::Cursor::~Cursor"></span><span class="target" id="class_embedded_database_1_1_cursor_1a84472863577508a099fcc5cd5c583b3f"></span><em class="property">virtual</em> <code class="sig-name descname">~Cursor</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase6CursorD0Ev" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4N16EmbeddedDatabase6Cursor11getColCountEv">
 <span id="_CPPv3N16EmbeddedDatabase6Cursor11getColCountEv"></span><span id="_CPPv2N16EmbeddedDatabase6Cursor11getColCountEv"></span><span id="EmbeddedDatabase::Cursor::getColCount"></span><span class="target" id="class_embedded_database_1_1_cursor_1ab8046c70fe8785d6687a2760a4844ec3"></span>size_t <code class="sig-name descname">getColCount</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase6Cursor11getColCountEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><p><a class="reference internal" href="#class_embedded_database_1_1_cursor"><span class="std std-ref">Cursor</span></a> external methods </p>
+</dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N16EmbeddedDatabase6Cursor11getRowCountEv">
@@ -1946,7 +1957,30 @@
 
 <dl class="function">
 <dt id="_CPPv4N16EmbeddedDatabase6Cursor10getColTypeE8uint32_t">
-<span id="_CPPv3N16EmbeddedDatabase6Cursor10getColTypeE8uint32_t"></span><span id="_CPPv2N16EmbeddedDatabase6Cursor10getColTypeE8uint32_t"></span><span id="EmbeddedDatabase::Cursor::getColType__uint32_t"></span><span class="target" id="class_embedded_database_1_1_cursor_1a35d9d64058ff28988b9b51b16dc3fdbe"></span>int <code class="sig-name descname">getColType</code><span class="sig-paren">(</span>uint32_t <em>col_num</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase6Cursor10getColTypeE8uint32_t" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N16EmbeddedDatabase6Cursor10getColTypeE8uint32_t"></span><span id="_CPPv2N16EmbeddedDatabase6Cursor10getColTypeE8uint32_t"></span><span id="EmbeddedDatabase::Cursor::getColType__uint32_t"></span><span class="target" id="class_embedded_database_1_1_cursor_1addcebe6096d8079ae45d062f42245eaf"></span>ColumnType <code class="sig-name descname">getColType</code><span class="sig-paren">(</span>uint32_t <em>col_num</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase6Cursor10getColTypeE8uint32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N16EmbeddedDatabase6Cursor19getArrowRecordBatchEv">
+<span id="_CPPv3N16EmbeddedDatabase6Cursor19getArrowRecordBatchEv"></span><span id="_CPPv2N16EmbeddedDatabase6Cursor19getArrowRecordBatchEv"></span><span id="EmbeddedDatabase::Cursor::getArrowRecordBatch"></span><span class="target" id="class_embedded_database_1_1_cursor_1ac8c518cd0844c0d6d77e1f8ec64fb07b"></span>std::shared_ptr&lt;arrow::RecordBatch&gt; <code class="sig-name descname">getArrowRecordBatch</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase6Cursor19getArrowRecordBatchEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Protected Functions</p>
+<dl class="function">
+<dt id="_CPPv4N16EmbeddedDatabase6Cursor6CursorEv">
+<span id="_CPPv3N16EmbeddedDatabase6Cursor6CursorEv"></span><span id="_CPPv2N16EmbeddedDatabase6Cursor6CursorEv"></span><span id="EmbeddedDatabase::Cursor::Cursor"></span><span class="target" id="class_embedded_database_1_1_cursor_1ac00f29d5a39bf7041782966b1ce8ac06"></span><code class="sig-name descname">Cursor</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase6Cursor6CursorEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N16EmbeddedDatabase6Cursor6CursorERK6Cursor">
+<span id="_CPPv3N16EmbeddedDatabase6Cursor6CursorERK6Cursor"></span><span id="_CPPv2N16EmbeddedDatabase6Cursor6CursorERK6Cursor"></span><span id="EmbeddedDatabase::Cursor::Cursor__CursorCR"></span><span class="target" id="class_embedded_database_1_1_cursor_1a6ec0febf8056cbdb774176c7002e698f"></span><code class="sig-name descname">Cursor</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv4N16EmbeddedDatabase6Cursor6CursorEv" title="EmbeddedDatabase::Cursor::Cursor">Cursor</a>&amp;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase6Cursor6CursorERK6Cursor" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N16EmbeddedDatabase6CursoraSERK6Cursor">
+<span id="_CPPv3N16EmbeddedDatabase6CursoraSERK6Cursor"></span><span id="_CPPv2N16EmbeddedDatabase6CursoraSERK6Cursor"></span><span id="EmbeddedDatabase::Cursor::assign-operator__CursorCR"></span><span class="target" id="class_embedded_database_1_1_cursor_1af85b36b673155a8fcf0f72a49400ab38"></span><a class="reference internal" href="#_CPPv4N16EmbeddedDatabase6CursorE" title="EmbeddedDatabase::Cursor">Cursor</a> &amp;<code class="sig-name descname">operator=</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv4N16EmbeddedDatabase6CursorE" title="EmbeddedDatabase::Cursor">Cursor</a>&amp;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16EmbeddedDatabase6CursoraSERK6Cursor" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -1965,7 +1999,7 @@
         <a href="class_embedded_database_1_1_cursor_impl.html" class="btn btn-neutral float-right" title="Class EmbeddedDatabase::CursorImpl" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="class_dummy_persistent_foreign_storage.html" class="btn btn-neutral float-left" title="Class DummyPersistentForeignStorage" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="class_embedded_database_1_1_column_details.html" class="btn btn-neutral float-left" title="Class EmbeddedDatabase::ColumnDetails" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

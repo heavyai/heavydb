@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 94aeaff
+                5.7.0dev 8903cc0
               </div>
             
           
@@ -414,6 +414,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_drop_foreign_server_command.html">Class DropForeignServerCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_drop_foreign_table_command.html">Class DropForeignTableCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_dummy_persistent_foreign_storage.html">Class DummyPersistentForeignStorage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_column_details.html">Class EmbeddedDatabase::ColumnDetails</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_cursor.html">Class EmbeddedDatabase::Cursor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_cursor_impl.html">Class EmbeddedDatabase::CursorImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_d_b_engine.html">Class EmbeddedDatabase::DBEngine</a></li>
@@ -767,6 +768,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_bench_analyzer.html">Class analyze_benchmark::BenchAnalyzer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_benchmark_loader.html">Class analyze_benchmark::BenchmarkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_pretty_print.html">Class analyze_benchmark::PrettyPrint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_arrow_result_set_converter_8cpp_03_1_1_result_set_buffer.html">Class anonymous_namespace{ArrowResultSetConverter.cpp}::ResultSetBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_arrow_result_set_converter_8cpp_03_1_1null__type.html">Class anonymous_namespace{ArrowResultSetConverter.cpp}::null_type</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_ddl_command_data_impl.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::DdlCommandDataImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_json_column_encoding.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::JsonColumnEncoding</a></li>
@@ -1742,6 +1744,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_typed_data_accessors_8h_03_1_1_null_sentinel_supplier_1_1_int_selector.html">Struct anonymous_namespace{TypedDataAccessors.h}::NullSentinelSupplier::IntSelector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_types_8cpp_03_1_1_bounding_box.html">Struct anonymous_namespace{Types.cpp}::BoundingBox</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_types_8cpp_03_1_1_coords.html">Struct anonymous_namespace{Types.cpp}::Coords</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1get__has__to_string.html">Struct anonymous_namespace{toString.h}::get_has_toString</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1has__to_string.html">Struct anonymous_namespace{toString.h}::has_toString</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1has__to_string_3_01_t_00_01decltype_07std_1_1dec934f37e70248688d220a4ef1ce6df4f0.html">Struct anonymous_namespace{toString.h}::has_toString&lt; T, decltype(std::declval&lt; T &gt;().toString(), void())&gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdict__ref__t.html">Struct dict_ref_t</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdouble__sort_1_1_iterator.html">Struct double_sort::Iterator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdouble__sort_1_1_value.html">Struct double_sort::Value</a></li>
@@ -1931,8 +1936,8 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N16Buffer_Namespace6Buffer6BufferEP9BufferMgrN10BufferList8iteratorEKiK6size_tK6size_t">
-<span id="_CPPv3N16Buffer_Namespace6Buffer6BufferEP9BufferMgrN10BufferList8iteratorEKiK6size_tK6size_t"></span><span id="_CPPv2N16Buffer_Namespace6Buffer6BufferEP9BufferMgrN10BufferList8iteratorEKiK6size_tK6size_t"></span><span id="Buffer_Namespace::Buffer::Buffer__BufferMgrP.BufferList::iterator.iC.sC.sC"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1a498b0cf237461ad2a7772673d0e02ae4"></span><code class="sig-name descname">Buffer</code><span class="sig-paren">(</span><a class="reference internal" href="class_buffer___namespace_1_1_buffer_mgr.html#_CPPv4N16Buffer_Namespace9BufferMgrE" title="Buffer_Namespace::BufferMgr">BufferMgr</a> *<em>bm</em>, BufferList::iterator <em>seg_it</em>, <em class="property">const</em> int <em>device_id</em>, <em class="property">const</em> size_t <em>page_size</em> = 512, <em class="property">const</em> size_t <em>num_bytes</em> = 0<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16Buffer_Namespace6Buffer6BufferEP9BufferMgrN10BufferList8iteratorEKiK6size_tK6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N6Buffer6BufferEP9BufferMgrN10BufferList8iteratorEKiK6size_tK6size_t">
+<span id="_CPPv3N6Buffer6BufferEP9BufferMgrN10BufferList8iteratorEKiK6size_tK6size_t"></span><span id="_CPPv2N6Buffer6BufferEP9BufferMgrN10BufferList8iteratorEKiK6size_tK6size_t"></span><span id="Buffer::Buffer__BufferMgrP.BufferList::iterator.iC.sC.sC"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1a4d69c52c180a74010701401028299c3a"></span><code class="sig-name descname">Buffer</code><span class="sig-paren">(</span>BufferMgr *<em>bm</em>, BufferList::iterator <em>seg_it</em>, <em class="property">const</em> int <em>device_id</em>, <em class="property">const</em> size_t <em>page_size</em> = 512, <em class="property">const</em> size_t <em>num_bytes</em> = 0<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6Buffer6BufferEP9BufferMgrN10BufferList8iteratorEKiK6size_tK6size_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Constructs a <a class="reference internal" href="#class_buffer___namespace_1_1_buffer"><span class="std std-ref">Buffer</span></a> object. The constructor requires a memory address (provided by <a class="reference internal" href="class_buffer___namespace_1_1_buffer_mgr.html#class_buffer___namespace_1_1_buffer_mgr"><span class="std std-ref">BufferMgr</span></a>), number of pages, and the size in bytes of each page. Additionally, the <a class="reference internal" href="#class_buffer___namespace_1_1_buffer"><span class="std std-ref">Buffer</span></a> can be initialized with an epoch. </p>
 <p><dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
@@ -1947,14 +1952,14 @@
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N16Buffer_Namespace6BufferD0Ev">
-<span id="_CPPv3N16Buffer_Namespace6BufferD0Ev"></span><span id="_CPPv2N16Buffer_Namespace6BufferD0Ev"></span><span id="Buffer_Namespace::Buffer::~Buffer"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1a605da8ea0cd3b1ba8a164c3adbe5a3de"></span><code class="sig-name descname">~Buffer</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16Buffer_Namespace6BufferD0Ev" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N6BufferD0Ev">
+<span id="_CPPv3N6BufferD0Ev"></span><span id="_CPPv2N6BufferD0Ev"></span><span id="Buffer::~Buffer"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1a0bbaca2d47ade89fb96c2366195f7694"></span><code class="sig-name descname">~Buffer</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6BufferD0Ev" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Destructor. </p>
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N16Buffer_Namespace6Buffer4readEPC6int8_tK6size_tK6size_tK11MemoryLevelKi">
-<span id="_CPPv3N16Buffer_Namespace6Buffer4readEPC6int8_tK6size_tK6size_tK11MemoryLevelKi"></span><span id="_CPPv2N16Buffer_Namespace6Buffer4readEPC6int8_tK6size_tK6size_tK11MemoryLevelKi"></span><span id="Buffer_Namespace::Buffer::read__int8_tPC.sC.sC.MemoryLevelC.iC"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1a44a7f2ea36c680a6e35000316dc1e91e"></span>void <code class="sig-name descname">read</code><span class="sig-paren">(</span>int8_t *<em class="property">const</em> <em>dst</em>, <em class="property">const</em> size_t <em>num_bytes</em>, <em class="property">const</em> size_t <em>offset</em> = 0, <em class="property">const</em> MemoryLevel <em>dst_buffer_type</em> = CPU_LEVEL, <em class="property">const</em> int <em>device_id</em> = -1<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16Buffer_Namespace6Buffer4readEPC6int8_tK6size_tK6size_tK11MemoryLevelKi" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N6Buffer4readEPC6int8_tK6size_tK6size_tK11MemoryLevelKi">
+<span id="_CPPv3N6Buffer4readEPC6int8_tK6size_tK6size_tK11MemoryLevelKi"></span><span id="_CPPv2N6Buffer4readEPC6int8_tK6size_tK6size_tK11MemoryLevelKi"></span><span id="Buffer::read__int8_tPC.sC.sC.MemoryLevelC.iC"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1aabb8d867a9eafdacd766fdfee293776c"></span>void <code class="sig-name descname">read</code><span class="sig-paren">(</span>int8_t *<em class="property">const</em> <em>dst</em>, <em class="property">const</em> size_t <em>num_bytes</em>, <em class="property">const</em> size_t <em>offset</em> = 0, <em class="property">const</em> MemoryLevel <em>dst_buffer_type</em> = CPU_LEVEL, <em class="property">const</em> int <em>device_id</em> = -1<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6Buffer4readEPC6int8_tK6size_tK6size_tK11MemoryLevelKi" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Reads (copies) data from the buffer to the destination (dst) memory location. Reads (copies) nbytes of data from the buffer, beginning at the specified byte offset, into the destination (dst) memory location. </p>
 <p><dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
@@ -1968,13 +1973,13 @@
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N16Buffer_Namespace6Buffer7reserveEK6size_t">
-<span id="_CPPv3N16Buffer_Namespace6Buffer7reserveEK6size_t"></span><span id="_CPPv2N16Buffer_Namespace6Buffer7reserveEK6size_t"></span><span id="Buffer_Namespace::Buffer::reserve__sC"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1ac2965a6be3e3e8955b3eae2241639349"></span>void <code class="sig-name descname">reserve</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>num_bytes</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16Buffer_Namespace6Buffer7reserveEK6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N6Buffer7reserveEK6size_t">
+<span id="_CPPv3N6Buffer7reserveEK6size_t"></span><span id="_CPPv2N6Buffer7reserveEK6size_t"></span><span id="Buffer::reserve__sC"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1a1b7f534ad394a72e0d6aa44e280323a7"></span>void <code class="sig-name descname">reserve</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>num_bytes</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6Buffer7reserveEK6size_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N16Buffer_Namespace6Buffer5writeEP6int8_tK6size_tK6size_tK11MemoryLevelKi">
-<span id="_CPPv3N16Buffer_Namespace6Buffer5writeEP6int8_tK6size_tK6size_tK11MemoryLevelKi"></span><span id="_CPPv2N16Buffer_Namespace6Buffer5writeEP6int8_tK6size_tK6size_tK11MemoryLevelKi"></span><span id="Buffer_Namespace::Buffer::write__int8_tP.sC.sC.MemoryLevelC.iC"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1acc621bd89b45636463e27b94006944f0"></span>void <code class="sig-name descname">write</code><span class="sig-paren">(</span>int8_t *<em>src</em>, <em class="property">const</em> size_t <em>num_bytes</em>, <em class="property">const</em> size_t <em>offset</em> = 0, <em class="property">const</em> MemoryLevel <em>src_buffer_type</em> = CPU_LEVEL, <em class="property">const</em> int <em>device_id</em> = -1<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16Buffer_Namespace6Buffer5writeEP6int8_tK6size_tK6size_tK11MemoryLevelKi" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N6Buffer5writeEP6int8_tK6size_tK6size_tK11MemoryLevelKi">
+<span id="_CPPv3N6Buffer5writeEP6int8_tK6size_tK6size_tK11MemoryLevelKi"></span><span id="_CPPv2N6Buffer5writeEP6int8_tK6size_tK6size_tK11MemoryLevelKi"></span><span id="Buffer::write__int8_tP.sC.sC.MemoryLevelC.iC"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1ab057d6d86d9de58b38042ac119d560d8"></span>void <code class="sig-name descname">write</code><span class="sig-paren">(</span>int8_t *<em>src</em>, <em class="property">const</em> size_t <em>num_bytes</em>, <em class="property">const</em> size_t <em>offset</em> = 0, <em class="property">const</em> MemoryLevel <em>src_buffer_type</em> = CPU_LEVEL, <em class="property">const</em> int <em>device_id</em> = -1<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6Buffer5writeEP6int8_tK6size_tK6size_tK11MemoryLevelKi" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Writes (copies) data from src into the buffer. Writes (copies) nbytes of data into the buffer at the specified byte offset, from the source (src) memory location. </p>
 <p><dl class="simple">
 <dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
@@ -1988,13 +1993,13 @@
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N16Buffer_Namespace6Buffer6appendEP6int8_tK6size_tK11MemoryLevelKi">
-<span id="_CPPv3N16Buffer_Namespace6Buffer6appendEP6int8_tK6size_tK11MemoryLevelKi"></span><span id="_CPPv2N16Buffer_Namespace6Buffer6appendEP6int8_tK6size_tK11MemoryLevelKi"></span><span id="Buffer_Namespace::Buffer::append__int8_tP.sC.MemoryLevelC.iC"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1af80e5efe60e6331bf404b503d57706af"></span>void <code class="sig-name descname">append</code><span class="sig-paren">(</span>int8_t *<em>src</em>, <em class="property">const</em> size_t <em>num_bytes</em>, <em class="property">const</em> MemoryLevel <em>src_buffer_type</em> = CPU_LEVEL, <em class="property">const</em> int <em>deviceId</em> = -1<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16Buffer_Namespace6Buffer6appendEP6int8_tK6size_tK11MemoryLevelKi" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N6Buffer6appendEP6int8_tK6size_tK11MemoryLevelKi">
+<span id="_CPPv3N6Buffer6appendEP6int8_tK6size_tK11MemoryLevelKi"></span><span id="_CPPv2N6Buffer6appendEP6int8_tK6size_tK11MemoryLevelKi"></span><span id="Buffer::append__int8_tP.sC.MemoryLevelC.iC"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1adf8081be56b8a4105da7a6256a7834cc"></span>void <code class="sig-name descname">append</code><span class="sig-paren">(</span>int8_t *<em>src</em>, <em class="property">const</em> size_t <em>num_bytes</em>, <em class="property">const</em> MemoryLevel <em>src_buffer_type</em> = CPU_LEVEL, <em class="property">const</em> int <em>deviceId</em> = -1<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6Buffer6appendEP6int8_tK6size_tK11MemoryLevelKi" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N16Buffer_Namespace6Buffer12getMemoryPtrEv">
-<span id="_CPPv3N16Buffer_Namespace6Buffer12getMemoryPtrEv"></span><span id="_CPPv2N16Buffer_Namespace6Buffer12getMemoryPtrEv"></span><span id="Buffer_Namespace::Buffer::getMemoryPtr"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1a126739d44a15436990dd84e4ebd52b7d"></span>int8_t *<code class="sig-name descname">getMemoryPtr</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16Buffer_Namespace6Buffer12getMemoryPtrEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N6Buffer12getMemoryPtrEv">
+<span id="_CPPv3N6Buffer12getMemoryPtrEv"></span><span id="_CPPv2N6Buffer12getMemoryPtrEv"></span><span id="Buffer::getMemoryPtr"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1a2da00d3d2a96556e03fec6efb9164b55"></span>int8_t *<code class="sig-name descname">getMemoryPtr</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6Buffer12getMemoryPtrEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Returns a raw, constant (read-only) pointer to the underlying buffer. </p>
 <p><dl class="simple">
 <dt><strong>Return</strong></dt><dd><p>A constant memory pointer for read-only access. </p>
@@ -2004,8 +2009,8 @@
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N16Buffer_Namespace6Buffer12setMemoryPtrEP6int8_t">
-<span id="_CPPv3N16Buffer_Namespace6Buffer12setMemoryPtrEP6int8_t"></span><span id="_CPPv2N16Buffer_Namespace6Buffer12setMemoryPtrEP6int8_t"></span><span id="Buffer_Namespace::Buffer::setMemoryPtr__int8_tP"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1a292f961f1320d45192d7bc076d542986"></span>void <code class="sig-name descname">setMemoryPtr</code><span class="sig-paren">(</span>int8_t *<em>new_ptr</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16Buffer_Namespace6Buffer12setMemoryPtrEP6int8_t" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N6Buffer12setMemoryPtrEP6int8_t">
+<span id="_CPPv3N6Buffer12setMemoryPtrEP6int8_t"></span><span id="_CPPv2N6Buffer12setMemoryPtrEP6int8_t"></span><span id="Buffer::setMemoryPtr__int8_tP"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1a22f08a3bfd0bf466023a459323ad0ab8"></span>void <code class="sig-name descname">setMemoryPtr</code><span class="sig-paren">(</span>int8_t *<em>new_ptr</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6Buffer12setMemoryPtrEP6int8_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2054,7 +2059,7 @@
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
 <dl class="function">
 <dt id="_CPPv4N16Buffer_Namespace6Buffer6BufferERK6Buffer">
-<span id="_CPPv3N16Buffer_Namespace6Buffer6BufferERK6Buffer"></span><span id="_CPPv2N16Buffer_Namespace6Buffer6BufferERK6Buffer"></span><span id="Buffer_Namespace::Buffer::Buffer__BufferCR"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1a936fdd74db4f2bba31c9adcc1c621957"></span><code class="sig-name descname">Buffer</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv4N16Buffer_Namespace6Buffer6BufferEP9BufferMgrN10BufferList8iteratorEKiK6size_tK6size_t" title="Buffer_Namespace::Buffer::Buffer">Buffer</a>&amp;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16Buffer_Namespace6Buffer6BufferERK6Buffer" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N16Buffer_Namespace6Buffer6BufferERK6Buffer"></span><span id="_CPPv2N16Buffer_Namespace6Buffer6BufferERK6Buffer"></span><span id="Buffer_Namespace::Buffer::Buffer__BufferCR"></span><span class="target" id="class_buffer___namespace_1_1_buffer_1a936fdd74db4f2bba31c9adcc1c621957"></span><code class="sig-name descname">Buffer</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv4N16Buffer_Namespace6Buffer6BufferERK6Buffer" title="Buffer_Namespace::Buffer::Buffer">Buffer</a>&amp;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16Buffer_Namespace6Buffer6BufferERK6Buffer" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>pointer to beginning of buffer’s memory </p>
 </dd></dl>
 

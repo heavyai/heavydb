@@ -1,0 +1,9 @@
+Struct anonymous_namespace{toString.h}::has_toString< T, decltype(std::declval< T >().toString(), void())>
+==========================================================================================================
+
+.. doxygenstruct:: anonymous_namespace{toString.h}::has_toString< T, decltype(std::declval< T >().toString(), void())>
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

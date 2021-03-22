@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 94aeaff
+                5.7.0dev 8903cc0
               </div>
             
           
@@ -414,6 +414,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_drop_foreign_server_command.html">Class DropForeignServerCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_drop_foreign_table_command.html">Class DropForeignTableCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_dummy_persistent_foreign_storage.html">Class DummyPersistentForeignStorage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_column_details.html">Class EmbeddedDatabase::ColumnDetails</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_cursor.html">Class EmbeddedDatabase::Cursor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_cursor_impl.html">Class EmbeddedDatabase::CursorImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_d_b_engine.html">Class EmbeddedDatabase::DBEngine</a></li>
@@ -767,6 +768,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_bench_analyzer.html">Class analyze_benchmark::BenchAnalyzer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_benchmark_loader.html">Class analyze_benchmark::BenchmarkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_pretty_print.html">Class analyze_benchmark::PrettyPrint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_arrow_result_set_converter_8cpp_03_1_1_result_set_buffer.html">Class anonymous_namespace{ArrowResultSetConverter.cpp}::ResultSetBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_arrow_result_set_converter_8cpp_03_1_1null__type.html">Class anonymous_namespace{ArrowResultSetConverter.cpp}::null_type</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_ddl_command_data_impl.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::DdlCommandDataImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_json_column_encoding.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::JsonColumnEncoding</a></li>
@@ -1742,6 +1744,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_typed_data_accessors_8h_03_1_1_null_sentinel_supplier_1_1_int_selector.html">Struct anonymous_namespace{TypedDataAccessors.h}::NullSentinelSupplier::IntSelector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_types_8cpp_03_1_1_bounding_box.html">Struct anonymous_namespace{Types.cpp}::BoundingBox</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_types_8cpp_03_1_1_coords.html">Struct anonymous_namespace{Types.cpp}::Coords</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1get__has__to_string.html">Struct anonymous_namespace{toString.h}::get_has_toString</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1has__to_string.html">Struct anonymous_namespace{toString.h}::has_toString</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1has__to_string_3_01_t_00_01decltype_07std_1_1dec934f37e70248688d220a4ef1ce6df4f0.html">Struct anonymous_namespace{toString.h}::has_toString&lt; T, decltype(std::declval&lt; T &gt;().toString(), void())&gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdict__ref__t.html">Struct dict_ref_t</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdouble__sort_1_1_iterator.html">Struct double_sort::Iterator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdouble__sort_1_1_value.html">Struct double_sort::Value</a></li>
@@ -1927,6 +1932,35 @@
 <dt id="_CPPv415ExecutionResult">
 <span id="_CPPv315ExecutionResult"></span><span id="_CPPv215ExecutionResult"></span><span id="ExecutionResult"></span><span class="target" id="class_execution_result"></span><em class="property">class </em><code class="sig-name descname">ExecutionResult</code><a class="headerlink" href="#_CPPv415ExecutionResult" title="Permalink to this definition">¶</a><br /></dt>
 <dd><div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Types</p>
+<dl class="enum">
+<dt id="_CPPv4N15ExecutionResult5RTypeE">
+<span id="_CPPv3N15ExecutionResult5RTypeE"></span><span id="_CPPv2N15ExecutionResult5RTypeE"></span><span class="target" id="class_execution_result_1acf53da3d3f8002bb21459c68d5eaf13a"></span><em class="property">enum </em><code class="sig-name descname">RType</code><a class="headerlink" href="#_CPPv4N15ExecutionResult5RTypeE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p><em>Values:</em></p>
+<dl class="enumerator">
+<dt id="_CPPv4N15ExecutionResult11QueryResultE">
+<span id="_CPPv3N15ExecutionResult11QueryResultE"></span><span id="_CPPv2N15ExecutionResult11QueryResultE"></span><span class="target" id="class_execution_result_1acf53da3d3f8002bb21459c68d5eaf13aa3e7b9b6ce17f4cd57417f443646de294"></span><code class="sig-name descname">QueryResult</code><a class="headerlink" href="#_CPPv4N15ExecutionResult11QueryResultE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N15ExecutionResult12SimpleResultE">
+<span id="_CPPv3N15ExecutionResult12SimpleResultE"></span><span id="_CPPv2N15ExecutionResult12SimpleResultE"></span><span class="target" id="class_execution_result_1acf53da3d3f8002bb21459c68d5eaf13aaccda0406b398252f66e2a7cbbc37bb29"></span><code class="sig-name descname">SimpleResult</code><a class="headerlink" href="#_CPPv4N15ExecutionResult12SimpleResultE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N15ExecutionResult12ExplainationE">
+<span id="_CPPv3N15ExecutionResult12ExplainationE"></span><span id="_CPPv2N15ExecutionResult12ExplainationE"></span><span class="target" id="class_execution_result_1acf53da3d3f8002bb21459c68d5eaf13aa1ccff05b72c53fb14347d249b245b876"></span><code class="sig-name descname">Explaination</code><a class="headerlink" href="#_CPPv4N15ExecutionResult12ExplainationE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N15ExecutionResult10CalciteDdlE">
+<span id="_CPPv3N15ExecutionResult10CalciteDdlE"></span><span id="_CPPv2N15ExecutionResult10CalciteDdlE"></span><span class="target" id="class_execution_result_1acf53da3d3f8002bb21459c68d5eaf13aaa651ff1c5b57b9c20cbe622a801df042"></span><code class="sig-name descname">CalciteDdl</code><a class="headerlink" href="#_CPPv4N15ExecutionResult10CalciteDdlE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
 <dt id="_CPPv4N15ExecutionResult15ExecutionResultEv">
@@ -2003,6 +2037,41 @@
 <span id="_CPPv3NK15ExecutionResult8toStringEv"></span><span id="_CPPv2NK15ExecutionResult8toStringEv"></span><span id="ExecutionResult::toStringC"></span><span class="target" id="class_execution_result_1a425f985eac8d6589bebe7ab4206fa98d"></span>std::string <code class="sig-name descname">toString</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15ExecutionResult8toStringEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4N15ExecutionResult14getExplanationEv">
+<span id="_CPPv3N15ExecutionResult14getExplanationEv"></span><span id="_CPPv2N15ExecutionResult14getExplanationEv"></span><span id="ExecutionResult::getExplanation"></span><span class="target" id="class_execution_result_1ae6c0962223c3448f29ec5982a7f867a2"></span>std::string <code class="sig-name descname">getExplanation</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15ExecutionResult14getExplanationEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15ExecutionResult15updateResultSetERKNSt6stringE5RTypeb">
+<span id="_CPPv3N15ExecutionResult15updateResultSetERKNSt6stringE5RTypeb"></span><span id="_CPPv2N15ExecutionResult15updateResultSetERKNSt6stringE5RTypeb"></span><span id="ExecutionResult::updateResultSet__ssCR.RType.b"></span><span class="target" id="class_execution_result_1abb366edf320ec978aa201e41f7c25362"></span>void <code class="sig-name descname">updateResultSet</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_ra</em>, <a class="reference internal" href="#_CPPv4N15ExecutionResult5RTypeE" title="ExecutionResult::RType">RType</a> <em>type</em>, bool <em>success</em> = true<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15ExecutionResult15updateResultSetERKNSt6stringE5RTypeb" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK15ExecutionResult13getResultTypeEv">
+<span id="_CPPv3NK15ExecutionResult13getResultTypeEv"></span><span id="_CPPv2NK15ExecutionResult13getResultTypeEv"></span><span id="ExecutionResult::getResultTypeC"></span><span class="target" id="class_execution_result_1a04cbf95a0dc27160673b8d2de84cd678"></span><a class="reference internal" href="#_CPPv4N15ExecutionResult5RTypeE" title="ExecutionResult::RType">RType</a> <code class="sig-name descname">getResultType</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15ExecutionResult13getResultTypeEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15ExecutionResult13setResultTypeE5RType">
+<span id="_CPPv3N15ExecutionResult13setResultTypeE5RType"></span><span id="_CPPv2N15ExecutionResult13setResultTypeE5RType"></span><span id="ExecutionResult::setResultType__RType"></span><span class="target" id="class_execution_result_1a340d1a4260039cd9b0009402a924172b"></span>void <code class="sig-name descname">setResultType</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N15ExecutionResult5RTypeE" title="ExecutionResult::RType">RType</a> <em>type</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15ExecutionResult13setResultTypeE5RType" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK15ExecutionResult16getExecutionTimeEv">
+<span id="_CPPv3NK15ExecutionResult16getExecutionTimeEv"></span><span id="_CPPv2NK15ExecutionResult16getExecutionTimeEv"></span><span id="ExecutionResult::getExecutionTimeC"></span><span class="target" id="class_execution_result_1a2d47d5499628ebb65a2e7e99899ff287"></span>int64_t <code class="sig-name descname">getExecutionTime</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15ExecutionResult16getExecutionTimeEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15ExecutionResult16setExecutionTimeE7int64_t">
+<span id="_CPPv3N15ExecutionResult16setExecutionTimeE7int64_t"></span><span id="_CPPv2N15ExecutionResult16setExecutionTimeE7int64_t"></span><span id="ExecutionResult::setExecutionTime__int64_t"></span><span class="target" id="class_execution_result_1af491dfd3ec648042aa545cbed2f5e66d"></span>void <code class="sig-name descname">setExecutionTime</code><span class="sig-paren">(</span>int64_t <em>execution_time_ms</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15ExecutionResult16setExecutionTimeE7int64_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15ExecutionResult16addExecutionTimeE7int64_t">
+<span id="_CPPv3N15ExecutionResult16addExecutionTimeE7int64_t"></span><span id="_CPPv2N15ExecutionResult16addExecutionTimeE7int64_t"></span><span id="ExecutionResult::addExecutionTime__int64_t"></span><span class="target" id="class_execution_result_1a3fdea2953c90cc77503af85cc8e19c6e"></span>void <code class="sig-name descname">addExecutionTime</code><span class="sig-paren">(</span>int64_t <em>execution_time_ms</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15ExecutionResult16addExecutionTimeE7int64_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Members</p>
@@ -2024,6 +2093,21 @@
 <dl class="member">
 <dt id="_CPPv4N15ExecutionResult25filter_push_down_enabled_E">
 <span id="_CPPv3N15ExecutionResult25filter_push_down_enabled_E"></span><span id="_CPPv2N15ExecutionResult25filter_push_down_enabled_E"></span><span id="ExecutionResult::filter_push_down_enabled___b"></span><span class="target" id="class_execution_result_1a530af46522f23f0ce7d2ef01bb7f8867"></span>bool <code class="sig-name descname">filter_push_down_enabled_</code><a class="headerlink" href="#_CPPv4N15ExecutionResult25filter_push_down_enabled_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15ExecutionResult8success_E">
+<span id="_CPPv3N15ExecutionResult8success_E"></span><span id="_CPPv2N15ExecutionResult8success_E"></span><span id="ExecutionResult::success___b"></span><span class="target" id="class_execution_result_1a500e1fffb1c2aea740c099f850049980"></span>bool <code class="sig-name descname">success_</code><a class="headerlink" href="#_CPPv4N15ExecutionResult8success_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15ExecutionResult18execution_time_ms_E">
+<span id="_CPPv3N15ExecutionResult18execution_time_ms_E"></span><span id="_CPPv2N15ExecutionResult18execution_time_ms_E"></span><span id="ExecutionResult::execution_time_ms___uint64_t"></span><span class="target" id="class_execution_result_1ac14c80e48a0540abf9520ea2510b4224"></span>uint64_t <code class="sig-name descname">execution_time_ms_</code><a class="headerlink" href="#_CPPv4N15ExecutionResult18execution_time_ms_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15ExecutionResult5type_E">
+<span id="_CPPv3N15ExecutionResult5type_E"></span><span id="_CPPv2N15ExecutionResult5type_E"></span><span id="ExecutionResult::type___RType"></span><span class="target" id="class_execution_result_1ac2701f4ec05a4ebfc2b8e88527e10321"></span><a class="reference internal" href="#_CPPv4N15ExecutionResult5RTypeE" title="ExecutionResult::RType">RType</a> <code class="sig-name descname">type_</code><a class="headerlink" href="#_CPPv4N15ExecutionResult5type_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

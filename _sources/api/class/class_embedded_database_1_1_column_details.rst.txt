@@ -1,0 +1,9 @@
+Class EmbeddedDatabase::ColumnDetails
+=====================================
+
+.. doxygenclass:: EmbeddedDatabase::ColumnDetails
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
