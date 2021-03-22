@@ -255,6 +255,23 @@ void check_if_loop_join_is_allowed(RelAlgExecutionUnit& ra_exe_unit,
   }
 }
 
+void check_valid_join_qual(std::shared_ptr<Analyzer::BinOper>& bin_oper) {
+  // check whether a join qual is valid before entering the hashtable build and codegen
+
+  auto lhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_left_operand());
+  auto rhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_right_operand());
+  if (lhs_cv && rhs_cv && !bin_oper->is_overlaps_oper()) {
+    auto lhs_type = lhs_cv->get_type_info().get_type();
+    auto rhs_type = rhs_cv->get_type_info().get_type();
+    // check #1. avoid a join btw full array columns
+    if (lhs_type == SQLTypes::kARRAY && rhs_type == SQLTypes::kARRAY) {
+      throw std::runtime_error(
+          "Join operation between full array columns (i.e., R.arr = S.arr) instead of "
+          "indexed array columns (i.e., R.arr[1] = S.arr[2]) is not supported yet.");
+    }
+  }
+}
+
 }  // namespace
 
 std::vector<JoinLoop> Executor::buildJoinLoops(
@@ -510,6 +527,7 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
       }
       continue;
     }
+    check_valid_join_qual(qual_bin_oper);
     JoinHashTableOrError hash_table_or_error;
     if (!current_level_hash_table) {
       hash_table_or_error = buildHashTableForQualifier(

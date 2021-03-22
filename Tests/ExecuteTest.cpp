@@ -8352,6 +8352,11 @@ TEST(Select, Joins_Arrays) {
                                   "array_test.x = "
                                   "test_inner.x;",
                                   dt)));
+    // throw exception for full array joins
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_i32 = t2.arr_i32;",
+                                dt),
+                 std::runtime_error);
   }
 }
 
