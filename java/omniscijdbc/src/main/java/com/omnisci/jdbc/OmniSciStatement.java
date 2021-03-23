@@ -51,7 +51,7 @@ public class OmniSciStatement implements java.sql.Statement {
     session = tsession;
     connection = tconnection;
     client = connection.client;
-    maxRows = (Integer) (connection.cP.get(Connection_enums.max_rows));
+    maxRows = Integer.parseInt(connection.cP.getProperty(Options.max_rows));
   }
 
   static Pattern top_pattern =
