@@ -31,10 +31,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.nio.file.Files;
 import java.security.*;
 import java.security.cert.X509Certificate;
-import java.security.spec.PKCS8EncodedKeySpec;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.CallableStatement;
@@ -60,38 +58,6 @@ import sun.security.provider.X509Factory;
  *
  * @author michael
  */
-/*
- * Param_pair - Simple pair class to hold the label for a component in the url
- * and an index into the url to that component. For example in the url
- * jdbc:mapd:hostname:6278 a Param_pair for hostname would have a label of
- * "hostname" and an index of 2
- *
- */
-class Param_pair {
-  public Param_pair(String l, int i) {
-    label = l;
-    index = i;
-  }
-
-  public String label;
-  public int index;
-}
-
-enum Connection_enums {
-  host_name,
-  port_num,
-  db_name,
-  protocol,
-  server_trust_store,
-  server_trust_store_pwd,
-  pkiauth,
-  sslcert,
-  sslkey,
-  sslkey_password,
-  user,
-  user_passwd,
-  max_rows
-}
 
 class KeyLoader {
   static class S_struct {
@@ -121,7 +87,7 @@ class KeyLoader {
         count++;
       }
       if (count != 1) {
-        throw new RuntimeException("pkcs12 file [" + filename
+        throw new SQLException("pkcs12 file [" + filename
                 + "] contains an incorrect number [" + count
                 + "] of certificate(s); only a single certificate is allowed");
       }
@@ -137,148 +103,224 @@ class KeyLoader {
   }
 }
 
+class Options {
+  // The Options class supplies the keys for the
+  // Connection_properties class
+  static String host_name = "host_name";
+  static String port_num = "port_num";
+  static String db_name = "db_name";
+  static String protocol = "protocol";
+  static String server_trust_store = "server_trust_store";
+  static String server_trust_store_pwd = "server_trust_store_pwd";
+  static String pkiauth = "pkiauth";
+  static String sslcert = "sslcert";
+  static String sslkey = "sslkey";
+  static String sslkey_password = "sslkey_password";
+  static String max_rows = "max_rows";
+  static String user = "user";
+  static String password = "password";
+  // The order in the array corresponds to the order the value will appear in the ':'
+  // separated URL. Used to loop over the incoming URL and store in the properties struct
+  // Note user and password are not expected to come via the main body  of the url
+  // However they may be supplied in the query string portion.
+
+  static String[] option_order = {host_name,
+          port_num,
+          db_name,
+          protocol,
+          server_trust_store,
+          server_trust_store_pwd,
+          pkiauth,
+          sslcert,
+          sslkey,
+          sslkey_password,
+          max_rows};
+}
+
 public class OmniSciConnection implements java.sql.Connection, Cloneable {
   final static Logger logger = LoggerFactory.getLogger(OmniSciConnection.class);
 
   Set<String> protocol_set = new HashSet<String>(
           Arrays.asList("binary", "binary_tls", "http", "https", "https_insecure"));
-  // A simple internal class to hold a summary of the properties passed to the
-  // connection
-  // Properties can come two ways - via the url or via a Properties param
-  class Connection_properties extends Hashtable<Connection_enums, Object> {
-    // All 'used' properties should be listed in this enum map
-    EnumMap<Connection_enums, Param_pair> connection_map =
-            new EnumMap<Connection_enums, Param_pair>(Connection_enums.class) {
-              {
-                // the map allows peoperties to be access via a enum rather than string
-                put(Connection_enums.host_name, new Param_pair("host_name", 2));
-                put(Connection_enums.port_num, new Param_pair("port_num", 3));
-                put(Connection_enums.db_name, new Param_pair("db_name", 4));
-                put(Connection_enums.protocol, new Param_pair("protocol", 5));
-                put(Connection_enums.server_trust_store,
-                        new Param_pair("server_trust_store", 6));
-                put(Connection_enums.server_trust_store_pwd,
-                        new Param_pair("server_trust_store_pwd", 7));
-                put(Connection_enums.pkiauth, new Param_pair("pkiauth", 7));
-                put(Connection_enums.sslcert, new Param_pair("sslcert", 8));
-                put(Connection_enums.sslkey, new Param_pair("sslkey", 9));
-                put(Connection_enums.sslkey_password,
-                        new Param_pair("sslkey_password", 10));
 
-                put(Connection_enums.user, new Param_pair("user", 100));
-                put(Connection_enums.user_passwd, new Param_pair("password", 101));
-                put(Connection_enums.max_rows, new Param_pair("max_rows", 102));
-              }
-            };
-    protected boolean parm_warning = false;
+  class Connection_properties extends Properties {
+    // Properties can come in three ways:
+    // 1. via main part of the url,
+    // 2, via the query string portion of the URL or
+    // 3. via a Properties param
+    //
+    // Example url. Note the first two fields are constants and must be present. '
+    // jdbc:omnisci:localhost:4247:db_name?max_rows=2000&protocol=binary
+    //
+    // Priority is given to the URL data, followed by the query fragment data and
+    // lastly the Properties information
+    //
+    // All connection parameters can be supplied via the main portion of the connection
+    // URL, however as this structure is position dependent the nth argument must be
+    // preceded by the n - 1  arguments.  In the case of complex connection strings it is
+    // recommended to use either a properties object or the query string portion of the
+    // URL.
+    //
+    // Note the class java.sql.DriverManager expects the URL to contain three components
+    // the literal string JDBC a 'subprotocol' followed by a 'subname', as in
+    // 'jdbc:omnisci:localhost' For this reason host mame must be supplied in the  main
+    // part of the URL and should not be supplied in the query portion.
 
-    public Connection_properties(Properties properties, String connection_url) {
-      super();
-      String[] url_values = connection_url.split(":");
+    private String extract_and_remove_query_components(
+            String connection_url, Properties query_props) throws SQLException {
+      // The omnisci version of the connection_url is a ':' separated list
+      // with an optional 'query component' at the end (see example above).
+      // The query component starts with the first '?' in the string.
+      // Its is made up of key=value pairs separated by the '&' character.
+      //
+      // The query component is terminated by the end of the string and is
+      // assumed to be at the end of the URL
 
-      // Look for all possible properties values
-      for (Connection_enums enum_key : connection_map.keySet()) {
-        // Get each entry - a string to index the properties param (such as host_name
-        // and an int to index it into the URL, such as 5 for host_name.
-        // index will be greater than 99 if the value shouldn't be expected in the URL
-        Param_pair param_pair = connection_map.get(enum_key);
-        String value_from_prop = null;
-        String value_from_url = null;
-        // if the index is inside the range of the URL then grab the value
-        if (param_pair.index < url_values.length) {
-          value_from_url = url_values[param_pair.index];
+      String[] url_components = connection_url.split("\\?");
+      if (url_components.length == 2) {
+        // Query component are separated by an '&' - replace each with a '\n'
+        // will allow Properties.load method to build a properties obj
+        StringReader reader = new StringReader(url_components[1].replace('&', '\n'));
+        try {
+          query_props.load(reader);
+        } catch (IOException iex) {
+          throw new SQLException(iex.toString());
         }
-
-        // Grab the possible value from the properties variable, using the already
-        // obtained value_from_url as the default if the entry isn't in properties
-        // (note value_from_url could still be null in which case value_from_prop will
-        // be null)
-        value_from_prop = properties.getProperty(param_pair.label, value_from_url);
-        if (value_from_url != null && value_from_prop != null) {
-          if (!value_from_prop.equals(value_from_url)) {
-            logger.warn("Connected property in url[" + value_from_url
-                    + "] differs from Properties class [" + value_from_prop
-                    + "]. Using url version");
-            value_from_prop = value_from_url;
-            parm_warning = true;
-          }
-        }
-        if (value_from_prop != null) this.put(enum_key, value_from_prop);
+      } else if (url_components.length > 2) {
+        throw new SQLException(
+                "Invalid connection string. Multiple query components included ["
+                + connection_url + "]");
       }
-      // Make sure we have all that is needed and in the correct format
+      // return the url with out any query component
+      return url_components[0];
+    }
+    public Connection_properties(String connection_url, Properties baseProperties)
+            throws SQLException {
+      connection_url = extract_and_remove_query_components(connection_url, this);
+      String[] url_values = connection_url.split(":");
+      // add 2 for the default jdbc:omnisci at the start of the url.
+      if (url_values.length > Options.option_order.length + 2) {
+        // would be nice to print the url at this stage, but the user may have added their
+        // password into the list.
+        throw new SQLException("Invalid number of arguments provided in url ["
+                + url_values.length + "]. Maximum allowed ["
+                + (Options.option_order.length + 2) + "]");
+      }
+      for (int i = 2; i < url_values.length; i++) {
+        // the offest of 2 is caused by the 2 lables 'jdbc:omnsci' at the start if the URL
+        String existingValue = getProperty(Options.option_order[i - 2]);
+        if (existingValue != null && !existingValue.equals((url_values[i]))) {
+          logger.warn("Connection property [" + Options.option_order[i - 2]
+                  + "] has been provided with different values in the URL and query component of the url. Defaulting to the URL value");
+        }
+        setProperty(Options.option_order[i - 2], url_values[i]);
+      }
+
+      for (String key : baseProperties.stringPropertyNames()) {
+        String existingValue = getProperty(key);
+        if (existingValue != null
+                && !existingValue.equals(baseProperties.getProperty(key))) {
+          logger.warn("Connection property " + key
+                  + "] has been provided with different values in the properties object and the url. Defaulting to the URL value");
+        } else {
+          setProperty(key, baseProperties.getProperty(key));
+        }
+      }
+
       validate_params();
     }
 
-    private void validate_params() {
-      // if present remove "//" from front of hostname
-      String hN = (String) this.get(Connection_enums.host_name);
-      if (hN.startsWith("//")) {
-        this.put(Connection_enums.host_name, hN.substring(2));
+    private void validate_params() throws SQLException {
+      // Warn if config values with invalid keys have been used.
+      for (String key : this.stringPropertyNames()) {
+        if (key != Options.user && key != Options.password
+                && !Arrays.asList(Options.option_order).contains(key)) {
+          logger.warn("Unsupported configuration key" + key + " used.");
+        }
       }
-      Integer port_num = Integer.parseInt((String) (this.get(Connection_enums.port_num)));
-      this.put(Connection_enums.port_num, port_num);
-      // Default to binary of no protocol specified
+      // if present remove "//" from front of hostname
+      if (containsKey(Options.host_name)) {
+        String hN = this.getProperty(Options.host_name);
+        if (hN.startsWith("//")) {
+          this.setProperty(Options.host_name, hN.substring(2));
+        }
+      }
+
+      // Default to binary if no protocol specified
       String protocol = "binary";
-      if (this.containsKey(Connection_enums.protocol)) {
-        protocol = (String) this.get(Connection_enums.protocol);
+      if (this.containsKey(Options.protocol)) {
+        protocol = this.getProperty(Options.protocol);
         protocol.toLowerCase();
         if (!protocol_set.contains(protocol)) {
           logger.warn("Incorrect protcol [" + protocol
                   + "] supplied. Possible values are [" + protocol_set.toString()
                   + "]. Using binary as default");
           protocol = "binary";
-          parm_warning = true;
         }
       }
-      this.put(Connection_enums.protocol, protocol);
-      if (this.containsKey(Connection_enums.server_trust_store)
-              && !this.containsKey(Connection_enums.server_trust_store_pwd)) {
+      this.setProperty(Options.protocol, protocol);
+
+      if (this.containsKey(Options.port_num)) {
+        try {
+          Integer.parseInt(getProperty(Options.port_num));
+        } catch (NumberFormatException nfe) {
+          throw new SQLException(
+                  "Invalid port number supplied" + getProperty(Options.port_num));
+        }
+      }
+
+      if (this.containsKey(Options.server_trust_store)
+              && !this.containsKey(Options.server_trust_store_pwd)) {
         logger.warn("server trust store ["
-                + (String) this.get(Connection_enums.server_trust_store)
+                + (String) this.getProperty(Options.server_trust_store)
                 + " specfied without a password");
-        parm_warning = true;
       }
-      if (this.containsKey(Connection_enums.server_trust_store_pwd)
-              && !this.containsKey(Connection_enums.server_trust_store)) {
+      if (this.containsKey(Options.server_trust_store_pwd)
+              && !this.containsKey(Options.server_trust_store)) {
         logger.warn("server trust store password specified without a keystore file");
-        parm_warning = true;
       }
-      Integer max_rows = 100000;
-      if (this.containsKey(Connection_enums.max_rows)) {
-        max_rows = Integer.parseInt((String) (this.get(Connection_enums.max_rows)));
+      if (!this.containsKey(Options.max_rows)) {
+        this.setProperty(Options.max_rows, "100000");
+      } else {
+        try {
+          Integer.parseInt(getProperty(Options.max_rows));
+        } catch (NumberFormatException nfe) {
+          throw new SQLException(
+                  "Invalid value supplied for max rows " + getProperty(Options.max_rows));
+        }
       }
-      this.put(Connection_enums.max_rows, max_rows);
     }
 
     boolean isHttpProtocol() {
-      return (this.containsKey(Connection_enums.protocol)
-              && this.get(Connection_enums.protocol).equals("http"));
+      return (this.containsKey(Options.protocol)
+              && this.getProperty(Options.protocol).equals("http"));
     }
 
     boolean isHttpsProtocol_insecure() {
-      return (this.containsKey(Connection_enums.protocol)
-              && this.get(Connection_enums.protocol).equals("https_insecure"));
+      return (this.containsKey(Options.protocol)
+              && this.getProperty(Options.protocol).equals("https_insecure"));
     }
 
     boolean isHttpsProtocol() {
-      return (this.containsKey(Connection_enums.protocol)
-              && this.get(Connection_enums.protocol).equals("https"));
+      return (this.containsKey(Options.protocol)
+              && this.getProperty(Options.protocol).equals("https"));
     }
 
     boolean isBinary() {
-      return (this.containsKey(Connection_enums.protocol)
-              && this.get(Connection_enums.protocol).equals("binary"));
+      return (this.containsKey(Options.protocol)
+              && this.getProperty(Options.protocol).equals("binary"));
     }
     boolean isBinary_tls() {
-      return (this.containsKey(Connection_enums.protocol)
-              && this.get(Connection_enums.protocol).equals("binary_tls"));
+      return (this.containsKey(Options.protocol)
+              && this.getProperty(Options.protocol).equals("binary_tls"));
     }
     boolean containsTrustStore() {
-      return this.containsKey(Connection_enums.server_trust_store);
+      return this.containsKey(Options.server_trust_store);
     }
-  } /*
-     * End class Connection_properties extends Hashtable<Connection_enums, Object>
-     */
+  }
+  /*
+   * End class Connection_properties
+   */
 
   protected String session = null;
   protected OmniSci.Client client = null;
@@ -313,17 +355,19 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
     return omniSciConnection;
   }
 
+  // any java.lang.Exception thrown is caught downstream and converted
+  // to a SQLException
   private TProtocol manageConnection() throws java.lang.Exception {
     SockTransportProperties skT = null;
     String trust_store = null;
-    if (cP.get(Connection_enums.server_trust_store) != null
-            && !cP.get(Connection_enums.server_trust_store).toString().isEmpty()) {
-      trust_store = cP.get(Connection_enums.server_trust_store).toString();
+    if (cP.getProperty(Options.server_trust_store) != null
+            && !cP.getProperty(Options.server_trust_store).isEmpty()) {
+      trust_store = cP.getProperty(Options.server_trust_store);
     }
     String trust_store_pwd = null;
-    if (cP.get(Connection_enums.server_trust_store_pwd) != null
-            && !cP.get(Connection_enums.server_trust_store_pwd).toString().isEmpty()) {
-      trust_store_pwd = cP.get(Connection_enums.server_trust_store_pwd).toString();
+    if (cP.getProperty(Options.server_trust_store_pwd) != null
+            && !cP.getProperty(Options.server_trust_store_pwd).isEmpty()) {
+      trust_store_pwd = cP.getProperty(Options.server_trust_store_pwd);
     }
 
     TProtocol protocol = null;
@@ -331,17 +375,15 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
       // HTTP
       skT = SockTransportProperties.getUnencryptedClient();
 
-      transport = skT.openHttpClientTransport(
-              (String) this.cP.get(Connection_enums.host_name),
-              ((Integer) this.cP.get(Connection_enums.port_num)).intValue());
+      transport = skT.openHttpClientTransport(this.cP.getProperty(Options.host_name),
+              Integer.parseInt(this.cP.getProperty(Options.port_num)));
       transport.open();
       protocol = new TJSONProtocol(transport);
 
     } else if (this.cP.isBinary()) {
       skT = SockTransportProperties.getUnencryptedClient();
-      transport =
-              skT.openClientTransport((String) this.cP.get(Connection_enums.host_name),
-                      ((Integer) this.cP.get(Connection_enums.port_num)).intValue());
+      transport = skT.openClientTransport(this.cP.getProperty(Options.host_name),
+              Integer.parseInt(this.cP.getProperty(Options.port_num)));
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
@@ -353,9 +395,8 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
         skT = SockTransportProperties.getEncryptedClientSpecifiedTrustStore(
                 trust_store, trust_store_pwd, !this.cP.isHttpsProtocol_insecure());
       }
-      transport = skT.openHttpsClientTransport(
-              (String) this.cP.get(Connection_enums.host_name),
-              ((Integer) this.cP.get(Connection_enums.port_num)).intValue());
+      transport = skT.openHttpsClientTransport(this.cP.getProperty(Options.host_name),
+              Integer.parseInt(this.cP.getProperty(Options.port_num)));
       transport.open();
       protocol = new TJSONProtocol(transport);
 
@@ -366,14 +407,13 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
         skT = SockTransportProperties.getEncryptedClientSpecifiedTrustStore(
                 trust_store, trust_store_pwd, false);
       }
-      transport =
-              skT.openClientTransport((String) this.cP.get(Connection_enums.host_name),
-                      ((Integer) this.cP.get(Connection_enums.port_num)).intValue());
+      transport = skT.openClientTransport(this.cP.getProperty(Options.host_name),
+              Integer.parseInt(this.cP.getProperty(Options.port_num)));
 
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
     } else {
-      throw new RuntimeException("Invalid protocol supplied");
+      throw new SQLException("Invalid protocol supplied");
     }
     return protocol;
   }
@@ -382,16 +422,15 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
     KeyLoader.S_struct s_struct = null;
     // If pki aut then stuff public cert into password.
     if (pki_auth != null && pki_auth.toString().equalsIgnoreCase("true")) {
-      s_struct = KeyLoader.getDetails_pkcs12(
-              this.cP.get(Connection_enums.sslcert).toString(),
-              this.cP.get(Connection_enums.sslkey_password).toString());
-      this.cP.put(Connection_enums.user_passwd, s_struct.cert);
+      s_struct = KeyLoader.getDetails_pkcs12(this.cP.getProperty(Options.sslcert),
+              this.cP.getProperty(Options.sslkey_password));
+      this.cP.setProperty(Options.password, s_struct.cert);
     }
 
     // Get the seesion for all connectioms
-    session = client.connect((String) this.cP.get(Connection_enums.user),
-            (String) this.cP.get(Connection_enums.user_passwd),
-            (String) this.cP.get(Connection_enums.db_name));
+    session = client.connect((String) this.cP.getProperty(Options.user),
+            (String) this.cP.getProperty(Options.password),
+            (String) this.cP.getProperty(Options.db_name));
 
     // if pki auth the session will be encoded.
     if (pki_auth != null && pki_auth.toString().equalsIgnoreCase("true")) {
@@ -404,16 +443,14 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
     }
   }
 
-  public OmniSciConnection(String url, Properties info)
-          throws SQLException { // logger.debug("Entered");
+  public OmniSciConnection(String url, Properties base_properties) throws SQLException {
     this.url = url;
-    this.cP = new Connection_properties(info, url);
-
+    this.cP = new Connection_properties(url, base_properties);
     try {
       TProtocol protocol = manageConnection();
       client = new OmniSci.Client(protocol);
-      setSession(this.cP.get(Connection_enums.pkiauth));
-      catalog = (String) this.cP.get(Connection_enums.db_name);
+      setSession(this.cP.getProperty(Options.pkiauth));
+      catalog = (String) this.cP.getProperty(Options.db_name);
     } catch (TTransportException ex) {
       throw new SQLException("Thrift transport connection failed - "
                       + OmniSciExceptionText.getExceptionDetail(ex),
@@ -833,9 +870,9 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
   public void setSchema(String schema) throws SQLException { // logger.debug("Entered");
     // Setting setSchema to be a NOOP allows integration with third party products
     // that require a successful call to setSchema to work.
-    Object db_name = this.cP.get(Connection_enums.db_name);
+    Object db_name = this.cP.getProperty(Options.db_name);
     if (db_name == null) {
-      throw new RuntimeException("db name not set, "
+      throw new SQLException("db name not set, "
               + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
               + " class:" + new Throwable().getStackTrace()[0].getClassName()
               + " method:" + new Throwable().getStackTrace()[0].getMethodName());

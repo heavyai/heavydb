@@ -91,7 +91,7 @@ class OmniSciDatabaseMetaData implements DatabaseMetaData {
   @Override
   public String getUserName() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    return (String) con.cP.get(Connection_enums.user);
+    return (String) con.cP.get(Options.user);
   }
 
   @Override
