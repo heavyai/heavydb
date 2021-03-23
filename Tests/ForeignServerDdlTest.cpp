@@ -880,7 +880,7 @@ TEST_F(ShowForeignServerTest, BadQuery) {
   std::string query{"SHOW SERVERS WHERE server_name 'x' ;"};
   queryAndAssertException(
       query,
-      "Exception: Parse failed: Encountered \"\\'x\\'\" at line 1, column 32.\nWas "
+      "Exception: SQL Error: Encountered \"\\'x\\'\" at line 1, column 32.\nWas "
       "expecting one of:\n"
       "    \"LIKE\" ...\n    \"=\" ...\n    \".\" ...\n    ");
 }
