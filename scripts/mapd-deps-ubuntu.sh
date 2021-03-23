@@ -144,6 +144,9 @@ make -j $(nproc)
 make install
 popd
 
+VERS=3.52.14
+CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install https://github.com/openlink/iODBC/releases/download/v${VERS}/libiodbc-${VERS}.tar.gz
+
 #c-blosc
 VERS=1.14.4
 wget --continue https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
