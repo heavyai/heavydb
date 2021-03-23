@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev dfd6e7e
+                5.7.0dev 91dd689
               </div>
             
           
@@ -1926,11 +1926,11 @@
             
   <div class="section" id="data-flow">
 <h1>5. Data Flow<a class="headerlink" href="#data-flow" title="Permalink to this headline">¶</a></h1>
-<p>A SQL query is essentially a series of transformations on some input data. While the input to the query engine is a SQL query, the query engine (and more so, the <code class="docutils literal notranslate"><span class="pre">Exectutor</span></code>) can be thought of a black box which builds a transformation, loads data, applies the transformation, and returns the result. In the following section, we provide a summary of how data flows through the system, from physical storage on disk through the memory hierarchy to the output.</p>
+<p>A SQL query is essentially a series of transformations on some input data. While the input to the query engine is a SQL query, the query engine (and more so, the <code class="docutils literal notranslate"><span class="pre">Executor</span></code>) can be thought of a black box which builds a transformation, loads data, applies the transformation, and returns the result. In the following section, we provide a summary of how data flows through the system, from physical storage on disk through the memory hierarchy to the output.</p>
 <div class="section" id="input-data">
 <h2>5.1. Input Data<a class="headerlink" href="#input-data" title="Permalink to this headline">¶</a></h2>
 <p>All requests for input data start from the <code class="docutils literal notranslate"><span class="pre">Executor</span></code>. The executor loads chunks required for a query to device memory by making a call into the standalone <code class="docutils literal notranslate"><span class="pre">ColumnFetcher</span></code> class. The <code class="docutils literal notranslate"><span class="pre">ColumnFetcher</span></code> makes calls directly into the buffer manager hierarchy and storage layer to ensure requested chunks are available in the appropriate memory level for the device.</p>
-<p>The following schematic illustrates the proess for requesting inputs for a query step, from storage through to the execution device (in this example, a GPU).</p>
+<p>The following schematic illustrates the process for requesting inputs for a query step, from storage through to the execution device (in this example, a GPU).</p>
 <div class="figure align-center">
 <p class="plantuml">
 <img src="../_images/plantuml-0ec2eb0129553e37890c39b34d6c29c4aee3c48c.png" alt="&#64;startuml
