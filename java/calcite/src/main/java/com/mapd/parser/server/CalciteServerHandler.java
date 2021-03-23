@@ -194,46 +194,50 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       if (!isRAQuery) {
         Pair<String, SqlIdentifierCapturer> res;
         SqlNode node;
-        try {
-          res = parser.process(queryText, parserOptions);
-          jsonResult = res.left;
-          capturer = res.right;
 
-          primaryAccessedObjects.tables_selected_from = new ArrayList<>(capturer.selects);
-          primaryAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
-          primaryAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
-          primaryAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
+        res = parser.process(queryText, parserOptions);
+        jsonResult = res.left;
+        capturer = res.right;
 
-          // also resolve all the views in the select part
-          // resolution of the other parts is not
-          // necessary as these cannot be views
-          resolvedAccessedObjects.tables_selected_from =
-                  new ArrayList<>(parser.resolveSelectIdentifiers(capturer));
-          resolvedAccessedObjects.tables_inserted_into =
-                  new ArrayList<>(capturer.inserts);
-          resolvedAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
-          resolvedAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
-        } catch (ValidationException ex) {
-          String msg = "Validation: " + ex.getMessage();
-          MAPDLOGGER.error(msg, ex);
-          throw ex;
-        } catch (RelConversionException ex) {
-          String msg = " RelConversion failed: " + ex.getMessage();
-          MAPDLOGGER.error(msg, ex);
-          throw ex;
-        }
+        primaryAccessedObjects.tables_selected_from = new ArrayList<>(capturer.selects);
+        primaryAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
+        primaryAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
+        primaryAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
+
+        // also resolve all the views in the select part
+        // resolution of the other parts is not
+        // necessary as these cannot be views
+        resolvedAccessedObjects.tables_selected_from =
+                new ArrayList<>(parser.resolveSelectIdentifiers(capturer));
+        resolvedAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
+        resolvedAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
+        resolvedAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
+
       } else {
         jsonResult = parser.optimizeRAQuery(queryText, parserOptions);
       }
     } catch (SqlParseException ex) {
-      String msg = "Parse failed: " + ex.getMessage();
-      MAPDLOGGER.error(msg, ex);
+      String msg = "SQL Error: " + ex.getMessage();
+      MAPDLOGGER.error(msg);
       throw new InvalidParseRequest(-2, msg);
-    } catch (CalciteContextException ex) {
-      String msg = "Validate failed: " + ex.getMessage();
-      MAPDLOGGER.error(msg, ex);
+    } catch (org.apache.calcite.tools.ValidationException ex) {
+      String msg = "SQL Error: " + ex.getMessage();
+      if (ex.getCause() != null
+              && (ex.getCause().getClass() == CalciteContextException.class)) {
+        msg = "SQL Error: " + ex.getCause().getMessage();
+      }
+      MAPDLOGGER.error(msg);
       throw new InvalidParseRequest(-3, msg);
+    } catch (CalciteContextException ex) {
+      String msg = ex.getMessage();
+      MAPDLOGGER.error(msg);
+      throw new InvalidParseRequest(-6, msg);
+    } catch (RelConversionException ex) {
+      String msg = "Failed to generate relational algebra for query " + ex.getMessage();
+      MAPDLOGGER.error(msg, ex);
+      throw new InvalidParseRequest(-5, msg);
     } catch (Throwable ex) {
+      MAPDLOGGER.error(ex.getClass().toString());
       String msg = "Exception occurred: " + ex.getMessage();
       MAPDLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-4, msg);
@@ -245,7 +249,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       } catch (Exception ex) {
         String msg = "Could not return parse object: " + ex.getMessage();
         MAPDLOGGER.error(msg, ex);
-        throw new InvalidParseRequest(-4, msg);
+        throw new InvalidParseRequest(-7, msg);
       }
     }
 

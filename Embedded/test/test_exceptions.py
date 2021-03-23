@@ -57,7 +57,7 @@ def test_success_DML():
 def test_failed_DML():
     with pytest.raises(RuntimeError) as excinfo:
         cursor = engine.executeDML("selectTT * from test")
-    assert "Parse failed" in str(excinfo.value)
+    assert "SQL Error" in str(excinfo.value)
 
 #######################Check zero division exception
 def test_zero_division():

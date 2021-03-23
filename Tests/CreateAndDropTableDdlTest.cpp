@@ -1116,7 +1116,7 @@ TEST_P(NegativePrecisionOrDimensionTest, NegativePrecisionOrDimension) {
     FAIL() << "An exception should have been thrown for this test case.";
   } catch (const TOmniSciException& e) {
     if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
-      ASSERT_TRUE(e.error_msg.find("Exception: Parse failed") != std::string::npos);
+      ASSERT_TRUE(e.error_msg.find("Exception: SQL Error") != std::string::npos);
     } else {
       if (!g_enable_calcite_ddl_parser) {
         ASSERT_EQ("Exception: No negative number in type definition.", e.error_msg);
@@ -1473,7 +1473,7 @@ TEST_P(CreateTableTest, InvalidSyntax) {
     FAIL() << "An exception should have been thrown for this test case.";
   } catch (const TOmniSciException& e) {
     if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
-      ASSERT_TRUE(e.error_msg.find("Exception: Parse failed") != std::string::npos);
+      ASSERT_TRUE(e.error_msg.find("Exception: SQL Error") != std::string::npos);
     } else {
       if (!g_enable_calcite_ddl_parser) {
         ASSERT_EQ("Exception: Syntax error at: INTEGER", e.error_msg);
@@ -1615,7 +1615,7 @@ TEST_F(CreateViewUnsupportedTest, Basics) {
       ddl_utils::TableType::TABLE, "test_table", "(col1 INTEGER, col2 FLOAT)"));
   queryAndAssertException(
       "CREATE VIEW showcreateviewtest (c1, c2) AS SELECT * FROM showcreatetabletest;",
-      "Exception: Parse failed: Column list aliases in views are not yet supported.");
+      "Exception: SQL Error: Column list aliases in views are not yet supported.");
 }
 
 class CreateNonReservedKeywordsTest : public CreateAndDropTableDdlTest {

@@ -1260,10 +1260,9 @@ void DBHandler::sql_execute(TQueryResult& _return,
     if (strstr(e.what(), "java.lang.NullPointerException")) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") +
                            "query failed from broken view or other schema related issue");
-    } else if (strstr(e.what(), "Parse failed: Encountered \";\"")) {
+    } else if (strstr(e.what(), "SQL Error: Encountered \";\"")) {
       THROW_MAPD_EXCEPTION("multiple SQL statements not allowed");
-    } else if (strstr(e.what(),
-                      "Parse failed: Encountered \"<EOF>\" at line 0, column 0")) {
+    } else if (strstr(e.what(), "SQL Error: Encountered \"<EOF>\" at line 0, column 0")) {
       THROW_MAPD_EXCEPTION("empty SQL statment not allowed");
     } else {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
@@ -1319,10 +1318,9 @@ void DBHandler::sql_execute(ExecutionResult& _return,
     if (strstr(e.what(), "java.lang.NullPointerException")) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") +
                            "query failed from broken view or other schema related issue");
-    } else if (strstr(e.what(), "Parse failed: Encountered \";\"")) {
+    } else if (strstr(e.what(), "SQL Error: Encountered \";\"")) {
       THROW_MAPD_EXCEPTION("multiple SQL statements not allowed");
-    } else if (strstr(e.what(),
-                      "Parse failed: Encountered \"<EOF>\" at line 0, column 0")) {
+    } else if (strstr(e.what(), "SQL Error: Encountered \"<EOF>\" at line 0, column 0")) {
       THROW_MAPD_EXCEPTION("empty SQL statment not allowed");
     } else {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
