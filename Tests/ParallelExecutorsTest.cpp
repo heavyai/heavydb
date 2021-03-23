@@ -32,7 +32,7 @@
 #endif
 
 bool g_keep_data{false};
-size_t g_max_num_executors{8};
+size_t g_max_num_executors{4};
 size_t g_num_tables{25};
 
 extern bool g_is_test_env;
