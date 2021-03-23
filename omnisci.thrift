@@ -588,6 +588,7 @@ service OmniSci {
   # import
   void load_table_binary(1: TSessionId session, 2: string table_name, 3: list<TRow> rows, 4: list<string> column_names = {}) throws (1: TOmniSciException e)
   void load_table_binary_columnar(1: TSessionId session, 2: string table_name, 3: list<TColumn> cols, 4: list<string> column_names = {}) throws (1: TOmniSciException e)
+  void load_table_binary_columnar_polys(1: TSessionId session, 2: string table_name, 3: list<TColumn> cols, 4: list<string> column_names = {}, 5: bool assign_render_groups = true) throws (1: TOmniSciException e)
   void load_table_binary_arrow(1: TSessionId session, 2: string table_name, 3: binary arrow_stream, 4: bool use_column_names = false) throws (1: TOmniSciException e)
   void load_table(1: TSessionId session, 2: string table_name, 3: list<TStringRow> rows, 4: list<string> column_names = {}) throws (1: TOmniSciException e)
   TDetectResult detect_column_types(1: TSessionId session, 2: string file_name, 3: TCopyParams copy_params) throws (1: TOmniSciException e)

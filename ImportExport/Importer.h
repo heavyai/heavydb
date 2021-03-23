@@ -838,7 +838,7 @@ class Importer : public DataStreamSink {
       std::vector<std::vector<double>>& bounds_column,
       std::vector<std::vector<int>>& ring_sizes_column,
       std::vector<std::vector<int>>& poly_rings_column,
-      int render_group);
+      std::vector<int>& render_groups_column);
   void checkpoint(const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs);
   auto getLoader() const { return loader.get(); }
 
