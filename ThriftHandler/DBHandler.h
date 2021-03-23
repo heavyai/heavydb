@@ -402,6 +402,11 @@ class DBHandler : public OmniSciIf {
                                   const std::string& table_name,
                                   const std::vector<TColumn>& cols,
                                   const std::vector<std::string>& column_names) override;
+  void load_table_binary_columnar_polys(const TSessionId& session,
+                                        const std::string& table_name,
+                                        const std::vector<TColumn>& cols,
+                                        const std::vector<std::string>& column_names,
+                                        const bool assign_render_groups) override;
   void load_table_binary_arrow(const TSessionId& session,
                                const std::string& table_name,
                                const std::string& arrow_stream,
@@ -966,4 +971,25 @@ class DBHandler : public OmniSciIf {
   // this function passes the interrupt request to the DB executor
   void interruptQuery(const Catalog_Namespace::SessionInfo& session_info,
                       const std::string& target_session);
+
+  // render group assignment
+
+  enum class AssignRenderGroupsMode { kNone, kAssign, kCleanUp };
+
+  void load_table_binary_columnar_internal(
+      const TSessionId& session,
+      const std::string& table_name,
+      const std::vector<TColumn>& cols,
+      const std::vector<std::string>& column_names,
+      const AssignRenderGroupsMode assign_render_groups_mode);
+
+  using RenderGroupAssignmentColumnMap =
+      std::unordered_map<std::string,
+                         std::unique_ptr<import_export::RenderGroupAnalyzer>>;
+  using RenderGroupAssignmentTableMap =
+      std::unordered_map<std::string, RenderGroupAssignmentColumnMap>;
+  using RenderGroupAnalyzerSessionMap =
+      std::unordered_map<TSessionId, RenderGroupAssignmentTableMap>;
+  RenderGroupAnalyzerSessionMap render_group_assignment_map_;
+  std::mutex render_group_assignment_mutex_;
 };

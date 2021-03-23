@@ -1565,14 +1565,14 @@ void Importer::set_geo_physical_import_buffer_columnar(
     std::vector<std::vector<double>>& bounds_column,
     std::vector<std::vector<int>>& ring_sizes_column,
     std::vector<std::vector<int>>& poly_rings_column,
-    int render_group) {
+    std::vector<int>& render_groups_column) {
   const auto col_ti = cd->columnType;
   const auto col_type = col_ti.get_type();
   auto columnId = cd->columnId;
 
   auto coords_row_count = coords_column.size();
   auto cd_coords = catalog.getMetadataForColumn(cd->tableId, ++columnId);
-  for (auto coords : coords_column) {
+  for (auto& coords : coords_column) {
     bool is_null_geo = false;
     bool is_null_point = false;
     if (!col_ti.get_notnull()) {
@@ -1594,7 +1594,7 @@ void Importer::set_geo_physical_import_buffer_columnar(
     if (!is_null_geo) {
       std::vector<uint8_t> compressed_coords =
           Geospatial::compress_coords(coords, col_ti);
-      for (auto cc : compressed_coords) {
+      for (auto const& cc : compressed_coords) {
         TDatum td_byte;
         td_byte.val.int_val = cc;
         td_coords_data.push_back(td_byte);
@@ -1613,14 +1613,14 @@ void Importer::set_geo_physical_import_buffer_columnar(
     }
     // Create ring_sizes array value and add it to the physical column
     auto cd_ring_sizes = catalog.getMetadataForColumn(cd->tableId, ++columnId);
-    for (auto ring_sizes : ring_sizes_column) {
+    for (auto const& ring_sizes : ring_sizes_column) {
       bool is_null_geo = false;
       if (!col_ti.get_notnull()) {
         // Check for NULL geo
         is_null_geo = ring_sizes.empty();
       }
       std::vector<TDatum> td_ring_sizes;
-      for (auto ring_size : ring_sizes) {
+      for (auto const& ring_size : ring_sizes) {
         TDatum td_ring_size;
         td_ring_size.val.int_val = ring_size;
         td_ring_sizes.push_back(td_ring_size);
@@ -1639,14 +1639,14 @@ void Importer::set_geo_physical_import_buffer_columnar(
     }
     // Create poly_rings array value and add it to the physical column
     auto cd_poly_rings = catalog.getMetadataForColumn(cd->tableId, ++columnId);
-    for (auto poly_rings : poly_rings_column) {
+    for (auto const& poly_rings : poly_rings_column) {
       bool is_null_geo = false;
       if (!col_ti.get_notnull()) {
         // Check for NULL geo
         is_null_geo = poly_rings.empty();
       }
       std::vector<TDatum> td_poly_rings;
-      for (auto num_rings : poly_rings) {
+      for (auto const& num_rings : poly_rings) {
         TDatum td_num_rings;
         td_num_rings.val.int_val = num_rings;
         td_poly_rings.push_back(td_num_rings);
@@ -1664,14 +1664,14 @@ void Importer::set_geo_physical_import_buffer_columnar(
       CHECK(false) << "Geometry import columnar: bounds column size mismatch";
     }
     auto cd_bounds = catalog.getMetadataForColumn(cd->tableId, ++columnId);
-    for (auto bounds : bounds_column) {
+    for (auto const& bounds : bounds_column) {
       bool is_null_geo = false;
       if (!col_ti.get_notnull()) {
         // Check for NULL geo
         is_null_geo = (bounds.empty() || bounds[0] == NULL_ARRAY_DOUBLE);
       }
       std::vector<TDatum> td_bounds_data;
-      for (auto b : bounds) {
+      for (auto const& b : bounds) {
         TDatum td_double;
         td_double.val.real_val = b;
         td_bounds_data.push_back(td_double);
@@ -1687,10 +1687,10 @@ void Importer::set_geo_physical_import_buffer_columnar(
   if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
     // Create render_group value and add it to the physical column
     auto cd_render_group = catalog.getMetadataForColumn(cd->tableId, ++columnId);
-    TDatum td_render_group;
-    td_render_group.val.int_val = render_group;
-    td_render_group.is_null = false;
-    for (decltype(coords_row_count) i = 0; i < coords_row_count; i++) {
+    for (auto const& render_group : render_groups_column) {
+      TDatum td_render_group;
+      td_render_group.val.int_val = render_group;
+      td_render_group.is_null = false;
       import_buffers[col_idx]->add_value(cd_render_group, td_render_group, false);
     }
     col_idx++;

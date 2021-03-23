@@ -687,10 +687,22 @@ void DBHandler::disconnect_impl(const SessionMap::iterator& session_it,
                                 mapd_unique_lock<mapd_shared_mutex>& write_lock) {
   // session_it existence should already have been checked (i.e. called via
   // get_session_it_unsafe(...))
+
   const auto session_id = session_it->second->get_session_id();
-  if (leaf_aggregator_.leafCount() > 0) {
-    leaf_aggregator_.disconnect(session_id);
+  std::exception_ptr leaf_exception = nullptr;
+  try {
+    if (leaf_aggregator_.leafCount() > 0) {
+      leaf_aggregator_.disconnect(session_id);
+    }
+  } catch (...) {
+    leaf_exception = std::current_exception();
   }
+
+  {
+    std::lock_guard<std::mutex> lock(render_group_assignment_mutex_);
+    render_group_assignment_map_.erase(session_id);
+  }
+
   sessions_.erase(session_it);
   write_lock.unlock();
 
@@ -2899,9 +2911,59 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session,
                                            const std::string& table_name,
                                            const std::vector<TColumn>& cols,
                                            const std::vector<std::string>& column_names) {
+  load_table_binary_columnar_internal(
+      session, table_name, cols, column_names, AssignRenderGroupsMode::kNone);
+}
+
+void DBHandler::load_table_binary_columnar_polys(
+    const TSessionId& session,
+    const std::string& table_name,
+    const std::vector<TColumn>& cols,
+    const std::vector<std::string>& column_names,
+    const bool assign_render_groups) {
+  load_table_binary_columnar_internal(session,
+                                      table_name,
+                                      cols,
+                                      column_names,
+                                      assign_render_groups
+                                          ? AssignRenderGroupsMode::kAssign
+                                          : AssignRenderGroupsMode::kCleanUp);
+}
+
+void DBHandler::load_table_binary_columnar_internal(
+    const TSessionId& session,
+    const std::string& table_name,
+    const std::vector<TColumn>& cols,
+    const std::vector<std::string>& column_names,
+    const AssignRenderGroupsMode assign_render_groups_mode) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
+
+  if (assign_render_groups_mode == AssignRenderGroupsMode::kCleanUp) {
+    // throw if the user tries to pass column data on a clean-up
+    if (cols.size()) {
+      THROW_MAPD_EXCEPTION(
+          "load_table_binary_columnar_polys: Column data must be empty when called with "
+          "assign_render_groups = false");
+    }
+
+    // mutex the map access
+    std::lock_guard<std::mutex> lock(render_group_assignment_mutex_);
+
+    // drop persistent render group assignment data for this session and table
+    // keep the per-session map in case other tables are active (ideally not)
+    auto itr_session = render_group_assignment_map_.find(session);
+    if (itr_session != render_group_assignment_map_.end()) {
+      LOG(INFO) << "load_table_binary_columnar_polys: Cleaning up Render Group "
+                   "Assignment Persistent Data for Session '"
+                << session << "', Table '" << table_name << "'";
+      itr_session->second.erase(table_name);
+    }
+
+    // just doing clean-up, so we're done
+    return;
+  }
 
   std::unique_ptr<import_export::Loader> loader;
   std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
@@ -2954,7 +3016,7 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session,
             import_buffers[geo_col_idx]->getGeoStringBuffer();
         std::vector<std::vector<double>> coords_column, bounds_column;
         std::vector<std::vector<int>> ring_sizes_column, poly_rings_column;
-        int render_group = 0;
+        std::vector<int> render_groups_column;
         SQLTypeInfo ti = cd->columnType;
         if (num_rows != wkt_or_wkb_hex_column->size() ||
             !Geospatial::GeoTypesFactory::getGeoColumns(wkt_or_wkb_hex_column,
@@ -2969,6 +3031,51 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session,
               << cd->columnName;
           THROW_MAPD_EXCEPTION(oss.str());
         }
+
+        // start or continue assigning render groups for poly columns?
+        if (IS_GEO_POLY(cd->columnType.get_type()) &&
+            assign_render_groups_mode == AssignRenderGroupsMode::kAssign) {
+          // get RGA to use
+          import_export::RenderGroupAnalyzer* render_group_analyzer{};
+          {
+            // mutex the map access
+            std::lock_guard<std::mutex> lock(render_group_assignment_mutex_);
+
+            // emplace new RGA or fetch existing RGA from map
+            auto [itr_table, emplaced_table] = render_group_assignment_map_.try_emplace(
+                session, RenderGroupAssignmentTableMap());
+            LOG_IF(INFO, emplaced_table)
+                << "load_table_binary_columnar_polys: Creating Render Group Assignment "
+                   "Persistent Data for Session '"
+                << session << "'";
+            auto [itr_column, emplaced_column] = itr_table->second.try_emplace(
+                table_name, RenderGroupAssignmentColumnMap());
+            LOG_IF(INFO, emplaced_column)
+                << "load_table_binary_columnar_polys: Creating Render Group Assignment "
+                   "Persistent Data for Table '"
+                << table_name << "'";
+            auto [itr_analyzer, emplaced_analyzer] = itr_column->second.try_emplace(
+                cd->columnName, std::make_unique<import_export::RenderGroupAnalyzer>());
+            LOG_IF(INFO, emplaced_analyzer)
+                << "load_table_binary_columnar_polys: Creating Render Group Assignment "
+                   "Persistent Data for Column '"
+                << cd->columnName << "'";
+            render_group_analyzer = itr_analyzer->second.get();
+            CHECK(render_group_analyzer);
+          }
+
+          // assign render groups for this set of bounds
+          render_groups_column.reserve(bounds_column.size());
+          for (auto const& bounds : bounds_column) {
+            CHECK_EQ(bounds.size(), 4u);
+            int rg = render_group_analyzer->insertBoundsAndReturnRenderGroup(bounds);
+            render_groups_column.push_back(rg);
+          }
+        } else {
+          // render groups all zero
+          render_groups_column.resize(bounds_column.size(), 0);
+        }
+
         // Populate physical columns, advance col_idx
         import_export::Importer::set_geo_physical_import_buffer_columnar(
             session_ptr->getCatalog(),
@@ -2979,7 +3086,7 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session,
             bounds_column,
             ring_sizes_column,
             poly_rings_column,
-            render_group);
+            render_groups_column);
         skip_physical_cols = cd->columnType.get_physical_cols();
       }
       // Advance to the next column of values being loaded

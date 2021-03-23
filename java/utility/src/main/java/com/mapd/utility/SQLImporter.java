@@ -82,7 +82,7 @@ class SQLImporter_args {
     sb.append(
             "[-d <other database JDBC drive class>] -c <other database JDBC connection string>\n");
     sb.append(
-            "-su <other database user> -sp <other database user password> -su <other database sql statement>\n");
+            "-su <other database user> -sp <other database user password> -ss <other database sql statement>\n");
     sb.append(
             "-t <OmniSci target table> -b <transfer buffer size> -f <table fragment size>\n");
     sb.append("[-tr] -i <init commands file>\n");
@@ -151,7 +151,7 @@ class SQLImporter_args {
                               .build());
     options.addOption(
             Option.builder()
-                    .desc("Inseure TLS - do not validate server OmniSci server credentials")
+                    .desc("Insecure TLS - do not validate server OmniSci server credentials")
                     .longOpt("insecure")
                     .build());
 
@@ -408,8 +408,8 @@ public class SQLImporter {
         if (bufferCount == bufferSize) {
           bufferCount = 0;
           // send the buffer to mapD
-          client.load_table_binary_columnar(
-                  session, cmd.getOptionValue("targetTable"), cols, null); // old
+          client.load_table_binary_columnar_polys(
+                  session, cmd.getOptionValue("targetTable"), cols, null, true);
           // recreate columnar store for use
           for (int i = 1; i <= md.getColumnCount(); i++) {
             resetBinaryColumn(i, md, bufferSize, cols.get(i - 1));
@@ -422,10 +422,15 @@ public class SQLImporter {
       }
       if (bufferCount > 0) {
         // send the LAST buffer to mapD
-        client.load_table_binary_columnar(
-                session, cmd.getOptionValue("targetTable"), cols, null);
+        client.load_table_binary_columnar_polys(
+                session, cmd.getOptionValue("targetTable"), cols, null, true);
         bufferCount = 0;
       }
+
+      // dump render group assignment data immediately
+      client.load_table_binary_columnar_polys(
+              session, cmd.getOptionValue("targetTable"), null, null, false);
+
       LOGGER.info("result set count is " + resultCount + " read time is "
               + (System.currentTimeMillis() - timer) + "ms");
 
@@ -763,7 +768,7 @@ public class SQLImporter {
   }
 
   private void executeMapDCommand(String sql) {
-    LOGGER.info(" run comamnd :" + sql);
+    LOGGER.info("Run Command - " + sql);
 
     try {
       TQueryResult sqlResult = client.sql_execute(session, sql + ";", true, null, -1, -1);
