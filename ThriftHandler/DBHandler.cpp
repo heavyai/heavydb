@@ -1146,42 +1146,47 @@ void DBHandler::sql_execute_local(
                                 first_n,
                                 at_most_n,
                                 use_calcite);
-    convert_data(
+    DBHandler::convertData(
         _return, result, query_state_proxy, query_str, column_format, first_n, at_most_n);
   });
 }
 
-void DBHandler::convert_data(TQueryResult& _return,
-                             ExecutionResult& result,
-                             const QueryStateProxy& query_state_proxy,
-                             const std::string& query_str,
-                             const bool column_format,
-                             const int32_t first_n,
-                             const int32_t at_most_n) {
+void DBHandler::convertData(TQueryResult& _return,
+                            ExecutionResult& result,
+                            const QueryStateProxy& query_state_proxy,
+                            const std::string& query_str,
+                            const bool column_format,
+                            const int32_t first_n,
+                            const int32_t at_most_n) {
+  _return.execution_time_ms += result.getExecutionTime();
   if (result.empty()) {
-    _return.execution_time_ms += result.getExecutionTime();
     return;
   }
 
   switch (result.getResultType()) {
     case ExecutionResult::QueryResult:
-      convert_rows(_return,
-                   query_state_proxy,
-                   result.getTargetsMeta(),
-                   *result.getRows(),
-                   column_format,
-                   first_n,
-                   at_most_n);
+      convertRows(_return,
+                  query_state_proxy,
+                  result.getTargetsMeta(),
+                  *result.getRows(),
+                  column_format,
+                  first_n,
+                  at_most_n);
       break;
     case ExecutionResult::SimpleResult:
-      convert_result(_return, *result.getRows(), true);
+      convertResult(_return, *result.getRows(), true);
       break;
     case ExecutionResult::Explaination:
-      convert_explain(_return, *result.getRows(), true);
+      convertExplain(_return, *result.getRows(), true);
       break;
     case ExecutionResult::CalciteDdl:
-      const auto& session = query_state_proxy.getConstQueryState().getConstSessionInfo();
-      convert_result_set(result, *session, query_str, _return);
+      convertRows(_return,
+                  query_state_proxy,
+                  result.getTargetsMeta(),
+                  *result.getRows(),
+                  column_format,
+                  -1,
+                  -1);
       break;
   }
 }
@@ -1740,7 +1745,7 @@ TQueryResult DBHandler::validate_rel_alg(const std::string& query_ra,
   dispatch_queue_->submit(execute_rel_alg_task, /*is_update_delete=*/false);
   auto result_future = execute_rel_alg_task->get_future();
   result_future.get();
-  convert_data(_return, result, query_state_proxy, query_ra, true, -1, -1);
+  DBHandler::convertData(_return, result, query_state_proxy, query_ra, true, -1, -1);
   return _return;
 }
 
@@ -2457,7 +2462,8 @@ void DBHandler::get_tables_meta_impl(std::vector<TTableMeta>& _return,
                         /*find_push_down_candidates=*/false,
                         ExplainInfo::defaults());
         TQueryResult result;
-        convert_data(result, ex_result, query_state_proxy, query_ra, true, -1, -1);
+        DBHandler::convertData(
+            result, ex_result, query_state_proxy, query_ra, true, -1, -1);
         num_cols = result.row_set.row_desc.size();
         for (const auto& col : result.row_set.row_desc) {
           if (col.is_physical) {
@@ -5523,13 +5529,13 @@ std::vector<std::string> DBHandler::getTargetNames(
   return names;
 }
 
-void DBHandler::convert_rows(TQueryResult& _return,
-                             QueryStateProxy query_state_proxy,
-                             const std::vector<TargetMetaInfo>& targets,
-                             const ResultSet& results,
-                             const bool column_format,
-                             const int32_t first_n,
-                             const int32_t at_most_n) const {
+void DBHandler::convertRows(TQueryResult& _return,
+                            QueryStateProxy query_state_proxy,
+                            const std::vector<TargetMetaInfo>& targets,
+                            const ResultSet& results,
+                            const bool column_format,
+                            const int32_t first_n,
+                            const int32_t at_most_n) {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
   _return.row_set.row_desc = ThriftSerializers::target_meta_infos_to_thrift(targets);
   int32_t fetched{0};
@@ -5594,10 +5600,10 @@ TRowDescriptor DBHandler::fixup_row_descriptor(const TRowDescriptor& row_desc,
 }
 
 // create simple result set to return a single column result
-void DBHandler::create_simple_result(TQueryResult& _return,
-                                     const ResultSet& results,
-                                     const bool column_format,
-                                     const std::string label) const {
+void DBHandler::createSimpleResult(TQueryResult& _return,
+                                   const ResultSet& results,
+                                   const bool column_format,
+                                   const std::string label) {
   CHECK_EQ(size_t(1), results.rowCount());
   TColumnType proj_info;
   proj_info.col_name = label;
@@ -5631,16 +5637,16 @@ void DBHandler::create_simple_result(TQueryResult& _return,
   }
 }
 
-void DBHandler::convert_explain(TQueryResult& _return,
-                                const ResultSet& results,
-                                const bool column_format) const {
-  create_simple_result(_return, results, column_format, "Explanation");
+void DBHandler::convertExplain(TQueryResult& _return,
+                               const ResultSet& results,
+                               const bool column_format) {
+  createSimpleResult(_return, results, column_format, "Explanation");
 }
 
-void DBHandler::convert_result(TQueryResult& _return,
-                               const ResultSet& results,
-                               const bool column_format) const {
-  create_simple_result(_return, results, column_format, "Result");
+void DBHandler::convertResult(TQueryResult& _return,
+                              const ResultSet& results,
+                              const bool column_format) {
+  createSimpleResult(_return, results, column_format, "Result");
 }
 
 // this all should be moved out of here to catalog
@@ -6646,12 +6652,12 @@ void DBHandler::register_runtime_extension_functions(
   ExtensionFunctionsWhitelist::addRTUdfs(whitelist);
 }
 
-void DBHandler::convert_result_set(ExecutionResult& result,
-                                   const Catalog_Namespace::SessionInfo& session_info,
-                                   const std::string& query_state_str,
-                                   TQueryResult& _return) {
+void DBHandler::convertResultSet(ExecutionResult& result,
+                                 const Catalog_Namespace::SessionInfo& session_info,
+                                 const std::string& query_state_str,
+                                 TQueryResult& _return) {
   // Stuff ResultSet into _return (which is a TQueryResult)
-  // calls convert_rows, but after some setup using session_info
+  // calls convertRows, but after some setup using session_info
 
   auto session_ptr = get_session_ptr(session_info.get_session_id());
   auto qs = create_query_state(session_ptr, query_state_str);
@@ -6661,13 +6667,13 @@ void DBHandler::convert_result_set(ExecutionResult& result,
   //   assume that omnisci_server should only return column format
   int32_t nRows = result.getDataPtr()->rowCount();
 
-  convert_rows(_return,
-               qsp,
-               result.getTargetsMeta(),
-               *result.getDataPtr(),
-               /*column_format=*/true,
-               /*first_n=*/nRows,
-               /*at_most_n=*/nRows);
+  convertRows(_return,
+              qsp,
+              result.getTargetsMeta(),
+              *result.getDataPtr(),
+              /*column_format=*/true,
+              /*first_n=*/nRows,
+              /*at_most_n=*/nRows);
 }
 
 static std::unique_ptr<RexLiteral> genLiteralStr(std::string val) {
@@ -6891,7 +6897,7 @@ void DBHandler::executeDdl(
       // reduce execution time by the time spent during queue waiting
       _return.execution_time_ms -= result.getRows()->getQueueTime();
 
-      convert_result_set(result, *session_ptr, commandStr, _return);
+      convertResultSet(result, *session_ptr, commandStr, _return);
     }
   }
 }

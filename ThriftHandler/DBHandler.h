@@ -670,13 +670,13 @@ class DBHandler : public OmniSciIf {
 
   int64_t process_geo_copy_from(const TSessionId& session_id);
 
-  void convert_data(TQueryResult& _return,
-                    ExecutionResult& result,
-                    const QueryStateProxy& query_state_proxy,
-                    const std::string& query_str,
-                    const bool column_format,
-                    const int32_t first_n,
-                    const int32_t at_most_n);
+  static void convertData(TQueryResult& _return,
+                          ExecutionResult& result,
+                          const QueryStateProxy& query_state_proxy,
+                          const std::string& query_str,
+                          const bool column_format,
+                          const int32_t first_n,
+                          const int32_t at_most_n);
 
   void sql_execute_impl(ExecutionResult& _return,
                         QueryStateProxy,
@@ -760,32 +760,32 @@ class DBHandler : public OmniSciIf {
                                 const std::string& name,
                                 const bool is_array);
 
-  void convert_explain(TQueryResult& _return,
-                       const ResultSet& results,
-                       const bool column_format) const;
-  void convert_result(TQueryResult& _return,
-                      const ResultSet& results,
-                      const bool column_format) const;
+  static void convertExplain(TQueryResult& _return,
+                             const ResultSet& results,
+                             const bool column_format);
+  static void convertResult(TQueryResult& _return,
+                            const ResultSet& results,
+                            const bool column_format);
 
-  void convert_rows(TQueryResult& _return,
-                    QueryStateProxy query_state_proxy,
-                    const std::vector<TargetMetaInfo>& targets,
-                    const ResultSet& results,
-                    const bool column_format,
-                    const int32_t first_n,
-                    const int32_t at_most_n) const;
+  static void convertRows(TQueryResult& _return,
+                          QueryStateProxy query_state_proxy,
+                          const std::vector<TargetMetaInfo>& targets,
+                          const ResultSet& results,
+                          const bool column_format,
+                          const int32_t first_n,
+                          const int32_t at_most_n);
 
   // Use ExecutionResult to populate a TQueryResult
-  //    calls convert_rows, but after some setup using session_info
-  void convert_result_set(ExecutionResult& result,
-                          const Catalog_Namespace::SessionInfo& session_info,
-                          const std::string& query_state_str,
-                          TQueryResult& _return);
+  //    calls convertRows, but after some setup using session_info
+  void convertResultSet(ExecutionResult& result,
+                        const Catalog_Namespace::SessionInfo& session_info,
+                        const std::string& query_state_str,
+                        TQueryResult& _return);
 
-  void create_simple_result(TQueryResult& _return,
-                            const ResultSet& results,
-                            const bool column_format,
-                            const std::string label) const;
+  static void createSimpleResult(TQueryResult& _return,
+                                 const ResultSet& results,
+                                 const bool column_format,
+                                 const std::string label);
 
   std::vector<TargetMetaInfo> getTargetMetaInfo(
       const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const;
