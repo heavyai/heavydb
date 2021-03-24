@@ -437,9 +437,9 @@ public class SQLImporter {
       // Clean-up environment
       rs.close();
       stmt.close();
+      conn.close();
 
       totalTime = System.currentTimeMillis() - startTime;
-      conn.close();
     } catch (SQLException se) {
       LOGGER.error("SQLException - " + se.toString());
       se.printStackTrace();
@@ -464,8 +464,19 @@ public class SQLImporter {
       } catch (SQLException se) {
         LOGGER.error("SQlException in close - " + se.toString());
         se.printStackTrace();
-      } // end finally try
-    } // end try
+      }
+      try {
+        if (session != null) {
+          client.disconnect(session);
+        }
+      } catch (TOmniSciException ex) {
+        LOGGER.error("TOmniSciException - in finalization " + ex.toString());
+        ex.printStackTrace();
+      } catch (TException ex) {
+        LOGGER.error("TException - in finalization" + ex.toString());
+        ex.printStackTrace();
+      }
+    }
   }
 
   private void run_init(Connection conn) {
@@ -599,8 +610,8 @@ public class SQLImporter {
                   || dstType == TDatumType.LINESTRING);
           break;
         case java.sql.Types.OTHER:
-          // NOTE: I ignore subtypes (geography vs geopetry vs none) here just because it
-          // makes no difference for OmniSciDB at the moment
+          // NOTE: I ignore subtypes (geography vs geopetry vs none) here just because
+          // it makes no difference for OmniSciDB at the moment
           Db_vendor_types.GisType gisType =
                   vendor_types.find_gis_type(otherdb_conn, srcColumns, i);
           if (gisType.srid != dstScale) {
