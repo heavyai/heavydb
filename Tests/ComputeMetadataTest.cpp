@@ -834,6 +834,47 @@ TEST_F(OptimizeTableVacuumTest, MultiplePagesPerFile) {
   sqlAndCompareResult("select * from test_table;", {{i(25)}});
 }
 
+class VarLenColumnUpdateTest : public DBHandlerTestFixture {
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("drop table if exists test_table;");
+  }
+
+  void TearDown() override {
+    sql("drop table if exists test_table;");
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+// This covers a use case that would previously result in row deletion when reusing a data
+// page containing non-zero values
+TEST_F(VarLenColumnUpdateTest, ChunkUpdateReusesDataPage) {
+  sql("create table test_table (i integer, t text encoding none) with "
+      "(max_rollback_epochs = 0);");
+  sql("insert into test_table values (1, 'a');");
+  sql("insert into test_table values (2, 'b');");
+  sql("insert into test_table values (3, 'c');");
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(1), "a"}, {i(2), "b"}, {i(3), "c"}});
+
+  // Rolls off page containing old version of chunk
+  sql("update test_table set i = i + 1;");
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(2), "a"}, {i(3), "b"}, {i(4), "c"}});
+
+  // Update table to contain 2 rows
+  sql("delete from test_table where i >= 4;");
+  sqlAndCompareResult("select * from test_table;", {{i(2), "a"}, {i(3), "b"}});
+  sql("optimize table test_table with (vacuum = 'true');");
+  sqlAndCompareResult("select * from test_table;", {{i(2), "a"}, {i(3), "b"}});
+
+  // Variable length update results in $deleted$ column with 3 rows. If inserted 0 value
+  // for new row is not copied over to the new page, this would result in deletion of the
+  // new row.
+  sql("update test_table set t = 'e' where t = 'a';");
+  sqlAndCompareResult("select * from test_table;", {{i(3), "b"}, {i(2), "e"}});
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
