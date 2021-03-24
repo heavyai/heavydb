@@ -87,7 +87,6 @@ class RexPhysicalInputsVisitor : public RexVisitor<PhysicalInputSet> {
           result = aggregateResult(result, visit(input));
         }
       }
-      return result;
     }
     for (size_t i = 0; i < oper->size(); i++) {
       result = aggregateResult(result, visit(oper->getOperand(i)));

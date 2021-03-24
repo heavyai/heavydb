@@ -570,6 +570,7 @@ class RexInputCollector : public RexVisitor<std::unordered_set<RexInput>> {
 
  public:
   RexInputCollector(const RelAlgNode* node) : node_(node) {}
+
   RetType visitInput(const RexInput* input) const override {
     RetType result;
     if (node_->inputCount() == 1) {
