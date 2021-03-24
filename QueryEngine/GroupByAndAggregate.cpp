@@ -1524,15 +1524,10 @@ llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
     auto arg_it = ROW_FUNC->arg_begin();
     auto groups_buffer = arg_it++;
     CodeGenerator code_generator(executor_);
-    if (!window_func_context->getRowNumber()) {
-      CHECK(window_func->getKind() == SqlWindowFunctionKind::COUNT);
-      window_func_context->setRowNumber(emitCall(
-          "row_number_window_func",
-          {LL_INT(reinterpret_cast<const int64_t>(window_func_context->output())),
-           code_generator.posArg(nullptr)}));
-    }
-    const auto pos_in_window = LL_BUILDER.CreateTrunc(window_func_context->getRowNumber(),
-                                                      get_int_type(32, LL_CONTEXT));
+    auto window_pos_lv = code_generator.codegenWindowPosition(
+        window_func_context, code_generator.posArg(nullptr));
+    const auto pos_in_window =
+        LL_BUILDER.CreateTrunc(window_pos_lv, get_int_type(32, LL_CONTEXT));
     llvm::Value* entry_count_lv =
         LL_INT(static_cast<int32_t>(query_mem_desc.getEntryCount()));
     std::vector<llvm::Value*> args{

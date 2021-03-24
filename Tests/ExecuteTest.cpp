@@ -18005,6 +18005,14 @@ TEST(Select, WindowFunctionCumeDist) {
   c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
 }
 
+TEST(Select, WindowFunctionFiltered) {
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  std::string part1 =
+      R"(SELECT max(CASE WHEN y <> 'aaa' THEN t ELSE NULL END) OVER (PARTITION BY x ORDER BY t ASC) AS labelrank_max_filtered FROM test_window_func ORDER BY t ASC)";
+  std::string part2 = R"(, y ASC, labelrank_max_filtered ASC)";
+  c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+}
+
 // lag(expr, offset)
 // lead(expr, offset)
 // SQLite: "If the offset argument is provided, then it must be a non-negative integer."

@@ -519,14 +519,6 @@ size_t WindowFunctionContext::elementCount() const {
   return elem_count_;
 }
 
-void WindowFunctionContext::setRowNumber(llvm::Value* row_number) {
-  aggregate_state_.row_number = row_number;
-}
-
-llvm::Value* WindowFunctionContext::getRowNumber() const {
-  return aggregate_state_.row_number;
-}
-
 namespace {
 
 template <class T>

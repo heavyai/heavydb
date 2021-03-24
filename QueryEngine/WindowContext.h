@@ -109,12 +109,6 @@ class WindowFunctionContext {
   // Returns the element count in the columns used by the window function.
   size_t elementCount() const;
 
-  // Sets the row number expression for this window function.
-  void setRowNumber(llvm::Value* row_number);
-
-  // Gets the row number expression for this window function.
-  llvm::Value* getRowNumber() const;
-
   using Comparator = std::function<bool(const int64_t lhs, const int64_t rhs)>;
 
  private:
