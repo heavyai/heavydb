@@ -388,7 +388,7 @@ void FileBuffer::copyPage(Page& srcPage,
                           const size_t offset) {
   // FILE *srcFile = fm_->files_[srcPage.fileId]->f;
   // FILE *destFile = fm_->files_[destPage.fileId]->f;
-  CHECK(offset + numBytes < pageDataSize_);
+  CHECK_LE(offset + numBytes, pageDataSize_);
   FileInfo* srcFileInfo = fm_->getFileInfoForFileId(srcPage.fileId);
   FileInfo* destFileInfo = fm_->getFileInfoForFileId(destPage.fileId);
 
@@ -584,7 +584,7 @@ void FileBuffer::write(int8_t* src,
         // about it
         copyPage(lastPage, page, startPageOffset, 0);
       }
-      if (pageNum == startPage + numPagesToWrite &&
+      if (pageNum == (startPage + numPagesToWrite - 1) &&
           bytesLeft > 0) {  // bytesLeft should always > 0
         copyPage(lastPage,
                  page,
