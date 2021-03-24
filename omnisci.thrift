@@ -45,50 +45,50 @@ enum TRole {
 }
 
 /* union */ struct TDatumVal {
-  1: i64 int_val,
-  2: double real_val,
-  3: string str_val,
-  4: list<TDatum> arr_val
+  1: i64 int_val;
+  2: double real_val;
+  3: string str_val;
+  4: list<TDatum> arr_val;
 }
 
 struct TDatum {
-  1: TDatumVal val,
-  2: bool is_null
+  1: TDatumVal val;
+  2: bool is_null;
 }
 
 struct TStringValue {
-  1: string str_val
-  2: bool is_null
+  1: string str_val;
+  2: bool is_null;
 }
 
 struct TColumnType {
-  1: string col_name,
-  2: common.TTypeInfo col_type,
-  3: bool is_reserved_keyword,
-  4: string src_name,
-  5: bool is_system,
-  6: bool is_physical,
-  7: i64 col_id
+  1: string col_name;
+  2: common.TTypeInfo col_type;
+  3: bool is_reserved_keyword;
+  4: string src_name;
+  5: bool is_system;
+  6: bool is_physical;
+  7: i64 col_id;
 }
 
 struct TRow {
-  1: list<TDatum> cols
+  1: list<TDatum> cols;
 }
 
 /* union */ struct TColumnData {
-  1: list<i64> int_col,
-  2: list<double> real_col,
-  3: list<string> str_col,
-  4: list<TColumn> arr_col
+  1: list<i64> int_col;
+  2: list<double> real_col;
+  3: list<string> str_col;
+  4: list<TColumn> arr_col;
 }
 
 struct TColumn {
-  1: TColumnData data,
-  2: list<bool> nulls
+  1: TColumnData data;
+  2: list<bool> nulls;
 }
 
 struct TStringRow {
-  1: list<TStringValue> cols
+  1: list<TStringValue> cols;
 }
 
 typedef list<TColumnType> TRowDescriptor
@@ -98,8 +98,8 @@ typedef i64 TQueryId
 typedef i64 TSubqueryId
 
 struct TKrb5Session {
-  1: TSessionId sessionId
-  2: TKrb5Token krbToken
+  1: TSessionId sessionId;
+  2: TKrb5Token krbToken;
 }
 
 enum TMergeType {
@@ -108,19 +108,19 @@ enum TMergeType {
 }
 
 struct TStepResult {
-  1: serialized_result_set.TSerializedRows serialized_rows
-  2: bool execution_finished
-  3: TMergeType merge_type
-  4: bool sharded
-  5: TRowDescriptor row_desc
-  6: i32 node_id
+  1: serialized_result_set.TSerializedRows serialized_rows;
+  2: bool execution_finished;
+  3: TMergeType merge_type;
+  4: bool sharded;
+  5: TRowDescriptor row_desc;
+  6: i32 node_id;
 }
 
 struct TRowSet {
-  1: TRowDescriptor row_desc
-  2: list<TRow> rows
-  3: list<TColumn> columns
-  4: bool is_columnar
+  1: TRowDescriptor row_desc;
+  2: list<TRow> rows;
+  3: list<TColumn> columns;
+  4: bool is_columnar;
 }
 
 enum TQueryType {
@@ -137,183 +137,183 @@ enum TArrowTransport {
 }
 
 struct TQueryResult {
-  1: TRowSet row_set
-  2: i64 execution_time_ms
-  3: i64 total_time_ms
-  4: string nonce
-  5: string debug
-  6: bool success=true
-  7: TQueryType query_type=TQueryType.UNKNOWN
+  1: TRowSet row_set;
+  2: i64 execution_time_ms;
+  3: i64 total_time_ms;
+  4: string nonce;
+  5: string debug;
+  6: bool success=true;
+  7: TQueryType query_type=TQueryType.UNKNOWN;
 }
 
 struct TDataFrame {
-  1: binary sm_handle
-  2: i64 sm_size
-  3: binary df_handle
-  4: i64 df_size
-  5: i64 execution_time_ms
-  6: i64 arrow_conversion_time_ms
-  7: binary df_buffer
+  1: binary sm_handle;
+  2: i64 sm_size;
+  3: binary df_handle;
+  4: i64 df_size;
+  5: i64 execution_time_ms;
+  6: i64 arrow_conversion_time_ms;
+  7: binary df_buffer;
 }
 
 struct TDBInfo {
-  1: string db_name
-  2: string db_owner
+  1: string db_name;
+  2: string db_owner;
 }
 
 exception TOmniSciException {
-  1: string error_msg
+  1: string error_msg;
 }
 
 struct TCopyParams {
-  1: string delimiter
-  2: string null_str
-  3: TImportHeaderRow has_header=TImportHeaderRow.AUTODETECT
-  4: bool quoted
-  5: string quote
-  6: string escape
-  7: string line_delim
-  8: string array_delim
-  9: string array_begin
-  10: string array_end
-  11: i32 threads
-  12: TFileType file_type=TFileType.DELIMITED
-  13: string s3_access_key
-  14: string s3_secret_key
-  15: string s3_region
-  16: common.TEncodingType geo_coords_encoding=TEncodingType.GEOINT
-  17: i32 geo_coords_comp_param=32
-  18: common.TDatumType geo_coords_type=TDatumType.GEOMETRY
-  19: i32 geo_coords_srid=4326
-  20: bool sanitize_column_names=true
-  21: string geo_layer_name
-  22: string s3_endpoint
-  23: bool geo_assign_render_groups=true
-  24: bool geo_explode_collections=false
-  25: i32 source_srid=0
+  1: string delimiter;
+  2: string null_str;
+  3: TImportHeaderRow has_header=TImportHeaderRow.AUTODETECT;
+  4: bool quoted;
+  5: string quote;
+  6: string escape;
+  7: string line_delim;
+  8: string array_delim;
+  9: string array_begin;
+  10: string array_end;
+  11: i32 threads;
+  12: TFileType file_type=TFileType.DELIMITED;
+  13: string s3_access_key;
+  14: string s3_secret_key;
+  15: string s3_region;
+  16: common.TEncodingType geo_coords_encoding=TEncodingType.GEOINT;
+  17: i32 geo_coords_comp_param=32;
+  18: common.TDatumType geo_coords_type=TDatumType.GEOMETRY;
+  19: i32 geo_coords_srid=4326;
+  20: bool sanitize_column_names=true;
+  21: string geo_layer_name;
+  22: string s3_endpoint;
+  23: bool geo_assign_render_groups=true;
+  24: bool geo_explode_collections=false;
+  25: i32 source_srid=0;
 }
 
 struct TCreateParams {
-  1: bool is_replicated
+  1: bool is_replicated;
 }
 
 struct TDetectResult {
-  1: TRowSet row_set
-  2: TCopyParams copy_params
+  1: TRowSet row_set;
+  2: TCopyParams copy_params;
 }
 
 struct TImportStatus {
-  1: i64 elapsed
-  2: i64 rows_completed
-  3: i64 rows_estimated
-  4: i64 rows_rejected
+  1: i64 elapsed;
+  2: i64 rows_completed;
+  3: i64 rows_estimated;
+  4: i64 rows_rejected;
 }
 
 struct TFrontendView {
-  1: string view_name
-  2: string view_state
-  3: string image_hash
-  4: string update_time
-  5: string view_metadata
+  1: string view_name;
+  2: string view_state;
+  3: string image_hash;
+  4: string update_time;
+  5: string view_metadata;
 }
 
 struct TServerStatus {
-  1: bool read_only
-  2: string version
-  3: bool rendering_enabled
-  4: i64 start_time
-  5: string edition
-  6: string host_name
-  7: bool poly_rendering_enabled
-  8: TRole role
+  1: bool read_only;
+  2: string version;
+  3: bool rendering_enabled;
+  4: i64 start_time;
+  5: string edition;
+  6: string host_name;
+  7: bool poly_rendering_enabled;
+  8: TRole role;
 }
 
 struct TPixel {
-  1: i64 x
-  2: i64 y
+  1: i64 x;
+  2: i64 y;
 }
 
 struct TPixelTableRowResult {
-  1: TPixel pixel
-  2: string vega_table_name
-  3: list<i64> table_id
-  4: list<i64> row_id
-  5: TRowSet row_set
-  6: string nonce
+  1: TPixel pixel;
+  2: string vega_table_name;
+  3: list<i64> table_id;
+  4: list<i64> row_id;
+  5: TRowSet row_set;
+  6: string nonce;
 }
 
 struct TRenderResult {
-  1: binary image
-  2: string nonce
-  3: i64 execution_time_ms
-  4: i64 render_time_ms
-  5: i64 total_time_ms
-  6: string vega_metadata
+  1: binary image;
+  2: string nonce;
+  3: i64 execution_time_ms;
+  4: i64 render_time_ms;
+  5: i64 total_time_ms;
+  6: string vega_metadata;
 }
 
 struct TGpuSpecification {
-  1: i32 num_sm
-  2: i64 clock_frequency_kHz
-  3: i64 memory
-  4: i16 compute_capability_major
-  5: i16 compute_capability_minor
+  1: i32 num_sm;
+  2: i64 clock_frequency_kHz;
+  3: i64 memory;
+  4: i16 compute_capability_major;
+  5: i16 compute_capability_minor;
 }
 
 struct THardwareInfo {
-  1: i16 num_gpu_hw
-  2: i16 num_cpu_hw
-  3: i16 num_gpu_allocated
-  4: i16 start_gpu
-  5: string host_name
-  6: list<TGpuSpecification> gpu_info
+  1: i16 num_gpu_hw;
+  2: i16 num_cpu_hw;
+  3: i16 num_gpu_allocated;
+  4: i16 start_gpu;
+  5: string host_name;
+  6: list<TGpuSpecification> gpu_info;
 }
 
 struct TClusterHardwareInfo {
-  1: list<THardwareInfo> hardware_info
+  1: list<THardwareInfo> hardware_info;
 }
 
 struct TMemoryData {
-  1: i64 slab
-  2: i32 start_page
-  3: i64 num_pages
-  4: i32 touch
-  5: list<i64> chunk_key
-  6: i32 buffer_epoch
-  7: bool is_free
+  1: i64 slab;
+  2: i32 start_page;
+  3: i64 num_pages;
+  4: i32 touch;
+  5: list<i64> chunk_key;
+  6: i32 buffer_epoch;
+  7: bool is_free;
 }
 
 struct TNodeMemoryInfo {
-  1: string host_name
-  2: i64 page_size
-  3: i64 max_num_pages
-  4: i64 num_pages_allocated
-  5: bool is_allocation_capped
-  6: list<TMemoryData> node_memory_data
+  1: string host_name;
+  2: i64 page_size;
+  3: i64 max_num_pages;
+  4: i64 num_pages_allocated;
+  5: bool is_allocation_capped;
+  6: list<TMemoryData> node_memory_data;
 }
 
 struct TTableMeta {
-  1: string table_name
-  2: i64 num_cols
-  4: bool is_view
-  5: bool is_replicated
-  6: i64 shard_count
-  7: i64 max_rows
-  8: i64 table_id
-  9: i64 max_table_id
-  10: list<common.TTypeInfo> col_types
-  11: list<string> col_names
+  1: string table_name;
+  2: i64 num_cols;
+  4: bool is_view;
+  5: bool is_replicated;
+  6: i64 shard_count;
+  7: i64 max_rows;
+  8: i64 table_id;
+  9: i64 max_table_id;
+  10: list<common.TTypeInfo> col_types;
+  11: list<string> col_names;
 }
 
 struct TTableDetails {
-  1: TRowDescriptor row_desc
-  2: i64 fragment_size
-  3: i64 page_size
-  4: i64 max_rows
-  5: string view_sql
-  6: i64 shard_count
-  7: string key_metainfo
-  8: bool is_temporary
-  9: TPartitionDetail partition_detail
+  1: TRowDescriptor row_desc;
+  2: i64 fragment_size;
+  3: i64 page_size;
+  4: i64 max_rows;
+  5: string view_sql;
+  6: i64 shard_count;
+  7: string key_metainfo;
+  8: bool is_temporary;
+  9: TPartitionDetail partition_detail;
 }
 
 enum TExpressionRangeType {
@@ -324,100 +324,100 @@ enum TExpressionRangeType {
 }
 
 struct TColumnRange {
-  1: TExpressionRangeType type
-  2: i32 col_id
-  3: i32 table_id
-  4: bool has_nulls
-  5: i64 int_min
-  6: i64 int_max
-  7: i64 bucket
-  8: double fp_min
-  9: double fp_max
+  1: TExpressionRangeType type;
+  2: i32 col_id;
+  3: i32 table_id;
+  4: bool has_nulls;
+  5: i64 int_min;
+  6: i64 int_max;
+  7: i64 bucket;
+  8: double fp_min;
+  9: double fp_max;
 }
 
 struct TDictionaryGeneration {
-  1: i32 dict_id
-  2: i64 entry_count
+  1: i32 dict_id;
+  2: i64 entry_count;
 }
 
 struct TTableGeneration {
-  1: i32 table_id
-  2: i64 tuple_count
-  3: i64 start_rowid
+  1: i32 table_id;
+  2: i64 tuple_count;
+  3: i64 start_rowid;
 }
 
 struct TPendingQuery {
-  1: TQueryId id
-  2: list<TColumnRange> column_ranges
-  3: list<TDictionaryGeneration> dictionary_generations
-  4: list<TTableGeneration> table_generations
-  5: TSessionId parent_session_id
+  1: TQueryId id;
+  2: list<TColumnRange> column_ranges;
+  3: list<TDictionaryGeneration> dictionary_generations;
+  4: list<TTableGeneration> table_generations;
+  5: TSessionId parent_session_id;
 }
 
 struct TVarLen {
-  1: binary payload
-  2: bool is_null
+  1: binary payload;
+  2: bool is_null;
 }
 
 union TDataBlockPtr {
-  1: binary fixed_len_data
-  2: list<TVarLen> var_len_data
+  1: binary fixed_len_data;
+  2: list<TVarLen> var_len_data;
 }
 
 struct TInsertData {
-  1: i32 db_id
-  2: i32 table_id
-  3: list<i32> column_ids
-  4: list<TDataBlockPtr> data
-  5: i64 num_rows
-  6: list<bool> is_default
+  1: i32 db_id;
+  2: i32 table_id;
+  3: list<i32> column_ids;
+  4: list<TDataBlockPtr> data;
+  5: i64 num_rows;
+  6: list<bool> is_default;
 }
 
 struct TPendingRenderQuery {
-  1: TQueryId id
+  1: TQueryId id;
 }
 
 struct TRenderParseResult {
-  1: TMergeType merge_type
-  2: i32 node_id
-  3: i64 execution_time_ms
-  4: i64 render_time_ms
-  5: i64 total_time_ms
+  1: TMergeType merge_type;
+  2: i32 node_id;
+  3: i64 execution_time_ms;
+  4: i64 render_time_ms;
+  5: i64 total_time_ms;
 }
 
 struct TRawRenderPassDataResult {
-  1: i32 num_pixel_channels
-  2: i32 num_pixel_samples
-  3: binary pixels
-  4: binary row_ids_A
-  5: binary row_ids_B
-  6: binary table_ids
-  7: binary accum_data
-  8: i32 accum_depth
+  1: i32 num_pixel_channels;
+  2: i32 num_pixel_samples;
+  3: binary pixels;
+  4: binary row_ids_A;
+  5: binary row_ids_B;
+  6: binary table_ids;
+  7: binary accum_data;
+  8: i32 accum_depth;
 }
 
 typedef map<i32, TRawRenderPassDataResult> TRenderPassMap
 
 struct TRawPixelData {
-  1: i32 width
-  2: i32 height
-  3: TRenderPassMap render_pass_map
+  1: i32 width;
+  2: i32 height;
+  3: TRenderPassMap render_pass_map;
 }
 
 struct TRenderDatum {
-  1: common.TDatumType type
-  2: i32 cnt
-  3: binary value
+  1: common.TDatumType type;
+  2: i32 cnt;
+  3: binary value;
 }
 
 typedef map<string, map<string, map<string, map<string, list<TRenderDatum>>>>> TRenderAggDataMap
 
 struct TRenderStepResult {
-  1: TRenderAggDataMap merge_data
-  2: TRawPixelData raw_pixel_data
-  3: i64 execution_time_ms
-  4: i64 render_time_ms
-  5: i64 total_time_ms
+  1: TRenderAggDataMap merge_data;
+  2: TRawPixelData raw_pixel_data;
+  3: i64 execution_time_ms;
+  4: i64 render_time_ms;
+  5: i64 total_time_ms;
 }
 struct TDatabasePermissions {
   1: bool create_;
@@ -461,28 +461,28 @@ struct TServerPermissions {
 }
 
 union TDBObjectPermissions {
-  1: TDatabasePermissions database_permissions_
-  2: TTablePermissions table_permissions_
-  3: TDashboardPermissions dashboard_permissions_
-  4: TViewPermissions view_permissions_
-  5: TServerPermissions server_permissions_
+  1: TDatabasePermissions database_permissions_;
+  2: TTablePermissions table_permissions_;
+  3: TDashboardPermissions dashboard_permissions_;
+  4: TViewPermissions view_permissions_;
+  5: TServerPermissions server_permissions_;
 }
 
 enum TDBObjectType {
   AbstractDBObjectType = 0,
   DatabaseDBObjectType,
   TableDBObjectType,
-  DashboardDBObjectType
+  DashboardDBObjectType,
   ViewDBObjectType,
   ServerDBObjectType
 }
 
 struct TDBObject {
-  1: string objectName
-  2: TDBObjectType objectType
-  3: list<bool> privs
-  4: string grantee
-  5: TDBObjectType privilegeObjectType
+  1: string objectName;
+  2: TDBObjectType objectType;
+  3: list<bool> privs;
+  4: string grantee;
+  5: TDBObjectType privilegeObjectType;
 }
 
 struct TDashboardGrantees {
@@ -492,19 +492,19 @@ struct TDashboardGrantees {
 }
 
 struct TDashboard {
-  1: string dashboard_name
-  2: string dashboard_state
-  3: string image_hash
-  4: string update_time
-  5: string dashboard_metadata
-  6: i32 dashboard_id
-  7: string dashboard_owner
-  8: bool is_dash_shared
-  9: TDashboardPermissions dashboard_permissions
+  1: string dashboard_name;
+  2: string dashboard_state;
+  3: string image_hash;
+  4: string update_time;
+  5: string dashboard_metadata;
+  6: i32 dashboard_id;
+  7: string dashboard_owner;
+  8: bool is_dash_shared;
+  9: TDashboardPermissions dashboard_permissions;
 }
 
 struct TLicenseInfo {
-  1: list<string> claims
+  1: list<string> claims;
 }
 
 struct TSessionInfo {
@@ -552,21 +552,21 @@ service OmniSci {
   void clear_gpu_memory(1: TSessionId session) throws (1: TOmniSciException e)
   void set_cur_session(1: TSessionId parent_session, 2: TSessionId leaf_session, 3: string start_time_str, 4: string label) throws (1: TOmniSciException e)
   void invalidate_cur_session(1: TSessionId parent_session, 2: TSessionId leaf_session, 3: string start_time_str, 4: string label) throws (1: TOmniSciException e)
-  void set_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id 4: i32 new_epoch) throws (1: TOmniSciException e)
-  void set_table_epoch_by_name (1: TSessionId session 2: string table_name 3: i32 new_epoch) throws (1: TOmniSciException e)
-  i32 get_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id);
-  i32 get_table_epoch_by_name (1: TSessionId session 2: string table_name);
-  list<TTableEpochInfo> get_table_epochs(1: TSessionId session 2: i32 db_id 3: i32 table_id);
-  void set_table_epochs(1: TSessionId session 2: i32 db_id 3: list<TTableEpochInfo> table_epochs);
+  void set_table_epoch (1: TSessionId session, 2: i32 db_id, 3: i32 table_id, 4: i32 new_epoch) throws (1: TOmniSciException e)
+  void set_table_epoch_by_name (1: TSessionId session, 2: string table_name, 3: i32 new_epoch) throws (1: TOmniSciException e)
+  i32 get_table_epoch (1: TSessionId session, 2: i32 db_id, 3: i32 table_id)
+  i32 get_table_epoch_by_name (1: TSessionId session, 2: string table_name)
+  list<TTableEpochInfo> get_table_epochs(1: TSessionId session, 2: i32 db_id, 3: i32 table_id)
+  void set_table_epochs(1: TSessionId session, 2: i32 db_id, 3: list<TTableEpochInfo> table_epochs)
   TSessionInfo get_session_info(1: TSessionId session) throws (1: TOmniSciException e)
   # query, render
-  TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format, 4: string nonce, 5: i32 first_n = -1, 6: i32 at_most_n = -1) throws (1: TOmniSciException e)
-  TDataFrame sql_execute_df(1: TSessionId session, 2: string query 3: common.TDeviceType device_type 4: i32 device_id = 0 5: i32 first_n = -1 6: TArrowTransport transport_method) throws (1: TOmniSciException e)
-  TDataFrame sql_execute_gdf(1: TSessionId session, 2: string query 3: i32 device_id = 0, 4: i32 first_n = -1) throws (1: TOmniSciException e)
+  TQueryResult sql_execute(1: TSessionId session, 2: string query, 3: bool column_format, 4: string nonce, 5: i32 first_n = -1, 6: i32 at_most_n = -1) throws (1: TOmniSciException e)
+  TDataFrame sql_execute_df(1: TSessionId session, 2: string query, 3: common.TDeviceType device_type, 4: i32 device_id = 0, 5: i32 first_n = -1, 6: TArrowTransport transport_method) throws (1: TOmniSciException e)
+  TDataFrame sql_execute_gdf(1: TSessionId session, 2: string query, 3: i32 device_id = 0, 4: i32 first_n = -1) throws (1: TOmniSciException e)
   void deallocate_df(1: TSessionId session, 2: TDataFrame df, 3: common.TDeviceType device_type, 4: i32 device_id = 0) throws (1: TOmniSciException e)
   void interrupt(1: TSessionId query_session, 2: TSessionId interrupt_session) throws (1: TOmniSciException e)
   TRowDescriptor sql_validate(1: TSessionId session, 2: string query) throws (1: TOmniSciException e)
-  list<completion_hints.TCompletionHint> get_completion_hints(1: TSessionId session, 2:string sql, 3:i32 cursor) throws (1: TOmniSciException e)
+  list<completion_hints.TCompletionHint> get_completion_hints(1: TSessionId session, 2: string sql, 3: i32 cursor) throws (1: TOmniSciException e)
   void set_execution_mode(1: TSessionId session, 2: TExecuteMode mode) throws (1: TOmniSciException e)
   TRenderResult render_vega(1: TSessionId session, 2: i64 widget_id, 3: string vega_json, 4: i32 compression_level, 5: string nonce) throws (1: TOmniSciException e)
   TPixelTableRowResult get_result_row_for_pixel(1: TSessionId session, 2: i64 widget_id, 3: TPixel pixel, 4: map<string, list<string>> table_col_names, 5: bool column_format, 6: i32 pixelRadius, 7: string nonce) throws (1: TOmniSciException e)
@@ -611,11 +611,11 @@ service OmniSci {
   void checkpoint(1: TSessionId session, 2: i32 table_id) throws (1: TOmniSciException e)
   # object privileges
   list<string> get_roles(1: TSessionId session) throws (1: TOmniSciException e)
-  list<TDBObject> get_db_objects_for_grantee(1: TSessionId session 2: string roleName) throws (1: TOmniSciException e)
-  list<TDBObject> get_db_object_privs(1: TSessionId session 2: string objectName 3: TDBObjectType type) throws (1: TOmniSciException e)
-  list<string> get_all_roles_for_user(1: TSessionId session 2: string userName) throws (1: TOmniSciException e)
-  bool has_role(1: TSessionId session 2: string granteeName 3: string roleName) throws (1: TOmniSciException e)
-  bool has_object_privilege(1: TSessionId session 2: string granteeName 3: string ObjectName 4: TDBObjectType objectType 5: TDBObjectPermissions permissions) throws (1: TOmniSciException e)
+  list<TDBObject> get_db_objects_for_grantee(1: TSessionId session, 2: string roleName) throws (1: TOmniSciException e)
+  list<TDBObject> get_db_object_privs(1: TSessionId session, 2: string objectName, 3: TDBObjectType type) throws (1: TOmniSciException e)
+  list<string> get_all_roles_for_user(1: TSessionId session, 2: string userName) throws (1: TOmniSciException e)
+  bool has_role(1: TSessionId session, 2: string granteeName, 3: string roleName) throws (1: TOmniSciException e)
+  bool has_object_privilege(1: TSessionId session, 2: string granteeName, 3: string ObjectName, 4: TDBObjectType objectType, 5: TDBObjectPermissions permissions) throws (1: TOmniSciException e)
   # licensing
   TLicenseInfo set_license_key(1: TSessionId session, 2: string key, 3: string nonce = "") throws (1: TOmniSciException e)
   TLicenseInfo get_license_claims(1: TSessionId session, 2: string nonce = "") throws (1: TOmniSciException e)
