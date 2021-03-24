@@ -552,6 +552,8 @@ class CodeGenerator {
 
   CgenState* cgen_state_;
   PlanState* plan_state_;
+
+  friend class GroupByAndAggregate;
 };
 
 // Code generator specialized for scalar expressions which doesn't require an executor.

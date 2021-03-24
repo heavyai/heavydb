@@ -231,7 +231,6 @@ llvm::Value* CodeGenerator::codegenWindowPosition(
       "row_number_window_func",
       {cgen_state_->llInt(reinterpret_cast<const int64_t>(window_func_context->output())),
        pos_arg});
-  window_func_context->setRowNumber(window_position);
   return window_position;
 }
 
