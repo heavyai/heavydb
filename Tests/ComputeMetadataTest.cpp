@@ -549,6 +549,7 @@ class OptimizeTableVacuumTest : public DBHandlerTestFixture {
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
     sql("drop table if exists test_table;");
+    g_enable_auto_metadata_update = true;
   }
 
   void TearDown() override {
@@ -557,6 +558,7 @@ class OptimizeTableVacuumTest : public DBHandlerTestFixture {
         File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_DATA_FILE);
     File_Namespace::FileMgr::setNumPagesPerMetadataFile(
         File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_METADATA_FILE);
+    g_enable_auto_metadata_update = false;
     DBHandlerTestFixture::TearDown();
   }
 
@@ -683,11 +685,9 @@ TEST_F(OptimizeTableVacuumTest, UpdateAndCompactTableData) {
   sql("alter table test_table set max_rollback_epochs = 0;");
   assertFileAndFreePageCount(4, 2, 4, 2);
 
-  // Compaction deletes the 4 free pages from above. Metadata
-  // re-computation (in the optimize command) creates a new
-  // metadata page/file.
+  // Compaction deletes the 4 free pages from above.
   sql("optimize table test_table with (vacuum = 'true');");
-  assertFileAndFreePageCount(3, 1, 2, 0);
+  assertFileAndFreePageCount(2, 0, 2, 0);
 
   // Verify that subsequent queries work as expected
   sqlAndCompareResult("select * from test_table;", {{i(30)}});
@@ -751,11 +751,9 @@ TEST_F(OptimizeTableVacuumTest, UpdateAndCompactShardedTableData) {
   sql("alter table test_table set max_rollback_epochs = 0;");
   assertFileAndFreePageCount(20, 8, 20, 8);
 
-  // Compaction deletes the 16 free pages from above. Metadata
-  // re-computation (in the optimize command) creates a new
-  // metadata page/file per shard.
+  // Compaction deletes the 16 free pages from above.
   sql("optimize table test_table with (vacuum = 'true');");
-  assertFileAndFreePageCount(16, 4, 12, 0);
+  assertFileAndFreePageCount(12, 0, 12, 0);
 
   // Verify that subsequent queries work as expected
   sqlAndCompareResult("select * from test_table order by i;",
@@ -832,6 +830,20 @@ TEST_F(OptimizeTableVacuumTest, MultiplePagesPerFile) {
   sqlAndCompareResult("select * from test_table;", {{i(30)}});
   sql("update test_table set i = i - 5;");
   sqlAndCompareResult("select * from test_table;", {{i(25)}});
+}
+
+TEST_F(OptimizeTableVacuumTest, UpdateAfterVacuumedDeletedFragment) {
+  sql("create table test_table (i int) with (fragment_size = 2);");
+  insertRange(1, 6);
+
+  // Delete second fragment
+  sql("delete from test_table where i = 3 or i = 4;");
+  sql("optimize table test_table with (vacuum = 'true');");
+  sqlAndCompareResult("select * from test_table;", {{i(1)}, {i(2)}, {i(5)}, {i(6)}});
+
+  // Do an update that changes metadata of third fragment
+  sql("update test_table set i = 6 where i = 5;");
+  sqlAndCompareResult("select * from test_table;", {{i(1)}, {i(2)}, {i(6)}, {i(6)}});
 }
 
 class VarLenColumnUpdateTest : public DBHandlerTestFixture {
