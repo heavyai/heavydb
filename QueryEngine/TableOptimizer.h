@@ -67,7 +67,11 @@ class TableOptimizer {
                                const ColumnDescriptor* cd,
                                const std::unordered_map<int, size_t>& tuple_count_map,
                                std::optional<Data_Namespace::MemoryLevel> memory_level,
-                               const std::set<int>& fragment_ids) const;
+                               const std::set<size_t>& fragment_indexes) const;
+
+  std::set<size_t> getFragmentIndexes(const TableDescriptor* td,
+                                      const std::set<int>& fragment_ids) const;
+
   const TableDescriptor* td_;
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;

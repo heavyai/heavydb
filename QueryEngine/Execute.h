@@ -541,7 +541,7 @@ class Executor {
                                   const ExecutionOptions& eo,
                                   const Catalog_Namespace::Catalog& cat,
                                   PerFragmentCallBack& cb,
-                                  const std::set<int>& fragment_ids);
+                                  const std::set<size_t>& fragment_indexes_param);
 
   ResultSetPtr executeExplain(const QueryCompilationDescriptor&);
 

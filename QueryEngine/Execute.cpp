@@ -1593,13 +1593,14 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                      gridSize());
 }
 
-void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit_in,
-                                          const InputTableInfo& table_info,
-                                          const CompilationOptions& co,
-                                          const ExecutionOptions& eo,
-                                          const Catalog_Namespace::Catalog& cat,
-                                          PerFragmentCallBack& cb,
-                                          const std::set<int>& fragment_ids_param) {
+void Executor::executeWorkUnitPerFragment(
+    const RelAlgExecutionUnit& ra_exe_unit_in,
+    const InputTableInfo& table_info,
+    const CompilationOptions& co,
+    const ExecutionOptions& eo,
+    const Catalog_Namespace::Catalog& cat,
+    PerFragmentCallBack& cb,
+    const std::set<size_t>& fragment_indexes_param) {
   const auto [ra_exe_unit, deleted_cols_map] = addDeletedColumn(ra_exe_unit_in, co);
   ColumnCacheMap column_cache;
 
@@ -1631,16 +1632,16 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
   const auto table_id = ra_exe_unit.input_descs[0].getTableId();
   const auto& outer_fragments = table_info.info.fragments;
 
-  std::set<size_t> fragment_ids;
-  if (fragment_ids_param.empty()) {
-    // An empty `fragment_ids_param` set implies executing
+  std::set<size_t> fragment_indexes;
+  if (fragment_indexes_param.empty()) {
+    // An empty `fragment_indexes_param` set implies executing
     // the query for all fragments in the table. In this
-    // case, populate `fragment_ids` with all fragment ids.
+    // case, populate `fragment_indexes` with all fragment indexes.
     for (size_t i = 0; i < outer_fragments.size(); i++) {
-      fragment_ids.emplace(i);
+      fragment_indexes.emplace(i);
     }
   } else {
-    fragment_ids.insert(fragment_ids_param.begin(), fragment_ids_param.end());
+    fragment_indexes = fragment_indexes_param;
   }
 
   {
@@ -1648,10 +1649,10 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
     std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);
     kernel_queue_time_ms_ += timer_stop(clock_begin);
 
-    for (auto fragment_id : fragment_ids) {
+    for (auto fragment_index : fragment_indexes) {
       // We may want to consider in the future allowing this to execute on devices other
       // than CPU
-      FragmentsList fragments_list{{table_id, {fragment_id}}};
+      FragmentsList fragments_list{{table_id, {fragment_index}}};
       ExecutionKernel kernel(ra_exe_unit,
                              co.device_type,
                              /*device_id=*/0,
@@ -1669,9 +1670,9 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
 
   const auto& all_fragment_results = kernel_context.getFragmentResults();
 
-  for (const auto& [result_set_ptr, result_fragment_ids] : all_fragment_results) {
-    CHECK_EQ(result_fragment_ids.size(), 1);
-    cb(result_set_ptr, outer_fragments[result_fragment_ids[0]]);
+  for (const auto& [result_set_ptr, result_fragment_indexes] : all_fragment_results) {
+    CHECK_EQ(result_fragment_indexes.size(), 1);
+    cb(result_set_ptr, outer_fragments[result_fragment_indexes[0]]);
   }
 }
 

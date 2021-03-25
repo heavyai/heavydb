@@ -20,6 +20,7 @@
 #include "LockMgr/LockMgr.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
+#include "Shared/misc.h"
 #include "Shared/scope.h"
 
 TableOptimizer::TableOptimizer(const TableDescriptor* td,
@@ -175,11 +176,13 @@ void TableOptimizer::recomputeMetadataUnlocked(
     recomputeDeletedColumnMetadata(td, tuple_count_map);
     for (const auto cd : columns) {
       CHECK(optimize_candidates.find(cd) != optimize_candidates.end());
+      auto fragment_indexes =
+          getFragmentIndexes(td, optimize_candidates.find(cd)->second);
       recomputeColumnMetadata(td,
                               cd,
                               tuple_count_map,
                               Data_Namespace::MemoryLevel::CPU_LEVEL,
-                              optimize_candidates.find(cd)->second);
+                              fragment_indexes);
     }
   }
 }
@@ -292,7 +295,7 @@ void TableOptimizer::recomputeColumnMetadata(
     const ColumnDescriptor* cd,
     const std::unordered_map</*fragment_id*/ int, size_t>& tuple_count_map,
     std::optional<Data_Namespace::MemoryLevel> memory_level,
-    const std::set<int>& fragment_ids) const {
+    const std::set<size_t>& fragment_indexes) const {
   const auto ti = cd->columnType;
   if (ti.is_varlen()) {
     LOG(INFO) << "Skipping varlen column " << cd->columnName;
@@ -371,12 +374,33 @@ void TableOptimizer::recomputeColumnMetadata(
             std::make_pair(fragment_info.fragmentId, chunk_metadata->chunkStats));
       };
 
-  executor_->executeWorkUnitPerFragment(
-      ra_exe_unit, table_infos[0], co, eo, cat_, compute_metadata_callback, fragment_ids);
+  executor_->executeWorkUnitPerFragment(ra_exe_unit,
+                                        table_infos[0],
+                                        co,
+                                        eo,
+                                        cat_,
+                                        compute_metadata_callback,
+                                        fragment_indexes);
 
   auto* fragmenter = td->fragmenter.get();
   CHECK(fragmenter);
   fragmenter->updateChunkStats(cd, stats_map, memory_level);
+}
+
+// Returns the corresponding indexes for the given fragment ids in the list of fragments
+// returned by `getFragmentsForQuery()`
+std::set<size_t> TableOptimizer::getFragmentIndexes(
+    const TableDescriptor* td,
+    const std::set<int>& fragment_ids) const {
+  CHECK(td->fragmenter);
+  auto table_info = td->fragmenter->getFragmentsForQuery();
+  std::set<size_t> fragment_indexes;
+  for (size_t i = 0; i < table_info.fragments.size(); i++) {
+    if (shared::contains(fragment_ids, table_info.fragments[i].fragmentId)) {
+      fragment_indexes.emplace(i);
+    }
+  }
+  return fragment_indexes;
 }
 
 void TableOptimizer::vacuumDeletedRows() const {
