@@ -188,10 +188,15 @@ void start_server(TThreadedServer& server, const int port) {
   }
 }
 
-void releaseWarmupSession(TSessionId& sessionId, std::ifstream& query_file) {
+void releaseWarmupSession(TSessionId& sessionId, std::ifstream& query_file) noexcept {
   query_file.close();
   if (sessionId != g_warmup_handler->getInvalidSessionId()) {
-    g_warmup_handler->disconnect(sessionId);
+    try {
+      g_warmup_handler->disconnect(sessionId);
+    } catch (...) {
+      LOG(ERROR) << "Failed to disconnect warmup session, possible failure to run warmup "
+                    "queries.";
+    }
   }
 }
 
@@ -202,6 +207,12 @@ void run_warmup_queries(mapd::shared_ptr<DBHandler> handler,
   if (query_file_path.empty()) {
     return;
   }
+  if (handler->isAggregator()) {
+    LOG(INFO) << "Skipping warmup query execution on the aggregator, queries should be "
+                 "run directly on the leaf nodes.";
+    return;
+  }
+
   LOG(INFO) << "Running DB warmup with queries from " << query_file_path;
   try {
     g_warmup_handler = handler;
@@ -264,10 +275,11 @@ void run_warmup_queries(mapd::shared_ptr<DBHandler> handler,
       }
       db_info.clear();
     }
-  } catch (...) {
-    LOG(WARNING) << "Exception while executing warmup queries. "
-                 << "Warmup may not be fully completed. Will proceed nevertheless."
-                 << std::endl;
+  } catch (const std::exception& e) {
+    LOG(WARNING)
+        << "Exception while executing warmup queries. "
+        << "Warmup may not be fully completed. Will proceed nevertheless.\nError was: "
+        << e.what();
   }
 }
 

@@ -563,6 +563,10 @@ void DBHandler::internal_connect(TSessionId& session,
   connect_impl(session, std::string(), dbname2, user_meta, cat, stdlog);
 }
 
+bool DBHandler::isAggregator() const {
+  return leaf_aggregator_.leafCount() > 0;
+}
+
 void DBHandler::krb5_connect(TKrb5Session& session,
                              const std::string& inputToken,
                              const std::string& dbname) {

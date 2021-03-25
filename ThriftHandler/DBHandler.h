@@ -547,6 +547,8 @@ class DBHandler : public OmniSciIf {
                         const std::string& username,
                         const std::string& dbname);
 
+  bool isAggregator() const;
+
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
 
   LeafAggregator leaf_aggregator_;
