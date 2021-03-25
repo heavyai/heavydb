@@ -105,10 +105,14 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec,
       // We don't want to read headerSize in our header - so start
       // reading 4 bytes past it
 
-      // always derive dbid/tbid from FileMgr
+      // Derive dbid/tbid if from FileMgr
       ChunkKey chunkKey(&ints[1], &ints[1 + numHeaderElems - 2]);
-      chunkKey[0] = fileMgr->get_fileMgrKey().first;
-      chunkKey[1] = fileMgr->get_fileMgrKey().second;
+      if (fileMgr->hasFileMgrKey()) {
+        // A regular FileMgr is locked to one table, but a CachingFileMgr can contain
+        // chunks from different tables
+        chunkKey[0] = fileMgr->get_fileMgrKey().first;
+        chunkKey[1] = fileMgr->get_fileMgrKey().second;
+      }
       // recover page in case a crash failed deletion of this page
       if (!g_read_only) {
         if (ints[1] == DELETE_CONTINGENT || ints[1] == ROLLOFF_CONTINGENT) {

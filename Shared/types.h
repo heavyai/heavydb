@@ -54,6 +54,11 @@ inline ChunkKey get_table_key(const ChunkKey& key) {
   return ChunkKey{key[CHUNK_KEY_DB_IDX], key[CHUNK_KEY_TABLE_IDX]};
 }
 
+inline std::pair<int, int> get_table_prefix(const ChunkKey& key) {
+  CHECK(has_table_prefix(key));
+  return std::pair<int, int>{key[CHUNK_KEY_DB_IDX], key[CHUNK_KEY_TABLE_IDX]};
+}
+
 inline bool is_column_key(const ChunkKey& key) {
   return key.size() == 3;
 }
@@ -68,6 +73,13 @@ inline bool is_varlen_data_key(const ChunkKey& key) {
 
 inline bool is_varlen_index_key(const ChunkKey& key) {
   return key.size() == 5 && key[4] == 2;
+}
+
+inline bool in_same_table(const ChunkKey& left_key, const ChunkKey& right_key) {
+  CHECK(has_table_prefix(left_key));
+  CHECK(has_table_prefix(right_key));
+  return (left_key[CHUNK_KEY_DB_IDX] == right_key[CHUNK_KEY_DB_IDX] &&
+          left_key[CHUNK_KEY_TABLE_IDX] == right_key[CHUNK_KEY_TABLE_IDX]);
 }
 
 inline std::string show_chunk(const ChunkKey& key) {

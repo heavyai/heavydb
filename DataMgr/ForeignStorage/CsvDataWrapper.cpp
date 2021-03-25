@@ -513,7 +513,6 @@ void cache_blocks(std::map<ChunkKey, Chunk_NS::Chunk>& cached_chunks,
       }
     }
     cached_chunks[chunk_key].appendData(data_block, row_count, 0);
-
     if (is_last_block) {
       // cache the chunks now so they are tracked by eviction algorithm
       std::vector<ChunkKey> key_to_cache{chunk_key};
@@ -821,7 +820,6 @@ void add_placeholder_metadata(
     empty_buffer.initEncoder(column->columnType);
     auto chunk_metadata = empty_buffer.getEncoder()->getMetadata(column->columnType);
     chunk_metadata->numElements = num_elements;
-    // signal to query engine populate, not set by default for arrays
     chunk_metadata->chunkStats.min.intval = std::numeric_limits<int32_t>::max();
     chunk_metadata->chunkStats.max.intval = std::numeric_limits<int32_t>::lowest();
 
@@ -890,6 +888,7 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
       columns_to_scan.insert(column->columnId);
     }
   }
+
   // Track where scan started for appends
   int start_row = num_rows_;
   if (!csv_reader_->isScanFinished()) {

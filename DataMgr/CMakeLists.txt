@@ -8,6 +8,7 @@ set(datamgr_source_files
     DataMgr.cpp
     Encoder.cpp
     StringNoneEncoder.cpp
+    FileMgr/CachingFileMgr.cpp
     FileMgr/GlobalFileMgr.cpp
     FileMgr/FileMgr.cpp
     FileMgr/FileBuffer.cpp

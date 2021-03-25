@@ -151,6 +151,16 @@ struct HeaderInfo {
              const int32_t versionEpoch,
              const Page& page)
       : chunkKey(chunkKey), pageId(pageId), versionEpoch(versionEpoch), page(page) {}
+
+  bool operator<(const HeaderInfo& other) {
+    if (chunkKey != other.chunkKey) {
+      return chunkKey < other.chunkKey;
+    }
+    if (pageId != other.pageId) {
+      return pageId < other.pageId;
+    }
+    return versionEpoch < other.versionEpoch;
+  }
 };
 
 }  // namespace File_Namespace

@@ -1490,14 +1490,8 @@ ExecutionResult ShowDiskCacheUsageCommand::execute() {
     auto [td, td_with_lock] =
         get_table_descriptor_with_lock<lockmgr::ReadLock>(*cat_ptr, table_name, false);
 
-    const auto mgr = dynamic_cast<File_Namespace::FileMgr*>(
-        disk_cache->getGlobalFileMgr()->findFileMgr(cat_ptr->getDatabaseId(),
-                                                    td->tableId));
-
-    // NOTE: This size does not include datawrapper metadata that is on disk.
-    // If a mgr does not exist it means a cache is not enabled/created for the given
-    // table.
-    auto table_cache_size = mgr ? mgr->getTotalFileSize() : 0;
+    auto table_cache_size =
+        disk_cache->getSpaceReservedByTable(cat_ptr->getDatabaseId(), td->tableId);
 
     // logical_values -> table data
     logical_values.emplace_back(RelLogicalValues::RowValues{});

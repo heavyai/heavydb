@@ -60,7 +60,6 @@ FILE* create(const std::string& basePath,
   if (f == nullptr) {
     LOG(FATAL) << "Error trying to create file '" << path
                << "', the error was: " << std::strerror(errno);
-    ;
   }
   fseek(f, static_cast<long>((pageSize * numPages) - 1), SEEK_SET);
   fputc(EOF, f);

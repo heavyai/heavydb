@@ -38,7 +38,7 @@ class PersistentStorageMgrTest : public testing::Test {
 
 TEST_F(PersistentStorageMgrTest, DiskCache_CustomPath) {
   PersistentStorageMgr psm(data_path, 0, {cache_path_, DiskCacheLevel::fsi});
-  ASSERT_EQ(psm.getDiskCache()->getGlobalFileMgr()->getBasePath(), cache_path_ + "/");
+  ASSERT_EQ(psm.getDiskCache()->getCacheDirectory(), cache_path_);
 }
 
 TEST_F(PersistentStorageMgrTest, DiskCache_InitializeWithoutCache) {
@@ -48,7 +48,7 @@ TEST_F(PersistentStorageMgrTest, DiskCache_InitializeWithoutCache) {
 
 TEST_F(PersistentStorageMgrTest, MutableDiskCache_CustomPath) {
   MutableCachePersistentStorageMgr psm(data_path, 0, {cache_path_, DiskCacheLevel::all});
-  ASSERT_EQ(psm.getDiskCache()->getGlobalFileMgr()->getBasePath(), cache_path_ + "/");
+  ASSERT_EQ(psm.getDiskCache()->getCacheDirectory(), cache_path_);
 }
 
 int main(int argc, char** argv) {

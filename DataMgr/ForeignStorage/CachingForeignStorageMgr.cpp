@@ -15,7 +15,6 @@
  */
 
 #include "CachingForeignStorageMgr.h"
-
 #include "Catalog/ForeignTable.h"
 #include "CsvDataWrapper.h"
 #include "ForeignStorageException.h"
@@ -26,7 +25,6 @@ namespace foreign_storage {
 
 namespace {
 constexpr int64_t MAX_REFRESH_TIME_IN_SECONDS = 60 * 60;
-const std::string wrapper_file_name = "/wrapper_metadata.json";
 }  // namespace
 
 CachingForeignStorageMgr::CachingForeignStorageMgr(ForeignStorageCache* cache)
@@ -106,16 +104,18 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
 void CachingForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
     ChunkMetadataVector& chunk_metadata,
     const ChunkKey& keyPrefix) {
+  auto [db_id, tb_id] = get_table_prefix(keyPrefix);
   ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(chunk_metadata, keyPrefix);
   getDataWrapper(keyPrefix)->serializeDataWrapperInternals(
-      disk_cache_->getCacheDirectoryForTablePrefix(keyPrefix) + wrapper_file_name);
+      disk_cache_->getCacheDirectoryForTable(db_id, tb_id) + wrapper_file_name);
 }
 
 void CachingForeignStorageMgr::recoverDataWrapperFromDisk(
     const ChunkKey& table_key,
     const ChunkMetadataVector& chunk_metadata) {
+  auto [db_id, tb_id] = get_table_prefix(table_key);
   getDataWrapper(table_key)->restoreDataWrapperInternals(
-      disk_cache_->getCacheDirectoryForTablePrefix(table_key) + wrapper_file_name,
+      disk_cache_->getCacheDirectoryForTable(db_id, tb_id) + wrapper_file_name,
       chunk_metadata);
 }
 

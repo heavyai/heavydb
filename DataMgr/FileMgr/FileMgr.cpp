@@ -50,18 +50,6 @@ using namespace std;
 
 namespace File_Namespace {
 
-bool headerCompare(const HeaderInfo& firstElem, const HeaderInfo& secondElem) {
-  // HeaderInfo.first is a pair of Chunk key with a vector containing
-  // pageId and version
-  if (firstElem.chunkKey != secondElem.chunkKey) {
-    return firstElem.chunkKey < secondElem.chunkKey;
-  }
-  if (firstElem.pageId != secondElem.pageId) {
-    return firstElem.pageId < secondElem.pageId;
-  }
-  return firstElem.versionEpoch < secondElem.versionEpoch;
-}
-
 FileMgr::FileMgr(const int32_t deviceId,
                  GlobalFileMgr* gfm,
                  const std::pair<const int32_t, const int> fileMgrKey,
@@ -70,11 +58,11 @@ FileMgr::FileMgr(const int32_t deviceId,
                  const int32_t epoch,
                  const size_t defaultPageSize)
     : AbstractBufferMgr(deviceId)
-    , gfm_(gfm)
-    , fileMgrKey_(fileMgrKey)
     , maxRollbackEpochs_(maxRollbackEpochs)
     , defaultPageSize_(defaultPageSize)
-    , nextFileId_(0) {
+    , nextFileId_(0)
+    , gfm_(gfm)
+    , fileMgrKey_(fileMgrKey) {
   init(num_reader_threads, epoch);
 }
 
@@ -85,11 +73,11 @@ FileMgr::FileMgr(const int32_t deviceId,
                  const size_t defaultPageSize,
                  const bool runCoreInit)
     : AbstractBufferMgr(deviceId)
-    , gfm_(gfm)
-    , fileMgrKey_(fileMgrKey)
     , maxRollbackEpochs_(-1)
     , defaultPageSize_(defaultPageSize)
-    , nextFileId_(0) {
+    , nextFileId_(0)
+    , gfm_(gfm)
+    , fileMgrKey_(fileMgrKey) {
   const std::string fileMgrDirPrefix("table");
   const std::string FileMgrDirDelim("_");
   fileMgrBasePath_ = (gfm_->getBasePath() + fileMgrDirPrefix + FileMgrDirDelim +
@@ -104,12 +92,12 @@ FileMgr::FileMgr(const int32_t deviceId,
 
 FileMgr::FileMgr(GlobalFileMgr* gfm, const size_t defaultPageSize, std::string basePath)
     : AbstractBufferMgr(0)
-    , gfm_(gfm)
-    , fileMgrKey_(0, 0)
     , maxRollbackEpochs_(-1)
     , fileMgrBasePath_(basePath)
     , defaultPageSize_(defaultPageSize)
-    , nextFileId_(0) {
+    , nextFileId_(0)
+    , gfm_(gfm)
+    , fileMgrKey_(0, 0) {
   init(basePath, -1);
 }
 
@@ -117,6 +105,9 @@ FileMgr::FileMgr(GlobalFileMgr* gfm, const size_t defaultPageSize, std::string b
 FileMgr::FileMgr(const int epoch) : AbstractBufferMgr(-1) {
   epoch_.ceiling(epoch);
 }
+
+// Used to initialize CachingFileMgr.
+FileMgr::FileMgr() : AbstractBufferMgr(0) {}
 
 FileMgr::~FileMgr() {
   // free memory used by FileInfo objects
@@ -283,7 +274,7 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
      * and in order of increasing PageId
      * - Version Epoch */
     auto& header_vec = open_files_result.header_infos;
-    std::sort(header_vec.begin(), header_vec.end(), headerCompare);
+    std::sort(header_vec.begin(), header_vec.end());
 
     /* Goal of next section is to find sequences in the
      * sorted headerVec of the same ChunkId, which we
@@ -339,8 +330,8 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
 
   /* define number of reader threads to be used */
   size_t num_hardware_based_threads =
-      std::thread::hardware_concurrency();  // # of threads is based on # of cores on the
-                                            // host
+      std::thread::hardware_concurrency();  // # of threads is based on # of cores on
+                                            // the host
   if (num_reader_threads == 0) {            // # of threads has not been defined by user
     num_reader_threads_ = num_hardware_based_threads;
   } else {
@@ -489,7 +480,7 @@ void FileMgr::init(const std::string& dataPathToConvertFrom,
      * and in order of increasing PageId
      * - Version Epoch */
 
-    std::sort(headerVec.begin(), headerVec.end(), headerCompare);
+    std::sort(headerVec.begin(), headerVec.end());
 
     /* Goal of next section is to find sequences in the
      * sorted headerVec of the same ChunkId, which we
@@ -568,9 +559,8 @@ void FileMgr::init(const std::string& dataPathToConvertFrom,
   isFullyInitted_ = true;
 }
 
-void FileMgr::closeRemovePhysical() {
-  for (auto file_info_entry : files_) {
-    auto file_info = file_info_entry.second;
+void FileMgr::closePhysicalUnlocked() {
+  for (auto& [idx, file_info] : files_) {
     if (file_info->f) {
       close(file_info->f);
       file_info->f = nullptr;
@@ -586,7 +576,11 @@ void FileMgr::closeRemovePhysical() {
     close(epochFile_);
     epochFile_ = nullptr;
   }
+}
 
+void FileMgr::closeRemovePhysical() {
+  mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
+  closePhysicalUnlocked();
   /* rename for later deletion the directory containing table related data */
   File_Namespace::renameForDelete(getFileMgrBasePath());
 }
@@ -702,9 +696,14 @@ void FileMgr::rollOffOldData(const int32_t epochCeiling, const bool shouldCheckp
   }
 }
 
+std::string FileMgr::describeSelf() {
+  stringstream ss;
+  ss << "table (" << fileMgrKey_.first << ", " << fileMgrKey_.second << ")";
+  return ss.str();
+}
+
 void FileMgr::checkpoint() {
-  VLOG(2) << "Checkpointing table (" << fileMgrKey_.first << ", " << fileMgrKey_.second
-          << " epoch: " << epoch();
+  VLOG(2) << "Checkpointing " << describeSelf() << " epoch: " << epoch();
   mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
     if (chunkIt->second->isDirty()) {
@@ -1202,9 +1201,8 @@ void FileMgr::migrateToLatestFileMgrVersion() {
 void FileMgr::setEpoch(const int32_t newEpoch) {
   if (newEpoch < epoch_.floor()) {
     std::stringstream error_message;
-    error_message << "Cannot set epoch for table (" << fileMgrKey_.first << ","
-                  << fileMgrKey_.second << ") lower than the minimum rollback epoch ("
-                  << epoch_.floor() << ").";
+    error_message << "Cannot set epoch for " << describeSelf()
+                  << " lower than the minimum rollback epoch (" << epoch_.floor() << ").";
     throw std::runtime_error(error_message.str());
   }
   epoch_.ceiling(newEpoch);
@@ -1218,20 +1216,6 @@ void FileMgr::free_page(std::pair<FileInfo*, int32_t>&& page) {
 
 void FileMgr::removeTableRelatedDS(const int32_t db_id, const int32_t table_id) {
   UNREACHABLE();
-}
-
-uint64_t FileMgr::getTotalFileSize() const {
-  uint64_t total_size = 0;
-  for (const auto& file_info_entry : files_) {
-    total_size += file_info_entry.second->size();
-  }
-  if (epochFile_) {
-    total_size += fileSize(epochFile_);
-  }
-  if (DBMetaFile_) {
-    total_size += fileSize(DBMetaFile_);
-  }
-  return total_size;
 }
 
 /**

@@ -42,10 +42,10 @@ PersistentStorageMgr::PersistentStorageMgr(const std::string& data_dir,
 
   global_file_mgr_ = std::make_unique<File_Namespace::GlobalFileMgr>(
       0, fsi_, data_dir, num_reader_threads);
-  disk_cache_ = disk_cache_config_.isEnabled()
-                    ? std::make_unique<foreign_storage::ForeignStorageCache>(
-                          disk_cache_config, fsi_)
-                    : nullptr;
+  disk_cache_ =
+      disk_cache_config_.isEnabled()
+          ? std::make_unique<foreign_storage::ForeignStorageCache>(disk_cache_config)
+          : nullptr;
   foreign_storage_mgr_ =
       disk_cache_config_.isEnabledForFSI()
           ? std::make_unique<foreign_storage::CachingForeignStorageMgr>(disk_cache_.get())

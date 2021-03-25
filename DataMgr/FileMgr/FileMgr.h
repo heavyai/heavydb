@@ -163,7 +163,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   FileMgr(GlobalFileMgr* gfm, const size_t defaultPageSize, std::string basePath);
 
   /// Destructor
-  ~FileMgr() override;
+  virtual ~FileMgr() override;
 
   StorageStats getStorageStats();
   /// Creates a chunk with the specified key and page size.
@@ -215,7 +215,6 @@ class FileMgr : public AbstractBufferMgr {  // implements
 
   inline FileInfo* getFileInfoForFileId(const int32_t fileId) { return files_[fileId]; }
 
-  uint64_t getTotalFileSize() const;
   FileMetadata getMetadataForFile(
       const boost::filesystem::directory_iterator& fileIterator);
 
@@ -228,7 +227,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
    * @return a boolean representing whether the directory path existed
    */
 
-  bool coreInit();
+  virtual bool coreInit();
 
   void copyPage(Page& srcPage,
                 FileMgr* destFileMgr,
@@ -328,12 +327,13 @@ class FileMgr : public AbstractBufferMgr {  // implements
   int32_t getDBVersion() const;
   bool getDBConvert() const;
   void createTopLevelMetadata();  // create metadata shared by all tables of all DBs
-  std::string getFileMgrBasePath() const { return fileMgrBasePath_; }
-  void closeRemovePhysical();
+  inline std::string getFileMgrBasePath() const { return fileMgrBasePath_; }
+  virtual void closeRemovePhysical();
 
   void removeTableRelatedDS(const int32_t db_id, const int32_t table_id) override;
 
   void free_page(std::pair<FileInfo*, int32_t>&& page);
+  inline virtual bool hasFileMgrKey() const { return true; }
   const std::pair<const int32_t, const int32_t> get_fileMgrKey() const {
     return fileMgrKey_;
   }
@@ -365,12 +365,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
   static void setNumPagesPerMetadataFile(size_t num_pages);
 
  protected:
-  // For testing purposes only
-  FileMgr(const int epoch);
+  // Used to initialize CachingFileMgr.
+  FileMgr();
 
- private:
-  GlobalFileMgr* gfm_;  /// Global FileMgr
-  std::pair<const int32_t, const int32_t> fileMgrKey_;
   int32_t maxRollbackEpochs_;
   std::string fileMgrBasePath_;  /// The OS file system path containing files related to
                                  /// this FileMgr
@@ -466,6 +463,18 @@ class FileMgr : public AbstractBufferMgr {  // implements
   void deleteEmptyFiles();
   void resumeFileCompaction(const std::string& status_file_name);
   std::vector<PageMapping> readPageMappingsFromStatusFile();
+
+  // For testing purposes only
+  FileMgr(const int epoch);
+
+  // Used to describe the manager in logging and error messages.
+  virtual std::string describeSelf();
+
+  void closePhysicalUnlocked();
+
+ private:
+  GlobalFileMgr* gfm_;  /// Global FileMgr
+  std::pair<const int32_t, const int32_t> fileMgrKey_;
 };
 
 }  // namespace File_Namespace

@@ -27,7 +27,7 @@
 
 #include "../Shared/mapd_shared_mutex.h"
 #include "DataMgr/AbstractBufferMgr.h"
-#include "DataMgr/FileMgr/GlobalFileMgr.h"
+#include "DataMgr/FileMgr/CachingFileMgr.h"
 #include "ForeignDataWrapper.h"
 
 class CacheTooSmallException : public std::runtime_error {
@@ -54,10 +54,11 @@ using namespace Data_Namespace;
 
 namespace foreign_storage {
 
+const std::string wrapper_file_name = "wrapper_metadata.json";
+
 class ForeignStorageCache {
  public:
-  ForeignStorageCache(const DiskCacheConfig& config,
-                      std::shared_ptr<ForeignStorageInterface> fsi);
+  ForeignStorageCache(const DiskCacheConfig& config);
 
   /**
    * Caches the chunks for the given chunk keys. Chunk buffers
@@ -97,14 +98,21 @@ class ForeignStorageCache {
   std::string dumpCachedChunkEntries() const;
   std::string dumpCachedMetadataEntries() const;
 
-  inline File_Namespace::GlobalFileMgr* getGlobalFileMgr() const {
-    return global_file_mgr_.get();
+  inline std::string getCacheDirectory() const {
+    return caching_file_mgr_->getFileMgrBasePath();
   }
 
-  std::string getCacheDirectoryForTablePrefix(const ChunkKey&) const;
+  inline std::string getCacheDirectoryForTable(int db_id, int tb_id) const {
+    return caching_file_mgr_->getOrAddTableDir(db_id, tb_id);
+  }
+
   void cacheMetadataWithFragIdGreaterOrEqualTo(const ChunkMetadataVector& metadata_vec,
                                                const int frag_id);
   void evictThenEraseChunk(const ChunkKey&);
+
+  inline uint64_t getSpaceReservedByTable(int db_id, int tb_id) const {
+    return caching_file_mgr_->getSpaceReservedByTable(db_id, tb_id);
+  }
 
  private:
   // These methods are private and assume locks are already acquired when called.
@@ -115,8 +123,8 @@ class ForeignStorageCache {
   void evictThenEraseChunkUnlocked(const ChunkKey&);
   void validatePath(const std::string&) const;
 
-  // Underlying storage is handled by a GlobalFileMgr unique to the cache.
-  std::unique_ptr<File_Namespace::GlobalFileMgr> global_file_mgr_;
+  // Underlying storage is handled by a CachingFileMgr unique to the cache.
+  std::unique_ptr<File_Namespace::CachingFileMgr> caching_file_mgr_;
 
   // Keeps tracks of which Chunks/ChunkMetadata are cached.
   std::set<ChunkKey> cached_chunks_;

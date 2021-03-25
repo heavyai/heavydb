@@ -622,4 +622,12 @@ void FileBuffer::write(int8_t* src,
   CHECK(bytesLeft == 0);
 }
 
+std::string FileBuffer::dump() const {
+  std::stringstream ss;
+  ss << "chunk_key = " << show_chunk(chunkKey_) << "\n";
+  ss << "has_encoder = " << (hasEncoder() ? "true\n" : "false\n");
+  ss << "size_ = " << size_ << "\n";
+  return ss.str();
+}
+
 }  // namespace File_Namespace

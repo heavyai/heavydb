@@ -38,7 +38,8 @@ using namespace Data_Namespace;
 
 namespace File_Namespace {
 
-class FileMgr;  // forward declaration
+// forward declarations
+class FileMgr;
 
 /**
  * @class   FileBuffer
@@ -147,6 +148,8 @@ class FileBuffer : public AbstractBuffer {
   // inline virtual size_t used() const {
 
   inline size_t numMetadataPages() const { return metadataPages_.pageVersions.size(); };
+
+  std::string dump() const;
 
  private:
   // FileBuffer(const FileBuffer&);      // private copy constructor
