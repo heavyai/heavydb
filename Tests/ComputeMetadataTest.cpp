@@ -846,6 +846,218 @@ TEST_F(OptimizeTableVacuumTest, UpdateAfterVacuumedDeletedFragment) {
   sqlAndCompareResult("select * from test_table;", {{i(1)}, {i(2)}, {i(6)}, {i(6)}});
 }
 
+TEST_F(OptimizeTableVacuumTest, VarLengthArrayColumnWithFirstValueNull) {
+  sql("create table test_table (i integer[]);");
+  sql("insert into test_table values (null);");
+  sql("insert into test_table values ({1, 2, 3});");
+  sql("insert into test_table values ({4, 5, 6});");
+  sqlAndCompareResult("select * from test_table;",
+                      {{Null}, {array({i(1), i(2), i(3)})}, {array({i(4), i(5), i(6)})}});
+
+  sql("delete from test_table where rowid = 0;");
+  sqlAndCompareResult("select * from test_table;",
+                      {{array({i(1), i(2), i(3)})}, {array({i(4), i(5), i(6)})}});
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  sqlAndCompareResult("select * from test_table;",
+                      {{array({i(1), i(2), i(3)})}, {array({i(4), i(5), i(6)})}});
+}
+
+TEST_F(OptimizeTableVacuumTest, VarLengthArrayColumnWithLastValueNull) {
+  sql("create table test_table (i integer[]);");
+  sql("insert into test_table values ({1, 2, 3});");
+  sql("insert into test_table values ({4, 5, 6});");
+  sql("insert into test_table values (null);");
+  sqlAndCompareResult("select * from test_table;",
+                      {{array({i(1), i(2), i(3)})}, {array({i(4), i(5), i(6)})}, {Null}});
+
+  sql("delete from test_table where rowid = 0;");
+  sqlAndCompareResult("select * from test_table;", {{array({i(4), i(5), i(6)})}, {Null}});
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  sqlAndCompareResult("select * from test_table;", {{array({i(4), i(5), i(6)})}, {Null}});
+}
+
+TEST_F(OptimizeTableVacuumTest, VarLengthArrayColumnWithFirstAndSubsequentNullValue) {
+  sql("create table test_table (i integer[]);");
+  sql("insert into test_table values (null);");
+  sql("insert into test_table values (null);");
+  sql("insert into test_table values ({1, 2, 3});");
+  sql("insert into test_table values ({4, 5, 6});");
+  sqlAndCompareResult(
+      "select * from test_table;",
+      {{Null}, {Null}, {array({i(1), i(2), i(3)})}, {array({i(4), i(5), i(6)})}});
+
+  sql("delete from test_table where rowid = 0;");
+  sqlAndCompareResult("select * from test_table;",
+                      {{Null}, {array({i(1), i(2), i(3)})}, {array({i(4), i(5), i(6)})}});
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  sqlAndCompareResult("select * from test_table;",
+                      {{Null}, {array({i(1), i(2), i(3)})}, {array({i(4), i(5), i(6)})}});
+}
+
+TEST_F(OptimizeTableVacuumTest, VarLengthArrayColumnWithAllNullValues) {
+  sql("create table test_table (i integer[]);");
+  sql("insert into test_table values (null);");
+  sql("insert into test_table values (null);");
+  sql("insert into test_table values (null);");
+  sqlAndCompareResult("select * from test_table;", {{Null}, {Null}, {Null}});
+
+  sql("delete from test_table where rowid = 0;");
+  sqlAndCompareResult("select * from test_table;", {{Null}, {Null}});
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  sqlAndCompareResult("select * from test_table;", {{Null}, {Null}});
+}
+
+TEST_F(OptimizeTableVacuumTest, VarLengthArrayColumnWithNullInBetween) {
+  sql("create table test_table (i integer[]);");
+  sql("insert into test_table values ({1, 2, 3});");
+  sql("insert into test_table values (null);");
+  sql("insert into test_table values ({4, 5, 6});");
+  sqlAndCompareResult("select * from test_table;",
+                      {{array({i(1), i(2), i(3)})}, {Null}, {array({i(4), i(5), i(6)})}});
+
+  sql("delete from test_table where rowid = 0;");
+  sqlAndCompareResult("select * from test_table;", {{Null}, {array({i(4), i(5), i(6)})}});
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  sqlAndCompareResult("select * from test_table;", {{Null}, {array({i(4), i(5), i(6)})}});
+}
+
+TEST_F(OptimizeTableVacuumTest, VarLengthArrayColumnWithNullValueAndNullDeleted) {
+  sql("create table test_table (i integer[]);");
+  sql("insert into test_table values ({1, 2, 3});");
+  sql("insert into test_table values (null);");
+  sql("insert into test_table values ({4, 5, 6});");
+  sqlAndCompareResult("select * from test_table;",
+                      {{array({i(1), i(2), i(3)})}, {Null}, {array({i(4), i(5), i(6)})}});
+
+  sql("delete from test_table where rowid = 1;");
+  sqlAndCompareResult("select * from test_table;",
+                      {{array({i(1), i(2), i(3)})}, {array({i(4), i(5), i(6)})}});
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  sqlAndCompareResult("select * from test_table;",
+                      {{array({i(1), i(2), i(3)})}, {array({i(4), i(5), i(6)})}});
+}
+
+TEST_F(OptimizeTableVacuumTest,
+       VarLengthArrayColumnWithNullAfterOffsetLessThanDefaultNullPadding) {
+  sql("create table test_table (i integer[]);");
+  // First array has a size that is less than ArrayNoneEncoder::DEFAULT_NULL_PADDING_SIZE
+  sql("insert into test_table values ({1});");
+  sql("insert into test_table values (null);");
+  sql("insert into test_table values ({4, 5, 6});");
+  sqlAndCompareResult("select * from test_table;",
+                      {{array({i(1)})}, {Null}, {array({i(4), i(5), i(6)})}});
+
+  sql("delete from test_table where rowid = 0;");
+  sqlAndCompareResult("select * from test_table;", {{Null}, {array({i(4), i(5), i(6)})}});
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  sqlAndCompareResult("select * from test_table;", {{Null}, {array({i(4), i(5), i(6)})}});
+}
+
+TEST_F(OptimizeTableVacuumTest, VarLengthArrayColumnWithAllRowsDeleted) {
+  sql("create table test_table (i integer[]);");
+  sql("insert into test_table values (null);");
+  sql("insert into test_table values ({1, 2, 3});");
+  sql("insert into test_table values ({4, 5, 6});");
+  sqlAndCompareResult("select * from test_table;",
+                      {{Null}, {array({i(1), i(2), i(3)})}, {array({i(4), i(5), i(6)})}});
+
+  sql("delete from test_table;");
+  sqlAndCompareResult("select * from test_table;", {});
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  sqlAndCompareResult("select * from test_table;", {});
+}
+
+TEST_F(OptimizeTableVacuumTest, VarLengthArrayColumnWithNotNullConstraint) {
+  sql("create table test_table (i integer[] not null);");
+  sql("insert into test_table values ({1, 2, 3});");
+  sql("insert into test_table values ({4, 5, 6});");
+  sqlAndCompareResult("select * from test_table;",
+                      {{array({i(1), i(2), i(3)})}, {array({i(4), i(5), i(6)})}});
+
+  sql("delete from test_table where rowid = 0;");
+  sqlAndCompareResult("select * from test_table;", {{array({i(4), i(5), i(6)})}});
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  sqlAndCompareResult("select * from test_table;", {{array({i(4), i(5), i(6)})}});
+}
+
+TEST_F(OptimizeTableVacuumTest, VarLengthTextArrayColumnWithNullValues) {
+  sql("create table test_table (i integer, t text[]);");
+  sql("insert into test_table values (1, null);");
+  sql("insert into test_table values (2, null);");
+  sqlAndCompareResult("select * from test_table;", {{i(1), Null}, {i(2), Null}});
+
+  sql("delete from test_table where i = 1;");
+  sqlAndCompareResult("select * from test_table;", {{i(2), Null}});
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  sqlAndCompareResult("select * from test_table;", {{i(2), Null}});
+}
+
+TEST_F(OptimizeTableVacuumTest, NoneEncodedStringColumnWithFirstValueNull) {
+  sql("create table test_table (t text encoding none);");
+  sql("insert into test_table values (null);");
+  sql("insert into test_table values ('a');");
+  sql("insert into test_table values ('b');");
+  sqlAndCompareResult("select * from test_table;", {{Null}, {"a"}, {"b"}});
+
+  sql("delete from test_table where rowid = 0;");
+  sqlAndCompareResult("select * from test_table;", {{"a"}, {"b"}});
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  sqlAndCompareResult("select * from test_table;", {{"a"}, {"b"}});
+}
+
+TEST_F(OptimizeTableVacuumTest, NoneEncodedStringColumnWithNullInBetween) {
+  sql("create table test_table (t text encoding none);");
+  sql("insert into test_table values ('a');");
+  sql("insert into test_table values (null);");
+  sql("insert into test_table values ('b');");
+  sqlAndCompareResult("select * from test_table;", {{"a"}, {Null}, {"b"}});
+
+  sql("delete from test_table where rowid = 0;");
+  sqlAndCompareResult("select * from test_table;", {{Null}, {"b"}});
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  sqlAndCompareResult("select * from test_table;", {{Null}, {"b"}});
+}
+
+TEST_F(OptimizeTableVacuumTest, NoneEncodedStringColumnWithLastValueNull) {
+  sql("create table test_table (t text encoding none);");
+  sql("insert into test_table values ('a');");
+  sql("insert into test_table values ('b');");
+  sql("insert into test_table values (null);");
+  sqlAndCompareResult("select * from test_table;", {{"a"}, {"b"}, {Null}});
+
+  sql("delete from test_table where rowid = 0;");
+  sqlAndCompareResult("select * from test_table;", {{"b"}, {Null}});
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  sqlAndCompareResult("select * from test_table;", {{"b"}, {Null}});
+}
+
+TEST_F(OptimizeTableVacuumTest, NoneEncodedStringColumnWithAllNullValues) {
+  sql("create table test_table (t text encoding none);");
+  sql("insert into test_table values (null);");
+  sql("insert into test_table values (null);");
+  sql("insert into test_table values (null);");
+  sqlAndCompareResult("select * from test_table;", {{Null}, {Null}, {Null}});
+
+  sql("delete from test_table where rowid = 0;");
+  sqlAndCompareResult("select * from test_table;", {{Null}, {Null}});
+
+  sql("optimize table test_table with (vacuum = 'true');");
+  sqlAndCompareResult("select * from test_table;", {{Null}, {Null}});
+}
+
 class VarLenColumnUpdateTest : public DBHandlerTestFixture {
   void SetUp() override {
     DBHandlerTestFixture::SetUp();

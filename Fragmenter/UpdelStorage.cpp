@@ -14,21 +14,19 @@
  * limitations under the License.
  */
 #include <algorithm>
-#include <boost/variant.hpp>
-#include <boost/variant/get.hpp>
-#include <limits>
 #include <mutex>
 #include <string>
 #include <vector>
 
+#include <boost/variant.hpp>
+#include <boost/variant/get.hpp>
+
 #include "Catalog/Catalog.h"
-#include "DataMgr/DataMgr.h"
+#include "DataMgr/ArrayNoneEncoder.h"
 #include "DataMgr/FixedLengthArrayNoneEncoder.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "LockMgr/LockMgr.h"
-#include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
-#include "QueryEngine/TargetValue.h"
 #include "Shared/DateConverters.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/thread_count.h"
@@ -1133,21 +1131,107 @@ auto InsertOrderFragmenter::vacuum_fixlen_rows(
   return nbytes_fix_data_to_keep;
 }
 
+// Gets the initial padding required for the chunk buffer. For variable length array
+// columns, if the first element after vacuuming is going to be a null array, a padding
+// with a value that is greater than 0 is expected.
+size_t get_null_padding(bool is_varlen_array,
+                        const std::vector<uint64_t>& frag_offsets,
+                        const StringOffsetT* index_array,
+                        size_t fragment_row_count) {
+  if (is_varlen_array) {
+    size_t first_non_deleted_row_index{0};
+    for (auto deleted_offset : frag_offsets) {
+      if (first_non_deleted_row_index < deleted_offset) {
+        break;
+      } else {
+        first_non_deleted_row_index++;
+      }
+    }
+    CHECK_LT(first_non_deleted_row_index, fragment_row_count);
+    if (first_non_deleted_row_index == 0) {
+      // If the first row in the fragment is not deleted, then the first offset in the
+      // index buffer/array already contains expected padding.
+      return index_array[0];
+    } else {
+      // If the first non-deleted element is a null array (indentified by a negative
+      // offset), get a padding value for the chunk buffer.
+      if (index_array[first_non_deleted_row_index + 1] < 0) {
+        size_t first_non_zero_offset{0};
+        for (size_t i = 0; i <= first_non_deleted_row_index; i++) {
+          if (index_array[i] != 0) {
+            first_non_zero_offset = index_array[i];
+            break;
+          }
+        }
+        CHECK_GT(first_non_zero_offset, static_cast<size_t>(0));
+        return std::min(ArrayNoneEncoder::DEFAULT_NULL_PADDING_SIZE,
+                        first_non_zero_offset);
+      } else {
+        return 0;
+      }
+    }
+  } else {
+    return 0;
+  }
+}
+
+// Gets the indexes of variable length null arrays in the chunk after vacuuming.
+std::set<size_t> get_var_len_null_array_indexes(const SQLTypeInfo sql_type_info,
+                                                const std::vector<uint64_t>& frag_offsets,
+                                                const StringOffsetT* index_array,
+                                                size_t fragment_row_count) {
+  std::set<size_t> null_array_indexes;
+  if (sql_type_info.is_varlen_array() && !sql_type_info.get_notnull()) {
+    size_t frag_offset_index{0};
+    size_t vacuum_offset{0};
+    for (size_t i = 0; i < fragment_row_count; i++) {
+      if (frag_offset_index < frag_offsets.size() &&
+          i == frag_offsets[frag_offset_index]) {
+        frag_offset_index++;
+        vacuum_offset++;
+      } else if (index_array[i + 1] < 0) {
+        null_array_indexes.emplace(i - vacuum_offset);
+      }
+    }
+  }
+  return null_array_indexes;
+}
+
+StringOffsetT get_buffer_offset(bool is_varlen_array,
+                                const StringOffsetT* index_array,
+                                size_t index) {
+  auto offset = index_array[index];
+  if (offset < 0) {
+    // Variable length arrays encode null arrays as negative offsets
+    CHECK(is_varlen_array);
+    offset = -offset;
+  }
+  return offset;
+}
+
 auto InsertOrderFragmenter::vacuum_varlen_rows(
     const FragmentInfo& fragment,
     const std::shared_ptr<Chunk_NS::Chunk>& chunk,
     const std::vector<uint64_t>& frag_offsets) {
+  auto is_varlen_array = chunk->getColumnDesc()->columnType.is_varlen_array();
   auto data_buffer = chunk->getBuffer();
+  CHECK(data_buffer);
   auto index_buffer = chunk->getIndexBuf();
+  CHECK(index_buffer);
   auto data_addr = data_buffer->getMemoryPtr();
-  auto indices_addr = index_buffer ? index_buffer->getMemoryPtr() : nullptr;
+  auto indices_addr = index_buffer->getMemoryPtr();
+  CHECK(indices_addr);
   auto index_array = (StringOffsetT*)indices_addr;
   int64_t irow_of_blk_to_keep = 0;  // head of next row block to keep
   int64_t irow_of_blk_to_fill = 0;  // row offset to fit the kept block
   size_t nbytes_fix_data_to_keep = 0;
-  size_t nbytes_var_data_to_keep = 0;
-  auto nrows_to_vacuum = frag_offsets.size();
   auto nrows_in_fragment = fragment.getPhysicalNumTuples();
+  size_t null_padding =
+      get_null_padding(is_varlen_array, frag_offsets, index_array, nrows_in_fragment);
+  size_t nbytes_var_data_to_keep = null_padding;
+  auto null_array_indexes = get_var_len_null_array_indexes(
+      chunk->getColumnDesc()->columnType, frag_offsets, index_array, nrows_in_fragment);
+  auto nrows_to_vacuum = frag_offsets.size();
   for (size_t irow = 0; irow <= nrows_to_vacuum; irow++) {
     auto is_last_one = irow == nrows_to_vacuum;
     auto irow_to_vacuum = is_last_one ? nrows_in_fragment : frag_offsets[irow];
@@ -1155,19 +1239,27 @@ auto InsertOrderFragmenter::vacuum_varlen_rows(
     int64_t nrows_to_keep = irow_to_vacuum - irow_of_blk_to_keep;
     if (nrows_to_keep > 0) {
       auto ibyte_var_data_to_keep = nbytes_var_data_to_keep;
+      auto deleted_row_start_offset =
+          get_buffer_offset(is_varlen_array, index_array, irow_to_vacuum);
+      auto kept_row_start_offset =
+          get_buffer_offset(is_varlen_array, index_array, irow_of_blk_to_keep);
       auto nbytes_to_keep =
-          (is_last_one ? data_buffer->size() : index_array[irow_to_vacuum]) -
-          index_array[irow_of_blk_to_keep];
+          (is_last_one ? data_buffer->size() : deleted_row_start_offset) -
+          kept_row_start_offset;
       if (irow_of_blk_to_fill != irow_of_blk_to_keep) {
-        // move curr varlen row block toward front
-        memmove(data_addr + ibyte_var_data_to_keep,
-                data_addr + index_array[irow_of_blk_to_keep],
-                nbytes_to_keep);
+        if (nbytes_to_keep > 0) {
+          CHECK(data_addr);
+          // move curr varlen row block toward front
+          memmove(data_addr + ibyte_var_data_to_keep,
+                  data_addr + kept_row_start_offset,
+                  nbytes_to_keep);
+        }
 
-        const auto index_base = index_array[irow_of_blk_to_keep];
+        const auto base_offset = kept_row_start_offset;
         for (int64_t i = 0; i < nrows_to_keep; ++i) {
-          auto& index = index_array[irow_of_blk_to_keep + i];
-          index = ibyte_var_data_to_keep + (index - index_base);
+          auto update_index = irow_of_blk_to_keep + i;
+          auto offset = get_buffer_offset(is_varlen_array, index_array, update_index);
+          index_array[update_index] = ibyte_var_data_to_keep + (offset - base_offset);
         }
       }
       nbytes_var_data_to_keep += nbytes_to_keep;
@@ -1185,6 +1277,17 @@ auto InsertOrderFragmenter::vacuum_varlen_rows(
       nbytes_fix_data_to_keep += nbytes_to_keep;
     }
     irow_of_blk_to_keep = irow_to_vacuum + 1;
+  }
+
+  // Set expected null padding, last offset, and negative values for null array offsets.
+  index_array[0] = null_padding;
+  auto post_vacuum_row_count = nrows_in_fragment - nrows_to_vacuum;
+  index_array[post_vacuum_row_count] = nbytes_var_data_to_keep;
+  if (!is_varlen_array) {
+    CHECK(null_array_indexes.empty());
+  }
+  for (auto index : null_array_indexes) {
+    index_array[index + 1] = -1 * std::abs(index_array[index + 1]);
   }
   return nbytes_var_data_to_keep;
 }
@@ -1222,7 +1325,11 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
     auto fixlen_vacuum =
         [=, &update_stats_per_thread, &updel_roll, &frag_offsets, &fragment] {
           size_t nbytes_fix_data_to_keep;
-          nbytes_fix_data_to_keep = vacuum_fixlen_rows(fragment, chunk, frag_offsets);
+          if (nrows_to_keep == 0) {
+            nbytes_fix_data_to_keep = 0;
+          } else {
+            nbytes_fix_data_to_keep = vacuum_fixlen_rows(fragment, chunk, frag_offsets);
+          }
 
           data_buffer->getEncoder()->setNumElems(nrows_to_keep);
           data_buffer->setSize(nbytes_fix_data_to_keep);
@@ -1257,13 +1364,16 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
 
     auto varlen_vacuum = [=, &updel_roll, &frag_offsets, &fragment] {
       size_t nbytes_var_data_to_keep;
-      nbytes_var_data_to_keep = vacuum_varlen_rows(fragment, chunk, frag_offsets);
+      if (nrows_to_keep == 0) {
+        nbytes_var_data_to_keep = 0;
+      } else {
+        nbytes_var_data_to_keep = vacuum_varlen_rows(fragment, chunk, frag_offsets);
+      }
 
       data_buffer->getEncoder()->setNumElems(nrows_to_keep);
       data_buffer->setSize(nbytes_var_data_to_keep);
       data_buffer->setUpdated();
 
-      index_array[nrows_to_keep] = data_buffer->size();
       index_buffer->setSize(sizeof(*index_array) *
                             (nrows_to_keep ? 1 + nrows_to_keep : 0));
       index_buffer->setUpdated();
