@@ -15,8 +15,8 @@ channels:
   - conda-forge
 
 dependencies:
-  - gxx_linux-64   8.*
-  - gcc_linux-64   8.*
+  - gxx_linux-64   9.*
+  - gcc_linux-64   9.*
   - ccache
   - libgdal    >=2.3
   - sysroot_linux-64 >=2.14
