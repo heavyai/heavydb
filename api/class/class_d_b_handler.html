@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 91dd689
+                5.7.0dev c6fa9b7
               </div>
             
           
@@ -438,6 +438,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_failed_to_create_slab.html">Class FailedToCreateSlab</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_failed_to_fetch_column.html">Class FailedToFetchColumn</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_failed_to_join_on_virtual_column.html">Class FailedToJoinOnVirtualColumn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_file___namespace_1_1_caching_file_mgr.html">Class File_Namespace::CachingFileMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_file___namespace_1_1_file_buffer.html">Class File_Namespace::FileBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_file___namespace_1_1_file_mgr.html">Class File_Namespace::FileMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_file___namespace_1_1_global_file_mgr.html">Class File_Namespace::GlobalFileMgr</a></li>
@@ -1038,7 +1039,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_statement.html">Class com::omnisci::jdbc::OmniSciStatement</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_statement_test.html">Class com::omnisci::jdbc::OmniSciStatementTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_type.html">Class com::omnisci::jdbc::OmniSciType</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_param__pair.html">Class com::omnisci::jdbc::Param_pair</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_options.html">Class com::omnisci::jdbc::Options</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_property__loader.html">Class com::omnisci::jdbc::Property_loader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcreate__table_1_1_column.html">Class create_table::Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcreate__table_1_1_synthetic_table.html">Class create_table::SyntheticTable</a></li>
@@ -2249,6 +2250,11 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4N9DBHandler32load_table_binary_columnar_polysERK10TSessionIdRKNSt6stringERKNSt6vectorI7TColumnEERKNSt6vectorINSt6stringEEEKb">
+<span id="_CPPv3N9DBHandler32load_table_binary_columnar_polysERK10TSessionIdRKNSt6stringERKNSt6vectorI7TColumnEERKNSt6vectorINSt6stringEEEKb"></span><span id="_CPPv2N9DBHandler32load_table_binary_columnar_polysERK10TSessionIdRKNSt6stringERKNSt6vectorI7TColumnEERKNSt6vectorINSt6stringEEEKb"></span><span id="DBHandler::load_table_binary_columnar_polys__TSessionIdCR.ssCR.std::vector:TColumn:CR.std::vector:ss:CR.bC"></span><span class="target" id="class_d_b_handler_1a637e2f563a73d11597fe352d0ea3ec76"></span>void <code class="sig-name descname">load_table_binary_columnar_polys</code><span class="sig-paren">(</span><em class="property">const</em> TSessionId &amp;<em>session</em>, <em class="property">const</em> std::string &amp;<em>table_name</em>, <em class="property">const</em> std::vector&lt;TColumn&gt; &amp;<em>cols</em>, <em class="property">const</em> std::vector&lt;std::string&gt; &amp;<em>column_names</em>, <em class="property">const</em> bool <em>assign_render_groups</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler32load_table_binary_columnar_polysERK10TSessionIdRKNSt6stringERKNSt6vectorI7TColumnEERKNSt6vectorINSt6stringEEEKb" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4N9DBHandler23load_table_binary_arrowERK10TSessionIdRKNSt6stringERKNSt6stringEKb">
 <span id="_CPPv3N9DBHandler23load_table_binary_arrowERK10TSessionIdRKNSt6stringERKNSt6stringEKb"></span><span id="_CPPv2N9DBHandler23load_table_binary_arrowERK10TSessionIdRKNSt6stringERKNSt6stringEKb"></span><span id="DBHandler::load_table_binary_arrow__TSessionIdCR.ssCR.ssCR.bC"></span><span class="target" id="class_d_b_handler_1ac2c9d6f446db5612ceff7c38c6aa578a"></span>void <code class="sig-name descname">load_table_binary_arrow</code><span class="sig-paren">(</span><em class="property">const</em> TSessionId &amp;<em>session</em>, <em class="property">const</em> std::string &amp;<em>table_name</em>, <em class="property">const</em> std::string &amp;<em>arrow_stream</em>, <em class="property">const</em> bool <em>use_column_names</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler23load_table_binary_arrowERK10TSessionIdRKNSt6stringERKNSt6stringEKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2601,6 +2607,45 @@
 
 </div>
 <div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Private Types</p>
+<dl class="enum">
+<dt id="_CPPv4N9DBHandler22AssignRenderGroupsModeE">
+<span id="_CPPv3N9DBHandler22AssignRenderGroupsModeE"></span><span id="_CPPv2N9DBHandler22AssignRenderGroupsModeE"></span><span class="target" id="class_d_b_handler_1a3ba2c84fd5c338901f229ae4c2517861"></span><em class="property">enum </em><code class="sig-name descname">AssignRenderGroupsMode</code><a class="headerlink" href="#_CPPv4N9DBHandler22AssignRenderGroupsModeE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p><em>Values:</em></p>
+<dl class="enumerator">
+<dt id="_CPPv4N9DBHandler5kNoneE">
+<span id="_CPPv3N9DBHandler5kNoneE"></span><span id="_CPPv2N9DBHandler5kNoneE"></span><span class="target" id="class_d_b_handler_1a3ba2c84fd5c338901f229ae4c2517861a35c3ace1970663a16e5c65baa5941b13"></span><code class="sig-name descname">kNone</code><a class="headerlink" href="#_CPPv4N9DBHandler5kNoneE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N9DBHandler7kAssignE">
+<span id="_CPPv3N9DBHandler7kAssignE"></span><span id="_CPPv2N9DBHandler7kAssignE"></span><span class="target" id="class_d_b_handler_1a3ba2c84fd5c338901f229ae4c2517861a4bf03a5b9add1cfbbc9bd41c2155f568"></span><code class="sig-name descname">kAssign</code><a class="headerlink" href="#_CPPv4N9DBHandler7kAssignE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N9DBHandler8kCleanUpE">
+<span id="_CPPv3N9DBHandler8kCleanUpE"></span><span id="_CPPv2N9DBHandler8kCleanUpE"></span><span class="target" id="class_d_b_handler_1a3ba2c84fd5c338901f229ae4c2517861a9bf7388d02191cb5cf374c15124d7395"></span><code class="sig-name descname">kCleanUp</code><a class="headerlink" href="#_CPPv4N9DBHandler8kCleanUpE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="type">
+<dt id="_CPPv4N9DBHandler30RenderGroupAssignmentColumnMapE">
+<span id="_CPPv3N9DBHandler30RenderGroupAssignmentColumnMapE"></span><span id="_CPPv2N9DBHandler30RenderGroupAssignmentColumnMapE"></span><span class="target" id="class_d_b_handler_1a90bfe5359aac16938e69cd2c2cfdc2a9"></span><em class="property">using </em><code class="sig-name descname">RenderGroupAssignmentColumnMap</code> = std::unordered_map&lt;std::string, std::unique_ptr&lt;import_export::<a class="reference internal" href="classimport__export_1_1_render_group_analyzer.html#_CPPv4N13import_export19RenderGroupAnalyzerE" title="import_export::RenderGroupAnalyzer">RenderGroupAnalyzer</a>&gt;&gt;<a class="headerlink" href="#_CPPv4N9DBHandler30RenderGroupAssignmentColumnMapE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="type">
+<dt id="_CPPv4N9DBHandler29RenderGroupAssignmentTableMapE">
+<span id="_CPPv3N9DBHandler29RenderGroupAssignmentTableMapE"></span><span id="_CPPv2N9DBHandler29RenderGroupAssignmentTableMapE"></span><span class="target" id="class_d_b_handler_1aa175ade6c868825b20c56fa7ea9a4b30"></span><em class="property">using </em><code class="sig-name descname">RenderGroupAssignmentTableMap</code> = std::unordered_map&lt;std::string, <a class="reference internal" href="#_CPPv4N9DBHandler30RenderGroupAssignmentColumnMapE" title="DBHandler::RenderGroupAssignmentColumnMap">RenderGroupAssignmentColumnMap</a>&gt;<a class="headerlink" href="#_CPPv4N9DBHandler29RenderGroupAssignmentTableMapE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="type">
+<dt id="_CPPv4N9DBHandler29RenderGroupAnalyzerSessionMapE">
+<span id="_CPPv3N9DBHandler29RenderGroupAnalyzerSessionMapE"></span><span id="_CPPv2N9DBHandler29RenderGroupAnalyzerSessionMapE"></span><span class="target" id="class_d_b_handler_1a41af40cbf38c31b5479fbb1422bf08cb"></span><em class="property">using </em><code class="sig-name descname">RenderGroupAnalyzerSessionMap</code> = std::unordered_map&lt;TSessionId, <a class="reference internal" href="#_CPPv4N9DBHandler29RenderGroupAssignmentTableMapE" title="DBHandler::RenderGroupAssignmentTableMap">RenderGroupAssignmentTableMap</a>&gt;<a class="headerlink" href="#_CPPv4N9DBHandler29RenderGroupAnalyzerSessionMapE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
 <dl class="function">
 <dt id="_CPPv4N9DBHandler18create_new_sessionER10TSessionIdRKNSt6stringERKN17Catalog_Namespace12UserMetadataENSt10shared_ptrIN17Catalog_Namespace7CatalogEEE">
@@ -2698,11 +2743,6 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N9DBHandler12convert_dataER12TQueryResultR15ExecutionResultRK15QueryStateProxyRKNSt6stringEKbK7int32_tK7int32_t">
-<span id="_CPPv3N9DBHandler12convert_dataER12TQueryResultR15ExecutionResultRK15QueryStateProxyRKNSt6stringEKbK7int32_tK7int32_t"></span><span id="_CPPv2N9DBHandler12convert_dataER12TQueryResultR15ExecutionResultRK15QueryStateProxyRKNSt6stringEKbK7int32_tK7int32_t"></span><span id="DBHandler::convert_data__TQueryResultR.ExecutionResultR.QueryStateProxyCR.ssCR.bC.int32_tC.int32_tC"></span><span class="target" id="class_d_b_handler_1a65dcb168fc34c80ff108661537b4c951"></span>void <code class="sig-name descname">convert_data</code><span class="sig-paren">(</span>TQueryResult &amp;<em>_return</em>, <a class="reference internal" href="class_execution_result.html#_CPPv415ExecutionResult" title="ExecutionResult">ExecutionResult</a> &amp;<em>result</em>, <em class="property">const</em> QueryStateProxy &amp;<em>query_state_proxy</em>, <em class="property">const</em> std::string &amp;<em>query_str</em>, <em class="property">const</em> bool <em>column_format</em>, <em class="property">const</em> int32_t <em>first_n</em>, <em class="property">const</em> int32_t <em>at_most_n</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler12convert_dataER12TQueryResultR15ExecutionResultRK15QueryStateProxyRKNSt6stringEKbK7int32_tK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4N9DBHandler16sql_execute_implER15ExecutionResult15QueryStateProxyKbK18ExecutorDeviceTypeK7int32_tK7int32_tKb">
 <span id="_CPPv3N9DBHandler16sql_execute_implER15ExecutionResult15QueryStateProxyKbK18ExecutorDeviceTypeK7int32_tK7int32_tKb"></span><span id="_CPPv2N9DBHandler16sql_execute_implER15ExecutionResult15QueryStateProxyKbK18ExecutorDeviceTypeK7int32_tK7int32_tKb"></span><span id="DBHandler::sql_execute_impl__ExecutionResultR.QueryStateProxy.bC.ExecutorDeviceTypeC.int32_tC.int32_tC.bC"></span><span class="target" id="class_d_b_handler_1a06ccec1399dea7fdb6bde100220c2024"></span>void <code class="sig-name descname">sql_execute_impl</code><span class="sig-paren">(</span><a class="reference internal" href="class_execution_result.html#_CPPv415ExecutionResult" title="ExecutionResult">ExecutionResult</a> &amp;<em>_return</em>, QueryStateProxy <em>query_state_proxy</em>, <em class="property">const</em> bool <em>column_format</em>, <em class="property">const</em> ExecutorDeviceType <em>executor_device_type</em>, <em class="property">const</em> int32_t <em>first_n</em>, <em class="property">const</em> int32_t <em>at_most_n</em>, <em class="property">const</em> bool <em>use_calcite</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler16sql_execute_implER15ExecutionResult15QueryStateProxyKbK18ExecutorDeviceTypeK7int32_tK7int32_tKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2793,28 +2833,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK9DBHandler15convert_explainER12TQueryResultRK9ResultSetKb">
-<span id="_CPPv3NK9DBHandler15convert_explainER12TQueryResultRK9ResultSetKb"></span><span id="_CPPv2NK9DBHandler15convert_explainER12TQueryResultRK9ResultSetKb"></span><span id="DBHandler::convert_explain__TQueryResultR.ResultSetCR.bCC"></span><span class="target" id="class_d_b_handler_1ac3c87c8e484012ed4610d6022f2cb9e1"></span>void <code class="sig-name descname">convert_explain</code><span class="sig-paren">(</span>TQueryResult &amp;<em>_return</em>, <em class="property">const</em> <a class="reference internal" href="class_result_set.html#_CPPv49ResultSet" title="ResultSet">ResultSet</a> &amp;<em>results</em>, <em class="property">const</em> bool <em>column_format</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9DBHandler15convert_explainER12TQueryResultRK9ResultSetKb" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK9DBHandler14convert_resultER12TQueryResultRK9ResultSetKb">
-<span id="_CPPv3NK9DBHandler14convert_resultER12TQueryResultRK9ResultSetKb"></span><span id="_CPPv2NK9DBHandler14convert_resultER12TQueryResultRK9ResultSetKb"></span><span id="DBHandler::convert_result__TQueryResultR.ResultSetCR.bCC"></span><span class="target" id="class_d_b_handler_1a089d4c82e9a1f4b5877d5fc7f59b0d57"></span>void <code class="sig-name descname">convert_result</code><span class="sig-paren">(</span>TQueryResult &amp;<em>_return</em>, <em class="property">const</em> <a class="reference internal" href="class_result_set.html#_CPPv49ResultSet" title="ResultSet">ResultSet</a> &amp;<em>results</em>, <em class="property">const</em> bool <em>column_format</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9DBHandler14convert_resultER12TQueryResultRK9ResultSetKb" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK9DBHandler12convert_rowsER12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK9ResultSetKbK7int32_tK7int32_t">
-<span id="_CPPv3NK9DBHandler12convert_rowsER12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK9ResultSetKbK7int32_tK7int32_t"></span><span id="_CPPv2NK9DBHandler12convert_rowsER12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK9ResultSetKbK7int32_tK7int32_t"></span><span id="DBHandler::convert_rows__TQueryResultR.QueryStateProxy.std::vector:TargetMetaInfo:CR.ResultSetCR.bC.int32_tC.int32_tCC"></span><span class="target" id="class_d_b_handler_1a43e2f8b66522d9b95250ec1fa167f812"></span>void <code class="sig-name descname">convert_rows</code><span class="sig-paren">(</span>TQueryResult &amp;<em>_return</em>, QueryStateProxy <em>query_state_proxy</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="class_target_meta_info.html#_CPPv414TargetMetaInfo" title="TargetMetaInfo">TargetMetaInfo</a>&gt; &amp;<em>targets</em>, <em class="property">const</em> <a class="reference internal" href="class_result_set.html#_CPPv49ResultSet" title="ResultSet">ResultSet</a> &amp;<em>results</em>, <em class="property">const</em> bool <em>column_format</em>, <em class="property">const</em> int32_t <em>first_n</em>, <em class="property">const</em> int32_t <em>at_most_n</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9DBHandler12convert_rowsER12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK9ResultSetKbK7int32_tK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N9DBHandler18convert_result_setER15ExecutionResultRKN17Catalog_Namespace11SessionInfoERKNSt6stringER12TQueryResult">
-<span id="_CPPv3N9DBHandler18convert_result_setER15ExecutionResultRKN17Catalog_Namespace11SessionInfoERKNSt6stringER12TQueryResult"></span><span id="_CPPv2N9DBHandler18convert_result_setER15ExecutionResultRKN17Catalog_Namespace11SessionInfoERKNSt6stringER12TQueryResult"></span><span id="DBHandler::convert_result_set__ExecutionResultR.Catalog_Namespace::SessionInfoCR.ssCR.TQueryResultR"></span><span class="target" id="class_d_b_handler_1a39fe127eb4f3ed4634224c3b92606629"></span>void <code class="sig-name descname">convert_result_set</code><span class="sig-paren">(</span><a class="reference internal" href="class_execution_result.html#_CPPv415ExecutionResult" title="ExecutionResult">ExecutionResult</a> &amp;<em>result</em>, <em class="property">const</em> Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_session_info.html#_CPPv4N17Catalog_Namespace11SessionInfoE" title="Catalog_Namespace::SessionInfo">SessionInfo</a> &amp;<em>session_info</em>, <em class="property">const</em> std::string &amp;<em>query_state_str</em>, TQueryResult &amp;<em>_return</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler18convert_result_setER15ExecutionResultRKN17Catalog_Namespace11SessionInfoERKNSt6stringER12TQueryResult" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK9DBHandler20create_simple_resultER12TQueryResultRK9ResultSetKbKNSt6stringE">
-<span id="_CPPv3NK9DBHandler20create_simple_resultER12TQueryResultRK9ResultSetKbKNSt6stringE"></span><span id="_CPPv2NK9DBHandler20create_simple_resultER12TQueryResultRK9ResultSetKbKNSt6stringE"></span><span id="DBHandler::create_simple_result__TQueryResultR.ResultSetCR.bC.ssCC"></span><span class="target" id="class_d_b_handler_1aa331e331182c1a06c5dcb4cc0d32b118"></span>void <code class="sig-name descname">create_simple_result</code><span class="sig-paren">(</span>TQueryResult &amp;<em>_return</em>, <em class="property">const</em> <a class="reference internal" href="class_result_set.html#_CPPv49ResultSet" title="ResultSet">ResultSet</a> &amp;<em>results</em>, <em class="property">const</em> bool <em>column_format</em>, <em class="property">const</em> std::string <em>label</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9DBHandler20create_simple_resultER12TQueryResultRK9ResultSetKbKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N9DBHandler16convertResultSetER15ExecutionResultRKN17Catalog_Namespace11SessionInfoERKNSt6stringER12TQueryResult">
+<span id="_CPPv3N9DBHandler16convertResultSetER15ExecutionResultRKN17Catalog_Namespace11SessionInfoERKNSt6stringER12TQueryResult"></span><span id="_CPPv2N9DBHandler16convertResultSetER15ExecutionResultRKN17Catalog_Namespace11SessionInfoERKNSt6stringER12TQueryResult"></span><span id="DBHandler::convertResultSet__ExecutionResultR.Catalog_Namespace::SessionInfoCR.ssCR.TQueryResultR"></span><span class="target" id="class_d_b_handler_1a341a2d08781764b0fb73d0d482aa05a3"></span>void <code class="sig-name descname">convertResultSet</code><span class="sig-paren">(</span><a class="reference internal" href="class_execution_result.html#_CPPv415ExecutionResult" title="ExecutionResult">ExecutionResult</a> &amp;<em>result</em>, <em class="property">const</em> Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_session_info.html#_CPPv4N17Catalog_Namespace11SessionInfoE" title="Catalog_Namespace::SessionInfo">SessionInfo</a> &amp;<em>session_info</em>, <em class="property">const</em> std::string &amp;<em>query_state_str</em>, TQueryResult &amp;<em>_return</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler16convertResultSetER15ExecutionResultRKN17Catalog_Namespace11SessionInfoERKNSt6stringER12TQueryResult" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2905,6 +2925,11 @@
 <dl class="function">
 <dt id="_CPPv4N9DBHandler14interruptQueryERKN17Catalog_Namespace11SessionInfoERKNSt6stringE">
 <span id="_CPPv3N9DBHandler14interruptQueryERKN17Catalog_Namespace11SessionInfoERKNSt6stringE"></span><span id="_CPPv2N9DBHandler14interruptQueryERKN17Catalog_Namespace11SessionInfoERKNSt6stringE"></span><span id="DBHandler::interruptQuery__Catalog_Namespace::SessionInfoCR.ssCR"></span><span class="target" id="class_d_b_handler_1a99413216e856b1913c3cbc7b8d3487c9"></span>void <code class="sig-name descname">interruptQuery</code><span class="sig-paren">(</span><em class="property">const</em> Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_session_info.html#_CPPv4N17Catalog_Namespace11SessionInfoE" title="Catalog_Namespace::SessionInfo">SessionInfo</a> &amp;<em>session_info</em>, <em class="property">const</em> std::string &amp;<em>target_session</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler14interruptQueryERKN17Catalog_Namespace11SessionInfoERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9DBHandler35load_table_binary_columnar_internalERK10TSessionIdRKNSt6stringERKNSt6vectorI7TColumnEERKNSt6vectorINSt6stringEEEK22AssignRenderGroupsMode">
+<span id="_CPPv3N9DBHandler35load_table_binary_columnar_internalERK10TSessionIdRKNSt6stringERKNSt6vectorI7TColumnEERKNSt6vectorINSt6stringEEEK22AssignRenderGroupsMode"></span><span id="_CPPv2N9DBHandler35load_table_binary_columnar_internalERK10TSessionIdRKNSt6stringERKNSt6vectorI7TColumnEERKNSt6vectorINSt6stringEEEK22AssignRenderGroupsMode"></span><span id="DBHandler::load_table_binary_columnar_internal__TSessionIdCR.ssCR.std::vector:TColumn:CR.std::vector:ss:CR.AssignRenderGroupsModeC"></span><span class="target" id="class_d_b_handler_1abfa7a3d96afac40f2bbf79bc84265576"></span>void <code class="sig-name descname">load_table_binary_columnar_internal</code><span class="sig-paren">(</span><em class="property">const</em> TSessionId &amp;<em>session</em>, <em class="property">const</em> std::string &amp;<em>table_name</em>, <em class="property">const</em> std::vector&lt;TColumn&gt; &amp;<em>cols</em>, <em class="property">const</em> std::vector&lt;std::string&gt; &amp;<em>column_names</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv4N9DBHandler22AssignRenderGroupsModeE" title="DBHandler::AssignRenderGroupsMode">AssignRenderGroupsMode</a> <em>assign_render_groups_mode</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler35load_table_binary_columnar_internalERK10TSessionIdRKNSt6stringERKNSt6vectorI7TColumnEERKNSt6vectorINSt6stringEEEK22AssignRenderGroupsMode" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -3030,6 +3055,16 @@
 <span class="target" id="class_d_b_handler_1a13485aaf2660dae05566eac38429b338"></span><code class="sig-name descname">std::map&lt;const std::string, const PermissionFuncPtr&gt; DBHandler::permissionFuncMap_= {      {&quot;database&quot;s, has_database_permission},      {&quot;dashboard&quot;s, has_dashboard_permission},      {&quot;table&quot;s, has_table_permission},      {&quot;view&quot;s, has_view_permission},      {&quot;server&quot;s, has_server_permission}}</code></dt>
 <dd></dd></dl>
 
+<dl class="member">
+<dt id="_CPPv4N9DBHandler28render_group_assignment_map_E">
+<span id="_CPPv3N9DBHandler28render_group_assignment_map_E"></span><span id="_CPPv2N9DBHandler28render_group_assignment_map_E"></span><span id="DBHandler::render_group_assignment_map___RenderGroupAnalyzerSessionMap"></span><span class="target" id="class_d_b_handler_1abdb3e96f397b97f3f197f9b4681c3f06"></span><a class="reference internal" href="#_CPPv4N9DBHandler29RenderGroupAnalyzerSessionMapE" title="DBHandler::RenderGroupAnalyzerSessionMap">RenderGroupAnalyzerSessionMap</a> <code class="sig-name descname">render_group_assignment_map_</code><a class="headerlink" href="#_CPPv4N9DBHandler28render_group_assignment_map_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N9DBHandler30render_group_assignment_mutex_E">
+<span id="_CPPv3N9DBHandler30render_group_assignment_mutex_E"></span><span id="_CPPv2N9DBHandler30render_group_assignment_mutex_E"></span><span id="DBHandler::render_group_assignment_mutex___std::mutex"></span><span class="target" id="class_d_b_handler_1ade3bca14456433099ffba5aeba43c659"></span>std::mutex <code class="sig-name descname">render_group_assignment_mutex_</code><a class="headerlink" href="#_CPPv4N9DBHandler30render_group_assignment_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Static Functions</p>
@@ -3046,6 +3081,31 @@
 <dl class="function">
 <dt id="_CPPv4N9DBHandler18apply_copy_to_shimERKNSt6stringE">
 <span id="_CPPv3N9DBHandler18apply_copy_to_shimERKNSt6stringE"></span><span id="_CPPv2N9DBHandler18apply_copy_to_shimERKNSt6stringE"></span><span id="DBHandler::apply_copy_to_shim__ssCR"></span><span class="target" id="class_d_b_handler_1a14a64ceb1b88abe13f88a7e321df2a56"></span>std::string <code class="sig-name descname">apply_copy_to_shim</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_str</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler18apply_copy_to_shimERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9DBHandler11convertDataER12TQueryResultR15ExecutionResultRK15QueryStateProxyRKNSt6stringEKbK7int32_tK7int32_t">
+<span id="_CPPv3N9DBHandler11convertDataER12TQueryResultR15ExecutionResultRK15QueryStateProxyRKNSt6stringEKbK7int32_tK7int32_t"></span><span id="_CPPv2N9DBHandler11convertDataER12TQueryResultR15ExecutionResultRK15QueryStateProxyRKNSt6stringEKbK7int32_tK7int32_t"></span><span id="DBHandler::convertData__TQueryResultR.ExecutionResultR.QueryStateProxyCR.ssCR.bC.int32_tC.int32_tC"></span><span class="target" id="class_d_b_handler_1a8ff2a13df1011741deb93bad33491ad7"></span>void <code class="sig-name descname">convertData</code><span class="sig-paren">(</span>TQueryResult &amp;<em>_return</em>, <a class="reference internal" href="class_execution_result.html#_CPPv415ExecutionResult" title="ExecutionResult">ExecutionResult</a> &amp;<em>result</em>, <em class="property">const</em> QueryStateProxy &amp;<em>query_state_proxy</em>, <em class="property">const</em> std::string &amp;<em>query_str</em>, <em class="property">const</em> bool <em>column_format</em>, <em class="property">const</em> int32_t <em>first_n</em>, <em class="property">const</em> int32_t <em>at_most_n</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler11convertDataER12TQueryResultR15ExecutionResultRK15QueryStateProxyRKNSt6stringEKbK7int32_tK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9DBHandler14convertExplainER12TQueryResultRK9ResultSetKb">
+<span id="_CPPv3N9DBHandler14convertExplainER12TQueryResultRK9ResultSetKb"></span><span id="_CPPv2N9DBHandler14convertExplainER12TQueryResultRK9ResultSetKb"></span><span id="DBHandler::convertExplain__TQueryResultR.ResultSetCR.bC"></span><span class="target" id="class_d_b_handler_1ae1a43e9ce756b80b429f2532e68459f9"></span>void <code class="sig-name descname">convertExplain</code><span class="sig-paren">(</span>TQueryResult &amp;<em>_return</em>, <em class="property">const</em> <a class="reference internal" href="class_result_set.html#_CPPv49ResultSet" title="ResultSet">ResultSet</a> &amp;<em>results</em>, <em class="property">const</em> bool <em>column_format</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler14convertExplainER12TQueryResultRK9ResultSetKb" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9DBHandler13convertResultER12TQueryResultRK9ResultSetKb">
+<span id="_CPPv3N9DBHandler13convertResultER12TQueryResultRK9ResultSetKb"></span><span id="_CPPv2N9DBHandler13convertResultER12TQueryResultRK9ResultSetKb"></span><span id="DBHandler::convertResult__TQueryResultR.ResultSetCR.bC"></span><span class="target" id="class_d_b_handler_1a204d2af985f066c1496358f44241922b"></span>void <code class="sig-name descname">convertResult</code><span class="sig-paren">(</span>TQueryResult &amp;<em>_return</em>, <em class="property">const</em> <a class="reference internal" href="class_result_set.html#_CPPv49ResultSet" title="ResultSet">ResultSet</a> &amp;<em>results</em>, <em class="property">const</em> bool <em>column_format</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler13convertResultER12TQueryResultRK9ResultSetKb" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9DBHandler11convertRowsER12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK9ResultSetKbK7int32_tK7int32_t">
+<span id="_CPPv3N9DBHandler11convertRowsER12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK9ResultSetKbK7int32_tK7int32_t"></span><span id="_CPPv2N9DBHandler11convertRowsER12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK9ResultSetKbK7int32_tK7int32_t"></span><span id="DBHandler::convertRows__TQueryResultR.QueryStateProxy.std::vector:TargetMetaInfo:CR.ResultSetCR.bC.int32_tC.int32_tC"></span><span class="target" id="class_d_b_handler_1a42fb6234e75c7704c366a342cf89f685"></span>void <code class="sig-name descname">convertRows</code><span class="sig-paren">(</span>TQueryResult &amp;<em>_return</em>, QueryStateProxy <em>query_state_proxy</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="class_target_meta_info.html#_CPPv414TargetMetaInfo" title="TargetMetaInfo">TargetMetaInfo</a>&gt; &amp;<em>targets</em>, <em class="property">const</em> <a class="reference internal" href="class_result_set.html#_CPPv49ResultSet" title="ResultSet">ResultSet</a> &amp;<em>results</em>, <em class="property">const</em> bool <em>column_format</em>, <em class="property">const</em> int32_t <em>first_n</em>, <em class="property">const</em> int32_t <em>at_most_n</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler11convertRowsER12TQueryResult15QueryStateProxyRKNSt6vectorI14TargetMetaInfoEERK9ResultSetKbK7int32_tK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9DBHandler18createSimpleResultER12TQueryResultRK9ResultSetKbKNSt6stringE">
+<span id="_CPPv3N9DBHandler18createSimpleResultER12TQueryResultRK9ResultSetKbKNSt6stringE"></span><span id="_CPPv2N9DBHandler18createSimpleResultER12TQueryResultRK9ResultSetKbKNSt6stringE"></span><span id="DBHandler::createSimpleResult__TQueryResultR.ResultSetCR.bC.ssC"></span><span class="target" id="class_d_b_handler_1aceb212eda3b21d041746e974da10688c"></span>void <code class="sig-name descname">createSimpleResult</code><span class="sig-paren">(</span>TQueryResult &amp;<em>_return</em>, <em class="property">const</em> <a class="reference internal" href="class_result_set.html#_CPPv49ResultSet" title="ResultSet">ResultSet</a> &amp;<em>results</em>, <em class="property">const</em> bool <em>column_format</em>, <em class="property">const</em> std::string <em>label</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler18createSimpleResultER12TQueryResultRK9ResultSetKbKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

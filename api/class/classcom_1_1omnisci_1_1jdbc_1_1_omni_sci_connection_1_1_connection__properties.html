@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 91dd689
+                5.7.0dev c6fa9b7
               </div>
             
           
@@ -438,6 +438,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_failed_to_create_slab.html">Class FailedToCreateSlab</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_failed_to_fetch_column.html">Class FailedToFetchColumn</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_failed_to_join_on_virtual_column.html">Class FailedToJoinOnVirtualColumn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_file___namespace_1_1_caching_file_mgr.html">Class File_Namespace::CachingFileMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_file___namespace_1_1_file_buffer.html">Class File_Namespace::FileBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_file___namespace_1_1_file_mgr.html">Class File_Namespace::FileMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_file___namespace_1_1_global_file_mgr.html">Class File_Namespace::GlobalFileMgr</a></li>
@@ -1038,7 +1039,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_statement.html">Class com::omnisci::jdbc::OmniSciStatement</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_statement_test.html">Class com::omnisci::jdbc::OmniSciStatementTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_type.html">Class com::omnisci::jdbc::OmniSciType</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_param__pair.html">Class com::omnisci::jdbc::Param_pair</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_options.html">Class com::omnisci::jdbc::Options</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_property__loader.html">Class com::omnisci::jdbc::Property_loader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcreate__table_1_1_column.html">Class create_table::Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcreate__table_1_1_synthetic_table.html">Class create_table::SyntheticTable</a></li>
@@ -1930,25 +1931,22 @@
 <h1>Class com::omnisci::jdbc::OmniSciConnection::Connection_properties<a class="headerlink" href="#class-com-omnisci-jdbc-omnisciconnection-connection-properties" title="Permalink to this headline">¶</a></h1>
 <dl class="class">
 <dt id="_CPPv4N3com7omnisci4jdbc17OmniSciConnection21Connection_propertiesE">
-<span id="_CPPv3N3com7omnisci4jdbc17OmniSciConnection21Connection_propertiesE"></span><span id="_CPPv2N3com7omnisci4jdbc17OmniSciConnection21Connection_propertiesE"></span><span id="com::omnisci::jdbc::OmniSciConnection::Connection_properties"></span><span class="target" id="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_connection_1_1_connection__properties"></span><em class="property">class </em><code class="sig-name descname">Connection_properties</code> : <em class="property">public</em> java::util::Hashtable&lt;Connection_enums, Object&gt;<a class="headerlink" href="#_CPPv4N3com7omnisci4jdbc17OmniSciConnection21Connection_propertiesE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N3com7omnisci4jdbc17OmniSciConnection21Connection_propertiesE"></span><span id="_CPPv2N3com7omnisci4jdbc17OmniSciConnection21Connection_propertiesE"></span><span id="com::omnisci::jdbc::OmniSciConnection::Connection_properties"></span><span class="target" id="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_connection_1_1_connection__properties"></span><em class="property">class </em><code class="sig-name descname">Connection_properties</code> : <em class="property">public</em> Properties<a class="headerlink" href="#_CPPv4N3com7omnisci4jdbc17OmniSciConnection21Connection_propertiesE" title="Permalink to this definition">¶</a><br /></dt>
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_connection_1_1_connection__properties_1a1c55a2fd6772c1a4c8c1d798b3eb39e3"></span><code class="sig-name descname">com.omnisci.jdbc.OmniSciConnection.Connection_properties.Connection_properties(Properties properties, String connection_url)</code></dt>
-<dd></dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Protected Attributes</p>
-<dl class="member">
-<dt>
-<span class="target" id="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_connection_1_1_connection__properties_1a73b82950ca9e6ed8a09a28e341a82e28"></span><code class="sig-name descname">boolean com.omnisci.jdbc.OmniSciConnection.Connection_properties.parm_warning = false</code></dt>
+<span class="target" id="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_connection_1_1_connection__properties_1a83636267135f06d1c7392e7e5a336fce"></span><code class="sig-name descname">com.omnisci.jdbc.OmniSciConnection.Connection_properties.Connection_properties(String connection_url, Properties baseProperties)</code></dt>
 <dd></dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_connection_1_1_connection__properties_1a1d6b1cd0f32ae1ffc713f1fdc59929bb"></span><code class="sig-name descname">String com.omnisci.jdbc.OmniSciConnection.Connection_properties.extract_and_remove_query_components(String connection_url, Properties query_props)</code></dt>
+<dd></dd></dl>
+
 <dl class="function">
 <dt>
 <span class="target" id="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_connection_1_1_connection__properties_1a89cf7a35d3720715e241f5d7676d6859"></span><code class="sig-name descname">void com.omnisci.jdbc.OmniSciConnection.Connection_properties.validate_params()</code></dt>
