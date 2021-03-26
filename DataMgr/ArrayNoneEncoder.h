@@ -91,7 +91,7 @@ class ArrayNoneEncoder : public Encoder {
       // If the very first ArrayDatum is NULL, initial offset will be set to 8
       // so we could negate it and write it out to index buffer to convey NULLness
       if ((*srcData)[0].is_null) {
-        initial_offset = 8;
+        initial_offset = DEFAULT_NULL_PADDING_SIZE;
         first_elem_is_null = true;
       }
       index_buf->append((int8_t*)&initial_offset,
@@ -114,7 +114,7 @@ class ArrayNoneEncoder : public Encoder {
       }
     }
     // Need to start data from 8 byte offset if first array encoded is a NULL array
-    size_t data_size = (first_elem_is_null) ? 8 : 0;
+    size_t data_size = (first_elem_is_null) ? DEFAULT_NULL_PADDING_SIZE : 0;
     for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {
       // NULL arrays don't take any space so don't add to the data size
       if ((*srcData)[replicating ? 0 : n].is_null) {
@@ -146,7 +146,7 @@ class ArrayNoneEncoder : public Encoder {
 
     // Pad buffer_ with 8 bytes if first encoded array is a NULL array
     if (first_elem_is_null) {
-      buffer_->append(inbuf, 8);
+      buffer_->append(inbuf, DEFAULT_NULL_PADDING_SIZE);
     }
     for (size_t num_appended = 0; num_appended < numAppendElems;) {
       size_t size = 0;
@@ -280,6 +280,8 @@ class ArrayNoneEncoder : public Encoder {
     std::unique_lock<std::mutex> lock(EncoderMutex_);
     index_buf = buf;
   }
+
+  static constexpr size_t DEFAULT_NULL_PADDING_SIZE{8};
 
  private:
   std::mutex EncoderMutex_;
