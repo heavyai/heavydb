@@ -67,6 +67,7 @@ struct Interval {
   T const begin;
   T const end;
   U const index;  // [0, n_workers)
+  U size() const { return U(end) - U(begin); }
 };
 
 template <typename T, typename U = typename std::make_unsigned<T>::type>

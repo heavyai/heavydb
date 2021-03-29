@@ -496,7 +496,7 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
 }
 
 void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
-                     const size_t top_n,
+                     size_t top_n,
                      const Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
 
@@ -530,27 +530,26 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
 
   CHECK(permutation_.empty());
 
-  const bool use_heap{order_entries.size() == 1 && top_n};
-  if (use_heap && g_parallel_top_min < entryCount()) {
-    // Top sort
+  if (top_n && g_parallel_top_min < entryCount()) {
     if (g_enable_watchdog && g_parallel_top_max < entryCount()) {
       throw WatchdogException("Sorting the result would be too slow");
     }
     parallelTop(order_entries, top_n, executor);
-
   } else {
-    // Full sort
     if (g_enable_watchdog && Executor::baseline_threshold < entryCount()) {
       throw WatchdogException("Sorting the result would be too slow");
     }
-
-    permutation_ = initPermutationBuffer(0, 1);
-    auto compare = createComparator(order_entries, use_heap, permutation_, executor);
-
-    if (use_heap) {
-      topPermutation(permutation_, top_n, compare);
-    } else {
-      sortPermutation(compare);
+    permutation_.resize(query_mem_desc_.getEntryCount());
+    // PermutationView is used to share common API with parallelTop().
+    PermutationView pv(permutation_.data(), 0, permutation_.size());
+    pv = initPermutationBuffer(pv, 0, permutation_.size());
+    if (top_n == 0) {
+      top_n = pv.size();  // top_n == 0 implies a full sort
+    }
+    pv = topPermutation(pv, top_n, createComparator(order_entries, pv, executor, false));
+    if (pv.size() < permutation_.size()) {
+      permutation_.resize(pv.size());
+      permutation_.shrink_to_fit();
     }
   }
 }
@@ -573,21 +572,18 @@ void ResultSet::baselineSort(const std::list<Analyzer::OrderEntry>& order_entrie
 }
 #endif  // HAVE_CUDA
 
-// Required: start < step
-Permutation ResultSet::initPermutationBuffer(const size_t start,
-                                             const size_t step) const {
+// Append non-empty indexes i in [begin,end) from findStorage(i) to permutation.
+PermutationView ResultSet::initPermutationBuffer(PermutationView permutation,
+                                                 PermutationIdx const begin,
+                                                 PermutationIdx const end) const {
   auto timer = DEBUG_TIMER(__func__);
-  CHECK_NE(size_t(0), step);
-  Permutation permutation;
-  const auto total_entries = query_mem_desc_.getEntryCount();
-  permutation.reserve((total_entries + (step - start - 1)) / step);
-  for (size_t i = start; i < total_entries; i += step) {
+  for (PermutationIdx i = begin; i < end; ++i) {
     const auto storage_lookup_result = findStorage(i);
     const auto lhs_storage = storage_lookup_result.storage_ptr;
     const auto off = storage_lookup_result.fixedup_entry_idx;
     CHECK(lhs_storage);
     if (!lhs_storage->isEmptyEntry(off)) {
-      permutation.emplace_back(i);
+      permutation.push_back(i);
     }
   }
   return permutation;
@@ -597,57 +593,46 @@ const Permutation& ResultSet::getPermutationBuffer() const {
   return permutation_;
 }
 
-namespace {
-template <typename NESTED_CONTAINER>
-size_t sumSizes(NESTED_CONTAINER const& nc) {
-  auto const sum_sizes = [](auto acc, auto const& c) { return acc + c.size(); };
-  return std::accumulate(nc.cbegin(), nc.cend(), size_t(0), sum_sizes);
-}
-}  // namespace
-
 void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries,
                             const size_t top_n,
                             const Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
-  const size_t step = cpu_threads();
-  std::vector<Permutation> strided_permutations(step);
-  std::vector<std::future<void>> init_futures;
-  for (size_t start = 0; start < step; ++start) {
-    init_futures.emplace_back(
-        std::async(std::launch::async, [this, start, step, &strided_permutations] {
-          strided_permutations[start] = initPermutationBuffer(start, step);
-        }));
+  const size_t nthreads = cpu_threads();
+
+  // Split permutation_ into nthreads subranges and top-sort in-place.
+  permutation_.resize(query_mem_desc_.getEntryCount());
+  std::vector<PermutationView> permutation_views(nthreads);
+  const auto top_sort_interval = [&, top_n, executor](const auto interval) {
+    PermutationView pv(permutation_.data() + interval.begin, 0, interval.size());
+    pv = initPermutationBuffer(pv, interval.begin, interval.end);
+    const auto compare = createComparator(order_entries, pv, executor, true);
+    permutation_views[interval.index] = topPermutation(pv, top_n, compare);
+  };
+  threadpool::FuturesThreadPool<void> top_sort_threads;
+  for (auto interval : makeIntervals<PermutationIdx>(0, permutation_.size(), nthreads)) {
+    top_sort_threads.spawn(top_sort_interval, interval);
   }
-  for (auto& init_future : init_futures) {
-    init_future.wait();
-  }
-  for (auto& init_future : init_futures) {
-    init_future.get();
-  }
-  std::vector<std::future<void>> top_futures;
-  top_futures.reserve(strided_permutations.size());
-  for (auto& strided_permutation : strided_permutations) {
-    top_futures.emplace_back(std::async(std::launch::async, [&, executor, top_n] {
-      const auto compare =
-          createComparator(order_entries, true, strided_permutation, executor);
-      topPermutation(strided_permutation, top_n, compare);
-    }));
-  }
-  for (auto& top_future : top_futures) {
-    top_future.wait();
-  }
-  for (auto& top_future : top_futures) {
-    top_future.get();
+  top_sort_threads.join();
+
+  // In case you are considering implementing a parallel reduction, note that the
+  // ResultSetComparator constructor is O(N) in order to materialize some of the aggregate
+  // columns as necessary to perform a comparison. This cost is why reduction is chosen to
+  // be serial instead; only one more Comparator is needed below.
+
+  // Left-copy disjoint top-sorted subranges into one contiguous range.
+  // ++++....+++.....+++++...  ->  ++++++++++++............
+  auto end = permutation_.begin() + permutation_views.front().size();
+  for (size_t i = 1; i < nthreads; ++i) {
+    std::copy(permutation_views[i].begin(), permutation_views[i].end(), end);
+    end += permutation_views[i].size();
   }
 
-  permutation_.reserve(sumSizes(strided_permutations));
-  for (const auto& strided_permutation : strided_permutations) {
-    permutation_.insert(
-        permutation_.end(), strided_permutation.begin(), strided_permutation.end());
-  }
-
-  const auto compare = createComparator(order_entries, true, permutation_, executor);
-  topPermutation(permutation_, top_n, compare);
+  // Top sort final range.
+  PermutationView pv(permutation_.data(), end - permutation_.begin());
+  const auto compare = createComparator(order_entries, pv, executor, false);
+  pv = topPermutation(pv, top_n, compare);
+  permutation_.resize(pv.size());
+  permutation_.shrink_to_fit();
 }
 
 std::pair<size_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) const {
@@ -715,40 +700,29 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeCountDistinctCo
   const CountDistinctDescriptor count_distinct_descriptor =
       result_set_->query_mem_desc_.getCountDistinctDescriptor(order_entry.tle_no - 1);
   const size_t num_non_empty_entries = permutation_.size();
-  const size_t worker_count = cpu_threads();
+  const auto work = [&](const size_t start, const size_t end) {
+    for (size_t i = start; i < end; ++i) {
+      const PermutationIdx permuted_idx = permutation_[i];
+      const auto storage_lookup_result = result_set_->findStorage(permuted_idx);
+      const auto storage = storage_lookup_result.storage_ptr;
+      const auto off = storage_lookup_result.fixedup_entry_idx;
+      const auto value = buffer_itr_.getColumnInternal(
+          storage->buff_, off, order_entry.tle_no - 1, storage_lookup_result);
+      count_distinct_materialized_buffer[permuted_idx] =
+          count_distinct_set_size(value.i1, count_distinct_descriptor);
+    }
+  };
   // TODO(tlm): Allow use of tbb after we determine how to easily encapsulate the choice
   // between thread pool types
-  threadpool::FuturesThreadPool<void> thread_pool;
-  for (size_t i = 0,
-              start_entry = 0,
-              stride = (num_non_empty_entries + worker_count - 1) / worker_count;
-       i < worker_count && start_entry < num_non_empty_entries;
-       ++i, start_entry += stride) {
-    const auto end_entry = std::min(start_entry + stride, num_non_empty_entries);
-    thread_pool.spawn(
-        [this](const size_t start,
-               const size_t end,
-               const Analyzer::OrderEntry& order_entry,
-               const CountDistinctDescriptor& count_distinct_descriptor,
-               std::vector<int64_t>& count_distinct_materialized_buffer) {
-          for (size_t i = start; i < end; ++i) {
-            const PermutationIdx permuted_idx = permutation_[i];
-            const auto storage_lookup_result = result_set_->findStorage(permuted_idx);
-            const auto storage = storage_lookup_result.storage_ptr;
-            const auto off = storage_lookup_result.fixedup_entry_idx;
-            const auto value = buffer_itr_.getColumnInternal(
-                storage->buff_, off, order_entry.tle_no - 1, storage_lookup_result);
-            count_distinct_materialized_buffer[permuted_idx] =
-                count_distinct_set_size(value.i1, count_distinct_descriptor);
-          }
-        },
-        start_entry,
-        end_entry,
-        std::cref(order_entry),
-        std::cref(count_distinct_descriptor),
-        std::ref(count_distinct_materialized_buffer));
+  if (single_threaded_) {
+    work(0, num_non_empty_entries);
+  } else {
+    threadpool::FuturesThreadPool<void> thread_pool;
+    for (auto interval : makeIntervals<size_t>(0, num_non_empty_entries, cpu_threads())) {
+      thread_pool.spawn(work, interval.begin, interval.end);
+    }
+    thread_pool.join();
   }
-  thread_pool.join();
   return count_distinct_materialized_buffer;
 }
 
@@ -767,9 +741,7 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeApproxMedianCol
   ResultSet::ApproxMedianBuffers::value_type materialized_buffer(
       result_set_->query_mem_desc_.getEntryCount());
   const size_t size = permutation_.size();
-  const size_t worker_count = cpu_threads();
-  const auto work = [this, &order_entry, &materialized_buffer](const size_t start,
-                                                               const size_t end) {
+  const auto work = [&](const size_t start, const size_t end) {
     for (size_t i = start; i < end; ++i) {
       const PermutationIdx permuted_idx = permutation_[i];
       const auto storage_lookup_result = result_set_->findStorage(permuted_idx);
@@ -783,11 +755,15 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeApproxMedianCol
               : NULL_DOUBLE;
     }
   };
-  threadpool::FuturesThreadPool<void> thread_pool;
-  for (const auto interval : makeIntervals<size_t>(0, size, worker_count)) {
-    thread_pool.spawn(work, interval.begin, interval.end);
+  if (single_threaded_) {
+    work(0, size);
+  } else {
+    threadpool::FuturesThreadPool<void> thread_pool;
+    for (auto interval : makeIntervals<size_t>(0, size, cpu_threads())) {
+      thread_pool.spawn(work, interval.begin, interval.end);
+    }
+    thread_pool.join();
   }
-  thread_pool.join();
   return materialized_buffer;
 }
 
@@ -827,8 +803,6 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
       }
     }
 
-    const bool use_desc_cmp = use_heap_ ? !order_entry.is_desc : order_entry.is_desc;
-
     if (UNLIKELY(is_distinct_target(agg_info))) {
       CHECK_LT(materialized_count_distinct_buffer_idx,
                count_distinct_materialized_buffers_.size());
@@ -841,7 +815,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
       if (lhs_sz == rhs_sz) {
         continue;
       }
-      return use_desc_cmp ? lhs_sz > rhs_sz : lhs_sz < rhs_sz;
+      return (lhs_sz < rhs_sz) != order_entry.is_desc;
     } else if (UNLIKELY(agg_info.agg_kind == kAPPROX_MEDIAN)) {
       CHECK_LT(materialized_approx_median_buffer_idx,
                approx_median_materialized_buffers_.size());
@@ -854,12 +828,12 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
         continue;
       } else if (!entry_ti.get_notnull()) {
         if (lhs_value == NULL_DOUBLE) {
-          return use_heap_ != order_entry.nulls_first;
+          return order_entry.nulls_first;
         } else if (rhs_value == NULL_DOUBLE) {
-          return use_heap_ == order_entry.nulls_first;
+          return !order_entry.nulls_first;
         }
       }
-      return (lhs_value < rhs_value) != use_desc_cmp;
+      return (lhs_value < rhs_value) != order_entry.is_desc;
     }
 
     const auto lhs_v = buffer_itr_.getColumnInternal(lhs_storage->buff_,
@@ -877,11 +851,11 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
     }
     if (UNLIKELY(isNull(entry_ti, lhs_v, float_argument_input) &&
                  !isNull(entry_ti, rhs_v, float_argument_input))) {
-      return use_heap_ ? !order_entry.nulls_first : order_entry.nulls_first;
+      return order_entry.nulls_first;
     }
     if (UNLIKELY(isNull(entry_ti, rhs_v, float_argument_input) &&
                  !isNull(entry_ti, lhs_v, float_argument_input))) {
-      return use_heap_ ? order_entry.nulls_first : !order_entry.nulls_first;
+      return !order_entry.nulls_first;
     }
 
     if (LIKELY(lhs_v.isInt())) {
@@ -897,7 +871,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
         if (lhs_str == rhs_str) {
           continue;
         }
-        return use_desc_cmp ? lhs_str > rhs_str : lhs_str < rhs_str;
+        return (lhs_str < rhs_str) != order_entry.is_desc;
       }
 
       if (lhs_v.i1 == rhs_v.i1) {
@@ -907,16 +881,16 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
         if (float_argument_input) {
           const auto lhs_dval = *reinterpret_cast<const float*>(may_alias_ptr(&lhs_v.i1));
           const auto rhs_dval = *reinterpret_cast<const float*>(may_alias_ptr(&rhs_v.i1));
-          return use_desc_cmp ? lhs_dval > rhs_dval : lhs_dval < rhs_dval;
+          return (lhs_dval < rhs_dval) != order_entry.is_desc;
         } else {
           const auto lhs_dval =
               *reinterpret_cast<const double*>(may_alias_ptr(&lhs_v.i1));
           const auto rhs_dval =
               *reinterpret_cast<const double*>(may_alias_ptr(&rhs_v.i1));
-          return use_desc_cmp ? lhs_dval > rhs_dval : lhs_dval < rhs_dval;
+          return (lhs_dval < rhs_dval) != order_entry.is_desc;
         }
       }
-      return use_desc_cmp ? lhs_v.i1 > rhs_v.i1 : lhs_v.i1 < rhs_v.i1;
+      return (lhs_v.i1 < rhs_v.i1) != order_entry.is_desc;
     } else {
       if (lhs_v.isPair()) {
         CHECK(rhs_v.isPair());
@@ -927,7 +901,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
         if (lhs == rhs) {
           continue;
         }
-        return use_desc_cmp ? lhs > rhs : lhs < rhs;
+        return (lhs < rhs) != order_entry.is_desc;
       } else {
         CHECK(lhs_v.isStr() && rhs_v.isStr());
         const auto lhs = lhs_v.strVal();
@@ -935,33 +909,28 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
         if (lhs == rhs) {
           continue;
         }
-        return use_desc_cmp ? lhs > rhs : lhs < rhs;
+        return (lhs < rhs) != order_entry.is_desc;
       }
     }
   }
   return false;
 }
 
-// Input: unordered vector of indicies to_sort.
-// Output: top n elements saved in to_sort.
-void ResultSet::topPermutation(Permutation& to_sort,
-                               const size_t n,
-                               const Comparator compare) {
+// Partial sort permutation into top(least by compare) n elements.
+// If permutation.size() <= n then sort entire permutation by compare.
+// Return PermutationView with new size() = min(n, permutation.size()).
+PermutationView ResultSet::topPermutation(PermutationView permutation,
+                                          const size_t n,
+                                          const Comparator& compare) {
   auto timer = DEBUG_TIMER(__func__);
-  std::make_heap(to_sort.begin(), to_sort.end(), compare);
-  Permutation permutation_top;
-  permutation_top.reserve(n);
-  for (size_t i = 0; i < n && !to_sort.empty(); ++i) {
-    permutation_top.push_back(to_sort.front());
-    std::pop_heap(to_sort.begin(), to_sort.end(), compare);
-    to_sort.pop_back();
+  if (n < permutation.size()) {
+    std::partial_sort(
+        permutation.begin(), permutation.begin() + n, permutation.end(), compare);
+    permutation.resize(n);
+  } else {
+    std::sort(permutation.begin(), permutation.end(), compare);
   }
-  to_sort.swap(permutation_top);
-}
-
-void ResultSet::sortPermutation(const Comparator compare) {
-  auto timer = DEBUG_TIMER(__func__);
-  std::sort(permutation_.begin(), permutation_.end(), compare);
+  return permutation;
 }
 
 void ResultSet::radixSortOnGpu(
