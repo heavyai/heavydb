@@ -53,6 +53,7 @@ class VectorView {
   VectorView() = default;
   DEVICE VectorView(T* data, size_type const size, size_type const capacity)
       : data_(data), size_(size), capacity_(capacity) {}
+  DEVICE VectorView(T* data, size_type const size) : VectorView(data, size, size) {}
 
   DEVICE T& back() { return data_[size_ - 1]; }
   DEVICE T const& back() const { return data_[size_ - 1]; }

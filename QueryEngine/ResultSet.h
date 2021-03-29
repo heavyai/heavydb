@@ -151,6 +151,7 @@ class ResultSetBuilder;
 using AppendedStorage = std::vector<std::unique_ptr<ResultSetStorage>>;
 using PermutationIdx = uint32_t;
 using Permutation = std::vector<PermutationIdx>;
+using PermutationView = VectorView<PermutationIdx>;
 using Comparator = std::function<bool(const PermutationIdx, const PermutationIdx)>;
 
 class ResultSet {
@@ -251,7 +252,7 @@ class ResultSet {
   bool isRowAtEmpty(const size_t index) const;
 
   void sort(const std::list<Analyzer::OrderEntry>& order_entries,
-            const size_t top_n,
+            size_t top_n,
             const Executor* executor);
 
   void keepFirstN(const size_t n);
@@ -622,16 +623,16 @@ class ResultSet {
     using BufferIteratorType = BUFFER_ITERATOR_TYPE;
 
     ResultSetComparator(const std::list<Analyzer::OrderEntry>& order_entries,
-                        const bool use_heap,
                         const ResultSet* result_set,
-                        const Permutation& permutation,
-                        const Executor* executor)
+                        const PermutationView permutation,
+                        const Executor* executor,
+                        const bool single_threaded)
         : order_entries_(order_entries)
-        , use_heap_(use_heap)
         , result_set_(result_set)
         , permutation_(permutation)
         , buffer_itr_(result_set)
         , executor_(executor)
+        , single_threaded_(single_threaded)
         , approx_median_materialized_buffers_(materializeApproxMedianColumns()) {
       materializeCountDistinctColumns();
     }
@@ -647,43 +648,42 @@ class ResultSet {
     bool operator()(const PermutationIdx lhs, const PermutationIdx rhs) const;
 
     const std::list<Analyzer::OrderEntry>& order_entries_;
-    // Think use_heap = reverse_sort_order due to popping from a max-heap data structure.
-    const bool use_heap_;
     const ResultSet* result_set_;
-    const Permutation& permutation_;
+    const PermutationView permutation_;
     const BufferIteratorType buffer_itr_;
     const Executor* executor_;
+    const bool single_threaded_;
     std::vector<std::vector<int64_t>> count_distinct_materialized_buffers_;
     const ApproxMedianBuffers approx_median_materialized_buffers_;
   };
 
   Comparator createComparator(const std::list<Analyzer::OrderEntry>& order_entries,
-                              const bool use_heap,
-                              const Permutation& permutation,
-                              const Executor* executor) {
+                              const PermutationView permutation,
+                              const Executor* executor,
+                              const bool single_threaded) {
     auto timer = DEBUG_TIMER(__func__);
     if (query_mem_desc_.didOutputColumnar()) {
       return [rsc = ResultSetComparator<ColumnWiseTargetAccessor>(
-                  order_entries, use_heap, this, permutation, executor)](
+                  order_entries, this, permutation, executor, single_threaded)](
                  const PermutationIdx lhs, const PermutationIdx rhs) {
         return rsc(lhs, rhs);
       };
     } else {
       return [rsc = ResultSetComparator<RowWiseTargetAccessor>(
-                  order_entries, use_heap, this, permutation, executor)](
+                  order_entries, this, permutation, executor, single_threaded)](
                  const PermutationIdx lhs, const PermutationIdx rhs) {
         return rsc(lhs, rhs);
       };
     }
   }
 
-  static void topPermutation(Permutation& to_sort,
-                             const size_t n,
-                             const Comparator compare);
+  static PermutationView topPermutation(PermutationView,
+                                        const size_t n,
+                                        const Comparator&);
 
-  void sortPermutation(const Comparator compare);
-
-  Permutation initPermutationBuffer(const size_t start, const size_t step) const;
+  PermutationView initPermutationBuffer(PermutationView permutation,
+                                        PermutationIdx const begin,
+                                        PermutationIdx const end) const;
 
   void parallelTop(const std::list<Analyzer::OrderEntry>& order_entries,
                    const size_t top_n,

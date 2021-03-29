@@ -138,8 +138,12 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
       permutation_.insert(
           permutation_.end(), strided_permutation.begin(), strided_permutation.end());
     }
-    auto compare = createComparator(order_entries, true, permutation_, executor);
-    topPermutation(permutation_, top_n, compare);
+    auto pv = PermutationView(permutation_.data(), permutation_.size());
+    topPermutation(pv, top_n, createComparator(order_entries, pv, executor, false));
+    if (top_n < permutation_.size()) {
+      permutation_.resize(top_n);
+      permutation_.shrink_to_fit();
+    }
     return;
   } else {
     permutation_ =
