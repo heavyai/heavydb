@@ -22,6 +22,7 @@
 #include "CartesianProduct.h"
 #include "CgenState.h"
 #include "CodeCache.h"
+#include "CompilationOptions.h"
 #include "DateTimeUtils.h"
 #include "Descriptors/QueryFragmentDescriptor.h"
 #include "ExecutionKernel.h"
@@ -525,7 +526,8 @@ class Executor {
   bool needLinearizeAllFragments(const ColumnDescriptor* cd,
                                  const InputColDescriptor& inner_col_desc,
                                  const RelAlgExecutionUnit& ra_exe_unit,
-                                 const FragmentsList& selected_fragments) const;
+                                 const FragmentsList& selected_fragments,
+                                 const Data_Namespace::MemoryLevel memory_level) const;
 
   using PerFragmentCallBack =
       std::function<void(ResultSetPtr, const Fragmenter_Namespace::FragmentInfo&)>;

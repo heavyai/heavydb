@@ -8446,8 +8446,18 @@ TEST(Select, Joins_Fixed_Size_Array_Multi_Frag) {
     ASSERT_EQ(int64_t(5), v<int64_t>(run_simple_agg(q6, dt)));
   };
 
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
+  // If GPU exists, check whether we get an exception related to varlen columnarization
+  // when query is executed on GPU
+  if (!skip_tests(ExecutorDeviceType::GPU)) {
+    EXPECT_THROW(
+        run_simple_agg(
+            R"(SELECT COUNT(1) FROM mf_t_arr r1, mf_t_arr r2 WHERE r1.t2[1] = r2.t2[1];)",
+            ExecutorDeviceType::GPU),
+        std::runtime_error);
+  }
+
+  // skip to test GPU device until we fix the #5425 issue
+  for (auto dt : {ExecutorDeviceType::CPU}) {
     test_query("mf_f_arr", dt);
     test_query("mf_d_arr", dt);
     test_query("mf_i_arr", dt);

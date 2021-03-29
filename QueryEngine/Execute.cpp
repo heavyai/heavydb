@@ -2385,16 +2385,23 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
   return fragments.size() > 1;
 }
 
-bool Executor::needLinearizeAllFragments(const ColumnDescriptor* cd,
-                                         const InputColDescriptor& inner_col_desc,
-                                         const RelAlgExecutionUnit& ra_exe_unit,
-                                         const FragmentsList& selected_fragments) const {
+bool Executor::needLinearizeAllFragments(
+    const ColumnDescriptor* cd,
+    const InputColDescriptor& inner_col_desc,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const FragmentsList& selected_fragments,
+    const Data_Namespace::MemoryLevel memory_level) const {
   const int nest_level = inner_col_desc.getScanDesc().getNestLevel();
   const int table_id = inner_col_desc.getScanDesc().getTableId();
   CHECK_LT(static_cast<size_t>(nest_level), selected_fragments.size());
   CHECK_EQ(table_id, selected_fragments[nest_level].table_id);
   const auto& fragments = selected_fragments[nest_level].fragment_ids;
   auto need_linearize = cd->columnType.is_fixlen_array();
+  if (memory_level == MemoryLevel::GPU_LEVEL) {
+    // we disable multi-frag linearization for GPU case until we find the reason of
+    // CUDA 'misaligned address' issue, see #5245
+    need_linearize = false;
+  }
   return table_id > 0 && need_linearize && fragments.size() > 1;
 }
 
@@ -2493,7 +2500,11 @@ FetchResult Executor::fetchChunks(
           // i.e., a column that is classified as varlen type, i.e., array
           // for now, we only support fixed-length array that contains
           // geo point coordianates but we can support more types in this way
-          if (needLinearizeAllFragments(cd, *col_id, ra_exe_unit, selected_fragments)) {
+          if (needLinearizeAllFragments(cd,
+                                        *col_id,
+                                        ra_exe_unit,
+                                        selected_fragments,
+                                        memory_level_for_column)) {
             frag_col_buffers[it->second] =
                 column_fetcher.linearizeColumnFragments(table_id,
                                                         col_id->getColId(),
