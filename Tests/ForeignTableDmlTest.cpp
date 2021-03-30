@@ -1153,6 +1153,21 @@ TEST_P(CacheControllingSelectQueryTest, CSV_CustomDelimiters) {
   // clang-format on
 }
 
+TEST_P(DataWrapperSelectQueryTest, AggregateAndGroupByNull) {
+  const auto& query =
+      getCreateForeignTableQuery("(t TEXT, i INT)", "null_str", GetParam());
+  sql(query);
+  TQueryResult result;
+  sql(result, "select t, count( * )  from test_foreign_table group by 1 order by 1 asc;");
+  // clang-format off
+  assertResultSetEqual({{"a", i(1)},
+                        {"b", i(1)},
+                        {"c", i(1)},
+                        {Null, i(1)}},
+                       result);
+  // clang-format on
+}
+
 class CSVFileTypeTests
     : public SelectQueryTest,
       public ::testing::WithParamInterface<std::pair<std::string, std::string>> {};

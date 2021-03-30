@@ -146,6 +146,7 @@ void CsvDataWrapper::updateMetadata(
             entry.second.getBuffer()->getEncoder()->getMetadata(column->columnType);
         cached_metadata->chunkStats.max = chunk_metadata->chunkStats.max;
         cached_metadata->chunkStats.min = chunk_metadata->chunkStats.min;
+        cached_metadata->chunkStats.has_nulls = chunk_metadata->chunkStats.has_nulls;
         cached_metadata->numBytes = entry.second.getBuffer()->size();
         fragmenter->updateColumnChunkMetadata(column, fragment_id, cached_metadata);
       }
@@ -815,16 +816,8 @@ void add_placeholder_metadata(
                               ? total_num_rows % foreign_table->maxFragRows
                               : foreign_table->maxFragRows;
 
-    ForeignStorageBuffer empty_buffer;
-    // Use default encoder metadata as in parquet wrapper
-    empty_buffer.initEncoder(column->columnType);
-    auto chunk_metadata = empty_buffer.getEncoder()->getMetadata(column->columnType);
-    chunk_metadata->numElements = num_elements;
-    chunk_metadata->chunkStats.min.intval = std::numeric_limits<int32_t>::max();
-    chunk_metadata->chunkStats.max.intval = std::numeric_limits<int32_t>::lowest();
-
     chunk_key[CHUNK_KEY_FRAGMENT_IDX] = fragment_id;
-    chunk_metadata_map[chunk_key] = chunk_metadata;
+    chunk_metadata_map[chunk_key] = Csv::get_placeholder_metadata(column, num_elements);
   }
 }
 
