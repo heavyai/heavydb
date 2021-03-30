@@ -8089,7 +8089,7 @@ TEST(Select, Empty) {
 TEST(Update, Empty) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("UPDATE emptytab SET x = (SELECT x FROM test_inner WHERE emptytab.x = "
+    c("UPDATE emptytab SET x = (SELECT X FROM test_inner WHERE emptytab.x = "
       "test_inner.x);",
       dt);
   }
