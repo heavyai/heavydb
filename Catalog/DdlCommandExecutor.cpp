@@ -30,6 +30,7 @@
 #include "Shared/StringTransform.h"
 
 #include "QueryEngine/Execute.h"  // Executor::getArenaBlockSize()
+#include "QueryEngine/ExternalCacheInvalidators.h"
 #include "QueryEngine/ResultSetBuilder.h"
 
 extern bool g_enable_fsi;
@@ -1326,6 +1327,8 @@ ExecutionResult RefreshForeignTablesCommand::execute() {
     std::string table_name = table_name_json.GetString();
     foreign_storage::refresh_foreign_table(cat, table_name, evict_cached_entries);
   }
+
+  UpdateTriggeredCacheInvalidator::invalidateCaches();
 
   return ExecutionResult();
 }
