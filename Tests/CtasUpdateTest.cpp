@@ -675,6 +675,19 @@ std::shared_ptr<ResultSet> run_multiple_agg(const std::string& sql,
   return QR::get()->runSQL(sql, ExecutorDeviceType::CPU, true, true);
 }
 
+TargetValue run_simple_agg(const std::string& query_str,
+                           const ExecutorDeviceType device_type,
+                           const bool geo_return_geo_tv = true,
+                           const bool allow_loop_joins = true) {
+  auto rows = QR::get()->runSQL(query_str, device_type, allow_loop_joins);
+  if (geo_return_geo_tv) {
+    rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+  }
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size()) << query_str;
+  return crt_row[0];
+}
+
 }  // namespace
 
 TEST(Ctas, SyntaxCheck) {
@@ -2352,6 +2365,151 @@ TEST(Itas, PartialInsertIntoShardedTableFromSelectReplicated) {
   partial_itas_test_body(partialDescriptors,
                          ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')",
                          ") WITH (partitions='REPLICATED')");
+}
+
+TEST(Select, CtasItasValidation) {
+  auto drop_table = []() {
+    run_ddl_statement("DROP TABLE IF EXISTS CTAS_ITAS_VALIDATION_1;");
+    run_ddl_statement("DROP TABLE IF EXISTS CTAS_ITAS_VALIDATION_2;");
+    run_ddl_statement("DROP TABLE IF EXISTS CTAS_ITAS_VALIDATION_3;");
+  };
+
+  auto drop_ctas_itas_table = []() {
+    run_ddl_statement("DROP TABLE IF EXISTS CTAS_ITAS_VALIDATION_RES_1;");
+    run_ddl_statement("DROP TABLE IF EXISTS CTAS_ITAS_VALIDATION_RES_2;");
+    run_ddl_statement("DROP TABLE IF EXISTS CTAS_ITAS_VALIDATION_RES_3;");
+    run_ddl_statement("DROP TABLE IF EXISTS CTAS_ITAS_VALIDATION_RES_4;");
+    run_ddl_statement("DROP TABLE IF EXISTS CTAS_ITAS_VALIDATION_RES_5;");
+    run_ddl_statement("DROP TABLE IF EXISTS CTAS_ITAS_VALIDATION_RES_6;");
+  };
+
+  auto create_itas_table = []() {
+    run_ddl_statement("CREATE TABLE CTAS_ITAS_VALIDATION_RES_4 (i1 INT);");
+    run_ddl_statement("CREATE TABLE CTAS_ITAS_VALIDATION_RES_5 (i1 INT);");
+    run_ddl_statement(
+        "CREATE TABLE CTAS_ITAS_VALIDATION_RES_6 (i1 INT) WITH (FRAGMENT_SIZE = "
+        "100000);");
+  };
+
+  auto create_table = []() {
+    run_ddl_statement("CREATE TABLE CTAS_ITAS_VALIDATION_1 (i1 INT);");
+    run_ddl_statement("CREATE TABLE CTAS_ITAS_VALIDATION_2 (i1 INT);");
+    run_ddl_statement(
+        "CREATE TABLE CTAS_ITAS_VALIDATION_3 (i1 INT) WITH (FRAGMENT_SIZE = 100000);");
+  };
+
+  // write a temporary datafile used in the test
+  // because "INSERT INTO ..." stmt for this takes too much time
+  // and add pre-generated dataset increases meaningless LOC of this test code
+  const auto data1_path =
+      boost::filesystem::path("../../Tests/Import/datafiles/ctas_itas_validation_1.csv");
+  if (boost::filesystem::exists(data1_path)) {
+    boost::filesystem::remove(data1_path);
+  }
+  std::ofstream out1(data1_path.string());
+  for (int i = 0; i < 75000; i++) {
+    if (out1.is_open()) {
+      out1 << i << "\n";
+    }
+  }
+  out1.close();
+
+  const auto data2_path =
+      boost::filesystem::path("../../Tests/Import/datafiles/ctas_itas_validation_2.csv");
+  if (boost::filesystem::exists(data2_path)) {
+    boost::filesystem::remove(data2_path);
+  }
+  std::ofstream out2(data2_path.string());
+  for (int i = 0; i < 750000; i++) {
+    if (out2.is_open()) {
+      out2 << i << "\n";
+    }
+  }
+  out2.close();
+
+  drop_table();
+
+  create_table();
+
+  auto copy_data1_str = "COPY CTAS_ITAS_VALIDATION_1 FROM \'" + data1_path.string() +
+                        "\' WITH (HEADER=\'f\');";
+  auto copy_data2_str = "COPY CTAS_ITAS_VALIDATION_2 FROM \'" + data2_path.string() +
+                        "\' WITH (HEADER=\'f\');";
+  auto copy_data3_str = "COPY CTAS_ITAS_VALIDATION_3 FROM \'" + data2_path.string() +
+                        "\' WITH (HEADER=\'f\');";
+
+  run_ddl_statement(copy_data1_str);
+  run_ddl_statement(copy_data2_str);
+  run_ddl_statement(copy_data3_str);
+
+  boost::filesystem::remove(data1_path);
+  boost::filesystem::remove(data2_path);
+
+  drop_ctas_itas_table();
+  ASSERT_EQ(
+      75000,
+      v<int64_t>(run_simple_agg("SELECT COUNT(DISTINCT i1) FROM CTAS_ITAS_VALIDATION_1",
+                                ExecutorDeviceType::CPU)));
+  ASSERT_EQ(
+      750000,
+      v<int64_t>(run_simple_agg("SELECT COUNT(DISTINCT i1) FROM CTAS_ITAS_VALIDATION_2",
+                                ExecutorDeviceType::CPU)));
+  ASSERT_EQ(
+      750000,
+      v<int64_t>(run_simple_agg("SELECT COUNT(DISTINCT i1) FROM CTAS_ITAS_VALIDATION_3",
+                                ExecutorDeviceType::CPU)));
+
+  ASSERT_NO_THROW(
+      run_ddl_statement("CREATE TABLE CTAS_ITAS_VALIDATION_RES_1 AS SELECT * FROM "
+                        "CTAS_ITAS_VALIDATION_1;"));
+  ASSERT_EQ(75000,
+            v<int64_t>(run_simple_agg(
+                "SELECT COUNT(DISTINCT i1) FROM CTAS_ITAS_VALIDATION_RES_1",
+                ExecutorDeviceType::CPU)));
+
+  ASSERT_NO_THROW(
+      run_ddl_statement("CREATE TABLE CTAS_ITAS_VALIDATION_RES_2 AS SELECT * FROM "
+                        "CTAS_ITAS_VALIDATION_2;"));
+  ASSERT_EQ(750000,
+            v<int64_t>(run_simple_agg(
+                "SELECT COUNT(DISTINCT i1) FROM CTAS_ITAS_VALIDATION_RES_2",
+                ExecutorDeviceType::CPU)));
+
+  ASSERT_NO_THROW(
+      run_ddl_statement("CREATE TABLE CTAS_ITAS_VALIDATION_RES_3 AS SELECT * FROM "
+                        "CTAS_ITAS_VALIDATION_3;"));
+  ASSERT_EQ(750000,
+            v<int64_t>(run_simple_agg(
+                "SELECT COUNT(DISTINCT i1) FROM CTAS_ITAS_VALIDATION_RES_3",
+                ExecutorDeviceType::CPU)));
+
+  create_itas_table();
+  ASSERT_NO_THROW(
+      run_ddl_statement("INSERT INTO CTAS_ITAS_VALIDATION_RES_4 SELECT * FROM "
+                        "CTAS_ITAS_VALIDATION_1;"));
+  ASSERT_EQ(75000,
+            v<int64_t>(run_simple_agg(
+                "SELECT COUNT(DISTINCT i1) FROM CTAS_ITAS_VALIDATION_RES_4",
+                ExecutorDeviceType::CPU)));
+
+  ASSERT_NO_THROW(
+      run_ddl_statement("INSERT INTO CTAS_ITAS_VALIDATION_RES_5 SELECT * FROM "
+                        "CTAS_ITAS_VALIDATION_2;"));
+  ASSERT_EQ(750000,
+            v<int64_t>(run_simple_agg(
+                "SELECT COUNT(DISTINCT i1) FROM CTAS_ITAS_VALIDATION_RES_5",
+                ExecutorDeviceType::CPU)));
+
+  ASSERT_NO_THROW(
+      run_ddl_statement("INSERT INTO CTAS_ITAS_VALIDATION_RES_6 SELECT * FROM "
+                        "CTAS_ITAS_VALIDATION_2;"));
+  ASSERT_EQ(750000,
+            v<int64_t>(run_simple_agg(
+                "SELECT COUNT(DISTINCT i1) FROM CTAS_ITAS_VALIDATION_RES_6",
+                ExecutorDeviceType::CPU)));
+
+  drop_table();
+  drop_ctas_itas_table();
 }
 
 int main(int argc, char* argv[]) {
