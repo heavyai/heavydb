@@ -3040,12 +3040,16 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
         std::atomic<size_t> row_idx{0};
 
         auto do_work = [&result_rows, &num_rows_to_process, &value_converters, &row_idx](
-                           size_t& idx, const size_t end, const size_t num_cols) {
+                           const size_t idx,
+                           const size_t end,
+                           const size_t num_cols,
+                           const size_t thread_id,
+                           bool& stop_convert) {
           const auto result_row = result_rows->getRowAtNoTranslations(idx);
           if (!result_row.empty()) {
             size_t target_row = row_idx.fetch_add(1);
             if (target_row >= num_rows_to_process) {
-              idx = end;
+              stop_convert = true;
               return;
             }
             for (unsigned int col = 0; col < num_cols; col++) {
@@ -3066,6 +3070,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           const size_t start = thread_start_idx[thread_id];
           const size_t end = thread_end_idx[thread_id];
           size_t idx = 0;
+          bool stop_convert = false;
           if (g_enable_non_kernel_time_query_interrupt) {
             size_t local_idx = 0;
             for (idx = start; idx < end; ++idx, ++local_idx) {
@@ -3075,21 +3080,31 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
                     "Query execution has been interrupted while performing " +
                     work_type_str);
               }
-              do_work(idx, end, num_cols);
+              do_work(idx, end, num_cols, thread_id, stop_convert);
+              if (stop_convert) {
+                break;
+              }
             }
           } else {
             for (idx = start; idx < end; ++idx) {
-              do_work(idx, end, num_cols);
+              do_work(idx, end, num_cols, thread_id, stop_convert);
+              if (stop_convert) {
+                break;
+              }
             }
           }
+          thread_start_idx[thread_id] = idx;
         };
 
         auto single_threaded_value_converter =
             [&row_idx, &num_rows_to_process, &value_converters, &result_rows](
-                size_t& idx, const size_t end, const size_t num_cols) {
+                const size_t idx,
+                const size_t end,
+                const size_t num_cols,
+                bool& stop_convert) {
               size_t target_row = row_idx.fetch_add(1);
               if (target_row >= num_rows_to_process) {
-                idx = end;
+                stop_convert = true;
                 return;
               }
               const auto result_row = result_rows->getNextRow(false, false);
@@ -3112,6 +3127,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
               const size_t start = thread_start_idx[thread_id];
               const size_t end = thread_end_idx[thread_id];
               size_t idx = 0;
+              bool stop_convert = false;
               if (g_enable_non_kernel_time_query_interrupt) {
                 size_t local_idx = 0;
                 for (idx = start; idx < end; ++idx, ++local_idx) {
@@ -3121,13 +3137,20 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
                         "Query execution has been interrupted while performing " +
                         work_type_str);
                   }
-                  single_threaded_value_converter(idx, end, num_cols);
+                  single_threaded_value_converter(idx, end, num_cols, stop_convert);
+                  if (stop_convert) {
+                    break;
+                  }
                 }
               } else {
                 for (idx = start; idx < end; ++idx) {
-                  single_threaded_value_converter(idx, end, num_cols);
+                  single_threaded_value_converter(idx, end, num_cols, stop_convert);
+                  if (stop_convert) {
+                    break;
+                  }
                 }
               }
+              thread_start_idx[thread_id] = idx;
             };
 
         if (can_go_parallel) {
