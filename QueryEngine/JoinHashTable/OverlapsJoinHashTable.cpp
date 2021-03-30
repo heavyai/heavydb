@@ -522,6 +522,7 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
   auto overlaps_max_table_size_bytes = g_overlaps_max_table_size_bytes;
   std::optional<double> overlaps_threshold_override;
   auto query_hint = getRegisteredQueryHint();
+  auto skip_hashtable_caching = false;
   if (query_hint.isHintRegistered("overlaps_bucket_threshold")) {
     VLOG(1) << "Setting overlaps bucket threshold "
                "\'overlaps_hashjoin_bucket_threshold\' via "
@@ -544,6 +545,11 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
              "\'overlaps_hashjoin_bucket_threshold\'";
     }
     VLOG(1) << oss.str();
+  }
+  if (query_hint.isHintRegistered("overlaps_no_cache")) {
+    VLOG(1) << "User requests to skip caching overlaps join hashtable and its tuned "
+               "parameters for this query";
+    skip_hashtable_caching = true;
   }
 
   std::vector<ColumnsForDevice> columns_per_device;
@@ -617,7 +623,8 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
               layout,
               shard_count,
               entry_count,
-              emitted_keys_count);
+              emitted_keys_count,
+              skip_hashtable_caching);
   } else {
     HashTableCacheKey cache_key{columns_per_device.front().join_columns.front().num_elems,
                                 composite_key_info.cache_key_chunks,
@@ -649,7 +656,8 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
                   layout,
                   shard_count,
                   hash_table->getEntryCount(),
-                  hash_table->getEmittedKeysCount());
+                  hash_table->getEmittedKeysCount(),
+                  skip_hashtable_caching);
       } else {
         VLOG(1) << "Computing bucket size for cached bucket threshold";
         // compute bucket size using our cached tuner value
@@ -673,7 +681,8 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
                   layout,
                   shard_count,
                   entry_count,
-                  emitted_keys_count);
+                  emitted_keys_count,
+                  skip_hashtable_caching);
       }
     } else {
       // compute bucket size using the auto tuner
@@ -739,9 +748,13 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
       }
       CHECK_GE(tuning_state.chosen_overlaps_threshold, double(0));
       if (!cache_key_contains_intermediate_table(cache_key)) {
-        auto cache_value = std::make_pair(tuning_state.chosen_overlaps_threshold,
-                                          inverse_bucket_sizes_for_dimension_);
-        auto_tuner_cache_->insert(cache_key, cache_value);
+        if (skip_hashtable_caching) {
+          VLOG(1) << "Skip to add tuned parameters to auto tuner";
+        } else {
+          auto cache_value = std::make_pair(tuning_state.chosen_overlaps_threshold,
+                                            inverse_bucket_sizes_for_dimension_);
+          auto_tuner_cache_->insert(cache_key, cache_value);
+        }
       }
 
       reifyImpl(columns_per_device,
@@ -749,7 +762,8 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
                 layout,
                 shard_count,
                 crt_props.entry_count,
-                crt_props.emitted_keys_count);
+                crt_props.emitted_keys_count,
+                skip_hashtable_caching);
     }
   }
 }
@@ -1044,7 +1058,8 @@ void OverlapsJoinHashTable::reifyImpl(std::vector<ColumnsForDevice>& columns_per
                                       const HashType layout,
                                       const size_t shard_count,
                                       const size_t entry_count,
-                                      const size_t emitted_keys_count) {
+                                      const size_t emitted_keys_count,
+                                      const bool skip_hashtable_caching) {
   std::vector<std::future<void>> init_threads;
   for (int device_id = 0; device_id < device_count_; ++device_id) {
     const auto fragments =
@@ -1058,6 +1073,7 @@ void OverlapsJoinHashTable::reifyImpl(std::vector<ColumnsForDevice>& columns_per
                                       layout,
                                       entry_count,
                                       emitted_keys_count,
+                                      skip_hashtable_caching,
                                       device_id,
                                       logger::thread_id()));
   }
@@ -1073,6 +1089,7 @@ void OverlapsJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_d
                                            const HashType layout,
                                            const size_t entry_count,
                                            const size_t emitted_keys_count,
+                                           const bool skip_hashtable_caching,
                                            const int device_id,
                                            const logger::ThreadId parent_thread_id) {
   DEBUG_TIMER_NEW_THREAD(parent_thread_id);
@@ -1087,7 +1104,8 @@ void OverlapsJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_d
                                          columns_for_device.join_buckets,
                                          layout,
                                          entry_count,
-                                         emitted_keys_count);
+                                         emitted_keys_count,
+                                         skip_hashtable_caching);
     CHECK(hash_table);
 
 #ifdef HAVE_CUDA
@@ -1128,7 +1146,8 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnCpu(
     const std::vector<JoinBucketInfo>& join_bucket_info,
     const HashType layout,
     const size_t entry_count,
-    const size_t emitted_keys_count) {
+    const size_t emitted_keys_count,
+    const bool skip_hashtable_caching) {
   auto timer = DEBUG_TIMER(__func__);
   const auto composite_key_info =
       HashJoin::getCompositeKeyInfo(inner_outer_pairs_, executor_);
@@ -1181,7 +1200,11 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnCpu(
   }
   std::shared_ptr<BaselineHashTable> hash_table = builder.getHashTable();
   if (HashJoin::getInnerTableId(inner_outer_pairs_) > 0) {
-    putHashTableOnCpuToCache(cache_key, hash_table);
+    if (skip_hashtable_caching) {
+      VLOG(1) << "Skip to cache overlaps join hashtable";
+    } else {
+      putHashTableOnCpuToCache(cache_key, hash_table);
+    }
   }
   return hash_table;
 }

@@ -1900,6 +1900,11 @@ class RelAlgDagBuilder : public boost::noncopyable {
             VLOG(1) << "Allowing GPU hash table build for overlaps join.";
             break;
           }
+          case 4: {  // overlaps_no_cache
+            query_hint_.registerHint(kv.first);
+            query_hint_.overlaps_no_cache = true;
+            VLOG(1) << "Skip auto tuner and hashtable caching for overlaps join.";
+          }
           default:
             break;
         }

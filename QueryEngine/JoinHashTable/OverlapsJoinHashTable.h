@@ -135,12 +135,14 @@ class OverlapsJoinHashTable : public HashJoin {
                          const HashType layout,
                          const size_t shard_count,
                          const size_t entry_count,
-                         const size_t emitted_keys_count);
+                         const size_t emitted_keys_count,
+                         const bool skip_hashtable_caching);
 
   void reifyForDevice(const ColumnsForDevice& columns_for_device,
                       const HashType layout,
                       const size_t entry_count,
                       const size_t emitted_keys_count,
+                      const bool skip_hashtable_caching,
                       const int device_id,
                       const logger::ThreadId parent_thread_id);
 
@@ -193,7 +195,8 @@ class OverlapsJoinHashTable : public HashJoin {
       const std::vector<JoinBucketInfo>& join_bucket_info,
       const HashType layout,
       const size_t entry_count,
-      const size_t emitted_keys_count);
+      const size_t emitted_keys_count,
+      const bool skip_hashtable_caching);
 
 #ifdef HAVE_CUDA
   std::shared_ptr<BaselineHashTable> initHashTableOnGpu(

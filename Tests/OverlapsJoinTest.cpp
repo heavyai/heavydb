@@ -427,6 +427,63 @@ TEST_F(OverlapsTest, EmptyPolyPolyJoin) {
   });
 }
 
+TEST_F(OverlapsTest, SkipHashtableCaching) {
+  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
+  const auto enable_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many;
+
+  g_enable_overlaps_hashjoin = true;
+  g_enable_hashjoin_many_to_many = true;
+  g_trivial_loop_join_threshold = 1;
+
+  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state,
+                                     &enable_hashjoin_many_to_many_state] {
+    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
+    g_enable_overlaps_hashjoin = enable_hashjoin_many_to_many_state;
+    g_trivial_loop_join_threshold = 1000;
+  };
+
+  QR::get()->clearCpuMemory();
+  // check whether overlaps hashtable caching works properly
+  const auto q1 =
+      "SELECT count(*) FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
+      "ST_Intersects(a.poly, b.poly);";
+  execSQL(q1, ExecutorDeviceType::CPU);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)2);
+
+  const auto q2 =
+      "SELECT /*+ overlaps_bucket_threshold(0.2), overlaps_no_cache */ count(*) FROM "
+      "does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
+      "ST_Intersects(a.poly, b.poly);";
+  execSQL(q2, ExecutorDeviceType::CPU);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)2);
+
+  QR::get()->clearCpuMemory();
+  execSQL(q2, ExecutorDeviceType::CPU);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)0);
+
+  const auto q3 =
+      "SELECT /*+ overlaps_no_cache */ count(*) FROM does_not_intersect_b as b JOIN "
+      "does_not_intersect_a as a ON "
+      "ST_Intersects(a.poly, b.poly);";
+  execSQL(q3, ExecutorDeviceType::CPU);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)0);
+
+  const auto q4 =
+      "SELECT /*+ overlaps_max_size(1000), overlaps_no_cache */ count(*) FROM "
+      "does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
+      "ST_Intersects(a.poly, b.poly);";
+  execSQL(q4, ExecutorDeviceType::CPU);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)0);
+
+  const auto q5 =
+      "SELECT /*+ overlaps_bucket_threshold(0.2), overlaps_max_size(1000), "
+      "overlaps_no_cache */ count(*) FROM does_not_intersect_b as b JOIN "
+      "does_not_intersect_a as a ON "
+      "ST_Intersects(a.poly, b.poly);";
+  execSQL(q5, ExecutorDeviceType::CPU);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)0);
+}
+
 class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
  public:
   struct ExpectedValues {
@@ -479,7 +536,8 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
                  const HashType layout,
                  const size_t shard_count,
                  const size_t entry_count,
-                 const size_t emitted_keys_count) final {
+                 const size_t emitted_keys_count,
+                 const bool skip_hashtable_caching) final {
     EXPECT_LE(step_, expected_values_per_step_.size());
     auto& expected_values = expected_values_per_step_.back();
     EXPECT_EQ(entry_count, expected_values.entry_count);
