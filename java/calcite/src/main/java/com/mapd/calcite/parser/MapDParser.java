@@ -532,6 +532,9 @@ public final class MapDParser {
     }
 
     if (wrapInSingleValue) {
+      if (select0.isA(EnumSet.of(SqlKind.AS))) {
+        select0 = ((SqlCall) select0).getOperandList().get(0);
+      }
       select0 = new SqlBasicCall(
               SqlStdOperatorTable.SINGLE_VALUE, new SqlNode[] {select0}, ZERO);
     }
@@ -692,8 +695,16 @@ public final class MapDParser {
     }
 
     MapDPlanner planner = getPlanner(true, allowPushdownJoinCondition);
-    SqlNode node = planner.parse(select.toSqlString(CalciteSqlDialect.DEFAULT).getSql());
-    node = planner.validate(node);
+    SqlNode node = null;
+    try {
+      node = planner.parse(select.toSqlString(CalciteSqlDialect.DEFAULT).getSql());
+      node = planner.validate(node);
+    } catch (Exception e) {
+      MAPDLOGGER.error("Error processing UPDATE rewrite, rewritten stmt was: "
+              + select.toSqlString(CalciteSqlDialect.DEFAULT).getSql());
+      throw e;
+    }
+
     RelRoot root = planner.rel(node);
     LogicalProject project = (LogicalProject) root.project();
 
