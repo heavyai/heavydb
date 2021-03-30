@@ -231,6 +231,30 @@ Chunk_NS::Chunk make_chunk_for_column(
   retval.initEncoder();
   return retval;
 }
+
+std::shared_ptr<ChunkMetadata> get_placeholder_metadata(const ColumnDescriptor* column,
+                                                        size_t num_elements) {
+  ForeignStorageBuffer empty_buffer;
+  // Use default encoder metadata as in parquet wrapper
+  empty_buffer.initEncoder(column->columnType);
+  auto chunk_metadata = empty_buffer.getEncoder()->getMetadata(column->columnType);
+  chunk_metadata->numElements = num_elements;
+
+  if (!column->columnType.is_varlen_indeed()) {
+    chunk_metadata->numBytes = column->columnType.get_size() * num_elements;
+  }
+  // min/max not set by default for arrays, so get from elem type encoder
+  if (column->columnType.is_array()) {
+    ForeignStorageBuffer scalar_buffer;
+    scalar_buffer.initEncoder(column->columnType.get_elem_type());
+    auto scalar_metadata =
+        scalar_buffer.getEncoder()->getMetadata(column->columnType.get_elem_type());
+    chunk_metadata->chunkStats.min = scalar_metadata->chunkStats.min;
+    chunk_metadata->chunkStats.max = scalar_metadata->chunkStats.max;
+  }
+  chunk_metadata->chunkStats.has_nulls = true;
+  return chunk_metadata;
+}
 }  // namespace Csv
 
 }  // namespace foreign_storage

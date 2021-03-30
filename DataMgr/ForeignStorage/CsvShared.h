@@ -92,5 +92,9 @@ Chunk_NS::Chunk make_chunk_for_column(
     std::map<ChunkKey, std::shared_ptr<ChunkMetadata>>& chunk_metadata_map,
     const std::map<ChunkKey, AbstractBuffer*>& buffers);
 
+// Construct default metadata for given column descriptor with num_elements
+std::shared_ptr<ChunkMetadata> get_placeholder_metadata(const ColumnDescriptor* column,
+                                                        size_t num_elements);
+
 }  // namespace Csv
 }  // namespace foreign_storage
