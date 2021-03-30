@@ -989,6 +989,13 @@ TEST_F(ShowCreateTableTest, ForeignTable_AllOptions) {
                         "REFRESH_UPDATE_TYPE='APPEND', FRAGMENT_SIZE=50);"}});
 }
 
+TEST_F(ShowCreateTableTest, NotCaseSensitive) {
+  sql("CREATE TABLE showcreatetabletest(c1 int);");
+
+  sqlAndCompareResult("SHOW CREATE TABLE sHoWcReAtEtAbLeTeSt;",
+                      {{"CREATE TABLE showcreatetabletest (\n  c1 INTEGER);"}});
+}
+
 namespace {
 const int64_t PAGES_PER_DATA_FILE =
     File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_DATA_FILE;
@@ -1541,6 +1548,35 @@ TEST_F(ShowTableDetailsTest, EmptyTables) {
                           {i(5), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
                            i(5), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0), i(0), i(0), i(0),
                            i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0), i(NULL_BIGINT)}},
+                         result);
+  }
+  // clang-format on
+}
+
+TEST_F(ShowTableDetailsTest, NotCaseSensitive) {
+  sql("create table TEST_table_1 (c1 int, c2 text);");
+
+  TQueryResult result;
+  sql(result, "show table details test_TABLE_1;");
+  assertExpectedHeaders(result);
+
+  // clang-format off
+  if (isDistributedMode()) {
+    assertResultSetEqual({{i(0), i(1), "TEST_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)},
+                          {i(1), i(1), "TEST_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)}}, 
+                         result);
+  }
+  else {
+    assertResultSetEqual({{i(1), "TEST_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
+                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
+                           i(0), i(0), i(0), i(0), i(0), i(NULL_BIGINT), i(0), i(0), i(0),
+                           i(NULL_BIGINT)}}, 
                          result);
   }
   // clang-format on

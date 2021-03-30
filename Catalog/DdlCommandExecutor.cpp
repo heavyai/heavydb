@@ -1124,13 +1124,17 @@ std::vector<std::string> ShowTableDetailsCommand::getFilteredTableNames() {
   auto& ddl_payload = extractPayload(ddl_data_);
   auto all_table_names =
       catalog->getTableNamesForUser(session_ptr_->get_currentUser(), GET_PHYSICAL_TABLES);
+  std::transform(all_table_names.begin(),
+                 all_table_names.end(),
+                 all_table_names.begin(),
+                 [](const std::string& s) { return to_upper(s); });
   std::vector<std::string> filtered_table_names;
   if (ddl_payload.HasMember("tableNames")) {
     std::set<std::string> all_table_names_set(all_table_names.begin(),
                                               all_table_names.end());
     for (const auto& table_name_json : ddl_payload["tableNames"].GetArray()) {
       std::string table_name = table_name_json.GetString();
-      if (all_table_names_set.find(table_name) == all_table_names_set.end()) {
+      if (all_table_names_set.find(to_upper(table_name)) == all_table_names_set.end()) {
         throw std::runtime_error{"Unable to show table details for table: " + table_name +
                                  ". Table does not exist."};
       }
