@@ -2938,6 +2938,21 @@ void Catalog::setMaxRows(const int32_t table_id, const int64_t max_rows) {
   td->fragmenter->dropFragmentsToSize(max_rows);
 }
 
+// For testing purposes only
+void Catalog::setUncappedTableEpoch(const std::string& table_name) {
+  cat_write_lock write_lock(this);
+  auto td_entry = tableDescriptorMap_.find(to_upper(table_name));
+  CHECK(td_entry != tableDescriptorMap_.end());
+  auto td = td_entry->second;
+  TableDescriptorUpdateParams table_update_params(td);
+  table_update_params.max_rollback_epochs = -1;
+  alterTableMetadata(td, table_update_params);
+
+  File_Namespace::FileMgrParams file_mgr_params;
+  file_mgr_params.max_rollback_epochs = -1;
+  setTableFileMgrParams(td->tableId, file_mgr_params);
+}
+
 void Catalog::setTableFileMgrParams(
     const int table_id,
     const File_Namespace::FileMgrParams& file_mgr_params) {
@@ -4299,7 +4314,8 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
     CHECK(sort_cd);
     with_options.push_back("SORT_COLUMN='" + sort_cd->columnName + "'");
   }
-  if (td->maxRollbackEpochs != DEFAULT_MAX_ROLLBACK_EPOCHS) {
+  if (td->maxRollbackEpochs != DEFAULT_MAX_ROLLBACK_EPOCHS &&
+      td->maxRollbackEpochs != -1) {
     with_options.push_back("MAX_ROLLBACK_EPOCHS=" +
                            std::to_string(td->maxRollbackEpochs));
   }
@@ -4452,7 +4468,8 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
   if (!foreign_table && (dump_defaults || td->maxRows != DEFAULT_MAX_ROWS)) {
     with_options.push_back("MAX_ROWS=" + std::to_string(td->maxRows));
   }
-  if (dump_defaults || td->maxRollbackEpochs != DEFAULT_MAX_ROLLBACK_EPOCHS) {
+  if ((dump_defaults || td->maxRollbackEpochs != DEFAULT_MAX_ROLLBACK_EPOCHS) &&
+      td->maxRollbackEpochs != -1) {
     with_options.push_back("MAX_ROLLBACK_EPOCHS=" +
                            std::to_string(td->maxRollbackEpochs));
   }

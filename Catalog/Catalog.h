@@ -470,6 +470,9 @@ class Catalog final {
 
   void updateLeaf(const LeafHostInfo& string_dict_host);
 
+  // For testing purposes only
+  void setUncappedTableEpoch(const std::string& table_name);
+
  protected:
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();
