@@ -121,7 +121,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
           column_fetcher.columnarized_table_cache_);
       // We use the size of the first column to be the size of the output column
       if (!output_column_size) {
-        output_column_size = buf_elem_count;
+        output_column_size = (buf_elem_count ? buf_elem_count : 1);
       }
       if (ti.is_column_list()) {
         if (col_index == -1) {
@@ -268,12 +268,6 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   std::vector<int64_t*> output_col_buf_ptrs;
   for (size_t i = 0; i < num_out_columns; i++) {
     output_col_buf_ptrs.emplace_back(output_buffers_ptr + i * allocated_output_row_count);
-  }
-
-  if (allocated_output_row_count == 0) {
-    // don't bother executing the UDTF when the row count is zero
-    query_buffers->getResultSet(0)->updateStorageEntryCount(0);
-    return query_buffers->getResultSetOwned(0);
   }
 
   // execute

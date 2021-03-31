@@ -1684,6 +1684,23 @@ ResultSetPtr Executor::executeTableFunction(
     const ExecutionOptions& eo,
     const Catalog_Namespace::Catalog& cat) {
   INJECT_TIMER(Exec_executeTableFunction);
+
+  if (eo.just_validate) {
+    QueryMemoryDescriptor query_mem_desc(this,
+                                         /*entry_count=*/0,
+                                         QueryDescriptionType::Projection,
+                                         /*is_table_function=*/true);
+    query_mem_desc.setOutputColumnar(true);
+    return std::make_shared<ResultSet>(
+        target_exprs_to_infos(exe_unit.target_exprs, query_mem_desc),
+        co.device_type,
+        ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
+        this->getRowSetMemoryOwner(),
+        this->getCatalog(),
+        this->blockSize(),
+        this->gridSize());
+  }
+
   nukeOldState(false, table_infos, PlanState::DeletedColumnsMap{}, nullptr);
 
   ColumnCacheMap column_cache;  // Note: if we add retries to the table function
