@@ -159,14 +159,20 @@ struct Column {
 
   DEVICE Column<T>& operator=(const Column<T>& other) {
     const auto& other_ptr = &other[0];
-    if (sz == other.getSize() && other_ptr != nullptr) {
+    if (other.getSize() == 0) {
+      sz = 0;
+    } else if (sz == other.getSize() && other_ptr != nullptr) {
 #ifndef __CUDACC__
       memcpy(ptr, other_ptr, other.getSize() * sizeof(T));
 #else
       assert(false);
 #endif
     } else {
-      sz = -2;  // indicates a failure in copying other data
+#ifndef __CUDACC__
+      throw std::runtime_error("cannot assign columns: sizes mismatch or lack of data");
+#else
+      sz = -2;
+#endif
     }
     return *this;
   }
