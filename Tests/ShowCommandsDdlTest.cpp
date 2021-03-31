@@ -996,6 +996,20 @@ TEST_F(ShowCreateTableTest, NotCaseSensitive) {
                       {{"CREATE TABLE showcreatetabletest (\n  c1 INTEGER);"}});
 }
 
+TEST_F(ShowCreateTableTest, TableWithUncappedEpoch) {
+  sql("CREATE TABLE showcreatetabletest (c1 INTEGER);");
+  getCatalog().setUncappedTableEpoch("showcreatetabletest");
+  sqlAndCompareResult("SHOW CREATE TABLE showcreatetabletest;",
+                      {{"CREATE TABLE showcreatetabletest (\n  c1 INTEGER);"}});
+}
+
+TEST_F(ShowCreateTableTest, TableWithMaxRollbackEpochs) {
+  sql("CREATE TABLE showcreatetabletest (c1 INTEGER) WITH (MAX_ROLLBACK_EPOCHS = 10);");
+  sqlAndCompareResult("SHOW CREATE TABLE showcreatetabletest;",
+                      {{"CREATE TABLE showcreatetabletest (\n  c1 INTEGER)\nWITH "
+                        "(MAX_ROLLBACK_EPOCHS=10);"}});
+}
+
 namespace {
 const int64_t PAGES_PER_DATA_FILE =
     File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_DATA_FILE;

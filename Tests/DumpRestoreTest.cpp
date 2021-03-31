@@ -285,6 +285,17 @@ class DumpAndRestoreTest : public ::testing::Test {
       }
     }
   }
+
+  void sqlAndCompareResult(const std::string& sql,
+                           const std::vector<int64_t>& expected_values) {
+    auto result = run_multiple_agg(sql);
+    ASSERT_EQ(expected_values.size(), result->rowCount());
+    for (auto expected_value : expected_values) {
+      auto row = result->getNextRow(true, true);
+      auto& target_value = boost::get<ScalarTargetValue>(row[0]);
+      EXPECT_EQ(expected_value, boost::get<int64_t>(target_value));
+    }
+  }
 };
 
 TEST_F(DumpAndRestoreTest, Geo_DifferentEncodings) {
@@ -374,6 +385,38 @@ TEST_F(DumpAndRestoreTest, TextArray) {
   run_ddl_statement("DUMP TABLE test_table TO '" + tar_ball_path + "';");
   run_ddl_statement("RESTORE TABLE test_table_2 FROM '" + tar_ball_path + "';");
   sqlAndCompareArrayResult("SELECT * FROM test_table_2;", expected_result);
+}
+
+TEST_F(DumpAndRestoreTest, TableWithUncappedEpoch) {
+  run_ddl_statement("CREATE TABLE test_table (i INTEGER);");
+  QR::get()->getCatalog()->setUncappedTableEpoch("test_table");
+  run_multiple_agg("INSERT INTO test_table VALUES(1);");
+  run_multiple_agg("INSERT INTO test_table VALUES(2);");
+  run_multiple_agg("INSERT INTO test_table VALUES(3);");
+
+  sqlAndCompareResult("SELECT * FROM test_table;", {1, 2, 3});
+  run_ddl_statement("DUMP TABLE test_table TO '" + tar_ball_path + "';");
+  run_ddl_statement("RESTORE TABLE test_table_2 FROM '" + tar_ball_path + "';");
+  sqlAndCompareResult("SELECT * FROM test_table_2;", {1, 2, 3});
+  auto td = QR::get()->getCatalog()->getMetadataForTable("test_table_2", false);
+  ASSERT_TRUE(td != nullptr);
+  ASSERT_EQ(DEFAULT_MAX_ROLLBACK_EPOCHS, td->maxRollbackEpochs);
+}
+
+TEST_F(DumpAndRestoreTest, TableWithMaxRollbackEpochs) {
+  run_ddl_statement(
+      "CREATE TABLE test_table (i INTEGER) WITH (max_rollback_epochs = 10);");
+  run_multiple_agg("INSERT INTO test_table VALUES(1);");
+  run_multiple_agg("INSERT INTO test_table VALUES(2);");
+  run_multiple_agg("INSERT INTO test_table VALUES(3);");
+
+  sqlAndCompareResult("SELECT * FROM test_table;", {1, 2, 3});
+  run_ddl_statement("DUMP TABLE test_table TO '" + tar_ball_path + "';");
+  run_ddl_statement("RESTORE TABLE test_table_2 FROM '" + tar_ball_path + "';");
+  sqlAndCompareResult("SELECT * FROM test_table_2;", {1, 2, 3});
+  auto td = QR::get()->getCatalog()->getMetadataForTable("test_table_2", false);
+  ASSERT_TRUE(td != nullptr);
+  ASSERT_EQ(10, td->maxRollbackEpochs);
 }
 
 int main(int argc, char** argv) {
