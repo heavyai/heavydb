@@ -433,12 +433,24 @@ struct DataTypeFragmentSizeAndDataWrapperParam {
   std::string extension;
 };
 
-struct AppendRefreshTestParam {
+using AppendRefreshTestParam =
+    std::tuple<int, std::string, std::string, std::string, bool, bool>;
+
+struct AppendRefreshTestStruct {
+  AppendRefreshTestStruct(const AppendRefreshTestParam& tuple) {
+    fragment_size = std::get<0>(tuple);
+    wrapper = std::get<1>(tuple);
+    filename = std::get<2>(tuple);
+    file_display = std::get<3>(tuple);
+    recover_cache = std::get<4>(tuple);
+    evict = std::get<5>(tuple);
+  }
   int fragment_size;
   std::string wrapper;
   std::string filename;
   std::string file_display;
   bool recover_cache;
+  bool evict;
 };
 
 class DataTypeFragmentSizeAndDataWrapperTest
@@ -478,9 +490,11 @@ struct PrintToStringParamName {
   std::string operator()(
       const ::testing::TestParamInfo<AppendRefreshTestParam>& info) const {
     std::stringstream ss;
-    ss << "Fragment_size_" << info.param.fragment_size << "_Data_wrapper_"
-       << info.param.wrapper << "_file_" << info.param.file_display
-       << (info.param.recover_cache ? "_recover" : "");
+    auto param_struct = AppendRefreshTestStruct(info.param);
+    ss << "Fragment_size_" << param_struct.fragment_size << "_Data_wrapper_"
+       << param_struct.wrapper << "_file_" << param_struct.file_display
+       << (param_struct.recover_cache ? "_recover" : "")
+       << (param_struct.evict ? "_evict" : "");
     return ss.str();
   }
   std::string operator()(
@@ -2130,6 +2144,10 @@ class AppendRefreshTest : public RecoverCacheQueryTest,
     sqlDropForeignTable(0, default_name);
     RecoverCacheQueryTest::TearDown();
   }
+  AppendRefreshTestStruct getParamStruct() { return AppendRefreshTestStruct{GetParam()}; }
+  std::string evictString() {
+    return getParamStruct().evict ? " WITH (evict = true)" : " WITH (evict = false)";
+  }
 };
 
 TEST_F(AppendRefreshTest, CSV_MissingFileArchive) {
@@ -2169,114 +2187,176 @@ INSTANTIATE_TEST_SUITE_P(
     AppendParamaterizedTests,
     FragmentSizesAppendRefreshTest,
     ::testing::Values(
-        AppendRefreshTestParam{1, "csv", "single_file.csv", "single_csv", false},
+        AppendRefreshTestParam{1, "csv", "single_file.csv", "single_csv", false, false},
         AppendRefreshTestParam{1,
                                "parquet",
                                "single_file.parquet",
                                "single_parquet",
+                               false,
                                false},
-        AppendRefreshTestParam{1, "csv", "csv_dir_file", "csv_dir", false},
-        AppendRefreshTestParam{1, "parquet", "parquet_dir_file", "parquet_dir", false},
-        AppendRefreshTestParam{1, "csv", "dir_file.zip", "csv_dir_zip", false},
+        AppendRefreshTestParam{1, "csv", "csv_dir_file", "csv_dir", false, false},
+        AppendRefreshTestParam{1,
+                               "parquet",
+                               "parquet_dir_file",
+                               "parquet_dir",
+                               false,
+                               false},
+        AppendRefreshTestParam{1, "csv", "dir_file.zip", "csv_dir_zip", false, false},
         AppendRefreshTestParam{1,
                                "csv",
                                "csv_dir_file_multi",
                                "csv_dir_file_multi",
+                               false,
                                false},
         AppendRefreshTestParam{1,
                                "parquet",
                                "parquet_dir_file_multi",
                                "parquet_dir_file_multi",
+                               false,
                                false},
         AppendRefreshTestParam{1,
                                "csv",
                                "dir_file_multi.zip",
                                "csv_dir_multi_zip",
+                               false,
                                false},
-        AppendRefreshTestParam{1, "csv", "single_file.zip", "csv_single_zip", false},
-        AppendRefreshTestParam{4, "csv", "single_file.csv", "single_csv", false},
+        AppendRefreshTestParam{1,
+                               "csv",
+                               "single_file.zip",
+                               "csv_single_zip",
+                               false,
+                               false},
+        AppendRefreshTestParam{4, "csv", "single_file.csv", "single_csv", false, false},
         AppendRefreshTestParam{4,
                                "parquet",
                                "single_file.parquet",
                                "single_parquet",
+                               false,
                                false},
-        AppendRefreshTestParam{4, "csv", "csv_dir_file", "csv_dir", false},
-        AppendRefreshTestParam{4, "parquet", "parquet_dir_file", "parquet_dir", false},
-        AppendRefreshTestParam{4, "csv", "dir_file.zip", "csv_dir_zip", false},
+        AppendRefreshTestParam{4, "csv", "csv_dir_file", "csv_dir", false, false},
+        AppendRefreshTestParam{4,
+                               "parquet",
+                               "parquet_dir_file",
+                               "parquet_dir",
+                               false,
+                               false},
+        AppendRefreshTestParam{4, "csv", "dir_file.zip", "csv_dir_zip", false, false},
         AppendRefreshTestParam{4,
                                "csv",
                                "csv_dir_file_multi",
                                "csv_dir_file_multi",
+                               false,
                                false},
         AppendRefreshTestParam{4,
                                "parquet",
                                "parquet_dir_file_multi",
                                "parquet_dir_file_multi",
+                               false,
                                false},
         AppendRefreshTestParam{4,
                                "csv",
                                "dir_file_multi.zip",
                                "csv_dir_multi_zip",
+                               false,
                                false},
-        AppendRefreshTestParam{4, "csv", "single_file.zip", "csv_single_zip", false},
-        AppendRefreshTestParam{32000000, "csv", "single_file.csv", "single_csv", false},
+        AppendRefreshTestParam{4,
+                               "csv",
+                               "single_file.zip",
+                               "csv_single_zip",
+                               false,
+                               false},
+        AppendRefreshTestParam{32000000,
+                               "csv",
+                               "single_file.csv",
+                               "single_csv",
+                               false,
+                               false},
         AppendRefreshTestParam{32000000,
                                "parquet",
                                "single_file.parquet",
                                "single_parquet",
+                               false,
                                false},
-        AppendRefreshTestParam{32000000, "csv", "csv_dir_file", "csv_dir", false},
+        AppendRefreshTestParam{32000000, "csv", "csv_dir_file", "csv_dir", false, false},
         AppendRefreshTestParam{32000000,
                                "parquet",
                                "parquet_dir_file",
                                "parquet_dir",
+                               false,
                                false},
-        AppendRefreshTestParam{32000000, "csv", "dir_file.zip", "csv_dir_zip"},
+        AppendRefreshTestParam{32000000,
+                               "csv",
+                               "dir_file.zip",
+                               "csv_dir_zip",
+                               false,
+                               false},
         AppendRefreshTestParam{32000000,
                                "csv",
                                "csv_dir_file_multi",
                                "csv_dir_file_multi",
+                               false,
                                false},
         AppendRefreshTestParam{32000000,
                                "parquet",
                                "parquet_dir_file_multi",
                                "parquet_dir_file_multi",
+                               false,
                                false},
         AppendRefreshTestParam{32000000,
                                "csv",
                                "dir_file_multi.zip",
                                "csv_dir_multi_zip",
+                               false,
                                false},
         AppendRefreshTestParam{32000000,
                                "csv",
                                "single_file.zip",
                                "csv_single_zip",
+                               false,
                                false},
-        AppendRefreshTestParam{1, "csv", "single_file.csv", "single_csv", true},
+        AppendRefreshTestParam{1, "csv", "single_file.csv", "single_csv", true, false},
         AppendRefreshTestParam{1,
                                "parquet",
                                "single_file.parquet",
                                "single_parquet",
-                               true},
-        AppendRefreshTestParam{1, "csv", "csv_dir_file", "csv_dir", true},
-        AppendRefreshTestParam{1, "parquet", "parquet_dir_file", "parquet_dir", true},
-        AppendRefreshTestParam{1, "csv", "dir_file.zip", "csv_dir_zip", true},
+                               true,
+                               false},
+        AppendRefreshTestParam{1, "csv", "csv_dir_file", "csv_dir", true, false},
+        AppendRefreshTestParam{1,
+                               "parquet",
+                               "parquet_dir_file",
+                               "parquet_dir",
+                               true,
+                               false},
+        AppendRefreshTestParam{1, "csv", "dir_file.zip", "csv_dir_zip", true, false},
         AppendRefreshTestParam{1,
                                "csv",
                                "csv_dir_file_multi",
                                "csv_dir_file_multi",
-                               true},
+                               true,
+                               false},
         AppendRefreshTestParam{1,
                                "parquet",
                                "parquet_dir_file_multi",
                                "parquet_dir_file_multi",
-                               true},
-        AppendRefreshTestParam{1, "csv", "dir_file_multi.zip", "csv_dir_multi_zip", true},
-        AppendRefreshTestParam{1, "csv", "single_file.zip", "csv_single_zip", true}),
+                               true,
+                               false},
+        AppendRefreshTestParam{1,
+                               "csv",
+                               "dir_file_multi.zip",
+                               "csv_dir_multi_zip",
+                               true,
+                               false},
+        AppendRefreshTestParam{1,
+                               "csv",
+                               "single_file.zip",
+                               "csv_single_zip",
+                               true,
+                               false}),
     PrintToStringParamName());
 
 TEST_P(FragmentSizesAppendRefreshTest, AppendFrags) {
-  auto& param = GetParam();
+  auto param = getParamStruct();
   int fragment_size = param.fragment_size;
   std::string filename = param.filename;
 
@@ -2357,47 +2437,29 @@ TEST_P(FragmentSizesAppendRefreshTest, AppendFrags) {
 // Test that string dictionaries are populated correctly after an append
 class StringDictAppendTest : public AppendRefreshTest {};
 
-INSTANTIATE_TEST_SUITE_P(
-    StringDictAppendParamaterizedTests,
-    StringDictAppendTest,
-    ::testing::Values(
-        AppendRefreshTestParam{32000000,  // Fragment is modified during append
-                               "parquet",
-                               "parquet_string_dir",
-                               "parquet_string_dir",
-                               false},
-        AppendRefreshTestParam{5,  // Incomplete fragments created during the append
-                               "parquet",
-                               "parquet_string_dir",
-                               "parquet_string_dir",
-                               false},
-        AppendRefreshTestParam{
-            2,  // Complete + Incomplete fragments are created during the append
-            "parquet",
-            "parquet_string_dir",
-            "parquet_string_dir",
-            false},
-        AppendRefreshTestParam{32000000,  // Fragment is modified during append
-                               "csv",
-                               "csv_string_dir",
-                               "csv_string_dir",
-                               false},
-        AppendRefreshTestParam{5,  // Incomplete fragments created during the append
-                               "csv",
-                               "csv_string_dir",
-                               "csv_string_dir",
-                               false},
-        AppendRefreshTestParam{2,  // Fragment is modified during append
-                               "csv",
-                               "csv_string_dir",
-                               "csv_string_dir",
-                               false}));
+INSTANTIATE_TEST_SUITE_P(StringDictAppendParamaterizedTestsCsv,
+                         StringDictAppendTest,
+                         testing::Combine(testing::Values(2, 5, 3200000),
+                                          testing::Values("csv"),
+                                          testing::Values("csv_string_dir"),
+                                          testing::Values("csv_string_dir"),
+                                          testing::Values(true, false),
+                                          testing::Values(true, false)));
+
+INSTANTIATE_TEST_SUITE_P(StringDictAppendParamaterizedTestsParquet,
+                         StringDictAppendTest,
+                         testing::Combine(testing::Values(2, 5, 3200000),
+                                          testing::Values("parquet"),
+                                          testing::Values("parquet_string_dir"),
+                                          testing::Values("parquet_string_dir"),
+                                          testing::Values(true, false),
+                                          testing::Values(true, false)));
 
 TEST_P(StringDictAppendTest, AppendStringDictFilter) {
   // Create initial files and tables
   bf::remove_all(getDataFilesPath() + "append_tmp");
   recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
-  auto& param = GetParam();
+  auto param = getParamStruct();
   int fragment_size = param.fragment_size;
   std::string filename = param.filename;
   std::string query =
@@ -2425,8 +2487,7 @@ TEST_P(StringDictAppendTest, AppendStringDictFilter) {
   bf::remove_all(getDataFilesPath() + "append_tmp");
   recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
 
-  // Refresh command
-  sql("REFRESH FOREIGN TABLES " + default_name + ";");
+  sql("REFRESH FOREIGN TABLES " + default_name + evictString() + ";");
   {
     TQueryResult result;
     sql(result, "SELECT count(txt) from " + default_name + " WHERE txt = 'aaaa';");
@@ -2443,7 +2504,7 @@ TEST_P(StringDictAppendTest, AppendStringDictJoin) {
   // Create initial files and tables
   bf::remove_all(getDataFilesPath() + "append_tmp");
   recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
-  auto& param = GetParam();
+  auto param = getParamStruct();
   int fragment_size = param.fragment_size;
   std::string name_1 = default_name + "_1";
   std::string name_2 = default_name + "_2";
@@ -2476,8 +2537,8 @@ TEST_P(StringDictAppendTest, AppendStringDictJoin) {
   recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
 
   // Refresh command
-  sql("REFRESH FOREIGN TABLES " + name_1 + "  WITH (evict = true) ;");
-  sql("REFRESH FOREIGN TABLES " + name_2 + " WITH (evict = true);");
+  sql("REFRESH FOREIGN TABLES " + name_1 + evictString() + ";");
+  sql("REFRESH FOREIGN TABLES " + name_2 + evictString() + ";");
 
   {
     TQueryResult result;
@@ -2501,21 +2562,23 @@ INSTANTIATE_TEST_SUITE_P(
     AppendParamaterizedTests,
     DataWrapperAppendRefreshTest,
     ::testing::Values(
-        AppendRefreshTestParam{1, "csv", "single_file.csv", "single_csv", false},
+        AppendRefreshTestParam{1, "csv", "single_file.csv", "single_csv", false, false},
         AppendRefreshTestParam{1,
                                "parquet",
                                "single_file.parquet",
                                "single_parquet",
+                               false,
                                false},
-        AppendRefreshTestParam{1, "csv", "single_file.csv", "single_csv", true},
+        AppendRefreshTestParam{1, "csv", "single_file.csv", "single_csv", true, false},
         AppendRefreshTestParam{1,
                                "parquet",
                                "single_file.parquet",
                                "single_parquet",
-                               true}));
+                               true,
+                               false}));
 
 TEST_P(DataWrapperAppendRefreshTest, AppendNothing) {
-  auto& param = GetParam();
+  auto param = getParamStruct();
   int fragment_size = 1;
   std::string filename = "single_file." + param.wrapper;
 
@@ -2554,7 +2617,7 @@ TEST_P(DataWrapperAppendRefreshTest, AppendNothing) {
 
 TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
   int fragment_size = 1;
-  std::string wrapper = GetParam().wrapper;
+  std::string wrapper = getParamStruct().wrapper;
   std::string filename = "single_file_delete_rows." + wrapper;
   // Create initial files and tables
   bf::remove_all(getDataFilesPath() + "append_tmp");
@@ -2587,7 +2650,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
 
 TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
   int fragment_size = 1;
-  std::string wrapper = GetParam().wrapper;
+  std::string wrapper = getParamStruct().wrapper;
   std::string filename = wrapper + "_dir_missing_file";
 
   // Create initial files and tables
@@ -2624,7 +2687,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
 // directory but an update is made to only one of the files.
 TEST_P(DataWrapperAppendRefreshTest, MultifileAppendtoFile) {
   int fragment_size = 1;
-  std::string wrapper = GetParam().wrapper;
+  std::string wrapper = getParamStruct().wrapper;
   std::string filename = wrapper + "_dir_file_multi_bad_append";
 
   // Create initial files and tables
