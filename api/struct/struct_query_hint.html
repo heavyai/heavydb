@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev c6fa9b7
+                5.7.0dev 380133c
               </div>
             
           
@@ -780,6 +780,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classanonymous__namespace_02_expression_rewrite_8cpp_03_1_1_or_to_in_visitor.html">Class anonymous_namespace{ExpressionRewrite.cpp}::OrToInVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classanonymous__namespace_02_expression_rewrite_8cpp_03_1_1_recursive_or_to_in_visitor.html">Class anonymous_namespace{ExpressionRewrite.cpp}::RecursiveOrToInVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classanonymous__namespace_02_from_table_reordering_8cpp_03_1_1_scheduling_dependency_tracking.html">Class anonymous_namespace{FromTableReordering.cpp}::SchedulingDependencyTracking</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classanonymous__namespace_02_i_r_codegen_8cpp_03_1_1_expr_table_id_visitor.html">Class anonymous_namespace{IRCodegen.cpp}::ExprTableIdVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classanonymous__namespace_02_join_filter_push_down_8cpp_03_1_1_bind_filter_to_outermost_visitor.html">Class anonymous_namespace{JoinFilterPushDown.cpp}::BindFilterToOutermostVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classanonymous__namespace_02_join_filter_push_down_8cpp_03_1_1_collect_input_columns_visitor.html">Class anonymous_namespace{JoinFilterPushDown.cpp}::CollectInputColumnsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_bucket_size_tuner.html">Class anonymous_namespace{OverlapsJoinHashTable.cpp}::BucketSizeTuner</a></li>
@@ -995,6 +996,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1tests_1_1_distributed_concurrency_test.html">Class com::mapd::tests::DistributedConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1tests_1_1_eagain_concurrency_test.html">Class com::mapd::tests::EagainConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1tests_1_1_foreign_storage_concurrency_test.html">Class com::mapd::tests::ForeignStorageConcurrencyTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1tests_1_1_foreign_table_refresh_concurrency_test.html">Class com::mapd::tests::ForeignTableRefreshConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test.html">Class com::mapd::tests::ImportAlterValidateSelectConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1tests_1_1_mapd_asserts.html">Class com::mapd::tests::MapdAsserts</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1tests_1_1_mapd_test_client.html">Class com::mapd::tests::MapdTestClient</a></li>
@@ -2003,8 +2005,18 @@
 <dd></dd></dl>
 
 <dl class="member">
+<dt id="_CPPv4N9QueryHint17overlaps_no_cacheE">
+<span id="_CPPv3N9QueryHint17overlaps_no_cacheE"></span><span id="_CPPv2N9QueryHint17overlaps_no_cacheE"></span><span id="QueryHint::overlaps_no_cache__b"></span><span class="target" id="struct_query_hint_1aab23b09cc4fccde10277686268e20e18"></span>bool <code class="sig-name descname">overlaps_no_cache</code><a class="headerlink" href="#_CPPv4N9QueryHint17overlaps_no_cacheE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N9QueryHint21overlaps_keys_per_binE">
+<span id="_CPPv3N9QueryHint21overlaps_keys_per_binE"></span><span id="_CPPv2N9QueryHint21overlaps_keys_per_binE"></span><span id="QueryHint::overlaps_keys_per_bin__double"></span><span class="target" id="struct_query_hint_1a2997b4f7a8ae480a41ec086f7aca2e4a"></span>double <code class="sig-name descname">overlaps_keys_per_bin</code><a class="headerlink" href="#_CPPv4N9QueryHint21overlaps_keys_per_binE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
 <dt>
-<span class="target" id="struct_query_hint_1a20ea6fece160554338bab0e786278846"></span><code class="sig-name descname">std::unordered_map&lt;std::string, size_t&gt; QueryHint::OMNISCI_SUPPORTED_HINT_CLASS= {      {&quot;cpu_mode&quot;, 0},      {&quot;overlaps_bucket_threshold&quot;, 1},      {&quot;overlaps_max_size&quot;, 2},      {&quot;overlaps_allow_gpu_build&quot;, 3}}</code></dt>
+<span class="target" id="struct_query_hint_1a20ea6fece160554338bab0e786278846"></span><code class="sig-name descname">std::unordered_map&lt;std::string, size_t&gt; QueryHint::OMNISCI_SUPPORTED_HINT_CLASS= {      {&quot;cpu_mode&quot;, 0},      {&quot;overlaps_bucket_threshold&quot;, 1},      {&quot;overlaps_max_size&quot;, 2},      {&quot;overlaps_allow_gpu_build&quot;, 3},      {&quot;overlaps_no_cache&quot;, 4},      {&quot;overlaps_keys_per_bin&quot;, 5}}</code></dt>
 <dd></dd></dl>
 
 <dl class="member">

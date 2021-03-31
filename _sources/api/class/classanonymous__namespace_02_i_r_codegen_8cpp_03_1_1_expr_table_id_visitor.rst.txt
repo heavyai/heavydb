@@ -1,0 +1,9 @@
+Class anonymous_namespace{IRCodegen.cpp}::ExprTableIdVisitor
+============================================================
+
+.. doxygenclass:: anonymous_namespace{IRCodegen.cpp}::ExprTableIdVisitor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
