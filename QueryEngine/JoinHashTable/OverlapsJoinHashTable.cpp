@@ -521,6 +521,7 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
 
   auto overlaps_max_table_size_bytes = g_overlaps_max_table_size_bytes;
   std::optional<double> overlaps_threshold_override;
+  double overlaps_target_entries_per_bin = g_overlaps_target_entries_per_bin;
   auto query_hint = getRegisteredQueryHint();
   auto skip_hashtable_caching = false;
   if (query_hint.isHintRegistered("overlaps_bucket_threshold")) {
@@ -550,6 +551,13 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
     VLOG(1) << "User requests to skip caching overlaps join hashtable and its tuned "
                "parameters for this query";
     skip_hashtable_caching = true;
+  }
+  if (query_hint.isHintRegistered("overlaps_keys_per_bin")) {
+    VLOG(1) << "User requests to change a threshold \'overlaps_keys_per_bin\' via query "
+               "hint: "
+            << overlaps_target_entries_per_bin << " -> "
+            << query_hint.overlaps_keys_per_bin;
+    overlaps_target_entries_per_bin = query_hint.overlaps_keys_per_bin;
   }
 
   std::vector<ColumnsForDevice> columns_per_device;
@@ -700,7 +708,7 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
 
       // manages the tuning state machine
       TuningState tuning_state(overlaps_max_table_size_bytes,
-                               g_overlaps_target_entries_per_bin);
+                               overlaps_target_entries_per_bin);
       while (tuner.tuneOneStep(tuning_state.tuning_direction)) {
         const auto inverse_bucket_sizes = tuner.getInverseBucketSizes();
 

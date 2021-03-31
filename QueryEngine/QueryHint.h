@@ -38,6 +38,7 @@ struct QueryHint {
     overlaps_max_size = other.overlaps_max_size;
     overlaps_allow_gpu_build = other.overlaps_allow_gpu_build;
     overlaps_no_cache = other.overlaps_no_cache;
+    overlaps_keys_per_bin = other.overlaps_keys_per_bin;
     registered_hint = other.registered_hint;
     return *this;
   }
@@ -48,6 +49,7 @@ struct QueryHint {
     overlaps_max_size = other.overlaps_max_size;
     overlaps_allow_gpu_build = other.overlaps_allow_gpu_build;
     overlaps_no_cache = other.overlaps_no_cache;
+    overlaps_keys_per_bin = other.overlaps_keys_per_bin;
     registered_hint = other.registered_hint;
   }
 
@@ -59,13 +61,15 @@ struct QueryHint {
   size_t overlaps_max_size;
   bool overlaps_allow_gpu_build;
   bool overlaps_no_cache;
+  double overlaps_keys_per_bin;
 
   std::unordered_map<std::string, size_t> OMNISCI_SUPPORTED_HINT_CLASS = {
       {"cpu_mode", 0},
       {"overlaps_bucket_threshold", 1},
       {"overlaps_max_size", 2},
       {"overlaps_allow_gpu_build", 3},
-      {"overlaps_no_cache", 4}};
+      {"overlaps_no_cache", 4},
+      {"overlaps_keys_per_bin", 5}};
 
   std::vector<bool> registered_hint;
 

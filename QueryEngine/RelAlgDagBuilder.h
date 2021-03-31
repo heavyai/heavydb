@@ -1904,6 +1904,21 @@ class RelAlgDagBuilder : public boost::noncopyable {
             query_hint_.registerHint(kv.first);
             query_hint_.overlaps_no_cache = true;
             VLOG(1) << "Skip auto tuner and hashtable caching for overlaps join.";
+            break;
+          }
+          case 5: {  // overlaps_keys_per_bin
+            CHECK(target->second.getListOptions().size() == 1);
+            double overlaps_keys_per_bin = std::stod(target->second.getListOptions()[0]);
+            if (overlaps_keys_per_bin > 0.0 &&
+                overlaps_keys_per_bin < std::numeric_limits<double>::max()) {
+              query_hint_.registerHint(kv.first);
+              query_hint_.overlaps_keys_per_bin = overlaps_keys_per_bin;
+            } else {
+              VLOG(1) << "Skip the given query hint \"overlaps_keys_per_bin\" ("
+                      << overlaps_keys_per_bin
+                      << ") : the hint value should be larger than zero";
+            }
+            break;
           }
           default:
             break;
