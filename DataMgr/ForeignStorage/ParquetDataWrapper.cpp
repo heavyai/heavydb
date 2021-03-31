@@ -46,6 +46,10 @@ void reduce_metadata(std::shared_ptr<ChunkMetadata> reduce_to,
   // metadata reducution is done at metadata scan time, both string & geometry
   // columns have no valid stats to reduce beyond `has_nulls`
   if (column_type.is_string() || column_type.is_geometry()) {
+    // Reset to invalid range, as formerly valid metadata
+    // needs to be invalidated during an append for these types
+    reduce_to->chunkStats.max = reduce_from->chunkStats.max;
+    reduce_to->chunkStats.min = reduce_from->chunkStats.min;
     return;
   }
 
@@ -416,30 +420,43 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
   auto metadata = chunk_loader.loadChunk(
       row_group_intervals, parquet_column_index, chunks, string_dictionary);
   auto fragmenter = foreign_table_->fragmenter;
-  if (fragmenter) {
-    auto metadata_iter = metadata.begin();
-    for (int column_id = column_interval.start; column_id <= column_interval.end;
-         ++column_id, ++metadata_iter) {
-      auto column = schema_->getColumnDescriptor(column_id);
-      ChunkKey data_chunk_key = {db_id_, foreign_table_->tableId, column_id, fragment_id};
-      if (column->columnType.is_varlen_indeed()) {
-        data_chunk_key.emplace_back(1);
-      }
-      CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
-      auto cached_metadata = chunk_metadata_map_.at(data_chunk_key);
-      auto updated_metadata = std::make_shared<ChunkMetadata>();
-      *updated_metadata = *cached_metadata;
-      // for certain types, update the metadata statistics
-      if (is_dictionary_encoded_string_column ||
-          logical_column->columnType.is_geometry()) {
-        CHECK(metadata_iter != metadata.end());
-        auto& chunk_metadata_ptr = *metadata_iter;
-        updated_metadata->chunkStats.max = chunk_metadata_ptr->chunkStats.max;
-        updated_metadata->chunkStats.min = chunk_metadata_ptr->chunkStats.min;
-      }
-      CHECK(required_buffers.find(data_chunk_key) != required_buffers.end());
-      updated_metadata->numBytes = required_buffers.at(data_chunk_key)->size();
-      fragmenter->updateColumnChunkMetadata(column, fragment_id, updated_metadata);
+
+  auto metadata_iter = metadata.begin();
+  for (int column_id = column_interval.start; column_id <= column_interval.end;
+       ++column_id, ++metadata_iter) {
+    auto column = schema_->getColumnDescriptor(column_id);
+    ChunkKey data_chunk_key = {db_id_, foreign_table_->tableId, column_id, fragment_id};
+    if (column->columnType.is_varlen_indeed()) {
+      data_chunk_key.emplace_back(1);
+    }
+    CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
+
+    // Allocate new shared_ptr for metadata so we dont modify old one which may be used by
+    // executor
+    auto cached_metadata_previous = chunk_metadata_map_.at(data_chunk_key);
+    chunk_metadata_map_.at(data_chunk_key) = std::make_shared<ChunkMetadata>();
+    auto cached_metadata = chunk_metadata_map_.at(data_chunk_key);
+    *cached_metadata = *cached_metadata_previous;
+
+    CHECK(required_buffers.find(data_chunk_key) != required_buffers.end());
+    cached_metadata->numBytes = required_buffers.at(data_chunk_key)->size();
+
+    // for certain types, update the metadata statistics
+    // should update the fragmenter, cache, and the internal chunk_metadata_map_
+    if (is_dictionary_encoded_string_column || logical_column->columnType.is_geometry()) {
+      CHECK(metadata_iter != metadata.end());
+      auto& chunk_metadata_ptr = *metadata_iter;
+      cached_metadata->chunkStats.max = chunk_metadata_ptr->chunkStats.max;
+      cached_metadata->chunkStats.min = chunk_metadata_ptr->chunkStats.min;
+
+      // Update stats on buffer so it is saved in cache
+      required_buffers.at(data_chunk_key)
+          ->getEncoder()
+          ->resetChunkStats(cached_metadata->chunkStats);
+    }
+
+    if (fragmenter) {
+      fragmenter->updateColumnChunkMetadata(column, fragment_id, cached_metadata);
     }
   }
 }
