@@ -64,96 +64,6 @@ void reduce_metadata(std::shared_ptr<ChunkMetadata> reduce_to,
   encoder_to->getMetadata(updated_metadata);
   reduce_to->chunkStats = updated_metadata->chunkStats;
 }
-
-struct ThreadPartitioner {
-  using ParallelismHints = std::set<ForeignStorageMgr::ParallelismHint>;
-
-  /**
-   * @brief Partition ParallelismHints for threads in a manner that equally
-   * distributes work but requires that every hint falling into a constrained
-   * column is processed by a single thread in order.
-   *
-   * @param column_fragments - the column and fragment hints to partition among threads
-   * @param constrained_columns - the columns which are to be constrained; any
-   * hints falling into this column must be processed by a single thread in
-   * order of increasing fragments
-   * @param max_threads - the maximum number of partitions to create
-   *
-   * @return a vector of ParallelismHints for each thread
-   */
-  static std::vector<ParallelismHints> partition_for_threads(
-      const ParallelismHints& column_fragments,
-      const std::set<int>& constrained_columns,
-      size_t max_threads) {
-    // keep track of a min priority_queue for threads based on their partition size
-    std::priority_queue<ThreadPartition,
-                        std::vector<ThreadPartition>,
-                        std::greater<ThreadPartition>>
-        threads;
-    for (size_t i = 0; i < max_threads; ++i) {
-      threads.push(ThreadPartition{});
-    }
-
-    // distribute constrained columns first, each one should be assigned a thread
-    // immediately if possible
-    for (const auto column_id : constrained_columns) {
-      ThreadPartition thread = threads.top();
-      threads.pop();
-      auto start_iter = column_fragments.lower_bound({column_id, 0});
-      auto end_iter = column_fragments.lower_bound({column_id + 1, 0});
-      for (auto iter = start_iter; iter != end_iter; ++iter) {
-        thread.insert(*iter);
-      }
-      threads.push(thread);
-    }
-
-    // distribute remaining column/fragments to threads, keeping partitions as equal in
-    // size as possible
-    for (const auto& col_frag : column_fragments) {
-      if (constrained_columns.find(col_frag.first) != constrained_columns.end()) {
-        continue;  // colum/fragment already spoken for
-      }
-      ThreadPartition thread = threads.top();
-      threads.pop();
-      thread.insert(col_frag);
-      threads.push(thread);
-    }
-
-    std::vector<ParallelismHints> return_value;
-    while (!threads.empty()) {
-      const auto& thread = threads.top();
-      if (thread.hints_->size()) {
-        return_value.push_back(*thread.hints_);
-      }
-      threads.pop();
-    }
-    return return_value;
-  }
-
- private:
-  struct ThreadPartition {
-    std::shared_ptr<ParallelismHints> hints_;
-    ThreadPartition() : hints_(std::make_shared<ParallelismHints>()) {}
-
-    void insert(const ForeignStorageMgr::ParallelismHint& hint) { hints_->insert(hint); }
-
-    bool operator>(const ThreadPartition& rhs) const {
-      return hints_->size() > rhs.hints_->size();
-    }
-  };
-};
-
-bool is_dict_encoded_data_chunk_key(const ColumnDescriptor* logical_column,
-                                    const ChunkKey& chunk_key) {
-  if (logical_column->columnType.is_dict_encoded_type()) {
-    if ((logical_column->columnType.is_varlen_array() && chunk_key.back() == 1) ||
-        !logical_column->columnType.is_varlen_array()) {
-      return true;
-    }
-  }
-  return false;
-}
-
 }  // namespace
 
 ParquetDataWrapper::ParquetDataWrapper() : db_id_(-1), foreign_table_(nullptr) {}
@@ -543,23 +453,14 @@ void ParquetDataWrapper::populateChunkBuffers(const ChunkToBufferMap& required_b
   CHECK(!buffers_to_load.empty());
 
   std::set<ForeignStorageMgr::ParallelismHint> col_frag_hints;
-  std::set<int> dict_encoded_columns_for_preload;
   for (const auto& [chunk_key, buffer] : buffers_to_load) {
     CHECK_EQ(buffer->size(), static_cast<size_t>(0));
-    auto logical_column = schema_->getLogicalColumn(chunk_key[CHUNK_KEY_COLUMN_IDX]);
-    if (is_dict_encoded_data_chunk_key(logical_column, chunk_key)) {
-      auto cached_metadata = chunk_metadata_map_[chunk_key];
-      CHECK(cached_metadata);
-      if (is_metadata_placeholder(*cached_metadata)) {
-        dict_encoded_columns_for_preload.insert(logical_column->columnId);
-      }
-    }
-    auto col_id = logical_column->columnId;
-    col_frag_hints.emplace(col_id, chunk_key[CHUNK_KEY_FRAGMENT_IDX]);
+    col_frag_hints.emplace(
+        schema_->getLogicalColumn(chunk_key[CHUNK_KEY_COLUMN_IDX])->columnId,
+        chunk_key[CHUNK_KEY_FRAGMENT_IDX]);
   }
 
-  auto hints_per_thread = ThreadPartitioner::partition_for_threads(
-      col_frag_hints, dict_encoded_columns_for_preload, g_max_import_threads);
+  auto hints_per_thread = partition_for_threads(col_frag_hints, g_max_import_threads);
 
   std::vector<std::future<void>> futures;
   for (const auto& hint_set : hints_per_thread) {
