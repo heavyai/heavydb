@@ -56,13 +56,13 @@
 #ifdef HAVE_AWS_S3
 #include "DataMgr/OmniSciAwsSdk.h"
 #endif
-#include "DataMgr/ForeignStorage/ForeignTableRefresh.h"
 #include "MapDRelease.h"
 #include "Shared/Compressor.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/file_delete.h"
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/scope.h"
+#include "ThriftHandler/ForeignTableRefreshScheduler.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::concurrency;

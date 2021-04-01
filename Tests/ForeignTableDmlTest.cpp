@@ -29,6 +29,7 @@
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "TestHelpers.h"
+#include "ThriftHandler/ForeignTableRefreshScheduler.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -4192,6 +4193,108 @@ TEST_F(ScheduledRefreshTest, SecondsIntervalDisabled) {
   auto query = getCreateScheduledRefreshTableQuery("10S");
   queryAndAssertException(
       query, "Exception: Invalid value provided for the REFRESH_INTERVAL option.");
+}
+
+class QueryEngineCacheInvalidationTest : public ScheduledRefreshTest,
+                                         public ::testing::WithParamInterface<bool> {
+ protected:
+  void SetUp() override {
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_1;");
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_2;");
+    ScheduledRefreshTest::SetUp();
+  }
+
+  void TearDown() override {
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_1;");
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_2;");
+    ScheduledRefreshTest::TearDown();
+  }
+
+  void setTestDir(const std::string& src_dir_name) {
+    bf::remove_all(REFRESH_TEST_DIR);
+    recursive_copy(getDataFilesPath() + src_dir_name, REFRESH_TEST_DIR);
+  }
+
+  std::string getCreateScheduledRefreshTableQuery(const std::string& table_name) {
+    auto start_date_time = getCurrentTimeString(1);
+    auto test_file_path = boost::filesystem::canonical(REFRESH_TEST_DIR);
+    std::string query = "CREATE FOREIGN TABLE " + table_name +
+                        " (txt TEXT) server "
+                        "omnisci_local_parquet with (file_path = '" +
+                        test_file_path.string() +
+                        "', refresh_update_type = 'append', refresh_timing_type = "
+                        "'scheduled', refresh_start_date_time = '" +
+                        start_date_time +
+                        "', refresh_interval = '1S', fragment_size = 2);";
+    return query;
+  }
+
+  std::string getCreateTableQuery(const std::string& table_name) {
+    auto test_file_path = boost::filesystem::canonical(REFRESH_TEST_DIR);
+    std::string query = "CREATE FOREIGN TABLE " + table_name +
+                        " (txt TEXT) server "
+                        "omnisci_local_parquet with (file_path = '" +
+                        test_file_path.string() + "', refresh_update_type = 'append'," +
+                        "fragment_size = 2);";
+    return query;
+  }
+
+  void createForeignTestTable(const std::string& table_name) {
+    const auto& use_scheduled_refresh = GetParam();
+    if (use_scheduled_refresh) {
+      sql(getCreateScheduledRefreshTableQuery(table_name));
+    } else {
+      sql(getCreateTableQuery(table_name));
+    }
+  }
+
+  void refreshForeignTables(const std::vector<std::string>& table_names) {
+    const auto& use_scheduled_refresh = GetParam();
+    if (use_scheduled_refresh) {
+      waitTwoRefreshCycles();
+    } else {
+      for (const auto& table_name : table_names) {
+        sql("REFRESH FOREIGN TABLES " + table_name + "  WITH (evict = true) ;");
+      }
+    }
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(ScheduledAndNonScheduledRefreshTest,
+                         QueryEngineCacheInvalidationTest,
+                         ::testing::Values(true, false));
+
+TEST_P(QueryEngineCacheInvalidationTest, StringDictAppendRefreshWithJoinQuery) {
+  const auto& use_scheduled_refresh = GetParam();
+  // TODO: Remove the skipping of the test once outstanding issues with
+  // ScheduledRefreshTest are resolved.
+  if (use_scheduled_refresh) {
+    GTEST_SKIP();
+  }
+  setTestDir("append_before/parquet_string_dir/");
+  createForeignTestTable("test_foreign_table_1");
+  createForeignTestTable("test_foreign_table_2");
+  std::string join_query =
+      "SELECT t1.txt, t2.txt FROM test_foreign_table_1 AS t1 JOIN test_foreign_table_2 "
+      "AS t2 ON t1.txt = t2.txt ORDER BY t1.txt;";
+  {
+    TQueryResult result;
+    sql(result, join_query);
+    assertResultSetEqual({{"a", "a"}, {"aa", "aa"}, {"aaa", "aaa"}}, result);
+  }
+  setTestDir("append_after/parquet_string_dir/");
+  refreshForeignTables({"test_foreign_table_1", "test_foreign_table_2"});
+  {
+    TQueryResult result;
+    sql(result, join_query);
+    assertResultSetEqual({{"a", "a"},
+                          {"aa", "aa"},
+                          {"aaa", "aaa"},
+                          {"aaaa", "aaaa"},
+                          {"aaaaa", "aaaaa"},
+                          {"aaaaaa", "aaaaaa"}},
+                         result);
+  }
 }
 
 class SchemaMismatchTest : public ForeignTableTest,

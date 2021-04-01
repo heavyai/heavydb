@@ -24,24 +24,4 @@ namespace foreign_storage {
 void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,
                            const std::string& table_name,
                            const bool evict_cached_entries);
-
-class ForeignTableRefreshScheduler {
- public:
-  static void start(std::atomic<bool>& is_program_running);
-  static void stop();
-
-  // The following methods are for testing purposes only
-  static void setWaitDuration(int64_t duration_in_seconds);
-  static bool isRunning();
-  static bool hasRefreshedTable();
-  static void resetHasRefreshedTable();
-
- private:
-  static std::atomic<bool> is_scheduler_running_;
-  static std::chrono::seconds thread_wait_duration_;
-  static std::thread scheduler_thread_;
-  static std::atomic<bool> has_refreshed_table_;
-  static std::mutex wait_mutex_;
-  static std::condition_variable wait_condition_;
-};
 }  // namespace foreign_storage
