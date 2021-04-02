@@ -297,13 +297,14 @@ void InsertOrderFragmenter::updateColumns(
   std::vector<std::unique_ptr<TargetValueConverter>> sourceDataConverters(
       columnDescriptors.size());
   std::vector<std::unique_ptr<ChunkToInsertDataConverter>> chunkConverters;
-
+  size_t indexOfDeletedColumn{0};
   std::shared_ptr<Chunk_NS::Chunk> deletedChunk;
   for (size_t indexOfChunk = 0; indexOfChunk < chunks.size(); indexOfChunk++) {
     auto chunk = chunks[indexOfChunk];
     const auto chunk_cd = chunk->getColumnDesc();
 
     if (chunk_cd->isDeletedCol) {
+      indexOfDeletedColumn = chunk_cd->columnId;
       deletedChunk = chunk;
       continue;
     }
@@ -551,7 +552,13 @@ void InsertOrderFragmenter::updateColumns(
   insert_data.is_default.resize(insert_data.columnIds.size(), false);
   insertDataNoCheckpoint(insert_data);
 
-  // update metdata
+  // update metdata for deleted chunk as we are doing special handling
+  auto chunk_meta_it = fragment.getChunkMetadataMap().find(indexOfDeletedColumn);
+  CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
+  chunk_meta_it->second->chunkStats.max.boolval = 1;
+
+  // Im not completely sure that we need to do this in fragmented and on the buffer
+  // but leaving this alone for now
   if (!deletedChunk->getBuffer()->hasEncoder()) {
     deletedChunk->initEncoder();
   }

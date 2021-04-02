@@ -124,6 +124,8 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
     // be obtained. This is the case for fragments which have deleted rows, temporary
     // table fragments, or fragments in a UNION query.
     if (is_temporary_table) {
+      // 31 Mar 2021 MAT TODO I think that the fragment Tuple count should be ok
+      // need to double check that at some later date
       return std::nullopt;
     }
     if (deleted_chunk_metadata_vec.empty()) {
@@ -294,7 +296,6 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
 
   const auto& catalog = executor->getCatalog();
 
-  auto& data_mgr = catalog->getDataMgr();
   ChunkMetadataVector deleted_chunk_metadata_vec;
 
   bool is_temporary_table = false;
@@ -308,13 +309,25 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
       // layers that we can disregard the early out select * optimization
       is_temporary_table = true;
     } else {
-      const auto deleted_cd =
-          executor->plan_state_->getDeletedColForTable(outer_table_id);
+      const auto deleted_cd = catalog->getDeletedColumnIfRowsDeleted(td);
       if (deleted_cd) {
-        ChunkKey chunk_key_prefix = {
-            catalog->getCurrentDB().dbId, outer_table_id, deleted_cd->columnId};
-        data_mgr.getChunkMetadataVecForKeyPrefix(deleted_chunk_metadata_vec,
-                                                 chunk_key_prefix);
+        // 01 Apr 2021 MAT TODO this code is called on logical tables (ie not the shards)
+        // I wonder if this makes sense in those cases
+        td->fragmenter->getFragmenterId();
+        auto frags = td->fragmenter->getFragmentsForQuery().fragments;
+        for (auto frag : frags) {
+          auto chunk_meta_it =
+              frag.getChunkMetadataMapPhysical().find(deleted_cd->columnId);
+          if (chunk_meta_it != frag.getChunkMetadataMapPhysical().end()) {
+            const auto& chunk_meta = chunk_meta_it->second;
+            ChunkKey chunk_key_prefix = {catalog->getCurrentDB().dbId,
+                                         outer_table_id,
+                                         deleted_cd->columnId,
+                                         frag.fragmentId};
+            deleted_chunk_metadata_vec.emplace_back(
+                std::pair{chunk_key_prefix, chunk_meta});
+          }
+        }
       }
     }
   }
