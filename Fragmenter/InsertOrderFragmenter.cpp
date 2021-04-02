@@ -613,6 +613,8 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insert_data) {
 
   FragmentInfo* currentFragment{nullptr};
 
+  // Access to fragmentInfoVec_ is protected as we are under the insertMutex_ lock but it
+  // feels fragile
   if (fragmentInfoVec_.empty()) {  // if no fragments exist for table
     currentFragment = createNewFragment(defaultInsertLevel_);
   } else {

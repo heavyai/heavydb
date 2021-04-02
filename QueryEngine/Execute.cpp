@@ -3537,15 +3537,15 @@ bool Executor::isFragmentFullyDeleted(
 
   const auto deleted_col_id = deleted_cd->columnId;
   auto chunk_meta_it = fragment.getChunkMetadataMap().find(deleted_col_id);
-  CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
-
-  const int64_t chunk_min =
-      extract_min_stat(chunk_meta_it->second->chunkStats, chunk_type);
-  const int64_t chunk_max =
-      extract_max_stat(chunk_meta_it->second->chunkStats, chunk_type);
-  if (chunk_min == 1 && chunk_max == 1) {  // Delete chunk if metadata says full bytemap
-    // is true (signifying all rows deleted)
-    return true;
+  if (chunk_meta_it != fragment.getChunkMetadataMap().end()) {
+    const int64_t chunk_min =
+        extract_min_stat(chunk_meta_it->second->chunkStats, chunk_type);
+    const int64_t chunk_max =
+        extract_max_stat(chunk_meta_it->second->chunkStats, chunk_type);
+    if (chunk_min == 1 && chunk_max == 1) {  // Delete chunk if metadata says full bytemap
+      // is true (signifying all rows deleted)
+      return true;
+    }
   }
   return false;
 }

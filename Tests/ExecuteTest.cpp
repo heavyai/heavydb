@@ -16581,7 +16581,7 @@ TEST(Delete, ShardedTableDeleteTest) {
                                                    g_use_temporary_tables,
                                                    true,
                                                    false));
-    ScopeGuard drop_table = [] { run_ddl_statement("DROP TABLE IF EXISTS shard_key;"); };
+    ScopeGuard drop_table = [] { run_ddl_statement("DROP TABLE IF EXISTS shardkey;"); };
 
     run_multiple_agg("insert into shardkey values (1,2);", dt);
     run_multiple_agg("insert into shardkey values (3,4);", dt);

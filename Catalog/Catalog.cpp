@@ -3075,55 +3075,32 @@ const bool Catalog::checkMetadataForDeletedRecs(const TableDescriptor* td,
                                                 int delete_column_id) const {
   // check if there are rows deleted by examining the deletedColumn metadata
   CHECK(td);
-
-  if (table_is_temporary(td)) {
-    auto fragmenter = td->fragmenter;
-    CHECK(fragmenter);
+  auto fragmenter = td->fragmenter;
+  if (fragmenter) {
     return fragmenter->hasDeletedRows(delete_column_id);
   } else {
-    ChunkKey chunk_key_prefix = {currentDB_.dbId, td->tableId, delete_column_id};
-    ChunkMetadataVector chunk_metadata_vec;
-    dataMgr_->getChunkMetadataVecForKeyPrefix(chunk_metadata_vec, chunk_key_prefix);
-    int64_t chunk_max{0};
-
-    for (auto chunk_metadata : chunk_metadata_vec) {
-      chunk_max = chunk_metadata.second->chunkStats.max.tinyintval;
-      // delete has occured
-      if (chunk_max == 1) {
-        return true;
-      }
-    }
     return false;
   }
 }
 
 const ColumnDescriptor* Catalog::getDeletedColumnIfRowsDeleted(
     const TableDescriptor* td) const {
-  cat_read_lock read_lock(this);
+  std::vector<const TableDescriptor*> tds;
+  const ColumnDescriptor* cd;
+  {
+    cat_read_lock read_lock(this);
 
-  const auto it = deletedColumnPerTable_.find(td);
-  // if not a table that supports delete return nullptr,  nothing more to do
-  if (it == deletedColumnPerTable_.end()) {
-    return nullptr;
-  }
-  const ColumnDescriptor* cd = it->second;
-
-  const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
-
-  if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
-    // check all shards
-    const auto physicalTables = physicalTableIt->second;
-    CHECK(!physicalTables.empty());
-    for (size_t i = 0; i < physicalTables.size(); i++) {
-      int32_t physical_tb_id = physicalTables[i];
-      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
-      CHECK(phys_td);
-      if (checkMetadataForDeletedRecs(phys_td, cd->columnId)) {
-        return cd;
-      }
+    const auto it = deletedColumnPerTable_.find(td);
+    // if not a table that supports delete return nullptr,  nothing more to do
+    if (it == deletedColumnPerTable_.end()) {
+      return nullptr;
     }
-  } else {
-    if (checkMetadataForDeletedRecs(td, cd->columnId)) {
+    cd = it->second;
+    tds = getPhysicalTablesDescriptors(td, false);
+  }
+  // individual tables are still protected by higher level locks
+  for (auto tdd : tds) {
+    if (checkMetadataForDeletedRecs(tdd, cd->columnId)) {
       return cd;
     }
   }

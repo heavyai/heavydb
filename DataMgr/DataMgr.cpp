@@ -409,6 +409,7 @@ bool DataMgr::isBufferOnDevice(const ChunkKey& key,
 
 void DataMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                               const ChunkKey& keyPrefix) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   bufferMgrs_[0][0]->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, keyPrefix);
 }
 
@@ -487,6 +488,8 @@ void DataMgr::copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer) {
 
 void DataMgr::checkpoint(const int db_id, const int tb_id) {
   // TODO(adb): do we need a buffer mgr lock here?
+  // MAT Yes to reduce Parallel Executor TSAN issues (and correctness for now)
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {
     // use reverse iterator so we start at GPU level, then CPU then DISK
     for (auto deviceIt = levelIt->begin(); deviceIt != levelIt->end(); ++deviceIt) {
@@ -498,6 +501,7 @@ void DataMgr::checkpoint(const int db_id, const int tb_id) {
 void DataMgr::checkpoint(const int db_id,
                          const int table_id,
                          const MemoryLevel memory_level) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   CHECK_LT(static_cast<size_t>(memory_level), bufferMgrs_.size());
   CHECK_LT(static_cast<size_t>(memory_level), levelSizes_.size());
   for (int device_id = 0; device_id < levelSizes_[memory_level]; device_id++) {
@@ -507,6 +511,8 @@ void DataMgr::checkpoint(const int db_id,
 
 void DataMgr::checkpoint() {
   // TODO(adb): SAA
+  // MAT Yes to reduce Parallel Executor TSAN issues (and correctness for now)
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {
     // use reverse iterator so we start at GPU level, then CPU then DISK
     for (auto deviceIt = levelIt->begin(); deviceIt != levelIt->end(); ++deviceIt) {
