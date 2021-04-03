@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,13 @@
  * @file		DatumString.cpp
  * @author	Wei Hong <wei@map-d.com>
  * @brief		Functions to convert between strings and Datum
- *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
+#include <algorithm>
 #include <cassert>
+#include <cctype>
 #include <charconv>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
@@ -139,18 +140,62 @@ std::string toString(SQLTypeInfo const& ti, unsigned const fieldsize) {
   return ti.get_type_name() + '(' + std::to_string(fieldsize) + ')';
 }
 
-}  // namespace
+// GCC 10 does not support std::from_chars w/ double, so strtold() is used instead.
+// Convert s to long double then round to integer type T.
+// It's not assumed that long double is any particular size; it is to be nice to
+// users who use floating point values where integers are expected. Some platforms
+// may be more accommodating with larger long doubles than others.
+template <typename T, typename U = long double>
+T parseFloatAsInteger(std::string_view s, SQLTypeInfo const& ti) {
+  // Use stack memory if s is small enough before resorting to dynamic memory.
+  constexpr size_t bufsize = 64;
+  char c_str[bufsize];
+  std::string str;
+  char const* str_begin;
+  char* str_end;
+  if (s.size() < bufsize) {
+    s.copy(c_str, s.size());
+    c_str[s.size()] = '\0';
+    str_begin = c_str;
+  } else {
+    str = s;
+    str_begin = str.c_str();
+  }
+  U value = strtold(str_begin, &str_end);
+  if (str_begin == str_end) {
+    throw std::runtime_error("Unable to parse " + std::string(s) + " to " +
+                             ti.get_type_name());
+  } else if (str_begin + s.size() != str_end) {
+    throw std::runtime_error(std::string("Unexpected character \"") + *str_end +
+                             "\" encountered in " + ti.get_type_name() + " value " +
+                             std::string(s));
+  }
+  value = std::round(value);
+  if (!std::isfinite(value)) {
+    throw std::runtime_error("Invalid conversion from \"" + std::string(s) + "\" to " +
+                             ti.get_type_name());
+  } else if (value < static_cast<U>(std::numeric_limits<T>::min()) ||
+             static_cast<U>(std::numeric_limits<T>::max()) < value) {
+    throw std::runtime_error("Integer " + std::string(s) + " is out of range for " +
+                             ti.get_type_name());
+  }
+  return static_cast<T>(value);
+}
+
+// String ends in either "." or ".0".
+inline bool hasCommonSuffix(char const* const ptr, char const* const end) {
+  return *ptr == '.' && (ptr + 1 == end || (ptr[1] == '0' && ptr + 2 == end));
+}
 
 template <typename T>
 T parseInteger(std::string_view s, SQLTypeInfo const& ti) {
   T retval{0};
-  unsigned const fieldsize =
-      ti.get_compression() == kENCODING_FIXED ? ti.get_comp_param() : 8 * sizeof(T);
-  auto [ptr, error_code] = std::from_chars(s.data(), s.data() + s.size(), retval);
-  if (ptr != s.data() + s.size()) {
-    throw std::runtime_error(std::string("Unexpected character \"") + *ptr +
-                             "\" encountered in " + ti.get_type_name() + " value " +
-                             std::string(s));
+  char const* const end = s.data() + s.size();
+  auto [ptr, error_code] = std::from_chars(s.data(), end, retval);
+  if (ptr != end) {
+    if (error_code != std::errc() || !hasCommonSuffix(ptr, end)) {
+      retval = parseFloatAsInteger<T>(s, ti);
+    }
   } else if (error_code != std::errc()) {
     if (error_code == std::errc::result_out_of_range) {
       throw std::runtime_error("Integer " + std::string(s) + " is out of range for " +
@@ -158,7 +203,11 @@ T parseInteger(std::string_view s, SQLTypeInfo const& ti) {
     }
     throw std::runtime_error("Invalid conversion from \"" + std::string(s) + "\" to " +
                              ti.get_type_name());
-  } else if (fieldsize < 8 * sizeof(T)) {
+  }
+  // Bounds checking based on SQLTypeInfo.
+  unsigned const fieldsize =
+      ti.get_compression() == kENCODING_FIXED ? ti.get_comp_param() : 8 * sizeof(T);
+  if (fieldsize < 8 * sizeof(T)) {
     if (maxValue<T>(fieldsize) < retval) {
       throw std::runtime_error("Integer " + std::string(s) +
                                " exceeds maximum value for " + toString(ti, fieldsize));
@@ -181,6 +230,8 @@ T parseInteger(std::string_view s, SQLTypeInfo const& ti) {
   }
   return retval;
 }
+
+}  // namespace
 
 /*
  * @brief convert string to a datum

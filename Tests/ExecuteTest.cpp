@@ -16059,8 +16059,7 @@ TEST(Update, ImplicitCastToNumericTypes) {
 
     EXPECT_ANY_THROW(
         run_multiple_agg("update inttest set i=cast( 'nonsense' as varchar );", dt));
-    EXPECT_ANY_THROW(
-        run_multiple_agg("update inttest set i=cast( '128.90' as varchar );", dt));
+    run_multiple_agg("update inttest set i=cast( '128.90' as varchar );", dt);
 
     run_multiple_agg("update inttest set i=cast( '2000-01-01 10:11:12' as timestamp );",
                      dt);
@@ -16097,8 +16096,7 @@ TEST(Update, ImplicitCastToNumericTypes) {
 
     EXPECT_ANY_THROW(
         run_multiple_agg("update sinttest set i=cast( 'nonsense' as varchar );", dt));
-    EXPECT_ANY_THROW(
-        run_multiple_agg("update sinttest set i=cast( '128.90' as varchar );", dt));
+    run_multiple_agg("update sinttest set i=cast( '128.90' as varchar );", dt);
 
     run_multiple_agg("update sinttest set i=cast( '2000-01-01 10:11:12' as timestamp );",
                      dt);
@@ -16135,8 +16133,7 @@ TEST(Update, ImplicitCastToNumericTypes) {
 
     EXPECT_ANY_THROW(
         run_multiple_agg("update binttest set i=cast( 'nonsense' as varchar );", dt));
-    EXPECT_ANY_THROW(
-        run_multiple_agg("update binttest set i=cast( '128.90' as varchar );", dt));
+    run_multiple_agg("update binttest set i=cast( '128.90' as varchar );", dt);
 
     run_multiple_agg("update binttest set i=cast( '2000-01-01 10:11:12' as timestamp );",
                      dt);
@@ -19279,8 +19276,8 @@ TEST(Select, ParseIntegerExceptions) {
        "Invalid conversion from \"\" to BIGINT"},
       {"SELECT * FROM test WHERE '9223372036854775808'=9223372036854775807;",
        "Integer 9223372036854775808 is out of range for BIGINT"},
-      {"SELECT * FROM test WHERE '1e3'=1;",
-       "Unexpected character \"e\" encountered in INTEGER value 1e3"}};
+      {"SELECT * FROM test WHERE '1e3.0'=1;",
+       "Unexpected character \".\" encountered in INTEGER value 1e3.0"}};
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     for (auto const& test : tests) {

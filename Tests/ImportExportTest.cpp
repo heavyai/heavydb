@@ -733,7 +733,7 @@ TEST_F(ImportTestInt, ImportGoodInt) {
                         "'../../Tests/Import/datafiles/int_good_test.txt';"));
 
   auto rows = run_query("SELECT * FROM inttable;");
-  ASSERT_EQ(42u, rows->entryCount());
+  ASSERT_EQ(86u, rows->entryCount());
 };
 
 class ImportTestLegacyDate : public ::testing::Test {

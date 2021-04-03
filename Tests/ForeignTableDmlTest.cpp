@@ -991,9 +991,9 @@ TEST_F(SelectQueryTest, ParseError) {
       "(i INTEGER)", {{"buffer_size", "25"}}, "1badint", "csv");
   sql(query);
   queryAndAssertException("SELECT * FROM test_foreign_table;",
-                          "Exception: Parsing failure \"Unexpected character \"-\" "
-                          "encountered in INTEGER value -a\" in row "
-                          "\"-a\" in file \"" +
+                          "Exception: Parsing failure \""
+                          "Unable to parse -a to INTEGER"
+                          "\" in row \"-a\" in file \"" +
                               getDataFilesPath() + "1badint.csv\"");
 }
 
