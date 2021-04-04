@@ -26,6 +26,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
+string(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_LOWER)
 
 if("${CMAKE_VERSION}" VERSION_GREATER 3.11.999)
   cmake_policy(SET CMP0074 NEW)
@@ -128,6 +129,49 @@ if(ENABLE_CUDA)
 else()
   set(CUDA_LIBRARIES "")
   set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-cpu")
+endif()
+
+# CUDA architecture flags
+if("${CMAKE_BUILD_TYPE_LOWER}" STREQUAL "debug")
+  option(ENABLE_ONLY_ONE_ARCH "Enable quicker building for only one GPU arch" ON)
+else()
+  option(ENABLE_ONLY_ONE_ARCH "Enable quicker building for only one GPU arch" OFF)
+endif()
+if(ENABLE_CUDA)
+  if(ENABLE_ONLY_ONE_ARCH)
+    execute_process(
+      COMMAND cmake -S ${CMAKE_SOURCE_DIR}/NvidiaComputeCapability -B NvidiaComputeCapability
+      OUTPUT_QUIET
+      ERROR_QUIET
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    execute_process(
+      COMMAND cmake --build NvidiaComputeCapability
+      OUTPUT_FILE ${CMAKE_BINARY_DIR}/NvidiaComputeCapability/build.out.txt
+      ERROR_FILE ${CMAKE_BINARY_DIR}/NvidiaComputeCapability/build.err.txt
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    file(STRINGS ${CMAKE_BINARY_DIR}/NvidiaComputeCapability.txt NVIDIA_COMPUTE_CAPABILITY)
+    set (CUDA_COMPILATION_ARCH
+      -gencode=arch=compute_${NVIDIA_COMPUTE_CAPABILITY},code=compute_${NVIDIA_COMPUTE_CAPABILITY}
+      -Wno-deprecated-gpu-targets
+    )
+    add_custom_target(clean_nvidia_compute_capability
+      COMMAND ${CMAKE_BUILD_TOOL} clean
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/NvidiaComputeCapability
+    )
+    add_dependencies(clean-all clean_nvidia_compute_capability)
+    message(STATUS "CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
+  else()
+    set (CUDA_COMPILATION_ARCH
+      -gencode=arch=compute_35,code=compute_35
+      -gencode=arch=compute_50,code=compute_50
+      -gencode=arch=compute_60,code=compute_60
+      -gencode=arch=compute_70,code=compute_70
+      -gencode=arch=compute_75,code=compute_75
+      -Wno-deprecated-gpu-targets
+    )
+  endif()
 endif()
 
 option(SUPPRESS_NULL_LOGGER_DEPRECATION_WARNINGS "Suppress NullLogger deprecated warnings.")
@@ -389,16 +433,6 @@ add_definitions(${CLANG_DEFINITIONS})
 # Boost
 find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale iostreams REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
-
-# CUDA architecture flags
-set (CUDA_COMPILATION_ARCH
-  -gencode=arch=compute_35,code=compute_35
-  -gencode=arch=compute_50,code=compute_50
-  -gencode=arch=compute_60,code=compute_60
-  -gencode=arch=compute_70,code=compute_70
-  -gencode=arch=compute_75,code=compute_75
-  -Wno-deprecated-gpu-targets
-)
 
 # Allow explicit include statements to access third party headers directly.
 # Ex: raft/canonical/include/raft.h
@@ -793,7 +827,6 @@ endif(DOXYGEN_FOUND)
 
 # Packaging
 
-string(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_LOWER)
 if(NOT "${CMAKE_BUILD_TYPE_LOWER}" STREQUAL "debug" AND NOT "${CMAKE_BUILD_TYPE_LOWER}" STREQUAL "relwithdebinfo")
   set(CPACK_STRIP_FILES ON)
 else()
