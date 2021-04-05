@@ -144,6 +144,7 @@ class Catalog final {
   void dropTable(const TableDescriptor* td);
   void truncateTable(const TableDescriptor* td);
   void renameTable(const TableDescriptor* td, const std::string& newTableName);
+  void renameTable(std::vector<std::pair<std::string, std::string>>& names);
   void renameColumn(const TableDescriptor* td,
                     const ColumnDescriptor* cd,
                     const std::string& newColumnName);
@@ -519,6 +520,8 @@ class Catalog final {
   void executeDropTableSqliteQueries(const TableDescriptor* td);
   void doTruncateTable(const TableDescriptor* td);
   void renamePhysicalTable(const TableDescriptor* td, const std::string& newTableName);
+  void renamePhysicalTable(std::vector<std::pair<std::string, std::string>>& names,
+                           std::vector<int>& tableIds);
   void instantiateFragmenter(TableDescriptor* td) const;
   void getAllColumnMetadataForTableImpl(const TableDescriptor* td,
                                         std::list<const ColumnDescriptor*>& colDescs,

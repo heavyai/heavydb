@@ -491,6 +491,36 @@ SqlDrop SqlDropTable(Span s, boolean replace) :
 }
 
 
+/*
+ * Rename table(s) using the following syntax:
+ *
+ * RENAME TABLE <table_name> TO <new_table_name> [, <table_name_n> TO <new_table_name_n>]
+ */
+SqlRenameTable SqlRenameTable(Span s) :
+{   
+    SqlIdentifier tableName;
+    SqlIdentifier newTableName;
+    final List<Pair<String, String>> tableNames = new ArrayList<Pair<String, String>>();
+}
+{
+    <RENAME>
+    <TABLE>
+    tableName = CompoundIdentifier()
+    <TO>
+    newTableName = CompoundIdentifier()
+    { tableNames.add(new Pair<String, String>(tableName.toString(), newTableName.toString())); }
+    (
+        <COMMA>
+        tableName = CompoundIdentifier()
+        <TO>
+        newTableName = CompoundIdentifier()
+        { tableNames.add(new Pair<String, String>(tableName.toString(), newTableName.toString())); }
+    )*
+    {
+        return new SqlRenameTable(s.end(this), tableNames);
+    }
+}
+
 SqlCreate SqlCreateView(Span s, boolean replace) :
 {
     final boolean ifNotExists;

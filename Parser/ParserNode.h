@@ -1281,16 +1281,22 @@ class RenameUserStmt : public DDLStmt {
 
 class RenameTableStmt : public DDLStmt {
  public:
-  RenameTableStmt(std::string* tab, std::string* new_tab_name)
-      : table(tab), new_table_name(new_tab_name) {}
+  using TableNamePair =
+      std::pair<std::unique_ptr<std::string>, std::unique_ptr<std::string>>;
 
-  const std::string* get_prev_table() const { return table.get(); }
-  const std::string* get_new_table() const { return new_table_name.get(); }
+  // when created via ddl
+  RenameTableStmt(const rapidjson::Value& payload);
+
+  // to rename a single table
+  RenameTableStmt(std::string* tab_name, std::string* new_tab_name);
+
+  // to rename multiple tables
+  RenameTableStmt(std::list<std::pair<std::string, std::string>> tableNames);
+
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:
-  std::unique_ptr<std::string> table;
-  std::unique_ptr<std::string> new_table_name;
+  std::list<TableNamePair> tablesToRename;
 };
 
 class RenameColumnStmt : public DDLStmt {
