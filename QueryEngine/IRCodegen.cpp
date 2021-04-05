@@ -544,6 +544,21 @@ JoinLoop::HoistedFiltersCallback Executor::buildHoistLeftHandSideFiltersCb(
                                            const std::string& loop_name,
                                            llvm::Function* parent_func,
                                            CgenState* cgen_state) -> llvm::BasicBlock* {
+            // make sure we have quals to hoist
+            bool has_quals_to_hoist = false;
+            for (const auto& qual : hoisted_quals) {
+              // check to see if the filter was previously hoisted. if all filters were
+              // previously hoisted, this callback becomes a noop
+              if (plan_state_->hoisted_filters_.count(qual) == 0) {
+                has_quals_to_hoist = true;
+                break;
+              }
+            }
+
+            if (!has_quals_to_hoist) {
+              return nullptr;
+            }
+
             AUTOMATIC_IR_METADATA(cgen_state);
 
             llvm::IRBuilder<>& builder = cgen_state->ir_builder_;
@@ -560,12 +575,15 @@ JoinLoop::HoistedFiltersCallback Executor::buildHoistLeftHandSideFiltersCb(
             CodeGenerator code_generator(this);
             CHECK(plan_state_);
             for (const auto& qual : hoisted_quals) {
-              VLOG(1) << "Generating code for hoisted left hand side qualifier "
-                      << qual->toString();
-              CHECK(plan_state_->hoisted_filters_.insert(qual).second);
-              auto cond = code_generator.toBool(
-                  code_generator.codegen(qual.get(), true, co).front());
-              filter_lv = builder.CreateAnd(filter_lv, cond);
+              if (plan_state_->hoisted_filters_.insert(qual).second) {
+                // qual was inserted into the hoisted filters map, which means we have not
+                // seen this qual before. Generate filter.
+                VLOG(1) << "Generating code for hoisted left hand side qualifier "
+                        << qual->toString();
+                auto cond = code_generator.toBool(
+                    code_generator.codegen(qual.get(), true, co).front());
+                filter_lv = builder.CreateAnd(filter_lv, cond);
+              }
             }
             CHECK(filter_lv->getType()->isIntegerTy(1));
 
