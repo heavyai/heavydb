@@ -353,6 +353,10 @@ ExecutionResult DdlCommandExecutor::execute() {
     auto drop_view_stmt = Parser::DropViewStmt(extractPayload(*ddl_data_));
     drop_view_stmt.execute(*session_ptr_);
     return result;
+  } else if (ddl_command_ == "RENAME_TABLE") {
+    auto rename_table_stmt = Parser::RenameTableStmt(extractPayload(*ddl_data_));
+    rename_table_stmt.execute(*session_ptr_);
+    return result;
   }
 
   // the following commands require a global unique lock until proper table locking has
@@ -419,7 +423,8 @@ bool DdlCommandExecutor::isKillQuery() {
 DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails() {
   DistributedExecutionDetails execution_details;
   if (ddl_command_ == "CREATE_TABLE" || ddl_command_ == "DROP_TABLE" ||
-      ddl_command_ == "CREATE_VIEW" || ddl_command_ == "DROP_VIEW") {
+      ddl_command_ == "CREATE_VIEW" || ddl_command_ == "DROP_VIEW" ||
+      ddl_command_ == "RENAME_TABLE") {
     execution_details.execution_location = ExecutionLocation::ALL_NODES;
     execution_details.aggregation_type = AggregationType::NONE;
   } else if (ddl_command_ == "SHOW_TABLE_DETAILS") {

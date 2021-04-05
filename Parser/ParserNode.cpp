@@ -3700,6 +3700,88 @@ void RenameDatabaseStmt::execute(const Catalog_Namespace::SessionInfo& session) 
   SysCatalog::instance().renameDatabase(*database_name_, *new_database_name_);
 }
 
+RenameTableStmt::RenameTableStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("command"));
+
+  CHECK(payload.HasMember("tableNames"));
+  CHECK(payload["tableNames"].IsArray());
+  const auto elements = payload["tableNames"].GetArray();
+  for (const auto& element : elements) {
+    CHECK(element.HasMember("name"));
+    CHECK(element.HasMember("newName"));
+    tablesToRename.emplace_back(new std::string(json_str(element["name"])),
+                                new std::string(json_str(element["newName"])));
+  }
+}
+
+RenameTableStmt::RenameTableStmt(std::string* tab_name, std::string* new_tab_name) {
+  tablesToRename.emplace_back(tab_name, new_tab_name);
+}
+
+RenameTableStmt::RenameTableStmt(
+    std::list<std::pair<std::string, std::string>> tableNames) {
+  for (auto item : tableNames) {
+    tablesToRename.emplace_back(new std::string(item.first),
+                                new std::string(item.second));
+  }
+}
+
+using SubstituteMap = std::map<std::string, std::string>;
+
+// Namespace fns used to track a left-to-right execution of RENAME TABLE
+//   and verify that the command should be (entirely/mostly) valid
+//
+namespace {
+
+static constexpr char const* EMPTY_NAME{""};
+
+std::string generateUniqueTableName(std::string name) {
+  // TODO - is there a "better" way to create a tmp name for the table
+  std::time_t result = std::time(nullptr);
+  return name + "_tmp" + std::to_string(result);
+}
+
+void recordRename(SubstituteMap& sMap, std::string oldName, std::string newName) {
+  sMap[oldName] = newName;
+}
+
+std::string loadTable(Catalog_Namespace::Catalog& catalog,
+                      SubstituteMap& sMap,
+                      std::string tableName) {
+  if (sMap.find(tableName) != sMap.end()) {
+    if (sMap[tableName] == EMPTY_NAME)
+      return tableName;
+    return sMap[tableName];
+  } else {
+    // lookup table in src catalog
+    const TableDescriptor* td = catalog.getMetadataForTable(tableName);
+    if (td) {
+      sMap[tableName] = tableName;
+    } else {
+      sMap[tableName] = EMPTY_NAME;
+    }
+  }
+  return tableName;
+}
+
+bool hasData(SubstituteMap& sMap, std::string tableName) {
+  // assumes loadTable has been previously called
+  return (sMap[tableName] != EMPTY_NAME);
+}
+
+void checkNameSubstition(SubstituteMap& sMap) {
+  // Substition map should be clean at end of rename:
+  //    all items in map must (map to self) or (map to EMPTY_STRING) by end
+
+  for (auto it : sMap) {
+    if ((it.second) != EMPTY_NAME && (it.first) != (it.second)) {
+      throw std::runtime_error(
+          "Error: Attempted to overwrite and lose data in table: \'" + (it.first) + "\'");
+    }
+  }
+}
+}  // namespace
+
 void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
@@ -3708,19 +3790,75 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
-  const auto td_with_lock =
-      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-          catalog, *table, false);
-  const auto td = td_with_lock();
-  CHECK(td);
-  validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
+  // accumulated vector of table names: oldName->newName
+  std::vector<std::pair<std::string, std::string>> names;
 
-  check_alter_table_privilege(session, td);
-  if (catalog.getMetadataForTable(*new_table_name) != nullptr) {
-    throw std::runtime_error("Table or View " + *new_table_name + " already exists.");
+  SubstituteMap tableSubtituteMap;
+
+  for (auto& item : tablesToRename) {
+    std::string curTableName = *(item.first);
+    std::string newTableName = *(item.second);
+
+    // Note: if rename (a->b, b->a)
+    //    requires a tmp name change (a->tmp, b->a, tmp->a),
+    //    inject that here because
+    //         catalog.renameTable() assumes cleanliness else will fail
+
+    std::string altCurTableName = loadTable(catalog, tableSubtituteMap, curTableName);
+    std::string altNewTableName = loadTable(catalog, tableSubtituteMap, newTableName);
+
+    if (altCurTableName != curTableName && altCurTableName != EMPTY_NAME) {
+      // rename is a one-shot deal, reset the mapping once used
+      recordRename(tableSubtituteMap, curTableName, curTableName);
+    }
+
+    // Check to see if the command (as-entered) will likely execute cleanly (logic-wise)
+    //     src tables exist before coping from
+    //     destination table collisions
+    //         handled (a->b, b->a)
+    //         or flagged (pre-existing a,b ... "RENAME TABLE a->c, b->c" )
+    //     handle mulitple chained renames, tmp names (a_>tmp, b->a, tmp->a)
+    //     etc.
+    //
+    if (hasData(tableSubtituteMap, altCurTableName)) {
+      const TableDescriptor* td = catalog.getMetadataForTable(altCurTableName);
+      if (td) {
+        // any table that pre-exists must pass these tests
+        validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
+        check_alter_table_privilege(session, td);
+      }
+
+      if (hasData(tableSubtituteMap, altNewTableName)) {
+        std::string tmpNewTableName = generateUniqueTableName(altNewTableName);
+        // rename: newTableName to tmpNewTableName to get it out of the way
+        //    because it was full
+        recordRename(tableSubtituteMap, altCurTableName, EMPTY_NAME);
+        recordRename(tableSubtituteMap, altNewTableName, tmpNewTableName);
+        recordRename(tableSubtituteMap, tmpNewTableName, tmpNewTableName);
+        names.push_back(
+            std::pair<std::string, std::string>(altNewTableName, tmpNewTableName));
+        names.push_back(
+            std::pair<std::string, std::string>(altCurTableName, altNewTableName));
+      } else {
+        // rename: curNewTableName to newTableName
+        recordRename(tableSubtituteMap, altCurTableName, EMPTY_NAME);
+        recordRename(tableSubtituteMap, altNewTableName, altNewTableName);
+        names.push_back(
+            std::pair<std::string, std::string>(altCurTableName, altNewTableName));
+      }
+    } else {
+      throw std::runtime_error("Source table \'" + curTableName + "\' does not exist.");
+    }
   }
-  catalog.renameTable(td, *new_table_name);
-}
+  checkNameSubstition(tableSubtituteMap);
+
+  catalog.renameTable(names);
+
+  // just to be explicit, clean out the list, the unique_ptr will delete
+  while (!tablesToRename.empty()) {
+    tablesToRename.pop_front();
+  }
+}  // namespace Parser
 
 void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef) {
   bool not_null;
@@ -3790,9 +3928,9 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         "option.");
   }
 
-  // Do not take a data write lock, as the fragmenter may call `deleteFragments` during
-  // a cap operation. Note that the schema write lock will prevent concurrent inserts
-  // along with all other queries.
+  // Do not take a data write lock, as the fragmenter may call `deleteFragments`
+  // during a cap operation. Note that the schema write lock will prevent concurrent
+  // inserts along with all other queries.
 
   catalog.getSqliteConnector().query("BEGIN TRANSACTION");
   try {
@@ -4025,8 +4163,9 @@ void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session)
       {"max_rollback_epochs", TableParamType::MaxRollbackEpochs},
       {"epoch", TableParamType::Epoch},
       {"max_rows", TableParamType::MaxRows}};
-  // Below is to ensure that executor is not currently executing on table when we might be
-  // changing it's storage. Question: will/should catalog write lock take care of this?
+  // Below is to ensure that executor is not currently executing on table when we
+  // might be changing it's storage. Question: will/should catalog write lock take
+  // care of this?
   const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
@@ -4878,7 +5017,8 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (std::find(get_grantees().begin(), get_grantees().end(), OMNISCI_ROOT_USER) !=
       get_grantees().end()) {
     throw std::runtime_error(
-        "Request to revoke role failed because privileges can not be revoked from mapd "
+        "Request to revoke role failed because privileges can not be revoked from "
+        "mapd "
         "root user.");
   }
   SysCatalog::instance().revokeRoleBatch(get_roles(), get_grantees());
@@ -4952,8 +5092,8 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
     *file_path = file_dir + file_name;
   } else {
-    // Above branch will create a new file in the mapd_export directory. If that path is
-    // not exercised, go through applicable file path validations.
+    // Above branch will create a new file in the mapd_export directory. If that path
+    // is not exercised, go through applicable file path validations.
     ddl_utils::validate_allowed_file_path(*file_path,
                                           ddl_utils::DataTransferType::EXPORT);
   }
@@ -5220,8 +5360,8 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   td.maxRows = DEFAULT_MAX_ROWS;
   catalog.createTable(td, {}, {}, true);
 
-  // TODO (max): It's transactionally unsafe, should be fixed: we may create object w/o
-  // privileges
+  // TODO (max): It's transactionally unsafe, should be fixed: we may create object
+  // w/o privileges
   SysCatalog::instance().createDBObject(
       session.get_currentUser(), view_name_, ViewDBObjectType, catalog);
 }
@@ -5510,6 +5650,9 @@ void execute_calcite_ddl(
   } else if (ddl_command == "DROP_VIEW") {
     auto drop_view_stmt = Parser::DropViewStmt(payload);
     drop_view_stmt.execute(*session_ptr);
+  } else if (ddl_command == "RENAME_TABLE") {
+    auto rename_table_stmt = Parser::RenameTableStmt(payload);
+    rename_table_stmt.execute(*session_ptr);
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }

@@ -3238,6 +3238,16 @@ TEST_F(ForeignTablePermissionsTest, TableGrantRevokeAlterForeignTablePrivilege) 
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
+TEST_F(TablePermissionsTest, TableRenameTablePrivilege) {
+  std::string privilege{"ALTER"};
+  std::string query{"RENAME TABLE test_table TO renamed_test_table;"};
+  std::string no_privilege_exception{
+      "Exception: Current user does not have the privilege to alter table: test_table"};
+  createTestTable();
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  queryAsTestUserWithPrivilege(query, privilege);
+}
+
 TEST_F(ForeignTablePermissionsTest, ForeignTableAllPrivileges) {
   createTestForeignTable();
   sql("GRANT ALL ON TABLE test_table TO test_user;");

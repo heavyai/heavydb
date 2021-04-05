@@ -28,13 +28,12 @@
 #include "TestHelpers.h"
 #include "Utils/DdlUtils.h"
 
-#ifndef BASE_PATH
-#define BASE_PATH "./tmp"
-#endif
-
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
 extern bool g_enable_calcite_ddl_parser;
+
+using namespace std;
+using namespace TestHelpers;
 
 namespace bf = boost::filesystem;
 
@@ -1654,6 +1653,113 @@ TEST_F(CreateNonReservedKeywordsTest, NonReservedRename) {
   sql("ALTER TABLE test_table RENAME COLUMN QUERY to virtual;");
 }
 
+class RenameTableTest : public CreateAndDropTableDdlTest {
+ protected:
+  void SetUp() override {
+    CreateAndDropTableDdlTest::SetUp();
+
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "A", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "B", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "C", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "D", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "E", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "F", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "G", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "H", true));
+    dropTestUser();
+
+    sql("CREATE TABLE A (Name text);");
+    sql("INSERT INTO  A (Name) values ('A');");
+
+    sql("CREATE TABLE B (Name text);");
+    sql("INSERT INTO  B (Name) values ('B');");
+
+    sql("CREATE TABLE C (Name text);");
+    sql("INSERT INTO  C (Name) values ('C');");
+
+    sql("CREATE TABLE D (Name text);");
+    sql("INSERT INTO  D (Name) values ('D');");
+
+    sql("CREATE TABLE E (Name text);");
+    sql("INSERT INTO  E (Name) values ('E');");
+  }
+
+  void TearDown() override {
+    g_enable_fsi = true;
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "A", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "B", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "C", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "D", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "E", true));
+    dropTestUser();
+
+    CreateAndDropTableDdlTest::TearDown();
+  }
+};
+
+TEST_F(RenameTableTest, SimpleRename) {
+  // rename
+  sql("RENAME TABLE A to F;");
+  sql("RENAME TABLE B to G, C to H;");
+
+  // verify
+  sqlAndCompareResult("SELECT count(*) FROM F WHERE Name = 'A';", {{i(1)}});
+  sqlAndCompareResult("SELECT count(*) FROM G WHERE Name = 'B';", {{i(1)}});
+  sqlAndCompareResult("SELECT count(*) FROM H WHERE Name = 'C';", {{i(1)}});
+
+  // reset
+  sql("RENAME TABLE F TO A, G TO B, H TO C;");
+}
+
+TEST_F(RenameTableTest, SwapRename) {
+  // swap
+  sql("RENAME TABLE D to E, E to D");
+
+  // verify
+  sqlAndCompareResult("SELECT count(*) FROM D WHERE Name = 'E';", {{i(1)}});
+  sqlAndCompareResult("SELECT count(*) FROM E WHERE Name = 'D';", {{i(1)}});
+
+  // rotate
+  sql("RENAME TABLE A TO B, B TO C, C TO A");
+
+  // verify
+  sqlAndCompareResult("SELECT count(*) FROM A WHERE Name = 'C';", {{i(1)}});
+  sqlAndCompareResult("SELECT count(*) FROM B WHERE Name = 'A';", {{i(1)}});
+  sqlAndCompareResult("SELECT count(*) FROM C WHERE Name = 'B';", {{i(1)}});
+
+  // reset
+  sql("RENAME TABLE D TO E, E TO D;");
+  sql("RENAME TABLE C TO B, B TO A, A TO C;");
+}
+
+TEST_F(RenameTableTest, ErrorChecks) {
+  // ERROR, expect no change, as would trigger an overwrite of B
+
+  executeLambdaAndAssertException(
+      [this] { sql("RENAME TABLE A to B"); },
+      "Exception: Error: Attempted to overwrite and lose data in table: 'B'");
+
+  // verify no change
+  sqlAndCompareResult("SELECT count(*) FROM A WHERE Name = 'A';", {{i(1)}});
+  sqlAndCompareResult("SELECT count(*) FROM B WHERE Name = 'B';", {{i(1)}});
+
+  // ERROR, expect no change, as would trigger an overwrite
+  executeLambdaAndAssertException(
+      [this] { sql("RENAME TABLE A to C, B TO C"); },
+      "Exception: Error: Attempted to overwrite and lose data in table: 'C'");
+
+  // verify no name change
+  sqlAndCompareResult("SELECT count(*) FROM A WHERE Name = 'A';", {{i(1)}});
+  sqlAndCompareResult("SELECT count(*) FROM B WHERE Name = 'B';", {{i(1)}});
+
+  // ERROR, expect no change, table Z is non-existant
+  executeLambdaAndAssertException([this] { sql("RENAME TABLE Z TO A"); },
+                                  "Exception: Source table 'Z' does not exist.");
+
+  // verify
+  sqlAndCompareResult("SELECT count(*) FROM A WHERE Name = 'A';", {{i(1)}});
+}
+
 class CreateShardedTableTest : public CreateAndDropTableDdlTest {
   void SetUp() override {
     CreateAndDropTableDdlTest::SetUp();
@@ -1667,7 +1773,8 @@ class CreateShardedTableTest : public CreateAndDropTableDdlTest {
 };
 
 TEST_F(CreateShardedTableTest, ShardedTableName) {
-  sql("CREATE TABLE test_table (i INT, SHARD KEY(i)) WITH (shard_count = 2);");
+  sql("CREATE TABLE test_table (i INT, SHARD KEY(i)) WITH "
+      "(shard_count = 2);");
 
   auto& catalog = getCatalog();
   auto logical_table = catalog.getMetadataForTable("test_table", false);
@@ -1744,5 +1851,6 @@ int main(int argc, char** argv) {
   }
 
   g_enable_fsi = false;
+
   return err;
 }

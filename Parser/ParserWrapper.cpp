@@ -37,6 +37,7 @@ const std::vector<std::string> ParserWrapper::ddl_cmd = {"ARCHIVE",
                                                          "DUMP",
                                                          "OPTIMIZE",
                                                          "REFRESH",
+                                                         "RENAME",
                                                          "RESTORE",
                                                          "REVOKE",
                                                          "SHOW",
@@ -121,6 +122,7 @@ ParserWrapper::ParserWrapper(std::string query_string) {
     is_validate = true;
     return;
   }
+
   query_type_ = QueryType::Read;
   for (std::string ddl : ddl_cmd) {
     is_ddl = boost::istarts_with(query_string, ddl);
@@ -195,6 +197,11 @@ ParserWrapper::ParserWrapper(std::string query_string) {
         }
       } else if (ddl == "KILL") {
         query_type_ = QueryType::Unknown;
+        is_calcite_ddl_ = true;
+        is_legacy_ddl_ = false;
+        return;
+      } else if (ddl == "RENAME") {
+        query_type_ = QueryType::SchemaWrite;
         is_calcite_ddl_ = true;
         is_legacy_ddl_ = false;
         return;
