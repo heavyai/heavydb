@@ -782,6 +782,11 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_allow_query_step_cpu_retry)
           ->implicit_value(true),
       R"(Allow certain query steps to retry on CPU, even when allow-cpu-retry is disabled)");
+  developer_desc.add_options()("enable-cpu-shmem",
+                               po::value<bool>(&g_enable_cpu_shmem)
+                                   ->default_value(g_enable_cpu_shmem)
+                                   ->implicit_value(true),
+                               "Enable shared execution context for CPU code.");
 }
 
 namespace {

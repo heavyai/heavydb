@@ -311,6 +311,10 @@ extern "C" ALWAYS_INLINE uint64_t agg_count(uint64_t* agg, const int64_t) {
   return (*agg)++;
 }
 
+extern "C" ALWAYS_INLINE uint64_t agg_count_cpu_shared(uint64_t* agg, const int64_t) {
+  return __atomic_fetch_add(agg, (uint64_t)1, __ATOMIC_ACQ_REL);
+}
+
 extern "C" ALWAYS_INLINE void agg_count_distinct_bitmap(int64_t* agg,
                                                         const int64_t val,
                                                         const int64_t min_val) {
@@ -376,6 +380,10 @@ extern "C" ALWAYS_INLINE int64_t agg_sum(int64_t* agg, const int64_t val) {
   return old;
 }
 
+extern "C" ALWAYS_INLINE int64_t agg_sum_cpu_shared(int64_t* agg, const int64_t val) {
+  return __atomic_fetch_add(agg, val, __ATOMIC_ACQ_REL);
+}
+
 extern "C" ALWAYS_INLINE void agg_max(int64_t* agg, const int64_t val) {
   *agg = std::max(*agg, val);
 }
@@ -385,6 +393,10 @@ extern "C" ALWAYS_INLINE void agg_min(int64_t* agg, const int64_t val) {
 }
 
 extern "C" ALWAYS_INLINE void agg_id(int64_t* agg, const int64_t val) {
+  *agg = val;
+}
+
+extern "C" ALWAYS_INLINE void agg_id_cpu_shared(int64_t* agg, const int64_t val) {
   *agg = val;
 }
 
