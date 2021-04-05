@@ -9107,35 +9107,49 @@ TEST(Select, Joins_LeftJoinFiltered) {
     g_enable_left_join_filter_hoisting = left_join_hoisting_state;
   };
 
+  auto check_explain_result = [](const std::string& query,
+                                 const ExecutorDeviceType dt,
+                                 const bool enable_filter_hoisting) {
+    const auto query_explain_result =
+        QR::get()->runSelectQuery(query,
+                                  dt,
+                                  /*hoist_literals=*/true,
+                                  /*allow_loop_joins=*/false,
+                                  /*just_explain=*/true);
+    const auto explain_result = query_explain_result->getRows();
+    EXPECT_EQ(size_t(1), explain_result->rowCount());
+    const auto crt_row = explain_result->getNextRow(true, true);
+    EXPECT_EQ(size_t(1), crt_row.size());
+    const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
+    const auto n = explain_str.find("hoisted_left_join_filters_");
+    const bool condition = n == std::string::npos;
+    if (enable_filter_hoisting) {
+      // expect a match
+      EXPECT_FALSE(condition);
+    } else {
+      // expect no match
+      EXPECT_TRUE(condition);
+    }
+  };
+
   for (bool enable_filter_hoisting : {false, true}) {
     g_enable_left_join_filter_hoisting = enable_filter_hoisting;
 
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
       SKIP_NO_GPU();
 
-      const std::string query =
-          R"(SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test.x = test_inner.x WHERE test.y > 42;)";
-      c(query, dt);
+      {
+        const std::string query =
+            R"(SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test.x = test_inner.x WHERE test.y > 42;)";
+        c(query, dt);
+        check_explain_result(query, dt, enable_filter_hoisting);
+      }
 
-      const auto query_explain_result =
-          QR::get()->runSelectQuery(query,
-                                    dt,
-                                    /*hoist_literals=*/true,
-                                    /*allow_loop_joins=*/false,
-                                    /*just_explain=*/true);
-      const auto explain_result = query_explain_result->getRows();
-      EXPECT_EQ(size_t(1), explain_result->rowCount());
-      const auto crt_row = explain_result->getNextRow(true, true);
-      EXPECT_EQ(size_t(1), crt_row.size());
-      const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
-      const auto n = explain_str.find("hoisted_left_join_filters_");
-      const bool condition = n == std::string::npos;
-      if (enable_filter_hoisting) {
-        // expect a match
-        EXPECT_FALSE(condition);
-      } else {
-        // expect no match
-        EXPECT_TRUE(condition);
+      {
+        const std::string query =
+            R"(SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test.x = test_inner.x LEFT JOIN test_inner_x ON test.x = test_inner_x.x WHERE test.y > 42;)";
+        c(query, dt);
+        check_explain_result(query, dt, enable_filter_hoisting);
       }
     }
   }
