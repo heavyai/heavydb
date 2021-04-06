@@ -1785,6 +1785,54 @@ TEST_F(OpportunisticVacuumingTest, DifferentDataTypesMetadataUpdate) {
   // clang-format on
 }
 
+TEST_F(OpportunisticVacuumingTest, VarLenColumnUpdateOfConsecutiveInnerFragments) {
+  sql("create table test_table (i int, t text encoding none) with (fragment_size = 3, "
+      "max_rollback_epochs = 25);");
+  insertRange(1, 15, "abc");
+
+  assertChunkContentAndMetadata(0, {1, 2, 3});
+  assertChunkContentAndMetadata(1, {4, 5, 6});
+  assertChunkContentAndMetadata(2, {7, 8, 9});
+  assertChunkContentAndMetadata(3, {10, 11, 12});
+  assertChunkContentAndMetadata(4, {13, 14, 15});
+
+  assertTextChunkContentAndMetadata(0, {"abc1", "abc2", "abc3"});
+  assertTextChunkContentAndMetadata(1, {"abc4", "abc5", "abc6"});
+  assertTextChunkContentAndMetadata(2, {"abc7", "abc8", "abc9"});
+  assertTextChunkContentAndMetadata(3, {"abc10", "abc11", "abc12"});
+  assertTextChunkContentAndMetadata(4, {"abc13", "abc14", "abc15"});
+
+  // Do an update that touches only the inner fragments
+  sql("update test_table set t = 'test_val' where i = 6 or i = 7 or i = 11;");
+
+  // When a variable length column is updated, the entire row is marked as deleted and a
+  // new row with updated values is appended to the end of the table.
+  assertChunkContentAndMetadata(0, {1, 2, 3});
+  assertChunkContentAndMetadata(1, {4, 5});
+  assertChunkContentAndMetadata(2, {8, 9});
+  assertChunkContentAndMetadata(3, {10, 12});
+  assertChunkContentAndMetadata(4, {13, 14, 15});
+  assertChunkContentAndMetadata(5, {6, 7, 11});
+
+  assertTextChunkContentAndMetadata(0, {"abc1", "abc2", "abc3"});
+  assertTextChunkContentAndMetadata(1, {"abc4", "abc5"});
+  assertTextChunkContentAndMetadata(2, {"abc8", "abc9"});
+  assertTextChunkContentAndMetadata(3, {"abc10", "abc12"});
+  assertTextChunkContentAndMetadata(4, {"abc13", "abc14", "abc15"});
+  assertTextChunkContentAndMetadata(5, {"test_val", "test_val", "test_val"});
+
+  assertFragmentRowCount(15);
+  // clang-format off
+  sqlAndCompareResult("select * from test_table;",
+                      {{i(1), "abc1"}, {i(2), "abc2"}, {i(3), "abc3"},
+                       {i(4), "abc4"}, {i(5), "abc5"},
+                       {i(8), "abc8"}, {i(9), "abc9"},
+                       {i(10), "abc10"},{i(12), "abc12"},
+                       {i(13), "abc13"}, {i(14), "abc14"}, {i(15), "abc15"},
+                       {i(6), "test_val"}, {i(7), "test_val"}, {i(11), "test_val"}});
+  // clang-format on
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
