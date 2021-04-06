@@ -25,6 +25,8 @@ struct OverlapsHashTableCacheKey {
   const size_t num_elements;
   const std::vector<ChunkKey> chunk_keys;
   const SQLOps optype;
+  const size_t max_hashtable_size;
+  const double bucket_threshold;
   const std::vector<double> inverse_bucket_sizes;
 
   bool operator==(const struct OverlapsHashTableCacheKey& that) const {
@@ -38,24 +40,33 @@ struct OverlapsHashTableCacheKey {
       }
     }
     return num_elements == that.num_elements && chunk_keys == that.chunk_keys &&
-           optype == that.optype;
+           optype == that.optype && max_hashtable_size == that.max_hashtable_size &&
+           bucket_threshold == that.bucket_threshold;
   }
 
   OverlapsHashTableCacheKey(const size_t num_elements,
                             const std::vector<ChunkKey>& chunk_keys,
                             const SQLOps& optype,
-                            const std::vector<double> inverse_bucket_sizes)
+                            const size_t max_hashtable_size,
+                            const double bucket_threshold,
+                            const std::vector<double> inverse_bucket_sizes = {})
       : num_elements(num_elements)
       , chunk_keys(chunk_keys)
       , optype(optype)
+      , max_hashtable_size(max_hashtable_size)
+      , bucket_threshold(bucket_threshold)
       , inverse_bucket_sizes(inverse_bucket_sizes) {}
 
   // "copy" constructor
-  OverlapsHashTableCacheKey(const HashTableCacheKey& that,
-                            const std::vector<double>& inverse_bucket_sizes)
+  OverlapsHashTableCacheKey(const OverlapsHashTableCacheKey& that,
+                            const size_t max_hashtable_size,
+                            const double bucket_threshold,
+                            const std::vector<double>& inverse_bucket_sizes = {})
       : num_elements(that.num_elements)
       , chunk_keys(that.chunk_keys)
       , optype(that.optype)
+      , max_hashtable_size(max_hashtable_size)
+      , bucket_threshold(bucket_threshold)
       , inverse_bucket_sizes(inverse_bucket_sizes) {}
 };
 
@@ -136,13 +147,17 @@ class OverlapsJoinHashTable : public HashJoin {
                          const size_t shard_count,
                          const size_t entry_count,
                          const size_t emitted_keys_count,
-                         const bool skip_hashtable_caching);
+                         const bool skip_hashtable_caching,
+                         const size_t chosen_max_hashtable_size,
+                         const double chosen_bucket_threshold);
 
   void reifyForDevice(const ColumnsForDevice& columns_for_device,
                       const HashType layout,
                       const size_t entry_count,
                       const size_t emitted_keys_count,
                       const bool skip_hashtable_caching,
+                      const size_t chosen_max_hashtable_size,
+                      const double chosen_bucket_threshold,
                       const int device_id,
                       const logger::ThreadId parent_thread_id);
 
@@ -158,13 +173,17 @@ class OverlapsJoinHashTable : public HashJoin {
   // returns entry_count, emitted_keys_count
   virtual std::pair<size_t, size_t> approximateTupleCount(
       const std::vector<double>& inverse_bucket_sizes_for_dimension,
-      std::vector<ColumnsForDevice>&);
+      std::vector<ColumnsForDevice>&,
+      const size_t chosen_max_hashtable_size,
+      const double chosen_bucket_threshold);
 
   // returns entry_count, emitted_keys_count
   virtual std::pair<size_t, size_t> computeHashTableCounts(
       const size_t shard_count,
       const std::vector<double>& inverse_bucket_sizes_for_dimension,
-      std::vector<ColumnsForDevice>& columns_per_device);
+      std::vector<ColumnsForDevice>& columns_per_device,
+      const size_t chosen_max_hashtable_size,
+      const double chosen_bucket_threshold);
 
   void setInverseBucketSizeInfo(const std::vector<double>& inverse_bucket_sizes,
                                 std::vector<ColumnsForDevice>& columns_per_device,
@@ -196,7 +215,9 @@ class OverlapsJoinHashTable : public HashJoin {
       const HashType layout,
       const size_t entry_count,
       const size_t emitted_keys_count,
-      const bool skip_hashtable_caching);
+      const bool skip_hashtable_caching,
+      const size_t chosen_max_hashtable_size,
+      const double chosen_bucket_threshold);
 
 #ifdef HAVE_CUDA
   std::shared_ptr<BaselineHashTable> initHashTableOnGpu(
@@ -343,7 +364,7 @@ class OverlapsJoinHashTable : public HashJoin {
   using BucketThreshold = double;
   using BucketSizes = std::vector<double>;
   static std::unique_ptr<
-      HashTableCache<HashTableCacheKey, std::pair<BucketThreshold, BucketSizes>>>
+      HashTableCache<OverlapsHashTableCacheKey, std::pair<BucketThreshold, BucketSizes>>>
       auto_tuner_cache_;
 
   QueryHint query_hint_;

@@ -484,6 +484,110 @@ TEST_F(OverlapsTest, SkipHashtableCaching) {
   ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)0);
 }
 
+TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
+  // consider the following symbols:
+  // T_E: bucket_threshold_hint_enabled
+  // T_D: bucket_threshold_hint_disabled (use default value)
+  // T_C: use calculated bucket_threshold value
+  //      by performing auto tuner with an initial value of T_D
+  // M_E: hashtable_max_size_hint_enabled
+  // M_D: hashtable_max_size_hint_disabled (use default value)
+
+  // here, we only add param setting to auto_tuner iff the initial setting is <T_D, *>
+  // but we try to keep a hashtable for every param setting
+
+  // let say a hashtable is built from the setting C as C ----> T
+  // then we reuse hashtable iff we have a cached hashtable which is mapped to C
+  // all combinations of <chosen bucket_threshold, max_hashtable_size> combination:
+  // <T_E, M_E> --> impossible, we use <T_E, M_D> instead since we skip M_E and set M_D
+  // <T_E, M_D> --> possible, but do not add the pair to auto_tuner_cache
+  //                and map <T_E, M_D> ----> T to hashtable cache
+  // <T_D, M_E> --> possible, and it is reintepreted as <T_C, M_E> by auto tuner
+  //                add map <T_D, M_D> ----> <T_C, M_E> to auto_tuner_cache
+  //                add map <T_C, M_E> ----> T to hashtable cache
+  // <T_D, M_D> --> possible, and it is reinterpreted as <T_C, M_D> by auto tuner
+  //                add map <T_D, M_D> ----> <T_C, M_D> to auto_tuner_cache
+  //                add map <T_C, M_D> ----> T to hashtable cache
+  // <T_C, M_E> --> possible, and comes from the initial setting of <T_D, M_E>
+  // <T_C, M_D> --> possible, and comes from the initial setting of <T_D, M_D>
+
+  QR::get()->clearCpuMemory();
+  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
+  const auto enable_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many;
+
+  g_enable_overlaps_hashjoin = true;
+  g_enable_hashjoin_many_to_many = true;
+  g_trivial_loop_join_threshold = 1;
+
+  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state,
+                                     &enable_hashjoin_many_to_many_state] {
+    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
+    g_enable_overlaps_hashjoin = enable_hashjoin_many_to_many_state;
+    g_trivial_loop_join_threshold = 1000;
+  };
+
+  // <T_D, M_D> case, add both <T_C, M_D> to auto tuner and its hashtable to cache
+  const auto q1 =
+      "SELECT count(*) FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
+      "ST_Intersects(a.poly, b.poly);";
+  execSQL(q1, ExecutorDeviceType::CPU);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)2);
+
+  // <T_E, M_D> case, only add hashtable to cache with <T_E: 0.1, M_D>
+  const auto q2 =
+      "SELECT /*+ overlaps_bucket_threshold(0.1) */ count(*) FROM does_not_intersect_b "
+      "as b JOIN does_not_intersect_a as a ON ST_Intersects(a.poly, b.poly);";
+  execSQL(q2, ExecutorDeviceType::CPU);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)3);
+
+  // <T_E, M_D> case... only add hashtable to cache with <T_E: 0.2, M_D>
+  const auto q3 =
+      "SELECT /*+ overlaps_bucket_threshold(0.2) */ count(*) FROM does_not_intersect_b "
+      "as b JOIN does_not_intersect_a as a ON ST_Intersects(a.poly, b.poly);";
+  execSQL(q3, ExecutorDeviceType::CPU);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)4);
+
+  // only reuse cached hashtable for <T_E: 0.1, M_D>
+  const auto q4 =
+      "SELECT /*+ overlaps_bucket_threshold(0.1) */ count(*) FROM does_not_intersect_b "
+      "as b JOIN does_not_intersect_a as a ON ST_Intersects(a.poly, b.poly);";
+  execSQL(q4, ExecutorDeviceType::CPU);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)4);
+
+  // skip max_size hint, so <T_E, M_D> case and only reuse <T_E: 0.1, M_D> hashtable
+  const auto q5 =
+      "SELECT /*+ overlaps_bucket_threshold(0.1), overlaps_max_size(1000) */ count(*) "
+      "FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
+      "ST_Intersects(a.poly, b.poly);";
+  execSQL(q5, ExecutorDeviceType::CPU);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)4);
+
+  // <T_D, M_E> case, so it now becomes <T_C, M_E>
+  // add <T_D, M_E> --> <T_C, M_E: 1000> mapping to auto_tuner
+  // add <T_C, M_E: 1000> hashtable to cache
+  const auto q6 =
+      "SELECT /*+ overlaps_max_size(1000) */ count(*) FROM does_not_intersect_b as b "
+      "JOIN does_not_intersect_a as a ON ST_Intersects(a.poly, b.poly);";
+  execSQL(q6, ExecutorDeviceType::CPU);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)6);
+
+  // <T_E, M_D> case, only reuse cached hashtable of <T_E: 0.2, M_D>
+  const auto q7 =
+      "SELECT /*+ overlaps_max_size(1000), overlaps_bucket_threshold(0.2) */ count(*) "
+      "FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
+      "ST_Intersects(a.poly, b.poly);";
+  execSQL(q7, ExecutorDeviceType::CPU);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)6);
+
+  // <T_E, M_D> case... only add hashtable to cache with <T_E: 0.3, M_D>
+  const auto q8 =
+      "SELECT /*+ overlaps_max_size(1000), overlaps_bucket_threshold(0.3) */ count(*) "
+      "FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
+      "ST_Intersects(a.poly, b.poly);";
+  execSQL(q8, ExecutorDeviceType::CPU);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)7);
+}
+
 class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
  public:
   struct ExpectedValues {
@@ -537,7 +641,9 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
                  const size_t shard_count,
                  const size_t entry_count,
                  const size_t emitted_keys_count,
-                 const bool skip_hashtable_caching) final {
+                 const bool skip_hashtable_caching,
+                 const size_t chosen_max_hashtable_size,
+                 const double chosen_bucket_threshold) final {
     EXPECT_LE(step_, expected_values_per_step_.size());
     auto& expected_values = expected_values_per_step_.back();
     EXPECT_EQ(entry_count, expected_values.entry_count);
@@ -548,9 +654,14 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
   // returns entry_count, emitted_keys_count
   std::pair<size_t, size_t> approximateTupleCount(
       const std::vector<double>& bucket_sizes_for_dimension,
-      std::vector<ColumnsForDevice>& columns_per_device) final {
-    auto [entry_count, emitted_keys_count] = OverlapsJoinHashTable::approximateTupleCount(
-        bucket_sizes_for_dimension, columns_per_device);
+      std::vector<ColumnsForDevice>& columns_per_device,
+      const size_t chosen_max_hashtable_size,
+      const double chosen_bucket_threshold) final {
+    auto [entry_count, emitted_keys_count] =
+        OverlapsJoinHashTable::approximateTupleCount(bucket_sizes_for_dimension,
+                                                     columns_per_device,
+                                                     chosen_max_hashtable_size,
+                                                     chosen_bucket_threshold);
     return std::make_pair(entry_count, emitted_keys_count);
   }
 
@@ -558,10 +669,15 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
   std::pair<size_t, size_t> computeHashTableCounts(
       const size_t shard_count,
       const std::vector<double>& bucket_sizes_for_dimension,
-      std::vector<ColumnsForDevice>& columns_per_device) final {
+      std::vector<ColumnsForDevice>& columns_per_device,
+      const size_t chosen_max_hashtable_size,
+      const double chosen_bucket_threshold) final {
     auto [entry_count, emitted_keys_count] =
-        OverlapsJoinHashTable::computeHashTableCounts(
-            shard_count, bucket_sizes_for_dimension, columns_per_device);
+        OverlapsJoinHashTable::computeHashTableCounts(shard_count,
+                                                      bucket_sizes_for_dimension,
+                                                      columns_per_device,
+                                                      chosen_max_hashtable_size,
+                                                      chosen_bucket_threshold);
     EXPECT_LT(step_, expected_values_per_step_.size());
     auto& expected_values = expected_values_per_step_[step_];
     EXPECT_EQ(entry_count, expected_values.entry_count);
