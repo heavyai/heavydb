@@ -1,0 +1,9 @@
+Class StringConstInResultSet
+============================
+
+.. doxygenclass:: StringConstInResultSet
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
