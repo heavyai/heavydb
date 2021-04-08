@@ -39,6 +39,7 @@ void ForeignTableRefreshScheduler::start(std::atomic<bool>& is_program_running) 
         if (!is_program_running || !is_scheduler_running_) {
           return;
         }
+        bool at_least_one_table_refreshed = false;
         for (const auto& catalog : sys_catalog.getCatalogsForAllDbs()) {
           // Exit if scheduler has been stopped asynchronously
           if (!is_program_running || !is_scheduler_running_) {
@@ -57,7 +58,10 @@ void ForeignTableRefreshScheduler::start(std::atomic<bool>& is_program_running) 
                          << "\" resulted in an error. " << e.what();
             }
             has_refreshed_table_ = true;
+            at_least_one_table_refreshed = true;
           }
+        }
+        if (at_least_one_table_refreshed) {
           invalidateQueryEngineCaches();
         }
         // Exit if scheduler has been stopped asynchronously
