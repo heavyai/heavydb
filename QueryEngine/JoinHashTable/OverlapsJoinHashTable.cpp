@@ -59,7 +59,9 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     if (condition->is_overlaps_oper()) {
       CHECK_EQ(inner_outer_pairs.size(), size_t(1));
       if (inner_outer_pairs[0].first->get_type_info().is_array() &&
-          inner_outer_pairs[0].second->get_type_info().is_array()) {
+          inner_outer_pairs[0].second->get_type_info().is_array() &&
+          // Bounds vs constructed points, former should yield ManyToMany
+          inner_outer_pairs[0].second->get_type_info().get_size() == 32) {
         layout = HashType::ManyToMany;
       }
     }
@@ -1077,7 +1079,9 @@ void OverlapsJoinHashTable::reify(const HashType preferred_layout) {
   CHECK(condition_->is_overlaps_oper());
   CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
   HashType layout;
-  if (inner_outer_pairs_[0].second->get_type_info().is_array()) {
+  if (inner_outer_pairs_[0].second->get_type_info().is_fixlen_array() &&
+      inner_outer_pairs_[0].second->get_type_info().get_size() == 32) {
+    // bounds array
     layout = HashType::ManyToMany;
   } else {
     layout = HashType::OneToMany;
@@ -1370,55 +1374,74 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
   }
 
   const auto& inner_outer_pair = inner_outer_pairs_[0];
-  const auto outer_col = inner_outer_pair.second;
-  const auto outer_col_ti = outer_col->get_type_info();
+  const auto outer_geo = inner_outer_pair.second;
+  const auto outer_geo_ti = outer_geo->get_type_info();
 
-  if (outer_col_ti.is_geometry()) {
-    CodeGenerator code_generator(executor_);
+  llvm::Value* arr_ptr = nullptr;
+  CodeGenerator code_generator(executor_);
+  CHECK_EQ(inverse_bucket_sizes_for_dimension_.size(), static_cast<size_t>(2));
+
+  if (outer_geo_ti.is_geometry()) {
     // TODO(adb): for points we will use the coords array, but for other geometries we
     // will need to use the bounding box. For now only support points.
-    CHECK_EQ(outer_col_ti.get_type(), kPOINT);
-    CHECK_EQ(inverse_bucket_sizes_for_dimension_.size(), static_cast<size_t>(2));
+    CHECK_EQ(outer_geo_ti.get_type(), kPOINT);
 
-    const auto col_lvs = code_generator.codegen(outer_col, true, co);
-    CHECK_EQ(col_lvs.size(), size_t(1));
+    if (const auto outer_geo_col = dynamic_cast<const Analyzer::ColumnVar*>(outer_geo)) {
+      const auto outer_geo_col_lvs = code_generator.codegen(outer_geo_col, true, co);
+      CHECK_EQ(outer_geo_col_lvs.size(), size_t(1));
+      const auto coords_cd = executor_->getCatalog()->getMetadataForColumn(
+          outer_geo_col->get_table_id(), outer_geo_col->get_column_id() + 1);
+      CHECK(coords_cd);
 
-    const auto outer_col_var = dynamic_cast<const Analyzer::ColumnVar*>(outer_col);
-    CHECK(outer_col_var);
-    const auto coords_cd = executor_->getCatalog()->getMetadataForColumn(
-        outer_col_var->get_table_id(), outer_col_var->get_column_id() + 1);
-    CHECK(coords_cd);
-
-    const auto array_ptr = executor_->cgen_state_->emitExternalCall(
-        "array_buff",
-        llvm::Type::getInt8PtrTy(executor_->cgen_state_->context_),
-        {col_lvs.front(), code_generator.posArg(outer_col)});
-    CHECK(coords_cd->columnType.get_elem_type().get_type() == kTINYINT)
-        << "Only TINYINT coordinates columns are supported in geo overlaps hash join.";
-    const auto arr_ptr =
-        code_generator.castArrayPointer(array_ptr, coords_cd->columnType.get_elem_type());
-
-    for (size_t i = 0; i < 2; i++) {
-      const auto key_comp_dest_lv = LL_BUILDER.CreateGEP(key_buff_lv, LL_INT(i));
-
-      // Note that get_bucket_key_for_range_compressed will need to be specialized for
-      // future compression schemes
-      auto bucket_key =
-          outer_col_ti.get_compression() == kENCODING_GEOINT
-              ? executor_->cgen_state_->emitExternalCall(
-                    "get_bucket_key_for_range_compressed",
-                    get_int_type(64, LL_CONTEXT),
-                    {arr_ptr, LL_INT(i), LL_FP(inverse_bucket_sizes_for_dimension_[i])})
-              : executor_->cgen_state_->emitExternalCall(
-                    "get_bucket_key_for_range_double",
-                    get_int_type(64, LL_CONTEXT),
-                    {arr_ptr, LL_INT(i), LL_FP(inverse_bucket_sizes_for_dimension_[i])});
-      const auto col_lv = LL_BUILDER.CreateSExt(
-          bucket_key, get_int_type(key_component_width * 8, LL_CONTEXT));
-      LL_BUILDER.CreateStore(col_lv, key_comp_dest_lv);
+      const auto array_ptr = executor_->cgen_state_->emitExternalCall(
+          "array_buff",
+          llvm::Type::getInt8PtrTy(executor_->cgen_state_->context_),
+          {outer_geo_col_lvs.front(), code_generator.posArg(outer_geo_col)});
+      CHECK(coords_cd->columnType.get_elem_type().get_type() == kTINYINT)
+          << "Only TINYINT coordinates columns are supported in geo overlaps hash join.";
+      arr_ptr = code_generator.castArrayPointer(array_ptr,
+                                                coords_cd->columnType.get_elem_type());
     }
-  } else {
-    LOG(FATAL) << "Overlaps key currently only supported for geospatial types.";
+  } else if (outer_geo_ti.is_fixlen_array()) {
+    // Process dynamically constructed points
+    const auto outer_geo_cast_coord_array =
+        dynamic_cast<const Analyzer::UOper*>(outer_geo);
+    CHECK(outer_geo_cast_coord_array->get_optype() == kCAST);
+    const auto outer_geo_coord_array = dynamic_cast<const Analyzer::ArrayExpr*>(
+        outer_geo_cast_coord_array->get_operand());
+    CHECK(outer_geo_coord_array);
+    CHECK(outer_geo_coord_array->isLocalAlloc());
+    CHECK(outer_geo_coord_array->getElementCount() == 2);
+    CHECK(outer_geo_ti.get_size() == 2 * sizeof(double));
+    const auto outer_geo_constructed_lvs = code_generator.codegen(outer_geo, true, co);
+    // CHECK_EQ(outer_geo_constructed_lvs.size(), size_t(2));     // Pointer and size
+    const auto array_ptr = outer_geo_constructed_lvs.front();  // Just need the pointer
+    arr_ptr = LL_BUILDER.CreateGEP(array_ptr, LL_INT(0));
+    arr_ptr = code_generator.castArrayPointer(array_ptr, SQLTypeInfo(kTINYINT, true));
+  }
+  if (!arr_ptr) {
+    LOG(FATAL) << "Overlaps key currently only supported for geospatial columns and "
+                  "constructed points.";
+  }
+
+  for (size_t i = 0; i < 2; i++) {
+    const auto key_comp_dest_lv = LL_BUILDER.CreateGEP(key_buff_lv, LL_INT(i));
+
+    // Note that get_bucket_key_for_range_compressed will need to be specialized for
+    // future compression schemes
+    auto bucket_key =
+        outer_geo_ti.get_compression() == kENCODING_GEOINT
+            ? executor_->cgen_state_->emitExternalCall(
+                  "get_bucket_key_for_range_compressed",
+                  get_int_type(64, LL_CONTEXT),
+                  {arr_ptr, LL_INT(i), LL_FP(inverse_bucket_sizes_for_dimension_[i])})
+            : executor_->cgen_state_->emitExternalCall(
+                  "get_bucket_key_for_range_double",
+                  get_int_type(64, LL_CONTEXT),
+                  {arr_ptr, LL_INT(i), LL_FP(inverse_bucket_sizes_for_dimension_[i])});
+    const auto col_lv = LL_BUILDER.CreateSExt(
+        bucket_key, get_int_type(key_component_width * 8, LL_CONTEXT));
+    LL_BUILDER.CreateStore(col_lv, key_comp_dest_lv);
   }
   return key_buff_lv;
 }

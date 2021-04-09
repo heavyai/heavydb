@@ -91,7 +91,9 @@ const auto init_stmts_ddl = {
     R"(create table does_intersect_b (id int,
                                       poly geometry(polygon, 4326),
                                       mpoly geometry(multipolygon, 4326),
-                                      pt geometry(point, 4326));
+                                      pt geometry(point, 4326),
+                                      x DOUBLE,
+                                      y DOUBLE);
     )",
     R"(create table does_not_intersect_a (id int,
                                         poly geometry(polygon, 4326),
@@ -133,13 +135,15 @@ const auto init_stmts_dml = {
        values (0,
               'polygon((0 0,30 0,30 0,30 30,0 0))',
               'multipolygon(((0 0,30 0,30 0,30 30,0 0)))',
-              'point(8 8)');
+              'point(8 8)',
+              8, 8);
     )",
     R"(insert into does_intersect_b
        values (1,
               'polygon((25 25,30 25,30 30,25 30,25 25))',
               'multipolygon(((25 25,30 25,30 30,25 30,25 25)))',
-              'point(28 28)');
+              'point(28 28)',
+              28, 28);
     )",
     R"(insert into does_not_intersect_a
        values (1,
@@ -225,6 +229,19 @@ TEST_F(OverlapsTest, InnerJoinPointInPolyIntersects) {
     sql =
         "SELECT count(*) from does_intersect_b as b JOIN "
         "does_intersect_a as a ON ST_Intersects(a.poly, b.pt);";
+    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
+
+    sql =
+        "SELECT "
+        "count(*) from "
+        "does_intersect_b as b JOIN does_intersect_a as a ON ST_Intersects(a.poly, "
+        "ST_SetSRID(ST_Point(b.x, b.y), 4326));";
+    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
+
+    sql =
+        "SELECT count(*) from does_intersect_b as b JOIN "
+        "does_intersect_a as a ON ST_Intersects(a.poly, "
+        "ST_SetSRID(ST_Point(b.x, b.y), 4326));";
     ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
   });
 }
@@ -396,6 +413,13 @@ TEST_F(OverlapsTest, JoinPolyPointContains) {
         "SELECT "
         "count(*) from "
         "does_intersect_b as b JOIN does_intersect_a as a ON ST_Contains(a.poly, b.pt);";
+    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
+
+    sql =
+        "SELECT "
+        "count(*) from "
+        "does_intersect_b as b JOIN does_intersect_a as a ON "
+        "ST_Contains(a.poly, ST_SetSRID(ST_Point(b.x, b.y), 4326));";
     ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
 
     // sql =

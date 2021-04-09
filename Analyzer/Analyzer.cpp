@@ -3022,6 +3022,13 @@ void DatetruncExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
   from_expr_->collect_rte_idx(rte_idx_set);
 }
 
+void ArrayExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
+  for (unsigned i = 0; i < getElementCount(); i++) {
+    const auto expr = getElement(i);
+    expr->collect_rte_idx(rte_idx_set);
+  }
+}
+
 void CaseExpr::collect_column_var(
     std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
     bool include_agg) const {
@@ -3058,6 +3065,15 @@ void DatetruncExpr::collect_column_var(
     std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
     bool include_agg) const {
   from_expr_->collect_column_var(colvar_set, include_agg);
+}
+
+void ArrayExpr::collect_column_var(
+    std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+    bool include_agg) const {
+  for (unsigned i = 0; i < getElementCount(); i++) {
+    const auto expr = getElement(i);
+    expr->collect_column_var(colvar_set, include_agg);
+  }
 }
 
 void CaseExpr::check_group_by(

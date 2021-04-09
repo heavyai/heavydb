@@ -1173,6 +1173,13 @@ inline bool is_unnest(const Analyzer::Expr* expr) {
          static_cast<const Analyzer::UOper*>(expr)->get_optype() == kUNNEST;
 }
 
+inline bool is_constructed_point(const Analyzer::Expr* expr) {
+  auto uoper = dynamic_cast<const Analyzer::UOper*>(expr);
+  auto oper = (uoper && uoper->get_optype() == kCAST) ? uoper->get_operand() : expr;
+  auto arr = dynamic_cast<const Analyzer::ArrayExpr*>(oper);
+  return (arr && arr->isLocalAlloc() && arr->get_type_info().is_fixlen_array());
+}
+
 bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos,
                           const RelAlgExecutionUnit& ra_exe_unit);
 
