@@ -29,6 +29,7 @@ using cost_t = unsigned;
 using node_t = size_t;
 
 static std::unordered_map<SQLTypes, cost_t> GEO_TYPE_COSTS{{kPOINT, 60},
+                                                           {kARRAY, 60},
                                                            {kLINESTRING, 70},
                                                            {kPOLYGON, 80},
                                                            {kMULTIPOLYGON, 90}};
@@ -42,7 +43,7 @@ std::pair<cost_t, cost_t> get_join_qual_cost(const Analyzer::Expr* qual,
     for (size_t i = 0; i < func_oper->getArity(); i++) {
       const auto arg_expr = func_oper->getArg(i);
       const auto& ti = arg_expr->get_type_info();
-      if (ti.is_geometry()) {
+      if (ti.is_geometry() || is_constructed_point(arg_expr)) {
         geo_types_for_func.push_back(ti.get_type());
       }
     }

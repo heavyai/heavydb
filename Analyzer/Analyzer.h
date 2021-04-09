@@ -1494,6 +1494,12 @@ class ArrayExpr : public Expr {
     return contained_expressions_[i].get();
   }
 
+  void collect_rte_idx(std::set<int>& rte_idx_set) const override;
+  void collect_column_var(
+      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>&
+          colvar_set,
+      bool include_agg) const override;
+
  private:
   ExpressionPtrVector contained_expressions_;
   bool local_alloc_;

@@ -670,10 +670,11 @@ InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
       throw HashJoinFail(
           "Overlaps join only supported for 4-element double fixed length arrays");
     }
-    if (!(outer_col_ti.get_type() == kPOINT || is_bounds_array(outer_col_ti))) {
+    if (!(outer_col_ti.get_type() == kPOINT || is_bounds_array(outer_col_ti) ||
+          is_constructed_point(outer_expr))) {
       throw HashJoinFail(
-          "Overlaps join only supported for geometry outer columns of type point or "
-          "geometry columns with bounds");
+          "Overlaps join only supported for geometry outer columns of type point, "
+          "geometry columns with bounds or constructed points");
     }
   } else {
     if (!(inner_col_real_ti.is_integer() || inner_col_real_ti.is_time() ||

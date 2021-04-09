@@ -818,7 +818,7 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
       CHECK(rewritten_lhs);
       const auto& lhs_ti = rewritten_lhs->get_type_info();
 
-      if (!lhs_ti.is_geometry()) {
+      if (!lhs_ti.is_geometry() && !is_constructed_point(rewritten_lhs.get())) {
         // TODO(adb): If ST_Contains is passed geospatial literals instead of columns, the
         // function will be expanded during translation rather than during code
         // generation. While this scenario does not make sense for the overlaps join, we
@@ -828,8 +828,8 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
         // mean the function has not been expanded to the physical types, yet.
 
         LOG(INFO) << "Unable to rewrite " << func_oper->getName()
-                  << " to overlaps conjunction. LHS input type is not a geospatial "
-                     "type. Are both inputs geospatial columns?\n"
+                  << " to overlaps conjunction. LHS input type is neither a geospatial "
+                     "column nor a constructed point\n"
                   << func_oper->toString();
 
         return boost::none;
