@@ -3243,41 +3243,74 @@ void RelAlgExecutor::handlePersistentError(const int32_t error_code) {
   throw std::runtime_error(getErrorMessageFromCode(error_code));
 }
 
+namespace {
+struct ErrorInfo {
+  const char* code{nullptr};
+  const char* description{nullptr};
+};
+ErrorInfo getErrorDescription(const int32_t error_code) {
+  switch (error_code) {
+    case Executor::ERR_DIV_BY_ZERO:
+      return {.code = "ERR_DIV_BY_ZERO", .description = "Division by zero"};
+    case Executor::ERR_OUT_OF_GPU_MEM:
+      return {.code = "ERR_OUT_OF_GPU_MEM",
+              .description =
+                  "Query couldn't keep the entire working set of columns in GPU memory"};
+    case Executor::ERR_UNSUPPORTED_SELF_JOIN:
+      return {.code = "ERR_UNSUPPORTED_SELF_JOIN",
+              .description = "Self joins not supported yet"};
+    case Executor::ERR_OUT_OF_CPU_MEM:
+      return {.code = "ERR_OUT_OF_CPU_MEM",
+              .description = "Not enough host memory to execute the query"};
+    case Executor::ERR_OVERFLOW_OR_UNDERFLOW:
+      return {.code = "ERR_OVERFLOW_OR_UNDERFLOW",
+              .description = "Overflow or underflow"};
+    case Executor::ERR_OUT_OF_TIME:
+      return {.code = "ERR_OUT_OF_TIME",
+              .description = "Query execution has exceeded the time limit"};
+    case Executor::ERR_INTERRUPTED:
+      return {.code = "ERR_INTERRUPTED",
+              .description = "Query execution has been interrupted"};
+    case Executor::ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED:
+      return {
+          .code = "ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED",
+          .description = "Columnar conversion not supported for variable length types"};
+    case Executor::ERR_TOO_MANY_LITERALS:
+      return {.code = "ERR_TOO_MANY_LITERALS",
+              .description = "Too many literals in the query"};
+    case Executor::ERR_STRING_CONST_IN_RESULTSET:
+      return {.code = "ERR_STRING_CONST_IN_RESULTSET",
+              .description =
+                  "NONE ENCODED String types are not supported as input result set."};
+    case Executor::ERR_OUT_OF_RENDER_MEM:
+      return {.code = "ERR_OUT_OF_RENDER_MEM",
+              .description = "Not enough OpenGL memory to render the query results"};
+    case Executor::ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY:
+      return {.code = "ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY",
+              .description = "Streaming-Top-N not supported in Render Query"};
+    case Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES:
+      return {.code = "ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES",
+              .description = "Multiple distinct values encountered"};
+    case Executor::ERR_GEOS:
+      return {.code = "ERR_GEOS", .description = "ERR_GEOS"};
+    default:
+      return {.code = nullptr, .description = nullptr};
+  }
+}
+
+}  // namespace
+
 std::string RelAlgExecutor::getErrorMessageFromCode(const int32_t error_code) {
   if (error_code < 0) {
     return "Ran out of slots in the query output buffer";
   }
-  switch (error_code) {
-    case Executor::ERR_DIV_BY_ZERO:
-      return "Division by zero";
-    case Executor::ERR_OUT_OF_GPU_MEM:
-      return "Query couldn't keep the entire working set of columns in GPU memory";
-    case Executor::ERR_UNSUPPORTED_SELF_JOIN:
-      return "Self joins not supported yet";
-    case Executor::ERR_OUT_OF_CPU_MEM:
-      return "Not enough host memory to execute the query";
-    case Executor::ERR_OVERFLOW_OR_UNDERFLOW:
-      return "Overflow or underflow";
-    case Executor::ERR_OUT_OF_TIME:
-      return "Query execution has exceeded the time limit";
-    case Executor::ERR_INTERRUPTED:
-      return "Query execution has been interrupted";
-    case Executor::ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED:
-      return "Columnar conversion not supported for variable length types";
-    case Executor::ERR_TOO_MANY_LITERALS:
-      return "Too many literals in the query";
-    case Executor::ERR_STRING_CONST_IN_RESULTSET:
-      return "NONE ENCODED String types are not supported as input result set.";
-    case Executor::ERR_OUT_OF_RENDER_MEM:
-      return "Not enough OpenGL memory to render the query results";
-    case Executor::ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY:
-      return "Streaming-Top-N not supported in Render Query";
-    case Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES:
-      return "Multiple distinct values encountered";
-    case Executor::ERR_GEOS:
-      return "Geos call failure";
+  const auto errorInfo = getErrorDescription(error_code);
+
+  if (errorInfo.code) {
+    return errorInfo.code + ": "s + errorInfo.description;
+  } else {
+    return "Other error: code "s + std::to_string(error_code);
   }
-  return "Other error: code " + std::to_string(error_code);
 }
 
 void RelAlgExecutor::executePostExecutionCallback() {
