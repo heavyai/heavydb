@@ -3240,9 +3240,6 @@ void RelAlgExecutor::handlePersistentError(const int32_t error_code) {
     }
     return;
   }
-  if (error_code == Executor::ERR_INTERRUPTED) {
-    Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID)->resetInterrupt();
-  }
   throw std::runtime_error(getErrorMessageFromCode(error_code));
 }
 

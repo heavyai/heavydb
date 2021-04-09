@@ -1527,11 +1527,9 @@ ResultSetPtr Executor::executeWorkUnitImpl(
       } catch (QueryExecutionError& e) {
         if (eo.with_dynamic_watchdog && interrupted_.load() &&
             e.getErrorCode() == ERR_OUT_OF_TIME) {
-          resetInterrupt();
           throw QueryExecutionError(ERR_INTERRUPTED);
         }
         if (e.getErrorCode() == ERR_INTERRUPTED) {
-          resetInterrupt();
           throw QueryExecutionError(ERR_INTERRUPTED);
         }
         if (e.getErrorCode() == ERR_OVERFLOW_OR_UNDERFLOW &&
@@ -2471,12 +2469,10 @@ FetchResult Executor::fetchChunks(
               checkIsQuerySessionInterrupted(query_session, session_read_lock);
         }
         if (isInterrupted) {
-          resetInterrupt();
           throw QueryExecutionError(ERR_INTERRUPTED);
         }
       }
       if (g_enable_dynamic_watchdog && interrupted_.load()) {
-        resetInterrupt();
         throw QueryExecutionError(ERR_INTERRUPTED);
       }
       CHECK(col_id);
@@ -2641,7 +2637,6 @@ FetchResult Executor::fetchUnionChunks(
               checkIsQuerySessionInterrupted(query_session, session_read_lock);
         }
         if (isInterrupted) {
-          resetInterrupt();
           throw QueryExecutionError(ERR_INTERRUPTED);
         }
       }
@@ -2889,12 +2884,10 @@ int32_t Executor::executePlanWithoutGroupBy(
       isInterrupted = checkIsQuerySessionInterrupted(query_session, session_read_lock);
     }
     if (isInterrupted) {
-      resetInterrupt();
       throw QueryExecutionError(ERR_INTERRUPTED);
     }
   }
   if (g_enable_dynamic_watchdog && interrupted_.load()) {
-    resetInterrupt();
     throw QueryExecutionError(ERR_INTERRUPTED);
   }
   if (device_type == ExecutorDeviceType::CPU) {
@@ -3097,7 +3090,6 @@ int32_t Executor::executePlanWithGroupBy(
       isInterrupted = checkIsQuerySessionInterrupted(query_session, session_read_lock);
     }
     if (isInterrupted) {
-      resetInterrupt();
       throw QueryExecutionError(ERR_INTERRUPTED);
     }
   }
@@ -3301,7 +3293,6 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     return {nullptr, "Overlaps hash join disabled, attempting to fall back to loop join"};
   }
   if (g_enable_dynamic_watchdog && interrupted_.load()) {
-    resetInterrupt();
     throw QueryExecutionError(ERR_INTERRUPTED);
   }
   try {
