@@ -63,15 +63,19 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
     return {nullptr, 0};
   }
   const auto table_id = hash_col.get_table_id();
-  auto chunk_meta_it = fragment.getChunkMetadataMap().find(hash_col.get_column_id());
-  CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
   const auto& catalog = *executor->getCatalog();
   const auto cd =
       get_column_descriptor_maybe(hash_col.get_column_id(), table_id, catalog);
   CHECK(!cd || !(cd->isVirtualCol));
   const int8_t* col_buff = nullptr;
-
   if (cd) {  // real table
+    /* chunk_meta_it is used here to retrieve chunk numBytes and
+       numElements. Apparently, their values are often zeros. If we
+       knew how to predict the zero values, calling
+       getChunkMetadataMap could be avoided to skip
+       synthesize_metadata calls. */
+    auto chunk_meta_it = fragment.getChunkMetadataMap().find(hash_col.get_column_id());
+    CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
     ChunkKey chunk_key{catalog.getCurrentDB().dbId,
                        fragment.physicalTableId,
                        hash_col.get_column_id(),

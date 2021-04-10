@@ -34,7 +34,7 @@ struct ChunkMetadata {
   size_t numElements;
   ChunkStats chunkStats;
 
-  std::string dump() {
+  std::string dump() const {
     auto type = sqlType.is_array() ? sqlType.get_elem_type() : sqlType;
     // Unencoded strings have no min/max.
     if (type.is_string() && type.get_compression() == kENCODING_NONE) {
@@ -55,6 +55,8 @@ struct ChunkMetadata {
              " has_nulls: " + to_string(chunkStats.has_nulls);
     }
   }
+
+  std::string toString() const { return dump(); }
 
   ChunkMetadata(const SQLTypeInfo& sql_type,
                 const size_t num_bytes,

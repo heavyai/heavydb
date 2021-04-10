@@ -73,9 +73,10 @@
 #endif
 #endif
 
-#define PRINT(EXPR)                                                             \
-  std::cout << __FILE__ << ":" << __func__ << "#" << __LINE__ << ": " #EXPR "=" \
-            << ::toString(EXPR) << std::endl;
+#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#define PRINT(EXPR)                                                      \
+  std::cout << "[" << __FILENAME__ << ":" << __func__ << "#" << __LINE__ \
+            << "]: " #EXPR "=" << ::toString(EXPR) << std::endl;
 
 template <typename T>
 std::string typeName(const T* v) {

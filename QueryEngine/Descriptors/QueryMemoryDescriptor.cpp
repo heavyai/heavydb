@@ -1154,6 +1154,7 @@ std::string QueryMemoryDescriptor::toString() const {
   str += "\tOutput Columnar: " + ::toString(output_columnar_) + "\n";
   str += "\tRender Output: " + ::toString(render_output_) + "\n";
   str += "\tUse Baseline Sort: " + ::toString(must_use_baseline_sort_) + "\n";
+  str += "\tIs Table Function: " + ::toString(is_table_function_) + "\n";
   return str;
 }
 

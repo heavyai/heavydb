@@ -20,6 +20,7 @@
 #include <cassert>
 #include <string>
 #include "../Shared/sqltypes.h"
+#include "../Shared/toString.h"
 
 /**
  * @type ColumnDescriptor
@@ -55,6 +56,13 @@ struct ColumnDescriptor {
       , isDeletedCol(false) {}
   ColumnDescriptor(const bool isGeoPhyCol) : ColumnDescriptor() {
     this->isGeoPhyCol = isGeoPhyCol;
+  }
+
+  std::string toString() const {
+    return ::typeName(this) + "(tableId=" + ::toString(tableId) +
+           ", columnId=" + ::toString(columnId) +
+           ", columnName=" + ::toString(columnName) +
+           ", columnType=" + ::toString(columnType) + ")";
   }
 };
 

@@ -193,6 +193,11 @@ class ResultSet {
 
   ~ResultSet();
 
+  std::string toString() const {
+    return typeName(this) + "(targets=" + ::toString(targets_) +
+           ", query_mem_desc=" + ::toString(query_mem_desc_) + ")";
+  }
+
   inline ResultSetRowIterator rowIterator(size_t from_logical_index,
                                           bool translate_strings,
                                           bool decimal_to_double) const {

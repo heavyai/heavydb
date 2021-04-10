@@ -30,6 +30,7 @@
 #include "DataMgr/ChunkMetadata.h"
 #include "DataMgr/DataMgr.h"
 #include "Shared/sqltypes.h"
+#include "Shared/toString.h"
 #include "Utils/ChunkIter.h"
 
 using Data_Namespace::AbstractBuffer;
@@ -112,6 +113,12 @@ class Chunk {
   void initEncoder();
 
   void decompress(int8_t* compressed, VarlenDatum* result, Datum* datum) const;
+
+  std::string toString() const {
+    return ::typeName(this) + "(buffer=" + ::toString(buffer_) +
+           ", index_buf=" + ::toString(index_buf_) +
+           ", column_desc=" + ::toString(column_desc_) + ")";
+  }
 
  private:
   AbstractBuffer* buffer_;
