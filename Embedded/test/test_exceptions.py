@@ -2,7 +2,7 @@
 
 #import sys
 import pytest
-import dbe
+import omniscidbe as dbe
 import ctypes
 import pandas
 import pyarrow

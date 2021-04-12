@@ -347,6 +347,7 @@ if(ENABLE_DBE)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
   set(ENABLE_STANDALONE_CALCITE ON)
   add_definitions("-DENABLE_EMBEDDED_DATABASE")
+  add_definitions("-DDBEngine_LIBNAME=\"${CMAKE_SHARED_LIBRARY_PREFIX}DBEngine${CMAKE_SHARED_LIBRARY_SUFFIX}\"")
 endif()
 
 # Code coverage
@@ -858,6 +859,8 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses" DESTINATION 
 
 # OmniSciTypes.h local includes (for UDF/UDTF)
 install(FILES Shared/funcannotations.h DESTINATION "Shared/" COMPONENT "include")
+install(FILES Shared/InlineNullValues.h DESTINATION "Shared/" COMPONENT "include")
+install(FILES Logger/Logger.h DESTINATION "Logger/" COMPONENT "include")
 
 # Frontend
 option(MAPD_IMMERSE_DOWNLOAD "Download OmniSci Immerse for packaging" OFF)
@@ -973,6 +976,7 @@ install(FILES completion_hints.thrift DESTINATION "." COMPONENT "thrift")
 install(FILES omnisci.thrift DESTINATION "." COMPONENT "thrift")
 install(FILES common.thrift DESTINATION "." COMPONENT "thrift")
 install(FILES QueryEngine/serialized_result_set.thrift DESTINATION "QueryEngine/" COMPONENT "thrift")
+install(FILES QueryEngine/extension_functions.thrift DESTINATION "QueryEngine/" COMPONENT "thrift")
 
 if(NOT PREFER_STATIC_LIBS AND NOT ENABLE_CONDA)
   install(FILES ${Boost_LIBRARIES} DESTINATION ThirdParty/lib)
