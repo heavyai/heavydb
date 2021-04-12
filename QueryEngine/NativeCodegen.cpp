@@ -1342,7 +1342,7 @@ llvm::Module* read_template_module(llvm::LLVMContext& context) {
 
   auto buffer_or_error = llvm::MemoryBuffer::getFile(omnisci::get_root_abs_path() +
                                                      "/QueryEngine/RuntimeFunctions.bc");
-  CHECK(!buffer_or_error.getError());
+  CHECK(!buffer_or_error.getError()) << "root path=" << omnisci::get_root_abs_path();
   llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
 
   auto owner = llvm::parseBitcodeFile(buffer->getMemBufferRef(), context);
@@ -1370,7 +1370,7 @@ llvm::Module* read_libdevice_module(llvm::LLVMContext& context) {
   }
 
   auto buffer_or_error = llvm::MemoryBuffer::getFile(cuda_path.c_str());
-  CHECK(!buffer_or_error.getError());
+  CHECK(!buffer_or_error.getError()) << "cuda_path=" << cuda_path.c_str();
   llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
 
   auto owner = llvm::parseBitcodeFile(buffer->getMemBufferRef(), context);
@@ -1388,7 +1388,7 @@ llvm::Module* read_geos_module(llvm::LLVMContext& context) {
 
   auto buffer_or_error = llvm::MemoryBuffer::getFile(omnisci::get_root_abs_path() +
                                                      "/QueryEngine/GeosRuntime.bc");
-  CHECK(!buffer_or_error.getError());
+  CHECK(!buffer_or_error.getError()) << "root path=" << omnisci::get_root_abs_path();
   llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
 
   auto owner = llvm::parseBitcodeFile(buffer->getMemBufferRef(), context);
