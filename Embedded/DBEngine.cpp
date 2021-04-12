@@ -145,7 +145,6 @@ class DBEngineImpl : public DBEngine {
 
     prog_config_opts.system_parameters.omnisci_server_port = -1;
     prog_config_opts.system_parameters.calcite_keepalive = true;
-
     try {
       db_handler_ =
           std::make_shared<DBHandler>(prog_config_opts.db_leaves,
@@ -260,69 +259,63 @@ class DBEngineImpl : public DBEngine {
 
   std::vector<std::string> getTables() {
     std::vector<std::string> table_names;
-    auto catalog = db_handler_->get_session_copy(session_id_).get_catalog_ptr();
-    if (catalog) {
-      const auto tables = catalog->getAllTableMetadata();
-      for (const auto td : tables) {
-        if (td->shard >= 0) {
-          // skip shards, they're not standalone tables
-          continue;
-        }
-        table_names.push_back(td->tableName);
+    auto& catalog = db_handler_->get_session_copy(session_id_).getCatalog();
+    const auto tables = catalog.getAllTableMetadata();
+    for (const auto td : tables) {
+      if (td->shard >= 0) {
+        // skip shards, they're not standalone tables
+        continue;
       }
-    } else {
-      throw std::runtime_error("System catalog uninitialized");
+      table_names.push_back(td->tableName);
     }
     return table_names;
   }
 
   std::vector<ColumnDetails> getTableDetails(const std::string& table_name) {
     std::vector<ColumnDetails> result;
-    auto catalog = db_handler_->get_session_copy(session_id_).get_catalog_ptr();
-    if (catalog) {
-      auto metadata = catalog->getMetadataForTable(table_name, false);
-      if (metadata) {
-        const auto col_descriptors =
-            catalog->getAllColumnMetadataForTable(metadata->tableId, false, true, false);
-        const auto deleted_cd = catalog->getDeletedColumn(metadata);
-        for (const auto cd : col_descriptors) {
-          if (cd == deleted_cd) {
-            continue;
-          }
-          ColumnDetails col_details;
-          col_details.col_name = cd->columnName;
-          auto ct = cd->columnType;
-          SQLTypes sql_type = ct.get_type();
-          EncodingType sql_enc = ct.get_compression();
-          col_details.col_type = sqlToColumnType(sql_type);
-          col_details.encoding = sqlToColumnEncoding(sql_enc);
-          col_details.nullable = !ct.get_notnull();
-          col_details.is_array = (sql_type == kARRAY);
-          if (IS_GEO(sql_type)) {
-            col_details.precision = static_cast<int>(ct.get_subtype());
-            col_details.scale = ct.get_output_srid();
-          } else {
-            col_details.precision = ct.get_precision();
-            col_details.scale = ct.get_scale();
-          }
-          if (col_details.encoding == ColumnEncoding::DICT) {
-            // have to get the actual size of the encoding from the dictionary
-            // definition
-            const int dict_id = ct.get_comp_param();
-            auto dd = catalog->getMetadataForDict(dict_id, false);
-            if (dd) {
-              col_details.comp_param = dd->dictNBits;
-            } else {
-              throw std::runtime_error("Dictionary definition for column doesn't exist");
-            }
-          } else {
-            col_details.comp_param = ct.get_comp_param();
-            if (ct.is_date_in_days() && col_details.comp_param == 0) {
-              col_details.comp_param = 32;
-            }
-          }
-          result.push_back(col_details);
+    auto& catalog = db_handler_->get_session_copy(session_id_).getCatalog();
+    auto metadata = catalog.getMetadataForTable(table_name, false);
+    if (metadata) {
+      const auto col_descriptors =
+          catalog.getAllColumnMetadataForTable(metadata->tableId, false, true, false);
+      const auto deleted_cd = catalog.getDeletedColumn(metadata);
+      for (const auto cd : col_descriptors) {
+        if (cd == deleted_cd) {
+          continue;
         }
+        ColumnDetails col_details;
+        col_details.col_name = cd->columnName;
+        auto ct = cd->columnType;
+        SQLTypes sql_type = ct.get_type();
+        EncodingType sql_enc = ct.get_compression();
+        col_details.col_type = sqlToColumnType(sql_type);
+        col_details.encoding = sqlToColumnEncoding(sql_enc);
+        col_details.nullable = !ct.get_notnull();
+        col_details.is_array = (sql_type == kARRAY);
+        if (IS_GEO(sql_type)) {
+          col_details.precision = static_cast<int>(ct.get_subtype());
+          col_details.scale = ct.get_output_srid();
+        } else {
+          col_details.precision = ct.get_precision();
+          col_details.scale = ct.get_scale();
+        }
+        if (col_details.encoding == ColumnEncoding::DICT) {
+          // have to get the actual size of the encoding from the dictionary
+          // definition
+          const int dict_id = ct.get_comp_param();
+          auto dd = catalog.getMetadataForDict(dict_id, false);
+          if (dd) {
+            col_details.comp_param = dd->dictNBits;
+          } else {
+            throw std::runtime_error("Dictionary definition for column doesn't exist");
+          }
+        } else {
+          col_details.comp_param = ct.get_comp_param();
+          if (ct.is_date_in_days() && col_details.comp_param == 0) {
+            col_details.comp_param = 32;
+          }
+        }
+        result.push_back(col_details);
       }
     }
     return result;
@@ -344,12 +337,15 @@ class DBEngineImpl : public DBEngine {
  protected:
   void reset() {
     if (db_handler_) {
-      db_handler_->disconnect(session_id_);
+      try {
+        db_handler_->disconnect(session_id_);
+      } catch (const std::exception& e) {
+        // skip exception in case of invalid session
+      }
       db_handler_->shutdown();
     }
     Catalog_Namespace::SysCatalog::destroy();
     db_handler_.reset();
-
     logger::shutdown();
     if (is_temp_db_) {
       boost::filesystem::remove_all(base_path_);
@@ -517,26 +513,31 @@ inline const CursorImpl* getImpl(const Cursor* ptr) {
 
 size_t Cursor::getColCount() {
   CursorImpl* cursor = getImpl(this);
+  CHECK(cursor);
   return cursor->getColCount();
 }
 
 size_t Cursor::getRowCount() {
   CursorImpl* cursor = getImpl(this);
+  CHECK(cursor);
   return cursor->getRowCount();
 }
 
 Row Cursor::getNextRow() {
   CursorImpl* cursor = getImpl(this);
+  CHECK(cursor);
   return cursor->getNextRow();
 }
 
 ColumnType Cursor::getColType(uint32_t col_num) {
   CursorImpl* cursor = getImpl(this);
+  CHECK(cursor);
   return cursor->getColType(col_num);
 }
 
 std::shared_ptr<arrow::RecordBatch> Cursor::getArrowRecordBatch() {
   CursorImpl* cursor = getImpl(this);
+  CHECK(cursor);
   return cursor->getArrowRecordBatch();
 }
 }  // namespace EmbeddedDatabase
