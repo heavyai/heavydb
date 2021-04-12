@@ -61,7 +61,7 @@ setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3 :: Only",
     ],
-    packages=find_packages(),
+    packages=find_packages(exclude=('tests',)),
     version=VERSION,
     install_requires=install_requires,
     extras_require=extra_requires,
