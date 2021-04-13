@@ -1,0 +1,9 @@
+Struct anonymous_namespace{RelAlgExecutor.cpp}::ErrorInfo
+=========================================================
+
+.. doxygenstruct:: anonymous_namespace{RelAlgExecutor.cpp}::ErrorInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
