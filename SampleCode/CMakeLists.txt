@@ -28,26 +28,18 @@ add_custom_command(
   DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
     OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/OmniSci.cpp
-        ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/omnisci_constants.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/omnisci_types.cpp
-        ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
-        ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
-        ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/common_constants.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/common_types.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen cpp -r -I ${CMAKE_SOURCE_DIR} -o ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_SOURCE_DIR}/omnisci.thrift)
 add_library(mapd_sample_thrift
     ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/OmniSci.cpp
-    ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/omnisci_constants.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/omnisci_types.cpp
-    ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
-    ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
-    ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/common_constants.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/common_types.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/extension_functions_types.cpp)
 target_link_libraries(mapd_sample_thrift ${Thrift_LIBRARIES})

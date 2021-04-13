@@ -564,15 +564,10 @@ endif()
 set(gen_cpp_files
     ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h
-    ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_types.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.h
 )
