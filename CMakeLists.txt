@@ -151,7 +151,12 @@ if(ENABLE_CUDA)
       ERROR_FILE ${CMAKE_BINARY_DIR}/NvidiaComputeCapability/build.err.txt
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
-    file(STRINGS ${CMAKE_BINARY_DIR}/NvidiaComputeCapability.txt NVIDIA_COMPUTE_CAPABILITY)
+    set(NVIDIA_COMPUTE_CAPABILITY "")
+    if (EXISTS ${CMAKE_BINARY_DIR}/NvidiaComputeCapability.txt)
+      file(STRINGS ${CMAKE_BINARY_DIR}/NvidiaComputeCapability.txt NVIDIA_COMPUTE_CAPABILITY)
+    endif()
+  endif()
+  if (ENABLE_ONLY_ONE_ARCH AND NOT "${NVIDIA_COMPUTE_CAPABILITY}" STREQUAL "")
     set (CUDA_COMPILATION_ARCH
       -gencode=arch=compute_${NVIDIA_COMPUTE_CAPABILITY},code=compute_${NVIDIA_COMPUTE_CAPABILITY}
       -Wno-deprecated-gpu-targets
@@ -171,6 +176,10 @@ if(ENABLE_CUDA)
       -gencode=arch=compute_75,code=compute_75
       -Wno-deprecated-gpu-targets
     )
+    if(ENABLE_ONLY_ONE_ARCH)
+      message(STATUS "ENABLE_ONLY_ONE_ARCH ignored because NvidiaComputeCapability.txt not found or not readable")
+      message(STATUS "CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
+    endif()
   endif()
 endif()
 
