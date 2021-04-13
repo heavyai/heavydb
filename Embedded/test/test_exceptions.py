@@ -65,8 +65,15 @@ def test_zero_division():
         cursor = engine.executeDML("SELECT x / (x - x) FROM test")
     assert "Division by zero" in str(excinfo.value)
 
+######################Check Authentication failure
+def test_auth_fail():
+    with pytest.raises(RuntimeError) as excinfo:
+        engine.login("db", "user", "password")
+    assert "Authentication failure" in str(excinfo.value)
+
 #######################Check double init  exception
 def test_double_init():
     with pytest.raises(RuntimeError) as excinfo:
         engine = dbe.PyDbEngine()
     assert "already initialized" in str(excinfo.value)
+

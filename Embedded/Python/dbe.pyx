@@ -230,3 +230,12 @@ cdef class PyDbEngine:
     def get_tables(self):
         self.check_closed()
         return self.c_dbe.get().getTables()
+
+    def setDatabase(self, db_name):
+        self.check_closed()
+        return self.c_dbe.get().setDatabase(db_name)
+
+    def login(self, db_name, user_name, password):
+        self.check_closed()
+        return self.c_dbe.get().login(db_name, user_name, password)
+
