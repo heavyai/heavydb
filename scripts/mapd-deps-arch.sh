@@ -14,7 +14,7 @@ yay -S \
     aws-sdk-cpp \
     blosc \
     boost \
-    c-ares-cmake \
+    c-ares \
     clang \
     cmake \
     cuda \
