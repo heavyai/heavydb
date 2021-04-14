@@ -61,7 +61,9 @@ class L0Device {
   std::unique_ptr<L0CommandList> create_command_list() const;
   ze_context_handle_t ctx() const;
 
-  std::shared_ptr<L0Module> create_module(uint8_t* code, size_t len) const;
+  std::shared_ptr<L0Module> create_module(uint8_t* code,
+                                          size_t len,
+                                          bool log = false) const;
 
   ~L0Device();
 };

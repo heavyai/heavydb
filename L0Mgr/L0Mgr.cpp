@@ -157,7 +157,9 @@ std::unique_ptr<L0CommandList> L0Device::create_command_list() const {
   return std::make_unique<L0CommandList>(res);
 }
 
-std::shared_ptr<L0Module> L0Device::create_module(uint8_t* code, size_t len) const {
+std::shared_ptr<L0Module> L0Device::create_module(uint8_t* code,
+                                                  size_t len,
+                                                  bool log) const {
   ze_module_desc_t desc{
       .stype = ZE_STRUCTURE_TYPE_MODULE_DESC,
       .pNext = nullptr,
@@ -168,7 +170,26 @@ std::shared_ptr<L0Module> L0Device::create_module(uint8_t* code, size_t len) con
       .pConstants = nullptr,
   };
   ze_module_handle_t handle;
-  L0_SAFE_CALL(zeModuleCreate(ctx(), device_, &desc, &handle, nullptr));
+  ze_module_build_log_handle_t buildlog = nullptr;
+
+  auto status = zeModuleCreate(ctx(), device_, &desc, &handle, &buildlog);
+  if (log) {
+    size_t logSize = 0;
+    L0_SAFE_CALL(zeModuleBuildLogGetString(buildlog, &logSize, nullptr));
+    std::vector<char> strLog(logSize);
+    L0_SAFE_CALL(zeModuleBuildLogGetString(buildlog, &logSize, strLog.data()));
+    std::fstream out;
+    out.open("log.txt", std::ios::app);
+    if (!out.good()) {
+      std::cerr << "Unable to open log file.\n";
+    } else {
+      out << std::string(strLog.begin(), strLog.end());
+      out.close();
+    }
+  }
+  if (status) {
+    throw l0::L0Exception(status);
+  }
   return std::make_shared<L0Module>(handle);
 }
 
