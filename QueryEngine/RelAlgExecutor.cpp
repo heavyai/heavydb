@@ -603,7 +603,23 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
 
   time(&now_);
   CHECK(!seq.empty());
-  const auto exec_desc_count = eo.just_explain ? size_t(1) : seq.size();
+
+  auto get_descriptor_count = [&seq, &eo]() -> size_t {
+    if (eo.just_explain) {
+      if (dynamic_cast<const RelLogicalValues*>(seq.getDescriptor(0)->getBody())) {
+        // run the logical values descriptor to generate the result set, then the next
+        // descriptor to generate the explain
+        CHECK_GE(seq.size(), size_t(2));
+        return 2;
+      } else {
+        return 1;
+      }
+    } else {
+      return seq.size();
+    }
+  };
+
+  const auto exec_desc_count = get_descriptor_count();
 
   for (size_t i = 0; i < exec_desc_count; i++) {
     VLOG(1) << "Executing query step " << i;
@@ -2029,10 +2045,6 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
     const RelLogicalValues* logical_values,
     const ExecutionOptions& eo) {
   auto timer = DEBUG_TIMER(__func__);
-  if (eo.just_explain) {
-    throw std::runtime_error("EXPLAIN not supported for LogicalValues");
-  }
-
   QueryMemoryDescriptor query_mem_desc(executor_,
                                        logical_values->getNumRows(),
                                        QueryDescriptionType::Projection,

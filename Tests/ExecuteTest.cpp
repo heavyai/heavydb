@@ -6496,6 +6496,21 @@ TEST(Select, LogicalValues) {
     EXPECT_ANY_THROW(run_simple_agg("SELECT * FROM (VALUES(1, 'test'));", dt));
 
     EXPECT_ANY_THROW(run_simple_agg("SELECT (1,2);", dt));
+
+    SKIP_ON_AGGREGATOR({
+      const auto query_explain_result =
+          QR::get()->runSelectQuery("SELECT 1+2;",
+                                    dt,
+                                    /*hoist_literals=*/true,
+                                    /*allow_loop_joins=*/false,
+                                    /*just_explain=*/true);
+      const auto explain_result = query_explain_result->getRows();
+      EXPECT_EQ(size_t(1), explain_result->rowCount());
+      const auto crt_row = explain_result->getNextRow(true, true);
+      EXPECT_EQ(size_t(1), crt_row.size());
+      const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
+      EXPECT_TRUE(explain_str.find("IR for the ") == 0);
+    });
   }
 }
 
