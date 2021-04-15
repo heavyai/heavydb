@@ -327,7 +327,7 @@ class DBHandler : public OmniSciIf {
   // dashboards
   void get_dashboard(TDashboard& _return,
                      const TSessionId& session,
-                     int32_t dashboard_id) override;
+                     const int32_t dashboard_id) override;
   void get_dashboards(std::vector<TDashboard>& _return,
                       const TSessionId& session) override;
   int32_t create_dashboard(const TSessionId& session,
@@ -366,7 +366,7 @@ class DBHandler : public OmniSciIf {
                          const TDashboardPermissions& permissions) override;
   void get_dashboard_grantees(std::vector<TDashboardGrantees>& _return,
                               const TSessionId& session,
-                              int32_t dashboard_id) override;
+                              const int32_t dashboard_id) override;
 
   void get_link_view(TFrontendView& _return,
                      const TSessionId& session,

@@ -38,6 +38,8 @@ struct SystemParameters {
   std::string ha_unique_server_id;  // name of the HA unique id for this server
   std::string ha_brokers;           // name of the HA broker
   std::string ha_shared_data;       // name of shared data directory base
+  std::string master_address;       // address the RW master node is located
+  int master_port = 6274;           // port the RW master node is listening on
   bool is_decr_start_epoch;         // are we doing a start epoch decrement?
   size_t cpu_buffer_mem_bytes = 0;  // max size of memory reserved for CPU buffers [bytes]
   size_t gpu_buffer_mem_bytes = 0;  // max size of memory reserved for GPU buffers [bytes]
