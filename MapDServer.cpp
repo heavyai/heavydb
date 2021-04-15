@@ -373,38 +373,43 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
   }
 
   try {
-    g_mapd_handler =
-        mapd::make_shared<DBHandler>(prog_config_opts.db_leaves,
-                                     prog_config_opts.string_leaves,
-                                     prog_config_opts.base_path,
-                                     prog_config_opts.allow_multifrag,
-                                     prog_config_opts.jit_debug,
-                                     prog_config_opts.intel_jit_profile,
-                                     prog_config_opts.read_only,
-                                     prog_config_opts.allow_loop_joins,
-                                     prog_config_opts.enable_rendering,
-                                     prog_config_opts.renderer_use_vulkan_driver,
-                                     prog_config_opts.enable_auto_clear_render_mem,
-                                     prog_config_opts.render_oom_retry_threshold,
-                                     prog_config_opts.render_mem_bytes,
-                                     prog_config_opts.max_concurrent_render_sessions,
-                                     prog_config_opts.reserved_gpu_mem,
-                                     prog_config_opts.render_compositor_use_last_gpu,
-                                     prog_config_opts.num_reader_threads,
-                                     prog_config_opts.authMetadata,
-                                     prog_config_opts.system_parameters,
-                                     prog_config_opts.enable_legacy_syntax,
-                                     prog_config_opts.idle_session_duration,
-                                     prog_config_opts.max_session_duration,
-                                     prog_config_opts.enable_runtime_udf,
-                                     prog_config_opts.udf_file_name,
-                                     prog_config_opts.udf_compiler_path,
-                                     prog_config_opts.udf_compiler_options,
+    if (prog_config_opts.system_parameters.master_address.empty()) {
+      g_mapd_handler =
+          mapd::make_shared<DBHandler>(prog_config_opts.db_leaves,
+                                       prog_config_opts.string_leaves,
+                                       prog_config_opts.base_path,
+                                       prog_config_opts.allow_multifrag,
+                                       prog_config_opts.jit_debug,
+                                       prog_config_opts.intel_jit_profile,
+                                       prog_config_opts.read_only,
+                                       prog_config_opts.allow_loop_joins,
+                                       prog_config_opts.enable_rendering,
+                                       prog_config_opts.renderer_use_vulkan_driver,
+                                       prog_config_opts.enable_auto_clear_render_mem,
+                                       prog_config_opts.render_oom_retry_threshold,
+                                       prog_config_opts.render_mem_bytes,
+                                       prog_config_opts.max_concurrent_render_sessions,
+                                       prog_config_opts.reserved_gpu_mem,
+                                       prog_config_opts.render_compositor_use_last_gpu,
+                                       prog_config_opts.num_reader_threads,
+                                       prog_config_opts.authMetadata,
+                                       prog_config_opts.system_parameters,
+                                       prog_config_opts.enable_legacy_syntax,
+                                       prog_config_opts.idle_session_duration,
+                                       prog_config_opts.max_session_duration,
+                                       prog_config_opts.enable_runtime_udf,
+                                       prog_config_opts.udf_file_name,
+                                       prog_config_opts.udf_compiler_path,
+                                       prog_config_opts.udf_compiler_options,
 #ifdef ENABLE_GEOS
-                                     prog_config_opts.libgeos_so_filename,
+                                       prog_config_opts.libgeos_so_filename,
 #endif
-                                     prog_config_opts.disk_cache_config,
-                                     false);
+                                       prog_config_opts.disk_cache_config,
+                                       false);
+    } else {  // running ha server
+      LOG(FATAL)
+          << "No High Availability module available, please contact OmniSci support";
+    }
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize service handler: " << e.what();
   }
@@ -450,59 +455,55 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
     g_thrift_buf_server = g_thrift_http_server = nullptr;
   };
 
-  if (prog_config_opts.system_parameters.ha_group_id.empty()) {
-    mapd::shared_ptr<TProcessor> processor(
-        new TrackingProcessor(g_mapd_handler, prog_config_opts.log_user_origin));
-    mapd::shared_ptr<TTransportFactory> bufTransportFactory(
-        new TBufferedTransportFactory());
-    mapd::shared_ptr<TProtocolFactory> bufProtocolFactory(new TBinaryProtocolFactory());
+  mapd::shared_ptr<TProcessor> processor(
+      new TrackingProcessor(g_mapd_handler, prog_config_opts.log_user_origin));
+  mapd::shared_ptr<TTransportFactory> bufTransportFactory(
+      new TBufferedTransportFactory());
+  mapd::shared_ptr<TProtocolFactory> bufProtocolFactory(new TBinaryProtocolFactory());
 
-    mapd::shared_ptr<TServerTransport> bufServerTransport(serverSocket);
-    TThreadedServer bufServer(
-        processor, bufServerTransport, bufTransportFactory, bufProtocolFactory);
+  mapd::shared_ptr<TServerTransport> bufServerTransport(serverSocket);
+  TThreadedServer bufServer(
+      processor, bufServerTransport, bufTransportFactory, bufProtocolFactory);
+  {
+    mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
+    g_thrift_buf_server = &bufServer;
+  }
+
+  std::thread bufThread(start_server,
+                        std::ref(bufServer),
+                        prog_config_opts.system_parameters.omnisci_server_port);
+
+  // TEMPORARY
+  auto warmup_queries = [&prog_config_opts]() {
+    // run warm up queries if any exists
+    run_warmup_queries(
+        g_mapd_handler, prog_config_opts.base_path, prog_config_opts.db_query_file);
+    if (prog_config_opts.exit_after_warmup) {
+      g_running = false;
+    }
+  };
+
+  mapd::shared_ptr<TServerTransport> httpServerTransport(httpServerSocket);
+  mapd::shared_ptr<TTransportFactory> httpTransportFactory(
+      new THttpServerTransportFactory());
+  mapd::shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
+  TThreadedServer httpServer(
+      processor, httpServerTransport, httpTransportFactory, httpProtocolFactory);
+  if (start_http_server) {
     {
       mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
-      g_thrift_buf_server = &bufServer;
+      g_thrift_http_server = &httpServer;
     }
+    std::thread httpThread(
+        start_server, std::ref(httpServer), prog_config_opts.http_port);
 
-    std::thread bufThread(start_server,
-                          std::ref(bufServer),
-                          prog_config_opts.system_parameters.omnisci_server_port);
+    warmup_queries();
 
-    // TEMPORARY
-    auto warmup_queries = [&prog_config_opts]() {
-      // run warm up queries if any exists
-      run_warmup_queries(
-          g_mapd_handler, prog_config_opts.base_path, prog_config_opts.db_query_file);
-      if (prog_config_opts.exit_after_warmup) {
-        g_running = false;
-      }
-    };
-
-    mapd::shared_ptr<TServerTransport> httpServerTransport(httpServerSocket);
-    mapd::shared_ptr<TTransportFactory> httpTransportFactory(
-        new THttpServerTransportFactory());
-    mapd::shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
-    TThreadedServer httpServer(
-        processor, httpServerTransport, httpTransportFactory, httpProtocolFactory);
-    if (start_http_server) {
-      {
-        mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
-        g_thrift_http_server = &httpServer;
-      }
-      std::thread httpThread(
-          start_server, std::ref(httpServer), prog_config_opts.http_port);
-
-      warmup_queries();
-
-      bufThread.join();
-      httpThread.join();
-    } else {
-      warmup_queries();
-      bufThread.join();
-    }
-  } else {  // running ha server
-    LOG(FATAL) << "No High Availability module available, please contact OmniSci support";
+    bufThread.join();
+    httpThread.join();
+  } else {
+    warmup_queries();
+    bufThread.join();
   }
 
   g_running = false;

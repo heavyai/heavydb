@@ -4240,7 +4240,7 @@ void DBHandler::unshare_dashboard(const TSessionId& session,
 void DBHandler::get_dashboard_grantees(
     std::vector<TDashboardGrantees>& dashboard_grantees,
     const TSessionId& session,
-    int32_t dashboard_id) {
+    const int32_t dashboard_id) {
   auto stdlog = STDLOG(get_session_ptr(session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();

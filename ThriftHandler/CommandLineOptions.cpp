@@ -1071,6 +1071,16 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     }
   }
 
+  boost::algorithm::trim_if(system_parameters.master_address, boost::is_any_of("\"'"));
+  if (!system_parameters.master_address.empty()) {
+    if (!read_only) {
+      LOG(ERROR) << "The master-address setting is only allowed in readonly mode";
+      return 9;
+    }
+    LOG(INFO) << " Master Address is " << system_parameters.master_address;
+    LOG(INFO) << " Master Port is " << system_parameters.master_port;
+  }
+
   if (g_max_import_threads < 1) {
     std::cerr << "max-import-threads must be >= 1 (was set to " << g_max_import_threads
               << ")." << std::endl;
