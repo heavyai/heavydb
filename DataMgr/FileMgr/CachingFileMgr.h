@@ -103,6 +103,30 @@ class CachingFileMgr : public FileMgr {
   uint64_t getSpaceReservedByTable(int db_id, int tb_id);
 
   std::string describeSelf() override;
+
+  void checkpoint(const int32_t db_id, const int32_t tb_id) override;
+
+  // These functions need locks because FileBuffers will call epoch() which can interfere
+  // with an incremment.
+  inline int32_t epoch() const override {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(epoch_mutex_);
+    return FileMgr::epoch();
+  }
+
+  inline int32_t incrementEpoch() override {
+    mapd_unique_lock<mapd_shared_mutex> write_lock(epoch_mutex_);
+    return FileMgr::incrementEpoch();
+  }
+
+ private:
+  void rollOffOldData(const int32_t db_id,
+                      const int32_t tb_id,
+                      const int32_t epoch_ceiling);
+  void freePagesBeforeEpoch(const int32_t db_id,
+                            const int32_t tb_id,
+                            const int32_t min_epoch);
+
+  mutable mapd_shared_mutex epoch_mutex_;
 };
 
 }  // namespace File_Namespace

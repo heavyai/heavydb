@@ -263,18 +263,18 @@ class FileMgr : public AbstractBufferMgr {  // implements
    */
 
   void checkpoint() override;
-  void checkpoint(const int32_t db_id, const int32_t tb_id) override {
+  virtual void checkpoint(const int32_t db_id, const int32_t tb_id) override {
     LOG(FATAL) << "Operation not supported, api checkpoint() should be used instead";
   }
   /**
    * @brief Returns current value of epoch - should be
    * one greater than recorded at last checkpoint
    */
-  inline int32_t epoch() { return static_cast<int32_t>(epoch_.ceiling()); }
+  inline virtual int32_t epoch() const { return static_cast<int32_t>(epoch_.ceiling()); }
 
-  inline int32_t epochFloor() { return static_cast<int32_t>(epoch_.floor()); }
+  inline int32_t epochFloor() const { return static_cast<int32_t>(epoch_.floor()); }
 
-  inline int32_t incrementEpoch() {
+  inline virtual int32_t incrementEpoch() {
     int32_t newEpoch = epoch_.increment();
     epochIsCheckpointed_ = false;
     // We test for error here instead of in Epoch::increment so we can log FileMgr
@@ -426,12 +426,6 @@ class FileMgr : public AbstractBufferMgr {  // implements
   void openAndReadEpochFile(const std::string& epochFileName);
   void writeAndSyncEpochToDisk();
   void setEpoch(const int32_t newEpoch);  // resets current value of epoch at startup
-  void freePagesBeforeEpoch(const int32_t minRollbackEpoch);
-
-  void rollOffOldData(const int32_t epochCeiling, const bool shouldCheckpoint);
-  // int32_t checkEpochFloor(const std::string& epochFloorFilePath) const;
-  // void setEpochFloor(const std::string& epochFloorFilePath, const int32_t epochFloor);
-
   int32_t readVersionFromDisk(const std::string& versionFileName) const;
   void writeAndSyncVersionToDisk(const std::string& versionFileName,
                                  const int32_t version);
@@ -471,8 +465,16 @@ class FileMgr : public AbstractBufferMgr {  // implements
   virtual std::string describeSelf();
 
   void closePhysicalUnlocked();
+  void syncFilesToDisk();
+  void freePages();
+  void freePagesBeforeEpochUnlocked(const int32_t min_epoch,
+                                    const ChunkKeyToChunkMap::iterator lower_bound,
+                                    const ChunkKeyToChunkMap::iterator upper_bound);
 
  private:
+  void rollOffOldData(const int32_t epochCeiling, const bool shouldCheckpoint);
+  void freePagesBeforeEpoch(const int32_t min_epoch);
+
   GlobalFileMgr* gfm_;  /// Global FileMgr
   std::pair<const int32_t, const int32_t> fileMgrKey_;
 };

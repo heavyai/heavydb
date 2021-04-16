@@ -70,7 +70,7 @@ void CachingFileMgr::clearForTable(int db_id, int tb_id) {
       bf::remove_all(dir_name);
     }
   }
-  checkpoint();
+  checkpoint(db_id, tb_id);
   // TODO(Misiu): Implement background file removal.
   // Currently the renameForDelete idiom will only work in the mapd/ directory as the
   // cleanup thread is targetted there.  If we want it to work for arbitrary directories
@@ -154,6 +154,55 @@ uint64_t CachingFileMgr::getSpaceReservedByTable(int db_id, int tb_id) {
 
 std::string CachingFileMgr::describeSelf() {
   return "cache";
+}
+
+// Similar to FileMgr::checkpoint() but only writes/rolloffs a subset of buffers.
+void CachingFileMgr::checkpoint(const int32_t db_id, const int32_t tb_id) {
+  VLOG(2) << "Checkpointing " << describeSelf() << " (" << db_id << ", " << tb_id
+          << " epoch: " << epoch();
+  {
+    mapd_unique_lock<mapd_shared_mutex> chunk_index_write_lock(chunkIndexMutex_);
+    ChunkKey min_table_key{db_id, tb_id};
+    ChunkKey max_table_key{db_id, tb_id, std::numeric_limits<int32_t>::max()};
+
+    for (auto chunkIt = chunkIndex_.lower_bound(min_table_key);
+         chunkIt != chunkIndex_.upper_bound(max_table_key);
+         ++chunkIt) {
+      if (chunkIt->second->isDirty()) {
+        chunkIt->second->writeMetadata(epoch());
+        chunkIt->second->clearDirtyBits();
+      }
+    }
+  }
+
+  syncFilesToDisk();
+  writeAndSyncEpochToDisk();
+  incrementEpoch();
+  rollOffOldData(db_id, tb_id, lastCheckpointedEpoch());
+  freePages();
+}
+
+void CachingFileMgr::rollOffOldData(const int32_t db_id,
+                                    const int32_t tb_id,
+                                    const int32_t epoch_ceiling) {
+  if (maxRollbackEpochs_ >= 0) {
+    auto min_epoch = std::max(epoch_ceiling - maxRollbackEpochs_, epoch_.floor());
+    if (min_epoch > epoch_.floor()) {
+      freePagesBeforeEpoch(db_id, tb_id, min_epoch);
+      epoch_.floor(min_epoch);
+    }
+  }
+}
+
+void CachingFileMgr::freePagesBeforeEpoch(const int32_t db_id,
+                                          const int32_t tb_id,
+                                          const int32_t min_rollback_epoch) {
+  mapd_shared_lock<mapd_shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
+  ChunkKey min_table_key{db_id, tb_id};
+  ChunkKey max_table_key{db_id, tb_id, std::numeric_limits<int32_t>::max()};
+  freePagesBeforeEpochUnlocked(min_rollback_epoch,
+                               chunkIndex_.lower_bound(min_table_key),
+                               chunkIndex_.upper_bound(max_table_key));
 }
 
 }  // namespace File_Namespace

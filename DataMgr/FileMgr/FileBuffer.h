@@ -40,6 +40,7 @@ namespace File_Namespace {
 
 // forward declarations
 class FileMgr;
+class CachingFileMgr;
 
 /**
  * @class   FileBuffer
@@ -56,6 +57,7 @@ class FileMgr;
  */
 class FileBuffer : public AbstractBuffer {
   friend class FileMgr;
+  friend class CachingFileMgr;
 
  public:
   /**

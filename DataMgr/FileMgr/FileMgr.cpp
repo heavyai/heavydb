@@ -299,14 +299,9 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
           new FileBuffer(this, /*pageSize,*/ lastChunkKey, startIt, header_vec.end());
     }
     nextFileId_ = open_files_result.max_file_id + 1;
-    rollOffOldData(epoch(),
-                   true /* shouldCheckpoint - only happens if data is rolled off */);
+    rollOffOldData(epoch(), true /* only checkpoint if data is rolled off */);
     incrementEpoch();
-    mapd_unique_lock<mapd_shared_mutex> freePagesWriteLock(mutex_free_page_);
-    for (auto& free_page : free_pages_) {
-      free_page.first->freePageDeferred(free_page.second);
-    }
-    free_pages_.clear();
+    freePages();
   } else {
     boost::filesystem::path path(fileMgrBasePath_);
     if (!boost::filesystem::create_directory(path)) {
@@ -321,7 +316,6 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
       epoch_.floor(0);
       epoch_.ceiling(0);
     }
-
     createEpochFile(EPOCH_FILENAME);
     writeAndSyncEpochToDisk();
     writeAndSyncVersionToDisk(FILE_MGR_VERSION_FILENAME, fileMgrVersion_);
@@ -662,34 +656,37 @@ void FileMgr::writeAndSyncEpochToDisk() {
   CHECK(epochFile_);
   write(epochFile_, 0, Epoch::byte_size(), epoch_.storage_ptr());
   int32_t status = fflush(epochFile_);
-  if (status != 0) {
-    LOG(FATAL) << "Could not flush epoch file to disk";
-  }
+  CHECK(status == 0) << "Could not flush epoch file to disk";
 #ifdef __APPLE__
   status = fcntl(fileno(epochFile_), 51);
 #else
   status = omnisci::fsync(fileno(epochFile_));
 #endif
-  if (status != 0) {
-    LOG(FATAL) << "Could not sync epoch file to disk";
-  }
+  CHECK(status == 0) << "Could not sync epoch file to disk";
   epochIsCheckpointed_ = true;
 }
 
-void FileMgr::freePagesBeforeEpoch(const int32_t minRollbackEpoch) {
-  for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-    chunkIt->second->freePagesBeforeEpoch(minRollbackEpoch);
+void FileMgr::freePagesBeforeEpoch(const int32_t min_epoch) {
+  mapd_shared_lock<mapd_shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
+  freePagesBeforeEpochUnlocked(min_epoch, chunkIndex_.begin(), chunkIndex_.end());
+}
+
+void FileMgr::freePagesBeforeEpochUnlocked(
+    const int32_t min_epoch,
+    const ChunkKeyToChunkMap::iterator lower_bound,
+    const ChunkKeyToChunkMap::iterator upper_bound) {
+  for (auto chunkIt = lower_bound; chunkIt != upper_bound; ++chunkIt) {
+    chunkIt->second->freePagesBeforeEpoch(min_epoch);
   }
 }
 
-void FileMgr::rollOffOldData(const int32_t epochCeiling, const bool shouldCheckpoint) {
+void FileMgr::rollOffOldData(const int32_t epoch_ceiling, const bool should_checkpoint) {
   if (maxRollbackEpochs_ >= 0) {
-    const int32_t minRollbackEpoch =
-        std::max(epochCeiling - maxRollbackEpochs_, epoch_.floor());
-    if (minRollbackEpoch > epoch_.floor()) {
-      freePagesBeforeEpoch(minRollbackEpoch);
-      epoch_.floor(minRollbackEpoch);
-      if (shouldCheckpoint) {
+    auto min_epoch = std::max(epoch_ceiling - maxRollbackEpochs_, epoch_.floor());
+    if (min_epoch > epoch_.floor()) {
+      freePagesBeforeEpoch(min_epoch);
+      epoch_.floor(min_epoch);
+      if (should_checkpoint) {
         checkpoint();
       }
     }
@@ -704,32 +701,20 @@ std::string FileMgr::describeSelf() {
 
 void FileMgr::checkpoint() {
   VLOG(2) << "Checkpointing " << describeSelf() << " epoch: " << epoch();
-  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
-  for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-    if (chunkIt->second->isDirty()) {
-      chunkIt->second->writeMetadata(epoch());
-      chunkIt->second->clearDirtyBits();
+  {
+    mapd_unique_lock<mapd_shared_mutex> chunk_index_write_lock(chunkIndexMutex_);
+    for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
+      if (chunkIt->second->isDirty()) {
+        chunkIt->second->writeMetadata(epoch());
+        chunkIt->second->clearDirtyBits();
+      }
     }
   }
-  chunkIndexWriteLock.unlock();
-
-  mapd_shared_lock<mapd_shared_mutex> read_lock(files_rw_mutex_);
-  for (auto file_info_entry : files_) {
-    int32_t status = file_info_entry.second->syncToDisk();
-    if (status != 0) {
-      LOG(FATAL) << "Could not sync file to disk";
-    }
-  }
-
+  syncFilesToDisk();
   writeAndSyncEpochToDisk();
   incrementEpoch();
   rollOffOldData(lastCheckpointedEpoch(), false /* shouldCheckpoint */);
-
-  mapd_unique_lock<mapd_shared_mutex> freePagesWriteLock(mutex_free_page_);
-  for (auto& free_page : free_pages_) {
-    free_page.first->freePageDeferred(free_page.second);
-  }
-  free_pages_.clear();
+  freePages();  // write free_page mutex.
 }
 
 FileBuffer* FileMgr::createBuffer(const ChunkKey& key,
@@ -1573,6 +1558,22 @@ void FileMgr::setNumPagesPerDataFile(size_t num_pages) {
 
 void FileMgr::setNumPagesPerMetadataFile(size_t num_pages) {
   num_pages_per_metadata_file_ = num_pages;
+}
+
+void FileMgr::syncFilesToDisk() {
+  mapd_shared_lock<mapd_shared_mutex> files_read_lock(files_rw_mutex_);
+  for (auto file_info_entry : files_) {
+    int32_t status = file_info_entry.second->syncToDisk();
+    CHECK(status == 0) << "Could not sync file to disk";
+  }
+}
+
+void FileMgr::freePages() {
+  mapd_unique_lock<mapd_shared_mutex> free_pages_write_lock(mutex_free_page_);
+  for (auto& free_page : free_pages_) {
+    free_page.first->freePageDeferred(free_page.second);
+  }
+  free_pages_.clear();
 }
 
 size_t FileMgr::num_pages_per_data_file_{DEFAULT_NUM_PAGES_PER_DATA_FILE};

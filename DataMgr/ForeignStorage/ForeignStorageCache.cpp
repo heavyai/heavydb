@@ -76,7 +76,8 @@ void ForeignStorageCache::cacheChunk(const ChunkKey& chunk_key, AbstractBuffer* 
   buffer->setUpdated();
   num_chunks_added_++;
   caching_file_mgr_->putBuffer(chunk_key, buffer);
-  caching_file_mgr_->checkpoint();
+  caching_file_mgr_->checkpoint(chunk_key[CHUNK_KEY_DB_IDX],
+                                chunk_key[CHUNK_KEY_TABLE_IDX]);
   cached_metadata_.emplace(chunk_key);
   cached_chunks_.emplace(chunk_key);
   CHECK(!buffer->isDirty());
@@ -98,7 +99,7 @@ void ForeignStorageCache::cacheTableChunks(const std::vector<ChunkKey>& chunk_ke
     num_chunks_added_++;
     cached_chunks_.emplace(chunk_key);
   }
-  caching_file_mgr_->checkpoint();
+  caching_file_mgr_->checkpoint(db_id, table_id);
 }
 
 AbstractBuffer* ForeignStorageCache::getCachedChunkIfExists(const ChunkKey& chunk_key) {
@@ -163,9 +164,14 @@ void ForeignStorageCache::evictThenEraseChunkUnlocked(const ChunkKey& chunk_key)
 
 void ForeignStorageCache::cacheMetadataVec(const ChunkMetadataVector& metadata_vec) {
   auto timer = DEBUG_TIMER(__func__);
+  if (metadata_vec.empty()) {
+    return;
+  }
+  auto first_chunk_key = metadata_vec.begin()->first;
   write_lock meta_lock(metadata_mutex_);
   write_lock chunk_lock(chunks_mutex_);
   for (auto& [chunk_key, metadata] : metadata_vec) {
+    CHECK(in_same_table(chunk_key, first_chunk_key));
     cached_metadata_.emplace(chunk_key);
     AbstractBuffer* buf;
     AbstractBuffer* index_buffer = nullptr;
@@ -219,7 +225,8 @@ void ForeignStorageCache::cacheMetadataVec(const ChunkMetadataVector& metadata_v
     }
     num_metadata_added_++;
   }
-  caching_file_mgr_->checkpoint();
+  caching_file_mgr_->checkpoint(first_chunk_key[CHUNK_KEY_DB_IDX],
+                                first_chunk_key[CHUNK_KEY_TABLE_IDX]);
 }
 
 void ForeignStorageCache::getCachedMetadataVecForKeyPrefix(
@@ -273,7 +280,8 @@ void ForeignStorageCache::clearForTablePrefix(const ChunkKey& chunk_prefix) {
       meta_it = cached_metadata_.erase(meta_it);
     }
   }
-  caching_file_mgr_->clearForTable(chunk_prefix[0], chunk_prefix[1]);
+  caching_file_mgr_->clearForTable(chunk_prefix[CHUNK_KEY_DB_IDX],
+                                   chunk_prefix[CHUNK_KEY_TABLE_IDX]);
 }
 
 void ForeignStorageCache::clear() {
