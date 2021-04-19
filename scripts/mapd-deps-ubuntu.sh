@@ -51,6 +51,13 @@ sudo mkdir -p $PREFIX
 sudo chown -R $(id -u) $PREFIX
 
 DEBIAN_FRONTEND=noninteractive sudo apt update
+
+# required for gcc-9 on Ubuntu 18.04
+if [ "$VERSION_ID" == "18.04" ]; then
+  DEBIAN_FRONTEND=noninteractive sudo apt install -y software-properties-common
+  DEBIAN_FRONTEND=noninteractive sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+fi
+
 DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     software-properties-common \
     build-essential \
@@ -58,8 +65,8 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     git \
     wget \
     curl \
-    gcc-8 \
-    g++-8 \
+    gcc-9 \
+    g++-9 \
     libboost-all-dev \
     libgoogle-glog-dev \
     libssl-dev \
@@ -106,8 +113,8 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
 
 # Set up gcc-8 as default gcc
 sudo update-alternatives \
-  --install /usr/bin/gcc gcc /usr/bin/gcc-8 800 \
-  --slave /usr/bin/g++ g++ /usr/bin/g++-8
+  --install /usr/bin/gcc gcc /usr/bin/gcc-9 900 \
+  --slave /usr/bin/g++ g++ /usr/bin/g++-9
 
 # Needed to find sqlite3, xmltooling, and xml_security_c
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
