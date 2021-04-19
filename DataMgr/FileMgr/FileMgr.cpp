@@ -713,6 +713,8 @@ void FileMgr::checkpoint() {
   }
   chunkIndexWriteLock.unlock();
 
+  rollOffOldData(epoch(), false /* shouldCheckpoint */);
+
   mapd_shared_lock<mapd_shared_mutex> read_lock(files_rw_mutex_);
   for (auto file_info_entry : files_) {
     int32_t status = file_info_entry.second->syncToDisk();
@@ -723,7 +725,6 @@ void FileMgr::checkpoint() {
 
   writeAndSyncEpochToDisk();
   incrementEpoch();
-  rollOffOldData(lastCheckpointedEpoch(), false /* shouldCheckpoint */);
 
   mapd_unique_lock<mapd_shared_mutex> freePagesWriteLock(mutex_free_page_);
   for (auto& free_page : free_pages_) {
@@ -1302,8 +1303,14 @@ void FileMgr::compactFiles() {
 
   std::vector<PageMapping> page_mappings;
   std::set<Page> touched_pages;
-  sortAndCopyFilePagesForCompaction(DEFAULT_PAGE_SIZE, page_mappings, touched_pages);
-  sortAndCopyFilePagesForCompaction(METADATA_PAGE_SIZE, page_mappings, touched_pages);
+  std::set<size_t> page_sizes;
+  for (auto [file_id, file_info] : files_) {
+    page_sizes.emplace(file_info->pageSize);
+  }
+  for (auto page_size : page_sizes) {
+    sortAndCopyFilePagesForCompaction(page_size, page_mappings, touched_pages);
+  }
+
   writePageMappingsToStatusFile(page_mappings);
   renameCompactionStatusFile(COPY_PAGES_STATUS, UPDATE_PAGE_VISIBILITY_STATUS);
 

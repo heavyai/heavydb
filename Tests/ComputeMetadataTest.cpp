@@ -850,6 +850,55 @@ TEST_F(OptimizeTableVacuumTest, MultiplePagesPerFile) {
   sqlAndCompareResult("select * from test_table;", {{i(25)}});
 }
 
+// This test case covers a use case where compaction deletes files containing some of
+// the chunk pages for a previously deleted chunk. This would previously result in a crash
+// due to a bug where an attempt is made to restore old chunk pages for the deleted chunk,
+// which results in an assertion failure because of incomplete chunk pages for the chunk.
+TEST_F(OptimizeTableVacuumTest, PartialOldChunkPagesRemainAfterCompaction) {
+  File_Namespace::FileMgr::setNumPagesPerDataFile(3);
+
+  // The following page size (derived from `reserved header size (32) + big int size (8)`)
+  // results in one big int entry/row per page.
+  constexpr size_t ONE_BIG_INT_PAGE_SIZE = 40;
+  sql("create table test_table (i bigint) with (max_rollback_epochs = 0, page_size = " +
+      std::to_string(ONE_BIG_INT_PAGE_SIZE) + ", fragment_size = 4);");
+
+  // Fill up fragment. This should occupy 5 data pages (4 pages for the big int entries
+  // + 1 page for the $deleted$ chunk) across 2 files (since there are 3 pages per file,
+  // per above setting).
+  sql("insert into test_table select * from (values (1), (2), (3), (4));");
+  assertFileAndFreePageCount(1, 4094, 2, 1);
+
+  // Insert into second fragment uses 2 additional pages (1 for the big int entry + 1
+  // for the $deleted$ chunk).
+  sql("insert into test_table values (5);");
+  assertFileAndFreePageCount(1, 4092, 3, 2);
+
+  // Delete uses a new page for the $deleted$ chunk and
+  // frees the old $deleted$ chunk page.
+  sql("delete from test_table where i <= 4;");
+  assertFileAndFreePageCount(1, 4092, 3, 2);
+
+  // Inserts re-use the 2 free pages
+  sql("insert into test_table values (6);");
+  sql("insert into test_table values (7);");
+  assertFileAndFreePageCount(1, 4092, 3, 0);
+
+  // Optimize should delete the first data file, which contains the freed first 3 pages of
+  // the deleted first fragment's "i" chunk. The second file should contain the freed 4th
+  // page for the deleted first fragment's "i" chunk and data for chunks in the second
+  // fragment. The third file should contain the freed page for the first fragment's
+  // $deleted$ chunk and data for chunks in the second fragment.
+  //
+  // A crash would previously occur here due to an attempt to restore rolled-off pages for
+  // the deleted first fragment's "i" chunk, starting with the 4th page for the chunk.
+  sql("optimize table test_table with (vacuum = 'true');");
+  assertFileAndFreePageCount(1, 4092, 2, 2);
+
+  // Verify that subsequent queries work as expected
+  sqlAndCompareResult("select * from test_table;", {{i(5)}, {i(6)}, {i(7)}});
+}
+
 TEST_F(OptimizeTableVacuumTest, UpdateAfterVacuumedDeletedFragment) {
   sql("create table test_table (i int) with (fragment_size = 2);");
   insertRange(1, 6);
