@@ -944,12 +944,15 @@ void InsertOrderFragmenter::updateColumnMetadata(
   auto td = updel_roll.catalog->getMetadataForTable(cd->tableId);
   auto key = std::make_pair(td, &fragment);
   std::lock_guard<std::mutex> lck(updel_roll.mutex);
+  mapd_unique_lock<mapd_shared_mutex> write_lock(fragmentInfoMutex_);
   if (0 == updel_roll.chunkMetadata.count(key)) {
     updel_roll.chunkMetadata[key] = fragment.getChunkMetadataMapPhysical();
   }
   if (0 == updel_roll.numTuples.count(key)) {
     updel_roll.numTuples[key] = fragment.shadowNumTuples;
   }
+  // at this point we are just looking at a reference to the real active metadata it is
+  // unsafe to do operations on this we need this to be a copy?
   auto& chunkMetadata = updel_roll.chunkMetadata[key];
 
   auto buffer = chunk->getBuffer();
