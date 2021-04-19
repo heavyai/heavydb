@@ -16,10 +16,10 @@ root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # conda-forge packages omniscidbe and pyomniscidbe are built
 # separately. OMNISCI_ROOT_PATH is defined by the omniscidbe activate
 # script that determines the location of libDBEngine.so and is
-# required in linking Python extension module omniscidbe.
-omnisci_root_path = os.environ.get('OMNISCI_ROOT_PATH',
-                                   os.path.join(sys.exec_prefix, 'opt', 'omnisci'))
-omniscidbe_root = os.path.join(omnisci_root_path, 'lib')
+# required for linking Python extension module omniscidbe.
+extra_library_dirs = []
+if 'OMNISCI_ROOT_PATH' in os.environ:
+    extra_library_dirs.append(os.path.join(os.environ['OMNISCI_ROOT_PATH'], 'lib'))
 
 dbe = Extension(
     "omniscidbe",
@@ -34,8 +34,8 @@ dbe = Extension(
         "@CMAKE_SOURCE_DIR@/ThirdParty/rapidjson",
         "@CMAKE_SOURCE_DIR@/Distributed/os",
     ],
-    library_dirs=pa.get_library_dirs() + ["@CMAKE_CURRENT_BINARY_DIR@", ".", omniscidbe_root],
-    runtime_library_dirs=pa.get_library_dirs() + ["$ORIGIN/../../", omniscidbe_root],
+    library_dirs=pa.get_library_dirs() + ["@CMAKE_CURRENT_BINARY_DIR@", "."] + extra_library_dirs,
+    runtime_library_dirs=pa.get_library_dirs() + ["$ORIGIN/../../"] + extra_library_dirs,
     libraries=pa.get_libraries() + ["DBEngine", "boost_system"],
     extra_compile_args=["-std=c++17", "-DRAPIDJSON_HAS_STDSTRING"],
 )
