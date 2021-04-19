@@ -710,10 +710,10 @@ void FileMgr::checkpoint() {
       }
     }
   }
+  rollOffOldData(epoch(), false /* shouldCheckpoint */);
   syncFilesToDisk();
   writeAndSyncEpochToDisk();
   incrementEpoch();
-  rollOffOldData(lastCheckpointedEpoch(), false /* shouldCheckpoint */);
   freePages();  // write free_page mutex.
 }
 
@@ -1272,8 +1272,14 @@ void FileMgr::compactFiles() {
 
   std::vector<PageMapping> page_mappings;
   std::set<Page> touched_pages;
-  sortAndCopyFilePagesForCompaction(DEFAULT_PAGE_SIZE, page_mappings, touched_pages);
-  sortAndCopyFilePagesForCompaction(METADATA_PAGE_SIZE, page_mappings, touched_pages);
+  std::set<size_t> page_sizes;
+  for (auto [file_id, file_info] : files_) {
+    page_sizes.emplace(file_info->pageSize);
+  }
+  for (auto page_size : page_sizes) {
+    sortAndCopyFilePagesForCompaction(page_size, page_mappings, touched_pages);
+  }
+
   writePageMappingsToStatusFile(page_mappings);
   renameCompactionStatusFile(COPY_PAGES_STATUS, UPDATE_PAGE_VISIBILITY_STATUS);
 
