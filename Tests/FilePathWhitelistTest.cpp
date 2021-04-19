@@ -51,6 +51,7 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
   static void TearDownTestSuite() {
     boost::filesystem::remove(temp_file_path_);
     boost::filesystem::remove(CONFIG_FILE_PATH);
+    boost::filesystem::remove("symlink_test.csv");
     boost::filesystem::remove_all(DEFAULT_IMPORT_PATH);
     boost::filesystem::remove_all(DEFAULT_EXPORT_PATH);
   }
@@ -107,22 +108,45 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
     return file_path;
   }
 
-  std::string setAndGetFileAtDefaultImportAndExportPath() {
-    auto source_path = getTestFilePath();
-    boost::filesystem::path destination_path;
+  boost::filesystem::path initDefaultImportOrExportDirectory() {
+    boost::filesystem::path directory_path;
     if (GetParam() == "CopyTo") {
-      destination_path = DEFAULT_EXPORT_PATH;
+      directory_path = DEFAULT_EXPORT_PATH;
     } else {
-      destination_path = DEFAULT_IMPORT_PATH;
+      directory_path = DEFAULT_IMPORT_PATH;
     }
-    if (!boost::filesystem::exists(destination_path)) {
-      boost::filesystem::create_directory(destination_path);
+    if (!boost::filesystem::exists(directory_path)) {
+      boost::filesystem::create_directory(directory_path);
     }
+    return directory_path;
+  }
+
+  std::string setAndGetFileAtDefaultImportOrExportPath() {
+    auto source_path = getTestFilePath();
+    boost::filesystem::path destination_path = initDefaultImportOrExportDirectory();
+
     destination_path /= boost::filesystem::path(source_path).filename().string();
     boost::filesystem::copy_file(source_path,
                                  destination_path,
                                  boost::filesystem::copy_option::overwrite_if_exists);
     return boost::filesystem::canonical(destination_path).string();
+  }
+
+  std::string clearAndGetSymlinkFilePath(boost::filesystem::path destination_path) {
+    destination_path = boost::filesystem::canonical(destination_path);
+    destination_path /= "symlink_test.csv";
+    if (boost::filesystem::exists(destination_path)) {
+      boost::filesystem::remove(destination_path);
+    }
+    return destination_path.string();
+  }
+
+  std::string getWhitelistedSymlinkFilePath() {
+    return clearAndGetSymlinkFilePath(initDefaultImportOrExportDirectory());
+  }
+
+  std::string getUnlistedSymlinkFilePath() {
+    return clearAndGetSymlinkFilePath(boost::filesystem::path("."));
   }
 
   std::string getMalformedConfigErrorMessage() {
@@ -193,6 +217,48 @@ TEST_P(FilePathWhitelistTest, NonWhitelistedPath) {
       "Exception: File or directory path \"" + file_path + "\" is not whitelisted.");
 }
 
+TEST_P(FilePathWhitelistTest, WhitelistedSymlinkToUnlistedPath) {
+  setServerConfig("test_config.conf");
+  initializeWhitelist();
+  const auto file_path =
+      boost::filesystem::canonical(
+          "../../Tests/Import/datafiles/with_quoted_fields_doublequotes.csv")
+          .string();
+  const auto symlink_path = getWhitelistedSymlinkFilePath();
+  boost::filesystem::create_symlink(file_path, symlink_path);
+
+  queryAndAssertException(getQuery(symlink_path),
+                          "Exception: File or directory path \"" + symlink_path +
+                              "\" (resolved to \"" + file_path +
+                              "\") is not whitelisted.");
+}
+
+TEST_P(FilePathWhitelistTest, UnlistedSymlinkToWhitelistedPath) {
+  setServerConfig("test_config.conf");
+  initializeWhitelist();
+  const auto file_path = getTestFilePath();
+  const auto symlink_path = getUnlistedSymlinkFilePath();
+  boost::filesystem::create_symlink(file_path, symlink_path);
+
+  EXPECT_NO_THROW(sql(getQuery(symlink_path)));
+}
+
+TEST_P(FilePathWhitelistTest, UnlistedSymlinkToUnlistedPath) {
+  setServerConfig("test_config.conf");
+  initializeWhitelist();
+  const auto file_path =
+      boost::filesystem::canonical(
+          "../../Tests/Import/datafiles/with_quoted_fields_doublequotes.csv")
+          .string();
+  const auto symlink_path = getUnlistedSymlinkFilePath();
+  boost::filesystem::create_symlink(file_path, symlink_path);
+
+  queryAndAssertException(getQuery(symlink_path),
+                          "Exception: File or directory path \"" + symlink_path +
+                              "\" (resolved to \"" + file_path +
+                              "\") is not whitelisted.");
+}
+
 TEST_P(FilePathWhitelistTest, InvalidConfigValue) {
   std::string config_path;
   if (GetParam() == "CopyTo") {
@@ -237,6 +303,18 @@ TEST_P(FilePathWhitelistTest, BlacklistedPath) {
                               "\" is not allowed.");
 }
 
+TEST_P(FilePathWhitelistTest, UnlistedSymlinkToBlacklistedPath) {
+  setServerConfig("test_config.conf");
+  const auto file_path = getTestFilePath();
+  const auto symlink_path = getUnlistedSymlinkFilePath();
+  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  boost::filesystem::create_symlink(file_path, symlink_path);
+  queryAndAssertException(getQuery(symlink_path),
+                          "Exception: Access to file or directory path \"" +
+                              symlink_path + "\" (resolved to \"" + file_path +
+                              "\") is not allowed.");
+}
+
 TEST_P(FilePathWhitelistTest, RootPathWhitelisted) {
   whitelistRootPath();
   std::string file_path = getTestFilePath();
@@ -253,7 +331,7 @@ TEST_P(FilePathWhitelistTest, RootPathWhitelisted) {
 
 TEST_P(FilePathWhitelistTest, DefaultImportAndExportPaths) {
   ddl_utils::FilePathWhitelist::initialize(BASE_PATH, "", "");
-  auto file_path = setAndGetFileAtDefaultImportAndExportPath();
+  auto file_path = setAndGetFileAtDefaultImportOrExportPath();
   EXPECT_NO_THROW(sql(getQuery(file_path)));
 }
 

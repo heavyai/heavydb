@@ -573,14 +573,19 @@ std::string get_malformed_config_error_message(const std::string& config_key) {
 
 void validate_expanded_file_path(const std::string& file_path,
                                  const std::vector<std::string>& whitelisted_root_paths) {
-  boost::filesystem::path canonical_file_path = boost::filesystem::canonical(file_path);
+  const auto& canonical_file_path = boost::filesystem::canonical(file_path);
   for (const auto& root_path : whitelisted_root_paths) {
     if (boost::istarts_with(canonical_file_path.string(), root_path)) {
       return;
     }
   }
+  if (canonical_file_path == boost::filesystem::absolute(file_path)) {
+    throw std::runtime_error{"File or directory path \"" + file_path +
+                             "\" is not whitelisted."};
+  }
   throw std::runtime_error{"File or directory path \"" + file_path +
-                           "\" is not whitelisted."};
+                           "\" (resolved to \"" + canonical_file_path.string() +
+                           "\") is not whitelisted."};
 }
 
 std::vector<std::string> get_expanded_file_paths(
@@ -630,8 +635,14 @@ void validate_allowed_file_path(const std::string& file_path,
       get_expanded_file_paths(file_path, data_transfer_type);
   for (const auto& path : expanded_file_paths) {
     if (FilePathBlacklist::isBlacklistedPath(path)) {
+      const auto& canonical_file_path = boost::filesystem::canonical(file_path);
+      if (canonical_file_path == boost::filesystem::absolute(file_path)) {
+        throw std::runtime_error{"Access to file or directory path \"" + file_path +
+                                 "\" is not allowed."};
+      }
       throw std::runtime_error{"Access to file or directory path \"" + file_path +
-                               "\" is not allowed."};
+                               "\" (resolved to \"" + canonical_file_path.string() +
+                               "\") is not allowed."};
     }
   }
   FilePathWhitelist::validateWhitelistedFilePath(expanded_file_paths, data_transfer_type);
