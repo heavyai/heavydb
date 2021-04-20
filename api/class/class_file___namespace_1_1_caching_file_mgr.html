@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev a667adc
+                5.7.0dev 92ec5fa
               </div>
             
           
@@ -2043,6 +2043,43 @@
 <dl class="function">
 <dt id="_CPPv4N14File_Namespace14CachingFileMgr12describeSelfEv">
 <span id="_CPPv3N14File_Namespace14CachingFileMgr12describeSelfEv"></span><span id="_CPPv2N14File_Namespace14CachingFileMgr12describeSelfEv"></span><span id="File_Namespace::CachingFileMgr::describeSelf"></span><span class="target" id="class_file___namespace_1_1_caching_file_mgr_1ad540aeb0d014060a864eb4d55ddd72b3"></span>std::string <code class="sig-name descname">describeSelf</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14File_Namespace14CachingFileMgr12describeSelfEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N14File_Namespace14CachingFileMgr10checkpointEK7int32_tK7int32_t">
+<span id="_CPPv3N14File_Namespace14CachingFileMgr10checkpointEK7int32_tK7int32_t"></span><span id="_CPPv2N14File_Namespace14CachingFileMgr10checkpointEK7int32_tK7int32_t"></span><span id="File_Namespace::CachingFileMgr::checkpoint__int32_tC.int32_tC"></span><span class="target" id="class_file___namespace_1_1_caching_file_mgr_1a39149cc6cc064947d8e57f13edbc1210"></span>void <code class="sig-name descname">checkpoint</code><span class="sig-paren">(</span><em class="property">const</em> int32_t <em>db_id</em>, <em class="property">const</em> int32_t <em>tb_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14File_Namespace14CachingFileMgr10checkpointEK7int32_tK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK14File_Namespace14CachingFileMgr5epochEv">
+<span id="_CPPv3NK14File_Namespace14CachingFileMgr5epochEv"></span><span id="_CPPv2NK14File_Namespace14CachingFileMgr5epochEv"></span><span id="File_Namespace::CachingFileMgr::epochC"></span><span class="target" id="class_file___namespace_1_1_caching_file_mgr_1a602143cab65e8f28bda43b5be7dea14f"></span>int32_t <code class="sig-name descname">epoch</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK14File_Namespace14CachingFileMgr5epochEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Returns current value of epoch - should be one greater than recorded at last checkpoint. </p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N14File_Namespace14CachingFileMgr14incrementEpochEv">
+<span id="_CPPv3N14File_Namespace14CachingFileMgr14incrementEpochEv"></span><span id="_CPPv2N14File_Namespace14CachingFileMgr14incrementEpochEv"></span><span id="File_Namespace::CachingFileMgr::incrementEpoch"></span><span class="target" id="class_file___namespace_1_1_caching_file_mgr_1ad4d98eca6e52f214400eca54bcdb99b5"></span>int32_t <code class="sig-name descname">incrementEpoch</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14File_Namespace14CachingFileMgr14incrementEpochEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Private Functions</p>
+<dl class="function">
+<dt id="_CPPv4N14File_Namespace14CachingFileMgr14rollOffOldDataEK7int32_tK7int32_tK7int32_t">
+<span id="_CPPv3N14File_Namespace14CachingFileMgr14rollOffOldDataEK7int32_tK7int32_tK7int32_t"></span><span id="_CPPv2N14File_Namespace14CachingFileMgr14rollOffOldDataEK7int32_tK7int32_tK7int32_t"></span><span id="File_Namespace::CachingFileMgr::rollOffOldData__int32_tC.int32_tC.int32_tC"></span><span class="target" id="class_file___namespace_1_1_caching_file_mgr_1a95beaaf913f0fb76ef6469dfa861c689"></span>void <code class="sig-name descname">rollOffOldData</code><span class="sig-paren">(</span><em class="property">const</em> int32_t <em>db_id</em>, <em class="property">const</em> int32_t <em>tb_id</em>, <em class="property">const</em> int32_t <em>epoch_ceiling</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14File_Namespace14CachingFileMgr14rollOffOldDataEK7int32_tK7int32_tK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N14File_Namespace14CachingFileMgr20freePagesBeforeEpochEK7int32_tK7int32_tK7int32_t">
+<span id="_CPPv3N14File_Namespace14CachingFileMgr20freePagesBeforeEpochEK7int32_tK7int32_tK7int32_t"></span><span id="_CPPv2N14File_Namespace14CachingFileMgr20freePagesBeforeEpochEK7int32_tK7int32_tK7int32_t"></span><span id="File_Namespace::CachingFileMgr::freePagesBeforeEpoch__int32_tC.int32_tC.int32_tC"></span><span class="target" id="class_file___namespace_1_1_caching_file_mgr_1ace469e21ae6192a77b9c6a749feed7fa"></span>void <code class="sig-name descname">freePagesBeforeEpoch</code><span class="sig-paren">(</span><em class="property">const</em> int32_t <em>db_id</em>, <em class="property">const</em> int32_t <em>tb_id</em>, <em class="property">const</em> int32_t <em>min_epoch</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14File_Namespace14CachingFileMgr20freePagesBeforeEpochEK7int32_tK7int32_tK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Private Members</p>
+<dl class="member">
+<dt id="_CPPv4N14File_Namespace14CachingFileMgr12epoch_mutex_E">
+<span id="_CPPv3N14File_Namespace14CachingFileMgr12epoch_mutex_E"></span><span id="_CPPv2N14File_Namespace14CachingFileMgr12epoch_mutex_E"></span><span id="File_Namespace::CachingFileMgr::epoch_mutex___mapd_shared_mutex"></span><span class="target" id="class_file___namespace_1_1_caching_file_mgr_1acdd8449f30072e43ae0b5cfce30d623a"></span>mapd_shared_mutex <code class="sig-name descname">epoch_mutex_</code><a class="headerlink" href="#_CPPv4N14File_Namespace14CachingFileMgr12epoch_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
