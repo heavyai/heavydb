@@ -167,6 +167,15 @@ public class MapDPlanner extends PlannerImpl {
     return new CompletionResult(hints, replaced[0]);
   }
 
+  public static HepPlanner getHepPlanner(HepProgram hepProgram, boolean noDag) {
+    if (noDag) {
+      return new HepPlanner(
+              hepProgram, null, true, Functions.ignore2(), RelOptCostImpl.FACTORY);
+    } else {
+      return new HepPlanner(hepProgram);
+    }
+  }
+
   @Override
   public RelRoot rel(SqlNode sql) {
     RelRoot root = super.rel(sql);
@@ -186,7 +195,7 @@ public class MapDPlanner extends PlannerImpl {
 
     final HepProgram program =
             HepProgram.builder().addRuleInstance(injectFilterRule).build();
-    HepPlanner prePlanner = new HepPlanner(program);
+    HepPlanner prePlanner = MapDPlanner.getHepPlanner(program, false);
     prePlanner.setRoot(root.rel);
     final RelNode rootRelNode = prePlanner.findBestExp();
     return root.withRel(rootRelNode);
@@ -202,7 +211,7 @@ public class MapDPlanner extends PlannerImpl {
             filterPushDownInfo);
     final HepProgram program =
             HepProgram.builder().addRuleInstance(dynamicFilterJoinRule).build();
-    HepPlanner prePlanner = new HepPlanner(program);
+    HepPlanner prePlanner = MapDPlanner.getHepPlanner(program, false);
     prePlanner.setRoot(root.rel);
     final RelNode rootRelNode = prePlanner.findBestExp();
     filterPushDownInfo.clear();
@@ -213,10 +222,8 @@ public class MapDPlanner extends PlannerImpl {
     QueryOptimizationRules outerJoinOptRule =
             new OuterJoinOptViaNullRejectionRule(RelFactories.LOGICAL_BUILDER);
 
-    HepProgram opt_program =
-            HepProgram.builder().addRuleInstance(outerJoinOptRule).build();
-    HepPlanner prePlanner = new HepPlanner(
-            opt_program, null, true, Functions.ignore2(), RelOptCostImpl.FACTORY);
+    HepProgram program = HepProgram.builder().addRuleInstance(outerJoinOptRule).build();
+    HepPlanner prePlanner = MapDPlanner.getHepPlanner(program, true);
     prePlanner.setRoot(root.rel);
     final RelNode rootRelNode = prePlanner.findBestExp();
     return root.withRel(rootRelNode);
