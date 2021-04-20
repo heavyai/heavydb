@@ -257,8 +257,8 @@ void ParquetDataWrapper::fetchChunkMetadata() {
       }
     }
   } else {
+    CHECK(chunk_metadata_map_.empty());
     new_file_paths = getAllFilePaths();
-    chunk_metadata_map_.clear();
     resetParquetMetadata();
   }
 

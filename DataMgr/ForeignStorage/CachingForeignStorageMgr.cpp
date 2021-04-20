@@ -124,8 +124,11 @@ void CachingForeignStorageMgr::refreshTable(const ChunkKey& table_key,
   CHECK(is_table_key(table_key));
   ForeignStorageMgr::checkIfS3NeedsToBeEnabled(table_key);
   clearTempChunkBufferMapEntriesForTable(table_key);
-  evict_cached_entries ? disk_cache_->clearForTablePrefix(table_key)
-                       : refreshTableInCache(table_key);
+  if (evict_cached_entries) {
+    clearTable(table_key);
+  } else {
+    refreshTableInCache(table_key);
+  }
 }
 
 void CachingForeignStorageMgr::refreshTableInCache(const ChunkKey& table_key) {
@@ -149,6 +152,16 @@ void CachingForeignStorageMgr::refreshTableInCache(const ChunkKey& table_key) {
 
   append_mode ? refreshAppendTableInCache(table_key, old_chunk_keys)
               : refreshNonAppendTableInCache(table_key, old_chunk_keys);
+}
+
+void CachingForeignStorageMgr::clearTable(const ChunkKey& table_key) {
+  disk_cache_->clearForTablePrefix(table_key);
+
+  ForeignStorageMgr::clearDataWrapper(table_key);
+  auto [db_id, tb_id] = get_table_prefix(table_key);
+  // Make sure metadata file is gone
+  CHECK(!boost::filesystem::exists(disk_cache_->getCacheDirectoryForTable(db_id, tb_id) +
+                                   wrapper_file_name));
 }
 
 int CachingForeignStorageMgr::getHighestCachedFragId(const ChunkKey& table_key) {
@@ -186,7 +199,7 @@ void CachingForeignStorageMgr::refreshNonAppendTableInCache(
     const std::vector<ChunkKey>& old_chunk_keys) {
   CHECK(is_table_key(table_key));
   ChunkMetadataVector storage_metadata;
-  disk_cache_->clearForTablePrefix(table_key);
+  clearTable(table_key);
   getChunkMetadataVecForKeyPrefix(storage_metadata, table_key);
 
   try {

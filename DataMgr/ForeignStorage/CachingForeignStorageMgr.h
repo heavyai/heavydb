@@ -51,6 +51,7 @@ class CachingForeignStorageMgr : public ForeignStorageMgr {
   void populateChunkBuffersSafely(ForeignDataWrapper& data_wrapper,
                                   ChunkToBufferMap& required_buffers,
                                   ChunkToBufferMap& optional_buffers);
+  void clearTable(const ChunkKey& table_key);
   ForeignStorageCache* disk_cache_;
 };
 

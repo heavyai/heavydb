@@ -213,7 +213,22 @@ bool ForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chunk_key) 
 
 void ForeignStorageMgr::refreshTable(const ChunkKey& table_key,
                                      const bool evict_cached_entries) {
-  // Noop - If the cache is not enabled then a refresh does nothing.
+  auto catalog =
+      Catalog_Namespace::SysCatalog::instance().getCatalog(table_key[CHUNK_KEY_DB_IDX]);
+  CHECK(catalog);
+  // Clear datawrapper unless table is non-append and evict is false
+  if (evict_cached_entries ||
+      !catalog->getForeignTableUnlocked(table_key[CHUNK_KEY_TABLE_IDX])->isAppendMode()) {
+    clearDataWrapper(table_key);
+  }
+}
+
+void ForeignStorageMgr::clearDataWrapper(const ChunkKey& table_key) {
+  std::lock_guard data_wrapper_lock(data_wrapper_mutex_);
+  // May not be created yet
+  if (data_wrapper_map_.find(table_key) != data_wrapper_map_.end()) {
+    data_wrapper_map_.erase(table_key);
+  }
 }
 
 void ForeignStorageMgr::clearTempChunkBufferMapEntriesForTableUnlocked(

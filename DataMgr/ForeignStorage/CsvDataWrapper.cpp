@@ -850,8 +850,9 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
       UNREACHABLE();
     }
   } else {
-    chunk_metadata_map_.clear();
-    fragment_id_to_file_regions_map_.clear();
+    // Should only be called once for non-append tables
+    CHECK(chunk_metadata_map_.empty());
+    CHECK(fragment_id_to_file_regions_map_.empty());
     if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
       csv_reader_ = std::make_unique<LocalMultiFileReader>(file_path, copy_params);
     } else {

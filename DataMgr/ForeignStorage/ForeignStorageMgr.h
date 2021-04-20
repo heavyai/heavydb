@@ -101,6 +101,9 @@ class ForeignStorageMgr : public AbstractBufferMgr {
 
  protected:
   bool createDataWrapperIfNotExists(const ChunkKey& chunk_key);
+
+  void clearDataWrapper(const ChunkKey& table_key);
+
   std::shared_ptr<ForeignDataWrapper> getDataWrapper(const ChunkKey& chunk_key);
   bool fetchBufferIfTempBufferMapEntryExists(const ChunkKey& chunk_key,
                                              AbstractBuffer* destination_buffer,
