@@ -242,6 +242,18 @@ void validate_and_set_fixed_encoding(ColumnDescriptor& cd,
   // fixed-bits encoding
   if (type == kARRAY) {
     type = cd.columnType.get_subtype();
+    switch (type) {
+      case kTINYINT:
+      case kSMALLINT:
+      case kINT:
+      case kBIGINT:
+      case kDATE:
+        throw std::runtime_error(cd.columnName + ": Cannot apply FIXED encoding to " +
+                                 column_type->to_string() + " type array.");
+        break;
+      default:
+        break;
+    }
   }
 
   if (!IS_INTEGER(type) && !is_datetime(type) &&
@@ -397,6 +409,10 @@ void validate_and_set_compressed_encoding(ColumnDescriptor& cd, int encoding_siz
 
 void validate_and_set_date_encoding(ColumnDescriptor& cd, int encoding_size) {
   // days encoding for dates
+  if (cd.columnType.get_type() == kARRAY && cd.columnType.get_subtype() == kDATE) {
+    throw std::runtime_error(cd.columnName +
+                             ": Cannot apply days encoding to date array.");
+  }
   if (cd.columnType.get_type() != kDATE) {
     throw std::runtime_error(cd.columnName +
                              ": Days encoding is only supported for DATE columns.");

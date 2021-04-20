@@ -356,6 +356,59 @@ TEST_F(ArrayExtOpsEnv, ArrayAppendDowncast) {
   }
 }
 
+class FixedEncodedArrayTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i64_i32;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i64_i16;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i64_i8;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i32_i8;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i32_i16;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i16_i8;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_dt64_dt32;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_dt64_dt16;");
+    run_ddl_statement("DROP TABLE IF EXISTS farr_dt64_dt32;");
+    run_ddl_statement("DROP TABLE IF EXISTS farr_dt64_dt16;");
+  }
+
+  void TearDown() override {
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i64_i32;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i64_i16;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i64_i8;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i32_i8;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i32_i16;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i16_i8;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_dt64_dt32;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_dt64_dt16;");
+    run_ddl_statement("DROP TABLE IF EXISTS farr_dt64_dt32;");
+    run_ddl_statement("DROP TABLE IF EXISTS farr_dt64_dt16;");
+  }
+};
+
+TEST_F(FixedEncodedArrayTest, ExceptionTest) {
+  // Check whether we throw exception for the below cases instead of crashes
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE varr_i64_i32 (val BIGINT[] ENCODING FIXED(32));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE varr_i64_i16 (val BIGINT[] ENCODING FIXED(16));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE varr_i64_i8 (val BIGINT[] ENCODING FIXED(8));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE varr_i32_i8 (val INT[] ENCODING FIXED(16));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE varr_i32_i16 (val INT[] ENCODING FIXED(8));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE varr_i16_i8 (val SMALLINT[] ENCODING FIXED(8));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE varr_dt64_dt32 (val DATE[] ENCODING FIXED(32));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE varr_dt64_dt16 (val DATE[] ENCODING FIXED(16));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE farr_dt64_dt32 (val DATE[1] ENCODING FIXED(32));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE farr_dt64_dt16 (val DATE[1] ENCODING FIXED(16));"));
+}
+
 int main(int argc, char** argv) {
   g_is_test_env = true;
 
