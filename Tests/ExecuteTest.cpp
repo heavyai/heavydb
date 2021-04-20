@@ -10554,6 +10554,27 @@ TEST(Select, Views) {
   run_test();
 }
 
+TEST(Select, ViewHavingSelfJoin) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+
+  auto run_test = [](bool calcite_view_opt_state) {
+    auto calcite_view_optimization_state = g_enable_calcite_view_optimize;
+    ScopeGuard reset_calcite_view_opt = [&calcite_view_optimization_state] {
+      g_enable_calcite_view_optimize = calcite_view_optimization_state;
+    };
+    g_enable_calcite_view_optimize = calcite_view_opt_state;
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+      c("SELECT * FROM view_self_join_v1;", dt);
+      c("SELECT * FROM view_self_join_v2;", dt);
+      c("SELECT * FROM view_self_join_v3;", dt);
+    }
+  };
+  run_test(true);
+  run_test(false);
+}
+
 TEST(Select, CreateTableAsSelect) {
   SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
@@ -20696,6 +20717,19 @@ int create_views() {
       "CREATE VIEW join_view_test AS SELECT a.x AS x FROM test a JOIN test_inner b ON "
       "a.str = b.str;"};
   const std::string drop_old_join_view{"DROP VIEW IF EXISTS join_view_test;"};
+  const std::string drop_self_join_view1{"DROP VIEW IF EXISTS view_self_join_v1;"};
+  const std::string drop_self_join_view2{"DROP VIEW IF EXISTS view_self_join_v2;"};
+  const std::string drop_self_join_view3{"DROP VIEW IF EXISTS view_self_join_v3;"};
+  const std::string create_self_join_view1{
+      "CREATE VIEW view_self_join_v1 AS SELECT count(1) FROM test r1, test r2 where r1.x "
+      "= r2.x;"};
+  const std::string create_self_join_view2{
+      "CREATE VIEW view_self_join_v2 AS SELECT count(1) FROM test r1 INNER JOIN test r2 "
+      "on (r1.x = r2.x);"};
+  const std::string create_self_join_view3{
+      "CREATE VIEW view_self_join_v3 AS SELECT count(1) FROM test r1 LEFT JOIN test r2 "
+      "on (r1.x = r2.x);"};
+
   try {
     run_ddl_statement(drop_old_view);
     run_ddl_statement(create_view_test);
@@ -20722,6 +20756,48 @@ int create_views() {
     g_sqlite_comparator.query(create_join_view_test);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create view 'join_view_test' -- g_sqlite_comparator";
+    return -EEXIST;
+  }
+  try {
+    run_ddl_statement(drop_self_join_view1);
+    run_ddl_statement(create_self_join_view1);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create view 'view_self_join_v1' -- run_ddl_statement";
+    return -EEXIST;
+  }
+  try {
+    g_sqlite_comparator.query(drop_self_join_view1);
+    g_sqlite_comparator.query(create_self_join_view1);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create view 'view_self_join_v1' -- g_sqlite_comparator";
+    return -EEXIST;
+  }
+  try {
+    run_ddl_statement(drop_self_join_view2);
+    run_ddl_statement(create_self_join_view2);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create view 'view_self_join_v2' -- run_ddl_statement";
+    return -EEXIST;
+  }
+  try {
+    g_sqlite_comparator.query(drop_self_join_view2);
+    g_sqlite_comparator.query(create_self_join_view2);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create view 'view_self_join_v2' -- g_sqlite_comparator";
+    return -EEXIST;
+  }
+  try {
+    run_ddl_statement(drop_self_join_view3);
+    run_ddl_statement(create_self_join_view3);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create view 'view_self_join_v3' -- run_ddl_statement";
+    return -EEXIST;
+  }
+  try {
+    g_sqlite_comparator.query(drop_self_join_view3);
+    g_sqlite_comparator.query(create_self_join_view3);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create view 'view_self_join_v3' -- g_sqlite_comparator";
     return -EEXIST;
   }
   return 0;
@@ -20922,6 +20998,13 @@ void drop_views() {
   const std::string drop_join_view_test{"DROP VIEW join_view_test;"};
   run_ddl_statement(drop_join_view_test);
   g_sqlite_comparator.query(drop_join_view_test);
+
+  run_ddl_statement("DROP VIEW IF EXISTS view_self_join_v1;");
+  run_ddl_statement("DROP VIEW IF EXISTS view_self_join_v2;");
+  run_ddl_statement("DROP VIEW IF EXISTS view_self_join_v3;");
+  g_sqlite_comparator.query("DROP VIEW IF EXISTS view_self_join_v1;");
+  g_sqlite_comparator.query("DROP VIEW IF EXISTS view_self_join_v2;");
+  g_sqlite_comparator.query("DROP VIEW IF EXISTS view_self_join_v3;");
 }
 
 }  // namespace

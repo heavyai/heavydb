@@ -29,13 +29,8 @@ import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.config.CalciteConnectionConfigImpl;
 import org.apache.calcite.config.CalciteConnectionProperty;
-import org.apache.calcite.plan.Context;
-import org.apache.calcite.plan.RelOptCluster;
-import org.apache.calcite.plan.RelOptLattice;
-import org.apache.calcite.plan.RelOptMaterialization;
-import org.apache.calcite.plan.RelOptPlanner;
-import org.apache.calcite.plan.RelOptTable;
-import org.apache.calcite.plan.RelOptUtil;
+import org.apache.calcite.linq4j.function.Functions;
+import org.apache.calcite.plan.*;
 import org.apache.calcite.plan.hep.HepPlanner;
 import org.apache.calcite.plan.hep.HepProgram;
 import org.apache.calcite.plan.hep.HepProgramBuilder;
@@ -857,8 +852,7 @@ public final class MapDParser {
       builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
       builder.addRuleInstance(CoreRules.PROJECT_MERGE);
       builder.addRuleInstance(ProjectProjectRemoveRule.INSTANCE);
-
-      HepPlanner hepPlanner = new HepPlanner(builder.build());
+      HepPlanner hepPlanner = MapDPlanner.getHepPlanner(builder.build(), true);
       final RelNode root = relR.project();
       hepPlanner.setRoot(root);
       final RelNode newRel = hepPlanner.findBestExp();
