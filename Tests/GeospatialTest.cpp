@@ -212,7 +212,8 @@ void import_geospatial_join_test(const bool use_temporary_tables) {
       "DROP TABLE IF EXISTS geospatial_inner_join_test;");
   run_ddl_statement(drop_geospatial_test);
   std::string column_definition =
-      "id INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON";
+      "id INT, p POINT, l LINESTRING, poly POLYGON, gp4326 GEOMETRY(POLYGON, 4326), "
+      "mpoly MULTIPOLYGON";
   auto create_statement =
       build_create_table_statement(column_definition,
                                    "geospatial_inner_join_test",
@@ -237,7 +238,8 @@ void import_geospatial_join_test(const bool use_temporary_tables) {
                            std::to_string(i + 1) + ", 0 0))'"};
     const std::string mpoly{"'MULTIPOLYGON(((0 0, " + std::to_string(i + 1) + " 0, 0 " +
                             std::to_string(i + 1) + ", 0 0)))'"};
-    run_multiple_agg(gen(i, point, linestring, poly, mpoly), ExecutorDeviceType::CPU);
+    run_multiple_agg(gen(i, point, linestring, poly, poly, mpoly),
+                     ExecutorDeviceType::CPU);
   }
 }
 
@@ -2098,6 +2100,35 @@ TEST_P(GeoSpatialJoinTablesFixture, GeoJoins) {
         static_cast<int64_t>(2),
         v<int64_t>(run_simple_agg(
             R"(SELECT count(*) FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON ST_Contains(ST_SetSRID(b.poly, 4326), a.gp4326) WHERE b.id = 4;)",
+            dt)));
+
+    // enable table reordering, disable loop joins
+    const bool table_reordering_state = g_from_table_reordering;
+    ScopeGuard table_reordering_reset = [table_reordering_state] {
+      g_from_table_reordering = table_reordering_state;
+    };
+    g_from_table_reordering = true;
+    const auto trivial_loop_join_state = g_trivial_loop_join_threshold;
+    g_trivial_loop_join_threshold = 1;
+    ScopeGuard reset_loop_join_state = [&trivial_loop_join_state] {
+      g_trivial_loop_join_threshold = trivial_loop_join_state;
+    };
+
+    // constructed point
+    ASSERT_EQ(
+        static_cast<int64_t>(10),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM geospatial_test a LEFT JOIN geospatial_inner_join_test b ON ST_Contains(ST_SetSRID(ST_Point(a.id, a.id), 4326), b.gp4326);)",
+            dt)));
+
+    EXPECT_NO_THROW(run_multiple_agg(
+        R"(SELECT a.id FROM geospatial_test a LEFT JOIN geospatial_inner_join_test b ON ST_Contains(ST_SetSRID(ST_Point(a.id, a.id), 4326), b.gp4326);)",
+        dt));
+
+    ASSERT_EQ(
+        static_cast<int64_t>(15),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON ST_Intersects(ST_SetSRID(ST_Point(a.id, a.id), 4326), b.gp4326);)",
             dt)));
   }
 }
