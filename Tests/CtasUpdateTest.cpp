@@ -2512,6 +2512,83 @@ TEST(Select, CtasItasValidation) {
   drop_ctas_itas_table();
 }
 
+TEST(Select, CtasItasNullGeoPoint) {
+  auto run_test = [](const std::string col_type) {
+    auto drop_table = []() {
+      run_ddl_statement("DROP TABLE IF EXISTS T_With_Null_GeoPoint;");
+      run_ddl_statement("DROP TABLE IF EXISTS CTAS_GeoNull;");
+      run_ddl_statement("DROP TABLE IF EXISTS ITAS_GeoNull;");
+    };
+
+    auto create_table = [&col_type]() {
+      run_ddl_statement("CREATE TABLE T_With_Null_GeoPoint (pt " + col_type + ");");
+      run_ddl_statement("CREATE TABLE ITAS_GeoNull (pt " + col_type + ");");
+    };
+
+    drop_table();
+    create_table();
+
+    run_multiple_agg("INSERT INTO T_With_Null_GeoPoint VALUES (\'POINT(1 1)\');",
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO T_With_Null_GeoPoint VALUES (NULL);",
+                     ExecutorDeviceType::CPU);
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(1) FROM T_With_Null_GeoPoint WHERE ST_X(pt) is not null;",
+                  ExecutorDeviceType::CPU)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(1) FROM T_With_Null_GeoPoint WHERE ST_X(pt) is null;",
+                  ExecutorDeviceType::CPU)));
+    run_ddl_statement("INSERT INTO ITAS_GeoNull SELECT * FROM T_With_Null_GeoPoint;");
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(1) FROM ITAS_GeoNull WHERE ST_X(pt) is not null;",
+                  ExecutorDeviceType::CPU)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(1) FROM ITAS_GeoNull WHERE ST_X(pt) is null;",
+                  ExecutorDeviceType::CPU)));
+    run_ddl_statement("CREATE TABLE CTAS_GeoNull AS SELECT * FROM T_With_Null_GeoPoint;");
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(1) FROM CTAS_GeoNull WHERE ST_X(pt) is not null;",
+                  ExecutorDeviceType::CPU)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(1) FROM CTAS_GeoNull WHERE ST_X(pt) is null;",
+                  ExecutorDeviceType::CPU)));
+    run_ddl_statement(
+        "INSERT INTO T_With_Null_GeoPoint SELECT * FROM T_With_Null_GeoPoint;");
+    ASSERT_EQ(4,
+              v<int64_t>(run_simple_agg("SELECT COUNT(1) FROM T_With_Null_GeoPoint",
+                                        ExecutorDeviceType::CPU)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(1) FROM T_With_Null_GeoPoint WHERE ST_X(pt) is not null;",
+                  ExecutorDeviceType::CPU)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(1) FROM T_With_Null_GeoPoint WHERE ST_X(pt) is null;",
+                  ExecutorDeviceType::CPU)));
+
+    drop_table();
+  };
+
+  std::vector<std::string> geo_point_types{
+      "POINT",
+      "GEOMETRY(POINT)",
+      "GEOMETRY(POINT, 4326)",
+      "GEOMETRY(POINT, 4326)",
+      "GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32)",
+      "GEOMETRY(POINT, 4326) ENCODING NONE",
+      "GEOMETRY(POINT, 900913)",
+      "GEOMETRY(POINT, 900913) ENCODING NONE"};
+  for (auto& col_type : geo_point_types) {
+    run_test(col_type);
+  }
+}
+
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);
