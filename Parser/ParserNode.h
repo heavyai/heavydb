@@ -1146,6 +1146,28 @@ class CreateTableAsSelectStmt : public InsertIntoTableAsSelectStmt {
 };
 
 /*
+ * @type AlterTableStmt
+ * @brief ALTER TABLE statement
+ *
+ * AlterTableStmt is more a composite Stmt in that it relies upon several other Stmts to
+ * handle the execution.
+ */
+
+class AlterTableStmt : public DDLStmt {
+ public:
+  static void delegateExecute(const rapidjson::Value& payload,
+                              const Catalog_Namespace::SessionInfo& session);
+
+  const std::string* get_table() const { return table.get(); }
+
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
+
+ private:
+  std::unique_ptr<std::string> table;
+  const rapidjson::Value payload;
+};
+
+/*
  * @type DropTableStmt
  * @brief DROP TABLE statement
  */

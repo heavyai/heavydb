@@ -39,6 +39,7 @@
 #include <random>
 #include <regex>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <typeinfo>
 
@@ -3609,6 +3610,191 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   DeleteTriggeredCacheInvalidator::invalidateCaches();
 }
 
+void AlterTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {}
+
+void AlterTableStmt::delegateExecute(const rapidjson::Value& payload,
+                                     const Catalog_Namespace::SessionInfo& session) {
+  CHECK(payload.HasMember("tableName"));
+  auto tableName = json_str(payload["tableName"]);
+
+  CHECK(payload.HasMember("alterType"));
+  auto type = json_str(payload["alterType"]);
+
+  if (type == "RENAME_TABLE") {
+    CHECK(payload.HasMember("newTableName"));
+    auto newTableName = json_str(payload["newTableName"]);
+    Parser::RenameTableStmt(new std::string(tableName), new std::string(newTableName))
+        .execute(session);
+
+  } else if (type == "RENAME_COLUMN") {
+    CHECK(payload.HasMember("columnName"));
+    auto columnName = json_str(payload["columnName"]);
+    CHECK(payload.HasMember("newColumnName"));
+    auto newColumnName = json_str(payload["newColumnName"]);
+    Parser::RenameColumnStmt(new std::string(tableName),
+                             new std::string(columnName),
+                             new std::string(newColumnName))
+        .execute(session);
+
+  } else if (type == "ADD_COLUMN") {
+    CHECK(payload.HasMember("columnData"));
+    CHECK(payload["columnData"].IsArray());
+
+    // TODO : Shares alot of code below with CREATE_TABLE -> try to merge these two ?
+    //  unique_ptr vs regular
+
+    // New Columns go into this list
+    std::list<ColumnDef*>* table_element_list_ = new std::list<ColumnDef*>;
+
+    const auto elements = payload["columnData"].GetArray();
+    for (const auto& element : elements) {
+      CHECK(element.IsObject());
+      CHECK(element.HasMember("type"));
+      if (json_str(element["type"]) == "SQL_COLUMN_DECLARATION") {
+        CHECK(element.HasMember("name"));
+        auto col_name = std::make_unique<std::string>(json_str(element["name"]));
+        CHECK(element.HasMember("sqltype"));
+        const auto sql_types = to_sql_type(json_str(element["sqltype"]));
+
+        // decimal / numeric precision / scale
+        int precision = -1;
+        int scale = -1;
+        if (element.HasMember("precision")) {
+          precision = json_i64(element["precision"]);
+        }
+        if (element.HasMember("scale")) {
+          scale = json_i64(element["scale"]);
+        }
+
+        std::optional<int64_t> array_size;
+        if (element.HasMember("arraySize")) {
+          // We do not yet support geo arrays
+          array_size = json_i64(element["arraySize"]);
+        }
+        std::unique_ptr<SQLType> sql_type;
+        if (element.HasMember("subtype")) {
+          CHECK(element.HasMember("coordinateSystem"));
+          const auto subtype_sql_types = to_sql_type(json_str(element["subtype"]));
+          sql_type = std::make_unique<SQLType>(
+              subtype_sql_types,
+              static_cast<int>(sql_types),
+              static_cast<int>(json_i64(element["coordinateSystem"])),
+              false);
+        } else if (precision > 0 && scale > 0) {
+          sql_type = std::make_unique<SQLType>(sql_types,
+                                               precision,
+                                               scale,
+                                               /*is_array=*/array_size.has_value(),
+                                               array_size ? *array_size : -1);
+        } else if (precision > 0) {
+          sql_type = std::make_unique<SQLType>(sql_types,
+                                               precision,
+                                               0,
+                                               /*is_array=*/array_size.has_value(),
+                                               array_size ? *array_size : -1);
+        } else {
+          sql_type = std::make_unique<SQLType>(sql_types,
+                                               /*is_array=*/array_size.has_value(),
+                                               array_size ? *array_size : -1);
+        }
+        CHECK(sql_type);
+
+        CHECK(element.HasMember("nullable"));
+        const auto nullable = json_bool(element["nullable"]);
+        std::unique_ptr<ColumnConstraintDef> constraint_def;
+        if (!nullable) {
+          StringLiteral* str_literal = nullptr;
+          if (element.HasMember("expression") && !element["expression"].IsNull()) {
+            std::string* defaultval = new std::string(json_str(element["expression"]));
+            boost::algorithm::trim_if(*defaultval, boost::is_any_of(" \"'`"));
+            str_literal = new StringLiteral(defaultval);
+          }
+
+          constraint_def =
+              std::make_unique<ColumnConstraintDef>(/*notnull=*/true,
+                                                    /*unique=*/false,
+                                                    /*primarykey=*/false,
+                                                    /*defaultval=*/str_literal);
+        }
+        std::unique_ptr<CompressDef> compress_def;
+        if (element.HasMember("encodingType") && !element["encodingType"].IsNull()) {
+          std::string encoding_type = json_str(element["encodingType"]);
+          CHECK(element.HasMember("encodingSize"));
+          auto encoding_name =
+              std::make_unique<std::string>(json_str(element["encodingType"]));
+          compress_def = std::make_unique<CompressDef>(encoding_name.release(),
+                                                       json_i64(element["encodingSize"]));
+        }
+        auto col_def = new ColumnDef(col_name.release(),
+                                     sql_type.release(),
+                                     compress_def ? compress_def.release() : nullptr,
+                                     constraint_def ? constraint_def.release() : nullptr);
+        table_element_list_->emplace_back(col_def);
+
+      } else {
+        LOG(FATAL) << "Unsupported element type for ALTER TABLE: "
+                   << element["type"].GetString();
+      }
+    }
+
+    Parser::AddColumnStmt(new std::string(tableName), table_element_list_)
+        .execute(session);
+
+  } else if (type == "DROP_COLUMN") {
+    CHECK(payload.HasMember("columnData"));
+    auto columnData = json_str(payload["columnData"]);
+    // Convert columnData to std::list<std::string*>*
+    //    allocate std::list<> as DropColumnStmt will delete it;
+    std::list<std::string*>* cols = new std::list<std::string*>;
+    std::vector<std::string> cols1;
+    boost::split(cols1, columnData, boost::is_any_of(","));
+    for (auto s : cols1) {
+      // strip leading/trailing spaces/quotes/single quotes
+      boost::algorithm::trim_if(s, boost::is_any_of(" \"'`"));
+      std::string* str = new std::string(s);
+      cols->emplace_back(str);
+    }
+
+    Parser::DropColumnStmt(new std::string(tableName), cols).execute(session);
+
+  } else if (type == "ALTER_OPTIONS") {
+    CHECK(payload.HasMember("options"));
+
+    if (payload["options"].IsObject()) {
+      for (const auto& option : payload["options"].GetObject()) {
+        std::string* option_name = new std::string(json_str(option.name));
+        Literal* literal_value;
+        if (option.value.IsString()) {
+          std::string literal_string = json_str(option.value);
+
+          // iff this string can be converted to INT
+          //   ... do so because it is necessary for AlterTableParamStmt
+          std::size_t sz;
+          int iVal = std::stoi(literal_string, &sz);
+          if (sz == literal_string.size()) {
+            literal_value = new IntLiteral(iVal);
+          } else {
+            literal_value = new StringLiteral(&literal_string);
+          }
+        } else if (option.value.IsInt() || option.value.IsInt64()) {
+          literal_value = new IntLiteral(json_i64(option.value));
+        } else if (option.value.IsNull()) {
+          literal_value = new NullLiteral();
+        } else {
+          throw std::runtime_error("Unable to handle literal for " + *option_name);
+        }
+        CHECK(literal_value);
+
+        NameValueAssign* p1 = new NameValueAssign(option_name, literal_value);
+        Parser::AlterTableParamStmt(new std::string(tableName), p1).execute(session);
+      }
+
+    } else {
+      CHECK(payload["options"].IsNull());
+    }
+  }
+}
+
 void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
@@ -4163,9 +4349,8 @@ void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session)
       {"max_rollback_epochs", TableParamType::MaxRollbackEpochs},
       {"epoch", TableParamType::Epoch},
       {"max_rows", TableParamType::MaxRows}};
-  // Below is to ensure that executor is not currently executing on table when we
-  // might be changing it's storage. Question: will/should catalog write lock take
-  // care of this?
+  // Below is to ensure that executor is not currently executing on table when we might be
+  // changing it's storage. Question: will/should catalog write lock take care of this?
   const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
@@ -5653,6 +5838,8 @@ void execute_calcite_ddl(
   } else if (ddl_command == "RENAME_TABLE") {
     auto rename_table_stmt = Parser::RenameTableStmt(payload);
     rename_table_stmt.execute(*session_ptr);
+  } else if (ddl_command == "ALTER_TABLE") {
+    Parser::AlterTableStmt::delegateExecute(payload, *session_ptr);
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }

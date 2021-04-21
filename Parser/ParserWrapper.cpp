@@ -205,6 +205,16 @@ ParserWrapper::ParserWrapper(std::string query_string) {
         is_calcite_ddl_ = true;
         is_legacy_ddl_ = false;
         return;
+      } else if (ddl == "ALTER") {
+        query_type_ = QueryType::SchemaWrite;
+        boost::regex alter_table_regex{R"(ALTER\s+TABLE.*)",
+                                       boost::regex::extended | boost::regex::icase};
+        if (g_enable_calcite_ddl_parser &&
+            boost::regex_match(query_string, alter_table_regex)) {
+          is_calcite_ddl_ = true;
+          is_legacy_ddl_ = false;
+          return;
+        }
       }
       is_legacy_ddl_ = !is_calcite_ddl_;
       return;

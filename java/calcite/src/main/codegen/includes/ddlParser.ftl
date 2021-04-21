@@ -14,6 +14,40 @@
  limitations under the License.
 -->
 
+
+
+
+SqlNodeList SimpleIdentifierNodeList() :
+{
+    SqlIdentifier id;
+    final List<SqlNode> list = new ArrayList<SqlNode>();
+}
+{
+    id = SimpleIdentifier() {list.add(id);}
+    (
+        <COMMA> id = SimpleIdentifier() {
+            list.add(id);
+        }
+    )*
+    { return new SqlNodeList(list, SqlParserPos.ZERO); }
+}
+
+SqlNodeList RawTableElementList() :
+{
+    final Span s;
+    final List<SqlNode> list = new ArrayList<SqlNode>();
+}
+{
+    { s = span(); }
+    TableElement(list)
+    (
+        <COMMA> TableElement(list)
+    )*
+    {
+        return new SqlNodeList(list, s.end(this));
+    }
+}
+
 SqlNodeList TableElementList() :
 {
     final Span s;
@@ -520,6 +554,87 @@ SqlRenameTable SqlRenameTable(Span s) :
         return new SqlRenameTable(s.end(this), tableNames);
     }
 }
+
+/*
+ * Alter a table using the following syntax:
+ *
+ * ALTER TABLE <table_name>
+ *
+ */
+SqlDdl SqlAlterTable(Span s) :
+{
+    SqlAlterTable.Builder sqlAlterTableBuilder = new SqlAlterTable.Builder();
+    SqlIdentifier tableName;
+    SqlIdentifier newTableName;
+    SqlIdentifier columnName;
+    SqlIdentifier newColumnName;
+    SqlIdentifier columnType;
+    SqlIdentifier encodingSpec;
+    boolean notNull = false;
+    SqlNodeList columnList = null;
+}
+{
+    <ALTER>
+    <TABLE>
+    tableName=CompoundIdentifier()
+    {
+        sqlAlterTableBuilder.setTableName(tableName.toString());
+    }
+    (
+        <RENAME>
+        (
+            <TO>
+            newTableName = CompoundIdentifier()
+            {
+                sqlAlterTableBuilder.alterTableName(newTableName.toString());
+            }
+        |
+            <COLUMN>
+            columnName = CompoundIdentifier()
+            <TO>
+            newColumnName = CompoundIdentifier()
+            {
+                sqlAlterTableBuilder.alterColumnName(columnName.toString(), newColumnName.toString());
+            }
+        )
+    |
+        <DROP>
+        <COLUMN>
+        columnList = SimpleIdentifierNodeList()
+        {
+            sqlAlterTableBuilder.dropColumn(columnList);
+        }
+    |
+        <ADD>
+        [<COLUMN>]
+        (
+            columnList = TableElementList()
+            |
+            columnList = RawTableElementList()
+        )
+        {
+            sqlAlterTableBuilder.addColumnList(columnList);
+        }
+    |
+        <SET>
+        Option(sqlAlterTableBuilder)
+        (
+            <COMMA>
+            Option(sqlAlterTableBuilder)
+        )*
+        {
+            sqlAlterTableBuilder.alterOptions();
+        }
+    )
+    {
+        sqlAlterTableBuilder.setPos(s.end(this));
+
+        // Builder implementation
+        return sqlAlterTableBuilder.build();
+
+    }
+}
+
 
 SqlCreate SqlCreateView(Span s, boolean replace) :
 {
