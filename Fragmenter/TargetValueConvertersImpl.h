@@ -676,7 +676,9 @@ struct GeoPointValueConverter : public TargetValueConverter {
     } else {
       // NULL point
       (*column_data_)[row] = "";
-      auto coords = std::make_shared<std::vector<double>>(NULL_ARRAY_DOUBLE, NULL_DOUBLE);
+      auto coords = std::make_shared<std::vector<double>>();
+      coords->push_back(NULL_ARRAY_DOUBLE);
+      coords->push_back(NULL_DOUBLE);
       auto coords_datum = toCompressedCoords(coords);
       coords_datum.is_null = true;
       (*signed_compressed_coords_data_)[row] = coords_datum;
