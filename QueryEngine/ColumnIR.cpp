@@ -577,10 +577,6 @@ std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
           // physical col without geospatial type info
           return nullptr;
         }
-        if (is_constructed_point(eq_left_op)) {
-          // skip cast for a constructed point lhs
-          return nullptr;
-        }
         const auto eq_left_op_col = dynamic_cast<const Analyzer::ColumnVar*>(eq_left_op);
         CHECK(eq_left_op_col);
         if (eq_left_op_col->get_rte_idx() != 0) {
