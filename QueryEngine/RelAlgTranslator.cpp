@@ -1280,13 +1280,15 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateItem(
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentDate() const {
   constexpr bool is_null = false;
-  Datum datum{.bigintval = now_ - now_ % (24 * 60 * 60)};  // Assumes 0 < now_.
+  Datum datum;
+  datum.bigintval = now_ - now_ % (24 * 60 * 60);  // Assumes 0 < now_.
   return makeExpr<Analyzer::Constant>(kDATE, is_null, datum);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentTime() const {
   constexpr bool is_null = false;
-  Datum datum{.bigintval = now_ % (24 * 60 * 60)};  // Assumes 0 < now_.
+  Datum datum;
+  datum.bigintval = now_ % (24 * 60 * 60);  // Assumes 0 < now_.
   return makeExpr<Analyzer::Constant>(kTIME, is_null, datum);
 }
 
