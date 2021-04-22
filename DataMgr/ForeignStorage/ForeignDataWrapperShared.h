@@ -17,6 +17,7 @@
 #pragma once
 
 #include <stdexcept>
+#include <string>
 
 namespace foreign_storage {
 inline void throw_removed_row_error(const std::string& file_path) {
