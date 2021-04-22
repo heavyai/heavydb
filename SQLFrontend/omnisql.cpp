@@ -847,8 +847,7 @@ static std::vector<std::string> stringify_privs(const std::vector<bool>& priv_ma
                                                 TDBObjectType::type type) {
   // Client priviliges print lookup
   std::vector<std::string> priv_strs;
-  static const std::unordered_map<const TDBObjectType::type,
-                                  const std::vector<std::string>>
+  static const std::unordered_map<TDBObjectType::type, const std::vector<std::string>>
       privilege_names_lookup{
           {TDBObjectType::DatabaseDBObjectType,
            {"create"s, "drop"s, "view-sql-editor"s, "login-access"s}},
