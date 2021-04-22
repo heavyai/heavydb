@@ -19,7 +19,9 @@
 #include "CsvDataWrapper.h"
 #include "ForeignStorageException.h"
 #include "ForeignTableSchema.h"
+#ifdef ENABLE_IMPORT_PARQUET
 #include "ParquetDataWrapper.h"
+#endif
 
 namespace foreign_storage {
 

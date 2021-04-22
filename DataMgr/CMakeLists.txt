@@ -1,4 +1,6 @@
+if(NOT MSVC)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-result")
+endif()
 
 set(datamgr_source_files
     AbstractBuffer.cpp
@@ -31,11 +33,9 @@ set(datamgr_source_files
     BufferMgr/CpuBufferMgr/CpuBuffer.cpp
     BufferMgr/BufferMgr.cpp
     BufferMgr/Buffer.cpp
-    ForeignStorage/ParquetDataWrapper.cpp
     PersistentStorageMgr/MutableCachePersistentStorageMgr.cpp
     PersistentStorageMgr/PersistentStorageMgr.cpp
     ForeignStorage/LazyParquetChunkLoader.cpp
-    ForeignStorage/ParquetShared.cpp
     ForeignStorage/ForeignTableRefresh.cpp
     ForeignStorage/AbstractFileStorageDataWrapper.cpp
     ForeignStorage/ForeignDataWrapperFactory.cpp
@@ -48,6 +48,11 @@ if(ENABLE_AWS_S3)
   list(APPEND datamgr_source_files ForeignStorage/ee/S3SelectClient.cpp)
   list(APPEND datamgr_source_files ForeignStorage/ee/S3SelectDataWrapper.cpp)
 endif()
+endif()
+
+if(ENABLE_IMPORT_PARQUET)
+  list(APPEND datamgr_source_files ForeignStorage/ParquetDataWrapper.cpp)
+  list(APPEND datamgr_source_files ForeignStorage/ParquetShared.cpp)
 endif()
 
 # On Linux, Arrow internally links symbols for its dependency libraries (such as the C++ AWS SDK)

@@ -19,7 +19,9 @@
 #include "CsvDataWrapper.h"
 #include "DataMgr/ForeignStorage/CsvShared.h"
 #include "ForeignDataWrapper.h"
+#ifdef ENABLE_IMPORT_PARQUET
 #include "ParquetDataWrapper.h"
+#endif
 
 namespace foreign_storage {
 std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::create(
@@ -33,8 +35,10 @@ std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::create(
     } else {
       data_wrapper = std::make_unique<CsvDataWrapper>(db_id, foreign_table);
     }
+#ifdef ENABLE_IMPORT_PARQUET
   } else if (data_wrapper_type == DataWrapperType::PARQUET) {
     data_wrapper = std::make_unique<ParquetDataWrapper>(db_id, foreign_table);
+#endif
   } else {
     throw std::runtime_error("Unsupported data wrapper");
   }
