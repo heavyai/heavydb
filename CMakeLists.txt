@@ -269,6 +269,11 @@ if(ENABLE_FOLLY)
     include_directories(${Folly_INCLUDE_DIRS})
     add_definitions("-DHAVE_FOLLY")
     list(APPEND Folly_LIBRARIES ${Glog_LIBRARIES})
+    # TODO: use Folly::folly_deps?
+    if(MSVC)
+      find_package(Libevent REQUIRED)
+      list(APPEND Folly_LIBRARIES libevent::core)
+    endif()
   endif()
 endif()
 
