@@ -58,7 +58,7 @@ constexpr size_t kArenaBlockOverhead =
  */
 class Arena : public folly::Arena< ::SysAllocator<AllocatorType> > {
  public:
-  explicit Arena(size_t min_block_size = static_cast<size_t>(1UL << 32) + kBlockOverhead,
+  explicit Arena(size_t min_block_size = static_cast<size_t>(1ULL << 32) + kBlockOverhead,
                  size_t size_limit = kNoSizeLimit,
                  size_t max_align = kDefaultMaxAlign)
       : folly::Arena<SysAllocator<AllocatorType> >({},
@@ -91,7 +91,7 @@ constexpr size_t kArenaBlockOverhead = 0;
  */
 class Arena {
  public:
-  explicit Arena(size_t min_block_size = 1UL << 32, size_t size_limit = 0) {}
+  explicit Arena(size_t min_block_size = 1ULL << 32, size_t size_limit = 0) {}
 
   ~Arena() {
     for (auto ptr : allocations_) {
