@@ -785,7 +785,11 @@ void CommandLineOptions::validate() {
     const auto lock_file = boost::filesystem::path(base_path) / "omnisci_server_pid.lck";
     auto pid = std::to_string(getpid());
 
+#ifdef _WIN32
+    int pid_fd = _open(lock_file.string().c_str(), O_RDWR | O_CREAT, 0644);
+#else
     int pid_fd = open(lock_file.string().c_str(), O_RDWR | O_CREAT, 0644);
+#endif
     if (pid_fd == -1) {
       auto err = std::string("Failed to open PID file ") + lock_file.string().c_str() +
                  ". " + strerror(errno) + ".";
