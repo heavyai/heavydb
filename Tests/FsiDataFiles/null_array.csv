@@ -1,0 +1,4 @@
+index, i1, i2, i3
+1, NULL, NULL, {NULL}
+2, NULL, {100}, {NULL, NULL}
+3, {100}, {200}, {NULL, 100}

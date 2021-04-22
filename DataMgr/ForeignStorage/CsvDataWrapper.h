@@ -90,7 +90,6 @@ class CsvDataWrapper : public AbstractFileStorageDataWrapper {
 
   // Data needed for append workflow
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_encoder_buffers_;
-  std::map<ChunkKey, size_t> chunk_byte_count_;
   // How many rows have been read
   size_t num_rows_;
   // What byte offset we left off at in the csv_reader

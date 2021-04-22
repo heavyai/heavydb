@@ -1166,6 +1166,20 @@ TEST_P(DataWrapperSelectQueryTest, AggregateAndGroupByNull) {
   // clang-format on
 }
 
+TEST_P(DataWrapperSelectQueryTest, ArrayWithNullValues) {
+  const auto& query = getCreateForeignTableQuery(
+      "(index INTEGER, i1 INTEGER[], i2 INTEGER[], i3 INTEGER[])",
+      "null_array",
+      GetParam());
+  sql(query);
+  // clang-format off
+  sqlAndCompareResult("select * from test_foreign_table order by index;",
+                      {{i(1), Null, Null, array({Null_i})},
+                       {i(2), Null, array({i(100)}), array({Null_i, Null_i})},
+                       {i(3), array({i(100)}), array({i(200)}), array({Null_i, i(100)})}});
+  // clang-format on
+}
+
 class CSVFileTypeTests
     : public SelectQueryTest,
       public ::testing::WithParamInterface<std::pair<std::string, std::string>> {};

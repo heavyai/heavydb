@@ -386,8 +386,6 @@ struct MetadataScanMultiThreadingParams {
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_encoder_buffers;
   std::map<ChunkKey, Chunk_NS::Chunk> cached_chunks;
   std::mutex chunk_encoder_buffers_mutex;
-  std::map<ChunkKey, size_t> chunk_byte_count;
-  std::mutex chunk_byte_count_mutex;
 };
 
 /**
@@ -428,28 +426,6 @@ void add_file_region(std::map<int, FileRegions>& fragment_id_to_file_regions_map
                  first_row_index,
                  result.row_count,
                  result.row_offsets.back() - result.row_offsets.front()));
-}
-
-/**
- * Get the total number of bytes in the given data block for
- * a variable length column.
- */
-size_t get_var_length_data_block_size(DataBlockPtr data_block,
-                                      SQLTypeInfo sql_type_info) {
-  CHECK(sql_type_info.is_varlen());
-  size_t byte_count = 0;
-  if (sql_type_info.is_string() || sql_type_info.is_geometry()) {
-    for (const auto& str : *data_block.stringsPtr) {
-      byte_count += str.length();
-    }
-  } else if (sql_type_info.is_array()) {
-    for (const auto& array : *data_block.arraysPtr) {
-      byte_count += array.length;
-    }
-  } else {
-    UNREACHABLE();
-  }
-  return byte_count;
 }
 
 /**
@@ -547,19 +523,9 @@ void process_data_blocks(MetadataScanMultiThreadingParams& multi_threading_param
   for (auto& [column_id, data_block] : result.column_id_to_data_blocks_map) {
     ChunkKey chunk_key{request.db_id, request.getTableId(), column_id, fragment_id};
     const auto column = column_by_id[column_id];
-    size_t byte_count;
     if (column->columnType.is_varlen_indeed()) {
       chunk_key.emplace_back(1);
-      byte_count = get_var_length_data_block_size(data_block, column->columnType);
-    } else {
-      byte_count = column->columnType.get_size() * result.row_count;
     }
-
-    {
-      std::lock_guard<std::mutex> lock(multi_threading_params.chunk_byte_count_mutex);
-      multi_threading_params.chunk_byte_count[chunk_key] += byte_count;
-    }
-
     if (multi_threading_params.chunk_encoder_buffers.find(chunk_key) ==
         multi_threading_params.chunk_encoder_buffers.end()) {
       multi_threading_params.chunk_encoder_buffers[chunk_key] =
@@ -872,7 +838,6 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
 
   // Restore previous chunk data
   if (foreign_table_->isAppendMode()) {
-    multi_threading_params.chunk_byte_count = chunk_byte_count_;
     multi_threading_params.chunk_encoder_buffers = std::move(chunk_encoder_buffers_);
   }
 
@@ -935,10 +900,22 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
   }
 
   for (auto& [chunk_key, buffer] : multi_threading_params.chunk_encoder_buffers) {
-    auto chunk_metadata =
-        buffer->getEncoder()->getMetadata(column_by_id[chunk_key[2]]->columnType);
+    auto column_entry = column_by_id.find(chunk_key[CHUNK_KEY_COLUMN_IDX]);
+    CHECK(column_entry != column_by_id.end());
+    const auto& column_type = column_entry->second->columnType;
+    auto chunk_metadata = buffer->getEncoder()->getMetadata(column_type);
     chunk_metadata->numElements = buffer->getEncoder()->getNumElems();
-    chunk_metadata->numBytes = multi_threading_params.chunk_byte_count[chunk_key];
+    const auto& cached_chunks = multi_threading_params.cached_chunks;
+    if (!column_type.is_varlen_indeed()) {
+      chunk_metadata->numBytes = column_type.get_size() * chunk_metadata->numElements;
+    } else if (auto chunk_entry = cached_chunks.find(chunk_key);
+               chunk_entry != cached_chunks.end()) {
+      auto buffer = chunk_entry->second.getBuffer();
+      CHECK(buffer);
+      chunk_metadata->numBytes = buffer->size();
+    } else {
+      CHECK_EQ(chunk_metadata->numBytes, static_cast<size_t>(0));
+    }
     chunk_metadata_map_[chunk_key] = chunk_metadata;
   }
 
@@ -955,7 +932,6 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
 
   // Save chunk data
   if (foreign_table_->isAppendMode()) {
-    chunk_byte_count_ = multi_threading_params.chunk_byte_count;
     chunk_encoder_buffers_ = std::move(multi_threading_params.chunk_encoder_buffers);
   }
 
@@ -1047,7 +1023,6 @@ void CsvDataWrapper::restoreDataWrapperInternals(
       chunk_encoder_buffers_[pair.first]->getEncoder()->resetChunkStats(
           pair.second->chunkStats);
       chunk_encoder_buffers_[pair.first]->setUpdated();
-      chunk_byte_count_[pair.first] = pair.second->numBytes;
     }
   }
   is_restored_ = true;
