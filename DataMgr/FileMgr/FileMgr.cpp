@@ -1266,8 +1266,8 @@ void FileMgr::compactFiles() {
 
   auto copy_pages_status_file_path = getFilePath(COPY_PAGES_STATUS);
   CHECK(!boost::filesystem::exists(copy_pages_status_file_path));
-  std::ofstream status_file{copy_pages_status_file_path,
-                            std::ios::out | std::ios::binary};
+  std::ofstream status_file(copy_pages_status_file_path.string(),
+                            std::ios::out | std::ios::binary);
   status_file.close();
 
   std::vector<PageMapping> page_mappings;
