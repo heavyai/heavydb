@@ -885,6 +885,7 @@ const size_t priv_col_width = 20;
 
 struct PrivilegeRow {
   std::string object_name;
+  int32_t object_id;
   std::string object_type;
   std::string privilege_object_type;
   std::vector<std::string> privileges;
@@ -892,6 +893,7 @@ struct PrivilegeRow {
 
 std::ostream& operator<<(std::ostream& os, const PrivilegeRow& priv_row) {
   os << std::setw(priv_col_width) << priv_row.object_name;
+  os << std::setw(priv_col_width) << std::to_string(priv_row.object_id);
   os << std::setw(priv_col_width) << priv_row.object_type;
   os << std::setw(priv_col_width) << priv_row.privilege_object_type;
   os << boost::algorithm::join(priv_row.privileges, ", ");
@@ -939,7 +941,7 @@ void get_db_objects_for_grantee(ClientContext& context) {
   };
 
   const std::vector<std::string> headers = {
-      "ObjectName", "ObjectType", "PrivilegeType", "Privileges"};
+      "ObjectName", "ObjectId", "ObjectType", "PrivilegeType", "Privileges"};
   write_table_header(headers);
   if (thrift_with_retry(kGET_OBJECTS_FOR_GRANTEE, context, nullptr)) {
     std::vector<PrivilegeRow> table_values;
@@ -954,6 +956,7 @@ void get_db_objects_for_grantee(ClientContext& context) {
       }
 
       out_row.object_name = db_object.objectName.c_str();
+      out_row.object_id = db_object.objectId;
       out_row.object_type = type_to_string(db_object.objectType);
       out_row.privilege_object_type = type_to_string(db_object.privilegeObjectType);
       out_row.privileges =

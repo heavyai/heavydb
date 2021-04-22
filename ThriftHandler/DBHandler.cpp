@@ -1788,6 +1788,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
   TDBObject outObject;
   outObject.objectName = inObject.getName();
   outObject.grantee = roleName;
+  outObject.objectId = inObject.getObjectKey().objectId;
   const auto ap = inObject.getPrivileges();
   switch (inObject.getObjectKey().permissionType) {
     case DatabaseDBObjectType:

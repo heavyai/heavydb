@@ -483,6 +483,7 @@ struct TDBObject {
   3: list<bool> privs;
   4: string grantee;
   5: TDBObjectType privilegeObjectType;
+  6: i32 objectId;
 }
 
 struct TDashboardGrantees {
