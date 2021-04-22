@@ -23,6 +23,7 @@
 #include <io.h>
 
 #include <windows.h>
+#include "Shared/cleanup_global_namespace.h"
 
 #include <memoryapi.h>
 

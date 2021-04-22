@@ -53,6 +53,12 @@
 #include <sstream>
 #include <thread>
 
+#ifdef _WIN32
+#if defined(ERROR) || defined(INFO) || defined(WARNING) || defined(FATAL)
+#include "Shared/cleanup_global_namespace.h"
+#endif
+#endif
+
 extern bool g_enable_debug_timer;
 
 namespace logger {
