@@ -396,7 +396,7 @@ find_library(CLANG_LIB clang-cpp)
 find_library(LLVM_LIB LLVM)
 # Deps builds use separate libs for each clang component, while some distros now bundle into a single lib
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin" OR NOT LLVM_LIB)
-  set(LLVM_COMPONENTS support mcjit core irreader option)
+  set(LLVM_COMPONENTS support mcjit core irreader option linker)
 
   option(ENABLE_INTEL_JIT_LISTENER "Enable Intel Vtune JIT Listener" OFF)
   if(ENABLE_INTEL_JIT_LISTENER)
