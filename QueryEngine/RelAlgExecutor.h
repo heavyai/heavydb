@@ -134,7 +134,7 @@ class RelAlgExecutor : private StorageIOFacility {
     CHECK(query_dag_);
     return query_dag_->getSubqueries();
   };
-  QueryHint getParsedQueryHints() {
+  RegisteredQueryHint getParsedQueryHints() {
     CHECK(query_dag_);
     return query_dag_->getQueryHints();
   }

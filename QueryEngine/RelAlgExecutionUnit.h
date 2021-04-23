@@ -74,7 +74,7 @@ struct RelAlgExecutionUnit {
   const std::shared_ptr<Analyzer::Estimator> estimator;
   const SortInfo sort_info;
   size_t scan_limit;
-  QueryHint query_hint;
+  RegisteredQueryHint query_hint;
   bool use_bump_allocator{false};
   // empty if not a UNION, true if UNION ALL, false if regular UNION
   const std::optional<bool> union_all;

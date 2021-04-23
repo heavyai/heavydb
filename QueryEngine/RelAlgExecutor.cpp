@@ -2909,7 +2909,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
 
   // register query hint if query_dag_ is valid
   ra_exe_unit.query_hint =
-      query_dag_ ? query_dag_->getQueryHints() : QueryHint::defaults();
+      query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults();
 
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
   if (is_window_execution_unit(ra_exe_unit)) {
@@ -3573,7 +3573,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
       nullptr,
       sort_info,
       0,
-      query_dag_ ? query_dag_->getQueryHints() : QueryHint::defaults(),
+      query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults(),
       false,
       std::nullopt,
       query_state_};
@@ -3820,7 +3820,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
               nullptr,
               sort_info,
               0,
-              query_dag_ ? query_dag_->getQueryHints() : QueryHint::defaults(),
+              query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults(),
               false,
               std::nullopt,
               query_state_},
@@ -3892,7 +3892,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
       nullptr,
       sort_info,
       0,
-      query_dag_ ? query_dag_->getQueryHints() : QueryHint::defaults(),
+      query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults(),
       false,
       std::nullopt,
       query_state_};
@@ -3980,7 +3980,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
       nullptr,
       sort_info,
       max_num_tuples,
-      query_dag_ ? query_dag_->getQueryHints() : QueryHint::defaults(),
+      query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults(),
       false,
       logical_union->isAll(),
       query_state_};
@@ -4217,7 +4217,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            nullptr,
            sort_info,
            0,
-           query_dag_ ? query_dag_->getQueryHints() : QueryHint::defaults()},
+           query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults()},
           filter,
           max_groups_buffer_entry_default_guess,
           nullptr};

@@ -102,7 +102,7 @@ class OverlapsJoinHashTable : public HashJoin {
       , device_count_(device_count) {
     CHECK_GT(device_count_, 0);
     hash_tables_for_device_.resize(std::max(device_count_, 1));
-    query_hint_ = QueryHint::defaults();
+    query_hint_ = RegisteredQueryHint::defaults();
   }
 
   virtual ~OverlapsJoinHashTable() {}
@@ -115,7 +115,7 @@ class OverlapsJoinHashTable : public HashJoin {
       const int device_count,
       ColumnCacheMap& column_cache,
       Executor* executor,
-      const QueryHint& query_hint);
+      const RegisteredQueryHint& query_hint);
 
   static auto getCacheInvalidator() -> std::function<void()> {
     return []() -> void {
@@ -252,9 +252,11 @@ class OverlapsJoinHashTable : public HashJoin {
     return nullptr;
   }
 
-  const QueryHint& getRegisteredQueryHint() { return query_hint_; }
+  const RegisteredQueryHint& getRegisteredQueryHint() { return query_hint_; }
 
-  void registerQueryHint(const QueryHint& query_hint) { query_hint_ = query_hint; }
+  void registerQueryHint(const RegisteredQueryHint& query_hint) {
+    query_hint_ = query_hint;
+  }
 
  private:
   size_t getEntryCount() const {
@@ -367,5 +369,5 @@ class OverlapsJoinHashTable : public HashJoin {
       HashTableCache<OverlapsHashTableCacheKey, std::pair<BucketThreshold, BucketSizes>>>
       auto_tuner_cache_;
 
-  QueryHint query_hint_;
+  RegisteredQueryHint query_hint_;
 };

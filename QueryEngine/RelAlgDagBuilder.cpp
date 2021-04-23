@@ -2465,7 +2465,7 @@ class RelAlgDispatcher {
     return {key, val};
   }
 
-  HintExplained parseHintString(std::string& hint_string) {
+  ExplainedQueryHint parseHintString(std::string& hint_string) {
     std::string white_space_delim = " ";
     int l = hint_string.length();
     hint_string = hint_string.erase(0, 1).substr(0, l - 2);
@@ -2474,6 +2474,7 @@ class RelAlgDispatcher {
       // need to parse hint options
       std::vector<std::string> tokens;
       std::string hint_name = hint_string.substr(0, hint_string.find(white_space_delim));
+      auto hint_type = RegisteredQueryHint::translateQueryHint(hint_name);
       bool kv_list_op = false;
       std::string raw_options = hint_string.substr(pos + 8, hint_string.length() - 2);
       if (raw_options.find('{') != std::string::npos) {
@@ -2494,7 +2495,7 @@ class RelAlgDispatcher {
         // handle the last kv pair
         auto kv_pair = getKVOptionPair(raw_options, pos);
         kv_options.emplace(kv_pair.first, kv_pair.second);
-        return {hint_name, true, false, true, kv_options};
+        return {hint_type, true, false, true, kv_options};
       } else {
         std::vector<std::string> list_options;
         while ((pos = raw_options.find(op_delim)) != std::string::npos) {
@@ -2503,12 +2504,13 @@ class RelAlgDispatcher {
         }
         // handle the last option
         list_options.emplace_back(raw_options.substr(0, pos));
-        return {hint_name, true, false, false, list_options};
+        return {hint_type, true, false, false, list_options};
       }
     } else {
       // marker hint: no extra option for this hint
       std::string hint_name = hint_string.substr(0, hint_string.find(white_space_delim));
-      return {hint_name, true, true, false};
+      auto hint_type = RegisteredQueryHint::translateQueryHint(hint_name);
+      return {hint_type, true, true, false};
     }
   }
 
@@ -2579,7 +2581,7 @@ class RelAlgDispatcher {
 RelAlgDagBuilder::RelAlgDagBuilder(const std::string& query_ra,
                                    const Catalog_Namespace::Catalog& cat,
                                    const RenderInfo* render_info)
-    : cat_(cat), render_info_(render_info), query_hint_(QueryHint::defaults()) {
+    : cat_(cat), render_info_(render_info), query_hint_(RegisteredQueryHint::defaults()) {
   rapidjson::Document query_ast;
   query_ast.Parse(query_ra.c_str());
   VLOG(2) << "Parsing query RA JSON: " << query_ra;
@@ -2601,7 +2603,7 @@ RelAlgDagBuilder::RelAlgDagBuilder(RelAlgDagBuilder& root_dag_builder,
                                    const rapidjson::Value& query_ast,
                                    const Catalog_Namespace::Catalog& cat,
                                    const RenderInfo* render_info)
-    : cat_(cat), render_info_(render_info), query_hint_(QueryHint::defaults()) {
+    : cat_(cat), render_info_(render_info), query_hint_(RegisteredQueryHint::defaults()) {
   build(query_ast, root_dag_builder);
 }
 

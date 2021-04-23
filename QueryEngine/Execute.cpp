@@ -3288,7 +3288,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const MemoryLevel memory_level,
     const HashType preferred_hash_type,
     ColumnCacheMap& column_cache,
-    const QueryHint& query_hint) {
+    const RegisteredQueryHint& query_hint) {
   if (!g_enable_overlaps_hashjoin && qual_bin_oper->is_overlaps_oper()) {
     return {nullptr, "Overlaps hash join disabled, attempting to fall back to loop join"};
   }

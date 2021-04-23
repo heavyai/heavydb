@@ -163,7 +163,7 @@ class QueryRunner {
   virtual std::vector<std::shared_ptr<ResultSet>> runMultipleStatements(
       const std::string&,
       const ExecutorDeviceType);
-  virtual QueryHint getParsedQueryHint(const std::string&);
+  virtual RegisteredQueryHint getParsedQueryHint(const std::string&);
 
   virtual void runImport(Parser::CopyTableStmt* import_stmt);
   virtual std::unique_ptr<import_export::Loader> getLoader(

@@ -2596,7 +2596,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                              query_state_proxy.getQueryState().shared_from_this());
   CompilationOptions co = CompilationOptions::defaults(device_type);
   const auto& query_hints = ra_executor.getParsedQueryHints();
-  const auto cpu_mode_enabled = query_hints.isHintRegistered("cpu_mode");
+  const auto cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
   if (cpu_mode_enabled) {
     co.device_type = ExecutorDeviceType::CPU;
   }
@@ -2656,7 +2656,7 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
           .plan_result;
   RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
   const auto& query_hints = ra_executor.getParsedQueryHints();
-  const bool cpu_mode_enabled = query_hints.isHintRegistered("cpu_mode");
+  const bool cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
   CompilationOptions co = {cpu_mode_enabled ? ExecutorDeviceType::CPU : device_type,
                            true,
                            ExecutorOptLevel::LoopStrengthReduction,

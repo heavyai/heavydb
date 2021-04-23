@@ -266,7 +266,7 @@ std::string apply_copy_to_shim(const std::string& query_str) {
   return result;
 }
 
-QueryHint QueryRunner::getParsedQueryHint(const std::string& query_str) {
+RegisteredQueryHint QueryRunner::getParsedQueryHint(const std::string& query_str) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
@@ -446,7 +446,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
         }
         auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra, query_state);
         const auto& query_hints = ra_executor.getParsedQueryHints();
-        const bool cpu_mode_enabled = query_hints.isHintRegistered("cpu_mode");
+        const bool cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
         if (cpu_mode_enabled) {
           co.device_type = ExecutorDeviceType::CPU;
         }
@@ -550,7 +550,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
                             .plan_result;
   auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
   const auto& query_hints = ra_executor.getParsedQueryHints();
-  const bool cpu_mode_enabled = query_hints.isHintRegistered("cpu_mode");
+  const bool cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
   if (cpu_mode_enabled) {
     co.device_type = ExecutorDeviceType::CPU;
   }
@@ -639,7 +639,7 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
                                   .plan_result;
         auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
         const auto& query_hints = ra_executor.getParsedQueryHints();
-        const bool cpu_mode_enabled = query_hints.isHintRegistered("cpu_mode");
+        const bool cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
         if (cpu_mode_enabled) {
           co.device_type = ExecutorDeviceType::CPU;
         }

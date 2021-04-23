@@ -626,7 +626,7 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
       ColumnCacheMap& column_cache,
       Executor* executor,
       const int device_count,
-      const QueryHint& query_hint,
+      const RegisteredQueryHint& query_hint,
       const std::vector<OverlapsJoinHashTableMock::ExpectedValues>& expected_values) {
     auto hash_join = std::make_shared<OverlapsJoinHashTableMock>(condition,
                                                                  query_infos,
@@ -800,7 +800,7 @@ TEST_F(BucketSizeTest, OverlapsTunerEarlyOut) {
                                              column_cache,
                                              executor.get(),
                                              /*device_count=*/1,
-                                             QueryHint::defaults(),
+                                             RegisteredQueryHint::defaults(),
                                              expected_values);
   CHECK(hash_table);
 }
@@ -823,9 +823,9 @@ TEST_F(BucketSizeTest, OverlapsTooBig) {
   expected_values.emplace_back(OverlapsJoinHashTableMock::ExpectedValues{
       2, 4});  // step 3 (hash table not getting smaller, bails)
 
-  QueryHint hint;
+  RegisteredQueryHint hint;
   hint.overlaps_max_size = 2;
-  hint.registerHint("overlaps_max_size");
+  hint.registerHint(QueryHint::kOverlapsMaxSize);
   EXPECT_ANY_THROW(
       OverlapsJoinHashTableMock::getInstance(condition,
                                              query_infos,

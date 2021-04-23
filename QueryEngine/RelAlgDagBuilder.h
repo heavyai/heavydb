@@ -614,85 +614,6 @@ class RexAgg : public Rex {
   const std::vector<size_t> operands_;
 };
 
-class HintExplained {
- public:
-  HintExplained(std::string hint_name,
-                bool query_hint,
-                bool is_marker,
-                bool has_kv_type_options)
-      : hint_name_(hint_name)
-      , query_hint_(query_hint)
-      , is_marker_(is_marker)
-      , has_kv_type_options_(has_kv_type_options) {}
-
-  HintExplained(std::string hint_name,
-                bool query_hint,
-                bool is_marker,
-                bool has_kv_type_options,
-                std::vector<std::string>& list_options)
-      : hint_name_(hint_name)
-      , query_hint_(query_hint)
-      , is_marker_(is_marker)
-      , has_kv_type_options_(has_kv_type_options)
-      , list_options_(std::move(list_options)) {}
-
-  HintExplained(std::string hint_name,
-                bool query_hint,
-                bool is_marker,
-                bool has_kv_type_options,
-                std::unordered_map<std::string, std::string>& kv_options)
-      : hint_name_(hint_name)
-      , query_hint_(query_hint)
-      , is_marker_(is_marker)
-      , has_kv_type_options_(has_kv_type_options)
-      , kv_options_(std::move(kv_options)) {}
-
-  void setListOptions(std::vector<std::string>& list_options) {
-    list_options_ = list_options;
-  }
-
-  void setKVOptions(std::unordered_map<std::string, std::string>& kv_options) {
-    kv_options_ = kv_options;
-  }
-
-  void setInheritPaths(std::vector<int>& interit_paths) {
-    inherit_paths_ = interit_paths;
-  }
-
-  const std::vector<std::string>& getListOptions() { return list_options_; }
-
-  const std::vector<int>& getInteritPath() { return inherit_paths_; }
-
-  const std::unordered_map<std::string, std::string>& getKVOptions() {
-    return kv_options_;
-  }
-
-  const std::string& getHintName() const { return hint_name_; }
-
-  bool isQueryHint() const { return query_hint_; }
-
-  bool hasOptions() const { return is_marker_; }
-
-  bool hasKvOptions() const { return has_kv_type_options_; }
-
- private:
-  std::string hint_name_;
-  // Set true if this hint affects globally
-  // Otherwise it just affects the node which this hint is included (aka table hint)
-  bool query_hint_;
-  // set true if this has no extra options (neither list_options nor kv_options)
-  bool is_marker_;
-  // Set true if it is not a marker and has key-value type options
-  // Otherwise (it is not a marker but has list type options), we set this be false
-  bool has_kv_type_options_;
-  std::vector<int> inherit_paths_;  // currently not used
-  std::vector<std::string> list_options_;
-  std::unordered_map<std::string, std::string> kv_options_;
-};
-
-// a map from hint_name to its detailed info
-using Hints = std::unordered_map<std::string, HintExplained>;
-
 class RelAlgNode {
  public:
   RelAlgNode(RelAlgInputs inputs = {})
@@ -820,25 +741,25 @@ class RelScan : public RelAlgNode {
     return nullptr;
   };
 
-  void addHint(const HintExplained& hint_explained) {
+  void addHint(const ExplainedQueryHint& hint_explained) {
     if (!hint_applied_) {
       hint_applied_ = true;
     }
-    hints_->emplace(hint_explained.getHintName(), hint_explained);
+    hints_->emplace(hint_explained.getHint(), hint_explained);
   }
 
-  const bool hasHintEnabled(const std::string& candidate_hint_name) const {
+  const bool hasHintEnabled(const QueryHint candidate_hint) const {
     if (hint_applied_ && !hints_->empty()) {
-      return hints_->find(candidate_hint_name) != hints_->end();
+      return hints_->find(candidate_hint) != hints_->end();
     }
     return false;
   }
 
-  const HintExplained& getHintInfo(const std::string& hint_name) const {
+  const ExplainedQueryHint& getHintInfo(QueryHint hint) const {
     CHECK(hint_applied_);
     CHECK(!hints_->empty());
-    CHECK(hasHintEnabled(hint_name));
-    return hints_->at(hint_name);
+    CHECK(hasHintEnabled(hint));
+    return hints_->at(hint);
   }
 
   bool hasDeliveredHint() { return !hints_->empty(); }
@@ -988,25 +909,25 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
 
   bool hasWindowFunctionExpr() const;
 
-  void addHint(const HintExplained& hint_explained) {
+  void addHint(const ExplainedQueryHint& hint_explained) {
     if (!hint_applied_) {
       hint_applied_ = true;
     }
-    hints_->emplace(hint_explained.getHintName(), hint_explained);
+    hints_->emplace(hint_explained.getHint(), hint_explained);
   }
 
-  const bool hasHintEnabled(const std::string& candidate_hint_name) const {
+  const bool hasHintEnabled(QueryHint candidate_hint) const {
     if (hint_applied_ && !hints_->empty()) {
-      return hints_->find(candidate_hint_name) != hints_->end();
+      return hints_->find(candidate_hint) != hints_->end();
     }
     return false;
   }
 
-  const HintExplained& getHintInfo(const std::string& hint_name) const {
+  const ExplainedQueryHint& getHintInfo(QueryHint hint) const {
     CHECK(hint_applied_);
     CHECK(!hints_->empty());
-    CHECK(hasHintEnabled(hint_name));
-    return hints_->at(hint_name);
+    CHECK(hasHintEnabled(hint));
+    return hints_->at(hint);
   }
 
   bool hasDeliveredHint() { return !hints_->empty(); }
@@ -1103,25 +1024,25 @@ class RelAggregate : public RelAlgNode {
     return std::make_shared<RelAggregate>(*this);
   }
 
-  void addHint(const HintExplained& hint_explained) {
+  void addHint(const ExplainedQueryHint& hint_explained) {
     if (!hint_applied_) {
       hint_applied_ = true;
     }
-    hints_->emplace(hint_explained.getHintName(), hint_explained);
+    hints_->emplace(hint_explained.getHint(), hint_explained);
   }
 
-  const bool hasHintEnabled(const std::string& candidate_hint_name) const {
+  const bool hasHintEnabled(QueryHint candidate_hint) const {
     if (hint_applied_ && !hints_->empty()) {
-      return hints_->find(candidate_hint_name) != hints_->end();
+      return hints_->find(candidate_hint) != hints_->end();
     }
     return false;
   }
 
-  const HintExplained& getHintInfo(const std::string& hint_name) const {
+  const ExplainedQueryHint& getHintInfo(QueryHint hint) const {
     CHECK(hint_applied_);
     CHECK(!hints_->empty());
-    CHECK(hasHintEnabled(hint_name));
-    return hints_->at(hint_name);
+    CHECK(hasHintEnabled(hint));
+    return hints_->at(hint);
   }
 
   bool hasDeliveredHint() { return !hints_->empty(); }
@@ -1182,25 +1103,25 @@ class RelJoin : public RelAlgNode {
     return std::make_shared<RelJoin>(*this);
   }
 
-  void addHint(const HintExplained& hint_explained) {
+  void addHint(const ExplainedQueryHint& hint_explained) {
     if (!hint_applied_) {
       hint_applied_ = true;
     }
-    hints_->emplace(hint_explained.getHintName(), hint_explained);
+    hints_->emplace(hint_explained.getHint(), hint_explained);
   }
 
-  const bool hasHintEnabled(const std::string& candidate_hint_name) const {
+  const bool hasHintEnabled(QueryHint candidate_hint) const {
     if (hint_applied_ && !hints_->empty()) {
-      return hints_->find(candidate_hint_name) != hints_->end();
+      return hints_->find(candidate_hint) != hints_->end();
     }
     return false;
   }
 
-  const HintExplained& getHintInfo(const std::string& hint_name) const {
+  const ExplainedQueryHint& getHintInfo(QueryHint hint) const {
     CHECK(hint_applied_);
     CHECK(!hints_->empty());
-    CHECK(hasHintEnabled(hint_name));
-    return hints_->at(hint_name);
+    CHECK(hasHintEnabled(hint));
+    return hints_->at(hint);
   }
 
   bool hasDeliveredHint() { return !hints_->empty(); }
@@ -1361,25 +1282,25 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
     return std::make_shared<RelCompound>(*this);
   }
 
-  void addHint(const HintExplained& hint_explained) {
+  void addHint(const ExplainedQueryHint& hint_explained) {
     if (!hint_applied_) {
       hint_applied_ = true;
     }
-    hints_->emplace(hint_explained.getHintName(), hint_explained);
+    hints_->emplace(hint_explained.getHint(), hint_explained);
   }
 
-  const bool hasHintEnabled(const std::string& candidate_hint_name) const {
+  const bool hasHintEnabled(QueryHint candidate_hint) const {
     if (hint_applied_ && !hints_->empty()) {
-      return hints_->find(candidate_hint_name) != hints_->end();
+      return hints_->find(candidate_hint) != hints_->end();
     }
     return false;
   }
 
-  const HintExplained& getHintInfo(const std::string& hint_name) const {
+  const ExplainedQueryHint& getHintInfo(QueryHint hint) const {
     CHECK(hint_applied_);
     CHECK(!hints_->empty());
-    CHECK(hasHintEnabled(hint_name));
-    return hints_->at(hint_name);
+    CHECK(hasHintEnabled(hint));
+    return hints_->at(hint);
   }
 
   bool hasDeliveredHint() { return !hints_->empty(); }
@@ -1856,80 +1777,76 @@ class RelAlgDagBuilder : public boost::noncopyable {
   }
 
   void registerQueryHints(Hints* hints_delivered) {
-    for (auto& kv : query_hint_.OMNISCI_SUPPORTED_HINT_CLASS) {
-      auto target = hints_delivered->find(kv.first);
-      if (target != hints_delivered->end()) {
-        int target_hint_num = kv.second;
-        switch (target_hint_num) {
-          case 0: {  // cpu_mode
-            query_hint_.registerHint(kv.first);
-            query_hint_.cpu_mode = true;
-            VLOG(1) << "A user forces to run the query on the CPU execution mode";
-            break;
-          }
-          case 1: {  // overlaps_bucket_threshold
-            CHECK(target->second.getListOptions().size() == 1);
-            double overlaps_bucket_threshold =
-                std::stod(target->second.getListOptions()[0]);
-            if (overlaps_bucket_threshold >= 0.0 && overlaps_bucket_threshold <= 90.0) {
-              query_hint_.registerHint(kv.first);
-              query_hint_.overlaps_bucket_threshold = overlaps_bucket_threshold;
-            } else {
-              VLOG(1) << "Skip the given query hint \"overlaps_bucket_threshold\" ("
-                      << overlaps_bucket_threshold
-                      << ") : the hint value should be within 0.0 ~ 90.0";
-            }
-            break;
-          }
-          case 2: {  // overlaps_max_size
-            CHECK(target->second.getListOptions().size() == 1);
-            std::stringstream ss(target->second.getListOptions()[0]);
-            int overlaps_max_size;
-            ss >> overlaps_max_size;
-            if (overlaps_max_size >= 0) {
-              query_hint_.registerHint(kv.first);
-              query_hint_.overlaps_max_size = (size_t)overlaps_max_size;
-            } else {
-              VLOG(1) << "Skip the query hint \"overlaps_max_size\" ("
-                      << overlaps_max_size
-                      << ") : the hint value should be larger than or equal to zero";
-            }
-            break;
-          }
-          case 3: {  // overlaps_allow_gpu_build
-            query_hint_.registerHint(kv.first);
-            query_hint_.overlaps_allow_gpu_build = true;
-            VLOG(1) << "Allowing GPU hash table build for overlaps join.";
-            break;
-          }
-          case 4: {  // overlaps_no_cache
-            query_hint_.registerHint(kv.first);
-            query_hint_.overlaps_no_cache = true;
-            VLOG(1) << "Skip auto tuner and hashtable caching for overlaps join.";
-            break;
-          }
-          case 5: {  // overlaps_keys_per_bin
-            CHECK(target->second.getListOptions().size() == 1);
-            double overlaps_keys_per_bin = std::stod(target->second.getListOptions()[0]);
-            if (overlaps_keys_per_bin > 0.0 &&
-                overlaps_keys_per_bin < std::numeric_limits<double>::max()) {
-              query_hint_.registerHint(kv.first);
-              query_hint_.overlaps_keys_per_bin = overlaps_keys_per_bin;
-            } else {
-              VLOG(1) << "Skip the given query hint \"overlaps_keys_per_bin\" ("
-                      << overlaps_keys_per_bin
-                      << ") : the hint value should be larger than zero";
-            }
-            break;
-          }
-          default:
-            break;
+    for (auto it = hints_delivered->begin(); it != hints_delivered->end(); it++) {
+      auto target = it->second;
+      auto hint_type = it->first;
+      switch (hint_type) {
+        case QueryHint::kCpuMode: {
+          query_hint_.registerHint(QueryHint::kCpuMode);
+          query_hint_.cpu_mode = true;
+          VLOG(1) << "A user forces to run the query on the CPU execution mode";
+          break;
         }
+        case QueryHint::kOverlapsBucketThreshold: {
+          CHECK(target.getListOptions().size() == 1);
+          double overlaps_bucket_threshold = std::stod(target.getListOptions()[0]);
+          if (overlaps_bucket_threshold >= 0.0 && overlaps_bucket_threshold <= 90.0) {
+            query_hint_.registerHint(QueryHint::kOverlapsBucketThreshold);
+            query_hint_.overlaps_bucket_threshold = overlaps_bucket_threshold;
+          } else {
+            VLOG(1) << "Skip the given query hint \"overlaps_bucket_threshold\" ("
+                    << overlaps_bucket_threshold
+                    << ") : the hint value should be within 0.0 ~ 90.0";
+          }
+          break;
+        }
+        case QueryHint::kOverlapsMaxSize: {
+          CHECK(target.getListOptions().size() == 1);
+          std::stringstream ss(target.getListOptions()[0]);
+          int overlaps_max_size;
+          ss >> overlaps_max_size;
+          if (overlaps_max_size >= 0) {
+            query_hint_.registerHint(QueryHint::kOverlapsMaxSize);
+            query_hint_.overlaps_max_size = (size_t)overlaps_max_size;
+          } else {
+            VLOG(1) << "Skip the query hint \"overlaps_max_size\" (" << overlaps_max_size
+                    << ") : the hint value should be larger than or equal to zero";
+          }
+          break;
+        }
+        case QueryHint::kOverlapsAllowGpuBuild: {
+          query_hint_.registerHint(QueryHint::kOverlapsAllowGpuBuild);
+          query_hint_.overlaps_allow_gpu_build = true;
+          VLOG(1) << "Allowing GPU hash table build for overlaps join.";
+          break;
+        }
+        case QueryHint::kOverlapsNoCache: {
+          query_hint_.registerHint(QueryHint::kOverlapsNoCache);
+          query_hint_.overlaps_no_cache = true;
+          VLOG(1) << "Skip auto tuner and hashtable caching for overlaps join.";
+          break;
+        }
+        case QueryHint::kOverlapsKeysPerBin: {
+          CHECK(target.getListOptions().size() == 1);
+          double overlaps_keys_per_bin = std::stod(target.getListOptions()[0]);
+          if (overlaps_keys_per_bin > 0.0 &&
+              overlaps_keys_per_bin < std::numeric_limits<double>::max()) {
+            query_hint_.registerHint(QueryHint::kOverlapsKeysPerBin);
+            query_hint_.overlaps_keys_per_bin = overlaps_keys_per_bin;
+          } else {
+            VLOG(1) << "Skip the given query hint \"overlaps_keys_per_bin\" ("
+                    << overlaps_keys_per_bin
+                    << ") : the hint value should be larger than zero";
+          }
+          break;
+        }
+        default:
+          break;
       }
     }
   }
 
-  const QueryHint getQueryHints() const { return query_hint_; }
+  const RegisteredQueryHint getQueryHints() const { return query_hint_; }
 
   /**
    * Gets all registered subqueries. Only the root DAG can contain subqueries.
@@ -1943,7 +1860,7 @@ class RelAlgDagBuilder : public boost::noncopyable {
   std::vector<std::shared_ptr<RelAlgNode>> nodes_;
   std::vector<std::shared_ptr<RexSubQuery>> subqueries_;
   const RenderInfo* render_info_;
-  QueryHint query_hint_;
+  RegisteredQueryHint query_hint_;
 };
 
 using RANodeOutput = std::vector<RexInput>;

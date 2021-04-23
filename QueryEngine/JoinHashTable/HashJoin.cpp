@@ -243,7 +243,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
     const int device_count,
     ColumnCacheMap& column_cache,
     Executor* executor,
-    const QueryHint& query_hint) {
+    const RegisteredQueryHint& query_hint) {
   auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<HashJoin> join_hash_table;
   CHECK_GT(device_count, 0);
@@ -484,7 +484,7 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
       AllColumnVarsVisitor().visit(qual_bin_oper.get());
   auto query_infos = getSyntheticInputTableInfo(cvs, executor);
   setupSyntheticCaching(cvs, executor);
-  QueryHint query_hint = QueryHint::defaults();
+  RegisteredQueryHint query_hint = RegisteredQueryHint::defaults();
 
   auto hash_table = HashJoin::getInstance(qual_bin_oper,
                                           query_infos,
@@ -509,7 +509,7 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
       AllColumnVarsVisitor().visit(qual_bin_oper.get());
   auto query_infos = getSyntheticInputTableInfo(cvs, executor);
   setupSyntheticCaching(cvs, executor);
-  QueryHint query_hint = QueryHint::defaults();
+  RegisteredQueryHint query_hint = RegisteredQueryHint::defaults();
 
   auto hash_table = HashJoin::getInstance(qual_bin_oper,
                                           query_infos,

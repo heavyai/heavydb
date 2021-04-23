@@ -178,7 +178,7 @@ class HashJoin {
       const int device_count,
       ColumnCacheMap& column_cache,
       Executor* executor,
-      const QueryHint& query_hint);
+      const RegisteredQueryHint& query_hint);
 
   //! Make hash table from named tables and columns (such as for testing).
   static std::shared_ptr<HashJoin> getSyntheticInstance(

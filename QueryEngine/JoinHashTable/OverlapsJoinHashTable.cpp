@@ -47,7 +47,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     const int device_count,
     ColumnCacheMap& column_cache,
     Executor* executor,
-    const QueryHint& query_hint) {
+    const RegisteredQueryHint& query_hint) {
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
   auto inner_outer_pairs = normalize_column_pairs(
       condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
@@ -526,14 +526,14 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
   double overlaps_target_entries_per_bin = g_overlaps_target_entries_per_bin;
   auto query_hint = getRegisteredQueryHint();
   auto skip_hashtable_caching = false;
-  if (query_hint.isHintRegistered("overlaps_bucket_threshold")) {
+  if (query_hint.isHintRegistered(QueryHint::kOverlapsBucketThreshold)) {
     VLOG(1) << "Setting overlaps bucket threshold "
                "\'overlaps_hashjoin_bucket_threshold\' via "
                "query hint: "
             << query_hint.overlaps_bucket_threshold;
     overlaps_threshold_override = query_hint.overlaps_bucket_threshold;
   }
-  if (query_hint.isHintRegistered("overlaps_max_size")) {
+  if (query_hint.isHintRegistered(QueryHint::kOverlapsMaxSize)) {
     std::ostringstream oss;
     oss << "User requests to change a threshold \'overlaps_max_table_size_bytes\' via "
            "query hint";
@@ -547,12 +547,12 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
     }
     VLOG(1) << oss.str();
   }
-  if (query_hint.isHintRegistered("overlaps_no_cache")) {
+  if (query_hint.isHintRegistered(QueryHint::kOverlapsNoCache)) {
     VLOG(1) << "User requests to skip caching overlaps join hashtable and its tuned "
                "parameters for this query";
     skip_hashtable_caching = true;
   }
-  if (query_hint.isHintRegistered("overlaps_keys_per_bin")) {
+  if (query_hint.isHintRegistered(QueryHint::kOverlapsKeysPerBin)) {
     VLOG(1) << "User requests to change a threshold \'overlaps_keys_per_bin\' via query "
                "hint: "
             << overlaps_target_entries_per_bin << " -> "
@@ -1689,7 +1689,7 @@ std::set<DecodedJoinHashBufferEntry> OverlapsJoinHashTable::toSet(
 Data_Namespace::MemoryLevel OverlapsJoinHashTable::getEffectiveMemoryLevel(
     const std::vector<InnerOuter>& inner_outer_pairs) const {
   // always build on CPU
-  if (query_hint_.isHintRegistered("overlaps_allow_gpu_build") &&
+  if (query_hint_.isHintRegistered(QueryHint::kOverlapsAllowGpuBuild) &&
       query_hint_.overlaps_allow_gpu_build) {
     return memory_level_;
   }

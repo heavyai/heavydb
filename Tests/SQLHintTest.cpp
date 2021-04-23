@@ -65,7 +65,7 @@ std::shared_ptr<ResultSet> run_query(const std::string& query_str,
   return QR::get()->runSQL(query_str, device_type, true, true);
 }
 
-TEST(CPU_MODE, ForceToCPUMode) {
+TEST(kCpuMode, ForceToCPUMode) {
   const auto create_table_ddl = "CREATE TABLE SQL_HINT_DUMMY(key int)";
   const auto drop_table_ddl = "DROP TABLE IF EXISTS SQL_HINT_DUMMY";
   const auto query_with_cpu_mode_hint = "SELECT /*+ cpu_mode */ * FROM SQL_HINT_DUMMY";
@@ -74,7 +74,7 @@ TEST(CPU_MODE, ForceToCPUMode) {
   QR::get()->runDDLStatement(create_table_ddl);
   if (QR::get()->gpusPresent()) {
     auto query_hints = QR::get()->getParsedQueryHint(query_with_cpu_mode_hint);
-    const bool cpu_mode_enabled = query_hints.isHintRegistered("cpu_mode");
+    const bool cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
     CHECK(cpu_mode_enabled);
     query_hints = QR::get()->getParsedQueryHint(query_without_cpu_mode_hint);
     CHECK(!query_hints.isAnyQueryHintDelivered());
@@ -82,7 +82,7 @@ TEST(CPU_MODE, ForceToCPUMode) {
   QR::get()->runDDLStatement(drop_table_ddl);
 }
 
-TEST(OVERLAPS_JOIN_PARAM, Check_Overlaps_Join_Hint) {
+TEST(QueryHint, CheckQueryHintForOverlapsJoin) {
   const auto overlaps_join_status_backup = g_enable_overlaps_hashjoin;
   g_enable_overlaps_hashjoin = true;
   ScopeGuard reset_loop_join_state = [&overlaps_join_status_backup] {
@@ -113,7 +113,7 @@ TEST(OVERLAPS_JOIN_PARAM, Check_Overlaps_Join_Hint) {
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto q1_hints = QR::get()->getParsedQueryHint(q1);
-    EXPECT_TRUE(q1_hints.isHintRegistered("overlaps_bucket_threshold") &&
+    EXPECT_TRUE(q1_hints.isHintRegistered(QueryHint::kOverlapsBucketThreshold) &&
                 approx_eq(q1_hints.overlaps_bucket_threshold, 0.718));
   }
   {
@@ -121,7 +121,7 @@ TEST(OVERLAPS_JOIN_PARAM, Check_Overlaps_Join_Hint) {
         "SELECT /*+ overlaps_max_size(2021) */ a.id FROM geospatial_test a INNER JOIN "
         "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto q2_hints = QR::get()->getParsedQueryHint(q2);
-    EXPECT_TRUE(q2_hints.isHintRegistered("overlaps_max_size") &&
+    EXPECT_TRUE(q2_hints.isHintRegistered(QueryHint::kOverlapsMaxSize) &&
                 (q2_hints.overlaps_max_size == 2021));
   }
 
@@ -133,8 +133,8 @@ TEST(OVERLAPS_JOIN_PARAM, Check_Overlaps_Join_Hint) {
         "ST_Contains(b.poly, "
         "a.p);";
     auto q3_hints = QR::get()->getParsedQueryHint(q3);
-    EXPECT_TRUE(q3_hints.isHintRegistered("overlaps_max_size") &&
-                q3_hints.isHintRegistered("overlaps_bucket_threshold") &&
+    EXPECT_TRUE(q3_hints.isHintRegistered(QueryHint::kOverlapsBucketThreshold) &&
+                q3_hints.isHintRegistered(QueryHint::kOverlapsMaxSize) &&
                 (q3_hints.overlaps_max_size == 2021) &&
                 approx_eq(q3_hints.overlaps_bucket_threshold, 0.718));
   }
@@ -143,7 +143,7 @@ TEST(OVERLAPS_JOIN_PARAM, Check_Overlaps_Join_Hint) {
     const auto query =
         R"(SELECT /*+ overlaps_allow_gpu_build */ a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);)";
     const auto hints = QR::get()->getParsedQueryHint(query);
-    EXPECT_TRUE(hints.isHintRegistered("overlaps_allow_gpu_build"));
+    EXPECT_TRUE(hints.isHintRegistered(QueryHint::kOverlapsAllowGpuBuild));
     EXPECT_TRUE(hints.overlaps_allow_gpu_build);
   }
   {
@@ -152,7 +152,7 @@ TEST(OVERLAPS_JOIN_PARAM, Check_Overlaps_Join_Hint) {
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto q4_hints = QR::get()->getParsedQueryHint(q4);
-    EXPECT_TRUE(q4_hints.isHintRegistered("overlaps_bucket_threshold") &&
+    EXPECT_TRUE(q4_hints.isHintRegistered(QueryHint::kOverlapsBucketThreshold) &&
                 approx_eq(q4_hints.overlaps_bucket_threshold, 0.1));
   }
   {
@@ -161,7 +161,7 @@ TEST(OVERLAPS_JOIN_PARAM, Check_Overlaps_Join_Hint) {
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto q5_hints = QR::get()->getParsedQueryHint(q5);
-    EXPECT_TRUE(q5_hints.isHintRegistered("overlaps_keys_per_bin") &&
+    EXPECT_TRUE(q5_hints.isHintRegistered(QueryHint::kOverlapsKeysPerBin) &&
                 approx_eq(q5_hints.overlaps_keys_per_bin, 0.1));
   }
   {
@@ -170,7 +170,7 @@ TEST(OVERLAPS_JOIN_PARAM, Check_Overlaps_Join_Hint) {
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto q6_hints = QR::get()->getParsedQueryHint(q6);
-    EXPECT_TRUE(q6_hints.isHintRegistered("overlaps_keys_per_bin") &&
+    EXPECT_TRUE(q6_hints.isHintRegistered(QueryHint::kOverlapsKeysPerBin) &&
                 approx_eq(q6_hints.overlaps_keys_per_bin, 19980909.01));
   }
 
@@ -188,7 +188,7 @@ TEST(OVERLAPS_JOIN_PARAM, Check_Overlaps_Join_Hint) {
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto wrong_q1_hints = QR::get()->getParsedQueryHint(wrong_q1);
-    EXPECT_TRUE(!wrong_q1_hints.isHintRegistered("overlaps_bucket_threshold"));
+    EXPECT_TRUE(!wrong_q1_hints.isHintRegistered(QueryHint::kOverlapsBucketThreshold));
   }
 
   {
@@ -197,7 +197,7 @@ TEST(OVERLAPS_JOIN_PARAM, Check_Overlaps_Join_Hint) {
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto wrong_q2_hints = QR::get()->getParsedQueryHint(wrong_q2);
-    EXPECT_TRUE(!wrong_q2_hints.isHintRegistered("overlaps_bucket_threshold"));
+    EXPECT_TRUE(!wrong_q2_hints.isHintRegistered(QueryHint::kOverlapsBucketThreshold));
   }
 
   {
@@ -205,14 +205,14 @@ TEST(OVERLAPS_JOIN_PARAM, Check_Overlaps_Join_Hint) {
         "SELECT /*+ overlaps_max_size(-2021) */ a.id FROM geospatial_test a INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto wrong_q3_hints = QR::get()->getParsedQueryHint(wrong_q3);
-    EXPECT_TRUE(!wrong_q3_hints.isHintRegistered("overlaps_max_size"));
+    EXPECT_TRUE(!wrong_q3_hints.isHintRegistered(QueryHint::kOverlapsMaxSize));
   }
   {
     const auto wrong_q4 =
         "SELECT /*+ overlaps_keys_per_bin(-0.1) */ a.id FROM geospatial_test a INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto wrong_q4_hints = QR::get()->getParsedQueryHint(wrong_q4);
-    EXPECT_TRUE(!wrong_q4_hints.isHintRegistered("overlaps_keys_per_bin"));
+    EXPECT_TRUE(!wrong_q4_hints.isHintRegistered(QueryHint::kOverlapsKeysPerBin));
   }
   {
     // overlaps_keys_per_bin needs to below then DOUBLE_MAX
@@ -223,7 +223,7 @@ TEST(OVERLAPS_JOIN_PARAM, Check_Overlaps_Join_Hint) {
         "FROM geospatial_test a INNER JOIN geospatial_inner_join_test b "
         "ON ST_Contains(b.poly, a.p);";
     auto wrong_q5_hints = QR::get()->getParsedQueryHint(wrong_q5);
-    EXPECT_TRUE(!wrong_q5_hints.isHintRegistered("overlaps_keys_per_bin"));
+    EXPECT_TRUE(!wrong_q5_hints.isHintRegistered(QueryHint::kOverlapsKeysPerBin));
   }
 }
 

@@ -5360,7 +5360,7 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                              query_state_proxy.getQueryState().shared_from_this());
   // handle hints
   const auto& query_hints = ra_executor.getParsedQueryHints();
-  const bool cpu_mode_enabled = query_hints.isHintRegistered("cpu_mode");
+  const bool cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
   CompilationOptions co = {
       cpu_mode_enabled ? ExecutorDeviceType::CPU : executor_device_type,
       /*hoist_literals=*/true,
@@ -5431,7 +5431,7 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                              query_ra,
                              query_state_proxy.getQueryState().shared_from_this());
   const auto& query_hints = ra_executor.getParsedQueryHints();
-  const bool cpu_mode_enabled = query_hints.isHintRegistered("cpu_mode");
+  const bool cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
   CompilationOptions co = {cpu_mode_enabled ? ExecutorDeviceType::CPU : device_type,
                            /*hoist_literals=*/true,
                            ExecutorOptLevel::Default,
