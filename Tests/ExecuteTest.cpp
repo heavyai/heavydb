@@ -7929,6 +7929,39 @@ TEST(Select, DecimalCompression) {
   }
 }
 
+TEST(Select, BigintGroupByColCompactionTest) {
+  run_ddl_statement("DROP TABLE IF EXISTS bigint_groupby_col_compaction_test;");
+  run_ddl_statement("CREATE TABLE bigint_groupby_col_compaction_test (c bigint);");
+  run_multiple_agg(
+      "INSERT INTO bigint_groupby_col_compaction_test VALUES(-6312639302689611776);",
+      ExecutorDeviceType::CPU);
+  run_multiple_agg(
+      "INSERT INTO bigint_groupby_col_compaction_test VALUES(-6312639302689611776);",
+      ExecutorDeviceType::CPU);
+  run_multiple_agg(
+      "INSERT INTO bigint_groupby_col_compaction_test VALUES(-6312639302689611776);",
+      ExecutorDeviceType::CPU);
+  run_multiple_agg(
+      "INSERT INTO bigint_groupby_col_compaction_test VALUES(-6336283200715718656);",
+      ExecutorDeviceType::CPU);
+  run_multiple_agg(
+      "INSERT INTO bigint_groupby_col_compaction_test VALUES(-6312639302689603584);",
+      ExecutorDeviceType::CPU);
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    const auto result = run_multiple_agg(
+        "SELECT * FROM bigint_groupby_col_compaction_test GROUP BY c ORDER BY c;", dt);
+    ASSERT_EQ(size_t(3), result->rowCount());
+    const auto row1 = result->getNextRow(true, true);
+    ASSERT_EQ(int64_t(-6336283200715718656), v<int64_t>(row1[0]));
+    const auto row2 = result->getNextRow(true, true);
+    ASSERT_EQ(int64_t(-6312639302689611776), v<int64_t>(row2[0]));
+    const auto row3 = result->getNextRow(true, true);
+    ASSERT_EQ(int64_t(-6312639302689603584), v<int64_t>(row3[0]));
+  }
+  run_ddl_statement("DROP TABLE IF EXISTS bigint_groupby_col_compaction_test;");
+}
+
 TEST(Update, DecimalOverflow) {
   // TODO: Move decimal validator into temp table update codegen
   SKIP_WITH_TEMP_TABLES();

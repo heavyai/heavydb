@@ -37,6 +37,10 @@ bool is_int_and_no_bigger_than(const SQLTypeInfo& ti, const size_t byte_width) {
   return get_bit_width(ti) <= (byte_width * 8);
 }
 
+bool is_valid_int32_range(const ExpressionRange& range) {
+  return range.getIntMin() > INT32_MIN && range.getIntMax() < EMPTY_KEY_32 - 1;
+}
+
 std::vector<int64_t> target_expr_group_by_indices(
     const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
     const std::vector<Analyzer::Expr*>& target_exprs) {
@@ -118,7 +122,7 @@ int8_t pick_baseline_key_component_width(const ExpressionRange& range,
       if (group_col_width == sizeof(int64_t) && range.hasNulls()) {
         return sizeof(int64_t);
       }
-      return range.getIntMax() < EMPTY_KEY_32 - 1 ? sizeof(int32_t) : sizeof(int64_t);
+      return is_valid_int32_range(range) ? sizeof(int32_t) : sizeof(int64_t);
     case ExpressionRangeType::Float:
     case ExpressionRangeType::Double:
       return sizeof(int64_t);  // No compaction for floating point yet.
