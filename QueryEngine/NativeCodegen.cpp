@@ -859,6 +859,10 @@ llvm::StringRef get_gpu_target_triple_string() {
   return llvm::StringRef("nvptx64-nvidia-cuda");
 }
 
+llvm::StringRef get_l0_target_triple_string() {
+  return llvm::StringRef("spir-unknown-unknown");
+}
+
 llvm::StringRef get_gpu_data_layout() {
   return llvm::StringRef(
       "e-p:64:64:64-i1:8:8-i8:8:8-"
@@ -1593,53 +1597,54 @@ void set_row_func_argnames(llvm::Function* row_func,
 
 llvm::Function* create_row_function(const size_t in_col_count,
                                     const size_t agg_col_count,
-                                    const bool hoist_literals,
+                                    const CompilationOptions& co,
                                     llvm::Module* module,
                                     llvm::LLVMContext& context) {
   std::vector<llvm::Type*> row_process_arg_types;
+  unsigned int AS = (co.device_type == ExecutorDeviceType::L0) ? 4 : 0;
 
   if (agg_col_count) {
     // output (aggregate) arguments
     for (size_t i = 0; i < agg_col_count; ++i) {
-      row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+      row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context, AS));
     }
   } else {
     // group by buffer
-    row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+    row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context, AS));
     // current match count
-    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context, AS));
     // total match count passed from the caller
-    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context, AS));
     // old total match count returned to the caller
-    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context, AS));
     // max matched (total number of slots in the output buffer)
-    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context, AS));
   }
 
   // aggregate init values
-  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context, AS));
 
   // position argument
   row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
 
   // fragment row offset argument
-  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context, AS));
 
   // number of rows for each scan
-  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context, AS));
 
   // literals buffer argument
-  if (hoist_literals) {
-    row_process_arg_types.push_back(llvm::Type::getInt8PtrTy(context));
+  if (co.hoist_literals) {
+    row_process_arg_types.push_back(llvm::Type::getInt8PtrTy(context, AS));
   }
 
   // column buffer arguments
   for (size_t i = 0; i < in_col_count; ++i) {
-    row_process_arg_types.emplace_back(llvm::Type::getInt8PtrTy(context));
+    row_process_arg_types.emplace_back(llvm::Type::getInt8PtrTy(context, AS));
   }
 
   // join hash table argument
-  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context, AS));
 
   // generate the function
   auto ft =
@@ -1649,7 +1654,7 @@ llvm::Function* create_row_function(const size_t in_col_count,
       llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "row_func", module);
 
   // set the row function argument names; for debugging purposes only
-  set_row_func_argnames(row_func, in_col_count, agg_col_count, hoist_literals);
+  set_row_func_argnames(row_func, in_col_count, agg_col_count, co.hoist_literals);
 
   return row_func;
 }
@@ -2600,6 +2605,12 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       throw QueryMustRunOnCpu();
     }
   }
+  if (co.device_type == ExecutorDeviceType::L0) {
+    const auto l0_mgr = catalog_->getDataMgr().getL0Mgr();
+    if (!l0_mgr) {
+      throw QueryMustRunOnCpu();
+    }
+  }
 
 #ifndef NDEBUG
   static std::uint64_t counter = 0;
@@ -2685,24 +2696,36 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                 func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage ||
                 CodeGenerator::alwaysCloneRuntimeFunction(func));
       });
-  if (co.device_type == ExecutorDeviceType::CPU) {
-    if (is_udf_module_present(true)) {
-      CodeGenerator::link_udf_module(udf_cpu_module, *rt_module_copy, cgen_state_.get());
-    }
-    if (is_rt_udf_module_present(true)) {
-      CodeGenerator::link_udf_module(
-          rt_udf_cpu_module, *rt_module_copy, cgen_state_.get());
-    }
-  } else {
-    rt_module_copy->setDataLayout(get_gpu_data_layout());
-    rt_module_copy->setTargetTriple(get_gpu_target_triple_string());
-    if (is_udf_module_present()) {
-      CodeGenerator::link_udf_module(udf_gpu_module, *rt_module_copy, cgen_state_.get());
-    }
-    if (is_rt_udf_module_present()) {
-      CodeGenerator::link_udf_module(
-          rt_udf_gpu_module, *rt_module_copy, cgen_state_.get());
-    }
+  switch (co.device_type) {
+    case ExecutorDeviceType::CPU:
+      if (is_udf_module_present(true)) {
+        CodeGenerator::link_udf_module(
+            udf_cpu_module, *rt_module_copy, cgen_state_.get());
+      }
+      if (is_rt_udf_module_present(true)) {
+        CodeGenerator::link_udf_module(
+            rt_udf_cpu_module, *rt_module_copy, cgen_state_.get());
+      }
+      break;
+    case ExecutorDeviceType::GPU:
+      rt_module_copy->setDataLayout(get_gpu_data_layout());
+      rt_module_copy->setTargetTriple(get_gpu_target_triple_string());
+      if (is_udf_module_present()) {
+        CodeGenerator::link_udf_module(
+            udf_gpu_module, *rt_module_copy, cgen_state_.get());
+      }
+      if (is_rt_udf_module_present()) {
+        CodeGenerator::link_udf_module(
+            rt_udf_gpu_module, *rt_module_copy, cgen_state_.get());
+      }
+      break;
+    case ExecutorDeviceType::L0:
+      rt_module_copy->setTargetTriple(get_l0_target_triple_string());
+      // todo: link udf & rt_udf
+      break;
+
+    default:
+      CHECK(false) << "Invalid device type!\n";
   }
 
   cgen_state_->module_ = rt_module_copy.release();
@@ -2723,7 +2746,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                                                    gpu_smem_context)
                                          : query_template(cgen_state_->module_,
                                                           agg_slot_count,
-                                                          co.hoist_literals,
+                                                          co,
                                                           !!ra_exe_unit.estimator,
                                                           gpu_smem_context);
   bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
@@ -2748,7 +2771,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   cgen_state_->row_func_ = create_row_function(ra_exe_unit.input_col_descs.size(),
                                                is_group_by ? 0 : agg_slot_count,
-                                               co.hoist_literals,
+                                               co,
                                                cgen_state_->module_,
                                                cgen_state_->context_);
   CHECK(cgen_state_->row_func_);
