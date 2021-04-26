@@ -1736,7 +1736,7 @@ TEST_F(RenameTableTest, ErrorChecks) {
   // ERROR, expect no change, as would trigger an overwrite of B
 
   executeLambdaAndAssertException(
-      [this] { sql("RENAME TABLE A to B"); },
+      [] { sql("RENAME TABLE A to B"); },
       "Exception: Error: Attempted to overwrite and lose data in table: 'B'");
 
   // verify no change
@@ -1745,7 +1745,7 @@ TEST_F(RenameTableTest, ErrorChecks) {
 
   // ERROR, expect no change, as would trigger an overwrite
   executeLambdaAndAssertException(
-      [this] { sql("RENAME TABLE A to C, B TO C"); },
+      [] { sql("RENAME TABLE A to C, B TO C"); },
       "Exception: Error: Attempted to overwrite and lose data in table: 'C'");
 
   // verify no name change
@@ -1753,7 +1753,7 @@ TEST_F(RenameTableTest, ErrorChecks) {
   sqlAndCompareResult("SELECT count(*) FROM B WHERE Name = 'B';", {{i(1)}});
 
   // ERROR, expect no change, table Z is non-existant
-  executeLambdaAndAssertException([this] { sql("RENAME TABLE Z TO A"); },
+  executeLambdaAndAssertException([] { sql("RENAME TABLE Z TO A"); },
                                   "Exception: Source table 'Z' does not exist.");
 
   // verify

@@ -61,7 +61,7 @@ QueryState::QueryState(
                                  : boost::none)
     , query_str_(std::move(query_str))
     , logged_(false)
-    , submitted_(std::move(::toString(std::chrono::system_clock::now()))) {}
+    , submitted_(::toString(std::chrono::system_clock::now())) {}
 
 QueryStateProxy QueryState::createQueryStateProxy() {
   return createQueryStateProxy(events_.end());

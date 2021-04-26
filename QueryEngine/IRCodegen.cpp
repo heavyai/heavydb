@@ -520,8 +520,7 @@ JoinLoop::HoistedFiltersCallback Executor::buildHoistLeftHandSideFiltersCb(
       if (selected_lhs) {
         std::list<std::shared_ptr<Analyzer::Expr>> hoisted_quals;
         // get all LHS-only filters
-        auto should_hoist_qual = [&hoisted_quals, &selected_lhs](const auto& qual,
-                                                                 const int table_id) {
+        auto should_hoist_qual = [&hoisted_quals](const auto& qual, const int table_id) {
           CHECK(qual);
 
           ExprTableIdVisitor visitor;

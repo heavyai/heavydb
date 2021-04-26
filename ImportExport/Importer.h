@@ -857,7 +857,6 @@ class Importer : public DataStreamSink {
   std::unique_ptr<Loader> loader;
   std::unique_ptr<bool[]> is_array_a;
   static std::mutex init_gdal_mutex;
-  bool interrupted;
 };
 
 std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
