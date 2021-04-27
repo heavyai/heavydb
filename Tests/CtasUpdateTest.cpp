@@ -2589,6 +2589,38 @@ TEST(Select, CtasItasNullGeoPoint) {
   }
 }
 
+TEST(Select, CtasFixedLenBooleanArrayCrash) {
+  auto drop_table = []() {
+    run_ddl_statement("DROP TABLE IF EXISTS CtasFBoolArrayCrash;");
+  };
+  auto prepare_table = []() {
+    run_ddl_statement(
+        "CREATE TABLE CtasFBoolArrayCrash (src boolean[3], dst boolean[3]);");
+    run_multiple_agg(
+        "INSERT INTO CtasFBoolArrayCrash VALUES (null, {\'true\', \'false\', \'true\'});",
+        ExecutorDeviceType::CPU);
+    run_multiple_agg(
+        "INSERT INTO CtasFBoolArrayCrash VALUES ({\'true\', \'false\', \'true\'}, "
+        "{\'false\', \'true\', \'false\'});",
+        ExecutorDeviceType::CPU);
+    run_multiple_agg("UPDATE CtasFBoolArrayCrash set dst = src;",
+                     ExecutorDeviceType::CPU);
+  };
+  drop_table();
+
+  prepare_table();
+  run_multiple_agg("SELECT src FROM CtasFBoolArrayCrash;", ExecutorDeviceType::CPU);
+  drop_table();
+
+  prepare_table();
+  run_multiple_agg("SELECT dst FROM CtasFBoolArrayCrash;", ExecutorDeviceType::CPU);
+  drop_table();
+
+  prepare_table();
+  run_multiple_agg("UPDATE CtasFBoolArrayCrash set dst = src;", ExecutorDeviceType::CPU);
+  drop_table();
+}
+
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);

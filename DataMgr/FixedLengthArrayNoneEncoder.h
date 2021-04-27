@@ -169,8 +169,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     }
     switch (type.get_subtype()) {
       case kBOOLEAN: {
-        const bool* bool_array = (bool*)array;
-        return ((int8_t)bool_array[0] == NULL_ARRAY_BOOLEAN);
+        return (array[0] == NULL_ARRAY_BOOLEAN);
       }
       case kINT: {
         const int32_t* int_array = (int32_t*)array;
