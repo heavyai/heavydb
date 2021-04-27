@@ -5397,7 +5397,11 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                                  co, eo, explain_info.explain_plan, nullptr);
                            });
   // reduce execution time by the time spent during queue waiting
-  _return.setExecutionTime(execution_time_ms -= _return.getRows()->getQueueTime());
+  const auto rs = _return.getRows();
+  if (rs) {
+    execution_time_ms -= rs->getQueueTime();
+  }
+  _return.setExecutionTime(execution_time_ms);
   VLOG(1) << cat.getDataMgr().getSystemMemoryUsage();
   const auto& filter_push_down_info = _return.getPushedDownFilterInfo();
   if (!filter_push_down_info.empty()) {
