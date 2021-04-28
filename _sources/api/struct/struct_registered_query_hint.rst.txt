@@ -1,0 +1,9 @@
+Struct RegisteredQueryHint
+==========================
+
+.. doxygenstruct:: RegisteredQueryHint
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

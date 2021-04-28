@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 61a58e0
+                5.7.0dev 22538a2
               </div>
             
           
@@ -427,6 +427,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_execution_result.html">Class ExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_executor.html">Class Executor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_executor_1_1_fetch_cache_anchor.html">Class Executor::FetchCacheAnchor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_explained_query_hint.html">Class ExplainedQueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_expression_range.html">Class ExpressionRange</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_extension_function.html">Class ExtensionFunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_extension_function_binding_error.html">Class ExtensionFunctionBindingError</a></li>
@@ -484,7 +485,6 @@
 <li class="toctree-l2"><a class="reference internal" href="class_hash_table.html">Class HashTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_table_cache.html">Class HashTableCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_type_cache.html">Class HashTypeCache</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_hint_explained.html">Class HintExplained</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_i_cmp.html">Class ICmp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_in_values_bitmap.html">Class InValuesBitmap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_input_col_descriptor.html">Class InputColDescriptor</a></li>
@@ -525,6 +525,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_parse_i_r_error.html">Class ParseIRError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_add_column_stmt.html">Class Parser::AddColumnStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_alter_table_param_stmt.html">Class Parser::AlterTableParamStmt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_alter_table_stmt.html">Class Parser::AlterTableStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_alter_user_stmt.html">Class Parser::AlterUserStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_array_literal.html">Class Parser::ArrayLiteral</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_assignment.html">Class Parser::Assignment</a></li>
@@ -932,6 +933,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterForeignTable::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server.html">Class com::mapd::parser::extension::ddl::SqlAlterServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterServer::Builder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_table.html">Class com::mapd::parser::extension::ddl::SqlAlterTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterTable::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_attribute_definition.html">Class com::mapd::parser::extension::ddl::SqlAttributeDefinition</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_check_constraint.html">Class com::mapd::parser::extension::ddl::SqlCheckConstraint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_column_declaration.html">Class com::mapd::parser::extension::ddl::SqlColumnDeclaration</a></li>
@@ -1663,10 +1666,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_pushed_down_filter_info.html">Struct PushedDownFilterInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_quals_conjunctive_form.html">Struct QualsConjunctiveForm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_execution_properties.html">Struct QueryExecutionProperties</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_hint.html">Struct QueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_info.html">Struct QueryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_step_execution_result.html">Struct QueryStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_reduction_code.html">Struct ReductionCode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_registered_query_hint.html">Struct RegisteredQueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html">Struct RelAlgExecutionUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_1_1_table_function_work_unit.html">Struct RelAlgExecutor::TableFunctionWorkUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_1_1_work_unit.html">Struct RelAlgExecutor::WorkUnit</a></li>
@@ -2026,7 +2029,7 @@
 
 <dl class="function">
 <dt id="_CPPv4N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE">
-<span id="_CPPv3N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE"></span><span id="_CPPv2N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE"></span><span id="QueryRunner::QueryRunner::getParsedQueryHint__ssCR"></span><span class="target" id="class_query_runner_1_1_query_runner_1a7d0ef6d3617d0cd3d05bfbfc3b584ab9"></span><a class="reference internal" href="../struct/struct_query_hint.html#_CPPv49QueryHint" title="QueryHint">QueryHint</a> <code class="sig-name descname">getParsedQueryHint</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_str</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE"></span><span id="_CPPv2N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE"></span><span id="QueryRunner::QueryRunner::getParsedQueryHint__ssCR"></span><span class="target" id="class_query_runner_1_1_query_runner_1ac1b91d0af56ac284aeb40911764980fd"></span><a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a> <code class="sig-name descname">getParsedQueryHint</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_str</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

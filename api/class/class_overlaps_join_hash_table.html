@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 61a58e0
+                5.7.0dev 22538a2
               </div>
             
           
@@ -427,6 +427,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_execution_result.html">Class ExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_executor.html">Class Executor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_executor_1_1_fetch_cache_anchor.html">Class Executor::FetchCacheAnchor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_explained_query_hint.html">Class ExplainedQueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_expression_range.html">Class ExpressionRange</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_extension_function.html">Class ExtensionFunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_extension_function_binding_error.html">Class ExtensionFunctionBindingError</a></li>
@@ -484,7 +485,6 @@
 <li class="toctree-l2"><a class="reference internal" href="class_hash_table.html">Class HashTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_table_cache.html">Class HashTableCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_type_cache.html">Class HashTypeCache</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_hint_explained.html">Class HintExplained</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_i_cmp.html">Class ICmp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_in_values_bitmap.html">Class InValuesBitmap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_input_col_descriptor.html">Class InputColDescriptor</a></li>
@@ -525,6 +525,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_parse_i_r_error.html">Class ParseIRError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_add_column_stmt.html">Class Parser::AddColumnStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_alter_table_param_stmt.html">Class Parser::AlterTableParamStmt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_alter_table_stmt.html">Class Parser::AlterTableStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_alter_user_stmt.html">Class Parser::AlterUserStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_array_literal.html">Class Parser::ArrayLiteral</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_assignment.html">Class Parser::Assignment</a></li>
@@ -932,6 +933,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterForeignTable::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server.html">Class com::mapd::parser::extension::ddl::SqlAlterServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterServer::Builder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_table.html">Class com::mapd::parser::extension::ddl::SqlAlterTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterTable::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_attribute_definition.html">Class com::mapd::parser::extension::ddl::SqlAttributeDefinition</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_check_constraint.html">Class com::mapd::parser::extension::ddl::SqlCheckConstraint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_column_declaration.html">Class com::mapd::parser::extension::ddl::SqlColumnDeclaration</a></li>
@@ -1663,10 +1666,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_pushed_down_filter_info.html">Struct PushedDownFilterInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_quals_conjunctive_form.html">Struct QualsConjunctiveForm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_execution_properties.html">Struct QueryExecutionProperties</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_hint.html">Struct QueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_info.html">Struct QueryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_step_execution_result.html">Struct QueryStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_reduction_code.html">Struct ReductionCode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_registered_query_hint.html">Struct RegisteredQueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html">Struct RelAlgExecutionUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_1_1_table_function_work_unit.html">Struct RelAlgExecutor::TableFunctionWorkUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_1_1_work_unit.html">Struct RelAlgExecutor::WorkUnit</a></li>
@@ -1952,8 +1955,8 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Static Functions</p>
 <dl class="function">
-<dt id="_CPPv4N21OverlapsJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEKiR14ColumnCacheMapP8ExecutorRK9QueryHint">
-<span id="_CPPv3N21OverlapsJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEKiR14ColumnCacheMapP8ExecutorRK9QueryHint"></span><span id="_CPPv2N21OverlapsJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEKiR14ColumnCacheMapP8ExecutorRK9QueryHint"></span><span id="OverlapsJoinHashTable::getInstance__std::shared_ptr:Analyzer::BinOper:C.std::vector:InputTableInfo:CR.Data_Namespace::MemoryLevelC.iC.ColumnCacheMapR.ExecutorP.QueryHintCR"></span><span class="target" id="class_overlaps_join_hash_table_1ab882f0a83b32c1a2ee6415ebcf4c8165"></span>std::shared_ptr&lt;<a class="reference internal" href="#_CPPv421OverlapsJoinHashTable" title="OverlapsJoinHashTable">OverlapsJoinHashTable</a>&gt; <code class="sig-name descname">getInstance</code><span class="sig-paren">(</span><em class="property">const</em> std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_bin_oper.html#_CPPv4N8Analyzer7BinOperE" title="Analyzer::BinOper">BinOper</a>&gt; <em>condition</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<em>query_infos</em>, <em class="property">const</em> Data_Namespace::MemoryLevel <em>memory_level</em>, <em class="property">const</em> int <em>device_count</em>, ColumnCacheMap &amp;<em>column_cache</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_query_hint.html#_CPPv49QueryHint" title="QueryHint">QueryHint</a> &amp;<em>query_hint</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEKiR14ColumnCacheMapP8ExecutorRK9QueryHint" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21OverlapsJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEKiR14ColumnCacheMapP8ExecutorRK19RegisteredQueryHint">
+<span id="_CPPv3N21OverlapsJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEKiR14ColumnCacheMapP8ExecutorRK19RegisteredQueryHint"></span><span id="_CPPv2N21OverlapsJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEKiR14ColumnCacheMapP8ExecutorRK19RegisteredQueryHint"></span><span id="OverlapsJoinHashTable::getInstance__std::shared_ptr:Analyzer::BinOper:C.std::vector:InputTableInfo:CR.Data_Namespace::MemoryLevelC.iC.ColumnCacheMapR.ExecutorP.RegisteredQueryHintCR"></span><span class="target" id="class_overlaps_join_hash_table_1ab9bf969768d74bf67fe6c81e862377d9"></span>std::shared_ptr&lt;<a class="reference internal" href="#_CPPv421OverlapsJoinHashTable" title="OverlapsJoinHashTable">OverlapsJoinHashTable</a>&gt; <code class="sig-name descname">getInstance</code><span class="sig-paren">(</span><em class="property">const</em> std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_bin_oper.html#_CPPv4N8Analyzer7BinOperE" title="Analyzer::BinOper">BinOper</a>&gt; <em>condition</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<em>query_infos</em>, <em class="property">const</em> Data_Namespace::MemoryLevel <em>memory_level</em>, <em class="property">const</em> int <em>device_count</em>, ColumnCacheMap &amp;<em>column_cache</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a> &amp;<em>query_hint</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEKiR14ColumnCacheMapP8ExecutorRK19RegisteredQueryHint" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Make hash table from an in-flight SQL query’s parse tree etc. </p>
 </dd></dl>
 
@@ -2067,12 +2070,12 @@
 
 <dl class="function">
 <dt id="_CPPv4N21OverlapsJoinHashTable22getRegisteredQueryHintEv">
-<span id="_CPPv3N21OverlapsJoinHashTable22getRegisteredQueryHintEv"></span><span id="_CPPv2N21OverlapsJoinHashTable22getRegisteredQueryHintEv"></span><span id="OverlapsJoinHashTable::getRegisteredQueryHint"></span><span class="target" id="class_overlaps_join_hash_table_1a1ea920b7c75a8d5d2a8a406593c30644"></span><em class="property">const</em> <a class="reference internal" href="../struct/struct_query_hint.html#_CPPv49QueryHint" title="QueryHint">QueryHint</a> &amp;<code class="sig-name descname">getRegisteredQueryHint</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable22getRegisteredQueryHintEv" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N21OverlapsJoinHashTable22getRegisteredQueryHintEv"></span><span id="_CPPv2N21OverlapsJoinHashTable22getRegisteredQueryHintEv"></span><span id="OverlapsJoinHashTable::getRegisteredQueryHint"></span><span class="target" id="class_overlaps_join_hash_table_1aa47ef20bd4d4e9d895649801b2b957a8"></span><em class="property">const</em> <a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a> &amp;<code class="sig-name descname">getRegisteredQueryHint</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable22getRegisteredQueryHintEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N21OverlapsJoinHashTable17registerQueryHintERK9QueryHint">
-<span id="_CPPv3N21OverlapsJoinHashTable17registerQueryHintERK9QueryHint"></span><span id="_CPPv2N21OverlapsJoinHashTable17registerQueryHintERK9QueryHint"></span><span id="OverlapsJoinHashTable::registerQueryHint__QueryHintCR"></span><span class="target" id="class_overlaps_join_hash_table_1a313b3588e9af4d06f42eeac1eb7e7fe8"></span>void <code class="sig-name descname">registerQueryHint</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_query_hint.html#_CPPv49QueryHint" title="QueryHint">QueryHint</a> &amp;<em>query_hint</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable17registerQueryHintERK9QueryHint" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21OverlapsJoinHashTable17registerQueryHintERK19RegisteredQueryHint">
+<span id="_CPPv3N21OverlapsJoinHashTable17registerQueryHintERK19RegisteredQueryHint"></span><span id="_CPPv2N21OverlapsJoinHashTable17registerQueryHintERK19RegisteredQueryHint"></span><span id="OverlapsJoinHashTable::registerQueryHint__RegisteredQueryHintCR"></span><span class="target" id="class_overlaps_join_hash_table_1abd23aecb831d12885aeff8f0d10acd3f"></span>void <code class="sig-name descname">registerQueryHint</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a> &amp;<em>query_hint</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable17registerQueryHintERK19RegisteredQueryHint" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2236,7 +2239,7 @@
 
 <dl class="member">
 <dt id="_CPPv4N21OverlapsJoinHashTable11query_hint_E">
-<span id="_CPPv3N21OverlapsJoinHashTable11query_hint_E"></span><span id="_CPPv2N21OverlapsJoinHashTable11query_hint_E"></span><span id="OverlapsJoinHashTable::query_hint___QueryHint"></span><span class="target" id="class_overlaps_join_hash_table_1a481bc141b423dadb7beee0648dcb0459"></span><a class="reference internal" href="../struct/struct_query_hint.html#_CPPv49QueryHint" title="QueryHint">QueryHint</a> <code class="sig-name descname">query_hint_</code><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable11query_hint_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N21OverlapsJoinHashTable11query_hint_E"></span><span id="_CPPv2N21OverlapsJoinHashTable11query_hint_E"></span><span id="OverlapsJoinHashTable::query_hint___RegisteredQueryHint"></span><span class="target" id="class_overlaps_join_hash_table_1a22558112b2a04d190b84a53bf9e4568a"></span><a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a> <code class="sig-name descname">query_hint_</code><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable11query_hint_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

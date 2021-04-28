@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Class Parser::AlterUserStmt" href="class_parser_1_1_alter_user_stmt.html" />
+    <link rel="next" title="Class Parser::AlterTableStmt" href="class_parser_1_1_alter_table_stmt.html" />
     <link rel="prev" title="Class Parser::AddColumnStmt" href="class_parser_1_1_add_column_stmt.html" /> 
 </head>
 
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 61a58e0
+                5.7.0dev 22538a2
               </div>
             
           
@@ -427,6 +427,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_execution_result.html">Class ExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_executor.html">Class Executor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_executor_1_1_fetch_cache_anchor.html">Class Executor::FetchCacheAnchor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_explained_query_hint.html">Class ExplainedQueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_expression_range.html">Class ExpressionRange</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_extension_function.html">Class ExtensionFunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_extension_function_binding_error.html">Class ExtensionFunctionBindingError</a></li>
@@ -484,7 +485,6 @@
 <li class="toctree-l2"><a class="reference internal" href="class_hash_table.html">Class HashTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_table_cache.html">Class HashTableCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_type_cache.html">Class HashTypeCache</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_hint_explained.html">Class HintExplained</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_i_cmp.html">Class ICmp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_in_values_bitmap.html">Class InValuesBitmap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_input_col_descriptor.html">Class InputColDescriptor</a></li>
@@ -525,6 +525,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_parse_i_r_error.html">Class ParseIRError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_add_column_stmt.html">Class Parser::AddColumnStmt</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class Parser::AlterTableParamStmt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_alter_table_stmt.html">Class Parser::AlterTableStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_alter_user_stmt.html">Class Parser::AlterUserStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_array_literal.html">Class Parser::ArrayLiteral</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_assignment.html">Class Parser::Assignment</a></li>
@@ -932,6 +933,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterForeignTable::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server.html">Class com::mapd::parser::extension::ddl::SqlAlterServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterServer::Builder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_table.html">Class com::mapd::parser::extension::ddl::SqlAlterTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterTable::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_attribute_definition.html">Class com::mapd::parser::extension::ddl::SqlAttributeDefinition</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_check_constraint.html">Class com::mapd::parser::extension::ddl::SqlCheckConstraint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_column_declaration.html">Class com::mapd::parser::extension::ddl::SqlColumnDeclaration</a></li>
@@ -1663,10 +1666,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_pushed_down_filter_info.html">Struct PushedDownFilterInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_quals_conjunctive_form.html">Struct QualsConjunctiveForm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_execution_properties.html">Struct QueryExecutionProperties</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_hint.html">Struct QueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_info.html">Struct QueryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_step_execution_result.html">Struct QueryStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_reduction_code.html">Struct ReductionCode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_registered_query_hint.html">Struct RegisteredQueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html">Struct RelAlgExecutionUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_1_1_table_function_work_unit.html">Struct RelAlgExecutor::TableFunctionWorkUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_1_1_work_unit.html">Struct RelAlgExecutor::WorkUnit</a></li>
@@ -1974,7 +1977,7 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="class_parser_1_1_alter_user_stmt.html" class="btn btn-neutral float-right" title="Class Parser::AlterUserStmt" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="class_parser_1_1_alter_table_stmt.html" class="btn btn-neutral float-right" title="Class Parser::AlterTableStmt" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="class_parser_1_1_add_column_stmt.html" class="btn btn-neutral float-left" title="Class Parser::AddColumnStmt" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

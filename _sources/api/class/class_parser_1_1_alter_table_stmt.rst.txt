@@ -1,0 +1,9 @@
+Class Parser::AlterTableStmt
+============================
+
+.. doxygenclass:: Parser::AlterTableStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

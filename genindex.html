@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.7.0dev 61a58e0
+                5.7.0dev 22538a2
               </div>
             
           
@@ -426,6 +426,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_execution_result.html">Class ExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_executor.html">Class Executor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_executor_1_1_fetch_cache_anchor.html">Class Executor::FetchCacheAnchor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_explained_query_hint.html">Class ExplainedQueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_expression_range.html">Class ExpressionRange</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_extension_function.html">Class ExtensionFunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_extension_function_binding_error.html">Class ExtensionFunctionBindingError</a></li>
@@ -483,7 +484,6 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_hash_table.html">Class HashTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_hash_table_cache.html">Class HashTableCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_hash_type_cache.html">Class HashTypeCache</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/class_hint_explained.html">Class HintExplained</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_i_cmp.html">Class ICmp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_in_values_bitmap.html">Class InValuesBitmap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_input_col_descriptor.html">Class InputColDescriptor</a></li>
@@ -524,6 +524,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parse_i_r_error.html">Class ParseIRError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_add_column_stmt.html">Class Parser::AddColumnStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_alter_table_param_stmt.html">Class Parser::AlterTableParamStmt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_alter_table_stmt.html">Class Parser::AlterTableStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_alter_user_stmt.html">Class Parser::AlterUserStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_array_literal.html">Class Parser::ArrayLiteral</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_assignment.html">Class Parser::Assignment</a></li>
@@ -931,6 +932,8 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterForeignTable::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server.html">Class com::mapd::parser::extension::ddl::SqlAlterServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterServer::Builder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_table.html">Class com::mapd::parser::extension::ddl::SqlAlterTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterTable::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_attribute_definition.html">Class com::mapd::parser::extension::ddl::SqlAttributeDefinition</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_check_constraint.html">Class com::mapd::parser::extension::ddl::SqlCheckConstraint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_column_declaration.html">Class com::mapd::parser::extension::ddl::SqlColumnDeclaration</a></li>
@@ -1662,10 +1665,10 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_pushed_down_filter_info.html">Struct PushedDownFilterInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_quals_conjunctive_form.html">Struct QualsConjunctiveForm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_query_execution_properties.html">Struct QueryExecutionProperties</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_query_hint.html">Struct QueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_query_info.html">Struct QueryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_query_step_execution_result.html">Struct QueryStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_reduction_code.html">Struct ReductionCode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_registered_query_hint.html">Struct RegisteredQueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_rel_alg_execution_unit.html">Struct RelAlgExecutionUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_rel_alg_executor_1_1_table_function_work_unit.html">Struct RelAlgExecutor::TableFunctionWorkUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_rel_alg_executor_1_1_work_unit.html">Struct RelAlgExecutor::WorkUnit</a></li>
@@ -5513,10 +5516,10 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator19codegenFunctionOperEPKN8Analyzer12FunctionOperERK18CompilationOptions">CodeGenerator::codegenFunctionOper (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator27codegenFunctionOperCastArgsEPKN8Analyzer12FunctionOperEPK17ExtensionFunctionRKNSt6vectorIPN4llvm5ValueEEERKNSt6vectorI6size_tEERKNSt13unordered_mapIPN4llvm5ValueEPN4llvm5ValueEEERK18CompilationOptions">CodeGenerator::codegenFunctionOperCastArgs (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator26codegenFunctionOperNullArgEPKN8Analyzer12FunctionOperERKNSt6vectorIPN4llvm5ValueEEE">CodeGenerator::codegenFunctionOperNullArg (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator41codegenFunctionOperWithCustomTypeHandlingEPKN8Analyzer34FunctionOperWithCustomTypeHandlingERK18CompilationOptions">CodeGenerator::codegenFunctionOperWithCustomTypeHandling (C++ function)</a>
@@ -6150,6 +6153,10 @@
       <li><a href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table.html#_CPPv4N3com4mapd6parser9extension3ddl20SqlAlterForeignTable9AlterTypeE">com::mapd::parser::extension::ddl::SqlAlterForeignTable::AlterType (C++ enum)</a>
 </li>
       <li><a href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server.html#_CPPv4N3com4mapd6parser9extension3ddl14SqlAlterServer9AlterTypeE">com::mapd::parser::extension::ddl::SqlAlterServer::AlterType (C++ enum)</a>
+</li>
+      <li><a href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_table.html#_CPPv4N3com4mapd6parser9extension3ddl13SqlAlterTableE">com::mapd::parser::extension::ddl::SqlAlterTable (C++ class)</a>
+</li>
+      <li><a href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_table.html#_CPPv4N3com4mapd6parser9extension3ddl13SqlAlterTable9AlterTypeE">com::mapd::parser::extension::ddl::SqlAlterTable::AlterType (C++ enum)</a>
 </li>
       <li><a href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_attribute_definition.html#_CPPv4N3com4mapd6parser9extension3ddl22SqlAttributeDefinitionE">com::mapd::parser::extension::ddl::SqlAttributeDefinition (C++ class)</a>
 </li>
@@ -8685,7 +8692,7 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor26buildCurrentLevelHashTableERK13JoinConditionR19RelAlgExecutionUnitRK18CompilationOptionsRKNSt6vectorI14InputTableInfoEER14ColumnCacheMapRNSt6vectorINSt6stringEEE">Executor::buildCurrentLevelHashTable (C++ function)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor26buildHashTableForQualifierERKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEK11MemoryLevelK8HashTypeR14ColumnCacheMapRK9QueryHint">Executor::buildHashTableForQualifier (C++ function)</a>
+      <li><a href="api/class/class_executor.html#_CPPv4N8Executor26buildHashTableForQualifierERKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEK11MemoryLevelK8HashTypeR14ColumnCacheMapRK19RegisteredQueryHint">Executor::buildHashTableForQualifier (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor31buildHoistLeftHandSideFiltersCbERK19RelAlgExecutionUnitK6size_tKiRK18CompilationOptions">Executor::buildHoistLeftHandSideFiltersCb (C++ function)</a>
 </li>
@@ -8791,8 +8798,6 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor15ERR_DIV_BY_ZEROE">Executor::ERR_DIV_BY_ZERO (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor8ERR_GEOSE">Executor::ERR_GEOS (C++ member)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor15ERR_INTERRUPTEDE">Executor::ERR_INTERRUPTED (C++ member)</a>
@@ -8813,6 +8818,8 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor49ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERYE">Executor::ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor29ERR_STRING_CONST_IN_RESULTSETE">Executor::ERR_STRING_CONST_IN_RESULTSET (C++ member)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor21ERR_TOO_MANY_LITERALSE">Executor::ERR_TOO_MANY_LITERALS (C++ member)</a>
@@ -9080,6 +9087,44 @@
       <li><a href="api/class/class_executor.html#_CPPv4NK8Executor8warpSizeEv">Executor::warpSize (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor34window_project_node_context_owned_E">Executor::window_project_node_context_owned_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv418ExplainedQueryHint">ExplainedQueryHint (C++ class)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4N18ExplainedQueryHint18ExplainedQueryHintE9QueryHintbbb">ExplainedQueryHint::ExplainedQueryHint (C++ function)</a>, <a href="api/class/class_explained_query_hint.html#_CPPv4N18ExplainedQueryHint18ExplainedQueryHintE9QueryHintbbbRNSt13unordered_mapINSt6stringENSt6stringEEE">[1]</a>, <a href="api/class/class_explained_query_hint.html#_CPPv4N18ExplainedQueryHint18ExplainedQueryHintE9QueryHintbbbRNSt6vectorINSt6stringEEE">[2]</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4NK18ExplainedQueryHint7getHintEv">ExplainedQueryHint::getHint (C++ function)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4N18ExplainedQueryHint14getInteritPathEv">ExplainedQueryHint::getInteritPath (C++ function)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4N18ExplainedQueryHint12getKVOptionsEv">ExplainedQueryHint::getKVOptions (C++ function)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4N18ExplainedQueryHint14getListOptionsEv">ExplainedQueryHint::getListOptions (C++ function)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4N18ExplainedQueryHint20has_kv_type_options_E">ExplainedQueryHint::has_kv_type_options_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4NK18ExplainedQueryHint12hasKvOptionsEv">ExplainedQueryHint::hasKvOptions (C++ function)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4NK18ExplainedQueryHint10hasOptionsEv">ExplainedQueryHint::hasOptions (C++ function)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4N18ExplainedQueryHint5hint_E">ExplainedQueryHint::hint_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4N18ExplainedQueryHint14inherit_paths_E">ExplainedQueryHint::inherit_paths_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4N18ExplainedQueryHint10is_marker_E">ExplainedQueryHint::is_marker_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4NK18ExplainedQueryHint11isQueryHintEv">ExplainedQueryHint::isQueryHint (C++ function)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4N18ExplainedQueryHint11kv_options_E">ExplainedQueryHint::kv_options_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4N18ExplainedQueryHint13list_options_E">ExplainedQueryHint::list_options_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4N18ExplainedQueryHint11query_hint_E">ExplainedQueryHint::query_hint_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4N18ExplainedQueryHint15setInheritPathsERNSt6vectorIiEE">ExplainedQueryHint::setInheritPaths (C++ function)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4N18ExplainedQueryHint12setKVOptionsERNSt13unordered_mapINSt6stringENSt6stringEEE">ExplainedQueryHint::setKVOptions (C++ function)</a>
+</li>
+      <li><a href="api/class/class_explained_query_hint.html#_CPPv4N18ExplainedQueryHint14setListOptionsERNSt6vectorINSt6stringEEE">ExplainedQueryHint::setListOptions (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_explain_info.html#_CPPv411ExplainInfo">ExplainInfo (C++ class)</a>
 </li>
@@ -10253,6 +10298,8 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_caching_foreign_storage_mgr.html#_CPPv4N15foreign_storage24CachingForeignStorageMgr24CachingForeignStorageMgrEP19ForeignStorageCache">foreign_storage::CachingForeignStorageMgr::CachingForeignStorageMgr (C++ function)</a>
 </li>
+      <li><a href="api/class/classforeign__storage_1_1_caching_foreign_storage_mgr.html#_CPPv4N15foreign_storage24CachingForeignStorageMgr10clearTableERK8ChunkKey">foreign_storage::CachingForeignStorageMgr::clearTable (C++ function)</a>
+</li>
       <li><a href="api/class/classforeign__storage_1_1_caching_foreign_storage_mgr.html#_CPPv4N15foreign_storage24CachingForeignStorageMgr37createOrRecoverDataWrapperIfNotExistsERK8ChunkKey">foreign_storage::CachingForeignStorageMgr::createOrRecoverDataWrapperIfNotExists (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_caching_foreign_storage_mgr.html#_CPPv4N15foreign_storage24CachingForeignStorageMgr11disk_cache_E">foreign_storage::CachingForeignStorageMgr::disk_cache_ (C++ member)</a>
@@ -10378,8 +10425,6 @@
       <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapperE">foreign_storage::CsvDataWrapper (C++ class)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper20append_start_offset_E">foreign_storage::CsvDataWrapper::append_start_offset_ (C++ member)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper17chunk_byte_count_E">foreign_storage::CsvDataWrapper::chunk_byte_count_ (C++ member)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper22chunk_encoder_buffers_E">foreign_storage::CsvDataWrapper::chunk_encoder_buffers_ (C++ member)</a>
 </li>
@@ -10673,6 +10718,8 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr10checkpointEKiKi">foreign_storage::ForeignStorageMgr::checkpoint (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr10checkpointEv">[1]</a>
 </li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr16clearDataWrapperERK8ChunkKey">foreign_storage::ForeignStorageMgr::clearDataWrapper (C++ function)</a>
+</li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr10clearSlabsEv">foreign_storage::ForeignStorageMgr::clearSlabs (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr38clearTempChunkBufferMapEntriesForTableERK8ChunkKey">foreign_storage::ForeignStorageMgr::clearTempChunkBufferMapEntriesForTable (C++ function)</a>
@@ -10697,12 +10744,12 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr37fetchBufferIfTempBufferMapEntryExistsERK8ChunkKeyP14AbstractBufferK6size_t">foreign_storage::ForeignStorageMgr::fetchBufferIfTempBufferMapEntryExists (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr17ForeignStorageMgrEv">foreign_storage::ForeignStorageMgr::ForeignStorageMgr (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr4freeEP14AbstractBuffer">foreign_storage::ForeignStorageMgr::free (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr12getAllocatedEv">foreign_storage::ForeignStorageMgr::getAllocated (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr9getBufferERK8ChunkKeyK6size_t">foreign_storage::ForeignStorageMgr::getBuffer (C++ function)</a>
@@ -10914,10 +10961,6 @@
       <li><a href="api/struct/structforeign__storage_1_1_metadata_scan_multi_threading_params.html#_CPPv4N15foreign_storage32MetadataScanMultiThreadingParamsE">foreign_storage::MetadataScanMultiThreadingParams (C++ class)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_metadata_scan_multi_threading_params.html#_CPPv4N15foreign_storage32MetadataScanMultiThreadingParams13cached_chunksE">foreign_storage::MetadataScanMultiThreadingParams::cached_chunks (C++ member)</a>
-</li>
-      <li><a href="api/struct/structforeign__storage_1_1_metadata_scan_multi_threading_params.html#_CPPv4N15foreign_storage32MetadataScanMultiThreadingParams16chunk_byte_countE">foreign_storage::MetadataScanMultiThreadingParams::chunk_byte_count (C++ member)</a>
-</li>
-      <li><a href="api/struct/structforeign__storage_1_1_metadata_scan_multi_threading_params.html#_CPPv4N15foreign_storage32MetadataScanMultiThreadingParams22chunk_byte_count_mutexE">foreign_storage::MetadataScanMultiThreadingParams::chunk_byte_count_mutex (C++ member)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_metadata_scan_multi_threading_params.html#_CPPv4N15foreign_storage32MetadataScanMultiThreadingParams21chunk_encoder_buffersE">foreign_storage::MetadataScanMultiThreadingParams::chunk_encoder_buffers (C++ member)</a>
 </li>
@@ -12865,7 +12908,7 @@
 </li>
       <li><a href="api/class/class_hash_join.html#_CPPv4NK8HashJoin19getInnerTableRteIdxEv">HashJoin::getInnerTableRteIdx (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_join.html#_CPPv4N8HashJoin11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8HashTypeKiR14ColumnCacheMapP8ExecutorRK9QueryHint">HashJoin::getInstance (C++ function)</a>
+      <li><a href="api/class/class_hash_join.html#_CPPv4N8HashJoin11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8HashTypeKiR14ColumnCacheMapP8ExecutorRK19RegisteredQueryHint">HashJoin::getInstance (C++ function)</a>
 </li>
       <li><a href="api/class/class_hash_join.html#_CPPv4NK8HashJoin17getJoinHashBufferEK18ExecutorDeviceTypeKi">HashJoin::getJoinHashBuffer (C++ function)</a>
 </li>
@@ -12899,6 +12942,8 @@
 </li>
       <li><a href="api/struct/struct_hash_join_matching_set.html#_CPPv4N19HashJoinMatchingSet5countE">HashJoinMatchingSet::count (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/struct_hash_join_matching_set.html#_CPPv4N19HashJoinMatchingSet8elementsE">HashJoinMatchingSet::elements (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_hash_join_matching_set.html#_CPPv4N19HashJoinMatchingSet4slotE">HashJoinMatchingSet::slot (C++ member)</a>
@@ -12919,8 +12964,6 @@
 </li>
       <li><a href="api/class/class_hash_table.html#_CPPv4N9HashTable5toSetE6size_t6size_t6size_tPK6int8_tPK6int8_tPK6int8_tPK6int8_t6size_t">HashTable::toSet (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_hash_table.html#_CPPv4N9HashTable8toStringERKNSt6stringERKNSt6stringE6size_t6size_t6size_tPK6int8_tPK6int8_tPK6int8_tPK6int8_t6size_tb">HashTable::toString (C++ function)</a>
 </li>
       <li><a href="api/class/class_hash_table.html#_CPPv4N9HashTableD0Ev">HashTable::~HashTable (C++ function)</a>
@@ -12966,44 +13009,6 @@
       <li><a href="api/class/class_hash_type_cache.html#_CPPv4N13HashTypeCache22hash_type_cache_mutex_E">HashTypeCache::hash_type_cache_mutex_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_hash_type_cache.html#_CPPv4N13HashTypeCache3setERKNSt6vectorI8ChunkKeyEEK8HashType">HashTypeCache::set (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv413HintExplained">HintExplained (C++ class)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4NK13HintExplained11getHintNameEv">HintExplained::getHintName (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4N13HintExplained14getInteritPathEv">HintExplained::getInteritPath (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4N13HintExplained12getKVOptionsEv">HintExplained::getKVOptions (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4N13HintExplained14getListOptionsEv">HintExplained::getListOptions (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4N13HintExplained20has_kv_type_options_E">HintExplained::has_kv_type_options_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4NK13HintExplained12hasKvOptionsEv">HintExplained::hasKvOptions (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4NK13HintExplained10hasOptionsEv">HintExplained::hasOptions (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4N13HintExplained10hint_name_E">HintExplained::hint_name_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4N13HintExplained13HintExplainedENSt6stringEbbb">HintExplained::HintExplained (C++ function)</a>, <a href="api/class/class_hint_explained.html#_CPPv4N13HintExplained13HintExplainedENSt6stringEbbbRNSt13unordered_mapINSt6stringENSt6stringEEE">[1]</a>, <a href="api/class/class_hint_explained.html#_CPPv4N13HintExplained13HintExplainedENSt6stringEbbbRNSt6vectorINSt6stringEEE">[2]</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4N13HintExplained14inherit_paths_E">HintExplained::inherit_paths_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4N13HintExplained10is_marker_E">HintExplained::is_marker_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4NK13HintExplained11isQueryHintEv">HintExplained::isQueryHint (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4N13HintExplained11kv_options_E">HintExplained::kv_options_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4N13HintExplained13list_options_E">HintExplained::list_options_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4N13HintExplained11query_hint_E">HintExplained::query_hint_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4N13HintExplained15setInheritPathsERNSt6vectorIiEE">HintExplained::setInheritPaths (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4N13HintExplained12setKVOptionsERNSt13unordered_mapINSt6stringENSt6stringEEE">HintExplained::setKVOptions (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hint_explained.html#_CPPv4N13HintExplained14setListOptionsERNSt6vectorINSt6stringEEE">HintExplained::setListOptions (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_hit_test_types.html#_CPPv412HitTestTypes">HitTestTypes (C++ class)</a>
 </li>
@@ -13281,8 +13286,6 @@
 </li>
       <li><a href="api/class/classimport__export_1_1_importer.html#_CPPv4N13import_export8Importer15init_gdal_mutexE">import_export::Importer::init_gdal_mutex (C++ member)</a>
 </li>
-      <li><a href="api/class/classimport__export_1_1_importer.html#_CPPv4N13import_export8Importer11interruptedE">import_export::Importer::interrupted (C++ member)</a>
-</li>
       <li><a href="api/class/classimport__export_1_1_importer.html#_CPPv4N13import_export8Importer10is_array_aE">import_export::Importer::is_array_a (C++ member)</a>
 </li>
       <li><a href="api/class/classimport__export_1_1_importer.html#_CPPv4N13import_export8Importer4loadERKNSt6vectorINSt10unique_ptrI17TypedImportBufferEEEE6size_tPKN17Catalog_Namespace11SessionInfoE">import_export::Importer::load (C++ function)</a>
@@ -13451,10 +13454,10 @@
 </li>
       <li><a href="api/class/classimport__export_1_1_query_exporter.html#_CPPv4NK13import_export13QueryExporter22validateFileExtensionsERKNSt6stringERKNSt6stringERKNSt13unordered_setINSt6stringEEE">import_export::QueryExporter::validateFileExtensions (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classimport__export_1_1_query_exporter.html#_CPPv4N13import_export13QueryExporterD0Ev">import_export::QueryExporter::~QueryExporter (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classimport__export_1_1_query_exporter_c_s_v.html#_CPPv4N13import_export16QueryExporterCSVE">import_export::QueryExporterCSV (C++ class)</a>
 </li>
       <li><a href="api/class/classimport__export_1_1_query_exporter_c_s_v.html#_CPPv4N13import_export16QueryExporterCSV11beginExportERKNSt6stringERKNSt6stringERK10CopyParamsRKNSt6vectorI14TargetMetaInfoEEK15FileCompressionK17ArrayNullHandling">import_export::QueryExporterCSV::beginExport (C++ function)</a>
@@ -15703,7 +15706,7 @@
 </li>
       <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4NK21OverlapsJoinHashTable19getInnerTableRteIdxEv">OverlapsJoinHashTable::getInnerTableRteIdx (C++ function)</a>
 </li>
-      <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEKiR14ColumnCacheMapP8ExecutorRK9QueryHint">OverlapsJoinHashTable::getInstance (C++ function)</a>
+      <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEKiR14ColumnCacheMapP8ExecutorRK19RegisteredQueryHint">OverlapsJoinHashTable::getInstance (C++ function)</a>
 </li>
       <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4NK21OverlapsJoinHashTable16getKeyBufferSizeEv">OverlapsJoinHashTable::getKeyBufferSize (C++ function)</a>
 </li>
@@ -15743,7 +15746,7 @@
 </li>
       <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable12query_infos_E">OverlapsJoinHashTable::query_infos_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable17registerQueryHintERK9QueryHint">OverlapsJoinHashTable::registerQueryHint (C++ function)</a>
+      <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable17registerQueryHintERK19RegisteredQueryHint">OverlapsJoinHashTable::registerQueryHint (C++ function)</a>
 </li>
       <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable5reifyEK8HashType">OverlapsJoinHashTable::reify (C++ function)</a>
 </li>
@@ -15808,6 +15811,18 @@
       <li><a href="api/class/class_parser_1_1_alter_table_param_stmt.html#_CPPv4N6Parser19AlterTableParamStmt5paramE">Parser::AlterTableParamStmt::param (C++ member)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_alter_table_param_stmt.html#_CPPv4N6Parser19AlterTableParamStmt5tableE">Parser::AlterTableParamStmt::table (C++ member)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_alter_table_stmt.html#_CPPv4N6Parser14AlterTableStmtE">Parser::AlterTableStmt (C++ class)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_alter_table_stmt.html#_CPPv4N6Parser14AlterTableStmt15delegateExecuteERKN9rapidjson5ValueERKN17Catalog_Namespace11SessionInfoE">Parser::AlterTableStmt::delegateExecute (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_alter_table_stmt.html#_CPPv4N6Parser14AlterTableStmt7executeERKN17Catalog_Namespace11SessionInfoE">Parser::AlterTableStmt::execute (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_alter_table_stmt.html#_CPPv4NK6Parser14AlterTableStmt9get_tableEv">Parser::AlterTableStmt::get_table (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_alter_table_stmt.html#_CPPv4N6Parser14AlterTableStmt7payloadE">Parser::AlterTableStmt::payload (C++ member)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_alter_table_stmt.html#_CPPv4N6Parser14AlterTableStmt5tableE">Parser::AlterTableStmt::table (C++ member)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_alter_user_stmt.html#_CPPv4N6Parser13AlterUserStmtE">Parser::AlterUserStmt (C++ class)</a>
 </li>
@@ -16719,14 +16734,14 @@
 </li>
       <li><a href="api/class/class_parser_1_1_order_spec.html#_CPPv4N6Parser9OrderSpec11nulls_firstE">Parser::OrderSpec::nulls_first (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_parser_1_1_order_spec.html#_CPPv4N6Parser9OrderSpec9OrderSpecEiP9ColumnRefbb">Parser::OrderSpec::OrderSpec (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_parser_1_1_positive_or_zero_validate.html#_CPPv4N6Parser22PositiveOrZeroValidateE">Parser::PositiveOrZeroValidate (C++ class)</a>
 </li>
       <li><a href="api/struct/struct_parser_1_1_positive_or_zero_validate.html#_CPPv4I0EN6Parser22PositiveOrZeroValidateclEDc1T">Parser::PositiveOrZeroValidate::operator() (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_parser_1_1_query_expr.html#_CPPv4N6Parser9QueryExprE">Parser::QueryExpr (C++ class)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_query_expr.html#_CPPv4NK6Parser9QueryExpr7analyzeERKN17Catalog_Namespace7CatalogERN8Analyzer5QueryE">Parser::QueryExpr::analyze (C++ function)</a>
@@ -18079,36 +18094,6 @@
 </li>
       <li><a href="api/class/class_query_fragment_descriptor.html#_CPPv4N23QueryFragmentDescriptor23tuple_count_per_device_E">QueryFragmentDescriptor::tuple_count_per_device_ (C++ member)</a>
 </li>
-      <li><a href="api/struct/struct_query_hint.html#_CPPv49QueryHint">QueryHint (C++ class)</a>
-</li>
-      <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint8cpu_modeE">QueryHint::cpu_mode (C++ member)</a>
-</li>
-      <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint8defaultsEv">QueryHint::defaults (C++ function)</a>
-</li>
-      <li><a href="api/struct/struct_query_hint.html#_CPPv4NK9QueryHint12getHintClassERKNSt6stringE">QueryHint::getHintClass (C++ function)</a>
-</li>
-      <li><a href="api/struct/struct_query_hint.html#_CPPv4NK9QueryHint23isAnyQueryHintDeliveredEv">QueryHint::isAnyQueryHintDelivered (C++ function)</a>
-</li>
-      <li><a href="api/struct/struct_query_hint.html#_CPPv4NK9QueryHint16isHintRegisteredEK6size_t">QueryHint::isHintRegistered (C++ function)</a>, <a href="api/struct/struct_query_hint.html#_CPPv4NK9QueryHint16isHintRegisteredERKNSt6stringE">[1]</a>
-</li>
-      <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHintaSERK9QueryHint">QueryHint::operator= (C++ function)</a>
-</li>
-      <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint24overlaps_allow_gpu_buildE">QueryHint::overlaps_allow_gpu_build (C++ member)</a>
-</li>
-      <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint25overlaps_bucket_thresholdE">QueryHint::overlaps_bucket_threshold (C++ member)</a>
-</li>
-      <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint21overlaps_keys_per_binE">QueryHint::overlaps_keys_per_bin (C++ member)</a>
-</li>
-      <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint17overlaps_max_sizeE">QueryHint::overlaps_max_size (C++ member)</a>
-</li>
-      <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint17overlaps_no_cacheE">QueryHint::overlaps_no_cache (C++ member)</a>
-</li>
-      <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint9QueryHintERK9QueryHint">QueryHint::QueryHint (C++ function)</a>, <a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint9QueryHintEv">[1]</a>
-</li>
-      <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint15registered_hintE">QueryHint::registered_hint (C++ member)</a>
-</li>
-      <li><a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint12registerHintEK6size_t">QueryHint::registerHint (C++ function)</a>, <a href="api/struct/struct_query_hint.html#_CPPv4N9QueryHint12registerHintERKNSt6stringE">[1]</a>
-</li>
       <li><a href="api/struct/struct_query_info.html#_CPPv49QueryInfo">QueryInfo (C++ class)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv421QueryMemoryDescriptor">QueryMemoryDescriptor (C++ class)</a>
@@ -18133,8 +18118,6 @@
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor17col_slot_context_E">QueryMemoryDescriptor::col_slot_context_ (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor27count_distinct_descriptors_E">QueryMemoryDescriptor::count_distinct_descriptors_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4N21QueryMemoryDescriptor30countDescriptorsLogicallyEmptyERK24CountDistinctDescriptors">QueryMemoryDescriptor::countDescriptorsLogicallyEmpty (C++ function)</a>
@@ -18151,6 +18134,8 @@
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor18forceFourByteFloatEv">QueryMemoryDescriptor::forceFourByteFloat (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor9getBucketEv">QueryMemoryDescriptor::getBucket (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor21getBufferColSlotCountEv">QueryMemoryDescriptor::getBufferColSlotCount (C++ function)</a>
@@ -18735,9 +18720,39 @@
 </li>
       <li><a href="api/class/class_refresh_foreign_tables_command.html#_CPPv4N27RefreshForeignTablesCommand27RefreshForeignTablesCommandERK14DdlCommandDataNSt10shared_ptrIKN17Catalog_Namespace11SessionInfoEEE">RefreshForeignTablesCommand::RefreshForeignTablesCommand (C++ function)</a>
 </li>
+      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint">RegisteredQueryHint (C++ class)</a>
+</li>
+      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint8cpu_modeE">RegisteredQueryHint::cpu_mode (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint8defaultsEv">RegisteredQueryHint::defaults (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4NK19RegisteredQueryHint23isAnyQueryHintDeliveredEv">RegisteredQueryHint::isAnyQueryHintDelivered (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4NK19RegisteredQueryHint16isHintRegisteredEK9QueryHint">RegisteredQueryHint::isHintRegistered (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHintaSERK19RegisteredQueryHint">RegisteredQueryHint::operator= (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint24overlaps_allow_gpu_buildE">RegisteredQueryHint::overlaps_allow_gpu_build (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint25overlaps_bucket_thresholdE">RegisteredQueryHint::overlaps_bucket_threshold (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint21overlaps_keys_per_binE">RegisteredQueryHint::overlaps_keys_per_bin (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint17overlaps_max_sizeE">RegisteredQueryHint::overlaps_max_size (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint17overlaps_no_cacheE">RegisteredQueryHint::overlaps_no_cache (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint15registered_hintE">RegisteredQueryHint::registered_hint (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint19RegisteredQueryHintERK19RegisteredQueryHint">RegisteredQueryHint::RegisteredQueryHint (C++ function)</a>, <a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint19RegisteredQueryHintEv">[1]</a>
+</li>
+      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint12registerHintEK9QueryHint">RegisteredQueryHint::registerHint (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint18translateQueryHintERKNSt6stringE">RegisteredQueryHint::translateQueryHint (C++ function)</a>
+</li>
       <li><a href="api/class/class_rel_aggregate.html#_CPPv412RelAggregate">RelAggregate (C++ class)</a>
 </li>
-      <li><a href="api/class/class_rel_aggregate.html#_CPPv4N12RelAggregate7addHintERK13HintExplained">RelAggregate::addHint (C++ function)</a>
+      <li><a href="api/class/class_rel_aggregate.html#_CPPv4N12RelAggregate7addHintERK18ExplainedQueryHint">RelAggregate::addHint (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_aggregate.html#_CPPv4N12RelAggregate10agg_exprs_E">RelAggregate::agg_exprs_ (C++ member)</a>
 </li>
@@ -18761,13 +18776,13 @@
 </li>
       <li><a href="api/class/class_rel_aggregate.html#_CPPv4NK12RelAggregate15getGroupByCountEv">RelAggregate::getGroupByCount (C++ function)</a>
 </li>
-      <li><a href="api/class/class_rel_aggregate.html#_CPPv4NK12RelAggregate11getHintInfoERKNSt6stringE">RelAggregate::getHintInfo (C++ function)</a>
+      <li><a href="api/class/class_rel_aggregate.html#_CPPv4NK12RelAggregate11getHintInfoE9QueryHint">RelAggregate::getHintInfo (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_aggregate.html#_CPPv4N12RelAggregate14groupby_count_E">RelAggregate::groupby_count_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_rel_aggregate.html#_CPPv4N12RelAggregate16hasDeliveredHintEv">RelAggregate::hasDeliveredHint (C++ function)</a>
 </li>
-      <li><a href="api/class/class_rel_aggregate.html#_CPPv4NK12RelAggregate14hasHintEnabledERKNSt6stringE">RelAggregate::hasHintEnabled (C++ function)</a>
+      <li><a href="api/class/class_rel_aggregate.html#_CPPv4NK12RelAggregate14hasHintEnabledE9QueryHint">RelAggregate::hasHintEnabled (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_aggregate.html#_CPPv4N12RelAggregate13hint_applied_E">RelAggregate::hint_applied_ (C++ member)</a>
 </li>
@@ -19225,7 +19240,7 @@
 </li>
       <li><a href="api/class/class_rel_compound.html#_CPPv411RelCompound">RelCompound (C++ class)</a>
 </li>
-      <li><a href="api/class/class_rel_compound.html#_CPPv4N11RelCompound7addHintERK13HintExplained">RelCompound::addHint (C++ function)</a>
+      <li><a href="api/class/class_rel_compound.html#_CPPv4N11RelCompound7addHintERK18ExplainedQueryHint">RelCompound::addHint (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_compound.html#_CPPv4N11RelCompound10agg_exprs_E">RelCompound::agg_exprs_ (C++ member)</a>
 </li>
@@ -19245,7 +19260,7 @@
 </li>
       <li><a href="api/class/class_rel_compound.html#_CPPv4NK11RelCompound15getGroupByCountEv">RelCompound::getGroupByCount (C++ function)</a>
 </li>
-      <li><a href="api/class/class_rel_compound.html#_CPPv4NK11RelCompound11getHintInfoERKNSt6stringE">RelCompound::getHintInfo (C++ function)</a>
+      <li><a href="api/class/class_rel_compound.html#_CPPv4NK11RelCompound11getHintInfoE9QueryHint">RelCompound::getHintInfo (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_compound.html#_CPPv4NK11RelCompound15getScalarSourceEK6size_t">RelCompound::getScalarSource (C++ function)</a>
 </li>
@@ -19257,7 +19272,7 @@
 </li>
       <li><a href="api/class/class_rel_compound.html#_CPPv4N11RelCompound16hasDeliveredHintEv">RelCompound::hasDeliveredHint (C++ function)</a>
 </li>
-      <li><a href="api/class/class_rel_compound.html#_CPPv4NK11RelCompound14hasHintEnabledERKNSt6stringE">RelCompound::hasHintEnabled (C++ function)</a>
+      <li><a href="api/class/class_rel_compound.html#_CPPv4NK11RelCompound14hasHintEnabledE9QueryHint">RelCompound::hasHintEnabled (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_compound.html#_CPPv4N11RelCompound13hint_applied_E">RelCompound::hint_applied_ (C++ member)</a>
 </li>
@@ -19305,7 +19320,7 @@
 </li>
       <li><a href="api/class/class_rel_join.html#_CPPv47RelJoin">RelJoin (C++ class)</a>
 </li>
-      <li><a href="api/class/class_rel_join.html#_CPPv4N7RelJoin7addHintERK13HintExplained">RelJoin::addHint (C++ function)</a>
+      <li><a href="api/class/class_rel_join.html#_CPPv4N7RelJoin7addHintERK18ExplainedQueryHint">RelJoin::addHint (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_join.html#_CPPv4N7RelJoin10condition_E">RelJoin::condition_ (C++ member)</a>
 </li>
@@ -19317,13 +19332,13 @@
 </li>
       <li><a href="api/class/class_rel_join.html#_CPPv4N7RelJoin17getDeliveredHintsEv">RelJoin::getDeliveredHints (C++ function)</a>
 </li>
-      <li><a href="api/class/class_rel_join.html#_CPPv4NK7RelJoin11getHintInfoERKNSt6stringE">RelJoin::getHintInfo (C++ function)</a>
+      <li><a href="api/class/class_rel_join.html#_CPPv4NK7RelJoin11getHintInfoE9QueryHint">RelJoin::getHintInfo (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_join.html#_CPPv4NK7RelJoin11getJoinTypeEv">RelJoin::getJoinType (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_join.html#_CPPv4N7RelJoin16hasDeliveredHintEv">RelJoin::hasDeliveredHint (C++ function)</a>
 </li>
-      <li><a href="api/class/class_rel_join.html#_CPPv4NK7RelJoin14hasHintEnabledERKNSt6stringE">RelJoin::hasHintEnabled (C++ function)</a>
+      <li><a href="api/class/class_rel_join.html#_CPPv4NK7RelJoin14hasHintEnabledE9QueryHint">RelJoin::hasHintEnabled (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_join.html#_CPPv4N7RelJoin13hint_applied_E">RelJoin::hint_applied_ (C++ member)</a>
 </li>
@@ -19465,7 +19480,7 @@
 </li>
       <li><a href="api/class/class_rel_project.html#_CPPv410RelProject">RelProject (C++ class)</a>
 </li>
-      <li><a href="api/class/class_rel_project.html#_CPPv4N10RelProject7addHintERK13HintExplained">RelProject::addHint (C++ function)</a>
+      <li><a href="api/class/class_rel_project.html#_CPPv4N10RelProject7addHintERK18ExplainedQueryHint">RelProject::addHint (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_project.html#_CPPv4N10RelProject11appendInputENSt6stringENSt10unique_ptrIK9RexScalarEE">RelProject::appendInput (C++ function)</a>
 </li>
@@ -19485,7 +19500,7 @@
 </li>
       <li><a href="api/class/class_rel_project.html#_CPPv4NK10RelProject9getFieldsEv">RelProject::getFields (C++ function)</a>
 </li>
-      <li><a href="api/class/class_rel_project.html#_CPPv4NK10RelProject11getHintInfoERKNSt6stringE">RelProject::getHintInfo (C++ function)</a>
+      <li><a href="api/class/class_rel_project.html#_CPPv4NK10RelProject11getHintInfoE9QueryHint">RelProject::getHintInfo (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_project.html#_CPPv4NK10RelProject12getProjectAtEK6size_t">RelProject::getProjectAt (C++ function)</a>
 </li>
@@ -19493,7 +19508,7 @@
 </li>
       <li><a href="api/class/class_rel_project.html#_CPPv4N10RelProject16hasDeliveredHintEv">RelProject::hasDeliveredHint (C++ function)</a>
 </li>
-      <li><a href="api/class/class_rel_project.html#_CPPv4NK10RelProject14hasHintEnabledERKNSt6stringE">RelProject::hasHintEnabled (C++ function)</a>
+      <li><a href="api/class/class_rel_project.html#_CPPv4NK10RelProject14hasHintEnabledE9QueryHint">RelProject::hasHintEnabled (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_project.html#_CPPv4NK10RelProject21hasWindowFunctionExprEv">RelProject::hasWindowFunctionExpr (C++ function)</a>
 </li>
@@ -19539,7 +19554,7 @@
 </li>
       <li><a href="api/class/class_rel_scan.html#_CPPv47RelScan">RelScan (C++ class)</a>
 </li>
-      <li><a href="api/class/class_rel_scan.html#_CPPv4N7RelScan7addHintERK13HintExplained">RelScan::addHint (C++ function)</a>
+      <li><a href="api/class/class_rel_scan.html#_CPPv4N7RelScan7addHintERK18ExplainedQueryHint">RelScan::addHint (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_scan.html#_CPPv4NK7RelScan8deepCopyEv">RelScan::deepCopy (C++ function)</a>
 </li>
@@ -19551,13 +19566,13 @@
 </li>
       <li><a href="api/class/class_rel_scan.html#_CPPv4NK7RelScan13getFieldNamesEv">RelScan::getFieldNames (C++ function)</a>
 </li>
-      <li><a href="api/class/class_rel_scan.html#_CPPv4NK7RelScan11getHintInfoERKNSt6stringE">RelScan::getHintInfo (C++ function)</a>
+      <li><a href="api/class/class_rel_scan.html#_CPPv4NK7RelScan11getHintInfoE9QueryHint">RelScan::getHintInfo (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_scan.html#_CPPv4NK7RelScan18getTableDescriptorEv">RelScan::getTableDescriptor (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_scan.html#_CPPv4N7RelScan16hasDeliveredHintEv">RelScan::hasDeliveredHint (C++ function)</a>
 </li>
-      <li><a href="api/class/class_rel_scan.html#_CPPv4NK7RelScan14hasHintEnabledERKNSt6stringE">RelScan::hasHintEnabled (C++ function)</a>
+      <li><a href="api/class/class_rel_scan.html#_CPPv4NK7RelScan14hasHintEnabledEK9QueryHint">RelScan::hasHintEnabled (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_scan.html#_CPPv4N7RelScan13hint_applied_E">RelScan::hint_applied_ (C++ member)</a>
 </li>
@@ -19759,6 +19774,8 @@
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo11InSituStateE">RenderInfo::InSituState (C++ enum)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo10IS_IN_SITUE">RenderInfo::IS_IN_SITU (C++ enumerator)</a>
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo14IS_NOT_IN_SITUE">RenderInfo::IS_NOT_IN_SITU (C++ enumerator)</a>
@@ -19775,8 +19792,6 @@
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo24render_allocator_map_ptrE">RenderInfo::render_allocator_map_ptr (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo18render_query_opts_E">RenderInfo::render_query_opts_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo14render_sessionE">RenderInfo::render_session (C++ member)</a>
