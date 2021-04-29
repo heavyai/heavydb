@@ -133,6 +133,8 @@ bool g_is_test_env{false};  // operating under a unit test environment. Currentl
 size_t g_approx_quantile_buffer{1000};
 size_t g_approx_quantile_centroids{300};
 
+bool g_enable_automatic_ir_metadata{true};
+
 extern bool g_cache_string_hash;
 
 int const Executor::max_gpu_count;

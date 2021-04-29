@@ -26,6 +26,8 @@
 
 #ifndef NDEBUG
 
+extern bool g_enable_automatic_ir_metadata;
+
 class AutomaticIRMetadataGuard {
  public:
   AutomaticIRMetadataGuard(CgenState* cgen_state,
@@ -38,17 +40,20 @@ class AutomaticIRMetadataGuard {
       , ppfunc_(ppfunc)
       , our_instructions_(nullptr)
       , done_(false)
-      , this_is_root_(!instructions_.count(cgen_state_)) {
-    CHECK(cgen_state_);
-    CHECK(cgen_state_->module_);
-    our_instructions_ = &instructions_[cgen_state_];
-    rememberPreexistingInstructions();
+      , this_is_root_(!instructions_.count(cgen_state_))
+      , enabled_(g_enable_automatic_ir_metadata) {
+    if (enabled_) {
+      CHECK(cgen_state_);
+      CHECK(cgen_state_->module_);
+      our_instructions_ = &instructions_[cgen_state_];
+      rememberPreexistingInstructions();
+    }
   }
 
   ~AutomaticIRMetadataGuard() { done(); }
 
   void done() noexcept {
-    if (!done_) {
+    if (enabled_ && !done_) {
       rememberOurInstructions();
       if (this_is_root_) {
         markInstructions();
@@ -186,6 +191,7 @@ class AutomaticIRMetadataGuard {
 
   bool done_;
   bool this_is_root_;
+  bool enabled_;
 
   inline static std::unordered_map<CgenState*, OurInstructions> instructions_;
 

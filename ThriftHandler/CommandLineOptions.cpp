@@ -730,6 +730,11 @@ void CommandLineOptions::fillAdvancedOptions() {
                                "deleted rows in a fragment at which to perform "
                                "automatic vacuuming. A number greater than 1 can "
                                "be used to disable automatic vacuuming.");
+  developer_desc.add_options()("enable-automatic-ir-metadata",
+                               po::value<bool>(&g_enable_automatic_ir_metadata)
+                                   ->default_value(g_enable_automatic_ir_metadata)
+                                   ->implicit_value(true),
+                               "Enable automatic IR metadata (debug builds only).");
 }
 
 namespace {
