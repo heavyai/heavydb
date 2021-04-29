@@ -3489,10 +3489,18 @@ TEST_F(ForeignStorageCacheQueryTest, ArrayTypes) {
   // clang-format off
   assertMetadataEqual(metadata_vec[0].second,
                       createMetadata(kINT, 12, 3, "1", "3", false));
+  // we add 8-byte padding when 1-byte type (boolean[] and tinyint[]) varlen array col
+  // inserts the first row and its array value is one of the following cases:
+  // 1) is null,
+  // 2) has a single elem, (i.e., {true} and {1}) or
+  // 3) an empty array (i.e., {})
+  // and in this test dataset, only boolean[] col matches the second case
+  // --> see file_1.csv where the second column has an array having a single elem: '{true}'
+  // so we need to consider the additional 8-byte adding, so 'numBytes' should become 12 (=4+8) bytes instead of 4
   assertMetadataEqual(
       metadata_vec[1].second,
       createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kBOOLEAN),
-                     4, 3, "false", "true", false));
+                     12, 3, "false", "true", false));
   assertMetadataEqual(
       metadata_vec[2].second,
       createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kTINYINT),

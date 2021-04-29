@@ -409,6 +409,63 @@ TEST_F(FixedEncodedArrayTest, ExceptionTest) {
       run_ddl_statement("CREATE TABLE farr_dt64_dt16 (val DATE[1] ENCODING FIXED(16));"));
 }
 
+class TinyIntArrayImportTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    run_ddl_statement("DROP TABLE IF EXISTS tinyint_arr;");
+    run_ddl_statement("CREATE TABLE tinyint_arr (ti tinyint[]);");
+  }
+
+  void TearDown() override { run_ddl_statement("DROP TABLE IF EXISTS tinyint_arr;"); }
+};
+
+TEST_F(TinyIntArrayImportTest, TinyIntImportBugTest) {
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
+                                    ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES (NULL);",
+                                    ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
+                                    ExecutorDeviceType::CPU));
+
+  TearDown();
+  SetUp();
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
+                                    ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES (NULL);",
+                                    ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
+                                    ExecutorDeviceType::CPU));
+
+  TearDown();
+  SetUp();
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
+                                    ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES (NULL);",
+                                    ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
+                                    ExecutorDeviceType::CPU));
+}
+
 int main(int argc, char** argv) {
   g_is_test_env = true;
 

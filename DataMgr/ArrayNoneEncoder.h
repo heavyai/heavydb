@@ -85,17 +85,20 @@ class ArrayNoneEncoder : public Encoder {
     }
     index_buf->reserve(index_size);
 
-    bool first_elem_is_null = false;
+    bool first_elem_padded = false;
     ArrayOffsetT initial_offset = 0;
     if (num_elems_ == 0) {
-      // If the very first ArrayDatum is NULL, initial offset will be set to 8
-      // so we could negate it and write it out to index buffer to convey NULLness
-      if ((*srcData)[0].is_null) {
+      if ((*srcData)[0].is_null || (*srcData)[0].length <= 1) {
+        // Covers following potentially problematic first arrays:
+        // (1) NULL array, issue - can't encode a NULL with 0 initial offset
+        // otherwise, if first array is not NULL:
+        // (2) length=1 array - could be followed by a {}*/NULL, covers tinyint,bool
+        // (3) empty array - could be followed by {}*/NULL, or {}*|{x}|{}*|NULL, etc.
         initial_offset = DEFAULT_NULL_PADDING_SIZE;
-        first_elem_is_null = true;
+        first_elem_padded = true;
       }
       index_buf->append((int8_t*)&initial_offset,
-                        sizeof(ArrayOffsetT));  // write the inital offset
+                        sizeof(ArrayOffsetT));  // write the initial offset
       last_offset = initial_offset;
     } else {
       // Valid last_offset is never negative
@@ -114,7 +117,7 @@ class ArrayNoneEncoder : public Encoder {
       }
     }
     // Need to start data from 8 byte offset if first array encoded is a NULL array
-    size_t data_size = (first_elem_is_null) ? DEFAULT_NULL_PADDING_SIZE : 0;
+    size_t data_size = (first_elem_padded) ? DEFAULT_NULL_PADDING_SIZE : 0;
     for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {
       // NULL arrays don't take any space so don't add to the data size
       if ((*srcData)[replicating ? 0 : n].is_null) {
@@ -145,8 +148,9 @@ class ArrayNoneEncoder : public Encoder {
     }
 
     // Pad buffer_ with 8 bytes if first encoded array is a NULL array
-    if (first_elem_is_null) {
-      buffer_->append(inbuf, DEFAULT_NULL_PADDING_SIZE);
+    if (first_elem_padded) {
+      auto padding_size = DEFAULT_NULL_PADDING_SIZE;
+      buffer_->append(inbuf, padding_size);
     }
     for (size_t num_appended = 0; num_appended < numAppendElems;) {
       size_t size = 0;
