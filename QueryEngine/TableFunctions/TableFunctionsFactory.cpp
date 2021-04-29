@@ -139,28 +139,119 @@ SQLTypeInfo TableFunction::getOutputSQLType(const size_t idx) const {
   return ext_arg_type_to_type_info_output(output_args_[idx]);
 }
 
+int32_t TableFunction::countScalarArgs() const {
+  int32_t scalar_args = 0;
+  for (const auto& ext_arg : input_args_) {
+    if (is_ext_arg_type_scalar(ext_arg)) {
+      scalar_args += 1;
+    }
+  }
+  return scalar_args;
+}
+
+size_t TableFunction::getSqlOutputRowSizeParameter() const {
+  /*
+    This function differs from getOutputRowSizeParameter() since it returns the correct
+    index for the sizer in the sql_args list. For instance, consider the example below:
+
+      RowMultiplier=4
+      input_args=[{i32*, i64}, {i32*, i64}, {i32*, i64}, i32, {i32*, i64}, {i32*, i64},
+    i32] sql_args=[cursor, i32, cursor, i32]
+
+    Non-scalar args are aggregated in a cursor inside the sql_args list and the new
+    sizer index is 2 rather than 4 originally specified.
+  */
+
+  if (hasUserSpecifiedOutputSizeMultiplier()) {
+    size_t sizer = getOutputRowSizeParameter();  // lookup until reach the sizer arg
+    int32_t ext_arg_index = 0, sql_arg_index = 0;
+
+    auto same_kind = [&](const ExtArgumentType& ext_arg, const ExtArgumentType& sql_arg) {
+      return ((is_ext_arg_type_scalar(ext_arg) && is_ext_arg_type_scalar(sql_arg)) ||
+              (is_ext_arg_type_nonscalar(ext_arg) && is_ext_arg_type_nonscalar(sql_arg)));
+    };
+
+    while ((size_t)ext_arg_index < sizer) {
+      if ((size_t)ext_arg_index == sizer - 1)
+        return sql_arg_index;
+
+      const auto& ext_arg = input_args_[ext_arg_index];
+      const auto& sql_arg = sql_args_[sql_arg_index];
+
+      if (same_kind(ext_arg, sql_arg)) {
+        ++ext_arg_index;
+        ++sql_arg_index;
+      } else {
+        CHECK(same_kind(ext_arg, sql_args_[sql_arg_index - 1]));
+        ext_arg_index += 1;
+      }
+    }
+
+    CHECK(false);
+  }
+
+  return getOutputRowSizeParameter();
+}
+
 void TableFunctionsFactory::add(const std::string& name,
                                 const TableFunctionOutputRowSizer sizer,
                                 const std::vector<ExtArgumentType>& input_args,
                                 const std::vector<ExtArgumentType>& output_args,
                                 const std::vector<ExtArgumentType>& sql_args,
                                 bool is_runtime) {
+  auto tf = TableFunction(name, sizer, input_args, output_args, sql_args, is_runtime);
+  auto sig = tf.getSignature();
   for (auto it = functions_.begin(); it != functions_.end();) {
     if (it->second.getName() == name) {
       if (it->second.isRuntime()) {
-        VLOG(1) << "Overriding existing run-time table function (reset not called?): "
-                << name;
+        LOG(WARNING)
+            << "Overriding existing run-time table function (reset not called?): "
+            << name;
         it = functions_.erase(it);
       } else {
         throw std::runtime_error("Will not override existing load-time table function: " +
                                  name);
       }
     } else {
+      if (sig == it->second.getSignature() &&
+          ((tf.isCPU() && it->second.isCPU()) || (tf.isGPU() && it->second.isGPU()))) {
+        LOG(WARNING)
+            << "The existing (1) and added (2) table functions have the same signature `"
+            << sig << "`:\n"
+            << "  1: " << it->second.toString() << "\n  2: " << tf.toString() << "\n";
+      }
       ++it;
     }
   }
-  auto tf = TableFunction(name, sizer, input_args, output_args, sql_args, is_runtime);
+
   functions_.emplace(name, tf);
+  if (sizer.type == OutputBufferSizeType::kUserSpecifiedRowMultiplier) {
+    auto input_args2 = input_args;
+    input_args2.erase(input_args2.begin() + sizer.val - 1);
+
+    auto sql_args2 = sql_args;
+    auto sql_sizer_pos = tf.getSqlOutputRowSizeParameter();
+    sql_args2.erase(sql_args2.begin() + sql_sizer_pos);
+
+    auto tf2 = TableFunction(name + DEFAULT_ROW_MULTIPLIER_SUFFIX,
+                             sizer,
+                             input_args2,
+                             output_args,
+                             sql_args2,
+                             is_runtime);
+    auto sig = tf2.getSignature();
+    for (auto it = functions_.begin(); it != functions_.end();) {
+      if (sig == it->second.getSignature() &&
+          ((tf2.isCPU() && it->second.isCPU()) || (tf2.isGPU() && it->second.isGPU()))) {
+        LOG(WARNING)
+            << "The existing (1) and added (2) table functions have the same signature `"
+            << sig << "`:\n"
+            << "  1: " << it->second.toString() << "\n  2: " << tf2.toString() << "\n";
+      }
+      ++it;
+    }
+    functions_.emplace(name + DEFAULT_ROW_MULTIPLIER_SUFFIX, tf2);
+  }
 }
 
 /*
@@ -184,7 +275,7 @@ void TableFunctionsFactory::reset() {
 
 namespace {
 
-std::string drop_suffix(const std::string& str) {
+std::string drop_suffix_impl(const std::string& str) {
   const auto idx = str.find("__");
   if (idx == std::string::npos) {
     return str;
@@ -195,13 +286,24 @@ std::string drop_suffix(const std::string& str) {
 
 }  // namespace
 
+std::string TableFunction::getName(const bool drop_suffix, const bool lower) const {
+  std::string result = name_;
+  if (drop_suffix) {
+    result = drop_suffix_impl(result);
+  }
+  if (lower) {
+    boost::algorithm::to_lower(result);
+  }
+  return result;
+}
+
 std::vector<TableFunction> TableFunctionsFactory::get_table_funcs(const std::string& name,
                                                                   const bool is_gpu) {
   std::vector<TableFunction> table_funcs;
   auto table_func_name = name;
   boost::algorithm::to_lower(table_func_name);
   for (const auto& pair : functions_) {
-    auto fname = drop_suffix(pair.first);
+    auto fname = drop_suffix_impl(pair.first);
     if (fname == table_func_name &&
         (is_gpu ? pair.second.isGPU() : pair.second.isCPU())) {
       table_funcs.push_back(pair.second);

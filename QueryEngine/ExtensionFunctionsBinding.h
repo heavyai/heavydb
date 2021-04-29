@@ -59,10 +59,4 @@ bind_table_function(std::string name,
                     Analyzer::ExpressionPtrVector input_args,
                     const bool is_gpu);
 
-bool is_ext_arg_type_column(const ExtArgumentType ext_arg_type);
-bool is_ext_arg_type_column_list(const ExtArgumentType ext_arg_type);
-bool is_ext_arg_type_array(const ExtArgumentType ext_arg_type);
-bool is_ext_arg_type_geo(const ExtArgumentType ext_arg_type);
-bool is_ext_arg_type_pointer(const ExtArgumentType ext_arg_type);
-bool is_ext_arg_type_scalar(const ExtArgumentType ext_arg_type);
 #endif  // QUERYENGINE_EXTENSIONFUNCTIONSBINDING_H

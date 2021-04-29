@@ -121,6 +121,19 @@ TEST_F(TableFunctions, BasicProjection) {
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
     }
+    // Omit sizer (kRowMultiplier)
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_adder(cursor(SELECT d, d2 FROM tf_test)));", dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test))) ORDER BY "
+          "out0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
     // Constant (kConstant) size tests with get_max_with_row_offset
     {
       const auto rows = run_multiple_agg(

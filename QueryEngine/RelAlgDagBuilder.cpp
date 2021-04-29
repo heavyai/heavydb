@@ -475,6 +475,17 @@ void RelTableFunction::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
   }
 }
 
+int32_t RelTableFunction::countRexLiteralArgs() const {
+  int32_t literal_args = 0;
+  for (const auto& arg : table_func_inputs_) {
+    const auto rex_literal = dynamic_cast<const RexLiteral*>(arg.get());
+    if (rex_literal) {
+      literal_args += 1;
+    }
+  }
+  return literal_args;
+}
+
 RelTableFunction::RelTableFunction(RelTableFunction const& rhs)
     : RelAlgNode(rhs)
     , function_name_(rhs.function_name_)

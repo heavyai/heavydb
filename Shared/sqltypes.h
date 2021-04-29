@@ -453,24 +453,25 @@ class SQLTypeInfo {
     return type_name[static_cast<int>(type)] + ps;
   }
   inline std::string get_compression_name() const { return comp_name[(int)compression]; }
+  std::string toString() const { return to_string(); }  // for PRINT macro
   inline std::string to_string() const {
-    return concat("(",
+    return concat("(type=",
                   type_name[static_cast<int>(type)],
-                  ", ",
+                  ", dimension=",
                   get_dimension(),
-                  ", ",
+                  ", scale=",
                   get_scale(),
-                  ", ",
+                  ", null=",
                   get_notnull() ? "not nullable" : "nullable",
-                  ", ",
+                  ", name=",
                   get_compression_name(),
-                  ", ",
+                  ", comp=",
                   get_comp_param(),
-                  ", ",
+                  ", subtype=",
                   type_name[static_cast<int>(subtype)],
-                  ": ",
+                  ", size=",
                   get_size(),
-                  ": ",
+                  ", element_size=",
                   get_elem_type().get_size(),
                   ")");
   }

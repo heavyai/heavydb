@@ -504,8 +504,9 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
   }
 
   for (const auto& kv : table_functions::TableFunctionsFactory::functions_) {
-    if (kv.second.isRuntime()) {
+    if (kv.second.isRuntime() || kv.second.useDefaultSizer()) {
       // Runtime UDTFs are defined in LLVM/NVVM IR module
+      // UDTFs using default sizer share LLVM IR
       continue;
     }
     if (!((is_gpu && kv.second.isGPU()) || (!is_gpu && kv.second.isCPU()))) {

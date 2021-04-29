@@ -6646,7 +6646,9 @@ void DBHandler::register_runtime_extension_functions(
 
   /* Register extension functions with Calcite server */
   CHECK(calcite_);
-  calcite_->setRuntimeExtensionFunctions(udfs, udtfs, /*is_runtime =*/true);
+  auto udtfs_ = ThriftSerializers::to_thrift(
+      table_functions::TableFunctionsFactory::get_table_funcs(/*is_runtime=*/true));
+  calcite_->setRuntimeExtensionFunctions(udfs, udtfs_, /*is_runtime =*/true);
 
   /* Update the extension function whitelist */
   std::string whitelist = calcite_->getRuntimeExtensionFunctionWhitelist();

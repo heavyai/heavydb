@@ -4023,38 +4023,38 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
 }
 
 RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUnit(
-    const RelTableFunction* table_func,
+    const RelTableFunction* rel_table_func,
     const bool just_explain,
     const bool is_gpu) {
   std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  auto input_to_nest_level = get_input_nest_levels(table_func, {});
+  auto input_to_nest_level = get_input_nest_levels(rel_table_func, {});
   std::tie(input_descs, input_col_descs, std::ignore) =
-      get_input_desc(table_func, input_to_nest_level, {}, cat_);
+      get_input_desc(rel_table_func, input_to_nest_level, {}, cat_);
   const auto query_infos = get_table_infos(input_descs, executor_);
   RelAlgTranslator translator(
       cat_, query_state_, executor_, input_to_nest_level, {}, now_, just_explain);
   const auto input_exprs_owned =
-      translate_scalar_sources(table_func, translator, ::ExecutorType::Native);
+      translate_scalar_sources(rel_table_func, translator, ::ExecutorType::Native);
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), input_exprs_owned.begin(), input_exprs_owned.end());
-  const auto input_exprs = get_exprs_not_owned(input_exprs_owned);
+  auto input_exprs = get_exprs_not_owned(input_exprs_owned);
 
   const auto table_function_impl_and_type_infos = [=]() {
     if (is_gpu) {
       try {
         return bind_table_function(
-            table_func->getFunctionName(), input_exprs_owned, is_gpu);
+            rel_table_func->getFunctionName(), input_exprs_owned, is_gpu);
       } catch (ExtensionFunctionBindingError& e) {
         LOG(WARNING) << "createTableFunctionWorkUnit[GPU]: " << e.what()
-                     << " Redirecting " << table_func->getFunctionName()
+                     << " Redirecting " << rel_table_func->getFunctionName()
                      << " to run on CPU.";
         throw QueryMustRunOnCpu();
       }
     } else {
       try {
         return bind_table_function(
-            table_func->getFunctionName(), input_exprs_owned, is_gpu);
+            rel_table_func->getFunctionName(), input_exprs_owned, is_gpu);
       } catch (ExtensionFunctionBindingError& e) {
         LOG(WARNING) << "createTableFunctionWorkUnit[CPU]: " << e.what();
         throw;
@@ -4070,21 +4070,33 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
     const auto parameter_index =
         table_function_impl.getOutputRowSizeParameter(table_function_type_infos);
     CHECK_GT(parameter_index, size_t(0));
-    const auto parameter_expr = table_func->getTableFuncInputAt(parameter_index - 1);
-    const auto parameter_expr_literal = dynamic_cast<const RexLiteral*>(parameter_expr);
-    if (!parameter_expr_literal) {
-      throw std::runtime_error(
-          "Provided output buffer sizing parameter is not a literal. Only literal "
-          "values are supported with output buffer sizing configured table "
-          "functions.");
+    if (rel_table_func->countRexLiteralArgs() == table_function_impl.countScalarArgs()) {
+      const auto parameter_expr =
+          rel_table_func->getTableFuncInputAt(parameter_index - 1);
+      const auto parameter_expr_literal = dynamic_cast<const RexLiteral*>(parameter_expr);
+      if (!parameter_expr_literal) {
+        throw std::runtime_error(
+            "Provided output buffer sizing parameter is not a literal. Only literal "
+            "values are supported with output buffer sizing configured table "
+            "functions.");
+      }
+      int64_t literal_val = parameter_expr_literal->getVal<int64_t>();
+      if (literal_val < 0) {
+        throw std::runtime_error("Provided output sizing parameter " +
+                                 std::to_string(literal_val) +
+                                 " must be positive integer.");
+      }
+      output_row_sizing_param = static_cast<size_t>(literal_val);
+    } else {
+      // RowMultiplier not specified in the SQL query. Set it to 1
+      output_row_sizing_param = 1;  // default value for RowMultiplier
+      static Datum d = {DEFAULT_ROW_MULTIPLIER_VALUE};
+      static auto DEFAULT_ROW_MULTIPLIER_EXPR =
+          makeExpr<Analyzer::Constant>(kINT, false, d);
+      // Push the constant 1 to input_exprs
+      input_exprs.insert(input_exprs.begin() + parameter_index - 1,
+                         DEFAULT_ROW_MULTIPLIER_EXPR.get());
     }
-    int64_t literal_val = parameter_expr_literal->getVal<int64_t>();
-    if (literal_val < 0) {
-      throw std::runtime_error("Provided output sizing parameter " +
-                               std::to_string(literal_val) +
-                               " must be positive integer.");
-    }
-    output_row_sizing_param = static_cast<size_t>(literal_val);
   } else if (table_function_impl.hasNonUserSpecifiedOutputSizeConstant()) {
     output_row_sizing_param = table_function_impl.getOutputRowSizeParameter();
   } else {
@@ -4115,7 +4127,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       input_index++;
     }
   }
-  CHECK_EQ(input_col_exprs.size(), table_func->getColInputsSize());
+  CHECK_EQ(input_col_exprs.size(), rel_table_func->getColInputsSize());
   std::vector<Analyzer::Expr*> table_func_outputs;
   for (size_t i = 0; i < table_function_impl.getOutputsSize(); i++) {
     const auto ti = table_function_impl.getOutputSQLType(i);
@@ -4130,9 +4142,9 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       table_func_outputs,       // table function projected exprs
       output_row_sizing_param,  // output buffer sizing param
       table_function_impl};
-  const auto targets_meta = get_targets_meta(table_func, exe_unit.target_exprs);
-  table_func->setOutputMetainfo(targets_meta);
-  return {exe_unit, table_func};
+  const auto targets_meta = get_targets_meta(rel_table_func, exe_unit.target_exprs);
+  rel_table_func->setOutputMetainfo(targets_meta);
+  return {exe_unit, rel_table_func};
 }
 
 namespace {

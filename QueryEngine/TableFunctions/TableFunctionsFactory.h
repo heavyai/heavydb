@@ -20,8 +20,12 @@
 #include <vector>
 
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
+#include "QueryEngine/TableFunctionHelper.h"
 #include "Shared/toString.h"
 #include "TableFunctionOutputBufferSizeType.h"
+
+#define DEFAULT_ROW_MULTIPLIER_SUFFIX "__default_RowMultiplier_"
+#define DEFAULT_ROW_MULTIPLIER_VALUE 1
 
 /*
 
@@ -111,49 +115,6 @@ struct TableFunctionOutputRowSizer {
   }
 };
 
-inline ExtArgumentType ext_arg_type_ensure_column(const ExtArgumentType ext_arg_type) {
-  switch (ext_arg_type) {
-    case ExtArgumentType::Int8:
-      return ExtArgumentType::ColumnInt8;
-    case ExtArgumentType::Int16:
-      return ExtArgumentType::ColumnInt16;
-    case ExtArgumentType::Int32:
-      return ExtArgumentType::ColumnInt32;
-    case ExtArgumentType::Int64:
-      return ExtArgumentType::ColumnInt64;
-    case ExtArgumentType::Float:
-      return ExtArgumentType::ColumnFloat;
-    case ExtArgumentType::Double:
-      return ExtArgumentType::ColumnDouble;
-    case ExtArgumentType::Bool:
-      return ExtArgumentType::ColumnBool;
-    default:
-      return ext_arg_type;
-  }
-}
-
-inline ExtArgumentType ext_arg_type_ensure_column_list(
-    const ExtArgumentType ext_arg_type) {
-  switch (ext_arg_type) {
-    case ExtArgumentType::Int8:
-      return ExtArgumentType::ColumnListInt8;
-    case ExtArgumentType::Int16:
-      return ExtArgumentType::ColumnListInt16;
-    case ExtArgumentType::Int32:
-      return ExtArgumentType::ColumnListInt32;
-    case ExtArgumentType::Int64:
-      return ExtArgumentType::ColumnListInt64;
-    case ExtArgumentType::Float:
-      return ExtArgumentType::ColumnListFloat;
-    case ExtArgumentType::Double:
-      return ExtArgumentType::ColumnListDouble;
-    case ExtArgumentType::Bool:
-      return ExtArgumentType::ColumnListBool;
-    default:
-      return ext_arg_type;
-  }
-}
-
 class TableFunction {
  public:
   TableFunction(const std::string& name,
@@ -190,10 +151,17 @@ class TableFunction {
   SQLTypeInfo getInputSQLType(const size_t idx) const;
   SQLTypeInfo getOutputSQLType(const size_t idx) const;
 
+  int32_t countScalarArgs() const;
+
   auto getInputsSize() const { return input_args_.size(); }
   auto getOutputsSize() const { return output_args_.size(); }
 
-  auto getName() const { return name_; }
+  std::string getName(const bool drop_suffix = false, const bool lower = false) const;
+
+  auto getSignature() const {
+    return getName(/*drop_suffix=*/true, /*lower=*/true) + "(" +
+           ExtensionFunctionsWhitelist::toString(input_args_) + ")";
+  }
 
   bool hasNonUserSpecifiedOutputSizeConstant() const {
     return output_sizer_.type == OutputBufferSizeType::kConstant;
@@ -210,6 +178,8 @@ class TableFunction {
   OutputBufferSizeType getOutputRowSizeType() const { return output_sizer_.type; }
 
   size_t getOutputRowSizeParameter() const { return output_sizer_.val; }
+
+  size_t getSqlOutputRowSizeParameter() const;
 
   size_t getOutputRowSizeParameter(const std::vector<SQLTypeInfo>& variant) const {
     auto val = output_sizer_.val;
@@ -242,12 +212,17 @@ class TableFunction {
     return (name_.find("_gpu_", name_.find("__")) == std::string::npos);
   }
 
+  inline bool useDefaultSizer() const {
+    // Functions that use a default sizer value have one less argument
+    return (name_.find("_default_", name_.find("__")) != std::string::npos);
+  }
+
   std::string toString() const {
-    auto result = "TableFunction(" + name_ + ", [";
+    auto result = "TableFunction(" + name_ + ", input_args=[";
     result += ExtensionFunctionsWhitelist::toString(input_args_);
-    result += "], [";
+    result += "], output_args=[";
     result += ExtensionFunctionsWhitelist::toString(output_args_);
-    result += "], [";
+    result += "], sql_args=[";
     result += ExtensionFunctionsWhitelist::toString(sql_args_);
     result += "], is_runtime=" + std::string((is_runtime_ ? "true" : "false"));
     result += ", sizer=" + ::toString(output_sizer_);

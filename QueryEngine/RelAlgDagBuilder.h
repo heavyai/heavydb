@@ -1574,6 +1574,8 @@ class RelTableFunction : public RelAlgNode {
 
   size_t getColInputsSize() const { return col_inputs_.size(); }
 
+  int32_t countRexLiteralArgs() const;
+
   const RexScalar* getTableFuncInputAt(const size_t idx) const {
     CHECK_LT(idx, table_func_inputs_.size());
     return table_func_inputs_[idx].get();

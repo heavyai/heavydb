@@ -407,8 +407,8 @@ bool is_valid_identifier(std::string str) {
 template <typename T>
 std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
     std::string name,
-    Analyzer::ExpressionPtrVector func_args,
-    const std::vector<T>& ext_funcs,
+    Analyzer::ExpressionPtrVector func_args,  // function args from sql query
+    const std::vector<T>& ext_funcs,          // list of functions registered
     const std::string processor) {
   /* worker function
 
@@ -543,10 +543,12 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
                                new_type_infos_variants.begin(),
                                new_type_infos_variants.end());
   }
+
   // Find extension function that gives the best match on the set of
   // argument type variants:
   for (auto ext_func : ext_funcs) {
     index++;
+
     auto ext_func_args = ext_func.getInputArgs();
     int index_variant = -1;
     for (const auto& type_infos : type_infos_variants) {
@@ -596,11 +598,36 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
       }
       message += "\n  Existing extension function implementations:";
       for (const auto& ext_func : ext_funcs) {
+        // Do not show functions missing the sizer argument
+        if constexpr (std::is_same_v<T, table_functions::TableFunction>)
+          if (ext_func.useDefaultSizer())
+            continue;
         message += "\n    " + ext_func.toStringSQL();
       }
     }
     throw ExtensionFunctionBindingError(message);
   }
+
+  // Functions with "_default_" suffix only exist for calcite
+  if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
+    if (ext_funcs[optimal].hasUserSpecifiedOutputSizeMultiplier() &&
+        ext_funcs[optimal].useDefaultSizer()) {
+      std::string name = ext_funcs[optimal].getName();
+      name.erase(name.find(DEFAULT_ROW_MULTIPLIER_SUFFIX),
+                 sizeof(DEFAULT_ROW_MULTIPLIER_SUFFIX));
+      for (size_t i = 0; i < ext_funcs.size(); i++) {
+        if (ext_funcs[i].getName() == name) {
+          optimal = i;
+          std::vector<SQLTypeInfo> type_info = type_infos_variants[optimal_variant];
+          size_t sizer = ext_funcs[optimal].getOutputRowSizeParameter();
+          type_info.insert(type_info.begin() + sizer - 1, SQLTypeInfo(kINT, true));
+          return {ext_funcs[optimal], type_info};
+        }
+      }
+      UNREACHABLE();
+    }
+  }
+
   return {ext_funcs[optimal], type_infos_variants[optimal_variant]};
 }
 
@@ -672,97 +699,4 @@ bind_table_function(std::string name,
   std::vector<table_functions::TableFunction> table_funcs =
       table_functions::TableFunctionsFactory::get_table_funcs(name, is_gpu);
   return bind_table_function(name, input_args, table_funcs, is_gpu);
-}
-
-bool is_ext_arg_type_array(const ExtArgumentType ext_arg_type) {
-  switch (ext_arg_type) {
-    case ExtArgumentType::ArrayInt8:
-    case ExtArgumentType::ArrayInt16:
-    case ExtArgumentType::ArrayInt32:
-    case ExtArgumentType::ArrayInt64:
-    case ExtArgumentType::ArrayFloat:
-    case ExtArgumentType::ArrayDouble:
-    case ExtArgumentType::ArrayBool:
-      return true;
-
-    default:
-      return false;
-  }
-}
-
-bool is_ext_arg_type_column(const ExtArgumentType ext_arg_type) {
-  switch (ext_arg_type) {
-    case ExtArgumentType::ColumnInt8:
-    case ExtArgumentType::ColumnInt16:
-    case ExtArgumentType::ColumnInt32:
-    case ExtArgumentType::ColumnInt64:
-    case ExtArgumentType::ColumnFloat:
-    case ExtArgumentType::ColumnDouble:
-    case ExtArgumentType::ColumnBool:
-      return true;
-
-    default:
-      return false;
-  }
-}
-
-bool is_ext_arg_type_column_list(const ExtArgumentType ext_arg_type) {
-  switch (ext_arg_type) {
-    case ExtArgumentType::ColumnListInt8:
-    case ExtArgumentType::ColumnListInt16:
-    case ExtArgumentType::ColumnListInt32:
-    case ExtArgumentType::ColumnListInt64:
-    case ExtArgumentType::ColumnListFloat:
-    case ExtArgumentType::ColumnListDouble:
-    case ExtArgumentType::ColumnListBool:
-      return true;
-
-    default:
-      return false;
-  }
-}
-
-bool is_ext_arg_type_geo(const ExtArgumentType ext_arg_type) {
-  switch (ext_arg_type) {
-    case ExtArgumentType::GeoPoint:
-    case ExtArgumentType::GeoLineString:
-    case ExtArgumentType::GeoPolygon:
-    case ExtArgumentType::GeoMultiPolygon:
-      return true;
-
-    default:
-      return false;
-  }
-}
-
-bool is_ext_arg_type_pointer(const ExtArgumentType ext_arg_type) {
-  switch (ext_arg_type) {
-    case ExtArgumentType::PInt8:
-    case ExtArgumentType::PInt16:
-    case ExtArgumentType::PInt32:
-    case ExtArgumentType::PInt64:
-    case ExtArgumentType::PFloat:
-    case ExtArgumentType::PDouble:
-    case ExtArgumentType::PBool:
-      return true;
-
-    default:
-      return false;
-  }
-}
-
-bool is_ext_arg_type_scalar(const ExtArgumentType ext_arg_type) {
-  switch (ext_arg_type) {
-    case ExtArgumentType::Int8:
-    case ExtArgumentType::Int16:
-    case ExtArgumentType::Int32:
-    case ExtArgumentType::Int64:
-    case ExtArgumentType::Float:
-    case ExtArgumentType::Double:
-    case ExtArgumentType::Bool:
-      return true;
-
-    default:
-      return false;
-  }
 }
