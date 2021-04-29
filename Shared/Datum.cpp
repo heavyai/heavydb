@@ -432,22 +432,32 @@ SQLTypes decimal_to_int_type(const SQLTypeInfo& ti) {
   return kNULLT;
 }
 
+// Return decimal_value * 10^dscale
+// where dscale = new_type_info.get_scale() - type_info.get_scale()
 int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
                                        const SQLTypeInfo& type_info,
                                        const SQLTypeInfo& new_type_info) {
-  auto converted_decimal_value = decimal_value;
-  if (new_type_info.get_scale() > type_info.get_scale()) {
-    for (int i = 0; i < new_type_info.get_scale() - type_info.get_scale(); i++) {
-      converted_decimal_value *= 10;
+  constexpr int max_scale = std::numeric_limits<uint64_t>::digits10;  // 19
+  constexpr auto pow10 = shared::powersOf<uint64_t, max_scale + 1>(10);
+  int const dscale = new_type_info.get_scale() - type_info.get_scale();
+  if (dscale < 0) {
+    if (dscale < -max_scale) {
+      return 0;  // +/- 0.09223372036854775807 rounds to 0
     }
-  } else if (new_type_info.get_scale() < type_info.get_scale()) {
-    for (int i = 0; i < type_info.get_scale() - new_type_info.get_scale(); i++) {
-      if (converted_decimal_value > 0) {
-        converted_decimal_value = (converted_decimal_value + 5) / 10;
-      } else {
-        converted_decimal_value = (converted_decimal_value - 5) / 10;
-      }
+    uint64_t const u = std::abs(decimal_value);
+    uint64_t const pow = pow10[-dscale];
+    uint64_t div = u / pow;
+    uint64_t rem = u % pow;
+    div += pow / 2 <= rem;
+    return decimal_value < 0 ? -div : div;
+  } else if (dscale < max_scale) {
+    int64_t retval;
+    if (!__builtin_mul_overflow(decimal_value, pow10[dscale], &retval)) {
+      return retval;
     }
   }
-  return converted_decimal_value;
+  if (decimal_value == 0) {
+    return 0;
+  }
+  throw std::runtime_error("Overflow in DECIMAL-to-DECIMAL conversion.");
 }
