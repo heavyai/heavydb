@@ -5982,6 +5982,105 @@ TEST(Select, CastFromNull) {
   }
 }
 
+TEST(Select, CastRound) {
+  auto const run = [](char const* n, char const* type, ExecutorDeviceType const dt) {
+    return run_simple_agg(std::string("SELECT CAST(") + n + " AS " + type + ");", dt);
+  };
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_EQ(127, v<int64_t>(run("127.4999999999999999", "TINYINT", dt)));
+    EXPECT_ANY_THROW(run("127.5", "TINYINT", dt));  // overflow
+    EXPECT_EQ(-128, v<int64_t>(run("-128.4999999999999999", "TINYINT", dt)));
+    EXPECT_ANY_THROW(run("-128.5", "TINYINT", dt));  // overflow
+
+    EXPECT_EQ(32767, v<int64_t>(run("32767.49999999999999", "SMALLINT", dt)));
+    EXPECT_ANY_THROW(run("32767.5", "SMALLINT", dt));  // overflow
+    EXPECT_EQ(-32768, v<int64_t>(run("-32768.49999999999999", "SMALLINT", dt)));
+    EXPECT_ANY_THROW(run("-32768.5", "SMALLINT", dt));  // overflow
+
+    EXPECT_EQ(2147483647, v<int64_t>(run("2147483647.499999999", "INT", dt)));
+    EXPECT_ANY_THROW(run("2147483647.5", "INT", dt));  // overflow
+    EXPECT_EQ(-2147483648, v<int64_t>(run("-2147483648.499999999", "INT", dt)));
+    EXPECT_ANY_THROW(run("-2147483648.5", "INT", dt));  // overflow
+
+    EXPECT_EQ(std::numeric_limits<int64_t>::max(),
+              v<int64_t>(run("9223372036854775807.", "BIGINT", dt)));
+    EXPECT_ANY_THROW(run("9223372036854775807.0", "BIGINT", dt));  // out of range
+    EXPECT_ANY_THROW(run("9223372036854775807.5", "BIGINT", dt));  // out of range
+    EXPECT_EQ(std::numeric_limits<int64_t>::min(),
+              v<int64_t>(run("-9223372036854775808.", "BIGINT", dt)));
+    EXPECT_ANY_THROW(run("-9223372036854775808.0", "BIGINT", dt));  // out of range
+    EXPECT_ANY_THROW(run("-9223372036854775808.5", "BIGINT", dt));  // out of range
+
+    EXPECT_EQ(1e18f, v<float>(run("999999999999999999", "FLOAT", dt)));
+    EXPECT_EQ(1e10f, v<float>(run("9999999999.99999999", "FLOAT", dt)));
+    EXPECT_EQ(-1e18f, v<float>(run("-999999999999999999", "FLOAT", dt)));
+    EXPECT_EQ(-1e10f, v<float>(run("-9999999999.99999999", "FLOAT", dt)));
+
+    EXPECT_EQ(1e18, v<double>(run("999999999999999999", "DOUBLE", dt)));
+    EXPECT_EQ(1e10, v<double>(run("9999999999.99999999", "DOUBLE", dt)));
+    EXPECT_EQ(-1e18, v<double>(run("-999999999999999999", "DOUBLE", dt)));
+    EXPECT_EQ(-1e10, v<double>(run("-9999999999.99999999", "DOUBLE", dt)));
+
+    EXPECT_ANY_THROW(run("9223372036854775808e0", "BIGINT", dt));  // overflow
+    EXPECT_ANY_THROW(run("9223372036854775807e0", "BIGINT", dt));  // overflow
+    EXPECT_ANY_THROW(run("9223372036854775296e0", "BIGINT", dt));  // overflow
+    // RHS = Largest integer that doesn't overflow when cast to DOUBLE to BIGINT.
+    // LHS = Largest double value less than std::numeric_limits<int64_t>::max().
+    EXPECT_EQ(9223372036854774784ll,
+              v<int64_t>(run("9223372036854775295e0", "BIGINT", dt)));
+    EXPECT_EQ(std::numeric_limits<int64_t>::min(),
+              v<int64_t>(run("-9223372036854775808e0", "BIGINT", dt)));
+    /* These results may be platform-dependent so are not included in tests.
+    EXPECT_EQ(std::numeric_limits<int64_t>::min(),
+              v<int64_t>(run("-9223372036854776959e0", "BIGINT", dt)));
+    EXPECT_ANY_THROW(run("-9223372036854776960e0", "BIGINT", dt));  // overflow
+    */
+
+    // Apply BIGINT tests to DECIMAL
+    EXPECT_ANY_THROW(run("9223372036854775808e0", "DECIMAL", dt));  // overflow
+    EXPECT_ANY_THROW(run("9223372036854775807e0", "DECIMAL", dt));  // overflow
+    EXPECT_ANY_THROW(run("9223372036854775296e0", "DECIMAL", dt));  // overflow
+    EXPECT_EQ(9223372036854774784.0,
+              v<double>(run("9223372036854775295e0", "DECIMAL", dt)));
+    EXPECT_EQ(static_cast<double>(std::numeric_limits<int64_t>::min()),
+              v<double>(run("-9223372036854775808e0", "DECIMAL", dt)));
+
+    EXPECT_ANY_THROW(run("2147483647.5e0", "INT", dt));  // overflow
+    EXPECT_EQ(2147483647, v<int64_t>(run("2147483647.4999e0", "BIGINT", dt)));
+    EXPECT_EQ(std::numeric_limits<int32_t>::min(),
+              v<int64_t>(run("-2147483648.4999e0", "INT", dt)));
+    EXPECT_ANY_THROW(run("-2147483648.5e0", "INT", dt));  // overflow
+
+    EXPECT_ANY_THROW(run("32767.5e0", "SMALLINT", dt));  // overflow
+    EXPECT_EQ(32767, v<int64_t>(run("32767.4999e0", "SMALLINT", dt)));
+    EXPECT_EQ(-32768, v<int64_t>(run("-32768.4999e0", "SMALLINT", dt)));
+    EXPECT_ANY_THROW(run("-32768.5e0", "SMALLINT", dt));  // overflow
+
+    EXPECT_ANY_THROW(run("127.5e0", "TINYINT", dt));  // overflow
+    EXPECT_EQ(127, v<int64_t>(run("127.4999e0", "TINYINT", dt)));
+    EXPECT_EQ(-128, v<int64_t>(run("-128.4999e0", "TINYINT", dt)));
+    EXPECT_ANY_THROW(run("-128.5e0", "TINYINT", dt));  // overflow
+
+    EXPECT_TRUE(
+        v<int64_t>(run_simple_agg("SELECT '292277026596-12-04 15:30:07' = "
+                                  "CAST(9223372036854775807 AS TIMESTAMP(0));",
+                                  dt)));
+    EXPECT_TRUE(
+        v<int64_t>(run_simple_agg("SELECT '292278994-08-17 07:12:55.807' = "
+                                  "CAST(9223372036854775807 AS TIMESTAMP(3));",
+                                  dt)));
+    EXPECT_TRUE(v<int64_t>(
+        run_simple_agg("SELECT CAST('294247-01-10 04:00:54.775807' AS TIMESTAMP(6)) = "
+                       "CAST(9223372036854775807 AS TIMESTAMP(6));",
+                       dt)));
+    EXPECT_TRUE(v<int64_t>(
+        run_simple_agg("SELECT CAST('2262-04-11 23:47:16.854775807' AS TIMESTAMP(9)) = "
+                       "CAST(9223372036854775807 AS TIMESTAMP(9));",
+                       dt)));
+  }
+}
+
 TEST(Select, DropSecondaryDB) {
   run_ddl_statement("CREATE DATABASE SECONDARY_DB;");
   run_ddl_statement("DROP DATABASE SECONDARY_DB;");
@@ -16477,21 +16576,18 @@ TEST(Update, ImplicitCastToTimestamp8) {
     EXPECT_NO_THROW(run_multiple_agg(
         "update tstamp set t1=cast( '1989-01-01 00:00:00' as timestamp );", dt));
     EXPECT_NO_THROW(run_multiple_agg("update tstamp set t1=cast( '2000' as date );", dt));
-    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 2000.00 as float );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 2123.444 as double );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 1235 as integer );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 12 as smallint );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 9 as bigint );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 'False' as boolean );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update tstamp set t1=cast( '1234.00' as decimal );", dt),
-        std::runtime_error);
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp set t1=cast( 2000.00 as float );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp set t1=cast( 2123.444 as double );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp set t1=cast( 1235 as integer );", dt));
+    EXPECT_NO_THROW(run_multiple_agg("update tstamp set t1=cast( 12 as smallint );", dt));
+    EXPECT_NO_THROW(run_multiple_agg("update tstamp set t1=cast( 9 as bigint );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp set t1=cast( 'False' as boolean );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp set t1=cast( '1234.00' as decimal );", dt));
 
     run_ddl_statement("drop table tstamp;");
   }
@@ -16532,23 +16628,19 @@ TEST(Update, ImplicitCastToTimestamp4) {
         "update tstamp4 set t1=cast( '1989-01-01 00:00:00' as timestamp );", dt));
     EXPECT_NO_THROW(
         run_multiple_agg("update tstamp4 set t1=cast( '2000' as date );", dt));
-    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( 2000.00 as float );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update tstamp4 set t1=cast( 2123.444 as double );", dt),
-        std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( 1235 as integer );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( 12 as smallint );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( 9 as bigint );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update tstamp4 set t1=cast( 'False' as boolean );", dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update tstamp4 set t1=cast( '1234.00' as decimal );", dt),
-        std::runtime_error);
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp4 set t1=cast( 2000.00 as float );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp4 set t1=cast( 2123.444 as double );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp4 set t1=cast( 1235 as integer );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp4 set t1=cast( 12 as smallint );", dt));
+    EXPECT_NO_THROW(run_multiple_agg("update tstamp4 set t1=cast( 9 as bigint );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp4 set t1=cast( 'False' as boolean );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp4 set t1=cast( '1234.00' as decimal );", dt));
 
     run_ddl_statement("drop table tstamp4;");
   }

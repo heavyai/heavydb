@@ -1841,8 +1841,9 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
           ival == inline_int_null_val(SQLTypeInfo(kBIGINT, false))) {
         return NULL_DOUBLE;
       }
-      if (ival ==
-          inline_int_null_val(SQLTypeInfo(decimal_to_int_type(chosen_type), false))) {
+      if (!chosen_type.get_notnull() &&
+          ival ==
+              inline_int_null_val(SQLTypeInfo(decimal_to_int_type(chosen_type), false))) {
         return NULL_DOUBLE;
       }
       return static_cast<double>(ival) / exp_to_scale(chosen_type.get_scale());
