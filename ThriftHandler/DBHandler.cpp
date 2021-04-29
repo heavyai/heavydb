@@ -3068,15 +3068,26 @@ void DBHandler::load_table_binary_columnar_internal(
                 << cd->columnName << "'";
             render_group_analyzer = itr_analyzer->second.get();
             CHECK(render_group_analyzer);
+
+            // seed new RGA from existing table/column, to handle appends
+            if (emplaced_analyzer) {
+              LOG(INFO) << "load_table_binary_columnar_polys: Seeding Render Groups from "
+                           "existing table...";
+              render_group_analyzer->seedFromExistingTableContents(
+                  session_ptr->getCatalog(), table_name, cd->columnName);
+              LOG(INFO) << "load_table_binary_columnar_polys: Done";
+            }
           }
 
           // assign render groups for this set of bounds
+          LOG(INFO) << "load_table_binary_columnar_polys: Assigning Render Groups...";
           render_groups_column.reserve(bounds_column.size());
           for (auto const& bounds : bounds_column) {
             CHECK_EQ(bounds.size(), 4u);
             int rg = render_group_analyzer->insertBoundsAndReturnRenderGroup(bounds);
             render_groups_column.push_back(rg);
           }
+          LOG(INFO) << "load_table_binary_columnar_polys: Done";
         } else {
           // render groups all zero
           render_groups_column.resize(bounds_column.size(), 0);

@@ -4165,13 +4165,15 @@ ImportStatus Importer::importDelimited(
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
   if (copy_params.geo_assign_render_groups) {
-    auto columnDescriptors = loader->getCatalog().getAllColumnMetadataForTable(
-        loader->getTableDesc()->tableId, false, false, false);
-    for (auto cd : columnDescriptors) {
-      SQLTypes ct = cd->columnType.get_type();
-      if (ct == kPOLYGON || ct == kMULTIPOLYGON) {
+    auto& cat = loader->getCatalog();
+    auto* td = loader->getTableDesc();
+    CHECK(td);
+    auto column_descriptors =
+        cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
+    for (auto const& cd : column_descriptors) {
+      if (IS_GEO_POLY(cd->columnType.get_type())) {
         auto rga = std::make_shared<RenderGroupAnalyzer>();
-        rga->seedFromExistingTableContents(loader, cd->columnName);
+        rga->seedFromExistingTableContents(cat, td->tableName, cd->columnName);
         columnIdToRenderGroupAnalyzerMap[cd->columnId] = rga;
       }
     }
@@ -4989,13 +4991,15 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
   if (copy_params.geo_assign_render_groups) {
-    auto columnDescriptors = loader->getCatalog().getAllColumnMetadataForTable(
-        loader->getTableDesc()->tableId, false, false, false);
-    for (auto cd : columnDescriptors) {
-      SQLTypes ct = cd->columnType.get_type();
-      if (ct == kPOLYGON || ct == kMULTIPOLYGON) {
+    auto& cat = loader->getCatalog();
+    auto* td = loader->getTableDesc();
+    CHECK(td);
+    auto column_descriptors =
+        cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
+    for (auto const& cd : column_descriptors) {
+      if (IS_GEO_POLY(cd->columnType.get_type())) {
         auto rga = std::make_shared<RenderGroupAnalyzer>();
-        rga->seedFromExistingTableContents(loader, cd->columnName);
+        rga->seedFromExistingTableContents(cat, td->tableName, cd->columnName);
         columnIdToRenderGroupAnalyzerMap[cd->columnId] = rga;
       }
     }
@@ -5165,7 +5169,8 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 //
 
 void RenderGroupAnalyzer::seedFromExistingTableContents(
-    const std::unique_ptr<Loader>& loader,
+    Catalog_Namespace::Catalog& cat,
+    const std::string& tableName,
     const std::string& geoColumnBaseName) {
   // start timer
   auto seedTimer = timer_start();
@@ -5175,8 +5180,11 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(
   _numRenderGroups = 0;
 
   // get the table descriptor
-  const auto& cat = loader->getCatalog();
-  if (loader->getTableDesc()->storageType == StorageType::FOREIGN_TABLE) {
+  auto const* td = cat.getMetadataForTable(tableName);
+  CHECK(td);
+
+  // foreign tables not supported
+  if (td->storageType == StorageType::FOREIGN_TABLE) {
     if (DEBUG_RENDER_GROUP_ANALYZER) {
       LOG(INFO) << "DEBUG: Table is a foreign table";
     }
@@ -5185,12 +5193,8 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(
     return;
   }
 
-  const std::string& tableName = loader->getTableDesc()->tableName;
-  const auto td = cat.getMetadataForTable(tableName);
-  CHECK(td);
-  CHECK(td->fragmenter);
-
   // if the table is empty, just make an empty tree
+  CHECK(td->fragmenter);
   if (td->fragmenter->getFragmentsForQuery().getPhysicalNumTuples() == 0) {
     if (DEBUG_RENDER_GROUP_ANALYZER) {
       LOG(INFO) << "DEBUG: Table is empty!";
