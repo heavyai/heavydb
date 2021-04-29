@@ -85,7 +85,7 @@ class SQLImporter_args {
             "-su <other database user> -sp <other database user password> -ss <other database sql statement>\n");
     sb.append(
             "-t <OmniSci target table> -b <transfer buffer size> -f <table fragment size>\n");
-    sb.append("[-tr] -i <init commands file>\n");
+    sb.append("[-tr] [-adtf] [-nprg] -i <init commands file>\n");
     sb.append("\nSQLImporter -h | --help\n\n");
 
     HelpFormatter formatter = new HelpFormatter();
@@ -219,6 +219,12 @@ class SQLImporter_args {
             Option.builder("adtf")
                     .desc("Allow double to float conversion, note precision will be reduced")
                     .longOpt("AllowDoubleToFloat")
+                    .build());
+
+    options.addOption(
+            Option.builder("nprg")
+                    .desc("Do not assign Render Groups to Polygons (faster import, but not renderable)")
+                    .longOpt("noPolyRenderGroups")
                     .build());
   }
 
@@ -393,6 +399,8 @@ public class SQLImporter {
         cols.add(col);
       }
 
+      boolean assignRenderGroups = !cmd.hasOption("noPolyRenderGroups");
+
       // read data from old DB
       while (rs.next()) {
         for (int i = 1; i <= md.getColumnCount(); i++) {
@@ -408,8 +416,13 @@ public class SQLImporter {
         if (bufferCount == bufferSize) {
           bufferCount = 0;
           // send the buffer to mapD
-          client.load_table_binary_columnar_polys(
-                  session, cmd.getOptionValue("targetTable"), cols, null, true);
+          if (assignRenderGroups) {
+            client.load_table_binary_columnar_polys(
+                    session, cmd.getOptionValue("targetTable"), cols, null, true);
+          } else {
+            client.load_table_binary_columnar(
+                    session, cmd.getOptionValue("targetTable"), cols, null);
+          }
           // recreate columnar store for use
           for (int i = 1; i <= md.getColumnCount(); i++) {
             resetBinaryColumn(i, md, bufferSize, cols.get(i - 1));
@@ -422,14 +435,21 @@ public class SQLImporter {
       }
       if (bufferCount > 0) {
         // send the LAST buffer to mapD
-        client.load_table_binary_columnar_polys(
-                session, cmd.getOptionValue("targetTable"), cols, null, true);
+        if (assignRenderGroups) {
+          client.load_table_binary_columnar_polys(
+                  session, cmd.getOptionValue("targetTable"), cols, null, true);
+        } else {
+          client.load_table_binary_columnar(
+                  session, cmd.getOptionValue("targetTable"), cols, null);
+        }
         bufferCount = 0;
       }
 
       // dump render group assignment data immediately
-      client.load_table_binary_columnar_polys(
-              session, cmd.getOptionValue("targetTable"), null, null, false);
+      if (assignRenderGroups) {
+        client.load_table_binary_columnar_polys(
+                session, cmd.getOptionValue("targetTable"), null, null, false);
+      }
 
       LOGGER.info("result set count is " + resultCount + " read time is "
               + (System.currentTimeMillis() - timer) + "ms");

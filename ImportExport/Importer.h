@@ -742,7 +742,8 @@ class ImporterUtils {
 class RenderGroupAnalyzer {
  public:
   RenderGroupAnalyzer() : _rtree(std::make_unique<RTree>()), _numRenderGroups(0) {}
-  void seedFromExistingTableContents(const std::unique_ptr<Loader>& loader,
+  void seedFromExistingTableContents(Catalog_Namespace::Catalog& cat,
+                                     const std::string& tableName,
                                      const std::string& geoColumnBaseName);
   int insertBoundsAndReturnRenderGroup(const std::vector<double>& bounds);
 
