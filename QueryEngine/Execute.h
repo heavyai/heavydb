@@ -17,49 +17,6 @@
 #ifndef QUERYENGINE_EXECUTE_H
 #define QUERYENGINE_EXECUTE_H
 
-#include "AggregatedColRange.h"
-#include "BufferCompaction.h"
-#include "CartesianProduct.h"
-#include "CgenState.h"
-#include "CodeCache.h"
-#include "CompilationOptions.h"
-#include "DateTimeUtils.h"
-#include "Descriptors/QueryFragmentDescriptor.h"
-#include "ExecutionKernel.h"
-#include "GpuSharedMemoryContext.h"
-#include "GroupByAndAggregate.h"
-#include "LoopControlFlow/JoinLoop.h"
-#include "NvidiaKernel.h"
-#include "PlanState.h"
-#include "RelAlgExecutionUnit.h"
-#include "RelAlgTranslator.h"
-#include "StringDictionaryGenerations.h"
-#include "TableGenerations.h"
-#include "TargetMetaInfo.h"
-#include "WindowContext.h"
-
-#include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
-#include "QueryEngine/JoinHashTable/HashJoin.h"
-
-#include "../Logger/Logger.h"
-#include "../Shared/SystemParameters.h"
-#include "../Shared/funcannotations.h"
-#include "../Shared/mapd_shared_mutex.h"
-#include "../Shared/measure.h"
-#include "../Shared/thread_count.h"
-#include "../Shared/toString.h"
-#include "../StringDictionary/LruCache.hpp"
-#include "../StringDictionary/StringDictionary.h"
-#include "../StringDictionary/StringDictionaryProxy.h"
-#include "DataMgr/Chunk/Chunk.h"
-#include "ThriftHandler/CommandLineOptions.h"
-
-#include <llvm/IR/Function.h>
-#include <llvm/IR/Value.h>
-#include <llvm/Linker/Linker.h>
-#include <llvm/Transforms/Utils/ValueMapper.h>
-#include <rapidjson/document.h>
-
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>
@@ -73,6 +30,48 @@
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
+
+#include <llvm/IR/Function.h>
+#include <llvm/IR/Value.h>
+#include <llvm/Linker/Linker.h>
+#include <llvm/Transforms/Utils/ValueMapper.h>
+#include <rapidjson/document.h>
+
+#include "QueryEngine/AggregatedColRange.h"
+#include "QueryEngine/BufferCompaction.h"
+#include "QueryEngine/CartesianProduct.h"
+#include "QueryEngine/CgenState.h"
+#include "QueryEngine/CodeCache.h"
+#include "QueryEngine/CompilationOptions.h"
+#include "QueryEngine/DateTimeUtils.h"
+#include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
+#include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
+#include "QueryEngine/ExecutionKernel.h"
+#include "QueryEngine/GpuSharedMemoryContext.h"
+#include "QueryEngine/GroupByAndAggregate.h"
+#include "QueryEngine/JoinHashTable/HashJoin.h"
+#include "QueryEngine/LoopControlFlow/JoinLoop.h"
+#include "QueryEngine/NvidiaKernel.h"
+#include "QueryEngine/PlanState.h"
+#include "QueryEngine/RelAlgExecutionUnit.h"
+#include "QueryEngine/RelAlgTranslator.h"
+#include "QueryEngine/StringDictionaryGenerations.h"
+#include "QueryEngine/TableGenerations.h"
+#include "QueryEngine/TargetMetaInfo.h"
+#include "QueryEngine/WindowContext.h"
+
+#include "DataMgr/Chunk/Chunk.h"
+#include "Logger/Logger.h"
+#include "Shared/SystemParameters.h"
+#include "Shared/funcannotations.h"
+#include "Shared/mapd_shared_mutex.h"
+#include "Shared/measure.h"
+#include "Shared/thread_count.h"
+#include "Shared/toString.h"
+#include "StringDictionary/LruCache.hpp"
+#include "StringDictionary/StringDictionary.h"
+#include "StringDictionary/StringDictionaryProxy.h"
+#include "ThriftHandler/CommandLineOptions.h"
 
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;
 class QueryMemoryDescriptor;

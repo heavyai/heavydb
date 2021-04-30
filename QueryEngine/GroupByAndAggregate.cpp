@@ -710,8 +710,6 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
   const auto count_distinct_descriptors = init_count_distinct_descriptors(
       ra_exe_unit_, query_infos_, device_type_, executor_);
 
-  auto group_col_widths = get_col_byte_widths(ra_exe_unit_.groupby_exprs);
-
   const bool is_group_by{!ra_exe_unit_.groupby_exprs.empty()};
 
   auto col_range_info_nosharding = getColRangeInfo();

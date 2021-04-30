@@ -1439,7 +1439,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     max_groups_buffer_entry_guess = compute_buffer_entry_guess(query_infos);
   }
 
-  int8_t crt_min_byte_width{get_min_byte_width()};
+  int8_t crt_min_byte_width{MAX_BYTE_WIDTH_SUPPORTED};
   do {
     SharedKernelContext shared_context(query_infos);
     ColumnFetcher column_fetcher(this, column_cache);

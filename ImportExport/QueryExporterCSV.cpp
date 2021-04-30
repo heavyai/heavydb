@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-#include <ImportExport/QueryExporterCSV.h>
+#include "ImportExport/QueryExporterCSV.h"
 
 #include <boost/variant/get.hpp>
 
-#include <QueryEngine/GroupByAndAggregate.h>
-#include <QueryEngine/ResultSet.h>
+#include "QueryEngine/ResultSet.h"
 #include "Shared/misc.h"
 
 namespace import_export {
@@ -72,6 +71,71 @@ void QueryExporterCSV::beginExport(const std::string& file_path,
   copy_params_ = copy_params;
 }
 
+namespace {
+
+std::string nullable_str_to_string(const NullableString& str) {
+  auto nptr = boost::get<void*>(&str);
+  if (nptr) {
+    CHECK(!*nptr);
+    return "NULL";
+  }
+  auto sptr = boost::get<std::string>(&str);
+  CHECK(sptr);
+  return *sptr;
+}
+
+std::string target_value_to_string(const TargetValue& tv,
+                                   const SQLTypeInfo& ti,
+                                   const std::string& delim) {
+  if (ti.is_array()) {
+    const auto array_tv = boost::get<ArrayTargetValue>(&tv);
+    CHECK(array_tv);
+    if (array_tv->is_initialized()) {
+      const auto& vec = array_tv->get();
+      std::vector<std::string> elem_strs;
+      elem_strs.reserve(vec.size());
+      const auto& elem_ti = ti.get_elem_type();
+      for (const auto& elem_tv : vec) {
+        elem_strs.push_back(target_value_to_string(elem_tv, elem_ti, delim));
+      }
+      return "{" + boost::algorithm::join(elem_strs, delim) + "}";
+    }
+    return "NULL";
+  }
+  const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
+  if (ti.is_time() || ti.is_decimal()) {
+    Datum datum;
+    datum.bigintval = *boost::get<int64_t>(scalar_tv);
+    if (datum.bigintval == NULL_BIGINT) {
+      return "NULL";
+    }
+    return DatumToString(datum, ti);
+  }
+  if (ti.is_boolean()) {
+    const auto bool_val = *boost::get<int64_t>(scalar_tv);
+    return bool_val == NULL_BOOLEAN ? "NULL" : (bool_val ? "true" : "false");
+  }
+  auto iptr = boost::get<int64_t>(scalar_tv);
+  if (iptr) {
+    return *iptr == inline_int_null_val(ti) ? "NULL" : std::to_string(*iptr);
+  }
+  auto fptr = boost::get<float>(scalar_tv);
+  if (fptr) {
+    return *fptr == inline_fp_null_val(ti) ? "NULL" : std::to_string(*fptr);
+  }
+  auto dptr = boost::get<double>(scalar_tv);
+  if (dptr) {
+    return *dptr == inline_fp_null_val(ti.is_decimal() ? SQLTypeInfo(kDOUBLE, false) : ti)
+               ? "NULL"
+               : std::to_string(*dptr);
+  }
+  auto sptr = boost::get<NullableString>(scalar_tv);
+  CHECK(sptr);
+  return nullable_str_to_string(*sptr);
+}
+
+}  // namespace
+
 void QueryExporterCSV::exportResults(const std::vector<AggregatedResult>& query_results) {
   for (auto& agg_result : query_results) {
     auto results = agg_result.rs;
@@ -97,7 +161,7 @@ void QueryExporterCSV::exportResults(const std::vector<AggregatedResult>& query_
         }
         auto const& ti = targets[i].get_type_info();
         if (!scalar_tv) {
-          outfile_ << datum_to_string(crt_row[i], ti, " | ");
+          outfile_ << target_value_to_string(crt_row[i], ti, " | ");
           if (copy_params_.quoted) {
             outfile_ << copy_params_.quote;
           }

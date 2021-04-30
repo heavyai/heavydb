@@ -181,6 +181,46 @@ bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
   return false;
 }
 
+template <class T>
+inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
+  std::vector<int8_t> col_widths;
+  size_t col_expr_idx = 0;
+  for (const auto col_expr : col_expr_list) {
+    if (!col_expr) {
+      // row index
+      col_widths.push_back(sizeof(int64_t));
+    } else {
+      const auto agg_info = get_target_info(col_expr, g_bigint_count);
+      const auto chosen_type = get_compact_type(agg_info);
+      if ((chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE) ||
+          chosen_type.is_array()) {
+        col_widths.push_back(sizeof(int64_t));
+        col_widths.push_back(sizeof(int64_t));
+        ++col_expr_idx;
+        continue;
+      }
+      if (chosen_type.is_geometry()) {
+        for (auto i = 0; i < chosen_type.get_physical_coord_cols(); ++i) {
+          col_widths.push_back(sizeof(int64_t));
+          col_widths.push_back(sizeof(int64_t));
+        }
+        ++col_expr_idx;
+        continue;
+      }
+      const auto col_expr_bitwidth = get_bit_width(chosen_type);
+      CHECK_EQ(size_t(0), col_expr_bitwidth % 8);
+      col_widths.push_back(static_cast<int8_t>(col_expr_bitwidth >> 3));
+      // for average, we'll need to keep the count as well
+      if (agg_info.agg_kind == kAVG) {
+        CHECK(agg_info.is_agg);
+        col_widths.push_back(sizeof(int64_t));
+      }
+    }
+    ++col_expr_idx;
+  }
+  return col_widths;
+}
+
 }  // namespace
 
 std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(

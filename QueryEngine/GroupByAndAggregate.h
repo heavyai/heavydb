@@ -44,72 +44,6 @@
 extern bool g_enable_smem_group_by;
 extern bool g_bigint_count;
 
-class ReductionRanOutOfSlots : public std::runtime_error {
- public:
-  ReductionRanOutOfSlots() : std::runtime_error("ReductionRanOutOfSlots") {}
-};
-
-inline std::string nullable_str_to_string(const NullableString& str) {
-  auto nptr = boost::get<void*>(&str);
-  if (nptr) {
-    CHECK(!*nptr);
-    return "NULL";
-  }
-  auto sptr = boost::get<std::string>(&str);
-  CHECK(sptr);
-  return *sptr;
-}
-
-inline std::string datum_to_string(const TargetValue& tv,
-                                   const SQLTypeInfo& ti,
-                                   const std::string& delim) {
-  if (ti.is_array()) {
-    const auto array_tv = boost::get<ArrayTargetValue>(&tv);
-    CHECK(array_tv);
-    if (array_tv->is_initialized()) {
-      const auto& vec = array_tv->get();
-      std::vector<std::string> elem_strs;
-      elem_strs.reserve(vec.size());
-      const auto& elem_ti = ti.get_elem_type();
-      for (const auto& elem_tv : vec) {
-        elem_strs.push_back(datum_to_string(elem_tv, elem_ti, delim));
-      }
-      return "{" + boost::algorithm::join(elem_strs, delim) + "}";
-    }
-    return "NULL";
-  }
-  const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
-  if (ti.is_time() || ti.is_decimal()) {
-    Datum datum;
-    datum.bigintval = *boost::get<int64_t>(scalar_tv);
-    if (datum.bigintval == NULL_BIGINT) {
-      return "NULL";
-    }
-    return DatumToString(datum, ti);
-  }
-  if (ti.is_boolean()) {
-    const auto bool_val = *boost::get<int64_t>(scalar_tv);
-    return bool_val == NULL_BOOLEAN ? "NULL" : (bool_val ? "true" : "false");
-  }
-  auto iptr = boost::get<int64_t>(scalar_tv);
-  if (iptr) {
-    return *iptr == inline_int_null_val(ti) ? "NULL" : std::to_string(*iptr);
-  }
-  auto fptr = boost::get<float>(scalar_tv);
-  if (fptr) {
-    return *fptr == inline_fp_null_val(ti) ? "NULL" : std::to_string(*fptr);
-  }
-  auto dptr = boost::get<double>(scalar_tv);
-  if (dptr) {
-    return *dptr == inline_fp_null_val(ti.is_decimal() ? SQLTypeInfo(kDOUBLE, false) : ti)
-               ? "NULL"
-               : std::to_string(*dptr);
-  }
-  auto sptr = boost::get<NullableString>(scalar_tv);
-  CHECK(sptr);
-  return nullable_str_to_string(*sptr);
-}
-
 struct ColRangeInfo {
   QueryDescriptionType hash_type_;
   int64_t min;
@@ -333,51 +267,5 @@ inline size_t get_count_distinct_sub_bitmap_count(const size_t bitmap_sz_bits,
              ? 64  // NB: must be a power of 2 to keep runtime offset computations cheap
              : 1;
 }
-
-template <class T>
-inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
-  std::vector<int8_t> col_widths;
-  size_t col_expr_idx = 0;
-  for (const auto col_expr : col_expr_list) {
-    if (!col_expr) {
-      // row index
-      col_widths.push_back(sizeof(int64_t));
-    } else {
-      const auto agg_info = get_target_info(col_expr, g_bigint_count);
-      const auto chosen_type = get_compact_type(agg_info);
-      if ((chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE) ||
-          chosen_type.is_array()) {
-        col_widths.push_back(sizeof(int64_t));
-        col_widths.push_back(sizeof(int64_t));
-        ++col_expr_idx;
-        continue;
-      }
-      if (chosen_type.is_geometry()) {
-        for (auto i = 0; i < chosen_type.get_physical_coord_cols(); ++i) {
-          col_widths.push_back(sizeof(int64_t));
-          col_widths.push_back(sizeof(int64_t));
-        }
-        ++col_expr_idx;
-        continue;
-      }
-      const auto col_expr_bitwidth = get_bit_width(chosen_type);
-      CHECK_EQ(size_t(0), col_expr_bitwidth % 8);
-      col_widths.push_back(static_cast<int8_t>(col_expr_bitwidth >> 3));
-      // for average, we'll need to keep the count as well
-      if (agg_info.agg_kind == kAVG) {
-        CHECK(agg_info.is_agg);
-        col_widths.push_back(sizeof(int64_t));
-      }
-    }
-    ++col_expr_idx;
-  }
-  return col_widths;
-}
-
-inline int8_t get_min_byte_width() {
-  return MAX_BYTE_WIDTH_SUPPORTED;
-}
-
-struct RelAlgExecutionUnit;
 
 #endif  // QUERYENGINE_GROUPBYANDAGGREGATE_H
