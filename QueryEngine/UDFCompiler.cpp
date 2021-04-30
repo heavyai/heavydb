@@ -380,7 +380,10 @@ UdfCompiler::UdfCompiler(const std::string& file_name,
                          const std::string& clang_path)
     : udf_file_name_(file_name)
     , udf_ast_file_name_(file_name)
-    , target_arch_(target_arch) {
+#ifdef HAVE_CUDA
+    , target_arch_(target_arch)
+#endif
+{
   init(clang_path);
 }
 
@@ -390,7 +393,9 @@ UdfCompiler::UdfCompiler(const std::string& file_name,
                          const std::vector<std::string> clang_options)
     : udf_file_name_(file_name)
     , udf_ast_file_name_(file_name)
+#ifdef HAVE_CUDA
     , target_arch_(target_arch)
+#endif
     , clang_options_(clang_options) {
   init(clang_path);
 }

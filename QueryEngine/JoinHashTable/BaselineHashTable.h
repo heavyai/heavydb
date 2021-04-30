@@ -32,9 +32,13 @@ class BaselineHashTable : public HashTable {
                     const size_t entry_count,
                     const size_t emitted_keys_count,
                     const size_t hash_table_size)
-      : device_id_(0)
+      :
+#ifdef HAVE_CUDA
+      device_id_(0)
       , catalog_(catalog)
-      , layout_(layout)
+      ,
+#endif
+      layout_(layout)
       , entry_count_(entry_count)
       , emitted_keys_count_(emitted_keys_count) {
     cpu_hash_table_buff_.resize(hash_table_size);
@@ -47,9 +51,13 @@ class BaselineHashTable : public HashTable {
                     const size_t emitted_keys_count,
                     const size_t hash_table_size,
                     const size_t device_id)
-      : device_id_(device_id)
+      :
+#ifdef HAVE_CUDA
+      device_id_(device_id)
       , catalog_(catalog)
-      , layout_(layout)
+      ,
+#endif
+      layout_(layout)
       , entry_count_(entry_count)
       , emitted_keys_count_(emitted_keys_count) {
 #ifdef HAVE_CUDA
@@ -96,10 +104,11 @@ class BaselineHashTable : public HashTable {
  private:
   std::vector<int8_t> cpu_hash_table_buff_;
   Data_Namespace::AbstractBuffer* gpu_hash_table_buff_{nullptr};
-  const size_t device_id_;
 
-  // TODO: only required for cuda
+#ifdef HAVE_CUDA
+  const size_t device_id_;
   const Catalog_Namespace::Catalog* catalog_;
+#endif
 
   HashType layout_;
   size_t entry_count_;         // number of keys in the hash table
