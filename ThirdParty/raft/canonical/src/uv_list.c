@@ -3,7 +3,7 @@
 #include "assert.h"
 #include "uv.h"
 
-#if 0
+#if 1
 #define tracef(...) Tracef(uv->tracer, __VA_ARGS__)
 #else
 #define tracef(...)

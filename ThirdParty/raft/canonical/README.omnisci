@@ -2,3 +2,4 @@ git@github.com:canonical/raft.git
 Commit: 714fcc94812057ceb97e335d5097856455b63f5d
 Clone date: 2021-02-25
 
+For all #define tracef lines, manually changed #if 0 to be #if 1 to enable tracing.

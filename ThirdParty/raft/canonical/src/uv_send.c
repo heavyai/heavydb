@@ -7,7 +7,7 @@
 #include "uv_encoding.h"
 
 /* Set to 1 to enable tracing. */
-#if 0
+#if 1
 #define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
 #else
 #define tracef(...)

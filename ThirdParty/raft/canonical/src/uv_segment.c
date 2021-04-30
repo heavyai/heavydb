@@ -13,8 +13,8 @@
 #include "uv.h"
 #include "uv_encoding.h"
 
-#if 0
-#define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
+#if 1
+#define tracef(...) Tracef(uv->tracer, __VA_ARGS__)
 #else
 #define tracef(...)
 #endif

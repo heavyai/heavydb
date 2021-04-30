@@ -11,8 +11,8 @@
 #include "uv_encoding.h"
 #include "uv_os.h"
 
-#if 0
-#define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
+#if 1
+#define tracef(...) Tracef(uv->tracer, __VA_ARGS__)
 #else
 #define tracef(...)
 #endif
@@ -494,7 +494,7 @@ static void uvSnapshotPutBarrierCb(struct UvBarrier *barrier)
 {
     struct uvSnapshotPut *put = barrier->data;
     if (put == NULL) {
-        tracef("uvSnapshotPutBarrierCb already fired, wait for UvUnblock\n");
+        //tracef("uvSnapshotPutBarrierCb already fired, wait for UvUnblock\n");
         return;
     }
 
