@@ -179,6 +179,52 @@ std::shared_ptr<Analyzer::BinOper> lower_multicol_compare(
   return acc;
 }
 
+void check_array_comp_cond(const Analyzer::BinOper* bin_oper) {
+  auto lhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_left_operand());
+  auto rhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_right_operand());
+  auto comp_op = IS_COMPARISON(bin_oper->get_optype());
+  if (lhs_cv && rhs_cv && comp_op) {
+    auto lhs_ti = lhs_cv->get_type_info();
+    auto rhs_ti = rhs_cv->get_type_info();
+    if (lhs_ti.is_array() && rhs_ti.is_array()) {
+      throw std::runtime_error(
+          "Comparing two full array columns is not supported yet. Please consider "
+          "rewriting the full array comparison to a comparison between indexed array "
+          "columns "
+          "(i.e., arr1[1] {<, <=, >, >=} arr2[1]).");
+    }
+  }
+  auto lhs_bin_oper =
+      dynamic_cast<const Analyzer::BinOper*>(bin_oper->get_left_operand());
+  auto rhs_bin_oper =
+      dynamic_cast<const Analyzer::BinOper*>(bin_oper->get_right_operand());
+  // we can do (non-)equivalence check of two encoded string
+  // even if they are (indexed) array cols
+  auto theta_comp = IS_COMPARISON(bin_oper->get_optype()) &&
+                    !IS_EQUIVALENCE(bin_oper->get_optype()) &&
+                    bin_oper->get_optype() != SQLOps::kNE;
+  if (lhs_bin_oper && rhs_bin_oper && theta_comp &&
+      lhs_bin_oper->get_optype() == SQLOps::kARRAY_AT &&
+      rhs_bin_oper->get_optype() == SQLOps::kARRAY_AT) {
+    auto lhs_arr_cv =
+        dynamic_cast<const Analyzer::ColumnVar*>(lhs_bin_oper->get_left_operand());
+    auto lhs_arr_idx =
+        dynamic_cast<const Analyzer::Constant*>(lhs_bin_oper->get_right_operand());
+    auto rhs_arr_cv =
+        dynamic_cast<const Analyzer::ColumnVar*>(rhs_bin_oper->get_left_operand());
+    auto rhs_arr_idx =
+        dynamic_cast<const Analyzer::Constant*>(rhs_bin_oper->get_right_operand());
+    if (lhs_arr_cv && rhs_arr_cv && lhs_arr_idx && rhs_arr_idx &&
+        ((lhs_arr_cv->get_type_info().is_array() &&
+          lhs_arr_cv->get_type_info().get_subtype() == SQLTypes::kTEXT) ||
+         (rhs_arr_cv->get_type_info().is_string() &&
+          rhs_arr_cv->get_type_info().get_subtype() == SQLTypes::kTEXT))) {
+      throw std::runtime_error(
+          "Comparison between string array columns is not supported yet.");
+    }
+  }
+}
+
 }  // namespace
 
 llvm::Value* CodeGenerator::codegenCmp(const Analyzer::BinOper* bin_oper,
@@ -209,6 +255,7 @@ llvm::Value* CodeGenerator::codegenCmp(const Analyzer::BinOper* bin_oper,
   if (is_unnest(lhs) || is_unnest(rhs)) {
     throw std::runtime_error("Unnest not supported in comparisons");
   }
+  check_array_comp_cond(bin_oper);
   const auto& lhs_ti = lhs->get_type_info();
   const auto& rhs_ti = rhs->get_type_info();
 
@@ -231,7 +278,6 @@ llvm::Value* CodeGenerator::codegenCmp(const Analyzer::BinOper* bin_oper,
       return cmp_decimal_const;
     }
   }
-
   auto lhs_lvs = codegen(lhs, true, co);
   return codegenCmp(optype, qualifier, lhs_lvs, lhs_ti, rhs, co);
 }

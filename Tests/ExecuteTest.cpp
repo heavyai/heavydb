@@ -1981,6 +1981,51 @@ TEST(Select, Arrays) {
         run_simple_agg("SELECT arr6_bool FROM array_test WHERE x < 9 AND arr6_bool[1];",
                        dt),
         std::vector<int64_t>({1, 0, 1, 0, 1, 0}));
+
+    // throw exception when comparing full array joins
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_i32 < t2.arr_i32;",
+                                dt),
+                 std::runtime_error);
+
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_i32 <= t2.arr_i32;",
+                                dt),
+                 std::runtime_error);
+
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_i32 > t2.arr_i32;",
+                                dt),
+                 std::runtime_error);
+
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_i32 >= t2.arr_i32;",
+                                dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_i32 <> t2.arr_i32;",
+                                dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_str[1] > t2.arr_str[1];",
+                                dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_str[1] >= t2.arr_str[1];",
+                                dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_str[1] < t2.arr_str[1];",
+                                dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_str[1] <= t2.arr_str[1];",
+                                dt),
+                 std::runtime_error);
+    EXPECT_NO_THROW(
+        run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                       "t1.arr_str[1] <> t2.arr_str[1];",
+                       dt));
   }
 }
 
