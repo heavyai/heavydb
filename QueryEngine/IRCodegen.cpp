@@ -878,7 +878,7 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
     const CompilationOptions& co,
     const bool translate_null_val,
     const int64_t translated_null_val,
-    GroupByAndAggregate::DiamondCodegen& diamond_codegen,
+    DiamondCodegen& diamond_codegen,
     std::stack<llvm::BasicBlock*>& array_loops,
     const bool thread_mem_shared) {
   AUTOMATIC_IR_METADATA(cgen_state_.get());
@@ -989,7 +989,7 @@ CodeGenerator::NullCheckCodegen::NullCheckCodegen(CgenState* cgen_state,
   AUTOMATIC_IR_METADATA(cgen_state);
   CHECK(nullable_ti.is_number() || nullable_ti.is_time());
 
-  null_check = std::make_unique<GroupByAndAggregate::DiamondCodegen>(
+  null_check = std::make_unique<DiamondCodegen>(
       nullable_ti.is_fp()
           ? cgen_state->ir_builder_.CreateFCmp(llvm::FCmpInst::FCMP_OEQ,
                                                nullable_lv,

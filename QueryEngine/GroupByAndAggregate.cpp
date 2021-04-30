@@ -920,53 +920,6 @@ bool GroupByAndAggregate::gpuCanHandleOrderEntries(
   return true;
 }
 
-GroupByAndAggregate::DiamondCodegen::DiamondCodegen(
-    llvm::Value* cond,
-    Executor* executor,
-    const bool chain_to_next,
-    const std::string& label_prefix,
-    DiamondCodegen* parent,
-    const bool share_false_edge_with_parent)
-    : executor_(executor), chain_to_next_(chain_to_next), parent_(parent) {
-  AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
-  if (parent_) {
-    CHECK(!chain_to_next_);
-  }
-  cond_true_ = llvm::BasicBlock::Create(LL_CONTEXT, label_prefix + "_true", CUR_FUNC);
-  if (share_false_edge_with_parent) {
-    CHECK(parent);
-    orig_cond_false_ = cond_false_ = parent_->cond_false_;
-  } else {
-    orig_cond_false_ = cond_false_ =
-        llvm::BasicBlock::Create(LL_CONTEXT, label_prefix + "_false", CUR_FUNC);
-  }
-
-  LL_BUILDER.CreateCondBr(cond, cond_true_, cond_false_);
-  LL_BUILDER.SetInsertPoint(cond_true_);
-}
-
-void GroupByAndAggregate::DiamondCodegen::setChainToNext() {
-  CHECK(!parent_);
-  chain_to_next_ = true;
-}
-
-void GroupByAndAggregate::DiamondCodegen::setFalseTarget(llvm::BasicBlock* cond_false) {
-  CHECK(!parent_ || orig_cond_false_ != parent_->cond_false_);
-  cond_false_ = cond_false;
-}
-
-GroupByAndAggregate::DiamondCodegen::~DiamondCodegen() {
-  AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
-  if (parent_ && orig_cond_false_ != parent_->cond_false_) {
-    LL_BUILDER.CreateBr(parent_->cond_false_);
-  } else if (chain_to_next_) {
-    LL_BUILDER.CreateBr(cond_false_);
-  }
-  if (!parent_ || (!chain_to_next_ && cond_false_ != parent_->cond_false_)) {
-    LL_BUILDER.SetInsertPoint(orig_cond_false_);
-  }
-}
-
 bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
                                   llvm::BasicBlock* sc_false,
                                   const QueryMemoryDescriptor& query_mem_desc,
@@ -1690,11 +1643,10 @@ llvm::Value* GroupByAndAggregate::codegenAggColumnPtr(
   return agg_col_ptr;
 }
 
-void GroupByAndAggregate::codegenEstimator(
-    std::stack<llvm::BasicBlock*>& array_loops,
-    GroupByAndAggregate::DiamondCodegen& diamond_codegen,
-    const QueryMemoryDescriptor& query_mem_desc,
-    const CompilationOptions& co) {
+void GroupByAndAggregate::codegenEstimator(std::stack<llvm::BasicBlock*>& array_loops,
+                                           DiamondCodegen& diamond_codegen,
+                                           const QueryMemoryDescriptor& query_mem_desc,
+                                           const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto& estimator_arg = ra_exe_unit_.estimator->getArgument();
   auto estimator_comp_count_lv = LL_INT(static_cast<int32_t>(estimator_arg.size()));

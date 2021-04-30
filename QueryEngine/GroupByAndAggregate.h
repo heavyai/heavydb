@@ -27,6 +27,8 @@
 #include "Rendering/RenderInfo.h"
 #include "RuntimeFunctions.h"
 
+#include "QueryEngine/Utils/DiamondCodegen.h"
+
 #include "../Shared/sqltypes.h"
 #include "Logger/Logger.h"
 
@@ -147,25 +149,6 @@ class GroupByAndAggregate {
   static size_t shard_count_for_top_groups(const RelAlgExecutionUnit& ra_exe_unit,
                                            const Catalog_Namespace::Catalog& catalog);
 
-  struct DiamondCodegen {
-    DiamondCodegen(llvm::Value* cond,
-                   Executor* executor,
-                   const bool chain_to_next,
-                   const std::string& label_prefix,
-                   DiamondCodegen* parent,
-                   const bool share_false_edge_with_parent);
-    void setChainToNext();
-    void setFalseTarget(llvm::BasicBlock* cond_false);
-    ~DiamondCodegen();
-
-    Executor* executor_;
-    llvm::BasicBlock* cond_true_;
-    llvm::BasicBlock* cond_false_;
-    llvm::BasicBlock* orig_cond_false_;
-    bool chain_to_next_;
-    DiamondCodegen* parent_;
-  };
-
  private:
   bool gpuCanHandleOrderEntries(const std::list<Analyzer::OrderEntry>& order_entries);
 
@@ -255,7 +238,7 @@ class GroupByAndAggregate {
       const size_t target_idx);
 
   void codegenEstimator(std::stack<llvm::BasicBlock*>& array_loops,
-                        GroupByAndAggregate::DiamondCodegen& diamond_codegen,
+                        DiamondCodegen& diamond_codegen,
                         const QueryMemoryDescriptor& query_mem_desc,
                         const CompilationOptions&);
 

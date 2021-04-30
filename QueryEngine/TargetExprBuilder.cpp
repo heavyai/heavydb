@@ -101,8 +101,8 @@ void TargetExprCodegen::codegen(
     const std::vector<llvm::Value*>& agg_out_vec,
     llvm::Value* output_buffer_byte_stream,
     llvm::Value* out_row_idx,
-    GroupByAndAggregate::DiamondCodegen& diamond_codegen,
-    GroupByAndAggregate::DiamondCodegen* sample_cfg) const {
+    DiamondCodegen& diamond_codegen,
+    DiamondCodegen* sample_cfg) const {
   CHECK(group_by_and_agg);
   CHECK(executor);
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
@@ -588,7 +588,7 @@ void TargetExprCodegenBuilder::codegen(
     const std::vector<llvm::Value*>& agg_out_vec,
     llvm::Value* output_buffer_byte_stream,
     llvm::Value* out_row_idx,
-    GroupByAndAggregate::DiamondCodegen& diamond_codegen) const {
+    DiamondCodegen& diamond_codegen) const {
   CHECK(group_by_and_agg);
   CHECK(executor);
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
@@ -627,7 +627,7 @@ void TargetExprCodegenBuilder::codegenSampleExpressions(
     const std::vector<llvm::Value*>& agg_out_vec,
     llvm::Value* output_buffer_byte_stream,
     llvm::Value* out_row_idx,
-    GroupByAndAggregate::DiamondCodegen& diamond_codegen) const {
+    DiamondCodegen& diamond_codegen) const {
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
   CHECK(!sample_exprs_to_codegen.empty());
   CHECK(co.device_type == ExecutorDeviceType::GPU);
@@ -664,7 +664,7 @@ void TargetExprCodegenBuilder::codegenSingleSlotSampleExpression(
     const std::vector<llvm::Value*>& agg_out_vec,
     llvm::Value* output_buffer_byte_stream,
     llvm::Value* out_row_idx,
-    GroupByAndAggregate::DiamondCodegen& diamond_codegen) const {
+    DiamondCodegen& diamond_codegen) const {
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
   CHECK_EQ(size_t(1), sample_exprs_to_codegen.size());
   CHECK(!sample_exprs_to_codegen.front().target_info.sql_type.is_varlen());
@@ -691,7 +691,7 @@ void TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions(
     const std::vector<llvm::Value*>& agg_out_vec,
     llvm::Value* output_buffer_byte_stream,
     llvm::Value* out_row_idx,
-    GroupByAndAggregate::DiamondCodegen& diamond_codegen) const {
+    DiamondCodegen& diamond_codegen) const {
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
   CHECK(sample_exprs_to_codegen.size() > 1 ||
         sample_exprs_to_codegen.front().target_info.sql_type.is_varlen());
@@ -725,7 +725,7 @@ void TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions(
 
   auto sample_cas_lv = codegenSlotEmptyKey(agg_col_ptr, target_lvs, executor, init_val);
 
-  GroupByAndAggregate::DiamondCodegen sample_cfg(
+  DiamondCodegen sample_cfg(
       sample_cas_lv, executor, false, "sample_valcheck", &diamond_codegen, false);
 
   for (const auto& target_expr_codegen : sample_exprs_to_codegen) {

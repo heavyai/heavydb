@@ -112,6 +112,7 @@ set(query_engine_source_files
     TableOptimizer.cpp
     TargetExprBuilder.cpp
     UDFCompiler.cpp
+    Utils/DiamondCodegen.cpp
     StringFunctions.cpp
     StringOpsIR.cpp
     RegexpFunctions.cpp

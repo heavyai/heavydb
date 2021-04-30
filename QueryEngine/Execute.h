@@ -881,7 +881,7 @@ class Executor {
                                          const CompilationOptions&,
                                          const bool translate_null_val,
                                          const int64_t translated_null_val,
-                                         GroupByAndAggregate::DiamondCodegen&,
+                                         DiamondCodegen&,
                                          std::stack<llvm::BasicBlock*>&,
                                          const bool thread_mem_shared);
 
@@ -1128,6 +1128,7 @@ class Executor {
   friend class BaselineJoinHashTable;
   friend class CodeGenerator;
   friend class ColumnFetcher;
+  friend struct DiamondCodegen;  // cgen_state_
   friend class ExecutionKernel;
   friend class HashJoin;  // cgen_state_
   friend class OverlapsJoinHashTable;

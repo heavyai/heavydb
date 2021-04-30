@@ -127,7 +127,7 @@ class CodeGenerator {
     std::string name;
     llvm::BasicBlock* nullcheck_bb{nullptr};
     llvm::PHINode* nullcheck_value{nullptr};
-    std::unique_ptr<GroupByAndAggregate::DiamondCodegen> null_check;
+    std::unique_ptr<DiamondCodegen> null_check;
   };
 
  private:
