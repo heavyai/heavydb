@@ -63,6 +63,7 @@ class RenderAllocator : public Allocator {
   int8_t* alloc(const size_t bytes) final;
 
   void markChunkComplete();
+  void freeCurrentChunk();
 
   size_t getCurrentChunkOffset() const;
   size_t getCurrentChunkSize() const;
