@@ -190,8 +190,6 @@ class GroupByAndAggregate {
 
   void addTransientStringLiterals();
 
-  CountDistinctDescriptors initCountDistinctDescriptors();
-
   llvm::Value* codegenOutputSlot(llvm::Value* groups_buffer,
                                  const QueryMemoryDescriptor& query_mem_desc,
                                  const CompilationOptions& co,
@@ -229,12 +227,7 @@ class GroupByAndAggregate {
 
   ColRangeInfo getColRangeInfo();
 
-  ColRangeInfo getExprRangeInfo(const Analyzer::Expr* expr) const;
-
   static int64_t getBucketedCardinality(const ColRangeInfo& col_range_info);
-
-  KeylessInfo getKeylessInfo(const std::vector<Analyzer::Expr*>& target_expr_list,
-                             const bool is_group_by) const;
 
   llvm::Value* convertNullIfAny(const SQLTypeInfo& arg_type,
                                 const TargetInfo& agg_info,

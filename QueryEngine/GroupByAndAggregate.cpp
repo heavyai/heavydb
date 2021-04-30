@@ -131,6 +131,45 @@ bool cardinality_estimate_less_than_column_range(const int64_t cardinality_estim
   }
 }
 
+ColRangeInfo get_expr_range_info(const RelAlgExecutionUnit& ra_exe_unit,
+                                 const std::vector<InputTableInfo>& query_infos,
+                                 const Analyzer::Expr* expr,
+                                 Executor* executor) {
+  if (!expr) {
+    return {QueryDescriptionType::Projection, 0, 0, 0, false};
+  }
+
+  const auto expr_range = getExpressionRange(
+      expr, query_infos, executor, boost::make_optional(ra_exe_unit.simple_quals));
+  switch (expr_range.getType()) {
+    case ExpressionRangeType::Integer: {
+      if (expr_range.getIntMin() > expr_range.getIntMax()) {
+        return {
+            QueryDescriptionType::GroupByBaselineHash, 0, -1, 0, expr_range.hasNulls()};
+      }
+      return {QueryDescriptionType::GroupByPerfectHash,
+              expr_range.getIntMin(),
+              expr_range.getIntMax(),
+              expr_range.getBucket(),
+              expr_range.hasNulls()};
+    }
+    case ExpressionRangeType::Float:
+    case ExpressionRangeType::Double: {
+      if (expr_range.getFpMin() > expr_range.getFpMax()) {
+        return {
+            QueryDescriptionType::GroupByBaselineHash, 0, -1, 0, expr_range.hasNulls()};
+      }
+      return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
+    }
+    case ExpressionRangeType::Invalid:
+      return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
+    default:
+      CHECK(false);
+  }
+  CHECK(false);
+  return {QueryDescriptionType::NonGroupedAggregate, 0, 0, 0, false};
+}
+
 }  // namespace
 
 ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
@@ -149,7 +188,8 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
       checked_int64_t cardinality{1};
       bool has_nulls{false};
       for (const auto& groupby_expr : ra_exe_unit_.groupby_exprs) {
-        auto col_range_info = getExprRangeInfo(groupby_expr.get());
+        auto col_range_info = get_expr_range_info(
+            ra_exe_unit_, query_infos_, groupby_expr.get(), executor_);
         if (col_range_info.hash_type_ != QueryDescriptionType::GroupByPerfectHash) {
           // going through baseline hash if a non-integer type is encountered
           return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
@@ -183,7 +223,8 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
       ra_exe_unit_.simple_quals.size() > 0) {
     return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
   }
-  const auto col_range_info = getExprRangeInfo(ra_exe_unit_.groupby_exprs.front().get());
+  const auto col_range_info = get_expr_range_info(
+      ra_exe_unit_, query_infos_, ra_exe_unit_.groupby_exprs.front().get(), executor_);
   if (!ra_exe_unit_.groupby_exprs.front()) {
     return col_range_info;
   }
@@ -252,42 +293,6 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
             col_range_info.has_nulls};
   }
   return col_range_info;
-}
-
-ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const Analyzer::Expr* expr) const {
-  if (!expr) {
-    return {QueryDescriptionType::Projection, 0, 0, 0, false};
-  }
-
-  const auto expr_range = getExpressionRange(
-      expr, query_infos_, executor_, boost::make_optional(ra_exe_unit_.simple_quals));
-  switch (expr_range.getType()) {
-    case ExpressionRangeType::Integer: {
-      if (expr_range.getIntMin() > expr_range.getIntMax()) {
-        return {
-            QueryDescriptionType::GroupByBaselineHash, 0, -1, 0, expr_range.hasNulls()};
-      }
-      return {QueryDescriptionType::GroupByPerfectHash,
-              expr_range.getIntMin(),
-              expr_range.getIntMax(),
-              expr_range.getBucket(),
-              expr_range.hasNulls()};
-    }
-    case ExpressionRangeType::Float:
-    case ExpressionRangeType::Double: {
-      if (expr_range.getFpMin() > expr_range.getFpMax()) {
-        return {
-            QueryDescriptionType::GroupByBaselineHash, 0, -1, 0, expr_range.hasNulls()};
-      }
-      return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
-    }
-    case ExpressionRangeType::Invalid:
-      return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
-    default:
-      CHECK(false);
-  }
-  CHECK(false);
-  return {QueryDescriptionType::NonGroupedAggregate, 0, 0, 0, false};
 }
 
 int64_t GroupByAndAggregate::getBucketedCardinality(const ColRangeInfo& col_range_info) {
@@ -383,6 +388,273 @@ int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_i
   return bucket;
 }
 
+namespace {
+
+/**
+ * This function goes through all target expressions and answers two questions:
+ * 1. Is it possible to have keyless hash?
+ * 2. If yes to 1, then what aggregate expression should be considered to represent the
+ * key's presence, if needed (e.g., in detecting empty entries in the result set).
+ *
+ * NOTE: Keyless hash is only valid with single-column group by at the moment.
+ *
+ */
+KeylessInfo get_keyless_info(const RelAlgExecutionUnit& ra_exe_unit,
+                             const std::vector<InputTableInfo>& query_infos,
+                             const bool is_group_by,
+                             Executor* executor) {
+  bool keyless{true}, found{false};
+  int32_t num_agg_expr{0};
+  int32_t index{0};
+  for (const auto target_expr : ra_exe_unit.target_exprs) {
+    const auto agg_info = get_target_info(target_expr, g_bigint_count);
+    const auto chosen_type = get_compact_type(agg_info);
+    if (agg_info.is_agg) {
+      num_agg_expr++;
+    }
+    if (!found && agg_info.is_agg && !is_distinct_target(agg_info)) {
+      auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+      CHECK(agg_expr);
+      const auto arg_expr = agg_arg(target_expr);
+      const bool float_argument_input = takes_float_argument(agg_info);
+      switch (agg_info.agg_kind) {
+        case kAVG:
+          ++index;
+          if (arg_expr && !arg_expr->get_type_info().get_notnull()) {
+            auto expr_range_info = getExpressionRange(arg_expr, query_infos, executor);
+            if (expr_range_info.getType() == ExpressionRangeType::Invalid ||
+                expr_range_info.hasNulls()) {
+              break;
+            }
+          }
+          found = true;
+          break;
+        case kCOUNT:
+          if (arg_expr && !arg_expr->get_type_info().get_notnull()) {
+            auto expr_range_info = getExpressionRange(arg_expr, query_infos, executor);
+            if (expr_range_info.getType() == ExpressionRangeType::Invalid ||
+                expr_range_info.hasNulls()) {
+              break;
+            }
+          }
+          found = true;
+          break;
+        case kSUM: {
+          auto arg_ti = arg_expr->get_type_info();
+          if (constrained_not_null(arg_expr, ra_exe_unit.quals)) {
+            arg_ti.set_notnull(true);
+          }
+          if (!arg_ti.get_notnull()) {
+            auto expr_range_info = getExpressionRange(arg_expr, query_infos, executor);
+            if (expr_range_info.getType() != ExpressionRangeType::Invalid &&
+                !expr_range_info.hasNulls()) {
+              found = true;
+            }
+          } else {
+            auto expr_range_info = getExpressionRange(arg_expr, query_infos, executor);
+            switch (expr_range_info.getType()) {
+              case ExpressionRangeType::Float:
+              case ExpressionRangeType::Double:
+                if (expr_range_info.getFpMax() < 0 || expr_range_info.getFpMin() > 0) {
+                  found = true;
+                }
+                break;
+              case ExpressionRangeType::Integer:
+                if (expr_range_info.getIntMax() < 0 || expr_range_info.getIntMin() > 0) {
+                  found = true;
+                }
+                break;
+              default:
+                break;
+            }
+          }
+          break;
+        }
+        case kMIN: {
+          CHECK(agg_expr && agg_expr->get_arg());
+          const auto& arg_ti = agg_expr->get_arg()->get_type_info();
+          if (arg_ti.is_string() || arg_ti.is_buffer()) {
+            break;
+          }
+          auto expr_range_info =
+              getExpressionRange(agg_expr->get_arg(), query_infos, executor);
+          auto init_max = get_agg_initial_val(agg_info.agg_kind,
+                                              chosen_type,
+                                              is_group_by || float_argument_input,
+                                              float_argument_input ? sizeof(float) : 8);
+          switch (expr_range_info.getType()) {
+            case ExpressionRangeType::Float:
+            case ExpressionRangeType::Double: {
+              auto double_max =
+                  *reinterpret_cast<const double*>(may_alias_ptr(&init_max));
+              if (expr_range_info.getFpMax() < double_max) {
+                found = true;
+              }
+              break;
+            }
+            case ExpressionRangeType::Integer:
+              if (expr_range_info.getIntMax() < init_max) {
+                found = true;
+              }
+              break;
+            default:
+              break;
+          }
+          break;
+        }
+        case kMAX: {
+          CHECK(agg_expr && agg_expr->get_arg());
+          const auto& arg_ti = agg_expr->get_arg()->get_type_info();
+          if (arg_ti.is_string() || arg_ti.is_buffer()) {
+            break;
+          }
+          auto expr_range_info =
+              getExpressionRange(agg_expr->get_arg(), query_infos, executor);
+          // NULL sentinel and init value for kMAX are identical, which results in
+          // ambiguity in detecting empty keys in presence of nulls.
+          if (expr_range_info.getType() == ExpressionRangeType::Invalid ||
+              expr_range_info.hasNulls()) {
+            break;
+          }
+          auto init_min = get_agg_initial_val(agg_info.agg_kind,
+                                              chosen_type,
+                                              is_group_by || float_argument_input,
+                                              float_argument_input ? sizeof(float) : 8);
+          switch (expr_range_info.getType()) {
+            case ExpressionRangeType::Float:
+            case ExpressionRangeType::Double: {
+              auto double_min =
+                  *reinterpret_cast<const double*>(may_alias_ptr(&init_min));
+              if (expr_range_info.getFpMin() > double_min) {
+                found = true;
+              }
+              break;
+            }
+            case ExpressionRangeType::Integer:
+              if (expr_range_info.getIntMin() > init_min) {
+                found = true;
+              }
+              break;
+            default:
+              break;
+          }
+          break;
+        }
+        default:
+          keyless = false;
+          break;
+      }
+    }
+    if (!keyless) {
+      break;
+    }
+    if (!found) {
+      ++index;
+    }
+  }
+
+  // shouldn't use keyless for projection only
+  return {
+      keyless && found,
+      index,
+  };
+}
+
+CountDistinctDescriptors init_count_distinct_descriptors(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& query_infos,
+    const ExecutorDeviceType device_type,
+    Executor* executor) {
+  CountDistinctDescriptors count_distinct_descriptors;
+  for (const auto target_expr : ra_exe_unit.target_exprs) {
+    auto agg_info = get_target_info(target_expr, g_bigint_count);
+    if (is_distinct_target(agg_info)) {
+      CHECK(agg_info.is_agg);
+      CHECK(agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
+      const auto agg_expr = static_cast<const Analyzer::AggExpr*>(target_expr);
+      const auto& arg_ti = agg_expr->get_arg()->get_type_info();
+      if (arg_ti.is_bytes()) {
+        throw std::runtime_error(
+            "Strings must be dictionary-encoded for COUNT(DISTINCT).");
+      }
+      if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT && arg_ti.is_buffer()) {
+        throw std::runtime_error("APPROX_COUNT_DISTINCT on arrays not supported yet");
+      }
+      if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT && arg_ti.is_geometry()) {
+        throw std::runtime_error(
+            "APPROX_COUNT_DISTINCT on geometry columns not supported");
+      }
+      if (agg_info.is_distinct && arg_ti.is_geometry()) {
+        throw std::runtime_error("COUNT DISTINCT on geometry columns not supported");
+      }
+      ColRangeInfo no_range_info{QueryDescriptionType::Projection, 0, 0, 0, false};
+      auto arg_range_info =
+          arg_ti.is_fp() ? no_range_info
+                         : get_expr_range_info(
+                               ra_exe_unit, query_infos, agg_expr->get_arg(), executor);
+      CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
+      int64_t bitmap_sz_bits{0};
+      if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
+        const auto error_rate = agg_expr->get_error_rate();
+        if (error_rate) {
+          CHECK(error_rate->get_type_info().get_type() == kINT);
+          CHECK_GE(error_rate->get_constval().intval, 1);
+          bitmap_sz_bits = hll_size_for_rate(error_rate->get_constval().smallintval);
+        } else {
+          bitmap_sz_bits = g_hll_precision_bits;
+        }
+      }
+      if (arg_range_info.isEmpty()) {
+        count_distinct_descriptors.emplace_back(
+            CountDistinctDescriptor{CountDistinctImplType::Bitmap,
+                                    0,
+                                    64,
+                                    agg_info.agg_kind == kAPPROX_COUNT_DISTINCT,
+                                    device_type,
+                                    1});
+        continue;
+      }
+      if (arg_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
+          !(arg_ti.is_buffer() || arg_ti.is_geometry())) {  // TODO(alex): allow bitmap
+                                                            // implementation for arrays
+        count_distinct_impl_type = CountDistinctImplType::Bitmap;
+        if (agg_info.agg_kind == kCOUNT) {
+          bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;
+          const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000LL};
+          if (bitmap_sz_bits <= 0 || bitmap_sz_bits > MAX_BITMAP_BITS) {
+            count_distinct_impl_type = CountDistinctImplType::StdSet;
+          }
+        }
+      }
+      if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT &&
+          count_distinct_impl_type == CountDistinctImplType::StdSet &&
+          !(arg_ti.is_array() || arg_ti.is_geometry())) {
+        count_distinct_impl_type = CountDistinctImplType::Bitmap;
+      }
+
+      if (g_enable_watchdog && !(arg_range_info.isEmpty()) &&
+          count_distinct_impl_type == CountDistinctImplType::StdSet) {
+        throw WatchdogException("Cannot use a fast path for COUNT distinct");
+      }
+      const auto sub_bitmap_count =
+          get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit, device_type);
+      count_distinct_descriptors.emplace_back(
+          CountDistinctDescriptor{count_distinct_impl_type,
+                                  arg_range_info.min,
+                                  bitmap_sz_bits,
+                                  agg_info.agg_kind == kAPPROX_COUNT_DISTINCT,
+                                  device_type,
+                                  sub_bitmap_count});
+    } else {
+      count_distinct_descriptors.emplace_back(CountDistinctDescriptor{
+          CountDistinctImplType::Invalid, 0, 0, false, device_type, 0});
+    }
+  }
+  return count_distinct_descriptors;
+}
+
+}  // namespace
+
 std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescriptor(
     const bool allow_multifrag,
     const size_t max_groups_buffer_entry_count,
@@ -435,7 +707,8 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
     const bool output_columnar_hint) {
   addTransientStringLiterals();
 
-  const auto count_distinct_descriptors = initCountDistinctDescriptors();
+  const auto count_distinct_descriptors = init_count_distinct_descriptors(
+      ra_exe_unit_, query_infos_, device_type_, executor_);
 
   auto group_col_widths = get_col_byte_widths(ra_exe_unit_.groupby_exprs);
 
@@ -457,10 +730,11 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
 
   // Non-grouped aggregates do not support accessing aggregated ranges
   // Keyless hash is currently only supported with single-column perfect hash
-  const auto keyless_info = !(is_group_by && col_range_info.hash_type_ ==
-                                                 QueryDescriptionType::GroupByPerfectHash)
-                                ? KeylessInfo{false, -1}
-                                : getKeylessInfo(ra_exe_unit_.target_exprs, is_group_by);
+  const auto keyless_info =
+      !(is_group_by &&
+        col_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash)
+          ? KeylessInfo{false, -1}
+          : get_keyless_info(ra_exe_unit_, query_infos_, is_group_by, executor_);
 
   if (g_enable_watchdog &&
       ((col_range_info.hash_type_ == QueryDescriptionType::GroupByBaselineHash &&
@@ -603,262 +877,6 @@ void GroupByAndAggregate::addTransientStringLiterals(
   }
 }
 
-CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
-  CountDistinctDescriptors count_distinct_descriptors;
-  for (const auto target_expr : ra_exe_unit_.target_exprs) {
-    auto agg_info = get_target_info(target_expr, g_bigint_count);
-    if (is_distinct_target(agg_info)) {
-      CHECK(agg_info.is_agg);
-      CHECK(agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
-      const auto agg_expr = static_cast<const Analyzer::AggExpr*>(target_expr);
-      const auto& arg_ti = agg_expr->get_arg()->get_type_info();
-      if (arg_ti.is_bytes()) {
-        throw std::runtime_error(
-            "Strings must be dictionary-encoded for COUNT(DISTINCT).");
-      }
-      if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT && arg_ti.is_buffer()) {
-        throw std::runtime_error("APPROX_COUNT_DISTINCT on arrays not supported yet");
-      }
-      if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT && arg_ti.is_geometry()) {
-        throw std::runtime_error(
-            "APPROX_COUNT_DISTINCT on geometry columns not supported");
-      }
-      if (agg_info.is_distinct && arg_ti.is_geometry()) {
-        throw std::runtime_error("COUNT DISTINCT on geometry columns not supported");
-      }
-      ColRangeInfo no_range_info{QueryDescriptionType::Projection, 0, 0, 0, false};
-      auto arg_range_info =
-          arg_ti.is_fp() ? no_range_info : getExprRangeInfo(agg_expr->get_arg());
-      CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
-      int64_t bitmap_sz_bits{0};
-      if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
-        const auto error_rate = agg_expr->get_error_rate();
-        if (error_rate) {
-          CHECK(error_rate->get_type_info().get_type() == kINT);
-          CHECK_GE(error_rate->get_constval().intval, 1);
-          bitmap_sz_bits = hll_size_for_rate(error_rate->get_constval().smallintval);
-        } else {
-          bitmap_sz_bits = g_hll_precision_bits;
-        }
-      }
-      if (arg_range_info.isEmpty()) {
-        count_distinct_descriptors.emplace_back(
-            CountDistinctDescriptor{CountDistinctImplType::Bitmap,
-                                    0,
-                                    64,
-                                    agg_info.agg_kind == kAPPROX_COUNT_DISTINCT,
-                                    device_type_,
-                                    1});
-        continue;
-      }
-      if (arg_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
-          !(arg_ti.is_buffer() || arg_ti.is_geometry())) {  // TODO(alex): allow bitmap
-                                                            // implementation for arrays
-        count_distinct_impl_type = CountDistinctImplType::Bitmap;
-        if (agg_info.agg_kind == kCOUNT) {
-          bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;
-          const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000LL};
-          if (bitmap_sz_bits <= 0 || bitmap_sz_bits > MAX_BITMAP_BITS) {
-            count_distinct_impl_type = CountDistinctImplType::StdSet;
-          }
-        }
-      }
-      if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT &&
-          count_distinct_impl_type == CountDistinctImplType::StdSet &&
-          !(arg_ti.is_array() || arg_ti.is_geometry())) {
-        count_distinct_impl_type = CountDistinctImplType::Bitmap;
-      }
-
-      if (g_enable_watchdog && !(arg_range_info.isEmpty()) &&
-          count_distinct_impl_type == CountDistinctImplType::StdSet) {
-        throw WatchdogException("Cannot use a fast path for COUNT distinct");
-      }
-      const auto sub_bitmap_count =
-          get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit_, device_type_);
-      count_distinct_descriptors.emplace_back(
-          CountDistinctDescriptor{count_distinct_impl_type,
-                                  arg_range_info.min,
-                                  bitmap_sz_bits,
-                                  agg_info.agg_kind == kAPPROX_COUNT_DISTINCT,
-                                  device_type_,
-                                  sub_bitmap_count});
-    } else {
-      count_distinct_descriptors.emplace_back(CountDistinctDescriptor{
-          CountDistinctImplType::Invalid, 0, 0, false, device_type_, 0});
-    }
-  }
-  return count_distinct_descriptors;
-}
-
-/**
- * This function goes through all target expressions and answers two questions:
- * 1. Is it possible to have keyless hash?
- * 2. If yes to 1, then what aggregate expression should be considered to represent the
- * key's presence, if needed (e.g., in detecting empty entries in the result set).
- *
- * NOTE: Keyless hash is only valid with single-column group by at the moment.
- *
- */
-KeylessInfo GroupByAndAggregate::getKeylessInfo(
-    const std::vector<Analyzer::Expr*>& target_expr_list,
-    const bool is_group_by) const {
-  bool keyless{true}, found{false};
-  int32_t num_agg_expr{0};
-  int32_t index{0};
-  for (const auto target_expr : target_expr_list) {
-    const auto agg_info = get_target_info(target_expr, g_bigint_count);
-    const auto chosen_type = get_compact_type(agg_info);
-    if (agg_info.is_agg) {
-      num_agg_expr++;
-    }
-    if (!found && agg_info.is_agg && !is_distinct_target(agg_info)) {
-      auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
-      CHECK(agg_expr);
-      const auto arg_expr = agg_arg(target_expr);
-      const bool float_argument_input = takes_float_argument(agg_info);
-      switch (agg_info.agg_kind) {
-        case kAVG:
-          ++index;
-          if (arg_expr && !arg_expr->get_type_info().get_notnull()) {
-            auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
-            if (expr_range_info.getType() == ExpressionRangeType::Invalid ||
-                expr_range_info.hasNulls()) {
-              break;
-            }
-          }
-          found = true;
-          break;
-        case kCOUNT:
-          if (arg_expr && !arg_expr->get_type_info().get_notnull()) {
-            auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
-            if (expr_range_info.getType() == ExpressionRangeType::Invalid ||
-                expr_range_info.hasNulls()) {
-              break;
-            }
-          }
-          found = true;
-          break;
-        case kSUM: {
-          auto arg_ti = arg_expr->get_type_info();
-          if (constrained_not_null(arg_expr, ra_exe_unit_.quals)) {
-            arg_ti.set_notnull(true);
-          }
-          if (!arg_ti.get_notnull()) {
-            auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
-            if (expr_range_info.getType() != ExpressionRangeType::Invalid &&
-                !expr_range_info.hasNulls()) {
-              found = true;
-            }
-          } else {
-            auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
-            switch (expr_range_info.getType()) {
-              case ExpressionRangeType::Float:
-              case ExpressionRangeType::Double:
-                if (expr_range_info.getFpMax() < 0 || expr_range_info.getFpMin() > 0) {
-                  found = true;
-                }
-                break;
-              case ExpressionRangeType::Integer:
-                if (expr_range_info.getIntMax() < 0 || expr_range_info.getIntMin() > 0) {
-                  found = true;
-                }
-                break;
-              default:
-                break;
-            }
-          }
-          break;
-        }
-        case kMIN: {
-          CHECK(agg_expr && agg_expr->get_arg());
-          const auto& arg_ti = agg_expr->get_arg()->get_type_info();
-          if (arg_ti.is_string() || arg_ti.is_buffer()) {
-            break;
-          }
-          auto expr_range_info =
-              getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
-          auto init_max = get_agg_initial_val(agg_info.agg_kind,
-                                              chosen_type,
-                                              is_group_by || float_argument_input,
-                                              float_argument_input ? sizeof(float) : 8);
-          switch (expr_range_info.getType()) {
-            case ExpressionRangeType::Float:
-            case ExpressionRangeType::Double: {
-              auto double_max =
-                  *reinterpret_cast<const double*>(may_alias_ptr(&init_max));
-              if (expr_range_info.getFpMax() < double_max) {
-                found = true;
-              }
-              break;
-            }
-            case ExpressionRangeType::Integer:
-              if (expr_range_info.getIntMax() < init_max) {
-                found = true;
-              }
-              break;
-            default:
-              break;
-          }
-          break;
-        }
-        case kMAX: {
-          CHECK(agg_expr && agg_expr->get_arg());
-          const auto& arg_ti = agg_expr->get_arg()->get_type_info();
-          if (arg_ti.is_string() || arg_ti.is_buffer()) {
-            break;
-          }
-          auto expr_range_info =
-              getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
-          // NULL sentinel and init value for kMAX are identical, which results in
-          // ambiguity in detecting empty keys in presence of nulls.
-          if (expr_range_info.getType() == ExpressionRangeType::Invalid ||
-              expr_range_info.hasNulls()) {
-            break;
-          }
-          auto init_min = get_agg_initial_val(agg_info.agg_kind,
-                                              chosen_type,
-                                              is_group_by || float_argument_input,
-                                              float_argument_input ? sizeof(float) : 8);
-          switch (expr_range_info.getType()) {
-            case ExpressionRangeType::Float:
-            case ExpressionRangeType::Double: {
-              auto double_min =
-                  *reinterpret_cast<const double*>(may_alias_ptr(&init_min));
-              if (expr_range_info.getFpMin() > double_min) {
-                found = true;
-              }
-              break;
-            }
-            case ExpressionRangeType::Integer:
-              if (expr_range_info.getIntMin() > init_min) {
-                found = true;
-              }
-              break;
-            default:
-              break;
-          }
-          break;
-        }
-        default:
-          keyless = false;
-          break;
-      }
-    }
-    if (!keyless) {
-      break;
-    }
-    if (!found) {
-      ++index;
-    }
-  }
-
-  // shouldn't use keyless for projection only
-  return {
-      keyless && found,
-      index,
-  };
-}
-
 bool GroupByAndAggregate::gpuCanHandleOrderEntries(
     const std::list<Analyzer::OrderEntry>& order_entries) {
   if (order_entries.size() > 1) {  // TODO(alex): lift this restriction
@@ -883,7 +901,8 @@ bool GroupByAndAggregate::gpuCanHandleOrderEntries(
       if (arg_ti.is_fp()) {
         return false;
       }
-      auto expr_range_info = getExprRangeInfo(agg_expr->get_arg());
+      auto expr_range_info =
+          get_expr_range_info(ra_exe_unit_, query_infos_, agg_expr->get_arg(), executor_);
       // TOD(adb): QMD not actually initialized here?
       if ((!(expr_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
              /* query_mem_desc.getGroupbyColCount() == 1 */ false) ||
@@ -1221,7 +1240,8 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
   int32_t subkey_idx = 0;
   CHECK(query_mem_desc.getGroupbyColCount() == ra_exe_unit_.groupby_exprs.size());
   for (const auto& group_expr : ra_exe_unit_.groupby_exprs) {
-    const auto col_range_info = getExprRangeInfo(group_expr.get());
+    const auto col_range_info =
+        get_expr_range_info(ra_exe_unit_, query_infos_, group_expr.get(), executor_);
     const auto translated_null_value = static_cast<int64_t>(
         query_mem_desc.isSingleColumnGroupByWithPerfectHash()
             ? checked_int64_t(query_mem_desc.getMaxVal()) +
@@ -1431,7 +1451,8 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   llvm::Value* hash_lv{llvm::ConstantInt::get(get_int_type(64, LL_CONTEXT), 0)};
   std::vector<int64_t> cardinalities;
   for (const auto& groupby_expr : ra_exe_unit_.groupby_exprs) {
-    auto col_range_info = getExprRangeInfo(groupby_expr.get());
+    auto col_range_info =
+        get_expr_range_info(ra_exe_unit_, query_infos_, groupby_expr.get(), executor_);
     CHECK(col_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash);
     cardinalities.push_back(getBucketedCardinality(col_range_info));
   }
@@ -1439,7 +1460,8 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   for (const auto& groupby_expr : ra_exe_unit_.groupby_exprs) {
     auto key_comp_lv = key_hash_func_builder.CreateLoad(
         key_hash_func_builder.CreateGEP(key_buff_lv, LL_INT(dim_idx)));
-    auto col_range_info = getExprRangeInfo(groupby_expr.get());
+    auto col_range_info =
+        get_expr_range_info(ra_exe_unit_, query_infos_, groupby_expr.get(), executor_);
     auto crt_term_lv =
         key_hash_func_builder.CreateSub(key_comp_lv, LL_INT(col_range_info.min));
     if (col_range_info.bucket) {
