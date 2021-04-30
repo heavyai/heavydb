@@ -332,6 +332,18 @@ class DBHandler : public OmniSciIf {
       const int32_t pixel_radius,
       const std::string& nonce) override;
 
+  // custom expressions
+  int32_t create_custom_expression(const TSessionId& session,
+                                   const TCustomExpression& custom_expression);
+  void get_custom_expressions(std::vector<TCustomExpression>& _return,
+                              const TSessionId& session);
+  void update_custom_expression(const TSessionId& session,
+                                const int32_t id,
+                                const std::string& expression_json);
+  void delete_custom_expressions(const TSessionId& session,
+                                 const std::vector<int32_t>& custom_expression_ids,
+                                 const bool do_soft_delete);
+
   // dashboards
   void get_dashboard(TDashboard& _return,
                      const TSessionId& session,
@@ -994,4 +1006,5 @@ class DBHandler : public OmniSciIf {
       std::unordered_map<TSessionId, RenderGroupAssignmentTableMap>;
   RenderGroupAnalyzerSessionMap render_group_assignment_map_;
   std::mutex render_group_assignment_mutex_;
+  mapd_shared_mutex custom_expressions_mutex_;
 };

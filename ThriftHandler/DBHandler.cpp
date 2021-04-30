@@ -3910,6 +3910,109 @@ static bool is_allowed_on_dashboard(const Catalog_Namespace::SessionInfo& sessio
   return SysCatalog::instance().checkPrivileges(user, privs);
 }
 
+// custom expressions
+namespace {
+using Catalog_Namespace::CustomExpression;
+using Catalog_Namespace::DataSourceType;
+
+std::unique_ptr<Catalog_Namespace::CustomExpression> create_custom_expr_from_thrift_obj(
+    const TCustomExpression& t_custom_expr) {
+  CHECK(t_custom_expr.data_source_type == TDataSourceType::type::TABLE)
+      << "Unexpected data source type: "
+      << static_cast<int>(t_custom_expr.data_source_type);
+  DataSourceType data_source_type = DataSourceType::TABLE;
+  return std::make_unique<CustomExpression>(t_custom_expr.name,
+                                            t_custom_expr.expression_json,
+                                            data_source_type,
+                                            t_custom_expr.data_source_id);
+}
+
+TCustomExpression create_thrift_obj_from_custom_expr(
+    const CustomExpression& custom_expr) {
+  TCustomExpression t_custom_expr;
+  t_custom_expr.id = custom_expr.id;
+  t_custom_expr.name = custom_expr.name;
+  t_custom_expr.expression_json = custom_expr.expression_json;
+  t_custom_expr.data_source_id = custom_expr.data_source_id;
+  t_custom_expr.is_deleted = custom_expr.is_deleted;
+  CHECK(custom_expr.data_source_type == DataSourceType::TABLE)
+      << "Unexpected data source type: "
+      << static_cast<int>(custom_expr.data_source_type);
+  t_custom_expr.data_source_type = TDataSourceType::type::TABLE;
+  return t_custom_expr;
+}
+}  // namespace
+
+int32_t DBHandler::create_custom_expression(const TSessionId& session,
+                                            const TCustomExpression& t_custom_expr) {
+  auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  check_read_only("create_custom_expression");
+
+  auto session_ptr = stdlog.getConstSessionInfo();
+  if (!session_ptr->get_currentUser().isSuper) {
+    THROW_MAPD_EXCEPTION("Custom expressions can only be created by super users.")
+  }
+  auto& catalog = session_ptr->getCatalog();
+  CHECK(t_custom_expr.data_source_type == TDataSourceType::type::TABLE)
+      << "Unexpected data source type: "
+      << static_cast<int>(t_custom_expr.data_source_type);
+  if (catalog.getMetadataForTable(t_custom_expr.data_source_id, false) == nullptr) {
+    THROW_MAPD_EXCEPTION("Custom expression references a table that does not exist.")
+  }
+  mapd_unique_lock<mapd_shared_mutex> write_lock(custom_expressions_mutex_);
+  return catalog.createCustomExpression(
+      create_custom_expr_from_thrift_obj(t_custom_expr));
+}
+
+void DBHandler::get_custom_expressions(std::vector<TCustomExpression>& _return,
+                                       const TSessionId& session) {
+  auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+
+  auto session_ptr = stdlog.getConstSessionInfo();
+  auto& catalog = session_ptr->getCatalog();
+  mapd_shared_lock<mapd_shared_mutex> read_lock(custom_expressions_mutex_);
+  auto custom_expressions =
+      catalog.getCustomExpressionsForUser(session_ptr->get_currentUser());
+  for (const auto& custom_expression : custom_expressions) {
+    _return.emplace_back(create_thrift_obj_from_custom_expr(*custom_expression));
+  }
+}
+
+void DBHandler::update_custom_expression(const TSessionId& session,
+                                         const int32_t id,
+                                         const std::string& expression_json) {
+  auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  check_read_only("update_custom_expression");
+
+  auto session_ptr = stdlog.getConstSessionInfo();
+  if (!session_ptr->get_currentUser().isSuper) {
+    THROW_MAPD_EXCEPTION("Custom expressions can only be updated by super users.")
+  }
+  auto& catalog = session_ptr->getCatalog();
+  mapd_unique_lock<mapd_shared_mutex> write_lock(custom_expressions_mutex_);
+  catalog.updateCustomExpression(id, expression_json);
+}
+
+void DBHandler::delete_custom_expressions(
+    const TSessionId& session,
+    const std::vector<int32_t>& custom_expression_ids,
+    const bool do_soft_delete) {
+  auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  check_read_only("delete_custom_expressions");
+
+  auto session_ptr = stdlog.getConstSessionInfo();
+  if (!session_ptr->get_currentUser().isSuper) {
+    THROW_MAPD_EXCEPTION("Custom expressions can only be deleted by super users.")
+  }
+  auto& catalog = session_ptr->getCatalog();
+  mapd_unique_lock<mapd_shared_mutex> write_lock(custom_expressions_mutex_);
+  catalog.deleteCustomExpressions(custom_expression_ids, do_soft_delete);
+}
+
 // dashboards
 void DBHandler::get_dashboard(TDashboard& dashboard,
                               const TSessionId& session,

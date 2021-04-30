@@ -526,6 +526,19 @@ struct TTableEpochInfo {
   3: i32 leaf_index;
 }
 
+enum TDataSourceType {
+  TABLE
+}
+
+struct TCustomExpression {
+  1: i32 id;
+  2: string name;
+  4: string expression_json;
+  5: TDataSourceType data_source_type;
+  6: i32 data_source_id;
+  7: bool is_deleted;
+}
+
 service OmniSci {
   # connection, admin
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TOmniSciException e)
@@ -571,6 +584,13 @@ service OmniSci {
   void set_execution_mode(1: TSessionId session, 2: TExecuteMode mode) throws (1: TOmniSciException e)
   TRenderResult render_vega(1: TSessionId session, 2: i64 widget_id, 3: string vega_json, 4: i32 compression_level, 5: string nonce) throws (1: TOmniSciException e)
   TPixelTableRowResult get_result_row_for_pixel(1: TSessionId session, 2: i64 widget_id, 3: TPixel pixel, 4: map<string, list<string>> table_col_names, 5: bool column_format, 6: i32 pixelRadius, 7: string nonce) throws (1: TOmniSciException e)
+
+  # custom expressions
+  i32 create_custom_expression(1: TSessionId session, 2: TCustomExpression custom_expression) throws (1: TOmniSciException e)
+  list<TCustomExpression> get_custom_expressions(1: TSessionId session) throws (1: TOmniSciException e)
+  void update_custom_expression(1: TSessionId session, 2: i32 id, 3: string expression_json) throws (1: TOmniSciException e)
+  void delete_custom_expressions(1: TSessionId session, 2: list<i32> custom_expression_ids, 3: bool do_soft_delete) throws (1: TOmniSciException e)
+
   # dashboards
   TDashboard get_dashboard(1: TSessionId session, 2: i32 dashboard_id) throws (1: TOmniSciException e)
   list<TDashboard> get_dashboards(1: TSessionId session) throws (1: TOmniSciException e)

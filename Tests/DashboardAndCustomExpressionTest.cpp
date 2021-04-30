@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,8 @@
  */
 
 /**
- * @file DashboardTest.cpp
- * @brief Test suite for dashboard commands
+ * @file DashboardAndCustomExpressionTest.cpp
+ * @brief Test suite for dashboard and custom expression APIs
  */
 
 #include <gtest/gtest.h>
@@ -29,7 +29,28 @@
 #define BASE_PATH "./tmp"
 #endif
 
-class DashboardBasicTest : public DBHandlerTestFixture {
+class BaseTestFixture : public DBHandlerTestFixture {
+ protected:
+  static int32_t createTestUser(const std::string& user_name, const std::string& pass) {
+    sql("CREATE USER " + user_name + " (password = '" + pass + "');");
+    sql("GRANT ACCESS ON DATABASE omnisci TO " + user_name + ";");
+    Catalog_Namespace::UserMetadata user_metadata{};
+    Catalog_Namespace::SysCatalog::instance().getMetadataForUser(user_name,
+                                                                 user_metadata);
+    return user_metadata.userId;
+  }
+
+  static void dropTestUser(const std::string& user_name) {
+    try {
+      sql("DROP USER " + user_name + ";");
+    } catch (const std::exception& e) {
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      LOG(WARNING) << e.what();
+    }
+  }
+};
+
+class DashboardBasicTest : public BaseTestFixture {
  public:
   static void SetUpTestSuite() {
     createDBHandler();
@@ -64,24 +85,6 @@ class DashboardBasicTest : public DBHandlerTestFixture {
     }
   }
   void TearDown() override { DBHandlerTestFixture::TearDown(); }
-
-  static int32_t createTestUser(const std::string& user_name, const std::string& pass) {
-    sql("CREATE USER " + user_name + " (password = '" + pass + "');");
-    sql("GRANT ACCESS ON DATABASE omnisci TO " + user_name + ";");
-    Catalog_Namespace::UserMetadata user_metadata{};
-    Catalog_Namespace::SysCatalog::instance().getMetadataForUser(user_name,
-                                                                 user_metadata);
-    return user_metadata.userId;
-  }
-
-  static void dropTestUser(const std::string& user_name) {
-    try {
-      sql("DROP USER " + user_name + ";");
-    } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
-      LOG(WARNING) << e.what();
-    }
-  }
 
   inline static int32_t test_user_1_id;
 };
@@ -874,6 +877,324 @@ TEST_F(DashboardBulkDeleteTest, InvalidNoPrivilegeMix) {
   ASSERT_EQ(getNumDashboards(), size_t(0));
 
   logout(non_super_session);
+}
+
+class CustomExpressionTest : public BaseTestFixture {
+ public:
+  static void SetUpTestSuite() {
+    createDBHandler();
+    loginAdmin();
+    createTestUser("test_user", "test_pass");
+    sql("CREATE TABLE test_table_1 (i INTEGER);");
+    sql("CREATE TABLE test_table_2 (i INTEGER);");
+    sql("GRANT SELECT ON TABLE test_table_2 TO test_user;");
+    sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+    TSessionId user_session;
+    login("test_user", "test_pass", "omnisci", user_session);
+    TQueryResult result;
+    sql(result, "CREATE TABLE test_table_3 (i INTEGER);", user_session);
+  }
+
+  static void TearDownTestSuite() {
+    loginAdmin();
+    sql("DROP TABLE IF EXISTS test_table_1;");
+    sql("DROP TABLE IF EXISTS test_table_2;");
+    sql("DROP TABLE IF EXISTS test_table_3;");
+    dropTestUser("test_user");
+  }
+
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    loginAdmin();
+  }
+
+  void TearDown() override {
+    std::vector<int32_t> ids;
+    for (const auto custom_expression : getAllCustomExpressions()) {
+      ids.emplace_back(custom_expression->id);
+    }
+    getCatalog().deleteCustomExpressions(ids, false);
+    DBHandlerTestFixture::TearDown();
+  }
+
+  TCustomExpression createTestCustomExpression(
+      const std::string& expr_name = "test_expr",
+      const std::string& table_name = "test_table_1") {
+    auto td = getCatalog().getMetadataForTable(table_name, false);
+    CHECK(td);
+    TCustomExpression custom_expr;
+    custom_expr.name = expr_name;
+    custom_expr.expression_json = "test_expr_json";
+    custom_expr.data_source_type = TDataSourceType::type::TABLE;
+    custom_expr.data_source_id = td->tableId;
+    return custom_expr;
+  }
+
+  std::vector<int32_t> createTestCustomExpressions() {
+    std::vector<TCustomExpression> custom_expressions_to_create{
+        createTestCustomExpression("test_expr_1", "test_table_1"),
+        createTestCustomExpression("test_expr_2", "test_table_2"),
+        createTestCustomExpression("test_expr_3", "test_table_3")};
+
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    loginAdmin();
+    std::vector<int32_t> custom_expression_ids;
+    for (const auto custom_expr : custom_expressions_to_create) {
+      auto id = db_handler->create_custom_expression(session_id, custom_expr);
+      custom_expression_ids.emplace_back(id);
+    }
+    return custom_expression_ids;
+  }
+
+  int32_t getLastTableId() {
+    int32_t table_id{-1};
+    for (const auto table : getCatalog().getAllTableMetadata()) {
+      table_id = std::max(table_id, table->tableId);
+    }
+    CHECK_NE(table_id, -1);
+    return table_id;
+  }
+
+  int32_t getLastCustomExpressionId() {
+    int32_t custom_expression_id{-1};
+    for (const auto custom_expression : getAllCustomExpressions()) {
+      custom_expression_id = std::max(custom_expression_id, custom_expression->id);
+    }
+    CHECK_NE(custom_expression_id, -1);
+    return custom_expression_id;
+  }
+
+  std::vector<const Catalog_Namespace::CustomExpression*> getAllCustomExpressions() {
+    Catalog_Namespace::UserMetadata user_metadata{};
+    Catalog_Namespace::SysCatalog::instance().getMetadataForUser("admin", user_metadata);
+    return getCatalog().getCustomExpressionsForUser(user_metadata);
+  }
+
+  void assertExpectedCustomExpression(const TCustomExpression& t_custom_expr,
+                                      int32_t id) {
+    auto custom_expr_1 = getCatalog().getCustomExpression(id);
+    assertExpectedCustomExpression(t_custom_expr, custom_expr_1, id);
+
+    auto custom_expr_2 = getCatalog().getCustomExpressionFromStorage(id);
+    assertExpectedCustomExpression(t_custom_expr, custom_expr_2.get(), id);
+  }
+
+  void assertExpectedCustomExpression(
+      const TCustomExpression& t_custom_expr,
+      const Catalog_Namespace::CustomExpression* custom_expr,
+      int32_t id) {
+    EXPECT_EQ(id, custom_expr->id);
+    EXPECT_EQ(t_custom_expr.name, custom_expr->name);
+    EXPECT_EQ(t_custom_expr.expression_json, custom_expr->expression_json);
+    assertEqualDataSourceType(t_custom_expr.data_source_type,
+                              custom_expr->data_source_type);
+    EXPECT_EQ(t_custom_expr.data_source_id, custom_expr->data_source_id);
+    EXPECT_EQ(t_custom_expr.is_deleted, custom_expr->is_deleted);
+  }
+
+  void assertExpectedCustomExpressions(
+      const std::vector<int32_t>& expected_expression_ids,
+      const std::vector<TCustomExpression>& actual_expressions) {
+    ASSERT_EQ(expected_expression_ids.size(), actual_expressions.size());
+    for (size_t i = 0; i < expected_expression_ids.size(); i++) {
+      assertExpectedCustomExpression(actual_expressions[i], expected_expression_ids[i]);
+    }
+  }
+
+  void assertEqualDataSourceType(TDataSourceType::type t_type,
+                                 Catalog_Namespace::DataSourceType type) {
+    if (type == Catalog_Namespace::DataSourceType::TABLE) {
+      EXPECT_EQ(TDataSourceType::type::TABLE, t_type);
+    } else {
+      UNREACHABLE() << "Unexpected data source type: " << static_cast<int>(type);
+    }
+  }
+};
+
+TEST_F(CustomExpressionTest, CreateCustomExpressionSuperUser) {
+  auto custom_expr = createTestCustomExpression();
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto id = db_handler->create_custom_expression(session_id, custom_expr);
+  assertExpectedCustomExpression(custom_expr, id);
+}
+
+TEST_F(CustomExpressionTest, CreateCustomExpressionNonSuperUser) {
+  TSessionId user_session;
+  login("test_user", "test_pass", "omnisci", user_session);
+  executeLambdaAndAssertException(
+      [this, &user_session]() {
+        const auto db_handler = getDbHandlerAndSessionId().first;
+        db_handler->create_custom_expression(user_session, createTestCustomExpression());
+      },
+      "Custom expressions can only be created by super users.");
+  logout(user_session);
+}
+
+TEST_F(CustomExpressionTest, CreateCustomExpressionExistingNameAndDataSource) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto custom_expr = createTestCustomExpression();
+  auto id = db_handler->create_custom_expression(session_id, custom_expr);
+  assertExpectedCustomExpression(custom_expr, id);
+  executeLambdaAndAssertException(
+      [db_handler = db_handler, session_id = session_id, &custom_expr]() {
+        db_handler->create_custom_expression(session_id, custom_expr);
+      },
+      "A custom expression with the given name and data source already exists.");
+}
+
+TEST_F(CustomExpressionTest,
+       CreateCustomExpressionSoftDeletedWithExistingNameAndDataSource) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto custom_expr = createTestCustomExpression();
+  auto id_1 = db_handler->create_custom_expression(session_id, custom_expr);
+  assertExpectedCustomExpression(custom_expr, id_1);
+  getCatalog().deleteCustomExpressions({id_1}, true);
+  auto id_2 = db_handler->create_custom_expression(session_id, custom_expr);
+  assertExpectedCustomExpression(custom_expr, id_2);
+}
+
+TEST_F(CustomExpressionTest, CreateCustomExpressionInvalidTableId) {
+  executeLambdaAndAssertException(
+      [this]() {
+        auto non_existent_table_id = getLastTableId() + 1;
+        ASSERT_EQ(getCatalog().getMetadataForTable(non_existent_table_id), nullptr);
+        auto custom_expr = createTestCustomExpression();
+        custom_expr.data_source_id = non_existent_table_id;
+        const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+        db_handler->create_custom_expression(session_id, custom_expr);
+      },
+      "Custom expression references a table that does not exist.");
+}
+
+TEST_F(CustomExpressionTest, GetCustomExpressionsSuperUser) {
+  auto custom_expression_ids = createTestCustomExpressions();
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  std::vector<TCustomExpression> result;
+  db_handler->get_custom_expressions(result, session_id);
+  assertExpectedCustomExpressions(custom_expression_ids, result);
+}
+
+TEST_F(CustomExpressionTest, GetCustomExpressionsNonSuperUser) {
+  auto custom_expression_ids = createTestCustomExpressions();
+  TSessionId user_session;
+  login("test_user", "test_pass", "omnisci", user_session);
+  const auto db_handler = getDbHandlerAndSessionId().first;
+  std::vector<TCustomExpression> result;
+  db_handler->get_custom_expressions(result, user_session);
+  const auto& catalog = getCatalog();
+
+  std::vector<int32_t> user_custom_expression_ids;
+  for (auto id : custom_expression_ids) {
+    auto custom_expr = catalog.getCustomExpression(id);
+    ASSERT_EQ(custom_expr->data_source_type, Catalog_Namespace::DataSourceType::TABLE);
+    auto td = catalog.getMetadataForTable(custom_expr->data_source_id, false);
+    ASSERT_NE(td, nullptr);
+    // Users should only get custom expressions for tables they have access to.
+    if (td->tableName == "test_table_2" || td->tableName == "test_table_3") {
+      user_custom_expression_ids.emplace_back(id);
+    }
+  }
+  assertExpectedCustomExpressions(user_custom_expression_ids, result);
+}
+
+TEST_F(CustomExpressionTest, UpdateCustomExpressionSuperUser) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto t_custom_expr = createTestCustomExpression();
+  auto id = db_handler->create_custom_expression(session_id, t_custom_expr);
+  db_handler->update_custom_expression(session_id, id, "new_test_expr_json");
+  auto custom_expr = getCatalog().getCustomExpression(id);
+  ASSERT_EQ("new_test_expr_json", custom_expr->expression_json);
+}
+
+TEST_F(CustomExpressionTest, UpdateCustomExpressionNonSuperUser) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto t_custom_expr = createTestCustomExpression();
+  auto id = db_handler->create_custom_expression(session_id, t_custom_expr);
+
+  TSessionId user_session;
+  login("test_user", "test_pass", "omnisci", user_session);
+  executeLambdaAndAssertException(
+      [db_handler = db_handler, &user_session, id]() {
+        db_handler->update_custom_expression(user_session, id, "new_test_expr_json");
+      },
+      "Custom expressions can only be updated by super users.");
+  logout(user_session);
+}
+
+TEST_F(CustomExpressionTest, UpdateCustomExpressionNonExistentExpression) {
+  createTestCustomExpressions();
+  auto non_existent_id = getLastCustomExpressionId() + 1;
+  executeLambdaAndAssertException(
+      [this, non_existent_id]() {
+        ASSERT_EQ(getCatalog().getCustomExpression(non_existent_id), nullptr);
+        const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+        db_handler->update_custom_expression(
+            session_id, non_existent_id, "new_test_expr_json");
+      },
+      "Custom expression with id \"" + std::to_string(non_existent_id) +
+          "\" does not exist.");
+}
+
+TEST_F(CustomExpressionTest, UpdateCustomExpressionSoftDeletedExpression) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto t_custom_expr = createTestCustomExpression();
+  auto id = db_handler->create_custom_expression(session_id, t_custom_expr);
+  getCatalog().deleteCustomExpressions({id}, true);
+  ASSERT_NE(getCatalog().getCustomExpression(id), nullptr);
+  executeLambdaAndAssertException(
+      [db_handler = db_handler, session_id = session_id, id]() {
+        db_handler->update_custom_expression(session_id, id, "new_test_expr_json");
+      },
+      "Custom expression with id \"" + std::to_string(id) + "\" does not exist.");
+}
+
+TEST_F(CustomExpressionTest, DeleteCustomExpressionSuperUser) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto custom_expression_ids = createTestCustomExpressions();
+  db_handler->delete_custom_expressions(session_id, custom_expression_ids, false);
+  for (const auto& id : custom_expression_ids) {
+    ASSERT_EQ(getCatalog().getCustomExpression(id), nullptr);
+  }
+}
+
+TEST_F(CustomExpressionTest, DeleteCustomExpressionNonSuperUser) {
+  const auto db_handler = getDbHandlerAndSessionId().first;
+  auto custom_expression_ids = createTestCustomExpressions();
+  TSessionId user_session;
+  login("test_user", "test_pass", "omnisci", user_session);
+  executeLambdaAndAssertException(
+      [db_handler = db_handler, &user_session, &custom_expression_ids]() {
+        db_handler->delete_custom_expressions(user_session, custom_expression_ids, false);
+      },
+      "Custom expressions can only be deleted by super users.");
+  logout(user_session);
+}
+
+TEST_F(CustomExpressionTest, DeleteCustomExpressionNonExistentExpression) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto ids = createTestCustomExpressions();
+  std::vector<int32_t> non_existent_ids{getLastCustomExpressionId() + 1,
+                                        getLastCustomExpressionId() + 2};
+  for (auto non_existent_id : non_existent_ids) {
+    ASSERT_EQ(getCatalog().getCustomExpression(non_existent_id), nullptr);
+  }
+  ids.insert(ids.end(), non_existent_ids.begin(), non_existent_ids.end());
+  executeLambdaAndAssertException(
+      [db_handler = db_handler, session_id = session_id, &ids]() {
+        db_handler->delete_custom_expressions(session_id, ids, false);
+      },
+      "Custom expressions with ids: " + join(non_existent_ids, ",") + " do not exist.");
+}
+
+TEST_F(CustomExpressionTest, DeleteCustomExpressionSoftDelete) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto custom_expression_ids = createTestCustomExpressions();
+  db_handler->delete_custom_expressions(session_id, custom_expression_ids, true);
+  auto& catalog = getCatalog();
+  for (const auto& id : custom_expression_ids) {
+    ASSERT_TRUE(catalog.getCustomExpression(id)->is_deleted);
+  }
 }
 
 int main(int argc, char** argv) {

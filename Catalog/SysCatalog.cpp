@@ -1169,6 +1169,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
       dbConn->query(Catalog::getForeignServerSchema());
       dbConn->query(Catalog::getForeignTableSchema());
     }
+    dbConn->query(Catalog::getCustomExpressionsSchema());
   } catch (const std::exception&) {
     dbConn->query("ROLLBACK TRANSACTION");
     boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);

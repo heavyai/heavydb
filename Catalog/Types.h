@@ -22,6 +22,7 @@
 #include <unordered_map>
 
 #include "Catalog/ColumnDescriptor.h"
+#include "Catalog/CustomExpression.h"
 #include "Catalog/DashboardDescriptor.h"
 #include "Catalog/DictDescriptor.h"
 #include "Catalog/ForeignServer.h"
@@ -48,4 +49,5 @@ using ForeignServerMap =
     std::map<std::string, std::shared_ptr<foreign_storage::ForeignServer>>;
 using ForeignServerMapById =
     std::map<int, std::shared_ptr<foreign_storage::ForeignServer>>;
+using CustomExpressionMapById = std::map<int, std::unique_ptr<CustomExpression>>;
 }  // namespace Catalog_Namespace

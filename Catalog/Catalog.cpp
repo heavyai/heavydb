@@ -625,13 +625,25 @@ void Catalog::updateDictionarySchema() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
-void Catalog::createFsiSchemas() {
+void Catalog::updateFsiSchemas() {
   cat_sqlite_lock sqlite_lock(getObjForLock());
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query(getForeignServerSchema(true));
     sqliteConnector_.query(getForeignTableSchema(true));
   } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
+void Catalog::updateCustomExpressionsSchema() {
+  cat_sqlite_lock sqlite_lock(getObjForLock());
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query(getCustomExpressionsSchema(true));
+  } catch (const std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
   }
@@ -651,6 +663,13 @@ const std::string Catalog::getForeignTableSchema(bool if_not_exists) {
          "options text, last_refresh_time integer, next_refresh_time integer, " +
          "FOREIGN KEY(table_id) REFERENCES mapd_tables(tableid), " +
          "FOREIGN KEY(server_id) REFERENCES omnisci_foreign_servers(id))";
+}
+
+const std::string Catalog::getCustomExpressionsSchema(bool if_not_exists) {
+  return "CREATE TABLE " + (if_not_exists ? std::string{"IF NOT EXISTS "} : "") +
+         "omnisci_custom_expressions(id integer primary key, name text, " +
+         "expression_json text, data_source_type text, " +
+         "data_source_id integer, is_deleted boolean)";
 }
 
 void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
@@ -878,8 +897,9 @@ void Catalog::CheckAndExecuteMigrations() {
   updateFrontendViewsToDashboards();
   recordOwnershipOfObjectsInObjectPermissions();
   if (g_enable_fsi) {
-    createFsiSchemas();
+    updateFsiSchemas();
   }
+  updateCustomExpressionsSchema();
 }
 
 void Catalog::CheckAndExecuteMigrationsPostBuildMaps() {
@@ -1108,6 +1128,36 @@ void Catalog::buildMaps() {
       physicalTableIt->second.push_back(physical_tb_id);
     }
   }
+
+  buildCustomExpressionsMap();
+}
+
+void Catalog::buildCustomExpressionsMap() {
+  sqliteConnector_.query(
+      "SELECT id, name, expression_json, data_source_type, data_source_id, "
+      "is_deleted "
+      "FROM omnisci_custom_expressions");
+  auto num_rows = sqliteConnector_.getNumRows();
+  for (size_t row = 0; row < num_rows; row++) {
+    auto custom_expr = getCustomExpressionFromConnector(row);
+    custom_expr_map_by_id_[custom_expr->id] = std::move(custom_expr);
+  }
+}
+
+std::unique_ptr<CustomExpression> Catalog::getCustomExpressionFromConnector(size_t row) {
+  auto id = sqliteConnector_.getData<int>(row, 0);
+  auto name = sqliteConnector_.getData<string>(row, 1);
+  auto expression_json = sqliteConnector_.getData<string>(row, 2);
+  auto data_source_type_str = sqliteConnector_.getData<string>(row, 3);
+  auto data_source_id = sqliteConnector_.getData<int>(row, 4);
+  auto is_deleted = sqliteConnector_.getData<bool>(row, 5);
+  return std::make_unique<CustomExpression>(
+      id,
+      name,
+      expression_json,
+      CustomExpression::dataSourceTypeFromString(data_source_type_str),
+      data_source_id,
+      is_deleted);
 }
 
 void Catalog::addTableToMap(const TableDescriptor* td,
@@ -4816,4 +4866,177 @@ void Catalog::gatherAdditionalInfo(std::vector<std::string>& additional_info,
   }
 }
 
+int32_t Catalog::createCustomExpression(
+    std::unique_ptr<CustomExpression> custom_expression) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(getObjForLock());
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  int32_t custom_expression_id{-1};
+  try {
+    auto data_source_type_str =
+        CustomExpression::dataSourceTypeToString(custom_expression->data_source_type);
+    auto data_source_id_str = std::to_string(custom_expression->data_source_id);
+    std::string custom_expr_select_query{
+        "SELECT id FROM omnisci_custom_expressions WHERE name = ? and data_source_type = "
+        "? and data_source_id = ? and is_deleted = ?"};
+    std::vector<std::string> custom_expr_select_params{custom_expression->name,
+                                                       data_source_type_str,
+                                                       data_source_id_str,
+                                                       std::to_string(false)};
+    sqliteConnector_.query_with_text_params(custom_expr_select_query,
+                                            custom_expr_select_params);
+    if (sqliteConnector_.getNumRows() > 0) {
+      throw std::runtime_error{
+          "A custom expression with the given "
+          "name and data source already exists."};
+    }
+    sqliteConnector_.query_with_text_params(
+        "INSERT INTO omnisci_custom_expressions(name, expression_json, "
+        "data_source_type, data_source_id, is_deleted) VALUES (?,?,?,?,?)",
+        std::vector<std::string>{custom_expression->name,
+                                 custom_expression->expression_json,
+                                 data_source_type_str,
+                                 data_source_id_str,
+                                 std::to_string(false)});
+    sqliteConnector_.query_with_text_params(custom_expr_select_query,
+                                            custom_expr_select_params);
+    CHECK_EQ(sqliteConnector_.getNumRows(), static_cast<size_t>(1));
+    custom_expression->id = sqliteConnector_.getData<int32_t>(0, 0);
+    custom_expression_id = custom_expression->id;
+    CHECK(custom_expr_map_by_id_.find(custom_expression->id) ==
+          custom_expr_map_by_id_.end());
+    custom_expr_map_by_id_[custom_expression->id] = std::move(custom_expression);
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+  CHECK_GT(custom_expression_id, 0);
+  return custom_expression_id;
+}
+
+const CustomExpression* Catalog::getCustomExpression(int32_t custom_expression_id) const {
+  cat_read_lock read_lock(this);
+  auto it = custom_expr_map_by_id_.find(custom_expression_id);
+  if (it != custom_expr_map_by_id_.end()) {
+    return it->second.get();
+  }
+  return nullptr;
+}
+
+const std::unique_ptr<const CustomExpression> Catalog::getCustomExpressionFromStorage(
+    int32_t custom_expression_id) {
+  cat_sqlite_lock sqlite_lock(getObjForLock());
+  sqliteConnector_.query_with_text_params(
+      "SELECT id, name, expression_json, data_source_type, data_source_id, "
+      "is_deleted FROM omnisci_custom_expressions WHERE id = ?",
+      std::vector<std::string>{to_string(custom_expression_id)});
+  if (sqliteConnector_.getNumRows() > 0) {
+    CHECK_EQ(sqliteConnector_.getNumRows(), static_cast<size_t>(1));
+    return getCustomExpressionFromConnector(0);
+  }
+  return nullptr;
+}
+
+std::vector<const CustomExpression*> Catalog::getCustomExpressionsForUser(
+    const UserMetadata& user) const {
+  std::vector<const CustomExpression*> all_custom_expressions;
+  {
+    // Get custom expression pointers separately in order to avoid holding the catalog
+    // read lock while checking privileges (which may cause a deadlock).
+    cat_read_lock read_lock(this);
+    for (const auto& [id, custom_expression] : custom_expr_map_by_id_) {
+      all_custom_expressions.emplace_back(custom_expression.get());
+    }
+  }
+
+  std::vector<const CustomExpression*> filtered_custom_expressions;
+  for (const auto custom_expression : all_custom_expressions) {
+    CHECK(custom_expression->data_source_type == DataSourceType::TABLE);
+    DBObject db_object{custom_expression->data_source_id, TableDBObjectType};
+    db_object.loadKey(*this);
+    db_object.setPrivileges(AccessPrivileges::SELECT_FROM_TABLE);
+    if (SysCatalog::instance().checkPrivileges(user, {db_object})) {
+      filtered_custom_expressions.emplace_back(custom_expression);
+    }
+  }
+  return filtered_custom_expressions;
+}
+
+void Catalog::updateCustomExpression(int32_t custom_expression_id,
+                                     const std::string& expression_json) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(getObjForLock());
+  auto it = custom_expr_map_by_id_.find(custom_expression_id);
+  if (it == custom_expr_map_by_id_.end() || it->second->is_deleted) {
+    throw std::runtime_error{"Custom expression with id \"" +
+                             std::to_string(custom_expression_id) + "\" does not exist."};
+  }
+  auto old_expression_json = it->second->expression_json;
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query_with_text_params(
+        "SELECT id FROM omnisci_custom_expressions WHERE id = ?",
+        std::vector<std::string>{std::to_string(custom_expression_id)});
+    CHECK_EQ(sqliteConnector_.getNumRows(), static_cast<size_t>(1));
+    sqliteConnector_.query_with_text_params(
+        "UPDATE omnisci_custom_expressions SET expression_json = ? WHERE id = ?",
+        std::vector<std::string>{expression_json, std::to_string(custom_expression_id)});
+    it->second->expression_json = expression_json;
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    it->second->expression_json = old_expression_json;
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
+void Catalog::deleteCustomExpressions(const std::vector<int32_t>& custom_expression_ids,
+                                      bool do_soft_delete) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(getObjForLock());
+
+  std::vector<int32_t> invalid_ids;
+  for (const auto id : custom_expression_ids) {
+    if (custom_expr_map_by_id_.find(id) == custom_expr_map_by_id_.end()) {
+      invalid_ids.emplace_back(id);
+    }
+  }
+  if (!invalid_ids.empty()) {
+    throw std::runtime_error{"Custom expressions with ids: " + join(invalid_ids, ",") +
+                             " do not exist."};
+  }
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    for (const auto id : custom_expression_ids) {
+      sqliteConnector_.query_with_text_params(
+          "SELECT id FROM omnisci_custom_expressions WHERE id = ?",
+          std::vector<std::string>{std::to_string(id)});
+      CHECK_EQ(sqliteConnector_.getNumRows(), static_cast<size_t>(1));
+      if (do_soft_delete) {
+        sqliteConnector_.query_with_text_params(
+            "UPDATE omnisci_custom_expressions SET is_deleted = ? WHERE id = ?",
+            std::vector<std::string>{std::to_string(true), std::to_string(id)});
+      } else {
+        sqliteConnector_.query_with_text_params(
+            "DELETE FROM omnisci_custom_expressions WHERE id = ?",
+            std::vector<std::string>{std::to_string(id)});
+      }
+    }
+
+    for (const auto id : custom_expression_ids) {
+      if (do_soft_delete) {
+        auto it = custom_expr_map_by_id_.find(id);
+        CHECK(it != custom_expr_map_by_id_.end());
+        it->second->is_deleted = true;
+      } else {
+        custom_expr_map_by_id_.erase(id);
+      }
+    }
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
 }  // namespace Catalog_Namespace

@@ -41,6 +41,7 @@
 
 #include "Calcite/Calcite.h"
 #include "Catalog/ColumnDescriptor.h"
+#include "Catalog/CustomExpression.h"
 #include "Catalog/DashboardDescriptor.h"
 #include "Catalog/DictDescriptor.h"
 #include "Catalog/ForeignServer.h"
@@ -472,6 +473,76 @@ class Catalog final {
   // For testing purposes only
   void setUncappedTableEpoch(const std::string& table_name);
 
+  // Methods for accessing and updating custom expressions
+
+  /**
+   * Gets the DDL statement used to create the custom expressions table.
+   *
+   * @param if_not_exists - flag the indicates whether or not to include the "IF NOT
+   * EXISTS" phrase in the DDL statement.
+   * @return string containing DDL statement
+   */
+  static const std::string getCustomExpressionsSchema(bool if_not_exists = false);
+
+  /**
+   * Creates a new custom expression.
+   *
+   * @param custom_expression - unique pointer to struct containing custom expression
+   * details.
+   * @return id of created custom expression
+   */
+  int32_t createCustomExpression(std::unique_ptr<CustomExpression> custom_expression);
+
+  /**
+   * Gets a pointer to the custom expression object with the given id.
+   *
+   * @param custom_expression_id - id of custom expression to get
+   * @return pointer to custom expression object. nullptr is returned if no custom
+   * expression is found for the given id.
+   */
+  const CustomExpression* getCustomExpression(int32_t custom_expression_id) const;
+
+  /**
+   * Gets a pointer to a struct containing custom expression details fetched from storage.
+   * This is intended for use in tests, when asserting that expected custom expression
+   * data is persisted.
+   *
+   * @param custom_expression_id - id of custom expression to get
+   * @return pointer to custom expression object. nullptr is returned if no custom
+   * expression is found for the given id.
+   */
+  const std::unique_ptr<const CustomExpression> getCustomExpressionFromStorage(
+      int32_t custom_expression_id);
+
+  /**
+   * Gets pointers to all the custom expression objects that the given user has access to.
+   * For custom expressions that are associated with a table data source, custom
+   * expressions for tables that the given user has SELECT access to are returned.
+   *
+   * @param user - user for which to get accessible custom expressions
+   * @return pointer to custom expression objects that the given user has access to
+   */
+  std::vector<const CustomExpression*> getCustomExpressionsForUser(
+      const UserMetadata& user) const;
+
+  /**
+   * Updates the custom expression for the given id with the given expression json string.
+   *
+   * @param custom_expression_id - id of custom expression to update
+   * @param expression_json - expression json string to be set
+   */
+  void updateCustomExpression(int32_t custom_expression_id,
+                              const std::string& expression_json);
+
+  /**
+   * Deletes custom expressions with the given ids.
+   *
+   * @param custom_expression_ids - ids of custom expressions to delete
+   * @param do_soft_delete - flag indicating whether or not to do a soft delete
+   */
+  void deleteCustomExpressions(const std::vector<int32_t>& custom_expression_ids,
+                               bool do_soft_delete);
+
  protected:
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();
@@ -488,8 +559,8 @@ class Catalog final {
   void updatePageSize();
   void updateDeletedColumnIndicator();
   void updateFrontendViewsToDashboards();
-  void createFsiSchemas();
-  void dropFsiSchemasAndTables();
+  void updateCustomExpressionsSchema();
+  void updateFsiSchemas();
   void recordOwnershipOfObjectsInObjectPermissions();
   void checkDateInDaysColumnMigration();
   void createDashboardSystemRoles();
@@ -554,6 +625,7 @@ class Catalog final {
   LinkDescriptorMapById linkDescriptorMapById_;
   ForeignServerMap foreignServerMap_;
   ForeignServerMapById foreignServerMapById_;
+  CustomExpressionMapById custom_expr_map_by_id_;
 
   SqliteConnector sqliteConnector_;
   const DBMetadata currentDB_;
@@ -624,6 +696,9 @@ class Catalog final {
 
   const Catalog* getObjForLock();
   void removeChunksUnlocked(const int table_id) const;
+
+  void buildCustomExpressionsMap();
+  std::unique_ptr<CustomExpression> getCustomExpressionFromConnector(size_t row);
 
  public:
   mutable std::mutex sqliteMutex_;
