@@ -334,15 +334,15 @@ class DBHandler : public OmniSciIf {
 
   // custom expressions
   int32_t create_custom_expression(const TSessionId& session,
-                                   const TCustomExpression& custom_expression);
+                                   const TCustomExpression& custom_expression) override;
   void get_custom_expressions(std::vector<TCustomExpression>& _return,
-                              const TSessionId& session);
+                              const TSessionId& session) override;
   void update_custom_expression(const TSessionId& session,
                                 const int32_t id,
-                                const std::string& expression_json);
+                                const std::string& expression_json) override;
   void delete_custom_expressions(const TSessionId& session,
                                  const std::vector<int32_t>& custom_expression_ids,
-                                 const bool do_soft_delete);
+                                 const bool do_soft_delete) override;
 
   // dashboards
   void get_dashboard(TDashboard& _return,
