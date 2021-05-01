@@ -323,9 +323,22 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
   CHECK_EQ(parser.parse(query_str, parse_trees, last_parsed), 0) << query_str;
   CHECK_EQ(parse_trees.size(), size_t(1));
   auto stmt = parse_trees.front().get();
-  auto insert_values_stmt = dynamic_cast<InsertValuesStmt*>(stmt);
-  CHECK(insert_values_stmt);
-  insert_values_stmt->execute(*session_info_);
+  auto insert_values_stmt = dynamic_cast<Parser::InsertValuesStmt*>(stmt);
+  if (insert_values_stmt) {
+    insert_values_stmt->execute(*session_info_);
+    return nullptr;
+  }
+  auto ctas_stmt = dynamic_cast<Parser::CreateTableAsSelectStmt*>(stmt);
+  if (ctas_stmt) {
+    ctas_stmt->execute(*session_info_);
+    return nullptr;
+  }
+  auto itas_stmt = dynamic_cast<Parser::InsertIntoTableAsSelectStmt*>(stmt);
+  if (itas_stmt) {
+    itas_stmt->execute(*session_info_);
+    return nullptr;
+  }
+  UNREACHABLE();
   return nullptr;
 }
 
