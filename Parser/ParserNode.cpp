@@ -3299,6 +3299,10 @@ void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& 
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
+  if (catalog.getMetadataForTable(table_name_) == nullptr) {
+    throw std::runtime_error("ITAS failed: table " + table_name_ + " does not exist.");
+  }
+
   lockmgr::LockedTableDescriptors locks;
   std::vector<std::string> tables;
 

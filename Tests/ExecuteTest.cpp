@@ -17593,6 +17593,21 @@ TEST(Select, Correlated_In) {
   }
 }
 
+TEST(Errors, CtasItas) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+
+  auto dt = ExecutorDeviceType::CPU;
+
+  // duplicate table
+  EXPECT_ANY_THROW(
+      run_multiple_agg("CREATE TABLE test AS (SELECT * FROM test_inner);", dt));
+  // select table does not exist
+  EXPECT_ANY_THROW(run_multiple_agg("CREATE TABLE x_new AS (SELECT * FROM x_old);", dt));
+  // itas table does not exist
+  EXPECT_ANY_THROW(run_multiple_agg("INSERT INTO test_itas SELECT * FROM test;", dt));
+}
+
 TEST(Create, QuotedColumnIdentifier) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
