@@ -2509,6 +2509,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   nukeOldState(allow_lazy_fetch, query_infos, deleted_cols_map, &ra_exe_unit);
 
+  addTransientStringLiterals(ra_exe_unit, row_set_mem_owner);
+
   GroupByAndAggregate group_by_and_aggregate(
       this,
       co.device_type,

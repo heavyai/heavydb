@@ -75,11 +75,6 @@ class GroupByAndAggregate {
                const CompilationOptions& co,
                const GpuSharedMemoryContext& gpu_smem_context);
 
-  static void addTransientStringLiterals(
-      const RelAlgExecutionUnit& ra_exe_unit,
-      Executor* executor,
-      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
-
   static size_t shard_count_for_top_groups(const RelAlgExecutionUnit& ra_exe_unit,
                                            const Catalog_Namespace::Catalog& catalog);
 
@@ -104,8 +99,6 @@ class GroupByAndAggregate {
 
   int64_t getShardedTopBucket(const ColRangeInfo& col_range_info,
                               const size_t shard_count) const;
-
-  void addTransientStringLiterals();
 
   llvm::Value* codegenOutputSlot(llvm::Value* groups_buffer,
                                  const QueryMemoryDescriptor& query_mem_desc,

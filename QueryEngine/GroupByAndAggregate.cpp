@@ -705,8 +705,6 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
     RenderInfo* render_info,
     const bool must_use_baseline_sort,
     const bool output_columnar_hint) {
-  addTransientStringLiterals();
-
   const auto count_distinct_descriptors = init_count_distinct_descriptors(
       ra_exe_unit_, query_infos_, device_type_, executor_);
 
@@ -779,99 +777,6 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                                        must_use_baseline_sort,
                                        output_columnar_hint,
                                        /*streaming_top_n_hint=*/false);
-  }
-}
-
-void GroupByAndAggregate::addTransientStringLiterals() {
-  addTransientStringLiterals(ra_exe_unit_, executor_, row_set_mem_owner_);
-}
-
-namespace {
-
-void add_transient_string_literals_for_expression(
-    const Analyzer::Expr* expr,
-    Executor* executor,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
-  if (!expr) {
-    return;
-  }
-
-  const auto array_expr = dynamic_cast<const Analyzer::ArrayExpr*>(expr);
-  if (array_expr) {
-    for (size_t i = 0; i < array_expr->getElementCount(); i++) {
-      add_transient_string_literals_for_expression(
-          array_expr->getElement(i), executor, row_set_mem_owner);
-    }
-    return;
-  }
-
-  const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr);
-  const auto& expr_ti = expr->get_type_info();
-  if (cast_expr && cast_expr->get_optype() == kCAST && expr_ti.is_string()) {
-    CHECK_EQ(kENCODING_DICT, expr_ti.get_compression());
-    auto sdp = executor->getStringDictionaryProxy(
-        expr_ti.get_comp_param(), row_set_mem_owner, true);
-    CHECK(sdp);
-    const auto str_lit_expr =
-        dynamic_cast<const Analyzer::Constant*>(cast_expr->get_operand());
-    if (str_lit_expr && str_lit_expr->get_constval().stringval) {
-      sdp->getOrAddTransient(*str_lit_expr->get_constval().stringval);
-    }
-    return;
-  }
-  const auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
-  if (!case_expr) {
-    return;
-  }
-  Analyzer::DomainSet domain_set;
-  case_expr->get_domain(domain_set);
-  if (domain_set.empty()) {
-    return;
-  }
-  if (expr_ti.is_string()) {
-    CHECK_EQ(kENCODING_DICT, expr_ti.get_compression());
-    auto sdp = executor->getStringDictionaryProxy(
-        expr_ti.get_comp_param(), row_set_mem_owner, true);
-    CHECK(sdp);
-    for (const auto domain_expr : domain_set) {
-      const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(domain_expr);
-      const auto str_lit_expr =
-          cast_expr && cast_expr->get_optype() == kCAST
-              ? dynamic_cast<const Analyzer::Constant*>(cast_expr->get_operand())
-              : dynamic_cast<const Analyzer::Constant*>(domain_expr);
-      if (str_lit_expr && str_lit_expr->get_constval().stringval) {
-        sdp->getOrAddTransient(*str_lit_expr->get_constval().stringval);
-      }
-    }
-  }
-}
-
-}  // namespace
-
-void GroupByAndAggregate::addTransientStringLiterals(
-    const RelAlgExecutionUnit& ra_exe_unit,
-    Executor* executor,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
-  for (const auto& group_expr : ra_exe_unit.groupby_exprs) {
-    add_transient_string_literals_for_expression(
-        group_expr.get(), executor, row_set_mem_owner);
-  }
-  for (const auto target_expr : ra_exe_unit.target_exprs) {
-    const auto& target_type = target_expr->get_type_info();
-    if (target_type.is_string() && target_type.get_compression() != kENCODING_DICT) {
-      continue;
-    }
-    const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
-    if (agg_expr) {
-      if (agg_expr->get_aggtype() == kSINGLE_VALUE ||
-          agg_expr->get_aggtype() == kSAMPLE) {
-        add_transient_string_literals_for_expression(
-            agg_expr->get_arg(), executor, row_set_mem_owner);
-      }
-    } else {
-      add_transient_string_literals_for_expression(
-          target_expr, executor, row_set_mem_owner);
-    }
   }
 }
 

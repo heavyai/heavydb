@@ -477,6 +477,10 @@ class Executor {
                                     const UpdateLogForFragment::Callback& cb,
                                     const bool is_agg);
 
+  void addTransientStringLiterals(
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const std::shared_ptr<RowSetMemoryOwner>& row_set_mem_owner);
+
  private:
   void clearMetaInfoCache();
 

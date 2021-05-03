@@ -2544,8 +2544,8 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   if (it != leaf_results_.end()) {
     // Add any transient string literals to the sdp on the agg
     const auto source_work_unit = createSortInputWorkUnit(sort, eo);
-    GroupByAndAggregate::addTransientStringLiterals(
-        source_work_unit.exe_unit, executor_, executor_->row_set_mem_owner_);
+    executor_->addTransientStringLiterals(source_work_unit.exe_unit,
+                                          executor_->row_set_mem_owner_);
     // Handle push-down for LIMIT for multi-node
     auto& aggregated_result = it->second;
     auto& result_rows = aggregated_result.rs;
@@ -2891,8 +2891,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   VLOG(3) << "body->getId()=" << body->getId() << " body->toString()=" << body->toString()
           << " it==leaf_results_.end()=" << (it == leaf_results_.end());
   if (it != leaf_results_.end()) {
-    GroupByAndAggregate::addTransientStringLiterals(
-        work_unit.exe_unit, executor_, executor_->row_set_mem_owner_);
+    executor_->addTransientStringLiterals(work_unit.exe_unit,
+                                          executor_->row_set_mem_owner_);
     auto& aggregated_result = it->second;
     auto& result_rows = aggregated_result.rs;
     ExecutionResult result(result_rows, aggregated_result.targets_meta);
