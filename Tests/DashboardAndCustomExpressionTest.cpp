@@ -940,7 +940,7 @@ class CustomExpressionTest : public BaseTestFixture {
     const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
     loginAdmin();
     std::vector<int32_t> custom_expression_ids;
-    for (const auto custom_expr : custom_expressions_to_create) {
+    for (const auto& custom_expr : custom_expressions_to_create) {
       auto id = db_handler->create_custom_expression(session_id, custom_expr);
       custom_expression_ids.emplace_back(id);
     }
