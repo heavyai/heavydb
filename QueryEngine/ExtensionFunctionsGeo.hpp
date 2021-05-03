@@ -1046,7 +1046,7 @@ double ST_YMax_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
 //
 
 DEVICE ALWAYS_INLINE double length_linestring(int8_t* l,
-                                              int64_t lsize,
+                                              int32_t lsize,
                                               int32_t ic,
                                               int32_t isr,
                                               int32_t osr,
@@ -1101,9 +1101,9 @@ double ST_Length_LineString_Geodesic(int8_t* coords,
 
 EXTENSION_NOINLINE
 double ST_Perimeter_Polygon(int8_t* poly,
-                            int64_t polysize,
-                            int32_t* poly_ring_sizes,
-                            int64_t poly_num_rings,
+                            int32_t polysize,
+                            int8_t* poly_ring_sizes,
+                            int32_t poly_num_rings,
                             int32_t ic,
                             int32_t isr,
                             int32_t osr) {
@@ -1119,9 +1119,9 @@ double ST_Perimeter_Polygon(int8_t* poly,
 
 EXTENSION_NOINLINE
 double ST_Perimeter_Polygon_Geodesic(int8_t* poly,
-                                     int64_t polysize,
-                                     int32_t* poly_ring_sizes,
-                                     int64_t poly_num_rings,
+                                     int32_t polysize,
+                                     int8_t* poly_ring_sizes_in,
+                                     int32_t poly_num_rings,
                                      int32_t ic,
                                      int32_t isr,
                                      int32_t osr) {
@@ -1129,6 +1129,7 @@ double ST_Perimeter_Polygon_Geodesic(int8_t* poly,
     return 0.0;
   }
 
+  auto poly_ring_sizes = reinterpret_cast<int32_t*>(poly_ring_sizes_in);
   auto exterior_ring_num_coords = poly_ring_sizes[0] * 2;
   auto exterior_ring_coords_size = exterior_ring_num_coords * compression_unit_size(ic);
 
@@ -1136,11 +1137,11 @@ double ST_Perimeter_Polygon_Geodesic(int8_t* poly,
 }
 
 DEVICE ALWAYS_INLINE double perimeter_multipolygon(int8_t* mpoly_coords,
-                                                   int64_t mpoly_coords_size,
-                                                   int32_t* mpoly_ring_sizes,
-                                                   int64_t mpoly_num_rings,
-                                                   int32_t* mpoly_poly_sizes,
-                                                   int64_t mpoly_num_polys,
+                                                   int32_t mpoly_coords_size,
+                                                   int8_t* mpoly_ring_sizes_in,
+                                                   int32_t mpoly_num_rings,
+                                                   int8_t* mpoly_poly_sizes,
+                                                   int32_t mpoly_num_polys,
                                                    int32_t ic,
                                                    int32_t isr,
                                                    int32_t osr,
@@ -1151,6 +1152,8 @@ DEVICE ALWAYS_INLINE double perimeter_multipolygon(int8_t* mpoly_coords,
 
   double perimeter = 0.0;
 
+  auto mpoly_ring_sizes = reinterpret_cast<int32_t*>(mpoly_ring_sizes_in);
+
   // Set specific poly pointers as we move through the coords/ringsizes/polyrings arrays.
   auto next_poly_coords = mpoly_coords;
   auto next_poly_ring_sizes = mpoly_ring_sizes;
@@ -1158,7 +1161,7 @@ DEVICE ALWAYS_INLINE double perimeter_multipolygon(int8_t* mpoly_coords,
   for (auto poly = 0; poly < mpoly_num_polys; poly++) {
     auto poly_coords = next_poly_coords;
     auto poly_ring_sizes = next_poly_ring_sizes;
-    auto poly_num_rings = mpoly_poly_sizes[poly];
+    auto poly_num_rings = reinterpret_cast<int32_t*>(mpoly_poly_sizes)[poly];
     // Count number of coords in all of poly's rings, advance ring size pointer.
     int32_t poly_num_coords = 0;
     for (auto ring = 0; ring < poly_num_rings; ring++) {
@@ -1179,11 +1182,11 @@ DEVICE ALWAYS_INLINE double perimeter_multipolygon(int8_t* mpoly_coords,
 
 EXTENSION_NOINLINE
 double ST_Perimeter_MultiPolygon(int8_t* mpoly_coords,
-                                 int64_t mpoly_coords_size,
-                                 int32_t* mpoly_ring_sizes,
-                                 int64_t mpoly_num_rings,
-                                 int32_t* mpoly_poly_sizes,
-                                 int64_t mpoly_num_polys,
+                                 int32_t mpoly_coords_size,
+                                 int8_t* mpoly_ring_sizes,
+                                 int32_t mpoly_num_rings,
+                                 int8_t* mpoly_poly_sizes,
+                                 int32_t mpoly_num_polys,
                                  int32_t ic,
                                  int32_t isr,
                                  int32_t osr) {
@@ -1201,11 +1204,11 @@ double ST_Perimeter_MultiPolygon(int8_t* mpoly_coords,
 
 EXTENSION_NOINLINE
 double ST_Perimeter_MultiPolygon_Geodesic(int8_t* mpoly_coords,
-                                          int64_t mpoly_coords_size,
-                                          int32_t* mpoly_ring_sizes,
-                                          int64_t mpoly_num_rings,
-                                          int32_t* mpoly_poly_sizes,
-                                          int64_t mpoly_num_polys,
+                                          int32_t mpoly_coords_size,
+                                          int8_t* mpoly_ring_sizes,
+                                          int32_t mpoly_num_rings,
+                                          int8_t* mpoly_poly_sizes,
+                                          int32_t mpoly_num_polys,
                                           int32_t ic,
                                           int32_t isr,
                                           int32_t osr) {
@@ -1262,9 +1265,9 @@ DEVICE ALWAYS_INLINE double area_ring(int8_t* ring,
 }
 
 DEVICE ALWAYS_INLINE double area_polygon(int8_t* poly_coords,
-                                         int64_t poly_coords_size,
-                                         int32_t* poly_ring_sizes,
-                                         int64_t poly_num_rings,
+                                         int32_t poly_coords_size,
+                                         int8_t* poly_ring_sizes_in,
+                                         int32_t poly_num_rings,
                                          int32_t ic,
                                          int32_t isr,
                                          int32_t osr) {
@@ -1274,6 +1277,7 @@ DEVICE ALWAYS_INLINE double area_polygon(int8_t* poly_coords,
 
   double area = 0.0;
   auto ring_coords = poly_coords;
+  auto poly_ring_sizes = reinterpret_cast<int32_t*>(poly_ring_sizes_in);
 
   // Add up the areas of all rings.
   // External ring is CCW, open - positive area.
@@ -1289,9 +1293,9 @@ DEVICE ALWAYS_INLINE double area_polygon(int8_t* poly_coords,
 
 EXTENSION_NOINLINE
 double ST_Area_Polygon(int8_t* poly_coords,
-                       int64_t poly_coords_size,
-                       int32_t* poly_ring_sizes,
-                       int64_t poly_num_rings,
+                       int32_t poly_coords_size,
+                       int8_t* poly_ring_sizes,
+                       int32_t poly_num_rings,
                        int32_t ic,
                        int32_t isr,
                        int32_t osr) {
@@ -1299,25 +1303,13 @@ double ST_Area_Polygon(int8_t* poly_coords,
       poly_coords, poly_coords_size, poly_ring_sizes, poly_num_rings, ic, isr, osr);
 }
 
-EXTENSION_INLINE
-double ST_Area_Polygon_Geodesic(int8_t* poly_coords,
-                                int64_t poly_coords_size,
-                                int32_t* poly_ring_sizes,
-                                int64_t poly_num_rings,
-                                int32_t ic,
-                                int32_t isr,
-                                int32_t osr) {
-  return ST_Area_Polygon(
-      poly_coords, poly_coords_size, poly_ring_sizes, poly_num_rings, ic, isr, osr);
-}
-
 EXTENSION_NOINLINE
 double ST_Area_MultiPolygon(int8_t* mpoly_coords,
-                            int64_t mpoly_coords_size,
-                            int32_t* mpoly_ring_sizes,
-                            int64_t mpoly_num_rings,
-                            int32_t* mpoly_poly_sizes,
-                            int64_t mpoly_num_polys,
+                            int32_t mpoly_coords_size,
+                            int8_t* mpoly_ring_sizes,
+                            int32_t mpoly_num_rings,
+                            int8_t* mpoly_poly_sizes_in,
+                            int32_t mpoly_num_polys,
                             int32_t ic,
                             int32_t isr,
                             int32_t osr) {
@@ -1327,9 +1319,11 @@ double ST_Area_MultiPolygon(int8_t* mpoly_coords,
 
   double area = 0.0;
 
+  auto mpoly_poly_sizes = reinterpret_cast<int32_t*>(mpoly_poly_sizes_in);
+
   // Set specific poly pointers as we move through the coords/ringsizes/polyrings arrays.
   auto next_poly_coords = mpoly_coords;
-  auto next_poly_ring_sizes = mpoly_ring_sizes;
+  auto next_poly_ring_sizes = reinterpret_cast<int32_t*>(mpoly_ring_sizes);
 
   for (auto poly = 0; poly < mpoly_num_polys; poly++) {
     auto poly_coords = next_poly_coords;
@@ -1343,31 +1337,15 @@ double ST_Area_MultiPolygon(int8_t* mpoly_coords,
     auto poly_coords_size = poly_num_coords * compression_unit_size(ic);
     next_poly_coords += poly_coords_size;
 
-    area += area_polygon(
-        poly_coords, poly_coords_size, poly_ring_sizes, poly_num_rings, ic, isr, osr);
+    area += area_polygon(poly_coords,
+                         poly_coords_size,
+                         reinterpret_cast<int8_t*>(poly_ring_sizes),
+                         poly_num_rings,
+                         ic,
+                         isr,
+                         osr);
   }
   return area;
-}
-
-EXTENSION_INLINE
-double ST_Area_MultiPolygon_Geodesic(int8_t* mpoly_coords,
-                                     int64_t mpoly_coords_size,
-                                     int32_t* mpoly_ring_sizes,
-                                     int64_t mpoly_num_rings,
-                                     int32_t* mpoly_poly_sizes,
-                                     int64_t mpoly_num_polys,
-                                     int32_t ic,
-                                     int32_t isr,
-                                     int32_t osr) {
-  return ST_Area_MultiPolygon(mpoly_coords,
-                              mpoly_coords_size,
-                              mpoly_ring_sizes,
-                              mpoly_num_rings,
-                              mpoly_poly_sizes,
-                              mpoly_num_polys,
-                              ic,
-                              isr,
-                              osr);
 }
 
 //
@@ -1713,17 +1691,6 @@ double ST_Centroid_MultiPolygon(int8_t* mpoly_coords,
     return mpoly_centroid[1];
   }
   return mpoly_centroid[0];
-}
-
-EXTENSION_INLINE
-int32_t ST_NPoints(int8_t* coords, int64_t coords_sz, int32_t ic) {
-  auto num_pts = coords_sz / compression_unit_size(ic);
-  return static_cast<int32_t>(num_pts / 2);
-}
-
-EXTENSION_INLINE
-int32_t ST_NRings(int32_t* poly_ring_sizes, int64_t poly_num_rings) {
-  return static_cast<int32_t>(poly_num_rings);
 }
 
 //

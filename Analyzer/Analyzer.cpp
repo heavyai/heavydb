@@ -24,6 +24,8 @@
 
 #include "Analyzer.h"
 #include "Catalog/Catalog.h"
+#include "Geospatial/Conversion.h"
+#include "Geospatial/Types.h"
 #include "QueryEngine/DateTimeUtils.h"
 #include "RangeTableEntry.h"
 #include "Shared/DateConverters.h"
@@ -3290,6 +3292,214 @@ bool FunctionOperWithCustomTypeHandling::operator==(const Expr& rhs) const {
     }
   }
   return true;
+}
+
+namespace {
+
+SQLTypes get_ti_from_geo(const Geospatial::GeoBase* geo) {
+  CHECK(geo);
+  switch (geo->getType()) {
+    case Geospatial::GeoBase::GeoType::kPOINT: {
+      return kPOINT;
+    }
+    case Geospatial::GeoBase::GeoType::kLINESTRING: {
+      return kLINESTRING;
+    }
+    case Geospatial::GeoBase::GeoType::kPOLYGON: {
+      return kPOLYGON;
+    }
+    case Geospatial::GeoBase::GeoType::kMULTIPOLYGON: {
+      return kMULTIPOLYGON;
+    }
+    default:
+      UNREACHABLE();
+      return kNULLT;
+  }
+}
+
+}  // namespace
+
+// TODO: fixup null
+GeoConstant::GeoConstant(std::unique_ptr<Geospatial::GeoBase>&& geo,
+                         const SQLTypeInfo& ti)
+    : GeoExpr(ti), geo_(std::move(geo)) {
+  CHECK(geo_);
+  if (get_ti_from_geo(geo_.get()) != ti.get_type()) {
+    throw std::runtime_error("Conflicting types for geo data " + geo_->getWktString() +
+                             " (type provided: " + ti.get_type_name() + ")");
+  }
+}
+
+std::shared_ptr<Analyzer::Expr> GeoConstant::deep_copy() const {
+  CHECK(geo_);
+  return makeExpr<GeoConstant>(geo_->clone(), type_info);
+}
+
+std::string GeoConstant::toString() const {
+  std::string str{"(GeoConst "};
+  CHECK(geo_);
+  str += geo_->getWktString();
+  str += ") ";
+  return str;
+}
+
+bool GeoConstant::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(GeoConstant)) {
+    return false;
+  }
+  const GeoConstant& rhs_c = dynamic_cast<const GeoConstant&>(rhs);
+  if (type_info != rhs_c.get_type_info() /*|| is_null != rhs_c.get_is_null()*/) {
+    return false;
+  }
+  /* TODO: constant nulls
+  if (is_null && rhs_c.get_is_null()) {
+    return true;
+  }
+
+  */
+  return *geo_ == *rhs_c.geo_;
+}
+
+size_t GeoConstant::physicalCols() const {
+  CHECK(type_info.is_geometry());
+  return type_info.get_physical_coord_cols();
+}
+
+std::shared_ptr<Analyzer::Constant> GeoConstant::makePhysicalConstant(
+    const size_t index) const {
+  // TODO: handle bounds, etc
+  const auto num_phys_coords = type_info.get_physical_coord_cols();
+  CHECK_GE(num_phys_coords, 0);
+  CHECK_LE(index, size_t(num_phys_coords));
+  SQLTypeInfo ti = type_info;
+
+  std::vector<double> coords;
+  std::vector<double> bounds;
+  std::vector<int> ring_sizes;
+  std::vector<int> poly_rings;
+
+  Geospatial::GeoTypesFactory::getGeoColumns(
+      geo_->getWktString(), ti, coords, bounds, ring_sizes, poly_rings);
+
+  if (ti.get_output_srid() == 4326) {
+    // expect geo literals compressed by default
+    CHECK(ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32);
+  }
+
+  switch (index) {
+    case 0:  // coords
+      return Geospatial::convert_coords(coords, ti);
+    case 1:  // ring sizes
+      return Geospatial::convert_rings(ring_sizes);
+    case 2:  // poly rings
+      return Geospatial::convert_rings(poly_rings);
+    default:
+      UNREACHABLE();
+  }
+
+  UNREACHABLE();
+  return nullptr;
+}
+
+GeoOperator::GeoOperator(const SQLTypeInfo& ti,
+                         const std::string& name,
+                         const std::vector<std::shared_ptr<Analyzer::Expr>>& args)
+    : GeoExpr(ti), name_(name), args_(args) {}
+
+std::shared_ptr<Analyzer::Expr> GeoOperator::deep_copy() const {
+  std::vector<std::shared_ptr<Analyzer::Expr>> args;
+  for (size_t i = 0; i < args_.size(); i++) {
+    args.push_back(args_[i]->deep_copy());
+  }
+  return makeExpr<GeoOperator>(type_info, name_, args);
+}
+
+std::string GeoOperator::toString() const {
+  std::string str{"(" + name_ + " "};
+  for (const auto& arg : args_) {
+    str += arg->toString();
+  }
+  str += ")";
+  return str;
+}
+
+bool GeoOperator::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(GeoOperator)) {
+    return false;
+  }
+  const GeoOperator& rhs_go = dynamic_cast<const GeoOperator&>(rhs);
+  if (getName() != rhs_go.getName()) {
+    return false;
+  }
+  if (rhs_go.size() != size()) {
+    return false;
+  }
+  for (size_t i = 0; i < size(); i++) {
+    if (args_[i].get() != rhs_go.getOperand(i)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+size_t GeoOperator::size() const {
+  return args_.size();
+}
+
+Analyzer::Expr* GeoOperator::getOperand(const size_t index) const {
+  CHECK_LT(index, args_.size());
+  return args_[index].get();
+}
+
+GeoFunctionOperator::GeoFunctionOperator(
+    const SQLTypeInfo& ti,
+    const std::string& name,
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& args)
+    : GeoExpr(ti), name_(name), args_(args) {}
+
+std::shared_ptr<Analyzer::Expr> GeoFunctionOperator::deep_copy() const {
+  std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
+  for (size_t i = 0; i < size(); ++i) {
+    args_copy.push_back(getArg(i)->deep_copy());
+  }
+  return makeExpr<Analyzer::GeoFunctionOperator>(type_info, getName(), args_copy);
+}
+
+std::string GeoFunctionOperator::toString() const {
+  std::string str{"(" + name_ + " "};
+  for (const auto& arg : args_) {
+    str += arg->toString();
+  }
+  str += ")";
+  return str;
+}
+
+bool GeoFunctionOperator::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(GeoFunctionOperator)) {
+    return false;
+  }
+  const GeoFunctionOperator& rhs_go = dynamic_cast<const GeoFunctionOperator&>(rhs);
+  if (getName() != rhs_go.getName()) {
+    return false;
+  }
+  if (rhs_go.size() != size()) {
+    return false;
+  }
+  for (size_t i = 0; i < size(); i++) {
+    if (args_[i].get() != rhs_go.getArg(i)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+size_t GeoFunctionOperator::size() const {
+  return args_.size();
+}
+
+Analyzer::Expr* GeoFunctionOperator::getArg(const size_t index) const {
+  CHECK_LT(index, args_.size());
+  return args_[index].get();
 }
 
 }  // namespace Analyzer

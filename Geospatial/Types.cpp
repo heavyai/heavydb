@@ -533,6 +533,11 @@ bool GeoBase::run(GeoBase::GeoOp op) const {
   return result;
 }
 
+std::unique_ptr<GeoBase> GeoPoint::clone() const {
+  CHECK(geom_);
+  return std::unique_ptr<GeoBase>(new GeoPoint(geom_->clone(), true));
+}
+
 GeoPoint::GeoPoint(const std::vector<double>& coords) {
   if (coords.size() != 2) {
     throw GeoTypesError("Point",
@@ -575,6 +580,11 @@ void GeoPoint::getColumns(std::vector<double>& coords) const {
 
   coords.push_back(point_geom->getX());
   coords.push_back(point_geom->getY());
+}
+
+std::unique_ptr<GeoBase> GeoLineString::clone() const {
+  CHECK(geom_);
+  return std::unique_ptr<GeoBase>(new GeoLineString(geom_->clone(), true));
 }
 
 GeoLineString::GeoLineString(const std::vector<double>& coords) {
@@ -629,6 +639,11 @@ void GeoLineString::getColumns(std::vector<double>& coords,
   bounds.push_back(bbox.min.y);
   bounds.push_back(bbox.max.x);
   bounds.push_back(bbox.max.y);
+}
+
+std::unique_ptr<GeoBase> GeoPolygon::clone() const {
+  CHECK(geom_);
+  return std::unique_ptr<GeoBase>(new GeoPolygon(geom_->clone(), true));
 }
 
 GeoPolygon::GeoPolygon(const std::vector<double>& coords,
@@ -709,6 +724,11 @@ int32_t GeoPolygon::getNumInteriorRings() const {
   const auto poly_geom = dynamic_cast<OGRPolygon*>(geom_);
   CHECK(poly_geom);
   return poly_geom->getNumInteriorRings();
+}
+
+std::unique_ptr<GeoBase> GeoMultiPolygon::clone() const {
+  CHECK(geom_);
+  return std::unique_ptr<GeoBase>(new GeoMultiPolygon(geom_->clone(), true));
 }
 
 GeoMultiPolygon::GeoMultiPolygon(const std::vector<double>& coords,
@@ -802,6 +822,16 @@ void GeoMultiPolygon::getColumns(std::vector<double>& coords,
   bounds.push_back(bbox.min.y);
   bounds.push_back(bbox.max.x);
   bounds.push_back(bbox.max.y);
+}
+
+std::unique_ptr<GeoBase> GeoGeometry::clone() const {
+  CHECK(geom_);
+  return std::unique_ptr<GeoBase>(new GeoGeometry(geom_->clone(), true));
+}
+
+std::unique_ptr<GeoBase> GeoGeometryCollection::clone() const {
+  CHECK(geom_);
+  return std::unique_ptr<GeoBase>(new GeoGeometryCollection(geom_->clone(), true));
 }
 
 GeoGeometryCollection::GeoGeometryCollection(const std::string& wkt) {

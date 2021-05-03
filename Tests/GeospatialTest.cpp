@@ -944,6 +944,45 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
             R"(SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(poly, ST_Point(0.1 + ST_NRings(poly)/10.0, 0.1));)",
             dt)));
 
+    // perimeter and area
+    EXPECT_ANY_THROW(run_simple_agg(
+        R"(SELECT ST_Perimeter(p) FROM geospatial_test WHERE id = 4;)", dt));
+    EXPECT_ANY_THROW(run_simple_agg(
+        R"(SELECT ST_Perimeter(l) FROM geospatial_test WHERE id = 4;)", dt));
+    ASSERT_NEAR(
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Perimeter(poly) FROM geospatial_test WHERE id = 4;)", dt)),
+        double(17.071067811865476),
+        double(10e-5));
+    ASSERT_NEAR(
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Perimeter(mpoly) FROM geospatial_test WHERE id = 4;)", dt)),
+        double(17.071067811865476),
+        double(10e-5));
+    ASSERT_NEAR(
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Perimeter(gpoly4326) FROM geospatial_test WHERE id = 4;)", dt)),
+        double(17.07106773237212),
+        double(10e-5));
+
+    EXPECT_ANY_THROW(
+        run_simple_agg(R"(SELECT ST_Area(p) FROM geospatial_test WHERE id = 4;)", dt));
+    EXPECT_ANY_THROW(
+        run_simple_agg(R"(SELECT ST_Area(l) FROM geospatial_test WHERE id = 4;)", dt));
+    ASSERT_NEAR(v<double>(run_simple_agg(
+                    R"(SELECT ST_Area(poly) FROM geospatial_test WHERE id = 4;)", dt)),
+                double(12.5),
+                double(10e-5));
+    ASSERT_NEAR(v<double>(run_simple_agg(
+                    R"(SELECT ST_Area(mpoly) FROM geospatial_test WHERE id = 4;)", dt)),
+                double(12.5),
+                double(10e-5));
+    ASSERT_NEAR(
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Area(gpoly4326) FROM geospatial_test WHERE id = 4;)", dt)),
+        double(12.5),
+        double(10e-5));
+
     // order by (unsupported)
     EXPECT_ANY_THROW(run_multiple_agg("SELECT p FROM geospatial_test ORDER BY p;", dt));
     EXPECT_ANY_THROW(run_multiple_agg(
@@ -1612,7 +1651,7 @@ TEST(GeoSpatial, Math) {
         static_cast<double>(0.01));
     // Linestring: check that runaway indices are controlled
     ASSERT_NEAR(
-        static_cast<double>(-122.446747),  // stop at endpoint
+        static_cast<double>(inline_fp_null_value<double>()),  // return null
         v<double>(run_simple_agg(
             R"(SELECT ST_X(ST_PointN(ST_GeomFromText('LINESTRING(-118.243683 34.052235, -119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, -122.446747 37.733795)', 4326), 1000000));)",
             dt)),

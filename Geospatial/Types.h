@@ -84,6 +84,8 @@ class GeoBase {
   std::unique_ptr<GeoBase> run(GeoOp op, double param) const;
   bool run(GeoOp op) const;
 
+  virtual std::unique_ptr<GeoBase> clone() const = 0;
+
  protected:
   GeoBase(OGRGeometry* geom, const bool owns_geom_obj)
       : geom_(geom), owns_geom_obj_(owns_geom_obj) {}
@@ -104,6 +106,8 @@ class GeoPoint : public GeoBase {
   void getColumns(std::vector<double>& coords) const;
   GeoType getType() const final { return GeoType::kPOINT; }
 
+  std::unique_ptr<GeoBase> clone() const;
+
  protected:
   GeoPoint(OGRGeometry* geom, const bool owns_geom_obj) : GeoBase(geom, owns_geom_obj) {}
 
@@ -117,6 +121,8 @@ class GeoLineString : public GeoBase {
 
   void getColumns(std::vector<double>& coords, std::vector<double>& bounds) const;
   GeoType getType() const final { return GeoType::kLINESTRING; }
+
+  std::unique_ptr<GeoBase> clone() const final;
 
  protected:
   GeoLineString(OGRGeometry* geom, const bool owns_geom_obj)
@@ -137,6 +143,8 @@ class GeoPolygon : public GeoBase {
 
   int32_t getNumInteriorRings() const;
 
+  std::unique_ptr<GeoBase> clone() const final;
+
  protected:
   GeoPolygon(OGRGeometry* geom, const bool owns_geom_obj)
       : GeoBase(geom, owns_geom_obj) {}
@@ -156,6 +164,8 @@ class GeoMultiPolygon : public GeoBase {
                   std::vector<int32_t>& poly_rings,
                   std::vector<double>& bounds) const;
   GeoType getType() const final { return GeoType::kMULTIPOLYGON; }
+
+  std::unique_ptr<GeoBase> clone() const final;
 
  protected:
   GeoMultiPolygon(OGRGeometry* geom, const bool owns_geom_obj)
@@ -178,6 +188,8 @@ class GeoGeometry : public GeoBase {
                   std::vector<int32_t>& geo_kinds,
                   std::vector<double>& bounds) const {};
   GeoType getType() const final { return GeoType::kGEOMETRY; }
+
+  std::unique_ptr<GeoBase> clone() const final;
 
  protected:
   GeoGeometry(OGRGeometry* geom, const bool owns_geom_obj)
@@ -204,6 +216,8 @@ class GeoGeometryCollection : public GeoBase {
                   std::vector<int32_t>& geo_kinds,
                   std::vector<double>& bounds) const {};
   GeoType getType() const final { return GeoType::kGEOMETRYCOLLECTION; }
+
+  std::unique_ptr<GeoBase> clone() const final;
 
  protected:
   GeoGeometryCollection(OGRGeometry* geom, const bool owns_geom_obj)
