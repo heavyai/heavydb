@@ -40,6 +40,11 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (u_oper) {
     return {codegen(u_oper, co)};
   }
+  auto geo_col_var = dynamic_cast<const Analyzer::GeoColumnVar*>(expr);
+  if (geo_col_var) {
+    // inherits from ColumnVar, so it is important we check this first
+    return codegenGeoColumnVar(geo_col_var, fetch_columns, co);
+  }
   auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (col_var) {
     return codegenColumn(col_var, fetch_columns, co);
@@ -146,6 +151,10 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (function_oper_expr) {
     return {codegenFunctionOper(function_oper_expr, co)};
   }
+  auto geo_expr = dynamic_cast<const Analyzer::GeoExpr*>(expr);
+  if (geo_expr) {
+    return codegenGeoExpr(geo_expr, co);
+  }
   if (dynamic_cast<const Analyzer::OffsetInFragment*>(expr)) {
     return {posArg(nullptr)};
   }
@@ -194,8 +203,9 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::UOper* u_oper,
     case kUNNEST:
       return codegenUnnest(u_oper, co);
     default:
-      abort();
+      UNREACHABLE();
   }
+  return nullptr;
 }
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::SampleRatioExpr* expr,
@@ -987,21 +997,22 @@ CodeGenerator::NullCheckCodegen::NullCheckCodegen(CgenState* cgen_state,
                                                   const std::string& name)
     : cgen_state(cgen_state), name(name) {
   AUTOMATIC_IR_METADATA(cgen_state);
-  CHECK(nullable_ti.is_number() || nullable_ti.is_time());
+  CHECK(nullable_ti.is_number() || nullable_ti.is_time() || nullable_ti.is_boolean());
 
-  null_check = std::make_unique<DiamondCodegen>(
-      nullable_ti.is_fp()
-          ? cgen_state->ir_builder_.CreateFCmp(llvm::FCmpInst::FCMP_OEQ,
-                                               nullable_lv,
-                                               cgen_state->inlineFpNull(nullable_ti))
-          : cgen_state->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_EQ,
-                                               nullable_lv,
-                                               cgen_state->inlineIntNull(nullable_ti)),
-      executor,
-      false,
-      name,
-      nullptr,
-      false);
+  llvm::Value* is_null_lv{nullptr};
+  if (nullable_ti.is_fp()) {
+    is_null_lv = cgen_state->ir_builder_.CreateFCmp(
+        llvm::FCmpInst::FCMP_OEQ, nullable_lv, cgen_state->inlineFpNull(nullable_ti));
+  } else if (nullable_ti.is_boolean()) {
+    is_null_lv = cgen_state->ir_builder_.CreateICmp(
+        llvm::ICmpInst::ICMP_EQ, nullable_lv, cgen_state->llBool(true));
+  } else {
+    is_null_lv = cgen_state->ir_builder_.CreateICmp(
+        llvm::ICmpInst::ICMP_EQ, nullable_lv, cgen_state->inlineIntNull(nullable_ti));
+  }
+  CHECK(is_null_lv);
+  null_check =
+      std::make_unique<DiamondCodegen>(is_null_lv, executor, false, name, nullptr, false);
 
   // generate a phi node depending on whether we got a null or not
   nullcheck_bb = llvm::BasicBlock::Create(

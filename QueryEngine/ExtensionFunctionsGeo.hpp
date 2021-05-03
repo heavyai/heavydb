@@ -1715,17 +1715,6 @@ double ST_Centroid_MultiPolygon(int8_t* mpoly_coords,
   return mpoly_centroid[0];
 }
 
-EXTENSION_INLINE
-int32_t ST_NPoints(int8_t* coords, int64_t coords_sz, int32_t ic) {
-  auto num_pts = coords_sz / compression_unit_size(ic);
-  return static_cast<int32_t>(num_pts / 2);
-}
-
-EXTENSION_INLINE
-int32_t ST_NRings(int32_t* poly_ring_sizes, int64_t poly_num_rings) {
-  return static_cast<int32_t>(poly_num_rings);
-}
-
 //
 // ST_Distance
 //

@@ -1612,7 +1612,7 @@ TEST(GeoSpatial, Math) {
         static_cast<double>(0.01));
     // Linestring: check that runaway indices are controlled
     ASSERT_NEAR(
-        static_cast<double>(-122.446747),  // stop at endpoint
+        static_cast<double>(inline_fp_null_value<double>()),  // return null
         v<double>(run_simple_agg(
             R"(SELECT ST_X(ST_PointN(ST_GeomFromText('LINESTRING(-118.243683 34.052235, -119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, -122.446747 37.733795)', 4326), 1000000));)",
             dt)),
