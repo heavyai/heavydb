@@ -15,8 +15,8 @@
  */
 
 /**
- * @file ForeignTableDmlTest.cpp
- * @brief Test suite for DML SQL queries on foreign tables
+ * @file DiskCacheQueryTest.cpp
+ * @brief Test suite for queries on Disk Cache
  */
 
 #include <gtest/gtest.h>

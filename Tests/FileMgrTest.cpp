@@ -22,12 +22,15 @@
 #include <fstream>
 
 #include <gtest/gtest.h>
+#include <boost/filesystem.hpp>
 
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "Shared/File.h"
 #include "TestHelpers.h"
+
+#include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 
 class FileMgrTest : public DBHandlerTestFixture {
  protected:
@@ -1128,6 +1131,80 @@ TEST_F(MaxRollbackEpochTest, WriteEmptyBufferAndMultipleEpochVersions) {
   used_page_count =
       stats.total_data_page_count - stats.total_free_data_page_count.value();
   ASSERT_EQ(static_cast<uint64_t>(2), used_page_count);
+}
+
+constexpr char file_mgr_path[] = "./FileMgrTest";
+namespace bf = boost::filesystem;
+
+class FileMgrUnitTest : public testing::Test {
+ protected:
+  static constexpr size_t page_size_ = 64;
+  void SetUp() override {
+    bf::remove_all(file_mgr_path);
+    bf::create_directory(file_mgr_path);
+  }
+  void TearDown() override { bf::remove_all(file_mgr_path); }
+  std::unique_ptr<File_Namespace::GlobalFileMgr> initializeGFM(
+      std::shared_ptr<ForeignStorageInterface> fsi,
+      size_t num_pages = 1) {
+    std::vector<int8_t> write_buffer{1, 2, 3, 4};
+    auto gfm = std::make_unique<File_Namespace::GlobalFileMgr>(
+        0, fsi, file_mgr_path, 0, page_size_);
+    auto fm = dynamic_cast<File_Namespace::FileMgr*>(gfm->getFileMgr(1, 1));
+    auto buffer = fm->createBuffer({1, 1, 1, 1});
+    auto page_data_size = page_size_ - buffer->reservedHeaderSize();
+    for (size_t i = 0; i < page_data_size * num_pages; i += 4) {
+      buffer->append(write_buffer.data(), 4);
+    }
+    gfm->checkpoint(1, 1);
+    return gfm;
+  }
+};
+
+TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedFreedFirstPage) {
+  auto fsi = std::make_shared<ForeignStorageInterface>();
+  ::registerArrowForeignStorage(fsi);
+  ::registerArrowCsvForeignStorage(fsi);
+  {
+    auto temp_gfm = initializeGFM(fsi, 2);
+    auto buffer =
+        dynamic_cast<File_Namespace::FileBuffer*>(temp_gfm->getBuffer({1, 1, 1, 1}));
+    buffer->freePage(buffer->getMultiPage().front().current().page);
+  }
+  File_Namespace::GlobalFileMgr gfm(0, fsi, file_mgr_path, 0, page_size_);
+  auto buffer = gfm.getBuffer({1, 1, 1, 1});
+  ASSERT_EQ(buffer->pageCount(), 2U);
+}
+
+TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedFreedLastPage) {
+  auto fsi = std::make_shared<ForeignStorageInterface>();
+  ::registerArrowForeignStorage(fsi);
+  ::registerArrowCsvForeignStorage(fsi);
+  {
+    auto temp_gfm = initializeGFM(fsi, 2);
+    auto buffer =
+        dynamic_cast<File_Namespace::FileBuffer*>(temp_gfm->getBuffer({1, 1, 1, 1}));
+    buffer->freePage(buffer->getMultiPage().back().current().page);
+  }
+  File_Namespace::GlobalFileMgr gfm(0, fsi, file_mgr_path, 0, page_size_);
+  auto buffer = gfm.getBuffer({1, 1, 1, 1});
+  ASSERT_EQ(buffer->pageCount(), 2U);
+}
+
+TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedAppendPages) {
+  auto fsi = std::make_shared<ForeignStorageInterface>();
+  ::registerArrowForeignStorage(fsi);
+  ::registerArrowCsvForeignStorage(fsi);
+  std::vector<int8_t> write_buffer{1, 2, 3, 4};
+  {
+    auto temp_gfm = initializeGFM(fsi, 1);
+    auto buffer =
+        dynamic_cast<File_Namespace::FileBuffer*>(temp_gfm->getBuffer({1, 1, 1, 1}));
+    buffer->append(write_buffer.data(), 4);
+  }
+  File_Namespace::GlobalFileMgr gfm(0, fsi, file_mgr_path, 0, page_size_);
+  auto buffer = dynamic_cast<File_Namespace::FileBuffer*>(gfm.getBuffer({1, 1, 1, 1}));
+  ASSERT_EQ(buffer->pageCount(), 1U);
 }
 
 int main(int argc, char** argv) {

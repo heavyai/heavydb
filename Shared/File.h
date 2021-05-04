@@ -92,7 +92,7 @@ size_t read(FILE* f, const size_t offset, const size_t size, int8_t* buf);
  * @param err If not NULL, will hold an error code should an error occur.
  * @return size_t The number of bytes written.
  */
-size_t write(FILE* f, const size_t offset, const size_t size, int8_t* buf);
+size_t write(FILE* f, const size_t offset, const size_t size, const int8_t* buf);
 
 /**
  * @brief Appends the specified number of bytes to the end of the file f from buf.
@@ -103,7 +103,7 @@ size_t write(FILE* f, const size_t offset, const size_t size, int8_t* buf);
  * @param err If not NULL, will hold an error code should an error occur.
  * @return size_t The number of bytes written.
  */
-size_t append(FILE* f, const size_t size, int8_t* buf);
+size_t append(FILE* f, const size_t size, const int8_t* buf);
 
 /**
  * @brief Reads the specified page from the file f into buf.

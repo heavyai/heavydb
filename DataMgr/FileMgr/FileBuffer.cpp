@@ -34,7 +34,6 @@
 using namespace std;
 
 namespace File_Namespace {
-size_t FileBuffer::headerBufferOffset_ = 32;
 
 FileBuffer::FileBuffer(FileMgr* fm,
                        const size_t pageSize,
@@ -48,6 +47,7 @@ FileBuffer::FileBuffer(FileMgr* fm,
   // Create a new FileBuffer
   CHECK(fm_);
   calcHeaderBuffer();
+  CHECK(pageSize_ > reservedHeaderSize_);
   pageDataSize_ = pageSize_ - reservedHeaderSize_;
   //@todo reintroduce initialSize - need to develop easy way of
   // differentiating these pre-allocated pages from "written-to" pages
@@ -94,7 +94,6 @@ FileBuffer::FileBuffer(FileMgr* fm,
   calcHeaderBuffer();
   int32_t lastPageId = -1;
   int32_t curPageId = 0;
-  // Page lastMetadataPage;
   for (auto vecIt = headerStartIt; vecIt != headerEndIt; ++vecIt) {
     curPageId = vecIt->pageId;
 
@@ -104,16 +103,15 @@ FileBuffer::FileBuffer(FileMgr* fm,
     } else {
       if (curPageId != lastPageId) {
         // protect from bad data on disk, and give diagnostics
-        if (curPageId != lastPageId + 1) {
-          LOG(FATAL) << "Failure reading DB file " << show_chunk(chunkKey)
-                     << " Current page " << curPageId << " last page " << lastPageId
-                     << " epoch " << vecIt->versionEpoch;
+        if (fm->failOnReadError()) {
+          if (curPageId != lastPageId + 1) {
+            LOG(FATAL) << "Failure reading DB file " << show_chunk(chunkKey)
+                       << " Current page " << curPageId << " last page " << lastPageId
+                       << " epoch " << vecIt->versionEpoch;
+          }
         }
-        if (lastPageId == -1) {
-          // If we are on first real page
-          CHECK(metadataPages_.current().page.fileId != -1);  // was initialized
-          readMetadata(metadataPages_.current().page);
-          pageDataSize_ = pageSize_ - reservedHeaderSize_;
+        if (lastPageId == -1) {  // If we are on first real page
+          initMetadataAndPageDataSize();
         }
         MultiPage multiPage(pageSize_);
         multiPages_.push_back(multiPage);
@@ -123,8 +121,7 @@ FileBuffer::FileBuffer(FileMgr* fm,
     }
   }
   if (curPageId == -1) {  // meaning there was only a metadata page
-    readMetadata(metadataPages_.current().page);
-    pageDataSize_ = pageSize_ - reservedHeaderSize_;
+    initMetadataAndPageDataSize();
   }
 }
 
@@ -136,8 +133,7 @@ FileBuffer::~FileBuffer() {
 void FileBuffer::reserve(const size_t numBytes) {
   size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
   size_t numCurrentPages = multiPages_.size();
-  int32_t epoch = fm_->epoch();
-
+  auto epoch = getFileMgrEpoch();
   for (size_t pageNum = numCurrentPages; pageNum < numPagesRequested; ++pageNum) {
     Page page = addNewMultiPage(epoch);
     writeHeader(page, pageNum, epoch);
@@ -154,9 +150,13 @@ void FileBuffer::calcHeaderBuffer() {
   }
 }
 
+void FileBuffer::freePage(const Page& page) {
+  freePage(page, false);
+}
+
 void FileBuffer::freePage(const Page& page, const bool isRolloff) {
   FileInfo* fileInfo = fm_->getFileInfoForFileId(page.fileId);
-  fileInfo->freePage(page.pageNum, isRolloff);
+  fileInfo->freePage(page.pageNum, isRolloff, getFileMgrEpoch());
 }
 
 void FileBuffer::freeMetadataPages() {
@@ -203,7 +203,7 @@ void FileBuffer::freePagesBeforeEpoch(const int32_t targetEpoch) {
   // This method is only safe to be called within a checkpoint, after the sync and epoch
   // increment where a failure at any point32_t in the process would lead to a safe
   // rollback
-  const int32_t currentEpoch = fm_->epoch();
+  auto currentEpoch = getFileMgrEpoch();
   CHECK_LE(targetEpoch, currentEpoch);
   freePagesBeforeEpochForMultiPage(metadataPages_, targetEpoch, currentEpoch);
   for (auto& multiPage : multiPages_) {
@@ -500,7 +500,7 @@ void FileBuffer::append(int8_t* src,
   int8_t* curPtr = src;  // a pointer to the current location in dst being written to
   size_t initialNumPages = multiPages_.size();
   size_ = size_ + numBytes;
-  int32_t epoch = fm_->epoch();
+  auto epoch = getFileMgrEpoch();
   for (size_t pageNum = startPage; pageNum < startPage + numPagesToWrite; ++pageNum) {
     Page page;
     if (pageNum >= initialNumPages) {
@@ -535,9 +535,7 @@ void FileBuffer::write(int8_t* src,
                        const size_t offset,
                        const MemoryLevel srcBufferType,
                        const int32_t deviceId) {
-  if (srcBufferType != CPU_LEVEL) {
-    LOG(FATAL) << "Unsupported Buffer type";
-  }
+  CHECK(srcBufferType == CPU_LEVEL) << "Unsupported Buffer type";
 
   bool tempIsAppended = false;
   setDirty();
@@ -558,7 +556,7 @@ void FileBuffer::write(int8_t* src,
   size_t bytesLeft = numBytes;
   int8_t* curPtr = src;  // a pointer to the current location in dst being written to
   size_t initialNumPages = multiPages_.size();
-  int32_t epoch = fm_->epoch();
+  auto epoch = getFileMgrEpoch();
 
   if (startPage >
       initialNumPages) {  // means there is a gap we need to allocate pages for
@@ -622,12 +620,29 @@ void FileBuffer::write(int8_t* src,
   CHECK(bytesLeft == 0);
 }
 
+int32_t FileBuffer::getFileMgrEpoch() {
+  auto [db_id, tb_id] = get_table_prefix(chunkKey_);
+  return fm_->epoch(db_id, tb_id);
+}
+
 std::string FileBuffer::dump() const {
   std::stringstream ss;
   ss << "chunk_key = " << show_chunk(chunkKey_) << "\n";
   ss << "has_encoder = " << (hasEncoder() ? "true\n" : "false\n");
   ss << "size_ = " << size_ << "\n";
   return ss.str();
+}
+
+void FileBuffer::initMetadataAndPageDataSize() {
+  CHECK(metadataPages_.current().page.fileId != -1);  // was initialized
+  readMetadata(metadataPages_.current().page);
+  pageDataSize_ = pageSize_ - reservedHeaderSize_;
+}
+
+bool FileBuffer::isMissingPages() const {
+  // Detect the case where a page is missing by comparing the amount of pages read
+  // with the metadata size.
+  return ((size() + pageDataSize_ - 1) / pageDataSize_ != multiPages_.size());
 }
 
 }  // namespace File_Namespace

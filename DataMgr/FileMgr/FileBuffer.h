@@ -80,7 +80,7 @@ class FileBuffer : public AbstractBuffer {
              const std::vector<HeaderInfo>::const_iterator& headerEndIt);
 
   /// Destructor
-  ~FileBuffer() override;
+  virtual ~FileBuffer() override;
 
   Page addNewMultiPage(const int32_t epoch);
 
@@ -142,6 +142,7 @@ class FileBuffer : public AbstractBuffer {
 
   /// Returns vector of MultiPages in the FileBuffer.
   inline virtual std::vector<MultiPage> getMultiPage() const { return multiPages_; }
+  inline MultiPage getMetadataPage() const { return metadataPages_; }
 
   /// Returns the total number of bytes allocated for the FileBuffer.
   inline size_t reservedSize() const override { return multiPages_.size() * pageSize_; }
@@ -150,8 +151,22 @@ class FileBuffer : public AbstractBuffer {
   // inline virtual size_t used() const {
 
   inline size_t numMetadataPages() const { return metadataPages_.pageVersions.size(); };
+  inline size_t numChunkPages() const {
+    size_t total_size = 0;
+    for (const auto& multi_page : multiPages_) {
+      total_size += multi_page.pageVersions.size();
+    }
+    return total_size;
+  }
 
   std::string dump() const;
+
+  bool isMissingPages() const;
+
+  // Used for testing
+  void freePage(const Page& page);
+
+  static constexpr size_t headerBufferOffset_ = 32;
 
  private:
   // FileBuffer(const FileBuffer&);      // private copy constructor
@@ -173,10 +188,11 @@ class FileBuffer : public AbstractBuffer {
   void freePagesBeforeEpochForMultiPage(MultiPage& multiPage,
                                         const int32_t targetEpoch,
                                         const int32_t currentEpoch);
+  void initMetadataAndPageDataSize();
+  int32_t getFileMgrEpoch();
 
   FileMgr* fm_;  // a reference to FileMgr is needed for writing to new pages in available
                  // files
-  static size_t headerBufferOffset_;
   MultiPage metadataPages_;
   std::vector<MultiPage> multiPages_;
   size_t pageSize_;

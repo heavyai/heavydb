@@ -27,6 +27,7 @@ add_executable(ForeignStorageCacheTest ForeignStorageCacheTest.cpp)
 add_executable(PersistentStorageTest PersistentStorageTest.cpp)
 add_executable(ShardedTableEpochConsistencyTest ShardedTableEpochConsistencyTest.cpp)
 add_executable(DiskCacheQueryTest DiskCacheQueryTest.cpp)
+add_executable(CachingFileMgrTest CachingFileMgrTest.cpp)
 add_executable(JSONTest JSONTest.cpp)
 
 if(ENABLE_CUDA)
@@ -194,6 +195,7 @@ target_link_libraries(ForeignStorageCacheTest gtest ${MAPD_LIBRARIES})
 target_link_libraries(PersistentStorageTest gtest ${MAPD_LIBRARIES})
 target_link_libraries(ShardedTableEpochConsistencyTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(DiskCacheQueryTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(CachingFileMgrTest gtest Logger Shared DataMgr OSDependent ${Boost_LIBRARIES} ${Folly_LIBRARIES})
 target_link_libraries(LoadTableTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(JSONTest gtest Logger Shared)
 
@@ -275,6 +277,7 @@ add_test(ForeignStorageCacheTest ForeignStorageCacheTest ${TEST_ARGS})
 add_test(PersistentStorageTest PersistentStorageTest ${TEST_ARGS})
 add_test(ShardedTableEpochConsistencyTest ShardedTableEpochConsistencyTest ${TEST_ARGS})
 add_test(DiskCacheQueryTest DiskCacheQueryTest ${TEST_ARGS})
+add_test(CachingFileMgrTest CachingFileMgrTest ${TEST_ARGS})
 add_test(LoadTableTest LoadTableTest ${TEST_ARGS})
 add_test(JSONTest JSONTest ${TEST_ARGS})
 
@@ -364,6 +367,7 @@ set(TEST_PROGRAMS
   PersistentStorageTest
   ShardedTableEpochConsistencyTest
   DiskCacheQueryTest
+  CachingFileMgrTest
   LoadTableTest
   JSONTest
 )

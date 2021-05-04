@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include "DataMgr/DataMgr.h"
+#include "DataMgr/AbstractBuffer.h"
 
 namespace TestHelpers {
 

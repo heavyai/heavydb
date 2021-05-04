@@ -1023,8 +1023,7 @@ class ShowDiskCacheUsageTest : public ShowTest {
  public:
   static inline constexpr int64_t epoch_file_size{2 * sizeof(int64_t)};
   static inline constexpr int64_t empty_mgr_size{0};
-  static inline constexpr int64_t meta_only_size{METADATA_PAGE_SIZE};
-  static inline constexpr int64_t minimum_total_size{DEFAULT_PAGE_SIZE + meta_only_size};
+  static inline constexpr int64_t chunk_size{DEFAULT_PAGE_SIZE + METADATA_PAGE_SIZE};
   // TODO(Misiu): These can be made constexpr once c++20 is supported.
   static inline std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache";
   static inline std::string foreign_table1{"foreign_table1"};
@@ -1094,7 +1093,7 @@ class ShowDiskCacheUsageTest : public ShowTest {
   }
 
   uint64_t getMinSizeForTable(std::string& table_name) {
-    return minimum_total_size + getWrapperSizeForTable(table_name);
+    return chunk_size + getWrapperSizeForTable(table_name);
   }
 };
 
@@ -1185,7 +1184,7 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableMetadataOnly) {
 
   sqlAndCompareResult(
       "SHOW DISK CACHE USAGE;",
-      {{foreign_table1, i(meta_only_size + getWrapperSizeForTable(foreign_table1))}});
+      {{foreign_table1, i(METADATA_PAGE_SIZE + getWrapperSizeForTable(foreign_table1))}});
 }
 
 TEST_F(ShowDiskCacheUsageTest, ForeignAndNormalTable) {
@@ -1270,7 +1269,7 @@ TEST_F(ShowDiskCacheUsageForNormalTableTest, NormalTableMinimum) {
 
   sqlAndCompareResult("SHOW DISK CACHE USAGE;",
                       {{foreign_table1, i(getMinSizeForTable(foreign_table1))},
-                       {table1, i(minimum_total_size * 2)}});
+                       {table1, i(chunk_size * 2 + getWrapperSizeForTable(table1))}});
 }
 
 class ShowTableDetailsTest : public ShowTest,

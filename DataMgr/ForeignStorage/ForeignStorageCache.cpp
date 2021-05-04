@@ -55,32 +55,36 @@ ForeignStorageCache::ForeignStorageCache(const DiskCacheConfig& config)
     : num_chunks_added_(0), num_metadata_added_(0) {
   validatePath(config.path);
   caching_file_mgr_ = std::make_unique<File_Namespace::CachingFileMgr>(
-      config.path, config.num_reader_threads);
+      config.path, config.num_reader_threads, config.page_size);
 }
 
 void ForeignStorageCache::deleteBufferIfExists(const ChunkKey& chunk_key) {
   write_lock meta_lock(metadata_mutex_);
   write_lock chunk_lock(chunks_mutex_);
-  if (cached_metadata_.find(chunk_key) != cached_metadata_.end()) {
-    caching_file_mgr_->deleteBuffer(chunk_key);
-    cached_chunks_.erase(chunk_key);
-    cached_metadata_.erase(chunk_key);
-  }
+  caching_file_mgr_->deleteBufferIfExists(chunk_key);
+  cached_chunks_.erase(chunk_key);
+  cached_metadata_.erase(chunk_key);
 }
 
 void ForeignStorageCache::cacheChunk(const ChunkKey& chunk_key, AbstractBuffer* buffer) {
-  write_lock meta_lock(metadata_mutex_);
-  write_lock chunk_lock(chunks_mutex_);
   // We should only be caching buffers that are in sync with storage.
   CHECK(!buffer->isDirty());
-  buffer->setUpdated();
   num_chunks_added_++;
-  caching_file_mgr_->putBuffer(chunk_key, buffer);
+  if (buffer->size() == 0) {
+    // If we are writing an empty buffer, just delete it from the cache entirely.
+    deleteBufferIfExists(chunk_key);
+  } else {
+    // Replace the existing chunk with a new version.
+    write_lock meta_lock(metadata_mutex_);
+    write_lock chunk_lock(chunks_mutex_);
+    buffer->setAppended();
+    caching_file_mgr_->putBuffer(chunk_key, buffer);
+    cached_metadata_.emplace(chunk_key);
+    cached_chunks_.emplace(chunk_key);
+    CHECK(!buffer->isDirty());
+  }
   caching_file_mgr_->checkpoint(chunk_key[CHUNK_KEY_DB_IDX],
                                 chunk_key[CHUNK_KEY_TABLE_IDX]);
-  cached_metadata_.emplace(chunk_key);
-  cached_chunks_.emplace(chunk_key);
-  CHECK(!buffer->isDirty());
 }
 
 void ForeignStorageCache::cacheTableChunks(const std::vector<ChunkKey>& chunk_keys) {
@@ -102,7 +106,8 @@ void ForeignStorageCache::cacheTableChunks(const std::vector<ChunkKey>& chunk_ke
   caching_file_mgr_->checkpoint(db_id, table_id);
 }
 
-AbstractBuffer* ForeignStorageCache::getCachedChunkIfExists(const ChunkKey& chunk_key) {
+File_Namespace::FileBuffer* ForeignStorageCache::getCachedChunkIfExists(
+    const ChunkKey& chunk_key) {
   {
     read_lock lock(chunks_mutex_);
     // We do this instead of calling getBuffer so that we don't create a fileMgr if the

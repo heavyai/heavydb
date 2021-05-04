@@ -48,8 +48,6 @@ struct FileMgrParams {
   int32_t max_rollback_epochs;
 };
 
-using FileMgrKey = std::pair<int32_t, int32_t>;
-
 /**
  * @class   GlobalFileMgr
  * @brief
@@ -215,9 +213,9 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   bool dbConvert_;  /// true if conversion should be done between different
                     /// "omnisci_db_version_"
 
-  std::map<FileMgrKey, std::shared_ptr<FileMgr>> ownedFileMgrs_;
-  std::map<FileMgrKey, AbstractBufferMgr*> allFileMgrs_;
-  std::map<FileMgrKey, int32_t> max_rollback_epochs_per_table_;
+  std::map<TablePair, std::shared_ptr<FileMgr>> ownedFileMgrs_;
+  std::map<TablePair, AbstractBufferMgr*> allFileMgrs_;
+  std::map<TablePair, int32_t> max_rollback_epochs_per_table_;
   std::shared_ptr<ForeignStorageInterface> fsi_;
 
   mapd_shared_mutex fileMgrs_mutex_;

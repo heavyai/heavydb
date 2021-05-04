@@ -80,8 +80,8 @@ class ForeignStorageCacheUnitTest : public testing::Test {
 
     void cacheChunk(const ChunkKey& chunk_key) {
       auto buffer_map = cache_->getChunkBuffersForCaching({chunk_key});
-      buffer_map[chunk_key]->write(chunk->getBuffer()->getMemoryPtr(),
-                                   chunk->getBuffer()->size());
+      buffer_map[chunk_key]->append(chunk->getBuffer()->getMemoryPtr(),
+                                    chunk->getBuffer()->size());
       buffer_map[chunk_key]->syncEncoder(chunk->getBuffer());
       cache_->cacheTableChunks({chunk_key});
     }
@@ -300,13 +300,14 @@ TEST_F(ForeignStorageCacheUnitTest, Clear) {
 
 class CacheDiskStorageTest : public ForeignStorageCacheUnitTest {
  protected:
+  static constexpr size_t page_size_ = 64;
   static void SetUpTestSuite() {
     cache_path_ = "./tmp/mapd_data/test_foreign_data_cache";
   }
   static void TearDownTestSuite() {}
   void SetUp() override {
     boost::filesystem::remove_all(cache_path_);
-    reinitializeCache(cache_, {cache_path_, DiskCacheLevel::fsi});
+    reinitializeCache(cache_, {cache_path_, DiskCacheLevel::fsi, 0, page_size_});
   }
   void TearDown() override { boost::filesystem::remove_all(cache_path_); }
 };
@@ -320,8 +321,8 @@ TEST_F(CacheDiskStorageTest, CacheMetadata_VerifyMetadataFileCreated) {
 TEST_F(CacheDiskStorageTest, CacheChunk_VerifyChunkFileCreated) {
   ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1, 2, 3, 4}};
   chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
-  ASSERT_TRUE(boost::filesystem::exists(cache_path_ + "/1." +
-                                        to_string(DEFAULT_PAGE_SIZE) + ".mapd"));
+  ASSERT_TRUE(
+      boost::filesystem::exists(cache_path_ + "/1." + to_string(page_size_) + ".mapd"));
 }
 
 TEST_F(CacheDiskStorageTest, RecoverCache_Metadata) {
@@ -380,7 +381,7 @@ TEST_F(ForeignStorageCacheFileTest, FileCreation) {
     source_buffer.getEncoder()->getMetadata(cached_meta);
     cache.cacheMetadataVec({std::make_pair(chunk_key1, cached_meta)});
     auto buffer_map = cache.getChunkBuffersForCaching({chunk_key1});
-    buffer_map[chunk_key1]->write(source_buffer.getMemoryPtr(), source_buffer.size());
+    buffer_map[chunk_key1]->append(source_buffer.getMemoryPtr(), source_buffer.size());
     cache.cacheTableChunks({chunk_key1});
     ASSERT_TRUE(boost::filesystem::exists(cache_path_ + "/0.4096.mapd"));
     ASSERT_TRUE(boost::filesystem::exists(cache_path_ + "/1." +

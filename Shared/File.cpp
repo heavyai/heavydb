@@ -138,7 +138,7 @@ size_t read(FILE* f, const size_t offset, const size_t size, int8_t* buf) {
   return bytesRead;
 }
 
-size_t write(FILE* f, const size_t offset, const size_t size, int8_t* buf) {
+size_t write(FILE* f, const size_t offset, const size_t size, const int8_t* buf) {
   if (g_read_only) {
     LOG(FATAL) << "Error trying to write file '" << f << "', running readonly";
   }
@@ -156,7 +156,7 @@ size_t write(FILE* f, const size_t offset, const size_t size, int8_t* buf) {
   return bytesWritten;
 }
 
-size_t append(FILE* f, const size_t size, int8_t* buf) {
+size_t append(FILE* f, const size_t size, const int8_t* buf) {
   if (g_read_only) {
     LOG(FATAL) << "Error trying to append file '" << f << "', running readonly";
   }

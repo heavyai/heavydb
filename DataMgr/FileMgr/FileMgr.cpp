@@ -40,19 +40,13 @@
 #include "Shared/checked_alloc.h"
 #include "Shared/measure.h"
 
-constexpr char LEGACY_EPOCH_FILENAME[] = "epoch";
-constexpr char EPOCH_FILENAME[] = "epoch_metadata";
-constexpr char DB_META_FILENAME[] = "dbmeta";
-constexpr char FILE_MGR_VERSION_FILENAME[] = "filemgr_version";
-constexpr int32_t INVALID_VERSION = -1;
-
 using namespace std;
 
 namespace File_Namespace {
 
 FileMgr::FileMgr(const int32_t deviceId,
                  GlobalFileMgr* gfm,
-                 const std::pair<const int32_t, const int> fileMgrKey,
+                 const TablePair fileMgrKey,
                  const int32_t maxRollbackEpochs,
                  const size_t num_reader_threads,
                  const int32_t epoch,
@@ -69,7 +63,7 @@ FileMgr::FileMgr(const int32_t deviceId,
 // used only to initialize enough to drop
 FileMgr::FileMgr(const int32_t deviceId,
                  GlobalFileMgr* gfm,
-                 const std::pair<const int32_t, const int32_t> fileMgrKey,
+                 const TablePair fileMgrKey,
                  const size_t defaultPageSize,
                  const bool runCoreInit)
     : AbstractBufferMgr(deviceId)
@@ -322,19 +316,7 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
     incrementEpoch();
   }
 
-  /* define number of reader threads to be used */
-  size_t num_hardware_based_threads =
-      std::thread::hardware_concurrency();  // # of threads is based on # of cores on
-                                            // the host
-  if (num_reader_threads == 0) {            // # of threads has not been defined by user
-    num_reader_threads_ = num_hardware_based_threads;
-  } else {
-    if (num_reader_threads > num_hardware_based_threads) {
-      num_reader_threads_ = num_hardware_based_threads;
-    } else {
-      num_reader_threads_ = num_reader_threads;
-    }
-  }
+  initializeNumThreads(num_reader_threads);
   isFullyInitted_ = true;
 }
 
@@ -642,10 +624,11 @@ void FileMgr::openAndReadEpochFile(const std::string& epochFileName) {
     if (!boost::filesystem::is_regular_file(epochFilePath)) {
       LOG(FATAL) << "Epoch file `" << epochFilePath << "` is not a regular file";
     }
-    if (boost::filesystem::file_size(epochFilePath) != 16) {
+    if (boost::filesystem::file_size(epochFilePath) != Epoch::byte_size()) {
       LOG(FATAL) << "Epoch file `" << epochFilePath
                  << "` is not sized properly (current size: "
-                 << boost::filesystem::file_size(epochFilePath) << ", expected size: 16)";
+                 << boost::filesystem::file_size(epochFilePath)
+                 << ", expected size: " << Epoch::byte_size() << ")";
     }
     epochFile_ = open(epochFilePath);
   }
@@ -701,20 +684,12 @@ std::string FileMgr::describeSelf() {
 
 void FileMgr::checkpoint() {
   VLOG(2) << "Checkpointing " << describeSelf() << " epoch: " << epoch();
-  {
-    mapd_unique_lock<mapd_shared_mutex> chunk_index_write_lock(chunkIndexMutex_);
-    for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-      if (chunkIt->second->isDirty()) {
-        chunkIt->second->writeMetadata(epoch());
-        chunkIt->second->clearDirtyBits();
-      }
-    }
-  }
+  writeDirtyBuffers();
   rollOffOldData(epoch(), false /* shouldCheckpoint */);
   syncFilesToDisk();
   writeAndSyncEpochToDisk();
   incrementEpoch();
-  freePages();  // write free_page mutex.
+  freePages();
 }
 
 FileBuffer* FileMgr::createBuffer(const ChunkKey& key,
@@ -738,10 +713,10 @@ FileBuffer* FileMgr::createBufferUnlocked(const ChunkKey& key,
   // we will do this lazily and not allocate space for the Chunk (i.e.
   // FileBuffer yet)
 
-  if (chunkIndex_.find(key) != chunkIndex_.end()) {
-    LOG(FATAL) << "Chunk already exists for key: " << show_chunk(key);
-  }
-  chunkIndex_[key] = new FileBuffer(this, actualPageSize, key, numBytes);
+  CHECK(chunkIndex_.find(key) == chunkIndex_.end())
+      << "Chunk already exists for key: " << show_chunk(key);
+
+  chunkIndex_[key] = allocateBuffer(actualPageSize, key, numBytes);
   return (chunkIndex_[key]);
 }
 
@@ -752,19 +727,20 @@ bool FileMgr::isBufferOnDevice(const ChunkKey& key) {
 
 void FileMgr::deleteBuffer(const ChunkKey& key, const bool purge) {
   mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
-  auto chunkIt = chunkIndex_.find(key);
-  // ensure the Chunk exists
-  if (chunkIt == chunkIndex_.end()) {
-    LOG(FATAL) << "Chunk does not exist for key: " << show_chunk(key);
-  }
-  chunkIndexWriteLock.unlock();
-  // chunkIt->second->writeMetadata(-1); // writes -1 as epoch - signifies deleted
+  auto chunk_it = chunkIndex_.find(key);
+  CHECK(chunk_it != chunkIndex_.end())
+      << "Chunk does not exist for key: " << show_chunk(key);
+  deleteBufferUnlocked(chunk_it, purge);
+}
+
+void FileMgr::deleteBufferUnlocked(const ChunkKeyToChunkMap::iterator chunk_it,
+                                   const bool purge) {
   if (purge) {
-    chunkIt->second->freePages();
+    chunk_it->second->freePages();
   }
   //@todo need a way to represent delete in non purge case
-  delete chunkIt->second;
-  chunkIndex_.erase(chunkIt);
+  delete chunk_it->second;
+  chunkIndex_.erase(chunk_it);
 }
 
 void FileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool purge) {
@@ -827,16 +803,7 @@ void FileMgr::fetchBuffer(const ChunkKey& key,
 FileBuffer* FileMgr::putBuffer(const ChunkKey& key,
                                AbstractBuffer* srcBuffer,
                                const size_t numBytes) {
-  // obtain a pointer to the Chunk
-  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
-  auto chunkIt = chunkIndex_.find(key);
-  FileBuffer* chunk;
-  if (chunkIt == chunkIndex_.end()) {
-    chunk = createBufferUnlocked(key, defaultPageSize_);
-  } else {
-    chunk = chunkIt->second;
-  }
-  chunkIndexWriteLock.unlock();
+  auto chunk = getOrCreateBuffer(key);
   size_t oldChunkSize = chunk->size();
   // write the buffer's data to the Chunk
   // size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
@@ -969,7 +936,7 @@ FileInfo* FileMgr::openExistingFile(const std::string& path,
   FileInfo* fInfo = new FileInfo(
       this, fileId, f, pageSize, numPages, false);  // false means don't init file
 
-  fInfo->openExistingFile(headerVec, epoch());
+  fInfo->openExistingFile(headerVec);
   mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
   files_[fileId] = fInfo;
   fileIndex_.insert(std::pair<size_t, int32_t>(pageSize, fileId));
@@ -1574,12 +1541,76 @@ void FileMgr::syncFilesToDisk() {
   }
 }
 
+void FileMgr::initializeNumThreads(size_t num_reader_threads) {
+  // # of threads is based on # of cores on the host
+  size_t num_hardware_based_threads = std::thread::hardware_concurrency();
+  if (num_reader_threads == 0 || num_reader_threads > num_hardware_based_threads) {
+    // # of threads has not been defined by user
+    num_reader_threads_ = num_hardware_based_threads;
+  } else {
+    num_reader_threads_ = num_reader_threads;
+  }
+}
+
 void FileMgr::freePages() {
   mapd_unique_lock<mapd_shared_mutex> free_pages_write_lock(mutex_free_page_);
   for (auto& free_page : free_pages_) {
     free_page.first->freePageDeferred(free_page.second);
   }
   free_pages_.clear();
+}
+
+FileBuffer* FileMgr::allocateBuffer(const size_t page_size,
+                                    const ChunkKey& key,
+                                    const size_t num_bytes) {
+  return new FileBuffer(this, page_size, key, num_bytes);
+}
+
+// Checks if a page should be deleted or recovered.  Returns true if page was deleted.
+bool FileMgr::updatePageIfDeleted(FileInfo* file_info,
+                                  ChunkKey& chunk_key,
+                                  int32_t contingent,
+                                  int32_t page_epoch,
+                                  int32_t page_num) {
+  // If the parent FileMgr has a fileMgrKey, then all keys are locked to one table and
+  // can be set from the manager.
+  auto [db_id, tb_id] = get_fileMgrKey();
+  chunk_key[CHUNK_KEY_DB_IDX] = db_id;
+  chunk_key[CHUNK_KEY_TABLE_IDX] = tb_id;
+  const bool delete_contingent =
+      (contingent == DELETE_CONTINGENT || contingent == ROLLOFF_CONTINGENT);
+  // Check if page was deleted with a checkpointed epoch
+  if (delete_contingent && epoch(db_id, tb_id) >= page_epoch) {
+    file_info->freePageImmediate(page_num);
+    return true;
+  }
+  // Recover page if it was deleted but not checkpointed.
+  if (!g_read_only && delete_contingent) {
+    file_info->recoverPage(chunk_key, page_num);
+  }
+  return false;
+}
+
+FileBuffer* FileMgr::getOrCreateBuffer(const ChunkKey& key) {
+  FileBuffer* buf;
+  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
+  auto chunkIt = chunkIndex_.find(key);
+  if (chunkIt == chunkIndex_.end()) {
+    buf = createBufferUnlocked(key, defaultPageSize_);
+  } else {
+    buf = chunkIt->second;
+  }
+  return buf;
+}
+
+void FileMgr::writeDirtyBuffers() {
+  mapd_unique_lock<mapd_shared_mutex> chunk_index_write_lock(chunkIndexMutex_);
+  for (auto [key, buf] : chunkIndex_) {
+    if (buf->isDirty()) {
+      buf->writeMetadata(epoch());
+      buf->clearDirtyBits();
+    }
+  }
 }
 
 size_t FileMgr::num_pages_per_data_file_{DEFAULT_NUM_PAGES_PER_DATA_FILE};

@@ -40,6 +40,7 @@ struct DiskCacheConfig {
   std::string path;
   DiskCacheLevel enabled_level = DiskCacheLevel::none;
   size_t num_reader_threads = 0;
+  size_t page_size = DEFAULT_PAGE_SIZE;
   inline bool isEnabledForMutableTables() const {
     return enabled_level == DiskCacheLevel::non_fsi ||
            enabled_level == DiskCacheLevel::all;
@@ -71,7 +72,7 @@ class ForeignStorageCache {
   void cacheTableChunks(const std::vector<ChunkKey>& chunk_keys);
   void cacheChunk(const ChunkKey&, AbstractBuffer*);
 
-  AbstractBuffer* getCachedChunkIfExists(const ChunkKey&);
+  File_Namespace::FileBuffer* getCachedChunkIfExists(const ChunkKey&);
   bool isMetadataCached(const ChunkKey&) const;
   void cacheMetadataVec(const ChunkMetadataVector&);
   void getCachedMetadataVecForKeyPrefix(ChunkMetadataVector&, const ChunkKey&) const;

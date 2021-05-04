@@ -19,11 +19,17 @@
  *
  * This file details an extension of the FileMgr that can contain pages from multiple
  * tables (CachingFileMgr).
+ * The main differences between a CFM and an FM:
+ * - CFM can contain pages from multiple different tables in the same file.
+ * - CFM will only retain a single version of each page (no support for rolloff or
+ * rollback functionality).
+ * - CFM maintains a separate epoch for each table in it's files.
  */
 
 #pragma once
 
 #include "FileMgr.h"
+#include "Shared/File.h"
 
 namespace File_Namespace {
 
@@ -32,6 +38,43 @@ inline std::string get_dir_name_for_table(int db_id, int tb_id) {
   file_name << "table_" << db_id << "_" << tb_id << "/";
   return file_name.str();
 }
+
+// Struct to group data related to a single epoch.  Manages epoch file pointers.
+struct EpochInfo {
+  Epoch epoch;
+  FILE* epoch_file = nullptr;
+  bool is_checkpointed = true;
+  EpochInfo(FILE* f) {
+    CHECK(f) << "Cannot create EpochInfo from null file descriptor";
+    epoch = Epoch();
+    epoch_file = f;
+    is_checkpointed = true;
+  }
+  ~EpochInfo() { close(epoch_file); }
+  void increment() {
+    epoch.increment();
+    is_checkpointed = false;
+    CHECK(epoch.ceiling() <= Epoch::max_allowable_epoch())
+        << "Epoch greater than maximum allowed value (" << epoch.ceiling() << " > "
+        << Epoch::max_allowable_epoch() << ").";
+  }
+};
+
+// Extension of FileBuffer with restricted behaviour.
+class CachingFileBuffer : public FileBuffer {
+ public:
+  using FileBuffer::FileBuffer;
+  // The cache can only be appended to, not written, as it lets us maintain a single
+  // version of the data.  This override is to make sure we don't accidentally start
+  // writing to cache buffers.
+  void write(int8_t* src,
+             const size_t numBytes,
+             const size_t offset = 0,
+             const MemoryLevel srcMemoryLevel = CPU_LEVEL,
+             const int32_t deviceId = -1) override {
+    UNREACHABLE() << "Cache buffers support append(), but not write()";
+  }
+};
 
 /**
  * @class   CachingFileMgr
@@ -43,14 +86,10 @@ inline std::string get_dir_name_for_table(int db_id, int tb_id) {
  */
 class CachingFileMgr : public FileMgr {
  public:
-  CachingFileMgr(const std::string& base_path, const size_t num_reader_threads = 0);
-  ~CachingFileMgr() {}
-  /**
-   * @brief Determines file path, and if exists, runs file migration and opens and reads
-   * epoch file
-   * @return a boolean representing whether the directory path existed
-   */
-  bool coreInit() override;
+  CachingFileMgr(const std::string& base_path,
+                 const size_t num_reader_threads = 0,
+                 const size_t default_page_size = DEFAULT_PAGE_SIZE);
+  virtual ~CachingFileMgr();
 
   // Simple getters.
   inline MgrType getMgrType() override { return CACHING_FILE_MGR; };
@@ -76,7 +115,7 @@ class CachingFileMgr : public FileMgr {
   /**
    * @brief Removes all data related to the given table (pages and subdirectories).
    */
-  void clearForTable(int db_id, int tb_id);
+  void clearForTable(int32_t db_id, int32_t tb_id);
 
   /**
    * @brief Returns (and optionally creates) a subdirectory for table-specific persistent
@@ -90,7 +129,7 @@ class CachingFileMgr : public FileMgr {
    */
   inline bool hasFileMgrKey() const override { return false; }
   /**
-   * @breif Closes files and removes the caching directory.
+   * @brief Closes files and removes the caching directory.
    */
   void closeRemovePhysical() override;
 
@@ -102,31 +141,77 @@ class CachingFileMgr : public FileMgr {
   uint64_t getWrapperSpaceReservedByTable(int db_id, int tb_id);
   uint64_t getSpaceReservedByTable(int db_id, int tb_id);
 
+  /**
+   * @brief describes this FileMgr for logging purposes.
+   */
   std::string describeSelf() override;
 
+  /**
+   * @brief writes buffers for the given table, synchronizes files to disk, updates file
+   * epoch, and commits free pages.
+   */
   void checkpoint(const int32_t db_id, const int32_t tb_id) override;
 
-  // These functions need locks because FileBuffers will call epoch() which can interfere
-  // with an incremment.
-  inline int32_t epoch() const override {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(epoch_mutex_);
-    return FileMgr::epoch();
-  }
+  /**
+   * @brief obtain the epoch version for the given table.
+   */
+  int32_t epoch(int32_t db_id, int32_t tb_id) const override;
 
-  inline int32_t incrementEpoch() override {
-    mapd_unique_lock<mapd_shared_mutex> write_lock(epoch_mutex_);
-    return FileMgr::incrementEpoch();
-  }
+  /**
+   * @brief deletes any existing buffer for the given key then copies in a new one.
+   */
+  FileBuffer* putBuffer(const ChunkKey& key,
+                        AbstractBuffer* srcBuffer,
+                        const size_t numBytes = 0) override;
+  /**
+   * @brief allocates a new CachingFileBuffer.
+   */
+  CachingFileBuffer* allocateBuffer(const size_t page_size,
+                                    const ChunkKey& key,
+                                    const size_t num_bytes) override;
+
+  /**
+   * @brief checks whether a page should be deleted.
+   **/
+  bool updatePageIfDeleted(FileInfo* file_info,
+                           ChunkKey& chunk_key,
+                           int32_t contingent,
+                           int32_t page_epoch,
+                           int32_t page_num) override;
+
+  /**
+   * @brief True if a read error should cause a fatal error.
+   **/
+  inline bool failOnReadError() const override { return false; }
+
+  /**
+   * @brief deletes a buffer if it exists in the mgr.  Otherwise do nothing.
+   **/
+  void deleteBufferIfExists(const ChunkKey& key);
 
  private:
-  void rollOffOldData(const int32_t db_id,
-                      const int32_t tb_id,
-                      const int32_t epoch_ceiling);
-  void freePagesBeforeEpoch(const int32_t db_id,
-                            const int32_t tb_id,
-                            const int32_t min_epoch);
+  void openOrCreateEpochIfNotExists(int32_t db_id, int32_t tb_id);
+  void openAndReadEpochFileUnlocked(int32_t db_id, int32_t tb_id);
+  void incrementEpoch(int32_t db_id, int32_t tb_id);
+  void init(const size_t num_reader_threads);
+  void createEpochFileUnlocked(int32_t db_id, int32_t tb_id);
+  void writeAndSyncEpochToDisk(int32_t db_id, int32_t tb_id);
+  std::string getOrAddTableDirUnlocked(int db_id, int tb_id);
+  void readTableDirs();
+  void createBufferFromHeaders(const ChunkKey& key,
+                               const std::vector<HeaderInfo>::const_iterator& startIt,
+                               const std::vector<HeaderInfo>::const_iterator& endIt);
+  FileBuffer* createBufferUnlocked(const ChunkKey& key,
+                                   size_t pageSize = 0,
+                                   const size_t numBytes = 0) override;
+  void incrementAllEpochs();
+  void removeTableDirectory(int32_t db_id, int32_t tb_id);
+  void removeTableBuffers(int32_t db_id, int32_t tb_id);
+  void writeDirtyBuffers(int32_t db_id, int32_t tb_id);
 
-  mutable mapd_shared_mutex epoch_mutex_;
+  mutable mapd_shared_mutex epochs_mutex_;  // mutex for table_epochs_.
+  // each table gets a separate epoch.  Uses pointers for move semantics.
+  std::map<TablePair, std::unique_ptr<EpochInfo>> table_epochs_;
 };
 
 }  // namespace File_Namespace

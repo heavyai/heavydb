@@ -79,12 +79,12 @@ struct FileInfo {
   void initNewFile();
 
   void freePageDeferred(int32_t pageId);
-  void freePage(int32_t pageId, const bool isRolloff);
+  void freePage(int32_t pageId, const bool isRolloff, int32_t epoch);
   int32_t getFreePage();
   size_t write(const size_t offset, const size_t size, int8_t* buf);
   size_t read(const size_t offset, const size_t size, int8_t* buf);
 
-  void openExistingFile(std::vector<HeaderInfo>& headerVec, const int32_t fileMgrEpoch);
+  void openExistingFile(std::vector<HeaderInfo>& headerVec);
   /// Prints a summary of the file to stdout
   void print(bool pagesummary);
 
@@ -106,6 +106,9 @@ struct FileInfo {
 
   /// Returns the amount of used bytes; size() - available()
   inline size_t used() { return size() - available(); }
+
+  void freePageImmediate(int32_t page_num);
+  void recoverPage(const ChunkKey& chunk_key, int32_t page_num);
 };
 
 }  // namespace File_Namespace

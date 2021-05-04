@@ -68,8 +68,7 @@ size_t FileInfo::read(const size_t offset, const size_t size, int8_t* buf) {
   return File_Namespace::read(f, offset, size, buf);
 }
 
-void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec,
-                                const int32_t fileMgrEpoch) {
+void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec) {
   // HeaderInfo is defined in Page.h
 
   // Oct 2020: Changing semantics such that fileMgrEpoch should be last checkpointed
@@ -79,98 +78,71 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec,
   int32_t oldVersionEpoch = -99;
   int32_t skipped = 0;
   for (size_t pageNum = 0; pageNum < numPages; ++pageNum) {
-    int32_t headerSize;
-
     constexpr size_t MAX_INTS_TO_READ{10};  // currently use 1+6 ints
     int32_t ints[MAX_INTS_TO_READ];
     CHECK_EQ(fseek(f, pageNum * pageSize, SEEK_SET), 0);
     CHECK_EQ(fread(ints, sizeof(int32_t), MAX_INTS_TO_READ, f), MAX_INTS_TO_READ);
 
-    headerSize = ints[0];
-    const bool should_delete_deleted =
-        DELETE_CONTINGENT == ints[1] && fileMgrEpoch >= ints[2];
-    const bool should_delete_rolled_off =
-        ROLLOFF_CONTINGENT == ints[1] && fileMgrEpoch >= ints[2];
-    if (should_delete_deleted || should_delete_rolled_off) {
-      int32_t zero{0};
-      File_Namespace::write(f, pageNum * pageSize, sizeof(int32_t), (int8_t*)&zero);
-      headerSize = 0;
+    auto headerSize = ints[0];
+    if (headerSize == 0) {
+      // no header for this page - insert into free list
+      freePages.insert(pageNum);
+      continue;
     }
 
-    if (headerSize != 0) {
-      // headerSize doesn't include headerSize itself
-      // We're tying ourself to headers of ints here
-      size_t numHeaderElems = headerSize / sizeof(int32_t);
-      CHECK_GE(numHeaderElems, size_t(2));
-      // We don't want to read headerSize in our header - so start
-      // reading 4 bytes past it
-
-      // Derive dbid/tbid if from FileMgr
-      ChunkKey chunkKey(&ints[1], &ints[1 + numHeaderElems - 2]);
-      if (fileMgr->hasFileMgrKey()) {
-        // A regular FileMgr is locked to one table, but a CachingFileMgr can contain
-        // chunks from different tables
-        chunkKey[0] = fileMgr->get_fileMgrKey().first;
-        chunkKey[1] = fileMgr->get_fileMgrKey().second;
+    // headerSize doesn't include headerSize itself
+    // We're tying ourself to headers of ints here
+    size_t numHeaderElems = headerSize / sizeof(int32_t);
+    CHECK_GE(numHeaderElems, size_t(2));
+    // We don't want to read headerSize in our header - so start
+    // reading 4 bytes past it
+    ChunkKey chunkKey(&ints[1], &ints[1 + numHeaderElems - 2]);
+    if (fileMgr->updatePageIfDeleted(this, chunkKey, ints[1], ints[2], pageNum)) {
+      continue;
+    }
+    // Last two elements of header are always PageId and Version
+    // epoch - these are not in the chunk key so seperate them
+    int32_t pageId = ints[1 + numHeaderElems - 2];
+    int32_t versionEpoch = ints[1 + numHeaderElems - 1];
+    if (chunkKey != oldChunkKey || oldPageId != pageId - (1 + skipped)) {
+      if (skipped > 0) {
+        VLOG(4) << "FId.PSz: " << fileId << "." << pageSize
+                << " Chunk key: " << show_chunk(oldChunkKey)
+                << " Page id from : " << oldPageId << " to : " << oldPageId + skipped
+                << " Epoch: " << oldVersionEpoch;
+      } else if (oldPageId != -99) {
+        VLOG(4) << "FId.PSz: " << fileId << "." << pageSize
+                << " Chunk key: " << show_chunk(oldChunkKey) << " Page id: " << oldPageId
+                << " Epoch: " << oldVersionEpoch;
       }
-      // recover page in case a crash failed deletion of this page
+      oldPageId = pageId;
+      oldVersionEpoch = versionEpoch;
+      oldChunkKey = chunkKey;
+      skipped = 0;
+    } else {
+      skipped++;
+    }
+
+    /* Check if version epoch is equal to
+     * or greater (note: should never be greater)
+     * than FileMgr epoch_ - this means that this
+     * page wasn't checkpointed and thus we should
+     * not use it
+     */
+    int32_t fileMgrEpoch =
+        fileMgr->epoch(chunkKey[CHUNK_KEY_DB_IDX], chunkKey[CHUNK_KEY_TABLE_IDX]);
+    if (versionEpoch > fileMgrEpoch) {
+      // First write 0 to first four bytes of
+      // header to mark as free
       if (!g_read_only) {
-        if (ints[1] == DELETE_CONTINGENT || ints[1] == ROLLOFF_CONTINGENT) {
-          File_Namespace::write(f,
-                                pageNum * pageSize + sizeof(int32_t),
-                                2 * sizeof(int32_t),
-                                (int8_t*)&chunkKey[0]);
-        }
+        freePageImmediate(pageNum);
       }
-
-      // Last two elements of header are always PageId and Version
-      // epoch - these are not in the chunk key so seperate them
-      int32_t pageId = ints[1 + numHeaderElems - 2];
-      int32_t versionEpoch = ints[1 + numHeaderElems - 1];
-      if (chunkKey != oldChunkKey || oldPageId != pageId - (1 + skipped)) {
-        if (skipped > 0) {
-          VLOG(4) << "FId.PSz: " << fileId << "." << pageSize
-                  << " Chunk key: " << show_chunk(oldChunkKey)
-                  << " Page id from : " << oldPageId << " to : " << oldPageId + skipped
-                  << " Epoch: " << oldVersionEpoch;
-        } else if (oldPageId != -99) {
-          VLOG(4) << "FId.PSz: " << fileId << "." << pageSize
-                  << " Chunk key: " << show_chunk(oldChunkKey)
-                  << " Page id: " << oldPageId << " Epoch: " << oldVersionEpoch;
-        }
-        oldPageId = pageId;
-        oldVersionEpoch = versionEpoch;
-        oldChunkKey = chunkKey;
-        skipped = 0;
-      } else {
-        skipped++;
-      }
-
-      /* Check if version epoch is equal to
-       * or greater (note: should never be greater)
-       * than FileMgr epoch_ - this means that this
-       * page wasn't checkpointed and thus we should
-       * not use it
-       */
-      if (versionEpoch > fileMgrEpoch) {
-        // First write 0 to first four bytes of
-        // header to mark as free
-        if (!g_read_only) {
-          headerSize = 0;
-          File_Namespace::write(
-              f, pageNum * pageSize, sizeof(int32_t), (int8_t*)&headerSize);
-          // Now add page to free list
-          freePages.insert(pageNum);
-        }
-        LOG(WARNING) << "Was not checkpointed: Chunk key: " << show_chunk(chunkKey)
-                     << " Page id: " << pageId << " Epoch: " << versionEpoch
-                     << " FileMgrEpoch " << fileMgrEpoch << endl;
-      } else {  // page was checkpointed properly
-        Page page(fileId, pageNum);
-        headerVec.emplace_back(chunkKey, pageId, versionEpoch, page);
-      }
-    } else {  // no header for this page - insert into free list
-      freePages.insert(pageNum);
+      LOG(WARNING) << "Was not checkpointed: Chunk key: " << show_chunk(chunkKey)
+                   << " Page id: " << pageId << " Epoch: " << versionEpoch
+                   << " FileMgrEpoch " << fileMgrEpoch << endl;
+    } else {  // page was checkpointed properly
+      Page page(fileId, pageNum);
+      headerVec.emplace_back(chunkKey, pageId, versionEpoch, page);
     }
   }
   // printlast
@@ -203,11 +175,11 @@ static void sighandler(int sig) {
 }
 #endif
 
-void FileInfo::freePage(int pageId, const bool isRolloff) {
+void FileInfo::freePage(int pageId, const bool isRolloff, int32_t epoch) {
   std::lock_guard<std::mutex> lock(readWriteMutex_);
 #define RESILIENT_PAGE_HEADER
 #ifdef RESILIENT_PAGE_HEADER
-  int epoch_freed_page[2] = {DELETE_CONTINGENT, fileMgr->epoch()};
+  int32_t epoch_freed_page[2] = {DELETE_CONTINGENT, epoch};
   if (isRolloff) {
     epoch_freed_page[0] = ROLLOFF_CONTINGENT;
   }
@@ -217,11 +189,7 @@ void FileInfo::freePage(int pageId, const bool isRolloff) {
                         (int8_t*)epoch_freed_page);
   fileMgr->free_page(std::make_pair(this, pageId));
 #else
-  int32_t zeroVal = 0;
-  int8_t* zeroAddr = reinterpret_cast<int8_t*>(&zeroVal);
-  File_Namespace::write(f, pageId * pageSize, sizeof(int32_t), zeroAddr);
-  std::lock_guard<std::mutex> lock(freePagesMutex_);
-  freePages.insert(pageId);
+  freePageImmediate(pageId);
 #endif  // RESILIENT_PAGE_HEADER
   isDirty = true;
 
@@ -273,4 +241,19 @@ int32_t FileInfo::syncToDisk() {
   return 0;  // if file was not dirty and no syncing was needed
 }
 
+void FileInfo::freePageImmediate(int32_t page_num) {
+  std::lock_guard<std::mutex> lock(freePagesMutex_);
+  int32_t zero{0};
+  File_Namespace::write(
+      f, page_num * pageSize, sizeof(int32_t), reinterpret_cast<int8_t*>(&zero));
+  freePages.insert(page_num);
+}
+
+// Overwrites delete/rollback contingents by re-writing chunk key to page.
+void FileInfo::recoverPage(const ChunkKey& chunk_key, int32_t page_num) {
+  File_Namespace::write(f,
+                        page_num * pageSize + sizeof(int32_t),
+                        2 * sizeof(int32_t),
+                        reinterpret_cast<const int8_t*>(chunk_key.data()));
+}
 }  // namespace File_Namespace
