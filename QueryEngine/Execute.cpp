@@ -2971,7 +2971,8 @@ int32_t Executor::executePlanWithoutGroupBy(
 
     for (const auto target_expr : target_exprs) {
       const auto agg_info = get_target_info(target_expr, g_bigint_count);
-      CHECK(agg_info.is_agg);
+      CHECK(agg_info.is_agg || dynamic_cast<Analyzer::Constant*>(target_expr))
+          << target_expr->toString();
 
       const int num_iterations = agg_info.sql_type.is_geometry()
                                      ? agg_info.sql_type.get_physical_coord_cols()

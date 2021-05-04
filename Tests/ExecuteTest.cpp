@@ -1785,6 +1785,22 @@ TEST(Select, GroupBy) {
   }
 }
 
+TEST(Select, ExecutePlanWithoutGroupBy) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // SQLite doesn't support NOW(), and timestamps may not be exactly equal,
+    // so just test for no throw.
+    EXPECT_NO_THROW(
+        run_multiple_agg("SELECT COUNT(*), NOW(), CURRENT_TIME, CURRENT_DATE, "
+                         "CURRENT_TIMESTAMP FROM test;",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("SELECT x, COUNT(*), NOW(), CURRENT_TIME, CURRENT_DATE, "
+                         "CURRENT_TIMESTAMP FROM test GROUP BY x;",
+                         dt));
+  }
+}
+
 TEST(Select, FilterAndGroupBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
