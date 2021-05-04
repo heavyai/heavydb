@@ -434,7 +434,6 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
       casts_.insert({unvisited_operand, ti});
     }
     const auto operand = visit(unvisited_operand);
-
     const auto& operand_ti = operand->get_type_info();
     const auto operand_type =
         operand_ti.is_decimal() ? decimal_to_int_type(operand_ti) : operand_ti.get_type();

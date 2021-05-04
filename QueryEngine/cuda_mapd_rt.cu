@@ -1185,7 +1185,6 @@ extern "C" __device__ bool slotEmptyKeyCAS_int8(int8_t* slot,
 #define EXECUTE_INCLUDE
 #include "ArrayOps.cpp"
 #include "DateAdd.cpp"
-#include "GeoOps.cpp"
 #include "StringFunctions.cpp"
 #undef EXECUTE_INCLUDE
 #include "../Utils/Regexp.cpp"

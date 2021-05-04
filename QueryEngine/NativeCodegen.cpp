@@ -806,8 +806,6 @@ declare i64* @get_bin_from_k_heap_int32_t(i64*, i32, i32, i32, i1, i1, i1, i32, 
 declare i64* @get_bin_from_k_heap_int64_t(i64*, i32, i32, i32, i1, i1, i1, i64, i64);
 declare i64* @get_bin_from_k_heap_float(i64*, i32, i32, i32, i1, i1, i1, float, float);
 declare i64* @get_bin_from_k_heap_double(i64*, i32, i32, i32, i1, i1, i1, double, double);
-declare double @decompress_x_coord_geoint(i32);
-declare double @decompress_y_coord_geoint(i32);
 )" + gen_array_any_all_sigs() +
     gen_translate_null_key_sigs();
 

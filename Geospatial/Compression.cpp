@@ -49,8 +49,7 @@ uint64_t compress_null_point(const SQLTypeInfo& ti, bool x) {
 }
 
 // Compress non-NULL geo coords; and also NULL POINT coords (special case)
-std::vector<uint8_t> compress_coords(const std::vector<double>& coords,
-                                     const SQLTypeInfo& ti) {
+std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti) {
   CHECK(!coords.empty()) << "Coord compression received no data";
   bool is_null_point = false;
   if (!ti.get_notnull()) {

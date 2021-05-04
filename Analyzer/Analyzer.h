@@ -342,7 +342,7 @@ class Constant : public Expr {
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
 
- protected:
+ private:
   bool is_null;    // constant is NULL
   Datum constval;  // the constant value
   const std::list<std::shared_ptr<Analyzer::Expr>> value_list;
@@ -406,7 +406,7 @@ class UOper : public Expr {
                  std::list<const Expr*>& expr_list) const override;
   std::shared_ptr<Analyzer::Expr> add_cast(const SQLTypeInfo& new_type_info) override;
 
- protected:
+ private:
   SQLOps optype;  // operator type, e.g., kUMINUS, kISNULL, kEXISTS
   std::shared_ptr<Analyzer::Expr> operand;  // operand expression
 };
@@ -1670,117 +1670,6 @@ class Query {
   int64_t limit;                   // row count for LIMIT clause.  0 means ALL
   int64_t offset;                  // offset in OFFSET clause.  0 means no offset.
 };
-
-class GeoExpr : public Expr {
- public:
-  GeoExpr(const SQLTypeInfo& ti) : Expr(ti) {}
-};
-
-/**
- * An umbrella column var holding all information required to generate code for
- * subcolumns. Note that this currently inherits from ColumnVar, not the GeoExpr umbrella
- * type, because we use the same codegen paths regardless of columnvar type.
- */
-class GeoColumnVar : public ColumnVar {
- public:
-  GeoColumnVar(const SQLTypeInfo& ti,
-               const int table_id,
-               const int column_id,
-               const int range_table_index,
-               const bool with_bounds,
-               const bool with_render_group)
-      : ColumnVar(ti, table_id, column_id, range_table_index)
-      , with_bounds_(with_bounds)
-      , with_render_group_(with_render_group) {}
-
-  GeoColumnVar(const Analyzer::ColumnVar* column_var,
-               const bool with_bounds,
-               const bool with_render_group)
-      : ColumnVar(column_var->get_type_info(),
-                  column_var->get_table_id(),
-                  column_var->get_column_id(),
-                  column_var->get_rte_idx())
-      , with_bounds_(with_bounds)
-      , with_render_group_(with_render_group) {}
-
- protected:
-  bool with_bounds_;
-  bool with_render_group_;
-};
-
-class GeoConstant : public GeoExpr {
- public:
-  GeoConstant(std::unique_ptr<Geospatial::GeoBase>&& geo, const SQLTypeInfo& ti);
-
-  std::shared_ptr<Analyzer::Expr> deep_copy() const final;
-
-  std::string toString() const final;
-
-  bool operator==(const Expr&) const final;
-
-  size_t physicalCols() const;
-
-  std::shared_ptr<Analyzer::Constant> makePhysicalConstant(const size_t index) const;
-
- private:
-  std::unique_ptr<Geospatial::GeoBase> geo_;
-};
-
-/**
- * GeoOperator: A geo expression that transforms or accesses an input. Only accesses one
- * primary geo column
- */
-class GeoOperator : public GeoExpr {
- public:
-  GeoOperator(const SQLTypeInfo& ti,
-              const std::string& name,
-              const std::vector<std::shared_ptr<Analyzer::Expr>>& args);
-
-  std::shared_ptr<Analyzer::Expr> deep_copy() const final;
-
-  std::string toString() const final;
-
-  bool operator==(const Expr&) const final;
-
-  size_t size() const;
-
-  Analyzer::Expr* getOperand(const size_t index) const;
-
-  const std::string& getName() const { return name_; }
-
- private:
-  const std::string name_;
-  const std::vector<std::shared_ptr<Analyzer::Expr>> args_;
-};
-
-/**
- * GeoFunctionOperator: A geospatial function that takes one or more geo inputs and
- * outputs a scalar or geo output. Similar to an operator, but requires one or more
- * external function calls.
- */
-class GeoFunctionOperator : public GeoExpr {
- public:
-  GeoFunctionOperator(const SQLTypeInfo& ti,
-                      const std::string& name,
-                      const std::vector<std::shared_ptr<Analyzer::Expr>>& args);
-
-  std::shared_ptr<Analyzer::Expr> deep_copy() const final;
-
-  std::string toString() const final;
-
-  bool operator==(const Expr&) const final;
-
-  size_t size() const;
-
-  Analyzer::Expr* getArg(const size_t index) const;
-
-  const std::string& getName() const { return name_; }
-
- private:
-  const std::string name_;
-  const std::vector<std::shared_ptr<Analyzer::Expr>> args_;
-};
-
 }  // namespace Analyzer
 
 inline std::shared_ptr<Analyzer::Var> var_ref(const Analyzer::Expr* expr,

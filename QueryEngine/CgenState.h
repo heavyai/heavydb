@@ -28,12 +28,6 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/Transforms/Utils/ValueMapper.h>
 
-struct ArrayLoadCodegen {
-  llvm::Value* buffer;
-  llvm::Value* size;
-  llvm::Value* is_null;
-};
-
 struct CgenState {
  public:
   CgenState(const size_t num_query_infos, const bool contains_left_deep_outer_join)
@@ -347,9 +341,6 @@ struct CgenState {
   std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
   InsertionOrderedMap filter_func_args_;
   std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
-  std::map<std::pair<llvm::Value*, llvm::Value*>, ArrayLoadCodegen>
-      array_load_cache_;  // byte stream to array info
-  std::unordered_map<std::string, llvm::Value*> geo_target_cache_;
   bool needs_error_check_;
   bool needs_geos_;
 

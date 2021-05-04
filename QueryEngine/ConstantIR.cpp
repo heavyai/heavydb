@@ -23,24 +23,9 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* const
                                                  const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   if (co.hoist_literals) {
-    if (const auto geo_constant = dynamic_cast<const Analyzer::GeoConstant*>(constant)) {
-      std::vector<llvm::Value*> ret;
-      for (size_t i = 0; i < geo_constant->physicalCols(); i++) {
-        auto phys_constant = geo_constant->makePhysicalConstant(i);
-        CHECK(phys_constant);
-        const auto phys_constant_lvs =
-            codegen(phys_constant.get(),
-                    phys_constant->get_type_info().get_compression(),
-                    dict_id,
-                    co);
-        ret.insert(ret.end(), phys_constant_lvs.begin(), phys_constant_lvs.end());
-      }
-      return ret;
-    } else {
-      std::vector<const Analyzer::Constant*> constants(
-          executor()->deviceCount(co.device_type), constant);
-      return codegenHoistedConstants(constants, enc_type, dict_id);
-    }
+    std::vector<const Analyzer::Constant*> constants(
+        executor()->deviceCount(co.device_type), constant);
+    return codegenHoistedConstants(constants, enc_type, dict_id);
   }
   const auto& type_info = constant->get_type_info();
   const auto type =
@@ -137,7 +122,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
   auto lit_buff_query_func_lv = get_arg_by_name(cgen_state_->query_func_, "literals");
   const auto lit_buf_start = cgen_state_->query_func_entry_ir_builder_.CreateGEP(
       lit_buff_query_func_lv, cgen_state_->llInt(lit_off));
-  CHECK(!type_info.is_geometry());
   if (type_info.is_string() && enc_type != kENCODING_DICT) {
     CHECK_EQ(kENCODING_NONE, type_info.get_compression());
     CHECK_EQ(size_t(4),
@@ -224,7 +208,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsPlaceholders(
     const std::vector<llvm::Value*>& literal_loads) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   std::string literal_name = "literal_" + std::to_string(lit_off);
-  CHECK(!type_info.is_geometry());
 
   if (type_info.is_string() && enc_type != kENCODING_DICT) {
     CHECK_EQ(literal_loads.size(), 3u);
@@ -299,6 +282,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstants(
     const int dict_id) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(!constants.empty());
+
   const auto& type_info = constants.front()->get_type_info();
   int16_t lit_off{-1};
   for (size_t device_id = 0; device_id < constants.size(); ++device_id) {
