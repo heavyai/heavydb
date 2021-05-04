@@ -1,0 +1,9 @@
+Struct DiamondCodegen
+=====================
+
+.. doxygenstruct:: DiamondCodegen
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

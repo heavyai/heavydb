@@ -1,0 +1,9 @@
+Struct Catalog_Namespace::CustomExpression
+==========================================
+
+.. doxygenstruct:: Catalog_Namespace::CustomExpression
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

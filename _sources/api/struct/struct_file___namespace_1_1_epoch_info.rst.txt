@@ -1,0 +1,9 @@
+Struct File_Namespace::EpochInfo
+================================
+
+.. doxygenstruct:: File_Namespace::EpochInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
