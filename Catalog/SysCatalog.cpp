@@ -1053,7 +1053,8 @@ void SysCatalog::renameUser(std::string const& old_name, std::string const& new_
   auto q2 = {"UPDATE mapd_object_permissions set roleName=?1 WHERE roleName=?2;"s,
              new_name,
              old_name};
-  transaction_streamer(sqliteConnector_, success_handler, failure_handler, q1, q2);
+  auto q3 = {"UPDATE mapd_roles set userName=?1 WHERE userName=?2;"s, new_name, old_name};
+  transaction_streamer(sqliteConnector_, success_handler, failure_handler, q1, q2, q3);
 }
 
 void SysCatalog::renameDatabase(std::string const& old_name,
