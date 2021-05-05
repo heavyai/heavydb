@@ -2492,15 +2492,7 @@ public class SqlToRelConverter {
             ImmutableSet.of(),
             joinType,
             false);
-    boolean applyPushdown =
-            config.getPushdownJoinCondition().test(bb.getTopNode(), originalJoin);
-    RelNode node;
-    if (applyPushdown) {
-      node = node =
-              relBuilder.push(leftRel).push(rightRel).join(joinType, joinCond).build();
-    } else {
-      node = originalJoin;
-    }
+    RelNode node = originalJoin;
     // MAT 08 Jan 2021 end of OmniSci Code
 
     // If join conditions are pushed down, update the leaves.
@@ -5627,12 +5619,6 @@ public class SqlToRelConverter {
      * Per default returns the vaule of {@link #isExpand()} on all nodes
      */
     BiPredicate<SqlNode, SqlNode> getExpandPredicate();
-
-    /**
-     * Returns if join conditions should be pushed down to the projections, if
-     * possible.
-     */
-    BiPredicate<SqlNode, Join> getPushdownJoinCondition();
   }
 
   /** Builder for a {@link Config}. */
@@ -5648,7 +5634,8 @@ public class SqlToRelConverter {
     private RelBuilderFactory relBuilderFactory = RelFactories.LOGICAL_BUILDER;
     private HintStrategyTable hintStrategyTable = HintStrategyTable.EMPTY;
     // MAT 08 Jan 2021 OmniSci code
-    private BiPredicate<SqlNode, Join> pushdownJoinCondition;
+    // pushdown join condition incurs an extra projection overhead, so remove it (21 Apr
+    // 2021)
     private BiPredicate<SqlNode, SqlNode> expandPredicate;
     // MAT 08 Jan 2021 OmniSci code ends
 
@@ -5670,7 +5657,6 @@ public class SqlToRelConverter {
       if (!(config.getExpandPredicate() instanceof ConfigImpl.DefaultExpandPredicate)) {
         this.expandPredicate = config.getExpandPredicate();
       }
-      this.pushdownJoinCondition = config.getPushdownJoinCondition();
       // MAT 08 Jan 2021 OmniSci code ends
       return this;
     }
@@ -5697,11 +5683,6 @@ public class SqlToRelConverter {
 
     public ConfigBuilder withExpand(boolean expand) {
       this.expand = expand;
-      return this;
-    }
-
-    public ConfigBuilder withPushdownJoinCondition(BiPredicate<SqlNode, Join> pushdown) {
-      this.pushdownJoinCondition = pushdown;
       return this;
     }
 
@@ -5749,7 +5730,6 @@ public class SqlToRelConverter {
               createValuesRel,
               explain,
               expand,
-              pushdownJoinCondition,
               expandPredicate,
               inSubQueryThreshold,
               relBuilderConfigTransform,
@@ -5783,12 +5763,6 @@ public class SqlToRelConverter {
       }
     }
 
-    private BiPredicate<SqlNode, Join> pushdownJoinCondition =
-            new BiPredicate<SqlNode, Join>() {
-              public boolean test(SqlNode t, Join u) {
-                return true;
-              };
-            };
     // MAT 08 Jan 2021 OmniSci code ends
 
     private ConfigImpl(boolean decorrelationEnabled,
@@ -5797,7 +5771,6 @@ public class SqlToRelConverter {
             boolean explain,
             boolean expand,
             // MAT 08 Jan 2021 OmniSci code
-            BiPredicate<SqlNode, Join> pushdownJoinCondition,
             BiPredicate<SqlNode, SqlNode> expandPredicate,
             // MAT 08 Jan 2021 Omnisci code ends
             int inSubQueryThreshold,
@@ -5821,9 +5794,6 @@ public class SqlToRelConverter {
       }
       this.expandPredicate = expandPredicate;
 
-      if (null != pushdownJoinCondition) {
-        this.pushdownJoinCondition = pushdownJoinCondition;
-      }
       // MAT 08 Jan 2021 OmniSci code ends
     }
 
@@ -5891,10 +5861,6 @@ public class SqlToRelConverter {
     }
 
     // MAT 08 Jan 2021 OmniSci code
-    public BiPredicate<SqlNode, Join> getPushdownJoinCondition() {
-      return pushdownJoinCondition;
-    }
-
     public BiPredicate<SqlNode, SqlNode> getExpandPredicate() {
       return expandPredicate;
     }

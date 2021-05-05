@@ -207,7 +207,7 @@ public final class MapDParser {
   };
 
   private MapDPlanner getPlanner() {
-    return getPlanner(true, true);
+    return getPlanner(true);
   }
 
   private boolean isCorrelated(SqlNode expression) {
@@ -232,8 +232,7 @@ public final class MapDParser {
     return false;
   }
 
-  private MapDPlanner getPlanner(final boolean allowSubQueryExpansion,
-          final boolean allowPushdownJoinCondition) {
+  private MapDPlanner getPlanner(final boolean allowSubQueryExpansion) {
     final MapDSchema mapd =
             new MapDSchema(dataDir, this, mapdPort, mapdUser, sock_transport_properties);
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
@@ -314,28 +313,6 @@ public final class MapDParser {
       }
     };
 
-    BiPredicate<SqlNode, Join> pushdownJoinPredicate = new BiPredicate<SqlNode, Join>() {
-      @Override
-      public boolean test(SqlNode t, Join u) {
-        if (!allowPushdownJoinCondition) {
-          return false;
-        }
-
-        return !hasGeoColumns(u.getRowType());
-      }
-
-      private boolean hasGeoColumns(RelDataType type) {
-        for (RelDataTypeField f : type.getFieldList()) {
-          if ("any".equalsIgnoreCase(f.getType().getFamily().toString())) {
-            // any indicates geo types at the moment
-            return true;
-          }
-        }
-
-        return false;
-      }
-    };
-
     final FrameworkConfig config =
             Frameworks.newConfigBuilder()
                     .defaultSchema(rootSchema.add(mapdUser.getDB(), mapd))
@@ -355,7 +332,6 @@ public final class MapDParser {
                                     .withExpandPredicate(expandPredicate)
                                     // allow as many as possible IN operator values
                                     .withInSubQueryThreshold(Integer.MAX_VALUE)
-                                    .withPushdownJoinCondition(pushdownJoinPredicate)
                                     .withHintStrategyTable(
                                             OmniSciHintStrategyTable.HINT_STRATEGY_TABLE)
                                     .build())
@@ -374,7 +350,7 @@ public final class MapDParser {
   public Pair<String, SqlIdentifierCapturer> process(
           String sql, final MapDParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
-    final MapDPlanner planner = getPlanner(true, true);
+    final MapDPlanner planner = getPlanner(true);
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
     String res = processSql(sqlNode, parserOptions);
     SqlIdentifierCapturer capture = captureIdentifiers(sqlNode);
@@ -385,7 +361,7 @@ public final class MapDParser {
           throws IOException {
     MapDSchema schema =
             new MapDSchema(dataDir, this, mapdPort, mapdUser, sock_transport_properties);
-    MapDPlanner planner = getPlanner(true, true);
+    MapDPlanner planner = getPlanner(true);
 
     planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
     RelRoot optRel = planner.optimizeRaQuery(query, schema);
@@ -397,7 +373,7 @@ public final class MapDParser {
           throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
 
-    final MapDPlanner planner = getPlanner(true, true);
+    final MapDPlanner planner = getPlanner(true);
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
 
     return processSql(sqlNode, parserOptions);
@@ -415,7 +391,7 @@ public final class MapDParser {
       return sqlNode.toString();
     }
 
-    final MapDPlanner planner = getPlanner(true, true);
+    final MapDPlanner planner = getPlanner(true);
     planner.advanceToValidate();
 
     final RelRoot sqlRel = convertSqlToRelNode(sqlNode, planner, parserOptions);
@@ -606,7 +582,6 @@ public final class MapDParser {
               null);
     }
 
-    boolean allowPushdownJoinCondition = false;
     SqlNodeList sourceExpression = new SqlNodeList(SqlParserPos.ZERO);
     LogicalTableModify dummyModify = getDummyUpdate(update);
     RelOptTable targetTable = dummyModify.getTable();
@@ -689,7 +664,7 @@ public final class MapDParser {
               null);
     }
 
-    MapDPlanner planner = getPlanner(true, allowPushdownJoinCondition);
+    MapDPlanner planner = getPlanner(true);
     SqlNode node = null;
     try {
       node = planner.parse(select.toSqlString(CalciteSqlDialect.DEFAULT).getSql());
@@ -759,7 +734,7 @@ public final class MapDParser {
 
   RelRoot queryToRelNode(final String sql, final MapDParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
-    final MapDPlanner planner = getPlanner(true, true);
+    final MapDPlanner planner = getPlanner(true);
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
     return convertSqlToRelNode(sqlNode, planner, parserOptions);
   }
@@ -771,7 +746,6 @@ public final class MapDParser {
     SqlNode node = sqlNode;
     MapDPlanner planner = mapDPlanner;
     boolean allowCorrelatedSubQueryExpansion = true;
-    boolean allowPushdownJoinCondition = true;
     boolean patchUpdateToDelete = false;
 
     if (node.isA(DELETE)) {
@@ -813,7 +787,7 @@ public final class MapDParser {
       // close original planner
       planner.close();
       // create a new one
-      planner = getPlanner(allowCorrelatedSubQueryExpansion, allowPushdownJoinCondition);
+      planner = getPlanner(allowCorrelatedSubQueryExpansion);
       node = parseSql(
               node.toSqlString(CalciteSqlDialect.DEFAULT).toString(), false, planner);
     }
