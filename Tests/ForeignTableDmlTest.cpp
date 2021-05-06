@@ -131,6 +131,13 @@ class ForeignTableTest : public DBHandlerTestFixture {
     }
     return key;
   }
+
+  void queryAndAssertFileNotFoundException(
+      const std::string& file_path,
+      const std::string& query = "SELECT * FROM test_foreign_table;") {
+    queryAndAssertException(
+        query, "Exception: File or directory \"" + file_path + "\" does not exist.");
+  }
 };
 
 class SelectQueryTest : public ForeignTableTest {
@@ -1178,6 +1185,34 @@ TEST_P(DataWrapperSelectQueryTest, ArrayWithNullValues) {
                        {i(2), Null, array({i(100)}), array({Null_i, Null_i})},
                        {i(3), array({i(100)}), array({i(200)}), array({Null_i, i(100)})}});
   // clang-format on
+}
+
+TEST_P(DataWrapperSelectQueryTest, MissingFileOnCreateTable) {
+  auto query = getCreateForeignTableQuery("(i INTEGER)", {}, "missing_file", GetParam());
+  queryAndAssertFileNotFoundException(getDataFilesPath() + "missing_file." + GetParam(),
+                                      query);
+}
+
+TEST_P(DataWrapperSelectQueryTest, MissingFileOnSelectQuery) {
+  auto file_path = boost::filesystem::absolute("missing_file");
+  boost::filesystem::copy_file(getDataFilesPath() + "0." + GetParam(), file_path);
+  std::string query{"CREATE FOREIGN TABLE test_foreign_table (i INTEGER) "s +
+                    "SERVER omnisci_local_" + GetParam() + " WITH (file_path = '" +
+                    file_path.string() + "');"};
+  sql(query);
+  boost::filesystem::remove_all(file_path);
+  queryAndAssertFileNotFoundException(file_path.string());
+}
+
+TEST_P(DataWrapperSelectQueryTest, EmptyDirectory) {
+  auto dir_path = boost::filesystem::absolute("empty_dir");
+  boost::filesystem::create_directory(dir_path);
+  std::string query{"CREATE FOREIGN TABLE test_foreign_table (i INTEGER) "s +
+                    "SERVER omnisci_local_" + GetParam() + " WITH (file_path = '" +
+                    dir_path.string() + "');"};
+  sql(query);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {});
+  boost::filesystem::remove_all(dir_path);
 }
 
 class CSVFileTypeTests

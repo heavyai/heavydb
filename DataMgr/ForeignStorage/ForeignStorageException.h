@@ -26,4 +26,37 @@ class ForeignStorageException : public std::runtime_error {
       : std::runtime_error(error_message) {}
 };
 
+inline void throw_removed_row_error(const std::string& file_path) {
+  throw ForeignStorageException{
+      "Refresh of foreign table created with \"APPEND\" update type failed as file "
+      "reduced in size: " +
+      file_path};
+}
+
+inline void throw_removed_file_error(const std::string& file_path) {
+  throw ForeignStorageException{
+      "Refresh of foreign table created with \"APPEND\" update type failed as "
+      "file \"" +
+      file_path + "\" was removed."};
+}
+
+inline void throw_number_of_columns_mismatch_error(size_t num_table_cols,
+                                                   size_t num_file_cols,
+                                                   const std::string& file_path) {
+  throw ForeignStorageException{"Mismatched number of logical columns: (expected " +
+                                std::to_string(num_table_cols) + " columns, has " +
+                                std::to_string(num_file_cols) + "): in file '" +
+                                file_path + "'"};
+}
+
+inline void throw_file_access_error(const std::string& file_path,
+                                    const std::string& message) {
+  std::string error_message{"Unable to access file \"" + file_path + "\". " + message};
+  throw ForeignStorageException{error_message};
+}
+
+inline void throw_file_not_found_error(const std::string& file_path) {
+  throw ForeignStorageException{"File or directory \"" + file_path +
+                                "\" does not exist."};
+}
 }  // namespace foreign_storage

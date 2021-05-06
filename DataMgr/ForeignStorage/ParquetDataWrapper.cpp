@@ -17,16 +17,13 @@
 #include "ParquetDataWrapper.h"
 
 #include <queue>
-#include <regex>
 
 #include <arrow/filesystem/localfs.h>
 #include <boost/filesystem.hpp>
 
-#include "ForeignDataWrapperShared.h"
+#include "ForeignStorageException.h"
 #include "FsiJsonUtils.h"
-#include "ImportExport/Importer.h"
 #include "LazyParquetChunkLoader.h"
-#include "MetadataPlaceholder.h"
 #include "ParquetShared.h"
 #include "Utils/DdlUtils.h"
 
@@ -235,9 +232,9 @@ void ParquetDataWrapper::fetchChunkMetadata() {
     }
 
     // Single file append
-    // If an append occurs with multiple files, then we assume any existing files have not
-    // been altered.  If an append occurs on a single file, then we check to see if it has
-    // changed.
+    // If an append occurs with multiple files, then we assume any existing files have
+    // not been altered.  If an append occurs on a single file, then we check to see if
+    // it has changed.
     if (new_file_paths.empty() && all_file_paths.size() == 1) {
       CHECK_EQ(processed_file_paths.size(), static_cast<size_t>(1));
       const auto& file_path = *all_file_paths.begin();
@@ -280,24 +277,32 @@ std::set<std::string> ParquetDataWrapper::getProcessedFilePaths() {
 std::set<std::string> ParquetDataWrapper::getAllFilePaths() {
   auto timer = DEBUG_TIMER(__func__);
   std::set<std::string> file_paths;
-  arrow::fs::FileSelector file_selector{};
-  std::string base_path = getFullFilePath(foreign_table_);
-  file_selector.base_dir = base_path;
-  file_selector.recursive = true;
-
-  auto file_info_result = file_system_->GetFileInfo(file_selector);
+  auto file_path = getFullFilePath(foreign_table_);
+  auto file_info_result = file_system_->GetFileInfo(file_path);
   if (!file_info_result.ok()) {
-    // This is expected when `base_path` points to a single file.
-    file_paths.emplace(base_path);
+    throw_file_access_error(file_path, file_info_result.status().message());
   } else {
-    auto& file_info_vector = file_info_result.ValueOrDie();
-    for (const auto& file_info : file_info_vector) {
-      if (file_info.type() == arrow::fs::FileType::File) {
-        file_paths.emplace(file_info.path());
+    auto& file_info = file_info_result.ValueOrDie();
+    if (file_info.type() == arrow::fs::FileType::NotFound) {
+      throw_file_not_found_error(file_path);
+    } else if (file_info.type() == arrow::fs::FileType::File) {
+      file_paths.emplace(file_path);
+    } else {
+      CHECK_EQ(arrow::fs::FileType::Directory, file_info.type());
+      arrow::fs::FileSelector file_selector{};
+      file_selector.base_dir = file_path;
+      file_selector.recursive = true;
+      auto selector_result = file_system_->GetFileInfo(file_selector);
+      if (!selector_result.ok()) {
+        throw_file_access_error(file_path, selector_result.status().message());
+      } else {
+        auto& file_info_vector = selector_result.ValueOrDie();
+        for (const auto& file_info : file_info_vector) {
+          if (file_info.type() == arrow::fs::FileType::File) {
+            file_paths.emplace(file_info.path());
+          }
+        }
       }
-    }
-    if (file_paths.empty()) {
-      throw std::runtime_error{"No file found at given path \"" + base_path + "\"."};
     }
   }
   return file_paths;
@@ -431,8 +436,8 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
     }
     CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
 
-    // Allocate new shared_ptr for metadata so we dont modify old one which may be used by
-    // executor
+    // Allocate new shared_ptr for metadata so we dont modify old one which may be used
+    // by executor
     auto cached_metadata_previous = chunk_metadata_map_.at(data_chunk_key);
     chunk_metadata_map_.at(data_chunk_key) = std::make_shared<ChunkMetadata>();
     auto cached_metadata = chunk_metadata_map_.at(data_chunk_key);

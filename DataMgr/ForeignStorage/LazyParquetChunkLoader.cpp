@@ -25,7 +25,7 @@
 #include <parquet/statistics.h>
 #include <parquet/types.h>
 
-#include "ForeignDataWrapperShared.h"
+#include "ForeignStorageException.h"
 #include "ParquetDateFromTimestampEncoder.h"
 #include "ParquetDateInSecondsEncoder.h"
 #include "ParquetDecimalEncoder.h"

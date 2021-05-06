@@ -15,7 +15,7 @@
  */
 
 #include "DataMgr/ForeignStorage/CsvReader.h"
-#include "ForeignDataWrapperShared.h"
+#include "ForeignStorageException.h"
 #include "FsiJsonUtils.h"
 
 namespace foreign_storage {
@@ -529,6 +529,9 @@ bool MultiFileReader::isRemainingSizeKnown() {
 LocalMultiFileReader::LocalMultiFileReader(const std::string& file_path,
                                            const import_export::CopyParams& copy_params)
     : MultiFileReader(file_path, copy_params) {
+  if (!boost::filesystem::exists(file_path)) {
+    throw_file_not_found_error(file_path);
+  }
   std::set<std::string> file_locations;
   if (boost::filesystem::is_directory(file_path)) {
     // Find all files in this directory

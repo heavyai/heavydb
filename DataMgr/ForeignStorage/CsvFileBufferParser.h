@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "DataMgr/ForeignStorage/ForeignDataWrapperShared.h"
+#include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "DataMgr/ForeignStorage/ForeignTableSchema.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
