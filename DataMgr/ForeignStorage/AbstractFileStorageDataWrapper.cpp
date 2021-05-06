@@ -2,7 +2,6 @@
 
 #include "Catalog/ForeignServer.h"
 #include "Catalog/ForeignTable.h"
-#include "ForeignDataWrapperShared.h"
 #include "Shared/StringTransform.h"
 #include "Shared/misc.h"
 #include "Utils/DdlUtils.h"

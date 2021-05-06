@@ -131,6 +131,13 @@ class ForeignTableTest : public DBHandlerTestFixture {
     }
     return key;
   }
+
+  void queryAndAssertFileNotFoundException(
+      const std::string& file_path,
+      const std::string& query = "SELECT * FROM test_foreign_table;") {
+    queryAndAssertException(
+        query, "Exception: File or directory \"" + file_path + "\" does not exist.");
+  }
 };
 
 class SelectQueryTest : public ForeignTableTest {
