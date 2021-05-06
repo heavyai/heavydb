@@ -376,6 +376,11 @@ class DBHandlerTestFixture : public testing::Test {
     executeLambdaAndAssertException([&] { sql(sql_statement); }, error_message);
   }
 
+  void queryAndAssertPartialException(const std::string& sql_statement,
+                                      const std::string& error_message) {
+    executeLambdaAndAssertPartialException([&] { sql(sql_statement); }, error_message);
+  }
+
   void assertResultSetEqual(
       const std::vector<std::vector<TargetValue>>& expected_result_set,
       const TQueryResult actual_result) {
