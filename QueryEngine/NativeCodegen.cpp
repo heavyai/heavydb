@@ -1290,6 +1290,28 @@ std::shared_ptr<L0CompilationContext> CodeGenerator::generateNativeL0Code(
   compilation_ctx->addDeviceCode(move(device_compilation_ctx));
   return compilation_ctx;
 }
+
+std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenL0(
+    llvm::Function* query_func,
+    llvm::Function* multifrag_query_func,
+    std::unordered_set<llvm::Function*>& live_funcs,
+    const bool no_inline,
+    const l0::L0Manager* l0_mgr,
+    const CompilationOptions& co) {
+  auto module = multifrag_query_func->getParent();
+  CHECK(l0_mgr);
+  // todo: cache
+
+  std::shared_ptr<L0CompilationContext> compilation_context;
+  try {
+    compilation_context = CodeGenerator::generateNativeL0Code(
+        query_func, multifrag_query_func, live_funcs, co, l0_mgr);
+  } catch (l0::L0Exception& e) {
+    LOG(WARNING) << "Caught L0 exception: " << e.what() << "\n";
+    throw;
+  }
+  return compilation_context;
+}
 #endif  // HAVE_L0
 
 std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
@@ -2614,6 +2636,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                           const CompilationOptions& co,
                           const ExecutionOptions& eo,
                           const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                          const l0::L0Manager* l0_mgr,
                           const bool allow_lazy_fetch,
                           std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                           const size_t max_groups_buffer_entry_guess,
@@ -2999,6 +3022,29 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   }
 
   // Generate final native code from the LLVM IR.
+  std::shared_ptr<CompilationContext> compilation_context;
+  switch (co.device_type) {
+    case ExecutorDeviceType::CPU:
+      compilation_context =
+          optimizeAndCodegenCPU(query_func, multifrag_query_func, live_funcs, co);
+      break;
+    case ExecutorDeviceType::GPU:
+      compilation_context = optimizeAndCodegenGPU(query_func,
+                                                  multifrag_query_func,
+                                                  live_funcs,
+                                                  is_group_by || ra_exe_unit.estimator,
+                                                  cuda_mgr,
+                                                  co);
+      break;
+    case ExecutorDeviceType::L0:
+      compilation_context = optimizeAndCodegenL0(
+          query_func, multifrag_query_func, live_funcs, false, l0_mgr, co);
+      break;
+
+    default:
+      LOG(FATAL) << "Invalid device type";
+      return {};
+  }
   return std::make_tuple(
       CompilationResult{
           co.device_type == ExecutorDeviceType::CPU
