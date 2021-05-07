@@ -28,6 +28,8 @@
 #include "Shared/MathUtils.h"
 #include "StreamingTopN.h"
 
+#include "LLVMSPIRVLib/LLVMSPIRVLib.h"
+
 #if LLVM_VERSION_MAJOR < 9
 static_assert(false, "LLVM Version >= 9 is required.");
 #endif
@@ -1186,6 +1188,107 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   return {};
 #endif
 }
+
+#ifdef HAVE_L0
+std::shared_ptr<L0CompilationContext> CodeGenerator::generateNativeL0Code(
+    llvm::Function* func,
+    llvm::Function* wrapper_func,
+    const std::unordered_set<llvm::Function*>& live_funcs,
+    const CompilationOptions& co,
+    const l0::L0Manager* l0_mgr) {
+  auto module = func->getParent();
+
+  auto pass_manager_builder = llvm::PassManagerBuilder();
+  llvm::legacy::PassManager PM;
+  pass_manager_builder.populateModulePassManager(PM);
+  optimize_ir(func, module, PM, live_funcs, co);
+
+  std::ostringstream ss;
+  llvm::raw_os_ostream os(ss);
+  std::string err;
+
+  module->setTargetTriple("spir-unknown-unknown");
+  
+
+
+  llvm::LLVMContext& ctx = module->getContext();
+  // set metadata -- pretend we're opencl (see
+  // https://github.com/KhronosGroup/SPIRV-LLVM-Translator/blob/master/docs/SPIRVRepresentationInLLVM.rst#spir-v-instructions-mapped-to-llvm-metadata)
+  llvm::Metadata* spirv_src_ops[] = {
+      llvm::ConstantAsMetadata::get(
+          llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 3 /*OpenCL_C*/)),
+      llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
+                                                           102000 /*OpenCL ver 1.2*/))};
+  llvm::NamedMDNode* spirv_src = module->getOrInsertNamedMetadata("spirv.Source");
+  spirv_src->addOperand(llvm::MDNode::get(ctx, spirv_src_ops));
+
+  SPIRV::TranslatorOpts opts;
+  opts.enableAllExtensions();
+  opts.setDesiredBIsRepresentation(SPIRV::BIsRepresentation::OpenCL12);
+  opts.setDebugInfoEIS(SPIRV::DebugInfoEIS::OpenCL_DebugInfo_100);
+
+  std::unordered_set<llvm::Function*> roots{wrapper_func, func};
+
+  // todo: add helper funcs
+  // todo: add udf funcs
+
+  std::vector<llvm::Function*> rt_funcs;
+  for (auto& Fn : *module) {
+    if (!roots.count(&Fn)) {
+      rt_funcs.push_back(&Fn);
+    }
+  }
+
+  for (auto& pFn : rt_funcs) {
+    pFn->removeFromParent();
+  }
+
+  module->print(os, nullptr);
+  os.flush();
+
+  for (auto& pFn : rt_funcs) {
+    module->getFunctionList().push_back(pFn);
+  }
+
+  for (auto& Fn : *module) {
+    Fn.setCallingConv(llvm::CallingConv::SPIR_FUNC);
+  }
+
+  llvm::errs() << "func: " << (func? func->getName() : "null") << "\n";
+  llvm::errs() << "wrapper func: " << (wrapper_func? wrapper_func->getName() : "null") << "\n";
+  CHECK(wrapper_func);
+
+  wrapper_func->setCallingConv(llvm::CallingConv::SPIR_KERNEL);
+
+  std::error_code EC;
+  llvm::raw_fd_ostream OS("ir", EC, llvm::sys::fs::F_None);
+  llvm::WriteBitcodeToFile(*module, OS);
+  OS.flush();
+  llvm::errs() << EC.category().name() << '\n';
+
+  auto success = writeSpirv(module, opts, ss, err);
+  if (!success) {
+    llvm::errs() << "Spirv translation failed with error: " << err << "\n";
+  } else {
+    llvm::errs() << "Spirv tranlsation success.\n";
+  }
+  CHECK(success);
+
+
+  L0BinResult bin_result; 
+  try {
+    bin_result = spv_to_bin(ss.str(), 1 /*todo block size*/, l0_mgr);
+  } catch (l0::L0Exception& e) {
+    llvm::errs() << e.what() << "\n";
+    return {};
+  }
+
+  auto compilation_ctx = std::make_shared<L0CompilationContext>();
+  auto device_compilation_ctx = std::make_unique<L0DeviceCompilationContext>(bin_result.l0bin, bin_result.size, "todoname", 0, 0, nullptr);
+  compilation_ctx->addDeviceCode(move(device_compilation_ctx));
+  return compilation_ctx;
+}
+#endif  // HAVE_L0
 
 std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     llvm::Function* query_func,

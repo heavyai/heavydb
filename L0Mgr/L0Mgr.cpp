@@ -22,31 +22,57 @@
 
 namespace l0 {
 
-std::vector<std::shared_ptr<L0Device>> get_devices() {
+L0Driver::L0Driver(ze_driver_handle_t handle) : driver_(handle) {
+  ze_context_desc_t ctx_desc = {ZE_STRUCTURE_TYPE_CONTEXT_DESC, nullptr, 0};
+  L0_SAFE_CALL(zeContextCreate(driver_, &ctx_desc, &context_));
+
+  uint32_t device_count = 0;
+  L0_SAFE_CALL(zeDeviceGet(driver_, &device_count, nullptr));
+
+  std::vector<ze_device_handle_t> devices(device_count);
+  L0_SAFE_CALL(zeDeviceGet(driver_, &device_count, devices.data()));
+
+  for (auto device : devices) {
+    ze_device_properties_t device_properties;
+    L0_SAFE_CALL(zeDeviceGetProperties(device, &device_properties));
+    if (ZE_DEVICE_TYPE_GPU == device_properties.type) {
+      devices_.push_back(std::make_shared<L0Device>(*this, device));
+    }
+  }
+}
+
+L0Driver::~L0Driver() {
+  auto status = (zeContextDestroy(context_));
+  if (status) {
+    std::cerr << "Non-zero status for context destructor" << std::endl;
+  }
+}
+
+ze_context_handle_t L0Driver::ctx() const {
+  return context_;
+}
+
+ze_driver_handle_t L0Driver::driver() const {
+  return driver_;
+}
+
+const std::vector<std::shared_ptr<L0Device>>& L0Driver::devices() const {
+  return devices_;
+}
+
+std::vector<std::shared_ptr<L0Driver>> get_drivers() {
   zeInit(0);
   uint32_t driver_count = 0;
   zeDriverGet(&driver_count, nullptr);
 
-  std::vector<ze_driver_handle_t> drivers(driver_count);
-  zeDriverGet(&driver_count, drivers.data());
+  std::vector<ze_driver_handle_t> handles(driver_count);
+  zeDriverGet(&driver_count, handles.data());
 
-  std::vector<std::shared_ptr<L0Device>> res;
-  for (auto driver : drivers) {
-    uint32_t device_count = 0;
-    zeDeviceGet(driver, &device_count, nullptr);
-
-    std::vector<ze_device_handle_t> devices(device_count);
-    zeDeviceGet(driver, &device_count, devices.data());
-
-    for (auto device : devices) {
-      ze_device_properties_t device_properties;
-      L0_SAFE_CALL(zeDeviceGetProperties(device, &device_properties));
-      if (ZE_DEVICE_TYPE_GPU == device_properties.type) {
-        res.push_back(std::make_shared<L0Device>(driver, device));
-      }
-    }
+  std::vector<std::shared_ptr<L0Driver>> result(driver_count);
+  for (int i = 0; i < driver_count; i++) {
+    result[i] = std::make_shared<L0Driver>(handles[i]);
   }
-  return res;
+  return result;
 }
 
 void copy_host_to_device(int8_t* device_ptr,
@@ -80,10 +106,8 @@ int8_t* allocate_device_mem(const size_t num_bytes, L0Device& device) {
   return (int8_t*)mem;
 }
 
-L0Device::L0Device(ze_driver_handle_t driver, ze_device_handle_t device)
-    : device_(device) {
-  ze_context_desc_t ctx_desc = {ZE_STRUCTURE_TYPE_CONTEXT_DESC, nullptr, 0};
-  L0_SAFE_CALL(zeContextCreate(driver, &ctx_desc, &context_));
+L0Device::L0Device(const L0Driver& driver, ze_device_handle_t device)
+    : device_(device), driver_(driver) {
   ze_command_queue_desc_t command_queue_desc = {ZE_STRUCTURE_TYPE_COMMAND_QUEUE_DESC,
                                                 nullptr,
                                                 0,
@@ -92,16 +116,18 @@ L0Device::L0Device(ze_driver_handle_t driver, ze_device_handle_t device)
                                                 ZE_COMMAND_QUEUE_MODE_DEFAULT,
                                                 ZE_COMMAND_QUEUE_PRIORITY_NORMAL};
   L0_SAFE_CALL(
-      zeCommandQueueCreate(context_, device_, &command_queue_desc, &command_queue_));
+      zeCommandQueueCreate(driver_.ctx(), device_, &command_queue_desc, &command_queue_));
 }
 
 L0Device::~L0Device() {
-  L0_SAFE_CALL(zeContextDestroy(context_));
-  L0_SAFE_CALL(zeCommandQueueDestroy(command_queue_));
+  auto status = (zeCommandQueueDestroy(command_queue_));
+  if (status) {
+    std::cerr << "Non-zero status for command queue destructor" << std::endl;
+  }
 }
 
 ze_context_handle_t L0Device::ctx() const {
-  return context_;
+  return driver_.ctx();
 }
 ze_device_handle_t L0Device::device() const {
   return device_;
@@ -118,7 +144,13 @@ ze_command_list_handle_t L0Device::create_command_list() const {
       0  // flags
   };
   ze_command_list_handle_t res;
-  zeCommandListCreate(context_, device_, &desc, &res);
+  zeCommandListCreate(ctx(), device_, &desc, &res);
   return res;
+}
+
+L0Manager::L0Manager() : drivers_(get_drivers()) {}
+
+const std::vector<std::shared_ptr<L0Driver>>& L0Manager::drivers() const {
+  return drivers_;
 }
 }  // namespace l0
