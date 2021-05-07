@@ -20,25 +20,54 @@
 #include <string>
 #include <vector>
 
+#include "L0Mgr/L0Exception.h"
+#include "L0Mgr/Utils.h"
+
 #include <level_zero/ze_api.h>
 
 namespace l0 {
-class L0Device {
+class L0Device;
+class L0Driver {
  private:
   ze_context_handle_t context_;
+  ze_driver_handle_t driver_;
+
+  std::vector<std::shared_ptr<L0Device>> devices_;
+
+ public:
+  explicit L0Driver(ze_driver_handle_t handle);
+  ~L0Driver();
+  ze_context_handle_t ctx() const;
+  ze_driver_handle_t driver() const;
+
+  const std::vector<std::shared_ptr<L0Device>>& devices() const;
+};
+
+class L0Device {
+ private:
   ze_device_handle_t device_;
   ze_command_queue_handle_t command_queue_;
 
- public:
-  L0Device(ze_driver_handle_t driver, ze_device_handle_t device);
+  const L0Driver& driver_;
 
-  ze_context_handle_t ctx() const;
+ public:
+  L0Device(const L0Driver& driver, ze_device_handle_t device);
+
   ze_device_handle_t device() const;
   ze_command_queue_handle_t command_queue() const;
-
   ze_command_list_handle_t create_command_list() const;
+  ze_context_handle_t ctx() const;
 
   ~L0Device();
+};
+
+class L0Manager {
+ private:
+  std::vector<std::shared_ptr<L0Driver>> drivers_;
+
+ public:
+  L0Manager();
+  const std::vector<std::shared_ptr<L0Driver>>& drivers() const;
 };
 
 void copy_host_to_device(int8_t* device_ptr,
@@ -54,5 +83,4 @@ void copy_device_to_host(int8_t* host_ptr,
 int8_t* allocate_device_mem(const size_t num_bytes,
                             ze_command_list_handle_t command_list);
 
-std::vector<std::shared_ptr<L0Device>> get_devices();
 }  // namespace l0

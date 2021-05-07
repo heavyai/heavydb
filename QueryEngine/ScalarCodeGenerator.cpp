@@ -107,7 +107,8 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
   cgen_state_->ir_builder_.CreateStore(expr_lvs.front(),
                                        cgen_state_->row_func_->arg_begin());
   cgen_state_->ir_builder_.CreateRet(ll_int<int32_t>(0, ctx));
-  if (co.device_type == ExecutorDeviceType::GPU) {
+  if (co.device_type == ExecutorDeviceType::GPU ||
+      co.device_type == ExecutorDeviceType::L0) {
     std::vector<llvm::Type*> wrapper_arg_types(arg_types.size() + 1);
     wrapper_arg_types[0] = llvm::PointerType::get(get_int_type(32, ctx), 0);
     wrapper_arg_types[1] = arg_types[0];
@@ -152,6 +153,10 @@ std::vector<void*> ScalarCodeGenerator::generateNativeCode(
       return generateNativeGPUCode(
           compiled_expression.func, compiled_expression.wrapper_func, co);
     }
+    case ExecutorDeviceType::L0: {
+      return generateNativeL0Code(
+          compiled_expression.func, compiled_expression.wrapper_func, co);
+    }
     default: {
       LOG(FATAL) << "Invalid device type";
       return {};  // satisfy -Wreturn-type
@@ -191,4 +196,16 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
   gpu_compilation_context_ = CodeGenerator::generateNativeGPUCode(
       func, wrapper_func, {func, wrapper_func}, co, gpu_target);
   return gpu_compilation_context_->getNativeFunctionPointers();
+}
+
+std::vector<void*> ScalarCodeGenerator::generateNativeL0Code(
+    llvm::Function* func,
+    llvm::Function* wrapper_func,
+    const CompilationOptions& co) {
+  if (!l0_mgr_) {
+    l0_mgr_ = std::make_unique<l0::L0Manager>();
+  }
+  l0_compilation_context_ = CodeGenerator::generateNativeL0Code(
+      func, wrapper_func, {func, wrapper_func}, co, l0_mgr_.get());
+  return l0_compilation_context_->getNativeFunctionPointers();
 }
