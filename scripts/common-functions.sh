@@ -100,7 +100,7 @@ function install_arrow() {
     -DARROW_PARQUET=ON \
     -DARROW_FILESYSTEM=ON \
     -DARROW_S3=ON \
-    -DARROW_CUDA=ON \
+    -DARROW_CUDA=OFF \
     -DTHRIFT_HOME=${THRIFT_HOME:-$PREFIX} \
     ${ARROW_TSAN} \
     ..
@@ -188,6 +188,9 @@ function install_llvm() {
 
     # install spirv translator from github
     git clone -b llvm_release_100 https://github.com/KhronosGroup/SPIRV-LLVM-Translator llvm-$VERS.src/projects/llvm-spirv
+    pushd llvm-$VERS.src/projects/llvm-spirv
+    git checkout 576abae62cecd171992017a4a786e3831221ab8d
+    popd
 
     rm -rf build.llvm-$VERS
     mkdir build.llvm-$VERS

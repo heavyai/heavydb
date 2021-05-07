@@ -43,11 +43,11 @@ else
   exit 1
 fi
 
-sudo mkdir -p $PREFIX
-sudo chown -R $(id -u) $PREFIX
+ mkdir -p $PREFIX
+ chown -R $(id -u) $PREFIX
 
-DEBIAN_FRONTEND=noninteractive sudo apt update
-DEBIAN_FRONTEND=noninteractive sudo apt install -y \
+DEBIAN_FRONTEND=noninteractive  apt update
+DEBIAN_FRONTEND=noninteractive  apt install -y \
     software-properties-common \
     build-essential \
     ccache \
@@ -101,7 +101,7 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     libxmlsec1-dev
 
 # Set up gcc-8 as default gcc
-sudo update-alternatives \
+ update-alternatives \
   --install /usr/bin/gcc gcc /usr/bin/gcc-8 800 \
   --slave /usr/bin/g++ g++ /usr/bin/g++-8
 
