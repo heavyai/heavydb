@@ -414,8 +414,6 @@ TEST(CodeGeneratorTest, IntegerConstantL0) {
     command_list->launch(*kernel, &dIn, &dOut);
     command_list->copy(out_void, dOut, copy_size);
     command_list->submit(command_queue);
-    L0_SAFE_CALL(
-        zeCommandQueueSynchronize(command_queue, std::numeric_limits<uint32_t>::max()));
 
     std::cout << "out" << out.data[0] << std::endl;
 
