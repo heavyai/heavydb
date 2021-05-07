@@ -132,8 +132,10 @@ std::string SPIRVExecuteTest::generateSimpleSPIRV() {
 
   std::vector<Type*> args{Type::getFloatPtrTy(ctx, 1), Type::getFloatPtrTy(ctx, 1)};
   FunctionType* f_type = FunctionType::get(Type::getVoidTy(ctx), args, false);
-  Function* f = Function::Create(
-      f_type, GlobalValue::LinkageTypes::ExternalLinkage, "plus1", module.get());
+  Function* f = Function::Create(f_type,
+                                 GlobalValue::LinkageTypes::ExternalLinkage,
+                                 "sum_first_elements",
+                                 module.get());
   f->setCallingConv(CallingConv::SPIR_KERNEL);
 
   // get_global_id
@@ -149,13 +151,14 @@ std::string SPIRVExecuteTest::generateSimpleSPIRV() {
 
   builder.SetInsertPoint(entry);
   Constant* zero = ConstantInt::get(Type::getInt32Ty(ctx), 0);
-  Constant* onef = ConstantFP::get(ctx, APFloat(1.f));
   Value* idx = builder.CreateCall(get_global_idj, zero, "idx");
   auto argit = f->args().begin();
   Value* firstElemSrc = builder.CreateGEP(f->args().begin(), idx, "src.idx");
   Value* firstElemDst = builder.CreateGEP(++argit, idx, "dst.idx");
-  Value* ldSrc = builder.CreateLoad(Type::getFloatTy(ctx), firstElemSrc, "ld");
-  Value* result = builder.CreateFAdd(ldSrc, onef, "foo");
+  Value* ldSrc = builder.CreateLoad(Type::getFloatTy(ctx), firstElemSrc, "ld.src");
+  Value* ldDst = builder.CreateLoad(Type::getFloatTy(ctx), firstElemDst, "ld.dst");
+
+  Value* result = builder.CreateFAdd(ldSrc, ldDst, "result");
   builder.CreateStore(result, firstElemDst);
   builder.CreateRetVoid();
 
@@ -208,15 +211,15 @@ TEST_F(SPIRVExecuteTest, TranslateSimple) {
   kernelDesc.stype = ZE_STRUCTURE_TYPE_KERNEL_DESC;
   kernelDesc.pNext = nullptr;
   kernelDesc.flags = 0;
-  kernelDesc.pKernelName = "plus1";
+  kernelDesc.pKernelName = "sum_first_elements";
 
   L0_SAFE_CALL(zeKernelCreate(hModule, &kernelDesc, &hKernel));
 
   constexpr int a_size = 32;
   AlignedArray<float, a_size> a, b;
   for (auto i = 0; i < a_size; ++i) {
-    a.data[i] = a_size - i;
-    b.data[i] = i;
+    a.data[i] = 5;
+    b.data[i] = 6;
   }
 
   ze_device_mem_alloc_desc_t alloc_desc;
@@ -266,12 +269,70 @@ TEST_F(SPIRVExecuteTest, TranslateSimple) {
   }
   std::cout << std::endl;
 
-  ASSERT_EQ(b.data[0], 33);
-  ASSERT_EQ(b.data[1], 1);
-  ASSERT_EQ(b.data[2], 2);
+  ASSERT_EQ(b.data[0], 11);
+  ASSERT_EQ(b.data[1], 6);
+  ASSERT_EQ(b.data[2], 6);
 
   L0_SAFE_CALL(zeMemFree(hContext, dA));
   L0_SAFE_CALL(zeMemFree(hContext, dB));
+}
+
+TEST_F(SPIRVExecuteTest, TranslateSimpleWithL0Wrapper) {
+  auto mgr = std::make_shared<l0::L0Manager>();
+  auto driver = mgr->drivers()[0];
+  auto device = driver->devices()[0];
+
+  auto spv = generateSimpleSPIRV();
+
+  auto module = device->create_module((uint8_t*)spv.data(), spv.length());
+
+  auto command_queue = device->command_queue();
+  auto command_list = device->create_command_list();
+
+  constexpr int a_size = 32;
+  AlignedArray<float, a_size> a, b;
+  for (auto i = 0; i < a_size; ++i) {
+    a.data[i] = 5;
+    b.data[i] = 6;
+  }
+
+  ze_device_mem_alloc_desc_t alloc_desc;
+  alloc_desc.stype = ZE_STRUCTURE_TYPE_DEVICE_MEM_ALLOC_DESC;
+  alloc_desc.pNext = nullptr;
+  alloc_desc.flags = 0;
+  alloc_desc.ordinal = 0;
+
+  const float copy_size = a_size * sizeof(float);
+
+  void* dA = l0::allocate_device_mem(copy_size, *device);
+  void* dB = l0::allocate_device_mem(copy_size, *device);
+
+  void* a_void = a.data;
+  void* b_void = b.data;
+
+  command_list->copy(dA, a_void, copy_size);
+  command_list->copy(dB, b_void, copy_size);
+
+  auto kernel = module->create_kernel("sum_first_elements", 1, 1, 1);
+
+  command_list->launch(*kernel, &dA, &dB);
+  command_list->launch(*kernel, &dA, &dB);
+
+  command_list->copy(b_void, dB, copy_size);
+
+  command_list->submit(command_queue);
+
+  for (int i = 0; i < a_size; ++i) {
+    std::cout << b.data[i] << " ";
+  }
+  std::cout << std::endl;
+
+  ASSERT_EQ(b.data[0], 16);
+  ASSERT_EQ(b.data[1], 6);
+  ASSERT_EQ(b.data[2], 6);
+
+  L0_SAFE_CALL(zeMemFree(device->ctx(), dA));
+  L0_SAFE_CALL(zeMemFree(device->ctx(), dB));
 }
 
 TEST_F(SPIRVExecuteTest, TranslateSimpleWithL0Manager) {
@@ -289,48 +350,40 @@ TEST_F(SPIRVExecuteTest, TranslateSimpleWithL0Manager) {
   constexpr int a_size = 32;
   AlignedArray<float, a_size> a, b;
   for (auto i = 0; i < a_size; ++i) {
-    a.data[i] = a_size - i;
-    b.data[i] = i;
+    a.data[i] = 5;
+    b.data[i] = 6;
   }
 
-  ze_device_mem_alloc_desc_t alloc_desc;
-  alloc_desc.stype = ZE_STRUCTURE_TYPE_DEVICE_MEM_ALLOC_DESC;
-  alloc_desc.pNext = nullptr;
-  alloc_desc.flags = 0;
-  alloc_desc.ordinal = 0;
-
   const float copy_size = a_size * sizeof(float);
-  void* dA = l0::allocate_device_mem(copy_size, *device);
-  void* dB = l0::allocate_device_mem(copy_size, *device);
+  void* dA = mgr->allocateDeviceMem(copy_size, 0);
+  void* dB = mgr->allocateDeviceMem(copy_size, 0);
 
   void* a_void = a.data;
   void* b_void = b.data;
 
-  command_list->copy(dA, a_void, copy_size);
-  command_list->copy(dB, b_void, copy_size);
+  mgr->copyHostToDevice((int8_t*)dA, (int8_t*)a_void, copy_size, 0);
+  mgr->copyHostToDevice((int8_t*)dB, (int8_t*)b_void, copy_size, 0);
 
-  auto kernel = module->create_kernel("plus1", 1, 1, 1);
+  auto kernel = module->create_kernel("sum_first_elements", 1, 1, 1);
 
+  command_list->launch(*kernel, &dA, &dB);
   command_list->launch(*kernel, &dA, &dB);
 
   command_list->copy(b_void, dB, copy_size);
 
   command_list->submit(command_queue);
 
-  L0_SAFE_CALL(
-      zeCommandQueueSynchronize(command_queue, std::numeric_limits<uint32_t>::max()));
-
   for (int i = 0; i < a_size; ++i) {
     std::cout << b.data[i] << " ";
   }
   std::cout << std::endl;
 
-  ASSERT_EQ(b.data[0], 33);
-  ASSERT_EQ(b.data[1], 1);
-  ASSERT_EQ(b.data[2], 2);
+  ASSERT_EQ(b.data[0], 16);
+  ASSERT_EQ(b.data[1], 6);
+  ASSERT_EQ(b.data[2], 6);
 
-  L0_SAFE_CALL(zeMemFree(device->ctx(), dA));
-  L0_SAFE_CALL(zeMemFree(device->ctx(), dB));
+  mgr->freeDeviceMem((int8_t*)dA);
+  mgr->freeDeviceMem((int8_t*)dB);
 }
 
 int main(int argc, char** argv) {
