@@ -1020,6 +1020,7 @@ public class SQLImporter {
         }
         break;
       case java.sql.Types.OTHER:
+        Object objVal = rs.getObject(colNum);
         if (rs.wasNull()) {
           col.nulls.add(Boolean.TRUE);
           col.data.str_col.add("");
