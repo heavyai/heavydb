@@ -177,12 +177,14 @@ class PostGis_types extends com.mapd.utility.db_vendors.Db_vendor_types {
           Connection conn, ResultSetMetaData metadata, int column_number)
           throws SQLException {
     String column_name = metadata.getColumnName(column_number);
+    String table_name = metadata.getTableName(column_number);
     String column_type_name = metadata.getColumnTypeName(column_number);
     if (column_type_name.equalsIgnoreCase("geography"))
       return find_type_detail(
-              conn, "geography_columns", "f_geography_column", column_name);
+              conn, "geography_columns", "f_geography_column", column_name, table_name);
     else if (column_type_name.equalsIgnoreCase("geometry"))
-      return find_type_detail(conn, "geometry_columns", "f_geometry_column", column_name);
+      return find_type_detail(
+              conn, "geometry_columns", "f_geometry_column", column_name, table_name);
     if (!extra_types.containsKey(column_type_name))
       throw new SQLException(
               "type not supported: " + column_type_name + " for column " + column_name);
@@ -194,22 +196,25 @@ class PostGis_types extends com.mapd.utility.db_vendors.Db_vendor_types {
   private GisType find_type_detail(Connection conn,
           String ref_table_name,
           String ref_column_name,
-          String column_name) throws SQLException {
+          String column_name,
+          String table_name) throws SQLException {
     String omnisci_type = null;
     Statement detail_st = conn.createStatement();
     // Select for a specific column name from the ref table.
     String select = "select type, srid from " + ref_table_name + "  where "
             + ref_column_name + " = '" + column_name + "'";
+    if (table_name.length() > 0) {
+      select += " and f_table_name"
+              + " = '" + table_name + "'";
+    }
     ResultSet rs = detail_st.executeQuery(select);
     GisType result = new GisType();
     result.subtype = "GEOMETRY";
     result.type = null;
     result.srid = 0;
-    // The select statment above, can return multiple values qualified by schema/table.
-    // Unfortunately at this stage only the original postgres column name is known.  If
-    // get mulitple returns with the same column name, but different types we will not be
-    // able to separate which specific column is which type.  This loop checks for this
-    // condition and thows when detected.
+    // The select statment above, can return multiple values qualified by schema/table
+    // If an outdated driver is used, the utility jar is positioned befor the driver in
+    // the classpath or for whatever reason the table_name isn't returned by the driver
     while (rs.next()) {
       String type = rs.getString(1);
       int srid = rs.getInt(2);
@@ -219,7 +224,9 @@ class PostGis_types extends com.mapd.utility.db_vendors.Db_vendor_types {
       } else {
         if (!result.type.equalsIgnoreCase(type) || srid != result.srid) {
           throw new SQLException("multiple column definitions [" + result.type + ":"
-                  + type + "] found for column_name [" + column_name + "]");
+                  + type + "] found for column_name [" + column_name + "].\n"
+                  + "You can try to switch the jar positions in the classpath "
+                  + "or use a more recent postgresQL driver.");
         }
       }
     }
