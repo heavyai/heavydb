@@ -21,11 +21,24 @@ import org.slf4j.LoggerFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.TimeZone;
 
 public class ForeignTableRefreshConcurrencyTest {
   final static Logger logger =
           LoggerFactory.getLogger(ForeignTableRefreshConcurrencyTest.class);
+
+  public static String getTimeStamp(int sec_from_now) {
+    Calendar cal = Calendar.getInstance();
+    cal.setTime(new Date());
+    cal.add(Calendar.SECOND, sec_from_now);
+    SimpleDateFormat date_format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    date_format.setTimeZone(TimeZone.getTimeZone("GMT"));
+    return date_format.format(cal.getTime());
+  }
 
   public static void main(String[] args) throws Exception {
     ForeignTableRefreshConcurrencyTest test = new ForeignTableRefreshConcurrencyTest();
@@ -41,36 +54,44 @@ public class ForeignTableRefreshConcurrencyTest {
   // This test creates mulitple competing threads, some of which run selects
   // with joins on a table while others refresh a foreign table. The test
   // should resolve without exception as the cache being used during the join
-  // exectution should be safely invalidated during the foreign table refreshes.
+  // exectution should be safely invalidated during the foreign table
+  // refreshes.  Both manual and scheduled foreign table refreshes are tested
+  // as the code-paths used to invalidate the QueryEngine cache differ.
   private void runTest(String db,
           String userName,
           String userPassword,
-          int num_foreign_refresh_threads,
+          int num_foreign_manual_refresh_threads,
+          int num_foreign_scheduled_refresh_threads,
           int num_table_join_threads,
           int num_runs) throws Exception {
     ArrayList<Exception> exceptions = new ArrayList<Exception>();
 
-    Thread[] foreign_table_refresh_threads = new Thread[num_foreign_refresh_threads];
+    Thread[] foreign_table_manual_refresh_threads =
+            new Thread[num_foreign_manual_refresh_threads];
+    Thread[] foreign_table_scheduled_refresh_threads =
+            new Thread[num_foreign_scheduled_refresh_threads];
     Thread[] table_join_threads = new Thread[num_table_join_threads];
 
-    for (int i = 0; i < num_foreign_refresh_threads; ++i) {
+    for (int i = 0; i < num_foreign_manual_refresh_threads; ++i) {
       final int tid = i;
-      foreign_table_refresh_threads[tid] = new Thread(new Runnable() {
+      foreign_table_manual_refresh_threads[tid] = new Thread(new Runnable() {
         @Override
         public void run() {
           final String thread_name = "F[" + tid + "]";
           try {
-            logger.info("Starting foreign table refresh thread " + thread_name);
+            logger.info("Starting manual foreign table refresh thread " + thread_name);
             MapdTestClient user = MapdTestClient.getClient(
                     "localhost", 6274, db, userName, userPassword);
             for (int irun = 0; irun < num_runs; ++irun) {
-              runSqlAsUser(
-                      "SELECT * FROM test_foreign_table_" + tid + ";", user, thread_name);
-              runSqlAsUser("REFRESH FOREIGN TABLES test_foreign_table_" + tid + ";",
+              runSqlAsUser("SELECT * FROM test_foreign_table_manual_refresh_" + tid + ";",
+                      user,
+                      thread_name);
+              runSqlAsUser("REFRESH FOREIGN TABLES test_foreign_table_manual_refresh_"
+                              + tid + ";",
                       user,
                       thread_name);
             }
-            logger.info("Finished foreign table refresh " + thread_name);
+            logger.info("Finished foreign table manual refresh " + thread_name);
           } catch (Exception e) {
             logger.error("Foreign table refresh " + thread_name
                             + " Caught Exception: " + e.getMessage(),
@@ -79,7 +100,37 @@ public class ForeignTableRefreshConcurrencyTest {
           }
         }
       });
-      foreign_table_refresh_threads[tid].start();
+      foreign_table_manual_refresh_threads[tid].start();
+    }
+
+    for (int i = 0; i < num_foreign_scheduled_refresh_threads; ++i) {
+      final int tid = i;
+      foreign_table_scheduled_refresh_threads[tid] = new Thread(new Runnable() {
+        @Override
+        public void run() {
+          final String thread_name = "S[" + tid + "]";
+          try {
+            logger.info("Starting scheduled foreign table refresh thread " + thread_name);
+            MapdTestClient user = MapdTestClient.getClient(
+                    "localhost", 6274, db, userName, userPassword);
+            for (int irun = 0; irun < num_runs; ++irun) {
+              runSqlAsUser(
+                      "SELECT * FROM test_foreign_table_scheduled_refresh_" + tid + ";",
+                      user,
+                      thread_name);
+              Thread.sleep(1000); // sleep 1s between queries to allow
+                                  // refreshes to occur, which occur at 1s intervals
+            }
+            logger.info("Finished foreign table scheduled refresh " + thread_name);
+          } catch (Exception e) {
+            logger.error("Foreign table scheduled refresh " + thread_name
+                            + " Caught Exception: " + e.getMessage(),
+                    e);
+            exceptions.add(e);
+          }
+        }
+      });
+      foreign_table_scheduled_refresh_threads[tid].start();
     }
 
     for (int i = 0; i < num_table_join_threads; ++i) {
@@ -98,10 +149,11 @@ public class ForeignTableRefreshConcurrencyTest {
                               + "_right AS r ON l.id = r.id;",
                       user,
                       thread_name);
-              Thread.sleep(200); // sleep 200 milliseconds between queries to allow more
-                                 // contention between foreign table refreshes
+              Thread.sleep(1000); // sleep 1s between queries to allow more
+                                  // contention between foreign table refreshes;
+                                  // especially in the case of scheduled refreshes
             }
-            logger.info("Finished table join thread[0]");
+            logger.info("Finished table join thread T[" + tid + "]");
           } catch (Exception e) {
             logger.error(
                     "Table join " + thread_name + " Caught Exception: " + e.getMessage(),
@@ -113,7 +165,10 @@ public class ForeignTableRefreshConcurrencyTest {
       table_join_threads[tid].start();
     }
 
-    for (Thread t : foreign_table_refresh_threads) {
+    for (Thread t : foreign_table_manual_refresh_threads) {
+      t.join();
+    }
+    for (Thread t : foreign_table_scheduled_refresh_threads) {
       t.join();
     }
     for (Thread t : table_join_threads) {
@@ -134,15 +189,29 @@ public class ForeignTableRefreshConcurrencyTest {
     user.runSql(sql);
   }
 
-  private void createForeignTestTable(MapdTestClient dba, String foreign_table_name)
-          throws Exception {
+  private void createForeignTestTableScheduledRefresh(
+          MapdTestClient dba, String foreign_table_name) throws Exception {
     dba.runSql("CREATE FOREIGN TABLE " + foreign_table_name + " "
             + "(b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
             + "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
             + "txt_2 TEXT ENCODING NONE) "
             + "SERVER test_server WITH "
             + "(file_path = 'scalar_types.csv', "
-            + "FRAGMENT_SIZE = 2);");
+            + "refresh_timing_type = 'scheduled', "
+            + "refresh_start_date_time = '" + getTimeStamp(1) + "', "
+            + "refresh_interval = '1S', "
+            + "fragment_size = 2);");
+  }
+
+  private void createForeignTestTableManualRefresh(
+          MapdTestClient dba, String foreign_table_name) throws Exception {
+    dba.runSql("CREATE FOREIGN TABLE " + foreign_table_name + " "
+            + "(b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
+            + "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
+            + "txt_2 TEXT ENCODING NONE) "
+            + "SERVER test_server WITH "
+            + "(file_path = 'scalar_types.csv', "
+            + "fragment_size = 2);");
   }
 
   private void createTestTable(MapdTestClient dba, String table_name, Path copy_from_path)
@@ -170,7 +239,8 @@ public class ForeignTableRefreshConcurrencyTest {
     su.runSql("CREATE DATABASE db1;");
 
     // create tables for use
-    final int num_foreign_refresh_threads = 2;
+    final int num_foreign_manual_refresh_threads = 2;
+    final int num_foreign_scheduled_refresh_threads = 2;
     final int num_table_join_threads = 2;
     Path table_import_path = getAbsolutePath(
             "../java/utility/src/main/java/com/mapd/tests/data/simple_test.csv");
@@ -180,8 +250,12 @@ public class ForeignTableRefreshConcurrencyTest {
     dba.runSql("CREATE SERVER test_server "
             + "FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = 'LOCAL_FILE', "
             + "base_path = '" + foreign_server_path.toString() + "');");
-    for (int i = 0; i < num_foreign_refresh_threads; ++i) {
-      createForeignTestTable(dba, "test_foreign_table_" + i);
+    for (int i = 0; i < num_foreign_manual_refresh_threads; ++i) {
+      createForeignTestTableManualRefresh(dba, "test_foreign_table_manual_refresh_" + i);
+    }
+    for (int i = 0; i < num_foreign_scheduled_refresh_threads; ++i) {
+      createForeignTestTableScheduledRefresh(
+              dba, "test_foreign_table_scheduled_refresh_" + i);
     }
     for (int i = 0; i < num_table_join_threads; ++i) {
       createTestTables(dba, "test_table_" + i, table_import_path);
@@ -190,13 +264,17 @@ public class ForeignTableRefreshConcurrencyTest {
     runTest("db1",
             "admin",
             "HyperInteractive",
-            num_foreign_refresh_threads,
+            num_foreign_manual_refresh_threads,
+            num_foreign_scheduled_refresh_threads,
             num_table_join_threads,
             25);
 
     // cleanup
-    for (int i = 0; i < num_foreign_refresh_threads; ++i) {
-      dba.runSql("DROP FOREIGN TABLE test_foreign_table_" + i + ";");
+    for (int i = 0; i < num_foreign_manual_refresh_threads; ++i) {
+      dba.runSql("DROP FOREIGN TABLE test_foreign_table_manual_refresh_" + i + ";");
+    }
+    for (int i = 0; i < num_foreign_manual_refresh_threads; ++i) {
+      dba.runSql("DROP FOREIGN TABLE test_foreign_table_scheduled_refresh_" + i + ";");
     }
     for (int i = 0; i < num_table_join_threads; ++i) {
       dba.runSql("DROP TABLE test_table_" + i + "_left ;");
