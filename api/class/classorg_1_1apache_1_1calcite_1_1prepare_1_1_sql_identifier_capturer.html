@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 8fa3bf4
+                5.7.0dev fe05a0c
               </div>
             
           
@@ -306,6 +306,11 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper.html">Class Analyzer::FunctionOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper_with_custom_type_handling.html">Class Analyzer::FunctionOperWithCustomTypeHandling</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_bin_oper.html">Class Analyzer::GeoBinOper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_column_var.html">Class Analyzer::GeoColumnVar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_constant.html">Class Analyzer::GeoConstant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_expr.html">Class Analyzer::GeoExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_function_operator.html">Class Analyzer::GeoFunctionOperator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_operator.html">Class Analyzer::GeoOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_u_oper.html">Class Analyzer::GeoUOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_integer_set.html">Class Analyzer::InIntegerSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_values.html">Class Analyzer::InValues</a></li>
@@ -1464,6 +1469,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_analyzer_1_1_order_entry.html">Struct Analyzer::OrderEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array.html">Struct Array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_converter_factory.html">Struct ArrayConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_load_codegen.html">Struct ArrayLoadCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_value_converter.html">Struct ArrayValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrays_converter_factory.html">Struct ArraysConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_fragment.html">Struct ArrowFragment</a></li>
@@ -1959,22 +1965,22 @@
 <p class="breathe-sectiondef-title rubric">Public Members</p>
 <dl class="member">
 <dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1prepare_1_1_sql_identifier_capturer_1a0f7117d206dd81119938e8848d40cbee"></span><code class="sig-name descname">final Set&lt;String&gt; org.apache.calcite.prepare.SqlIdentifierCapturer.selects = new HashSet&lt;&gt;()</code></dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1prepare_1_1_sql_identifier_capturer_1a1abd58d210ce8f785aabbaba9aa4d5f2"></span><code class="sig-name descname">final Set&lt;ImmutableList&lt;String&gt; &gt; org.apache.calcite.prepare.SqlIdentifierCapturer.selects = new HashSet&lt;&gt;()</code></dt>
 <dd></dd></dl>
 
 <dl class="member">
 <dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1prepare_1_1_sql_identifier_capturer_1a3d3282cca80d444fd8d93ba303744b4b"></span><code class="sig-name descname">final Set&lt;String&gt; org.apache.calcite.prepare.SqlIdentifierCapturer.inserts = new HashSet&lt;&gt;()</code></dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1prepare_1_1_sql_identifier_capturer_1ad07d73e69e0839bd3c13865ea5abd5bd"></span><code class="sig-name descname">final Set&lt;ImmutableList&lt;String&gt; &gt; org.apache.calcite.prepare.SqlIdentifierCapturer.inserts = new HashSet&lt;&gt;()</code></dt>
 <dd></dd></dl>
 
 <dl class="member">
 <dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1prepare_1_1_sql_identifier_capturer_1a93fbc7ad4caf7758b491b15ad2065036"></span><code class="sig-name descname">final Set&lt;String&gt; org.apache.calcite.prepare.SqlIdentifierCapturer.updates = new HashSet&lt;&gt;()</code></dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1prepare_1_1_sql_identifier_capturer_1a16ca16a70eb861ead5238ab635094939"></span><code class="sig-name descname">final Set&lt;ImmutableList&lt;String&gt; &gt; org.apache.calcite.prepare.SqlIdentifierCapturer.updates = new HashSet&lt;&gt;()</code></dt>
 <dd></dd></dl>
 
 <dl class="member">
 <dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1prepare_1_1_sql_identifier_capturer_1a666cb538bd954c65182c52c401515ca5"></span><code class="sig-name descname">final Set&lt;String&gt; org.apache.calcite.prepare.SqlIdentifierCapturer.deletes = new HashSet&lt;&gt;()</code></dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1prepare_1_1_sql_identifier_capturer_1a8d76b5e90b6a85b96523ee2bb69a6799"></span><code class="sig-name descname">final Set&lt;ImmutableList&lt;String&gt; &gt; org.apache.calcite.prepare.SqlIdentifierCapturer.deletes = new HashSet&lt;&gt;()</code></dt>
 <dd></dd></dl>
 
 </div>
@@ -1995,12 +2001,12 @@
 
 <dl class="member">
 <dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1prepare_1_1_sql_identifier_capturer_1aecc11770ac77326d1bb7c400cd1062de"></span><code class="sig-name descname">Stack&lt;Set&lt;String&gt; &gt; org.apache.calcite.prepare.SqlIdentifierCapturer.currentList = new Stack&lt;&gt;()</code></dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1prepare_1_1_sql_identifier_capturer_1a825b58546a578dba8ecbce60ffec6fc1"></span><code class="sig-name descname">Stack&lt;Set&lt;ImmutableList&lt;String&gt; &gt; &gt; org.apache.calcite.prepare.SqlIdentifierCapturer.currentList = new Stack&lt;&gt;()</code></dt>
 <dd></dd></dl>
 
 <dl class="member">
 <dt>
-<span class="target" id="classorg_1_1apache_1_1calcite_1_1prepare_1_1_sql_identifier_capturer_1a77bea30c9a4a0f6fb41b843e1619ef5f"></span><code class="sig-name descname">final Set&lt;String&gt; org.apache.calcite.prepare.SqlIdentifierCapturer.ignore = new HashSet&lt;&gt;()</code></dt>
+<span class="target" id="classorg_1_1apache_1_1calcite_1_1prepare_1_1_sql_identifier_capturer_1a4b954cf0506f8434399a8053791e570e"></span><code class="sig-name descname">final Set&lt;ImmutableList&lt;String&gt; &gt; org.apache.calcite.prepare.SqlIdentifierCapturer.ignore = new HashSet&lt;&gt;()</code></dt>
 <dd></dd></dl>
 
 </div>

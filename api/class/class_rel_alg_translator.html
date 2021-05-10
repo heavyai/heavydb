@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 8fa3bf4
+                5.7.0dev fe05a0c
               </div>
             
           
@@ -306,6 +306,11 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper.html">Class Analyzer::FunctionOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper_with_custom_type_handling.html">Class Analyzer::FunctionOperWithCustomTypeHandling</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_bin_oper.html">Class Analyzer::GeoBinOper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_column_var.html">Class Analyzer::GeoColumnVar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_constant.html">Class Analyzer::GeoConstant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_expr.html">Class Analyzer::GeoExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_function_operator.html">Class Analyzer::GeoFunctionOperator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_operator.html">Class Analyzer::GeoOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_u_oper.html">Class Analyzer::GeoUOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_integer_set.html">Class Analyzer::InIntegerSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_values.html">Class Analyzer::InValues</a></li>
@@ -1464,6 +1469,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_analyzer_1_1_order_entry.html">Struct Analyzer::OrderEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array.html">Struct Array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_converter_factory.html">Struct ArrayConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_load_codegen.html">Struct ArrayLoadCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_value_converter.html">Struct ArrayValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrays_converter_factory.html">Struct ArraysConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_fragment.html">Struct ArrowFragment</a></li>
@@ -2200,8 +2206,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK16RelAlgTranslator23translateGeoFunctionArgEPK9RexScalarR11SQLTypeInfoR7int32_tKbKbKbKb">
-<span id="_CPPv3NK16RelAlgTranslator23translateGeoFunctionArgEPK9RexScalarR11SQLTypeInfoR7int32_tKbKbKbKb"></span><span id="_CPPv2NK16RelAlgTranslator23translateGeoFunctionArgEPK9RexScalarR11SQLTypeInfoR7int32_tKbKbKbKb"></span><span id="RelAlgTranslator::translateGeoFunctionArg__RexScalarCP.SQLTypeInfoR.int32_tR.bC.bC.bC.bCC"></span><span class="target" id="class_rel_alg_translator_1a592eb238e14bf380e808be94e42e10f1"></span>std::vector&lt;std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_expr.html#_CPPv4N8Analyzer4ExprE" title="Analyzer::Expr">Expr</a>&gt;&gt; <code class="sig-name descname">translateGeoFunctionArg</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="class_rex_scalar.html#_CPPv49RexScalar" title="RexScalar">RexScalar</a> *<em>rex_scalar</em>, <a class="reference internal" href="class_s_q_l_type_info.html#_CPPv411SQLTypeInfo" title="SQLTypeInfo">SQLTypeInfo</a> &amp;<em>arg_ti</em>, int32_t &amp;<em>lindex</em>, <em class="property">const</em> bool <em>with_bounds</em>, <em class="property">const</em> bool <em>with_render_group</em>, <em class="property">const</em> bool <em>expand_geo_col</em>, <em class="property">const</em> bool <em>is_projection</em> = false<span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK16RelAlgTranslator23translateGeoFunctionArgEPK9RexScalarR11SQLTypeInfoR7int32_tKbKbKbKb" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK16RelAlgTranslator23translateGeoFunctionArgEPK9RexScalarR11SQLTypeInfoR7int32_tKbKbKbKbKb">
+<span id="_CPPv3NK16RelAlgTranslator23translateGeoFunctionArgEPK9RexScalarR11SQLTypeInfoR7int32_tKbKbKbKbKb"></span><span id="_CPPv2NK16RelAlgTranslator23translateGeoFunctionArgEPK9RexScalarR11SQLTypeInfoR7int32_tKbKbKbKbKb"></span><span id="RelAlgTranslator::translateGeoFunctionArg__RexScalarCP.SQLTypeInfoR.int32_tR.bC.bC.bC.bC.bCC"></span><span class="target" id="class_rel_alg_translator_1a5944a3c5a901f34dc083d78ef4932a47"></span>std::vector&lt;std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_expr.html#_CPPv4N8Analyzer4ExprE" title="Analyzer::Expr">Expr</a>&gt;&gt; <code class="sig-name descname">translateGeoFunctionArg</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="class_rex_scalar.html#_CPPv49RexScalar" title="RexScalar">RexScalar</a> *<em>rex_scalar</em>, <a class="reference internal" href="class_s_q_l_type_info.html#_CPPv411SQLTypeInfo" title="SQLTypeInfo">SQLTypeInfo</a> &amp;<em>arg_ti</em>, int32_t &amp;<em>lindex</em>, <em class="property">const</em> bool <em>with_bounds</em>, <em class="property">const</em> bool <em>with_render_group</em>, <em class="property">const</em> bool <em>expand_geo_col</em>, <em class="property">const</em> bool <em>is_projection</em> = false, <em class="property">const</em> bool <em>use_geo_expressions</em> = false<span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK16RelAlgTranslator23translateGeoFunctionArgEPK9RexScalarR11SQLTypeInfoR7int32_tKbKbKbKbKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

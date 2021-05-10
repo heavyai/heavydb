@@ -1,0 +1,9 @@
+Struct ArrayLoadCodegen
+=======================
+
+.. doxygenstruct:: ArrayLoadCodegen
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

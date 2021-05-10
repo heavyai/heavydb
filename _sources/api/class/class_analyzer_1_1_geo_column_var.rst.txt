@@ -1,0 +1,9 @@
+Class Analyzer::GeoColumnVar
+============================
+
+.. doxygenclass:: Analyzer::GeoColumnVar
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

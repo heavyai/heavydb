@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 8fa3bf4
+                5.7.0dev fe05a0c
               </div>
             
           
@@ -306,6 +306,11 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper.html">Class Analyzer::FunctionOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper_with_custom_type_handling.html">Class Analyzer::FunctionOperWithCustomTypeHandling</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_bin_oper.html">Class Analyzer::GeoBinOper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_column_var.html">Class Analyzer::GeoColumnVar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_constant.html">Class Analyzer::GeoConstant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_expr.html">Class Analyzer::GeoExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_function_operator.html">Class Analyzer::GeoFunctionOperator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_operator.html">Class Analyzer::GeoOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_u_oper.html">Class Analyzer::GeoUOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_integer_set.html">Class Analyzer::InIntegerSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_values.html">Class Analyzer::InValues</a></li>
@@ -1464,6 +1469,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_analyzer_1_1_order_entry.html">Struct Analyzer::OrderEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array.html">Struct Array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_converter_factory.html">Struct ArrayConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_load_codegen.html">Struct ArrayLoadCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_value_converter.html">Struct ArrayValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrays_converter_factory.html">Struct ArraysConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_fragment.html">Struct ArrowFragment</a></li>
@@ -1957,11 +1963,6 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Static Functions</p>
 <dl class="function">
-<dt id="_CPPv4N19GroupByAndAggregate26addTransientStringLiteralsERK19RelAlgExecutionUnitP8ExecutorNSt10shared_ptrI17RowSetMemoryOwnerEE">
-<span id="_CPPv3N19GroupByAndAggregate26addTransientStringLiteralsERK19RelAlgExecutionUnitP8ExecutorNSt10shared_ptrI17RowSetMemoryOwnerEE"></span><span id="_CPPv2N19GroupByAndAggregate26addTransientStringLiteralsERK19RelAlgExecutionUnitP8ExecutorNSt10shared_ptrI17RowSetMemoryOwnerEE"></span><span id="GroupByAndAggregate::addTransientStringLiterals__RelAlgExecutionUnitCR.ExecutorP.std::shared_ptr:RowSetMemoryOwner:"></span><span class="target" id="class_group_by_and_aggregate_1a97974a0dbc4889d4c2f532ba5379bb34"></span>void <code class="sig-name descname">addTransientStringLiterals</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html#_CPPv419RelAlgExecutionUnit" title="RelAlgExecutionUnit">RelAlgExecutionUnit</a> &amp;<em>ra_exe_unit</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em>, std::shared_ptr&lt;<a class="reference internal" href="class_row_set_memory_owner.html#_CPPv417RowSetMemoryOwner" title="RowSetMemoryOwner">RowSetMemoryOwner</a>&gt; <em>row_set_mem_owner</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N19GroupByAndAggregate26addTransientStringLiteralsERK19RelAlgExecutionUnitP8ExecutorNSt10shared_ptrI17RowSetMemoryOwnerEE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4N19GroupByAndAggregate26shard_count_for_top_groupsERK19RelAlgExecutionUnitRKN17Catalog_Namespace7CatalogE">
 <span id="_CPPv3N19GroupByAndAggregate26shard_count_for_top_groupsERK19RelAlgExecutionUnitRKN17Catalog_Namespace7CatalogE"></span><span id="_CPPv2N19GroupByAndAggregate26shard_count_for_top_groupsERK19RelAlgExecutionUnitRKN17Catalog_Namespace7CatalogE"></span><span id="GroupByAndAggregate::shard_count_for_top_groups__RelAlgExecutionUnitCR.Catalog_Namespace::CatalogCR"></span><span class="target" id="class_group_by_and_aggregate_1abe9ed379c259c417f8f3dd7f946ab470"></span>size_t <code class="sig-name descname">shard_count_for_top_groups</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html#_CPPv419RelAlgExecutionUnit" title="RelAlgExecutionUnit">RelAlgExecutionUnit</a> &amp;<em>ra_exe_unit</em>, <em class="property">const</em> Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7CatalogE" title="Catalog_Namespace::Catalog">Catalog</a> &amp;<em>catalog</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N19GroupByAndAggregate26shard_count_for_top_groupsERK19RelAlgExecutionUnitRKN17Catalog_Namespace7CatalogE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -1987,11 +1988,6 @@
 <dl class="function">
 <dt id="_CPPv4NK19GroupByAndAggregate19getShardedTopBucketERK12ColRangeInfoK6size_t">
 <span id="_CPPv3NK19GroupByAndAggregate19getShardedTopBucketERK12ColRangeInfoK6size_t"></span><span id="_CPPv2NK19GroupByAndAggregate19getShardedTopBucketERK12ColRangeInfoK6size_t"></span><span id="GroupByAndAggregate::getShardedTopBucket__ColRangeInfoCR.sCC"></span><span class="target" id="class_group_by_and_aggregate_1a72c173e19c9034533f34b3e9f14f0afb"></span>int64_t <code class="sig-name descname">getShardedTopBucket</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_col_range_info.html#_CPPv412ColRangeInfo" title="ColRangeInfo">ColRangeInfo</a> &amp;<em>col_range_info</em>, <em class="property">const</em> size_t <em>shard_count</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK19GroupByAndAggregate19getShardedTopBucketERK12ColRangeInfoK6size_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N19GroupByAndAggregate26addTransientStringLiteralsEv">
-<span id="_CPPv3N19GroupByAndAggregate26addTransientStringLiteralsEv"></span><span id="_CPPv2N19GroupByAndAggregate26addTransientStringLiteralsEv"></span><span id="GroupByAndAggregate::addTransientStringLiterals"></span><span class="target" id="class_group_by_and_aggregate_1a7c0bd1caa271f7e0b5f8dba61069c781"></span>void <code class="sig-name descname">addTransientStringLiterals</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N19GroupByAndAggregate26addTransientStringLiteralsEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

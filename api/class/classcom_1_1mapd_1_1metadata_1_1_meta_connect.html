@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 8fa3bf4
+                5.7.0dev fe05a0c
               </div>
             
           
@@ -306,6 +306,11 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper.html">Class Analyzer::FunctionOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper_with_custom_type_handling.html">Class Analyzer::FunctionOperWithCustomTypeHandling</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_bin_oper.html">Class Analyzer::GeoBinOper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_column_var.html">Class Analyzer::GeoColumnVar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_constant.html">Class Analyzer::GeoConstant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_expr.html">Class Analyzer::GeoExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_function_operator.html">Class Analyzer::GeoFunctionOperator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_operator.html">Class Analyzer::GeoOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_u_oper.html">Class Analyzer::GeoUOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_integer_set.html">Class Analyzer::InIntegerSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_values.html">Class Analyzer::InValues</a></li>
@@ -1464,6 +1469,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_analyzer_1_1_order_entry.html">Struct Analyzer::OrderEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array.html">Struct Array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_converter_factory.html">Struct ArrayConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_load_codegen.html">Struct ArrayLoadCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_value_converter.html">Struct ArrayValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrays_converter_factory.html">Struct ArraysConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_fragment.html">Struct ArrowFragment</a></li>
@@ -1950,7 +1956,17 @@
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
 <dt>
+<span class="target" id="classcom_1_1mapd_1_1metadata_1_1_meta_connect_1ab8f4aec12e8fa42ce459e6c70b2ba3c1"></span><code class="sig-name descname">com.mapd.metadata.MetaConnect.MetaConnect(int mapdPort, String dataDir, MapDUser currentMapDUser, MapDParser parser, SockTransportProperties skT, String db)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
 <span class="target" id="classcom_1_1mapd_1_1metadata_1_1_meta_connect_1a3adc326fdaf75dbfdb716c37611448a5"></span><code class="sig-name descname">com.mapd.metadata.MetaConnect.MetaConnect(int mapdPort, String dataDir, MapDUser currentMapDUser, MapDParser parser, SockTransportProperties skT)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1metadata_1_1_meta_connect_1a0010cbc32abab7d652d9b57e8e6ae8b2"></span><code class="sig-name descname">List&lt;String&gt; com.mapd.metadata.MetaConnect.getDatabases()</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1991,12 +2007,17 @@
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1metadata_1_1_meta_connect_1a87fc9db1dd47b69afd3f1108c7fc416f"></span><code class="sig-name descname">void com.mapd.metadata.MetaConnect.connectToDBCatalog()</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1metadata_1_1_meta_connect_1a01d1aafd32762e30f4e2598d03ecbdd6"></span><code class="sig-name descname">void com.mapd.metadata.MetaConnect.connectToCatalog(String catalog)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1metadata_1_1_meta_connect_1ae13d757ca144ed33bb10705b40eeb310"></span><code class="sig-name descname">void com.mapd.metadata.MetaConnect.disconnectFromDBCatalog()</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1metadata_1_1_meta_connect_1a2ff2b7ed624253870b621d58c2ab4d4c"></span><code class="sig-name descname">void com.mapd.metadata.MetaConnect.disconnectFromCatalog()</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1metadata_1_1_meta_connect_1a87fc9db1dd47b69afd3f1108c7fc416f"></span><code class="sig-name descname">void com.mapd.metadata.MetaConnect.connectToDBCatalog()</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2039,6 +2060,16 @@
 <span class="target" id="classcom_1_1mapd_1_1metadata_1_1_meta_connect_1a65e1c37393d6e37cbf51fba2059c1659"></span><code class="sig-name descname">TDatumType com.mapd.metadata.MetaConnect.typeToThrift(int type)</code></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1metadata_1_1_meta_connect_1a72b4e941abd4fe2f6adbbf1e107772ba"></span><code class="sig-name descname">void com.mapd.metadata.MetaConnect.populateDatabases()</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1metadata_1_1_meta_connect_1ab8d6a830e3df53bb16b0085c21762564"></span><code class="sig-name descname">Set&lt;String&gt; com.mapd.metadata.MetaConnect.getDatabases_SQL()</code></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Members</p>
@@ -2049,7 +2080,7 @@
 
 <dl class="member">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1metadata_1_1_meta_connect_1a38a331ea9ee8e6bbb1f0ac89d2f3d19f"></span><code class="sig-name descname">final String com.mapd.metadata.MetaConnect.db</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1metadata_1_1_meta_connect_1a1bedd81357d54efc6bcb2502b6c6d22f"></span><code class="sig-name descname">final String com.mapd.metadata.MetaConnect.default_db</code></dt>
 <dd></dd></dl>
 
 <dl class="member">
@@ -2192,7 +2223,7 @@
 
 <dl class="member">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1metadata_1_1_meta_connect_1a511ad0570cdafec08aca71d98e821a0c"></span><code class="sig-name descname">volatile Map&lt;String, Set&lt;String&gt; &gt; com.mapd.metadata.MetaConnect.MAPD_DATABASE_TO_TABLES=          new ConcurrentHashMap&lt;&gt;()</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1metadata_1_1_meta_connect_1ac3ecb5b212c84feebb33a86a64645a51"></span><code class="sig-name descname">volatile Map&lt;String, Set&lt;String&gt; &gt; com.mapd.metadata.MetaConnect.DATABASE_TO_TABLES=          new ConcurrentHashMap&lt;&gt;()</code></dt>
 <dd></dd></dl>
 
 <dl class="member">

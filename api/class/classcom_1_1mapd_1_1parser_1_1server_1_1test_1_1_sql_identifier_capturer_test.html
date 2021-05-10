@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 8fa3bf4
+                5.7.0dev fe05a0c
               </div>
             
           
@@ -306,6 +306,11 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper.html">Class Analyzer::FunctionOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper_with_custom_type_handling.html">Class Analyzer::FunctionOperWithCustomTypeHandling</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_bin_oper.html">Class Analyzer::GeoBinOper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_column_var.html">Class Analyzer::GeoColumnVar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_constant.html">Class Analyzer::GeoConstant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_expr.html">Class Analyzer::GeoExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_function_operator.html">Class Analyzer::GeoFunctionOperator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_operator.html">Class Analyzer::GeoOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_u_oper.html">Class Analyzer::GeoUOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_integer_set.html">Class Analyzer::InIntegerSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_values.html">Class Analyzer::InValues</a></li>
@@ -1464,6 +1469,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_analyzer_1_1_order_entry.html">Struct Analyzer::OrderEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array.html">Struct Array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_converter_factory.html">Struct ArrayConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_load_codegen.html">Struct ArrayLoadCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_value_converter.html">Struct ArrayValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrays_converter_factory.html">Struct ArraysConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_fragment.html">Struct ArrowFragment</a></li>
@@ -1945,22 +1951,22 @@
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1test_1_1_sql_identifier_capturer_test_1ab805efb524f5506b99fb63fe36bb3481"></span><code class="sig-name descname">void com.mapd.parser.server.test.SqlIdentifierCapturerTest.testSelect(String sql, String[] expectedSelects)</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1test_1_1_sql_identifier_capturer_test_1a8ae80815430b7d423ba7a18b9acf720d"></span><code class="sig-name descname">void com.mapd.parser.server.test.SqlIdentifierCapturerTest.testSelect(String sql, Set&lt; ImmutableList&lt; String &gt;&gt; expectedSelects)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1test_1_1_sql_identifier_capturer_test_1acbffcaa41052990c83c9aaf9308edca8"></span><code class="sig-name descname">void com.mapd.parser.server.test.SqlIdentifierCapturerTest.testUpdate(String sql, String[] expectedUpdates, String[] expectedSelects)</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1test_1_1_sql_identifier_capturer_test_1a923a6d32e7db5da6b201b1a911a28b4a"></span><code class="sig-name descname">void com.mapd.parser.server.test.SqlIdentifierCapturerTest.testUpdate(String sql, Set&lt; ImmutableList&lt; String &gt;&gt; expectedUpdates, Set&lt; ImmutableList&lt; String &gt;&gt; expectedSelects)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1test_1_1_sql_identifier_capturer_test_1ac326f5d33151641e8225f3e13b445757"></span><code class="sig-name descname">void com.mapd.parser.server.test.SqlIdentifierCapturerTest.testInsert(String sql, String[] expectedInserts, String[] expectedSelects)</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1test_1_1_sql_identifier_capturer_test_1ab442659e7afcc4076656d7fa12a34c8d"></span><code class="sig-name descname">void com.mapd.parser.server.test.SqlIdentifierCapturerTest.testInsert(String sql, Set&lt; ImmutableList&lt; String &gt;&gt; expectedInserts, Set&lt; ImmutableList&lt; String &gt;&gt; expectedSelects)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1test_1_1_sql_identifier_capturer_test_1aabfabbdce48d72de8d48e2513e81a59d"></span><code class="sig-name descname">void com.mapd.parser.server.test.SqlIdentifierCapturerTest.testDelete(String sql, String[] expectedDeletes, String[] expectedSelects)</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1test_1_1_sql_identifier_capturer_test_1a661189c121c32e61363af0b0527d200f"></span><code class="sig-name descname">void com.mapd.parser.server.test.SqlIdentifierCapturerTest.testDelete(String sql, Set&lt; ImmutableList&lt; String &gt;&gt; expectedDeletes, Set&lt; ImmutableList&lt; String &gt;&gt; expectedSelects)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2008,12 +2014,27 @@
 <p class="breathe-sectiondef-title rubric">Public Static Functions</p>
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1test_1_1_sql_identifier_capturer_test_1ad73f784ffd4cf77cfd892f51f53faad0"></span><code class="sig-name descname">static String [] com.mapd.parser.server.test.SqlIdentifierCapturerTest.asArray(String... vals)</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1test_1_1_sql_identifier_capturer_test_1a6d8474377baa54ce784291bf6e277be2"></span><code class="sig-name descname">static ImmutableList&lt;String&gt; com.mapd.parser.server.test.SqlIdentifierCapturerTest.asImmutableList(String... vals)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1test_1_1_sql_identifier_capturer_test_1ac99049ed9814c17b97003e9248506cd3"></span><code class="sig-name descname">static Set&lt;String&gt; com.mapd.parser.server.test.SqlIdentifierCapturerTest.asSet(String... vals)</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1test_1_1_sql_identifier_capturer_test_1a601c925a23547d15adaf63d67591e8bc"></span><code class="sig-name descname">static ImmutableList&lt;String&gt; com.mapd.parser.server.test.SqlIdentifierCapturerTest.asImmutableList()</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1test_1_1_sql_identifier_capturer_test_1a4cf0f533f71feba75356a6c9d7ea9575"></span><code class="sig-name descname">static Set&lt;ImmutableList&lt;String&gt; &gt; com.mapd.parser.server.test.SqlIdentifierCapturerTest.asSet(ImmutableList&lt; String &gt; val)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1test_1_1_sql_identifier_capturer_test_1a70347b2ba149a0008f3fc1902071ac47"></span><code class="sig-name descname">static Set&lt;ImmutableList&lt;String&gt; &gt; com.mapd.parser.server.test.SqlIdentifierCapturerTest.asSet(ImmutableList&lt; String &gt;... vals)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1parser_1_1server_1_1test_1_1_sql_identifier_capturer_test_1a3699419dc712700a82ebfb9dc1b0f995"></span><code class="sig-name descname">static Set&lt;ImmutableList&lt;String&gt; &gt; com.mapd.parser.server.test.SqlIdentifierCapturerTest.asSet()</code></dt>
 <dd></dd></dl>
 
 </div>

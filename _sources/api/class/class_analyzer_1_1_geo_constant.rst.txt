@@ -1,0 +1,9 @@
+Class Analyzer::GeoConstant
+===========================
+
+.. doxygenclass:: Analyzer::GeoConstant
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 8fa3bf4
+                5.7.0dev fe05a0c
               </div>
             
           
@@ -306,6 +306,11 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper.html">Class Analyzer::FunctionOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper_with_custom_type_handling.html">Class Analyzer::FunctionOperWithCustomTypeHandling</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_bin_oper.html">Class Analyzer::GeoBinOper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_column_var.html">Class Analyzer::GeoColumnVar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_constant.html">Class Analyzer::GeoConstant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_expr.html">Class Analyzer::GeoExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_function_operator.html">Class Analyzer::GeoFunctionOperator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_operator.html">Class Analyzer::GeoOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_u_oper.html">Class Analyzer::GeoUOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_integer_set.html">Class Analyzer::InIntegerSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_values.html">Class Analyzer::InValues</a></li>
@@ -1464,6 +1469,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_analyzer_1_1_order_entry.html">Struct Analyzer::OrderEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array.html">Struct Array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_converter_factory.html">Struct ArrayConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_load_codegen.html">Struct ArrayLoadCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_value_converter.html">Struct ArrayValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrays_converter_factory.html">Struct ArraysConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_fragment.html">Struct ArrowFragment</a></li>
@@ -2009,6 +2015,11 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4N9DBHandler23get_tables_for_databaseERNSt6vectorINSt6stringEEERK10TSessionIdRKNSt6stringE">
+<span id="_CPPv3N9DBHandler23get_tables_for_databaseERNSt6vectorINSt6stringEEERK10TSessionIdRKNSt6stringE"></span><span id="_CPPv2N9DBHandler23get_tables_for_databaseERNSt6vectorINSt6stringEEERK10TSessionIdRKNSt6stringE"></span><span id="DBHandler::get_tables_for_database__std::vector:ss:R.TSessionIdCR.ssCR"></span><span class="target" id="class_d_b_handler_1a44c7ac69707716a8014369efac39e188"></span>void <code class="sig-name descname">get_tables_for_database</code><span class="sig-paren">(</span>std::vector&lt;std::string&gt; &amp;<em>_return</em>, <em class="property">const</em> TSessionId &amp;<em>session</em>, <em class="property">const</em> std::string &amp;<em>database_name</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler23get_tables_for_databaseERNSt6vectorINSt6stringEEERK10TSessionIdRKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4N9DBHandler19get_physical_tablesERNSt6vectorINSt6stringEEERK10TSessionId">
 <span id="_CPPv3N9DBHandler19get_physical_tablesERNSt6vectorINSt6stringEEERK10TSessionId"></span><span id="_CPPv2N9DBHandler19get_physical_tablesERNSt6vectorINSt6stringEEERK10TSessionId"></span><span id="DBHandler::get_physical_tables__std::vector:ss:R.TSessionIdCR"></span><span class="target" id="class_d_b_handler_1a0e3138ba9a8300416eece3184e6969bc"></span>void <code class="sig-name descname">get_physical_tables</code><span class="sig-paren">(</span>std::vector&lt;std::string&gt; &amp;<em>_return</em>, <em class="property">const</em> TSessionId &amp;<em>session</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler19get_physical_tablesERNSt6vectorINSt6stringEEERK10TSessionId" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2029,8 +2040,18 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4N9DBHandler30get_table_details_for_databaseER13TTableDetailsRK10TSessionIdRKNSt6stringERKNSt6stringE">
+<span id="_CPPv3N9DBHandler30get_table_details_for_databaseER13TTableDetailsRK10TSessionIdRKNSt6stringERKNSt6stringE"></span><span id="_CPPv2N9DBHandler30get_table_details_for_databaseER13TTableDetailsRK10TSessionIdRKNSt6stringERKNSt6stringE"></span><span id="DBHandler::get_table_details_for_database__TTableDetailsR.TSessionIdCR.ssCR.ssCR"></span><span class="target" id="class_d_b_handler_1a780b0f32e658d2dcbe25204a02bbedf7"></span>void <code class="sig-name descname">get_table_details_for_database</code><span class="sig-paren">(</span>TTableDetails &amp;<em>_return</em>, <em class="property">const</em> TSessionId &amp;<em>session</em>, <em class="property">const</em> std::string &amp;<em>table_name</em>, <em class="property">const</em> std::string &amp;<em>database_name</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler30get_table_details_for_databaseER13TTableDetailsRK10TSessionIdRKNSt6stringERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4N9DBHandler26get_internal_table_detailsER13TTableDetailsRK10TSessionIdRKNSt6stringE">
 <span id="_CPPv3N9DBHandler26get_internal_table_detailsER13TTableDetailsRK10TSessionIdRKNSt6stringE"></span><span id="_CPPv2N9DBHandler26get_internal_table_detailsER13TTableDetailsRK10TSessionIdRKNSt6stringE"></span><span id="DBHandler::get_internal_table_details__TTableDetailsR.TSessionIdCR.ssCR"></span><span class="target" id="class_d_b_handler_1a8b709e31b2833af66e2be239b5109793"></span>void <code class="sig-name descname">get_internal_table_details</code><span class="sig-paren">(</span>TTableDetails &amp;<em>_return</em>, <em class="property">const</em> TSessionId &amp;<em>session</em>, <em class="property">const</em> std::string &amp;<em>table_name</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler26get_internal_table_detailsER13TTableDetailsRK10TSessionIdRKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9DBHandler39get_internal_table_details_for_databaseER13TTableDetailsRK10TSessionIdRKNSt6stringERKNSt6stringE">
+<span id="_CPPv3N9DBHandler39get_internal_table_details_for_databaseER13TTableDetailsRK10TSessionIdRKNSt6stringERKNSt6stringE"></span><span id="_CPPv2N9DBHandler39get_internal_table_details_for_databaseER13TTableDetailsRK10TSessionIdRKNSt6stringERKNSt6stringE"></span><span id="DBHandler::get_internal_table_details_for_database__TTableDetailsR.TSessionIdCR.ssCR.ssCR"></span><span class="target" id="class_d_b_handler_1a298649c11f46939b0f15532374907922"></span>void <code class="sig-name descname">get_internal_table_details_for_database</code><span class="sig-paren">(</span>TTableDetails &amp;<em>_return</em>, <em class="property">const</em> TSessionId &amp;<em>session</em>, <em class="property">const</em> std::string &amp;<em>table_name</em>, <em class="property">const</em> std::string &amp;<em>database_name</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler39get_internal_table_details_for_databaseER13TTableDetailsRK10TSessionIdRKNSt6stringERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2707,13 +2728,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N9DBHandler15get_tables_implERNSt6vectorINSt6stringEEERKN17Catalog_Namespace11SessionInfoEK13GetTablesType">
-<span id="_CPPv3N9DBHandler15get_tables_implERNSt6vectorINSt6stringEEERKN17Catalog_Namespace11SessionInfoEK13GetTablesType"></span><span id="_CPPv2N9DBHandler15get_tables_implERNSt6vectorINSt6stringEEERKN17Catalog_Namespace11SessionInfoEK13GetTablesType"></span><span id="DBHandler::get_tables_impl__std::vector:ss:R.Catalog_Namespace::SessionInfoCR.GetTablesTypeC"></span><span class="target" id="class_d_b_handler_1ae86194a5f3a1c1038a8501dc41c331be"></span>void <code class="sig-name descname">get_tables_impl</code><span class="sig-paren">(</span>std::vector&lt;std::string&gt; &amp;<em>table_names</em>, <em class="property">const</em> Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_session_info.html#_CPPv4N17Catalog_Namespace11SessionInfoE" title="Catalog_Namespace::SessionInfo">SessionInfo</a> &amp;<em>session_info</em>, <em class="property">const</em> GetTablesType <em>get_tables_type</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler15get_tables_implERNSt6vectorINSt6stringEEERKN17Catalog_Namespace11SessionInfoEK13GetTablesType" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N9DBHandler15get_tables_implERNSt6vectorINSt6stringEEERKN17Catalog_Namespace11SessionInfoEK13GetTablesTypeRKNSt6stringE">
+<span id="_CPPv3N9DBHandler15get_tables_implERNSt6vectorINSt6stringEEERKN17Catalog_Namespace11SessionInfoEK13GetTablesTypeRKNSt6stringE"></span><span id="_CPPv2N9DBHandler15get_tables_implERNSt6vectorINSt6stringEEERKN17Catalog_Namespace11SessionInfoEK13GetTablesTypeRKNSt6stringE"></span><span id="DBHandler::get_tables_impl__std::vector:ss:R.Catalog_Namespace::SessionInfoCR.GetTablesTypeC.ssCR"></span><span class="target" id="class_d_b_handler_1a8aa5c4b878d5f63ab972a13de8ae11a3"></span>void <code class="sig-name descname">get_tables_impl</code><span class="sig-paren">(</span>std::vector&lt;std::string&gt; &amp;<em>table_names</em>, <em class="property">const</em> Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_session_info.html#_CPPv4N17Catalog_Namespace11SessionInfoE" title="Catalog_Namespace::SessionInfo">SessionInfo</a> &amp;<em>session_info</em>, <em class="property">const</em> GetTablesType <em>get_tables_type</em>, <em class="property">const</em> std::string &amp;<em>database_name</em> = {}<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler15get_tables_implERNSt6vectorINSt6stringEEERKN17Catalog_Namespace11SessionInfoEK13GetTablesTypeRKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N9DBHandler22get_table_details_implER13TTableDetailsRN11query_state6StdLogERKNSt6stringEKbKb">
-<span id="_CPPv3N9DBHandler22get_table_details_implER13TTableDetailsRN11query_state6StdLogERKNSt6stringEKbKb"></span><span id="_CPPv2N9DBHandler22get_table_details_implER13TTableDetailsRN11query_state6StdLogERKNSt6stringEKbKb"></span><span id="DBHandler::get_table_details_impl__TTableDetailsR.query_state::StdLogR.ssCR.bC.bC"></span><span class="target" id="class_d_b_handler_1a57a27b87b49c05789b31d768941a2b65"></span>void <code class="sig-name descname">get_table_details_impl</code><span class="sig-paren">(</span>TTableDetails &amp;<em>_return</em>, query_state::<a class="reference internal" href="classquery__state_1_1_std_log.html#_CPPv4N11query_state6StdLogE" title="query_state::StdLog">StdLog</a> &amp;<em>stdlog</em>, <em class="property">const</em> std::string &amp;<em>table_name</em>, <em class="property">const</em> bool <em>get_system</em>, <em class="property">const</em> bool <em>get_physical</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler22get_table_details_implER13TTableDetailsRN11query_state6StdLogERKNSt6stringEKbKb" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N9DBHandler22get_table_details_implER13TTableDetailsRN11query_state6StdLogERKNSt6stringEKbKbRKNSt6stringE">
+<span id="_CPPv3N9DBHandler22get_table_details_implER13TTableDetailsRN11query_state6StdLogERKNSt6stringEKbKbRKNSt6stringE"></span><span id="_CPPv2N9DBHandler22get_table_details_implER13TTableDetailsRN11query_state6StdLogERKNSt6stringEKbKbRKNSt6stringE"></span><span id="DBHandler::get_table_details_impl__TTableDetailsR.query_state::StdLogR.ssCR.bC.bC.ssCR"></span><span class="target" id="class_d_b_handler_1a7a1f9475d32bf51fb7e57c372834d618"></span>void <code class="sig-name descname">get_table_details_impl</code><span class="sig-paren">(</span>TTableDetails &amp;<em>_return</em>, query_state::<a class="reference internal" href="classquery__state_1_1_std_log.html#_CPPv4N11query_state6StdLogE" title="query_state::StdLog">StdLog</a> &amp;<em>stdlog</em>, <em class="property">const</em> std::string &amp;<em>table_name</em>, <em class="property">const</em> bool <em>get_system</em>, <em class="property">const</em> bool <em>get_physical</em>, <em class="property">const</em> std::string &amp;<em>database_name</em> = {}<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler22get_table_details_implER13TTableDetailsRN11query_state6StdLogERKNSt6stringEKbKbRKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

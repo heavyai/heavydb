@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 8fa3bf4
+                5.7.0dev fe05a0c
               </div>
             
           
@@ -306,6 +306,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_function_oper.html">Class Analyzer::FunctionOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_function_oper_with_custom_type_handling.html">Class Analyzer::FunctionOperWithCustomTypeHandling</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_geo_bin_oper.html">Class Analyzer::GeoBinOper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_geo_column_var.html">Class Analyzer::GeoColumnVar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_geo_constant.html">Class Analyzer::GeoConstant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_geo_expr.html">Class Analyzer::GeoExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_geo_function_operator.html">Class Analyzer::GeoFunctionOperator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_geo_operator.html">Class Analyzer::GeoOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_geo_u_oper.html">Class Analyzer::GeoUOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_in_integer_set.html">Class Analyzer::InIntegerSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_analyzer_1_1_in_values.html">Class Analyzer::InValues</a></li>
@@ -1464,6 +1469,7 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_analyzer_1_1_order_entry.html">Struct Analyzer::OrderEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_array.html">Struct Array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_array_converter_factory.html">Struct ArrayConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_array_load_codegen.html">Struct ArrayLoadCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_array_value_converter.html">Struct ArrayValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_arrays_converter_factory.html">Struct ArraysConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_arrow_fragment.html">Struct ArrowFragment</a></li>
@@ -2162,6 +2168,16 @@
 <dl class="member">
 <dt id="_CPPv4N9CgenState18in_values_bitmaps_E">
 <span id="_CPPv3N9CgenState18in_values_bitmaps_E"></span><span id="_CPPv2N9CgenState18in_values_bitmaps_E"></span><span id="CgenState::in_values_bitmaps___std::vector:std::unique_ptr:InValuesBitmapC::"></span><span class="target" id="struct_cgen_state_1a610efc2201ef3ce25411a226c3b4ad42"></span>std::vector&lt;std::unique_ptr&lt;<em class="property">const</em> <a class="reference internal" href="../class/class_in_values_bitmap.html#_CPPv414InValuesBitmap" title="InValuesBitmap">InValuesBitmap</a>&gt;&gt; <code class="sig-name descname">in_values_bitmaps_</code><a class="headerlink" href="#_CPPv4N9CgenState18in_values_bitmaps_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N9CgenState17array_load_cache_E">
+<span id="_CPPv3N9CgenState17array_load_cache_E"></span><span id="_CPPv2N9CgenState17array_load_cache_E"></span><span id="CgenState::array_load_cache___std::map:std::pair:llvm::ValueP.llvm::ValueP:.ArrayLoadCodegen:"></span><span class="target" id="struct_cgen_state_1a7170a04f91448de3938927b047c5104c"></span>std::map&lt;std::pair&lt;llvm::Value *, llvm::Value *&gt;, <a class="reference internal" href="struct_array_load_codegen.html#_CPPv416ArrayLoadCodegen" title="ArrayLoadCodegen">ArrayLoadCodegen</a>&gt; <code class="sig-name descname">array_load_cache_</code><a class="headerlink" href="#_CPPv4N9CgenState17array_load_cache_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N9CgenState17geo_target_cache_E">
+<span id="_CPPv3N9CgenState17geo_target_cache_E"></span><span id="_CPPv2N9CgenState17geo_target_cache_E"></span><span id="CgenState::geo_target_cache___std::unordered_map:ss.llvm::ValueP:"></span><span class="target" id="struct_cgen_state_1a5a5b7d22ccc16b26af1916feaa9541ed"></span>std::unordered_map&lt;std::string, llvm::Value *&gt; <code class="sig-name descname">geo_target_cache_</code><a class="headerlink" href="#_CPPv4N9CgenState17geo_target_cache_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

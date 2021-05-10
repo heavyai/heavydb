@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 8fa3bf4
+                5.7.0dev fe05a0c
               </div>
             
           
@@ -306,6 +306,11 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper.html">Class Analyzer::FunctionOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper_with_custom_type_handling.html">Class Analyzer::FunctionOperWithCustomTypeHandling</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_bin_oper.html">Class Analyzer::GeoBinOper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_column_var.html">Class Analyzer::GeoColumnVar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_constant.html">Class Analyzer::GeoConstant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_expr.html">Class Analyzer::GeoExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_function_operator.html">Class Analyzer::GeoFunctionOperator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_operator.html">Class Analyzer::GeoOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_u_oper.html">Class Analyzer::GeoUOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_integer_set.html">Class Analyzer::InIntegerSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_values.html">Class Analyzer::InValues</a></li>
@@ -1464,6 +1469,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_analyzer_1_1_order_entry.html">Struct Analyzer::OrderEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array.html">Struct Array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_converter_factory.html">Struct ArrayConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_load_codegen.html">Struct ArrayLoadCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_value_converter.html">Struct ArrayValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrays_converter_factory.html">Struct ArraysConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_fragment.html">Struct ArrowFragment</a></li>
@@ -1958,6 +1964,11 @@
 <p class="breathe-sectiondef-title rubric">Public Static Functions</p>
 <dl class="function">
 <dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_foreign_table_refresh_concurrency_test_1a54b8d457f5fcee73d422ca2210e35106"></span><code class="sig-name descname">static String com.mapd.tests.ForeignTableRefreshConcurrencyTest.getTimeStamp(int sec_from_now)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
 <span class="target" id="classcom_1_1mapd_1_1tests_1_1_foreign_table_refresh_concurrency_test_1a1495f2c8efc198a158c070446dfcdd5c"></span><code class="sig-name descname">static void com.mapd.tests.ForeignTableRefreshConcurrencyTest.main(String[] args)</code></dt>
 <dd></dd></dl>
 
@@ -1971,12 +1982,17 @@
 
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1tests_1_1_foreign_table_refresh_concurrency_test_1a9e9de46dd809ed2e961b7af12af985a0"></span><code class="sig-name descname">void com.mapd.tests.ForeignTableRefreshConcurrencyTest.runTest(String db, String userName, String userPassword, int num_foreign_refresh_threads, int num_table_join_threads, int num_runs)</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_foreign_table_refresh_concurrency_test_1a1c624288943942343e00e482bb34bc74"></span><code class="sig-name descname">void com.mapd.tests.ForeignTableRefreshConcurrencyTest.runTest(String db, String userName, String userPassword, int num_foreign_manual_refresh_threads, int num_foreign_scheduled_refresh_threads, int num_table_join_threads, int num_runs)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1tests_1_1_foreign_table_refresh_concurrency_test_1a27ccae3b1ceedcec17269418918dbb7a"></span><code class="sig-name descname">void com.mapd.tests.ForeignTableRefreshConcurrencyTest.createForeignTestTable(MapdTestClient dba, String foreign_table_name)</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_foreign_table_refresh_concurrency_test_1a8555bc39cd223ac5d15e127d342a0601"></span><code class="sig-name descname">void com.mapd.tests.ForeignTableRefreshConcurrencyTest.createForeignTestTableScheduledRefresh(MapdTestClient dba, String foreign_table_name)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_foreign_table_refresh_concurrency_test_1ab476b0ba950f93fd5bb62d548530b884"></span><code class="sig-name descname">void com.mapd.tests.ForeignTableRefreshConcurrencyTest.createForeignTestTableManualRefresh(MapdTestClient dba, String foreign_table_name)</code></dt>
 <dd></dd></dl>
 
 <dl class="function">

@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.7.0dev 8fa3bf4
+                5.7.0dev fe05a0c
               </div>
             
           
@@ -305,6 +305,11 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_function_oper.html">Class Analyzer::FunctionOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_function_oper_with_custom_type_handling.html">Class Analyzer::FunctionOperWithCustomTypeHandling</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_geo_bin_oper.html">Class Analyzer::GeoBinOper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_geo_column_var.html">Class Analyzer::GeoColumnVar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_geo_constant.html">Class Analyzer::GeoConstant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_geo_expr.html">Class Analyzer::GeoExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_geo_function_operator.html">Class Analyzer::GeoFunctionOperator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_geo_operator.html">Class Analyzer::GeoOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_geo_u_oper.html">Class Analyzer::GeoUOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_in_integer_set.html">Class Analyzer::InIntegerSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_in_values.html">Class Analyzer::InValues</a></li>
@@ -1463,6 +1468,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_analyzer_1_1_order_entry.html">Struct Analyzer::OrderEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_array.html">Struct Array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_array_converter_factory.html">Struct ArrayConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_array_load_codegen.html">Struct ArrayLoadCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_array_value_converter.html">Struct ArrayValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_arrays_converter_factory.html">Struct ArraysConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_arrow_fragment.html">Struct ArrowFragment</a></li>
@@ -2698,6 +2704,74 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_geo_bin_oper.html#_CPPv4NK8Analyzer10GeoBinOper8toStringEv">Analyzer::GeoBinOper::toString (C++ function)</a>
 </li>
+      <li><a href="api/class/class_analyzer_1_1_geo_column_var.html#_CPPv4N8Analyzer12GeoColumnVarE">Analyzer::GeoColumnVar (C++ class)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_column_var.html#_CPPv4N8Analyzer12GeoColumnVar12GeoColumnVarEPKN8Analyzer9ColumnVarEKbKb">Analyzer::GeoColumnVar::GeoColumnVar (C++ function)</a>, <a href="api/class/class_analyzer_1_1_geo_column_var.html#_CPPv4N8Analyzer12GeoColumnVar12GeoColumnVarERK11SQLTypeInfoKiKiKiKbKb">[1]</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_column_var.html#_CPPv4N8Analyzer12GeoColumnVar12with_bounds_E">Analyzer::GeoColumnVar::with_bounds_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_column_var.html#_CPPv4N8Analyzer12GeoColumnVar18with_render_group_E">Analyzer::GeoColumnVar::with_render_group_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_constant.html#_CPPv4N8Analyzer11GeoConstantE">Analyzer::GeoConstant (C++ class)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_constant.html#_CPPv4NK8Analyzer11GeoConstant9deep_copyEv">Analyzer::GeoConstant::deep_copy (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_constant.html#_CPPv4N8Analyzer11GeoConstant4geo_E">Analyzer::GeoConstant::geo_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_constant.html#_CPPv4N8Analyzer11GeoConstant11GeoConstantERRNSt10unique_ptrIN10Geospatial7GeoBaseEEERK11SQLTypeInfo">Analyzer::GeoConstant::GeoConstant (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_constant.html#_CPPv4NK8Analyzer11GeoConstant20makePhysicalConstantEK6size_t">Analyzer::GeoConstant::makePhysicalConstant (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_constant.html#_CPPv4NK8Analyzer11GeoConstanteqERK4Expr">Analyzer::GeoConstant::operator== (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_constant.html#_CPPv4NK8Analyzer11GeoConstant12physicalColsEv">Analyzer::GeoConstant::physicalCols (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_constant.html#_CPPv4NK8Analyzer11GeoConstant8toStringEv">Analyzer::GeoConstant::toString (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_expr.html#_CPPv4N8Analyzer7GeoExprE">Analyzer::GeoExpr (C++ class)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_expr.html#_CPPv4N8Analyzer7GeoExpr7GeoExprERK11SQLTypeInfo">Analyzer::GeoExpr::GeoExpr (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4N8Analyzer19GeoFunctionOperatorE">Analyzer::GeoFunctionOperator (C++ class)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4N8Analyzer19GeoFunctionOperator5args_E">Analyzer::GeoFunctionOperator::args_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4NK8Analyzer19GeoFunctionOperator9deep_copyEv">Analyzer::GeoFunctionOperator::deep_copy (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4N8Analyzer19GeoFunctionOperator19GeoFunctionOperatorERK11SQLTypeInfoRKNSt6stringERKNSt6vectorINSt10shared_ptrIN8Analyzer4ExprEEEEE">Analyzer::GeoFunctionOperator::GeoFunctionOperator (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4NK8Analyzer19GeoFunctionOperator6getArgEK6size_t">Analyzer::GeoFunctionOperator::getArg (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4NK8Analyzer19GeoFunctionOperator7getNameEv">Analyzer::GeoFunctionOperator::getName (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4N8Analyzer19GeoFunctionOperator5name_E">Analyzer::GeoFunctionOperator::name_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4NK8Analyzer19GeoFunctionOperatoreqERK4Expr">Analyzer::GeoFunctionOperator::operator== (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4NK8Analyzer19GeoFunctionOperator4sizeEv">Analyzer::GeoFunctionOperator::size (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4NK8Analyzer19GeoFunctionOperator8toStringEv">Analyzer::GeoFunctionOperator::toString (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_operator.html#_CPPv4N8Analyzer11GeoOperatorE">Analyzer::GeoOperator (C++ class)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_operator.html#_CPPv4N8Analyzer11GeoOperator5args_E">Analyzer::GeoOperator::args_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_operator.html#_CPPv4NK8Analyzer11GeoOperator9deep_copyEv">Analyzer::GeoOperator::deep_copy (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_operator.html#_CPPv4N8Analyzer11GeoOperator11GeoOperatorERK11SQLTypeInfoRKNSt6stringERKNSt6vectorINSt10shared_ptrIN8Analyzer4ExprEEEEE">Analyzer::GeoOperator::GeoOperator (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_operator.html#_CPPv4NK8Analyzer11GeoOperator7getNameEv">Analyzer::GeoOperator::getName (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_operator.html#_CPPv4NK8Analyzer11GeoOperator10getOperandEK6size_t">Analyzer::GeoOperator::getOperand (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_operator.html#_CPPv4N8Analyzer11GeoOperator5name_E">Analyzer::GeoOperator::name_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_operator.html#_CPPv4NK8Analyzer11GeoOperatoreqERK4Expr">Analyzer::GeoOperator::operator== (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_operator.html#_CPPv4NK8Analyzer11GeoOperator4sizeEv">Analyzer::GeoOperator::size (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_operator.html#_CPPv4NK8Analyzer11GeoOperator8toStringEv">Analyzer::GeoOperator::toString (C++ function)</a>
+</li>
       <li><a href="api/class/class_analyzer_1_1_geo_u_oper.html#_CPPv4N8Analyzer8GeoUOperE">Analyzer::GeoUOper (C++ class)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_geo_u_oper.html#_CPPv4N8Analyzer8GeoUOper6args0_E">Analyzer::GeoUOper::args0_ (C++ member)</a>
@@ -2824,6 +2898,8 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr7get_argEv">Analyzer::LikeExpr::get_arg (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr15get_escape_exprEv">Analyzer::LikeExpr::get_escape_expr (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr12get_is_ilikeEv">Analyzer::LikeExpr::get_is_ilike (C++ function)</a>
@@ -2854,8 +2930,6 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr8toStringEv">Analyzer::LikeExpr::toString (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_analyzer_1_1_likelihood_expr.html#_CPPv4N8Analyzer14LikelihoodExprE">Analyzer::LikelihoodExpr (C++ class)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_likelihood_expr.html#_CPPv4N8Analyzer14LikelihoodExpr3argE">Analyzer::LikelihoodExpr::arg (C++ member)</a>
@@ -3402,6 +3476,14 @@
 </li>
       <li><a href="api/struct/struct_array_converter_factory.html#_CPPv4N21ArrayConverterFactoryclE24ConverterCreateParameter">ArrayConverterFactory::operator() (C++ function)</a>
 </li>
+      <li><a href="api/struct/struct_array_load_codegen.html#_CPPv416ArrayLoadCodegen">ArrayLoadCodegen (C++ class)</a>
+</li>
+      <li><a href="api/struct/struct_array_load_codegen.html#_CPPv4N16ArrayLoadCodegen6bufferE">ArrayLoadCodegen::buffer (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_array_load_codegen.html#_CPPv4N16ArrayLoadCodegen7is_nullE">ArrayLoadCodegen::is_null (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_array_load_codegen.html#_CPPv4N16ArrayLoadCodegen4sizeE">ArrayLoadCodegen::size (C++ member)</a>
+</li>
       <li><a href="api/class/class_array_none_encoder.html#_CPPv416ArrayNoneEncoder">ArrayNoneEncoder (C++ class)</a>
 </li>
       <li><a href="api/class/class_array_none_encoder.html#_CPPv4N16ArrayNoneEncoder10appendDataEPKNSt6vectorI10ArrayDatumEEKiK6size_tKb">ArrayNoneEncoder::appendData (C++ function)</a>, <a href="api/class/class_array_none_encoder.html#_CPPv4N16ArrayNoneEncoder10appendDataERP6int8_tK6size_tRK11SQLTypeInfoKbK7int64_t">[1]</a>
@@ -3776,6 +3858,8 @@
 </li>
       <li><a href="api/class/class_baseline_hash_table.html#_CPPv4NK17BaselineHashTable9getLayoutEv">BaselineHashTable::getLayout (C++ function)</a>
 </li>
+      <li><a href="api/class/class_baseline_hash_table.html#_CPPv4N17BaselineHashTable20gpu_hash_table_buff_E">BaselineHashTable::gpu_hash_table_buff_ (C++ member)</a>
+</li>
       <li><a href="api/class/class_baseline_hash_table.html#_CPPv4N17BaselineHashTable7layout_E">BaselineHashTable::layout_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_baseline_hash_table.html#_CPPv4N17BaselineHashTableD0Ev">BaselineHashTable::~BaselineHashTable (C++ function)</a>
@@ -3996,10 +4080,10 @@
 </li>
       <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4N16Buffer_Namespace6Buffer10num_pages_E">Buffer_Namespace::Buffer::num_pages_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4N16Buffer_Namespace6BufferaSERK6Buffer">Buffer_Namespace::Buffer::operator= (C++ function)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4N16Buffer_Namespace6BufferaSERK6Buffer">Buffer_Namespace::Buffer::operator= (C++ function)</a>
+</li>
       <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4N16Buffer_Namespace6Buffer17page_dirty_flags_E">Buffer_Namespace::Buffer::page_dirty_flags_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4N16Buffer_Namespace6Buffer10page_size_E">Buffer_Namespace::Buffer::page_size_ (C++ member)</a>
@@ -5254,6 +5338,8 @@
 </li>
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState17addStringConstantERKNSt6stringE">CgenState::addStringConstant (C++ function)</a>
 </li>
+      <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState17array_load_cache_E">CgenState::array_load_cache_ (C++ member)</a>
+</li>
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState12castToTypeInEPN4llvm5ValueEK6size_t">CgenState::castToTypeIn (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState9CgenStateEK6size_tKb">CgenState::CgenState (C++ function)</a>, <a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState9CgenStateERN4llvm11LLVMContextE">[1]</a>
@@ -5289,6 +5375,8 @@
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState17FunctionOperValue5foperE">CgenState::FunctionOperValue::foper (C++ member)</a>, <a href="api/struct/struct_cgen_state_1_1_function_oper_value.html#_CPPv4N9CgenState17FunctionOperValue5foperE">[1]</a>
 </li>
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState17FunctionOperValue2lvE">CgenState::FunctionOperValue::lv (C++ member)</a>, <a href="api/struct/struct_cgen_state_1_1_function_oper_value.html#_CPPv4N9CgenState17FunctionOperValue2lvE">[1]</a>
+</li>
+      <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState17geo_target_cache_E">CgenState::geo_target_cache_ (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState21getLiteralBufferUsageEKi">CgenState::getLiteralBufferUsage (C++ function)</a>
 </li>
@@ -5538,12 +5626,12 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator15codegenDictLikeEKNSt10shared_ptrIN8Analyzer4ExprEEEPKN8Analyzer8ConstantEKbKbKcRK18CompilationOptions">CodeGenerator::codegenDictLike (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator17codegenDictRegexpEKNSt10shared_ptrIN8Analyzer4ExprEEEPKN8Analyzer8ConstantEKcRK18CompilationOptions">CodeGenerator::codegenDictRegexp (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator17codegenDictStrCmpEKNSt10shared_ptrIN8Analyzer4ExprEEEKNSt10shared_ptrIN8Analyzer4ExprEEEK6SQLOpsRK18CompilationOptions">CodeGenerator::codegenDictStrCmp (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator10codegenDivEPN4llvm5ValueEPN4llvm5ValueERKNSt6stringERKNSt6stringERK11SQLTypeInfob">CodeGenerator::codegenDiv (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator13CodeGeneratorEP8Executor">CodeGenerator::CodeGenerator (C++ function)</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator13CodeGeneratorEP9CgenStateP9PlanState">[1]</a>
@@ -5566,11 +5654,23 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator14codegenGeoArgsERKNSt6vectorINSt10shared_ptrIN8Analyzer4ExprEEEEERK18CompilationOptions">CodeGenerator::codegenGeoArgs (C++ function)</a>
 </li>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator31codegenGeoArrayLoadAndNullcheckEPN4llvm5ValueEPN4llvm5ValueERK11SQLTypeInfo">CodeGenerator::codegenGeoArrayLoadAndNullcheck (C++ function)</a>
+</li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator17codegenGeoBinOperEPKN8Analyzer10GeoBinOperERK18CompilationOptions">CodeGenerator::codegenGeoBinOper (C++ function)</a>
+</li>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator19codegenGeoColumnVarEPKN8Analyzer12GeoColumnVarEKbRK18CompilationOptions">CodeGenerator::codegenGeoColumnVar (C++ function)</a>
+</li>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator18codegenGeoConstantEPKN8Analyzer11GeoConstantERK18CompilationOptions">CodeGenerator::codegenGeoConstant (C++ function)</a>
+</li>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator14codegenGeoExprEPKN8Analyzer7GeoExprERK18CompilationOptions">CodeGenerator::codegenGeoExpr (C++ function)</a>
+</li>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator26codegenGeoFunctionOperatorEPKN8Analyzer19GeoFunctionOperatorERK18CompilationOptions">CodeGenerator::codegenGeoFunctionOperator (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator24codegenGeoLineStringArgsERKNSt6stringE6size_tPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueERNSt6vectorIPN4llvm5ValueEEE">CodeGenerator::codegenGeoLineStringArgs (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator26codegenGeoMultiPolygonArgsERKNSt6stringE6size_tPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueERNSt6vectorIPN4llvm5ValueEEE">CodeGenerator::codegenGeoMultiPolygonArgs (C++ function)</a>
+</li>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator18codegenGeoOperatorEPKN8Analyzer11GeoOperatorERK18CompilationOptions">CodeGenerator::codegenGeoOperator (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator19codegenGeoPointArgsERKNSt6stringE6size_tPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueERNSt6vectorIPN4llvm5ValueEEE">CodeGenerator::codegenGeoPointArgs (C++ function)</a>
 </li>
@@ -7488,6 +7588,8 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler26get_internal_table_detailsER13TTableDetailsRK10TSessionIdRKNSt6stringE">DBHandler::get_internal_table_details (C++ function)</a>
 </li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler39get_internal_table_details_for_databaseER13TTableDetailsRK10TSessionIdRKNSt6stringERKNSt6stringE">DBHandler::get_internal_table_details_for_database (C++ function)</a>
+</li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler22get_layers_in_geo_fileERNSt6vectorI17TGeoFileLayerInfoEERK10TSessionIdRKNSt6stringERK11TCopyParams">DBHandler::get_layers_in_geo_file (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler18get_license_claimsER12TLicenseInfoRK10TSessionIdRKNSt6stringE">DBHandler::get_license_claims (C++ function)</a>
@@ -7518,7 +7620,9 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler17get_table_detailsER13TTableDetailsRK10TSessionIdRKNSt6stringE">DBHandler::get_table_details (C++ function)</a>
 </li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler22get_table_details_implER13TTableDetailsRN11query_state6StdLogERKNSt6stringEKbKb">DBHandler::get_table_details_impl (C++ function)</a>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler30get_table_details_for_databaseER13TTableDetailsRK10TSessionIdRKNSt6stringERKNSt6stringE">DBHandler::get_table_details_for_database (C++ function)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler22get_table_details_implER13TTableDetailsRN11query_state6StdLogERKNSt6stringEKbKbRKNSt6stringE">DBHandler::get_table_details_impl (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler15get_table_epochERK10TSessionIdK7int32_tK7int32_t">DBHandler::get_table_epoch (C++ function)</a>
 </li>
@@ -7528,7 +7632,9 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler10get_tablesERNSt6vectorINSt6stringEEERK10TSessionId">DBHandler::get_tables (C++ function)</a>
 </li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler15get_tables_implERNSt6vectorINSt6stringEEERKN17Catalog_Namespace11SessionInfoEK13GetTablesType">DBHandler::get_tables_impl (C++ function)</a>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler23get_tables_for_databaseERNSt6vectorINSt6stringEEERK10TSessionIdRKNSt6stringE">DBHandler::get_tables_for_database (C++ function)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler15get_tables_implERNSt6vectorINSt6stringEEERKN17Catalog_Namespace11SessionInfoEK13GetTablesTypeRKNSt6stringE">DBHandler::get_tables_impl (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler15get_tables_metaERNSt6vectorI10TTableMetaEERK10TSessionId">DBHandler::get_tables_meta (C++ function)</a>
 </li>
@@ -7592,10 +7698,10 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler11insert_dataERK10TSessionIdRK11TInsertData">DBHandler::insert_data (C++ function)</a>
 </li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler18intel_jit_profile_E">DBHandler::intel_jit_profile_ (C++ member)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler18intel_jit_profile_E">DBHandler::intel_jit_profile_ (C++ member)</a>
+</li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler16internal_connectER10TSessionIdRKNSt6stringERKNSt6stringE">DBHandler::internal_connect (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler9interruptERK10TSessionIdRK10TSessionId">DBHandler::interrupt (C++ function)</a>
@@ -8041,6 +8147,8 @@
       <li><a href="api/class/class_deep_copy_visitor.html#_CPPv4NK15DeepCopyVisitor39visitFunctionOperWithCustomTypeHandlingEPKN8Analyzer34FunctionOperWithCustomTypeHandlingE">DeepCopyVisitor::visitFunctionOperWithCustomTypeHandling (C++ function)</a>
 </li>
       <li><a href="api/class/class_deep_copy_visitor.html#_CPPv4NK15DeepCopyVisitor15visitGeoBinOperEPKN8Analyzer10GeoBinOperE">DeepCopyVisitor::visitGeoBinOper (C++ function)</a>
+</li>
+      <li><a href="api/class/class_deep_copy_visitor.html#_CPPv4NK15DeepCopyVisitor12visitGeoExprEPKN8Analyzer7GeoExprE">DeepCopyVisitor::visitGeoExpr (C++ function)</a>
 </li>
       <li><a href="api/class/class_deep_copy_visitor.html#_CPPv4NK15DeepCopyVisitor13visitGeoUOperEPKN8Analyzer8GeoUOperE">DeepCopyVisitor::visitGeoUOper (C++ function)</a>
 </li>
@@ -8750,6 +8858,8 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor21addToQuerySessionListERK14QuerySessionIdRKNSt6stringERKNSt6stringEK6size_tKN18QuerySessionStatus11QueryStatusER16mapd_unique_lockI17mapd_shared_mutexE">Executor::addToQuerySessionList (C++ function)</a>
 </li>
+      <li><a href="api/class/class_executor.html#_CPPv4N8Executor26addTransientStringLiteralsERK19RelAlgExecutionUnitRKNSt10shared_ptrI17RowSetMemoryOwnerEE">Executor::addTransientStringLiterals (C++ function)</a>
+</li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor20agg_col_range_cache_E">Executor::agg_col_range_cache_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor23aggregateWindowStatePtrEv">Executor::aggregateWindowStatePtr (C++ function)</a>
@@ -8890,10 +9000,10 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor38ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUESE">Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES (C++ member)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor49ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERYE">Executor::ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY (C++ member)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_executor.html#_CPPv4N8Executor49ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERYE">Executor::ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY (C++ member)</a>
+</li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor29ERR_STRING_CONST_IN_RESULTSETE">Executor::ERR_STRING_CONST_IN_RESULTSET (C++ member)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor21ERR_TOO_MANY_LITERALSE">Executor::ERR_TOO_MANY_LITERALS (C++ member)</a>
@@ -12326,6 +12436,8 @@
 </li>
       <li><a href="api/struct/struct_geo_line_string.html#_CPPv413GeoLineString">GeoLineString (C++ class)</a>
 </li>
+      <li><a href="api/class/class_geospatial_1_1_geo_line_string.html#_CPPv4NK13GeoLineString5cloneEv">GeoLineString::clone (C++ function)</a>
+</li>
       <li><a href="api/struct/struct_geo_line_string.html#_CPPv4N13GeoLineString11compressionE">GeoLineString::compression (C++ member)</a>
 </li>
       <li><a href="api/class/class_geospatial_1_1_geo_line_string.html#_CPPv4N13GeoLineString13GeoLineStringERKNSt6stringE">GeoLineString::GeoLineString (C++ function)</a>, <a href="api/class/class_geospatial_1_1_geo_line_string.html#_CPPv4N13GeoLineString13GeoLineStringERKNSt6vectorIdEE">[1]</a>
@@ -12369,6 +12481,8 @@
       <li><a href="api/struct/struct_geo_linestring_value_converter.html#_CPPv4N27GeoLinestringValueConverterD0Ev">GeoLinestringValueConverter::~GeoLinestringValueConverter (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_geo_multi_polygon.html#_CPPv415GeoMultiPolygon">GeoMultiPolygon (C++ class)</a>
+</li>
+      <li><a href="api/class/class_geospatial_1_1_geo_multi_polygon.html#_CPPv4NK15GeoMultiPolygon5cloneEv">GeoMultiPolygon::clone (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_geo_multi_polygon.html#_CPPv4N15GeoMultiPolygon11compressionE">GeoMultiPolygon::compression (C++ member)</a>
 </li>
@@ -12444,6 +12558,8 @@
 </li>
       <li><a href="api/struct/struct_geo_point.html#_CPPv48GeoPoint">GeoPoint (C++ class)</a>
 </li>
+      <li><a href="api/class/class_geospatial_1_1_geo_point.html#_CPPv4NK8GeoPoint5cloneEv">GeoPoint::clone (C++ function)</a>
+</li>
       <li><a href="api/struct/struct_geo_point.html#_CPPv4N8GeoPoint11compressionE">GeoPoint::compression (C++ member)</a>
 </li>
       <li><a href="api/class/class_geospatial_1_1_geo_point.html#_CPPv4N8GeoPoint8GeoPointERKNSt6stringE">GeoPoint::GeoPoint (C++ function)</a>, <a href="api/class/class_geospatial_1_1_geo_point.html#_CPPv4N8GeoPoint8GeoPointERKNSt6vectorIdEE">[1]</a>
@@ -12493,6 +12609,8 @@
       <li><a href="api/struct/struct_geo_point_value_converter.html#_CPPv4N22GeoPointValueConverterD0Ev">GeoPointValueConverter::~GeoPointValueConverter (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_geo_polygon.html#_CPPv410GeoPolygon">GeoPolygon (C++ class)</a>
+</li>
+      <li><a href="api/class/class_geospatial_1_1_geo_polygon.html#_CPPv4NK10GeoPolygon5cloneEv">GeoPolygon::clone (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_geo_polygon.html#_CPPv4N10GeoPolygon11compressionE">GeoPolygon::compression (C++ member)</a>
 </li>
@@ -12584,6 +12702,8 @@
 </li>
       <li><a href="api/class/class_geospatial_1_1_geo_base.html#_CPPv4N10Geospatial7GeoBaseE">Geospatial::GeoBase (C++ class)</a>
 </li>
+      <li><a href="api/class/class_geospatial_1_1_geo_base.html#_CPPv4NK10Geospatial7GeoBase5cloneEv">Geospatial::GeoBase::clone (C++ function)</a>
+</li>
       <li><a href="api/class/class_geospatial_1_1_geo_base.html#_CPPv4N10Geospatial7GeoBase13createFromWkbERKNSt6vectorI7uint8_tEEPP11OGRGeometry">Geospatial::GeoBase::createFromWkb (C++ function)</a>
 </li>
       <li><a href="api/class/class_geospatial_1_1_geo_base.html#_CPPv4N10Geospatial7GeoBase19createFromWktStringERKNSt6stringEPP11OGRGeometry">Geospatial::GeoBase::createFromWktString (C++ function)</a>
@@ -12642,15 +12762,17 @@
 </li>
       <li><a href="api/class/class_geospatial_1_1_geo_base.html#_CPPv4N10Geospatial7GeoBase14owns_geom_obj_E">Geospatial::GeoBase::owns_geom_obj_ (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_geospatial_1_1_geo_base.html#_CPPv4NK10Geospatial7GeoBase3runE5GeoOp">Geospatial::GeoBase::run (C++ function)</a>, <a href="api/class/class_geospatial_1_1_geo_base.html#_CPPv4NK10Geospatial7GeoBase3runE5GeoOpRK7GeoBase">[1]</a>, <a href="api/class/class_geospatial_1_1_geo_base.html#_CPPv4NK10Geospatial7GeoBase3runE5GeoOpd">[2]</a>
 </li>
       <li><a href="api/class/class_geospatial_1_1_geo_base.html#_CPPv4N10Geospatial7GeoBase9transformE7int32_t7int32_t">Geospatial::GeoBase::transform (C++ function)</a>, <a href="api/class/class_geospatial_1_1_geo_base.html#_CPPv4N10Geospatial7GeoBase9transformER11SQLTypeInfo">[1]</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_geospatial_1_1_geo_base.html#_CPPv4N10Geospatial7GeoBaseD0Ev">Geospatial::GeoBase::~GeoBase (C++ function)</a>
 </li>
       <li><a href="api/class/class_geospatial_1_1_geo_geometry.html#_CPPv4N10Geospatial11GeoGeometryE">Geospatial::GeoGeometry (C++ class)</a>
+</li>
+      <li><a href="api/class/class_geospatial_1_1_geo_geometry.html#_CPPv4NK10Geospatial11GeoGeometry5cloneEv">Geospatial::GeoGeometry::clone (C++ function)</a>
 </li>
       <li><a href="api/class/class_geospatial_1_1_geo_geometry.html#_CPPv4N10Geospatial11GeoGeometry11GeoGeometryEP11OGRGeometryKb">Geospatial::GeoGeometry::GeoGeometry (C++ function)</a>, <a href="api/class/class_geospatial_1_1_geo_geometry.html#_CPPv4N10Geospatial11GeoGeometry11GeoGeometryERKNSt6stringE">[1]</a>, <a href="api/class/class_geospatial_1_1_geo_geometry.html#_CPPv4N10Geospatial11GeoGeometry11GeoGeometryERKNSt6vectorIdEERKNSt6vectorI7int32_tEERKNSt6vectorI7int32_tEERKNSt6vectorI7int32_tEE">[2]</a>
 </li>
@@ -12659,6 +12781,8 @@
       <li><a href="api/class/class_geospatial_1_1_geo_geometry.html#_CPPv4NK10Geospatial11GeoGeometry7getTypeEv">Geospatial::GeoGeometry::getType (C++ function)</a>
 </li>
       <li><a href="api/class/class_geospatial_1_1_geo_geometry_collection.html#_CPPv4N10Geospatial21GeoGeometryCollectionE">Geospatial::GeoGeometryCollection (C++ class)</a>
+</li>
+      <li><a href="api/class/class_geospatial_1_1_geo_geometry_collection.html#_CPPv4NK10Geospatial21GeoGeometryCollection5cloneEv">Geospatial::GeoGeometryCollection::clone (C++ function)</a>
 </li>
       <li><a href="api/class/class_geospatial_1_1_geo_geometry_collection.html#_CPPv4N10Geospatial21GeoGeometryCollection21GeoGeometryCollectionEP11OGRGeometryKb">Geospatial::GeoGeometryCollection::GeoGeometryCollection (C++ function)</a>, <a href="api/class/class_geospatial_1_1_geo_geometry_collection.html#_CPPv4N10Geospatial21GeoGeometryCollection21GeoGeometryCollectionERKNSt6stringE">[1]</a>, <a href="api/class/class_geospatial_1_1_geo_geometry_collection.html#_CPPv4N10Geospatial21GeoGeometryCollection21GeoGeometryCollectionERKNSt6vectorIdEERKNSt6vectorI7int32_tEERKNSt6vectorI7int32_tEERKNSt6vectorI7int32_tEE">[2]</a>
 </li>
@@ -12905,8 +13029,6 @@
       <li><a href="api/class/class_grantee.html#_CPPv4N7GranteeD0Ev">Grantee::~Grantee (C++ function)</a>
 </li>
       <li><a href="api/class/class_group_by_and_aggregate.html#_CPPv419GroupByAndAggregate">GroupByAndAggregate (C++ class)</a>
-</li>
-      <li><a href="api/class/class_group_by_and_aggregate.html#_CPPv4N19GroupByAndAggregate26addTransientStringLiteralsERK19RelAlgExecutionUnitP8ExecutorNSt10shared_ptrI17RowSetMemoryOwnerEE">GroupByAndAggregate::addTransientStringLiterals (C++ function)</a>, <a href="api/class/class_group_by_and_aggregate.html#_CPPv4N19GroupByAndAggregate26addTransientStringLiteralsEv">[1]</a>
 </li>
       <li><a href="api/class/class_group_by_and_aggregate.html#_CPPv4N19GroupByAndAggregate14checkErrorCodeEPN4llvm5ValueE">GroupByAndAggregate::checkErrorCode (C++ function)</a>
 </li>
@@ -19284,7 +19406,7 @@
 </li>
       <li><a href="api/class/class_rel_alg_translator.html#_CPPv4NK16RelAlgTranslator22translateGeoComparisonEPK11RexOperator">RelAlgTranslator::translateGeoComparison (C++ function)</a>
 </li>
-      <li><a href="api/class/class_rel_alg_translator.html#_CPPv4NK16RelAlgTranslator23translateGeoFunctionArgEPK9RexScalarR11SQLTypeInfoR7int32_tKbKbKbKb">RelAlgTranslator::translateGeoFunctionArg (C++ function)</a>
+      <li><a href="api/class/class_rel_alg_translator.html#_CPPv4NK16RelAlgTranslator23translateGeoFunctionArgEPK9RexScalarR11SQLTypeInfoR7int32_tKbKbKbKbKb">RelAlgTranslator::translateGeoFunctionArg (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_alg_translator.html#_CPPv4NK16RelAlgTranslator19translateGeoLiteralEPK10RexLiteralR11SQLTypeInfob">RelAlgTranslator::translateGeoLiteral (C++ function)</a>
 </li>
@@ -19808,8 +19930,6 @@
 </li>
       <li><a href="api/class/class_render_allocator.html#_CPPv4N15RenderAllocator17execution_policy_E">RenderAllocator::execution_policy_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_render_allocator.html#_CPPv4N15RenderAllocator16freeCurrentChunkEv">RenderAllocator::freeCurrentChunk (C++ function)</a>
-</li>
       <li><a href="api/class/class_render_allocator.html#_CPPv4NK15RenderAllocator16getAllocatedSizeEv">RenderAllocator::getAllocatedSize (C++ function)</a>
 </li>
       <li><a href="api/class/class_render_allocator.html#_CPPv4NK15RenderAllocator10getBasePtrEv">RenderAllocator::getBasePtr (C++ function)</a>
@@ -19910,10 +20030,10 @@
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo12in_situ_dataE">RenderInfo::in_situ_data (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo11InSituStateE">RenderInfo::InSituState (C++ enum)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo10IS_IN_SITUE">RenderInfo::IS_IN_SITU (C++ enumerator)</a>
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv4N10RenderInfo14IS_NOT_IN_SITUE">RenderInfo::IS_NOT_IN_SITU (C++ enumerator)</a>
@@ -21290,6 +21410,8 @@
 </li>
       <li><a href="api/class/class_scalar_expr_visitor.html#_CPPv4NK17ScalarExprVisitor15visitGeoBinOperEPKN8Analyzer10GeoBinOperE">ScalarExprVisitor::visitGeoBinOper (C++ function)</a>
 </li>
+      <li><a href="api/class/class_scalar_expr_visitor.html#_CPPv4NK17ScalarExprVisitor12visitGeoExprEPKN8Analyzer7GeoExprE">ScalarExprVisitor::visitGeoExpr (C++ function)</a>
+</li>
       <li><a href="api/class/class_scalar_expr_visitor.html#_CPPv4NK17ScalarExprVisitor13visitGeoUOperEPKN8Analyzer8GeoUOperE">ScalarExprVisitor::visitGeoUOper (C++ function)</a>
 </li>
       <li><a href="api/class/class_scalar_expr_visitor.html#_CPPv4NK17ScalarExprVisitor17visitInIntegerSetEPKN8Analyzer12InIntegerSetE">ScalarExprVisitor::visitInIntegerSet (C++ function)</a>
@@ -21734,10 +21856,10 @@
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo11SQLTypeInfoE8SQLTypes">SQLTypeInfo::SQLTypeInfo (C++ function)</a>, <a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo11SQLTypeInfoE8SQLTypesb">[1]</a>, <a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo11SQLTypeInfoE8SQLTypesb12EncodingType">[2]</a>, <a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo11SQLTypeInfoE8SQLTypesii">[3]</a>, <a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo11SQLTypeInfoE8SQLTypesiib">[4]</a>, <a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo11SQLTypeInfoE8SQLTypesiib12EncodingTypei8SQLTypes">[5]</a>, <a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo11SQLTypeInfoEv">[6]</a>
 </li>
-      <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo7subtypeE">SQLTypeInfo::subtype (C++ member)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4N11SQLTypeInfo7subtypeE">SQLTypeInfo::subtype (C++ member)</a>
+</li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo9to_stringEv">SQLTypeInfo::to_string (C++ function)</a>
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo8toStringEv">SQLTypeInfo::toString (C++ function)</a>
