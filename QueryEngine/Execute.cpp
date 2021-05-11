@@ -129,6 +129,8 @@ bool g_enable_smem_non_grouped_agg{
             // non-grouped aggregates
 bool g_is_test_env{false};  // operating under a unit test environment. Currently only
                             // limits the allocation for the output buffer arena
+size_t g_enable_parallel_linearization{
+    10000};  // # rows that we are trying to linearize varlen col in parallel
 
 size_t g_approx_quantile_buffer{1000};
 size_t g_approx_quantile_centroids{300};
@@ -1443,6 +1445,12 @@ ResultSetPtr Executor::executeWorkUnitImpl(
   do {
     SharedKernelContext shared_context(query_infos);
     ColumnFetcher column_fetcher(this, column_cache);
+    ScopeGuard scope_guard = [&column_fetcher, &device_type] {
+      column_fetcher.freeLinearizedBuf();
+      if (device_type == ExecutorDeviceType::GPU) {
+        column_fetcher.freeTemporaryCpuLinearizedIdxBuf();
+      }
+    };
     auto query_comp_desc_owned = std::make_unique<QueryCompilationDescriptor>();
     std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
     if (eo.executor_type == ExecutorType::Native) {
@@ -2500,12 +2508,9 @@ bool Executor::needLinearizeAllFragments(
   CHECK_LT(static_cast<size_t>(nest_level), selected_fragments.size());
   CHECK_EQ(table_id, selected_fragments[nest_level].table_id);
   const auto& fragments = selected_fragments[nest_level].fragment_ids;
-  auto need_linearize = cd->columnType.is_fixlen_array();
-  if (memory_level == MemoryLevel::GPU_LEVEL) {
-    // we disable multi-frag linearization for GPU case until we find the reason of
-    // CUDA 'misaligned address' issue, see #5245
-    need_linearize = false;
-  }
+  auto need_linearize =
+      cd->columnType.is_array() ||
+      (cd->columnType.is_string() && !cd->columnType.is_dict_encoded_type());
   return table_id > 0 && need_linearize && fragments.size() > 1;
 }
 
@@ -2541,7 +2546,6 @@ FetchResult Executor::fetchChunks(
 
   CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(
       selected_fragments_crossjoin);
-
   std::vector<std::vector<const int8_t*>> all_frag_col_buffers;
   std::vector<std::vector<int64_t>> all_num_rows;
   std::vector<std::vector<uint64_t>> all_frag_offsets;

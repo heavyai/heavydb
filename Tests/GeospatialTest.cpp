@@ -2196,18 +2196,7 @@ TEST_P(GeoSpatialMultiFragTestTablesFixture, LoopJoin) {
     g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
   };
 
-  // If GPU exists, check whether we get an exception related to varlen columnarization
-  // when query is executed on GPU
-  if (!skip_tests(ExecutorDeviceType::GPU)) {
-    EXPECT_THROW(
-        run_simple_agg(
-            R"(SELECT count(*) FROM geospatial_multi_frag_test t1, geospatial_multi_frag_test t2 WHERE ST_DISTANCE(t1.pt, t2.pt) < 10;)",
-            ExecutorDeviceType::GPU),
-        std::runtime_error);
-  }
-
-  // skip to test GPU device until we fix the #5425 issue
-  for (auto dt : {ExecutorDeviceType::CPU}) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     ASSERT_EQ(
         static_cast<int64_t>(109),
         v<int64_t>(run_simple_agg(
