@@ -301,6 +301,10 @@ if(ENABLE_L0)
   add_test(L0BuildTest L0BuildTest ${TEST_ARGS})
 endif()
 
+if(ENABLE_L0)
+  add_test(L0BuildTest L0BuildTest ${TEST_ARGS})
+endif()
+
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_test(UdfTest UdfTest ${TEST_ARGS})
 endif()
