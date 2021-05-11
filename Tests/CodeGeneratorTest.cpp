@@ -361,6 +361,71 @@ TEST(CodeGeneratorTest, IntegerExprGPU) {
   }
 }
 #endif  // HAVE_CUDA
+#ifdef HAVE_L0
+namespace {
+template <typename T, size_t N>
+struct alignas(4096) AlignedArray {
+  T data[N];
+};
+}  // namespace
+
+TEST(CodeGeneratorTest, IntegerConstantL0) {
+  auto& ctx = getGlobalLLVMContext();
+  std::unique_ptr<llvm::Module> module(read_template_module(ctx));
+  ScalarCodeGenerator code_generator(std::move(module));
+  CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::L0);
+  co.hoist_literals = false;
+
+  Datum d;
+  d.intval = 42;
+  auto constant = makeExpr<Analyzer::Constant>(kINT, false, d);
+  const auto compiled_expr = code_generator.compile(constant.get(), true, co);
+  verify_function_ir(compiled_expr.func);
+  ASSERT_TRUE(compiled_expr.inputs.empty());
+
+  const auto l0_kernels = code_generator.generateNativeL0Code(compiled_expr, co);
+
+  ASSERT_EQ(l0_kernels.size(), 1);
+
+  auto mgr = code_generator.getL0Mgr();
+  auto driver = mgr->drivers()[0];
+
+  for (size_t gpu_idx = 0; gpu_idx < l0_kernels.size(); ++gpu_idx) {
+    const auto kernel = l0_kernels[gpu_idx];
+
+    std::vector<void*> param_ptrs;
+    auto device = driver->devices()[gpu_idx];
+    auto command_queue = device->command_queue();
+    auto command_list = device->create_command_list();
+
+    const int elements = 1;
+    AlignedArray<int, elements> in, out;
+    in.data[0] = 51;
+    out.data[0] = -1;
+    const int copy_size = sizeof(int);
+
+    void* in_void = in.data;
+    void* out_void = out.data;
+
+    void* dIn = l0::allocate_device_mem(copy_size, *device);
+    void* dOut = l0::allocate_device_mem(copy_size, *device);
+
+    command_list->copy(dIn, in_void, copy_size);
+    command_list->launch(*kernel, &dIn, &dOut);
+    command_list->copy(out_void, dOut, copy_size);
+    command_list->submit(command_queue);
+    L0_SAFE_CALL(
+        zeCommandQueueSynchronize(command_queue, std::numeric_limits<uint32_t>::max()));
+
+    std::cout << "out" << out.data[0] << std::endl;
+
+    L0_SAFE_CALL(zeMemFree(device->ctx(), dIn));
+    L0_SAFE_CALL(zeMemFree(device->ctx(), dOut));
+
+    ASSERT_EQ(out.data[0], d.intval);
+  }
+}
+#endif  // HAVE_L0
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);

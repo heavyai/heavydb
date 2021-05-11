@@ -105,6 +105,18 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(REMOVE_ITEM THRIFT_HANDLER_TEST_LIBRARIES Licensing)
 endif()
 
+if(ENABLE_L0)
+  add_executable(SpirvExecuteTest SpirvExecuteTest.cpp)
+  target_include_directories(SpirvExecuteTest PRIVATE ${LevelZero_INCLUDE_DIRS})
+
+  target_link_libraries(SpirvExecuteTest ${LevelZero_LIBRARY} ${EXECUTE_TEST_LIBS})
+  target_link_libraries(SpirvExecuteTest LLVMSPIRVLib ${THRIFT_HANDLER_TEST_LIBRARIES})
+  target_link_libraries(SpirvExecuteTest ${LLVMSPIRVLib_LIBRARY} ${THRIFT_HANDLER_TEST_LIBRARIES})
+  target_link_libraries(SpirvExecuteTest L0Mgr)
+
+  add_test(SpirvExecuteTest SpirvExecuteTest ${TEST_ARGS})
+endif()
+
 target_link_libraries(ResultSetTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ColumnarResultsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(FromTableReorderingTest ${EXECUTE_TEST_LIBS})
