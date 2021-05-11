@@ -181,5 +181,27 @@ def test_filter_drop():
     batch = cursor.getArrowRecordBatch()
     assert batch.to_pydict() == target
 
+def test_self_join():
+    data = [
+        pa.array([55, 66, 77]),
+        pa.array([5, 6, 7]),
+        pa.array([3, 1, 0]),
+        pa.array(['aa', 'bb', 'cc'])
+    ]
+    table = pa.Table.from_arrays(data, ['x', 'w', 'y', 'z'])
+    engine.importArrowTable('jtest', table)
+
+    ra = """execute calcite {"rels": [
+{"id": "0", "relOp": "LogicalTableScan", "fieldNames": ["x", "w", "y", "z", "rowid"], "table": ["omnisci", "jtest"], "inputs": []},
+{"id": "1", "relOp": "LogicalTableScan", "fieldNames": ["x", "w", "y", "z", "rowid"], "table": ["omnisci", "jtest"], "inputs": []},
+{"id": "2", "relOp": "LogicalJoin", "condition": {"op": "=", "operands": [{"input": 0}, {"input": 5}], "type": {"type": "BOOLEAN", "nullable": false}}, "joinType": "left", "inputs": ["0", "1"]},
+{"id": "3", "relOp": "LogicalProject", "fields": ["x", "w", "y", "z", "x0", "w0", "y0", "z0"], "exprs": [{"input": 0}, {"input": 1}, {"input": 2}, {"input": 3}, {"input": 5 }, {"input": 6}, {"input": 7}, {"input": 8}]}]}
+"""
+    target = {'x': [55, 66, 77], 'w': [5, 6, 7], 'y': [3, 1, 0], 'z': ['aa', 'bb', 'cc'], 'x0': [55, 66, 77], 'w0': [5, 6, 7], 'y0': [3, 1, 0], 'z0': ['aa', 'bb', 'cc']}
+    cursor = engine.executeRA(ra)
+    batch = cursor.getArrowRecordBatch()
+    assert batch.to_pydict() == target
+
+
 if __name__ == "__main__":
     pytest.main(["-v", __file__])

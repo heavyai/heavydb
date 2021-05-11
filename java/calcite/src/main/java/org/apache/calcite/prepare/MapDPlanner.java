@@ -236,7 +236,7 @@ public class MapDPlanner extends PlannerImpl {
     for (RelOptRule rule : rules) {
       programBuilder.addRuleInstance(rule);
     }
-    HepPlanner hepPlanner = MapDPlanner.getHepPlanner(programBuilder.build(), false);
+    HepPlanner hepPlanner = MapDPlanner.getHepPlanner(programBuilder.build(), true);
     hepPlanner.setRoot(root.rel);
     return root.withRel(hepPlanner.findBestExp());
   }
