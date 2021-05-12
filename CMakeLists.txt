@@ -133,6 +133,12 @@ if(ENABLE_JAVA_REMOTE_DEBUG)
   add_definitions("-DENABLE_JAVA_REMOTE_DEBUG")
 endif()
 
+option(ENABLE_L0 "Enable level zero support" OFF)
+if(ENABLE_L0)
+  find_package(LevelZero REQUIRED COMPONENTS ${LevelZero_COMPONENTS})
+  add_definitions("-DHAVE_L0")
+endif()
+
 option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
   find_package(CUDA REQUIRED)
