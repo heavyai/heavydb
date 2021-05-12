@@ -21,6 +21,7 @@
 #include "DistributedLoader.h"
 #include "Geospatial/Transforms.h"
 #include "ImportExport/CopyParams.h"
+#include "L0Mgr/L0Mgr.h"
 #include "Logger/Logger.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/parser.h"
@@ -165,9 +166,14 @@ QueryRunner::QueryRunner(const char* db_path,
   g_calcite->setRuntimeExtensionFunctions(udfs, udtfs, /*is_runtime=*/false);
 
   std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr;
+  std::unique_ptr<l0::L0Manager> l0_mgr;
 #ifdef HAVE_CUDA
   if (uses_gpus) {
     cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(-1, 0);
+  }
+#elseif HAVE_L0
+  if (uses_gpus) {
+    lo_mgr = std::make_unique<l0::L0Manager>();
   }
 #else
   uses_gpus = false;
@@ -179,6 +185,7 @@ QueryRunner::QueryRunner(const char* db_path,
   data_mgr_.reset(new Data_Namespace::DataMgr(data_dir.string(),
                                               mapd_params,
                                               std::move(cuda_mgr),
+                                              std::move(l0_mgr),
                                               uses_gpus,
                                               reserved_gpu_mem,
                                               0,
