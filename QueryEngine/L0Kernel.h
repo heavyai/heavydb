@@ -1,30 +1,35 @@
 #pragma once
 
 #include "L0Mgr/L0Mgr.h"
+#include "Logger/Logger.h"  // CHECK
 #include "QueryEngine/CompilationContext.h"
 
 struct L0BinResult {
-  void* l0bin{nullptr};
-  size_t size{0};
+  std::shared_ptr<l0::L0Kernel> kernel;
+  std::shared_ptr<l0::L0Module> module;
 };
 
 L0BinResult spv_to_bin(const std::string& spv,
+                       const std::string& name,
                        const unsigned block_size,
                        const l0::L0Manager* mgr);
 
 class L0DeviceCompilationContext {
  public:
-  L0DeviceCompilationContext(const void* image,
-                             const size_t image_size,
-                             const std::string& kernel_name,
+  L0DeviceCompilationContext(std::shared_ptr<l0::L0Kernel> kernel,
+                             std::shared_ptr<l0::L0Module> module,
+                             const l0::L0Manager* l0_mgr,
                              const int device_id,
                              unsigned int num_options,
-                             void** option_vals);
+                             void** option_vals = nullptr);
+  l0::L0Kernel* kernel() { return kernel_.get(); }
   ~L0DeviceCompilationContext();
 
  private:
-  const int device_id_;
+  std::shared_ptr<l0::L0Kernel> kernel_;
+  std::shared_ptr<l0::L0Module> module_;
   const l0::L0Manager* l0_mgr_;
+  const int device_id_;
 };
 
 class L0CompilationContext : public CompilationContext {
@@ -32,8 +37,12 @@ class L0CompilationContext : public CompilationContext {
   using L0DevCompilationContextPtr = std::unique_ptr<L0DeviceCompilationContext>;
   L0CompilationContext() = default;
 
-  std::vector<void*> getNativeFunctionPointers() const {
-    std::vector<void*> fn_ptrs;
+  std::vector<l0::L0Kernel*> getNativeFunctionPointers() const {
+    std::vector<l0::L0Kernel*> fn_ptrs;
+    for (auto& ctx : contexts_per_device_) {
+      CHECK(ctx);
+      fn_ptrs.push_back(ctx->kernel());
+    }
     return fn_ptrs;
   }
 

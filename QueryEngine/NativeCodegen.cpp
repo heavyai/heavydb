@@ -1204,12 +1204,9 @@ std::shared_ptr<L0CompilationContext> CodeGenerator::generateNativeL0Code(
   optimize_ir(func, module, PM, live_funcs, co);
 
   std::ostringstream ss;
-  llvm::raw_os_ostream os(ss);
   std::string err;
 
   module->setTargetTriple("spir-unknown-unknown");
-  
-
 
   llvm::LLVMContext& ctx = module->getContext();
   // set metadata -- pretend we're opencl (see
@@ -1240,28 +1237,28 @@ std::shared_ptr<L0CompilationContext> CodeGenerator::generateNativeL0Code(
   }
 
   for (auto& pFn : rt_funcs) {
-    pFn->removeFromParent();
+    // pFn->removeFromParent();
+    pFn->eraseFromParent();
   }
 
-  module->print(os, nullptr);
-  os.flush();
-
-  for (auto& pFn : rt_funcs) {
-    module->getFunctionList().push_back(pFn);
-  }
+  // todo: enable when runtime functions are supported
+  // for (auto& pFn : rt_funcs) {
+  //   module->getFunctionList().push_back(pFn);
+  // }
 
   for (auto& Fn : *module) {
     Fn.setCallingConv(llvm::CallingConv::SPIR_FUNC);
   }
 
-  llvm::errs() << "func: " << (func? func->getName() : "null") << "\n";
-  llvm::errs() << "wrapper func: " << (wrapper_func? wrapper_func->getName() : "null") << "\n";
+  llvm::errs() << "func: " << (func ? func->getName() : "null") << "\n";
+  llvm::errs() << "wrapper func: " << (wrapper_func ? wrapper_func->getName() : "null")
+               << "\n";
   CHECK(wrapper_func);
 
   wrapper_func->setCallingConv(llvm::CallingConv::SPIR_KERNEL);
 
   std::error_code EC;
-  llvm::raw_fd_ostream OS("ir", EC, llvm::sys::fs::F_None);
+  llvm::raw_fd_ostream OS("ir.bc", EC, llvm::sys::fs::F_None);
   llvm::WriteBitcodeToFile(*module, OS);
   OS.flush();
   llvm::errs() << EC.category().name() << '\n';
@@ -1274,17 +1271,18 @@ std::shared_ptr<L0CompilationContext> CodeGenerator::generateNativeL0Code(
   }
   CHECK(success);
 
-
-  L0BinResult bin_result; 
+  const auto func_name = wrapper_func->getName().str();
+  L0BinResult bin_result;
   try {
-    bin_result = spv_to_bin(ss.str(), 1 /*todo block size*/, l0_mgr);
+    bin_result = spv_to_bin(ss.str(), func_name, 1 /*todo block size*/, l0_mgr);
   } catch (l0::L0Exception& e) {
     llvm::errs() << e.what() << "\n";
     return {};
   }
 
   auto compilation_ctx = std::make_shared<L0CompilationContext>();
-  auto device_compilation_ctx = std::make_unique<L0DeviceCompilationContext>(bin_result.l0bin, bin_result.size, "todoname", 0, 0, nullptr);
+  auto device_compilation_ctx = std::make_unique<L0DeviceCompilationContext>(
+      bin_result.kernel, bin_result.module, l0_mgr, 0, 1);
   compilation_ctx->addDeviceCode(move(device_compilation_ctx));
   return compilation_ctx;
 }

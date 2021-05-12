@@ -619,9 +619,13 @@ class ScalarCodeGenerator : public CodeGenerator {
   std::vector<void*> generateNativeCode(const CompiledExpression& compiled_expression,
                                         const CompilationOptions& co);
 
+  // Specific method for L0 code generation - L0 kernel is called with a handle.
+  std::vector<l0::L0Kernel*> generateNativeL0Code(
+      const CompiledExpression& compiled_expression,
+      const CompilationOptions& co);
+
   CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cuda_mgr_.get(); }
   l0::L0Manager* getL0Mgr() const { return l0_mgr_.get(); }
-//   l0::L0Device* getL0Device() const { return l0_dev_.get(); }
 
   using ColumnMap =
       std::unordered_map<InputColDescriptor, std::shared_ptr<Analyzer::ColumnVar>>;
@@ -639,9 +643,9 @@ class ScalarCodeGenerator : public CodeGenerator {
                                            llvm::Function* wrapper_func,
                                            const CompilationOptions& co);
 
-  std::vector<void*> generateNativeL0Code(llvm::Function* func,
-                                          llvm::Function* wrapper_func,
-                                          const CompilationOptions& co);
+  std::vector<l0::L0Kernel*> generateNativeL0Code(llvm::Function* func,
+                                                  llvm::Function* wrapper_func,
+                                                  const CompilationOptions& co);
 
   std::unique_ptr<llvm::Module> module_;
   ExecutionEngineWrapper execution_engine_;

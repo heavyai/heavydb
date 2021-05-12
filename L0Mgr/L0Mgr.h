@@ -77,7 +77,7 @@ class L0Module {
   ze_module_handle_t handle() const;
 
   template <typename... Args>
-  std::shared_ptr<L0Kernel> create_kernel(char* name, Args&&... args) const {
+  std::shared_ptr<L0Kernel> create_kernel(const char* name, Args&&... args) const {
     ze_kernel_desc_t desc{
         .stype = ZE_STRUCTURE_TYPE_KERNEL_DESC,
         .pNext = nullptr,
