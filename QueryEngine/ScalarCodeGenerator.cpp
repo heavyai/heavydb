@@ -74,6 +74,7 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
     const Analyzer::Expr* expr,
     const bool fetch_columns,
     const CompilationOptions& co) {
+  unsigned int addr_space = (co.device_type == ExecutorDeviceType::L0) ? 1 : 0;
   own_plan_state_ = std::make_unique<PlanState>(
       false, std::vector<InputTableInfo>{}, PlanState::DeletedColumnsMap{}, nullptr);
   plan_state_ = own_plan_state_.get();
@@ -91,7 +92,7 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
     arg_types[arg_idx + 1] = llvm_type_from_sql(ti, ctx);
   }
   arg_types[0] =
-      llvm::PointerType::get(llvm_type_from_sql(expr->get_type_info(), ctx), 0);
+      llvm::PointerType::get(llvm_type_from_sql(expr->get_type_info(), ctx), addr_space);
   auto ft = llvm::FunctionType::get(get_int_type(32, ctx), arg_types, false);
   auto scalar_expr_func = llvm::Function::Create(
       ft, llvm::Function::ExternalLinkage, "scalar_expr", module_.get());
@@ -110,10 +111,10 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
   if (co.device_type == ExecutorDeviceType::GPU ||
       co.device_type == ExecutorDeviceType::L0) {
     std::vector<llvm::Type*> wrapper_arg_types(arg_types.size() + 1);
-    wrapper_arg_types[0] = llvm::PointerType::get(get_int_type(32, ctx), 0);
+    wrapper_arg_types[0] = llvm::PointerType::get(get_int_type(32, ctx), addr_space);
     wrapper_arg_types[1] = arg_types[0];
     for (size_t i = 1; i < arg_types.size(); ++i) {
-      wrapper_arg_types[i + 1] = llvm::PointerType::get(arg_types[i], 0);
+      wrapper_arg_types[i + 1] = llvm::PointerType::get(arg_types[i], addr_space);
     }
     auto wrapper_ft =
         llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), wrapper_arg_types, false);
@@ -131,7 +132,8 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
       loaded_args.push_back(b.CreateLoad(wrapper_scalar_expr_func->arg_begin() + i));
     }
     auto error_lv = b.CreateCall(scalar_expr_func, loaded_args);
-    b.CreateStore(error_lv, wrapper_scalar_expr_func->arg_begin());
+    if (co.device_type != ExecutorDeviceType::L0)
+      b.CreateStore(error_lv, wrapper_scalar_expr_func->arg_begin());
     b.CreateRetVoid();
     return {scalar_expr_func, wrapper_scalar_expr_func, inputs};
   }
@@ -153,15 +155,20 @@ std::vector<void*> ScalarCodeGenerator::generateNativeCode(
       return generateNativeGPUCode(
           compiled_expression.func, compiled_expression.wrapper_func, co);
     }
-    case ExecutorDeviceType::L0: {
-      return generateNativeL0Code(
-          compiled_expression.func, compiled_expression.wrapper_func, co);
-    }
+    case ExecutorDeviceType::L0:  // todo wrapper?
     default: {
       LOG(FATAL) << "Invalid device type";
       return {};  // satisfy -Wreturn-type
     }
   }
+}
+
+std::vector<l0::L0Kernel*> ScalarCodeGenerator::generateNativeL0Code(
+    const CompiledExpression& compiled_expression,
+    const CompilationOptions& co) {
+  CHECK(co.device_type == ExecutorDeviceType::L0);
+  return generateNativeL0Code(
+      compiled_expression.func, compiled_expression.wrapper_func, co);
 }
 
 std::vector<llvm::Value*> ScalarCodeGenerator::codegenColumn(
@@ -198,7 +205,7 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
   return gpu_compilation_context_->getNativeFunctionPointers();
 }
 
-std::vector<void*> ScalarCodeGenerator::generateNativeL0Code(
+std::vector<l0::L0Kernel*> ScalarCodeGenerator::generateNativeL0Code(
     llvm::Function* func,
     llvm::Function* wrapper_func,
     const CompilationOptions& co) {
