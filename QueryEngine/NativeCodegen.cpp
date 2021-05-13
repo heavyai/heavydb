@@ -28,7 +28,9 @@
 #include "Shared/MathUtils.h"
 #include "StreamingTopN.h"
 
+#ifdef HAVE_L0
 #include "LLVMSPIRVLib/LLVMSPIRVLib.h"
+#endif
 
 #if LLVM_VERSION_MAJOR < 9
 static_assert(false, "LLVM Version >= 9 is required.");
@@ -1169,13 +1171,13 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
 #endif
 }
 
-#ifdef HAVE_L0
 std::shared_ptr<L0CompilationContext> CodeGenerator::generateNativeL0Code(
     llvm::Function* func,
     llvm::Function* wrapper_func,
     const std::unordered_set<llvm::Function*>& live_funcs,
     const CompilationOptions& co,
     const l0::L0Manager* l0_mgr) {
+#ifdef HAVE_L0
   auto module = func->getParent();
 
   auto pass_manager_builder = llvm::PassManagerBuilder();
@@ -1265,6 +1267,9 @@ std::shared_ptr<L0CompilationContext> CodeGenerator::generateNativeL0Code(
       bin_result.kernel, bin_result.module, l0_mgr, 0, 1);
   compilation_ctx->addDeviceCode(move(device_compilation_ctx));
   return compilation_ctx;
+#else
+  return {};
+#endif  // HAVE_L0
 }
 
 std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenL0(
@@ -1274,6 +1279,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenL0(
     const bool no_inline,
     const l0::L0Manager* l0_mgr,
     const CompilationOptions& co) {
+#ifdef HAVE_L0
   auto module = multifrag_query_func->getParent();
   CHECK(l0_mgr);
   // todo: cache
@@ -1287,8 +1293,10 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenL0(
     throw;
   }
   return compilation_context;
-}
+#else
+  return {};
 #endif  // HAVE_L0
+}
 
 std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     llvm::Function* query_func,
