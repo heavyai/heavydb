@@ -1406,13 +1406,16 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
     // Process dynamically constructed points
     const auto outer_geo_cast_coord_array =
         dynamic_cast<const Analyzer::UOper*>(outer_geo);
-    CHECK(outer_geo_cast_coord_array->get_optype() == kCAST);
+    CHECK_EQ(outer_geo_cast_coord_array->get_optype(), kCAST);
     const auto outer_geo_coord_array = dynamic_cast<const Analyzer::ArrayExpr*>(
         outer_geo_cast_coord_array->get_operand());
     CHECK(outer_geo_coord_array);
     CHECK(outer_geo_coord_array->isLocalAlloc());
-    CHECK(outer_geo_coord_array->getElementCount() == 2);
-    CHECK(outer_geo_ti.get_size() == 2 * sizeof(double));
+    CHECK_EQ(outer_geo_coord_array->getElementCount(), 2);
+    auto elem_size = (outer_geo_ti.get_compression() == kENCODING_GEOINT)
+                         ? sizeof(int32_t)
+                         : sizeof(double);
+    CHECK_EQ(outer_geo_ti.get_size(), int(2 * elem_size));
     const auto outer_geo_constructed_lvs = code_generator.codegen(outer_geo, true, co);
     // CHECK_EQ(outer_geo_constructed_lvs.size(), size_t(2));     // Pointer and size
     const auto array_ptr = outer_geo_constructed_lvs.front();  // Just need the pointer

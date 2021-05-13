@@ -782,6 +782,7 @@ class SQLTypeInfo {
             return sizeof(int32_t);
           case kENCODING_FIXED:
           case kENCODING_SPARSE:
+          case kENCODING_GEOINT:
             return comp_param / 8;
           case kENCODING_RL:
           case kENCODING_DIFF:

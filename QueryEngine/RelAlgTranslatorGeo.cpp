@@ -253,7 +253,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
     const bool with_render_group,
     const bool expand_geo_col,
     const bool is_projection,
-    const bool use_geo_expressions) const {
+    const bool use_geo_expressions,
+    const bool try_to_compress) const {
   std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
 
   const auto rex_input = dynamic_cast<const RexInput*>(rex_scalar);
@@ -595,22 +596,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       return arg0;
     } else if (rex_function->getName() == "ST_SetSRID"sv) {
       CHECK_EQ(size_t(2), rex_function->size());
-      const auto rex_scalar0 =
-          dynamic_cast<const RexScalar*>(rex_function->getOperand(0));
-      if (!rex_scalar0) {
-        throw QueryNotSupported(rex_function->getName() +
-                                ": expects scalar as first argument");
-      }
-      auto arg0 = translateGeoFunctionArg(rex_scalar0,
-                                          arg_ti,
-                                          lindex,
-                                          with_bounds,
-                                          with_render_group,
-                                          expand_geo_col,
-                                          is_projection);
-      if (!IS_GEO(arg_ti.get_type())) {
-        throw QueryNotSupported(rex_function->getName() + " expects geometry argument");
-      }
       const auto rex_literal =
           dynamic_cast<const RexLiteral*>(rex_function->getOperand(1));
       if (!rex_literal) {
@@ -632,6 +617,27 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       } else {
         throw QueryNotSupported(rex_function->getName() + ": expecting integer SRID");
       }
+
+      const auto rex_scalar0 =
+          dynamic_cast<const RexScalar*>(rex_function->getOperand(0));
+      if (!rex_scalar0) {
+        throw QueryNotSupported(rex_function->getName() +
+                                ": expects scalar as first argument");
+      }
+      // Only convey the request to compress if dealing with 4326 geo
+      auto arg0 = translateGeoFunctionArg(rex_scalar0,
+                                          arg_ti,
+                                          lindex,
+                                          with_bounds,
+                                          with_render_group,
+                                          expand_geo_col,
+                                          is_projection,
+                                          false,
+                                          (try_to_compress && (srid == 4326)));
+      if (!IS_GEO(arg_ti.get_type())) {
+        throw QueryNotSupported(rex_function->getName() + " expects geometry argument");
+      }
+
       arg_ti.set_input_srid(srid);   // Input SRID
       arg_ti.set_output_srid(srid);  // Output SRID is the same - no transform
       return arg0;
@@ -683,17 +689,29 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         CHECK(arg_ti.get_type() == kPOINT);
         return args;
       }
-      // Couldn't fold to geo literal, construct on the fly
+      // Couldn't fold to geo literal, construct [and compress] on the fly
       auto da_ti = SQLTypeInfo(kARRAY, true);
       da_ti.set_subtype(kDOUBLE);
       da_ti.set_size(16);
+      if (try_to_compress) {
+        // Switch to compressed coord array
+        da_ti.set_subtype(kINT);
+        da_ti.set_size(8);
+        da_ti.set_input_srid(4326);
+        da_ti.set_output_srid(4326);
+        da_ti.set_compression(kENCODING_GEOINT);
+        da_ti.set_comp_param(32);
+        // Register point compression
+        arg_ti.set_input_srid(4326);
+        arg_ti.set_output_srid(4326);
+        arg_ti.set_compression(kENCODING_GEOINT);
+        arg_ti.set_comp_param(32);
+      }
       auto cast_coords = {cast_coord1, cast_coord2};
       auto is_local_alloca = !is_projection;
       auto ae = makeExpr<Analyzer::ArrayExpr>(da_ti, cast_coords, false, is_local_alloca);
-      // cast it to  tinyint[16]
-      SQLTypeInfo tia_ti = SQLTypeInfo(kARRAY, true);
+      SQLTypeInfo tia_ti = da_ti;
       tia_ti.set_subtype(kTINYINT);
-      tia_ti.set_size(16);
       return {makeExpr<Analyzer::UOper>(tia_ti, false, kCAST, ae)};
     } else if (rex_function->getName() == "ST_Centroid"sv) {
       CHECK_EQ(size_t(1), rex_function->size());
@@ -1190,12 +1208,22 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
     geoargs0.push_back(makeExpr<Analyzer::Constant>(kINT, false, index));
   }
   geoargs.insert(geoargs.end(), geoargs0.begin(), geoargs0.end());
+
+  // If first arg of ST_Contains is compressed, try to compress the second one
+  // to be able to switch to ST_cContains
+  bool try_to_compress_arg1 = (function_name == "ST_Contains"sv &&
+                               arg0_ti.get_compression() == kENCODING_GEOINT &&
+                               arg0_ti.get_output_srid() == 4326);
+
   auto geoargs1 = translateGeoFunctionArg(rex_function->getOperand(swap_args ? 0 : 1),
                                           arg1_ti,
                                           lindex1,
                                           with_bounds,
                                           false,
-                                          false);
+                                          false,
+                                          false,
+                                          false,
+                                          try_to_compress_arg1);
   if (arg1_ti.get_type() == kLINESTRING) {
     Datum index;
     index.intval = lindex1;

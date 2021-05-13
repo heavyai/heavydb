@@ -97,11 +97,24 @@ std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
   auto& ir_builder(cgen_state_->ir_builder_);
 
   const auto& return_type = array_expr->get_type_info();
+  auto coord_compression = (return_type.get_compression() == kENCODING_GEOINT);
+  if (coord_compression) {
+    CHECK(array_expr->isLocalAlloc() && array_expr->getElementCount() == 2);
+  }
   for (size_t i = 0; i < array_expr->getElementCount(); i++) {
     const auto arg = array_expr->getElement(i);
     const auto arg_lvs = codegen(arg, true, co);
     if (arg_lvs.size() == 1) {
-      argument_list.push_back(arg_lvs.front());
+      if (coord_compression) {
+        // Compress double coords on the fly
+        auto mult = cgen_state_->llFp(2147483647.0 / (i == 0 ? 180.0 : 90.0));
+        auto c = ir_builder.CreateCast(llvm::Instruction::CastOps::FPToSI,
+                                       ir_builder.CreateFMul(arg_lvs.front(), mult),
+                                       get_int_type(32, cgen_state_->context_));
+        argument_list.push_back(c);
+      } else {
+        argument_list.push_back(arg_lvs.front());
+      }
     } else {
       throw std::runtime_error(
           "Unexpected argument count during array[] code generation.");
