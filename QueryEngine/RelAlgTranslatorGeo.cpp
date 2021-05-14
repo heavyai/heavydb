@@ -1087,6 +1087,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     if (std::dynamic_pointer_cast<Analyzer::GeoOperator>(new_geoargs.front())) {
       function_ti.set_notnull(false);
     }
+    if (std::dynamic_pointer_cast<Analyzer::GeoConstant>(new_geoargs.front())) {
+      // TODO(adb): fixup null handling
+      function_ti.set_notnull(true);
+    }
     return makeExpr<Analyzer::GeoOperator>(
         function_ti,
         rex_function->getName(),

@@ -17,33 +17,35 @@
 #include "Geospatial/Compression.h"
 #include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/Execute.h"
+#include "QueryEngine/GeoOperators/API.h"
+#include "QueryEngine/GeoOperators/Codegen.h"
 
 ArrayLoadCodegen CodeGenerator::codegenGeoArrayLoadAndNullcheck(llvm::Value* byte_stream,
                                                                 llvm::Value* pos,
-                                                                const SQLTypeInfo& ti) {
+                                                                const SQLTypeInfo& ti,
+                                                                CgenState* cgen_state) {
   CHECK(byte_stream);
 
   const auto key = std::make_pair(byte_stream, pos);
-  auto cache_itr = cgen_state_->array_load_cache_.find(key);
-  if (cache_itr != cgen_state_->array_load_cache_.end()) {
+  auto cache_itr = cgen_state->array_load_cache_.find(key);
+  if (cache_itr != cgen_state->array_load_cache_.end()) {
     return cache_itr->second;
   }
   const bool is_nullable = !ti.get_notnull();
   CHECK(ti.get_type() == kPOINT);  // TODO: lift this
 
   auto pt_arr_buf =
-      cgen_state_->emitExternalCall("array_buff",
-                                    llvm::Type::getInt8PtrTy(cgen_state_->context_),
-                                    {key.first, key.second});
+      cgen_state->emitExternalCall("array_buff",
+                                   llvm::Type::getInt8PtrTy(cgen_state->context_),
+                                   {key.first, key.second});
   llvm::Value* pt_is_null{nullptr};
   if (is_nullable) {
-    pt_is_null =
-        cgen_state_->emitExternalCall("point_coord_array_is_null",
-                                      llvm::Type::getInt1Ty(cgen_state_->context_),
-                                      {key.first, key.second});
+    pt_is_null = cgen_state->emitExternalCall("point_coord_array_is_null",
+                                              llvm::Type::getInt1Ty(cgen_state->context_),
+                                              {key.first, key.second});
   }
   ArrayLoadCodegen arr_load{pt_arr_buf, nullptr, pt_is_null};
-  cgen_state_->array_load_cache_.insert(std::make_pair(key, arr_load));
+  cgen_state->array_load_cache_.insert(std::make_pair(key, arr_load));
   return arr_load;
 }
 
@@ -110,307 +112,42 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoOperator(
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
 
-  if (geo_operator->getName() == "ST_PointN") {
-    CHECK_EQ(geo_operator->size(), size_t(2));
-    const auto geo_arg = geo_operator->getOperand(0);
-    const auto geo_arg_expr = dynamic_cast<const Analyzer::GeoExpr*>(geo_arg);
-    CHECK(geo_arg_expr) << geo_arg->toString();
-    auto geo_lvs = codegenGeoExpr(geo_arg_expr, co);  // array_buff, array_size
-    CHECK_EQ(geo_lvs.size(), size_t(2));
-    const auto index_expr = geo_operator->getOperand(1);
-    const auto index_lv = codegen(index_expr, /*fetch_columns=*/true, co);
-
-    auto& builder = cgen_state_->ir_builder_;
-
-    // return a nullptr if index is out of bounds
-    const auto is_null_lv = builder.CreateNot(
-        builder.CreateICmp(llvm::ICmpInst::ICMP_SLT, index_lv.front(), geo_lvs.back()));
-    CodeGenerator::NullCheckCodegen nullcheck_codegen(cgen_state_,
-                                                      executor(),
-                                                      is_null_lv,
-                                                      SQLTypeInfo(kBOOLEAN),
-                                                      "st_pointn_range_check");
-    const auto& geo_ti = geo_arg_expr->get_type_info();
-    llvm::Value* array_buff_cast{nullptr};
-    if (geo_ti.get_compression() == kENCODING_GEOINT) {
-      array_buff_cast = builder.CreateBitCast(
-          geo_lvs.front(), llvm::Type::getInt32PtrTy(cgen_state_->context_));
-    } else {
-      array_buff_cast = builder.CreateBitCast(
-          geo_lvs.front(), llvm::Type::getDoublePtrTy(cgen_state_->context_));
-    }
-
-    auto array_offset_lv =
-        builder.CreateGEP(array_buff_cast, index_lv, "ST_PointN_Offset");
-    auto ret_lv = nullcheck_codegen.finalize(
-        llvm::ConstantPointerNull::get(
-            geo_ti.get_compression() == kENCODING_GEOINT
-                ? llvm::Type::getInt32PtrTy(cgen_state_->context_)
-                : llvm::Type::getDoublePtrTy(cgen_state_->context_)),
-        array_offset_lv);
-    return {ret_lv, geo_lvs.back()};
-  } else if (geo_operator->getName() == "ST_EndPoint" ||
-             geo_operator->getName() == "ST_StartPoint") {
-    CHECK_EQ(geo_operator->size(), size_t(1));
-    const auto geo_arg = geo_operator->getOperand(0);
-    const auto geo_arg_expr = dynamic_cast<const Analyzer::GeoExpr*>(geo_arg);
-    CHECK(geo_arg_expr) << geo_arg->toString();
-    auto geo_lvs = codegenGeoExpr(geo_arg_expr, co);  // array_buff, array_size
-    CHECK_EQ(geo_lvs.size(), size_t(2));
-
-    auto& builder = cgen_state_->ir_builder_;
-    const auto& geo_ti = geo_arg_expr->get_type_info();
-    llvm::Value* array_buff_cast{nullptr};
-    size_t elem_size_bytes = 0;  // TODO: make int32_t
-    if (geo_ti.get_compression() == kENCODING_GEOINT) {
-      array_buff_cast = builder.CreateBitCast(
-          geo_lvs.front(), llvm::Type::getInt32PtrTy(cgen_state_->context_));
-      elem_size_bytes = 4;  // 4-byte ints
-    } else {
-      array_buff_cast = builder.CreateBitCast(
-          geo_lvs.front(), llvm::Type::getDoublePtrTy(cgen_state_->context_));
-      elem_size_bytes = 8;  // doubles
-    }
-    CHECK_GT(elem_size_bytes, 0);
-
-    const auto num_elements_lv =
-        builder.CreateSDiv(geo_lvs.back(), cgen_state_->llInt(int32_t(elem_size_bytes)));
-    const auto end_index_lv =
-        builder.CreateSub(num_elements_lv, cgen_state_->llInt(int32_t(2)));
-    auto array_offset_lv = builder.CreateGEP(
-        array_buff_cast, end_index_lv, geo_operator->getName() + "_Offset");
-    return {array_offset_lv, geo_lvs.back()};
-  } else if (geo_operator->getName() == "ST_NPoints") {
-    const auto operand = geo_operator->getOperand(0);
-    auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(operand);
-    CHECK(col_var);
-
-    const auto& geo_ti = col_var->get_type_info();
-    CHECK(geo_ti.is_geometry());
-
-    // create a new operand which is just the coords and codegen it
-    const auto catalog = executor()->getCatalog();
-    CHECK(catalog);
-    const auto coords_column_id = col_var->get_column_id() + 1;  // + 1 for coords
-    auto coords_cd =
-        get_column_descriptor(coords_column_id, col_var->get_table_id(), *catalog);
-    CHECK(coords_cd);
-
-    const auto coords_col_var = Analyzer::ColumnVar(coords_cd->columnType,
-                                                    col_var->get_table_id(),
-                                                    coords_column_id,
-                                                    col_var->get_rte_idx());
-    const auto coords_lv = codegen(&coords_col_var, /*fetch_columns=*/true, co);
-    CHECK_EQ(coords_lv.size(), size_t(1));  // ptr, size
-
-    std::string fn_name("array_size");
-
-    const auto& elem_ti = coords_cd->columnType.get_elem_type();
-    std::vector<llvm::Value*> array_size_args{
-        coords_lv.front(),
-        posArg(&coords_col_var),
-        cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))};
-
-    const bool is_nullable = !geo_ti.get_notnull();
-
-    if (is_nullable) {
-      fn_name += "_nullable";
-      array_size_args.push_back(
-          cgen_state_->inlineIntNull(geo_operator->get_type_info()));
-    }
-    const auto coords_arr_sz = cgen_state_->emitExternalCall(
-        fn_name, get_int_type(32, cgen_state_->context_), array_size_args);
-
-    std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
-    if (is_nullable) {
-      nullcheck_codegen = std::make_unique<NullCheckCodegen>(cgen_state_,
-                                                             executor(),
-                                                             coords_arr_sz,
-                                                             SQLTypeInfo(kINT),
-                                                             "st_npoints_nullcheck");
-    }
-
-    // divide the coord size by the constant compression value and return it
-    auto& builder = cgen_state_->ir_builder_;
-    llvm::Value* conversion_constant{nullptr};
-    if (geo_ti.get_compression() == kENCODING_GEOINT) {
-      conversion_constant = cgen_state_->llInt(4);
-    } else {
-      conversion_constant = cgen_state_->llInt(8);
-    }
-    CHECK(conversion_constant);
-    const auto total_num_pts = builder.CreateUDiv(coords_arr_sz, conversion_constant);
-    auto ret = builder.CreateUDiv(total_num_pts, cgen_state_->llInt(2));
-    if (is_nullable) {
-      ret = nullcheck_codegen->finalize(
-          cgen_state_->inlineIntNull(geo_operator->get_type_info()), ret);
-    }
-    return {ret};
-  } else if (geo_operator->getName() == "ST_NRings") {
-    const auto operand = geo_operator->getOperand(0);
-    auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(operand);
-    CHECK(col_var);
-
-    const auto& geo_ti = col_var->get_type_info();
-    CHECK(geo_ti.is_geometry());
-
-    // create a new operand which is just the ring sizes and codegen it
-    const auto catalog = executor()->getCatalog();
-    CHECK(catalog);
-    const auto ring_sizes_column_id = col_var->get_column_id() + 2;  // + 2 for ring sizes
-    auto ring_sizes_cd =
-        get_column_descriptor(ring_sizes_column_id, col_var->get_table_id(), *catalog);
-    CHECK(ring_sizes_cd);
-
-    const auto ring_sizes_col_var = Analyzer::ColumnVar(ring_sizes_cd->columnType,
-                                                        col_var->get_table_id(),
-                                                        ring_sizes_column_id,
-                                                        col_var->get_rte_idx());
-    const auto ring_sizes_lv = codegen(&ring_sizes_col_var, /*fetch_columns=*/true, co);
-    CHECK_EQ(ring_sizes_lv.size(), size_t(1));  // ptr, size
-
-    std::string fn_name("array_size");
-
-    const auto& elem_ti = ring_sizes_cd->columnType.get_elem_type();
-    std::vector<llvm::Value*> array_size_args{
-        ring_sizes_lv.front(),
-        posArg(&ring_sizes_col_var),
-        cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))};
-
-    const bool is_nullable = !geo_ti.get_notnull();
-
-    if (is_nullable) {
-      fn_name += "_nullable";
-      array_size_args.push_back(
-          cgen_state_->inlineIntNull(geo_operator->get_type_info()));
-    }
-    const auto total_num_rings_lv = cgen_state_->emitExternalCall(
-        fn_name, get_int_type(32, cgen_state_->context_), array_size_args);
-
-    std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
-    if (is_nullable) {
-      nullcheck_codegen = std::make_unique<NullCheckCodegen>(cgen_state_,
-                                                             executor(),
-                                                             total_num_rings_lv,
-                                                             SQLTypeInfo(kINT),
-                                                             "st_npoints_nullcheck");
-    }
-
-    auto ret = total_num_rings_lv;
-    if (is_nullable) {
-      ret = nullcheck_codegen->finalize(
-          cgen_state_->inlineIntNull(geo_operator->get_type_info()), ret);
-    }
-    return {ret};
-  } else if (geo_operator->getName() == "ST_X" || geo_operator->getName() == "ST_Y") {
+  if (geo_operator->getName() == "ST_X" || geo_operator->getName() == "ST_Y") {
     const auto key = geo_operator->toString();
     auto geo_target_cache_it = cgen_state_->geo_target_cache_.find(key);
     if (geo_target_cache_it != cgen_state_->geo_target_cache_.end()) {
       return {geo_target_cache_it->second};
     }
-
-    auto& builder = cgen_state_->ir_builder_;
-
-    const auto operand = geo_operator->getOperand(0);
-    const auto& geo_ti = operand->get_type_info();
-    const auto operand_lvs = codegen(operand, /*fetch_columns=*/true, co);
-    llvm::Value* array_buff_ptr{nullptr};
-    llvm::Value* is_null{nullptr};
-    if (operand_lvs.size() == 1) {
-      // col byte stream, get the array buffer ptr and is null attributes and cache
-      auto arr_load_lvs =
-          codegenGeoArrayLoadAndNullcheck(operand_lvs.front(), posArg(operand), geo_ti);
-      array_buff_ptr = arr_load_lvs.buffer;
-      is_null = arr_load_lvs.is_null;
-    } else {
-      // ptr and size
-      CHECK_EQ(operand_lvs.size(), size_t(2));
-      if (dynamic_cast<const Analyzer::GeoOperator*>(operand)) {
-        // null check will be if the ptr is a nullptr
-        is_null = builder.CreateICmp(
-            llvm::CmpInst::ICMP_EQ,
-            operand_lvs.front(),
-            llvm::ConstantPointerNull::get(
-                geo_ti.get_compression() == kENCODING_GEOINT
-                    ? llvm::Type::getInt32PtrTy(cgen_state_->context_)
-                    : llvm::Type::getDoublePtrTy(cgen_state_->context_)));
-      }
-
-      // TODO: nulls from other types not yet supported
-      array_buff_ptr = operand_lvs.front();
-    }
-    CHECK(array_buff_ptr) << geo_operator->toString();
-
-    const bool is_nullable = !geo_ti.get_notnull();
-    std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
-    if (is_nullable) {
-      CHECK(is_null);
-      nullcheck_codegen =
-          std::make_unique<NullCheckCodegen>(cgen_state_,
-                                             executor(),
-                                             is_null,
-                                             SQLTypeInfo(kBOOLEAN),
-                                             geo_operator->getName() + "_nullcheck");
-    }
-
-    const bool is_x = geo_operator->getName() == "ST_X";
-    const std::string expr_name = is_x ? "x" : "y";
-
-    llvm::Value* coord_lv;
-    if (geo_ti.get_compression() == kENCODING_GEOINT) {
-      auto compressed_arr_ptr = builder.CreateBitCast(
-          array_buff_ptr, llvm::Type::getInt32PtrTy(cgen_state_->context_));
-      auto coord_index = is_x ? cgen_state_->llInt(0) : cgen_state_->llInt(1);
-      auto coord_lv_ptr =
-          builder.CreateGEP(compressed_arr_ptr, coord_index, expr_name + "_coord_ptr");
-      auto compressed_coord_lv =
-          builder.CreateLoad(coord_lv_ptr, expr_name + "_coord_compressed");
-
-      coord_lv =
-          cgen_state_->emitExternalCall("decompress_" + expr_name + "_coord_geoint",
-                                        llvm::Type::getDoubleTy(cgen_state_->context_),
-                                        {compressed_coord_lv});
-    } else {
-      auto coord_arr_ptr = builder.CreateBitCast(
-          array_buff_ptr, llvm::Type::getDoublePtrTy(cgen_state_->context_));
-      auto coord_index = is_x ? cgen_state_->llInt(0) : cgen_state_->llInt(1);
-      auto coord_lv_ptr =
-          builder.CreateGEP(coord_arr_ptr, coord_index, expr_name + "_coord_ptr");
-      coord_lv = builder.CreateLoad(coord_lv_ptr, expr_name + "_coord");
-    }
-
-    // TODO: do this with transformation nodes explicitly
-    if (geo_ti.get_input_srid() != geo_ti.get_output_srid()) {
-      if (geo_ti.get_input_srid() == 4326) {
-        if (geo_ti.get_output_srid() == 900913) {
-          // convert WGS 84 -> Web mercator
-          coord_lv = cgen_state_->emitExternalCall(
-              "conv_4326_900913_" + expr_name,
-              llvm::Type::getDoubleTy(cgen_state_->context_),
-              {coord_lv});
-          coord_lv->setName(expr_name + "_coord_transformed");
-        } else {
-          throw std::runtime_error("Unsupported geo transformation: " +
-                                   std::to_string(geo_ti.get_input_srid()) + " to " +
-                                   std::to_string(geo_ti.get_output_srid()));
-        }
-      } else {
-        throw std::runtime_error(
-            "Unsupported geo transformation: " + std::to_string(geo_ti.get_input_srid()) +
-            " to " + std::to_string(geo_ti.get_output_srid()));
-      }
-    }
-
-    auto ret = coord_lv;
-    if (is_nullable) {
-      ret = nullcheck_codegen->finalize(cgen_state_->inlineFpNull(SQLTypeInfo(kDOUBLE)),
-                                        ret);
-    }
-    CHECK(cgen_state_->geo_target_cache_.insert(std::make_pair(key, ret)).second);
-    return {ret};
   }
-  UNREACHABLE() << geo_operator->toString();
-  return {};
+
+  const auto catalog = executor()->getCatalog();
+  CHECK(catalog);
+
+  auto op_codegen = st::Codegen::init(geo_operator, catalog);
+  CHECK(op_codegen);
+
+  std::vector<llvm::Value*> load_lvs;
+  for (size_t i = 0; i < op_codegen->size(); i++) {
+    auto intermediate_lvs =
+        codegen(op_codegen->getOperand(i), /*fetch_columns=*/true, co);
+    load_lvs.insert(load_lvs.end(), intermediate_lvs.begin(), intermediate_lvs.end());
+  }
+  const auto pos_arg_operand = op_codegen->getPositionOperand();
+  auto [arg_lvs, null_lv] = op_codegen->codegenLoads(
+      load_lvs, pos_arg_operand ? posArg(pos_arg_operand) : nullptr, cgen_state_);
+
+  std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
+  if (op_codegen->isNullable()) {
+    nullcheck_codegen =
+        std::make_unique<NullCheckCodegen>(cgen_state_,
+                                           executor(),
+                                           null_lv,
+                                           op_codegen->getNullType(),
+                                           op_codegen->getName() + "_nullcheck");
+  }
+
+  return op_codegen->codegen(
+      arg_lvs, nullcheck_codegen ? nullcheck_codegen.get() : nullptr, cgen_state_);
 }
 
 namespace {

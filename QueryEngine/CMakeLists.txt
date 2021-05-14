@@ -56,6 +56,7 @@ set(query_engine_source_files
     InPlaceSort.cpp
     InValuesIR.cpp
     IRCodegen.cpp
+    GeoOperators/Codegen.cpp
     GroupByAndAggregate.cpp
     InValuesBitmap.cpp
     InputMetadata.cpp
