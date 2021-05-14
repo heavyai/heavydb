@@ -117,7 +117,7 @@ DEVICE void SUFFIX(init_hash_join_buff)(int32_t* groups_buffer,
 #define mapd_cas(address, compare, val) __sync_val_compare_and_swap(address, compare, val)
 #endif
 
-template <typename SLOT_SELECTOR>
+template <typename HASHTABLE_FILLING_FUNC>
 DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
                                      const int32_t invalid_slot_val,
                                      const JoinColumn join_column,
@@ -126,7 +126,7 @@ DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
                                      const void* sd_outer_proxy,
                                      const int32_t cpu_thread_idx,
                                      const int32_t cpu_thread_count,
-                                     SLOT_SELECTOR slot_sel) {
+                                     HASHTABLE_FILLING_FUNC filling_func) {
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t step = blockDim.x * gridDim.x;
@@ -158,8 +158,7 @@ DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
     CHECK_GE(elem, type_info.min_val)
         << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
-    int32_t* entry_ptr = slot_sel(elem);
-    if (mapd_cas(entry_ptr, invalid_slot_val, index) != invalid_slot_val) {
+    if (filling_func(elem, index)) {
       return -1;
     }
   }
@@ -168,6 +167,7 @@ DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
 
 DEVICE int SUFFIX(fill_hash_join_buff_bucketized)(int32_t* buff,
                                                   const int32_t invalid_slot_val,
+                                                  const bool for_semi_join,
                                                   const JoinColumn join_column,
                                                   const JoinColumnTypeInfo type_info,
                                                   const void* sd_inner_proxy,
@@ -175,10 +175,14 @@ DEVICE int SUFFIX(fill_hash_join_buff_bucketized)(int32_t* buff,
                                                   const int32_t cpu_thread_idx,
                                                   const int32_t cpu_thread_count,
                                                   const int64_t bucket_normalization) {
-  auto slot_selector = [&](auto elem) {
-    return SUFFIX(get_bucketized_hash_slot)(
+  auto filling_func = for_semi_join ? SUFFIX(fill_hashtable_for_semi_join)
+                                    : SUFFIX(fill_one_to_one_hashtable);
+  auto hashtable_filling_func = [&](auto elem, size_t index) {
+    auto entry_ptr = SUFFIX(get_bucketized_hash_slot)(
         buff, elem, type_info.min_val, bucket_normalization);
+    return filling_func(index, entry_ptr, invalid_slot_val);
   };
+
   return fill_hash_join_buff_impl(buff,
                                   invalid_slot_val,
                                   join_column,
@@ -187,20 +191,25 @@ DEVICE int SUFFIX(fill_hash_join_buff_bucketized)(int32_t* buff,
                                   sd_outer_proxy,
                                   cpu_thread_idx,
                                   cpu_thread_count,
-                                  slot_selector);
+                                  hashtable_filling_func);
 }
 
 DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
                                        const int32_t invalid_slot_val,
+                                       const bool for_semi_join,
                                        const JoinColumn join_column,
                                        const JoinColumnTypeInfo type_info,
                                        const void* sd_inner_proxy,
                                        const void* sd_outer_proxy,
                                        const int32_t cpu_thread_idx,
                                        const int32_t cpu_thread_count) {
-  auto slot_selector = [&](auto elem) {
-    return SUFFIX(get_hash_slot)(buff, elem, type_info.min_val);
+  auto filling_func = for_semi_join ? SUFFIX(fill_hashtable_for_semi_join)
+                                    : SUFFIX(fill_one_to_one_hashtable);
+  auto hashtable_filling_func = [&](auto elem, size_t index) {
+    auto entry_ptr = SUFFIX(get_hash_slot)(buff, elem, type_info.min_val);
+    return filling_func(index, entry_ptr, invalid_slot_val);
   };
+
   return fill_hash_join_buff_impl(buff,
                                   invalid_slot_val,
                                   join_column,
@@ -209,10 +218,10 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
                                   sd_outer_proxy,
                                   cpu_thread_idx,
                                   cpu_thread_count,
-                                  slot_selector);
+                                  hashtable_filling_func);
 }
 
-template <typename SLOT_SELECTOR>
+template <typename HASHTABLE_FILLING_FUNC>
 DEVICE int fill_hash_join_buff_sharded_impl(int32_t* buff,
                                             const int32_t invalid_slot_val,
                                             const JoinColumn join_column,
@@ -222,7 +231,7 @@ DEVICE int fill_hash_join_buff_sharded_impl(int32_t* buff,
                                             const void* sd_outer_proxy,
                                             const int32_t cpu_thread_idx,
                                             const int32_t cpu_thread_count,
-                                            SLOT_SELECTOR slot_sel) {
+                                            HASHTABLE_FILLING_FUNC filling_func) {
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t step = blockDim.x * gridDim.x;
@@ -258,8 +267,7 @@ DEVICE int fill_hash_join_buff_sharded_impl(int32_t* buff,
     CHECK_GE(elem, type_info.min_val)
         << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
-    int32_t* entry_ptr = slot_sel(elem, shard);
-    if (mapd_cas(entry_ptr, invalid_slot_val, index) != invalid_slot_val) {
+    if (filling_func(elem, shard, index)) {
       return -1;
     }
   }
@@ -269,6 +277,7 @@ DEVICE int fill_hash_join_buff_sharded_impl(int32_t* buff,
 DEVICE int SUFFIX(fill_hash_join_buff_sharded_bucketized)(
     int32_t* buff,
     const int32_t invalid_slot_val,
+    const bool for_semi_join,
     const JoinColumn join_column,
     const JoinColumnTypeInfo type_info,
     const ShardInfo shard_info,
@@ -277,15 +286,19 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded_bucketized)(
     const int32_t cpu_thread_idx,
     const int32_t cpu_thread_count,
     const int64_t bucket_normalization) {
-  auto slot_selector = [&](auto elem, auto shard) -> auto {
-    return SUFFIX(get_bucketized_hash_slot_sharded_opt)(buff,
-                                                        elem,
-                                                        type_info.min_val,
-                                                        shard_info.entry_count_per_shard,
-                                                        shard,
-                                                        shard_info.num_shards,
-                                                        shard_info.device_count,
-                                                        bucket_normalization);
+  auto filling_func = for_semi_join ? SUFFIX(fill_hashtable_for_semi_join)
+                                    : SUFFIX(fill_one_to_one_hashtable);
+  auto hashtable_filling_func = [&](auto elem, auto shard, size_t index) {
+    auto entry_ptr =
+        SUFFIX(get_bucketized_hash_slot_sharded_opt)(buff,
+                                                     elem,
+                                                     type_info.min_val,
+                                                     shard_info.entry_count_per_shard,
+                                                     shard,
+                                                     shard_info.num_shards,
+                                                     shard_info.device_count,
+                                                     bucket_normalization);
+    return filling_func(index, entry_ptr, invalid_slot_val);
   };
 
   return fill_hash_join_buff_sharded_impl(buff,
@@ -297,11 +310,12 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded_bucketized)(
                                           sd_outer_proxy,
                                           cpu_thread_idx,
                                           cpu_thread_count,
-                                          slot_selector);
+                                          hashtable_filling_func);
 }
 
 DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
                                                const int32_t invalid_slot_val,
+                                               const bool for_semi_join,
                                                const JoinColumn join_column,
                                                const JoinColumnTypeInfo type_info,
                                                const ShardInfo shard_info,
@@ -309,15 +323,19 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
                                                const void* sd_outer_proxy,
                                                const int32_t cpu_thread_idx,
                                                const int32_t cpu_thread_count) {
-  auto slot_selector = [&](auto elem, auto shard) {
-    return SUFFIX(get_hash_slot_sharded_opt)(buff,
-                                             elem,
-                                             type_info.min_val,
-                                             shard_info.entry_count_per_shard,
-                                             shard,
-                                             shard_info.num_shards,
-                                             shard_info.device_count);
+  auto filling_func = for_semi_join ? SUFFIX(fill_hashtable_for_semi_join)
+                                    : SUFFIX(fill_one_to_one_hashtable);
+  auto hashtable_filling_func = [&](auto elem, auto shard, size_t index) {
+    auto entry_ptr = SUFFIX(get_hash_slot_sharded_opt)(buff,
+                                                       elem,
+                                                       type_info.min_val,
+                                                       shard_info.entry_count_per_shard,
+                                                       shard,
+                                                       shard_info.num_shards,
+                                                       shard_info.device_count);
+    return filling_func(index, entry_ptr, invalid_slot_val);
   };
+
   return fill_hash_join_buff_sharded_impl(buff,
                                           invalid_slot_val,
                                           join_column,
@@ -327,7 +345,7 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
                                           sd_outer_proxy,
                                           cpu_thread_idx,
                                           cpu_thread_count,
-                                          slot_selector);
+                                          hashtable_filling_func);
 }
 
 template <typename T>
@@ -492,10 +510,45 @@ DEVICE int write_baseline_hash_slot(const int32_t val,
   return 0;
 }
 
+template <typename T>
+DEVICE int write_baseline_hash_slot_for_semi_join(const int32_t val,
+                                                  int8_t* hash_buff,
+                                                  const int64_t entry_count,
+                                                  const T* key,
+                                                  const size_t key_component_count,
+                                                  const bool with_val_slot,
+                                                  const int32_t invalid_slot_val,
+                                                  const size_t key_size_in_bytes,
+                                                  const size_t hash_entry_size) {
+  const uint32_t h = MurmurHash1Impl(key, key_size_in_bytes, 0) % entry_count;
+  T* matching_group = get_matching_baseline_hash_slot_at(
+      hash_buff, h, key, key_component_count, hash_entry_size);
+  if (!matching_group) {
+    uint32_t h_probe = (h + 1) % entry_count;
+    while (h_probe != h) {
+      matching_group = get_matching_baseline_hash_slot_at(
+          hash_buff, h_probe, key, key_component_count, hash_entry_size);
+      if (matching_group) {
+        break;
+      }
+      h_probe = (h_probe + 1) % entry_count;
+    }
+  }
+  if (!matching_group) {
+    return -2;
+  }
+  if (!with_val_slot) {
+    return 0;
+  }
+  mapd_cas(matching_group, invalid_slot_val, val);
+  return 0;
+}
+
 template <typename T, typename FILL_HANDLER>
 DEVICE int SUFFIX(fill_baseline_hash_join_buff)(int8_t* hash_buff,
                                                 const int64_t entry_count,
                                                 const int32_t invalid_slot_val,
+                                                const bool for_semi_join,
                                                 const size_t key_component_count,
                                                 const bool with_val_slot,
                                                 const FILL_HANDLER* f,
@@ -519,18 +572,31 @@ DEVICE int SUFFIX(fill_baseline_hash_join_buff)(int8_t* hash_buff,
                            with_val_slot,
                            invalid_slot_val,
                            key_size_in_bytes,
-                           hash_entry_size](const int64_t entry_idx,
-                                            const T* key_scratch_buffer,
-                                            const size_t key_component_count) {
-    return write_baseline_hash_slot<T>(entry_idx,
-                                       hash_buff,
-                                       entry_count,
-                                       key_scratch_buffer,
-                                       key_component_count,
-                                       with_val_slot,
-                                       invalid_slot_val,
-                                       key_size_in_bytes,
-                                       hash_entry_size);
+                           hash_entry_size,
+                           &for_semi_join](const int64_t entry_idx,
+                                           const T* key_scratch_buffer,
+                                           const size_t key_component_count) {
+    if (for_semi_join) {
+      return write_baseline_hash_slot_for_semi_join<T>(entry_idx,
+                                                       hash_buff,
+                                                       entry_count,
+                                                       key_scratch_buffer,
+                                                       key_component_count,
+                                                       with_val_slot,
+                                                       invalid_slot_val,
+                                                       key_size_in_bytes,
+                                                       hash_entry_size);
+    } else {
+      return write_baseline_hash_slot<T>(entry_idx,
+                                         hash_buff,
+                                         entry_count,
+                                         key_scratch_buffer,
+                                         key_component_count,
+                                         with_val_slot,
+                                         invalid_slot_val,
+                                         key_size_in_bytes,
+                                         hash_entry_size);
+    }
   };
 
   JoinColumnTuple cols(
@@ -1672,6 +1738,7 @@ void init_baseline_hash_join_buff_64(int8_t* hash_join_buff,
 int fill_baseline_hash_join_buff_32(int8_t* hash_buff,
                                     const int64_t entry_count,
                                     const int32_t invalid_slot_val,
+                                    const bool for_semi_join,
                                     const size_t key_component_count,
                                     const bool with_val_slot,
                                     const GenericKeyHandler* key_handler,
@@ -1681,6 +1748,7 @@ int fill_baseline_hash_join_buff_32(int8_t* hash_buff,
   return fill_baseline_hash_join_buff<int32_t>(hash_buff,
                                                entry_count,
                                                invalid_slot_val,
+                                               for_semi_join,
                                                key_component_count,
                                                with_val_slot,
                                                key_handler,
@@ -1701,6 +1769,7 @@ int overlaps_fill_baseline_hash_join_buff_32(int8_t* hash_buff,
   return fill_baseline_hash_join_buff<int32_t>(hash_buff,
                                                entry_count,
                                                invalid_slot_val,
+                                               false,
                                                key_component_count,
                                                with_val_slot,
                                                key_handler,
@@ -1712,6 +1781,7 @@ int overlaps_fill_baseline_hash_join_buff_32(int8_t* hash_buff,
 int fill_baseline_hash_join_buff_64(int8_t* hash_buff,
                                     const int64_t entry_count,
                                     const int32_t invalid_slot_val,
+                                    const bool for_semi_join,
                                     const size_t key_component_count,
                                     const bool with_val_slot,
                                     const GenericKeyHandler* key_handler,
@@ -1721,6 +1791,7 @@ int fill_baseline_hash_join_buff_64(int8_t* hash_buff,
   return fill_baseline_hash_join_buff<int64_t>(hash_buff,
                                                entry_count,
                                                invalid_slot_val,
+                                               for_semi_join,
                                                key_component_count,
                                                with_val_slot,
                                                key_handler,
@@ -1741,6 +1812,7 @@ int overlaps_fill_baseline_hash_join_buff_64(int8_t* hash_buff,
   return fill_baseline_hash_join_buff<int64_t>(hash_buff,
                                                entry_count,
                                                invalid_slot_val,
+                                               false,
                                                key_component_count,
                                                with_val_slot,
                                                key_handler,

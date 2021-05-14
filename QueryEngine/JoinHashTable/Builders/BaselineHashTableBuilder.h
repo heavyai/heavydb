@@ -29,6 +29,7 @@ template <typename SIZE,
 int fill_baseline_hash_join_buff(int8_t* hash_buff,
                                  const size_t entry_count,
                                  const int32_t invalid_slot_val,
+                                 const bool for_semi_join,
                                  const size_t key_component_count,
                                  const bool with_val_slot,
                                  const KEY_HANDLER* key_handler,
@@ -39,6 +40,7 @@ int fill_baseline_hash_join_buff(int8_t* hash_buff,
     return fill_baseline_hash_join_buff_32(hash_buff,
                                            entry_count,
                                            invalid_slot_val,
+                                           for_semi_join,
                                            key_component_count,
                                            with_val_slot,
                                            key_handler,
@@ -66,6 +68,7 @@ template <typename SIZE,
 int fill_baseline_hash_join_buff(int8_t* hash_buff,
                                  const size_t entry_count,
                                  const int32_t invalid_slot_val,
+                                 const bool for_semi_join,
                                  const size_t key_component_count,
                                  const bool with_val_slot,
                                  const KEY_HANDLER* key_handler,
@@ -76,6 +79,7 @@ int fill_baseline_hash_join_buff(int8_t* hash_buff,
     return fill_baseline_hash_join_buff_64(hash_buff,
                                            entry_count,
                                            invalid_slot_val,
+                                           for_semi_join,
                                            key_component_count,
                                            with_val_slot,
                                            key_handler,
@@ -103,6 +107,7 @@ template <typename SIZE,
 void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                             const size_t entry_count,
                                             const int32_t invalid_slot_val,
+                                            const bool for_semi_join,
                                             const size_t key_component_count,
                                             const bool with_val_slot,
                                             int* dev_err_buff,
@@ -112,6 +117,7 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
     fill_baseline_hash_join_buff_on_device_32(hash_buff,
                                               entry_count,
                                               invalid_slot_val,
+                                              for_semi_join,
                                               key_component_count,
                                               with_val_slot,
                                               dev_err_buff,
@@ -130,6 +136,7 @@ template <typename SIZE,
 void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                             const size_t entry_count,
                                             const int32_t invalid_slot_val,
+                                            const bool for_semi_join,
                                             const size_t key_component_count,
                                             const bool with_val_slot,
                                             int* dev_err_buff,
@@ -139,6 +146,7 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
     fill_baseline_hash_join_buff_on_device_64(hash_buff,
                                               entry_count,
                                               invalid_slot_val,
+                                              for_semi_join,
                                               key_component_count,
                                               with_val_slot,
                                               dev_err_buff,
@@ -226,6 +234,7 @@ class BaselineJoinHashTableBuilder {
                          const size_t keyspace_entry_count,
                          const size_t keys_for_all_rows,
                          const HashType layout,
+                         const JoinType join_type,
                          const size_t key_component_width,
                          const size_t key_component_count) {
     auto timer = DEBUG_TIMER(__func__);
@@ -245,6 +254,9 @@ class BaselineJoinHashTableBuilder {
           "Hash tables for GPU requiring larger than 2GB contigious memory not supported "
           "yet");
     }
+    const bool for_semi_join =
+        (join_type == JoinType::SEMI || join_type == JoinType::ANTI) &&
+        layout == HashType::OneToOne;
 
     VLOG(1) << "Initializing CPU Join Hash Table with " << keyspace_entry_count
             << " hash entries and " << one_to_many_hash_entries
@@ -265,7 +277,8 @@ class BaselineJoinHashTableBuilder {
                       thread_idx,
                       thread_count,
                       cpu_hash_table_ptr,
-                      layout] {
+                      layout,
+                      for_semi_join] {
                        switch (key_component_width) {
                          case 4:
                            init_baseline_hash_join_buff_32(cpu_hash_table_ptr,
@@ -305,12 +318,14 @@ class BaselineJoinHashTableBuilder {
            layout,
            thread_idx,
            cpu_hash_table_ptr,
-           thread_count] {
+           thread_count,
+           for_semi_join] {
             switch (key_component_width) {
               case 4: {
                 return fill_baseline_hash_join_buff<int32_t>(cpu_hash_table_ptr,
                                                              keyspace_entry_count,
                                                              -1,
+                                                             for_semi_join,
                                                              key_component_count,
                                                              layout == HashType::OneToOne,
                                                              key_handler,
@@ -323,6 +338,7 @@ class BaselineJoinHashTableBuilder {
                 return fill_baseline_hash_join_buff<int64_t>(cpu_hash_table_ptr,
                                                              keyspace_entry_count,
                                                              -1,
+                                                             for_semi_join,
                                                              key_component_count,
                                                              layout == HashType::OneToOne,
                                                              key_handler,
@@ -435,6 +451,7 @@ class BaselineJoinHashTableBuilder {
   int initHashTableOnGpu(KEY_HANDLER* key_handler,
                          const std::vector<JoinColumn>& join_columns,
                          const HashType layout,
+                         const JoinType join_type,
                          const size_t key_component_width,
                          const size_t key_component_count,
                          const size_t keyspace_entry_count,
@@ -460,6 +477,9 @@ class BaselineJoinHashTableBuilder {
     copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
     auto gpu_hash_table_buff = hash_table_->getGpuBuffer();
     CHECK(gpu_hash_table_buff);
+    const bool for_semi_join =
+        (join_type == JoinType::SEMI || join_type == JoinType::ANTI) &&
+        layout == HashType::OneToOne;
 
     switch (key_component_width) {
       case 4:
@@ -486,6 +506,7 @@ class BaselineJoinHashTableBuilder {
             gpu_hash_table_buff,
             keyspace_entry_count,
             -1,
+            for_semi_join,
             key_component_count,
             layout == HashType::OneToOne,
             reinterpret_cast<int*>(dev_err_buff),
@@ -499,6 +520,7 @@ class BaselineJoinHashTableBuilder {
             gpu_hash_table_buff,
             keyspace_entry_count,
             -1,
+            for_semi_join,
             key_component_count,
             layout == HashType::OneToOne,
             reinterpret_cast<int*>(dev_err_buff),

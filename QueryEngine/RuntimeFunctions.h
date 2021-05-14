@@ -228,6 +228,14 @@ extern "C" int32_t* get_bucketized_hash_slot_sharded_opt(
     const uint32_t device_count,
     const int64_t bucket_normalization);
 
+extern "C" int fill_one_to_one_hashtable(size_t idx,
+                                         int32_t* entry_ptr,
+                                         const int32_t invalid_slot_val);
+
+extern "C" int fill_hashtable_for_semi_join(size_t idx,
+                                            int32_t* entry_ptr,
+                                            const int32_t invalid_slot_val);
+
 extern "C" void linear_probabilistic_count(uint8_t* bitmap,
                                            const uint32_t bitmap_bytes,
                                            const uint8_t* key_bytes,

@@ -147,6 +147,7 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
     const std::vector<InputTableInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
+    const JoinType join_type,
     const HashType preferred_hash_type,
     const int device_count,
     ColumnCacheMap& column_cache,
@@ -212,6 +213,7 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
                                                                      inner_col,
                                                                      query_infos,
                                                                      memory_level,
+                                                                     join_type,
                                                                      preferred_hash_type,
                                                                      col_range,
                                                                      column_cache,
@@ -461,7 +463,7 @@ void PerfectJoinHashTable::reifyForDevice(const ChunkKey& hash_table_key,
     const auto err = initHashTableForDevice(hash_table_key,
                                             join_column,
                                             inner_outer_pairs_.front(),
-                                            HashType::OneToOne,
+                                            layout,
                                             effective_memory_level,
                                             device_id);
     if (err) {
@@ -516,6 +518,8 @@ int PerfectJoinHashTable::initHashTableForDevice(
                                              col_range_,
                                              isBitwiseEq(),
                                              cols,
+                                             join_type_,
+                                             layout,
                                              hash_entry_info,
                                              hash_join_invalid_val,
                                              executor_);
@@ -596,6 +600,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
                                col_range_,
                                isBitwiseEq(),
                                cols,
+                               join_type_,
                                layout,
                                hash_entry_info,
                                shardCount(),
@@ -654,7 +659,8 @@ std::shared_ptr<PerfectHashTable> PerfectJoinHashTable::initHashTableOnCpuFromCa
                                   outer_col ? *outer_col : *cols.first,
                                   num_elements,
                                   chunk_key,
-                                  qual_bin_oper_->get_optype()};
+                                  qual_bin_oper_->get_optype(),
+                                  join_type_};
   auto hash_table_opt = (hash_table_cache_->get(cache_key));
   return hash_table_opt ? *hash_table_opt : nullptr;
 }
@@ -674,7 +680,8 @@ void PerfectJoinHashTable::putHashTableOnCpuToCache(const ChunkKey& chunk_key,
                                   outer_col ? *outer_col : *cols.first,
                                   num_elements,
                                   chunk_key,
-                                  qual_bin_oper_->get_optype()};
+                                  qual_bin_oper_->get_optype(),
+                                  join_type_};
   CHECK(hash_table_cache_);
   CHECK(hash_table && !hash_table->getGpuBuffer());
   hash_table_cache_->insert(cache_key, hash_table);

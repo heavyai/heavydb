@@ -105,7 +105,7 @@ enum StorageOption { kDISK = 0, kGPU = 1, kCPU = 2 };
 
 enum ViewRefreshOption { kMANUAL = 0, kAUTO = 1, kIMMEDIATE = 2 };
 
-enum class JoinType { INNER, LEFT, INVALID };
+enum class JoinType { INNER, LEFT, SEMI, ANTI, INVALID };
 
 #ifndef __CUDACC__
 

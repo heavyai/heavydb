@@ -1937,6 +1937,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
       executor_->buildHashTableForQualifier(partition_key_cond,
                                             query_infos,
                                             memory_level,
+                                            JoinType::INVALID,  // for window function
                                             HashType::OneToMany,
                                             column_cache_map,
                                             ra_exe_unit.query_hint);

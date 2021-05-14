@@ -660,6 +660,7 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
                             const int device_count,
                             const std::vector<ExpectedValues>& expected_values)
       : OverlapsJoinHashTable(condition,
+                              JoinType::INVALID,  // b/c this is mock
                               query_infos,
                               memory_level,
                               column_cache,

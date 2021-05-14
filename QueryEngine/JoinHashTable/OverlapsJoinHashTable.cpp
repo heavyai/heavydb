@@ -44,6 +44,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> condition,
     const std::vector<InputTableInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
+    const JoinType join_type,
     const int device_count,
     ColumnCacheMap& column_cache,
     Executor* executor,
@@ -91,6 +92,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
   }
 
   auto join_hash_table = std::make_shared<OverlapsJoinHashTable>(condition,
+                                                                 join_type,
                                                                  query_infos,
                                                                  memory_level,
                                                                  column_cache,
@@ -1246,6 +1248,7 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnCpu(
                                               entry_count,
                                               emitted_keys_count,
                                               layout,
+                                              join_type_,
                                               getKeyComponentWidth(),
                                               getKeyComponentCount());
   if (err) {
@@ -1298,6 +1301,7 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnGpu(
   const auto err = builder.initHashTableOnGpu(&key_handler,
                                               join_columns,
                                               layout,
+                                              join_type_,
                                               getKeyComponentWidth(),
                                               getKeyComponentCount(),
                                               entry_count,

@@ -62,6 +62,7 @@ class PerfectJoinHashTableBuilder {
                           const ExpressionRange& col_range,
                           const bool is_bitwise_eq,
                           const InnerOuter& cols,
+                          const JoinType join_type,
                           const HashType layout,
                           const HashEntryInfo hash_entry_info,
                           const size_t shard_count,
@@ -115,6 +116,7 @@ class PerfectJoinHashTableBuilder {
           fill_hash_join_buff_on_device_sharded_bucketized(
               reinterpret_cast<int32_t*>(gpu_hash_table_buff),
               hash_join_invalid_val,
+              for_semi_anti_join(join_type),
               reinterpret_cast<int*>(dev_err_buff),
               join_column,
               type_info,
@@ -135,6 +137,7 @@ class PerfectJoinHashTableBuilder {
         fill_hash_join_buff_on_device_bucketized(
             reinterpret_cast<int32_t*>(gpu_hash_table_buff),
             hash_join_invalid_val,
+            for_semi_anti_join(join_type),
             reinterpret_cast<int*>(dev_err_buff),
             join_column,
             type_info,
@@ -173,6 +176,8 @@ class PerfectJoinHashTableBuilder {
                                   const ExpressionRange& col_range,
                                   const bool is_bitwise_eq,
                                   const InnerOuter& cols,
+                                  const JoinType join_type,
+                                  const HashType hash_type,
                                   const HashEntryInfo hash_entry_info,
                                   const int32_t hash_join_invalid_val,
                                   const Executor* executor) {
@@ -184,7 +189,7 @@ class PerfectJoinHashTableBuilder {
     CHECK(!hash_table_);
     hash_table_ =
         std::make_unique<PerfectHashTable>(catalog_,
-                                           HashType::OneToOne,
+                                           hash_type,
                                            ExecutorDeviceType::CPU,
                                            hash_entry_info.getNormalizedHashEntryCount(),
                                            0);
@@ -193,6 +198,7 @@ class PerfectJoinHashTableBuilder {
     const StringDictionaryProxy* sd_inner_proxy{nullptr};
     const StringDictionaryProxy* sd_outer_proxy{nullptr};
     const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
+    const bool for_semi_join = for_semi_anti_join(join_type);
     if (ti.is_string() &&
         (outer_col && !(inner_col->get_comp_param() == outer_col->get_comp_param()))) {
       CHECK_EQ(kENCODING_DICT, ti.get_compression());
@@ -235,11 +241,13 @@ class PerfectJoinHashTableBuilder {
                                           &err,
                                           &col_range,
                                           &is_bitwise_eq,
+                                          &for_semi_join,
                                           cpu_hash_table_buff,
                                           hash_entry_info] {
         int partial_err =
             fill_hash_join_buff_bucketized(cpu_hash_table_buff,
                                            hash_join_invalid_val,
+                                           for_semi_join,
                                            join_column,
                                            {static_cast<size_t>(ti.get_size()),
                                             col_range.getIntMin(),
@@ -359,6 +367,10 @@ class PerfectJoinHashTableBuilder {
                                       const size_t shard_count) {
     CHECK_NE(size_t(0), shard_count);
     return (total_entry_count + shard_count - 1) / shard_count;
+  }
+
+  const bool for_semi_anti_join(const JoinType join_type) {
+    return join_type == JoinType::SEMI || join_type == JoinType::ANTI;
   }
 
  private:

@@ -1066,6 +1066,12 @@ JoinType to_join_type(const std::string& join_type_name) {
   if (join_type_name == "left") {
     return JoinType::LEFT;
   }
+  if (join_type_name == "semi") {
+    return JoinType::SEMI;
+  }
+  if (join_type_name == "anti") {
+    return JoinType::ANTI;
+  }
   throw QueryNotSupported("Join type (" + join_type_name + ") not supported");
 }
 

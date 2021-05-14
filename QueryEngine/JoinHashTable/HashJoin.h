@@ -174,6 +174,7 @@ class HashJoin {
       const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
       const std::vector<InputTableInfo>& query_infos,
       const Data_Namespace::MemoryLevel memory_level,
+      const JoinType join_type,
       const HashType preferred_hash_type,
       const int device_count,
       ColumnCacheMap& column_cache,

@@ -1206,6 +1206,10 @@ std::string join_type_to_string(const JoinType type) {
       return "INNER";
     case JoinType::LEFT:
       return "LEFT";
+    case JoinType::SEMI:
+      return "SEMI";
+    case JoinType::ANTI:
+      return "ANTI";
     case JoinType::INVALID:
       return "INVALID";
   }
@@ -3380,6 +3384,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const std::shared_ptr<Analyzer::BinOper>& qual_bin_oper,
     const std::vector<InputTableInfo>& query_infos,
     const MemoryLevel memory_level,
+    const JoinType join_type,
     const HashType preferred_hash_type,
     ColumnCacheMap& column_cache,
     const RegisteredQueryHint& query_hint) {
@@ -3393,6 +3398,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     auto tbl = HashJoin::getInstance(qual_bin_oper,
                                      query_infos,
                                      memory_level,
+                                     join_type,
                                      preferred_hash_type,
                                      deviceCountForMemoryLevel(memory_level),
                                      column_cache,

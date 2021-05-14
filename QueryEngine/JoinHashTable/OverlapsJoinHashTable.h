@@ -87,6 +87,7 @@ class OverlapsHashTableCache : public HashTableCache<K, V> {
 class OverlapsJoinHashTable : public HashJoin {
  public:
   OverlapsJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
+                        const JoinType join_type,
                         const std::vector<InputTableInfo>& query_infos,
                         const Data_Namespace::MemoryLevel memory_level,
                         ColumnCacheMap& column_cache,
@@ -94,6 +95,7 @@ class OverlapsJoinHashTable : public HashJoin {
                         const std::vector<InnerOuter>& inner_outer_pairs,
                         const int device_count)
       : condition_(condition)
+      , join_type_(join_type)
       , query_infos_(query_infos)
       , memory_level_(memory_level)
       , executor_(executor)
@@ -112,6 +114,7 @@ class OverlapsJoinHashTable : public HashJoin {
       const std::shared_ptr<Analyzer::BinOper> condition,
       const std::vector<InputTableInfo>& query_infos,
       const Data_Namespace::MemoryLevel memory_level,
+      const JoinType join_type,
       const int device_count,
       ColumnCacheMap& column_cache,
       Executor* executor,
@@ -341,6 +344,7 @@ class OverlapsJoinHashTable : public HashJoin {
   std::vector<llvm::Value*> codegenManyKey(const CompilationOptions&);
 
   const std::shared_ptr<Analyzer::BinOper> condition_;
+  const JoinType join_type_;
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
 

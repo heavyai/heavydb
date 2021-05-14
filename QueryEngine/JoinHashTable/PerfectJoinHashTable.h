@@ -56,6 +56,7 @@ class PerfectJoinHashTable : public HashJoin {
       const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
       const std::vector<InputTableInfo>& query_infos,
       const Data_Namespace::MemoryLevel memory_level,
+      const JoinType join_type,
       const HashType preferred_hash_type,
       const int device_count,
       ColumnCacheMap& column_cache,
@@ -136,12 +137,14 @@ class PerfectJoinHashTable : public HashJoin {
                        const Analyzer::ColumnVar* col_var,
                        const std::vector<InputTableInfo>& query_infos,
                        const Data_Namespace::MemoryLevel memory_level,
+                       const JoinType join_type,
                        const HashType preferred_hash_type,
                        const ExpressionRange& col_range,
                        ColumnCacheMap& column_cache,
                        Executor* executor,
                        const int device_count)
       : qual_bin_oper_(qual_bin_oper)
+      , join_type_(join_type)
       , col_var_(std::dynamic_pointer_cast<Analyzer::ColumnVar>(col_var->deep_copy()))
       , query_infos_(query_infos)
       , memory_level_(memory_level)
@@ -187,6 +190,7 @@ class PerfectJoinHashTable : public HashJoin {
   HashTable* getHashTableForDevice(const size_t device_id) const;
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
+  const JoinType join_type_;
   std::shared_ptr<Analyzer::ColumnVar> col_var_;
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
@@ -205,11 +209,13 @@ class PerfectJoinHashTable : public HashJoin {
     const size_t num_elements;
     const ChunkKey chunk_key;
     const SQLOps optype;
+    const JoinType join_type;
 
     bool operator==(const struct JoinHashTableCacheKey& that) const {
       return col_range == that.col_range && inner_col == that.inner_col &&
              outer_col == that.outer_col && num_elements == that.num_elements &&
-             chunk_key == that.chunk_key && optype == that.optype;
+             chunk_key == that.chunk_key && optype == that.optype &&
+             join_type == that.join_type;
     }
   };
 

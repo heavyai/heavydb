@@ -675,6 +675,8 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
     std::vector<std::string>& fail_reasons) {
   AUTOMATIC_IR_METADATA(cgen_state_.get());
   if (current_level_join_conditions.type != JoinType::INNER &&
+      current_level_join_conditions.type != JoinType::SEMI &&
+      current_level_join_conditions.type != JoinType::ANTI &&
       current_level_join_conditions.quals.size() > 1) {
     fail_reasons.emplace_back("No equijoin expression found for outer join");
     return nullptr;
@@ -684,7 +686,9 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
     auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(join_qual);
     if (!qual_bin_oper || !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
       fail_reasons.emplace_back("No equijoin expression found");
-      if (current_level_join_conditions.type == JoinType::INNER) {
+      if (current_level_join_conditions.type == JoinType::INNER ||
+          current_level_join_conditions.type == JoinType::SEMI ||
+          current_level_join_conditions.type == JoinType::ANTI) {
         add_qualifier_to_execution_unit(ra_exe_unit, join_qual);
       }
       continue;
@@ -697,6 +701,7 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
           query_infos,
           co.device_type == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
                                                     : MemoryLevel::CPU_LEVEL,
+          current_level_join_conditions.type,
           HashType::OneToOne,
           column_cache,
           ra_exe_unit.query_hint);
@@ -707,7 +712,9 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
       plan_state_->join_info_.equi_join_tautologies_.push_back(qual_bin_oper);
     } else {
       fail_reasons.push_back(hash_table_or_error.fail_reason);
-      if (current_level_join_conditions.type == JoinType::INNER) {
+      if (current_level_join_conditions.type == JoinType::INNER ||
+          current_level_join_conditions.type == JoinType::SEMI ||
+          current_level_join_conditions.type == JoinType::ANTI) {
         add_qualifier_to_execution_unit(ra_exe_unit, qual_bin_oper);
       }
     }

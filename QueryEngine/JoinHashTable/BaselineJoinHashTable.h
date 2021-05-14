@@ -42,10 +42,11 @@ struct HashTableCacheKey {
   const size_t num_elements;
   const std::vector<ChunkKey> chunk_keys;
   const SQLOps optype;
+  const JoinType join_type;
 
   bool operator==(const struct HashTableCacheKey& that) const {
     return num_elements == that.num_elements && chunk_keys == that.chunk_keys &&
-           optype == that.optype;
+           optype == that.optype && join_type == that.join_type;
   }
 };
 
@@ -73,6 +74,7 @@ class BaselineJoinHashTable : public HashJoin {
       const std::shared_ptr<Analyzer::BinOper> condition,
       const std::vector<InputTableInfo>& query_infos,
       const Data_Namespace::MemoryLevel memory_level,
+      const JoinType join_type,
       const HashType preferred_hash_type,
       const int device_count,
       ColumnCacheMap& column_cache,
@@ -133,6 +135,7 @@ class BaselineJoinHashTable : public HashJoin {
 
  protected:
   BaselineJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
+                        const JoinType join_type,
                         const std::vector<InputTableInfo>& query_infos,
                         const Data_Namespace::MemoryLevel memory_level,
                         ColumnCacheMap& column_cache,
@@ -199,6 +202,7 @@ class BaselineJoinHashTable : public HashJoin {
   bool isBitwiseEq() const;
 
   const std::shared_ptr<Analyzer::BinOper> condition_;
+  const JoinType join_type_;
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
   Executor* executor_;

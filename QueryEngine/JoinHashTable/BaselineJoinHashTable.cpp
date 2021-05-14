@@ -39,6 +39,7 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> condition,
     const std::vector<InputTableInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
+    const JoinType join_type,
     const HashType preferred_hash_type,
     const int device_count,
     ColumnCacheMap& column_cache,
@@ -55,6 +56,7 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
 
   auto join_hash_table =
       std::shared_ptr<BaselineJoinHashTable>(new BaselineJoinHashTable(condition,
+                                                                       join_type,
                                                                        query_infos,
                                                                        memory_level,
                                                                        column_cache,
@@ -98,6 +100,7 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
 
 BaselineJoinHashTable::BaselineJoinHashTable(
     const std::shared_ptr<Analyzer::BinOper> condition,
+    const JoinType join_type,
     const std::vector<InputTableInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
     ColumnCacheMap& column_cache,
@@ -105,6 +108,7 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     const std::vector<InnerOuter>& inner_outer_pairs,
     const int device_count)
     : condition_(condition)
+    , join_type_(join_type)
     , query_infos_(query_infos)
     , memory_level_(memory_level)
     , executor_(executor)
@@ -343,7 +347,8 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
         HashJoin::getCompositeKeyInfo(inner_outer_pairs_, executor_);
     HashTableCacheKey cache_key{columns_per_device.front().join_columns.front().num_elems,
                                 composite_key_info.cache_key_chunks,
-                                condition_->get_optype()};
+                                condition_->get_optype(),
+                                join_type_};
     const auto cached_count_info = getApproximateTupleCountFromCache(cache_key);
     if (cached_count_info.first) {
       VLOG(1) << "Using a cached tuple count: " << *cached_count_info.first
@@ -553,7 +558,8 @@ int BaselineJoinHashTable::initHashTableForDevice(
     CHECK(!join_columns.empty());
     HashTableCacheKey cache_key{join_columns.front().num_elems,
                                 composite_key_info.cache_key_chunks,
-                                condition_->get_optype()};
+                                condition_->get_optype(),
+                                join_type_};
 
     if (memory_level_ == Data_Namespace::MemoryLevel::CPU_LEVEL) {
       CHECK_EQ(device_id, size_t(0));
@@ -581,6 +587,7 @@ int BaselineJoinHashTable::initHashTableForDevice(
                                        entry_count,
                                        join_columns.front().num_elems,
                                        layout,
+                                       join_type_,
                                        getKeyComponentWidth(),
                                        getKeyComponentCount());
       hash_tables_for_device_[device_id] = builder.getHashTable();
@@ -644,6 +651,7 @@ int BaselineJoinHashTable::initHashTableForDevice(
     err = builder.initHashTableOnGpu(&key_handler,
                                      join_columns,
                                      layout,
+                                     join_type_,
                                      getKeyComponentWidth(),
                                      getKeyComponentCount(),
                                      entry_count,
