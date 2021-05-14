@@ -69,16 +69,12 @@ function install_cmake() {
   CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-${CMAKE_VERSION}.tar.gz
 }
 
-ARROW_VERSION=apache-arrow-2.0.0
+ARROW_VERSION=apache-arrow-3.0.0
 
 function install_arrow() {
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
   extract $ARROW_VERSION.tar.gz
-
-  pushd arrow-$ARROW_VERSION
-  patch -p1 < ${SCRIPTS_DIR}/ARROW-10651-fix-alloc-dealloc-mismatch.patch
-  popd
-
+  
   mkdir -p arrow-$ARROW_VERSION/cpp/build
   pushd arrow-$ARROW_VERSION/cpp/build
   cmake \

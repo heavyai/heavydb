@@ -214,7 +214,7 @@ OmniSciDB has the following dependencies:
 | [CUDA](http://nvidia.com/cuda) | 11.0 | yes, if compiling with GPU support |
 | [gperftools](https://github.com/gperftools/gperftools) | | yes |
 | [gdal](http://gdal.org/) | 2.4.2 | yes |
-| [Arrow](https://arrow.apache.org/) | 1.0.0 | yes |
+| [Arrow](https://arrow.apache.org/) | 3.0.0 | yes |
 
 ## CentOS 7
 

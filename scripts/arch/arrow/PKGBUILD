@@ -1,7 +1,7 @@
 # Maintainer: Guillaume Horel <guillaume.horel@gmail.com>
 
 pkgname='arrow'
-pkgver=2.0.0
+pkgver=3.0.0
 pkgrel=10
 pkgdesc="A columnar in-memory analytics layer for big data."
 arch=('x86_64')
