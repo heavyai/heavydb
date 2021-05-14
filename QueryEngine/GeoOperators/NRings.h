@@ -18,7 +18,7 @@
 
 #include "QueryEngine/GeoOperators/Codegen.h"
 
-namespace st {
+namespace spatial_type {
 
 class NRings : public Codegen {
  public:
@@ -104,4 +104,4 @@ class NRings : public Codegen {
   std::unique_ptr<Analyzer::ColumnVar> operand_owned_;
 };
 
-}  // namespace st
+}  // namespace spatial_type

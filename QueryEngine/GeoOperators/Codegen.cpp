@@ -17,7 +17,7 @@
 #include "QueryEngine/GeoOperators/Codegen.h"
 #include "QueryEngine/GeoOperators/API.h"
 
-namespace st {
+namespace spatial_type {
 
 std::unique_ptr<Codegen> Codegen::init(const Analyzer::GeoOperator* geo_operator,
                                        const Catalog_Namespace::Catalog* catalog) {
@@ -37,4 +37,4 @@ std::unique_ptr<Codegen> Codegen::init(const Analyzer::GeoOperator* geo_operator
   return nullptr;
 }
 
-}  // namespace st
+}  // namespace spatial_type

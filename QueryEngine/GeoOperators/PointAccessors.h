@@ -18,7 +18,7 @@
 
 #include "QueryEngine/GeoOperators/Codegen.h"
 
-namespace st {
+namespace spatial_type {
 
 // ST_X and ST_Y
 class PointAccessors : public Codegen {
@@ -154,4 +154,4 @@ class PointAccessors : public Codegen {
   }
 };
 
-}  // namespace st
+}  // namespace spatial_type

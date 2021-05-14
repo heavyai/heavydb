@@ -18,7 +18,7 @@
 
 #include "QueryEngine/GeoOperators/Codegen.h"
 
-namespace st {
+namespace spatial_type {
 
 class PointN : public Codegen {
  public:
@@ -87,7 +87,7 @@ class PointN : public Codegen {
 
     const auto index_lv = args[2];
     auto array_offset_lv =
-        builder.CreateGEP(array_buff_cast, index_lv, "ST_PointN_Offset");
+        builder.CreateGEP(array_buff_cast, index_lv, operator_->getName() + "_Offset");
     CHECK(nullcheck_codegen);
     auto ret_lv = nullcheck_codegen->finalize(
         llvm::ConstantPointerNull::get(
@@ -100,4 +100,4 @@ class PointN : public Codegen {
   }
 };
 
-}  // namespace st
+}  // namespace spatial_type

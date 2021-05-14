@@ -18,7 +18,7 @@
 
 #include "QueryEngine/GeoOperators/Codegen.h"
 
-namespace st {
+namespace spatial_type {
 
 class StartEndPoint : public Codegen {
  public:
@@ -85,4 +85,4 @@ class StartEndPoint : public Codegen {
   }
 };
 
-}  // namespace st
+}  // namespace spatial_type

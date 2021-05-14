@@ -20,7 +20,7 @@
 
 #pragma once
 
-namespace st {
+namespace spatial_type {
 
 class Codegen {
  public:
@@ -66,4 +66,4 @@ class Codegen {
   bool is_nullable_{true};
 };
 
-}  // namespace st
+}  // namespace spatial_type
