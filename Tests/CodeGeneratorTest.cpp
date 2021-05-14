@@ -413,7 +413,7 @@ TEST(CodeGeneratorTest, IntegerConstantL0) {
     command_list->copy(dIn, in_void, copy_size);
     command_list->launch(*kernel, &dIn, &dOut);
     command_list->copy(out_void, dOut, copy_size);
-    command_list->submit(command_queue);
+    command_list->submit(*command_queue);
 
     std::cout << "out" << out.data[0] << std::endl;
 

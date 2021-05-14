@@ -345,7 +345,7 @@ void DBHandler::initialize(const bool is_new_db) {
       is_rendering_enabled = false;
     }
   }
-#elseif HAVE_L0
+#elif HAVE_L0
   if (!cpu_mode_only_ || is_rendering_enabled) {
     try {
       l0_mgr = std::make_unique<l0::L0Manager>();
