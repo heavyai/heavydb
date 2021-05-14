@@ -196,9 +196,9 @@ QueryRunner::QueryRunner(const char* db_path,
   if (uses_gpus) {
     cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(-1, 0);
   }
-#elseif HAVE_L0
+#elif HAVE_L0
   if (uses_gpus) {
-    lo_mgr = std::make_unique<l0::L0Manager>();
+    l0_mgr = std::make_unique<l0::L0Manager>();
   }
 #else
   uses_gpus = false;

@@ -320,7 +320,7 @@ TEST_F(SPIRVExecuteTest, TranslateSimpleWithL0Wrapper) {
 
   command_list->copy(b_void, dB, copy_size);
 
-  command_list->submit(command_queue);
+  command_list->submit(*command_queue);
 
   for (int i = 0; i < a_size; ++i) {
     std::cout << b.data[i] << " ";
@@ -371,7 +371,7 @@ TEST_F(SPIRVExecuteTest, TranslateSimpleWithL0Manager) {
 
   command_list->copy(b_void, dB, copy_size);
 
-  command_list->submit(command_queue);
+  command_list->submit(*command_queue);
 
   for (int i = 0; i < a_size; ++i) {
     std::cout << b.data[i] << " ";
