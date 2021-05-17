@@ -76,8 +76,8 @@
 bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
 bool g_use_tbb_pool{false};
-bool g_enable_subfragments{false};
-size_t g_subfragment_size{500'000};
+bool g_enable_cpu_sub_tasks{false};
+size_t g_cpu_sub_task_size{500'000};
 bool g_enable_filter_function{true};
 unsigned g_dynamic_watchdog_time_limit{10000};
 bool g_allow_cpu_retry{true};
@@ -2259,7 +2259,8 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
 #ifdef HAVE_TBB
   if constexpr (std::is_same<decltype(&thread_pool),
                              decltype(shared_context.getThreadPool())>::value) {
-    if (g_use_tbb_pool && g_enable_subfragments) {
+    if (g_use_tbb_pool && g_enable_cpu_sub_tasks &&
+        device_type == ExecutorDeviceType::CPU) {
       shared_context.setThreadPool(&thread_pool);
     }
   }
