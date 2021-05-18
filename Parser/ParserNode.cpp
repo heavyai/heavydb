@@ -5645,10 +5645,6 @@ void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  if (!session.get_currentUser().isSuper) {
-    throw std::runtime_error("DROP DATABASE command can only be executed by super user.");
-  }
-
   const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
@@ -5663,7 +5659,8 @@ void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   if (!session.get_currentUser().isSuper &&
       session.get_currentUser().userId != db.dbOwner) {
-    throw std::runtime_error("Only the super user or the owner can drop database.");
+    throw std::runtime_error(
+        "DROP DATABASE command can only be executed by the owner or by a super user.");
   }
 
   SysCatalog::instance().dropDatabase(db);

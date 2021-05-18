@@ -2392,6 +2392,115 @@ TEST(SysCatalog, RenameDatabase_PrivsTest) {
   EXPECT_NO_THROW(quark_qr->runSQL("select * from riches;", dt));
 }
 
+TEST(SysCatalog, DropDatabase_ByOwner) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
+  const std::string username = "theowner";
+  const std::string dbname = "thedb";
+
+  ScopeGuard scope_guard = [&] {
+    try {
+      run_ddl_statement("DROP USER " + username + ";");
+    } catch (...) {
+    }
+    run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
+  };
+
+  run_ddl_statement("CREATE USER " + username + " (password='password');");
+  run_ddl_statement("CREATE DATABASE " + dbname + " (owner='" + username + "');");
+  run_ddl_statement("ALTER USER " + username + " (default_db='" + dbname + "');");
+
+  Catalog_Namespace::UserMetadata user_meta;
+  std::string username_out{username};
+  std::string dbname_out{dbname};
+
+  ASSERT_NO_THROW(sys_cat.login(dbname_out, username_out, "password", user_meta, false));
+  EXPECT_EQ(dbname, dbname_out);
+
+  auto qr = get_qr_for_user(dbname, user_meta);
+  EXPECT_NO_THROW(qr->runDDLStatement("DROP DATABASE " + dbname + ";"));
+}
+
+TEST(SysCatalog, DropDatabase_ByNonOwner) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
+  const std::string username = "theowner";
+  const std::string dbname = "thedb";
+
+  ScopeGuard scope_guard = [&] {
+    try {
+      run_ddl_statement("DROP USER " + username + ";");
+    } catch (...) {
+    }
+    try {
+      run_ddl_statement("DROP USER not" + username + ";");
+    } catch (...) {
+    }
+    run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
+  };
+
+  run_ddl_statement("CREATE USER " + username + " (password='password');");
+  run_ddl_statement("CREATE USER not" + username + " (password='password');");
+  run_ddl_statement("CREATE DATABASE " + dbname + " (owner='" + username + "');");
+  run_ddl_statement("ALTER USER " + username + " (default_db='" + dbname + "');");
+  run_ddl_statement("ALTER USER not" + username + " (default_db='" + dbname + "');");
+
+  Catalog_Namespace::UserMetadata user_meta;
+  std::string username_out{"not" + username};
+  std::string dbname_out{dbname};
+
+  ASSERT_NO_THROW(sys_cat.login(dbname_out, username_out, "password", user_meta, false));
+  EXPECT_EQ(dbname, dbname_out);
+
+  auto qr = get_qr_for_user(dbname, user_meta);
+  EXPECT_THROW(qr->runDDLStatement("DROP DATABASE " + dbname + ";"), std::runtime_error);
+}
+
+TEST(SysCatalog, DropDatabase_BySuperUser) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
+  const std::string username = "theowner";
+  const std::string dbname = "thedb";
+
+  ScopeGuard scope_guard = [&] {
+    try {
+      run_ddl_statement("DROP USER " + username + ";");
+    } catch (...) {
+    }
+    try {
+      run_ddl_statement("DROP USER not" + username + ";");
+    } catch (...) {
+    }
+    run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
+  };
+
+  run_ddl_statement("CREATE USER " + username + " (password='password');");
+  run_ddl_statement("CREATE USER not" + username +
+                    " (password='password',is_super='true');");
+  run_ddl_statement("CREATE DATABASE " + dbname + " (owner='" + username + "');");
+  run_ddl_statement("ALTER USER " + username + " (default_db='" + dbname + "');");
+  run_ddl_statement("ALTER USER not" + username + " (default_db='" + dbname + "');");
+
+  Catalog_Namespace::UserMetadata user_meta;
+  std::string username_out{"not" + username};
+  std::string dbname_out{dbname};
+
+  ASSERT_NO_THROW(sys_cat.login(dbname_out, username_out, "password", user_meta, false));
+  EXPECT_EQ(dbname, dbname_out);
+
+  auto alternate_qr = get_qr_for_user(dbname, user_meta);
+  EXPECT_NO_THROW(alternate_qr->runDDLStatement("DROP DATABASE " + dbname + ";"));
+}
+
 TEST(SysCatalog, GetDatabaseList) {
   static const std::string username{"test_user"};
   static const std::string username2{username + "2"};
