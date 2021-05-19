@@ -191,10 +191,13 @@ inline bool fast_logging_check(Severity severity) {
 // which are fortunately prevented by our clang-tidy requirements.
 // These can be changed to for/while loops with slight performance degradation.
 
-#define LOG(tag)                                             \
-  if (logger::fast_logging_check(logger::tag))               \
-    if (auto _omnisci_logger_ = logger::Logger(logger::tag)) \
+#define SLOG(severity_or_channel)                                                     \
+  if (auto _omnisci_logger_severity_or_channel_ = severity_or_channel;                \
+      logger::fast_logging_check(_omnisci_logger_severity_or_channel_))               \
+    if (auto _omnisci_logger_ = logger::Logger(_omnisci_logger_severity_or_channel_)) \
   _omnisci_logger_.stream(__FILE__, __LINE__)
+
+#define LOG(tag) SLOG(logger::tag)
 
 #define LOGGING(tag) logger::fast_logging_check(logger::tag)
 
