@@ -3151,6 +3151,55 @@ TEST(ResultsetConversion, EnforceParallelColumnarConversion) {
   }
 }
 
+TEST(Util, PairToDouble) {
+  const int64_t null_float = shared::reinterpretBits<int64_t, float>(NULL_FLOAT);
+  const int64_t null_double = shared::reinterpretBits<int64_t, double>(NULL_DOUBLE);
+  EXPECT_EQ(int64_t(1) << 23, null_float);
+  EXPECT_EQ(int64_t(1) << 52, null_double);
+  // Test all 16 combinations of (null_float,null_double)x(kFloat,kDouble)x(bool)x(bool).
+  // Only 3 return the NULL sentinel NULL_DOUBLE, the rest are interpreted as non-null.
+  EXPECT_EQ(shared::reinterpretBits<double>(null_float) / 2,
+            pair_to_double({null_float, 2}, SQLTypeInfo(kFLOAT, false), false));
+  EXPECT_EQ(NULL_DOUBLE,
+            pair_to_double({null_float, 2}, SQLTypeInfo(kFLOAT, false), true));
+  EXPECT_EQ(shared::reinterpretBits<double>(null_float) / 2,
+            pair_to_double({null_float, 2}, SQLTypeInfo(kFLOAT, true), false));
+  EXPECT_EQ(NULL_FLOAT / 2,
+            pair_to_double({null_float, 2}, SQLTypeInfo(kFLOAT, true), true));
+  EXPECT_EQ(shared::reinterpretBits<double>(null_float) / 2,
+            pair_to_double({null_float, 2}, SQLTypeInfo(kDOUBLE, false), false));
+  EXPECT_EQ(shared::reinterpretBits<double>(null_float) / 2,
+            pair_to_double({null_float, 2}, SQLTypeInfo(kDOUBLE, false), true));
+  EXPECT_EQ(shared::reinterpretBits<double>(null_float) / 2,
+            pair_to_double({null_float, 2}, SQLTypeInfo(kDOUBLE, true), false));
+  EXPECT_EQ(shared::reinterpretBits<double>(null_float) / 2,
+            pair_to_double({null_float, 2}, SQLTypeInfo(kDOUBLE, true), true));
+  EXPECT_EQ(shared::reinterpretBits<double>(null_double) / 2,
+            pair_to_double({null_double, 2}, SQLTypeInfo(kFLOAT, false), false));
+  EXPECT_EQ(0.0 / 2, pair_to_double({null_double, 2}, SQLTypeInfo(kFLOAT, false), true));
+  EXPECT_EQ(shared::reinterpretBits<double>(null_double) / 2,
+            pair_to_double({null_double, 2}, SQLTypeInfo(kFLOAT, true), false));
+  EXPECT_EQ(0.0 / 2, pair_to_double({null_double, 2}, SQLTypeInfo(kFLOAT, true), true));
+  EXPECT_EQ(NULL_DOUBLE,
+            pair_to_double({null_double, 2}, SQLTypeInfo(kDOUBLE, false), false));
+  EXPECT_EQ(NULL_DOUBLE,
+            pair_to_double({null_double, 2}, SQLTypeInfo(kDOUBLE, false), true));
+  EXPECT_EQ(shared::reinterpretBits<double>(null_double) / 2,
+            pair_to_double({null_double, 2}, SQLTypeInfo(kDOUBLE, true), false));
+  EXPECT_EQ(shared::reinterpretBits<double>(null_double) / 2,
+            pair_to_double({null_double, 2}, SQLTypeInfo(kDOUBLE, true), true));
+  // Test a few non-null values.
+  EXPECT_EQ(0.5,
+            pair_to_double({shared::reinterpretBits<int64_t, float>(1.0), 2},
+                           SQLTypeInfo(kFLOAT, false),
+                           true));
+  EXPECT_EQ(-0.5,
+            pair_to_double({shared::reinterpretBits<int64_t, double>(-1.0), 2},
+                           SQLTypeInfo(kDOUBLE, false),
+                           true));
+  EXPECT_EQ(2.5, pair_to_double({1000, 4}, SQLTypeInfo(kDECIMAL, 19, 2), true));
+}
+
 int main(int argc, char** argv) {
   g_is_test_env = true;
 
