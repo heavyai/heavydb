@@ -92,8 +92,10 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec,
     const bool should_delete_rolled_off =
         ROLLOFF_CONTINGENT == ints[1] && fileMgrEpoch >= ints[2];
     if (should_delete_deleted || should_delete_rolled_off) {
-      int32_t zero{0};
-      File_Namespace::write(f, pageNum * pageSize, sizeof(int32_t), (int8_t*)&zero);
+      if (!g_read_only) {
+        int32_t zero{0};
+        File_Namespace::write(f, pageNum * pageSize, sizeof(int32_t), (int8_t*)&zero);
+      }
       headerSize = 0;
     }
 
