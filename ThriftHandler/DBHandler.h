@@ -616,6 +616,13 @@ class DBHandler : public OmniSciIf {
                             const Catalog_Namespace::SessionInfo& session_info,
                             const bool with_table_locks = true);
 
+ protected:
+  // Returns empty std::shared_ptr if !check_license && session.empty().
+  std::shared_ptr<Catalog_Namespace::SessionInfo> get_session_ptr(
+      const TSessionId& session_id);
+
+  ConnectionInfo getConnectionInfo() const;
+
  private:
   std::atomic<bool> initialized_{false};
   std::shared_ptr<Catalog_Namespace::SessionInfo> create_new_session(
@@ -663,8 +670,7 @@ class DBHandler : public OmniSciIf {
   // Returns empty std::shared_ptr if session.empty().
   std::shared_ptr<const Catalog_Namespace::SessionInfo> get_const_session_ptr(
       const TSessionId& session);
-  std::shared_ptr<Catalog_Namespace::SessionInfo> get_session_ptr(
-      const TSessionId& session_id);
+
   template <typename SESSION_MAP_LOCK>
   SessionMap::iterator get_session_it_unsafe(const TSessionId& session,
                                              SESSION_MAP_LOCK& lock);
@@ -837,8 +843,6 @@ class DBHandler : public OmniSciIf {
   std::unordered_map<std::string, std::unordered_set<std::string>>
   fill_column_names_by_table(std::vector<std::string>& table_names,
                              query_state::StdLog& stdlog);
-
-  ConnectionInfo getConnectionInfo() const;
 
   TDashboard get_dashboard_impl(
       const std::shared_ptr<Catalog_Namespace::SessionInfo const>& session_ptr,

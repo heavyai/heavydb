@@ -1083,7 +1083,7 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   boost::algorithm::trim_if(system_parameters.master_address, boost::is_any_of("\"'"));
   if (!system_parameters.master_address.empty()) {
     if (!read_only) {
-      LOG(ERROR) << "The master-address setting is only allowed in readonly mode";
+      LOG(ERROR) << "The master-address setting is only allowed in read-only mode";
       return 9;
     }
     LOG(INFO) << " Master Address is " << system_parameters.master_address;
