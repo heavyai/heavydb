@@ -8,7 +8,6 @@
 
 #include "TestHelpers.h"
 
-
 TEST(SPIRVBuildTest, TranslateSimple) {
   using namespace llvm;
   // See source at https://github.com/kurapov-peter/L0Snippets
