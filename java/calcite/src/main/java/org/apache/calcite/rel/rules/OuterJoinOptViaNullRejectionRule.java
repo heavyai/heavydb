@@ -133,7 +133,8 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
               originalRightJoinCols,
               originalLeftJoinColToColNameMap,
               originalRightJoinColToColNameMap);
-    } else if (joinCond.getKind() == SqlKind.AND || joinCond.getKind() == SqlKind.OR) {
+      // we only consider ANDED exprs
+    } else if (joinCond.getKind() == SqlKind.AND) {
       for (RexNode n : joinCond.getOperands()) {
         if (n instanceof RexCall) {
           RexCall op = (RexCall) n;
@@ -180,11 +181,17 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
     // and collect join column info used in target join nodes to be translated
     Set<Integer> nullRejectedLeftJoinCols = new HashSet<>();
     Set<Integer> nullRejectedRightJoinCols = new HashSet<>();
+    boolean hasExprsConnectedViaOR = false;
     for (LogicalFilter filter : collectedFilterNodes) {
       RexNode node = filter.getCondition();
       if (node instanceof RexCall) {
         RexCall curExpr = (RexCall) node;
-        if (curExpr.getKind() == SqlKind.AND || curExpr.getKind() == SqlKind.OR) {
+        // we only consider ANDED exprs
+        if (curExpr.getKind() == SqlKind.OR) {
+          hasExprsConnectedViaOR = true;
+          break;
+        }
+        if (curExpr.getKind() == SqlKind.AND) {
           for (RexNode n : curExpr.getOperands()) {
             if (n instanceof RexCall) {
               RexCall c = (RexCall) n;
@@ -229,6 +236,12 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
           }
         }
       }
+    }
+
+    // we skip to optimize this query since analyzing complex filter exprs
+    // connected via OR condition is complex and risky
+    if (hasExprsConnectedViaOR) {
+      return;
     }
 
     if (!capturedFilterPredFromJoin.isEmpty()) {
