@@ -10049,6 +10049,75 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
       CHECK_EQ(q1_res->rowCount(), (size_t)1);
       CHECK_EQ(q1_res->rowCount(), q2_res->rowCount());
     }
+
+    {
+      // [BE-6037] null rejection rule issue v4: IS NOT NULL filter epxr connected via
+      // OR-logic
+      run_ddl_statement("DROP TABLE IF EXISTS BE_6037_a;");
+      run_ddl_statement("DROP TABLE IF EXISTS BE_6037_b;");
+      run_ddl_statement("DROP TABLE IF EXISTS BE_6037_c;");
+      g_sqlite_comparator.query("DROP TABLE IF EXISTS BE_6037_a;");
+      g_sqlite_comparator.query("DROP TABLE IF EXISTS BE_6037_b;");
+      g_sqlite_comparator.query("DROP TABLE IF EXISTS BE_6037_c;");
+      run_ddl_statement("CREATE TABLE BE_6037_a (id INT);");
+      run_ddl_statement(
+          "CREATE TABLE BE_6037_b (id INT) WITH (PARTITIONS='REPLICATED');");
+      run_ddl_statement(
+          "CREATE TABLE BE_6037_c (id INT) WITH (PARTITIONS='REPLICATED');");
+      g_sqlite_comparator.query("CREATE TABLE BE_6037_a (id INT);");
+      g_sqlite_comparator.query("CREATE TABLE BE_6037_b (id INT);");
+      g_sqlite_comparator.query("CREATE TABLE BE_6037_c (id INT);");
+      auto insert_stmt = [](const std::string& tbl_name, const int val) {
+        std::ostringstream oss;
+        oss << "INSERT INTO " << tbl_name << " VALUES (" << val << ");";
+        return oss.str();
+      };
+      for (int i = 1; i <= 12; i++) {
+        auto insert_stmt_a = insert_stmt("BE_6037_a", i);
+        run_multiple_agg(insert_stmt_a, ExecutorDeviceType::CPU);
+        g_sqlite_comparator.query(insert_stmt_a);
+        if (i % 2 == 0) {
+          auto insert_stmt_b = insert_stmt("BE_6037_b", i);
+          g_sqlite_comparator.query(insert_stmt_b);
+          run_multiple_agg(insert_stmt_b, ExecutorDeviceType::CPU);
+        }
+        if (i % 3 == 0) {
+          auto insert_stmt_c = insert_stmt("BE_6037_c", i);
+          g_sqlite_comparator.query(insert_stmt_c);
+          run_multiple_agg(insert_stmt_c, ExecutorDeviceType::CPU);
+        }
+      }
+      auto q1 =
+          "SELECT COUNT(1) FROM BE_6037_a r1 LEFT JOIN BE_6037_b r2 ON r1.id = r2.id "
+          "LEFT JOIN BE_6037_c r3 ON r1.id = r3.id WHERE r2.id IS NOT NULL OR r3.id IS "
+          "NOT NULL;";
+      auto q2 =
+          "SELECT COUNT(1) FROM (SELECT r1.id a, r2.id b, r3.id c FROM BE_6037_a r1 LEFT "
+          "JOIN BE_6037_b r2 ON r1.id = r2.id LEFT JOIN BE_6037_c r3 ON r1.id = r3.id) "
+          "WHERE b IS NOT NULL OR c IS NOT NULL;";
+      auto q3 =
+          "SELECT COUNT(1) FROM BE_6037_a r1 LEFT JOIN BE_6037_b r2 ON r1.id = r2.id "
+          "LEFT JOIN BE_6037_c r3 ON r1.id = r3.id WHERE r1.id IS NOT NULL AND r2.id IS "
+          "NOT NULL OR r3.id IS NOT NULL;";
+      auto q4 =
+          "SELECT COUNT(1) FROM BE_6037_a r1 LEFT JOIN BE_6037_b r2 ON r1.id = r2.id "
+          "LEFT JOIN BE_6037_c r3 ON r1.id = r3.id WHERE (r1.id IS NOT NULL AND r2.id IS "
+          "NOT NULL) OR r3.id IS NOT NULL;";
+      auto q5 =
+          "SELECT COUNT(1) FROM BE_6037_a r1 LEFT JOIN BE_6037_b r2 ON r1.id = r2.id "
+          "LEFT JOIN BE_6037_c r3 ON r1.id = r3.id WHERE r1.id IS NOT NULL AND (r2.id IS "
+          "NOT NULL OR r3.id IS NOT NULL);";
+      auto q6 =
+          "SELECT COUNT(1) FROM BE_6037_a r1 LEFT JOIN BE_6037_b r2 ON r1.id = r2.id "
+          "LEFT JOIN BE_6037_c r3 ON r1.id = r3.id WHERE r1.id IS NOT NULL OR (r2.id IS "
+          "NOT NULL AND r3.id IS NOT NULL);";
+      c(q1, dt);
+      c(q2, dt);
+      c(q3, dt);
+      c(q4, dt);
+      c(q5, dt);
+      c(q6, dt);
+    }
   }
 }
 
