@@ -40,6 +40,7 @@ using ChunkKey = std::vector<int>;
 #define CHUNK_KEY_TABLE_IDX 1
 #define CHUNK_KEY_COLUMN_IDX 2
 #define CHUNK_KEY_FRAGMENT_IDX 3
+#define CHUNK_KEY_VARLEN_IDX 4
 
 inline bool is_table_key(const ChunkKey& key) {
   return key.size() == 2;
