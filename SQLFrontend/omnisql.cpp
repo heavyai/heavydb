@@ -1447,6 +1447,9 @@ int main(int argc, char** argv) {
       if (nullptr != (env = getenv("AWS_SECRET_ACCESS_KEY"))) {
         copy_params.s3_secret_key = env;
       }
+      if (nullptr != (env = getenv("AWS_SESSION_TOKEN"))) {
+        copy_params.s3_session_token = env;
+      }
       detect_table(filepath, copy_params, context);
     } else if (!strncmp(line, "\\historylen", 11)) {
       /* The "/historylen" command will change the history len. */

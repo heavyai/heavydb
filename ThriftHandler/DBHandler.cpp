@@ -3458,6 +3458,9 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
   if (cp.s3_secret_key.length() > 0) {
     copy_params.s3_secret_key = cp.s3_secret_key;
   }
+  if (cp.s3_session_token.length() > 0) {
+    copy_params.s3_session_token = cp.s3_session_token;
+  }
   if (cp.s3_region.length() > 0) {
     copy_params.s3_region = cp.s3_region;
   }
@@ -3553,6 +3556,7 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
   copy_params.threads = cp.threads;
   copy_params.s3_access_key = cp.s3_access_key;
   copy_params.s3_secret_key = cp.s3_secret_key;
+  copy_params.s3_session_token = cp.s3_session_token;
   copy_params.s3_region = cp.s3_region;
   copy_params.s3_endpoint = cp.s3_endpoint;
   switch (cp.file_type) {
