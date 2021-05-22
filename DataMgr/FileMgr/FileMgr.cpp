@@ -1585,7 +1585,7 @@ bool FileMgr::updatePageIfDeleted(FileInfo* file_info,
     return true;
   }
   // Recover page if it was deleted but not checkpointed.
-  if (!g_read_only && delete_contingent) {
+  if (delete_contingent) {
     file_info->recoverPage(chunk_key, page_num);
   }
   return false;

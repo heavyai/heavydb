@@ -243,17 +243,27 @@ int32_t FileInfo::syncToDisk() {
 
 void FileInfo::freePageImmediate(int32_t page_num) {
   std::lock_guard<std::mutex> lock(freePagesMutex_);
-  int32_t zero{0};
-  File_Namespace::write(
-      f, page_num * pageSize, sizeof(int32_t), reinterpret_cast<int8_t*>(&zero));
-  freePages.insert(page_num);
+  // we should not get here but putting protection in place
+  // as it seems we are no guaranteed to have f/synced so
+  // protecting from RO trying to write
+  if (!g_read_only) {
+    int32_t zero{0};
+    File_Namespace::write(
+        f, page_num * pageSize, sizeof(int32_t), reinterpret_cast<int8_t*>(&zero));
+    freePages.insert(page_num);
+  }
 }
 
 // Overwrites delete/rollback contingents by re-writing chunk key to page.
 void FileInfo::recoverPage(const ChunkKey& chunk_key, int32_t page_num) {
-  File_Namespace::write(f,
-                        page_num * pageSize + sizeof(int32_t),
-                        2 * sizeof(int32_t),
-                        reinterpret_cast<const int8_t*>(chunk_key.data()));
+  // we should not get here but putting protection in place
+  // as it seems we are no guaranteed to have f/synced so
+  // protecting from RO trying to write
+  if (!g_read_only) {
+    File_Namespace::write(f,
+                          page_num * pageSize + sizeof(int32_t),
+                          2 * sizeof(int32_t),
+                          reinterpret_cast<const int8_t*>(chunk_key.data()));
+  }
 }
 }  // namespace File_Namespace
