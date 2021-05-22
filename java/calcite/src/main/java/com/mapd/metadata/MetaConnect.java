@@ -126,7 +126,9 @@ public class MetaConnect {
 
     // check to see if we have a populated DATABASE_TO_TABLES structure
     // first time in we need to make sure this gets populated
-    if (DATABASE_TO_TABLES.size() == 0) {
+    // It is OK to use a MetaConnect without a user
+    // but it should not attempt to populate the DB
+    if (currentUser != null && DATABASE_TO_TABLES.size() == 0) {
       // get all databases
       populateDatabases();
     }
