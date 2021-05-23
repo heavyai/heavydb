@@ -107,7 +107,10 @@ class ParserWrapper {
 
   bool isOtherExplain() const { return explain_type_ == ExplainType::Other; }
 
-  bool isCalcitePermissableDml(bool read_only_mode) {
+  bool isCalcitePermissableDml(bool read_only_mode = false) {
+    if (is_itas) {
+      return !read_only_mode;
+    }
     if (read_only_mode) {
       return !is_update_dml;  // If we're read-only, no update/delete DML is permissable
     }

@@ -1082,6 +1082,7 @@ class CreateDataframeStmt : public CreateTableBaseStmt {
 class InsertIntoTableAsSelectStmt : public DDLStmt {
  public:
   // ITAS constructor
+  InsertIntoTableAsSelectStmt(const rapidjson::Value& payload);
   InsertIntoTableAsSelectStmt(const std::string* table_name,
                               const std::string* select_query,
                               std::list<std::string*>* c)

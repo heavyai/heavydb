@@ -702,10 +702,6 @@ insert_statement:
 		{
 			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new InsertValuesStmt(($<stringval>3)->release(), ($<slistval>4)->release(), reinterpret_cast<std::list<Expr*>*>(($<listval>7)->release())));
 		}
-		| INSERT INTO table opt_column_commalist SELECTSTRING
-		{
-			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new InsertIntoTableAsSelectStmt(($<stringval>3)->release(), ($<stringval>5)->release(), ($<slistval>4)->release()));
-		}
 	;
 
 /* NOT SUPPORTED

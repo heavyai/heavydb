@@ -2765,6 +2765,283 @@ TEST_F(Select, CtasFixedLenBooleanArrayCrash) {
   drop_table();
 }
 
+class Errors : public DBHandlerTestFixture {
+ public:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    // Default connection string outside of thrift
+  }
+
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+
+  void create_itas_tables() {
+    sql("DROP TABLE IF EXISTS test_src_a;");
+    sql("DROP TABLE IF EXISTS test_src_b;");
+
+    std::string create_source_sql_a = "CREATE TABLE test_src_a(x int, str text);";
+    sql(create_source_sql_a);
+
+    std::string create_source_sql_b = "CREATE TABLE test_src_b(x int, str text);";
+    sql(create_source_sql_b);
+
+    // fill source tables
+    std::string insert_sql_a = "INSERT INTO test_src_a VALUES(7, 'foo');";
+    sql(insert_sql_a);
+
+    std::string insert_sql_b = "INSERT INTO test_src_b VALUES(-9, 'bars');";
+    sql(insert_sql_b);
+  }
+};
+
+TEST_F(Errors, CtasItas) {
+  create_itas_tables();
+
+  // duplicate table, test_src_b already exists
+  EXPECT_ANY_THROW(sql("CREATE TABLE test_src_b AS (SELECT * FROM test_src_a);"));
+
+  // select table 'x_old' does not exist
+  EXPECT_ANY_THROW(sql("CREATE TABLE x_new AS (SELECT * FROM x_old);"));
+
+  // itas table 'test_itas' does not exist
+  EXPECT_ANY_THROW(sql("INSERT INTO test_itas SELECT * FROM test_src_a;"));
+};
+
+// TODO(daniel): Get this ITAS test working again ASAP.
+//      Moved here as itas parsing no longer available in the old parser
+/*
+TEST_F(Non_Kernel_Time_Interrupt, DISABLED_Interrupt_ITAS) {
+  std::atomic<bool> catchInterruption(false);
+  try {
+    std::string session1 = generate_random_string(32);
+    QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
+
+    // do ITAS
+    sql("DROP TABLE IF EXISTS t_ITAS;");
+    sql("CREATE TABLE t_ITAS (x int not null);");
+
+    auto check_interrup_msg = [&catchInterruption](const std::string& msg,
+                                                   bool is_pending_query) {
+      std::cout << msg << std::endl;
+      std::string out_of_slot_msg{"Ran out of slots in the query output buffer"};
+      if (out_of_slot_msg.compare(msg) == 0) {
+        return;
+      }
+
+      auto check_interrupted_msg = msg.find("interrupted");
+      std::string expected_msg{
+          "Query execution has been interrupted while performing ITAS"};
+      CHECK((check_interrupted_msg != std::string::npos) ||
+            expected_msg.compare(msg) == 0)
+          << msg;
+      catchInterruption.store(true);
+    };
+
+    auto itas_thread = std::async(std::launch::async, [&] {
+      try {
+        sql("INSERT INTO t_ITAS SELECT x FROM t_very_large");
+      } catch (const QueryExecutionError& e) {
+        if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+          catchInterruption.store(true);
+        } else if (e.getErrorCode() < 0) {
+          std::cout << "Detect out of slot issue in the query output buffer while "
+                       "performing ITAS"
+                    << std::endl;
+          return;
+        } else {
+          throw e;
+        }
+      } catch (const std::runtime_error& e) {
+        check_interrup_msg(e.what(), false);
+      } catch (...) {
+        throw;
+      }
+      return;
+    });
+
+    std::string curRunningSession{""};
+    std::vector<QuerySessionStatus> query_status;
+    auto start_time = std::chrono::system_clock::now();
+    bool startITAS = false;
+    bool detect_time_out = false;
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+    while (!startITAS && !detect_time_out) {
+      {
+        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        query_status = executor->getQuerySessionInfo(session1, session_read_lock);
+      }
+      if (query_status.size() == 1) {
+        if (query_status[0].getQuerySession().compare(session1) != 0) {
+          CHECK(false);
+        }
+        auto query_str = query_status[0].getQueryStr();
+        if (query_str.find("INSERT_DATA") != std::string::npos) {
+          startITAS = true;
+          std::this_thread::sleep_for(std::chrono::milliseconds(100));
+          executor->interrupt(session1, session1);
+          break;
+        }
+      }
+      auto end_time = std::chrono::system_clock::now();
+      auto cur_sec =
+          std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
+      if (cur_sec.count() > 60) {
+        std::cout << "Detect time_out while performing ITAS" << std::endl;
+        {
+          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
+              executor->getSessionLock());
+          query_status = executor->getQuerySessionInfo(session1, session_read_lock);
+        }
+        detect_time_out = true;
+        executor->interrupt(session1, session1);
+        break;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    if (catchInterruption.load()) {
+      std::cout << "Detect interrupt request while performing ITAS" << std::endl;
+      std::shared_ptr<ResultSet> res =
+          run_query("SELECT COUNT(1) FROM t_ITAS", ExecutorDeviceType::CPU, session1);
+      CHECK_EQ(1, (int64_t)res.get()->rowCount());
+      auto crt_row = res.get()->getNextRow(false, false);
+      auto ret_val = v<int64_t>(crt_row[0]);
+      CHECK_EQ((int64_t)0, ret_val);
+      return;
+    }
+    if (detect_time_out) {
+      return;
+    }
+  } catch (...) {
+    CHECK(false);
+  }
+}
+*/
+
+class ItasStringTest : public DBHandlerTestFixture {
+ public:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("drop table if exists lower_function_test_people;");
+    sql("create table lower_function_test_people(first_name text, last_name text "
+        "encoding none, age integer, country_code text);");
+    sql("insert into lower_function_test_people values('JOHN', 'SMITH', 25, 'us');");
+    sql("insert into lower_function_test_people values('John', 'Banks', 30, 'Us');");
+    sql("insert into lower_function_test_people values('JOHN', 'Wilson', 20, 'cA');");
+    sql("insert into lower_function_test_people values('Sue', 'Smith', 25, 'CA');");
+    sql("drop table if exists lower_function_test_countries;");
+    sql("create table lower_function_test_countries(code text, name text, capital text "
+        "encoding none);");
+    sql("insert into lower_function_test_countries values('US', 'United States', "
+        "'Washington');");
+    sql("insert into lower_function_test_countries values('ca', 'Canada', 'Ottawa');");
+    sql("insert into lower_function_test_countries values('Gb', 'United Kingdom', "
+        "'London');");
+    sql("insert into lower_function_test_countries values('dE', 'Germany', 'Berlin');");
+  }
+
+  void TearDown() override {
+    sql("drop table lower_function_test_people;");
+    sql("drop table lower_function_test_countries;");
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void assertExpectedResult(const std::vector<std::string> headers,
+                            const std::vector<std::vector<std::string>> rows,
+                            const TQueryResult& result) {
+    const auto& row_set = result.row_set;
+    const auto& row_descriptor = result.row_set.row_desc;
+
+    ASSERT_TRUE(row_set.is_columnar);
+    ASSERT_EQ(headers.size(), row_descriptor.size());
+    ASSERT_FALSE(row_set.columns.empty());
+
+    for (size_t i = 0; i < headers.size(); i++) {
+      ASSERT_EQ(row_descriptor[i].col_name, headers[i]);
+      ASSERT_EQ(TDatumType::type::STR, row_descriptor[i].col_type.type);
+    }
+
+    for (const auto& column : row_set.columns) {
+      ASSERT_EQ(rows.size(), column.data.str_col.size());
+    }
+
+    for (size_t row = 0; row < rows.size(); row++) {
+      for (size_t column = 0; column < rows[row].size(); column++) {
+        ASSERT_EQ(rows[row][column], row_set.columns[column].data.str_col[row]);
+        ASSERT_FALSE(row_set.columns[column].nulls[row]);
+      }
+    }
+  }
+};
+
+TEST_F(ItasStringTest, InsertIntoSelectLowercase_SameTable) {
+  if (isDistributedMode()) {
+    GTEST_SKIP();
+  }
+
+  std::string insert_sql =
+      "insert into lower_function_test_people "
+      "(first_name, last_name, age, country_code) "
+      "(select first_name, last_name, age, lower(country_code) "
+      "from lower_function_test_people "
+      "where first_name = \'Sue\');";
+  std::string select_sql =
+      "select first_name, last_name, country_code from lower_function_test_people "
+      "where first_name = 'Sue';";
+
+  // globals for "lower()"
+  //  Use system locale setting by default (as done in the server).
+  g_enable_experimental_string_functions = true;
+  boost::locale::generator generator;
+  std::locale::global(generator.generate(""));
+
+  TQueryResult select_result;
+  sql(insert_sql);
+  sql(select_result, select_sql);
+
+  // compare the result sets
+  assertExpectedResult({"first_name", "last_name", "country_code"},
+                       {{"Sue", "Smith", "CA"}, {"Sue", "Smith", "ca"}},
+                       select_result);
+
+  g_enable_experimental_string_functions = false;
+}
+
+TEST_F(ItasStringTest, InsertIntoSelectLowercase_DifferentTables) {
+  if (isDistributedMode()) {
+    GTEST_SKIP();
+  }
+
+  std::string insert_sql =
+      "insert into lower_function_test_people "
+      "(first_name, last_name, age, country_code) "
+      "(select lower(name), capital, 100, code "
+      "from lower_function_test_countries "
+      "where code = 'US'); ";
+  std::string select_sql =
+      "select first_name, last_name, country_code "
+      "from lower_function_test_people "
+      "where first_name = 'united states';";
+  std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+      {"united states", "Washington", "US"}};
+
+  // globals for "lower()"
+  //  Use system locale setting by default (as done in the server).
+  g_enable_experimental_string_functions = true;
+  boost::locale::generator generator;
+  std::locale::global(generator.generate(""));
+
+  TQueryResult select_result;
+  sql(insert_sql);
+  sql(select_result, select_sql);
+
+  // compare the result sets
+  assertExpectedResult({"first_name", "last_name", "country_code"},
+                       {{"united states", "Washington", "US"}},
+                       select_result);
+
+  g_enable_experimental_string_functions = false;
+}
+
 int main(int argc, char* argv[]) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

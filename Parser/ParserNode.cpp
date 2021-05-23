@@ -2788,6 +2788,26 @@ std::list<ColumnDescriptor> LocalConnector::getColumnDescriptors(AggregatedResul
   return column_descriptors;
 }
 
+InsertIntoTableAsSelectStmt::InsertIntoTableAsSelectStmt(
+    const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("name"));
+  table_name_ = json_str(payload["name"]);
+
+  CHECK(payload.HasMember("query"));
+  select_query_ = json_str(payload["query"]);
+
+  boost::replace_all(select_query_, "\n", " ");
+  select_query_ = "(" + select_query_ + ")";
+
+  if (payload.HasMember("columns")) {
+    CHECK(payload["columns"].IsArray());
+    for (auto& column : payload["columns"].GetArray()) {
+      std::string s = json_str(column);
+      column_list_.emplace_back(std::unique_ptr<std::string>(new std::string(s)));
+    }
+  }
+}
+
 void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy,
                                                const TableDescriptor* td,
                                                bool validate_table,

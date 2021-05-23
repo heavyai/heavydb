@@ -5872,7 +5872,28 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
 
   lockmgr::LockedTableDescriptors locks;
   ParserWrapper pw{query_str};
-  if (pw.isCalcitePathPermissable(read_only_)) {
+
+  if (pw.is_itas) {
+    // itas can attempt to execute here
+
+    check_read_only("insert_into_table");
+
+    std::string query_ra;
+    _return.addExecutionTime(measure<>::execution([&]() {
+      TPlanResult result;
+      std::tie(result, locks) =
+          parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_);
+      query_ra = result.plan_result;
+    }));
+    rapidjson::Document ddl_query;
+    ddl_query.Parse(query_ra);
+    CHECK(ddl_query.HasMember("payload"));
+    CHECK(ddl_query["payload"].IsObject());
+    auto stmt = Parser::InsertIntoTableAsSelectStmt(ddl_query["payload"].GetObject());
+    _return.addExecutionTime(measure<>::execution([&]() { stmt.execute(*session_ptr); }));
+    return;
+
+  } else if (pw.isCalcitePathPermissable(read_only_)) {
     // run DDL before the locks as DDL statements should handle their own locking
     if (pw.isCalciteDdl()) {
       std::string query_ra;
@@ -5885,6 +5906,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
       executeDdl(_return, query_ra, session_ptr);
       return;
     }
+
     executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
         *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
             legacylockmgr::ExecutorOuterLock, true));
@@ -5956,6 +5978,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
                                                   explain_info.justExplain(),
                                                   explain_info.justCalciteExplain(),
                                                   filter_push_down_requests);
+
           } else if (explain_info.justCalciteExplain() &&
                      filter_push_down_requests.empty()) {
             // return the ra as the result:
@@ -6060,6 +6083,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
       return;
     }
   }
+
   LOG(INFO) << "passing query to legacy processor";
   const auto result = apply_copy_to_shim(query_str);
   DBHandler::parser_with_error_handler(result, parse_trees);
@@ -6228,7 +6252,8 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
   ParserWrapper pw{query_str};
   const std::string actual_query{pw.isSelectExplain() ? pw.actual_query : query_str};
   TPlanResult result;
-  if (pw.isCalcitePathPermissable()) {
+
+  if (pw.isCalcitePathPermissable(read_only_)) {
     auto cat = query_state_proxy.getQueryState().getConstSessionInfo()->get_catalog_ptr();
     auto session_cleanup_handler = [&](const auto& session_id) {
       removeInMemoryCalciteSession(session_id);
@@ -6287,6 +6312,7 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
             return cat->getMetadataForTable(a[0], false)->tableId <
                    cat->getMetadataForTable(b[0], false)->tableId;
           });
+
       // In the case of self-join and possibly other cases, we will
       // have duplicate tables. Ensure we only take one for locking below.
       tables.erase(unique(tables.begin(), tables.end()), tables.end());
@@ -7075,6 +7101,7 @@ void DBHandler::executeDdl(
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr) {
   DdlCommandExecutor executor = DdlCommandExecutor(query_ra, session_ptr);
   std::string commandStr = executor.commandStr();
+
   if (executor.isKillQuery()) {
     interruptQuery(*session_ptr, executor.getTargetQuerySessionToKill());
   } else {

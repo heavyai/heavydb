@@ -636,6 +636,49 @@ SqlDdl SqlAlterTable(Span s) :
 }
 
 
+/* 
+ * Insert into table(s) using the following syntax:
+ *
+ * INSERT INTO <table_name> [columns] <select>
+ */
+SqlInsertIntoTable SqlInsertIntoTable(Span s) :
+{
+    final SqlIdentifier table;
+    final SqlNode query;
+    SqlNodeList columnList = null;
+}
+{
+    <INSERT>
+    <INTO>
+    table = CompoundIdentifier()
+    (
+        LOOKAHEAD(SqlSelect())
+        query = SqlSelect()
+    |
+        LOOKAHEAD(2)
+        <LPAREN>
+        query = SqlSelect()
+        <RPAREN>
+    |
+        columnList = ParenthesizedSimpleIdentifierList()
+        (
+            query = SqlSelect()
+        |
+            <LPAREN>
+            query = SqlSelect()
+            <RPAREN>            
+        )
+    )
+    {
+        return new SqlInsertIntoTable(s.end(this), table, query, columnList);
+    }
+}
+
+/*
+ * Create a view using the following syntax:
+ *
+ * CREATE VIEW [ IF NOT EXISTS ] <view_name> [(columns)] [AS <query>]
+ */
 SqlCreate SqlCreateView(Span s, boolean replace) :
 {
     final boolean ifNotExists;

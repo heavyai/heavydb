@@ -231,14 +231,11 @@ ParserWrapper::ParserWrapper(std::string query_string) {
   }
 
   if (dml_type_ == DMLType::Insert) {
-    boost::regex insert_regex{R"(INSERT\s+INTO.*VALUES\s*\(.*)",
-                              boost::regex::extended | boost::regex::icase};
-    if (!boost::regex_match(query_string, insert_regex)) {
-      boost::regex itas_regex{R"(INSERT\s+INTO.*(\s|\(|\")+SELECT.*)",
-                              boost::regex::extended | boost::regex::icase};
-      if (boost::regex_match(query_string, itas_regex)) {
-        is_itas = true;
-      }
+    boost::regex itas_regex{R"(INSERT\s+INTO\s+.*(\s+|\(|\")SELECT(\s|\(|\").*)",
+                            boost::regex::extended | boost::regex::icase};
+    if (boost::regex_match(query_string, itas_regex)) {
+      is_itas = true;
+      return;
     }
   }
 }

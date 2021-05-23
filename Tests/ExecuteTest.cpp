@@ -2218,10 +2218,30 @@ TEST(Select, CountWithLimitAndOffset) {
                                         dt)));
   }
 
-  // now increase the data
-  for (int i = 0; i < 16; i++) {
-    run_ddl_statement("INSERT INTO count_test SELECT * from count_test;");
+  // now increase the data, by using temporary file
+  {
+    const auto data_path = boost::filesystem::path(
+        "../../Tests/Import/datafiles/ctas_itas_CountWithLimitAndOffset.csv");
+    if (boost::filesystem::exists(data_path)) {
+      boost::filesystem::remove(data_path);
+    }
+    std::ofstream out1(data_path.string());
+    // num_sets (-1) because data started out with 1 set of (10) items
+    int64_t num_sets = static_cast<int64_t>(pow(2, 16)) - 1;
+    for (int i = 0; i < num_sets; i++) {
+      for (int j = 0; j < 10; j++) {
+        if (out1.is_open()) {
+          out1 << j << "\n";
+        }
+      }
+    }
+    out1.close();
+    auto copy_data_str =
+        "COPY count_test FROM \'" + data_path.string() + "\' WITH (HEADER=\'f\');";
+    run_ddl_statement(copy_data_str);
+    boost::filesystem::remove(data_path);
   }
+
   int64_t size = static_cast<int64_t>(pow(2, 16) * 10);
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -17666,21 +17686,6 @@ TEST(Select, Correlated_In) {
       "l.val) AND f.val < 2",
       dt);
   }
-}
-
-TEST(Errors, CtasItas) {
-  SKIP_ALL_ON_AGGREGATOR();
-  SKIP_WITH_TEMP_TABLES();
-
-  auto dt = ExecutorDeviceType::CPU;
-
-  // duplicate table
-  EXPECT_ANY_THROW(
-      run_multiple_agg("CREATE TABLE test AS (SELECT * FROM test_inner);", dt));
-  // select table does not exist
-  EXPECT_ANY_THROW(run_multiple_agg("CREATE TABLE x_new AS (SELECT * FROM x_old);", dt));
-  // itas table does not exist
-  EXPECT_ANY_THROW(run_multiple_agg("INSERT INTO test_itas SELECT * FROM test;", dt));
 }
 
 TEST(Create, QuotedColumnIdentifier) {

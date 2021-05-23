@@ -866,6 +866,7 @@ TEST_F(OptimizeTableVacuumTest, PartialOldChunkPagesRemainAfterCompaction) {
   // Fill up fragment. This should occupy 5 data pages (4 pages for the big int entries
   // + 1 page for the $deleted$ chunk) across 2 files (since there are 3 pages per file,
   // per above setting).
+  // sql("insert into test_table select * from (values (1), (2), (3), (4));");
   sql("insert into test_table select * from (values (1), (2), (3), (4));");
   assertFileAndFreePageCount(1, 4094, 2, 1);
 
