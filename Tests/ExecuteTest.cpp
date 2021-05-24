@@ -8682,6 +8682,7 @@ TEST(Select, Joins_Fixed_Size_Array_Multi_Frag) {
 
   // skip to test GPU device until we fix the #5425 issue
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
     test_query("mf_f_arr", dt);
     test_query("mf_d_arr", dt);
     test_query("mf_i_arr", dt);
