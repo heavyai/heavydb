@@ -1,0 +1,9 @@
+Class st::Codegen
+=================
+
+.. doxygenclass:: st::Codegen
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

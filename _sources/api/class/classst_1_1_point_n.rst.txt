@@ -1,0 +1,9 @@
+Class st::PointN
+================
+
+.. doxygenclass:: st::PointN
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

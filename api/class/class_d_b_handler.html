@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev fe05a0c
+                5.7.0dev e83a46a
               </div>
             
           
@@ -958,6 +958,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_user_mapping.html">Class com::mapd::parser::extension::ddl::SqlDropUserMapping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_view.html">Class com::mapd::parser::extension::ddl::SqlDropView</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_filter.html">Class com::mapd::parser::extension::ddl::SqlFilter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_insert_into_table.html">Class com::mapd::parser::extension::ddl::SqlInsertIntoTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_key_constraint.html">Class com::mapd::parser::extension::ddl::SqlKeyConstraint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_kill_query.html">Class com::mapd::parser::extension::ddl::SqlKillQuery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_options_builder.html">Class com::mapd::parser::extension::ddl::SqlOptionsBuilder</a></li>
@@ -1444,6 +1445,12 @@
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_std_log.html">Class query_state::StdLog</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_std_log_data.html">Class query_state::StdLogData</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_timer.html">Class query_state::Timer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classst_1_1_codegen.html">Class st::Codegen</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classst_1_1_n_points.html">Class st::NPoints</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classst_1_1_n_rings.html">Class st::NRings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classst_1_1_point_accessors.html">Class st::PointAccessors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classst_1_1_point_n.html">Class st::PointN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classst_1_1_start_end_point.html">Class st::StartEndPoint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classstring__view__unordered__map.html">Class string_view_unordered_map</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classsystem__validator_1_1_distributed_validate.html">Class system_validator::DistributedValidate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classsystem__validator_1_1_single_node_validator.html">Class system_validator::SingleNodeValidator</a></li>
@@ -2662,6 +2669,19 @@
 
 </div>
 <div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Protected Functions</p>
+<dl class="function">
+<dt id="_CPPv4N9DBHandler15get_session_ptrERK10TSessionId">
+<span id="_CPPv3N9DBHandler15get_session_ptrERK10TSessionId"></span><span id="_CPPv2N9DBHandler15get_session_ptrERK10TSessionId"></span><span id="DBHandler::get_session_ptr__TSessionIdCR"></span><span class="target" id="class_d_b_handler_1a215ea885f64830bf2a865f492e1c40c2"></span>std::shared_ptr&lt;Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_session_info.html#_CPPv4N17Catalog_Namespace11SessionInfoE" title="Catalog_Namespace::SessionInfo">SessionInfo</a>&gt; <code class="sig-name descname">get_session_ptr</code><span class="sig-paren">(</span><em class="property">const</em> TSessionId &amp;<em>session_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler15get_session_ptrERK10TSessionId" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK9DBHandler17getConnectionInfoEv">
+<span id="_CPPv3NK9DBHandler17getConnectionInfoEv"></span><span id="_CPPv2NK9DBHandler17getConnectionInfoEv"></span><span id="DBHandler::getConnectionInfoC"></span><span class="target" id="class_d_b_handler_1aab4b62e13e74e04b9ff0744cc500007c"></span><a class="reference internal" href="../struct/struct_connection_info.html#_CPPv414ConnectionInfo" title="ConnectionInfo">ConnectionInfo</a> <code class="sig-name descname">getConnectionInfo</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9DBHandler17getConnectionInfoEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Types</p>
 <dl class="enum">
 <dt id="_CPPv4N9DBHandler22AssignRenderGroupsModeE">
@@ -2765,11 +2785,6 @@
 <dl class="function">
 <dt id="_CPPv4N9DBHandler21get_const_session_ptrERK10TSessionId">
 <span id="_CPPv3N9DBHandler21get_const_session_ptrERK10TSessionId"></span><span id="_CPPv2N9DBHandler21get_const_session_ptrERK10TSessionId"></span><span id="DBHandler::get_const_session_ptr__TSessionIdCR"></span><span class="target" id="class_d_b_handler_1a39f6273816e4566ed6e946a2e2e9c026"></span>std::shared_ptr&lt;<em class="property">const</em> Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_session_info.html#_CPPv4N17Catalog_Namespace11SessionInfoE" title="Catalog_Namespace::SessionInfo">SessionInfo</a>&gt; <code class="sig-name descname">get_const_session_ptr</code><span class="sig-paren">(</span><em class="property">const</em> TSessionId &amp;<em>session</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler21get_const_session_ptrERK10TSessionId" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N9DBHandler15get_session_ptrERK10TSessionId">
-<span id="_CPPv3N9DBHandler15get_session_ptrERK10TSessionId"></span><span id="_CPPv2N9DBHandler15get_session_ptrERK10TSessionId"></span><span id="DBHandler::get_session_ptr__TSessionIdCR"></span><span class="target" id="class_d_b_handler_1a215ea885f64830bf2a865f492e1c40c2"></span>std::shared_ptr&lt;Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_session_info.html#_CPPv4N17Catalog_Namespace11SessionInfoE" title="Catalog_Namespace::SessionInfo">SessionInfo</a>&gt; <code class="sig-name descname">get_session_ptr</code><span class="sig-paren">(</span><em class="property">const</em> TSessionId &amp;<em>session_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler15get_session_ptrERK10TSessionId" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2920,11 +2935,6 @@
 <dl class="function">
 <dt id="_CPPv4N9DBHandler26fill_column_names_by_tableERNSt6vectorINSt6stringEEERN11query_state6StdLogE">
 <span id="_CPPv3N9DBHandler26fill_column_names_by_tableERNSt6vectorINSt6stringEEERN11query_state6StdLogE"></span><span id="_CPPv2N9DBHandler26fill_column_names_by_tableERNSt6vectorINSt6stringEEERN11query_state6StdLogE"></span><span id="DBHandler::fill_column_names_by_table__std::vector:ss:R.query_state::StdLogR"></span><span class="target" id="class_d_b_handler_1a02bddf44a3643ddf437590a98bbae99b"></span>std::unordered_map&lt;std::string, std::unordered_set&lt;std::string&gt;&gt; <code class="sig-name descname">fill_column_names_by_table</code><span class="sig-paren">(</span>std::vector&lt;std::string&gt; &amp;<em>table_names</em>, query_state::<a class="reference internal" href="classquery__state_1_1_std_log.html#_CPPv4N11query_state6StdLogE" title="query_state::StdLog">StdLog</a> &amp;<em>stdlog</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9DBHandler26fill_column_names_by_tableERNSt6vectorINSt6stringEEERN11query_state6StdLogE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK9DBHandler17getConnectionInfoEv">
-<span id="_CPPv3NK9DBHandler17getConnectionInfoEv"></span><span id="_CPPv2NK9DBHandler17getConnectionInfoEv"></span><span id="DBHandler::getConnectionInfoC"></span><span class="target" id="class_d_b_handler_1aab4b62e13e74e04b9ff0744cc500007c"></span><a class="reference internal" href="../struct/struct_connection_info.html#_CPPv414ConnectionInfo" title="ConnectionInfo">ConnectionInfo</a> <code class="sig-name descname">getConnectionInfo</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9DBHandler17getConnectionInfoEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

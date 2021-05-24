@@ -1,0 +1,9 @@
+Class st::PointAccessors
+========================
+
+.. doxygenclass:: st::PointAccessors
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
