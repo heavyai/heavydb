@@ -63,8 +63,11 @@
       be user-specified integer value as specified in the <sizer>
       argument position of the table function call.
 
-    + Constant - the allocated output column size will be <sizer>. The
-      table function
+    + Constant - the allocated output column size will be <sizer>.
+
+    + TableFunctionSpecifiedParameter - The table function
+      implementation must call resize to allocate output column
+      buffers. The <sizer> value is not used.
 
     The actual size of the output column is returned by the table
     function implementation that must be equal or smaller to the
@@ -110,6 +113,8 @@ struct TableFunctionOutputRowSizer {
         return "kUserSpecifiedRowMultiplier[" + std::to_string(val) + "]";
       case OutputBufferSizeType::kConstant:
         return "kConstant[" + std::to_string(val) + "]";
+      case OutputBufferSizeType::kTableFunctionSpecifiedParameter:
+        return "kTableFunctionSpecifiedParameter[" + std::to_string(val) + "]";
     }
     return "";
   }
@@ -164,7 +169,8 @@ class TableFunction {
   }
 
   bool hasNonUserSpecifiedOutputSizeConstant() const {
-    return output_sizer_.type == OutputBufferSizeType::kConstant;
+    return output_sizer_.type == OutputBufferSizeType::kConstant ||
+           output_sizer_.type == OutputBufferSizeType::kTableFunctionSpecifiedParameter;
   }
 
   bool hasUserSpecifiedOutputSizeConstant() const {
@@ -173,6 +179,10 @@ class TableFunction {
 
   bool hasUserSpecifiedOutputSizeMultiplier() const {
     return output_sizer_.type == OutputBufferSizeType::kUserSpecifiedRowMultiplier;
+  }
+
+  bool hasTableFunctionSpecifiedParameter() const {
+    return output_sizer_.type == OutputBufferSizeType::kTableFunctionSpecifiedParameter;
   }
 
   OutputBufferSizeType getOutputRowSizeType() const { return output_sizer_.type; }

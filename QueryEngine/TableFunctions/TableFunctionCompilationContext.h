@@ -48,7 +48,7 @@ class TableFunctionCompilationContext {
   GpuCompilationContext* getGpuCode() const { return gpu_code_.get(); }
 
  private:
-  void generateEntryPoint(const TableFunctionExecutionUnit& exe_unit);
+  void generateEntryPoint(const TableFunctionExecutionUnit& exe_unit, bool is_gpu);
   void generateGpuKernel();
   void finalize(const CompilationOptions& co, Executor* executor);
 

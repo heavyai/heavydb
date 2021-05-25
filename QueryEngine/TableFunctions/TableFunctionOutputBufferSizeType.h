@@ -31,6 +31,7 @@ enum class OutputBufferSizeType {
   kConstant,
   kUserSpecifiedConstantParameter,
   kUserSpecifiedRowMultiplier,
+  kTableFunctionSpecifiedParameter
 };
 
 }  // namespace table_functions

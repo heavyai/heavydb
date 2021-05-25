@@ -119,7 +119,9 @@ std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
 namespace {
 
 // Returns the LLVM name for `type`.
-std::string serialize_type(const ExtArgumentType type, bool byval = true) {
+std::string serialize_type(const ExtArgumentType type,
+                           bool byval = true,
+                           bool declare = false) {
   switch (type) {
     case ExtArgumentType::Bool:
       return "i8";  // clang converts bool to i8
@@ -190,7 +192,7 @@ std::string serialize_type(const ExtArgumentType type, bool byval = true) {
     case ExtArgumentType::ColumnBool:
       return (byval ? "{i1*, i64}" : "i8*");
     case ExtArgumentType::TextEncodingNone:
-      return "text_encoding_node";
+      return (declare ? "{i8*, i32}*" : "text_encoding_node");
     case ExtArgumentType::TextEncodingDict8:
       return "text_encoding_dict8";
     case ExtArgumentType::TextEncodingDict16:
@@ -198,19 +200,19 @@ std::string serialize_type(const ExtArgumentType type, bool byval = true) {
     case ExtArgumentType::TextEncodingDict32:
       return "text_encoding_dict32";
     case ExtArgumentType::ColumnListInt8:
-      return "column_list_int8";
+      return (declare ? "{i8**, i64, i64}*" : "column_list_int8");
     case ExtArgumentType::ColumnListInt16:
-      return "column_list_int16";
+      return (declare ? "{i8**, i64, i64}*" : "column_list_int16");
     case ExtArgumentType::ColumnListInt32:
-      return "column_list_int32";
+      return (declare ? "{i8**, i64, i64}*" : "column_list_int32");
     case ExtArgumentType::ColumnListInt64:
-      return "column_list_int64";
+      return (declare ? "{i8**, i64, i64}*" : "column_list_int64");
     case ExtArgumentType::ColumnListFloat:
-      return "column_list_float";
+      return (declare ? "{i8**, i64, i64}*" : "column_list_float");
     case ExtArgumentType::ColumnListDouble:
-      return "column_list_double";
+      return (declare ? "{i8**, i64, i64}*" : "column_list_double");
     case ExtArgumentType::ColumnListBool:
-      return "column_list_bool";
+      return (declare ? "{i8**, i64, i64}*" : "column_list_bool");
     default:
       CHECK(false);
   }
@@ -516,7 +518,8 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
                             kv.first};
     std::vector<std::string> arg_strs;
     for (const auto arg : kv.second.getArgs(/* ensure_column = */ true)) {
-      arg_strs.push_back(serialize_type(arg, /* byval= */ kv.second.isRuntime()));
+      arg_strs.push_back(
+          serialize_type(arg, /* byval= */ kv.second.isRuntime(), /* declare= */ true));
     }
     declarations.push_back(decl_prefix + "(" + boost::algorithm::join(arg_strs, ", ") +
                            ");");

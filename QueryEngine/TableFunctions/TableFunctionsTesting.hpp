@@ -8,11 +8,11 @@
 
 // clang-format off
 /*
-  UDTF: ct_device_selection_udtf_any(Cursor<int32_t>) -> Column<int32_t>
-  UDTF: ct_device_selection_udtf_cpu__cpu_(Cursor<int32_t>) -> Column<int32_t>
-  UDTF: ct_device_selection_udtf_gpu__gpu_(Cursor<int32_t>) -> Column<int32_t>
-  UDTF: ct_device_selection_udtf_both__cpu_(Cursor<int32_t>) -> Column<int32_t>
-  UDTF: ct_device_selection_udtf_both__gpu_(Cursor<int32_t>) -> Column<int32_t>
+  UDTF: ct_device_selection_udtf_any(Cursor<int32_t>, Constant<1>) -> Column<int32_t>
+  UDTF: ct_device_selection_udtf_cpu__cpu_(Cursor<int32_t>, Constant<1>) -> Column<int32_t>
+  UDTF: ct_device_selection_udtf_gpu__gpu_(Cursor<int32_t>, Constant<1>) -> Column<int32_t>
+  UDTF: ct_device_selection_udtf_both__cpu_(Cursor<int32_t>, Constant<1>) -> Column<int32_t>
+  UDTF: ct_device_selection_udtf_both__gpu_(Cursor<int32_t>, Constant<1>) -> Column<int32_t>
 */
 // clang-format on
 
@@ -61,16 +61,16 @@ int32_t ct_device_selection_udtf_both__gpu_(const Column<int32_t>& input,
 /*
   Test functions for constant sizer parameter:
 
-  UDTF: ct_binding_udtf_constant__cpu_1(Cursor<int32_t>) -> Column<int32_t>
-  UDTF: ct_binding_udtf_constant__cpu_2(Cursor<int32_t, int32_t>) -> Column<int32_t>
-  UDTF: ct_binding_udtf_constant__cpu_3(Cursor<int32_t, int32_t, int32_t>) -> Column<int32_t>
-  UDTF: ct_binding_udtf_constant__cpu_4(Cursor<int64_t, int32_t, int32_t>) -> Column<int32_t>
-  UDTF: ct_binding_udtf_constant__cpu_5(Cursor<int64_t, int64_t, int32_t>) -> Column<int32_t>
-  UDTF: ct_binding_udtf_constant__cpu_6(Cursor<int64_t, int32_t, int64_t>) -> Column<int32_t>
-  UDTF: ct_binding_udtf_constant__cpu_7(Cursor<int32_t, ColumnList<int32_t>>) -> Column<int32_t>
-  UDTF: ct_binding_udtf_constant__cpu_8(Cursor<ColumnList<int32_t>, int64_t>) -> Column<int32_t>
-  UDTF: ct_binding_udtf_constant__cpu_9(Cursor<ColumnList<int32_t>, ColumnList<int64_t>>) -> Column<int32_t>
-  UDTF: ct_binding_udtf_constant__cpu_10(Cursor<int64_t, ColumnList<int64_t>, int64_t>) -> Column<int32_t>
+  UDTF: ct_binding_udtf_constant__cpu_1(Cursor<int32_t>, Constant<1>) -> Column<int32_t>
+  UDTF: ct_binding_udtf_constant__cpu_2(Cursor<int32_t, int32_t>, Constant<1>) -> Column<int32_t>
+  UDTF: ct_binding_udtf_constant__cpu_3(Cursor<int32_t, int32_t, int32_t>, Constant<1>) -> Column<int32_t>
+  UDTF: ct_binding_udtf_constant__cpu_4(Cursor<int64_t, int32_t, int32_t>, Constant<1>) -> Column<int32_t>
+  UDTF: ct_binding_udtf_constant__cpu_5(Cursor<int64_t, int64_t, int32_t>, Constant<1>) -> Column<int32_t>
+  UDTF: ct_binding_udtf_constant__cpu_6(Cursor<int64_t, int32_t, int64_t>, Constant<1>) -> Column<int32_t>
+  UDTF: ct_binding_udtf_constant__cpu_7(Cursor<int32_t, ColumnList<int32_t>>, Constant<1>) -> Column<int32_t>
+  UDTF: ct_binding_udtf_constant__cpu_8(Cursor<ColumnList<int32_t>, int64_t>, Constant<1>) -> Column<int32_t>
+  UDTF: ct_binding_udtf_constant__cpu_9(Cursor<ColumnList<int32_t>, ColumnList<int64_t>>, Constant<1>) -> Column<int32_t>
+  UDTF: ct_binding_udtf_constant__cpu_10(Cursor<int64_t, ColumnList<int64_t>, int64_t>, Constant<1>) -> Column<int32_t>
 
 
   Test functions for row multiplier sizer parameter:

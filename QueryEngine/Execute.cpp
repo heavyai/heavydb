@@ -3515,6 +3515,7 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
 #include "DateAdd.cpp"
 #include "GeoOps.cpp"
 #include "StringFunctions.cpp"
+#include "TableFunctions/TableFunctionOps.cpp"
 #undef EXECUTE_INCLUDE
 
 namespace {

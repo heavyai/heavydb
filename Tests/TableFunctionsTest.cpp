@@ -158,6 +158,14 @@ TEST_F(TableFunctions, BasicProjection) {
       ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]),
                 static_cast<int64_t>(4));  // max value of x
     }
+    // Table Function specified sizer test
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(column_list_row_sum(cursor(SELECT x, x FROM "
+          "tf_test)));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(2));
+    }
   }
 }
 

@@ -48,7 +48,7 @@ TextEncodingDict32, ColumnListInt8, ColumnListInt16, ColumnListInt32, ColumnList
 ColumnListFloat, ColumnListDouble, ColumnListBool '''.strip().replace(' ', '').split(',')
 
 OutputBufferSizeTypes = '''
-kConstant, kUserSpecifiedConstantParameter, kUserSpecifiedRowMultiplier
+kConstant, kUserSpecifiedConstantParameter, kUserSpecifiedRowMultiplier, kTableFunctionSpecifiedParameter
 '''.strip().replace(' ', '').split(',')
 
 translate_map = dict(
@@ -57,6 +57,7 @@ translate_map = dict(
     RowMultiplier = 'kUserSpecifiedRowMultiplier',
     UserSpecifiedConstantParameter = 'kUserSpecifiedConstantParameter',
     UserSpecifiedRowMultiplier = 'kUserSpecifiedRowMultiplier',
+    TableFunctionSpecifiedParameter = 'kTableFunctionSpecifiedParameter',
     short = 'Int16',
     int = 'Int32',
     long = 'Int64',
@@ -112,6 +113,10 @@ def find_comma(line):
             return i
     return -1
 
+def line_is_incomplete(line):
+    # TODO: try to parse the line to be certain about completeness.
+    return line.endswith(',') or line.endswith('->')
+
 add_stmts = []
 
 for input_file in sys.argv[1:-1]:
@@ -119,11 +124,12 @@ for input_file in sys.argv[1:-1]:
     last_line = None
     for line in open(input_file).readlines():
         line = line.replace(' ', '').strip()
-        if not line.startswith('UDTF:'):
-            continue
         if last_line is not None:
             line = last_line + line
-        if line.endswith(','):
+            last_line = None
+        if not line.startswith('UDTF:'):
+            continue
+        if line_is_incomplete(line):
             last_line = line
             continue
         last_line = None
@@ -177,7 +183,7 @@ for input_file in sys.argv[1:-1]:
             else:
                 n, t = r
                 if n in OutputBufferSizeTypes:
-                    if n != 'kConstant':
+                    if n not in ['kConstant', 'kTableFunctionSpecifiedParameter']:
                         input_types.append('ExtArgumentType::Int32')
                         sql_types.append('ExtArgumentType::Int32')
                     if n == 'kUserSpecifiedRowMultiplier':
@@ -205,7 +211,7 @@ for input_file in sys.argv[1:-1]:
             output_types.append('ExtArgumentType::%s' % (r))
 
         if sizer is None:
-            sizer = 'TableFunctionOutputRowSizer{OutputBufferSizeType::kConstant, 1}'
+            sizer = 'TableFunctionOutputRowSizer{OutputBufferSizeType::kTableFunctionSpecifiedParameter, 1}'
 
         input_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(input_types))
         output_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(output_types))

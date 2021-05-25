@@ -110,6 +110,7 @@ set(query_engine_source_files
     TableFunctions/TableFunctionCompilationContext.cpp
     TableFunctions/TableFunctionExecutionContext.cpp
     TableFunctions/TableFunctionsFactory.cpp
+    TableFunctions/TableFunctionOps.cpp
     TableGenerations.cpp
     TableOptimizer.cpp
     TargetExprBuilder.cpp
@@ -127,7 +128,8 @@ set(query_engine_source_files
     Codec.h
     Execute.h
     NvidiaKernel.h
-    QueryTemplateGenerator.h)
+    QueryTemplateGenerator.h
+    TableFunctions/QueryOutputBufferMemoryManager.h)
 
 if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   list(APPEND query_engine_source_files
