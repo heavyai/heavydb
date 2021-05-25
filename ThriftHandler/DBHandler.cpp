@@ -807,8 +807,24 @@ void DBHandler::get_server_status(TServerStatus& _return, const TSessionId& sess
 
 void DBHandler::get_status(std::vector<TServerStatus>& _return,
                            const TSessionId& session) {
-  auto stdlog = STDLOG(get_session_ptr(session));
-  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  //
+  // get_status() will soon be called locally at startup on the aggregator
+  // in order to validate that all nodes of a cluster are running the
+  // same software version and configured to use the same renderer driver.
+  //
+  // In that context, it will be called with the InvalidSessionID, and
+  // with the local super-user flag set.
+  //
+  // Hence, we allow this session-less mode only in distributed mode, and
+  // then on a leaf (always), or on the aggregator (only in super-user mode)
+  //
+  auto const allow_invalid_session = g_cluster && (!isAggregator() || super_user_rights_);
+  if (!allow_invalid_session || session != getInvalidSessionId()) {
+    auto stdlog = STDLOG(get_session_ptr(session));
+    stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  } else {
+    LOG(INFO) << "get_status() called in session-less mode";
+  }
   const auto rendering_enabled = bool(render_handler_);
   TServerStatus ret;
   ret.read_only = read_only_;
