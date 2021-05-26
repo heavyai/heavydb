@@ -295,7 +295,7 @@ class StorageIOFacility {
 
         fragment->setChunkMetadata(cd->columnId, new_chunk_metadata);
         fragment->shadowChunkMetadataMap =
-            fragment->getChunkMetadataMap();  // TODO(adb): needed?
+            fragment->getChunkMetadataMapPhysicalCopy();  // TODO(adb): needed?
 
         auto& data_mgr = catalog_.getDataMgr();
         if (data_mgr.gpusPresent()) {
@@ -507,7 +507,7 @@ class StorageIOFacility {
 
         fragment->setChunkMetadata(cd->columnId, new_chunk_metadata);
         fragment->shadowChunkMetadataMap =
-            fragment->getChunkMetadataMap();  // TODO(adb): needed?
+            fragment->getChunkMetadataMapPhysicalCopy();  // TODO(adb): needed?
 
         auto& data_mgr = catalog_.getDataMgr();
         if (data_mgr.gpusPresent()) {

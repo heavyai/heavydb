@@ -375,7 +375,7 @@ void InsertOrderFragmenter::updateChunkStats(
 
       fragment->setChunkMetadata(column_id, new_metadata);
       fragment->shadowChunkMetadataMap =
-          fragment->getChunkMetadataMap();  // TODO(adb): needed?
+          fragment->getChunkMetadataMapPhysicalCopy();  // TODO(adb): needed?
       if (defaultInsertLevel_ == Data_Namespace::DISK_LEVEL) {
         buf->setDirty();
       }
@@ -463,7 +463,8 @@ void InsertOrderFragmenter::addColumns(const InsertData& insertDataStruct) {
   }
   try {
     for (auto const& fragmentInfo : fragmentInfoVec_) {
-      fragmentInfo->shadowChunkMetadataMap = fragmentInfo->getChunkMetadataMapPhysical();
+      fragmentInfo->shadowChunkMetadataMap =
+          fragmentInfo->getChunkMetadataMapPhysicalCopy();
       auto numRowsToInsert = fragmentInfo->getPhysicalNumTuples();  // not getNumTuples()
       size_t numRowsCanBeInserted;
       for (size_t i = 0; i < insertDataStruct.columnIds.size(); i++) {
@@ -544,7 +545,8 @@ void InsertOrderFragmenter::dropColumns(const std::vector<int>& columnIds) {
   // synchronize concurrent accesses to fragmentInfoVec_
   mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
   for (auto const& fragmentInfo : fragmentInfoVec_) {
-    fragmentInfo->shadowChunkMetadataMap = fragmentInfo->getChunkMetadataMapPhysical();
+    fragmentInfo->shadowChunkMetadataMap =
+        fragmentInfo->getChunkMetadataMapPhysicalCopy();
   }
 
   for (const auto columnId : columnIds) {

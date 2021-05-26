@@ -98,6 +98,8 @@ class FragmentInfo {
 
   const ChunkMetadataMap& getChunkMetadataMapPhysical() const { return chunkMetadataMap; }
 
+  ChunkMetadataMap getChunkMetadataMapPhysicalCopy() const;
+
   size_t getNumTuples() const;
 
   size_t getPhysicalNumTuples() const { return numTuples; }

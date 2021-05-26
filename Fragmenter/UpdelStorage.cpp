@@ -455,12 +455,7 @@ void InsertOrderFragmenter::updateColumns(
   static boost_variant_accessor<ScalarTargetValue> SCALAR_TARGET_VALUE_ACCESSOR;
   static boost_variant_accessor<int64_t> OFFSET_VALUE__ACCESSOR;
 
-  updelRoll.dirtyChunks[deletedChunk.get()] = deletedChunk;
-  ChunkKey chunkey{updelRoll.catalog->getCurrentDB().dbId,
-                   deletedChunk->getColumnDesc()->tableId,
-                   deletedChunk->getColumnDesc()->columnId,
-                   fragment.fragmentId};
-  updelRoll.dirtyChunkeys.insert(chunkey);
+  updelRoll.addDirtyChunk(deletedChunk, fragment.fragmentId);
   bool* deletedChunkBuffer =
       reinterpret_cast<bool*>(deletedChunk->getBuffer()->getMemoryPtr());
 
@@ -553,9 +548,9 @@ void InsertOrderFragmenter::updateColumns(
   insertDataNoCheckpoint(insert_data);
 
   // update metdata for deleted chunk as we are doing special handling
-  auto chunk_meta_it = fragment.getChunkMetadataMap().find(indexOfDeletedColumn);
-  CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
-  chunk_meta_it->second->chunkStats.max.boolval = 1;
+  auto chunkMetadata =
+      updelRoll.getChunkMetadata({td, &fragment}, indexOfDeletedColumn, fragment);
+  chunkMetadata->chunkStats.max.boolval = 1;
 
   // Im not completely sure that we need to do this in fragmented and on the buffer
   // but leaving this alone for now
@@ -680,18 +675,7 @@ std::optional<ChunkUpdateStats> InsertOrderFragmenter::updateColumn(
   auto dbuf = chunk->getBuffer();
   auto dbuf_addr = dbuf->getMemoryPtr();
   dbuf->setUpdated();
-  {
-    std::lock_guard<std::mutex> lck(updel_roll.mutex);
-    if (updel_roll.dirtyChunks.count(chunk.get()) == 0) {
-      updel_roll.dirtyChunks.emplace(chunk.get(), chunk);
-    }
-
-    ChunkKey chunkey{updel_roll.catalog->getCurrentDB().dbId,
-                     cd->tableId,
-                     cd->columnId,
-                     fragment.fragmentId};
-    updel_roll.dirtyChunkeys.insert(chunkey);
-  }
+  updel_roll.addDirtyChunk(chunk, fragment.fragmentId);
   for (size_t rbegin = 0, c = 0; rbegin < nrow; ++c, rbegin += segsz) {
     threads.emplace_back(std::async(
         std::launch::async, [=, &update_stats_per_thread, &frag_offsets, &rhs_values] {
@@ -941,20 +925,7 @@ void InsertOrderFragmenter::updateColumnMetadata(
     const UpdateValuesStats& new_values_stats,
     const SQLTypeInfo& rhs_type,
     UpdelRoll& updel_roll) {
-  auto td = updel_roll.catalog->getMetadataForTable(cd->tableId);
-  auto key = std::make_pair(td, &fragment);
-  std::lock_guard<std::mutex> lck(updel_roll.mutex);
   mapd_unique_lock<mapd_shared_mutex> write_lock(fragmentInfoMutex_);
-  if (0 == updel_roll.chunkMetadata.count(key)) {
-    updel_roll.chunkMetadata[key] = fragment.getChunkMetadataMapPhysical();
-  }
-  if (0 == updel_roll.numTuples.count(key)) {
-    updel_roll.numTuples[key] = fragment.shadowNumTuples;
-  }
-  // at this point we are just looking at a reference to the real active metadata it is
-  // unsafe to do operations on this we need this to be a copy?
-  auto& chunkMetadata = updel_roll.chunkMetadata[key];
-
   auto buffer = chunk->getBuffer();
   const auto& lhs_type = cd->columnType;
 
@@ -990,21 +961,22 @@ void InsertOrderFragmenter::updateColumnMetadata(
                  new_values_stats.max_int64t,
                  new_values_stats.has_null);
   }
-  buffer->getEncoder()->getMetadata(chunkMetadata[cd->columnId]);
+  auto td = updel_roll.catalog->getMetadataForTable(cd->tableId);
+  auto chunk_metadata =
+      updel_roll.getChunkMetadata({td, &fragment}, cd->columnId, fragment);
+  buffer->getEncoder()->getMetadata(chunk_metadata);
 }
 
 void InsertOrderFragmenter::updateMetadata(const Catalog_Namespace::Catalog* catalog,
                                            const MetaDataKey& key,
                                            UpdelRoll& updel_roll) {
   mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
-  if (updel_roll.chunkMetadata.count(key)) {
-    auto& fragmentInfo = *key.second;
-    const auto& chunkMetadata = updel_roll.chunkMetadata[key];
-    fragmentInfo.shadowChunkMetadataMap = chunkMetadata;
-    fragmentInfo.setChunkMetadataMap(chunkMetadata);
-    fragmentInfo.shadowNumTuples = updel_roll.numTuples[key];
-    fragmentInfo.setPhysicalNumTuples(fragmentInfo.shadowNumTuples);
-  }
+  const auto chunk_metadata_map = updel_roll.getChunkMetadataMap(key);
+  auto& fragmentInfo = *key.second;
+  fragmentInfo.setChunkMetadataMap(chunk_metadata_map);
+  fragmentInfo.shadowChunkMetadataMap = fragmentInfo.getChunkMetadataMapPhysicalCopy();
+  fragmentInfo.shadowNumTuples = updel_roll.getNumTuple(key);
+  fragmentInfo.setPhysicalNumTuples(fragmentInfo.shadowNumTuples);
 }
 
 auto InsertOrderFragmenter::getChunksForAllColumns(
@@ -1092,20 +1064,11 @@ static void set_chunk_metadata(const Catalog_Namespace::Catalog* catalog,
   auto cd = chunk->getColumnDesc();
   auto td = catalog->getMetadataForTable(cd->tableId);
   auto data_buffer = chunk->getBuffer();
-  std::lock_guard<std::mutex> lck(updel_roll.mutex);
-  const auto key = std::make_pair(td, &fragment);
-  if (0 == updel_roll.chunkMetadata.count(key)) {
-    updel_roll.chunkMetadata[key] = fragment.getChunkMetadataMapPhysical();
-  }
-  auto& chunkMetadata = updel_roll.chunkMetadata[key];
-  chunkMetadata[cd->columnId]->numElements = nrows_to_keep;
-  chunkMetadata[cd->columnId]->numBytes = data_buffer->size();
-  if (updel_roll.dirtyChunks.count(chunk.get()) == 0) {
-    updel_roll.dirtyChunks.emplace(chunk.get(), chunk);
-    ChunkKey chunk_key{
-        catalog->getDatabaseId(), cd->tableId, cd->columnId, fragment.fragmentId};
-    updel_roll.dirtyChunkeys.emplace(chunk_key);
-  }
+  auto chunkMetadata =
+      updel_roll.getChunkMetadata({td, &fragment}, cd->columnId, fragment);
+  chunkMetadata->numElements = nrows_to_keep;
+  chunkMetadata->numBytes = data_buffer->size();
+  updel_roll.addDirtyChunk(chunk, fragment.fragmentId);
 }
 
 auto InsertOrderFragmenter::vacuum_fixlen_rows(
@@ -1407,8 +1370,7 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
 
   wait_cleanup_threads(threads);
 
-  auto key = std::make_pair(td, &fragment);
-  updel_roll.numTuples[key] = nrows_to_keep;
+  updel_roll.setNumTuple({td, &fragment}, nrows_to_keep);
   for (size_t ci = 0; ci < chunks.size(); ++ci) {
     auto chunk = chunks[ci];
     auto cd = chunk->getColumnDesc();
@@ -1450,7 +1412,7 @@ bool UpdelRoll::commitUpdate() {
       // `dirtyChunks` has to be cleared before resetting epochs
       catalog->checkpoint(logicalTableId);
     } catch (...) {
-      dirtyChunks.clear();
+      dirty_chunks.clear();
       catalog->setTableEpochsLogExceptions(catalog->getDatabaseId(), table_epochs);
       throw;
     }
@@ -1471,7 +1433,7 @@ void UpdelRoll::stageUpdate() {
   try {
     catalog->getDataMgr().checkpoint(db_id, table_id, memoryLevel);
   } catch (...) {
-    dirtyChunks.clear();
+    dirty_chunks.clear();
     throw;
   }
   updateFragmenterAndCleanupChunks();
@@ -1479,17 +1441,18 @@ void UpdelRoll::stageUpdate() {
 
 void UpdelRoll::updateFragmenterAndCleanupChunks() {
   // for each dirty fragment
-  for (auto& cm : chunkMetadata) {
+  for (auto& cm : chunk_metadata_map_per_fragment) {
     cm.first.first->fragmenter->updateMetadata(catalog, cm.first, *this);
   }
-  dirtyChunks.clear();
+
   // flush gpu dirty chunks if update was not on gpu
   if (memoryLevel != Data_Namespace::MemoryLevel::GPU_LEVEL) {
-    for (const auto& chunkey : dirtyChunkeys) {
+    for (const auto& [chunk_key, chunk] : dirty_chunks) {
       catalog->getDataMgr().deleteChunksWithPrefix(
-          chunkey, Data_Namespace::MemoryLevel::GPU_LEVEL);
+          chunk_key, Data_Namespace::MemoryLevel::GPU_LEVEL);
     }
   }
+  dirty_chunks.clear();
 }
 
 void UpdelRoll::cancelUpdate() {
@@ -1504,16 +1467,73 @@ void UpdelRoll::cancelUpdate() {
     int databaseId = catalog->getDatabaseId();
     auto table_epochs = catalog->getTableEpochs(databaseId, logicalTableId);
 
-    dirtyChunks.clear();
+    dirty_chunks.clear();
     catalog->setTableEpochs(databaseId, table_epochs);
   } else {
     const auto td = catalog->getMetadataForTable(logicalTableId);
     CHECK(td);
     if (td->persistenceLevel != memoryLevel) {
-      for (auto dit : dirtyChunks) {
-        catalog->getDataMgr().free(dit.first->getBuffer());
-        dit.first->setBuffer(nullptr);
+      for (const auto& [chunk_key, chunk] : dirty_chunks) {
+        catalog->getDataMgr().free(chunk->getBuffer());
+        chunk->setBuffer(nullptr);
       }
     }
   }
+}
+
+void UpdelRoll::addDirtyChunk(std::shared_ptr<Chunk_NS::Chunk> chunk,
+                              int32_t fragment_id) {
+  mapd_unique_lock<mapd_shared_mutex> lock(chunk_update_tracker_mutex);
+  CHECK(catalog);
+  ChunkKey chunk_key{catalog->getDatabaseId(),
+                     chunk->getColumnDesc()->tableId,
+                     chunk->getColumnDesc()->columnId,
+                     fragment_id};
+  dirty_chunks[chunk_key] = chunk;
+}
+
+void UpdelRoll::initializeUnsetMetadata(
+    const TableDescriptor* td,
+    Fragmenter_Namespace::FragmentInfo& fragment_info) {
+  mapd_unique_lock<mapd_shared_mutex> lock(chunk_update_tracker_mutex);
+  MetaDataKey key{td, &fragment_info};
+  if (chunk_metadata_map_per_fragment.count(key) == 0) {
+    chunk_metadata_map_per_fragment[key] =
+        fragment_info.getChunkMetadataMapPhysicalCopy();
+  }
+  if (num_tuples.count(key) == 0) {
+    num_tuples[key] = fragment_info.shadowNumTuples;
+  }
+}
+
+std::shared_ptr<ChunkMetadata> UpdelRoll::getChunkMetadata(
+    const MetaDataKey& key,
+    int32_t column_id,
+    Fragmenter_Namespace::FragmentInfo& fragment_info) {
+  initializeUnsetMetadata(key.first, fragment_info);
+  mapd_shared_lock<mapd_shared_mutex> lock(chunk_update_tracker_mutex);
+  auto metadata_map_it = chunk_metadata_map_per_fragment.find(key);
+  CHECK(metadata_map_it != chunk_metadata_map_per_fragment.end());
+  auto chunk_metadata_it = metadata_map_it->second.find(column_id);
+  CHECK(chunk_metadata_it != metadata_map_it->second.end());
+  return chunk_metadata_it->second;
+}
+
+ChunkMetadataMap UpdelRoll::getChunkMetadataMap(const MetaDataKey& key) const {
+  mapd_shared_lock<mapd_shared_mutex> lock(chunk_update_tracker_mutex);
+  auto metadata_map_it = chunk_metadata_map_per_fragment.find(key);
+  CHECK(metadata_map_it != chunk_metadata_map_per_fragment.end());
+  return metadata_map_it->second;
+}
+
+size_t UpdelRoll::getNumTuple(const MetaDataKey& key) const {
+  mapd_shared_lock<mapd_shared_mutex> lock(chunk_update_tracker_mutex);
+  auto it = num_tuples.find(key);
+  CHECK(it != num_tuples.end());
+  return it->second;
+}
+
+void UpdelRoll::setNumTuple(const MetaDataKey& key, size_t num_tuple) {
+  mapd_unique_lock<mapd_shared_mutex> lock(chunk_update_tracker_mutex);
+  num_tuples[key] = num_tuple;
 }
