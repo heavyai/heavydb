@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.7.0dev e83a46a
+                5.7.0dev d8ed73b
               </div>
             
           
@@ -1681,6 +1681,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_quals_conjunctive_form.html">Struct QualsConjunctiveForm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_query_execution_properties.html">Struct QueryExecutionProperties</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_query_info.html">Struct QueryInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_query_output_buffer_memory_manager.html">Struct QueryOutputBufferMemoryManager</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_query_step_execution_result.html">Struct QueryStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_reduction_code.html">Struct ReductionCode</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_registered_query_hint.html">Struct RegisteredQueryHint</a></li>
@@ -5889,9 +5890,9 @@
 </li>
       <li><a href="api/struct/struct_column.html#_CPPv4I0E6Column">Column (C++ class)</a>
 </li>
-      <li><a href="api/struct/struct_column.html#_CPPv4N6Column3ptrE">Column::ptr (C++ member)</a>
+      <li><a href="api/struct/struct_column.html#_CPPv4N6Column4ptr_E">Column::ptr_ (C++ member)</a>
 </li>
-      <li><a href="api/struct/struct_column.html#_CPPv4N6Column2szE">Column::sz (C++ member)</a>
+      <li><a href="api/struct/struct_column.html#_CPPv4N6Column5size_E">Column::size_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_columnar_conversion_not_supported.html#_CPPv430ColumnarConversionNotSupported">ColumnarConversionNotSupported (C++ class)</a>
 </li>
@@ -6067,11 +6068,11 @@
 </li>
       <li><a href="api/struct/struct_column_list.html#_CPPv4I0E10ColumnList">ColumnList (C++ class)</a>
 </li>
-      <li><a href="api/struct/struct_column_list.html#_CPPv4N10ColumnList6lengthE">ColumnList::length (C++ member)</a>
+      <li><a href="api/struct/struct_column_list.html#_CPPv4N10ColumnList9num_cols_E">ColumnList::num_cols_ (C++ member)</a>
 </li>
-      <li><a href="api/struct/struct_column_list.html#_CPPv4N10ColumnList4ptrsE">ColumnList::ptrs (C++ member)</a>
+      <li><a href="api/struct/struct_column_list.html#_CPPv4N10ColumnList5ptrs_E">ColumnList::ptrs_ (C++ member)</a>
 </li>
-      <li><a href="api/struct/struct_column_list.html#_CPPv4N10ColumnList4sizeE">ColumnList::size (C++ member)</a>
+      <li><a href="api/struct/struct_column_list.html#_CPPv4N10ColumnList5size_E">ColumnList::size_ (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_columns_for_device.html#_CPPv416ColumnsForDevice">ColumnsForDevice (C++ class)</a>
 </li>
@@ -18427,8 +18428,6 @@
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor18forceFourByteFloatEv">QueryMemoryDescriptor::forceFourByteFloat (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor9getBucketEv">QueryMemoryDescriptor::getBucket (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor21getBufferColSlotCountEv">QueryMemoryDescriptor::getBufferColSlotCount (C++ function)</a>
@@ -18445,6 +18444,8 @@
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor17getColSlotContextEv">QueryMemoryDescriptor::getColSlotContext (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor11getColsSizeEv">QueryMemoryDescriptor::getColsSize (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor19getCompactByteWidthEv">QueryMemoryDescriptor::getCompactByteWidth (C++ function)</a>
@@ -18702,6 +18703,40 @@
       <li><a href="api/class/class_query_not_supported.html#_CPPv417QueryNotSupported">QueryNotSupported (C++ class)</a>
 </li>
       <li><a href="api/class/class_query_not_supported.html#_CPPv4N17QueryNotSupported17QueryNotSupportedERKNSt6stringE">QueryNotSupported::QueryNotSupported (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv430QueryOutputBufferMemoryManager">QueryOutputBufferMemoryManager (C++ class)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv4N30QueryOutputBufferMemoryManager23allocate_output_buffersE7int64_t">QueryOutputBufferMemoryManager::allocate_output_buffers (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv4N30QueryOutputBufferMemoryManager13col_buf_ptrs_E">QueryOutputBufferMemoryManager::col_buf_ptrs_ (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv4N30QueryOutputBufferMemoryManager9exe_unit_E">QueryOutputBufferMemoryManager::exe_unit_ (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv4N30QueryOutputBufferMemoryManager9executor_E">QueryOutputBufferMemoryManager::executor_ (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv4NK30QueryOutputBufferMemoryManager9get_ncolsEv">QueryOutputBufferMemoryManager::get_ncols (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv4NK30QueryOutputBufferMemoryManager9get_nrowsEv">QueryOutputBufferMemoryManager::get_nrows (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv4N30QueryOutputBufferMemoryManager13get_singletonEv">QueryOutputBufferMemoryManager::get_singleton (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv4N30QueryOutputBufferMemoryManager19output_col_buf_ptrsE">QueryOutputBufferMemoryManager::output_col_buf_ptrs (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv4N30QueryOutputBufferMemoryManager18output_column_ptrsE">QueryOutputBufferMemoryManager::output_column_ptrs (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv4N30QueryOutputBufferMemoryManager16output_num_rows_E">QueryOutputBufferMemoryManager::output_num_rows_ (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv4N30QueryOutputBufferMemoryManager13query_buffersE">QueryOutputBufferMemoryManager::query_buffers (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv4N30QueryOutputBufferMemoryManager30QueryOutputBufferMemoryManagerERK26TableFunctionExecutionUnitP8ExecutorRNSt6vectorIPK6int8_tEENSt10shared_ptrI17RowSetMemoryOwnerEE">QueryOutputBufferMemoryManager::QueryOutputBufferMemoryManager (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv4N30QueryOutputBufferMemoryManager18row_set_mem_owner_E">QueryOutputBufferMemoryManager::row_set_mem_owner_ (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv4N30QueryOutputBufferMemoryManager17set_output_columnE7int32_tP6int8_t">QueryOutputBufferMemoryManager::set_output_column (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv4N30QueryOutputBufferMemoryManager13set_singletonEP30QueryOutputBufferMemoryManager">QueryOutputBufferMemoryManager::set_singleton (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_query_output_buffer_memory_manager.html#_CPPv4N30QueryOutputBufferMemoryManagerD0Ev">QueryOutputBufferMemoryManager::~QueryOutputBufferMemoryManager (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_rewriter.html#_CPPv413QueryRewriter">QueryRewriter (C++ class)</a>
 </li>
@@ -22669,6 +22704,8 @@
 </li>
       <li><a href="api/class/classtable__functions_1_1_table_function.html#_CPPv4NK15table_functions13TableFunction37hasNonUserSpecifiedOutputSizeConstantEv">table_functions::TableFunction::hasNonUserSpecifiedOutputSizeConstant (C++ function)</a>
 </li>
+      <li><a href="api/class/classtable__functions_1_1_table_function.html#_CPPv4NK15table_functions13TableFunction34hasTableFunctionSpecifiedParameterEv">table_functions::TableFunction::hasTableFunctionSpecifiedParameter (C++ function)</a>
+</li>
       <li><a href="api/class/classtable__functions_1_1_table_function.html#_CPPv4NK15table_functions13TableFunction34hasUserSpecifiedOutputSizeConstantEv">table_functions::TableFunction::hasUserSpecifiedOutputSizeConstant (C++ function)</a>
 </li>
       <li><a href="api/class/classtable__functions_1_1_table_function.html#_CPPv4NK15table_functions13TableFunction36hasUserSpecifiedOutputSizeMultiplierEv">table_functions::TableFunction::hasUserSpecifiedOutputSizeMultiplier (C++ function)</a>
@@ -22811,7 +22848,7 @@
 </li>
       <li><a href="api/class/class_table_function_compilation_context.html#_CPPv4N31TableFunctionCompilationContext7FuncPtrE">TableFunctionCompilationContext::FuncPtr (C++ type)</a>
 </li>
-      <li><a href="api/class/class_table_function_compilation_context.html#_CPPv4N31TableFunctionCompilationContext18generateEntryPointERK26TableFunctionExecutionUnit">TableFunctionCompilationContext::generateEntryPoint (C++ function)</a>
+      <li><a href="api/class/class_table_function_compilation_context.html#_CPPv4N31TableFunctionCompilationContext18generateEntryPointERK26TableFunctionExecutionUnitb">TableFunctionCompilationContext::generateEntryPoint (C++ function)</a>
 </li>
       <li><a href="api/class/class_table_function_compilation_context.html#_CPPv4N31TableFunctionCompilationContext17generateGpuKernelEv">TableFunctionCompilationContext::generateGpuKernel (C++ function)</a>
 </li>

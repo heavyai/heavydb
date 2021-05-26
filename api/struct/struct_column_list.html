@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev e83a46a
+                5.7.0dev d8ed73b
               </div>
             
           
@@ -1682,6 +1682,7 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_quals_conjunctive_form.html">Struct QualsConjunctiveForm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_query_execution_properties.html">Struct QueryExecutionProperties</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_query_info.html">Struct QueryInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_query_output_buffer_memory_manager.html">Struct QueryOutputBufferMemoryManager</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_query_step_execution_result.html">Struct QueryStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_reduction_code.html">Struct ReductionCode</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_registered_query_hint.html">Struct RegisteredQueryHint</a></li>
@@ -1958,45 +1959,35 @@
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
 <dt>
-<span class="target" id="struct_column_list_1af8ce9805a98cf707ca1eba6aba038a4b"></span><code class="sig-name descname">DEVICE int64_t ColumnList::getCols() const</code></dt>
+<span class="target" id="struct_column_list_1ae6b9a8a1257fad7b84fbc006d449d95d"></span><code class="sig-name descname">DEVICE int64_t ColumnList::size() const</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="struct_column_list_1ac2a2b0fd19264315dfd9eb6a11db5596"></span><code class="sig-name descname">DEVICE int64_t ColumnList::getRows() const</code></dt>
+<span class="target" id="struct_column_list_1a104c97f718905e79d23661ae7adb48d2"></span><code class="sig-name descname">DEVICE int64_t ColumnList::numCols() const</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt>
-<span class="target" id="struct_column_list_1a2db2e0970927d4fe2dcb611d199c9904"></span><code class="sig-name descname">DEVICE int64_t ColumnList::getLength() const</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="struct_column_list_1a284f995f2bcd9e57a3829ffba8d4b34d"></span><code class="sig-name descname">DEVICE int64_t ColumnList::getColumnSize() const</code></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt>
-<span class="target" id="struct_column_list_1a4ea212b3dc773e2b92c11bb4ff1906e6"></span><code class="sig-name descname">DEVICE Column&lt;T&gt; ColumnList::operator()(const  int index) const</code></dt>
+<span class="target" id="struct_column_list_1a4101588b38b593a5af829ab52026bbeb"></span><code class="sig-name descname">DEVICE Column&lt;T&gt; ColumnList::operator[](const  int index) const</code></dt>
 <dd></dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Members</p>
 <dl class="member">
-<dt id="_CPPv4N10ColumnList4ptrsE">
-<span id="_CPPv3N10ColumnList4ptrsE"></span><span id="_CPPv2N10ColumnList4ptrsE"></span><span id="ColumnList::ptrs__int8_tPP"></span><span class="target" id="struct_column_list_1aa6b042fc844082b89e333fd3f3297a08"></span>int8_t **<code class="sig-name descname">ptrs</code><a class="headerlink" href="#_CPPv4N10ColumnList4ptrsE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N10ColumnList5ptrs_E">
+<span id="_CPPv3N10ColumnList5ptrs_E"></span><span id="_CPPv2N10ColumnList5ptrs_E"></span><span id="ColumnList::ptrs___int8_tPP"></span><span class="target" id="struct_column_list_1a9079071429d1eaacfac91f9cdaaad721"></span>int8_t **<code class="sig-name descname">ptrs_</code><a class="headerlink" href="#_CPPv4N10ColumnList5ptrs_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N10ColumnList6lengthE">
-<span id="_CPPv3N10ColumnList6lengthE"></span><span id="_CPPv2N10ColumnList6lengthE"></span><span id="ColumnList::length__int64_t"></span><span class="target" id="struct_column_list_1aee4c2f7235cf9c18276f20f0a43d09f5"></span>int64_t <code class="sig-name descname">length</code><a class="headerlink" href="#_CPPv4N10ColumnList6lengthE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N10ColumnList9num_cols_E">
+<span id="_CPPv3N10ColumnList9num_cols_E"></span><span id="_CPPv2N10ColumnList9num_cols_E"></span><span id="ColumnList::num_cols___int64_t"></span><span class="target" id="struct_column_list_1a27e8ddff22596efad9608ce507350ae7"></span>int64_t <code class="sig-name descname">num_cols_</code><a class="headerlink" href="#_CPPv4N10ColumnList9num_cols_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N10ColumnList4sizeE">
-<span id="_CPPv3N10ColumnList4sizeE"></span><span id="_CPPv2N10ColumnList4sizeE"></span><span id="ColumnList::size__int64_t"></span><span class="target" id="struct_column_list_1a36eee2a339e80057460090067c033264"></span>int64_t <code class="sig-name descname">size</code><a class="headerlink" href="#_CPPv4N10ColumnList4sizeE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N10ColumnList5size_E">
+<span id="_CPPv3N10ColumnList5size_E"></span><span id="_CPPv2N10ColumnList5size_E"></span><span id="ColumnList::size___int64_t"></span><span class="target" id="struct_column_list_1a3fc58d348ebbb3eefad25f7160c5e236"></span>int64_t <code class="sig-name descname">size_</code><a class="headerlink" href="#_CPPv4N10ColumnList5size_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
