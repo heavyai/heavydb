@@ -503,9 +503,10 @@ class BucketSizeTuner {
 };
 
 std::ostream& operator<<(std::ostream& os, const BucketSizeTuner& tuner) {
-  os << "Step Num: " << tuner.num_steps_ << ", Threshold: " << std::fixed
-     << tuner.bucket_thresholds_[0] << ", Step Size: " << std::fixed << tuner.step_
-     << ", Min: " << std::fixed << tuner.min_threshold_;
+  os << "Step Num: " << tuner.num_steps_ << ", Threshold: " << std::fixed << "("
+     << tuner.bucket_thresholds_[0] << ", " << tuner.bucket_thresholds_[1] << ")"
+     << ", Step Size: " << std::fixed << tuner.step_ << ", Min: " << std::fixed
+     << tuner.min_threshold_;
   return os;
 }
 
