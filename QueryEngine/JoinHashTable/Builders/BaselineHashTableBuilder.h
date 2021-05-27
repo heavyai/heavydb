@@ -277,8 +277,7 @@ class BaselineJoinHashTableBuilder {
                       thread_idx,
                       thread_count,
                       cpu_hash_table_ptr,
-                      layout,
-                      for_semi_join] {
+                      layout] {
                        switch (key_component_width) {
                          case 4:
                            init_baseline_hash_join_buff_32(cpu_hash_table_ptr,

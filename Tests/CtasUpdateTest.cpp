@@ -2741,7 +2741,7 @@ TEST_F(Select, CtasItasNullGeoPoint) {
 }
 
 TEST_F(Select, CtasFixedLenBooleanArrayCrash) {
-  auto drop_table = [this]() { sql("DROP TABLE IF EXISTS CtasFBoolArrayCrash;"); };
+  auto drop_table = []() { sql("DROP TABLE IF EXISTS CtasFBoolArrayCrash;"); };
   auto prepare_table = []() {
     sql("CREATE TABLE CtasFBoolArrayCrash (src boolean[3], dst boolean[3]);");
     sql("INSERT INTO CtasFBoolArrayCrash VALUES (null, {\'true\', \'false\', "
