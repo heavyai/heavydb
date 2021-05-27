@@ -5,7 +5,7 @@
    ...
    fun:fseek
    fun:_ZN14File_Namespace5writeEP8_IO_FILEmmPKa
-   fun:_ZN14File_Namespace8FileInfo5writeEmmPa
+   fun:_ZN14File_Namespace8FileInfo5writeEmmPKa
    fun:_ZN14File_Namespace10FileBuffer11writeHeaderERNS_4PageEiib
    fun:_ZN14File_Namespace10FileBuffer13writeMetadataEi
    fun:_ZN14File_Namespace7FileMgr17writeDirtyBuffersEv

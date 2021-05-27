@@ -46,7 +46,7 @@ DataMgr::DataMgr(const std::string& dataDir,
                  const bool useGpus,
                  const size_t reservedGpuMem,
                  const size_t numReaderThreads,
-                 const DiskCacheConfig cache_config)
+                 const File_Namespace::DiskCacheConfig cache_config)
     : cudaMgr_{std::move(cudaMgr)}
     , dataDir_{dataDir}
     , hasGpus_{false}
@@ -162,7 +162,7 @@ size_t DataMgr::getTotalSystemMemory() {
 }
 
 // This function exists for testing purposes so that we can test a reset of the cache.
-void DataMgr::resetPersistentStorage(const DiskCacheConfig& cache_config,
+void DataMgr::resetPersistentStorage(const File_Namespace::DiskCacheConfig& cache_config,
                                      const size_t num_reader_threads,
                                      const SystemParameters& sys_params) {
   int numLevels = bufferMgrs_.size();
@@ -178,7 +178,7 @@ void DataMgr::resetPersistentStorage(const DiskCacheConfig& cache_config,
 
 void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                            const size_t userSpecifiedNumReaderThreads,
-                           const DiskCacheConfig& cache_config) {
+                           const File_Namespace::DiskCacheConfig& cache_config) {
   // no need for locking, as this is only called in the constructor
   bufferMgrs_.resize(2);
   bufferMgrs_[0].push_back(PersistentStorageMgr::createPersistentStorageMgr(

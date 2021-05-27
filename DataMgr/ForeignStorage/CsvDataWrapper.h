@@ -45,7 +45,7 @@ class CsvDataWrapper : public AbstractFileStorageDataWrapper {
 
   const std::set<std::string_view>& getSupportedTableOptions() const override;
 
-  void serializeDataWrapperInternals(const std::string& file_path) const override;
+  std::string getSerializedDataWrapper() const override;
 
   void restoreDataWrapperInternals(const std::string& file_path,
                                    const ChunkMetadataVector& chunk_metadata) override;

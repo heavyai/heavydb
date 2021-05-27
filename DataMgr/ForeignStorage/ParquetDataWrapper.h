@@ -43,7 +43,7 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
   void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
                             const ChunkToBufferMap& optional_buffers) override;
 
-  void serializeDataWrapperInternals(const std::string& file_path) const override;
+  std::string getSerializedDataWrapper() const override;
 
   void restoreDataWrapperInternals(
       const std::string& file_path,

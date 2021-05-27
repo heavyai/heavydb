@@ -35,10 +35,9 @@ class CachingForeignStorageMgr : public ForeignStorageMgr {
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metadata,
                                        const ChunkKey& chunk_key_prefix) override;
   void refreshTable(const ChunkKey& table_key, const bool evict_cached_entries) override;
+  bool createDataWrapperIfNotExists(const ChunkKey& chunk_key) override;
 
  private:
-  void recoverDataWrapperFromDisk(const ChunkKey& table_key,
-                                  const ChunkMetadataVector& chunk_metadata);
   void refreshTableInCache(const ChunkKey& table_key);
   int getHighestCachedFragId(const ChunkKey& table_key);
   void refreshAppendTableInCache(const ChunkKey& table_key,
@@ -47,7 +46,6 @@ class CachingForeignStorageMgr : public ForeignStorageMgr {
                                     const std::vector<ChunkKey>& old_chunk_keys);
   void refreshChunksInCacheByFragment(const std::vector<ChunkKey>& old_chunk_keys,
                                       int last_frag_id);
-  void createOrRecoverDataWrapperIfNotExists(const ChunkKey& chunk_key);
   void populateChunkBuffersSafely(ForeignDataWrapper& data_wrapper,
                                   ChunkToBufferMap& required_buffers,
                                   ChunkToBufferMap& optional_buffers);

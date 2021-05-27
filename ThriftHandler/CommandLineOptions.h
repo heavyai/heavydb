@@ -46,7 +46,7 @@ class CommandLineOptions {
   int http_port = 6278;
   size_t reserved_gpu_mem = 384 * 1024 * 1024;
   std::string base_path;
-  DiskCacheConfig disk_cache_config;
+  File_Namespace::DiskCacheConfig disk_cache_config;
   std::string cluster_file = {"cluster.conf"};
   std::string cluster_topology_file = {"cluster_topology.conf"};
   std::string license_path = {""};

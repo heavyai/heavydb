@@ -145,7 +145,7 @@ rapidjson::Document read_from_file(const std::string& file_path);
 // Write JSON content (encapsulated by the given Document object) to the given file path
 void write_to_file(const rapidjson::Document& document, const std::string& file_path);
 
-std::string convert_to_string(rapidjson::Document& document);
+std::string write_to_string(const rapidjson::Document& document);
 
 }  // namespace json_utils
 }  // namespace foreign_storage

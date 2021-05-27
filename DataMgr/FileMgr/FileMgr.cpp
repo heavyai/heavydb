@@ -282,15 +282,13 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
       for (auto headerIt = header_vec.begin() + 1; headerIt != header_vec.end();
            ++headerIt) {
         if (headerIt->chunkKey != lastChunkKey) {
-          chunkIndex_[lastChunkKey] =
-              new FileBuffer(this, /*pageSize,*/ lastChunkKey, startIt, headerIt);
+          createBufferFromHeaders(lastChunkKey, startIt, headerIt);
           lastChunkKey = headerIt->chunkKey;
           startIt = headerIt;
         }
       }
       // now need to insert last Chunk
-      chunkIndex_[lastChunkKey] =
-          new FileBuffer(this, /*pageSize,*/ lastChunkKey, startIt, header_vec.end());
+      createBufferFromHeaders(lastChunkKey, startIt, header_vec.end());
     }
     nextFileId_ = open_files_result.max_file_id + 1;
     rollOffOldData(epoch(), true /* only checkpoint if data is rolled off */);
@@ -311,7 +309,6 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
       epoch_.ceiling(0);
     }
     createEpochFile(EPOCH_FILENAME);
-    writeAndSyncEpochToDisk();
     writeAndSyncVersionToDisk(FILE_MGR_VERSION_FILENAME, fileMgrVersion_);
     incrementEpoch();
   }
@@ -472,10 +469,8 @@ void FileMgr::init(const std::string& dataPathToConvertFrom,
           FileMgr* c_fm_ =
               dynamic_cast<File_Namespace::FileMgr*>(gfm_->getFileMgr(lastChunkKey));
           CHECK(c_fm_);
-          FileBuffer* srcBuf = new FileBuffer(this, lastChunkKey, startIt, headerIt);
-          chunkIndex_[lastChunkKey] = srcBuf;
-          FileBuffer* destBuf = new FileBuffer(c_fm_, srcBuf->pageSize(), lastChunkKey);
-          c_fm_->chunkIndex_[lastChunkKey] = destBuf;
+          auto srcBuf = createBufferFromHeaders(lastChunkKey, startIt, headerIt);
+          auto destBuf = c_fm_->createBuffer(lastChunkKey, srcBuf->pageSize());
           destBuf->syncEncoder(srcBuf);
           destBuf->setSize(srcBuf->size());
           destBuf->setDirty();  // this needs to be set to force writing out metadata
@@ -503,10 +498,8 @@ void FileMgr::init(const std::string& dataPathToConvertFrom,
       // now need to insert last Chunk
       FileMgr* c_fm_ =
           dynamic_cast<File_Namespace::FileMgr*>(gfm_->getFileMgr(lastChunkKey));
-      FileBuffer* srcBuf = new FileBuffer(this, lastChunkKey, startIt, headerVec.end());
-      chunkIndex_[lastChunkKey] = srcBuf;
-      FileBuffer* destBuf = new FileBuffer(c_fm_, srcBuf->pageSize(), lastChunkKey);
-      c_fm_->chunkIndex_[lastChunkKey] = destBuf;
+      auto srcBuf = createBufferFromHeaders(lastChunkKey, startIt, headerVec.end());
+      auto destBuf = c_fm_->createBuffer(lastChunkKey, srcBuf->pageSize());
       destBuf->syncEncoder(srcBuf);
       destBuf->setSize(srcBuf->size());
       destBuf->setDirty();  // this needs to be set to write out metadata file from the
@@ -676,7 +669,7 @@ void FileMgr::rollOffOldData(const int32_t epoch_ceiling, const bool should_chec
   }
 }
 
-std::string FileMgr::describeSelf() {
+std::string FileMgr::describeSelf() const {
   stringstream ss;
   ss << "table (" << fileMgrKey_.first << ", " << fileMgrKey_.second << ")";
   return ss.str();
@@ -693,30 +686,34 @@ void FileMgr::checkpoint() {
 }
 
 FileBuffer* FileMgr::createBuffer(const ChunkKey& key,
-                                  const size_t pageSize,
-                                  const size_t numBytes) {
+                                  const size_t page_size,
+                                  const size_t num_bytes) {
   mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
-  return createBufferUnlocked(key, pageSize, numBytes);
-}
-
-// The underlying implementation of createBuffer needs to be lockless since
-// some of the codepaths that call it will have already obtained a write lock
-// and should not release it until they are complete.
-FileBuffer* FileMgr::createBufferUnlocked(const ChunkKey& key,
-                                          const size_t pageSize,
-                                          const size_t numBytes) {
-  size_t actualPageSize = pageSize;
-  if (actualPageSize == 0) {
-    actualPageSize = defaultPageSize_;
-  }
-  /// @todo Make all accesses to chunkIndex_ thread-safe
-  // we will do this lazily and not allocate space for the Chunk (i.e.
-  // FileBuffer yet)
-
   CHECK(chunkIndex_.find(key) == chunkIndex_.end())
       << "Chunk already exists for key: " << show_chunk(key);
+  return createBufferUnlocked(key, page_size, num_bytes);
+}
 
-  chunkIndex_[key] = allocateBuffer(actualPageSize, key, numBytes);
+// Assumes checks for pre-existing key have already occured.
+FileBuffer* FileMgr::createBufferUnlocked(const ChunkKey& key,
+                                          const size_t page_size,
+                                          const size_t num_bytes) {
+  size_t actual_page_size = page_size;
+  if (actual_page_size == 0) {
+    actual_page_size = defaultPageSize_;
+  }
+  chunkIndex_[key] = allocateBuffer(actual_page_size, key, num_bytes);
+  return (chunkIndex_[key]);
+}
+
+FileBuffer* FileMgr::createBufferFromHeaders(
+    const ChunkKey& key,
+    const std::vector<HeaderInfo>::const_iterator& headerStartIt,
+    const std::vector<HeaderInfo>::const_iterator& headerEndIt) {
+  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
+  CHECK(chunkIndex_.find(key) == chunkIndex_.end())
+      << "Chunk already exists for key: " << show_chunk(key);
+  chunkIndex_[key] = allocateBuffer(key, headerStartIt, headerEndIt);
   return (chunkIndex_[key]);
 }
 
@@ -733,14 +730,14 @@ void FileMgr::deleteBuffer(const ChunkKey& key, const bool purge) {
   deleteBufferUnlocked(chunk_it, purge);
 }
 
-void FileMgr::deleteBufferUnlocked(const ChunkKeyToChunkMap::iterator chunk_it,
-                                   const bool purge) {
+ChunkKeyToChunkMap::iterator FileMgr::deleteBufferUnlocked(
+    const ChunkKeyToChunkMap::iterator chunk_it,
+    const bool purge) {
   if (purge) {
     chunk_it->second->freePages();
   }
-  //@todo need a way to represent delete in non purge case
   delete chunk_it->second;
-  chunkIndex_.erase(chunk_it);
+  return chunkIndex_.erase(chunk_it);
 }
 
 void FileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool purge) {
@@ -754,21 +751,21 @@ void FileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool purg
                      chunkIt->first.begin() + keyPrefix.size(),
                      keyPrefix.begin(),
                      keyPrefix.end()) != chunkIt->first.begin() + keyPrefix.size()) {
-    if (purge) {
-      chunkIt->second->freePages();
-    }
-    //@todo need a way to represent delete in non purge case
-    delete chunkIt->second;
-    chunkIndex_.erase(chunkIt++);
+    deleteBufferUnlocked(chunkIt++, purge);
   }
 }
 
-FileBuffer* FileMgr::getBuffer(const ChunkKey& key, const size_t numBytes) {
-  mapd_shared_lock<mapd_shared_mutex> chunkIndexReadLock(chunkIndexMutex_);
-  auto chunkIt = chunkIndex_.find(key);
-  CHECK(chunkIt != chunkIndex_.end())
-      << "Chunk does not exist for key: " << show_chunk(key);
-  return chunkIt->second;
+FileBuffer* FileMgr::getBuffer(const ChunkKey& key, const size_t num_bytes) {
+  mapd_shared_lock<mapd_shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
+  auto chunk_it = chunkIndex_.find(key);
+  return getBufferUnlocked(chunk_it, num_bytes);
+}
+
+FileBuffer* FileMgr::getBufferUnlocked(const ChunkKeyToChunkMap::iterator chunk_it,
+                                       const size_t num_bytes) {
+  CHECK(chunk_it != chunkIndex_.end())
+      << "Chunk does not exist for key: " << show_chunk(chunk_it->first);
+  return chunk_it->second;
 }
 
 void FileMgr::fetchBuffer(const ChunkKey& key,
@@ -776,19 +773,10 @@ void FileMgr::fetchBuffer(const ChunkKey& key,
                           const size_t numBytes) {
   // reads chunk specified by ChunkKey into AbstractBuffer provided by
   // destBuffer
-  if (destBuffer->isDirty()) {
-    LOG(FATAL)
-        << "Aborting attempt to fetch a chunk marked dirty. Chunk inconsistency for key: "
-        << show_chunk(key);
-  }
-  mapd_shared_lock<mapd_shared_mutex> chunkIndexReadLock(chunkIndexMutex_);
-  auto chunkIt = chunkIndex_.find(key);
-  if (chunkIt == chunkIndex_.end()) {
-    LOG(FATAL) << "Chunk does not exist for key: " << show_chunk(key);
-  }
-  chunkIndexReadLock.unlock();
-
-  AbstractBuffer* chunk = chunkIt->second;
+  CHECK(!destBuffer->isDirty())
+      << "Aborting attempt to fetch a chunk marked dirty. Chunk inconsistency for key: "
+      << show_chunk(key);
+  AbstractBuffer* chunk = getBuffer(key);
   // chunk's size is either specified in function call with numBytes or we
   // just look at pageSize * numPages in FileBuffer
   if (numBytes > 0 && numBytes > chunk->size()) {
@@ -806,8 +794,7 @@ FileBuffer* FileMgr::putBuffer(const ChunkKey& key,
   auto chunk = getOrCreateBuffer(key);
   size_t oldChunkSize = chunk->size();
   // write the buffer's data to the Chunk
-  // size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
-  size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
+  size_t newChunkSize = (numBytes == 0) ? srcBuffer->size() : numBytes;
   if (chunk->isDirty()) {
     // multiple appends are allowed,
     // but only single update is allowed
@@ -864,7 +851,7 @@ Page FileMgr::requestFreePage(size_t pageSize, const bool isMetadata) {
   auto candidateFiles = fileIndex_.equal_range(pageSize);
   int32_t pageNum = -1;
   for (auto fileIt = candidateFiles.first; fileIt != candidateFiles.second; ++fileIt) {
-    FileInfo* fileInfo = files_[fileIt->second];
+    FileInfo* fileInfo = files_.at(fileIt->second);
     pageNum = fileInfo->getFreePage();
     if (pageNum != -1) {
       return (Page(fileInfo->fileId, pageNum));
@@ -892,7 +879,7 @@ void FileMgr::requestFreePages(size_t numPagesRequested,
   auto candidateFiles = fileIndex_.equal_range(pageSize);
   size_t numPagesNeeded = numPagesRequested;
   for (auto fileIt = candidateFiles.first; fileIt != candidateFiles.second; ++fileIt) {
-    FileInfo* fileInfo = files_[fileIt->second];
+    FileInfo* fileInfo = files_.at(fileIt->second);
     int32_t pageNum;
     do {
       pageNum = fileInfo->getFreePage();
@@ -974,14 +961,12 @@ FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
 FILE* FileMgr::getFileForFileId(const int32_t fileId) {
   CHECK(fileId >= 0);
   CHECK(files_.find(fileId) != files_.end());
-  return files_[fileId]->f;
+  return files_.at(fileId)->f;
 }
 
 void FileMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                               const ChunkKey& keyPrefix) {
-  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(
-      chunkIndexMutex_);  // is this guarding the right structure?  it look slike we oly
-                          // read here for chunk
+  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.lower_bound(keyPrefix);
   if (chunkIt == chunkIndex_.end()) {
     return;  // throw?
@@ -998,25 +983,6 @@ void FileMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadata
     }
     chunkIt++;
   }
-}
-
-size_t FileMgr::getNumUsedPages() const {
-  size_t num_used_pages = 0;
-  mapd_shared_lock<mapd_shared_mutex> read_lock(files_rw_mutex_);
-  for (const auto file_info_entry : files_) {
-    num_used_pages +=
-        (file_info_entry.second->numPages - file_info_entry.second->freePages.size());
-  }
-  return num_used_pages;
-}
-
-size_t FileMgr::getNumUsedMetadataPages() const {
-  size_t num_used_metadata_pages = 0;
-  mapd_shared_lock<mapd_shared_mutex> read_lock(chunkIndexMutex_);
-  for (const auto& chunkIt : chunkIndex_) {
-    num_used_metadata_pages += chunkIt.second->numMetadataPages();
-  }
-  return num_used_metadata_pages;
 }
 
 size_t FileMgr::getNumUsedMetadataPagesForChunkKey(const ChunkKey& chunkKey) const {
@@ -1268,7 +1234,7 @@ void FileMgr::sortAndCopyFilePagesForCompaction(size_t page_size,
   std::vector<FileInfo*> sorted_file_infos;
   auto range = fileIndex_.equal_range(page_size);
   for (auto it = range.first; it != range.second; it++) {
-    sorted_file_infos.emplace_back(files_[it->second]);
+    sorted_file_infos.emplace_back(files_.at(it->second));
   }
   if (sorted_file_infos.empty()) {
     return;
@@ -1389,11 +1355,11 @@ void FileMgr::copySourcePageForCompaction(const Page& source_page,
  */
 int32_t FileMgr::copyPageWithoutHeaderSize(const Page& source_page,
                                            const Page& destination_page) {
-  FileInfo* source_file_info = files_[source_page.fileId];
+  FileInfo* source_file_info = files_.at(source_page.fileId);
   CHECK(source_file_info);
   CHECK_EQ(source_file_info->fileId, source_page.fileId);
 
-  FileInfo* destination_file_info = files_[destination_page.fileId];
+  FileInfo* destination_file_info = files_.at(destination_page.fileId);
   CHECK(destination_file_info);
   CHECK_EQ(destination_file_info->fileId, destination_page.fileId);
   CHECK_EQ(source_file_info->pageSize, destination_file_info->pageSize);
@@ -1419,7 +1385,7 @@ int32_t FileMgr::copyPageWithoutHeaderSize(const Page& source_page,
  */
 void FileMgr::updateMappedPagesVisibility(const std::vector<PageMapping>& page_mappings) {
   for (const auto& page_mapping : page_mappings) {
-    auto destination_file = files_[page_mapping.destination_file_id];
+    auto destination_file = files_.at(page_mapping.destination_file_id);
 
     // Set destination page header size
     auto header_size = page_mapping.source_page_header_size;
@@ -1428,7 +1394,7 @@ void FileMgr::updateMappedPagesVisibility(const std::vector<PageMapping>& page_m
         page_mapping.destination_page_num * destination_file->pageSize,
         sizeof(PageHeaderSizeType),
         reinterpret_cast<int8_t*>(&header_size));
-    auto source_file = files_[page_mapping.source_file_id];
+    auto source_file = files_.at(page_mapping.source_file_id);
 
     // Free source page
     PageHeaderSizeType free_page_header_size{0};
@@ -1566,6 +1532,13 @@ FileBuffer* FileMgr::allocateBuffer(const size_t page_size,
   return new FileBuffer(this, page_size, key, num_bytes);
 }
 
+FileBuffer* FileMgr::allocateBuffer(
+    const ChunkKey& key,
+    const std::vector<HeaderInfo>::const_iterator& headerStartIt,
+    const std::vector<HeaderInfo>::const_iterator& headerEndIt) {
+  return new FileBuffer(this, key, headerStartIt, headerEndIt);
+}
+
 // Checks if a page should be deleted or recovered.  Returns true if page was deleted.
 bool FileMgr::updatePageIfDeleted(FileInfo* file_info,
                                   ChunkKey& chunk_key,
@@ -1594,11 +1567,11 @@ bool FileMgr::updatePageIfDeleted(FileInfo* file_info,
 FileBuffer* FileMgr::getOrCreateBuffer(const ChunkKey& key) {
   FileBuffer* buf;
   mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
-  auto chunkIt = chunkIndex_.find(key);
-  if (chunkIt == chunkIndex_.end()) {
-    buf = createBufferUnlocked(key, defaultPageSize_);
+  auto chunk_it = chunkIndex_.find(key);
+  if (chunk_it == chunkIndex_.end()) {
+    buf = createBufferUnlocked(key);
   } else {
-    buf = chunkIt->second;
+    buf = getBufferUnlocked(chunk_it);
   }
   return buf;
 }
@@ -1611,6 +1584,11 @@ void FileMgr::writeDirtyBuffers() {
       buf->clearDirtyBits();
     }
   }
+}
+
+size_t FileMgr::getNumChunks() {
+  mapd_shared_lock<mapd_shared_mutex> read_lock(chunkIndexMutex_);
+  return chunkIndex_.size();
 }
 
 size_t FileMgr::num_pages_per_data_file_{DEFAULT_NUM_PAGES_PER_DATA_FILE};

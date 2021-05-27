@@ -153,7 +153,9 @@ class TrackingProcessor : public OmniSciProcessor {
   const bool check_origin_;
 };
 
+namespace File_Namespace {
 struct DiskCacheConfig;
+}
 
 class DBHandler : public OmniSciIf {
  public:
@@ -186,7 +188,7 @@ class DBHandler : public OmniSciIf {
 #ifdef ENABLE_GEOS
             const std::string& libgeos_so_filename,
 #endif
-            const DiskCacheConfig& disk_cache_config,
+            const File_Namespace::DiskCacheConfig& disk_cache_config,
             const bool is_new_db);
   void initialize(const bool is_new_db);
   ~DBHandler() override;
@@ -903,7 +905,7 @@ class DBHandler : public OmniSciIf {
 #ifdef ENABLE_GEOS
   const std::string& libgeos_so_filename_;
 #endif
-  const DiskCacheConfig& disk_cache_config_;
+  const File_Namespace::DiskCacheConfig& disk_cache_config_;
   const std::string& udf_filename_;
   const std::string& clang_path_;
   const std::vector<std::string>& clang_options_;

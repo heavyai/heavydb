@@ -87,6 +87,7 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   size_t getNumChunks() override;
   void removeTableRelatedDS(const int db_id, const int table_id) override;
   bool hasDataWrapperForChunk(const ChunkKey& chunk_key);
+  virtual bool createDataWrapperIfNotExists(const ChunkKey& chunk_key);
 
   // For testing, is datawrapper state recovered from disk
   bool isDatawrapperRestored(const ChunkKey& chunk_key);
@@ -100,15 +101,12 @@ class ForeignStorageMgr : public AbstractBufferMgr {
       const std::map<ChunkKey, std::set<ParallelismHint>>& hints_per_table);
 
  protected:
-  bool createDataWrapperIfNotExists(const ChunkKey& chunk_key);
-
+  void createDataWrapperUnlocked(int32_t db, int32_t tb);
   void clearDataWrapper(const ChunkKey& table_key);
-
   std::shared_ptr<ForeignDataWrapper> getDataWrapper(const ChunkKey& chunk_key);
   bool fetchBufferIfTempBufferMapEntryExists(const ChunkKey& chunk_key,
                                              AbstractBuffer* destination_buffer,
                                              const size_t num_bytes);
-  void createAndPopulateDataWrapperIfNotExists(const ChunkKey& chunk_key);
   ChunkToBufferMap allocateTempBuffersForChunks(const std::set<ChunkKey>& chunk_keys);
   void clearTempChunkBufferMapEntriesForTable(const ChunkKey& table_key);
   void clearTempChunkBufferMapEntriesForTableUnlocked(const ChunkKey& table_key);

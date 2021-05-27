@@ -514,8 +514,7 @@ void get_value(const rapidjson::Value& json_val, RowGroupInterval& value) {
   json_utils::get_value_from_object(json_val, value.end_index, "end_index");
 }
 
-void ParquetDataWrapper::serializeDataWrapperInternals(
-    const std::string& file_path) const {
+std::string ParquetDataWrapper::getSerializedDataWrapper() const {
   rapidjson::Document d;
   d.SetObject();
 
@@ -530,8 +529,7 @@ void ParquetDataWrapper::serializeDataWrapperInternals(
       d, last_fragment_row_count_, "last_fragment_row_count", d.GetAllocator());
   json_utils::add_value_to_object(
       d, total_row_count_, "total_row_count", d.GetAllocator());
-
-  json_utils::write_to_file(d, file_path);
+  return json_utils::write_to_string(d);
 }
 
 void ParquetDataWrapper::restoreDataWrapperInternals(

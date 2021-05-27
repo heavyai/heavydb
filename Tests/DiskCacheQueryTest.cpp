@@ -45,7 +45,7 @@ class TableTest : public DBHandlerTestFixture {
   inline static PersistentStorageMgr* psm_;
 
   static void SetUpTestSuite() {
-    DBHandlerTestFixture::createDBHandler(DiskCacheLevel::all);
+    DBHandlerTestFixture::createDBHandler(File_Namespace::DiskCacheLevel::all);
     cat_ = &getCatalog();
     ASSERT_NE(cat_, nullptr);
     psm_ = cat_->getDataMgr().getPersistentStorageMgr();
@@ -91,7 +91,7 @@ class TableTest : public DBHandlerTestFixture {
     return key;
   }
 
-  static void resetPersistentStorageMgr(DiskCacheLevel cache_level) {
+  static void resetPersistentStorageMgr(File_Namespace::DiskCacheLevel cache_level) {
     for (auto table_it : cat_->getAllTableMetadata()) {
       cat_->removeFragmenterForTable(table_it->tableId);
     }
@@ -103,7 +103,7 @@ class TableTest : public DBHandlerTestFixture {
 
   static void resetStorageManagerAndClearTableMemory(
       const ChunkKey& table_key,
-      DiskCacheLevel cache_level = DiskCacheLevel::all) {
+      File_Namespace::DiskCacheLevel cache_level = File_Namespace::DiskCacheLevel::all) {
     // Reset cache and clear memory representations.
     resetPersistentStorageMgr(cache_level);
     cat_->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
@@ -161,10 +161,9 @@ TEST_F(TableTest, RecoverCache_All) {
                            cat_->getMetadataForTable(default_table_name)->tableId};
   const ChunkKey key1{table_key[0], table_key[1], 1, 0};
   sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
-  resetStorageManagerAndClearTableMemory(table_key, DiskCacheLevel::all);
-  ASSERT_EQ(cache_->getCachedChunkIfExists(key1), nullptr);
-  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
+  resetStorageManagerAndClearTableMemory(table_key, File_Namespace::DiskCacheLevel::all);
   ASSERT_NE(cache_->getCachedChunkIfExists(key1), nullptr);
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
 }
 
 TEST_F(TableTest, RecoverCache_NonFSI) {
@@ -174,12 +173,12 @@ TEST_F(TableTest, RecoverCache_NonFSI) {
                            cat_->getMetadataForTable(default_table_name)->tableId};
   const ChunkKey key1{table_key[0], table_key[1], 1, 0};
   sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
-  resetStorageManagerAndClearTableMemory(table_key, DiskCacheLevel::non_fsi);
-  ASSERT_EQ(cache_->getCachedChunkIfExists(key1), nullptr);
-  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
+  resetStorageManagerAndClearTableMemory(table_key,
+                                         File_Namespace::DiskCacheLevel::non_fsi);
   ASSERT_NE(cache_->getCachedChunkIfExists(key1), nullptr);
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
   sqlDropTable();
-  resetStorageManagerAndClearTableMemory(table_key, DiskCacheLevel::all);
+  resetStorageManagerAndClearTableMemory(table_key, File_Namespace::DiskCacheLevel::all);
 }
 
 int main(int argc, char** argv) {

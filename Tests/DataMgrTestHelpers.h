@@ -23,10 +23,10 @@ class TestBuffer : public AbstractBuffer {
  public:
   TestBuffer(const SQLTypeInfo sql_type) : AbstractBuffer(0, sql_type) {}
   TestBuffer(const std::vector<int8_t> bytes) : AbstractBuffer(0, kTINYINT) {
-    write((int8_t*)bytes.data(), bytes.size());
+    append((int8_t*)bytes.data(), bytes.size());
   }
   TestBuffer(const std::vector<int32_t> bytes) : AbstractBuffer(0, kINT) {
-    write((int8_t*)bytes.data(), bytes.size() * 4);
+    append((int8_t*)bytes.data(), bytes.size() * 4);
   }
 
   ~TestBuffer() override {
@@ -64,8 +64,8 @@ class TestBuffer : public AbstractBuffer {
 
   void append(int8_t* src,
               const size_t num_bytes,
-              const MemoryLevel src_buffer_type,
-              const int device_id) override {
+              const MemoryLevel src_buffer_type = CPU_LEVEL,
+              const int device_id = -1) override {
     size_t offset = size_;
     reserve(size_ + num_bytes);
     memcpy(mem_ + offset, src, num_bytes);

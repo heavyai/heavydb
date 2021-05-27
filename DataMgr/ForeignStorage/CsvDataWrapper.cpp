@@ -490,14 +490,6 @@ void cache_blocks(std::map<ChunkKey, Chunk_NS::Chunk>& cached_chunks,
       }
     }
     cached_chunks[chunk_key].appendData(data_block, row_count, 0);
-    if (is_last_block) {
-      // cache the chunks now so they are tracked by eviction algorithm
-      std::vector<ChunkKey> key_to_cache{chunk_key};
-      if (column->columnType.is_varlen_indeed()) {
-        key_to_cache.push_back(index_key);
-      }
-      cache->cacheTableChunks(key_to_cache);
-    }
   }
 }
 
@@ -934,32 +926,9 @@ void CsvDataWrapper::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_v
   if (foreign_table_->isAppendMode()) {
     chunk_encoder_buffers_ = std::move(multi_threading_params.chunk_encoder_buffers);
   }
-
-  // Any incomplete chunks should be cached now
-  auto cache = get_cache_if_enabled(catalog);
-  if (cache) {
-    std::vector<ChunkKey> to_cache;
-    for (auto& [chunk_key, buffer] : multi_threading_params.cached_chunks) {
-      if (buffer.getBuffer()->getEncoder()->getNumElems() !=
-          static_cast<size_t>(foreign_table_->maxFragRows)) {
-        if (column_by_id[chunk_key[CHUNK_KEY_COLUMN_IDX]]
-                ->columnType.is_varlen_indeed()) {
-          ChunkKey index_chunk_key = chunk_key;
-          index_chunk_key[4] = 2;
-          to_cache.push_back(chunk_key);
-          to_cache.push_back(index_chunk_key);
-        } else {
-          to_cache.push_back(chunk_key);
-        }
-      }
-    }
-    if (to_cache.size() > 0) {
-      cache->cacheTableChunks(to_cache);
-    }
-  }
 }
 
-void CsvDataWrapper::serializeDataWrapperInternals(const std::string& file_path) const {
+std::string CsvDataWrapper::getSerializedDataWrapper() const {
   rapidjson::Document d;
   d.SetObject();
 
@@ -978,7 +947,7 @@ void CsvDataWrapper::serializeDataWrapperInternals(const std::string& file_path)
   json_utils::add_value_to_object(
       d, append_start_offset_, "append_start_offset", d.GetAllocator());
 
-  json_utils::write_to_file(d, file_path);
+  return json_utils::write_to_string(d);
 }
 
 void CsvDataWrapper::restoreDataWrapperInternals(

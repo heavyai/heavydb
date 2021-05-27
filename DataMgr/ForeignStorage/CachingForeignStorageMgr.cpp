@@ -38,6 +38,7 @@ void CachingForeignStorageMgr::populateChunkBuffersSafely(
     ForeignDataWrapper& data_wrapper,
     ChunkToBufferMap& required_buffers,
     ChunkToBufferMap& optional_buffers) {
+  CHECK_GT(required_buffers.size(), 0U) << "Must populate at least one buffer";
   try {
     data_wrapper.populateChunkBuffers(required_buffers, optional_buffers);
   } catch (const std::runtime_error& error) {
@@ -57,6 +58,9 @@ void CachingForeignStorageMgr::populateChunkBuffersSafely(
 
     throw ForeignStorageException(error.what());
   }
+  // All required buffers should be from the same table.
+  auto [db, tb] = get_table_prefix(required_buffers.begin()->first);
+  disk_cache_->checkpoint(db, tb);
 }
 
 void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
@@ -64,8 +68,6 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
                                            const size_t num_bytes) {
   CHECK(destination_buffer);
   CHECK(!destination_buffer->isDirty());
-
-  createOrRecoverDataWrapperIfNotExists(chunk_key);
 
   // TODO: Populate optional buffers as part of CSV performance improvement
   std::vector<ChunkKey> chunk_keys = get_keys_vec_from_table(chunk_key);
@@ -92,10 +94,6 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
   ChunkToBufferMap required_buffers = disk_cache_->getChunkBuffersForCaching(chunk_keys);
   CHECK(required_buffers.find(chunk_key) != required_buffers.end());
   populateChunkBuffersSafely(data_wrapper, required_buffers, optional_buffers);
-  disk_cache_->cacheTableChunks(chunk_keys);
-  if (optional_keys.size()) {
-    disk_cache_->cacheTableChunks(optional_keys);
-  }
 
   AbstractBuffer* buffer = required_buffers.at(chunk_key);
   CHECK(buffer);
@@ -106,19 +104,14 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
 void CachingForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
     ChunkMetadataVector& chunk_metadata,
     const ChunkKey& keyPrefix) {
-  auto [db_id, tb_id] = get_table_prefix(keyPrefix);
   ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(chunk_metadata, keyPrefix);
-  getDataWrapper(keyPrefix)->serializeDataWrapperInternals(
-      disk_cache_->getCacheDirectoryForTable(db_id, tb_id) + wrapper_file_name);
-}
 
-void CachingForeignStorageMgr::recoverDataWrapperFromDisk(
-    const ChunkKey& table_key,
-    const ChunkMetadataVector& chunk_metadata) {
-  auto [db_id, tb_id] = get_table_prefix(table_key);
-  getDataWrapper(table_key)->restoreDataWrapperInternals(
-      disk_cache_->getCacheDirectoryForTable(db_id, tb_id) + wrapper_file_name,
-      chunk_metadata);
+  auto [db_id, tb_id] = get_table_prefix(keyPrefix);
+  auto doc = getDataWrapper(keyPrefix)->getSerializedDataWrapper();
+  disk_cache_->storeDataWrapper(doc, db_id, tb_id);
+
+  // If the wrapper populated buffers we want that action to be checkpointed.
+  disk_cache_->checkpoint(db_id, tb_id);
 }
 
 void CachingForeignStorageMgr::refreshTable(const ChunkKey& table_key,
@@ -136,13 +129,6 @@ void CachingForeignStorageMgr::refreshTable(const ChunkKey& table_key,
 void CachingForeignStorageMgr::refreshTableInCache(const ChunkKey& table_key) {
   CHECK(is_table_key(table_key));
 
-  // Before we can refresh a table we should make sure it has recovered any data
-  // if the table has been unused since the last server restart.
-  if (!disk_cache_->hasCachedMetadataForKeyPrefix(table_key)) {
-    ChunkMetadataVector old_cached_metadata;
-    disk_cache_->recoverCacheForTable(old_cached_metadata, table_key);
-  }
-
   // Preserve the list of which chunks were cached per table to refresh after clear.
   std::vector<ChunkKey> old_chunk_keys =
       disk_cache_->getCachedChunksForKeyPrefix(table_key);
@@ -158,12 +144,7 @@ void CachingForeignStorageMgr::refreshTableInCache(const ChunkKey& table_key) {
 
 void CachingForeignStorageMgr::clearTable(const ChunkKey& table_key) {
   disk_cache_->clearForTablePrefix(table_key);
-
   ForeignStorageMgr::clearDataWrapper(table_key);
-  auto [db_id, tb_id] = get_table_prefix(table_key);
-  // Make sure metadata file is gone
-  CHECK(!boost::filesystem::exists(disk_cache_->getCacheDirectoryForTable(db_id, tb_id) +
-                                   wrapper_file_name));
 }
 
 int CachingForeignStorageMgr::getHighestCachedFragId(const ChunkKey& table_key) {
@@ -183,7 +164,6 @@ void CachingForeignStorageMgr::refreshAppendTableInCache(
     const ChunkKey& table_key,
     const std::vector<ChunkKey>& old_chunk_keys) {
   CHECK(is_table_key(table_key));
-  createOrRecoverDataWrapperIfNotExists(table_key);
   int last_frag_id = getHighestCachedFragId(table_key);
 
   ChunkMetadataVector storage_metadata;
@@ -229,6 +209,7 @@ void CachingForeignStorageMgr::refreshChunksInCacheByFragment(
   const ChunkKey table_key{get_table_key(old_chunk_keys[0])};
   std::vector<ChunkKey> chunk_keys_in_fragment;
   for (const auto& chunk_key : old_chunk_keys) {
+    CHECK(chunk_key[CHUNK_KEY_TABLE_IDX] == table_key[CHUNK_KEY_TABLE_IDX]);
     if (chunk_key[CHUNK_KEY_FRAGMENT_IDX] < start_frag_id) {
       continue;
     }
@@ -280,23 +261,25 @@ void CachingForeignStorageMgr::refreshChunksInCacheByFragment(
     populateChunkBuffersSafely(
         *getDataWrapper(table_key), required_buffers, optional_buffers);
   }
-  if (chunk_keys_to_be_cached.size() > 0) {
-    disk_cache_->cacheTableChunks(chunk_keys_to_be_cached);
-  }
 }
 
-void CachingForeignStorageMgr::createOrRecoverDataWrapperIfNotExists(
-    const ChunkKey& chunk_key) {
+bool CachingForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chunk_key) {
+  std::lock_guard data_wrapper_lock(data_wrapper_mutex_);
   ChunkKey table_key = get_table_key(chunk_key);
-  if (createDataWrapperIfNotExists(table_key)) {
-    ChunkMetadataVector chunk_metadata;
-    if (disk_cache_->hasCachedMetadataForKeyPrefix(table_key)) {
-      disk_cache_->getCachedMetadataVecForKeyPrefix(chunk_metadata, table_key);
-      recoverDataWrapperFromDisk(table_key, chunk_metadata);
-    } else {
-      getDataWrapper(table_key)->populateChunkMetadata(chunk_metadata);
-    }
+  auto data_wrapper_it = data_wrapper_map_.find(table_key);
+  if (data_wrapper_it != data_wrapper_map_.end()) {
+    return false;
   }
+  auto [db, tb] = get_table_prefix(chunk_key);
+  createDataWrapperUnlocked(db, tb);
+  auto wrapper_file = disk_cache_->getSerializedWrapperPath(db, tb);
+  if (boost::filesystem::exists(wrapper_file)) {
+    ChunkMetadataVector chunk_metadata;
+    disk_cache_->getCachedMetadataVecForKeyPrefix(chunk_metadata, table_key);
+    data_wrapper_map_.at(table_key)->restoreDataWrapperInternals(
+        disk_cache_->getSerializedWrapperPath(db, tb), chunk_metadata);
+  }
+  return true;
 }
 
 }  // namespace foreign_storage

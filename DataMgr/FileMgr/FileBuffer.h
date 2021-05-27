@@ -86,9 +86,9 @@ class FileBuffer : public AbstractBuffer {
 
   void reserve(const size_t numBytes) override;
 
-  void freeMetadataPages();
+  size_t freeMetadataPages();
   size_t freeChunkPages();
-  void freePages();
+  size_t freePages();
   void freePagesBeforeEpoch(const int32_t targetEpoch);
 
   void read(int8_t* const dst,
@@ -130,6 +130,10 @@ class FileBuffer : public AbstractBuffer {
   /// Returns the number of pages in the FileBuffer.
   inline size_t pageCount() const override { return multiPages_.size(); }
 
+  /// Returns whether or not a buffer has data pages.  It is possible for a buffer to
+  /// represent metadata (have a size and encode) but not contain actual data.
+  inline bool hasDataPages() const { return pageCount() > 0; }
+
   /// Returns the size in bytes of each page in the FileBuffer.
   inline size_t pageSize() const override { return pageSize_; }
 
@@ -151,17 +155,10 @@ class FileBuffer : public AbstractBuffer {
   // inline virtual size_t used() const {
 
   inline size_t numMetadataPages() const { return metadataPages_.pageVersions.size(); };
-  inline size_t numChunkPages() const {
-    size_t total_size = 0;
-    for (const auto& multi_page : multiPages_) {
-      total_size += multi_page.pageVersions.size();
-    }
-    return total_size;
-  }
-
-  std::string dump() const;
 
   bool isMissingPages() const;
+  size_t numChunkPages() const;
+  std::string dump() const;
 
   // Used for testing
   void freePage(const Page& page);

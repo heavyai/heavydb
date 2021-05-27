@@ -182,7 +182,6 @@ class FileMgr : public AbstractBufferMgr {  // implements
   // can't undelete and revert to previous
   // state - reclaims disk space for chunk
   void deleteBuffer(const ChunkKey& key, const bool purge = true) override;
-
   void deleteBuffersWithPrefix(const ChunkKey& keyPrefix,
                                const bool purge = true) override;
 
@@ -206,18 +205,20 @@ class FileMgr : public AbstractBufferMgr {  // implements
   // Buffer API
   AbstractBuffer* alloc(const size_t numBytes) override;
   void free(AbstractBuffer* buffer) override;
-  Page requestFreePage(size_t pagesize, const bool isMetadata);
+  virtual Page requestFreePage(size_t pagesize, const bool isMetadata);
 
   inline MgrType getMgrType() override { return FILE_MGR; };
   inline std::string getStringMgrType() override { return ToString(FILE_MGR); }
   inline std::string printSlabs() override { return "Not Implemented"; }
-  inline void clearSlabs() override {}  // noop
+  inline void clearSlabs() override {}  // Noop
   inline size_t getMaxSize() override { return 0; }
   inline size_t getInUseSize() override { return 0; }
   inline size_t getAllocated() override { return 0; }
   inline bool isAllocationCapped() override { return false; }
 
-  inline FileInfo* getFileInfoForFileId(const int32_t fileId) { return files_[fileId]; }
+  inline FileInfo* getFileInfoForFileId(const int32_t fileId) const {
+    return files_.at(fileId);
+  }
 
   FileMetadata getMetadataForFile(
       const boost::filesystem::directory_iterator& fileIterator);
@@ -312,12 +313,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
 
   FILE* getFileForFileId(const int32_t fileId);
 
-  inline size_t getNumChunks() override {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(chunkIndexMutex_);
-    return chunkIndex_.size();
-  }
-  size_t getNumUsedPages() const;
-  size_t getNumUsedMetadataPages() const;
+  size_t getNumChunks() override;
   size_t getNumUsedMetadataPagesForChunkKey(const ChunkKey& chunkKey) const;
 
   ChunkKeyToChunkMap chunkIndex_;  /// Index for looking up chunks
@@ -330,7 +326,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
 
   void removeTableRelatedDS(const int32_t db_id, const int32_t table_id) override;
 
-  void free_page(std::pair<FileInfo*, int32_t>&& page);
+  virtual void free_page(std::pair<FileInfo*, int32_t>&& page);
   inline virtual bool hasFileMgrKey() const { return true; }
   const TablePair get_fileMgrKey() const { return fileMgrKey_; }
 
@@ -444,6 +440,10 @@ class FileMgr : public AbstractBufferMgr {  // implements
   virtual FileBuffer* createBufferUnlocked(const ChunkKey& key,
                                            size_t pageSize = 0,
                                            const size_t numBytes = 0);
+  virtual FileBuffer* createBufferFromHeaders(
+      const ChunkKey& key,
+      const std::vector<HeaderInfo>::const_iterator& headerStartIt,
+      const std::vector<HeaderInfo>::const_iterator& headerEndIt);
 
   // Migration functions
   void migrateToLatestFileMgrVersion();
@@ -472,7 +472,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   FileMgr(const int epoch);
 
   // Used to describe the manager in logging and error messages.
-  virtual std::string describeSelf();
+  virtual std::string describeSelf() const;
 
   void closePhysicalUnlocked();
   void syncFilesToDisk();
@@ -480,9 +480,16 @@ class FileMgr : public AbstractBufferMgr {  // implements
   void initializeNumThreads(size_t num_reader_threads = 0);
   virtual FileBuffer* allocateBuffer(const size_t page_size,
                                      const ChunkKey& key,
-                                     const size_t num_bytes);
-  void deleteBufferUnlocked(const ChunkKeyToChunkMap::iterator chunk_it,
-                            const bool purge = true);
+                                     const size_t num_bytes = 0);
+  virtual FileBuffer* allocateBuffer(
+      const ChunkKey& key,
+      const std::vector<HeaderInfo>::const_iterator& headerStartIt,
+      const std::vector<HeaderInfo>::const_iterator& headerEndIt);
+  virtual ChunkKeyToChunkMap::iterator deleteBufferUnlocked(
+      const ChunkKeyToChunkMap::iterator chunk_it,
+      const bool purge = true);
+  virtual FileBuffer* getBufferUnlocked(const ChunkKeyToChunkMap::iterator chunk_it,
+                                        const size_t numBytes = 0);
 
  private:
   void rollOffOldData(const int32_t epochCeiling, const bool shouldCheckpoint);

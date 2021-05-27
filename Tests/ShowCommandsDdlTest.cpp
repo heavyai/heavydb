@@ -1074,7 +1074,7 @@ class ShowDiskCacheUsageTest : public ShowTest {
         "');");
   }
 
-  uint64_t getWrapperSizeForTable(std::string& table_name) {
+  uint64_t getWrapperSizeForTable(const std::string& table_name) {
     uint64_t space_used = 0;
     auto& cat = getCatalog();
     auto td = cat.getMetadataForTable(table_name, false);
@@ -1217,15 +1217,15 @@ class ShowDiskCacheUsageForNormalTableTest : public ShowDiskCacheUsageTest {
  public:
   static void SetUpTestSuite() {
     ShowDiskCacheUsageTest::SetUpTestSuite();
-    resetPersistentStorageMgr(DiskCacheLevel::all);
+    resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::all);
   }
 
   static void TearDownTestSuite() {
-    resetPersistentStorageMgr(DiskCacheLevel::fsi);
+    resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::fsi);
     ShowDiskCacheUsageTest::TearDownTestSuite();
   }
 
-  static void resetPersistentStorageMgr(DiskCacheLevel cache_level) {
+  static void resetPersistentStorageMgr(File_Namespace::DiskCacheLevel cache_level) {
     for (auto table_it : getCatalog().getAllTableMetadata()) {
       getCatalog().removeFragmenterForTable(table_it->tableId);
     }

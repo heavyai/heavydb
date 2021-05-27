@@ -284,13 +284,13 @@ class SelectQueryTest : public ForeignTableTest {
 
 class CacheControllingSelectQueryTest
     : public SelectQueryTest,
-      public ::testing::WithParamInterface<DiskCacheLevel> {
+      public ::testing::WithParamInterface<File_Namespace::DiskCacheLevel> {
  public:
   inline static std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache";
-  DiskCacheLevel starting_cache_level_;
+  File_Namespace::DiskCacheLevel starting_cache_level_;
 
  protected:
-  void resetPersistentStorageMgr(DiskCacheLevel cache_level) {
+  void resetPersistentStorageMgr(File_Namespace::DiskCacheLevel cache_level) {
     for (auto table_it : getCatalog().getAllTableMetadata()) {
       getCatalog().removeFragmenterForTable(table_it->tableId);
     }
@@ -356,7 +356,7 @@ class RecoverCacheQueryTest : public ForeignTableTest {
   foreign_storage::ForeignStorageCache* cache_;
 
  protected:
-  void resetPersistentStorageMgr(DiskCacheLevel cache_level) {
+  void resetPersistentStorageMgr(File_Namespace::DiskCacheLevel cache_level) {
     for (auto table_it : cat_->getAllTableMetadata()) {
       cat_->removeFragmenterForTable(table_it->tableId);
     }
@@ -384,8 +384,7 @@ class RecoverCacheQueryTest : public ForeignTableTest {
                           .getDataMgr()
                           .getPersistentStorageMgr()
                           ->getDiskCache()
-                          ->getCacheDirectoryForTable(db_id, td->tableId) +
-                      "/" + foreign_storage::wrapper_file_name);
+                          ->getSerializedWrapperPath(db_id, td->tableId));
   }
 
   bool compareTableDatawrapperMetadataToFile(const std::string& name,
@@ -394,18 +393,17 @@ class RecoverCacheQueryTest : public ForeignTableTest {
     auto db_id = getCatalog().getCurrentDB().dbId;
     ChunkKey table_key{db_id, td->tableId};
     return compare_json_files(getCatalog()
-                                      .getDataMgr()
-                                      .getPersistentStorageMgr()
-                                      ->getDiskCache()
-                                      ->getCacheDirectoryForTable(db_id, td->tableId) +
-                                  foreign_storage::wrapper_file_name,
+                                  .getDataMgr()
+                                  .getPersistentStorageMgr()
+                                  ->getDiskCache()
+                                  ->getSerializedWrapperPath(db_id, td->tableId),
                               filepath,
                               getDataFilesPath());
   }
 
   void resetStorageManagerAndClearTableMemory(const ChunkKey& table_key) {
     // Reset cache and clear memory representations.
-    resetPersistentStorageMgr(DiskCacheLevel::fsi);
+    resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::fsi);
     cat_->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
     cat_->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
   }
@@ -424,9 +422,15 @@ class RecoverCacheQueryTest : public ForeignTableTest {
     cat_ = &getCatalog();
     psm_ = cat_->getDataMgr().getPersistentStorageMgr();
     cache_ = psm_->getDiskCache();
+    sqlDropForeignTable();
+    cache_->clear();
   }
 
-  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+  void TearDown() override {
+    sqlDropForeignTable();
+    cache_->clear();
+    DBHandlerTestFixture::TearDown();
+  }
   static void SetUpTestSuite() {}
   static void TearDownTestSuite() {}
 };
@@ -519,13 +523,14 @@ struct PrintToStringParamName {
     ss << ((info.param == TExecuteMode::GPU) ? "GPU" : "CPU");
     return ss.str();
   }
-  std::string operator()(const ::testing::TestParamInfo<DiskCacheLevel>& info) const {
+  std::string operator()(
+      const ::testing::TestParamInfo<File_Namespace::DiskCacheLevel>& info) const {
     std::stringstream ss;
     // clang-format off
-    if (info.param == DiskCacheLevel::none) ss << "NoCache";
-    if (info.param == DiskCacheLevel::fsi) ss << "FsiCache";
-    if (info.param == DiskCacheLevel::non_fsi) ss << "NonFsiCache";
-    if (info.param == DiskCacheLevel::all) ss << "AllCache";
+    if (info.param == File_Namespace::DiskCacheLevel::none) ss << "NoCache";
+    if (info.param == File_Namespace::DiskCacheLevel::fsi) ss << "FsiCache";
+    if (info.param == File_Namespace::DiskCacheLevel::non_fsi) ss << "NonFsiCache";
+    if (info.param == File_Namespace::DiskCacheLevel::all) ss << "AllCache";
     // clang-format on
     return ss.str();
   }
@@ -645,7 +650,7 @@ TEST_P(CacheControllingSelectQueryTest, ParquetNullRowgroups) {
 
 TEST_P(CacheControllingSelectQueryTest, CacheExists) {
   auto cache = getCatalog().getDataMgr().getPersistentStorageMgr()->getDiskCache();
-  if (GetParam() == DiskCacheLevel::none) {
+  if (GetParam() == File_Namespace::DiskCacheLevel::none) {
     ASSERT_EQ(cache, nullptr);
   } else {
     ASSERT_NE(cache, nullptr);
@@ -1015,7 +1020,8 @@ TEST_F(SelectQueryTest, ExistingTableWithFsiDisabled) {
 
 INSTANTIATE_TEST_SUITE_P(CachOnOffSelectQueryTests,
                          CacheControllingSelectQueryTest,
-                         ::testing::Values(DiskCacheLevel::none, DiskCacheLevel::fsi),
+                         ::testing::Values(File_Namespace::DiskCacheLevel::none,
+                                           File_Namespace::DiskCacheLevel::fsi),
                          PrintToStringParamName());
 
 INSTANTIATE_TEST_SUITE_P(DataWrapperParameterizedTests,
@@ -1681,54 +1687,6 @@ bool does_cache_contain_chunks(Catalog_Namespace::Catalog* cat,
   return true;
 }
 
-// Check that chunks/metadata are fully cleared in bulk update mode
-TEST_F(RefreshTests, BulkUpdateCacheUpdate) {
-  int fragment_size = 1;
-  std::string filename = "single_file.csv";
-  auto cache = getCatalog().getDataMgr().getPersistentStorageMgr()->getDiskCache();
-  // Create initial files and tables
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-
-  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
-  std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file.csv";
-
-  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
-                      getDataFilesPath() + "append_tmp/" + filename +
-                      "', fragment_size = '" + std::to_string(fragment_size) +
-                      "', REFRESH_UPDATE_TYPE = 'ALL');";
-  sql(query);
-
-  std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
-  // Read from table
-  sqlAndCompareResult(select, {{i(1)}, {i(2)}});
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-  recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
-  size_t mdata_count = cache->getNumMetadataAdded();
-  size_t chunk_count = cache->getNumChunksAdded();
-
-  // Refresh command
-  sql("REFRESH FOREIGN TABLES " + default_name + ";");
-
-  // All  chunks + will be updated
-  size_t update_count = 5;
-  ASSERT_EQ(update_count, cache->getNumMetadataAdded() - mdata_count);
-  // 2 chunks are recached, 3 added during refresh
-  ASSERT_EQ(update_count, cache->getNumChunksAdded() - chunk_count);
-
-  // cache contains original chunks;
-  ASSERT_TRUE(does_cache_contain_chunks(cat, default_name, {{1, 0}, {1, 1}}));
-
-  sqlAndCompareResult(select, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
-  ASSERT_EQ(update_count, cache->getNumMetadataAdded() - mdata_count);
-  // Now all new chunks are cached
-  ASSERT_EQ(update_count, cache->getNumChunksAdded() - chunk_count);
-  ASSERT_TRUE(does_cache_contain_chunks(
-      cat, default_name, {{1, 0}, {1, 1}, {1, 2}, {1, 3}, {1, 4}}));
-
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-}
-
 class RefreshMetadataTypeTest : public SelectQueryTest {};
 TEST_F(RefreshMetadataTypeTest, ScalarTypes) {
   const auto& query = getCreateForeignTableQuery(
@@ -2253,24 +2211,35 @@ class AppendRefreshTest : public RecoverCacheQueryTest,
   void SetUp() override {
     RecoverCacheQueryTest::SetUp();
     sqlDropForeignTable(0, default_name);
+    bf::remove_all(getDataFilesPath() + "append_tmp");
+    recursive_copy(getDataFilesPath() + "append_before",
+                   getDataFilesPath() + "append_tmp");
   }
 
   void TearDown() override {
     sqlDropForeignTable(0, default_name);
     RecoverCacheQueryTest::TearDown();
+    bf::remove_all(getDataFilesPath() + "append_tmp");
   }
+
   AppendRefreshTestStruct getParamStruct() { return AppendRefreshTestStruct{GetParam()}; }
+
   std::string evictString() {
     return getParamStruct().evict ? " WITH (evict = true)" : " WITH (evict = false)";
+  }
+
+  std::vector<std::vector<int32_t>> createSubKeys(size_t num_chunks) {
+    std::vector<std::vector<int32_t>> chunk_subkeys;
+    for (int32_t i = 0; i < static_cast<int>(num_chunks); ++i) {
+      chunk_subkeys.push_back({1, i});
+    }
+    return chunk_subkeys;
   }
 };
 
 TEST_F(AppendRefreshTest, CSV_MissingFileArchive) {
   int fragment_size = 1;
   std::string filename = "archive_delete_file.zip";
-  // Create initial files and tables
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
 
   std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
                       "SERVER omnisci_local_csv WITH (file_path = '" +
@@ -2292,8 +2261,6 @@ TEST_F(AppendRefreshTest, CSV_MissingFileArchive) {
       "REFRESH FOREIGN TABLES " + default_name + ";",
       "Exception: Foreign table refreshed with APPEND mode missing archive entry "
       "\"single_file_delete_rows.csv\" from file \"archive_delete_file.zip\".");
-
-  bf::remove_all(getDataFilesPath() + "append_tmp");
 }
 
 class FragmentSizesAppendRefreshTest : public AppendRefreshTest {};
@@ -2348,10 +2315,6 @@ TEST_P(FragmentSizesAppendRefreshTest, AppendFrags) {
   int fragment_size = param.fragment_size;
   std::string filename = param.filename;
 
-  // Create initial files and tables
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-
-  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
   std::string file_path =
       getDataFilesPath() + "append_tmp/" + "single_file." + param.wrapper;
 
@@ -2365,61 +2328,36 @@ TEST_P(FragmentSizesAppendRefreshTest, AppendFrags) {
   std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
   // Read from table
   sqlAndCompareResult(select, {{i(1)}, {i(2)}});
+
   bf::remove_all(getDataFilesPath() + "append_tmp");
   recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
 
   if (param.recover_cache) {
     // Reset cache
-    resetPersistentStorageMgr(DiskCacheLevel::fsi);
+    resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::fsi);
   }
-  size_t mdata_count = cache_->getNumMetadataAdded();
-  size_t chunk_count = cache_->getNumChunksAdded();
-  // Refresh command
-  sql("REFRESH FOREIGN TABLES " + default_name + ";");
 
   size_t original_chunks = std::ceil(double(2) / fragment_size);
   size_t final_chunks = std::ceil(double(5) / fragment_size);
-  // All new chunks + last original chunk will be updated
-  size_t metadata_update_count = final_chunks - original_chunks + 1;
-  ASSERT_EQ(metadata_update_count, cache_->getNumMetadataAdded() - mdata_count);
+  auto cat = &getCatalog();
 
-  // Last chunk only recached if size changes
-  size_t updated_chunks = 5 % fragment_size == 0 ? 0U : 1U;
-  size_t new_chunks = (final_chunks - original_chunks);
-
-  if (param.wrapper == "csv") {
-    // assumes new chunks are cached during scan
-    ASSERT_EQ(updated_chunks + new_chunks, cache_->getNumChunksAdded() - chunk_count);
-  } else {
-    ASSERT_EQ(updated_chunks, cache_->getNumChunksAdded() - chunk_count);
-  }
   // cache contains all original chunks
-  {
-    std::vector<std::vector<int>> chunk_subkeys;
-    for (int i = 0; i < static_cast<int>(original_chunks); i++) {
-      chunk_subkeys.push_back({1, i});
-    }
-    ASSERT_TRUE(does_cache_contain_chunks(&getCatalog(), default_name, chunk_subkeys));
-  }
+  ASSERT_TRUE(
+      does_cache_contain_chunks(cat, default_name, createSubKeys(original_chunks)));
+  sqlAndCompareResult("SELECT COUNT(*) FROM "s + default_name + ";", {{i(2)}});
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}});
+
+  // Refresh command
+  sql("REFRESH FOREIGN TABLES " + default_name + ";");
+
   // Check count to ensure metadata is updated
   sqlAndCompareResult("SELECT COUNT(*) FROM "s + default_name + ";", {{i(5)}});
-
   sqlAndCompareResult(select, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
-  ASSERT_EQ(metadata_update_count, cache_->getNumMetadataAdded() - mdata_count);
-  // Now all new chunks are cached
-  ASSERT_EQ(updated_chunks + new_chunks, cache_->getNumChunksAdded() - chunk_count);
+
   ASSERT_EQ(param.recover_cache, isTableDatawrapperRestored(default_name));
 
   // cache contains all original+new chunks
-  {
-    std::vector<std::vector<int>> chunk_subkeys;
-    for (int i = 0; i < static_cast<int>(final_chunks); i++) {
-      chunk_subkeys.push_back({1, i});
-    }
-    ASSERT_TRUE(does_cache_contain_chunks(&getCatalog(), default_name, chunk_subkeys));
-  }
-
-  bf::remove_all(getDataFilesPath() + "append_tmp");
+  ASSERT_TRUE(does_cache_contain_chunks(cat, default_name, createSubKeys(final_chunks)));
 }
 
 // Test that string dictionaries are populated correctly after an append
@@ -2463,9 +2401,6 @@ INSTANTIATE_TEST_SUITE_P(StringDictAppendParamaterizedTestsParquetFromDisk,
                          PrintToStringParamName());
 
 TEST_P(StringDictAppendTest, AppendStringDictFilter) {
-  // Create initial files and tables
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
   auto param = getParamStruct();
   int fragment_size = param.fragment_size;
   std::string filename = param.filename;
@@ -2488,7 +2423,7 @@ TEST_P(StringDictAppendTest, AppendStringDictFilter) {
 
   if (param.recover_cache) {
     // Reset cache
-    resetPersistentStorageMgr(DiskCacheLevel::fsi);
+    resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::fsi);
   }
   // Modify files
   bf::remove_all(getDataFilesPath() + "append_tmp");
@@ -2503,14 +2438,9 @@ TEST_P(StringDictAppendTest, AppendStringDictFilter) {
                          }},
                          result);
   }
-
-  bf::remove_all(getDataFilesPath() + "append_tmp");
 }
 
 TEST_P(StringDictAppendTest, AppendStringDictJoin) {
-  // Create initial files and tables
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
   auto param = getParamStruct();
   int fragment_size = param.fragment_size;
   std::string name_1 = default_name + "_1";
@@ -2536,7 +2466,7 @@ TEST_P(StringDictAppendTest, AppendStringDictJoin) {
 
   if (param.recover_cache) {
     // Reset cache
-    resetPersistentStorageMgr(DiskCacheLevel::fsi);
+    resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::fsi);
   }
 
   // Modify files
@@ -2560,7 +2490,6 @@ TEST_P(StringDictAppendTest, AppendStringDictJoin) {
   }
   sql("DROP FOREIGN TABLE IF EXISTS " + name_1 + ";");
   sql("DROP FOREIGN TABLE IF EXISTS " + name_2 + ";");
-  bf::remove_all(getDataFilesPath() + "append_tmp");
 }
 
 class DataWrapperAppendRefreshTest : public AppendRefreshTest {};
@@ -2591,34 +2520,25 @@ TEST_P(DataWrapperAppendRefreshTest, AppendNothing) {
 
   if (param.recover_cache) {
     // Reset cache
-    resetPersistentStorageMgr(DiskCacheLevel::fsi);
+    resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::fsi);
   }
-  size_t mdata_count = cache_->getNumMetadataAdded();
-  size_t chunk_count = cache_->getNumChunksAdded();
+
+  ASSERT_EQ(cache_->getNumCachedChunks(), 2U);  // Num chunks
+
   // Refresh command
   sql("REFRESH FOREIGN TABLES " + default_name + ";");
 
-  // Only last original chunk is recached
-  ASSERT_EQ(1U, cache_->getNumMetadataAdded() - mdata_count);
-  // Cache will not re-add chunk as it has not changed size
-  ASSERT_EQ(0U, cache_->getNumChunksAdded() - chunk_count);
-  // Read from table
+  ASSERT_EQ(cache_->getNumCachedChunks(), 2U);  // Num chunks
+
   sqlAndCompareResult(select, {{i(1)}, {i(2)}});
 
   ASSERT_EQ(param.recover_cache, isTableDatawrapperRestored(default_name));
-
-  // no updates to the cache
-  ASSERT_EQ(1U, cache_->getNumMetadataAdded() - mdata_count);
-  ASSERT_EQ(0U, cache_->getNumChunksAdded() - chunk_count);
 }
 
 TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
   int fragment_size = 1;
   std::string wrapper = getParamStruct().wrapper;
   std::string filename = "single_file_delete_rows." + wrapper;
-  // Create initial files and tables
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
 
   std::string query = "CREATE FOREIGN TABLE " + default_name + " (i BIGINT) "s +
                       "SERVER omnisci_local_" + wrapper + " WITH (file_path = '" +
@@ -2641,8 +2561,32 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
       "Exception: Refresh of foreign table created with \"APPEND\" update type failed as "
       "file reduced in size: " +
           getDataFilesPath() + "append_tmp/single_file_delete_rows." + wrapper);
+}
 
+TEST_P(DataWrapperAppendRefreshTest, BulkMissingRows) {
+  int fragment_size = 1;
+  std::string wrapper = getParamStruct().wrapper;
+  std::string filename = "single_file_delete_rows." + wrapper;
+
+  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i BIGINT) "s +
+                      "SERVER omnisci_local_" + wrapper + " WITH (file_path = '" +
+                      getDataFilesPath() + "append_tmp/" + filename +
+                      "', fragment_size = '" + std::to_string(fragment_size) +
+                      "', REFRESH_UPDATE_TYPE = 'ALL');";
+  sql(query);
+
+  std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
+  // Read from table
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}});
+
+  // Modify files
   bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
+
+  // Refresh command
+  sql("REFRESH FOREIGN TABLES " + default_name + ";");
+
+  sqlAndCompareResult(select, {{i(1)}});
 }
 
 TEST_P(DataWrapperAppendRefreshTest, MissingRowsEvict) {
@@ -2650,9 +2594,6 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRowsEvict) {
   int fragment_size = 1;
   std::string wrapper = getParamStruct().wrapper;
   std::string filename = "single_file_delete_rows." + wrapper;
-  // Create initial files and tables
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
 
   std::string query = "CREATE FOREIGN TABLE " + default_name + " (i BIGINT) "s +
                       "SERVER omnisci_local_" + wrapper + " WITH (file_path = '" +
@@ -2674,18 +2615,12 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRowsEvict) {
 
   // Check row has been removed
   sqlAndCompareResult(select, {{i(1)}});
-  bf::remove_all(getDataFilesPath() + "append_tmp");
 }
 
 TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
   int fragment_size = 1;
   std::string wrapper = getParamStruct().wrapper;
   std::string filename = wrapper + "_dir_missing_file";
-
-  // Create initial files and tables
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-
-  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
   std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file." + wrapper;
 
   std::string query = "CREATE FOREIGN TABLE " + default_name + " (i BIGINT) "s +
@@ -2708,8 +2643,6 @@ TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
       "file \"" +
           getDataFilesPath() + "append_tmp/" + filename + "/one_row_2." + wrapper +
           "\" was removed.");
-
-  bf::remove_all(getDataFilesPath() + "append_tmp");
 }
 
 // This tests the use case where there are multiple files in a
@@ -2718,11 +2651,6 @@ TEST_P(DataWrapperAppendRefreshTest, MultifileAppendtoFile) {
   int fragment_size = 1;
   std::string wrapper = getParamStruct().wrapper;
   std::string filename = wrapper + "_dir_file_multi_bad_append";
-
-  // Create initial files and tables
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-
-  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
   std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file." + wrapper;
 
   std::string query = "CREATE FOREIGN TABLE " + default_name + " (i BIGINT) "s +
@@ -2741,8 +2669,6 @@ TEST_P(DataWrapperAppendRefreshTest, MultifileAppendtoFile) {
   // Refresh command
   sql("REFRESH FOREIGN TABLES " + default_name + ";");
   sqlAndCompareResult(select, {{i(1)}, {i(2)}});
-
-  bf::remove_all(getDataFilesPath() + "append_tmp");
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -3651,7 +3577,6 @@ TEST_F(CacheDefaultTest, Path) {
 }
 
 TEST_F(RecoverCacheQueryTest, RecoverWithoutWrappers) {
-  sqlDropForeignTable();
   std::string query = "CREATE FOREIGN TABLE " + default_table_name +
                       " (t TEXT, i BIGINT[]) "s +
                       "SERVER omnisci_local_csv WITH (file_path = '" +
@@ -3668,136 +3593,59 @@ TEST_F(RecoverCacheQueryTest, RecoverWithoutWrappers) {
 
   // Reset cache and clear memory representations.
   resetStorageManagerAndClearTableMemory(table_key);
-
-  // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
-
-  sqlAndCompareResult("SELECT * FROM " + default_table_name + "  ORDER BY t;",
-                      {{"a", array({i(1), i(1), i(1)})},
-                       {"aa", array({NULL_BIGINT, i(2), i(2)})},
-                       {"aaa", array({i(3), NULL_BIGINT, i(3)})}});
-
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 2U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 3U);
-
-  // Datawrapper should not have been created.
-  ASSERT_FALSE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
-
-  sqlDropForeignTable();
-}
-
-TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandVarLenCsv) {
-  sqlDropForeignTable();
-  std::string query = "CREATE FOREIGN TABLE " + default_table_name +
-                      " (t TEXT, i BIGINT[]) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
-                      getDataFilesPath() + "/" + "example_1_dir_archives/');";
-  sql(query);
-  auto td = cat_->getMetadataForTable(default_table_name, false);
-  ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
-  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
-
-  sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(3)}});
   ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
 
-  // Reset cache and clear memory representations.
-  resetStorageManagerAndClearTableMemory(table_key);
-
-  // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
-
-  ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
-
   sqlAndCompareResult("SELECT * FROM " + default_table_name + "  ORDER BY t;",
                       {{"a", array({i(1), i(1), i(1)})},
                        {"aa", array({NULL_BIGINT, i(2), i(2)})},
                        {"aaa", array({i(3), NULL_BIGINT, i(3)})}});
 
-  // 2 data + 1 index chunk
-  ASSERT_EQ(cache_->getNumCachedChunks(), 3U);
-  // Only 2 metadata
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 2U);
-
+  ASSERT_EQ(cache_->getNumCachedChunks(), 3U);    // 2 data + 1 index chunk
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 2U);  // Only 2 metadata
   ASSERT_TRUE(isTableDatawrapperRestored(default_table_name));
-  sqlDropForeignTable();
 }
 
-TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandVarLenParquet) {
-  sqlDropForeignTable();
-  std::string query = "CREATE FOREIGN TABLE " + default_table_name +
-                      " (t TEXT, i INTEGER[]) "s +
-                      "SERVER omnisci_local_parquet WITH (file_path = '" +
-                      getDataFilesPath() + "/" + "example_1.parquet');";
-  sql(query);
-  auto td = cat_->getMetadataForTable(default_table_name, false);
-  ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
-  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
+class RecoverCacheTest : public RecoverCacheQueryTest,
+                         public ::testing::WithParamInterface<
+                             std::tuple<std::string, std::string, std::string>> {};
 
+TEST_P(RecoverCacheTest, RestoreCache) {
+  auto [name, server, path] = GetParam();
+  sql("CREATE FOREIGN TABLE " + default_table_name + " (t TEXT, i INTEGER[]) "s +
+      "SERVER " + server + " WITH (file_path = '" + getDataFilesPath() + "/" + path +
+      "');");
+
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
+
+  auto td = cat_->getMetadataForTable(default_table_name, false);
+  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
   sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(3)}});
   ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
 
-  // Reset cache and clear memory representations.
+  // Reset cache and clear memory representations (disk data persists).
   resetStorageManagerAndClearTableMemory(table_key);
-
-  // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
-
   ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
+  ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
 
   sqlAndCompareResult("SELECT * FROM " + default_table_name + "  ORDER BY t;",
                       {{"a", array({i(1), i(1), i(1)})},
                        {"aa", array({i(NULL_INT), i(2), i(2)})},
                        {"aaa", array({i(3), i(NULL_INT), i(3)})}});
 
-  // 2 data + 1 index chunk
-  ASSERT_EQ(cache_->getNumCachedChunks(), 3U);
-  // Only 2 metadata
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 2U);
-
+  ASSERT_EQ(cache_->getNumCachedChunks(), 3U);    // 2 data + 1 index chunk
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 2U);  // Only 2 metadata
   ASSERT_TRUE(isTableDatawrapperRestored(default_table_name));
-  sqlDropForeignTable();
 }
 
-// Check that csv datawrapper metadata is generated and restored correctly for CSV
-// Archives
-TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandFromCsvArchive) {
-  sqlDropForeignTable();
-  std::string query = "CREATE FOREIGN TABLE " + default_table_name +
-                      " (t TEXT, i INTEGER[]) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
-                      getDataFilesPath() + "/" + "example_1_multilevel.zip');";
-  sql(query);
-  auto td = cat_->getMetadataForTable(default_table_name, false);
-  ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
-  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
-
-  sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(3)}});
-
-  ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
-  ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
-
-  // Reset cache and clear memory representations.
-  resetStorageManagerAndClearTableMemory(table_key);
-
-  // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
-
-  sqlAndCompareResult("SELECT * FROM " + default_table_name + "  ORDER BY t;",
-                      {{"a", array({i(1), i(1), i(1)})},
-                       {"aa", array({Null_i, i(2), i(2)})},
-                       {"aaa", array({i(3), Null_i, i(3)})}});
-  // 2 columns
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 2U);
-  // extra chunk for varlen
-  ASSERT_EQ(cache_->getNumCachedChunks(), 3U);
-
-  ASSERT_TRUE(isTableDatawrapperRestored(default_table_name));
-  sqlDropForeignTable();
-}
+INSTANTIATE_TEST_SUITE_P(
+    RecoverCacheParameterizedTests,
+    RecoverCacheTest,
+    ::testing::Values(
+        std::make_tuple("csv_archive", "omnisci_local_csv", "example_1_dir_archives/"),
+        std::make_tuple("csv_zip", "omnisci_local_csv", "example_1_multilevel.zip"),
+        std::make_tuple("parquet", "omnisci_local_parquet", "example_1.parquet")),
+    [](const auto& param_info) { return std::get<0>(param_info.param); });
 
 class DataWrapperRecoverCacheQueryTest
     : public RecoverCacheQueryTest,
@@ -3823,10 +3671,6 @@ TEST_P(DataWrapperRecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemand
   // Reset cache and clear memory representations.
   resetStorageManagerAndClearTableMemory(table_key);
 
-  // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
-
   ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
   if (wrapper != "csv") {
     ASSERT_TRUE(compareTableDatawrapperMetadataToFile(
@@ -3838,14 +3682,10 @@ TEST_P(DataWrapperRecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemand
 
   ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
   ASSERT_EQ(cache_->getNumCachedChunks(), cache_during_scan ? 1U : 0U);
-  ASSERT_FALSE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
+  ASSERT_TRUE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
 
   sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
   ASSERT_EQ(cache_->getNumCachedChunks(), 1U);
-  // We dont need to recover if the data was cached
-  ASSERT_EQ(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key),
-            !cache_during_scan);
-
   sqlDropForeignTable();
 }
 
@@ -3883,10 +3723,6 @@ TEST_P(DataWrapperRecoverCacheQueryTest, AppendData) {
 
   // Reset cache and clear memory representations.
   resetStorageManagerAndClearTableMemory(table_key);
-
-  // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
 
   // Modify tables on disk
   bf::remove_all(getDataFilesPath() + "append_tmp");
@@ -3944,7 +3780,7 @@ class MockDataWrapper : public foreign_storage::MockForeignDataWrapper {
     throw_on_chunk_fetch_ = throw_on_chunk_fetch;
   }
 
-  void serializeDataWrapperInternals(const std::string& file_path) const override{};
+  std::string getSerializedDataWrapper() const override { return ""; };
 
   void restoreDataWrapperInternals(const std::string& file_path,
                                    const ChunkMetadataVector& chunk_metadata) override{};

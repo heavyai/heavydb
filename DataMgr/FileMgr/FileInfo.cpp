@@ -57,7 +57,7 @@ void FileInfo::initNewFile() {
   isDirty = true;
 }
 
-size_t FileInfo::write(const size_t offset, const size_t size, int8_t* buf) {
+size_t FileInfo::write(const size_t offset, const size_t size, const int8_t* buf) {
   std::lock_guard<std::mutex> lock(readWriteMutex_);
   isDirty = true;
   return File_Namespace::write(f, offset, size, buf);
@@ -177,8 +177,6 @@ static void sighandler(int sig) {
 
 void FileInfo::freePage(int pageId, const bool isRolloff, int32_t epoch) {
   std::lock_guard<std::mutex> lock(readWriteMutex_);
-#define RESILIENT_PAGE_HEADER
-#ifdef RESILIENT_PAGE_HEADER
   int32_t epoch_freed_page[2] = {DELETE_CONTINGENT, epoch};
   if (isRolloff) {
     epoch_freed_page[0] = ROLLOFF_CONTINGENT;
@@ -186,11 +184,8 @@ void FileInfo::freePage(int pageId, const bool isRolloff, int32_t epoch) {
   File_Namespace::write(f,
                         pageId * pageSize + sizeof(int32_t),
                         sizeof(epoch_freed_page),
-                        (int8_t*)epoch_freed_page);
+                        reinterpret_cast<const int8_t*>(epoch_freed_page));
   fileMgr->free_page(std::make_pair(this, pageId));
-#else
-  freePageImmediate(pageId);
-#endif  // RESILIENT_PAGE_HEADER
   isDirty = true;
 
 #ifdef ENABLE_CRASH_CORRUPTION_TEST
@@ -242,15 +237,14 @@ int32_t FileInfo::syncToDisk() {
 }
 
 void FileInfo::freePageImmediate(int32_t page_num) {
-  std::lock_guard<std::mutex> lock(freePagesMutex_);
   // we should not get here but putting protection in place
   // as it seems we are no guaranteed to have f/synced so
   // protecting from RO trying to write
   if (!g_read_only) {
     int32_t zero{0};
     File_Namespace::write(
-        f, page_num * pageSize, sizeof(int32_t), reinterpret_cast<int8_t*>(&zero));
-    freePages.insert(page_num);
+        f, page_num * pageSize, sizeof(int32_t), reinterpret_cast<const int8_t*>(&zero));
+    freePageDeferred(page_num);
   }
 }
 

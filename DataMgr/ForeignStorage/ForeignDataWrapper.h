@@ -55,9 +55,8 @@ class ForeignDataWrapper {
 
   /**
    * Serialize internal state of wrapper into file at given path if implemented
-   * @param file_path - location to save file to
    */
-  virtual void serializeDataWrapperInternals(const std::string& file_path) const = 0;
+  virtual std::string getSerializedDataWrapper() const = 0;
 
   /**
    * Restore internal state of datawrapper

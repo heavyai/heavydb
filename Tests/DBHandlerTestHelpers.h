@@ -208,7 +208,8 @@ class DBHandlerTestFixture : public testing::Test {
 
   static void TearDownTestSuite() {}
 
-  static void createDBHandler(DiskCacheLevel cache_level = DiskCacheLevel::fsi) {
+  static void createDBHandler(
+      File_Namespace::DiskCacheLevel cache_level = File_Namespace::DiskCacheLevel::fsi) {
     if (!db_handler_) {
       setupSignalHandler();
 
@@ -238,8 +239,8 @@ class DBHandlerTestFixture : public testing::Test {
       system_parameters_.omnisci_server_port = -1;
       system_parameters_.calcite_port = 3280;
 
-      DiskCacheConfig disk_cache_config{std::string(BASE_PATH) + "/omnisci_disk_cache",
-                                        cache_level};
+      File_Namespace::DiskCacheConfig disk_cache_config{
+          std::string(BASE_PATH) + "/omnisci_disk_cache", cache_level};
       db_handler_ = std::make_unique<DBHandler>(db_leaves_,
                                                 string_leaves_,
                                                 BASE_PATH,

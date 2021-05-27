@@ -144,8 +144,8 @@ QueryRunner::QueryRunner(const char* db_path,
   auto system_db_file = base_path / "mapd_catalogs" / OMNISCI_DEFAULT_DB;
   CHECK(boost::filesystem::exists(system_db_file));
   auto data_dir = base_path / "mapd_data";
-  DiskCacheConfig disk_cache_config{(base_path / "omnisci_disk_cache").string(),
-                                    DiskCacheLevel::fsi};
+  File_Namespace::DiskCacheConfig disk_cache_config{
+      (base_path / "omnisci_disk_cache").string(), File_Namespace::DiskCacheLevel::fsi};
   Catalog_Namespace::UserMetadata user;
   Catalog_Namespace::DBMetadata db;
 

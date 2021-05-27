@@ -240,7 +240,7 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
 #ifdef ENABLE_GEOS
                      const std::string& libgeos_so_filename,
 #endif
-                     const DiskCacheConfig& disk_cache_config,
+                     const File_Namespace::DiskCacheConfig& disk_cache_config,
                      const bool is_new_db)
     : leaf_aggregator_(db_leaves)
     , db_leaves_(db_leaves)

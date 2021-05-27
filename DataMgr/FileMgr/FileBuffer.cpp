@@ -47,7 +47,7 @@ FileBuffer::FileBuffer(FileMgr* fm,
   // Create a new FileBuffer
   CHECK(fm_);
   calcHeaderBuffer();
-  CHECK(pageSize_ > reservedHeaderSize_);
+  CHECK_GT(pageSize_, reservedHeaderSize_);
   pageDataSize_ = pageSize_ - reservedHeaderSize_;
   //@todo reintroduce initialSize - need to develop easy way of
   // differentiating these pre-allocated pages from "written-to" pages
@@ -159,7 +159,8 @@ void FileBuffer::freePage(const Page& page, const bool isRolloff) {
   fileInfo->freePage(page.pageNum, isRolloff, getFileMgrEpoch());
 }
 
-void FileBuffer::freeMetadataPages() {
+size_t FileBuffer::freeMetadataPages() {
+  size_t num_pages_freed = metadataPages_.pageVersions.size();
   for (auto metaPageIt = metadataPages_.pageVersions.begin();
        metaPageIt != metadataPages_.pageVersions.end();
        ++metaPageIt) {
@@ -168,6 +169,7 @@ void FileBuffer::freeMetadataPages() {
   while (metadataPages_.pageVersions.size() > 0) {
     metadataPages_.pop();
   }
+  return num_pages_freed;
 }
 
 size_t FileBuffer::freeChunkPages() {
@@ -184,9 +186,8 @@ size_t FileBuffer::freeChunkPages() {
   return num_pages_freed;
 }
 
-void FileBuffer::freePages() {
-  freeMetadataPages();
-  freeChunkPages();
+size_t FileBuffer::freePages() {
+  return freeMetadataPages() + freeChunkPages();
 }
 
 void FileBuffer::freePagesBeforeEpochForMultiPage(MultiPage& multiPage,
@@ -643,6 +644,14 @@ bool FileBuffer::isMissingPages() const {
   // Detect the case where a page is missing by comparing the amount of pages read
   // with the metadata size.
   return ((size() + pageDataSize_ - 1) / pageDataSize_ != multiPages_.size());
+}
+
+size_t FileBuffer::numChunkPages() const {
+  size_t total_size = 0;
+  for (const auto& multi_page : multiPages_) {
+    total_size += multi_page.pageVersions.size();
+  }
+  return total_size;
 }
 
 }  // namespace File_Namespace

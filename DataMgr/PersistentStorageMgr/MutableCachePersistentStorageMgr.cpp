@@ -19,7 +19,7 @@
 MutableCachePersistentStorageMgr::MutableCachePersistentStorageMgr(
     const std::string& data_dir,
     const size_t num_reader_threads,
-    const DiskCacheConfig& disk_cache_config)
+    const File_Namespace::DiskCacheConfig& disk_cache_config)
     : PersistentStorageMgr(data_dir, num_reader_threads, disk_cache_config) {
   CHECK(disk_cache_);
   CHECK(disk_cache_config_.isEnabledForMutableTables());

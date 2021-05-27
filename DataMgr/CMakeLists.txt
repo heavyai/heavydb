@@ -16,6 +16,7 @@ set(datamgr_source_files
     FileMgr/FileBuffer.cpp
     FileMgr/FileInfo.cpp
     ForeignStorage/ArrowForeignStorage.cpp
+    ForeignStorage/CacheEvictionAlgorithms/LRUEvictionAlgorithm.cpp
     ForeignStorage/CsvDataWrapper.cpp
     ForeignStorage/CachingForeignStorageMgr.cpp
     ForeignStorage/DummyForeignStorage.cpp

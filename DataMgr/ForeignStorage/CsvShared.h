@@ -89,7 +89,7 @@ bool validate_and_get_is_s3_select(const ForeignTable* foreign_table);
 
 Chunk_NS::Chunk make_chunk_for_column(
     const ChunkKey& chunk_key,
-    std::map<ChunkKey, std::shared_ptr<ChunkMetadata>>& chunk_metadata_map,
+    const std::map<ChunkKey, std::shared_ptr<ChunkMetadata>>& chunk_metadata_map,
     const std::map<ChunkKey, AbstractBuffer*>& buffers);
 
 // Construct default metadata for given column descriptor with num_elements

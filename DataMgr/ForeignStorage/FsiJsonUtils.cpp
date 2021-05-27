@@ -22,6 +22,8 @@
 #include <rapidjson/ostreamwrapper.h>
 #include <rapidjson/writer.h>
 
+#include <rapidjson/stringbuffer.h>
+
 namespace foreign_storage {
 namespace json_utils {
 
@@ -123,12 +125,11 @@ void write_to_file(const rapidjson::Document& document, const std::string& filep
   document.Accept(writer);
 }
 
-std::string convert_to_string(rapidjson::Document& document) {
-  rapidjson::StringBuffer buf;
-  rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
+std::string write_to_string(const rapidjson::Document& document) {
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
   document.Accept(writer);
-  return buf.GetString();
+  return buffer.GetString();
 }
-
 }  // namespace json_utils
 }  // namespace foreign_storage

@@ -83,7 +83,7 @@ class ForeignStorageCacheUnitTest : public testing::Test {
       buffer_map[chunk_key]->append(chunk->getBuffer()->getMemoryPtr(),
                                     chunk->getBuffer()->size());
       buffer_map[chunk_key]->syncEncoder(chunk->getBuffer());
-      cache_->cacheTableChunks({chunk_key});
+      cache_->checkpoint(chunk_key[CHUNK_KEY_DB_IDX], chunk_key[CHUNK_KEY_TABLE_IDX]);
     }
 
     void cacheMetadataThenChunk(const ChunkKey& chunk_key) {
@@ -307,7 +307,8 @@ class CacheDiskStorageTest : public ForeignStorageCacheUnitTest {
   static void TearDownTestSuite() {}
   void SetUp() override {
     boost::filesystem::remove_all(cache_path_);
-    reinitializeCache(cache_, {cache_path_, DiskCacheLevel::fsi, 0, page_size_});
+    reinitializeCache(cache_,
+                      {cache_path_, DiskCacheLevel::fsi, 0, 21474836480, page_size_});
   }
   void TearDown() override { boost::filesystem::remove_all(cache_path_); }
 };
@@ -329,11 +330,10 @@ TEST_F(CacheDiskStorageTest, RecoverCache_Metadata) {
   ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1, 2, 3, 4}};
   chunk_wrapper1.cacheMetadata(chunk_key1);
   reinitializeCache(cache_, {cache_path_, DiskCacheLevel::fsi});
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
-  ChunkMetadataVector metadata_vec_cached{};
-  cache_->recoverCacheForTable(metadata_vec_cached, table_prefix1);
   ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
   ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
+  ChunkMetadataVector metadata_vec_cached{};
+  cache_->getCachedMetadataVecForKeyPrefix(metadata_vec_cached, table_prefix1);
   assertMetadataEqual(metadata_vec_cached[0].second, createMetadata(16, 4, 1, 4, false));
 }
 
@@ -343,9 +343,9 @@ TEST_F(CacheDiskStorageTest, RecoverCache_UpdatedMetadata) {
   ChunkWrapper<int32_t> chunk_wrapper2{kINT, {5, 6}};
   chunk_wrapper2.cacheMetadata(chunk_key1);
   reinitializeCache(cache_, {cache_path_, DiskCacheLevel::fsi});
-  ChunkMetadataVector metadata_vec_cached{};
-  cache_->recoverCacheForTable(metadata_vec_cached, table_prefix1);
   ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
+  ChunkMetadataVector metadata_vec_cached{};
+  cache_->getCachedMetadataVecForKeyPrefix(metadata_vec_cached, table_prefix1);
   assertMetadataEqual(metadata_vec_cached[0].second, createMetadata(8, 2, 5, 6, false));
 }
 
@@ -353,9 +353,6 @@ TEST_F(CacheDiskStorageTest, RecoverCache_SingleChunk) {
   ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1, 2, 3, 4}};
   chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
   reinitializeCache(cache_, {cache_path_, DiskCacheLevel::fsi});
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
-  ChunkMetadataVector metadata_vec_cached{};
-  cache_->recoverCacheForTable(metadata_vec_cached, table_prefix1);
   ASSERT_EQ(cache_->getNumCachedChunks(), 1U);
   AbstractBuffer* cached_buf = cache_->getCachedChunkIfExists(chunk_key1);
   ASSERT_NE(cached_buf, nullptr);
@@ -382,7 +379,7 @@ TEST_F(ForeignStorageCacheFileTest, FileCreation) {
     cache.cacheMetadataVec({std::make_pair(chunk_key1, cached_meta)});
     auto buffer_map = cache.getChunkBuffersForCaching({chunk_key1});
     buffer_map[chunk_key1]->append(source_buffer.getMemoryPtr(), source_buffer.size());
-    cache.cacheTableChunks({chunk_key1});
+    cache.checkpoint(chunk_key1[CHUNK_KEY_DB_IDX], chunk_key1[CHUNK_KEY_TABLE_IDX]);
     ASSERT_TRUE(boost::filesystem::exists(cache_path_ + "/0.4096.mapd"));
     ASSERT_TRUE(boost::filesystem::exists(cache_path_ + "/1." +
                                           to_string(DEFAULT_PAGE_SIZE) + ".mapd"));
@@ -432,6 +429,56 @@ TEST_F(ForeignStorageCacheFileTest, ExistingDir) {
   boost::filesystem::remove_all(cache_path_);
   boost::filesystem::create_directory(cache_path_);
   ForeignStorageCache cache{{cache_path_, DiskCacheLevel::fsi}};
+}
+
+class ForeignStorageCacheLRUTest : public testing::Test {};
+TEST_F(ForeignStorageCacheLRUTest, Basic) {
+  LRUEvictionAlgorithm lru_alg{};
+  lru_alg.touchChunk(chunk_key1);
+  lru_alg.touchChunk(chunk_key2);
+  lru_alg.touchChunk(chunk_key3);
+  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key1);
+  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key2);
+  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key3);
+  ASSERT_THROW(lru_alg.evictNextChunk(), NoEntryFoundException);
+}
+
+TEST_F(ForeignStorageCacheLRUTest, AfterEvict) {
+  LRUEvictionAlgorithm lru_alg{};
+  lru_alg.touchChunk(chunk_key1);
+  lru_alg.touchChunk(chunk_key2);
+  lru_alg.touchChunk(chunk_key3);
+  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key1);
+  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key2);
+  lru_alg.touchChunk(chunk_key2);
+  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key3);
+  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key2);
+  ASSERT_THROW(lru_alg.evictNextChunk(), NoEntryFoundException);
+}
+
+TEST_F(ForeignStorageCacheLRUTest, RemoveChunk) {
+  LRUEvictionAlgorithm lru_alg{};
+  lru_alg.touchChunk(chunk_key1);
+  lru_alg.touchChunk(chunk_key2);
+  lru_alg.touchChunk(chunk_key3);
+  lru_alg.removeChunk(chunk_key2);
+  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key1);
+  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key3);
+  ASSERT_THROW(lru_alg.evictNextChunk(), NoEntryFoundException);
+}
+
+TEST_F(ForeignStorageCacheLRUTest, Reorder) {
+  LRUEvictionAlgorithm lru_alg{};
+  lru_alg.touchChunk(chunk_key1);
+  lru_alg.touchChunk(chunk_key2);
+  lru_alg.touchChunk(chunk_key3);
+  lru_alg.touchChunk(chunk_key1);
+  lru_alg.touchChunk(chunk_key2);
+  lru_alg.touchChunk(chunk_key1);
+  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key3);
+  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key2);
+  ASSERT_EQ(lru_alg.evictNextChunk(), chunk_key1);
+  ASSERT_THROW(lru_alg.evictNextChunk(), NoEntryFoundException);
 }
 
 int main(int argc, char** argv) {
