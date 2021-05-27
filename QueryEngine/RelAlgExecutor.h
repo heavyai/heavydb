@@ -367,7 +367,6 @@ class RelAlgExecutor : private StorageIOFacility {
   std::unordered_map<unsigned, AggregatedResult> leaf_results_;
   int64_t queue_time_ms_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;
-  static const size_t max_groups_buffer_entry_default_guess{16384};
 
   std::unique_ptr<TransactionParameters> dml_transaction_parameters_;
   std::optional<std::function<void()>> post_execution_callback_;
