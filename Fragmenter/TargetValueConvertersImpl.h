@@ -19,6 +19,8 @@
 
 #include "Fragmenter/TargetValueConverters.h"
 #include "Geospatial/Compression.h"
+#include "ImportExport/RenderGroupAnalyzer.h"
+#include "Shared/checked_alloc.h"
 #include "StringDictionary/StringDictionary.h"
 
 #include <atomic>

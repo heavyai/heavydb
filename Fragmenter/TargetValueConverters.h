@@ -18,7 +18,6 @@
 #define TARGET_VALUE_CONVERTERS_H_
 
 #include "../Catalog/Catalog.h"
-#include "../ImportExport/Importer.h"
 #include "../QueryEngine/TargetMetaInfo.h"
 #include "../QueryEngine/TargetValue.h"
 #include "../Shared/sqldefs.h"

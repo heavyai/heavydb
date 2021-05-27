@@ -34,6 +34,7 @@
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Geospatial/Transforms.h"
 #include "ImportExport/Importer.h"
+#include "ImportExport/RenderGroupAnalyzer.h"
 #include "LockMgr/LockMgr.h"
 #include "Logger/Logger.h"
 #include "Parser/ParserWrapper.h"

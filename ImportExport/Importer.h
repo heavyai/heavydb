@@ -739,25 +739,6 @@ class ImporterUtils {
   static ArrayDatum composeNullArray(const SQLTypeInfo& ti);
 };
 
-class RenderGroupAnalyzer {
- public:
-  RenderGroupAnalyzer() : _rtree(std::make_unique<RTree>()), _numRenderGroups(0) {}
-  void seedFromExistingTableContents(Catalog_Namespace::Catalog& cat,
-                                     const std::string& tableName,
-                                     const std::string& geoColumnBaseName);
-  int insertBoundsAndReturnRenderGroup(const std::vector<double>& bounds);
-
- private:
-  using Point = boost::geometry::model::point<double, 2, boost::geometry::cs::cartesian>;
-  using BoundingBox = boost::geometry::model::box<Point>;
-  using Node = std::pair<BoundingBox, int>;
-  using RTree =
-      boost::geometry::index::rtree<Node, boost::geometry::index::quadratic<16>>;
-  std::unique_ptr<RTree> _rtree;
-  std::mutex _rtreeMutex;
-  int _numRenderGroups;
-};
-
 class Importer : public DataStreamSink {
  public:
   Importer(Catalog_Namespace::Catalog& c,
