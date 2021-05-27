@@ -2946,9 +2946,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                                                      executor_->gridSize()),
                          {}};
 
-  auto execute_and_handle_errors =
-      [&](const auto max_groups_buffer_entry_guess_in,
-          const bool has_cardinality_estimation) -> ExecutionResult {
+  auto execute_and_handle_errors = [&](const auto max_groups_buffer_entry_guess_in,
+                                       const bool has_cardinality_estimation,
+                                       const bool has_ndv_estimation) -> ExecutionResult {
     // Note that the groups buffer entry guess may be modified during query execution.
     // Create a local copy so we can track those changes if we need to attempt a retry
     // due to OOM
@@ -2966,6 +2966,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                                          column_cache),
               targets_meta};
     } catch (const QueryExecutionError& e) {
+      if (!has_ndv_estimation && e.getErrorCode() < 0) {
+        throw CardinalityEstimationRequired(/*range=*/0);
+      }
       handlePersistentError(e.getErrorCode());
       return handleOutOfMemoryRetry(
           {ra_exe_unit, work_unit.body, local_groups_buffer_entry_guess},
@@ -2984,24 +2987,27 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     auto cached_cardinality = executor_->getCachedCardinality(cache_key);
     auto card = cached_cardinality.second;
     if (cached_cardinality.first && card >= 0) {
-      result = execute_and_handle_errors(card, true);
+      result = execute_and_handle_errors(
+          card, /*has_cardinality_estimation=*/true, /*has_ndv_estimation=*/false);
     } else {
       result = execute_and_handle_errors(
           max_groups_buffer_entry_guess,
-          groups_approx_upper_bound(table_infos) <= g_big_group_threshold);
+          groups_approx_upper_bound(table_infos) <= g_big_group_threshold,
+          /*has_ndv_estimation=*/false);
     }
   } catch (const CardinalityEstimationRequired& e) {
     // check the cardinality cache
     auto cached_cardinality = executor_->getCachedCardinality(cache_key);
     auto card = cached_cardinality.second;
     if (cached_cardinality.first && card >= 0) {
-      result = execute_and_handle_errors(card, true);
+      result = execute_and_handle_errors(card, true, /*has_ndv_estimation=*/true);
     } else {
       const auto estimated_groups_buffer_entry_guess =
           2 * std::min(groups_approx_upper_bound(table_infos),
                        getNDVEstimation(work_unit, e.range(), is_agg, co, eo));
       CHECK_GT(estimated_groups_buffer_entry_guess, size_t(0));
-      result = execute_and_handle_errors(estimated_groups_buffer_entry_guess, true);
+      result = execute_and_handle_errors(
+          estimated_groups_buffer_entry_guess, true, /*has_ndv_estimation=*/true);
       if (!(eo.just_validate || eo.just_explain)) {
         executor_->addToCardinalityCache(cache_key, estimated_groups_buffer_entry_guess);
       }
