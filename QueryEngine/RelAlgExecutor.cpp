@@ -3002,9 +3002,11 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     if (cached_cardinality.first && card >= 0) {
       result = execute_and_handle_errors(card, true, /*has_ndv_estimation=*/true);
     } else {
+      const auto ndv_groups_estimation =
+          getNDVEstimation(work_unit, e.range(), is_agg, co, eo);
       const auto estimated_groups_buffer_entry_guess =
-          2 * std::min(groups_approx_upper_bound(table_infos),
-                       getNDVEstimation(work_unit, e.range(), is_agg, co, eo));
+          ndv_groups_estimation > 0 ? 2 * ndv_groups_estimation
+                                    : 2 * groups_approx_upper_bound(table_infos);
       CHECK_GT(estimated_groups_buffer_entry_guess, size_t(0));
       result = execute_and_handle_errors(
           estimated_groups_buffer_entry_guess, true, /*has_ndv_estimation=*/true);
