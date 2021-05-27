@@ -174,6 +174,8 @@ class InsertOrderFragmenter : public AbstractFragmenter {
 
   bool hasDeletedRows(const int delete_column_id) override;
 
+  void resetSizesFromFragments() override;
+
  protected:
   std::vector<int> chunkKeyPrefix_;
   std::map<int, Chunk_NS::Chunk>
@@ -241,6 +243,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
  private:
   bool isAddingNewColumns(const InsertData& insert_data) const;
   void dropFragmentsToSizeNoInsertLock(const size_t max_rows);
+  void setLastFragmentVarLenColumnSizes();
 };
 
 }  // namespace Fragmenter_Namespace

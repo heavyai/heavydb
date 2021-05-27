@@ -197,25 +197,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
 
   // this is maximum number of rows assuming everything is fixed length
   maxFragmentRows_ = std::min(maxFragmentRows_, maxChunkSize_ / maxFixedColSize);
-
-  if (!uses_foreign_storage_ && fragmentInfoVec_.size() > 0) {
-    // Now need to get the insert buffers for each column - should be last
-    // fragment
-    int lastFragmentId = fragmentInfoVec_.back()->fragmentId;
-    // TODO: add accessor here for safe indexing
-    int deviceId =
-        fragmentInfoVec_.back()->deviceIds[static_cast<int>(defaultInsertLevel_)];
-    for (auto colIt = columnMap_.begin(); colIt != columnMap_.end(); ++colIt) {
-      ChunkKey insertKey = chunkKeyPrefix_;  // database_id and table_id
-      insertKey.push_back(colIt->first);     // column id
-      insertKey.push_back(lastFragmentId);   // fragment id
-      colIt->second.getChunkBuffer(dataMgr_, insertKey, defaultInsertLevel_, deviceId);
-      auto varLenColInfoIt = varLenColInfo_.find(colIt->first);
-      if (varLenColInfoIt != varLenColInfo_.end()) {
-        varLenColInfoIt->second = colIt->second.getBuffer()->size();
-      }
-    }
-  }
+  setLastFragmentVarLenColumnSizes();
 }
 
 void InsertOrderFragmenter::dropFragmentsToSize(const size_t max_rows) {
@@ -813,4 +795,33 @@ TableInfo InsertOrderFragmenter::getFragmentsForQuery() {
   return queryInfo;
 }
 
+void InsertOrderFragmenter::resetSizesFromFragments() {
+  mapd_shared_lock<mapd_shared_mutex> read_lock(fragmentInfoMutex_);
+  numTuples_ = 0;
+  for (const auto& fragment_info : fragmentInfoVec_) {
+    numTuples_ += fragment_info->getPhysicalNumTuples();
+  }
+  setLastFragmentVarLenColumnSizes();
+}
+
+void InsertOrderFragmenter::setLastFragmentVarLenColumnSizes() {
+  if (!uses_foreign_storage_ && fragmentInfoVec_.size() > 0) {
+    // Now need to get the insert buffers for each column - should be last
+    // fragment
+    int lastFragmentId = fragmentInfoVec_.back()->fragmentId;
+    // TODO: add accessor here for safe indexing
+    int deviceId =
+        fragmentInfoVec_.back()->deviceIds[static_cast<int>(defaultInsertLevel_)];
+    for (auto colIt = columnMap_.begin(); colIt != columnMap_.end(); ++colIt) {
+      ChunkKey insertKey = chunkKeyPrefix_;  // database_id and table_id
+      insertKey.push_back(colIt->first);     // column id
+      insertKey.push_back(lastFragmentId);   // fragment id
+      colIt->second.getChunkBuffer(dataMgr_, insertKey, defaultInsertLevel_, deviceId);
+      auto varLenColInfoIt = varLenColInfo_.find(colIt->first);
+      if (varLenColInfoIt != varLenColInfo_.end()) {
+        varLenColInfoIt->second = colIt->second.getBuffer()->size();
+      }
+    }
+  }
+}
 }  // namespace Fragmenter_Namespace

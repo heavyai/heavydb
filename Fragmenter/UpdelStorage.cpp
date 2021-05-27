@@ -1428,8 +1428,6 @@ void UpdelRoll::stageUpdate() {
   auto table_id = table_descriptor->tableId;
   CHECK_EQ(memoryLevel, Data_Namespace::MemoryLevel::CPU_LEVEL);
   CHECK_EQ(table_descriptor->persistenceLevel, Data_Namespace::MemoryLevel::DISK_LEVEL);
-  const auto table_lock =
-      lockmgr::TableDataLockMgr::getWriteLockForTable({db_id, logicalTableId});
   try {
     catalog->getDataMgr().checkpoint(db_id, table_id, memoryLevel);
   } catch (...) {
