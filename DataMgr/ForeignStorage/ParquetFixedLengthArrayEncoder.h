@@ -118,16 +118,30 @@ class ParquetFixedLengthArrayEncoder : public ParquetArrayEncoder {
 
   void appendNullArrayOrCheckArraySize() {
     auto size_of_last_array = sizeOfLastArray();
-    if (!isLastArrayNull()) {
+    if (isLastArrayNull()) {
+      // append a null array sentinel
+      CHECK(size_of_last_array == 0);
+      appendNullFixedLengthArray();
+    } else if (isLastArrayEmpty()) {
+      throwEmptyArrayException(array_element_count_, column_desciptor_.columnName);
+    } else {
       if (size_of_last_array != array_element_count_) {
         throwWrongSizeArray(
             size_of_last_array, array_element_count_, column_desciptor_.columnName);
       }
-    } else {
-      // append a null array sentinel
-      CHECK(size_of_last_array == 0);
-      appendNullFixedLengthArray();
     }
+  }
+
+  void throwEmptyArrayException(const size_t array_element_count,
+                                const std::string& omnisci_column_name) {
+    throw ForeignStorageException(
+        "Detected an empty array"
+        " being loaded into"
+        " OmniSci column '" +
+        omnisci_column_name +
+        "' which has a fixed length array type,"
+        " expecting " +
+        std::to_string(array_element_count) + " elements.");
   }
 
   void throwWrongSizeArray(const size_t size_of_last_array,

@@ -912,6 +912,33 @@ std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
   return encoder;
 }
 
+void validate_definition_levels(
+    const parquet::ParquetFileReader* reader,
+    const int row_group_index,
+    const int column_index,
+    const int16_t* def_levels,
+    const int64_t num_levels,
+    const parquet::ColumnDescriptor* parquet_column_descriptor) {
+  bool is_valid_parquet_list = is_valid_parquet_list_column(parquet_column_descriptor);
+  if (!is_valid_parquet_list) {
+    return;
+  }
+  std::unique_ptr<parquet::RowGroupMetaData> group_metadata =
+      reader->metadata()->RowGroup(row_group_index);
+  auto column_metadata = group_metadata->ColumnChunk(column_index);
+  auto stats = validate_and_get_column_metadata_statistics(column_metadata.get());
+  if (!stats->HasMinMax()) {
+    auto find_it = std::find_if(def_levels,
+                                def_levels + num_levels,
+                                [](const int16_t def_level) { return def_level == 3; });
+    if (find_it != def_levels + num_levels) {
+      throw std::runtime_error(
+          "No minimum and maximum statistic set in list column but non-null & non-empty "
+          "array/value detected.");
+    }
+  }
+}
+
 void validate_max_repetition_and_definition_level(
     const ColumnDescriptor* omnisci_column_descriptor,
     const parquet::ColumnDescriptor* parquet_column_descriptor) {
@@ -1269,7 +1296,12 @@ void validate_column_mapping_and_row_group_metadata(
       if (contains_metadata) {
         auto stats = column_chunk->statistics();
         bool is_all_nulls = stats->null_count() == column_chunk->num_values();
-        if (!stats->HasMinMax() && !is_all_nulls) {
+        bool is_list = is_valid_parquet_list_column(file_metadata->schema()->Column(i));
+        // Given a list, it is possible it has no min or max if it is comprised
+        // only of empty lists & nulls. This can not be detected by comparing
+        // the null count; therefore we afford list types the benefit of the
+        // doubt in this situation.
+        if (!(stats->HasMinMax() || is_all_nulls || is_list)) {
           contains_metadata = false;
         }
       }
@@ -1421,6 +1453,14 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
                                      reinterpret_cast<uint8_t*>(values.data()),
                                      &values_read,
                                      col_reader.get());
+
+          validate_definition_levels(parquet_reader,
+                                     row_group_index,
+                                     parquet_column_index,
+                                     def_levels.data(),
+                                     levels_read,
+                                     parquet_column_descriptor);
+
           encoder->appendData(def_levels.data(),
                               rep_levels.data(),
                               values_read,

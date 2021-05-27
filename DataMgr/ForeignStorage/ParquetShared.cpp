@@ -86,8 +86,6 @@ std::shared_ptr<parquet::Statistics> validate_and_get_column_metadata_statistics
     const parquet::ColumnChunkMetaData* column_metadata) {
   CHECK(column_metadata->is_stats_set());
   std::shared_ptr<parquet::Statistics> stats = column_metadata->statistics();
-  bool is_all_nulls = stats->null_count() == column_metadata->num_values();
-  CHECK(is_all_nulls || stats->HasMinMax());
   return stats;
 }
 

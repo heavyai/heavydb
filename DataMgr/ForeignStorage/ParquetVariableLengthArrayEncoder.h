@@ -56,7 +56,8 @@ class ParquetVariableLengthArrayEncoder : public ParquetArrayEncoder {
  private:
   void setFirstOffsetForBuffer(const int16_t def_level) {
     if (data_buffer_bytes_.size() == 0 && buffer_->size() == 0) {  // first  element
-      if (def_level == ParquetArrayEncoder::list_null_def_level) {
+      if (def_level == ParquetArrayEncoder::list_null_def_level ||
+          def_level == ParquetArrayEncoder::empty_list_def_level) {
         // OmniSci variable array types have a special encoding for chunks in
         // which the first array is null: the first `DEFAULT_NULL_PADDING_SIZE`
         // bytes of the chunk are filled and the offset is set appropriately.
@@ -74,12 +75,14 @@ class ParquetVariableLengthArrayEncoder : public ParquetArrayEncoder {
 
   void appendLastArrayOffset() {
     int64_t last_offset = buffer_->size() + data_buffer_bytes_.size();
-    if (!isLastArrayNull()) {
-      // append array data offset
-      offsets_.push_back(last_offset);
-    } else {
+    if (isLastArrayNull()) {
       // append a null array offset
       offsets_.push_back(-last_offset);
+    } else if (isLastArrayEmpty()) {
+      offsets_.push_back(last_offset);
+    } else {
+      // append array data offset
+      offsets_.push_back(last_offset);
     }
   }
 

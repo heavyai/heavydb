@@ -588,7 +588,7 @@ TEST_P(CacheControllingSelectQueryTest, MultipleDataBlocksPerFragment) {
 
   // Check that data is correct
   {
-    std::vector<std::vector<TargetValue>> expected_result_set;
+    std::vector<std::vector<NullableTargetValue>> expected_result_set;
     for (int number = 0; number < 256; number++) {
       expected_result_set.push_back({i(number),
                                      std::to_string(number),
@@ -602,7 +602,7 @@ TEST_P(CacheControllingSelectQueryTest, MultipleDataBlocksPerFragment) {
 
   // Check that WHERE statements filter numerical data correctly
   {
-    std::vector<std::vector<TargetValue>> expected_result_set;
+    std::vector<std::vector<NullableTargetValue>> expected_result_set;
     for (int number = 128; number < 256; number++) {
       expected_result_set.push_back({i(number),
                                      std::to_string(number),
@@ -614,7 +614,7 @@ TEST_P(CacheControllingSelectQueryTest, MultipleDataBlocksPerFragment) {
     assertResultSetEqual(expected_result_set, result);
   }
   {
-    std::vector<std::vector<TargetValue>> expected_result_set;
+    std::vector<std::vector<NullableTargetValue>> expected_result_set;
     for (int number = 0; number < 128; number++) {
       expected_result_set.push_back({i(number),
                                      std::to_string(number),
@@ -689,27 +689,27 @@ TEST_F(SelectQueryTest, ParquetStringsAllNullPlacementPermutations) {
         { i(1), "txt1", "txt1", "txt1", "txt1"},
         { i(2), "txt2", "txt2", "txt2", "txt2"},
         { i(3), "txt3", "txt3", "txt3", "txt3"},
-        { i(4), (void*)0, (void*)0, (void*)0, (void*)0 },
+        { i(4), Null, Null, Null, Null },
         { i(5), "txt5", "txt5", "txt5", "txt5"},
         { i(6), "txt6", "txt6", "txt6", "txt6"},
         { i(7), "txt7", "txt7", "txt7", "txt7"},
-        { i(8), (void*)0, (void*)0, (void*)0, (void*)0 },
+        { i(8), Null, Null, Null, Null },
         { i(9), "txt9", "txt9", "txt9", "txt9"},
         { i(10), "txt10", "txt10", "txt10", "txt10"},
         { i(11), "txt11", "txt11", "txt11", "txt11"},
-        { i(12), (void*)0, (void*)0, (void*)0, (void*)0 },
-        { i(13), (void*)0, (void*)0, (void*)0, (void*)0 },
-        { i(14), (void*)0, (void*)0, (void*)0, (void*)0 },
+        { i(12), Null, Null, Null, Null },
+        { i(13), Null, Null, Null, Null },
+        { i(14), Null, Null, Null, Null },
         { i(15), "txt15", "txt15", "txt15", "txt15"},
-        { i(16), (void*)0, (void*)0, (void*)0, (void*)0 },
+        { i(16), Null, Null, Null, Null },
         { i(17), "txt17", "txt17", "txt17", "txt17"},
-        { i(18), (void*)0, (void*)0, (void*)0, (void*)0 },
+        { i(18), Null, Null, Null, Null },
         { i(19), "txt19", "txt19", "txt19", "txt19"},
-        { i(20), (void*)0, (void*)0, (void*)0, (void*)0 },
-        { i(21), (void*)0, (void*)0, (void*)0, (void*)0 },
-        { i(22), (void*)0, (void*)0, (void*)0, (void*)0 },
-        { i(23), (void*)0, (void*)0, (void*)0, (void*)0 },
-        { i(24), (void*)0, (void*)0, (void*)0, (void*)0 }
+        { i(20), Null, Null, Null, Null },
+        { i(21), Null, Null, Null, Null },
+        { i(22), Null, Null, Null, Null },
+        { i(23), Null, Null, Null, Null },
+        { i(24), Null, Null, Null, Null }
       },
       result);
   // clang-format on
@@ -1022,6 +1022,59 @@ INSTANTIATE_TEST_SUITE_P(DataWrapperParameterizedTests,
                          DataWrapperSelectQueryTest,
                          ::testing::Values("csv", "parquet"),
                          PrintToStringParamName());
+
+TEST_P(DataWrapperSelectQueryTest, Int8EmptyAndNullArrayPermutations) {
+  const auto& query = getCreateForeignTableQuery(
+      "(index INT, tinyint_arr_0 TINYINT[], tinyint_arr_1 TINYINT[],"
+      "tinyint_arr_2 TINYINT[], tinyint_arr_3 TINYINT[], tinyint_arr_4 TINYINT[],"
+      "tinyint_arr_5 TINYINT[], tinyint_arr_6 TINYINT[], tinyint_arr_7 TINYINT[],"
+      "tinyint_arr_8 TINYINT[], tinyint_arr_9 TINYINT[], tinyint_arr_10 TINYINT[],"
+      "tinyint_arr_11 TINYINT[], tinyint_arr_12 TINYINT[], tinyint_arr_13 TINYINT[],"
+      "tinyint_arr_14 TINYINT[], tinyint_arr_15 TINYINT[], tinyint_arr_16 TINYINT[],"
+      "tinyint_arr_17 TINYINT[], tinyint_arr_18 TINYINT[], tinyint_arr_19 TINYINT[],"
+      "tinyint_arr_20 TINYINT[], tinyint_arr_21 TINYINT[], tinyint_arr_22 TINYINT[],"
+      "tinyint_arr_23 TINYINT[] )",
+      "int8_empty_and_null_array_permutations",
+      GetParam());
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table ORDER BY index;");
+
+  // clang-format off
+  assertResultSetEqual(
+    {
+      {
+        i(1),Null,Null,Null,Null,Null,Null,array({i(1)}),array({i(1)}),
+        array({i(1)}), array({i(1)}),array({i(1)}),array({i(1)}),array({i(NULL_TINYINT)})
+        ,array({i(NULL_TINYINT)}),array({i(NULL_TINYINT)}),array({i(NULL_TINYINT)}),
+        array({i(NULL_TINYINT)}),array({i(NULL_TINYINT)}),array({}),array({}),array({}),
+        array({}),array({}),array({})
+      },
+      {
+        i(2),array({i(1)}),array({i(1)}),array({i(NULL_TINYINT)}),
+        array({i(NULL_TINYINT)}),array({}),array({}),Null,Null,
+        array({i(NULL_TINYINT)}),array({i(NULL_TINYINT)}),array({}),array({}),Null,
+        Null,array({i(1)}),array({i(1)}),array({}),array({}),Null,Null,
+        array({i(1)}),array({i(1)}),array({i(NULL_TINYINT)}),array({i(NULL_TINYINT)})
+      },
+      {
+        i(3),array({i(NULL_TINYINT)}),array({}),array({i(1)}),array({}),array({i(1)}),
+        array({i(NULL_TINYINT)}),array({i(NULL_TINYINT)}),array({}),Null,array({}),
+        Null,array({i(NULL_TINYINT)}),array({i(1)}),array({}),Null,array({}),
+        Null,array({i(1)}),array({i(1)}),array({i(NULL_TINYINT)}),Null,
+        array({i(NULL_TINYINT)}),Null,array({i(1)})
+      },
+      {
+        i(4),array({}),array({i(NULL_TINYINT)}),array({}),array({i(1)}),
+        array({i(NULL_TINYINT)}),array({i(1)}),array({}),array({i(NULL_TINYINT)}),
+        array({}),Null,array({i(NULL_TINYINT)}),Null,array({}),
+        array({i(1)}),array({}),Null,array({i(1)}),Null,array({i(NULL_TINYINT)}),
+        array({i(1)}),array({i(NULL_TINYINT)}),Null,array({i(1)}),Null
+      },
+    }, result);
+  // clang-format on
+}
 
 TEST_P(DataWrapperSelectQueryTest, AggregateAndGroupBy) {
   const auto& query =
@@ -2766,6 +2819,20 @@ TEST_F(SelectQueryTest, CsvArrayQuotedText) {
   // clang-format on
 }
 
+TEST_F(SelectQueryTest, ParquetArrayInt8EmptyWithFixedLengthArray) {
+  const auto& query = getCreateForeignTableQuery(
+      "(tinyint_arr_empty TINYINT[1])", "int8_empty_array", "parquet");
+  sql(query);
+
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table;",
+
+      "Exception: Detected an empty array being loaded into OmniSci column "
+      "'tinyint_arr_empty' which has a fixed length array type, expecting 1 elements. "
+      "Row group: 0, Parquet column: 'tinyint_arr_empty.list.item', Parquet file: '" +
+          getDataFilesPath() + "int8_empty_array.parquet'");
+}
+
 TEST_F(SelectQueryTest, ParquetArrayDateTimeTypes) {
   const auto& query = getCreateForeignTableQuery(
       "(index INT, time_milli_array TIME[], time_micro_array TIME[],"
@@ -2783,8 +2850,8 @@ TEST_F(SelectQueryTest, ParquetArrayDateTimeTypes) {
   assertResultSetEqual(
       {
           {
-            i(1),array({}), array({}), array({}), array({}), array({}), array({}),
-            array({}), array({})
+            i(1),Null, Null, Null, Null, Null, Null,
+            Null, Null
           },
           {
             i(2),array({"23:59:59", "00:59:59", "12:00:00"}),
@@ -2807,8 +2874,8 @@ TEST_F(SelectQueryTest, ParquetArrayDateTimeTypes) {
             array({"2020-11-10", i(NULL_BIGINT)})
           },
           {
-            i(4),array({}), array({}), array({}),
-            array({}), array({}), array({}), array({}), array({})
+            i(4),Null, Null, Null,
+            Null, Null, Null, Null, Null
           },
           {
             i(5),array({"00:00:01"}),
@@ -2865,8 +2932,8 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayDateTimeTypes) {
   assertResultSetEqual(
       {
           {
-            i(1),array({}), array({}), array({}), array({}), array({}), array({}),
-            array({}), array({})
+            i(1),Null, Null, Null, Null, Null, Null,
+            Null, Null
           },
           {
             i(2),array({"23:59:59", "00:59:59"}),
@@ -2888,8 +2955,8 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayDateTimeTypes) {
             array({"2020-11-10", i(NULL_BIGINT)})
           },
           {
-            i(4),array({}), array({}), array({}),
-            array({}), array({}), array({}), array({}), array({})
+            i(4),Null, Null, Null,
+            Null, Null, Null, Null, Null
           },
           {
             i(5),array({"00:00:01", "12:00:00"}),
@@ -2928,7 +2995,7 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
         "0.999999982770532,0 0))",
         "MULTIPOLYGON (((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0)))"},
       {
-        i(2), (void*)0, (void*)0, (void*)0, (void*)0
+        i(2), Null, Null, Null, Null
       },
       {
         i(3),
@@ -2954,7 +3021,7 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
         "0.0,0.0 1.99999996554106,0 0)))",
       },
       {
-        i(5), (void*)0, (void*)0, (void*)0, (void*)0
+        i(5), Null, Null, Null, Null
       },
   },
   result);
@@ -2978,7 +3045,7 @@ TEST_F(SelectQueryTest, ParquetNullGeoTypes) {
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
     },
     {
-      i(2), (void*)0, (void*)0, (void*)0, (void*)0
+      i(2), Null, Null, Null, Null
     },
     {
       i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
@@ -2989,7 +3056,7 @@ TEST_F(SelectQueryTest, ParquetNullGeoTypes) {
       "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
     },
     {
-      i(5), (void*)0, (void*)0, (void*)0, (void*)0
+      i(5), Null, Null, Null, Null
     }},
     result);
   // clang-format on
@@ -3082,7 +3149,7 @@ TEST_F(SelectQueryTest, ParquetArrayUnsignedIntegerTypes) {
           array({i(6),i(NULL_INT)}),array({i(6),i(NULL_BIGINT)})
         },
         {
-          i(4),array({}),array({}),array({}),array({})
+          i(4),Null,Null,Null,Null
         },
         {
           i(5),array({i(7)}),array({i(7)}),array({i(7)})
@@ -3115,7 +3182,7 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayUnsignedIntegerTypes) {
           array({i(6),i(NULL_INT)}),array({i(6),i(NULL_BIGINT)})
         },
         {
-          i(4),array({}),array({}),array({}),array({})
+          i(4),Null,Null,Null,Null
         },
         {
           i(5),array({i(7),i(8)}),array({i(7),i(8)}),array({i(7),i(8)})

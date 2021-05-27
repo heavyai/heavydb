@@ -31,6 +31,7 @@ class ParquetArrayEncoder : public ParquetEncoder {
       , scalar_encoder_(scalar_encoder)
       , has_assembly_started_(false)
       , is_null_array_(false)
+      , is_empty_array_(false)
       , num_elements_in_array_(0) {}
 
   void appendData(const int16_t* def_levels,
@@ -63,8 +64,10 @@ class ParquetArrayEncoder : public ParquetEncoder {
       const parquet::RowGroupMetaData* group_metadata,
       const int parquet_column_index,
       const SQLTypeInfo& column_type) override {
-    return scalar_encoder_->getRowGroupMetadata(
+    auto metadata = scalar_encoder_->getRowGroupMetadata(
         group_metadata, parquet_column_index, column_type);
+    metadata->numBytes = 0;  // number of bytes is not known
+    return metadata;
   }
 
  protected:
@@ -76,6 +79,8 @@ class ParquetArrayEncoder : public ParquetEncoder {
   }
 
   bool isLastArrayNull() const { return is_null_array_; }
+
+  bool isLastArrayEmpty() const { return is_empty_array_; }
 
   size_t sizeOfLastArray() const { return num_elements_in_array_; }
 
@@ -93,6 +98,7 @@ class ParquetArrayEncoder : public ParquetEncoder {
   // constants used during Dremel encoding assembly
   const static int16_t non_null_def_level = 3;
   const static int16_t item_null_def_level = 2;
+  const static int16_t empty_list_def_level = 1;
   const static int16_t list_null_def_level = 0;
 
  private:
@@ -104,6 +110,7 @@ class ParquetArrayEncoder : public ParquetEncoder {
   }
 
   void resetLastArrayMetadata() {
+    is_empty_array_ = false;
     is_null_array_ = false;
     num_elements_in_array_ = 0;
   }
@@ -122,6 +129,8 @@ class ParquetArrayEncoder : public ParquetEncoder {
       appendNullArrayItem();
     } else if (def_level == list_null_def_level) {
       markArrayAsNull();
+    } else if (def_level == empty_list_def_level) {
+      markArrayAsEmpty();
     } else {
       UNREACHABLE();
     }
@@ -133,6 +142,8 @@ class ParquetArrayEncoder : public ParquetEncoder {
   }
 
   void markArrayAsNull() { is_null_array_ = true; }
+
+  void markArrayAsEmpty() { is_empty_array_ = true; }
 
   void appendArrayItem(const int64_t encoded_index) {
     auto omnisci_data_ptr = resizeArrayDataBytes(1);
@@ -150,6 +161,7 @@ class ParquetArrayEncoder : public ParquetEncoder {
   std::vector<int8_t> encode_buffer_;
   bool has_assembly_started_;
   bool is_null_array_;
+  bool is_empty_array_;
   size_t num_elements_in_array_;
 };
 }  // namespace foreign_storage

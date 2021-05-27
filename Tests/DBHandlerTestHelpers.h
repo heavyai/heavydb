@@ -33,6 +33,8 @@ constexpr int64_t False = 0;
 constexpr void* Null = nullptr;
 constexpr int64_t Null_i = NULL_INT;
 
+using NullableTargetValue = boost::variant<TargetValue, void*>;
+
 extern size_t g_leaf_count;
 extern bool g_cluster;
 
@@ -139,6 +141,30 @@ class AssertValueEqualsVisitor : public boost::static_visitor<> {
     }
     throw std::runtime_error{"Unexpected type TDatumType::type : " +
                              std::to_string(type)};
+  }
+
+  const TDatum& datum_;
+  const TColumnType& column_type_;
+  const size_t row_;
+  const size_t column_;
+};
+
+class AssertValueEqualsOrIsNullVisitor : public boost::static_visitor<> {
+ public:
+  AssertValueEqualsOrIsNullVisitor(const TDatum& datum,
+                                   const TColumnType& column_type,
+                                   const size_t row,
+                                   const size_t column)
+      : datum_(datum), column_type_(column_type), row_(row), column_(column) {}
+
+  void operator()(const TargetValue& value) const {
+    boost::apply_visitor(AssertValueEqualsVisitor{datum_, column_type_, row_, column_},
+                         value);
+  }
+
+  void operator()(const void* null) const {
+    EXPECT_TRUE(datum_.is_null)
+        << boost::format("At row: %d, column: %d") % row_ % column_;
   }
 
   const TDatum& datum_;
@@ -382,7 +408,7 @@ class DBHandlerTestFixture : public testing::Test {
   }
 
   void assertResultSetEqual(
-      const std::vector<std::vector<TargetValue>>& expected_result_set,
+      const std::vector<std::vector<NullableTargetValue>>& expected_result_set,
       const TQueryResult actual_result) {
     auto& row_set = actual_result.row_set;
     auto row_count = getRowCount(row_set);
@@ -404,7 +430,7 @@ class DBHandlerTestFixture : public testing::Test {
         auto column_value = row[c];
         auto expected_column_value = expected_result_set[r][c];
         boost::apply_visitor(
-            AssertValueEqualsVisitor{column_value, row_set.row_desc[c], r, c},
+            AssertValueEqualsOrIsNullVisitor{column_value, row_set.row_desc[c], r, c},
             expected_column_value);
       }
     }
@@ -412,7 +438,7 @@ class DBHandlerTestFixture : public testing::Test {
 
   void sqlAndCompareResult(
       const std::string& sql_statement,
-      const std::vector<std::vector<TargetValue>>& expected_result_set) {
+      const std::vector<std::vector<NullableTargetValue>>& expected_result_set) {
     TQueryResult result_set;
     sql(result_set, sql_statement);
     assertResultSetEqual(expected_result_set, result_set);
@@ -481,7 +507,7 @@ class DBHandlerTestFixture : public testing::Test {
         datum_array.emplace_back(datum_item);
       }
     } else {
-      throw std::runtime_error{"Unexpected column data"};
+      // no-op: it is possible for the array to be empty
     }
   }
 

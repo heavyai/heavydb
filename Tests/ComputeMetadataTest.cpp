@@ -1782,7 +1782,7 @@ TEST_F(OpportunisticVacuumingTest, DifferentDataTypesMetadataUpdate) {
        {i(1), "test_1", "test_1", 1.5f, array({10.5}), array({"2021-01-01 00:10:00"}), "2021-01-01"},
        {i(4), "test_4", "test_4", 4.5f, array({40.5}), array({"2021-04-01 00:10:00"}), "2021-04-01"},
        {i(10), "test_10", "test_10", 100.5f, array({1000.5}), array({"2021-10-10 00:10:00"}), "2021-10-10"},
-       {Null_i, Null, Null, NULL_FLOAT, array({NULL_DOUBLE}), array({}), Null}});
+       {Null_i, Null, Null, NULL_FLOAT, array({NULL_DOUBLE}), Null, Null}});
   // clang-format on
 }
 
