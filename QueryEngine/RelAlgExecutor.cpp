@@ -52,6 +52,7 @@ bool g_enable_interop{false};
 bool g_enable_union{false};
 
 extern bool g_enable_bump_allocator;
+extern size_t g_default_max_groups_buffer_entry_guess;
 
 namespace {
 
@@ -2665,7 +2666,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
   const size_t scan_total_limit =
       scan_limit ? get_scan_limit(source, scan_limit + offset) : 0;
   size_t max_groups_buffer_entry_guess{
-      scan_total_limit ? scan_total_limit : max_groups_buffer_entry_default_guess};
+      scan_total_limit ? scan_total_limit : g_default_max_groups_buffer_entry_guess};
   SortAlgorithm sort_algorithm{SortAlgorithm::SpeculativeTopN};
   const auto order_entries = get_order_entries(sort);
   SortInfo sort_info{order_entries, sort_algorithm, limit, offset};
@@ -3592,7 +3593,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
   compound->setOutputMetainfo(targets_meta);
   return {rewritten_exe_unit,
           compound,
-          max_groups_buffer_entry_default_guess,
+          g_default_max_groups_buffer_entry_guess,
           std::move(query_rewriter),
           input_permutation,
           left_deep_join_input_sizes};
@@ -3834,7 +3835,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
               std::nullopt,
               query_state_},
           aggregate,
-          max_groups_buffer_entry_default_guess,
+          g_default_max_groups_buffer_entry_guess,
           nullptr};
 }
 
@@ -3911,7 +3912,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
   project->setOutputMetainfo(targets_meta);
   return {rewritten_exe_unit,
           project,
-          max_groups_buffer_entry_default_guess,
+          g_default_max_groups_buffer_entry_guess,
           std::move(query_rewriter),
           input_permutation,
           left_deep_join_input_sizes};
@@ -4027,7 +4028,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
 
   return {rewritten_exe_unit,
           logical_union,
-          max_groups_buffer_entry_default_guess,
+          g_default_max_groups_buffer_entry_guess,
           std::move(query_rewriter)};
 }
 
@@ -4240,7 +4241,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            0,
            query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults()},
           filter,
-          max_groups_buffer_entry_default_guess,
+          g_default_max_groups_buffer_entry_guess,
           nullptr};
 }
 

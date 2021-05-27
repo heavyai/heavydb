@@ -99,7 +99,8 @@ size_t g_overlaps_max_table_size_bytes{1024 * 1024 * 1024};
 double g_overlaps_target_entries_per_bin{1.3};
 bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
-size_t g_big_group_threshold{20000};
+size_t g_default_max_groups_buffer_entry_guess{16384};
+size_t g_big_group_threshold{g_default_max_groups_buffer_entry_guess};
 bool g_enable_window_functions{true};
 bool g_enable_table_functions{false};
 size_t g_max_memory_allocation_size{2000000000};  // set to max slab size
