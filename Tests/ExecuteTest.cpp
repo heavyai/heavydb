@@ -7564,6 +7564,21 @@ TEST(Select, ArrayUnnest) {
       ASSERT_EQ(1, v<int64_t>(fixed_result_rows->getRowAt(0, 1, true)));
       ASSERT_EQ(0, v<int64_t>(fixed_result_rows->getRowAt(1, 1, true)));
     }
+
+    // unnest groupby, force estimator run
+    const auto big_group_threshold = g_big_group_threshold;
+    ScopeGuard reset_big_group_threshold = [&big_group_threshold] {
+      // this sets the "has estimation" parameter to false for baseline hash groupby of
+      // small tables, forcing the estimator to run
+      g_big_group_threshold = big_group_threshold;
+    };
+    g_big_group_threshold = 1;
+
+    EXPECT_EQ(
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM (SELECT  unnest(arr_str), unnest(arr_float) FROM array_test GROUP BY 1, 2);)",
+            dt)),
+        int64_t(104));
   }
 }
 
