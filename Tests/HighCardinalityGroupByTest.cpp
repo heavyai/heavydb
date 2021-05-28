@@ -16,6 +16,9 @@
 
 #include "TestHelpers.h"
 
+#include <boost/filesystem.hpp>
+#include <fstream>
+
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/InputMetadata.h"
 #include "../QueryRunner/QueryRunner.h"
@@ -26,6 +29,8 @@
 
 extern bool g_is_test_env;
 
+extern size_t g_big_group_threshold;
+
 using QR = QueryRunner::QueryRunner;
 using namespace TestHelpers;
 
@@ -33,6 +38,20 @@ inline void run_ddl_statement(const std::string& input_str) {
   QR::get()->runDDLStatement(input_str);
 }
 
+bool skip_tests(const ExecutorDeviceType device_type) {
+#ifdef HAVE_CUDA
+  return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
+#else
+  return device_type == ExecutorDeviceType::GPU;
+#endif
+}
+
+#define SKIP_NO_GPU()                                        \
+  if (skip_tests(dt)) {                                      \
+    CHECK(dt == ExecutorDeviceType::GPU);                    \
+    LOG(WARNING) << "GPU not available, skipping GPU tests"; \
+    continue;                                                \
+  }
 class HighCardinalityStringEnv : public ::testing::Test {
  protected:
   void SetUp() override {
@@ -309,6 +328,39 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
     auto row = result->getNextRow(false, false);
     EXPECT_EQ(row.size(), size_t(1));
     EXPECT_EQ(v<int64_t>(row[0]), 1);
+  }
+}
+
+class LowCardinalitySmallGroupsThresholdTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    run_ddl_statement("DROP TABLE IF EXISTS low_cardinality;");
+    run_ddl_statement("CREATE TABLE low_cardinality (fl text,ar text, dep text);");
+
+    // write some data to a file
+    boost::filesystem::path temp_path =
+        boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+    const std::string filename_with_ext = temp_path.native() + ".csv";
+    std::fstream f(filename_with_ext, f.binary | f.out | f.trunc);
+    CHECK(f.is_open());
+    for (size_t i = 0; i < g_big_group_threshold; i++) {
+      f << i << ", " << i + 1 << ", " << i + 2 << std::endl;
+    }
+    f.close();
+
+    run_ddl_statement("COPY low_cardinality FROM '" + filename_with_ext +
+                      "' WITH (header='false');");
+  }
+
+  void TearDown() override { run_ddl_statement("DROP TABLE IF EXISTS low_cardinality;"); }
+};
+
+TEST_F(LowCardinalitySmallGroupsThresholdTest, GroupBy) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    auto result = QR::get()->runSQL(
+        R"(select fl,ar,dep from low_cardinality group by fl,ar,dep;)", dt);
   }
 }
 
