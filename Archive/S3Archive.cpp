@@ -18,6 +18,7 @@
 
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
+#include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
 #include <aws/s3/model/Object.h>
@@ -27,6 +28,8 @@
 #include <memory>
 
 #include "Logger/Logger.h"
+
+bool g_allow_s3_server_privileges{false};
 
 void S3Archive::init_for_read() {
   boost::filesystem::create_directories(s3_temp_dir);
@@ -94,6 +97,9 @@ void S3Archive::init_for_read() {
       s3_client.reset(new Aws::S3::S3Client(
           Aws::Auth::AWSCredentials(s3_access_key, s3_secret_key, s3_session_token),
           s3_config));
+    } else if (g_allow_s3_server_privileges) {
+      s3_client.reset(new Aws::S3::S3Client(
+          std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>(), s3_config));
     } else {
       s3_client.reset(new Aws::S3::S3Client(
           std::make_shared<Aws::Auth::AnonymousAWSCredentialsProvider>(), s3_config));

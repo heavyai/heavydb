@@ -38,6 +38,7 @@
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
 extern bool g_enable_seconds_refresh;
+extern bool g_allow_s3_server_privileges;
 
 std::string test_binary_file_path;
 

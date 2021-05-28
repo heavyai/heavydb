@@ -197,6 +197,7 @@ extern bool g_use_tbb_pool;
 extern bool g_enable_filter_function;
 extern size_t g_max_import_threads;
 extern bool g_enable_auto_metadata_update;
+extern bool g_allow_s3_server_privileges;
 extern float g_vacuum_min_selectivity;
 extern bool g_read_only;
 extern bool g_enable_automatic_ir_metadata;

@@ -34,8 +34,9 @@
 #include "Archive/PosixFileArchive.h"
 #include "Catalog/Catalog.h"
 #ifdef HAVE_AWS_S3
+#include "AwsHelpers.h"
 #include "DataMgr/OmniSciAwsSdk.h"
-#endif
+#endif  // HAVE_AWS_S3
 #include "Geospatial/GDAL.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
@@ -56,6 +57,7 @@ using namespace TestHelpers;
 extern bool g_use_date_in_days_default_encoding;
 extern size_t g_leaf_count;
 extern bool g_is_test_env;
+extern bool g_allow_s3_server_privileges;
 
 namespace {
 
@@ -1857,6 +1859,123 @@ TEST_F(ImportTest, S3_GCS_One_geo_file) {
                              "geo",
                              87,
                              1.0));
+}
+
+class ImportServerPrivilegeTest : public ::testing::Test {
+ protected:
+  inline const static std::string AWS_DUMMY_CREDENTIALS_DIR =
+      to_string(BASE_PATH) + "/aws";
+  inline static std::map<std::string, std::string> aws_environment_;
+
+  static void SetUpTestSuite() {
+    omnisci_aws_sdk::init_sdk();
+    g_allow_s3_server_privileges = true;
+    aws_environment_ = unset_aws_env();
+    create_stub_aws_profile(AWS_DUMMY_CREDENTIALS_DIR);
+  }
+
+  static void TearDownTestSuite() {
+    omnisci_aws_sdk::shutdown_sdk();
+    g_allow_s3_server_privileges = false;
+    restore_aws_env(aws_environment_);
+    boost::filesystem::remove_all(AWS_DUMMY_CREDENTIALS_DIR);
+  }
+
+  void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists test_table_1;"););
+    ASSERT_NO_THROW(run_ddl_statement("create table test_table_1(C1 Int, C2 Text "
+                                      "Encoding None, C3 Text Encoding None)"););
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table test_table_1;"););
+  }
+
+  void importPublicBucket() {
+    std::string query_stmt =
+        "copy test_table_1 from 's3://omnisci-fsi-test-public/FsiDataFiles/0_255.csv';";
+    run_ddl_statement(query_stmt);
+  }
+
+  void importPrivateBucket(std::string s3_access_key = "",
+                           std::string s3_secret_key = "",
+                           std::string s3_session_token = "",
+                           std::string s3_region = "us-west-1") {
+    std::string query_stmt =
+        "copy test_table_1 from 's3://omnisci-fsi-test/FsiDataFiles/0_255.csv' WITH(";
+    if (s3_access_key.size()) {
+      query_stmt += "s3_access_key='" + s3_access_key + "', ";
+    }
+    if (s3_secret_key.size()) {
+      query_stmt += "s3_secret_key='" + s3_secret_key + "', ";
+    }
+    if (s3_session_token.size()) {
+      query_stmt += "s3_session_token='" + s3_session_token + "', ";
+    }
+    if (s3_region.size()) {
+      query_stmt += "s3_region='" + s3_region + "'";
+    }
+    query_stmt += ");";
+    run_ddl_statement(query_stmt);
+  }
+};
+
+TEST_F(ImportServerPrivilegeTest, S3_Public_without_credentials) {
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  EXPECT_NO_THROW(importPublicBucket());
+}
+
+TEST_F(ImportServerPrivilegeTest, S3_Private_without_credentials) {
+  if (is_valid_aws_role()) {
+    GTEST_SKIP();
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  EXPECT_THROW(importPrivateBucket(), std::runtime_error);
+}
+
+TEST_F(ImportServerPrivilegeTest, S3_Private_with_invalid_specified_credentials) {
+  if (!is_valid_aws_key(aws_environment_)) {
+    GTEST_SKIP();
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  EXPECT_THROW(importPrivateBucket("invalid_key", "invalid_secret"), std::runtime_error);
+}
+
+TEST_F(ImportServerPrivilegeTest, S3_Private_with_valid_specified_credentials) {
+  if (!is_valid_aws_key(aws_environment_)) {
+    GTEST_SKIP();
+  }
+  const auto aws_access_key_id = aws_environment_.find("AWS_ACCESS_KEY_ID")->second;
+  const auto aws_secret_access_key =
+      aws_environment_.find("AWS_SECRET_ACCESS_KEY")->second;
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  EXPECT_NO_THROW(importPrivateBucket(aws_access_key_id, aws_secret_access_key));
+}
+
+TEST_F(ImportServerPrivilegeTest, S3_Private_with_env_credentials) {
+  if (!is_valid_aws_key(aws_environment_)) {
+    GTEST_SKIP();
+  }
+  restore_aws_keys(aws_environment_);
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  EXPECT_NO_THROW(importPrivateBucket());
+  unset_aws_keys();
+}
+
+TEST_F(ImportServerPrivilegeTest, S3_Private_with_profile_credentials) {
+  if (!is_valid_aws_key(aws_environment_)) {
+    GTEST_SKIP();
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, true, aws_environment_);
+  EXPECT_NO_THROW(importPrivateBucket());
+}
+
+TEST_F(ImportServerPrivilegeTest, S3_Private_with_role_credentials) {
+  if (!is_valid_aws_role()) {
+    GTEST_SKIP();
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  EXPECT_NO_THROW(importPrivateBucket());
 }
 #endif  // HAVE_AWS_S3
 
