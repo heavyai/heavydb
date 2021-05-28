@@ -1511,6 +1511,14 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
   auto execute_update_for_node = [this, &co, &eo_in](const auto node,
                                                      auto& work_unit,
                                                      const bool is_aggregate) {
+    auto table_descriptor = node->getModifiedTableDescriptor();
+    CHECK(table_descriptor);
+    if (node->isVarlenUpdateRequired() && !table_descriptor->hasDeletedCol) {
+      throw std::runtime_error(
+          "UPDATE queries involving variable length columns are only supported on tables "
+          "with the vacuum attribute set to 'delayed'");
+    }
+
     dml_transaction_parameters_ =
         std::make_unique<UpdateTransactionParameters>(node->getModifiedTableDescriptor(),
                                                       node->getTargetColumns(),
@@ -1632,7 +1640,8 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
     CHECK(table_descriptor);
     if (!table_descriptor->hasDeletedCol) {
       throw std::runtime_error(
-          "DELETE only supported on tables with the vacuum attribute set to 'delayed'");
+          "DELETE queries are only supported on tables with the vacuum attribute set to "
+          "'delayed'");
     }
 
     const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
