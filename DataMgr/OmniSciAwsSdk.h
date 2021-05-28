@@ -16,7 +16,15 @@
 
 #pragma once
 
+#include <string>
+
 namespace omnisci_aws_sdk {
+struct SslConfig {
+  std::string ca_path;
+  std::string ca_file;
+};
+
 void init_sdk();
 void shutdown_sdk();
+SslConfig get_ssl_config();
 };  // namespace omnisci_aws_sdk

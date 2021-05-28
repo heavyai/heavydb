@@ -27,6 +27,7 @@
 #include <fstream>
 #include <memory>
 
+#include "DataMgr/OmniSciAwsSdk.h"
 #include "Logger/Logger.h"
 
 bool g_allow_s3_server_privileges{false};
@@ -61,37 +62,9 @@ void S3Archive::init_for_read() {
     Aws::Client::ClientConfiguration s3_config;
     s3_config.region = s3_region.size() ? s3_region : Aws::Region::US_EAST_1;
     s3_config.endpointOverride = s3_endpoint;
-
-    /*
-       Fix a wrong ca path established at building libcurl on Centos being carried to
-       Ubuntu. To fix the issue, this is this sequence of locating ca file: 1) if
-       `SSL_CERT_DIR` or `SSL_CERT_FILE` is set, set it to S3 ClientConfiguration. 2) if
-       none ^ is set, omnisci_server searches a list of known ca file paths. 3) if 2)
-       finds nothing, it is users' call to set correct SSL_CERT_DIR or SSL_CERT_FILE. S3
-       c++ sdk: "we only want to override the default path if someone has explicitly told
-       us to."
-     */
-    std::list<std::string> v_known_ca_paths({
-        "/etc/ssl/certs/ca-certificates.crt",
-        "/etc/pki/tls/certs/ca-bundle.crt",
-        "/usr/share/ssl/certs/ca-bundle.crt",
-        "/usr/local/share/certs/ca-root.crt",
-        "/etc/ssl/cert.pem",
-        "/etc/ssl/ca-bundle.pem",
-    });
-    char* env;
-    if (nullptr != (env = getenv("SSL_CERT_DIR"))) {
-      s3_config.caPath = env;
-    }
-    if (nullptr != (env = getenv("SSL_CERT_FILE"))) {
-      v_known_ca_paths.push_front(env);
-    }
-    for (const auto& known_ca_path : v_known_ca_paths) {
-      if (boost::filesystem::exists(known_ca_path)) {
-        s3_config.caFile = known_ca_path;
-        break;
-      }
-    }
+    auto ssl_config = omnisci_aws_sdk::get_ssl_config();
+    s3_config.caPath = ssl_config.ca_path;
+    s3_config.caFile = ssl_config.ca_file;
 
     if (!s3_access_key.empty() && !s3_secret_key.empty()) {
       s3_client.reset(new Aws::S3::S3Client(
