@@ -827,6 +827,7 @@ void legalize_nvvm_ir(llvm::Function* query_func) {
 
   std::vector<llvm::Instruction*> stackrestore_intrinsics;
   std::vector<llvm::Instruction*> stacksave_intrinsics;
+  std::vector<llvm::Instruction*> lifetime;
   for (auto& BB : *query_func) {
     for (llvm::Instruction& I : BB) {
       if (const llvm::IntrinsicInst* II = llvm::dyn_cast<llvm::IntrinsicInst>(&I)) {
@@ -834,6 +835,9 @@ void legalize_nvvm_ir(llvm::Function* query_func) {
           stacksave_intrinsics.push_back(&I);
         } else if (II->getIntrinsicID() == llvm::Intrinsic::stackrestore) {
           stackrestore_intrinsics.push_back(&I);
+        } else if (II->getIntrinsicID() == llvm::Intrinsic::lifetime_start ||
+                   II->getIntrinsicID() == llvm::Intrinsic::lifetime_end) {
+          lifetime.push_back(&I);
         }
       }
     }
@@ -846,6 +850,10 @@ void legalize_nvvm_ir(llvm::Function* query_func) {
     II->eraseFromParent();
   }
   for (auto& II : stacksave_intrinsics) {
+    II->eraseFromParent();
+  }
+  // Remove lifetime intrinsics as well. NVPTX don't like them
+  for (auto& II : lifetime) {
     II->eraseFromParent();
   }
 }
@@ -1063,6 +1071,22 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   // prevent helper functions from being removed
   for (auto f : gpu_target.cgen_state->helper_functions_) {
     roots.insert(f);
+  }
+
+  if (requires_libdevice) {
+    for (llvm::Function& F : *module) {
+      // Some libdevice functions calls another functions that starts with "__internal_"
+      // prefix.
+      // __internal_trig_reduction_slowpathd
+      // __internal_accurate_pow
+      // __internal_lgamma_pos
+      // Those functions have a "noinline" attribute which prevents the optimizer from
+      // inlining them into the body of @query_func
+      if (F.hasName() && F.getName().startswith("__internal") && !F.isDeclaration()) {
+        roots.insert(&F);
+      }
+      legalize_nvvm_ir(&F);
+    }
   }
 
   // Prevent the udf function(s) from being removed the way the runtime functions are
