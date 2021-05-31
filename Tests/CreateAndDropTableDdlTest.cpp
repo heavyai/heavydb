@@ -20,6 +20,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <boost/filesystem.hpp>
 
 #include "Catalog/ForeignTable.h"
 #include "Catalog/TableDescriptor.h"
@@ -139,6 +140,16 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
       // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
       LOG(WARNING) << e.what();
     }
+  }
+
+  std::string getTableDirPath() {
+    const auto& catalog = getCatalog();
+    auto base_path = catalog.getDataMgr().getGlobalFileMgr()->getBasePath();
+    auto td = catalog.getMetadataForTable("test_foreign_table", false);
+    CHECK(td);
+    auto table_dir_path = base_path + "table_" + std::to_string(catalog.getDatabaseId()) +
+                          "_" + std::to_string(td->tableId);
+    return table_dir_path;
   }
 };
 
@@ -1399,6 +1410,14 @@ TEST_F(CreateForeignTableTest, RevokedDatabaseServerUsage) {
       "SERVER test_server WITH (file_path = '../../Tests/FsiDataFiles/0.csv');",
       "Exception: Current user does not have USAGE privilege on foreign server: "
       "test_server");
+}
+
+TEST_F(CreateForeignTableTest, TableDirectoryIsNotCreated) {
+  sql(getCreateTableQuery(ddl_utils::TableType::FOREIGN_TABLE,
+                          "test_foreign_table",
+                          "(t TEXT, i INTEGER[])"));
+  sql("SELECT * FROM test_foreign_table;");
+  ASSERT_FALSE(boost::filesystem::exists(getTableDirPath()));
 }
 
 class DropTableTest : public CreateAndDropTableDdlTest,

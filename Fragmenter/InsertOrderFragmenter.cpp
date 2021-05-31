@@ -116,7 +116,8 @@ void InsertOrderFragmenter::conditionallyInstantiateFileMgrWithParams() {
   // Somewhat awkward to do this in Fragmenter, but FileMgrs are not instantiated until
   // first use by Fragmenter, and until maxRollbackEpochs param, no options were set in
   // storage per table
-  if (defaultInsertLevel_ == Data_Namespace::MemoryLevel::DISK_LEVEL) {
+  if (!uses_foreign_storage_ &&
+      defaultInsertLevel_ == Data_Namespace::MemoryLevel::DISK_LEVEL) {
     const TableDescriptor* td =
         catalog_->getMetadataForTable(physicalTableId_, false /*populateFragmenter*/);
     File_Namespace::FileMgrParams fileMgrParams;
