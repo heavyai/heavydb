@@ -6552,10 +6552,11 @@ void DBHandler::insert_data(const TSessionId& session,
       }
       insert_data.data.push_back(p);
     }
-    const auto td_with_lock =
-        lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
-            cat, insert_data.tableId);
-    const auto td = td_with_lock();
+    const ChunkKey lock_chunk_key{cat.getDatabaseId(),
+                                  cat.getLogicalTableId(insert_data.tableId)};
+    auto table_read_lock =
+        lockmgr::TableSchemaLockMgr::getReadLockForTable(lock_chunk_key);
+    const auto td = cat.getMetadataForTable(insert_data.tableId);
     CHECK(td);
 
     // this should have the same lock seq as COPY FROM

@@ -446,8 +446,9 @@ class StorageIOFacility {
     using RowProcessingFuturesVector = std::vector<std::future<uint64_t>>;
 
     if (delete_parameters.tableIsTemporary()) {
-      auto callback = [this](UpdateLogForFragment const& update_log,
-                             TableUpdateMetadata&) -> void {
+      auto logical_table_id = delete_parameters.getTableDescriptor()->tableId;
+      auto callback = [this, logical_table_id](UpdateLogForFragment const& update_log,
+                                               TableUpdateMetadata&) -> void {
         auto rs = update_log.getResultSet();
         CHECK(rs->didOutputColumnar());
         CHECK(rs->isDirectColumnarConversionPossible());
@@ -456,10 +457,9 @@ class StorageIOFacility {
         // Temporary table updates require the full projected column
         CHECK_EQ(rs->rowCount(), update_log.getRowCount());
 
-        ChunkKey chunk_key_prefix{catalog_.getCurrentDB().dbId,
-                                  update_log.getPhysicalTableId()};
+        const ChunkKey lock_chunk_key{catalog_.getCurrentDB().dbId, logical_table_id};
         const auto table_lock =
-            lockmgr::TableDataLockMgr::getWriteLockForTable(chunk_key_prefix);
+            lockmgr::TableDataLockMgr::getWriteLockForTable(lock_chunk_key);
 
         auto& fragment_info = update_log.getFragmentInfo();
         const auto td = catalog_.getMetadataForTable(update_log.getPhysicalTableId());
