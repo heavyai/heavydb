@@ -71,7 +71,9 @@
 #include "Shared/measure.h"
 #include "Shared/scope.h"
 
+#ifdef HAVE_AWS_S3
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
+#endif
 #include <fcntl.h>
 #include <picosha2.h>
 #include <sys/types.h>
@@ -103,7 +105,9 @@
 
 #define ENABLE_GEO_IMPORT_COLUMN_MATCHING 0
 
+#ifdef HAVE_AWS_S3
 extern bool g_allow_s3_server_privileges;
+#endif
 
 using Catalog_Namespace::Catalog;
 using Catalog_Namespace::SysCatalog;
@@ -3486,6 +3490,7 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
   if (cp.s3_endpoint.length() > 0) {
     copy_params.s3_endpoint = cp.s3_endpoint;
   }
+#ifdef HAVE_AWS_S3
   if (g_allow_s3_server_privileges && cp.s3_access_key.length() == 0 &&
       cp.s3_secret_key.length() == 0 && cp.s3_session_token.length() == 0) {
     const auto& server_credentials =
@@ -3494,6 +3499,7 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
     copy_params.s3_secret_key = server_credentials.GetAWSSecretKey();
     copy_params.s3_session_token = server_credentials.GetSessionToken();
   }
+#endif
   switch (cp.file_type) {
     case TFileType::POLYGON:
       copy_params.file_type = import_export::FileType::POLYGON;
