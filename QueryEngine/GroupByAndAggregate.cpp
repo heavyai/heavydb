@@ -51,6 +51,7 @@
 bool g_cluster{false};
 bool g_bigint_count{false};
 int g_hll_precision_bits{11};
+size_t g_watchdog_baseline_max_groups{120000000};
 extern size_t g_leaf_count;
 
 namespace {
@@ -734,7 +735,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
 
   if (g_enable_watchdog &&
       ((col_range_info.hash_type_ == QueryDescriptionType::GroupByBaselineHash &&
-        max_groups_buffer_entry_count > 120000000) ||
+        max_groups_buffer_entry_count > g_watchdog_baseline_max_groups) ||
        (col_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
         ra_exe_unit_.groupby_exprs.size() == 1 &&
         (col_range_info.max - col_range_info.min) /

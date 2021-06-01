@@ -34,6 +34,10 @@ size_t ResultSet::getNDVEstimator() const {
   CHECK(dynamic_cast<const Analyzer::NDVEstimator*>(estimator_.get()));
   CHECK(host_estimator_buffer_);
   auto bits_set = bitmap_set_size(host_estimator_buffer_, estimator_->getBufferSize());
+  if (bits_set == 0) {
+    // empty result set, return 1 for a groups buffer size of 1
+    return 1;
+  }
   const auto total_bits = estimator_->getBufferSize() * 8;
   CHECK_LE(bits_set, total_bits);
   const auto unset_bits = total_bits - bits_set;
@@ -65,7 +69,7 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
                                    false,
                                    column_cache);
     if (!estimator_result) {
-      return 0;
+      return 1;  // empty row set, only needs one slot
     }
     return estimator_result->getNDVEstimator();
   } catch (const QueryExecutionError& e) {
