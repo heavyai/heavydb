@@ -28,8 +28,9 @@
 #endif
 
 extern bool g_is_test_env;
-
+extern bool g_enable_watchdog;
 extern size_t g_big_group_threshold;
+extern size_t g_watchdog_baseline_max_groups;
 
 using QR = QueryRunner::QueryRunner;
 using namespace TestHelpers;
@@ -331,7 +332,7 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
   }
 }
 
-class LowCardinalitySmallGroupsThresholdTest : public ::testing::Test {
+class LowCardinalityThresholdTest : public ::testing::Test {
  protected:
   void SetUp() override {
     run_ddl_statement("DROP TABLE IF EXISTS low_cardinality;");
@@ -355,12 +356,59 @@ class LowCardinalitySmallGroupsThresholdTest : public ::testing::Test {
   void TearDown() override { run_ddl_statement("DROP TABLE IF EXISTS low_cardinality;"); }
 };
 
-TEST_F(LowCardinalitySmallGroupsThresholdTest, GroupBy) {
+TEST_F(LowCardinalityThresholdTest, GroupBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
     auto result = QR::get()->runSQL(
         R"(select fl,ar,dep from low_cardinality group by fl,ar,dep;)", dt);
+    EXPECT_EQ(result->rowCount(), g_big_group_threshold);
+  }
+}
+
+class BigCardinalityThresholdTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    g_enable_watchdog = true;
+    initial_g_watchdog_baseline_max_groups = g_watchdog_baseline_max_groups;
+    g_watchdog_baseline_max_groups = g_big_group_threshold + 1;
+
+    run_ddl_statement("DROP TABLE IF EXISTS big_cardinality;");
+    run_ddl_statement("CREATE TABLE big_cardinality (fl text,ar text, dep text);");
+
+    // write some data to a file
+    boost::filesystem::path temp_path =
+        boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+    const std::string filename_with_ext = temp_path.native() + ".csv";
+    std::fstream f(filename_with_ext, f.binary | f.out | f.trunc);
+    CHECK(f.is_open());
+    // add enough groups to trigger the watchdog exception if we use a poor estimate
+    for (size_t i = 0; i < g_watchdog_baseline_max_groups; i++) {
+      f << i << ", " << i + 1 << ", " << i + 2 << std::endl;
+    }
+    f.close();
+
+    run_ddl_statement("COPY big_cardinality FROM '" + filename_with_ext +
+                      "' WITH (header='false');");
+  }
+
+  void TearDown() override {
+    g_enable_watchdog = false;
+    g_watchdog_baseline_max_groups = initial_g_watchdog_baseline_max_groups;
+    run_ddl_statement("DROP TABLE IF EXISTS big_cardinality;");
+  }
+
+  size_t initial_g_watchdog_baseline_max_groups{0};
+};
+
+TEST_F(BigCardinalityThresholdTest, EmptyFilters) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    auto result = QR::get()->runSQL(
+        R"(SELECT fl,ar,dep FROM big_cardinality WHERE fl = 'a' GROUP BY fl,ar,dep;)",
+        dt);
+    EXPECT_EQ(result->rowCount(), size_t(0));
   }
 }
 

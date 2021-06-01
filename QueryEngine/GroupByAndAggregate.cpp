@@ -50,6 +50,7 @@
 bool g_cluster{false};
 bool g_bigint_count{false};
 int g_hll_precision_bits{11};
+size_t g_watchdog_baseline_max_groups{120000000};
 extern size_t g_leaf_count;
 
 namespace {
