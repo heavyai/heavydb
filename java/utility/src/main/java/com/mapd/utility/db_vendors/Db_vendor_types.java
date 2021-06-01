@@ -201,7 +201,7 @@ class PostGis_types extends com.mapd.utility.db_vendors.Db_vendor_types {
     String omnisci_type = null;
     Statement detail_st = conn.createStatement();
     // Select for a specific column name from the ref table.
-    String select = "select type, srid from " + ref_table_name + "  where "
+    String select = "select type, srid from " + ref_table_name + " where "
             + ref_column_name + " = '" + column_name + "'";
     if (table_name.length() > 0) {
       select += " and f_table_name"
@@ -226,7 +226,7 @@ class PostGis_types extends com.mapd.utility.db_vendors.Db_vendor_types {
           throw new SQLException("multiple column definitions [" + result.type + ":"
                   + type + "] found for column_name [" + column_name + "].\n"
                   + "You can try to switch the jar positions in the classpath "
-                  + "or use a more recent postgresQL driver.");
+                  + "or use a more recent postgreSQL driver.");
         }
       }
     }
