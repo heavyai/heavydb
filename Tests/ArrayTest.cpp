@@ -267,10 +267,7 @@ TEST_F(ArrayExtOpsEnv, ArrayAppendInteger) {
   }
 }
 
-/* 22 Oct 20 MAT Disabling this test as currently boolean arrays
- * are broken and we need to fix the undelying array and then barray_append
- */
-TEST_F(ArrayExtOpsEnv, DISABLED_ArrayAppendBool) {
+TEST_F(ArrayExtOpsEnv, ArrayAppendBool) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     auto check_row_result = [](const auto& crt_row, const auto& expected) {

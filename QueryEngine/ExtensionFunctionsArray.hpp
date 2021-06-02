@@ -19,6 +19,20 @@ DEVICE ALWAYS_INLINE Array<T> array_append_impl(const Array<T> in_arr, T val) {
   return out_arr;
 }
 
+// while appending boolean value to bool-type array we need to deal with its
+// array storage carefully to correctly represent null sentinel for bool type array
+DEVICE ALWAYS_INLINE Array<bool> barray_append_impl(const Array<bool> in_arr,
+                                                    const int8_t val) {
+  Array<bool> out_arr(in_arr.getSize() + 1);
+  // cast bool array storage to int8_t type to mask null elem correctly
+  auto casted_out_arr = (int8_t*)out_arr.ptr;
+  for (int64_t i = 0; i < in_arr.getSize(); i++) {
+    casted_out_arr[i] = in_arr(i);
+  }
+  casted_out_arr[in_arr.getSize()] = val;
+  return out_arr;
+}
+
 }  // namespace
 
 #endif
@@ -102,7 +116,9 @@ EXTENSION_NOINLINE Array<float> array_append__4(const Array<float> in_arr,
  */
 EXTENSION_NOINLINE Array<bool> barray_append(const Array<bool> in_arr, const bool val) {
 #ifndef __CUDACC__
-  return array_append_impl(in_arr, val);
+  // we need to cast 'val' to int8_t type to represent null sentinel correctly
+  // i.e., NULL_BOOLEAN = -128
+  return barray_append_impl(in_arr, val);
 #else
   assert(false);
   return Array<bool>(0, true);
