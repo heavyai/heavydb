@@ -2311,9 +2311,12 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
     }
     switch (col_type) {
       case kBOOLEAN: {
-        auto col_data = col_data_bytes;
-        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
-                                          : (col_datum.boolval ? 1 : 0);
+        auto col_data = reinterpret_cast<int8_t*>(col_data_bytes);
+        auto null_bool_val =
+            col_datum.boolval == inline_fixed_encoding_null_val(cd->columnType);
+        *col_data = col_cv->get_is_null() || null_bool_val
+                        ? inline_fixed_encoding_null_val(cd->columnType)
+                        : (col_datum.boolval ? 1 : 0);
         break;
       }
       case kTINYINT: {

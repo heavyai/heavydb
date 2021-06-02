@@ -257,9 +257,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
         if (array.is_null) {
           break;
         }
-        const bool* bool_array = (bool*)array.pointer;
+        const int8_t* bool_array = array.pointer;
         for (size_t i = 0; i < array.length / sizeof(bool); i++) {
-          if ((int8_t)bool_array[i] == NULL_BOOLEAN) {
+          if (bool_array[i] == NULL_BOOLEAN) {
             has_nulls = true;
           } else if (initialized) {
             elem_min.boolval = std::min(elem_min.boolval, bool_array[i]);

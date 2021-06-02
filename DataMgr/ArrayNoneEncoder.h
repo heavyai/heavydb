@@ -304,15 +304,15 @@ class ArrayNoneEncoder : public Encoder {
     switch (buffer_->getSqlType().get_subtype()) {
       case kBOOLEAN: {
         if (!initialized) {
-          elem_min.boolval = true;
-          elem_max.boolval = false;
+          elem_min.boolval = 1;
+          elem_max.boolval = 0;
         }
         if (array.is_null || array.length == 0) {
           break;
         }
-        const bool* bool_array = (bool*)array.pointer;
+        const int8_t* bool_array = array.pointer;
         for (size_t i = 0; i < array.length / sizeof(bool); i++) {
-          if ((int8_t)bool_array[i] == NULL_BOOLEAN) {
+          if (bool_array[i] == NULL_BOOLEAN) {
             has_nulls = true;
           } else if (initialized) {
             elem_min.boolval = std::min(elem_min.boolval, bool_array[i]);

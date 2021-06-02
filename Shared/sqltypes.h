@@ -202,7 +202,7 @@ using ArrayDatum =
     std::conditional_t<is_cuda_compiler(), DeviceArrayDatum, HostArrayDatum>;
 
 union Datum {
-  bool boolval;
+  int8_t boolval;
   int8_t tinyintval;
   int16_t smallintval;
   int32_t intval;
@@ -941,8 +941,8 @@ using ArrayOffsetT = int32_t;
 inline int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti) {
   switch (ti.get_type()) {
     case kBOOLEAN:
-      *(bool*)buf = d.boolval;
-      return buf + sizeof(bool);
+      *(int8_t*)buf = d.boolval;
+      return buf + sizeof(int8_t);
     case kNUMERIC:
     case kDECIMAL:
     case kBIGINT:
