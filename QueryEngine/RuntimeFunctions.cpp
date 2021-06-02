@@ -1311,7 +1311,7 @@ extern "C" NEVER_INLINE void linear_probabilistic_count(uint8_t* bitmap,
                                                         const uint32_t bitmap_bytes,
                                                         const uint8_t* key_bytes,
                                                         const uint32_t key_len) {
-  const uint32_t bit_pos = MurmurHash1(key_bytes, key_len, 0) % (bitmap_bytes * 8);
+  const uint32_t bit_pos = MurmurHash3(key_bytes, key_len, 0) % (bitmap_bytes * 8);
   const uint32_t word_idx = bit_pos / 32;
   const uint32_t bit_idx = bit_pos % 32;
   reinterpret_cast<uint32_t*>(bitmap)[word_idx] |= 1 << bit_idx;

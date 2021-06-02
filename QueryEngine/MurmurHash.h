@@ -26,4 +26,7 @@ MurmurHash1(const void* key, int len, const uint32_t seed);
 extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE RUNTIME_EXPORT uint64_t
 MurmurHash64A(const void* key, int len, uint64_t seed);
 
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE RUNTIME_EXPORT uint32_t
+MurmurHash3(const void* key, int len, const uint32_t seed);
+
 #endif  // QUERYENGINE_MURMURHASH_H

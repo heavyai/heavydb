@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include "MurmurHash.h"
-#include "MurmurHash1Inl.h"
+#include "QueryEngine/MurmurHash.h"
+#include "QueryEngine/MurmurHash1Inl.h"
+#include "QueryEngine/MurmurHash3Inl.h"
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE uint32_t MurmurHash1(const void* key,
                                                                    int len,
@@ -27,4 +28,10 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE uint64_t MurmurHash64A(const void*
                                                                      int len,
                                                                      uint64_t seed) {
   return MurmurHash64AImpl(key, len, seed);
+}
+
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE uint32_t MurmurHash3(const void* key,
+                                                                   int len,
+                                                                   const uint32_t seed) {
+  return MurmurHash3Impl(key, len, seed);
 }
