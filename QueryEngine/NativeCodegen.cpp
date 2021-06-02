@@ -1212,7 +1212,7 @@ std::shared_ptr<L0CompilationContext> CodeGenerator::generateNativeL0Code(
   std::ostringstream ss;
   std::string err;
 
-  module->setTargetTriple("spir-unknown-unknown");
+  module->setTargetTriple("spir64-unknown-unknown");
 
   llvm::LLVMContext& ctx = module->getContext();
   // set metadata -- pretend we're opencl (see
