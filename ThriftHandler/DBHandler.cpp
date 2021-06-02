@@ -810,6 +810,8 @@ void DBHandler::get_server_status(TServerStatus& _return, const TSessionId& sess
   _return.start_time = start_time_;
   _return.edition = MAPD_EDITION;
   _return.host_name = omnisci::get_hostname();
+  _return.renderer_status_json =
+      render_handler_ ? render_handler_->get_renderer_status_json() : "";
 }
 
 void DBHandler::get_status(std::vector<TServerStatus>& _return,
@@ -841,6 +843,8 @@ void DBHandler::get_status(std::vector<TServerStatus>& _return,
   ret.start_time = start_time_;
   ret.edition = MAPD_EDITION;
   ret.host_name = omnisci::get_hostname();
+  ret.renderer_status_json =
+      render_handler_ ? render_handler_->get_renderer_status_json() : "";
 
   // TSercivePort tcp_port{}
 

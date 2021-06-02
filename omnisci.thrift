@@ -227,6 +227,7 @@ struct TServerStatus {
   6: string host_name;
   7: bool poly_rendering_enabled;
   8: TRole role;
+  9: string renderer_status_json;
 }
 
 struct TPixel {
