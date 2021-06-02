@@ -3968,13 +3968,12 @@ void DBHandler::render_vega(TRenderResult& _return,
 
   _return.total_time_ms = measure<>::execution([&]() {
     try {
-      render_handler_->render_vega(
-          _return,
-          std::make_shared<Catalog_Namespace::SessionInfo>(*session_ptr),
-          widget_id,
-          vega_json,
-          compression_level,
-          nonce);
+      render_handler_->render_vega(_return,
+                                   stdlog.getSessionInfo(),
+                                   widget_id,
+                                   vega_json,
+                                   compression_level,
+                                   nonce);
     } catch (std::exception& e) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }

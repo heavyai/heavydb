@@ -62,7 +62,8 @@ class SessionInfo {
       , currentUser_(s.currentUser_)
       , executor_device_type_(static_cast<ExecutorDeviceType>(s.executor_device_type_))
       , session_id_(s.session_id_)
-      , public_session_id_(s.public_session_id_) {}
+      , public_session_id_(s.public_session_id_)
+      , restriction_(s.restriction_) {}
   Catalog& getCatalog() const {
     CHECK(catalog_);
     return *catalog_;
@@ -94,11 +95,11 @@ class SessionInfo {
   std::shared_ptr<Catalog> catalog_;
   UserMetadata currentUser_;
   std::atomic<ExecutorDeviceType> executor_device_type_;
-  std::shared_ptr<Restriction> restriction_;
   const std::string session_id_;
   std::atomic<time_t> last_used_time_;  // for tracking active session duration
   std::atomic<time_t> start_time_;      // for invalidating session after tolerance period
   const std::string public_session_id_;
+  std::shared_ptr<Restriction> restriction_;
   std::string
       connection_info_;  // String containing connection protocol (tcp/http) and address
   std::string public_session_id() const;

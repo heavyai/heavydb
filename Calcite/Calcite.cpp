@@ -557,7 +557,8 @@ TPlanResult Calcite::processImpl(
 
   TRestriction restriction;
   auto rest = user_session_info->get_restriction_ptr();
-  if (rest != nullptr) {
+  if (rest != nullptr && !rest->column.empty()) {
+    VLOG(1) << "This users session has a restriction : " << *rest;
     restriction.column = rest->column;
     restriction.values = rest->values;
   }
