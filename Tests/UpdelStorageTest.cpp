@@ -1193,7 +1193,23 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
-  QR::init(BASE_PATH);
+  namespace po = boost::program_options;
+  po::options_description desc("Options");
+  // these two are here to allow passing correctly google testing parameters
+  desc.add_options()("gtest_list_tests", "list all test");
+  desc.add_options()("gtest_filter", "filters tests, use --help for details");
+  desc.add_options()("use-disk-cache",
+                     "Use the disk cache for all tables with default size settings.");
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  po::notify(vm);
+  File_Namespace::DiskCacheConfig disk_cache_config{};
+  if (vm.count("use-disk-cache")) {
+    disk_cache_config = File_Namespace::DiskCacheConfig{
+        File_Namespace::DiskCacheConfig::getDefaultPath(std::string(BASE_PATH)),
+        File_Namespace::DiskCacheLevel::all};
+  }
+  QR::init(&disk_cache_config, BASE_PATH);
 
   // the data files for perf tests are too big to check in, so perf tests
   // are done privately in someone's dev host. prog option seems a overkill.

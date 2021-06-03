@@ -21346,6 +21346,8 @@ int main(int argc, char** argv) {
                          ->default_value(g_use_tbb_pool)
                          ->implicit_value(true),
                      "Use TBB thread pool implementation for query dispatch.");
+  desc.add_options()("use-disk-cache",
+                     "Use the disk cache for all tables with minimum size settings.");
 
   desc.add_options()(
       "test-help",
@@ -21381,7 +21383,14 @@ int main(int argc, char** argv) {
   g_enable_window_functions = true;
   g_enable_interop = false;
 
-  QR::init(BASE_PATH);
+  File_Namespace::DiskCacheConfig disk_cache_config{};
+  if (vm.count("use-disk-cache")) {
+    disk_cache_config = File_Namespace::DiskCacheConfig{
+        File_Namespace::DiskCacheConfig::getDefaultPath(std::string(BASE_PATH)),
+        File_Namespace::DiskCacheLevel::all};
+  }
+
+  QR::init(&disk_cache_config, BASE_PATH);
   if (vm.count("with-sharding")) {
     g_shard_count = choose_shard_count();
   }

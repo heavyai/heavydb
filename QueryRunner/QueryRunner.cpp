@@ -93,6 +93,25 @@ QueryRunner* QueryRunner::init(const char* db_path,
                            reserved_gpu_mem);
 }
 
+QueryRunner* QueryRunner::init(const File_Namespace::DiskCacheConfig* disk_cache_config,
+                               const char* db_path,
+                               const std::vector<LeafHostInfo>& string_servers,
+                               const std::vector<LeafHostInfo>& leaf_servers) {
+  return QueryRunner::init(db_path,
+                           std::string{OMNISCI_ROOT_USER},
+                           "HyperInteractive",
+                           std::string{OMNISCI_DEFAULT_DB},
+                           string_servers,
+                           leaf_servers,
+                           "",
+                           true,
+                           0,
+                           256 << 20,
+                           false,
+                           false,
+                           disk_cache_config);
+}
+
 QueryRunner* QueryRunner::init(const char* db_path,
                                const std::string& user,
                                const std::string& pass,
@@ -104,7 +123,8 @@ QueryRunner* QueryRunner::init(const char* db_path,
                                const size_t max_gpu_mem,
                                const int reserved_gpu_mem,
                                const bool create_user,
-                               const bool create_db) {
+                               const bool create_db,
+                               const File_Namespace::DiskCacheConfig* disk_cache_config) {
   // Whitelist root path for tests by default
   ddl_utils::FilePathWhitelist::clear();
   ddl_utils::FilePathWhitelist::initialize(db_path, "[\"/\"]", "[\"/\"]");
@@ -121,7 +141,8 @@ QueryRunner* QueryRunner::init(const char* db_path,
                                      max_gpu_mem,
                                      reserved_gpu_mem,
                                      create_user,
-                                     create_db));
+                                     create_db,
+                                     disk_cache_config));
   return qr_instance_.get();
 }
 
@@ -136,7 +157,8 @@ QueryRunner::QueryRunner(const char* db_path,
                          const size_t max_gpu_mem,
                          const int reserved_gpu_mem,
                          const bool create_user,
-                         const bool create_db)
+                         const bool create_db,
+                         const File_Namespace::DiskCacheConfig* cache_config)
     : dispatch_queue_(std::make_unique<QueryDispatchQueue>(1)) {
   g_serialize_temp_tables = true;
   boost::filesystem::path base_path{db_path};
@@ -146,6 +168,9 @@ QueryRunner::QueryRunner(const char* db_path,
   auto data_dir = base_path / "mapd_data";
   File_Namespace::DiskCacheConfig disk_cache_config{
       (base_path / "omnisci_disk_cache").string(), File_Namespace::DiskCacheLevel::fsi};
+  if (cache_config) {
+    disk_cache_config = *cache_config;
+  }
   Catalog_Namespace::UserMetadata user;
   Catalog_Namespace::DBMetadata db;
 

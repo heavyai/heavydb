@@ -70,6 +70,9 @@ struct DiskCacheConfig {
     }
     return "";
   }
+  static std::string getDefaultPath(const std::string& base_path) {
+    return base_path + "/omnisci_disk_cache";
+  }
 };
 
 inline std::string get_dir_name_for_table(int db_id, int tb_id) {

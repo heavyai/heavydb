@@ -45,7 +45,8 @@ class TableTest : public DBHandlerTestFixture {
   inline static PersistentStorageMgr* psm_;
 
   static void SetUpTestSuite() {
-    DBHandlerTestFixture::createDBHandler(File_Namespace::DiskCacheLevel::all);
+    use_disk_cache_ = true;
+    DBHandlerTestFixture::SetUpTestSuite();
     cat_ = &getCatalog();
     ASSERT_NE(cat_, nullptr);
     psm_ = cat_->getDataMgr().getPersistentStorageMgr();
@@ -53,8 +54,6 @@ class TableTest : public DBHandlerTestFixture {
     cache_ = psm_->getDiskCache();
     ASSERT_NE(cache_, nullptr);
   }
-
-  static void TearDownTestSuite() {}
 
   void SetUp() override {
     sqlDropTable();
@@ -111,7 +110,7 @@ class TableTest : public DBHandlerTestFixture {
   }
 };
 
-TEST_F(TableTest, DISABLED_InsertWithCache) {
+TEST_F(TableTest, InsertWithCache) {
   sqlCreateTable("(i INTEGER) WITH (fragment_size = 1)");
   const ChunkKey key1 = getChunkKeyFromTable(*cat_, default_table_name, {1, 0});
   const ChunkKey key2 = getChunkKeyFromTable(*cat_, default_table_name, {1, 1});

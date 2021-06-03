@@ -63,6 +63,11 @@ class QueryRunner {
                            const size_t max_gpu_mem = 0,  // use all available mem
                            const int reserved_gpu_mem = 256 << 20);
 
+  static QueryRunner* init(const File_Namespace::DiskCacheConfig* disk_cache_config,
+                           const char* db_path,
+                           const std::vector<LeafHostInfo>& string_servers = {},
+                           const std::vector<LeafHostInfo>& leaf_servers = {});
+
   static QueryRunner* init(const char* db_path,
                            const std::vector<LeafHostInfo>& string_servers,
                            const std::vector<LeafHostInfo>& leaf_servers) {
@@ -85,7 +90,8 @@ class QueryRunner {
                            const size_t max_gpu_mem = 0,  // use all available mem
                            const int reserved_gpu_mem = 256 << 20,
                            const bool create_user = false,
-                           const bool create_db = false);
+                           const bool create_db = false,
+                           const File_Namespace::DiskCacheConfig* config = nullptr);
 
   static QueryRunner* init(std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
     qr_instance_.reset(new QueryRunner(std::move(session)));
@@ -201,8 +207,8 @@ class QueryRunner {
               const size_t max_gpu_mem,
               const int reserved_gpu_mem,
               const bool create_user,
-              const bool create_db);
-
+              const bool create_db,
+              const File_Namespace::DiskCacheConfig* disk_cache_config = nullptr);
   static std::unique_ptr<QueryRunner> qr_instance_;
 
   std::shared_ptr<Catalog_Namespace::SessionInfo> session_info_;

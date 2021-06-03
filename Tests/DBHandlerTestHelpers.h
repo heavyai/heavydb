@@ -186,7 +186,9 @@ class DBHandlerTestFixture : public testing::Test {
     desc.add_options()("cluster",
                        po::value<std::string>(&cluster_config_file_path_),
                        "Path to data leaves list JSON file.");
-
+    desc.add_options()("use-disk-cache",
+                       po::value<bool>(&use_disk_cache_),
+                       "Enable disk cache for all tables.");
     po::variables_map vm;
     po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
     po::notify(vm);
@@ -208,8 +210,7 @@ class DBHandlerTestFixture : public testing::Test {
 
   static void TearDownTestSuite() {}
 
-  static void createDBHandler(
-      File_Namespace::DiskCacheLevel cache_level = File_Namespace::DiskCacheLevel::fsi) {
+  static void createDBHandler() {
     if (!db_handler_) {
       setupSignalHandler();
 
@@ -239,8 +240,14 @@ class DBHandlerTestFixture : public testing::Test {
       system_parameters_.omnisci_server_port = -1;
       system_parameters_.calcite_port = 3280;
 
+      File_Namespace::DiskCacheLevel cache_level{File_Namespace::DiskCacheLevel::fsi};
+      if (use_disk_cache_) {
+        cache_level = File_Namespace::DiskCacheLevel::all;
+      }
       File_Namespace::DiskCacheConfig disk_cache_config{
-          std::string(BASE_PATH) + "/omnisci_disk_cache", cache_level};
+          File_Namespace::DiskCacheConfig::getDefaultPath(std::string(BASE_PATH)),
+          cache_level};
+
       db_handler_ = std::make_unique<DBHandler>(db_leaves_,
                                                 string_leaves_,
                                                 BASE_PATH,
@@ -579,6 +586,7 @@ class DBHandlerTestFixture : public testing::Test {
 
  public:
   static std::string cluster_config_file_path_;
+  static bool use_disk_cache_;
 };
 
 TSessionId DBHandlerTestFixture::session_id_{};
@@ -598,3 +606,4 @@ std::string DBHandlerTestFixture::cluster_config_file_path_{};
 #ifdef ENABLE_GEOS
 std::string DBHandlerTestFixture::libgeos_so_filename_{};
 #endif
+bool DBHandlerTestFixture::use_disk_cache_{false};
