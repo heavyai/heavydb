@@ -2399,6 +2399,14 @@ void Catalog::createTable(
   }
 
   try {
+    auto cache = dataMgr_->getPersistentStorageMgr()->getDiskCache();
+    if (cache) {
+      CHECK(!cache->hasCachedMetadataForKeyPrefix({getCurrentDB().dbId, td.tableId}))
+          << "Disk cache at " + cache->getCacheDirectory()
+          << " contains preexisting data for new table.  Please "
+             "delete or clear cache before continuing";
+    }
+
     addTableToMap(&td, cds, dds);
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
     if (!td.storageType.empty() && td.storageType != StorageType::FOREIGN_TABLE) {

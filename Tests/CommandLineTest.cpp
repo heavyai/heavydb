@@ -170,10 +170,27 @@ TEST_F(InitDBTest, AlreadyInit) {
                       "OmniSci catalogs already initialized at " + get_temp_dir() +
                           ". Use -f to force reinitialization.");
 }
+// Blocked by existing cache.
+TEST_F(InitDBTest, ExistingCache) {
+  boost::filesystem::create_directory(get_temp_dir() + "/omnisci_disk_cache");
+  CommandLineTestcase(get_executable(),
+                      get_temp_dir(),
+                      1,
+                      "",
+                      "OmniSci disk cache already exists at " + get_temp_dir() +
+                          "/omnisci_disk_cache" + ". Use -f to force reinitialization.");
+}
 // Override existing database.
 TEST_F(InitDBTest, Force) {
   CommandLineTestcase(get_executable(), get_temp_dir(), 0, "", "");
   CommandLineTestcase(get_executable(), get_temp_dir() + " -f", 0, "", "");
+}
+// Override existing cache
+TEST_F(InitDBTest, ForceCache) {
+  boost::filesystem::create_directory(get_temp_dir() + "/omnisci_disk_cache");
+  boost::filesystem::create_directory(get_temp_dir() + "/omnisci_disk_cache/temp");
+  CommandLineTestcase(get_executable(), get_temp_dir() + " -f", 0, "", "");
+  ASSERT_FALSE(boost::filesystem::exists(get_temp_dir() + "/omnisci_disk_cache/temp"));
 }
 // Data directory does not exist.
 TEST_F(InitDBTest, MissingDir) {

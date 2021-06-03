@@ -129,6 +129,16 @@ int main(int argc, char* argv[]) {
       return 1;
     }
   }
+  std::string disk_cache_path = base_path + "/omnisci_disk_cache";
+  if (boost::filesystem::exists(disk_cache_path)) {
+    if (force) {
+      boost::filesystem::remove_all(disk_cache_path);
+    } else {
+      std::cerr << "OmniSci disk cache already exists at " + disk_cache_path +
+                       ". Use -f to force reinitialization.\n";
+      return 1;
+    }
+  }
   if (!boost::filesystem::create_directory(catalogs_path)) {
     std::cerr << "Cannot create mapd_catalogs subdirectory under " << base_path
               << std::endl;
