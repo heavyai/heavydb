@@ -15,6 +15,7 @@
  */
 
 #include "TestHelpers.h"
+#include "fmt/core.h"
 
 #include <gtest/gtest.h>
 
@@ -236,28 +237,28 @@ void run_ddl_statement(const std::string& ddl) {
   run_multiple_agg(ddl);
 }
 
+// Verify that column types match
 void test_scalar_values(const std::shared_ptr<arrow::RecordBatch>& read_batch) {
-  ASSERT_EQ(read_batch->schema()->num_fields(), 5);
+  using namespace arrow;
+  using namespace std;
 
-  // smallint column
-  auto sm_int_array = read_batch->column(0);
-  ASSERT_EQ(sm_int_array->type()->id(), arrow::Type::type::INT16);
+  ASSERT_EQ(read_batch->schema()->num_fields(), 6);
 
-  // int column
-  auto int_array = read_batch->column(1);
-  ASSERT_EQ(int_array->type()->id(), arrow::Type::type::INT32);
+  const std::vector expected_types = {
+      make_pair(Int16Type::type_id, Int16Type::type_name()),
+      make_pair(Int32Type::type_id, Int32Type::type_name()),
+      make_pair(Int64Type::type_id, Int64Type::type_name()),
+      make_pair(Decimal128Type::type_id, Decimal128Type::type_name()),
+      make_pair(FloatType::type_id, FloatType::type_name()),
+      make_pair(DoubleType::type_id, DoubleType::type_name())};
 
-  // bigint column
-  auto big_int_array = read_batch->column(2);
-  ASSERT_EQ(big_int_array->type()->id(), arrow::Type::type::INT64);
+  for (int i = 0; i < expected_types.size(); i++) {
+    auto [type, type_name] = expected_types[i];
 
-  // float column
-  auto float_array = read_batch->column(3);
-  ASSERT_EQ(float_array->type()->id(), arrow::Type::type::FLOAT);
-
-  // double column
-  auto double_array = read_batch->column(4);
-  ASSERT_EQ(double_array->type()->id(), arrow::Type::type::DOUBLE);
+    const auto arr = read_batch->column(i);
+    ASSERT_EQ(arr->type()->id(), type)
+        << fmt::format("Expected column {} to have type {}", i, type_name);
+  }
 }
 
 }  // namespace
@@ -267,12 +268,24 @@ class ArrowIpcBasic : public ::testing::Test {
   void SetUp() override {
     run_ddl_statement("DROP TABLE IF EXISTS arrow_ipc_test;");
     run_ddl_statement("DROP TABLE IF EXISTS test_data_scalars;");
-    run_ddl_statement(
-        "CREATE TABLE arrow_ipc_test(x INT, y DOUBLE, t TEXT ENCODING DICT(32)) WITH "
-        "(FRAGMENT_SIZE=2);");
-    run_ddl_statement(
-        "CREATE TABLE test_data_scalars(smallint_ SMALLINT, int_ INT, bigint_ BIGINT, "
-        "float_ FLOAT, double_ DOUBLE); ");
+
+    run_ddl_statement(R"(
+      CREATE TABLE 
+        arrow_ipc_test(x INT, 
+                       y DOUBLE,
+                       t TEXT ENCODING DICT(32))
+        WITH (FRAGMENT_SIZE=2);
+    )");
+
+    run_ddl_statement(R"(
+        CREATE TABLE
+          test_data_scalars(smallint_ SMALLINT,
+                            int_ INT,
+                            bigint_ BIGINT,
+                            dec_ DECIMAL(12,3),
+                            float_ FLOAT,
+                            double_ DOUBLE);
+    )");
 
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (1, 1.1, 'foo');");
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (2, 2.1, NULL);");
@@ -280,8 +293,10 @@ class ArrowIpcBasic : public ::testing::Test {
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (4, NULL, 'hello');");
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (5, 5.1, 'world');");
 
-    run_ddl_statement("INSERT INTO test_data_scalars VALUES (1, 2, 3, 0.1, 0.001);");
-    run_ddl_statement("INSERT INTO test_data_scalars VALUES (1, 2, 3, 0.1, 0.001);");
+    run_ddl_statement(
+        "INSERT INTO test_data_scalars VALUES (1, 2, 3, 123.456, 0.1, 0.001);");
+    run_ddl_statement(
+        "INSERT INTO test_data_scalars VALUES (1, 2, 3, 345.678, 0.1, 0.001);");
   }
 
   void TearDown() override { run_ddl_statement("DROP TABLE IF EXISTS arrow_ipc_test;"); }

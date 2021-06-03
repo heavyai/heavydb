@@ -39,6 +39,7 @@ using ValueArray = boost::variant<std::vector<bool>,
                                   std::vector<int16_t>,
                                   std::vector<int32_t>,
                                   std::vector<int64_t>,
+                                  std::vector<arrow::Decimal128>,
                                   std::vector<float>,
                                   std::vector<double>,
                                   std::vector<std::string>>;

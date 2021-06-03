@@ -298,8 +298,9 @@ if(("${MAPD_EDITION_LOWER}" STREQUAL "ee") AND ENABLE_AWS_S3)
   add_test(S3SelectClientTest S3SelectClientTest ${TEST_ARGS})
 endif()
 
+find_package(fmt REQUIRED)
 add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
-target_link_libraries(ArrowIpcIntegrationTest gtest ThriftClient mapd_thrift Logger Shared ${CUDA_LIBRARIES} ${Arrow_LIBRARIES})
+target_link_libraries(ArrowIpcIntegrationTest gtest fmt::fmt ThriftClient mapd_thrift Logger Shared ${CUDA_LIBRARIES} ${Arrow_LIBRARIES})
 add_test(ArrowIpcIntegrationTest ArrowIpcIntegrationTest ${TEST_ARGS})
 
 #parse s3 credentials
