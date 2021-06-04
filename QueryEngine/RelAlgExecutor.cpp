@@ -50,6 +50,7 @@
 bool g_skip_intermediate_count{true};
 bool g_enable_interop{false};
 bool g_enable_union{false};
+size_t g_estimator_failure_max_groupby_size{256000000};
 
 extern bool g_enable_bump_allocator;
 extern size_t g_default_max_groups_buffer_entry_guess;
@@ -3021,7 +3022,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
           getNDVEstimation(work_unit, e.range(), is_agg, co, eo);
       const auto estimated_groups_buffer_entry_guess =
           ndv_groups_estimation > 0 ? 2 * ndv_groups_estimation
-                                    : 2 * groups_approx_upper_bound(table_infos);
+                                    : std::min(groups_approx_upper_bound(table_infos),
+                                               g_estimator_failure_max_groupby_size);
       CHECK_GT(estimated_groups_buffer_entry_guess, size_t(0));
       result = execute_and_handle_errors(
           estimated_groups_buffer_entry_guess, true, /*has_ndv_estimation=*/true);
