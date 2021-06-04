@@ -17,10 +17,11 @@
 // EXAMPLE #1
 //
 //   #include "Shared/json.h"
+//   using JSON = omnisci::JSON;
 //   JSON json;
 //   json["item1"] = "abc";
 //   json["item2"] = 123;
-//   std::cout << json.str() << std::endl;
+//   std::cout << json.stringify() << std::endl;
 //   std::cout << static_cast<int>(json["item2"]) << std::endl;
 //
 // OUTPUT: {"item1":"abc","item2":123}
@@ -29,6 +30,7 @@
 // EXAMPLE #2
 //
 //   #include "Shared/json.h"
+//   using JSON = omnisci::JSON;
 //   std::string text = R"json(
 //     {
 //       "item1": "abc",
@@ -38,7 +40,7 @@
 //   JSON json(text);
 //   json["item3"] = false;
 //   json["item4"].parse("[0, 1, 2, 3, 4]");
-//   std::cout << json.str() << std::endl;
+//   std::cout << json.stringify() << std::endl;
 //   std::cout << static_cast<size_t>(json["item4"][2]) << std::endl;
 //
 // OUTPUT: {"item1":"abc","item2":123,"item3":false,"item4":[0,1,2,3,4]}
@@ -55,6 +57,11 @@
 #include <string>
 #include <type_traits>
 
+// Calling any public JSON constructor except the move constructor creates a new document.
+// Calling JSON's operator[] creates a reference into an existing document.
+
+namespace omnisci {
+
 class JSON final {
   std::shared_ptr<rapidjson::Document> doc_;
   rapidjson::Value* vptr_;
@@ -62,20 +69,27 @@ class JSON final {
   const std::string name_;  // only used in error messages
 
  public:
+  // Default constructor makes a new empty document.
   JSON()
       : doc_(std::make_shared<rapidjson::Document>())
       , vptr_(&*doc_)
       , allo_(doc_->GetAllocator())
       , name_("JSON") {}
 
+  // Copy constructor to make a new document as a deep copy of the peer document.
   JSON(const JSON& peer) : JSON() { vptr_->CopyFrom(*peer.vptr_, allo_); }
 
+  // Move constructor to keep the existing document. Class members are moved efficiently.
   JSON(JSON&&) = default;
 
+  // Constructor from std::string to make a new document.
   JSON(const std::string& json) : JSON() { parse(json); }
 
+  // Constructor from C-style string to make a new document.
   JSON(const char* json) : JSON() { parse(json); }
 
+  // Constructor from C-style string plus a length to make a new document without having
+  // to scan the string for the null terminator.
   JSON(const char* json, size_t len) : JSON() { parse(json, len); }
 
   void parse(const std::string& json) {
@@ -96,14 +110,23 @@ class JSON final {
     }
   }
 
-  std::string str() const {
+  std::string stringify() const {
     rapidjson::StringBuffer buf;
     rapidjson::Writer<rapidjson::StringBuffer> wr(buf);
     vptr_->Accept(wr);
     return buf.GetString();
   }
 
-  std::string getType() const { return kTypeNames[vptr_->GetType()]; }
+  [[deprecated]] std::string getType() const { return kTypeNames[vptr_->GetType()]; }
+
+  bool isString() const { return vptr_->IsString(); }
+  bool isNumber() const { return vptr_->IsNumber(); }
+  bool isBoolean() const { return vptr_->IsBool(); }
+  bool isObject() const { return vptr_->IsObject(); }
+  bool isArray() const { return vptr_->IsArray(); }
+  bool isNull() const { return vptr_->IsNull(); }
+
+  bool hasMember(const std::string& name) const { return vptr_->HasMember(name); }
 
   operator std::string() const {
     if (!vptr_->IsString()) {
@@ -125,40 +148,49 @@ class JSON final {
 
   template <typename T>
   operator T() const {
-    static_assert(std::numeric_limits<T>::is_integer &&
-                  !std::is_same_v<bool, std::remove_cv_t<T>>);
-    if constexpr (std::numeric_limits<T>::is_signed) {
-      if constexpr (sizeof(T) < 8) {
-        if (!vptr_->IsInt()) {
-          throw std::runtime_error("expected JSON field '" + name_ +
-                                   "' to be signed integer but got [" +
-                                   kTypeNames[vptr_->GetType()] + "]");
+    static_assert((std::is_integral_v<T> && !std::is_same_v<bool, std::remove_cv_t<T>>) ||
+                  (std::is_floating_point_v<T>));
+    if constexpr (std::is_integral_v<T>) {
+      if constexpr (std::numeric_limits<T>::is_signed) {
+        if constexpr (sizeof(T) < 8) {
+          if (!vptr_->IsInt()) {
+            throw std::runtime_error("can't convert JSON field '" + name_ +
+                                     "' to be signed integer from [" +
+                                     kTypeNames[vptr_->GetType()] + "]");
+          }
+          return vptr_->GetInt();
+        } else {
+          if (!vptr_->IsInt64()) {
+            throw std::runtime_error("can't convert JSON field '" + name_ +
+                                     "' to be signed 64-bit integer from [" +
+                                     kTypeNames[vptr_->GetType()] + "]");
+          }
+          return vptr_->GetInt64();
         }
-        return vptr_->GetInt();
       } else {
-        if (!vptr_->IsInt64()) {
-          throw std::runtime_error("expected JSON field '" + name_ +
-                                   "' to be signed 64-bit integer but got [" +
-                                   kTypeNames[vptr_->GetType()] + "]");
+        if constexpr (sizeof(T) < 8) {
+          if (!vptr_->IsUint()) {
+            throw std::runtime_error("can't convert JSON field '" + name_ +
+                                     "' to be unsigned integer from [" +
+                                     kTypeNames[vptr_->GetType()] + "]");
+          }
+          return vptr_->GetUint();
+        } else {
+          if (!vptr_->IsUint64()) {
+            throw std::runtime_error("can't convert JSON field '" + name_ +
+                                     "' to be unsigned 64-bit integer from [" +
+                                     kTypeNames[vptr_->GetType()] + "]");
+          }
+          return vptr_->GetUint64();
         }
-        return vptr_->GetInt64();
       }
-    } else {
-      if constexpr (sizeof(T) < 8) {
-        if (!vptr_->IsUint()) {
-          throw std::runtime_error("expected JSON field '" + name_ +
-                                   "' to be unsigned integer but got [" +
-                                   kTypeNames[vptr_->GetType()] + "]");
-        }
-        return vptr_->GetUint();
-      } else {
-        if (!vptr_->IsUint64()) {
-          throw std::runtime_error("expected JSON field '" + name_ +
-                                   "' to be unsigned 64-bit integer but got [" +
-                                   kTypeNames[vptr_->GetType()] + "]");
-        }
-        return vptr_->GetUint64();
+    } else if constexpr (std::is_floating_point_v<T>) {
+      if (!vptr_->IsDouble()) {
+        throw std::runtime_error("can't convert JSON field '" + name_ +
+                                 "' to be floating point number from [" +
+                                 kTypeNames[vptr_->GetType()] + "]");
       }
+      return vptr_->GetDouble();
     }
   }
 
@@ -221,8 +253,8 @@ class JSON final {
   JSON operator[](const std::string& name) const { return (*this)[name.c_str()]; }
   JSON operator[](const char* name) const {
     if (!vptr_->IsObject()) {
-      throw std::runtime_error("JSON " + getType() + " field '" + name_ +
-                               "' can't use operator []");
+      throw std::runtime_error("JSON " + kTypeNames[vptr_->GetType()] + " field '" +
+                               name_ + "' can't use operator []");
     }
     if (!vptr_->HasMember(name)) {
       throw std::runtime_error("JSON field '" + std::string(name) + "' not found");
@@ -251,8 +283,8 @@ class JSON final {
   }
   JSON operator[](size_t index) const {
     if (!vptr_->IsArray()) {
-      throw std::runtime_error("JSON " + getType() + " field '" + name_ +
-                               "' can't use operator []");
+      throw std::runtime_error("JSON " + kTypeNames[vptr_->GetType()] + " field '" +
+                               name_ + "' can't use operator []");
     }
     if (index >= vptr_->Size()) {
       throw std::runtime_error("JSON array index " + std::to_string(index) +
@@ -265,9 +297,55 @@ class JSON final {
   inline static std::string kTypeNames[] =
       {"Null", "False", "True", "Object", "Array", "String", "Number"};
 
+  // Constructor used by operator[] to produce a reference into an existing document.
   JSON(std::shared_ptr<rapidjson::Document> doc,
        rapidjson::Value* vptr,
        rapidjson::Document::AllocatorType& allo,
        const std::string& name)
       : doc_(doc), vptr_(vptr), allo_(allo), name_(name) {}
-};  // struct JSON
+
+  friend bool operator==(const JSON& json1, const JSON& json2);
+  friend bool operator!=(const JSON& json1, const JSON& json2);
+
+  template <typename T>
+  friend bool operator==(const JSON& json, const T& value);
+  template <typename T>
+  friend bool operator==(const T& value, const JSON& json);
+
+  template <typename T>
+  friend bool operator!=(const JSON& json, const T& value);
+  template <typename T>
+  friend bool operator!=(const T& value, const JSON& json);
+};  // class JSON
+
+// Compare the values referred to by two JSON objects.
+
+inline bool operator==(const JSON& json1, const JSON& json2) {
+  return (*json1.vptr_ == *json2.vptr_);
+}
+
+inline bool operator!=(const JSON& json1, const JSON& json2) {
+  return (*json1.vptr_ != *json2.vptr_);
+}
+
+// Compare a JSON object's value with a value of an arbitrary type.
+
+template <typename T>
+inline bool operator==(const JSON& json, const T& value) {
+  return (*json.vptr_ == value);
+}
+template <typename T>
+inline bool operator==(const T& value, const JSON& json) {
+  return (json == value);
+}
+
+template <typename T>
+inline bool operator!=(const JSON& json, const T& value) {
+  return (*json.vptr_ != value);
+}
+template <typename T>
+inline bool operator!=(const T& value, const JSON& json) {
+  return (json != value);
+}
+
+}  // namespace omnisci
