@@ -91,6 +91,8 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
 
 RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_unit,
                                               const int64_t range) {
+  const bool use_large_estimator =
+      range > g_large_ndv_threshold || ra_exe_unit.groupby_exprs.size() > 1;
   return {ra_exe_unit.input_descs,
           ra_exe_unit.input_col_descs,
           ra_exe_unit.simple_quals,
@@ -98,7 +100,7 @@ RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_
           ra_exe_unit.join_quals,
           {},
           {},
-          range > g_large_ndv_threshold
+          use_large_estimator
               ? makeExpr<Analyzer::LargeNDVEstimator>(ra_exe_unit.groupby_exprs)
               : makeExpr<Analyzer::NDVEstimator>(ra_exe_unit.groupby_exprs),
           SortInfo{{}, SortAlgorithm::Default, 0, 0},
