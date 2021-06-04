@@ -8898,6 +8898,11 @@ TEST(Select, Joins_FilterPushDown) {
         "R.y AND R.x < 20 AND S.y > 2 AND S.str <> 'foo' AND T.y < 18 AND T.x > 1 GROUP "
         "BY R.y ORDER BY R.y;",
         dt);
+      // BE-6050, filter pushdown for a query having subquery
+      c("SELECT COUNT(1) FROM coalesce_cols_test_1 WHERE y IN (SELECT MAX(R.y) FROM "
+        "coalesce_cols_test_1 R, (SELECT x, y FROM coalesce_cols_test_1) S WHERE R.y = "
+        "S.y AND s.x < -999);",
+        dt);
     }
   }
   // reloading default values
@@ -15444,6 +15449,16 @@ TEST(Update, SimpleFilter) {
     c("UPDATE simple_filter SET z = 2*z WHERE x < 6;", dt);
     c("SELECT * FROM simple_filter ORDER BY x, y, z;", dt);
     c("SELECT sum(x) FROM simple_filter WHERE x < 6;", dt);  // check metadata
+
+    // BE-6050
+    {
+      auto default_flag = g_enable_filter_push_down;
+      g_enable_filter_push_down = true;
+      c("UPDATE simple_filter SET x = 50 WHERE x IN (SELECT R.x FROM simple_filter R, "
+        "(SELECT x, y FROM simple_filter) S WHERE R.x = S.x AND S.y > 2021);",
+        dt);
+      g_enable_filter_push_down = default_flag;
+    }
   }
 }
 

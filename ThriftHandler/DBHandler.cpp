@@ -5986,6 +5986,10 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
          executor_device_type,
          first_n,
          at_most_n](const size_t executor_index) {
+          // if we find proper filters we need to "re-execute" the query
+          // with a modified query plan (i.e., which has pushdowned filter)
+          // otherwise this trial just executes the query and keeps corresponding query
+          // resultset in _return object
           filter_push_down_requests = execute_rel_alg(
               _return,
               query_state_proxy,
@@ -5998,34 +6002,43 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
               g_enable_filter_push_down && !g_cluster,
               explain_info,
               executor_index);
-          if (explain_info.justCalciteExplain() && filter_push_down_requests.empty()) {
-            // we only reach here if filter push down was enabled, but no filter
-            // push down candidate was found
-            _return.updateResultSet(query_ra, ExecutionResult::Explaination);
-          } else if (!filter_push_down_requests.empty()) {
-            CHECK(!locks.empty());
-            execute_rel_alg_with_filter_push_down(_return,
-                                                  query_state_proxy,
-                                                  query_ra,
-                                                  column_format,
-                                                  executor_device_type,
-                                                  first_n,
-                                                  at_most_n,
-                                                  explain_info.justExplain(),
-                                                  explain_info.justCalciteExplain(),
-                                                  filter_push_down_requests);
-
-          } else if (explain_info.justCalciteExplain() &&
-                     filter_push_down_requests.empty()) {
-            // return the ra as the result:
-            // If we reach here, the 'filter_push_down_request' turned out to be
-            // empty, i.e., no filter push down so we continue with the initial
-            // (unchanged) query's calcite explanation.
-            CHECK(!locks.empty());
-            query_ra =
-                parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_)
-                    .first.plan_result;
-            _return.updateResultSet(query_ra, ExecutionResult::Explaination);
+          if (explain_info.justCalciteExplain()) {
+            if (filter_push_down_requests.empty()) {
+              // we only reach here if filter push down was enabled, but no filter
+              // push down candidate was found
+              _return.updateResultSet(query_ra, ExecutionResult::Explaination);
+            } else {
+              CHECK(!locks.empty());
+              std::vector<TFilterPushDownInfo> filter_push_down_info;
+              for (const auto& req : filter_push_down_requests) {
+                TFilterPushDownInfo filter_push_down_info_for_request;
+                filter_push_down_info_for_request.input_prev = req.input_prev;
+                filter_push_down_info_for_request.input_start = req.input_start;
+                filter_push_down_info_for_request.input_next = req.input_next;
+                filter_push_down_info.push_back(filter_push_down_info_for_request);
+              }
+              query_ra = parse_to_ra(query_state_proxy,
+                                     query_str,
+                                     filter_push_down_info,
+                                     false,
+                                     system_parameters_)
+                             .first.plan_result;
+              _return.updateResultSet(query_ra, ExecutionResult::Explaination);
+            }
+          } else {
+            if (!filter_push_down_requests.empty()) {
+              CHECK(!locks.empty());
+              execute_rel_alg_with_filter_push_down(_return,
+                                                    query_state_proxy,
+                                                    query_ra,
+                                                    column_format,
+                                                    executor_device_type,
+                                                    first_n,
+                                                    at_most_n,
+                                                    explain_info.justExplain(),
+                                                    explain_info.justCalciteExplain(),
+                                                    filter_push_down_requests);
+            }
           }
         });
     CHECK(dispatch_queue_);
