@@ -1,0 +1,9 @@
+Struct omnisci_aws_sdk::SslConfig
+=================================
+
+.. doxygenstruct:: omnisci_aws_sdk::SslConfig
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

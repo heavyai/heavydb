@@ -1,0 +1,9 @@
+Class File_Namespace::TableFileMgr
+==================================
+
+.. doxygenclass:: File_Namespace::TableFileMgr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

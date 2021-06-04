@@ -1,0 +1,9 @@
+Class spatial_type::NRings
+==========================
+
+.. doxygenclass:: spatial_type::NRings
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

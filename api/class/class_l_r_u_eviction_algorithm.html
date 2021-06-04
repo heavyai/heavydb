@@ -41,7 +41,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Class LdapServer" href="class_ldap_server.html" />
-    <link rel="prev" title="Class JsonColumnSqlType" href="class_json_column_sql_type.html" /> 
+    <link rel="prev" title="Class JoinTargetRebaser" href="class_join_target_rebaser.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.5.0dev 327e1c4
+                5.7.0dev eef511a
               </div>
             
           
@@ -243,7 +243,11 @@
 <li class="toctree-l4"><a class="reference internal" href="../../execution/codegen.html#code-cache">7.4.5.3. Code Cache</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../../execution/codegen.html#troubleshooting">7.4.6. Troubleshooting</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../execution/codegen.html#troubleshooting">7.4.6. Troubleshooting</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../execution/codegen.html#log-files">7.4.6.1. Log Files</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../execution/codegen.html#automatic-llvm-ir-metadata">7.4.6.2. Automatic LLVM IR Metadata</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../execution/kernels.html">7.5. Execution Kernels</a><ul>
@@ -302,6 +306,11 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper.html">Class Analyzer::FunctionOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_function_oper_with_custom_type_handling.html">Class Analyzer::FunctionOperWithCustomTypeHandling</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_bin_oper.html">Class Analyzer::GeoBinOper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_column_var.html">Class Analyzer::GeoColumnVar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_constant.html">Class Analyzer::GeoConstant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_expr.html">Class Analyzer::GeoExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_function_operator.html">Class Analyzer::GeoFunctionOperator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_operator.html">Class Analyzer::GeoOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_u_oper.html">Class Analyzer::GeoUOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_integer_set.html">Class Analyzer::InIntegerSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_values.html">Class Analyzer::InValues</a></li>
@@ -397,6 +406,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_date_time_translator.html">Class DateTimeTranslator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_date_trunc_expr.html">Class DateTruncExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ddl_command.html">Class DdlCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_ddl_command_data.html">Class DdlCommandData</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ddl_command_executor.html">Class DdlCommandExecutor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_decimal_overflow_validator.html">Class DecimalOverflowValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_decoder.html">Class Decoder</a></li>
@@ -407,10 +417,10 @@
 <li class="toctree-l2"><a class="reference internal" href="class_diff_fixed_width_int.html">Class DiffFixedWidthInt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_distributed_loader.html">Class DistributedLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_distributed_query_runner.html">Class DistributedQueryRunner</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_distributed_validate.html">Class DistributedValidate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_drop_foreign_server_command.html">Class DropForeignServerCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_drop_foreign_table_command.html">Class DropForeignTableCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_dummy_persistent_foreign_storage.html">Class DummyPersistentForeignStorage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_column_details.html">Class EmbeddedDatabase::ColumnDetails</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_cursor.html">Class EmbeddedDatabase::Cursor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_cursor_impl.html">Class EmbeddedDatabase::CursorImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_embedded_database_1_1_d_b_engine.html">Class EmbeddedDatabase::DBEngine</a></li>
@@ -423,8 +433,10 @@
 <li class="toctree-l2"><a class="reference internal" href="class_execution_result.html">Class ExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_executor.html">Class Executor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_executor_1_1_fetch_cache_anchor.html">Class Executor::FetchCacheAnchor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_explained_query_hint.html">Class ExplainedQueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_expression_range.html">Class ExpressionRange</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_extension_function.html">Class ExtensionFunction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_extension_function_binding_error.html">Class ExtensionFunctionBindingError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_extension_functions_whitelist.html">Class ExtensionFunctionsWhitelist</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_external_call.html">Class ExternalCall</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_extract_expr.html">Class ExtractExpr</a></li>
@@ -433,9 +445,12 @@
 <li class="toctree-l2"><a class="reference internal" href="class_failed_to_create_slab.html">Class FailedToCreateSlab</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_failed_to_fetch_column.html">Class FailedToFetchColumn</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_failed_to_join_on_virtual_column.html">Class FailedToJoinOnVirtualColumn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_file___namespace_1_1_caching_file_buffer.html">Class File_Namespace::CachingFileBuffer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_file___namespace_1_1_caching_file_mgr.html">Class File_Namespace::CachingFileMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_file___namespace_1_1_file_buffer.html">Class File_Namespace::FileBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_file___namespace_1_1_file_mgr.html">Class File_Namespace::FileMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_file___namespace_1_1_global_file_mgr.html">Class File_Namespace::GlobalFileMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_file___namespace_1_1_table_file_mgr.html">Class File_Namespace::TableFileMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_first_try.html">Class FirstTry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_fixed_length_array_none_encoder.html">Class FixedLengthArrayNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_fixed_length_encoder.html">Class FixedLengthEncoder</a></li>
@@ -443,6 +458,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_fixed_width_real.html">Class FixedWidthReal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_fixed_width_small_date.html">Class FixedWidthSmallDate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_fixed_width_unsigned.html">Class FixedWidthUnsigned</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_flex_lexer.html">Class FlexLexer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_for.html">Class For</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_foreign_storage_buffer.html">Class ForeignStorageBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_foreign_storage_buffer_mgr.html">Class ForeignStorageBufferMgr</a></li>
@@ -472,9 +488,11 @@
 <li class="toctree-l2"><a class="reference internal" href="class_gpu_shared_memory_context.html">Class GpuSharedMemoryContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_grantee.html">Class Grantee</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_group_by_and_aggregate.html">Class GroupByAndAggregate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_hash_join.html">Class HashJoin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_join_fail.html">Class HashJoinFail</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_hash_table.html">Class HashTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_hash_table_cache.html">Class HashTableCache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_type_cache.html">Class HashTypeCache</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_hint_explained.html">Class HintExplained</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_i_cmp.html">Class ICmp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_in_values_bitmap.html">Class InValuesBitmap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_input_col_descriptor.html">Class InputColDescriptor</a></li>
@@ -485,12 +503,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_intervals.html">Class Intervals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_intervals_1_1_iterator.html">Class Intervals::Iterator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_join_covered_qual_visitor.html">Class JoinCoveredQualVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_join_hash_table.html">Class JoinHashTable</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_join_hash_table_interface.html">Class JoinHashTableInterface</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_join_loop.html">Class JoinLoop</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_join_target_rebaser.html">Class JoinTargetRebaser</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_json_column_encoding.html">Class JsonColumnEncoding</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_json_column_sql_type.html">Class JsonColumnSqlType</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class LRUEvictionAlgorithm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ldap_server.html">Class LdapServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_leaf_aggregator.html">Class LeafAggregator</a></li>
@@ -505,6 +519,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_modify_manipulation_target.html">Class ModifyManipulationTarget</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_mutable_cache_persistent_storage_mgr.html">Class MutableCachePersistentStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_native_execution_error.html">Class NativeExecutionError</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_needs_one_to_many_hash.html">Class NeedsOneToManyHash</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_no_entry_found_exception.html">Class NoEntryFoundException</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_none_encoder.html">Class NoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_null_aware_validator.html">Class NullAwareValidator</a></li>
@@ -513,8 +528,13 @@
 <li class="toctree-l2"><a class="reference internal" href="class_out_of_memory.html">Class OutOfMemory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_out_of_render_memory.html">Class OutOfRenderMemory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_overflow_or_underflow.html">Class OverflowOrUnderflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_overlaps_hash_table_cache.html">Class OverlapsHashTableCache</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_overlaps_hash_table_too_big.html">Class OverlapsHashTableTooBig</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_overlaps_join_hash_table.html">Class OverlapsJoinHashTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_parse_i_r_error.html">Class ParseIRError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_add_column_stmt.html">Class Parser::AddColumnStmt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_alter_table_param_stmt.html">Class Parser::AlterTableParamStmt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_alter_table_stmt.html">Class Parser::AlterTableStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_alter_user_stmt.html">Class Parser::AlterUserStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_array_literal.html">Class Parser::ArrayLiteral</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_assignment.html">Class Parser::Assignment</a></li>
@@ -609,6 +629,9 @@
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_user_literal.html">Class Parser::UserLiteral</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_validate_stmt.html">Class Parser::ValidateStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_wrapper.html">Class ParserWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_perfect_hash_table.html">Class PerfectHashTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_perfect_join_hash_table.html">Class PerfectJoinHashTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_perfect_join_hash_table_builder.html">Class PerfectJoinHashTableBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_persistent_foreign_storage_interface.html">Class PersistentForeignStorageInterface</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_persistent_storage_mgr.html">Class PersistentStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_pki_server.html">Class PkiServer</a></li>
@@ -692,6 +715,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_row_to_column_loader.html">Class RowToColumnLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_s3_archive.html">Class S3Archive</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_s3_parquet_archive.html">Class S3ParquetArchive</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_s_q_l_lexer.html">Class SQLLexer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_s_q_l_type_info.html">Class SQLTypeInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_saml_server.html">Class SamlServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_code_generator.html">Class ScalarCodeGenerator</a></li>
@@ -700,20 +724,23 @@
 <li class="toctree-l2"><a class="reference internal" href="class_scope_guard.html">Class ScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_shared_kernel_context.html">Class SharedKernelContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_show_disk_cache_usage_command.html">Class ShowDiskCacheUsageCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_foreign_servers_command.html">Class ShowForeignServersCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_show_table_details_command.html">Class ShowTableDetailsCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_tables_command.html">Class ShowTablesCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_simple_allocator.html">Class SimpleAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sort_field.html">Class SortField</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_speculative_top_n_blacklist.html">Class SpeculativeTopNBlacklist</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_speculative_top_n_failed.html">Class SpeculativeTopNFailed</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_speculative_top_n_map.html">Class SpeculativeTopNMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sqlite_connector.html">Class SqliteConnector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sqlite_mem_database.html">Class SqliteMemDatabase</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_sring_const_in_result_set.html">Class SringConstInResultSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_storage_i_o_facility.html">Class StorageIOFacility</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_storage_i_o_facility_1_1_transaction_parameters.html">Class StorageIOFacility::TransactionParameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_storage_i_o_facility_1_1_update_transaction_parameters.html">Class StorageIOFacility::UpdateTransactionParameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_streaming_top_n_not_supported_in_render_query.html">Class StreamingTopNNotSupportedInRenderQuery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_streaming_top_n_o_o_m.html">Class StreamingTopNOOM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_string_const_in_result_set.html">Class StringConstInResultSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary.html">Class StringDictionary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_client.html">Class StringDictionaryClient</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_generations.html">Class StringDictionaryGenerations</a></li>
@@ -744,6 +771,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_used_columns_visitor.html">Class UsedColumnsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_user.html">Class User</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_value.html">Class Value</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_vector_view.html">Class VectorView</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_watchdog_exception.html">Class WatchdogException</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_window_function_context.html">Class WindowFunctionContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_window_project_node_context.html">Class WindowProjectNodeContext</a></li>
@@ -751,16 +779,21 @@
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_bench_analyzer.html">Class analyze_benchmark::BenchAnalyzer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_benchmark_loader.html">Class analyze_benchmark::BenchmarkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanalyze__benchmark_1_1_pretty_print.html">Class analyze_benchmark::PrettyPrint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_arrow_result_set_converter_8cpp_03_1_1_result_set_buffer.html">Class anonymous_namespace{ArrowResultSetConverter.cpp}::ResultSetBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_arrow_result_set_converter_8cpp_03_1_1null__type.html">Class anonymous_namespace{ArrowResultSetConverter.cpp}::null_type</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_ddl_command_data_impl.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::DdlCommandDataImpl</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_json_column_encoding.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::JsonColumnEncoding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_json_column_sql_type.html">Class anonymous_namespace{DdlCommandExecutor.cpp}::JsonColumnSqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_execute_8cpp_03_1_1_out_vec_owner.html">Class anonymous_namespace{Execute.cpp}::OutVecOwner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_expression_rewrite_8cpp_03_1_1_array_element_string_literal_encoding_visitor.html">Class anonymous_namespace{ExpressionRewrite.cpp}::ArrayElementStringLiteralEncodingVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_expression_rewrite_8cpp_03_1_1_constant_folding_visitor.html">Class anonymous_namespace{ExpressionRewrite.cpp}::ConstantFoldingVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_expression_rewrite_8cpp_03_1_1_or_to_in_visitor.html">Class anonymous_namespace{ExpressionRewrite.cpp}::OrToInVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_expression_rewrite_8cpp_03_1_1_recursive_or_to_in_visitor.html">Class anonymous_namespace{ExpressionRewrite.cpp}::RecursiveOrToInVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_from_table_reordering_8cpp_03_1_1_scheduling_dependency_tracking.html">Class anonymous_namespace{FromTableReordering.cpp}::SchedulingDependencyTracking</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_i_r_codegen_8cpp_03_1_1_expr_table_id_visitor.html">Class anonymous_namespace{IRCodegen.cpp}::ExprTableIdVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_join_filter_push_down_8cpp_03_1_1_bind_filter_to_outermost_visitor.html">Class anonymous_namespace{JoinFilterPushDown.cpp}::BindFilterToOutermostVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_join_filter_push_down_8cpp_03_1_1_collect_input_columns_visitor.html">Class anonymous_namespace{JoinFilterPushDown.cpp}::CollectInputColumnsVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_join_hash_table_8cpp_03_1_1_needs_one_to_many_hash.html">Class anonymous_namespace{JoinHashTable.cpp}::NeedsOneToManyHash</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_bucket_size_tuner.html">Class anonymous_namespace{OverlapsJoinHashTable.cpp}::BucketSizeTuner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rel_alg_physical_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RelAlgPhysicalInputsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rel_alg_physical_table_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RelAlgPhysicalTableInputsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rex_physical_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RexPhysicalInputsVisitor</a></li>
@@ -789,6 +822,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_u_d_f_compiler_8cpp_03_1_1_function_decl_visitor.html">Class anonymous_namespace{UDFCompiler.cpp}::FunctionDeclVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_u_d_f_compiler_8cpp_03_1_1_handle_decl_action.html">Class anonymous_namespace{UDFCompiler.cpp}::HandleDeclAction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_u_d_f_compiler_8cpp_03_1_1_tool_factory.html">Class anonymous_namespace{UDFCompiler.cpp}::ToolFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classbench__batch__streaming__ingest_1_1_omni_con.html">Class bench_batch_streaming_ingest::OmniCon</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classbench__update_1_1_omni_sci_con.html">Class bench_update::OmniSciCon</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classboost__variant__accessor.html">Class boost_variant_accessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1bench_1_1_benchmark.html">Class com::mapd::bench::Benchmark</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1bench_1_1_benchmark_cloud.html">Class com::mapd::bench::BenchmarkCloud</a></li>
@@ -802,6 +837,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_all.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::All</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_any.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Any</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_approx_count_distinct.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ApproxCountDistinct</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_approx_median.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ApproxMedian</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_array_length.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ArrayLength</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_cast_to_geography.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::CastToGeography</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_char_length.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::CharLength</a></li>
@@ -811,7 +847,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_datetime.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Datetime</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_dedup_function.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::DedupFunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_ext_function.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ExtFunction</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_get_max_with_row_offset.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::GetMaxWithRowOffset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_ext_table_function.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ExtTableFunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_key_for_string.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::KeyForString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_last_sample.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::LastSample</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_length.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Length</a></li>
@@ -832,9 +868,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_ramp_function.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::RampFunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_regexp_like.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::RegexpLike</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_regexp_like_1_1_escape_optional.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::RegexpLike::EscapeOptional</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_row_add_sub.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::RowAddSub</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_row_adder.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::RowAdder</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_row_copier.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::RowCopier</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___approx___overlaps.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Approx_Overlaps</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___area.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Area</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___buffer.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Buffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___centroid.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Centroid</a></li>
@@ -908,6 +942,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_foreign_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterForeignTable::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server.html">Class com::mapd::parser::extension::ddl::SqlAlterServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterServer::Builder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_table.html">Class com::mapd::parser::extension::ddl::SqlAlterTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterTable::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_attribute_definition.html">Class com::mapd::parser::extension::ddl::SqlAttributeDefinition</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_check_constraint.html">Class com::mapd::parser::extension::ddl::SqlCheckConstraint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_column_declaration.html">Class com::mapd::parser::extension::ddl::SqlColumnDeclaration</a></li>
@@ -921,17 +957,23 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_ddl_nodes.html">Class com::mapd::parser::extension::ddl::SqlDdlNodes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlDropForeignTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_server.html">Class com::mapd::parser::extension::ddl::SqlDropServer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_table.html">Class com::mapd::parser::extension::ddl::SqlDropTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_user_mapping.html">Class com::mapd::parser::extension::ddl::SqlDropUserMapping</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_view.html">Class com::mapd::parser::extension::ddl::SqlDropView</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_filter.html">Class com::mapd::parser::extension::ddl::SqlFilter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_insert_into_table.html">Class com::mapd::parser::extension::ddl::SqlInsertIntoTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_key_constraint.html">Class com::mapd::parser::extension::ddl::SqlKeyConstraint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_kill_query.html">Class com::mapd::parser::extension::ddl::SqlKillQuery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_options_builder.html">Class com::mapd::parser::extension::ddl::SqlOptionsBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_refresh_foreign_tables.html">Class com::mapd::parser::extension::ddl::SqlRefreshForeignTables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_rename_table.html">Class com::mapd::parser::extension::ddl::SqlRenameTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_command.html">Class com::mapd::parser::extension::ddl::SqlShowCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html">Class com::mapd::parser::extension::ddl::SqlShowDatabases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_disk_cache_usage.html">Class com::mapd::parser::extension::ddl::SqlShowDiskCacheUsage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_queries.html">Class com::mapd::parser::extension::ddl::SqlShowQueries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_table_details.html">Class com::mapd::parser::extension::ddl::SqlShowTableDetails</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_tables.html">Class com::mapd::parser::extension::ddl::SqlShowTables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_sessions.html">Class com::mapd::parser::extension::ddl::SqlShowUserSessions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_user_mapping_test.html">Class com::mapd::parser::extension::ddl::UserMappingTest</a></li>
@@ -967,6 +1009,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_date_time_test.html">Class com::mapd::tests::DateTimeTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_distributed_concurrency_test.html">Class com::mapd::tests::DistributedConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_eagain_concurrency_test.html">Class com::mapd::tests::EagainConcurrencyTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_foreign_storage_concurrency_test.html">Class com::mapd::tests::ForeignStorageConcurrencyTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_foreign_table_refresh_concurrency_test.html">Class com::mapd::tests::ForeignTableRefreshConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test.html">Class com::mapd::tests::ImportAlterValidateSelectConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_mapd_asserts.html">Class com::mapd::tests::MapdAsserts</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_mapd_test_client.html">Class com::mapd::tests::MapdTestClient</a></li>
@@ -1011,7 +1055,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_statement.html">Class com::omnisci::jdbc::OmniSciStatement</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_statement_test.html">Class com::omnisci::jdbc::OmniSciStatementTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_omni_sci_type.html">Class com::omnisci::jdbc::OmniSciType</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_param__pair.html">Class com::omnisci::jdbc::Param_pair</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_options.html">Class com::omnisci::jdbc::Options</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_property__loader.html">Class com::omnisci::jdbc::Property_loader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcreate__table_1_1_column.html">Class create_table::Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcreate__table_1_1_synthetic_table.html">Class create_table::SyntheticTable</a></li>
@@ -1020,15 +1064,20 @@
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_file_path_whitelist.html">Class ddl_utils::FilePathWhitelist</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_sql_type.html">Class ddl_utils::SqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classdetails_1_1_rel_alg_dispatcher.html">Class details::RelAlgDispatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_abstract_file_storage_data_wrapper.html">Class foreign_storage::AbstractFileStorageDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_archive_wrapper.html">Class foreign_storage::ArchiveWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_caching_foreign_storage_mgr.html">Class foreign_storage::CachingForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_compressed_file_reader.html">Class foreign_storage::CompressedFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_reader_s3.html">Class foreign_storage::CsvReaderS3</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_date_in_seconds_bounds_validator.html">Class foreign_storage::DateInSecondsBoundsValidator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader_map.html">Class foreign_storage::FileReaderMap</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_float_point_validator.html">Class foreign_storage::FloatPointValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper.html">Class foreign_storage::ForeignDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper_factory.html">Class foreign_storage::ForeignDataWrapperFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_buffer.html">Class foreign_storage::ForeignStorageBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_cache.html">Class foreign_storage::ForeignStorageCache</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_exception.html">Class foreign_storage::ForeignStorageException</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_table_refresh_scheduler.html">Class foreign_storage::ForeignTableRefreshScheduler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_table_schema.html">Class foreign_storage::ForeignTableSchema</a></li>
@@ -1037,9 +1086,9 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_mock_foreign_data_wrapper.html">Class foreign_storage::MockForeignDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_multi_file_reader.html">Class foreign_storage::MultiFileReader</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_multi_s3_reader.html">Class foreign_storage::MultiS3Reader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_array_encoder.html">Class foreign_storage::ParquetArrayEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_data_wrapper.html">Class foreign_storage::ParquetDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_from_timestamp_encoder.html">Class foreign_storage::ParquetDateFromTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_in_seconds_encoder.html">Class foreign_storage::ParquetDateInSecondsEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_decimal_encoder.html">Class foreign_storage::ParquetDecimalEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_encoder.html">Class foreign_storage::ParquetEncoder</a></li>
@@ -1048,7 +1097,6 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_geospatial_encoder.html">Class foreign_storage::ParquetGeospatialEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_in_place_encoder.html">Class foreign_storage::ParquetInPlaceEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_metadata_validator.html">Class foreign_storage::ParquetMetadataValidator</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_s3_file_system.html">Class foreign_storage::ParquetS3FileSystem</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_scalar_encoder.html">Class foreign_storage::ParquetScalarEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_string_encoder.html">Class foreign_storage::ParquetStringEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_string_none_encoder.html">Class foreign_storage::ParquetStringNoneEncoder</a></li>
@@ -1057,6 +1105,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_variable_length_array_encoder.html">Class foreign_storage::ParquetVariableLengthArrayEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_file_reader.html">Class foreign_storage::SingleFileReader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_timestamp_bounds_validator.html">Class foreign_storage::TimestampBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_data_stream_sink.html">Class import_export::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_detector.html">Class import_export::Detector</a></li>
@@ -1095,6 +1144,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_log_options.html">Class logger::LogOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_logger.html">Class logger::Logger</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classmigrations_1_1_migration_mgr.html">Class migrations::MigrationMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1_j_s_o_n.html">Class omnisci::JSON</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1_u_u_i_d.html">Class omnisci::UUID</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1common_1_1ttypes_1_1_t_datum_type.html">Class omnisci::common::ttypes::TDatumType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1common_1_1ttypes_1_1_t_device_type.html">Class omnisci::common::ttypes::TDeviceType</a></li>
@@ -1221,6 +1271,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1_omni_sci_1_1get__table__epoch__by__name__args.html">Class omnisci::thrift::OmniSci::get_table_epoch_by_name_args</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1_omni_sci_1_1get__table__epoch__by__name__result.html">Class omnisci::thrift::OmniSci::get_table_epoch_by_name_result</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1_omni_sci_1_1get__table__epoch__result.html">Class omnisci::thrift::OmniSci::get_table_epoch_result</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1_omni_sci_1_1get__table__epochs__args.html">Class omnisci::thrift::OmniSci::get_table_epochs_args</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1_omni_sci_1_1get__table__epochs__result.html">Class omnisci::thrift::OmniSci::get_table_epochs_result</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1_omni_sci_1_1get__tables__args.html">Class omnisci::thrift::OmniSci::get_tables_args</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1_omni_sci_1_1get__tables__meta__args.html">Class omnisci::thrift::OmniSci::get_tables_meta_args</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1_omni_sci_1_1get__tables__meta__result.html">Class omnisci::thrift::OmniSci::get_tables_meta_result</a></li>
@@ -1271,6 +1323,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1_omni_sci_1_1set__table__epoch__by__name__args.html">Class omnisci::thrift::OmniSci::set_table_epoch_by_name_args</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1_omni_sci_1_1set__table__epoch__by__name__result.html">Class omnisci::thrift::OmniSci::set_table_epoch_by_name_result</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1_omni_sci_1_1set__table__epoch__result.html">Class omnisci::thrift::OmniSci::set_table_epoch_result</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1_omni_sci_1_1set__table__epochs__args.html">Class omnisci::thrift::OmniSci::set_table_epochs_args</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1_omni_sci_1_1set__table__epochs__result.html">Class omnisci::thrift::OmniSci::set_table_epochs_result</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1_omni_sci_1_1share__dashboard__args.html">Class omnisci::thrift::OmniSci::share_dashboard_args</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1_omni_sci_1_1share__dashboard__result.html">Class omnisci::thrift::OmniSci::share_dashboard_result</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1_omni_sci_1_1share__dashboards__args.html">Class omnisci::thrift::OmniSci::share_dashboards_args</a></li>
@@ -1352,12 +1406,14 @@
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1ttypes_1_1_t_role.html">Class omnisci::thrift::ttypes::TRole</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1ttypes_1_1_t_row.html">Class omnisci::thrift::ttypes::TRow</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1ttypes_1_1_t_row_set.html">Class omnisci::thrift::ttypes::TRowSet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1ttypes_1_1_t_server_permissions.html">Class omnisci::thrift::ttypes::TServerPermissions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1ttypes_1_1_t_server_status.html">Class omnisci::thrift::ttypes::TServerStatus</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1ttypes_1_1_t_session_info.html">Class omnisci::thrift::ttypes::TSessionInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1ttypes_1_1_t_step_result.html">Class omnisci::thrift::ttypes::TStepResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1ttypes_1_1_t_string_row.html">Class omnisci::thrift::ttypes::TStringRow</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1ttypes_1_1_t_string_value.html">Class omnisci::thrift::ttypes::TStringValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1ttypes_1_1_t_table_details.html">Class omnisci::thrift::ttypes::TTableDetails</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1ttypes_1_1_t_table_epoch_info.html">Class omnisci::thrift::ttypes::TTableEpochInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1ttypes_1_1_t_table_generation.html">Class omnisci::thrift::ttypes::TTableGeneration</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1ttypes_1_1_t_table_meta.html">Class omnisci::thrift::ttypes::TTableMeta</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1thrift_1_1ttypes_1_1_t_table_permissions.html">Class omnisci::thrift::ttypes::TTablePermissions</a></li>
@@ -1373,21 +1429,35 @@
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1externalize_1_1_map_d_rel_json_reader.html">Class org::apache::calcite::rel::externalize::MapDRelJsonReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1externalize_1_1_map_d_rel_json_writer.html">Class org::apache::calcite::rel::externalize::MapDRelJsonWriter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_dynamic_filter_join_rule.html">Class org::apache::calcite::rel::rules::DynamicFilterJoinRule</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_inject_filter_rule.html">Class org::apache::calcite::rel::rules::InjectFilterRule</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_outer_join_opt_via_null_rejection_rule.html">Class org::apache::calcite::rel::rules::OuterJoinOptViaNullRejectionRule</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_query_optimization_rules.html">Class org::apache::calcite::rel::rules::QueryOptimizationRules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1rel_1_1rules_1_1_restriction.html">Class org::apache::calcite::rel::rules::Restriction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_blackboard.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::Blackboard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_deferred_lookup.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::DeferredLookup</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_no_op_sub_query_converter.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::NoOpSubQueryConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1sql2rel_1_1_sql_to_rel_converter_1_1_rex_access_shuttle.html">Class org::apache::calcite::sql2rel::SqlToRelConverter::RexAccessShuttle</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classorg_1_1apache_1_1calcite_1_1util_1_1_escaped_string_json_builder.html">Class org::apache::calcite::util::EscapedStringJsonBuilder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classquantile_1_1detail_1_1_centroids_memory.html">Class quantile::detail::CentroidsMemory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classquantile_1_1detail_1_1_centroids_merger.html">Class quantile::detail::CentroidsMerger</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classquantile_1_1detail_1_1_t_digest.html">Class quantile::detail::TDigest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classquantile_1_1detail_1_1anonymous__namespace_02quantile_8h_03_1_1_skipped.html">Class quantile::detail::anonymous_namespace{quantile.h}::Skipped</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_query_state.html">Class query_state::QueryState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_query_state_proxy.html">Class query_state::QueryStateProxy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_query_states.html">Class query_state::QueryStates</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_std_log.html">Class query_state::StdLog</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_std_log_data.html">Class query_state::StdLogData</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_timer.html">Class query_state::Timer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_codegen.html">Class spatial_type::Codegen</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_n_points.html">Class spatial_type::NPoints</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_n_rings.html">Class spatial_type::NRings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_point_accessors.html">Class spatial_type::PointAccessors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_point_n.html">Class spatial_type::PointN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_start_end_point.html">Class spatial_type::StartEndPoint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classstring__view__unordered__map.html">Class string_view_unordered_map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classsystem__validator_1_1_distributed_validate.html">Class system_validator::DistributedValidate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classsystem__validator_1_1_single_node_validator.html">Class system_validator::SingleNodeValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classtable__functions_1_1_table_function.html">Class table_functions::TableFunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classtable__functions_1_1_table_functions_factory.html">Class table_functions::TableFunctionsFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classtests_1_1test__connection_1_1_test_connect.html">Class tests::test_connection::TestConnect</a></li>
@@ -1401,15 +1471,16 @@
 <li class="toctree-l2"><a class="reference internal" href="classthreadpool_1_1_futures_thread_pool.html">Class threadpool::FuturesThreadPool</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classthreadpool_1_1_futures_thread_pool_3_01_t_00_01std_1_1enable__if__t_3_01std_1_1is__object_3_01_t_01_4_1_1value_01_4_01_4.html">Class threadpool::FuturesThreadPool&lt; T, std::enable_if_t&lt; std::is_object&lt; T &gt;::value &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classthreadpool_1_1_futures_thread_pool_base.html">Class threadpool::FuturesThreadPoolBase</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classyy_flex_lexer.html">Class yyFlexLexer</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../structlist.html">Struct list</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_access_privileges.html">Struct AccessPrivileges</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_aggregated_result.html">Struct AggregatedResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_analyzer_1_1_order_entry.html">Struct Analyzer::OrderEntry</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_analyzer_1_1anonymous__namespace_02_analyzer_8cpp_03_1_1_int_frac_repr.html">Struct Analyzer::anonymous_namespace{Analyzer.cpp}::IntFracRepr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array.html">Struct Array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_converter_factory.html">Struct ArrayConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_load_codegen.html">Struct ArrayLoadCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_array_value_converter.html">Struct ArrayValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrays_converter_factory.html">Struct ArraysConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_fragment.html">Struct ArrowFragment</a></li>
@@ -1419,10 +1490,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_result_set_converter_1_1_serialized_arrow_output.html">Struct ArrowResultSetConverter::SerializedArrowOutput</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_auth_metadata.html">Struct AuthMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_automatic_i_r_metadata_guard_1_1_instruction_info.html">Struct AutomaticIRMetadataGuard::InstructionInfo</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_baseline_join_hash_table_1_1_columns_for_device.html">Struct BaselineJoinHashTable::ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_bounds.html">Struct Bounds</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_buffer___namespace_1_1_buffer_seg.html">Struct Buffer_Namespace::BufferSeg</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_buffer_range.html">Struct BufferRange</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_custom_expression.html">Struct Catalog_Namespace::CustomExpression</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_d_b_metadata.html">Struct Catalog_Namespace::DBMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_d_b_summary.html">Struct Catalog_Namespace::DBSummary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_table_epoch_info.html">Struct Catalog_Namespace::TableEpochInfo</a></li>
@@ -1442,6 +1513,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column.html">Struct Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_list.html">Struct ColumnList</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_columns_for_device.html">Struct ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_result.html">Struct CompilationResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_composite_key_info.html">Struct CompositeKeyInfo</a></li>
@@ -1462,26 +1535,37 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_dataframe_table_descriptor.html">Struct DataframeTableDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_date_time_parser_1_1_date_time.html">Struct DateTimeParser::DateTime</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_decoded_join_hash_buffer_entry.html">Struct DecodedJoinHashBufferEntry</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_deleted_column_stats.html">Struct DeletedColumnStats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_device_array_datum.html">Struct DeviceArrayDatum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_diamond_codegen.html">Struct DiamondCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_dict_descriptor.html">Struct DictDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_dictionary_converter_factory.html">Struct DictionaryConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_dictionary_value_converter.html">Struct DictionaryValueConverter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_disk_cache_config.html">Struct DiskCacheConfig</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_distributed_execution_details.html">Struct DistributedExecutionDetails</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_do_nothing_deleter.html">Struct DoNothingDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_enable_bitmask_ops.html">Struct EnableBitmaskOps</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_epoch.html">Struct Epoch</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_execution_kernel_descriptor.html">Struct ExecutionKernelDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_execution_options.html">Struct ExecutionOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_execution_unit_sql.html">Struct ExecutionUnitSql</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_executor_1_1_executor_mutex_holder.html">Struct Executor::ExecutorMutexHolder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_executor_1_1_group_col_l_l_v_m_value.html">Struct Executor::GroupColLLVMValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_executor_1_1_join_hash_table_or_error.html">Struct Executor::JoinHashTableOrError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_explain_info.html">Struct ExplainInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_external_query_output_spec.html">Struct ExternalQueryOutputSpec</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_external_query_table.html">Struct ExternalQueryTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fetch_result.html">Struct FetchResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_disk_cache_config.html">Struct File_Namespace::DiskCacheConfig</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_epoched_page.html">Struct File_Namespace::EpochedPage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_file_info.html">Struct File_Namespace::FileInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_file_metadata.html">Struct File_Namespace::FileMetadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_file_mgr_params.html">Struct File_Namespace::FileMgrParams</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_header_info.html">Struct File_Namespace::HeaderInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_multi_page.html">Struct File_Namespace::MultiPage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_open_files_result.html">Struct File_Namespace::OpenFilesResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_page.html">Struct File_Namespace::Page</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_page_mapping.html">Struct File_Namespace::PageMapping</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_storage_stats.html">Struct File_Namespace::StorageStats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1read_thread_d_s.html">Struct File_Namespace::readThreadDS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_filter_selectivity.html">Struct FilterSelectivity</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_foreign_storage_column_buffer.html">Struct ForeignStorageColumnBuffer</a></li>
@@ -1489,6 +1573,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_array_chunk_converter.html">Struct Fragmenter_Namespace::ArrayChunkConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_block_with_column_id.html">Struct Fragmenter_Namespace::BlockWithColumnId</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_chunk_to_insert_data_converter.html">Struct Fragmenter_Namespace::ChunkToInsertDataConverter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_chunk_update_stats.html">Struct Fragmenter_Namespace::ChunkUpdateStats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_date_chunk_converter.html">Struct Fragmenter_Namespace::DateChunkConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_fixed_len_array_chunk_converter.html">Struct Fragmenter_Namespace::FixedLenArrayChunkConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_insert_data.html">Struct Fragmenter_Namespace::InsertData</a></li>
@@ -1497,6 +1582,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_scalar_chunk_converter.html">Struct Fragmenter_Namespace::ScalarChunkConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_shard_data_owner.html">Struct Fragmenter_Namespace::ShardDataOwner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_string_chunk_converter.html">Struct Fragmenter_Namespace::StringChunkConverter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragmenter___namespace_1_1_update_values_stats.html">Struct Fragmenter_Namespace::UpdateValuesStats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fragments_per_table.html">Struct FragmentsPerTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_free_deleter.html">Struct FreeDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_function_1_1_named_arg.html">Struct Function::NamedArg</a></li>
@@ -1539,7 +1625,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_wkt_serializer_3_01k_p_o_l_y_g_o_n_01_4.html">Struct GeoWktSerializer&lt; kPOLYGON &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geospatial_1_1anonymous__namespace_02_types_8cpp_03_1_1_hex_digit_to_decimal_table.html">Struct Geospatial::anonymous_namespace{Types.cpp}::HexDigitToDecimalTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_gpu_group_by_buffers.html">Struct GpuGroupByBuffers</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_group_by_and_aggregate_1_1_diamond_codegen.html">Struct GroupByAndAggregate::DiamondCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_group_by_buffer_layout_info.html">Struct GroupByBufferLayoutInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
@@ -1564,7 +1649,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_column_typed.html">Struct JoinColumnTyped</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_column_typed_1_1_slice.html">Struct JoinColumnTyped::Slice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_condition.html">Struct JoinCondition</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_hash_table_1_1_join_hash_table_cache_key.html">Struct JoinHashTable::JoinHashTableCacheKey</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_info.html">Struct JoinInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_join_loop_domain.html">Struct JoinLoopDomain</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_key_accessor.html">Struct KeyAccessor</a></li>
@@ -1577,6 +1661,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_numeric_value_converter.html">Struct NumericValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_object_role_descriptor.html">Struct ObjectRoleDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_one_integer_column_row.html">Struct OneIntegerColumnRow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_overlaps_hash_table_cache_key.html">Struct OverlapsHashTableCacheKey</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_overlaps_join_conjunction.html">Struct OverlapsJoinConjunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_overlaps_key_handler.html">Struct OverlapsKeyHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_case_sensitive_validate.html">Struct Parser::CaseSensitiveValidate</a></li>
@@ -1585,27 +1670,30 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_default_validate_3_01_string_literal_01_4.html">Struct Parser::DefaultValidate&lt; StringLiteral &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_distributed_connector.html">Struct Parser::DistributedConnector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_local_connector.html">Struct Parser::LocalConnector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_positive_or_zero_validate.html">Struct Parser::PositiveOrZeroValidate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_d_b.html">Struct Parser::ShouldInvalidateSessionsByDB</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_d_b_3_01_drop_d_b_stmt_01_4.html">Struct Parser::ShouldInvalidateSessionsByDB&lt; DropDBStmt &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_d_b_3_01_rename_database_stmt_01_4.html">Struct Parser::ShouldInvalidateSessionsByDB&lt; RenameDatabaseStmt &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_user.html">Struct Parser::ShouldInvalidateSessionsByUser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_user_3_01_drop_user_stmt_01_4.html">Struct Parser::ShouldInvalidateSessionsByUser&lt; DropUserStmt &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_user_3_01_rename_user_stmt_01_4.html">Struct Parser::ShouldInvalidateSessionsByUser&lt; RenameUserStmt &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_perfect_join_hash_table_1_1_join_hash_table_cache_key.html">Struct PerfectJoinHashTable::JoinHashTableCacheKey</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_physical_input.html">Struct PhysicalInput</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_plan_state.html">Struct PlanState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_pod_order_entry.html">Struct PodOrderEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_pushed_down_filter_info.html">Struct PushedDownFilterInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_quals_conjunctive_form.html">Struct QualsConjunctiveForm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_execution_properties.html">Struct QueryExecutionProperties</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_hint.html">Struct QueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_info.html">Struct QueryInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_output_buffer_memory_manager.html">Struct QueryOutputBufferMemoryManager</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_step_execution_result.html">Struct QueryStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_reduction_code.html">Struct ReductionCode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_registered_query_hint.html">Struct RegisteredQueryHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html">Struct RelAlgExecutionUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_1_1_table_function_work_unit.html">Struct RelAlgExecutor::TableFunctionWorkUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_1_1_work_unit.html">Struct RelAlgExecutor::WorkUnit</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_rel_alg_executor_traits.html">Struct RelAlgExecutorTraits</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_render_query_options.html">Struct RenderQueryOptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_restriction.html">Struct Restriction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_column_wise_target_accessor.html">Struct ResultSet::ColumnWiseTargetAccessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_query_execution_timings.html">Struct ResultSet::QueryExecutionTimings</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_result_set_comparator.html">Struct ResultSet::ResultSetComparator</a></li>
@@ -1632,9 +1720,12 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_value_converter.html">Struct StringValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_system_parameters.html">Struct SystemParameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_table_descriptor.html">Struct TableDescriptor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_table_descriptor_update_params.html">Struct TableDescriptorUpdateParams</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_table_function_execution_unit.html">Struct TableFunctionExecutionUnit</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_table_generation.html">Struct TableGeneration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_table_metadata.html">Struct TableMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_table_privileges.html">Struct TablePrivileges</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_table_update_metadata.html">Struct TableUpdateMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_target_expr_codegen.html">Struct TargetExprCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_target_expr_codegen_builder.html">Struct TargetExprCodegenBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_target_info.html">Struct TargetInfo</a></li>
@@ -1664,6 +1755,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_force_disconnect.html">Struct anonymous_namespace{DBHandler.cpp}::ForceDisconnect</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_projection_tokens_for_completion.html">Struct anonymous_namespace{DBHandler.cpp}::ProjectionTokensForCompletion</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_date_truncate_8cpp_03_1_1_era_time.html">Struct anonymous_namespace{DateTruncate.cpp}::EraTime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_aggregrated_storage_stats.html">Struct anonymous_namespace{DdlCommandExecutor.cpp}::AggregratedStorageStats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_decoded_string.html">Struct anonymous_namespace{ExternalExecutor.cpp}::DecodedString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_cursor.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciCursor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_vtab.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciVtab</a></li>
@@ -1671,7 +1763,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_data_source_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRDataSourceDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_feature_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRFeatureDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_spatial_reference_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRSpatialReferenceDeleter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_executor_mutex_holder.html">Struct anonymous_namespace{RelAlgExecutor.cpp}::ExecutorMutexHolder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_hash_table_props.html">Struct anonymous_namespace{OverlapsJoinHashTable.cpp}::HashTableProps</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_tuning_state.html">Struct anonymous_namespace{OverlapsJoinHashTable.cpp}::TuningState</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_error_info.html">Struct anonymous_namespace{RelAlgExecutor.cpp}::ErrorInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_lazy_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoLazyFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_query_output_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoQueryOutputFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_target_value_builder.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoTargetValueBuilder</a></li>
@@ -1679,7 +1773,12 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_typed_data_accessors_8h_03_1_1_null_sentinel_supplier_1_1_int_selector.html">Struct anonymous_namespace{TypedDataAccessors.h}::NullSentinelSupplier::IntSelector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_types_8cpp_03_1_1_bounding_box.html">Struct anonymous_namespace{Types.cpp}::BoundingBox</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_types_8cpp_03_1_1_coords.html">Struct anonymous_namespace{Types.cpp}::Coords</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1get__has__to_string.html">Struct anonymous_namespace{toString.h}::get_has_toString</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1has__to_string.html">Struct anonymous_namespace{toString.h}::has_toString</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1has__to_string_3_01_t_00_01decltype_07std_1_1dec934f37e70248688d220a4ef1ce6df4f0.html">Struct anonymous_namespace{toString.h}::has_toString&lt; T, decltype(std::declval&lt; T &gt;().toString(), void())&gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdict__ref__t.html">Struct dict_ref_t</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structdouble__sort_1_1_iterator.html">Struct double_sort::Iterator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structdouble__sort_1_1_value.html">Struct double_sort::Value</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_column_type.html">Struct foreign_storage::ColumnType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_data_wrapper_type.html">Struct foreign_storage::DataWrapperType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_file_region.html">Struct foreign_storage::FileRegion</a></li>
@@ -1692,7 +1791,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_parse_file_region_result.html">Struct foreign_storage::ParseFileRegionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_interval.html">Struct foreign_storage::RowGroupInterval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_metadata.html">Struct foreign_storage::RowGroupMetadata</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_table_eviction_tracker.html">Struct foreign_storage::TableEvictionTracker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_request.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferRequest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_result.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structimport__export_1_1_bad_rows_tracker.html">Struct import_export::BadRowsTracker</a></li>
@@ -1707,10 +1805,20 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structlogger_1_1_log_shutdown.html">Struct logger::LogShutdown</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structmeasure.html">Struct measure</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structomnisci_1_1_device_identifier.html">Struct omnisci::DeviceIdentifier</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structomnisci__aws__sdk_1_1_ssl_config.html">Struct omnisci_aws_sdk::SslConfig</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structquantile_1_1detail_1_1_centroid.html">Struct quantile::detail::Centroid</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structquantile_1_1detail_1_1_centroids.html">Struct quantile::detail::Centroids</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structquantile_1_1detail_1_1anonymous__namespace_02quantile_8h_03_1_1_order_by_mean_asc_count_desc.html">Struct quantile::detail::anonymous_namespace{quantile.h}::OrderByMeanAscCountDesc</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structquantile_1_1detail_1_1anonymous__namespace_02quantile_8h_03_1_1_skipped_1_1_data.html">Struct quantile::detail::anonymous_namespace{quantile.h}::Skipped::Data</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquery__state_1_1_event.html">Struct query_state::Event</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquery__state_1_1_quote_formatter.html">Struct query_state::QuoteFormatter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquery__state_1_1_session_data.html">Struct query_state::SessionData</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquery__state_1_1_session_info_formatter.html">Struct query_state::SessionInfoFormatter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structserialize__detail_1_1_int_type.html">Struct serialize_detail::IntType</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structserialize__detail_1_1_int_type_3_011_01_4.html">Struct serialize_detail::IntType&lt; 1 &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structserialize__detail_1_1_int_type_3_012_01_4.html">Struct serialize_detail::IntType&lt; 2 &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structserialize__detail_1_1_int_type_3_014_01_4.html">Struct serialize_detail::IntType&lt; 4 &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structserialize__detail_1_1_int_type_3_018_01_4.html">Struct serialize_detail::IntType&lt; 8 &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1_div_u_mod.html">Struct shared::DivUMod</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1_print_container.html">Struct shared::PrintContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structshared_1_1is__std__container.html">Struct shared::is_std_container</a></li>
@@ -1732,12 +1840,16 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstd_1_1tuple__size_3_01boost_1_1tuples_1_1cons_3_01_t_00_01_u_01_4_01_4.html">Struct std::tuple_size&lt; boost::tuples::cons&lt; T, U &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structstuff.html">Struct stuff</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structtable__functions_1_1_table_function_output_row_sizer.html">Struct table_functions::TableFunctionOutputRowSizer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structyy__buffer__state.html">Struct yy_buffer_state</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structyy__trans__info.html">Struct yy_trans_info</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../unionlist.html">Union list</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="../union/union_data_block_ptr.html">Union DataBlockPtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../union/union_datum.html">Union Datum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../union/union_reduction_interpreter_1_1_eval_value.html">Union ReductionInterpreter::EvalValue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../union/uniondouble__sort_1_1_variant.html">Union double_sort::Variant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../union/unionyy___parser__stype.html">Union yy_Parser_stype</a></li>
 </ul>
 </li>
 </ul>
@@ -1887,6 +1999,11 @@
 <span id="_CPPv3N20LRUEvictionAlgorithm16cache_items_map_E"></span><span id="_CPPv2N20LRUEvictionAlgorithm16cache_items_map_E"></span><span id="LRUEvictionAlgorithm::cache_items_map___std::map:ChunkKeyC.std::list:ChunkKey:::iterator:"></span><span class="target" id="class_l_r_u_eviction_algorithm_1a1193f4b87e7d7b9dfec3fa098d30be14"></span>std::map&lt;<em class="property">const</em> ChunkKey, std::list&lt;ChunkKey&gt;::iterator&gt; <code class="sig-name descname">cache_items_map_</code><a class="headerlink" href="#_CPPv4N20LRUEvictionAlgorithm16cache_items_map_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="member">
+<dt id="_CPPv4N20LRUEvictionAlgorithm12cache_mutex_E">
+<span id="_CPPv3N20LRUEvictionAlgorithm12cache_mutex_E"></span><span id="_CPPv2N20LRUEvictionAlgorithm12cache_mutex_E"></span><span id="LRUEvictionAlgorithm::cache_mutex___mapd_shared_mutex"></span><span class="target" id="class_l_r_u_eviction_algorithm_1a632d3f9998ec18c2cd0613ebd7b79b30"></span>mapd_shared_mutex <code class="sig-name descname">cache_mutex_</code><a class="headerlink" href="#_CPPv4N20LRUEvictionAlgorithm12cache_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 </dd></dl>
 
@@ -1903,7 +2020,7 @@
         <a href="class_ldap_server.html" class="btn btn-neutral float-right" title="Class LdapServer" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="class_json_column_sql_type.html" class="btn btn-neutral float-left" title="Class JsonColumnSqlType" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="class_join_target_rebaser.html" class="btn btn-neutral float-left" title="Class JoinTargetRebaser" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

@@ -1,0 +1,9 @@
+Class omnisci::JSON
+===================
+
+.. doxygenclass:: omnisci::JSON
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

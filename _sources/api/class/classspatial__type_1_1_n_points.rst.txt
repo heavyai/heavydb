@@ -1,0 +1,9 @@
+Class spatial_type::NPoints
+===========================
+
+.. doxygenclass:: spatial_type::NPoints
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

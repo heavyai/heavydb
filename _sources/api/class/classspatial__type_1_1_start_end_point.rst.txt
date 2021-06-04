@@ -1,0 +1,9 @@
+Class spatial_type::StartEndPoint
+=================================
+
+.. doxygenclass:: spatial_type::StartEndPoint
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
