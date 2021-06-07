@@ -20,6 +20,7 @@ yay -S \
     cuda \
     doxygen \
     flex \
+    fmt \
     gcc \
     gdal \
     geos \
