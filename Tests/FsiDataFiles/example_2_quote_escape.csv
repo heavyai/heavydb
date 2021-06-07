@@ -1,0 +1,7 @@
+text,int,double
+a$aa,1,1.1
+a$a$aa,1,1.1
+a$a$aa,2,2.2
+a$a$a$aa,1,1.1
+a$a$a$aa,2,2.2
+a$a$a$aa,3,3.3

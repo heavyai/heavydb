@@ -1346,23 +1346,6 @@ TEST_P(CacheControllingSelectQueryTest, CsvArchiveInvalidFile) {
                               getDataFilesPath() + "example_1_invalid_file.zip'");
 }
 
-TEST_P(CacheControllingSelectQueryTest, CSV_CustomLineDelimiters) {
-  const auto& query = getCreateForeignTableQuery("(b BOOLEAN, i INTEGER, t TEXT)",
-                                                 {{"line_delimiter", "*"}},
-                                                 "custom_line_delimiter",
-                                                 "csv");
-  sql(query);
-
-  TQueryResult result;
-  sql(result, "SELECT * FROM test_foreign_table;");
-  // clang-format off
-  assertResultSetEqual({{True, i(1000), "text_1"},
-                        {False, i(2000), "text_2"},
-                        {True, i(3000), "text_3"}},
-                       result);
-  // clang-format on
-}
-
 // TODO: implement for parquet when kARRAY support implemented for parquet
 // Note: only need to test array_marker and array_delimiter
 TEST_P(CacheControllingSelectQueryTest, CSV_CustomMarkers) {
@@ -1535,6 +1518,75 @@ TEST_F(SelectQueryTest, ByteArrayDecimalFilterAndSort) {
   TQueryResult result;
   sql(result, "SELECT * FROM test_foreign_table where dc > 25 ORDER BY dc;");
   assertResultSetEqual({{25.55}, {50.11}}, result);
+}
+
+class CsvDelimiterTest : public SelectQueryTest {
+ protected:
+  void queryAndAssertExample2Result() {
+    TQueryResult result;
+    sql(result, "SELECT * FROM test_foreign_table;");
+    assertResultSetEqual({{"a", i(1), 1.1},
+                          {"aa", i(1), 1.1},
+                          {"aa", i(2), 2.2},
+                          {"aaa", i(1), 1.1},
+                          {"aaa", i(2), 2.2},
+                          {"aaa", i(3), 3.3}},
+                         result);
+  }
+};
+
+TEST_F(CsvDelimiterTest, CSVLineDelimNewline) {
+  const auto& query = getCreateForeignTableQuery(
+      "(t TEXT, i BIGINT, f DOUBLE)", {{"line_delimiter", "\\n"}}, "example_2", "csv");
+  sql(query);
+  queryAndAssertExample2Result();
+}
+
+TEST_F(CsvDelimiterTest, CSVDelimTab) {
+  const auto& query = getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)",
+                                                 {{"delimiter", "\\t"}},
+                                                 "example_2",
+                                                 "csv",
+                                                 0,
+                                                 "test_foreign_table",
+                                                 "tsv");
+  sql(query);
+  queryAndAssertExample2Result();
+}
+
+TEST_F(CsvDelimiterTest, CSVFieldDelim) {
+  const auto& query = getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)",
+                                                 {{"delimiter", "|"}},
+                                                 "example_2_field_delim",
+                                                 "csv");
+  sql(query);
+  queryAndAssertExample2Result();
+}
+
+TEST_F(CsvDelimiterTest, CSVLineDelim) {
+  const auto& query = getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)",
+                                                 {{"line_delimiter", "*"}},
+                                                 "example_2_line_delim",
+                                                 "csv");
+  sql(query);
+  queryAndAssertExample2Result();
+}
+
+TEST_F(CsvDelimiterTest, CSVQuote) {
+  const auto& query = getCreateForeignTableQuery(
+      "(t TEXT, i BIGINT, f DOUBLE)", {{"quote", "~"}}, "example_2_quote", "csv");
+  sql(query);
+  queryAndAssertExample2Result();
+}
+
+TEST_F(CsvDelimiterTest, CSVQuoteEscape) {
+  const auto& query = getCreateForeignTableQuery("(t TEXT, i BIGINT, f DOUBLE)",
+                                                 {{"quote", "a"}, {"escape", "$"}},
+                                                 "example_2_quote_escape",
+                                                 "csv");
+  // 'a' used as quote, so "a" is a$aa in csv file
+  sql(query);
+  queryAndAssertExample2Result();
 }
 
 class RefreshForeignTableTest : public ForeignTableTest {

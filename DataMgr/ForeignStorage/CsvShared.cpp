@@ -56,6 +56,26 @@ void get_value(const rapidjson::Value& json_val, FileRegion& file_region) {
 
 namespace Csv {
 namespace {
+std::string validate_and_get_delimiter(const ForeignTable* foreign_table,
+                                       const std::string& option_name) {
+  if (auto it = foreign_table->options.find(option_name);
+      it != foreign_table->options.end()) {
+    if (it->second.length() == 1) {
+      return it->second;
+    } else {
+      if (it->second == std::string("\\n")) {
+        return "\n";
+      } else if (it->second == std::string("\\t")) {
+        return "\t";
+      } else {
+        throw std::runtime_error{"Invalid value specified for option \"" + option_name +
+                                 "\". Expected a single character, \"\\n\" or  \"\\t\"."};
+      }
+    }
+  }
+  return "";
+}
+
 std::string validate_and_get_string_with_length(const ForeignTable* foreign_table,
                                                 const std::string& option_name,
                                                 const size_t expected_num_chars) {
@@ -142,8 +162,7 @@ import_export::CopyParams validate_and_get_copy_params(
       it != foreign_table->options.end()) {
     copy_params.buffer_size = std::stoi(it->second);
   }
-  if (const auto& value =
-          validate_and_get_string_with_length(foreign_table, "DELIMITER", 1);
+  if (const auto& value = validate_and_get_delimiter(foreign_table, "DELIMITER");
       !value.empty()) {
     copy_params.delimiter = value[0];
   }
@@ -159,8 +178,7 @@ import_export::CopyParams validate_and_get_copy_params(
       copy_params.has_header = import_export::ImportHeaderRow::NO_HEADER;
     }
   }
-  if (const auto& value =
-          validate_and_get_string_with_length(foreign_table, "LINE_DELIMITER", 1);
+  if (const auto& value = validate_and_get_delimiter(foreign_table, "LINE_DELIMITER");
       !value.empty()) {
     copy_params.line_delim = value[0];
   }
