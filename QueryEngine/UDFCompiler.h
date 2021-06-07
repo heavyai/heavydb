@@ -37,6 +37,7 @@ class UdfClangDriver {
  public:
   UdfClangDriver(const std::string&);
   clang::driver::Driver* getClangDriver() { return &the_driver; }
+  std::tuple<int, int, int> getClangVersion() const { return clang_version; }
 
  private:
   llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_options;
@@ -45,6 +46,7 @@ class UdfClangDriver {
   clang::DiagnosticsEngine diags;
   std::unique_ptr<clang::DiagnosticConsumer> diag_client_owner;
   clang::driver::Driver the_driver;
+  std::tuple<int, int, int> clang_version;
 };
 
 class UdfCompiler {
