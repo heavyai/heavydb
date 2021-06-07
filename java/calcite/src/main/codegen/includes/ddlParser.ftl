@@ -635,6 +635,19 @@ SqlDdl SqlAlterTable(Span s) :
     }
 }
 
+SqlNode WrappedOrderedQueryOrExpr(ExprContext exprContext) :
+{
+    final SqlNode query;
+}
+{
+        <LPAREN>
+        query = OrderedQueryOrExpr(exprContext)
+        <RPAREN>
+        { return query; }
+    |
+        query = OrderedQueryOrExpr(exprContext)
+        { return query; }
+}
 
 /* 
  * Insert into table(s) using the following syntax:
@@ -652,23 +665,13 @@ SqlInsertIntoTable SqlInsertIntoTable(Span s) :
     <INTO>
     table = CompoundIdentifier()
     (
-        LOOKAHEAD(SqlSelect())
-        query = SqlSelect()
+        LOOKAHEAD(3)
+        columnList = ParenthesizedSimpleIdentifierList() 
+        query = WrappedOrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
     |
-        LOOKAHEAD(2)
-        <LPAREN>
-        query = SqlSelect()
-        <RPAREN>
-    |
-        columnList = ParenthesizedSimpleIdentifierList()
-        (
-            query = SqlSelect()
-        |
-            <LPAREN>
-            query = SqlSelect()
-            <RPAREN>            
-        )
+        query = WrappedOrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
     )
+
     {
         return new SqlInsertIntoTable(s.end(this), table, query, columnList);
     }

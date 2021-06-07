@@ -1948,6 +1948,72 @@ TEST_F(Itas, OmitDictionaryEncodedArrayColumn) {
   }
 }
 
+TEST_F(Itas, ItasOrderLimitOffset) {
+  // clean up
+  sql("DROP TABLE IF EXISTS ITAS_TARGET;");
+  sql("DROP TABLE IF EXISTS ITAS_SOURCE;");
+
+  // create table src, target
+  sql("CREATE TABLE ITAS_TARGET (t int);");
+  sql("CREATE TABLE ITAS_SOURCE (s1 int, s2 int, s3 int) with (fragment_size = 4);");
+
+  // populate src
+  int max = 100;
+  for (int i = 0; i < max; i++) {
+    std::string insert_sql = "INSERT INTO ITAS_SOURCE VALUES(" + std::to_string(i) +
+                             ", " + std::to_string(max - i) + ", " +
+                             std::to_string(2 * max + i) + "); ";
+    sql(insert_sql);
+    // sql("INSERT INTO ITAS_SOURCE VALUES(i, max-i, 2*max+i); ");
+    // s1: 0 ... max-1
+    // s2: max ... 1
+    // s3: 2*max+0 ... 2*max+max-1
+  }
+
+  // itas with order-by, limit, offset
+
+  EXPECT_NO_THROW(
+      sql("INSERT INTO ITAS_TARGET (SELECT s1 FROM ITAS_SOURCE ORDER BY s2);"));
+  // verify -> 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+  TQueryResult result1;
+  sql(result1, "SELECT * FROM ITAS_TARGET ORDER BY t LIMIT 10;");
+  assertResultSetEqual(
+      {{i(0)}, {i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}, {i(6)}, {i(7)}, {i(8)}, {i(9)}},
+      result1);
+  sql("DELETE FROM ITAS_TARGET;");
+
+  EXPECT_NO_THROW(sql(
+      "INSERT INTO ITAS_TARGET (SELECT s2 FROM ITAS_SOURCE ORDER BY s2 DESC LIMIT 4);"));
+  // verify -> max-3, max-2, max-1, max-0
+  TQueryResult result2;
+  sql(result2, "SELECT * FROM ITAS_TARGET ORDER BY t;");
+  assertResultSetEqual({{i(max - 3)}, {i(max - 2)}, {i(max - 1)}, {i(max - 0)}}, result2);
+  sql("DELETE FROM ITAS_TARGET;");
+
+#if 0  
+  // disabled until an issue resolved with ORDER/LIMIT/OFFSET
+  //   -> LIMIT gets incorrectly set to same value as OFFSET if not explicitly specified
+  EXPECT_NO_THROW(sql(
+    "INSERT INTO ITAS_TARGET (SELECT s3 FROM ITAS_SOURCE ORDER BY s3 OFFSET 4);"));
+  // verify -> 24, 25, 26, 27, 28, 29
+  TQueryResult result3;
+  sql(result3, "SELECT * FROM ITAS_TARGET ORDER BY t LIMIT 6;");
+  int c = 3*max-1;
+  assertResultSetEqual({{i(c-5)}, {i(c-4)}, {i(c-3)}, {i(c-2)}, {i(c-1)}, {i(c)}}, result3);
+  sql("DELETE FROM ITAS_TARGET;");
+#endif
+
+  std::string insert_sql =
+      "INSERT INTO ITAS_TARGET (SELECT s1 FROM ITAS_SOURCE ORDER BY s3 LIMIT 6 OFFSET "
+      "62);";
+  EXPECT_NO_THROW(sql(insert_sql));
+  // verify -> 62, 63, 64, 65, 66, 67
+  TQueryResult result4;
+  sql(result4, "SELECT * FROM ITAS_TARGET ORDER BY t;");
+  assertResultSetEqual({{i(62)}, {i(63)}, {i(64)}, {i(65)}, {i(66)}, {i(67)}}, result4);
+  sql("DELETE FROM ITAS_TARGET;");
+}
+
 class Export : public DBHandlerTestFixture {
  public:
   void SetUp() override {
