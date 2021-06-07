@@ -33,6 +33,7 @@
 #include <boost/process/search_path.hpp>
 #include <iterator>
 #include <memory>
+#include "clang/Basic/Version.h"
 
 #if LLVM_VERSION_MAJOR >= 11
 #include <llvm/Support/Host.h>
@@ -159,6 +160,36 @@ class ToolFactory : public FrontendActionFactory {
 const char* convert(const std::string& s) {
   return s.c_str();
 }
+
+std::string exec_output(std::string cmd) {
+  std::array<char, 128> buffer;
+  std::string result;
+  std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
+  if (!pipe) {
+    throw std::runtime_error("popen(\"" + cmd + "\") failed!");
+  }
+  while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+    result += buffer.data();
+  }
+  return result;
+}
+
+std::tuple<int, int, int> get_clang_version(const std::string& clang_path) {
+  std::string cmd = clang_path + " --version";
+  std::string result = exec_output(cmd);
+  int major, minor, patchlevel;
+  auto count = sscanf(result.substr(result.find("clang version")).c_str(),
+                      "clang version %d.%d.%d",
+                      &major,
+                      &minor,
+                      &patchlevel);
+  if (count != 3) {
+    throw std::runtime_error("Failed to get clang version from output:\n" + result +
+                             "\n");
+  }
+  return {major, minor, patchlevel};
+}
+
 }  // namespace
 
 UdfClangDriver::UdfClangDriver(const std::string& clang_path)
@@ -167,7 +198,33 @@ UdfClangDriver::UdfClangDriver(const std::string& clang_path)
     , diag_id(new clang::DiagnosticIDs())
     , diags(diag_id, diag_options.get(), diag_client)
     , diag_client_owner(diags.takeClient())
-    , the_driver(clang_path.c_str(), llvm::sys::getDefaultTargetTriple(), diags) {}
+    , the_driver(clang_path.c_str(), llvm::sys::getDefaultTargetTriple(), diags)
+    , clang_version(get_clang_version(clang_path)) {
+  the_driver.CCPrintOptions = 0;
+
+  if (!boost::filesystem::exists(the_driver.ResourceDir)) {
+    LOG(WARNING) << "clang driver ResourceDir=" << the_driver.ResourceDir
+                 << " does not exist";
+  }
+
+  // Replace clang driver resource directory with clang compiler
+  // resource directory
+  std::string clang_resource_dir = exec_output(clang_path + " -print-resource-dir");
+
+  // trim clang_resource_dir string from right
+  clang_resource_dir.erase(
+      std::find_if(clang_resource_dir.rbegin(),
+                   clang_resource_dir.rend(),
+                   [](unsigned char ch) { return !std::isspace(ch); })
+          .base(),
+      clang_resource_dir.end());
+
+  if (clang_resource_dir != the_driver.ResourceDir) {
+    LOG(WARNING) << "Resetting clang driver ResourceDir to " << clang_resource_dir
+                 << " (was " << the_driver.ResourceDir << ")";
+    the_driver.ResourceDir = clang_resource_dir;
+  }
+}
 
 std::string UdfCompiler::removeFileExtension(const std::string& path) {
   if (path == "." || path == "..") {
@@ -231,12 +288,126 @@ int UdfCompiler::compileFromCommandLine(const std::vector<std::string>& command_
                    [&](const std::string& str) { return str.c_str(); });
   }
 
-  the_driver->CCPrintOptions = 0;
   std::unique_ptr<driver::Compilation> compilation(
       the_driver->BuildCompilation(clang_command_opts));
-
   if (!compilation) {
     LOG(FATAL) << "failed to build compilation object!\n";
+  }
+  auto [clang_version_major, clang_version_minor, clang_version_patchlevel] =
+      compiler_driver.getClangVersion();
+  if (clang_version_major != CLANG_VERSION_MAJOR
+      // mismatch of clang driver and compulier versions requires
+      // modified workflow that removes incompatible driver flags for
+      // compiler.
+      || CLANG_VERSION_MAJOR == 9
+      // clang driver 9 requires cudatoolkit 8 that we don't support,
+      // hence switching to modified clang compiler 9 workflow that is
+      // able to produce bytecode to GPU when using cudatoolkit 11.
+  ) {
+    /* Fix incompatibilities when driver and clang versions differ.
+     */
+    auto& jobs = compilation->getJobs();
+    CHECK_EQ(jobs.size(), 1);
+    auto& job = *jobs.begin();
+
+    std::string cmd = job.getExecutable();
+    int skip = 0;
+    std::string last = "";
+
+    for (auto& arg : job.getArguments()) {
+      const std::string& s = arg;
+      if (skip > 0) {
+        skip--;
+        last = s;
+        continue;
+      }
+
+      // inclusion of __clang_cuda_runtime_wrapper.h leads to either
+      // clang >9 compilation failure or clang 9 failure for using
+      // cuda >8 (unsupported CUDA version).
+      if (s == "-include") {
+        last = s;
+        continue;
+      }
+      if (last == "-include") {
+        if (s != "__clang_cuda_runtime_wrapper.h") {
+          cmd += " -include " + s;
+        }
+        last = s;
+        continue;
+      }
+
+      // Using -ffcuda-is-device flag produces empty gpu module
+      if (s == "-fcuda-is-device") {
+        last = s;
+        continue;
+      }
+
+      if constexpr (CLANG_VERSION_MAJOR == 9) {
+        if (clang_version_major > 9) {
+          // The following clang 9 flags are unknown to clang >9:
+          if (s == "-masm-verbose" || s == "-fuse-init-array" ||
+              s == "-dwarf-column-info" || s == "-momit-leaf-frame-pointer" ||
+              s == "-fdiagnostics-show-option" || s == "-mdisable-fp-elim") {
+            last = s;
+            continue;
+          }
+          if (s == "-fmessage-length") {
+            skip = 1;
+            last = s;
+            continue;
+          }
+        }
+      }
+
+      if constexpr (CLANG_VERSION_MAJOR == 10)
+        if (clang_version_major > 10) {
+          // The following clang 10 flags are unknown to clang >10:
+          if (s == "-masm-verbose" || s == "-dwarf-column-info" ||
+              s == "-fdiagnostics-show-option") {
+            last = s;
+            continue;
+          }
+          if (s == "-fmessage-length") {
+            skip = 1;
+            last = s;
+            continue;
+          }
+        }
+
+      if constexpr (CLANG_VERSION_MAJOR >= 10)
+        if (clang_version_major < 10) {
+          // The following clang >10 flags are unknown to clang <10:
+          if (s == "-fno-rounding-math" || s.rfind("-mframe-pointer=", 0) == 0 ||
+              s.rfind("-fgnuc-version=", 0) == 0) {
+            last = s;
+            continue;
+          }
+        }
+
+      if constexpr (CLANG_VERSION_MAJOR == 11)
+        if (clang_version_major < 11) {
+          // The following clang 11 flags are unknown to clang <11:
+          if (s == "-fno-verbose-asm") {
+            last = s;
+            continue;
+          }
+          if (s == "-aux-target-cpu") {
+            last = s;
+            skip = 1;
+            continue;
+          }
+        }
+
+      cmd += " " + s;
+      last = s;
+    }
+    // TODO: Here we don't use the_driver->ExecuteCompilation because
+    // could not find a better way to modify driver arguments. As a
+    // workaround, we run clang compiler via pipe (it could be run
+    // also via shell).
+    exec_output(cmd);
+    return 0;
   }
 
   llvm::SmallVector<std::pair<int, const driver::Command*>, 10> failing_commands;
@@ -248,7 +419,6 @@ int UdfCompiler::compileFromCommandLine(const std::vector<std::string>& command_
       }
     }
   }
-
   return res;
 }
 
@@ -306,7 +476,12 @@ int UdfCompiler::compileToCpuByteCode(const char* udf_file_name) {
                                         "-std=c++14",
                                         "-DNO_BOOST",
                                         udf_file_name};
-  return compileFromCommandLine(command_line);
+  auto res = compileFromCommandLine(command_line);
+  if (!boost::filesystem::exists(cpu_out_filename)) {
+    throw std::runtime_error("udf compile did not produce " + cpu_out_filename);
+  }
+
+  return res;
 }
 
 int UdfCompiler::parseToAst(const char* file_name) {
@@ -326,7 +501,6 @@ int UdfCompiler::parseToAst(const char* file_name) {
     std::copy(
         clang_options_.begin(), clang_options_.end(), std::back_inserter(arg_vector));
   }
-
   std::vector<const char*> arg_vec2;
   std::transform(
       arg_vector.begin(), arg_vector.end(), std::back_inserter(arg_vec2), convert);
@@ -451,7 +625,6 @@ int UdfCompiler::compileUdf() {
   }
 
   auto ast_result = parseToAst(udf_file_name_.c_str());
-
   if (ast_result == 0) {
     // Compile udf file to generate cpu and gpu bytecode files
 
