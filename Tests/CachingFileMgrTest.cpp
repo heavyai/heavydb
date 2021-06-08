@@ -346,6 +346,20 @@ TEST_F(ChunkEvictionTest, MultipleTables) {
   ASSERT_EQ(cfm->getBuffer({1, 1, 1, 2})->pageCount(), 128U);
 }
 
+TEST_F(ChunkEvictionTest, MetadataOnlyChunkInQueue) {
+  auto cfm = initializeCFM();
+  cfm->createBuffer({1, 1, 1, 1});  // No chunk data
+  writePages(*cfm, {1, 1, 1, 2}, 256);
+  ASSERT_EQ(cfm->getBuffer({1, 1, 1, 1})->pageCount(), 0U);
+  ASSERT_EQ(cfm->getBuffer({1, 1, 1, 2})->pageCount(), 256U);
+  // If we don't handle empty chunks correctly, i.e. skip them, then we will crash on this
+  // line as the cache tries to evict a chunk with no data.
+  writePages(*cfm, {1, 1, 1, 3}, 1);
+  ASSERT_EQ(cfm->getBuffer({1, 1, 1, 1})->pageCount(), 0U);
+  ASSERT_EQ(cfm->getBuffer({1, 1, 1, 2})->pageCount(), 0U);
+  ASSERT_EQ(cfm->getBuffer({1, 1, 1, 3})->pageCount(), 1U);
+}
+
 // Test how metadata is evicted - metadata is evicted on the table-level.
 class MetadataEvictionTest : public CachingFileMgrTest {};
 
