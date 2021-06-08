@@ -3318,7 +3318,9 @@ ErrorInfo getErrorDescription(const int32_t error_code) {
                   "NONE ENCODED String types are not supported as input result set."};
     case Executor::ERR_OUT_OF_RENDER_MEM:
       return {.code = "ERR_OUT_OF_RENDER_MEM",
-              .description = "Not enough OpenGL memory to render the query results"};
+              .description =
+                  "Insufficient GPU memory for query results in render output buffer "
+                  "sized by render-mem-bytes"};
     case Executor::ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY:
       return {.code = "ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY",
               .description = "Streaming-Top-N not supported in Render Query"};
