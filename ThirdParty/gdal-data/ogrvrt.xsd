@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
 /******************************************************************************
- * $Id: ogrvrt.xsd 55ecd4e11ef1179beec5787d5be781a5b15d61cf 2017-10-20 21:35:00Z Even Rouault $
+ * $Id: ogrvrt.xsd a47364611c193ff14f084bade64d37c7e1443d3b 2020-05-30 17:04:38 +0200 Even Rouault $
  *
  * Project:  GDAL/OGR
  * Purpose:  XML Schema for OGR VRT files.
- * Author:   Even Rouault, <even dot rouault at mines dash paris dot org>
+ * Author:   Even Rouault, <even dot rouault at spatialys.com>
  *
  **********************************************************************
  * Copyright (c) 2012, Even Rouault
@@ -141,10 +141,10 @@
 
     <xs:complexType name="FIDType">
         <xs:simpleContent>
-            <xs:extension base="nonEmptyStringType">
+            <xs:extension base="xs:string">
                 <xs:attribute name="name" type="xs:string">
                     <xs:annotation>
-                        <xs:documentation>A user-facing name can be specified here so that a FID column name is reported even if it is not reported as a regular field.</xs:documentation>
+                        <xs:documentation>User-facing name of the FID column.</xs:documentation>
                     </xs:annotation>
                 </xs:attribute>
             </xs:extension>
@@ -275,6 +275,7 @@
         <xs:attribute name="precision" type="xs:nonNegativeInteger"/>
         <xs:attribute name="nullable" type="OGRBooleanType" default="true"/>  <!-- new in GDAL 2.0 -->
         <xs:attribute name="default" type="xs:string"/>  <!-- new in GDAL 2.0 -->
+        <xs:attribute name="unique" type="OGRBooleanType" default="false"/>  <!-- new in GDAL 3.2 -->
     </xs:complexType>
 
     <xs:complexType name="FieldType">
