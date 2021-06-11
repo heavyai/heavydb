@@ -1,0 +1,2 @@
+# required for gdal3 in debug mode
+leak:__cxa_thread_atexit
