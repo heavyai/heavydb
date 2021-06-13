@@ -9396,6 +9396,22 @@ TEST(Select, Joins_LeftJoinFiltered) {
         c(query, dt);
         check_explain_result(query, dt, enable_filter_hoisting);
       }
+
+      {
+        const std::string query =
+            R"(SELECT a.x FROM test a INNER JOIN test_inner b ON (a.x = b.x AND a.y = b.y) LEFT JOIN test_inner_x c ON (a.x = c.x) WHERE a.x > 5 GROUP BY 1;)";
+        c(query, dt);
+        // filter hoisting disabled if LEFT JOIN is the not the first join condition
+        check_explain_result(query, dt, /*enable_filter_hoisting=*/false);
+      }
+
+      {
+        const std::string query =
+            R"(SELECT a.x FROM test a LEFT JOIN test_inner_x c ON (a.x = c.x) INNER JOIN test_inner b ON (a.x = b.x AND a.y = b.y) WHERE a.y + 1 > 5 GROUP BY 1;)";
+        c(query, dt);
+        // filter hoisting disabled if LEFT JOIN is the not the first join condition
+        check_explain_result(query, dt, /*enable_filter_hoisting=*/false);
+      }
     }
   }
 }
