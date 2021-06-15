@@ -42,6 +42,8 @@ bool g_enable_debug_timer{false};
 #include <mutex>
 #include <regex>
 
+#include "Shared/nvtx_helpers.h"
+
 namespace logger {
 
 namespace attr = boost::log::attributes;
@@ -302,6 +304,7 @@ void init(LogOptions const& log_opts) {
   }
   core->add_sink(make_sink<ClogSync>(log_opts));
   g_min_active_severity = std::min(g_min_active_severity, log_opts.severity_clog_);
+  nvtx_helpers::init();
 }
 
 void set_once_fatal_func(FatalFunc fatal_func) {
@@ -313,7 +316,10 @@ void set_once_fatal_func(FatalFunc fatal_func) {
 
 void shutdown() {
   static std::once_flag logger_flag;
-  std::call_once(logger_flag, []() { boost::log::core::get()->remove_all_sinks(); });
+  std::call_once(logger_flag, []() {
+    boost::log::core::get()->remove_all_sinks();
+    nvtx_helpers::shutdown();
+  });
 }
 
 namespace {
@@ -690,10 +696,13 @@ void logAndEraseDurationTree(std::string* json_str) {
 }
 
 DebugTimer::DebugTimer(Severity severity, char const* file, int line, char const* name)
-    : duration_(newDuration(severity, file, line, name)) {}
+    : duration_(newDuration(severity, file, line, name)) {
+  nvtx_helpers::omnisci_range_push(nvtx_helpers::Category::kDebugTimer, name, file);
+}
 
 DebugTimer::~DebugTimer() {
   stop();
+  nvtx_helpers::omnisci_range_pop();
 }
 
 void DebugTimer::stop() {
