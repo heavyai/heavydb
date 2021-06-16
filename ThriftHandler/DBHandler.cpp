@@ -799,6 +799,16 @@ void DBHandler::interrupt(const TSessionId& query_session,
   }
 }
 
+TRole::type DBHandler::getServerRole() const {
+  if (g_cluster) {
+    if (leaf_aggregator_.leafCount() > 0) {
+      return TRole::type::AGGREGATOR;
+    }
+    return TRole::type::LEAF;
+  }
+  return TRole::type::SERVER;
+}
+
 void DBHandler::get_server_status(TServerStatus& _return, const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
@@ -806,10 +816,11 @@ void DBHandler::get_server_status(TServerStatus& _return, const TSessionId& sess
   _return.read_only = read_only_;
   _return.version = MAPD_RELEASE;
   _return.rendering_enabled = rendering_enabled;
-  _return.poly_rendering_enabled = rendering_enabled;
   _return.start_time = start_time_;
   _return.edition = MAPD_EDITION;
   _return.host_name = omnisci::get_hostname();
+  _return.poly_rendering_enabled = rendering_enabled;
+  _return.role = getServerRole();
   _return.renderer_status_json =
       render_handler_ ? render_handler_->get_renderer_status_json() : "";
 }
@@ -817,11 +828,11 @@ void DBHandler::get_server_status(TServerStatus& _return, const TSessionId& sess
 void DBHandler::get_status(std::vector<TServerStatus>& _return,
                            const TSessionId& session) {
   //
-  // get_status() will soon be called locally at startup on the aggregator
+  // get_status() is now called locally at startup on the aggregator
   // in order to validate that all nodes of a cluster are running the
-  // same software version and configured to use the same renderer driver.
+  // same software version and the same renderer status
   //
-  // In that context, it will be called with the InvalidSessionID, and
+  // In that context, it is called with the InvalidSessionID, and
   // with the local super-user flag set.
   //
   // Hence, we allow this session-less mode only in distributed mode, and
@@ -839,21 +850,13 @@ void DBHandler::get_status(std::vector<TServerStatus>& _return,
   ret.read_only = read_only_;
   ret.version = MAPD_RELEASE;
   ret.rendering_enabled = rendering_enabled;
-  ret.poly_rendering_enabled = rendering_enabled;
   ret.start_time = start_time_;
   ret.edition = MAPD_EDITION;
   ret.host_name = omnisci::get_hostname();
+  ret.poly_rendering_enabled = rendering_enabled;
+  ret.role = getServerRole();
   ret.renderer_status_json =
       render_handler_ ? render_handler_->get_renderer_status_json() : "";
-
-  // TSercivePort tcp_port{}
-
-  if (g_cluster) {
-    ret.role =
-        (leaf_aggregator_.leafCount() > 0) ? TRole::type::AGGREGATOR : TRole::type::LEAF;
-  } else {
-    ret.role = TRole::type::SERVER;
-  }
 
   _return.push_back(ret);
   if (leaf_aggregator_.leafCount() > 0) {

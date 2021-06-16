@@ -95,6 +95,12 @@ std::string RenderHandler::get_renderer_status_json() const {
   return std::string();
 }
 
+bool RenderHandler::validate_renderer_status_json(
+    const std::string& other_renderer_status_json) const {
+  CHECK(impl_);
+  return false;
+}
+
 void RenderHandler::shutdown() {
   CHECK(impl_);
 }
