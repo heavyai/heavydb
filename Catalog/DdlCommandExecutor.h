@@ -173,6 +173,15 @@ class ShowDiskCacheUsageCommand : public DdlCommand {
   std::vector<std::string> getFilteredTableNames();
 };
 
+class ShowUserDetailsCommand : public DdlCommand {
+ public:
+  ShowUserDetailsCommand(
+      const DdlCommandData& ddl_data,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute() override;
+};
+
 class RefreshForeignTablesCommand : public DdlCommand {
  public:
   RefreshForeignTablesCommand(

@@ -23,6 +23,26 @@ public class ShowCommandTest extends DDLTest {
   }
 
   @Test
+  public void showUserDetails() throws Exception {
+    final JsonObject expectedJsonObject = getJsonFromFile("show_user_details.json");
+    final TPlanResult result = processDdlCommand("SHOW USER DETAILS;");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
+
+  @Test
+  public void showUserDetailsForUser() throws Exception {
+    final JsonObject expectedJsonObject =
+            getJsonFromFile("show_user_details_for_user.json");
+    final TPlanResult result =
+            processDdlCommand("SHOW USER DETAILS test_user1, test_user2;");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
+
+  @Test
   public void showTables() throws Exception {
     final JsonObject expectedJsonObject = getJsonFromFile("show_tables.json");
     final TPlanResult result = processDdlCommand("SHOW TABLES;");

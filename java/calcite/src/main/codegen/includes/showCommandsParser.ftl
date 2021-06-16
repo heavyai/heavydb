@@ -13,18 +13,43 @@
 
 /*
  *
- * <SHOW> <USER> <SESSIONS> 
- *   
+ * <SHOW> <USER> <DETAILS>
+ * <SHOW> <USER> <SESSIONS>
+ *
  */
 
-SqlDdl SqlShowUserSessions(Span s) :
+SqlDdl SqlShowUser(Span s) :
 {
+    SqlIdentifier userName = null;
+    List<String> userNames = null;
 }
 {
-    <SHOW> <USER> <SESSIONS> 
-    {
-        return new SqlShowUserSessions(s.end(this));
-    }
+    <SHOW> <USER>
+    (
+        <SESSIONS>
+        {
+            return new SqlShowUserSessions(s.end(this));
+        }
+    |
+        <DETAILS>
+        [
+            userName = CompoundIdentifier()
+            {
+                userNames = new ArrayList<String>();
+                userNames.add(userName.toString());
+            }
+            (
+                <COMMA>
+                userName = CompoundIdentifier()
+                {
+                    userNames.add(userName.toString());
+                }
+            )*
+        ]
+        {
+            return new SqlShowUserDetails(s.end(this), userNames);
+        }
+    )
 }
 
 /*
