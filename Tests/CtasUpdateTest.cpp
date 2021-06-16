@@ -18,6 +18,7 @@
 #include <ctime>
 #include <iostream>
 #include "DBHandlerTestHelpers.h"
+#include "QueryEngine/ErrorHandling.h"
 #include "TestHelpers.h"
 
 // uncomment to run full test suite
@@ -2869,14 +2870,49 @@ TEST_F(Errors, CtasItas) {
   EXPECT_ANY_THROW(sql("INSERT INTO test_itas SELECT * FROM test_src_a;"));
 };
 
-// TODO(daniel): Get this ITAS test working again ASAP.
-//      Moved here as itas parsing no longer available in the old parser
-/*
-TEST_F(Non_Kernel_Time_Interrupt, DISABLED_Interrupt_ITAS) {
+class Non_Kernel_Time_Interrupt : public DBHandlerTestFixture {
+ public:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    try {
+      sql("DROP TABLE IF EXISTS t_very_large;");
+      sql("CREATE TABLE t_very_large (x int not null, y int not null, z int not null);");
+      const auto file_path_very_large = boost::filesystem::path(
+          "../../Tests/Import/datafiles/interrupt_table_very_large.csv");
+      if (boost::filesystem::exists(file_path_very_large)) {
+        boost::filesystem::remove(file_path_very_large);
+      }
+      std::ofstream very_large_out(file_path_very_large.string());
+      for (int i = 0; i < 10000000; i++) {
+        if (very_large_out.is_open()) {
+          very_large_out << "1,1,1\n2,2,2\n3,3,3\n4,4,4\n5,5,5\n";
+        }
+      }
+      very_large_out.close();
+
+      std::string import_very_large_table_str{
+          "COPY t_very_large FROM "
+          "'../../Tests/Import/datafiles/interrupt_table_very_large.csv' WITH "
+          "(header='false')"};
+      sql(import_very_large_table_str);
+    } catch (...) {
+      LOG(ERROR) << "Failed to (re-)create table";
+    }
+  }
+
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS t_very_large;");
+    boost::filesystem::remove(
+        "../../Tests/Import/datafiles/interrupt_table_very_large.csv");
+
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+TEST_F(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
   std::atomic<bool> catchInterruption(false);
   try {
-    std::string session1 = generate_random_string(32);
-    QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
 
     // do ITAS
     sql("DROP TABLE IF EXISTS t_ITAS;");
@@ -2930,17 +2966,17 @@ TEST_F(Non_Kernel_Time_Interrupt, DISABLED_Interrupt_ITAS) {
     while (!startITAS && !detect_time_out) {
       {
         mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
-        query_status = executor->getQuerySessionInfo(session1, session_read_lock);
+        query_status = executor->getQuerySessionInfo(session_id, session_read_lock);
       }
       if (query_status.size() == 1) {
-        if (query_status[0].getQuerySession().compare(session1) != 0) {
+        if (query_status[0].getQuerySession().compare(session_id) != 0) {
           CHECK(false);
         }
         auto query_str = query_status[0].getQueryStr();
         if (query_str.find("INSERT_DATA") != std::string::npos) {
           startITAS = true;
           std::this_thread::sleep_for(std::chrono::milliseconds(100));
-          executor->interrupt(session1, session1);
+          executor->interrupt(session_id, session_id);
           break;
         }
       }
@@ -2952,10 +2988,10 @@ TEST_F(Non_Kernel_Time_Interrupt, DISABLED_Interrupt_ITAS) {
         {
           mapd_shared_lock<mapd_shared_mutex> session_read_lock(
               executor->getSessionLock());
-          query_status = executor->getQuerySessionInfo(session1, session_read_lock);
+          query_status = executor->getQuerySessionInfo(session_id, session_read_lock);
         }
         detect_time_out = true;
-        executor->interrupt(session1, session1);
+        executor->interrupt(session_id, session_id);
         break;
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -2963,12 +2999,107 @@ TEST_F(Non_Kernel_Time_Interrupt, DISABLED_Interrupt_ITAS) {
 
     if (catchInterruption.load()) {
       std::cout << "Detect interrupt request while performing ITAS" << std::endl;
-      std::shared_ptr<ResultSet> res =
-          run_query("SELECT COUNT(1) FROM t_ITAS", ExecutorDeviceType::CPU, session1);
-      CHECK_EQ(1, (int64_t)res.get()->rowCount());
-      auto crt_row = res.get()->getNextRow(false, false);
-      auto ret_val = v<int64_t>(crt_row[0]);
-      CHECK_EQ((int64_t)0, ret_val);
+
+      TQueryResult select_itas_result;
+      sql(select_itas_result, "SELECT COUNT(1) FROM t_ITAS");
+      auto columns_itas = select_itas_result.row_set.columns;
+      // num_cols == 1
+      ASSERT_EQ((size_t)1, columns_itas.size());
+      // num_rows == 1
+      ASSERT_EQ((size_t)1, columns_itas[0].nulls.size());
+
+      int64_t val = columns_itas[0].data.int_col[0];
+      CHECK_EQ((int64_t)1, val);
+      return;
+    }
+    if (detect_time_out) {
+      return;
+    }
+
+  } catch (...) {
+    CHECK(false);
+  }
+}
+
+TEST_F(Non_Kernel_Time_Interrupt, Interrupt_CTAS) {
+  std::atomic<bool> catchInterruption(false);
+  try {
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+
+    auto check_interrup_msg = [&catchInterruption](const std::string& msg,
+                                                   bool is_pending_query) {
+      std::cout << msg << std::endl;
+      std::string out_of_slot_msg{"Ran out of slots in the query output buffer"};
+      if (out_of_slot_msg.compare(msg) == 0) {
+        return;
+      }
+      auto check_interrupted_msg = msg.find("interrupted");
+      std::string expected_msg{
+          "Query execution has been interrupted while performing CTAS"};
+      CHECK((check_interrupted_msg != std::string::npos) ||
+            expected_msg.compare(msg) == 0)
+          << msg;
+      catchInterruption.store(true);
+    };
+    // do CTAS
+    sql("DROP TABLE IF EXISTS t_CTAS;");
+    auto ctas_thread = std::async(std::launch::async, [&] {
+      try {
+        sql("CREATE TABLE t_CTAS AS SELECT * FROM t_very_large WHERE x < 3;");
+      } catch (const QueryExecutionError& e) {
+        if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+          catchInterruption.store(true);
+        } else if (e.getErrorCode() < 0) {
+          std::cout << "Detect out of slot issue in the query output buffer while "
+                       "performing CTAS"
+                    << std::endl;
+          return;
+        } else {
+          throw e;
+        }
+      } catch (const std::runtime_error& e) {
+        check_interrup_msg(e.what(), false);
+      } catch (...) {
+        throw;
+      }
+      return;
+    });
+    std::string curRunningSession{""};
+    std::vector<QuerySessionStatus> query_status;
+    auto start_time = std::chrono::system_clock::now();
+    bool startCTAS = false;
+    bool detect_time_out = false;
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+    while (!startCTAS && !detect_time_out) {
+      {
+        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        query_status = executor->getQuerySessionInfo(session_id, session_read_lock);
+      }
+      if (query_status.size() == 1) {
+        if (query_status[0].getQuerySession().compare(session_id) != 0) {
+          CHECK(false);
+        }
+        auto query_str = query_status[0].getQueryStr();
+        if (query_str.find("INSERT_DATA") != std::string::npos) {
+          startCTAS = true;
+          executor->interrupt(session_id, session_id);
+          break;
+        }
+      }
+      auto end_time = std::chrono::system_clock::now();
+      auto cur_sec =
+          std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
+      if (cur_sec.count() > 60) {
+        detect_time_out = true;
+        std::cout << "Detect time_out while performing CTAS" << std::endl;
+        break;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    if (catchInterruption.load()) {
+      std::cout << "Detect interrupt request while performing CTAS" << std::endl;
+      // CTAS is interrupted and so the table is dropped
+      EXPECT_ANY_THROW(sql("SELECT COUNT(1) FROM t_CTAS"));
       return;
     }
     if (detect_time_out) {
@@ -2978,7 +3109,6 @@ TEST_F(Non_Kernel_Time_Interrupt, DISABLED_Interrupt_ITAS) {
     CHECK(false);
   }
 }
-*/
 
 class ItasStringTest : public DBHandlerTestFixture {
  public:
