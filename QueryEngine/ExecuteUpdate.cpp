@@ -65,6 +65,7 @@ SQLTypeInfo UpdateLogForFragment::getColumnType(const size_t col_idx) const {
 TableUpdateMetadata Executor::executeUpdate(
     const RelAlgExecutionUnit& ra_exe_unit_in,
     const std::vector<InputTableInfo>& table_infos,
+    const TableDescriptor* table_desc_for_update,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
     const Catalog_Namespace::Catalog& cat,
@@ -72,6 +73,7 @@ TableUpdateMetadata Executor::executeUpdate(
     const UpdateLogForFragment::Callback& cb,
     const bool is_agg) {
   CHECK(cb);
+  CHECK(table_desc_for_update);
   VLOG(1) << "Executor " << executor_id_
           << " is executing update/delete work unit:" << ra_exe_unit_in;
 
@@ -187,7 +189,7 @@ TableUpdateMetadata Executor::executeUpdate(
   }
 
   if (g_enable_auto_metadata_update) {
-    auto td = cat.getMetadataForTable(table_id);
+    auto td = cat.getMetadataForTable(table_desc_for_update->tableId);
     TableOptimizer table_optimizer{td, this, cat};
     table_optimizer.recomputeMetadataUnlocked(table_update_metadata);
   }

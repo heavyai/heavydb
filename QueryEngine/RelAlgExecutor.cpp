@@ -1518,52 +1518,53 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
           "UPDATE queries involving variable length columns are only supported on tables "
           "with the vacuum attribute set to 'delayed'");
     }
-
+    auto updated_table_desc = node->getModifiedTableDescriptor();
     dml_transaction_parameters_ =
-        std::make_unique<UpdateTransactionParameters>(node->getModifiedTableDescriptor(),
+        std::make_unique<UpdateTransactionParameters>(updated_table_desc,
                                                       node->getTargetColumns(),
                                                       node->getOutputMetainfo(),
                                                       node->isVarlenUpdateRequired());
 
     const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
-    auto execute_update_ra_exe_unit = [this, &co, &eo_in, &table_infos](
-                                          const RelAlgExecutionUnit& ra_exe_unit,
-                                          const bool is_aggregate) {
-      CompilationOptions co_project = CompilationOptions::makeCpuOnly(co);
+    auto execute_update_ra_exe_unit =
+        [this, &co, &eo_in, &table_infos, &updated_table_desc](
+            const RelAlgExecutionUnit& ra_exe_unit, const bool is_aggregate) {
+          CompilationOptions co_project = CompilationOptions::makeCpuOnly(co);
 
-      auto eo = eo_in;
-      if (dml_transaction_parameters_->tableIsTemporary()) {
-        eo.output_columnar_hint = true;
-        co_project.allow_lazy_fetch = false;
-        co_project.filter_on_deleted_column =
-            false;  // project the entire delete column for columnar update
-      }
+          auto eo = eo_in;
+          if (dml_transaction_parameters_->tableIsTemporary()) {
+            eo.output_columnar_hint = true;
+            co_project.allow_lazy_fetch = false;
+            co_project.filter_on_deleted_column =
+                false;  // project the entire delete column for columnar update
+          }
 
-      auto update_transaction_parameters =
-          dynamic_cast<UpdateTransactionParameters*>(dml_transaction_parameters_.get());
-      CHECK(update_transaction_parameters);
-      auto update_callback = yieldUpdateCallback(*update_transaction_parameters);
-      try {
-        auto table_update_metadata =
-            executor_->executeUpdate(ra_exe_unit,
-                                     table_infos,
-                                     co_project,
-                                     eo,
-                                     cat_,
-                                     executor_->row_set_mem_owner_,
-                                     update_callback,
-                                     is_aggregate);
-        post_execution_callback_ = [table_update_metadata, this]() {
-          dml_transaction_parameters_->finalizeTransaction(cat_);
-          TableOptimizer table_optimizer{
-              dml_transaction_parameters_->getTableDescriptor(), executor_, cat_};
-          table_optimizer.vacuumFragmentsAboveMinSelectivity(table_update_metadata);
+          auto update_transaction_parameters = dynamic_cast<UpdateTransactionParameters*>(
+              dml_transaction_parameters_.get());
+          CHECK(update_transaction_parameters);
+          auto update_callback = yieldUpdateCallback(*update_transaction_parameters);
+          try {
+            auto table_update_metadata =
+                executor_->executeUpdate(ra_exe_unit,
+                                         table_infos,
+                                         updated_table_desc,
+                                         co_project,
+                                         eo,
+                                         cat_,
+                                         executor_->row_set_mem_owner_,
+                                         update_callback,
+                                         is_aggregate);
+            post_execution_callback_ = [table_update_metadata, this]() {
+              dml_transaction_parameters_->finalizeTransaction(cat_);
+              TableOptimizer table_optimizer{
+                  dml_transaction_parameters_->getTableDescriptor(), executor_, cat_};
+              table_optimizer.vacuumFragmentsAboveMinSelectivity(table_update_metadata);
+            };
+          } catch (const QueryExecutionError& e) {
+            throw std::runtime_error(getErrorMessageFromCode(e.getErrorCode()));
+          }
         };
-      } catch (const QueryExecutionError& e) {
-        throw std::runtime_error(getErrorMessageFromCode(e.getErrorCode()));
-      }
-    };
 
     if (dml_transaction_parameters_->tableIsTemporary()) {
       // hold owned target exprs during execution if rewriting
@@ -1670,6 +1671,7 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
             auto table_update_metadata =
                 executor_->executeUpdate(exe_unit,
                                          table_infos,
+                                         table_descriptor,
                                          co_delete,
                                          eo,
                                          cat_,
