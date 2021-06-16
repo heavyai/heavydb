@@ -484,8 +484,13 @@ TEST_F(SizeTest, DefaultSize) {
   ASSERT_EQ(cfm.getMaxWrapperSize(),
             (cache_size_ * fn::CachingFileMgr::METADATA_SPACE_PERCENTAGE) -
                 (cache_size_ * fn::CachingFileMgr::METADATA_FILE_SPACE_PERCENTAGE));
-  ASSERT_EQ(cfm.getMaxDataFiles(), 36U);
-  ASSERT_EQ(cfm.getMaxMetaFiles(), 12U);
+  auto meta_space = fn::DiskCacheConfig::DEFAULT_MAX_SIZE *
+                    fn::CachingFileMgr::METADATA_SPACE_PERCENTAGE;
+  auto data_file_space = fn::DiskCacheConfig::DEFAULT_MAX_SIZE - meta_space;
+  auto meta_file_space = fn::DiskCacheConfig::DEFAULT_MAX_SIZE *
+                         fn::CachingFileMgr::METADATA_FILE_SPACE_PERCENTAGE;
+  ASSERT_EQ(cfm.getMaxDataFiles(), data_file_space / cfm.getDataFileSize());
+  ASSERT_EQ(cfm.getMaxMetaFiles(), meta_file_space / cfm.getMetadataFileSize());
 }
 
 TEST_F(SizeTest, ChunkSpace) {
