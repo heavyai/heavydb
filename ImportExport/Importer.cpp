@@ -419,6 +419,22 @@ ArrayDatum ImporterUtils::composeNullArray(const SQLTypeInfo& ti) {
   return NullArray(ti);
 }
 
+ArrayDatum ImporterUtils::composeNullPointCoords(const SQLTypeInfo& coords_ti,
+                                                 const SQLTypeInfo& geo_ti) {
+  if (geo_ti.get_compression() == kENCODING_GEOINT) {
+    CHECK(geo_ti.get_comp_param() == 32);
+    std::vector<double> null_point_coords = {NULL_ARRAY_DOUBLE, NULL_DOUBLE};
+    auto compressed_null_coords = Geospatial::compress_coords(null_point_coords, geo_ti);
+    const size_t len = compressed_null_coords.size();
+    int8_t* buf = (int8_t*)checked_malloc(len);
+    memcpy(buf, compressed_null_coords.data(), len);
+    return ArrayDatum(len, buf, false);
+  }
+  auto modified_ti = coords_ti;
+  modified_ti.set_subtype(kDOUBLE);
+  return import_export::ImporterUtils::composeNullArray(modified_ti);
+}
+
 void addBinaryStringArray(const TDatum& datum, std::vector<std::string>& string_vec) {
   const auto& arr = datum.val.arr_val;
   for (const auto& elem_datum : arr) {

@@ -43,6 +43,7 @@
 #include "DataMgr/ForeignStorage/DummyForeignStorage.h"
 #include "DistributedHandler.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
+#include "Geospatial/Compression.h"
 #include "Geospatial/GDAL.h"
 #include "Geospatial/Transforms.h"
 #include "Geospatial/Types.h"
@@ -6527,6 +6528,8 @@ void DBHandler::insert_data(const TSessionId& session,
     insert_data.numRows = thrift_insert_data.num_rows;
     std::vector<std::unique_ptr<std::vector<std::string>>> none_encoded_string_columns;
     std::vector<std::unique_ptr<std::vector<ArrayDatum>>> array_columns;
+    SQLTypeInfo geo_ti{kNULLT,
+                       false};  // will be filled with the correct info if possible
     for (size_t col_idx = 0; col_idx < insert_data.columnIds.size(); ++col_idx) {
       const int column_id = insert_data.columnIds[col_idx];
       DataBlockPtr p;
@@ -6561,6 +6564,11 @@ void DBHandler::insert_data(const TSessionId& session,
           none_encoded_strings->push_back(varlen_str.payload);
         }
         p.stringsPtr = none_encoded_strings.get();
+
+        // point geo type needs to mark null sentinel in its physical coord column
+        // To recognize null sentinel for point, therefore, we keep the actual geo type
+        // and needs to use it when constructing geo null point
+        geo_ti = ti;
       } else {
         CHECK(ti.is_array());
         array_columns.emplace_back(new std::vector<ArrayDatum>());
@@ -6568,7 +6576,12 @@ void DBHandler::insert_data(const TSessionId& session,
         CHECK_EQ(rows_expected, thrift_insert_data.data[col_idx].var_len_data.size());
         for (const auto& t_arr_datum : thrift_insert_data.data[col_idx].var_len_data) {
           if (t_arr_datum.is_null) {
-            if (ti.get_size() > 0 && !ti.get_elem_type().is_string()) {
+            if ((cd->columnName.find("_coords") != std::string::npos) &&
+                geo_ti.get_type() == kPOINT) {
+              // For geo point, we manually mark its null sentinel to coord buffer
+              array_column->push_back(
+                  import_export::ImporterUtils::composeNullPointCoords(ti, geo_ti));
+            } else if (ti.get_size() > 0 && !ti.get_elem_type().is_string()) {
               array_column->push_back(import_export::ImporterUtils::composeNullArray(ti));
             } else {
               array_column->emplace_back(0, nullptr, true);
