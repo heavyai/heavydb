@@ -115,7 +115,7 @@ class QueryExecutionContext : boost::noncopyable {
 
   void initializeRuntimeInterrupter(void* native_module, const int device_id) const;
 
-  std::vector<CUdeviceptr> prepareKernelParams(
+  std::vector<int8_t *> prepareKernelParams(
       const std::vector<std::vector<const int8_t*>>& col_buffers,
       const std::vector<int8_t>& literal_buff,
       const std::vector<std::vector<int64_t>>& num_rows,
@@ -133,7 +133,7 @@ class QueryExecutionContext : boost::noncopyable {
 
   ResultSetPtr groupBufferToDeinterleavedResults(const size_t i) const;
 
-  std::unique_ptr<CudaAllocator> gpu_allocator_;
+  std::unique_ptr<DeviceAllocator> gpu_allocator_;
 
   // TODO(adb): convert to shared_ptr
   QueryMemoryDescriptor query_mem_desc_;
