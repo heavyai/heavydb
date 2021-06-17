@@ -152,7 +152,7 @@ struct HeaderInfo {
              const Page& page)
       : chunkKey(chunkKey), pageId(pageId), versionEpoch(versionEpoch), page(page) {}
 
-  bool operator<(const HeaderInfo& other) {
+  bool operator<(const HeaderInfo& other) const {
     if (chunkKey != other.chunkKey) {
       return chunkKey < other.chunkKey;
     }
