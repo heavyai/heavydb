@@ -68,10 +68,19 @@ void GDAL::init() {
         L"GDAL_DATA",
         reinterpret_cast<LPCWSTR>(
             std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data").c_str()));
+    SetEnvironmentVariable(
+        L"PROJ_LIB",
+        reinterpret_cast<LPCWSTR>(
+            std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data/proj")
+                .c_str()));
 #else
     setenv("GDAL_DATA",
            std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data").c_str(),
            true);
+    setenv(
+        "PROJ_LIB",
+        std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data/proj").c_str(),
+        true);
 #endif
 
 #ifndef _MSC_VER  // TODO
