@@ -3027,7 +3027,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           throw std::runtime_error(
               "Query execution has been interrupted while performing " + work_type_str);
         }
-        auto result_rows = res.rs;
+        auto& result_rows = res.rs;
         result_rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
         const auto num_rows = result_rows->rowCount();
 
@@ -3039,14 +3039,9 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
         size_t leaf_count = leafs_connector_->leafCount();
 
-        size_t max_number_of_rows_per_package =
-            std::min(num_rows / leaf_count, size_t(64 * 1024));
-
-        size_t start_row = 0;
-        size_t num_rows_to_process = std::min(num_rows, max_number_of_rows_per_package);
-
-        // ensure that at least one row is being processed
-        num_rows_to_process = std::max(num_rows_to_process, size_t(1));
+        // ensure that at least 1 row is processed per block up to a maximum of 65536 rows
+        const size_t rows_per_block =
+            std::max(std::min(num_rows / leaf_count, size_t(64 * 1024)), size_t(1));
 
         std::vector<std::unique_ptr<TargetValueConverter>> value_converters;
 
@@ -3056,20 +3051,20 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
         std::vector<size_t> thread_start_idx(num_worker_threads),
             thread_end_idx(num_worker_threads);
-        bool can_go_parallel = !result_rows->isTruncated() && num_rows_to_process > 20000;
+        bool can_go_parallel = !result_rows->isTruncated() && rows_per_block > 20000;
 
-        std::atomic<size_t> row_idx{0};
+        std::atomic<size_t> crt_row_idx{0};
 
-        auto do_work = [&result_rows, &num_rows_to_process, &value_converters, &row_idx](
+        auto do_work = [&result_rows, &value_converters, &crt_row_idx](
                            const size_t idx,
-                           const size_t end,
+                           const size_t block_end,
                            const size_t num_cols,
                            const size_t thread_id,
                            bool& stop_convert) {
           const auto result_row = result_rows->getRowAtNoTranslations(idx);
           if (!result_row.empty()) {
-            size_t target_row = row_idx.fetch_add(1);
-            if (target_row >= num_rows_to_process) {
+            size_t target_row = crt_row_idx.fetch_add(1);
+            if (target_row >= block_end) {
               stop_convert = true;
               return;
             }
@@ -3086,7 +3081,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
                                  &executor,
                                  &query_session,
                                  &work_type_str,
-                                 &do_work](const int thread_id) {
+                                 &do_work](const int thread_id, const size_t block_end) {
           const int num_cols = value_converters.size();
           const size_t start = thread_start_idx[thread_id];
           const size_t end = thread_end_idx[thread_id];
@@ -3101,14 +3096,14 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
                     "Query execution has been interrupted while performing " +
                     work_type_str);
               }
-              do_work(idx, end, num_cols, thread_id, stop_convert);
+              do_work(idx, block_end, num_cols, thread_id, stop_convert);
               if (stop_convert) {
                 break;
               }
             }
           } else {
             for (idx = start; idx < end; ++idx) {
-              do_work(idx, end, num_cols, thread_id, stop_convert);
+              do_work(idx, block_end, num_cols, thread_id, stop_convert);
               if (stop_convert) {
                 break;
               }
@@ -3118,13 +3113,12 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
         };
 
         auto single_threaded_value_converter =
-            [&row_idx, &num_rows_to_process, &value_converters, &result_rows](
-                const size_t idx,
-                const size_t end,
-                const size_t num_cols,
-                bool& stop_convert) {
-              size_t target_row = row_idx.fetch_add(1);
-              if (target_row >= num_rows_to_process) {
+            [&crt_row_idx, &value_converters, &result_rows](const size_t idx,
+                                                            const size_t block_end,
+                                                            const size_t num_cols,
+                                                            bool& stop_convert) {
+              size_t target_row = crt_row_idx.fetch_add(1);
+              if (target_row >= block_end) {
                 stop_convert = true;
                 return;
               }
@@ -3136,52 +3130,54 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
               }
             };
 
-        auto single_threaded_convert_function =
-            [&value_converters,
-             &thread_start_idx,
-             &thread_end_idx,
-             &executor,
-             &query_session,
-             &work_type_str,
-             &single_threaded_value_converter](const int thread_id) {
-              const int num_cols = value_converters.size();
-              const size_t start = thread_start_idx[thread_id];
-              const size_t end = thread_end_idx[thread_id];
-              size_t idx = 0;
-              bool stop_convert = false;
-              if (g_enable_non_kernel_time_query_interrupt) {
-                size_t local_idx = 0;
-                for (idx = start; idx < end; ++idx, ++local_idx) {
-                  if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
-                               checkInterrupt(query_session, executor))) {
-                    throw std::runtime_error(
-                        "Query execution has been interrupted while performing " +
-                        work_type_str);
-                  }
-                  single_threaded_value_converter(idx, end, num_cols, stop_convert);
-                  if (stop_convert) {
-                    break;
-                  }
-                }
-              } else {
-                for (idx = start; idx < end; ++idx) {
-                  single_threaded_value_converter(idx, end, num_cols, stop_convert);
-                  if (stop_convert) {
-                    break;
-                  }
-                }
+        auto single_threaded_convert_function = [&value_converters,
+                                                 &thread_start_idx,
+                                                 &thread_end_idx,
+                                                 &executor,
+                                                 &query_session,
+                                                 &work_type_str,
+                                                 &single_threaded_value_converter](
+                                                    const int thread_id,
+                                                    const size_t block_end) {
+          const int num_cols = value_converters.size();
+          const size_t start = thread_start_idx[thread_id];
+          const size_t end = thread_end_idx[thread_id];
+          size_t idx = 0;
+          bool stop_convert = false;
+          if (g_enable_non_kernel_time_query_interrupt) {
+            size_t local_idx = 0;
+            for (idx = start; idx < end; ++idx, ++local_idx) {
+              if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
+                           checkInterrupt(query_session, executor))) {
+                throw std::runtime_error(
+                    "Query execution has been interrupted while performing " +
+                    work_type_str);
               }
-              thread_start_idx[thread_id] = idx;
-            };
+              single_threaded_value_converter(idx, block_end, num_cols, stop_convert);
+              if (stop_convert) {
+                break;
+              }
+            }
+          } else {
+            for (idx = start; idx < end; ++idx) {
+              single_threaded_value_converter(idx, end, num_cols, stop_convert);
+              if (stop_convert) {
+                break;
+              }
+            }
+          }
+          thread_start_idx[thread_id] = idx;
+        };
 
         if (can_go_parallel) {
-          const size_t entryCount = result_rows->entryCount();
-          for (size_t i = 0,
-                      start_entry = 0,
-                      stride = (entryCount + num_worker_threads - 1) / num_worker_threads;
-               i < num_worker_threads && start_entry < entryCount;
+          const size_t entry_count = result_rows->entryCount();
+          for (size_t
+                   i = 0,
+                   start_entry = 0,
+                   stride = (entry_count + num_worker_threads - 1) / num_worker_threads;
+               i < num_worker_threads && start_entry < entry_count;
                ++i, start_entry += stride) {
-            const auto end_entry = std::min(start_entry + stride, entryCount);
+            const auto end_entry = std::min(start_entry + stride, entry_count);
             thread_start_idx[i] = start_entry;
             thread_end_idx[i] = end_entry;
           }
@@ -3190,15 +3186,19 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           thread_end_idx[0] = result_rows->entryCount();
         }
 
-        while (start_row < num_rows) {
+        for (size_t block_start = 0; block_start < num_rows;
+             block_start += rows_per_block) {
+          const auto num_rows_this_itr = block_start + rows_per_block < num_rows
+                                             ? rows_per_block
+                                             : num_rows - block_start;
+          crt_row_idx = 0;  // reset block tracker
           value_converters.clear();
-          row_idx = 0;
           int colNum = 0;
           for (const auto targetDescriptor : target_column_descriptors) {
             auto sourceDataMetaInfo = res.targets_meta[colNum++];
 
             ConverterCreateParameter param{
-                num_rows_to_process,
+                num_rows_this_itr,
                 catalog,
                 sourceDataMetaInfo,
                 targetDescriptor,
@@ -3220,7 +3220,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
             std::vector<std::future<void>> worker_threads;
             for (int i = 0; i < num_worker_threads; ++i) {
               worker_threads.push_back(
-                  std::async(std::launch::async, convert_function, i));
+                  std::async(std::launch::async, convert_function, i, num_rows_this_itr));
             }
 
             for (auto& child : worker_threads) {
@@ -3231,7 +3231,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
             }
 
           } else {
-            single_threaded_convert_function(0);
+            single_threaded_convert_function(0, num_rows_this_itr);
           }
 
           // finalize the insert data
@@ -3257,7 +3257,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           insert_data.databaseId = catalog.getCurrentDB().dbId;
           CHECK(td);
           insert_data.tableId = td->tableId;
-          insert_data.numRows = num_rows_to_process;
+          insert_data.numRows = num_rows_this_itr;
 
           for (int col_idx = 0; col_idx < target_column_descriptors.size(); col_idx++) {
             if (UNLIKELY(g_enable_non_kernel_time_query_interrupt &&
@@ -3275,10 +3275,6 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
               import_export::fill_missing_columns(&catalog, insert_data);
           insertDataLoader.insertData(*session, insert_data);
           total_data_load_time_ms += timer_stop(data_load_clock_begin);
-
-          start_row += num_rows_to_process;
-          num_rows_to_process =
-              std::min(num_rows - start_row, max_number_of_rows_per_package);
         }
       }
     }
