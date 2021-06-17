@@ -68,7 +68,7 @@ class DefaultEnvResolver {
     return nullptr;
   }
 
-#if defined(_APPLE__) || defined(_WIN32)
+#if defined(__APPLE__) || defined(_WIN32)
   auto const* getenv(char const* env_var_name) const { return ::getenv(env_var_name); }
 #else
   auto const* getenv(char const* env_var_name) const {
