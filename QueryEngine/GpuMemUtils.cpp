@@ -58,7 +58,7 @@ inline size_t coalesced_size(const QueryMemoryDescriptor& query_mem_desc,
 }  // namespace
 
 GpuGroupByBuffers create_dev_group_by_buffers(
-    DeviceAllocator* cuda_allocator,
+    DeviceAllocator* device_allocator,
     const std::vector<int64_t*>& group_by_buffers,
     const QueryMemoryDescriptor& query_mem_desc,
     const unsigned block_size_x,
@@ -73,10 +73,10 @@ GpuGroupByBuffers create_dev_group_by_buffers(
   if (group_by_buffers.empty() && !insitu_allocator) {
     return {0, 0, 0};
   }
-  CHECK(cuda_allocator);
+  CHECK(device_allocator);
 
   size_t groups_buffer_size{0};
-  CUdeviceptr group_by_dev_buffers_mem{0};
+  int8_t* group_by_dev_buffers_mem{nullptr};
   size_t mem_size{0};
   size_t entry_count{0};
 
@@ -98,8 +98,7 @@ GpuGroupByBuffers create_dev_group_by_buffers(
                                 groups_buffer_size,
                                 query_mem_desc.blocksShareMemory() ? 1 : grid_size_x);
       // TODO(adb): render allocator support
-      group_by_dev_buffers_mem =
-          reinterpret_cast<CUdeviceptr>(cuda_allocator->alloc(mem_size));
+      group_by_dev_buffers_mem = device_allocator->alloc(mem_size);
     } else {
       // Attempt to allocate increasingly small buffers until we have less than 256B of
       // memory remaining on the device. This may have the side effect of evicting
@@ -118,8 +117,7 @@ GpuGroupByBuffers create_dev_group_by_buffers(
           CHECK_LE(entry_count, std::numeric_limits<uint32_t>::max());
 
           // TODO(adb): render allocator support
-          group_by_dev_buffers_mem =
-              reinterpret_cast<CUdeviceptr>(cuda_allocator->alloc(mem_size));
+          group_by_dev_buffers_mem = device_allocator->alloc(mem_size);
         } catch (const OutOfMemory& e) {
           LOG(WARNING) << e.what();
           max_memory_size = max_memory_size * g_bump_allocator_step_reduction;
@@ -154,13 +152,11 @@ GpuGroupByBuffers create_dev_group_by_buffers(
           insitu_allocator->alloc(mem_size + prepended_buff_size);
     } else {
       group_by_dev_buffers_allocation =
-          cuda_allocator->alloc(mem_size + prepended_buff_size);
+          device_allocator->alloc(mem_size + prepended_buff_size);
     }
     CHECK(group_by_dev_buffers_allocation);
 
-    group_by_dev_buffers_mem =
-        reinterpret_cast<CUdeviceptr>(group_by_dev_buffers_allocation) +
-        prepended_buff_size;
+    group_by_dev_buffers_mem = group_by_dev_buffers_allocation + prepended_buff_size;
   }
   CHECK_GT(groups_buffer_size, size_t(0));
   CHECK(group_by_dev_buffers_mem);
@@ -177,16 +173,15 @@ GpuGroupByBuffers create_dev_group_by_buffers(
       memcpy(buff_to_gpu_ptr, group_by_buffers[i], groups_buffer_size);
       buff_to_gpu_ptr += groups_buffer_size;
     }
-    cuda_allocator->copyToDevice(reinterpret_cast<int8_t*>(group_by_dev_buffers_mem),
-                                 buff_to_gpu.data(),
-                                 buff_to_gpu.size());
+    device_allocator->copyToDevice(
+        group_by_dev_buffers_mem, buff_to_gpu.data(), buff_to_gpu.size());
   }
 
   auto group_by_dev_buffer = group_by_dev_buffers_mem;
 
   const size_t num_ptrs{block_size_x * grid_size_x};
 
-  std::vector<CUdeviceptr> group_by_dev_buffers(num_ptrs);
+  std::vector<int8_t*> group_by_dev_buffers(num_ptrs);
 
   for (size_t i = 0; i < num_ptrs; i += step) {
     for (size_t j = 0; j < step; ++j) {
@@ -197,13 +192,13 @@ GpuGroupByBuffers create_dev_group_by_buffers(
     }
   }
 
-  auto group_by_dev_ptr = cuda_allocator->alloc(num_ptrs * sizeof(CUdeviceptr));
-  cuda_allocator->copyToDevice(group_by_dev_ptr,
-                               reinterpret_cast<int8_t*>(group_by_dev_buffers.data()),
-                               num_ptrs * sizeof(CUdeviceptr));
+  auto group_by_dev_ptr = device_allocator->alloc(num_ptrs * sizeof(int8_t*));
+  device_allocator->copyToDevice(group_by_dev_ptr,
+                                 reinterpret_cast<int8_t*>(group_by_dev_buffers.data()),
+                                 num_ptrs * sizeof(int8_t*));
 
   return {reinterpret_cast<CUdeviceptr>(group_by_dev_ptr),
-          group_by_dev_buffers_mem,
+          reinterpret_cast<CUdeviceptr>(group_by_dev_buffers_mem),
           entry_count};
 }
 
