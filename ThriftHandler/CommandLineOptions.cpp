@@ -363,7 +363,7 @@ void CommandLineOptions::fillOptions() {
       "'local_tables', 'none', and 'all'.");
 
   help_desc.add_options()("disk-cache-size",
-                          po::value<std::uint64_t>(&(disk_cache_config.size_limit)),
+                          po::value<size_t>(&(disk_cache_config.size_limit)),
                           "Specify a maximum size for the disk cache in bytes.");
 
 #ifdef HAVE_AWS_S3
