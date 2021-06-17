@@ -43,6 +43,7 @@ SqlCreate SqlCreateUserMapping(Span s, boolean replace) :
     {
         sqlCreateUserMappingBuilder.setServerName(serverName.toString());
     }
+    <WITH>
     Options(sqlCreateUserMappingBuilder)
     {
         sqlCreateUserMappingBuilder.setPos(s.end(this));

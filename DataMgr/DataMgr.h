@@ -161,16 +161,15 @@ class DataMgr {
   friend class GlobalFileMgr;
 
  public:
-  DataMgr(
+  explicit DataMgr(
       const std::string& dataDir,
       const SystemParameters& system_parameters,
+      std::unique_ptr<CudaMgr_Namespace::CudaMgr> cudaMgr,
       const bool useGpus,
-      const int numGpus,
-      const int startGpu = 0,
       const size_t reservedGpuMem = (1 << 27),
       const size_t numReaderThreads = 0, /* 0 means use default for # of reader threads */
-      const DiskCacheConfig cacheConfig = DiskCacheConfig());
-
+      const File_Namespace::DiskCacheConfig cacheConfig =
+          File_Namespace::DiskCacheConfig());
   ~DataMgr();
   AbstractBuffer* createChunkBuffer(const ChunkKey& key,
                                     const MemoryLevel memoryLevel,
@@ -198,6 +197,7 @@ class DataMgr {
   const std::map<ChunkKey, File_Namespace::FileBuffer*>& getChunkMap();
   void checkpoint(const int db_id,
                   const int tb_id);  // checkpoint for individual table of DB
+  void checkpoint(const int db_id, const int table_id, const MemoryLevel memory_level);
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                        const ChunkKey& keyPrefix);
   inline bool gpusPresent() { return hasGpus_; }
@@ -207,6 +207,7 @@ class DataMgr {
 
   CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cudaMgr_.get(); }
   File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;
+  std::shared_ptr<ForeignStorageInterface> getForeignStorageInterface() const;
 
   // database_id, table_id, column_id, fragment_id
   std::vector<int> levelSizes_;
@@ -225,14 +226,14 @@ class DataMgr {
   static size_t getTotalSystemMemory();
 
   PersistentStorageMgr* getPersistentStorageMgr() const;
-  void resetPersistentStorage(const DiskCacheConfig& cache_config,
+  void resetPersistentStorage(const File_Namespace::DiskCacheConfig& cache_config,
                               const size_t num_reader_threads,
                               const SystemParameters& sys_params);
 
  private:
   void populateMgrs(const SystemParameters& system_parameters,
                     const size_t userSpecifiedNumReaderThreads,
-                    const DiskCacheConfig& cache_config);
+                    const File_Namespace::DiskCacheConfig& cache_config);
   void convertDB(const std::string basePath);
   void checkpoint();  // checkpoint for whole DB, called from convertDB proc only
   void createTopLevelMetadata() const;

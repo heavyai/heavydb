@@ -75,7 +75,7 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
     CHECK(rhs_has_null_);
     return;
   }
-  const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000L};
+  const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000LL};
   const auto bitmap_sz_bits =
       static_cast<int64_t>(checked_int64_t(max_val_) - min_val_ + 1);
   if (bitmap_sz_bits > MAX_BITMAP_BITS) {

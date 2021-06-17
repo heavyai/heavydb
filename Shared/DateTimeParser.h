@@ -22,16 +22,26 @@
 #include <string_view>
 
 template <SQLTypes SQL_TYPE>
-int64_t dateTimeParse(std::string_view, unsigned const dim);
+std::optional<int64_t> dateTimeParseOptional(std::string_view, unsigned const dim);
 
 template <>
-int64_t dateTimeParse<kDATE>(std::string_view, unsigned const dim);
+std::optional<int64_t> dateTimeParseOptional<kDATE>(std::string_view, unsigned const dim);
 
 template <>
-int64_t dateTimeParse<kTIME>(std::string_view, unsigned const dim);
+std::optional<int64_t> dateTimeParseOptional<kTIME>(std::string_view, unsigned const dim);
 
 template <>
-int64_t dateTimeParse<kTIMESTAMP>(std::string_view, unsigned const dim);
+std::optional<int64_t> dateTimeParseOptional<kTIMESTAMP>(std::string_view,
+                                                         unsigned const dim);
+
+template <SQLTypes SQL_TYPE>
+int64_t dateTimeParse(std::string_view const s, unsigned const dim) {
+  if (auto const time = dateTimeParseOptional<SQL_TYPE>(s, dim)) {
+    return *time;
+  } else {
+    throw std::runtime_error(cat("Invalid ", toString(SQL_TYPE), " string (", s, ')'));
+  }
+}
 
 /**
  * Set format_type_ and parse date/time/timestamp strings into (s,ms,us,ns) since the
@@ -43,7 +53,7 @@ int64_t dateTimeParse<kTIMESTAMP>(std::string_view, unsigned const dim);
 class DateTimeParser {
  public:
   enum class FormatType { Date, Time, Timezone };
-  std::optional<int64_t> parse(std::string_view const&, unsigned dim);
+  std::optional<int64_t> parse(std::string_view const, unsigned dim);
   void setFormatType(FormatType);
   std::string_view unparsed() const;
 

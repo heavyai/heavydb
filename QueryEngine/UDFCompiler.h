@@ -78,7 +78,9 @@ class UdfCompiler {
  private:
   std::string udf_file_name_;
   std::string udf_ast_file_name_;
+#ifdef HAVE_CUDA
   CudaMgr_Namespace::NvidiaDeviceArch target_arch_;
+#endif
   std::string clang_path_;
   std::vector<std::string> clang_options_;
 };

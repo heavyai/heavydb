@@ -1,0 +1,9 @@
+{
+  "statementType": "DDL",
+  "payload": {
+    "alterType": "RENAME_TABLE",
+    "tableName": "test_table",
+    "newTableName": "new_test_table",
+    "command": "ALTER_FOREIGN_TABLE"
+  }
+}

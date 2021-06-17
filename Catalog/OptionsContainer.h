@@ -83,5 +83,13 @@ struct OptionsContainer {
     document.Accept(writer);
     return buffer.GetString();
   }
+
+  std::optional<std::string> getOption(const std::string_view& key) const {
+    if (auto it = options.find(key); it != options.end()) {
+      return it->second;
+    } else {
+      return {};
+    }
+  }
 };
 }  // namespace foreign_storage

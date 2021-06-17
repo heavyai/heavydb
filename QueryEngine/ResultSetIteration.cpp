@@ -35,6 +35,8 @@
 #include "Shared/sqltypes.h"
 #include "TypePunning.h"
 
+#include <boost/math/special_functions/fpclassify.hpp>
+
 #include <memory>
 #include <utility>
 
@@ -794,7 +796,7 @@ TargetValue build_string_array_target_value(
     const int dict_id,
     const bool translate_strings,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const Executor* executor) {
+    const Catalog_Namespace::Catalog* catalog) {
   std::vector<ScalarTargetValue> values;
   CHECK_EQ(size_t(0), buff_sz % sizeof(int32_t));
   const size_t num_elems = buff_sz / sizeof(int32_t);
@@ -810,7 +812,8 @@ TargetValue build_string_array_target_value(
           values.emplace_back(sdp->getString(string_id));
         } else {
           values.emplace_back(NullableString(
-              executor->getStringDictionaryProxy(dict_id, row_set_mem_owner, false)
+              row_set_mem_owner
+                  ->getOrAddStringDictProxy(dict_id, /*with_generation=*/false, catalog)
                   ->getString(string_id)));
         }
       }
@@ -828,7 +831,7 @@ TargetValue build_array_target_value(const SQLTypeInfo& array_ti,
                                      const size_t buff_sz,
                                      const bool translate_strings,
                                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                     const Executor* executor) {
+                                     const Catalog_Namespace::Catalog* catalog) {
   CHECK(array_ti.is_array());
   const auto& elem_ti = array_ti.get_elem_type();
   if (elem_ti.is_string()) {
@@ -837,7 +840,7 @@ TargetValue build_array_target_value(const SQLTypeInfo& array_ti,
                                            elem_ti.get_comp_param(),
                                            translate_strings,
                                            row_set_mem_owner,
-                                           executor);
+                                           catalog);
   }
   switch (elem_ti.get_size()) {
     case 1:
@@ -1031,8 +1034,8 @@ struct GeoTargetValueBuilder {
       }
       case ResultSet::GeoReturnType::WktString: {
         if (!geo_ti.get_notnull() && ad_arr[0]->is_null) {
-          // May need to generate EMPTY wkt instead of NULL
-          return NullableString("NULL");
+          // Generating NULL wkt string to represent NULL geo
+          return NullableString(nullptr);
         }
         return GeoReturnTypeTraits<ResultSet::GeoReturnType::WktString,
                                    GEO_SOURCE_TYPE>::GeoSerializerType::serialize(geo_ti,
@@ -1327,7 +1330,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
           varlen_buffer[varlen_ptr].size(),
           translate_strings,
           row_set_mem_owner_,
-          executor_);
+          catalog_);
     } else {
       CHECK(false);
     }
@@ -1378,7 +1381,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
                                         ad.length,
                                         translate_strings,
                                         row_set_mem_owner_,
-                                        executor_);
+                                        catalog_);
       }
     }
   }
@@ -1412,7 +1415,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
                                     length,
                                     translate_strings,
                                     row_set_mem_owner_,
-                                    executor_);
+                                    catalog_);
   }
   return std::string(reinterpret_cast<char*>(varlen_ptr), length);
 }
@@ -1774,6 +1777,12 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
     }
   }
   if (chosen_type.is_fp()) {
+    if (target_info.agg_kind == kAPPROX_MEDIAN) {
+      return *reinterpret_cast<double const*>(ptr) == NULL_DOUBLE
+                 ? NULL_DOUBLE  // sql_validate / just_validate
+                 : calculateQuantile(*reinterpret_cast<quantile::TDigest* const*>(ptr),
+                                     0.5);
+    }
     switch (actual_compact_sz) {
       case 8: {
         const auto dval = *reinterpret_cast<const double*>(ptr);
@@ -1813,10 +1822,11 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
       if (!chosen_type.get_comp_param()) {
         sdp = row_set_mem_owner_->getLiteralStringDictProxy();
       } else {
-        sdp = executor_
-                  ? executor_->getStringDictionaryProxy(
-                        chosen_type.get_comp_param(), row_set_mem_owner_, false)
-                  : row_set_mem_owner_->getStringDictProxy(chosen_type.get_comp_param());
+        sdp = catalog_
+                  ? row_set_mem_owner_->getOrAddStringDictProxy(
+                        chosen_type.get_comp_param(), /*with_generation=*/false, catalog_)
+                  : row_set_mem_owner_->getStringDictProxy(
+                        chosen_type.get_comp_param());  // unit tests bypass the catalog
       }
       return NullableString(sdp->getString(ival));
     } else {
@@ -1831,8 +1841,9 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
           ival == inline_int_null_val(SQLTypeInfo(kBIGINT, false))) {
         return NULL_DOUBLE;
       }
-      if (ival ==
-          inline_int_null_val(SQLTypeInfo(decimal_to_int_type(chosen_type), false))) {
+      if (!chosen_type.get_notnull() &&
+          ival ==
+              inline_int_null_val(SQLTypeInfo(decimal_to_int_type(chosen_type), false))) {
         return NULL_DOUBLE;
       }
       return static_cast<double>(ival) / exp_to_scale(chosen_type.get_scale());
@@ -1945,8 +1956,8 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
           const auto bitmap_byte_sz = count_distinct_desc.sub_bitmap_count == 1
                                           ? count_distinct_desc.bitmapSizeBytes()
                                           : count_distinct_desc.bitmapPaddedSizeBytes();
-          auto count_distinct_buffer =
-              row_set_mem_owner_->allocateCountDistinctBuffer(bitmap_byte_sz);
+          auto count_distinct_buffer = row_set_mem_owner_->allocateCountDistinctBuffer(
+              bitmap_byte_sz, /*thread_idx=*/0);
           *count_distinct_ptr_ptr = reinterpret_cast<int64_t>(count_distinct_buffer);
         }
       }

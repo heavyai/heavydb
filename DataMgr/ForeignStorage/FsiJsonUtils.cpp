@@ -22,16 +22,47 @@
 #include <rapidjson/ostreamwrapper.h>
 #include <rapidjson/writer.h>
 
+#include <rapidjson/stringbuffer.h>
+
 namespace foreign_storage {
 namespace json_utils {
 
+std::string get_type_as_string(const rapidjson::Value& object) {
+  if (object.IsArray()) {
+    return "array";
+  } else if (object.IsBool()) {
+    return "bool";
+  } else if (object.IsDouble()) {
+    return "double";
+  } else if (object.IsFloat()) {
+    return "float";
+  } else if (object.IsInt64()) {
+    return "int64";
+  } else if (object.IsInt()) {
+    return "int";
+  } else if (object.IsNull()) {
+    return "null";
+  } else if (object.IsNumber()) {
+    return "number";
+  } else if (object.IsObject()) {
+    return "onject";
+  } else if (object.IsString()) {
+    return "string";
+  } else if (object.IsUint64()) {
+    return "unit64";
+  } else if (object.IsUint()) {
+    return "unit";
+  }
+  return "unknown";
+}
+
 // Basic types (more can be added as required)
 void set_value(rapidjson::Value& json_val,
-               const long unsigned int& value,
+               const size_t& value,
                rapidjson::Document::AllocatorType& allocator) {
   json_val.SetUint64(value);
 }
-void get_value(const rapidjson::Value& json_val, long unsigned int& value) {
+void get_value(const rapidjson::Value& json_val, size_t& value) {
   CHECK(json_val.IsUint64());
   value = json_val.GetUint64();
 }
@@ -53,9 +84,21 @@ void set_value(rapidjson::Value& json_val,
   json_val.SetString(value, allocator);
 }
 
+// int64_t
 void get_value(const rapidjson::Value& json_val, std::string& value) {
   CHECK(json_val.IsString());
   value = json_val.GetString();
+}
+
+void set_value(rapidjson::Value& json_val,
+               const int64_t& value,
+               rapidjson::Document::AllocatorType& allocator) {
+  json_val.SetInt64(value);
+}
+
+void get_value(const rapidjson::Value& json_val, int64_t& value) {
+  CHECK(json_val.IsInt64());
+  value = json_val.GetInt64();
 }
 
 rapidjson::Document read_from_file(const std::string& file_path) {
@@ -82,5 +125,11 @@ void write_to_file(const rapidjson::Document& document, const std::string& filep
   document.Accept(writer);
 }
 
+std::string write_to_string(const rapidjson::Document& document) {
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  document.Accept(writer);
+  return buffer.GetString();
+}
 }  // namespace json_utils
 }  // namespace foreign_storage

@@ -19,13 +19,17 @@
 #include <limits>
 #include <type_traits>
 
+/* `../` is required for UDFCompiler */
+#include "../Shared/InlineNullValues.h"
 #include "../Shared/funcannotations.h"
 
-#define EXTENSION_INLINE extern "C" ALWAYS_INLINE DEVICE
-#define EXTENSION_NOINLINE extern "C" NEVER_INLINE DEVICE
+#define EXTENSION_INLINE extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE
+#define EXTENSION_NOINLINE extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE
 
 EXTENSION_NOINLINE int8_t* allocate_varlen_buffer(int64_t element_count,
                                                   int64_t element_size);
+
+EXTENSION_NOINLINE void set_output_row_size(int64_t num_rows);
 
 template <typename T>
 struct Array {
@@ -145,18 +149,83 @@ struct GeoMultiPolygon {
 
 template <typename T>
 struct Column {
-  T* ptr;      // row data
-  int64_t sz;  // row count
+  T* ptr_;        // row data
+  int64_t size_;  // row count
 
-  DEVICE T& operator[](const unsigned int index) const { return ptr[index]; }
-  DEVICE int64_t getSize() const { return sz; }
-  DEVICE void setSize(int64_t size) { this->sz = size; }
+  DEVICE T& operator[](const unsigned int index) const {
+    if (index >= size_) {
+#ifndef __CUDACC__
+      throw std::runtime_error("column buffer index is out of range");
+#else
+      static T null_value;
+      set_null(null_value);
+      return null_value;
+#endif
+    }
+    return ptr_[index];
+  }
+  DEVICE int64_t size() const { return size_; }
+
+  DEVICE bool isNull(int64_t index) const { return is_null(ptr_[index]); }
+  DEVICE void setNull(int64_t index) { set_null(ptr_[index]); }
+
+  DEVICE Column<T>& operator=(const Column<T>& other) {
+#ifndef __CUDACC__
+    if (size() == other.size()) {
+      memcpy(ptr_, &other[0], other.size() * sizeof(T));
+    } else {
+      throw std::runtime_error("cannot copy assign columns with different sizes");
+    }
+#else
+    if (size() == other.size()) {
+      for (unsigned int i = 0; i < size(); i++) {
+        ptr_[i] = other[i];
+      }
+    } else {
+      // TODO: set error
+    }
+#endif
+    return *this;
+  }
+
+#ifdef HAVE_TOSTRING
+  std::string toString() const {
+    return ::typeName(this) + "(ptr=" + ::toString(reinterpret_cast<void*>(ptr_)) +
+           ", size_=" + std::to_string(size_) + ")";
+  }
+#endif
+};
+
+/*
+  ColumnList is an ordered list of Columns.
+*/
+template <typename T>
+struct ColumnList {
+  int8_t** ptrs_;     // ptrs to columns data
+  int64_t num_cols_;  // the length of columns list
+  int64_t size_;      // the size of columns
+
+  DEVICE int64_t size() const { return size_; }
+  DEVICE int64_t numCols() const { return num_cols_; }
+  DEVICE Column<T> operator[](const int index) const {
+    if (index >= 0 && index < num_cols_)
+      return {reinterpret_cast<T*>(ptrs_[index]), size_};
+    else
+      return {nullptr, -1};
+  }
 
 #ifdef HAVE_TOSTRING
 
   std::string toString() const {
-    return ::typeName(this) + "(ptr=" + ::toString((void*)ptr) +
-           ", sz=" + std::to_string(sz) + ")";
+    std::string result = ::typeName(this) + "(ptrs=[";
+    for (int64_t index = 0; index < num_cols_; index++) {
+      result += ::toString(reinterpret_cast<void*>(ptrs_[index])) +
+                (index < num_cols_ - 1 ? ", " : "");
+    }
+    result += "], num_cols=" + std::to_string(num_cols_) +
+              ", size=" + std::to_string(size_) + ")";
+    return result;
   }
+
 #endif
 };

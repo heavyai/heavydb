@@ -47,8 +47,8 @@ llvm::Function* generate_entry_point(const CgenState* cgen_state) {
   auto arg_it = func->arg_begin();
   const auto input_cols_arg = &*arg_it;
   input_cols_arg->setName("input_col_buffers");
-  const auto input_row_count = &*(++arg_it);
-  input_row_count->setName("input_row_count");
+  const auto input_row_counts = &*(++arg_it);
+  input_row_counts->setName("input_row_counts");
   const auto output_buffers = &*(++arg_it);
   output_buffers->setName("output_buffers");
   const auto output_row_count = &*(++arg_it);
@@ -85,18 +85,22 @@ inline llvm::Type* get_llvm_type_from_sql_column_type(const SQLTypeInfo elem_ti,
   return nullptr;
 }
 
-llvm::Value* alloc_column(std::string col_name,
-                          const SQLTypeInfo& data_target_info,
-                          llvm::Value* data_ptr,
-                          llvm::Value* data_size,
-                          llvm::LLVMContext& ctx,
-                          llvm::IRBuilder<>& ir_builder,
-                          bool byval) {
+std::tuple<llvm::Value*, llvm::Value*> alloc_column(std::string col_name,
+                                                    const size_t index,
+                                                    const SQLTypeInfo& data_target_info,
+                                                    llvm::Value* data_ptr,
+                                                    llvm::Value* data_size,
+                                                    llvm::LLVMContext& ctx,
+                                                    llvm::IRBuilder<>& ir_builder) {
   /*
     Creates a new Column instance of given element type and initialize
-    its data ptr and sz members. If data ptr or sz are unspecified
-    (have nullptr values) then the corresponding members are
-    initialized with NULL and -1, respectively.
+    its data ptr and sz members when specified. If data ptr or sz are
+    unspecified (have nullptr values) then the corresponding members
+    are initialized with NULL and -1, respectively.
+
+    Return a pair of Column allocation (caller should apply
+    builder.CreateLoad to it in order to construct a Column instance
+    as a value) and a pointer to the Column instance.
    */
   llvm::Type* data_ptr_llvm_type =
       get_llvm_type_from_sql_column_type(data_target_info, ctx);
@@ -125,27 +129,95 @@ llvm::Value* alloc_column(std::string col_name,
   }
   if (data_size != nullptr) {
     auto data_size_type = data_size->getType();
+    llvm::Value* size_val = nullptr;
     if (data_size_type->isPointerTy()) {
       CHECK(data_size_type->getPointerElementType()->isIntegerTy(64));
-      auto val = ir_builder.CreateLoad(data_size);
-      ir_builder.CreateStore(val, col_sz_ptr);
+      size_val = ir_builder.CreateLoad(data_size);
     } else {
       CHECK(data_size_type->isIntegerTy(64));
-      ir_builder.CreateStore(data_size, col_sz_ptr);
+      size_val = data_size;
     }
+    ir_builder.CreateStore(size_val, col_sz_ptr);
   } else {
     auto const_minus1 = llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), -1, true);
     ir_builder.CreateStore(const_minus1, col_sz_ptr);
   }
+  auto col_ptr = ir_builder.CreatePointerCast(
+      col_ptr_ptr, llvm::PointerType::get(llvm::Type::getInt8Ty(ctx), 0));
+  col_ptr->setName(col_name + "_ptr");
+  return {col, col_ptr};
+}
 
-  if (byval) {
-    return ir_builder.CreateLoad(col);
+llvm::Value* alloc_column_list(std::string col_list_name,
+                               const SQLTypeInfo& data_target_info,
+                               llvm::Value* data_ptrs,
+                               int length,
+                               llvm::Value* data_size,
+                               llvm::LLVMContext& ctx,
+                               llvm::IRBuilder<>& ir_builder) {
+  /*
+    Creates a new ColumnList instance of given element type and initialize
+    its members. If data ptr or size are unspecified (have nullptr
+    values) then the corresponding members are initialized with NULL
+    and -1, respectively.
+   */
+  llvm::Type* data_ptrs_llvm_type = llvm::Type::getInt8PtrTy(ctx);
+
+  llvm::StructType* col_list_struct_type =
+      llvm::StructType::get(ctx,
+                            {
+                                data_ptrs_llvm_type,         /* int8_t* ptrs */
+                                llvm::Type::getInt64Ty(ctx), /* int64_t length */
+                                llvm::Type::getInt64Ty(ctx)  /* int64_t size */
+                            });
+  auto col_list = ir_builder.CreateAlloca(col_list_struct_type);
+  col_list->setName(col_list_name);
+  auto col_list_ptr_ptr = ir_builder.CreateStructGEP(col_list_struct_type, col_list, 0);
+  auto col_list_length_ptr =
+      ir_builder.CreateStructGEP(col_list_struct_type, col_list, 1);
+  auto col_list_size_ptr = ir_builder.CreateStructGEP(col_list_struct_type, col_list, 2);
+
+  col_list_ptr_ptr->setName(col_list_name + ".ptrs");
+  col_list_length_ptr->setName(col_list_name + ".length");
+  col_list_size_ptr->setName(col_list_name + ".size");
+
+  CHECK(length >= 0);
+  auto const_length = llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), length, true);
+
+  if (data_ptrs != nullptr) {
+    if (data_ptrs->getType() == data_ptrs_llvm_type->getPointerElementType()) {
+      ir_builder.CreateStore(data_ptrs, col_list_ptr_ptr);
+    } else {
+      auto tmp = ir_builder.CreateBitCast(data_ptrs, data_ptrs_llvm_type);
+      ir_builder.CreateStore(tmp, col_list_ptr_ptr);
+    }
   } else {
-    auto col_ptr = ir_builder.CreatePointerCast(
-        col_ptr_ptr, llvm::PointerType::get(llvm::Type::getInt8Ty(ctx), 0));
-    col_ptr->setName(col_name + "_ptr");
-    return col_ptr;
+    ir_builder.CreateStore(llvm::Constant::getNullValue(data_ptrs_llvm_type),
+                           col_list_ptr_ptr);
   }
+
+  ir_builder.CreateStore(const_length, col_list_length_ptr);
+
+  if (data_size != nullptr) {
+    auto data_size_type = data_size->getType();
+    llvm::Value* size_val = nullptr;
+    if (data_size_type->isPointerTy()) {
+      CHECK(data_size_type->getPointerElementType()->isIntegerTy(64));
+      size_val = ir_builder.CreateLoad(data_size);
+    } else {
+      CHECK(data_size_type->isIntegerTy(64));
+      size_val = data_size;
+    }
+    ir_builder.CreateStore(size_val, col_list_size_ptr);
+  } else {
+    auto const_minus1 = llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), -1, true);
+    ir_builder.CreateStore(const_minus1, col_list_size_ptr);
+  }
+
+  auto col_list_ptr = ir_builder.CreatePointerCast(
+      col_list_ptr_ptr, llvm::PointerType::get(llvm::Type::getInt8Ty(ctx), 0));
+  col_list_ptr->setName(col_list_name + "_ptrs");
+  return col_list_ptr;
 }
 
 }  // namespace
@@ -166,7 +238,7 @@ TableFunctionCompilationContext::TableFunctionCompilationContext()
 void TableFunctionCompilationContext::compile(const TableFunctionExecutionUnit& exe_unit,
                                               const CompilationOptions& co,
                                               Executor* executor) {
-  generateEntryPoint(exe_unit);
+  generateEntryPoint(exe_unit, /*is_gpu=*/co.device_type == ExecutorDeviceType::GPU);
   if (co.device_type == ExecutorDeviceType::GPU) {
     generateGpuKernel();
   }
@@ -174,11 +246,12 @@ void TableFunctionCompilationContext::compile(const TableFunctionExecutionUnit& 
 }
 
 void TableFunctionCompilationContext::generateEntryPoint(
-    const TableFunctionExecutionUnit& exe_unit) {
+    const TableFunctionExecutionUnit& exe_unit,
+    bool is_gpu) {
   CHECK(entry_point_func_);
   auto arg_it = entry_point_func_->arg_begin();
   const auto input_cols_arg = &*arg_it;
-  const auto input_row_count = &*(++arg_it);
+  const auto input_row_counts_arg = &*(++arg_it);
   const auto output_buffers_arg = &*(++arg_it);
   const auto output_row_count_ptr = &*(++arg_it);
 
@@ -199,30 +272,59 @@ void TableFunctionCompilationContext::generateEntryPoint(
       exe_unit.input_exprs.size(), input_cols_arg, cgen_state->ir_builder_, ctx);
   CHECK_EQ(exe_unit.input_exprs.size(), col_heads.size());
 
+  auto row_count_heads = generate_column_heads_load(
+      exe_unit.input_exprs.size(), input_row_counts_arg, cgen_state->ir_builder_, ctx);
+
   // The column arguments of C++ UDTFs processed by clang must be
-  // passed by reference, see rbc issue 200.
+  // passed by reference, see rbc issues 200 and 289.
   auto pass_column_by_value = exe_unit.table_func.isRuntime();
   std::vector<llvm::Value*> func_args;
+  size_t func_arg_index = 0;
+  int col_index = -1;
   for (size_t i = 0; i < exe_unit.input_exprs.size(); i++) {
     const auto& expr = exe_unit.input_exprs[i];
     const auto& ti = expr->get_type_info();
+    if (col_index == -1) {
+      func_arg_index += 1;
+    }
     if (ti.is_fp()) {
       auto r = cgen_state->ir_builder_.CreateBitCast(
           col_heads[i], llvm::PointerType::get(get_fp_type(get_bit_width(ti), ctx), 0));
       func_args.push_back(cgen_state->ir_builder_.CreateLoad(r));
+      CHECK_EQ(col_index, -1);
     } else if (ti.is_integer()) {
       auto r = cgen_state->ir_builder_.CreateBitCast(
           col_heads[i], llvm::PointerType::get(get_int_type(get_bit_width(ti), ctx), 0));
       func_args.push_back(cgen_state->ir_builder_.CreateLoad(r));
+      CHECK_EQ(col_index, -1);
     } else if (ti.is_column()) {
-      auto col = alloc_column(std::string("input_col.") + std::to_string(i),
-                              ti.get_elem_type(),
-                              col_heads[i],
-                              input_row_count,
-                              ctx,
-                              cgen_state_->ir_builder_,
-                              pass_column_by_value);
-      func_args.push_back(col);
+      auto [col, col_ptr] =
+          alloc_column(std::string("input_col.") + std::to_string(func_arg_index),
+                       i,
+                       ti.get_elem_type(),
+                       col_heads[i],
+                       row_count_heads[i],
+                       ctx,
+                       cgen_state_->ir_builder_);
+      func_args.push_back(
+          (pass_column_by_value ? cgen_state_->ir_builder_.CreateLoad(col) : col_ptr));
+      CHECK_EQ(col_index, -1);
+    } else if (ti.is_column_list()) {
+      if (col_index == -1) {
+        auto col_list = alloc_column_list(
+            std::string("input_col_list.") + std::to_string(func_arg_index),
+            ti.get_elem_type(),
+            col_heads[i],
+            ti.get_dimension(),
+            row_count_heads[i],
+            ctx,
+            cgen_state_->ir_builder_);
+        func_args.push_back(col_list);
+      }
+      col_index++;
+      if (col_index + 1 == ti.get_dimension()) {
+        col_index = -1;
+      }
     } else {
       throw std::runtime_error(
           "Only integer and floating point columns or scalars are supported as inputs to "
@@ -237,16 +339,45 @@ void TableFunctionCompilationContext::generateEntryPoint(
         cgen_state->ir_builder_.CreateGEP(output_buffers_arg, cgen_state_->llInt(i)));
     const auto& expr = exe_unit.target_exprs[i];
     const auto& ti = expr->get_type_info();
-    CHECK(!ti.is_column());  // UDTF output column type is its data type
-    auto col = alloc_column(std::string("output_col.") + std::to_string(i),
-                            ti,
-                            output_load,
-                            output_row_count_ptr,
-                            ctx,
-                            cgen_state_->ir_builder_,
-                            pass_column_by_value);
-    func_args.push_back(col);
+    CHECK(!ti.is_column());       // UDTF output column type is its data type
+    CHECK(!ti.is_column_list());  // TODO: when UDTF outputs column_list, convert it to
+                                  // output columns
+    auto [col, col_ptr] = alloc_column(
+        std::string("output_col.") + std::to_string(i),
+        i,
+        ti,
+        (is_gpu ? output_load : nullptr),  // CPU: set_output_row_size will set the output
+                                           // Column ptr member
+        output_row_count_ptr,
+        ctx,
+        cgen_state_->ir_builder_);
+    if (!is_gpu) {
+      cgen_state->emitExternalCall(
+          "register_output_column",
+          llvm::Type::getVoidTy(ctx),
+          {llvm::ConstantInt::get(get_int_type(32, ctx), i, true), col_ptr});
+    }
+    if (pass_column_by_value) {
+      output_col_args.push_back(col);
+    } else {
+      func_args.push_back(col_ptr);
+    }
   }
+
+  // output column members must be set before loading column when
+  // column instances are passed by value
+  if (!exe_unit.table_func.hasTableFunctionSpecifiedParameter() && !is_gpu) {
+    cgen_state->emitExternalCall(
+        "set_output_row_size",
+        llvm::Type::getVoidTy(ctx),
+        {cgen_state_->ir_builder_.CreateLoad(output_row_count_ptr)});
+  }
+  if (pass_column_by_value) {
+    for (auto& col : output_col_args) {
+      func_args.push_back(cgen_state_->ir_builder_.CreateLoad(col));
+    }
+  }
+
   auto func_name = exe_unit.table_func.getName();
   boost::algorithm::to_lower(func_name);
   const auto table_func_return =

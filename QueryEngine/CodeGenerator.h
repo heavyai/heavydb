@@ -106,7 +106,8 @@ class CodeGenerator {
 
   static bool prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
                               std::vector<Analyzer::Expr*>& primary_quals,
-                              std::vector<Analyzer::Expr*>& deferred_quals);
+                              std::vector<Analyzer::Expr*>& deferred_quals,
+                              const PlanState::HoistedFiltersSet& hoisted_quals);
 
   struct ExecutorRequired : public std::runtime_error {
     ExecutorRequired()
@@ -126,8 +127,13 @@ class CodeGenerator {
     std::string name;
     llvm::BasicBlock* nullcheck_bb{nullptr};
     llvm::PHINode* nullcheck_value{nullptr};
-    std::unique_ptr<GroupByAndAggregate::DiamondCodegen> null_check;
+    std::unique_ptr<DiamondCodegen> null_check;
   };
+
+  static ArrayLoadCodegen codegenGeoArrayLoadAndNullcheck(llvm::Value* byte_stream,
+                                                          llvm::Value* pos,
+                                                          const SQLTypeInfo& ti,
+                                                          CgenState* cgen_state);
 
  private:
   std::vector<llvm::Value*> codegen(const Analyzer::Constant*,
@@ -202,6 +208,23 @@ class CodeGenerator {
 
   std::vector<llvm::Value*> codegenArrayExpr(const Analyzer::ArrayExpr*,
                                              const CompilationOptions&);
+
+  std::vector<llvm::Value*> codegenGeoColumnVar(const Analyzer::GeoColumnVar*,
+                                                const bool fetch_columns,
+                                                const CompilationOptions& co);
+
+  std::vector<llvm::Value*> codegenGeoExpr(const Analyzer::GeoExpr*,
+                                           const CompilationOptions&);
+
+  std::vector<llvm::Value*> codegenGeoConstant(const Analyzer::GeoConstant*,
+                                               const CompilationOptions&);
+
+  std::vector<llvm::Value*> codegenGeoOperator(const Analyzer::GeoOperator*,
+                                               const CompilationOptions&);
+
+  std::vector<llvm::Value*> codegenGeoFunctionOperator(
+      const Analyzer::GeoFunctionOperator*,
+      const CompilationOptions&);
 
   std::vector<llvm::Value*> codegenGeoUOper(const Analyzer::GeoUOper*,
                                             const CompilationOptions&);
@@ -456,12 +479,12 @@ class CodeGenerator {
                                                          SQLTypes array_type,
                                                          bool cast_and_extend);
 
-  void codegenArrayArgs(const std::string& udf_func_name,
-                        size_t param_num,
-                        llvm::Value* array_buf,
-                        llvm::Value* array_size,
-                        llvm::Value* array_is_null,
-                        std::vector<llvm::Value*>& output_args);
+  void codegenBufferArgs(const std::string& udf_func_name,
+                         size_t param_num,
+                         llvm::Value* buffer_buf,
+                         llvm::Value* buffer_size,
+                         llvm::Value* buffer_is_null,
+                         std::vector<llvm::Value*>& output_args);
 
   llvm::StructType* createPointStructType(const std::string& udf_func_name,
                                           size_t param_num);
@@ -521,6 +544,7 @@ class CodeGenerator {
       const Analyzer::FunctionOper*,
       const ExtensionFunction*,
       const std::vector<llvm::Value*>&,
+      const std::vector<size_t>&,
       const std::unordered_map<llvm::Value*, llvm::Value*>&,
       const CompilationOptions&);
 
@@ -551,6 +575,8 @@ class CodeGenerator {
 
   CgenState* cgen_state_;
   PlanState* plan_state_;
+
+  friend class GroupByAndAggregate;
 };
 
 // Code generator specialized for scalar expressions which doesn't require an executor.

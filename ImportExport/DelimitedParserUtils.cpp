@@ -204,7 +204,8 @@ const char* get_row(const char* buf,
                     const bool* is_array,
                     std::vector<T>& row,
                     std::vector<std::unique_ptr<char[]>>& tmp_buffers,
-                    bool& try_single_thread) {
+                    bool& try_single_thread,
+                    bool filter_empty_lines) {
   const char* field = buf;
   const char* p;
   bool in_quote = false;
@@ -263,8 +264,10 @@ const char* get_row(const char* buf,
 
         if (is_eol(*p, copy_params)) {
           // We are at the end of the row. Skip the line endings now.
-          while (p + 1 < buf_end && is_eol(*(p + 1), copy_params)) {
-            p++;
+          if (filter_empty_lines) {
+            while (p + 1 < buf_end && is_eol(*(p + 1), copy_params)) {
+              p++;
+            }
           }
           break;
         }
@@ -292,7 +295,8 @@ template const char* get_row(const char* buf,
                              const bool* is_array,
                              std::vector<std::string>& row,
                              std::vector<std::unique_ptr<char[]>>& tmp_buffers,
-                             bool& try_single_thread);
+                             bool& try_single_thread,
+                             bool filter_empty_lines);
 
 template const char* get_row(const char* buf,
                              const char* buf_end,
@@ -301,7 +305,8 @@ template const char* get_row(const char* buf,
                              const bool* is_array,
                              std::vector<std::string_view>& row,
                              std::vector<std::unique_ptr<char[]>>& tmp_buffers,
-                             bool& try_single_thread);
+                             bool& try_single_thread,
+                             bool filter_empty_lines);
 
 void parse_string_array(const std::string& s,
                         const import_export::CopyParams& copy_params,
@@ -329,7 +334,8 @@ void parse_string_array(const std::string& s,
           nullptr,
           string_vec,
           tmp_buffers,
-          try_single_thread);
+          try_single_thread,
+          true);
 
   for (size_t i = 0; i < string_vec.size(); ++i) {
     if (string_vec[i].empty()) {  // Disallow empty strings for now

@@ -37,14 +37,23 @@ public class MapDSchema implements Schema {
           MapDParser mp,
           int mapdPort,
           MapDUser mapdUser,
-          SockTransportProperties skT) {
+          SockTransportProperties skT,
+          String db) {
     System.setProperty(
             "saffron.default.charset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
     System.setProperty(
             "saffron.default.nationalcharset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
     System.setProperty("saffron.default.collation.name",
             ConversionUtil.NATIVE_UTF16_CHARSET_NAME + "$en_US");
-    metaConnect = new MetaConnect(mapdPort, dataDir, mapdUser, mp, skT);
+    metaConnect = new MetaConnect(mapdPort, dataDir, mapdUser, mp, skT, db);
+  }
+
+  public MapDSchema(String dataDir,
+          MapDParser mp,
+          int mapdPort,
+          MapDUser mapdUser,
+          SockTransportProperties skT) {
+    this(dataDir, mp, mapdPort, mapdUser, skT, null);
   }
 
   @Override

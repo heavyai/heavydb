@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,12 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/Transforms/Utils/ValueMapper.h>
+
+struct ArrayLoadCodegen {
+  llvm::Value* buffer;
+  llvm::Value* size;
+  llvm::Value* is_null;
+};
 
 struct CgenState {
  public:
@@ -244,11 +250,7 @@ struct CgenState {
 
     auto func_p = module_->getOrInsertFunction(fname, func_ty, attrs);
     CHECK(func_p);
-#if LLVM_VERSION_MAJOR > 8
     auto callee = func_p.getCallee();
-#else
-    auto callee = func_p;
-#endif
     llvm::Function* func{nullptr};
     if (auto callee_cast = llvm::dyn_cast<llvm::ConstantExpr>(callee)) {
       // Get or insert function automatically adds a ConstantExpr cast if the return type
@@ -260,11 +262,7 @@ struct CgenState {
       func = llvm::dyn_cast<llvm::Function>(callee);
     }
     CHECK(func);
-#if LLVM_VERSION_MAJOR > 8
     llvm::FunctionType* func_type = func_p.getFunctionType();
-#else
-    llvm::FunctionType* func_type = func->getFunctionType();
-#endif
     CHECK(func_type);
     if (has_struct_return) {
       const auto arg_ti = func_type->getParamType(0);
@@ -280,11 +278,7 @@ struct CgenState {
       if (arg_ti->isPointerTy() && arg_ti->getPointerElementType()->isStructTy()) {
         auto attr_list = func->getAttributes();
         llvm::AttrBuilder arr_arg_builder(attr_list.getParamAttributes(i));
-#if LLVM_VERSION_MAJOR > 8
         arr_arg_builder.addByValAttr(arg_ti->getPointerElementType());
-#else
-        arr_arg_builder.addAttribute(llvm::Attribute::ByVal);
-#endif
         func->addParamAttrs(i, arr_arg_builder);
       }
     }
@@ -305,8 +299,8 @@ struct CgenState {
       const bool is_signed);
 
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
-
   llvm::ConstantFP* inlineFpNull(const SQLTypeInfo&);
+  llvm::Constant* inlineNull(const SQLTypeInfo&);
 
   template <class T>
   llvm::ConstantInt* llInt(const T v) const {
@@ -353,6 +347,9 @@ struct CgenState {
   std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
   InsertionOrderedMap filter_func_args_;
   std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
+  std::map<std::pair<llvm::Value*, llvm::Value*>, ArrayLoadCodegen>
+      array_load_cache_;  // byte stream to array info
+  std::unordered_map<std::string, llvm::Value*> geo_target_cache_;
   bool needs_error_check_;
   bool needs_geos_;
 
@@ -423,6 +420,8 @@ struct CgenState {
     literal_bytes_[device_id] = addAligned(literal_bytes_[device_id], lit_bytes);
     return literal_bytes_[device_id] - lit_bytes;
   }
+
+  void maybeCloneFunctionRecursive(llvm::Function* fn);
 
   std::unordered_map<int, LiteralValues> literals_;
   std::unordered_map<int, size_t> literal_bytes_;

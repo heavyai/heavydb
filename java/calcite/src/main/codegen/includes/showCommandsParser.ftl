@@ -73,3 +73,54 @@ SqlDdl SqlShowQueries(Span s) :
         return new SqlShowQueries(s.end(this));
     }
 }
+
+SqlDdl SqlShowDiskCacheUsage(Span s) : {
+    SqlIdentifier tableName = null;
+    List<String> tableNames = new ArrayList<String>();
+}
+{
+    <SHOW> <DISK> <CACHE> <USAGE>
+    (
+        tableName = CompoundIdentifier()
+        { tableNames.add(tableName.toString()); }
+        (
+            <COMMA>
+            tableName = CompoundIdentifier()
+            { tableNames.add(tableName.toString()); }
+        )*
+        { return new SqlShowDiskCacheUsage(s.end(this), tableNames); }
+    |
+        { return new SqlShowDiskCacheUsage(s.end(this)); }
+    )
+}
+
+/*
+ * Show table details using the following syntax:
+ *
+ * SHOW TABLE DETAILS [<table_name>, <table_name>, ...]
+ */
+SqlDdl SqlShowTableDetails(Span s) :
+{
+    SqlIdentifier tableName = null;
+    List<String> tableNames = null;
+}
+{
+    <SHOW> <TABLE> <DETAILS>
+    [
+        tableName = CompoundIdentifier()
+        {
+            tableNames = new ArrayList<String>();
+            tableNames.add(tableName.toString());
+        }
+        (
+            <COMMA>
+            tableName = CompoundIdentifier()
+            {
+                tableNames.add(tableName.toString());
+            }
+        )*
+    ]
+    {
+        return new SqlShowTableDetails(s.end(this), tableNames);
+    }
+}

@@ -165,7 +165,9 @@ void runSingleValueTest(std::string colType, ExecutorDeviceType dt) {
 
   runSingleValueTestValidation(colType, dt);
 
-  QR::get()->runDDLStatement("INSERT INTO test_facts SELECT * FROM test_facts;");
+  QR::get()->runSQL("INSERT INTO test_facts VALUES(1, 1);", ExecutorDeviceType::CPU);
+  QR::get()->runSQL("INSERT INTO test_facts VALUES(2, 1);", ExecutorDeviceType::CPU);
+  QR::get()->runSQL("INSERT INTO test_facts VALUES(3, 1);", ExecutorDeviceType::CPU);
 
   runSingleValueTestValidation(colType, dt);
 

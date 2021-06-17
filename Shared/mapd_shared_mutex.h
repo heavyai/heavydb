@@ -22,6 +22,8 @@
 #ifdef HAVE_FOLLY
 #include <folly/SharedMutex.h>
 using mapd_shared_mutex = folly::SharedMutex;
+// Folly includes windows.h and pollutes global namespace with macroses
+#include "cleanup_global_namespace.h"
 #else
 using mapd_shared_mutex = std::shared_timed_mutex;
 #endif  // HAVE_FOLLY

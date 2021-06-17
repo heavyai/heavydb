@@ -1,6 +1,11 @@
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 
+if(MSVC)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall")
+else()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall -Wno-attributes")
+endif()
+
 set_source_files_properties(RuntimeFunctionsCodegenWithIncludes.cpp PROPERTIES COMPILE_FLAGS -O0)
 set(query_engine_source_files
     AggregatedColRange.cpp
@@ -44,21 +49,24 @@ set(query_engine_source_files
     ExtractFromTime.cpp
     FromTableReordering.cpp
     GeoIR.cpp
+    GeoOps.cpp
     GpuInterrupt.cpp
     GpuMemUtils.cpp
     GpuSharedMemoryUtils.cpp
     InPlaceSort.cpp
     InValuesIR.cpp
     IRCodegen.cpp
+    GeoOperators/Codegen.cpp
     GroupByAndAggregate.cpp
     InValuesBitmap.cpp
     InputMetadata.cpp
     JoinFilterPushDown.cpp
     JoinHashTable/BaselineJoinHashTable.cpp
-    JoinHashTable/HashJoinRuntime.cpp
-    JoinHashTable/JoinHashTable.cpp
-    JoinHashTable/JoinHashTableInterface.cpp
+    JoinHashTable/HashJoin.cpp
+    JoinHashTable/HashTable.cpp
     JoinHashTable/OverlapsJoinHashTable.cpp
+    JoinHashTable/PerfectJoinHashTable.cpp
+    JoinHashTable/Runtime/HashJoinRuntime.cpp
     LogicalIR.cpp
     LLVMFunctionAttributesUtil.cpp
     LLVMGlobalContext.cpp
@@ -88,6 +96,7 @@ set(query_engine_source_files
     ResultSetReductionInterpreterStubs.cpp
     ResultSetReductionJIT.cpp
     ResultSetStorage.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/LoopControlFlow/JoinLoop.cpp
     ResultSetSort.cpp
     RuntimeFunctions.cpp
@@ -101,10 +110,12 @@ set(query_engine_source_files
     TableFunctions/TableFunctionCompilationContext.cpp
     TableFunctions/TableFunctionExecutionContext.cpp
     TableFunctions/TableFunctionsFactory.cpp
+    TableFunctions/TableFunctionOps.cpp
     TableGenerations.cpp
     TableOptimizer.cpp
     TargetExprBuilder.cpp
     UDFCompiler.cpp
+    Utils/DiamondCodegen.cpp
     StringFunctions.cpp
     StringOpsIR.cpp
     RegexpFunctions.cpp
@@ -117,7 +128,8 @@ set(query_engine_source_files
     Codec.h
     Execute.h
     NvidiaKernel.h
-    QueryTemplateGenerator.h)
+    QueryTemplateGenerator.h
+    TableFunctions/QueryOutputBufferMemoryManager.h)
 
 if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   list(APPEND query_engine_source_files
@@ -139,6 +151,7 @@ set(group_by_hash_test_files
 )
 
 if(ENABLE_CUDA)
+  message(DEBUG "QueryEngine CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
   set(MAPD_DEFINITIONS "-DHAVE_CUDA")
   set(NVCC_BUILD_TYPE_ARGS)
   string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPERCASE)
@@ -177,10 +190,10 @@ else()
 endif()
 
 add_custom_command(
-    DEPENDS RuntimeFunctions.cpp JoinHashTable/JoinHashTableQueryRuntime.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
+    DEPENDS RuntimeFunctions.h RuntimeFunctions.cpp DecodersImpl.h JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
     COMMAND ${llvm_clangpp_cmd}
-    ARGS -std=c++14 ${RT_OPT_FLAGS} -c -emit-llvm
+    ARGS -std=c++17 ${RT_OPT_FLAGS} -c -emit-llvm
     ${CLANG_SDK_INC}
     ${CLANG_CRT_INC}
     ${MAPD_DEFINITIONS}
@@ -204,10 +217,10 @@ add_custom_command(
 find_package(PythonInterp REQUIRED)
 
 add_custom_command(
-    DEPENDS ExtensionFunctions.hpp ExtensionFunctionsGeo.hpp ExtensionFunctionsArray.hpp
+    DEPENDS ExtensionFunctions.hpp ExtensionFunctionsGeo.hpp ExtensionFunctionsArray.hpp ExtensionFunctionsTesting.hpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast.raw
     COMMAND ${llvm_clangpp_cmd}
-    ARGS -std=c++14 -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color -Wno-return-type-c-linkage
+    ARGS -DNO_BOOST -std=c++17 -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color -Wno-return-type-c-linkage
     -I ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast.raw)
 
 add_custom_command(
@@ -222,15 +235,29 @@ add_custom_target(QueryEngineFunctionsTargets
         ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc
     )
 
+set(TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctionsTesting.hpp)
+if(ENABLE_MLPACK)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/MLFunctions.hpp)
+endif()
+add_custom_command(
+    DEPENDS ${TABLE_FUNCTION_HEADERS} 
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp
+    COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_TableFunctionsFactory_init.py ${TABLE_FUNCTION_HEADERS} ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp)
+
+add_custom_target(QueryEngineTableFunctionsFactory_init
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp)
+
+set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp GENERATED)
+
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/OmniSciTypes.h DESTINATION ${CMAKE_BINARY_DIR}/QueryEngine/)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/OmniSciTypes.h ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast DESTINATION QueryEngine COMPONENT "QE")
 
 if(ENABLE_CUDA)
   add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
-  add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineCudaTargets)
+  add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init QueryEngineCudaTargets)
 else()
   add_library(QueryEngine ${query_engine_source_files})
-  add_dependencies(QueryEngine QueryEngineFunctionsTargets)
+  add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init)
 endif()
 
 target_precompile_headers(QueryEngine PRIVATE
@@ -254,7 +281,7 @@ list(APPEND QUERY_ENGINE_LIBS ${llvm_libs} ${ZLIB_LIBRARIES})
 target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})
 
 add_custom_command(
-    DEPENDS cuda_mapd_rt.cu JoinHashTable/JoinHashTableQueryRuntime.cpp GpuInitGroups.cu GroupByRuntime.cpp TopKRuntime.cpp DateTruncate.cpp DateAdd.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsGeo.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctions.hpp
+    DEPENDS cuda_mapd_rt.cu JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp GpuInitGroups.cu GroupByRuntime.cpp TopKRuntime.cpp DateTruncate.cpp DateAdd.cpp ExtractFromTime.cpp  GeoOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsGeo.hpp  ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsTesting.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctionsTesting.hpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.fatbin
     COMMAND nvcc
     ARGS
@@ -269,7 +296,7 @@ add_custom_command(
         -fatbin
         -rdc=true
         ${CUDA_COMPILATION_ARCH}
-        -std=c++14
+        -std=c++17
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu
     )
@@ -282,7 +309,7 @@ add_custom_command(
         -I ${CMAKE_SOURCE_DIR}
         ${MAPD_HOST_COMPILER_FLAG}
         -Xcompiler -fPIC
-        -std=c++14
+        -std=c++17
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         ${CUDA_COMPILATION_ARCH}
@@ -301,7 +328,7 @@ add_custom_command(
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         ${CUDA_COMPILATION_ARCH}
-        -std=c++14
+        -std=c++17
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/InPlaceSortImpl.cu
     )
@@ -314,7 +341,7 @@ add_custom_command(
         -I ${CMAKE_SOURCE_DIR}
         ${MAPD_HOST_COMPILER_FLAG}
         -Xcompiler -fPIC
-        -std=c++14
+        -std=c++17
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         ${CUDA_COMPILATION_ARCH}
@@ -332,13 +359,13 @@ add_custom_command(
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         ${CUDA_COMPILATION_ARCH}
-        -std=c++14
+        -std=c++17
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuInitGroups.cu
     )
 
 add_custom_command(
-    DEPENDS JoinHashTable/HashJoinRuntimeGpu.cu JoinHashTable/HashJoinRuntime.cpp
+    DEPENDS JoinHashTable/Runtime/HashJoinRuntimeGpu.cu JoinHashTable/Runtime/HashJoinRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o
     COMMAND nvcc
     ARGS
@@ -348,9 +375,9 @@ add_custom_command(
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         ${CUDA_COMPILATION_ARCH}
-        -std=c++14
+        -std=c++17
         ${NVCC_BUILD_TYPE_ARGS}
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/JoinHashTable/HashJoinRuntimeGpu.cu
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/JoinHashTable/Runtime/HashJoinRuntimeGpu.cu
     )
 
 add_custom_target(QueryEngineCudaTargets

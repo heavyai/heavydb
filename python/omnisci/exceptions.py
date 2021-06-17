@@ -59,7 +59,7 @@ def _translate_exception(e):
     # TODO: see if there's a way to get error codes, rather than relying msgs
     if not isinstance(e, TOmniSciException):
         return e
-    if 'Validate failed' in e.error_msg or 'Parse failed' in e.error_msg:
+    if 'SQL Error' in e.error_msg:
         err = ProgrammingError
     elif 'Exception occurred' in e.error_msg:
         err = DatabaseError

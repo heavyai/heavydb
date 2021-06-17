@@ -43,6 +43,7 @@ class SharedKernelContext {
   std::vector<uint64_t> all_frag_row_offsets_;
   std::mutex all_frag_row_offsets_mutex_;
   const std::vector<InputTableInfo>& query_infos_;
+  const RegisteredQueryHint query_hint_;
 };
 
 class ExecutionKernel {
@@ -70,7 +71,9 @@ class ExecutionKernel {
       , render_info_(render_info)
       , rowid_lookup_key(rowid_lookup_key) {}
 
-  void run(Executor* executor, SharedKernelContext& shared_context);
+  void run(Executor* executor,
+           const size_t thread_idx,
+           SharedKernelContext& shared_context);
 
  private:
   const RelAlgExecutionUnit& ra_exe_unit_;
@@ -87,5 +90,7 @@ class ExecutionKernel {
 
   ResultSetPtr device_results_;
 
-  void runImpl(Executor* executor, SharedKernelContext& shared_context);
+  void runImpl(Executor* executor,
+               const size_t thread_idx,
+               SharedKernelContext& shared_context);
 };

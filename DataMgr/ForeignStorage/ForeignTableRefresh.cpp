@@ -37,8 +37,27 @@ void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,
 
   catalog.removeFragmenterForTable(td->tableId);
   ChunkKey table_key{catalog.getCurrentDB().dbId, td->tableId};
-  data_mgr.deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
-  data_mgr.deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
+
+  if (catalog.getForeignTableUnlocked(td->tableId)->isAppendMode() &&
+      !evict_cached_entries) {
+    ChunkMetadataVector metadata_vec;
+    data_mgr.getChunkMetadataVecForKeyPrefix(metadata_vec, table_key);
+    int last_fragment_id = 0;
+    for (const auto& [key, metadata] : metadata_vec) {
+      if (key[CHUNK_KEY_FRAGMENT_IDX] > last_fragment_id) {
+        last_fragment_id = key[CHUNK_KEY_FRAGMENT_IDX];
+      }
+    }
+    for (const auto& [key, metadata] : metadata_vec) {
+      if (key[CHUNK_KEY_FRAGMENT_IDX] == last_fragment_id) {
+        data_mgr.deleteChunksWithPrefix(key, MemoryLevel::CPU_LEVEL);
+        data_mgr.deleteChunksWithPrefix(key, MemoryLevel::GPU_LEVEL);
+      }
+    }
+  } else {
+    data_mgr.deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
+    data_mgr.deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
+  }
 
   try {
     data_mgr.getPersistentStorageMgr()->getForeignStorageMgr()->refreshTable(
@@ -49,56 +68,4 @@ void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,
     throw e.getOriginalException();
   }
 }
-
-void ForeignTableRefreshScheduler::start(std::atomic<bool>& is_program_running) {
-  if (!is_scheduler_running_) {
-    scheduler_thread_ = std::thread([&is_program_running]() {
-      while (is_program_running) {
-        auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
-        for (const auto& catalog : sys_catalog.getCatalogsForAllDbs()) {
-          auto tables = catalog->getAllForeignTablesForRefresh();
-          for (auto table : tables) {
-            try {
-              refresh_foreign_table(*catalog, table->tableName, false);
-            } catch (std::runtime_error& e) {
-              LOG(ERROR) << "Scheduled refresh for table \"" << table->tableName
-                         << "\" resulted in an error. " << e.what();
-            }
-            has_refreshed_table_ = true;
-          }
-        }
-        std::this_thread::sleep_for(thread_wait_duration_);
-      }
-    });
-    is_scheduler_running_ = true;
-  }
-}
-
-void ForeignTableRefreshScheduler::stop() {
-  if (is_scheduler_running_) {
-    scheduler_thread_.join();
-    is_scheduler_running_ = false;
-  }
-}
-
-void ForeignTableRefreshScheduler::setWaitDuration(int64_t duration_in_seconds) {
-  thread_wait_duration_ = std::chrono::seconds{duration_in_seconds};
-}
-
-bool ForeignTableRefreshScheduler::isRunning() {
-  return is_scheduler_running_;
-}
-
-bool ForeignTableRefreshScheduler::hasRefreshedTable() {
-  return has_refreshed_table_;
-}
-
-void ForeignTableRefreshScheduler::resetHasRefreshedTable() {
-  has_refreshed_table_ = false;
-}
-
-bool ForeignTableRefreshScheduler::is_scheduler_running_{false};
-std::chrono::seconds ForeignTableRefreshScheduler::thread_wait_duration_{60};
-std::thread ForeignTableRefreshScheduler::scheduler_thread_;
-std::atomic<bool> ForeignTableRefreshScheduler::has_refreshed_table_{false};
 }  // namespace foreign_storage

@@ -1063,11 +1063,153 @@ TEST_F(UpdateStorageTest, Half_boolean_deleted_rollback) {
 
 }  // namespace
 
+class VarLenColumnUpdateTest : public ::testing::Test {
+ protected:
+  static void SetUpTestSuite() { g_vacuum_min_selectivity = 1.1; }
+
+  void SetUp() override {
+    run_ddl_statement("drop table if exists test_table;");
+    run_ddl_statement(
+        "create table test_table (t text encoding none) with (fragment_size = 2);");
+  }
+
+  void TearDown() override { run_ddl_statement("drop table if exists test_table;"); }
+
+  void clearFragmenter() {
+    const auto catalog = QR::get()->getCatalog();
+    const auto td = catalog->getMetadataForTable("test_table", false);
+    catalog->removeFragmenterForTable(td->tableId);
+  }
+
+  void sqlAndCompareResult(const std::string& sql,
+                           const std::vector<std::string>& expected_result) {
+    auto result = run_query(sql);
+    ASSERT_EQ(expected_result.size(), result->rowCount());
+    for (const auto& expected_value : expected_result) {
+      auto row = result->getNextRow(true, true);
+      auto& target_value = boost::get<ScalarTargetValue>(row[0]);
+      auto& nullable_str = boost::get<NullableString>(target_value);
+      auto& value = boost::get<std::string>(nullable_str);
+      ASSERT_EQ(expected_value, value);
+    }
+  }
+
+  void assertElementCount(std::vector<size_t> counts_per_fragment) {
+    const auto catalog = QR::get()->getCatalog();
+    const auto td = catalog->getMetadataForTable("test_table");
+    CHECK(td->fragmenter);
+    ChunkKey table_chunk_key{catalog->getDatabaseId(), td->tableId};
+    ChunkMetadataVector metadata_vector;
+    catalog->getDataMgr().getChunkMetadataVecForKeyPrefix(metadata_vector,
+                                                          table_chunk_key);
+    for (const auto& [chunk_key, chunk_metadata] : metadata_vector) {
+      auto fragment_id = static_cast<size_t>(chunk_key[CHUNK_KEY_FRAGMENT_IDX]);
+      ASSERT_LT(fragment_id, counts_per_fragment.size());
+      ASSERT_EQ(counts_per_fragment[fragment_id], chunk_metadata->numElements);
+    }
+    for (size_t i = 0; i < counts_per_fragment.size(); i++) {
+      auto fragment_info = td->fragmenter->getFragmentInfo(i);
+      ASSERT_EQ(counts_per_fragment[i], fragment_info->getPhysicalNumTuples());
+    }
+  }
+};
+
+TEST_F(VarLenColumnUpdateTest, UpdateOnFullFragment) {
+  run_query("insert into test_table values ('a')");
+  run_query("insert into test_table values ('b')");
+
+  clearFragmenter();
+  run_query("update test_table set t = 'c' where t = 'a';");
+  assertElementCount({2, 1});
+  sqlAndCompareResult("select * from test_table;", {"b", "c"});
+}
+
+TEST_F(VarLenColumnUpdateTest, UpdateOnFragmentWithSpace) {
+  run_query("insert into test_table values ('a')");
+
+  clearFragmenter();
+  run_query("update test_table set t = 'c' where t = 'a';");
+  assertElementCount({2});
+  sqlAndCompareResult("select * from test_table;", {"c"});
+}
+
+class TableWithImmediateVacuumTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    run_ddl_statement("drop table if exists test_table;");
+    run_ddl_statement(
+        "create table test_table (i int, t text encoding none) with (vacuum = "
+        "'immediate');");
+    run_query("insert into test_table values (1, 'a');");
+  }
+
+  void TearDown() override { run_ddl_statement("drop table if exists test_table;"); }
+
+  void sqlAndAssertException(const std::string& query, const std::string& error_message) {
+    try {
+      run_query(query);
+      FAIL() << "An exception should have been thrown for this test case";
+    } catch (const std::exception& e) {
+      ASSERT_EQ(error_message, e.what());
+    }
+  }
+
+  void sqlAndCompareResult(const std::string& query,
+                           int64_t i_column,
+                           const std::string& t_column) {
+    auto result = run_query(query);
+    ASSERT_EQ(static_cast<size_t>(1), result->rowCount());
+    ASSERT_EQ(static_cast<size_t>(2), result->colCount());
+
+    auto row = result->getNextRow(true, true);
+    auto& target_value_1 = boost::get<ScalarTargetValue>(row[0]);
+    EXPECT_EQ(i_column, boost::get<int64_t>(target_value_1));
+
+    auto& target_value_2 = boost::get<ScalarTargetValue>(row[1]);
+    auto& nullable_str = boost::get<NullableString>(target_value_2);
+    EXPECT_EQ(t_column, boost::get<std::string>(nullable_str));
+  }
+};
+
+TEST_F(TableWithImmediateVacuumTest, Delete) {
+  sqlAndAssertException("delete from test_table where i = 1;",
+                        "DELETE queries are only supported on tables with the vacuum "
+                        "attribute set to 'delayed'");
+}
+
+TEST_F(TableWithImmediateVacuumTest, VarLenColumnUpdate) {
+  sqlAndAssertException("update test_table set t = 'b' where t = 'a';",
+                        "UPDATE queries involving variable length columns are only "
+                        "supported on tables with the vacuum attribute set to 'delayed'");
+}
+
+TEST_F(TableWithImmediateVacuumTest, FixedLenColumnUpdate) {
+  sqlAndCompareResult("select * from test_table;", 1, "a");
+  run_query("update test_table set i = 2 where i = 1;");
+  sqlAndCompareResult("select * from test_table;", 2, "a");
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
-  QR::init(BASE_PATH);
+  namespace po = boost::program_options;
+  po::options_description desc("Options");
+  // these two are here to allow passing correctly google testing parameters
+  desc.add_options()("gtest_list_tests", "list all test");
+  desc.add_options()("gtest_filter", "filters tests, use --help for details");
+  desc.add_options()("use-disk-cache",
+                     "Use the disk cache for all tables with default size settings.");
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  po::notify(vm);
+  File_Namespace::DiskCacheConfig disk_cache_config{};
+  if (vm.count("use-disk-cache")) {
+    disk_cache_config = File_Namespace::DiskCacheConfig{
+        File_Namespace::DiskCacheConfig::getDefaultPath(std::string(BASE_PATH)),
+        File_Namespace::DiskCacheLevel::all};
+  }
+  QR::init(&disk_cache_config, BASE_PATH);
 
   // the data files for perf tests are too big to check in, so perf tests
   // are done privately in someone's dev host. prog option seems a overkill.

@@ -38,18 +38,6 @@
 class S3Archive : public Archive {
  public:
   S3Archive(const std::string& url, const bool plain_text) : Archive(url, plain_text) {
-// init aws api should be singleton because because
-// it's bad to call Aws::InitAPI and Aws::ShutdownAPI
-// multiple times.
-#ifdef HAVE_AWS_S3
-    {
-      std::unique_lock<std::mutex> lck(awsapi_mtx);
-      if (0 == awsapi_count++) {
-        Aws::InitAPI(awsapi_options);
-      }
-    }
-#endif  // HAVE_AWS_S3
-
     // these envs are on server side so are global settings
     // which make few senses in case of private s3 resources
     char* env;
@@ -62,6 +50,10 @@ class S3Archive : public Archive {
     if (0 != (env = getenv("AWS_SECRET_ACCESS_KEY"))) {
       s3_secret_key = env;
     }
+    if (0 != (env = getenv("AWS_SESSION_TOKEN"))) {
+      s3_session_token = env;
+    }
+
     if (0 != (env = getenv("AWS_ENDPOINT"))) {
       s3_endpoint = env;
     }
@@ -70,12 +62,14 @@ class S3Archive : public Archive {
   S3Archive(const std::string& url,
             const std::string& s3_access_key,
             const std::string& s3_secret_key,
+            const std::string& s3_session_token,
             const std::string& s3_region,
             const std::string& s3_endpoint,
             const bool plain_text)
       : S3Archive(url, plain_text) {
     this->s3_access_key = s3_access_key;
     this->s3_secret_key = s3_secret_key;
+    this->s3_session_token = s3_session_token;
     this->s3_region = s3_region;
     this->s3_endpoint = s3_endpoint;
 
@@ -92,14 +86,16 @@ class S3Archive : public Archive {
         thread.join();
       }
     }
-    std::unique_lock<std::mutex> lck(awsapi_mtx);
-    if (0 == --awsapi_count) {
-      Aws::ShutdownAPI(awsapi_options);
-    }
 #endif  // HAVE_AWS_S3
   }
 
+#ifdef HAVE_AWS_S3
   void init_for_read() override;
+#else
+  void init_for_read() override {
+    throw std::runtime_error("AWS S3 support not available");
+  }
+#endif
   const std::vector<std::string>& get_objkeys() { return objkeys; }
 #ifdef HAVE_AWS_S3
   const std::string land(const std::string& objkey,
@@ -129,6 +125,7 @@ class S3Archive : public Archive {
 #endif                        // HAVE_AWS_S3
   std::string s3_access_key;  // per-query credentials to override the
   std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
+  std::string s3_session_token;
   std::string s3_region;
   std::string s3_endpoint;
   std::string s3_temp_dir;
@@ -145,13 +142,17 @@ class S3ParquetArchive : public S3Archive {
   S3ParquetArchive(const std::string& url,
                    const std::string& s3_access_key,
                    const std::string& s3_secret_key,
+                   const std::string& s3_session_token,
                    const std::string& s3_region,
                    const std::string& s3_endpoint,
                    const bool plain_text)
-      : S3Archive(url, s3_access_key, s3_secret_key, s3_region, s3_endpoint, plain_text) {
-  }
-
- private:
+      : S3Archive(url,
+                  s3_access_key,
+                  s3_secret_key,
+                  s3_session_token,
+                  s3_region,
+                  s3_endpoint,
+                  plain_text) {}
 };
 
 #endif /* ARCHIVE_S3ARCHIVE_H_ */

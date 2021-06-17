@@ -128,9 +128,9 @@ class Archive {
          c) customize init_for_read() which uses archive_read_open
 
    */
-  virtual int open() { return ARCHIVE_OK; }              // nop
-  virtual int close() { return ARCHIVE_OK; }             // nop
-  virtual ssize_t read(const void** buff) { return 0; }  // nop
+  virtual int open() { return ARCHIVE_OK; }                // nop
+  virtual int close() { return ARCHIVE_OK; }               // nop
+  virtual ptrdiff_t read(const void** buff) { return 0; }  // nop
 
   virtual void init_for_read() {
     // set libarchive callbacks
@@ -138,7 +138,7 @@ class Archive {
   }
 
   // these methods are callback for libarchive
-  static ssize_t read(struct archive* a, void* client_data, const void** buff) {
+  static ptrdiff_t read(struct archive* a, void* client_data, const void** buff) {
     return ((Archive*)client_data)->read(buff);
   }
 

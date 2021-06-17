@@ -20,13 +20,13 @@
 
 #include "Analyzer/Analyzer.h"
 #include "QueryEngine/Descriptors/InputDescriptors.h"
-#include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
+#include "QueryEngine/JoinHashTable/HashJoin.h"
 
 class Executor;
 
 struct JoinInfo {
   JoinInfo(const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies,
-           const std::vector<std::shared_ptr<JoinHashTableInterface>>& join_hash_tables)
+           const std::vector<std::shared_ptr<HashJoin>>& join_hash_tables)
       : equi_join_tautologies_(equi_join_tautologies)
       , join_hash_tables_(join_hash_tables) {}
 
@@ -34,7 +34,7 @@ struct JoinInfo {
       equi_join_tautologies_;  // expressions we equi-join on are true by
                                // definition when using a hash join; we'll
                                // fold them to true during code generation
-  std::vector<std::shared_ptr<JoinHashTableInterface>> join_hash_tables_;
+  std::vector<std::shared_ptr<HashJoin>> join_hash_tables_;
   std::unordered_set<size_t> sharded_range_table_indices_;
 };
 
@@ -42,6 +42,7 @@ struct PlanState {
   using TableId = int;
   using ColumnId = int;
   using DeletedColumnsMap = std::unordered_map<TableId, const ColumnDescriptor*>;
+  using HoistedFiltersSet = std::unordered_set<std::shared_ptr<Analyzer::Expr>>;
 
   PlanState(const bool allow_lazy_fetch,
             const std::vector<InputTableInfo>& query_infos,
@@ -55,6 +56,7 @@ struct PlanState {
 
   std::vector<int64_t> init_agg_vals_;
   std::vector<Analyzer::Expr*> target_exprs_;
+  HoistedFiltersSet hoisted_filters_;
   std::unordered_map<InputColDescriptor, size_t> global_to_local_col_ids_;
   std::set<std::pair<TableId, ColumnId>> columns_to_fetch_;
   std::set<std::pair<TableId, ColumnId>> columns_to_not_fetch_;

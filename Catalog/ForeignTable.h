@@ -22,15 +22,6 @@
 
 namespace foreign_storage {
 
-template <typename T>
-bool contains(const T& set, const std::string_view element) {
-  if (std::find(set.begin(), set.end(), element) == set.end()) {
-    return false;
-  } else {
-    return true;
-  }
-}
-
 struct ForeignTable : public TableDescriptor, public OptionsContainer {
   ForeignTable();
 
@@ -47,7 +38,6 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
   }
 
   // Option keys
-  static constexpr const char* FILE_PATH_KEY = "FILE_PATH";
   static constexpr const char* FRAGMENT_SIZE_KEY = "FRAGMENT_SIZE";
   static constexpr const char* REFRESH_TIMING_TYPE_KEY = "REFRESH_TIMING_TYPE";
   static constexpr const char* REFRESH_START_DATE_TIME_KEY = "REFRESH_START_DATE_TIME";
@@ -62,8 +52,8 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
 
   const ForeignServer* foreign_server;
   int64_t last_refresh_time{NULL_REFRESH_TIME}, next_refresh_time{NULL_REFRESH_TIME};
-  inline static const std::set<const char*> supported_options{FILE_PATH_KEY,
-                                                              FRAGMENT_SIZE_KEY,
+
+  inline static const std::set<const char*> supported_options{FRAGMENT_SIZE_KEY,
                                                               REFRESH_TIMING_TYPE_KEY,
                                                               REFRESH_START_DATE_TIME_KEY,
                                                               REFRESH_INTERVAL_KEY,
@@ -81,18 +71,57 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
                                                               REFRESH_INTERVAL_KEY,
                                                               REFRESH_UPDATE_TYPE_KEY};
 
-  void validateOptions() const;
-  void initializeOptions(const rapidjson::Value& options);
-  std::vector<std::string_view> getSupportedDataWrapperOptions() const;
-  void validateSupportedOptions(const OptionsMap& options_map) const;
-  bool isAppendMode() const;
-  std::string getFilePath() const;
+  /**
+    @brief Verifies the values for mapped options are valid.
+   */
+  void validateOptionValues() const;
 
-  static OptionsMap create_options_map(const rapidjson::Value& json_options);
-  static void validate_alter_options(const OptionsMap& options_map);
+  /**
+    @brief Creates an empty option map for the table.  Verifies that the required
+    option keys are present and that they contain legal values (as far as they can be
+    checked statically).  This is necessary even on a set of empty options because some
+    options may be required based on the options set in the server (e.g. file_path is
+    needed if the server has no base_path).
+  */
+  void initializeOptions();
+
+  /**
+    @brief Creates an option map from the given json options.  Verifies that the required
+    option keys are present and that they contain legal values (as far as they can be
+    checked statically).
+  */
+  void initializeOptions(const rapidjson::Value& options);
+
+  /**
+    @brief Verifies that the options_map contains the keys required by a foreign table;
+    including those specified by the table's data wrapper.
+   */
+  void validateSupportedOptionKeys(const OptionsMap& options_map) const;
+
+  /**
+    @brief Checks if the table is in append mode.
+  */
+  bool isAppendMode() const;
+
+  /**
+    @brief Creates an options map from given options.  Converts options that must be upper
+    case appropriately.
+   */
+  static OptionsMap createOptionsMap(const rapidjson::Value& json_options);
+
+  /**
+    @brief Verifies that the given options map only contains options that can be legally
+    altered.
+   */
+  static void validateAlterOptions(const OptionsMap& options_map);
+
+  /**
+    @brief Verifies the schema is supported by this foreign table
+   */
+  void validateSchema(const std::list<ColumnDescriptor>& columns) const;
 
  private:
   void validateDataWrapperOptions() const;
-  void validateRefreshOptions() const;
+  void validateRefreshOptionValues() const;
 };
 }  // namespace foreign_storage

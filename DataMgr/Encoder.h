@@ -132,7 +132,7 @@ class DateDaysOverflowValidator {
     }
     if (days < min_) {
       throw std::runtime_error("Date encoding underflow: Epoch days " +
-                               std::to_string(days) + " less than minumum capacity " +
+                               std::to_string(days) + " less than minimum capacity " +
                                std::to_string(min_));
     }
   }
@@ -177,6 +177,17 @@ class Encoder {
   virtual void updateStats(const int8_t* const src_data, const size_t num_elements) = 0;
 
   /**
+   * Update statistics for encoded data without appending.
+   *
+   * @param dst_data - the data with which to update statistics
+   * @param num_elements - the number of elements to scan in the data
+   */
+  virtual void updateStatsEncoded(const int8_t* const dst_data,
+                                  const size_t num_elements) {
+    UNREACHABLE();
+  }
+
+  /**
    * Update statistics for string data without appending.
    *
    * @param src_data - the string data with which to update statistics
@@ -209,7 +220,15 @@ class Encoder {
    * otherwise. Default false if metadata update is unsupported. Only reset chunk stats if
    * the incoming stats differ from the current stats.
    */
-  virtual bool resetChunkStats(const ChunkStats&) { return false; }
+  virtual bool resetChunkStats(const ChunkStats&) {
+    UNREACHABLE() << "Attempting to reset stats for unsupported type.";
+    return false;
+  }
+
+  /**
+   * Resets chunk metadata stats to their default values.
+   */
+  virtual void resetChunkStats() = 0;
 
   size_t getNumElems() const { return num_elems_; }
   void setNumElems(const size_t num_elems) { num_elems_ = num_elems; }

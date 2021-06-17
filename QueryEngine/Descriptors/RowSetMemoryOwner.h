@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,16 +18,20 @@
 
 #include <boost/noncopyable.hpp>
 #include <list>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include "Catalog/Catalog.h"
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/Allocators/ArenaAllocator.h"
 #include "DataMgr/DataMgr.h"
 #include "Logger/Logger.h"
+#include "QueryEngine/StringDictionaryGenerations.h"
+#include "Shared/quantile.h"
 #include "StringDictionary/StringDictionaryProxy.h"
 
 class ResultSet;
@@ -36,22 +40,29 @@ class ResultSet;
  * Handles allocations and outputs for all stages in a query, either explicitly or via a
  * managed allocator object
  */
-class RowSetMemoryOwner : boost::noncopyable {
+class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
  public:
-  RowSetMemoryOwner(const size_t arena_block_size)
-      : arena_block_size_(arena_block_size)
-      , allocator_(std::make_unique<Arena>(arena_block_size)) {}
-
-  int8_t* allocate(const size_t num_bytes) {
-    CHECK(allocator_);
-    std::lock_guard<std::mutex> lock(state_mutex_);
-    return reinterpret_cast<int8_t*>(allocator_->allocate(num_bytes));
+  RowSetMemoryOwner(const size_t arena_block_size, const size_t num_kernel_threads = 0)
+      : arena_block_size_(arena_block_size) {
+    for (size_t i = 0; i < num_kernel_threads + 1; i++) {
+      allocators_.emplace_back(std::make_unique<Arena>(arena_block_size));
+    }
+    CHECK(!allocators_.empty());
   }
 
-  int8_t* allocateCountDistinctBuffer(const size_t num_bytes) {
-    CHECK(allocator_);
+  int8_t* allocate(const size_t num_bytes, const size_t thread_idx = 0) override {
+    CHECK_LT(thread_idx, allocators_.size());
+    auto allocator = allocators_[thread_idx].get();
     std::lock_guard<std::mutex> lock(state_mutex_);
-    auto ret = reinterpret_cast<int8_t*>(allocator_->allocateAndZero(num_bytes));
+    return reinterpret_cast<int8_t*>(allocator->allocate(num_bytes));
+  }
+
+  int8_t* allocateCountDistinctBuffer(const size_t num_bytes,
+                                      const size_t thread_idx = 0) {
+    CHECK_LT(thread_idx, allocators_.size());
+    auto allocator = allocators_[thread_idx].get();
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    auto ret = reinterpret_cast<int8_t*>(allocator->allocateAndZero(num_bytes));
     count_distinct_bitmaps_.emplace_back(
         CountDistinctBitmapBuffer{ret, num_bytes, /*physical_buffer=*/true});
     return ret;
@@ -127,6 +138,11 @@ class RowSetMemoryOwner : boost::noncopyable {
     return it->second.get();
   }
 
+  StringDictionaryProxy* getOrAddStringDictProxy(
+      const int dict_id_in,
+      const bool with_generation,
+      const Catalog_Namespace::Catalog* catalog);
+
   void addLiteralStringDictProxy(
       std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy) {
     std::lock_guard<std::mutex> lock(state_mutex_);
@@ -163,11 +179,21 @@ class RowSetMemoryOwner : boost::noncopyable {
   }
 
   std::shared_ptr<RowSetMemoryOwner> cloneStrDictDataOnly() {
-    auto rtn = std::make_shared<RowSetMemoryOwner>(arena_block_size_);
+    auto rtn = std::make_shared<RowSetMemoryOwner>(arena_block_size_, /*num_kernels=*/1);
     rtn->str_dict_proxy_owned_ = str_dict_proxy_owned_;
     rtn->lit_str_dict_proxy_ = lit_str_dict_proxy_;
     return rtn;
   }
+
+  void setDictionaryGenerations(StringDictionaryGenerations generations) {
+    string_dictionary_generations_ = generations;
+  }
+
+  StringDictionaryGenerations& getStringDictionaryGenerations() {
+    return string_dictionary_generations_;
+  }
+
+  quantile::TDigest* nullTDigest();
 
  private:
   struct CountDistinctBitmapBuffer {
@@ -184,11 +210,13 @@ class RowSetMemoryOwner : boost::noncopyable {
   std::list<std::vector<int64_t>> arrays_;
   std::unordered_map<int, std::shared_ptr<StringDictionaryProxy>> str_dict_proxy_owned_;
   std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
+  StringDictionaryGenerations string_dictionary_generations_;
   std::vector<void*> col_buffers_;
   std::vector<Data_Namespace::AbstractBuffer*> varlen_input_buffers_;
+  std::vector<std::unique_ptr<quantile::TDigest>> t_digests_;
 
   size_t arena_block_size_;  // for cloning
-  std::unique_ptr<Arena> allocator_;
+  std::vector<std::unique_ptr<Arena>> allocators_;
 
   mutable std::mutex state_mutex_;
 

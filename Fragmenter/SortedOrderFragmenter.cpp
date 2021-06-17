@@ -212,16 +212,24 @@ void SortedOrderFragmenter::sortData(InsertData& insertDataStruct) {
                             physical_cd->columnId);
   CHECK(it != insertDataStruct.columnIds.end());
   // sort row indexes of the sort column
-  std::vector<size_t> indexes(insertDataStruct.numRows);
-  std::iota(indexes.begin(), indexes.end(), 0);
   const auto dist = std::distance(insertDataStruct.columnIds.begin(), it);
-  CHECK_LT(static_cast<size_t>(dist), insertDataStruct.data.size());
-  sortIndexes(physical_cd, indexes, insertDataStruct.data[dist]);
-  // shuffle rows of all columns
-  for (size_t i = 0; i < insertDataStruct.columnIds.size(); ++i) {
-    const auto cd = catalog_->getMetadataForColumn(table_desc->tableId,
-                                                   insertDataStruct.columnIds[i]);
-    shuffleByIndexes(cd, indexes, insertDataStruct.data[i]);
+  if (!insertDataStruct.is_default[dist]) {
+    std::vector<size_t> indexes(insertDataStruct.numRows);
+    std::iota(indexes.begin(), indexes.end(), 0);
+    CHECK_LT(static_cast<size_t>(dist), insertDataStruct.data.size());
+    sortIndexes(physical_cd, indexes, insertDataStruct.data[dist]);
+    // shuffle rows of all columns
+    for (size_t i = 0; i < insertDataStruct.columnIds.size(); ++i) {
+      if (insertDataStruct.is_default[i]) {
+        continue;
+      }
+      const auto cd = catalog_->getMetadataForColumn(table_desc->tableId,
+                                                     insertDataStruct.columnIds[i]);
+      shuffleByIndexes(cd, indexes, insertDataStruct.data[i]);
+    }
+  } else {
+    // nothing to shuffle, the column has the same value across all rows
+    return;
   }
 }
 

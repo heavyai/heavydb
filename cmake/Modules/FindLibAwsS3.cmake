@@ -97,6 +97,39 @@ find_library(LibAwsS3_LIBRARY
   /usr/local/homebrew/lib
   /opt/local/lib)
 
+find_library(LibAwsSTS_LIBRARY
+  NAMES aws-cpp-sdk-sts
+  HINTS ENV LD_LIBRARY_PATH
+  HINTS ENV DYLD_LIBRARY_PATH
+  HINTS ${PREFIX_LIBAWSS3}/lib
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /usr/local/homebrew/lib
+  /opt/local/lib)
+
+find_library(LibAwsIM_LIBRARY
+  NAMES aws-cpp-sdk-identity-management
+  HINTS ENV LD_LIBRARY_PATH
+  HINTS ENV DYLD_LIBRARY_PATH
+  HINTS ${PREFIX_LIBAWSS3}/lib
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /usr/local/homebrew/lib
+  /opt/local/lib)
+
+find_library(LibAwsCI_LIBRARY
+  NAMES aws-cpp-sdk-cognito-identity
+  HINTS ENV LD_LIBRARY_PATH
+  HINTS ENV DYLD_LIBRARY_PATH
+  HINTS ${PREFIX_LIBAWSS3}/lib
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /usr/local/homebrew/lib
+  /opt/local/lib)
+
 find_library(LibCurl_LIBRARY
   NAMES curl
   HINTS ENV LD_LIBRARY_PATH
@@ -131,7 +164,7 @@ find_path(LibAwsS3_INCLUDE_DIR
 
 # Set standard CMake FindPackage variables if found.
 set(LibAwsS3_SUPPORT_LIBRARIES ${LibCurl_LIBRARY} ${OPENSSL_LIBRARIES})
-set(LibAwsS3_LIBRARIES ${LibAwsS3_LIBRARIES} ${LibAwsS3_LIBRARY} ${libAwsCore_LIBRARY} ${libAwsCEventStream_LIBRARY} ${libAwsCCommon_LIBRARY} ${libAwsChecksums_LIBRARY} ${LibAwsS3_SUPPORT_LIBRARIES})
+set(LibAwsS3_LIBRARIES ${LibAwsS3_LIBRARIES} ${LibAwsS3_LIBRARY} ${LibAwsIM_LIBRARY} ${LibAwsCI_LIBRARY} ${libAwsCore_LIBRARY} ${libAwsCEventStream_LIBRARY} ${libAwsCCommon_LIBRARY} ${libAwsChecksums_LIBRARY} ${LibAwsSTS_LIBRARY} ${LibAwsS3_SUPPORT_LIBRARIES})
 set(LibAwsS3_INCLUDE_DIRS ${LibAwsS3_INCLUDE_DIR})
 set(LibAwsS3_LIBRARY_DIRS ${LibAwsS3_LIBRARY_DIR})
 
@@ -143,6 +176,9 @@ include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(LibAwsS3 REQUIRED_VARS
   LibAwsS3_INCLUDE_DIR
   LibAwsS3_LIBRARY
+  LibAwsSTS_LIBRARY
+  LibAwsIM_LIBRARY
+  LibAwsCI_LIBRARY
   libAwsCore_LIBRARY
   libAwsCCommon_LIBRARY
   libAwsCEventStream_LIBRARY

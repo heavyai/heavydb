@@ -122,7 +122,11 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateItem(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateNow() const;
+  std::shared_ptr<Analyzer::Expr> translateCurrentDate() const;
+
+  std::shared_ptr<Analyzer::Expr> translateCurrentTime() const;
+
+  std::shared_ptr<Analyzer::Expr> translateCurrentTimestamp() const;
 
   std::shared_ptr<Analyzer::Expr> translateDatetime(const RexFunctionOperator*) const;
 
@@ -180,7 +184,9 @@ class RelAlgTranslator {
       const bool with_bounds,
       const bool with_render_group,
       const bool expand_geo_col,
-      const bool is_projection = false) const;
+      const bool is_projection = false,
+      const bool use_geo_expressions = false,
+      const bool try_to_compress = false) const;
 
   std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoColumn(
       const RexInput*,

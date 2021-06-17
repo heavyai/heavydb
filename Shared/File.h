@@ -23,8 +23,6 @@
 #pragma once
 
 #define MAPD_FILE_EXT ".mapd"
-#define MAX_FILE_N_PAGES 256
-#define MAX_FILE_N_METADATA_PAGES 4096
 
 #include <cstdint>
 #include <cstdio>
@@ -34,6 +32,10 @@
 #include "Shared/types.h"
 
 namespace File_Namespace {
+
+std::string get_data_file_path(const std::string& base_path,
+                               int file_id,
+                               size_t page_size);
 
 FILE* create(const std::string& basePath,
              const int fileId,
@@ -90,7 +92,7 @@ size_t read(FILE* f, const size_t offset, const size_t size, int8_t* buf);
  * @param err If not NULL, will hold an error code should an error occur.
  * @return size_t The number of bytes written.
  */
-size_t write(FILE* f, const size_t offset, const size_t size, int8_t* buf);
+size_t write(FILE* f, const size_t offset, const size_t size, const int8_t* buf);
 
 /**
  * @brief Appends the specified number of bytes to the end of the file f from buf.
@@ -101,7 +103,7 @@ size_t write(FILE* f, const size_t offset, const size_t size, int8_t* buf);
  * @param err If not NULL, will hold an error code should an error occur.
  * @return size_t The number of bytes written.
  */
-size_t append(FILE* f, const size_t size, int8_t* buf);
+size_t append(FILE* f, const size_t size, const int8_t* buf);
 
 /**
  * @brief Reads the specified page from the file f into buf.

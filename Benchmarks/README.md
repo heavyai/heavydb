@@ -31,6 +31,18 @@ The required packages can otherwise be installed individually using [conda](http
 
 ## Usage
 
+### Running in docker
+
+The benchmark script can be run in a docker container with access to the db to be tested. Either build the container image using the `Dockerfile` in this directory, or pull the latest from: https://hub.docker.com/repository/docker/omnisci/core-benchmark . 
+
+The [nvidia-docker runtime](https://github.com/NVIDIA/nvidia-docker) is needed in order to get GPU details from the testing system if desired; use the `--no-gather-nvml-gpu-info` flag to skip this.
+
+Example:
+
+```
+docker run --gpus all omnisci/core-benchmark bash -c 'python3 run_benchmark.py --server remote.server --table flights --queries_dir queries/flights --label DockerTest --iterations 15 --destination output'
+```
+
 ### Required components
 
 Running the script requies a few components:

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,15 +18,14 @@
  * @file    ResultSetBufferAccessors.h
  * @author  Alex Suhan <alex@mapd.com>
  * @brief   Utility functions for easy access to the result set buffers.
- *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  */
 
 #ifndef QUERYENGINE_RESULTSETBUFFERACCESSORS_H
 #define QUERYENGINE_RESULTSETBUFFERACCESSORS_H
 
-#include "../Shared/SqlTypesLayout.h"
 #include "BufferCompaction.h"
+#include "Shared/SqlTypesLayout.h"
+#include "Shared/misc.h"
 #include "TypePunning.h"
 
 #ifndef __CUDACC__
@@ -202,19 +201,17 @@ inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair,
   switch (ti.get_type()) {
     case kFLOAT: {
       if (float_argument_input) {
-        dividend = static_cast<double>(
-            *reinterpret_cast<const float*>(may_alias_ptr(&fp_pair.first)));
+        dividend = shared::reinterpretBits<float>(fp_pair.first);
+        null_val = shared::reinterpretBits<int64_t, float>(inline_fp_null_val(ti));
       } else {
-        dividend = *reinterpret_cast<const double*>(may_alias_ptr(&fp_pair.first));
+        dividend = shared::reinterpretBits<double>(fp_pair.first);
+        null_val = shared::reinterpretBits<int64_t, double>(inline_fp_null_val(ti));
       }
-      double null_float = inline_fp_null_val(ti);
-      null_val = *reinterpret_cast<const int64_t*>(may_alias_ptr(&null_float));
       break;
     }
     case kDOUBLE: {
-      dividend = *reinterpret_cast<const double*>(may_alias_ptr(&fp_pair.first));
-      double null_double = inline_fp_null_val(ti);
-      null_val = *reinterpret_cast<const int64_t*>(may_alias_ptr(&null_double));
+      dividend = shared::reinterpretBits<double>(fp_pair.first);
+      null_val = shared::reinterpretBits<int64_t>(inline_fp_null_val(ti));
       break;
     }
     default: {

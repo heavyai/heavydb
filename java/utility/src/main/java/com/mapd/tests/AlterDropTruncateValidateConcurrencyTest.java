@@ -186,6 +186,16 @@ public class AlterDropTruncateValidateConcurrencyTest {
 
     MapdTestClient su = MapdTestClient.getClient(
             "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+    try {
+      su.runSql("DROP USER dba");
+    } catch (Exception e) {
+    }
+    try {
+      su.runSql("DROP USER bob");
+    } catch (Exception e) {
+    }
+    su.runSql("DROP DATABASE IF EXISTS db1");
+
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
 

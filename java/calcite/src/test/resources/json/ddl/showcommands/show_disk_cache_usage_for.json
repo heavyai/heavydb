@@ -1,0 +1,10 @@
+{
+  "statementType": "DDL",
+  "payload": {
+    "command": "SHOW_DISK_CACHE_USAGE",
+    "tableNames": [
+      "table1",
+      "table2"
+    ]
+  }
+}

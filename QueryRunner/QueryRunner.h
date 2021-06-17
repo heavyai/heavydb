@@ -28,7 +28,7 @@
 #include "LeafAggregator.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
-#include "QueryEngine/JoinHashTable/JoinHashTable.h"
+#include "QueryEngine/JoinHashTable/HashJoin.h"
 #include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
 #include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/QueryHint.h"
@@ -61,18 +61,12 @@ class QueryRunner {
   static QueryRunner* init(const char* db_path,
                            const std::string& udf_filename = "",
                            const size_t max_gpu_mem = 0,  // use all available mem
-                           const int reserved_gpu_mem = 256 << 20) {
-    return QueryRunner::init(db_path,
-                             std::string{OMNISCI_ROOT_USER},
-                             "HyperInteractive",
-                             std::string{OMNISCI_DEFAULT_DB},
-                             {},
-                             {},
-                             udf_filename,
-                             true,
-                             max_gpu_mem,
-                             reserved_gpu_mem);
-  }
+                           const int reserved_gpu_mem = 256 << 20);
+
+  static QueryRunner* init(const File_Namespace::DiskCacheConfig* disk_cache_config,
+                           const char* db_path,
+                           const std::vector<LeafHostInfo>& string_servers = {},
+                           const std::vector<LeafHostInfo>& leaf_servers = {});
 
   static QueryRunner* init(const char* db_path,
                            const std::vector<LeafHostInfo>& string_servers,
@@ -96,7 +90,8 @@ class QueryRunner {
                            const size_t max_gpu_mem = 0,  // use all available mem
                            const int reserved_gpu_mem = 256 << 20,
                            const bool create_user = false,
-                           const bool create_db = false);
+                           const bool create_db = false,
+                           const File_Namespace::DiskCacheConfig* config = nullptr);
 
   static QueryRunner* init(std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
     qr_instance_.reset(new QueryRunner(std::move(session)));
@@ -115,15 +110,45 @@ class QueryRunner {
   std::shared_ptr<Catalog_Namespace::SessionInfo> getSession() const {
     return session_info_;
   }
+
+  void addSessionId(const std::string& session_id,
+                    ExecutorDeviceType device_type = ExecutorDeviceType::GPU) {
+    session_info_ =
+        std::make_unique<Catalog_Namespace::SessionInfo>(session_info_->get_catalog_ptr(),
+                                                         session_info_->get_currentUser(),
+                                                         device_type,
+                                                         session_id);
+  }
+
+  void clearSessionId() { session_info_ = nullptr; }
+
   std::shared_ptr<Catalog_Namespace::Catalog> getCatalog() const;
   std::shared_ptr<Calcite> getCalcite() const;
   std::shared_ptr<Executor> getExecutor() const;
+  Catalog_Namespace::UserMetadata& getUserMetadata() const;
 
   bool gpusPresent() const;
   virtual void clearGpuMemory() const;
   virtual void clearCpuMemory() const;
 
   virtual void runDDLStatement(const std::string&);
+
+  virtual std::shared_ptr<ResultSet> runSQL(const std::string& query_str,
+                                            CompilationOptions co,
+                                            ExecutionOptions eo);
+  virtual std::shared_ptr<ExecutionResult> runSelectQuery(const std::string& query_str,
+                                                          CompilationOptions co,
+                                                          ExecutionOptions eo);
+  static ExecutionOptions defaultExecutionOptionsForRunSQL(bool allow_loop_joins = true,
+                                                           bool just_explain = false);
+
+  // TODO: Refactor away functions such as runSQL() and runSelectQuery() with arbitrary
+  // parameters that grow over time. Instead, pass CompilationOptions and
+  // ExecutionOptions which can be extended without changing the function signatures.
+  // Why?
+  //  * Functions with a large number of parameters are hard to maintain and error-prone.
+  //  * "Default arguments are banned on virtual functions"
+  //    https://google.github.io/styleguide/cppguide.html#Default_Arguments
   virtual std::shared_ptr<ResultSet> runSQL(const std::string& query_str,
                                             const ExecutorDeviceType device_type,
                                             const bool hoist_literals = true,
@@ -136,31 +161,32 @@ class QueryRunner {
       const bool just_explain = false);
   virtual std::shared_ptr<ResultSet> runSQLWithAllowingInterrupt(
       const std::string& query_str,
-      std::shared_ptr<Executor> executor,
       const std::string& session_id,
       const ExecutorDeviceType device_type,
       const double running_query_check_freq = 0.9,
       const unsigned pending_query_check_freq = 1000);
+
   virtual std::vector<std::shared_ptr<ResultSet>> runMultipleStatements(
       const std::string&,
       const ExecutorDeviceType);
-  virtual QueryHint getParsedQueryHintofQuery(const std::string&);
+  virtual RegisteredQueryHint getParsedQueryHint(const std::string&);
 
   virtual void runImport(Parser::CopyTableStmt* import_stmt);
   virtual std::unique_ptr<import_export::Loader> getLoader(
       const TableDescriptor* td) const;
 
-  const std::shared_ptr<std::vector<int32_t>>& getCachedJoinHashTable(size_t idx);
+  const int32_t* getCachedJoinHashTable(size_t idx);
   const int8_t* getCachedBaselineHashTable(size_t idx);
   size_t getEntryCntCachedBaselineHashTable(size_t idx);
-  uint64_t getNumberOfCachedJoinHashTables();
-  uint64_t getNumberOfCachedBaselineJoinHashTables();
+  size_t getNumberOfCachedJoinHashTables();
+  size_t getNumberOfCachedBaselineJoinHashTables();
+  size_t getNumberOfCachedOverlapsHashTables();
 
   void resizeDispatchQueue(const size_t num_executors);
 
   QueryRunner(std::unique_ptr<Catalog_Namespace::SessionInfo> session);
 
-  virtual ~QueryRunner() = default;
+  virtual ~QueryRunner();
 
   static query_state::QueryStates query_states_;
 
@@ -181,19 +207,21 @@ class QueryRunner {
               const size_t max_gpu_mem,
               const int reserved_gpu_mem,
               const bool create_user,
-              const bool create_db);
-
+              const bool create_db,
+              const File_Namespace::DiskCacheConfig* disk_cache_config = nullptr);
   static std::unique_ptr<QueryRunner> qr_instance_;
 
   std::shared_ptr<Catalog_Namespace::SessionInfo> session_info_;
   std::unique_ptr<QueryDispatchQueue> dispatch_queue_;
+  std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
 };
 
 class ImportDriver : public QueryRunner {
  public:
   ImportDriver(std::shared_ptr<Catalog_Namespace::Catalog> cat,
                const Catalog_Namespace::UserMetadata& user,
-               const ExecutorDeviceType dt = ExecutorDeviceType::GPU);
+               const ExecutorDeviceType dt = ExecutorDeviceType::GPU,
+               const std::string session_id = "");
 
   void importGeoTable(const std::string& file_path,
                       const std::string& table_name,

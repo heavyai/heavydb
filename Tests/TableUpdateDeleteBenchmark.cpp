@@ -115,7 +115,7 @@ class UpdateFixture : public benchmark::Fixture {
       }
     }
 
-    loader->load(import_buffers, state.range(0));
+    loader->load(import_buffers, state.range(0), nullptr);
 
     // make sure we're warmed up
     run_multiple_agg("SELECT * FROM update_bench_1;", ExecutorDeviceType::CPU);
@@ -237,7 +237,7 @@ class TempTableUpdateFixture : public benchmark::Fixture {
       }
     }
 
-    loader->load(import_buffers, state.range(0));
+    loader->load(import_buffers, state.range(0), nullptr);
 
     // make sure we're warmed up
     run_multiple_agg("SELECT * FROM update_bench_1;", ExecutorDeviceType::CPU);

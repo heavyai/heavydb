@@ -80,6 +80,7 @@ class AbstractBuffer {
                       const MemoryLevel src_buffer_type = CPU_LEVEL,
                       const int device_id = -1) = 0;
   virtual int8_t* getMemoryPtr() = 0;
+  virtual void setMemoryPtr(int8_t* new_ptr) { CHECK(false); }
   virtual size_t pageCount() const = 0;
   virtual size_t pageSize() const = 0;
   virtual size_t reservedSize() const = 0;

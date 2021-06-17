@@ -44,11 +44,11 @@ sudo yum groupinstall -y "Development Tools"
 sudo yum install -y \
     zlib-devel \
     epel-release \
+    which \
     libssh \
     openssl-devel \
     ncurses-devel \
     git \
-    maven \
     java-1.8.0-openjdk-devel \
     java-1.8.0-openjdk-headless \
     gperftools \
@@ -57,6 +57,7 @@ sudo yum install -y \
     python-devel \
     wget \
     curl \
+    python3 \
     openldap-devel
 sudo yum install -y \
     jq \
@@ -105,6 +106,8 @@ export CXX=$PREFIX/bin/g++
 
 install_ninja
 
+install_maven
+
 install_cmake
 
 download_make_install ftp://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz
@@ -117,6 +120,7 @@ VERS=1.0.6
 download ${HTTP_DEPS}/bzip2-$VERS.tar.gz
 extract bzip2-$VERS.tar.gz
 pushd bzip2-$VERS
+sed -i 's/O2 -g \$/O2 -g -fPIC \$/' Makefile
 makej
 make install PREFIX=$PREFIX
 popd
@@ -125,8 +129,8 @@ popd
 download_make_install ${HTTP_DEPS}/openssl-1.0.2u.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
 
 # libarchive
-download_make_install ${HTTP_DEPS}/xz-5.2.4.tar.xz "" "--disable-shared"
-download_make_install ${HTTP_DEPS}/libarchive-3.3.2.tar.gz "" "--without-openssl --disable-shared"
+CFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/xz-5.2.4.tar.xz "" "--disable-shared --with-pic"
+CFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libarchive-3.3.2.tar.gz "" "--without-openssl --disable-shared"
 
 CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.1.tar.gz # "" "--build=powerpc64le-unknown-linux-gnu"
 
@@ -169,18 +173,11 @@ popd
 VERS=0.3.5
 CXXFLAGS="-fPIC" download_make_install https://github.com/google/glog/archive/v$VERS.tar.gz glog-$VERS "--enable-shared=no" # --build=powerpc64le-unknown-linux-gnu"
 
-# folly
+# Libevent needed for folly
 VERS=2.1.10
 download_make_install https://github.com/libevent/libevent/releases/download/release-$VERS-stable/libevent-$VERS-stable.tar.gz
 
-VERS=2019.04.29.00
-download https://github.com/facebook/folly/archive/v$VERS.tar.gz
-extract v$VERS.tar.gz
-pushd folly-$VERS/build/
-CXXFLAGS="-fPIC -pthread" cmake -DCMAKE_INSTALL_PREFIX=$PREFIX ..
-makej
-make install
-popd
+install_folly
 
 # llvm
 # http://thrysoee.dk/editline/libedit-20170329-3.1.tar.gz
@@ -188,7 +185,7 @@ download_make_install ${HTTP_DEPS}/libedit-20170329-3.1.tar.gz
 # (see common-functions.sh)
 install_llvm
 
-VERS=7.69.0
+VERS=7.75.0
 # https://curl.haxx.se/download/curl-$VERS.tar.xz
 download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps"
 
@@ -227,7 +224,7 @@ VERS=1.6.21
 # http://download.sourceforge.net/libpng/libpng-$VERS.tar.xz
 download_make_install ${HTTP_DEPS}/libpng-$VERS.tar.xz
 
-VERS=3.0.2
+VERS=3.1.0
 download https://github.com/cginternals/glbinding/archive/v$VERS.tar.gz
 extract v$VERS.tar.gz
 BDIR="glbinding-$VERS/build"
@@ -248,6 +245,9 @@ make install
 popd
 
 install_snappy
+
+VERS=3.52.15
+CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libiodbc-${VERS}.tar.gz
 
 # c-blosc
 VERS=1.14.4
@@ -277,6 +277,9 @@ install_awscpp -j $(nproc)
 
 # Apache Arrow (see common-functions.sh)
 install_arrow
+
+# libuv
+install_libuv
 
 # glslang (with spirv-tools)
 VERS=8.13.3743 # stable 4/27/20
@@ -323,7 +326,7 @@ popd # spirv-cross
 
 # Vulkan
 # Custom tarball which excludes the spir-v toolchain
-VERS=1.2.148.1 # stable 8/9/20
+VERS=1.2.162.0 # stable 12/11/20
 rm -rf vulkan
 mkdir -p vulkan
 pushd vulkan

@@ -29,6 +29,7 @@ JoinLoop::JoinLoop(const JoinLoopKind kind,
                    const std::function<llvm::Value*(const std::vector<llvm::Value*>&)>&
                        outer_condition_match,
                    const std::function<void(llvm::Value*)>& found_outer_matches,
+                   const HoistedFiltersCallback& hoisted_filters,
                    const std::function<llvm::Value*(const std::vector<llvm::Value*>&,
                                                     llvm::Value*)>& is_deleted,
                    const std::string& name)
@@ -37,6 +38,7 @@ JoinLoop::JoinLoop(const JoinLoopKind kind,
     , iteration_domain_codegen_(iteration_domain_codegen)
     , outer_condition_match_(outer_condition_match)
     , found_outer_matches_(found_outer_matches)
+    , hoisted_filters_(hoisted_filters)
     , is_deleted_(is_deleted)
     , name_(name) {
   CHECK(outer_condition_match == nullptr || type == JoinType::LEFT);
@@ -68,17 +70,26 @@ llvm::BasicBlock* JoinLoop::codegen(
       case JoinLoopKind::Set: {
         const auto preheader_bb = llvm::BasicBlock::Create(
             context, "ub_iter_preheader_" + join_loop.name_, parent_func);
-        if (!entry) {
-          entry = preheader_bb;
+
+        llvm::BasicBlock* filter_bb{nullptr};
+        if (join_loop.hoisted_filters_) {
+          filter_bb = join_loop.hoisted_filters_(
+              preheader_bb, prev_exit_bb, join_loop.name_, parent_func, cgen_state);
         }
+
+        if (!entry) {
+          entry = filter_bb ? filter_bb : preheader_bb;
+        }
+
         if (prev_comparison_result) {
           builder.CreateCondBr(
               prev_comparison_result,
-              preheader_bb,
+              filter_bb ? filter_bb : preheader_bb,
               prev_join_type == JoinType::LEFT ? prev_iter_advance_bb : prev_exit_bb);
         }
         prev_exit_bb = prev_iter_advance_bb ? prev_iter_advance_bb : exit_bb;
         builder.SetInsertPoint(preheader_bb);
+
         const auto iteration_counter_ptr = builder.CreateAlloca(
             get_int_type(64, context), nullptr, "ub_iter_counter_ptr_" + join_loop.name_);
         llvm::Value* found_an_outer_match_ptr{nullptr};
@@ -157,16 +168,25 @@ llvm::BasicBlock* JoinLoop::codegen(
       case JoinLoopKind::Singleton: {
         const auto true_bb = llvm::BasicBlock::Create(
             context, "singleton_true_" + join_loop.name_, parent_func);
-        if (!entry) {
-          entry = true_bb;
+
+        llvm::BasicBlock* filter_bb{nullptr};
+        if (join_loop.hoisted_filters_) {
+          filter_bb = join_loop.hoisted_filters_(
+              true_bb, prev_exit_bb, join_loop.name_, parent_func, cgen_state);
         }
+
+        if (!entry) {
+          entry = filter_bb ? filter_bb : true_bb;
+        }
+
         if (prev_comparison_result) {
           builder.CreateCondBr(
               prev_comparison_result,
-              true_bb,
+              filter_bb ? filter_bb : true_bb,
               prev_join_type == JoinType::LEFT ? prev_iter_advance_bb : prev_exit_bb);
         }
         prev_exit_bb = prev_iter_advance_bb ? prev_iter_advance_bb : exit_bb;
+
         builder.SetInsertPoint(true_bb);
         const auto iteration_domain = join_loop.iteration_domain_codegen_(iterators);
         CHECK(!iteration_domain.values_buffer);

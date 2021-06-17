@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "../Shared/shard_key.h"
+#include "Geospatial/Types.h"
 #include "InsertDataLoader.h"
 #include "TargetValueConvertersFactories.h"
 
@@ -31,24 +32,33 @@ struct ShardDataOwner {
 };
 
 template <typename SRC>
-std::vector<std::vector<size_t>> computeRowIndicesOfShards(size_t shardCount,
-                                                           size_t leafCount,
-                                                           size_t rowCount,
-                                                           SRC* src) {
-  const auto numShardTables = shardCount * leafCount;
-
-  std::vector<std::vector<size_t>> rowIndicesOfShards(numShardTables);
-
-  for (size_t row = 0; row < rowCount; row++) {
-    // expecting unsigned data
-    // thus, no need for double remainder
-    auto shardId = (std::is_unsigned<SRC>::value)
-                       ? src[row] % numShardTables
-                       : SHARD_FOR_KEY(src[row], numShardTables);
-    rowIndicesOfShards[shardId].push_back(row);
+std::vector<std::vector<size_t>> computeRowIndicesOfShards(size_t shard_count,
+                                                           size_t leaf_count,
+                                                           size_t row_count,
+                                                           SRC* src,
+                                                           bool duplicated_key_value) {
+  const auto n_shard_tables = shard_count * leaf_count;
+  std::vector<std::vector<size_t>> row_indices_of_shards(n_shard_tables);
+  if (!duplicated_key_value) {
+    for (size_t row = 0; row < row_count; row++) {
+      // expecting unsigned data
+      // thus, no need for double remainder
+      auto shard_id = (std::is_unsigned<SRC>::value)
+                          ? src[row] % n_shard_tables
+                          : SHARD_FOR_KEY(src[row], n_shard_tables);
+      row_indices_of_shards[shard_id].push_back(row);
+    }
+  } else {
+    auto shard_id = (std::is_unsigned<SRC>::value)
+                        ? src[0] % n_shard_tables
+                        : SHARD_FOR_KEY(src[0], n_shard_tables);
+    row_indices_of_shards[shard_id].reserve(row_count);
+    for (size_t row = 0; row < row_count; row++) {
+      row_indices_of_shards[shard_id].push_back(row);
+    }
   }
 
-  return rowIndicesOfShards;
+  return row_indices_of_shards;
 }
 
 template <typename T>
@@ -120,31 +130,37 @@ std::vector<std::vector<size_t>> computeRowIndicesOfShards(
   CHECK(!isStringVectorData(shard_cd));
   CHECK(!isDatumVectorData(shard_cd));
 
+  CHECK(insert_data.is_default.size() == insert_data.columnIds.size());
+  bool is_default = insert_data.is_default[shardDataBlockIndex];
   switch (sizeOfRawColumn(cat, shard_cd)) {
     case 1:
       return computeRowIndicesOfShards(
           shardCount,
           leafCount,
           rowCount,
-          reinterpret_cast<uint8_t*>(shardDataBlock.numbersPtr));
+          reinterpret_cast<uint8_t*>(shardDataBlock.numbersPtr),
+          is_default);
     case 2:
       return computeRowIndicesOfShards(
           shardCount,
           leafCount,
           rowCount,
-          reinterpret_cast<uint16_t*>(shardDataBlock.numbersPtr));
+          reinterpret_cast<uint16_t*>(shardDataBlock.numbersPtr),
+          is_default);
     case 4:
       return computeRowIndicesOfShards(
           shardCount,
           leafCount,
           rowCount,
-          reinterpret_cast<uint32_t*>(shardDataBlock.numbersPtr));
+          reinterpret_cast<uint32_t*>(shardDataBlock.numbersPtr),
+          is_default);
     case 8:
       return computeRowIndicesOfShards(
           shardCount,
           leafCount,
           rowCount,
-          reinterpret_cast<uint64_t*>(shardDataBlock.numbersPtr));
+          reinterpret_cast<uint64_t*>(shardDataBlock.numbersPtr),
+          is_default);
   }
   throw std::runtime_error("Unexpected data block element size");
 }
@@ -160,6 +176,7 @@ void copyColumnDataOfShard(const std::vector<size_t>& rowIndices, T* src, T* dst
 struct BlockWithColumnId {
   int columnId;
   DataBlockPtr block;
+  bool is_default;
 };
 
 BlockWithColumnId copyColumnDataOfShard(const Catalog_Namespace::Catalog& cat,
@@ -167,46 +184,49 @@ BlockWithColumnId copyColumnDataOfShard(const Catalog_Namespace::Catalog& cat,
                                         const std::vector<size_t>& rowIndices,
                                         const ColumnDescriptor* pCol,
                                         size_t columnIndex,
-                                        DataBlockPtr dataBlock) {
+                                        DataBlockPtr dataBlock,
+                                        bool is_default) {
   DataBlockPtr ret;
+  std::vector<size_t> single_row_idx({0ul});
+  const std::vector<size_t>& rows = is_default ? single_row_idx : rowIndices;
   if (isStringVectorData(pCol)) {
     auto& data = dataOwner.stringData[columnIndex];
-    data.resize(rowIndices.size());
-    copyColumnDataOfShard(rowIndices, &(*(dataBlock.stringsPtr))[0], &data[0]);
+    data.resize(rows.size());
+    copyColumnDataOfShard(rows, &(*(dataBlock.stringsPtr))[0], &data[0]);
     ret.stringsPtr = &data;
 
   } else if (isDatumVectorData(pCol)) {
     auto& data = dataOwner.arrayData[columnIndex];
-    data.resize(rowIndices.size());
-    copyColumnDataOfShard(rowIndices, &(*(dataBlock.arraysPtr))[0], &data[0]);
+    data.resize(rows.size());
+    copyColumnDataOfShard(rows, &(*(dataBlock.arraysPtr))[0], &data[0]);
     ret.arraysPtr = &data;
 
   } else {
     auto rawArrayElementSize = sizeOfRawColumn(cat, pCol);
     auto& data = dataOwner.rawData[columnIndex];
-    data.resize(rowIndices.size() * rawArrayElementSize);
+    data.resize(rows.size() * rawArrayElementSize);
 
     switch (rawArrayElementSize) {
       case 1: {
-        copyColumnDataOfShard(rowIndices,
+        copyColumnDataOfShard(rows,
                               reinterpret_cast<uint8_t*>(dataBlock.numbersPtr),
                               reinterpret_cast<uint8_t*>(&data[0]));
         break;
       }
       case 2: {
-        copyColumnDataOfShard(rowIndices,
+        copyColumnDataOfShard(rows,
                               reinterpret_cast<uint16_t*>(dataBlock.numbersPtr),
                               reinterpret_cast<uint16_t*>(&data[0]));
         break;
       }
       case 4: {
-        copyColumnDataOfShard(rowIndices,
+        copyColumnDataOfShard(rows,
                               reinterpret_cast<uint32_t*>(dataBlock.numbersPtr),
                               reinterpret_cast<uint32_t*>(&data[0]));
         break;
       }
       case 8: {
-        copyColumnDataOfShard(rowIndices,
+        copyColumnDataOfShard(rows,
                               reinterpret_cast<uint64_t*>(dataBlock.numbersPtr),
                               reinterpret_cast<uint64_t*>(&data[0]));
         break;
@@ -218,7 +238,7 @@ BlockWithColumnId copyColumnDataOfShard(const Catalog_Namespace::Catalog& cat,
     ret.numbersPtr = reinterpret_cast<int8_t*>(&data[0]);
   }
 
-  return {pCol->columnId, ret};
+  return {pCol->columnId, ret, is_default};
 }
 
 InsertData copyDataOfShard(const Catalog_Namespace::Catalog& cat,
@@ -259,8 +279,13 @@ InsertData copyDataOfShard(const Catalog_Namespace::Catalog& cat,
   auto copycat = [&cat, &dataOwner, &rowIndices, &lCols, &pCols, &insert_data](int col) {
     const auto lColId = insert_data.columnIds[col];
     const auto pCol = pCols[indexOf(lCols, lColId)];
-    return copyColumnDataOfShard(
-        cat, dataOwner, rowIndices, pCol, col, insert_data.data[col]);
+    return copyColumnDataOfShard(cat,
+                                 dataOwner,
+                                 rowIndices,
+                                 pCol,
+                                 col,
+                                 insert_data.data[col],
+                                 insert_data.is_default[col]);
   };
 
   std::vector<std::future<BlockWithColumnId>> worker_threads;
@@ -276,6 +301,7 @@ InsertData copyDataOfShard(const Catalog_Namespace::Catalog& cat,
     auto shardColumnData = child.get();
     shardData.columnIds.push_back(shardColumnData.columnId);
     shardData.data.push_back(shardColumnData.block);
+    shardData.is_default.push_back(shardColumnData.is_default);
   }
 
   return shardData;
@@ -326,5 +352,4 @@ void InsertDataLoader::insertData(const Catalog_Namespace::SessionInfo& session_
 
   moveToNextLeaf();
 }
-
 }  // namespace Fragmenter_Namespace

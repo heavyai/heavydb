@@ -24,6 +24,7 @@
 #include <string>
 
 #include "Catalog/Catalog.h"
+#include "CudaMgr/CudaMgr.h"
 #include "ImportExport/Importer.h"
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_path.h"
@@ -128,6 +129,16 @@ int main(int argc, char* argv[]) {
       return 1;
     }
   }
+  std::string disk_cache_path = base_path + "/omnisci_disk_cache";
+  if (boost::filesystem::exists(disk_cache_path)) {
+    if (force) {
+      boost::filesystem::remove_all(disk_cache_path);
+    } else {
+      std::cerr << "OmniSci disk cache already exists at " + disk_cache_path +
+                       ". Use -f to force reinitialization.\n";
+      return 1;
+    }
+  }
   if (!boost::filesystem::create_directory(catalogs_path)) {
     std::cerr << "Cannot create mapd_catalogs subdirectory under " << base_path
               << std::endl;
@@ -142,10 +153,11 @@ int main(int argc, char* argv[]) {
 
   try {
     SystemParameters sys_parms;
-    auto dummy =
-        std::make_shared<Data_Namespace::DataMgr>(data_path, sys_parms, false, 0);
+    auto dummy = std::make_shared<Data_Namespace::DataMgr>(
+        data_path, sys_parms, nullptr, false, 0);
     auto calcite =
         std::make_shared<Calcite>(-1, CALCITEPORT, base_path, 1024, 5000, true, "");
+    g_base_path = base_path;
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
     sys_cat.init(base_path, dummy, {}, calcite, true, false, {});
 
@@ -154,8 +166,7 @@ int main(int argc, char* argv[]) {
       Catalog_Namespace::DBMetadata cur_db;
       const std::string db_name(OMNISCI_DEFAULT_DB);
       CHECK(sys_cat.getMetadataForDB(db_name, cur_db));
-      auto cat = Catalog_Namespace::Catalog::get(
-          base_path, cur_db, dummy, std::vector<LeafHostInfo>(), calcite, false);
+      auto cat = sys_cat.getCatalog(cur_db, false);
       Catalog_Namespace::UserMetadata user;
       CHECK(sys_cat.getMetadataForUser(OMNISCI_ROOT_USER, user));
 

@@ -156,8 +156,12 @@ Weight get_weight(const Analyzer::Expr* expr, int depth = 0) {
 
 bool CodeGenerator::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
                                     std::vector<Analyzer::Expr*>& primary_quals,
-                                    std::vector<Analyzer::Expr*>& deferred_quals) {
+                                    std::vector<Analyzer::Expr*>& deferred_quals,
+                                    const PlanState::HoistedFiltersSet& hoisted_quals) {
   for (auto expr : ra_exe_unit.simple_quals) {
+    if (hoisted_quals.find(expr) != hoisted_quals.end()) {
+      continue;
+    }
     if (should_defer_eval(expr)) {
       deferred_quals.push_back(expr.get());
       continue;
@@ -168,6 +172,10 @@ bool CodeGenerator::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
   bool short_circuit = false;
 
   for (auto expr : ra_exe_unit.quals) {
+    if (hoisted_quals.find(expr) != hoisted_quals.end()) {
+      continue;
+    }
+
     if (get_likelihood(expr.get()) < 0.10 && !contains_unsafe_division(expr.get())) {
       if (!short_circuit) {
         primary_quals.push_back(expr.get());

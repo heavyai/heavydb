@@ -529,4 +529,42 @@ public class OmniSciStatementTest {
     assertEquals(size, 2);
     statement.executeUpdate(sql_drop_tbl);
   }
+
+  private int resultSetSize(ResultSet rs) throws SQLException {
+    int sz = 0;
+    while (rs.next()) {
+      sz++;
+    }
+    return sz;
+  }
+
+  @Test
+  public void maxRowsTest() throws Exception {
+    Statement statement = m_conn.createStatement();
+    statement.executeUpdate("DROP TABLE IF EXISTS max_rows_tbl");
+    statement.executeUpdate("CREATE TABLE max_rows_tbl (i INTEGER)");
+    statement.executeUpdate("INSERT INTO max_rows_tbl VALUES (1)");
+    statement.executeUpdate("INSERT INTO max_rows_tbl VALUES (2)");
+    statement.executeUpdate("INSERT INTO max_rows_tbl VALUES (3)");
+    ResultSet rs = statement.executeQuery("SELECT * FROM max_rows_tbl");
+    assertEquals(3, resultSetSize(rs));
+    statement.setMaxRows(1);
+    rs = statement.executeQuery("SELECT * FROM max_rows_tbl");
+    assertEquals(1, resultSetSize(rs));
+    statement.close();
+
+    Properties pt = new Properties();
+    pt.setProperty("user", user);
+    pt.setProperty("password", password);
+    pt.setProperty("max_rows", "2");
+    Connection limited_conn = DriverManager.getConnection(url, pt);
+    statement = limited_conn.createStatement();
+    rs = statement.executeQuery("SELECT * FROM max_rows_tbl");
+    assertEquals(2, resultSetSize(rs));
+    statement.setMaxRows(1);
+    rs = statement.executeQuery("SELECT * FROM max_rows_tbl");
+    assertEquals(1, resultSetSize(rs));
+    statement.close();
+    limited_conn.close();
+  }
 }

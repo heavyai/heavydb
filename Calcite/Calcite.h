@@ -93,7 +93,8 @@ class Calcite final {
   ~Calcite();
   std::string getRuntimeExtensionFunctionWhitelist();
   void setRuntimeExtensionFunctions(const std::vector<TUserDefinedFunction>& udfs,
-                                    const std::vector<TUserDefinedTableFunction>& udtfs);
+                                    const std::vector<TUserDefinedTableFunction>& udtfs,
+                                    bool isruntime = true);
   std::string const getInternalSessionProxyUserName() { return kCalciteUserName; }
   std::string const getInternalSessionProxyPassword() { return kCalciteUserPassword; }
 

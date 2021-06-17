@@ -64,7 +64,6 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     default-jre-headless \
     default-jdk \
     default-jdk-headless \
-    maven \
     libncurses5-dev \
     libldap2-dev \
     binutils-dev \
@@ -112,6 +111,8 @@ export PATH=$PREFIX/bin:$PATH
 
 install_ninja
 
+install_maven
+
 install_cmake
 
 # llvm
@@ -143,6 +144,9 @@ make -j $(nproc)
 make install
 popd
 
+VERS=3.52.15
+CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libiodbc-${VERS}.tar.gz
+
 #c-blosc
 VERS=1.14.4
 wget --continue https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
@@ -164,14 +168,7 @@ make -j $(nproc)
 make install
 popd
 
-VERS=2019.04.29.00
-download https://github.com/facebook/folly/archive/v$VERS.tar.gz
-extract v$VERS.tar.gz
-pushd folly-$VERS/build/
-CXXFLAGS="-fPIC -pthread" cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DBUILD_SHARED_LIBS=on ..
-makej
-make install
-popd
+install_folly
 
 download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
 
@@ -185,7 +182,7 @@ install_arrow
 # Go
 install_go
 
-VERS=3.0.2
+VERS=3.1.0
 wget --continue https://github.com/cginternals/glbinding/archive/v$VERS.tar.gz
 tar xvf v$VERS.tar.gz
 mkdir -p glbinding-$VERS/build
@@ -206,6 +203,9 @@ popd
 
 # librdkafka
 install_rdkafka
+
+# libuv
+install_libuv
 
 # glslang (with spirv-tools)
 VERS=8.13.3743 # stable 4/27/20
@@ -252,7 +252,7 @@ popd # spirv-cross
 
 # Vulkan
 # Custom tarball which excludes the spir-v toolchain
-VERS=1.2.148.1 # stable 8/9/20
+VERS=1.2.162.0 # stable 12/11/20
 rm -rf vulkan
 mkdir -p vulkan
 pushd vulkan
@@ -275,6 +275,7 @@ LD_LIBRARY_PATH=\$PREFIX/lib64:\$LD_LIBRARY_PATH
 
 PATH=/usr/local/cuda/bin:\$PATH
 PATH=\$PREFIX/go/bin:\$PATH
+PATH=\$PREFIX/maven/bin:\$PATH
 PATH=\$PREFIX/bin:\$PATH
 
 VULKAN_SDK=\$PREFIX

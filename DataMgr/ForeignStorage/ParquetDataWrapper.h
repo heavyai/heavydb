@@ -20,6 +20,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "AbstractFileStorageDataWrapper.h"
 #include "Catalog/Catalog.h"
 #include "Catalog/ForeignTable.h"
 #include "DataMgr/Chunk/Chunk.h"
@@ -30,21 +31,19 @@
 #include "LazyParquetChunkLoader.h"
 
 namespace foreign_storage {
-class ParquetDataWrapper : public ForeignDataWrapper {
+
+class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
  public:
+  ParquetDataWrapper();
+
   ParquetDataWrapper(const int db_id, const ForeignTable* foreign_table);
 
   void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override;
 
-  void populateChunkBuffers(
-      std::map<ChunkKey, AbstractBuffer*>& required_buffers,
-      std::map<ChunkKey, AbstractBuffer*>& optional_buffers) override;
+  void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
+                            const ChunkToBufferMap& optional_buffers) override;
 
-  static void validateOptions(const ForeignTable* foreign_table);
-
-  static std::vector<std::string_view> getSupportedOptions();
-
-  void serializeDataWrapperInternals(const std::string& file_path) const override;
+  std::string getSerializedDataWrapper() const override;
 
   void restoreDataWrapperInternals(
       const std::string& file_path,
@@ -52,39 +51,26 @@ class ParquetDataWrapper : public ForeignDataWrapper {
 
   bool isRestored() const override;
 
- private:
-  ParquetDataWrapper(const ForeignTable* foreign_table);
+  ParallelismLevel getCachedParallelismLevel() const override { return INTER_FRAGMENT; }
 
+  ParallelismLevel getNonCachedParallelismLevel() const override {
+    return INTRA_FRAGMENT;
+  }
+
+ private:
   std::list<const ColumnDescriptor*> getColumnsToInitialize(
       const Interval<ColumnType>& column_interval);
   void initializeChunkBuffers(const int fragment_index,
                               const Interval<ColumnType>& column_interval,
-                              std::map<ChunkKey, AbstractBuffer*>& required_buffers,
+                              const ChunkToBufferMap& required_buffers,
                               const bool reserve_buffers_and_set_stats = false);
   void fetchChunkMetadata();
-  void loadBuffersUsingLazyParquetChunkLoader(
-      const int logical_column_id,
-      const int fragment_id,
-      std::map<ChunkKey, AbstractBuffer*>& required_buffers);
+  void loadBuffersUsingLazyParquetChunkLoader(const int logical_column_id,
+                                              const int fragment_id,
+                                              const ChunkToBufferMap& required_buffers);
 
-  void validateFilePath() const;
-  std::string getConfiguredFilePath() const;
   std::set<std::string> getProcessedFilePaths();
   std::set<std::string> getAllFilePaths();
-
-  import_export::CopyParams validateAndGetCopyParams() const;
-
-  /**
-   * Validates that the value of given table option has the expected number of characters.
-   * An exception is thrown if the number of characters do not match.
-   *
-   * @param option_name - name of table option whose value is validated and returned
-   * @param expected_num_chars - expected number of characters for option value
-   * @return value of the option if the number of characters match. Returns an
-   * empty string if table options do not contain provided option.
-   */
-  std::string validateAndGetStringWithLength(const std::string& option_name,
-                                             const size_t expected_num_chars) const;
 
   bool moveToNextFragment(size_t new_rows_count) const;
 
@@ -110,7 +96,6 @@ class ParquetDataWrapper : public ForeignDataWrapper {
   bool is_restored_;
   std::unique_ptr<ForeignTableSchema> schema_;
   std::shared_ptr<arrow::fs::FileSystem> file_system_;
-
-  static constexpr std::array<char const*, 0> supported_options_{};
+  std::unique_ptr<FileReaderMap> file_reader_cache_;
 };
 }  // namespace foreign_storage

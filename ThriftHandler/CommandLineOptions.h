@@ -46,12 +46,11 @@ class CommandLineOptions {
   int http_port = 6278;
   size_t reserved_gpu_mem = 384 * 1024 * 1024;
   std::string base_path;
-  DiskCacheConfig disk_cache_config;
+  File_Namespace::DiskCacheConfig disk_cache_config;
   std::string cluster_file = {"cluster.conf"};
   std::string cluster_topology_file = {"cluster_topology.conf"};
   std::string license_path = {""};
   std::string encryption_key_store_path = {};
-  bool cpu_only = false;
   bool verbose_logging = false;
   bool jit_debug = false;
   bool intel_jit_profile = false;
@@ -76,18 +75,13 @@ class CommandLineOptions {
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
   bool enable_runtime_query_interrupt = false;
+  bool enable_non_kernel_time_query_interrupt = true;
   bool use_estimator_result_cache = true;
   double running_query_interrupt_freq = 0.5;     // 0.0 ~ 1.0
   unsigned pending_query_interrupt_freq = 1000;  // in milliseconds
   unsigned dynamic_watchdog_time_limit = 10000;
   std::string disk_cache_level = "";
 
-  /**
-   * Can be used to override the number of gpus detected on the system
-   * -1 means do not override
-   */
-  int num_gpus = -1;
-  int start_gpu = 0;
   /**
    * Number of threads used when loading data
    */
@@ -112,6 +106,9 @@ class CommandLineOptions {
   std::string udf_file_name = {""};
   std::string udf_compiler_path = {""};
   std::vector<std::string> udf_compiler_options;
+
+  std::string allowed_import_paths{};
+  std::string allowed_export_paths{};
 
 #ifdef ENABLE_GEOS
   std::string libgeos_so_filename = {"libgeos_c.so"};
@@ -160,9 +157,11 @@ extern float g_filter_push_down_low_frac;
 extern float g_filter_push_down_high_frac;
 extern size_t g_filter_push_down_passing_row_ubound;
 extern bool g_enable_columnar_output;
+extern bool g_optimize_row_initialization;
 extern bool g_enable_overlaps_hashjoin;
 extern bool g_enable_hashjoin_many_to_many;
 extern size_t g_overlaps_max_table_size_bytes;
+extern double g_overlaps_target_entries_per_bin;
 extern bool g_strip_join_covered_quals;
 extern size_t g_constrained_by_in_threshold;
 extern size_t g_big_group_threshold;
@@ -174,10 +173,12 @@ extern bool g_enable_direct_columnarization;
 extern bool g_enable_runtime_query_interrupt;
 extern unsigned g_pending_query_interrupt_freq;
 extern double g_running_query_interrupt_freq;
+extern bool g_enable_non_kernel_time_query_interrupt;
 extern size_t g_gpu_smem_threshold;
 extern bool g_enable_smem_non_grouped_agg;
 extern bool g_enable_smem_grouped_non_count_agg;
 extern bool g_use_estimator_result_cache;
+extern bool g_enable_lazy_fetch;
 
 extern int64_t g_omni_kafka_seek;
 extern size_t g_leaf_count;
@@ -189,7 +190,15 @@ extern size_t g_min_memory_allocation_size;
 extern bool g_enable_experimental_string_functions;
 extern bool g_enable_table_functions;
 extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
 extern bool g_enable_interop;
 extern bool g_enable_union;
 extern bool g_use_tbb_pool;
 extern bool g_enable_filter_function;
+extern size_t g_max_import_threads;
+extern bool g_enable_auto_metadata_update;
+extern bool g_allow_s3_server_privileges;
+extern float g_vacuum_min_selectivity;
+extern bool g_read_only;
+extern bool g_enable_automatic_ir_metadata;
+extern size_t g_enable_parallel_linearization;

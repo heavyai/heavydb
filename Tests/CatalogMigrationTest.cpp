@@ -24,6 +24,7 @@
 
 #include "Catalog/Catalog.h"
 #include "DBHandlerTestHelpers.h"
+#include "DataMgr/ForeignStorage/AbstractFileStorageDataWrapper.h"
 #include "SqliteConnector/SqliteConnector.h"
 #include "TestHelpers.h"
 
@@ -32,6 +33,7 @@
 #endif
 
 extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
 
 class FsiSchemaTest : public testing::Test {
  protected:
@@ -41,6 +43,7 @@ class FsiSchemaTest : public testing::Test {
             boost::filesystem::absolute("mapd_catalogs", BASE_PATH).string()) {}
 
   static void SetUpTestSuite() {
+    g_enable_s3_fsi = true;
     Catalog_Namespace::SysCatalog::instance().init(
         BASE_PATH, nullptr, {}, nullptr, false, false, {});
   }
@@ -80,20 +83,38 @@ class FsiSchemaTest : public testing::Test {
     ASSERT_EQ(data_wrapper, foreign_server->data_wrapper_type);
     ASSERT_EQ(user_id, foreign_server->user_id);
 
-    ASSERT_TRUE(
-        foreign_server->options.find(foreign_storage::ForeignServer::STORAGE_TYPE_KEY) !=
-        foreign_server->options.end());
-    ASSERT_EQ(
-        foreign_storage::ForeignServer::LOCAL_FILE_STORAGE_TYPE,
-        foreign_server->options.find(foreign_storage::ForeignServer::STORAGE_TYPE_KEY)
-            ->second);
-
-    ASSERT_TRUE(
-        foreign_server->options.find(foreign_storage::ForeignServer::BASE_PATH_KEY) !=
-        foreign_server->options.end());
-    ASSERT_EQ("/",
-              foreign_server->options.find(foreign_storage::ForeignServer::BASE_PATH_KEY)
+    ASSERT_TRUE(foreign_server->options.find(
+                    foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY) !=
+                foreign_server->options.end());
+    ASSERT_EQ(foreign_storage::AbstractFileStorageDataWrapper::LOCAL_FILE_STORAGE_TYPE,
+              foreign_server->options
+                  .find(foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY)
                   ->second);
+
+    ASSERT_TRUE(foreign_server->options.find(
+                    foreign_storage::AbstractFileStorageDataWrapper::BASE_PATH_KEY) ==
+                foreign_server->options.end());
+
+    // check that server loaded from storage matches that in memory
+    auto foreign_server_in_memory = catalog->getForeignServer(server_name);
+
+    ASSERT_EQ(foreign_server->id, foreign_server_in_memory->id);
+    ASSERT_EQ(foreign_server_in_memory->name, foreign_server->name);
+    ASSERT_EQ(foreign_server_in_memory->data_wrapper_type,
+              foreign_server->data_wrapper_type);
+    ASSERT_EQ(foreign_server_in_memory->user_id, foreign_server->user_id);
+
+    ASSERT_TRUE(foreign_server_in_memory->options.find(
+                    foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY) !=
+                foreign_server_in_memory->options.end());
+    ASSERT_EQ(foreign_storage::AbstractFileStorageDataWrapper::LOCAL_FILE_STORAGE_TYPE,
+              foreign_server_in_memory->options
+                  .find(foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY)
+                  ->second);
+
+    ASSERT_TRUE(foreign_server_in_memory->options.find(
+                    foreign_storage::AbstractFileStorageDataWrapper::BASE_PATH_KEY) ==
+                foreign_server_in_memory->options.end());
   }
 
   void assertFsiTablesExist() {
@@ -136,7 +157,7 @@ TEST_F(FsiSchemaTest, FsiTablesAreCreatedWhenFsiIsEnabled) {
   assertFsiTablesExist();
 }
 
-TEST_F(FsiSchemaTest, FsiTablesAreDroppedWhenFsiIsDisabled) {
+TEST_F(FsiSchemaTest, FsiTablesAreNotDroppedWhenFsiIsDisabled) {
   assertFsiTablesDoNotExist();
 
   g_enable_fsi = true;
@@ -145,7 +166,7 @@ TEST_F(FsiSchemaTest, FsiTablesAreDroppedWhenFsiIsDisabled) {
 
   g_enable_fsi = false;
   initCatalog();
-  assertFsiTablesDoNotExist();
+  assertFsiTablesExist();
 }
 
 class ForeignTablesTest : public DBHandlerTestFixture {
@@ -180,7 +201,7 @@ class ForeignTablesTest : public DBHandlerTestFixture {
   }
 };
 
-TEST_F(ForeignTablesTest, ForeignTablesAreDroppedWhenFsiIsDisabled) {
+TEST_F(ForeignTablesTest, ForeignTablesAreNotDroppedWhenFsiIsDisabled) {
   const auto file_path =
       boost::filesystem::canonical("../../Tests/FsiDataFiles/example_1.csv").string();
   sql("CREATE FOREIGN TABLE test_foreign_table (c1 int) SERVER omnisci_local_csv "
@@ -197,7 +218,7 @@ TEST_F(ForeignTablesTest, ForeignTablesAreDroppedWhenFsiIsDisabled) {
   resetCatalog();
   loginAdmin();
 
-  ASSERT_EQ(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
+  ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
   ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_table", false));
   ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_view", false));
 }

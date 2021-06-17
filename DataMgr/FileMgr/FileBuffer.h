@@ -34,10 +34,13 @@ using namespace Data_Namespace;
 
 #define NUM_METADATA 10
 #define METADATA_VERSION 0
+#define METADATA_PAGE_SIZE 4096
 
 namespace File_Namespace {
 
-class FileMgr;  // forward declaration
+// forward declarations
+class FileMgr;
+class CachingFileMgr;
 
 /**
  * @class   FileBuffer
@@ -54,6 +57,7 @@ class FileMgr;  // forward declaration
  */
 class FileBuffer : public AbstractBuffer {
   friend class FileMgr;
+  friend class CachingFileMgr;
 
  public:
   /**
@@ -76,21 +80,22 @@ class FileBuffer : public AbstractBuffer {
              const std::vector<HeaderInfo>::const_iterator& headerEndIt);
 
   /// Destructor
-  ~FileBuffer() override;
+  virtual ~FileBuffer() override;
 
-  Page addNewMultiPage(const int epoch);
+  Page addNewMultiPage(const int32_t epoch);
 
   void reserve(const size_t numBytes) override;
 
-  void freePages();
+  size_t freeMetadataPages();
   size_t freeChunkPages();
-  void freeMetadataPages();
+  size_t freePages();
+  void freePagesBeforeEpoch(const int32_t targetEpoch);
 
   void read(int8_t* const dst,
             const size_t numBytes = 0,
             const size_t offset = 0,
             const MemoryLevel dstMemoryLevel = CPU_LEVEL,
-            const int deviceId = -1) override;
+            const int32_t deviceId = -1) override;
 
   /**
    * @brief Writes the contents of source (src) into new versions of the affected logical
@@ -104,12 +109,12 @@ class FileBuffer : public AbstractBuffer {
              const size_t numBytes,
              const size_t offset = 0,
              const MemoryLevel srcMemoryLevel = CPU_LEVEL,
-             const int deviceId = -1) override;
+             const int32_t deviceId = -1) override;
 
   void append(int8_t* src,
               const size_t numBytes,
               const MemoryLevel srcMemoryLevel = CPU_LEVEL,
-              const int deviceId = -1) override;
+              const int32_t deviceId = -1) override;
   void copyPage(Page& srcPage,
                 Page& destPage,
                 const size_t numBytes,
@@ -125,6 +130,10 @@ class FileBuffer : public AbstractBuffer {
   /// Returns the number of pages in the FileBuffer.
   inline size_t pageCount() const override { return multiPages_.size(); }
 
+  /// Returns whether or not a buffer has data pages.  It is possible for a buffer to
+  /// represent metadata (have a size and encode) but not contain actual data.
+  inline bool hasDataPages() const { return pageCount() > 0; }
+
   /// Returns the size in bytes of each page in the FileBuffer.
   inline size_t pageSize() const override { return pageSize_; }
 
@@ -137,6 +146,7 @@ class FileBuffer : public AbstractBuffer {
 
   /// Returns vector of MultiPages in the FileBuffer.
   inline virtual std::vector<MultiPage> getMultiPage() const { return multiPages_; }
+  inline MultiPage getMetadataPage() const { return metadataPages_; }
 
   /// Returns the total number of bytes allocated for the FileBuffer.
   inline size_t reservedSize() const override { return multiPages_.size() * pageSize_; }
@@ -144,25 +154,42 @@ class FileBuffer : public AbstractBuffer {
   /// Returns the total number of used bytes in the FileBuffer.
   // inline virtual size_t used() const {
 
+  inline size_t numMetadataPages() const { return metadataPages_.pageVersions.size(); };
+
+  bool isMissingPages() const;
+  size_t numChunkPages() const;
+  std::string dump() const;
+
+  // Used for testing
+  void freePage(const Page& page);
+
+  static constexpr size_t headerBufferOffset_ = 32;
+
  private:
   // FileBuffer(const FileBuffer&);      // private copy constructor
   // FileBuffer& operator=(const FileBuffer&); // private overloaded assignment operator
 
   /// Write header writes header at top of page in format
   // headerSize(numBytes), ChunkKey, pageId, version epoch
-  // void writeHeader(Page &page, const int pageId, const int epoch, const bool writeSize
-  // = false);
+  // void writeHeader(Page &page, const int32_t pageId, const int32_t epoch, const bool
+  // writeSize = false);
   void writeHeader(Page& page,
-                   const int pageId,
-                   const int epoch,
+                   const int32_t pageId,
+                   const int32_t epoch,
                    const bool writeMetadata = false);
-  void writeMetadata(const int epoch);
+  void writeMetadata(const int32_t epoch);
   void readMetadata(const Page& page);
   void calcHeaderBuffer();
 
+  void freePage(const Page& page, const bool isRolloff);
+  void freePagesBeforeEpochForMultiPage(MultiPage& multiPage,
+                                        const int32_t targetEpoch,
+                                        const int32_t currentEpoch);
+  void initMetadataAndPageDataSize();
+  int32_t getFileMgrEpoch();
+
   FileMgr* fm_;  // a reference to FileMgr is needed for writing to new pages in available
                  // files
-  static size_t headerBufferOffset_;
   MultiPage metadataPages_;
   std::vector<MultiPage> multiPages_;
   size_t pageSize_;

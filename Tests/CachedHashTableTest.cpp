@@ -127,9 +127,8 @@ HashtableInfo get_join_hashtable_info(std::vector<int32_t>& inserted_keys) {
 // in those hashtables.
 // currently this function only supports a hashtable for integer type
 // and assume a table is not sharded.
-bool check_one_to_one_join_hashtable(
-    std::vector<int32_t>& inserted_keys,
-    const std::shared_ptr<std::vector<int32_t>>& cached_hashtable) {
+bool check_one_to_one_join_hashtable(std::vector<int32_t>& inserted_keys,
+                                     const int32_t* cached_hashtable) {
   auto hashtable_info = get_join_hashtable_info(inserted_keys);
   int32_t min = hashtable_info.get_min_val();
   int32_t max = hashtable_info.get_max_val();
@@ -138,7 +137,7 @@ bool check_one_to_one_join_hashtable(
     int32_t offset = v - min;
     CHECK_GE(offset, 0);
     CHECK_LE(offset, max);
-    if ((*cached_hashtable)[offset] != rowID) {
+    if (cached_hashtable[offset] != rowID) {
       return false;
     }
     ++rowID;
@@ -218,9 +217,8 @@ bool check_one_to_many_baseline_hashtable(std::vector<std::vector<int32_t>>& ins
   return true;
 }
 
-bool check_one_to_many_join_hashtable(
-    std::vector<int32_t>& inserted_keys,
-    const std::shared_ptr<std::vector<int32_t>>& cached_hashtable) {
+bool check_one_to_many_join_hashtable(std::vector<int32_t>& inserted_keys,
+                                      const int32_t* cached_hashtable) {
   auto hashtable_info = get_join_hashtable_info(inserted_keys);
   int32_t min = hashtable_info.get_min_val();
   int32_t hash_entry_count = hashtable_info.get_hash_entry_count();
@@ -235,13 +233,13 @@ bool check_one_to_many_join_hashtable(
     int32_t offset = v - min;
     CHECK_GE(offset, 0);
     CHECK_LT(offset, hashtable_size);
-    int32_t PSV = (*cached_hashtable)[offset];  // Prefix Sum Value
+    int32_t PSV = cached_hashtable[offset];  // Prefix Sum Value
     if (PSV != -1) {
-      int32_t CV = (*cached_hashtable)[count_buff_start_offset + offset];
+      int32_t CV = cached_hashtable[count_buff_start_offset + offset];
       CHECK_GE(CV, 1);  // Count Value
       bool found_matching_key = false;
       for (int32_t idx = 0; idx < CV; idx++) {
-        if ((*cached_hashtable)[rowID_buff_start_offset + PSV + idx] == rowID) {
+        if (cached_hashtable[rowID_buff_start_offset + PSV + idx] == rowID) {
           found_matching_key = true;
           break;
         }
@@ -623,6 +621,68 @@ TEST(Truncate, JoinCacheInvalidationTest) {
   }
 }
 
+TEST(Truncate, OverlapsJoinCacheInvalidationTest) {
+  EXPECT_TRUE(g_enable_overlaps_hashjoin);
+
+  run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_point;");
+  run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_poly;");
+
+  run_ddl_statement("CREATE TABLE cache_invalid_point(pt GEOMETRY(point, 4326));");
+  run_ddl_statement(
+      "CREATE TABLE cache_invalid_poly(poly GEOMETRY(multipolygon, 4326));");
+
+  run_query("INSERT INTO cache_invalid_point VALUES ('POINT(0 0)');",
+            ExecutorDeviceType::CPU);
+  run_query("INSERT INTO cache_invalid_point VALUES ('POINT(1 1)');",
+            ExecutorDeviceType::CPU);
+  run_query("INSERT INTO cache_invalid_point VALUES ('POINT(10 10)');",
+            ExecutorDeviceType::CPU);
+
+  run_query(
+      R"(INSERT INTO cache_invalid_poly VALUES ('MULTIPOLYGON(((0 0, 2 0, 2 2, 0 2, 0 0)))');)",
+      ExecutorDeviceType::CPU);
+
+  // GPU does not cache, run on CPU
+  {
+    auto result = QR::get()->runSQL(
+        R"(SELECT count(*) FROM cache_invalid_point a, cache_invalid_poly b WHERE ST_Contains(b.poly, a.pt);)",
+        ExecutorDeviceType::CPU);
+    EXPECT_EQ(size_t(1), result->rowCount());
+    auto row = result->getNextRow(false, false);
+    EXPECT_EQ(size_t(1), row.size());
+    auto count = boost::get<int64_t>(boost::get<ScalarTargetValue>(row[0]));
+    EXPECT_EQ(1, count);  // POINT(1 1)
+  }
+  EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(),
+            size_t(2));  // bucket threshold and hash table
+
+  run_ddl_statement("TRUNCATE TABLE cache_invalid_poly");
+  EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), size_t(0));
+
+  run_query(
+      R"(INSERT INTO cache_invalid_poly VALUES ('MULTIPOLYGON(((0 0, 11 0, 11 11, 0 11, 0 0)))');)",
+      ExecutorDeviceType::CPU);
+
+  // user provided bucket threshold -- only one additional cache entry
+  {
+    auto result = QR::get()->runSQL(
+        "SELECT /*+ overlaps_bucket_threshold(0.2) */ count(*) FROM cache_invalid_point "
+        "a, cache_invalid_poly b WHERE "
+        "ST_Contains(b.poly, a.pt);",
+        ExecutorDeviceType::CPU);
+    EXPECT_EQ(size_t(1), result->rowCount());
+    auto row = result->getNextRow(false, false);
+    EXPECT_EQ(size_t(1), row.size());
+    auto count = boost::get<int64_t>(boost::get<ScalarTargetValue>(row[0]));
+    EXPECT_EQ(2, count);  // POINT(1 1) , POINT(10 10)
+  }
+  EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(),
+            size_t(1));  // bucket threshold and hash table
+
+  run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_point;");
+  run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_poly;");
+}
+
 TEST(Update, JoinCacheInvalidationTest) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -771,6 +831,9 @@ int main(int argc, char** argv) {
   QR::init(BASE_PATH);
 
   int err{0};
+
+  // enable overlaps hashjoin
+  g_enable_overlaps_hashjoin = true;
 
   try {
     err = RUN_ALL_TESTS();

@@ -23,19 +23,24 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 
-#include "Archive/S3Archive.h"
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "DataMgr/ForeignStorage/ForeignTableRefresh.h"
+#include "DataMgrTestHelpers.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "TestHelpers.h"
+#include "ThriftHandler/ForeignTableRefreshScheduler.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
 #endif
 
 extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
+extern bool g_enable_seconds_refresh;
+extern bool g_allow_s3_server_privileges;
+
 std::string test_binary_file_path;
 
 namespace bp = boost::process;
@@ -121,18 +126,26 @@ class ForeignTableTest : public DBHandlerTestFixture {
   static ChunkKey getChunkKeyFromTable(const Catalog_Namespace::Catalog& cat,
                                        const std::string& table_name,
                                        const ChunkKey& key_suffix) {
-    const TableDescriptor* fd = cat.getMetadataForTable(table_name);
+    const TableDescriptor* fd = cat.getMetadataForTable(table_name, false);
     ChunkKey key{cat.getCurrentDB().dbId, fd->tableId};
     for (auto i : key_suffix) {
       key.push_back(i);
     }
     return key;
   }
+
+  void queryAndAssertFileNotFoundException(
+      const std::string& file_path,
+      const std::string& query = "SELECT * FROM test_foreign_table;") {
+    queryAndAssertException(
+        query, "Exception: File or directory \"" + file_path + "\" does not exist.");
+  }
 };
 
 class SelectQueryTest : public ForeignTableTest {
  protected:
   void SetUp() override {
+    g_enable_fsi = true;
     ForeignTableTest::SetUp();
     import_export::delimited_parser::set_max_buffer_resize(max_buffer_resize_);
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
@@ -141,6 +154,7 @@ class SelectQueryTest : public ForeignTableTest {
   }
 
   void TearDown() override {
+    g_enable_fsi = true;
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_2;");
     sql("DROP SERVER IF EXISTS test_server;");
@@ -188,7 +202,7 @@ class SelectQueryTest : public ForeignTableTest {
       bool has_nulls,
       const std::string& table_name) {
     auto& cat = getCatalog();
-    auto foreign_table = cat.getMetadataForTable(table_name);
+    auto foreign_table = cat.getMetadataForTable(table_name, false);
     auto column_descriptor = cat.getMetadataForColumn(foreign_table->tableId, column_id);
     auto chunk_metadata = std::make_unique<ChunkMetadata>();
     chunk_metadata->sqlType = column_descriptor->columnType;
@@ -220,7 +234,7 @@ class SelectQueryTest : public ForeignTableTest {
           expected_metadata,
       const std::string& table_name) const {
     auto& cat = getCatalog();
-    auto foreign_table = cat.getMetadataForTable(table_name);
+    auto foreign_table = cat.getMetadataForTable(table_name, false);
     if (!foreign_table) {
       throw std::runtime_error("Could not find foreign table: " + table_name);
     }
@@ -272,13 +286,13 @@ class SelectQueryTest : public ForeignTableTest {
 
 class CacheControllingSelectQueryTest
     : public SelectQueryTest,
-      public ::testing::WithParamInterface<DiskCacheLevel> {
+      public ::testing::WithParamInterface<File_Namespace::DiskCacheLevel> {
  public:
-  inline static std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache/";
-  DiskCacheLevel starting_cache_level_;
+  inline static std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache";
+  File_Namespace::DiskCacheLevel starting_cache_level_;
 
  protected:
-  void resetPersistentStorageMgr(DiskCacheLevel cache_level) {
+  void resetPersistentStorageMgr(File_Namespace::DiskCacheLevel cache_level) {
     for (auto table_it : getCatalog().getAllTableMetadata()) {
       getCatalog().removeFragmenterForTable(table_it->tableId);
     }
@@ -338,13 +352,13 @@ bool compare_json_files(const std::string& generated,
 
 class RecoverCacheQueryTest : public ForeignTableTest {
  public:
-  inline static std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache/";
+  inline static std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache";
   Catalog_Namespace::Catalog* cat_;
   PersistentStorageMgr* psm_;
   foreign_storage::ForeignStorageCache* cache_;
 
  protected:
-  void resetPersistentStorageMgr(DiskCacheLevel cache_level) {
+  void resetPersistentStorageMgr(File_Namespace::DiskCacheLevel cache_level) {
     for (auto table_it : cat_->getAllTableMetadata()) {
       cat_->removeFragmenterForTable(table_it->tableId);
     }
@@ -355,7 +369,7 @@ class RecoverCacheQueryTest : public ForeignTableTest {
   }
 
   bool isTableDatawrapperRestored(const std::string& name) {
-    auto td = getCatalog().getMetadataForTable(name);
+    auto td = getCatalog().getMetadataForTable(name, false);
     ChunkKey table_key{getCatalog().getCurrentDB().dbId, td->tableId};
     return getCatalog()
         .getDataMgr()
@@ -365,33 +379,33 @@ class RecoverCacheQueryTest : public ForeignTableTest {
   }
 
   bool isTableDatawrapperDataOnDisk(const std::string& name) {
-    auto td = getCatalog().getMetadataForTable(name);
-    ChunkKey table_key{getCatalog().getCurrentDB().dbId, td->tableId};
+    auto td = getCatalog().getMetadataForTable(name, false);
+    auto db_id = getCatalog().getCurrentDB().dbId;
+    ChunkKey table_key{db_id, td->tableId};
     return bf::exists(getCatalog()
                           .getDataMgr()
                           .getPersistentStorageMgr()
                           ->getDiskCache()
-                          ->getCacheDirectoryForTablePrefix(table_key) +
-                      "/wrapper_metadata.json");
+                          ->getSerializedWrapperPath(db_id, td->tableId));
   }
 
   bool compareTableDatawrapperMetadataToFile(const std::string& name,
                                              const std::string& filepath) {
-    auto td = getCatalog().getMetadataForTable(name);
-    ChunkKey table_key{getCatalog().getCurrentDB().dbId, td->tableId};
+    auto td = getCatalog().getMetadataForTable(name, false);
+    auto db_id = getCatalog().getCurrentDB().dbId;
+    ChunkKey table_key{db_id, td->tableId};
     return compare_json_files(getCatalog()
-                                      .getDataMgr()
-                                      .getPersistentStorageMgr()
-                                      ->getDiskCache()
-                                      ->getCacheDirectoryForTablePrefix(table_key) +
-                                  "/wrapper_metadata.json",
+                                  .getDataMgr()
+                                  .getPersistentStorageMgr()
+                                  ->getDiskCache()
+                                  ->getSerializedWrapperPath(db_id, td->tableId),
                               filepath,
                               getDataFilesPath());
   }
 
   void resetStorageManagerAndClearTableMemory(const ChunkKey& table_key) {
     // Reset cache and clear memory representations.
-    resetPersistentStorageMgr(DiskCacheLevel::fsi);
+    resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::fsi);
     cat_->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
     cat_->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
   }
@@ -410,9 +424,15 @@ class RecoverCacheQueryTest : public ForeignTableTest {
     cat_ = &getCatalog();
     psm_ = cat_->getDataMgr().getPersistentStorageMgr();
     cache_ = psm_->getDiskCache();
+    sqlDropForeignTable();
+    cache_->clear();
   }
 
-  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+  void TearDown() override {
+    sqlDropForeignTable();
+    cache_->clear();
+    DBHandlerTestFixture::TearDown();
+  }
   static void SetUpTestSuite() {}
   static void TearDownTestSuite() {}
 };
@@ -426,12 +446,21 @@ struct DataTypeFragmentSizeAndDataWrapperParam {
   std::string extension;
 };
 
-struct AppendRefreshTestParam {
+using AppendRefreshTestParam = std::tuple<int, std::string, std::string, bool, bool>;
+
+struct AppendRefreshTestStruct {
+  AppendRefreshTestStruct(const AppendRefreshTestParam& tuple) {
+    fragment_size = std::get<0>(tuple);
+    wrapper = std::get<1>(tuple);
+    filename = std::get<2>(tuple);
+    recover_cache = std::get<3>(tuple);
+    evict = std::get<4>(tuple);
+  }
   int fragment_size;
   std::string wrapper;
   std::string filename;
-  std::string file_display;
   bool recover_cache;
+  bool evict;
 };
 
 class DataTypeFragmentSizeAndDataWrapperTest
@@ -471,9 +500,12 @@ struct PrintToStringParamName {
   std::string operator()(
       const ::testing::TestParamInfo<AppendRefreshTestParam>& info) const {
     std::stringstream ss;
-    ss << "Fragment_size_" << info.param.fragment_size << "_Data_wrapper_"
-       << info.param.wrapper << "_file_" << info.param.file_display
-       << (info.param.recover_cache ? "_recover" : "");
+    auto param_struct = AppendRefreshTestStruct(info.param);
+    std::replace(param_struct.filename.begin(), param_struct.filename.end(), '.', '_');
+    ss << "Fragment_size_" << param_struct.fragment_size << "_Data_wrapper_"
+       << param_struct.wrapper << "_file_" << param_struct.filename
+       << (param_struct.recover_cache ? "_recover" : "")
+       << (param_struct.evict ? "_evict" : "");
     return ss.str();
   }
   std::string operator()(
@@ -493,13 +525,14 @@ struct PrintToStringParamName {
     ss << ((info.param == TExecuteMode::GPU) ? "GPU" : "CPU");
     return ss.str();
   }
-  std::string operator()(const ::testing::TestParamInfo<DiskCacheLevel>& info) const {
+  std::string operator()(
+      const ::testing::TestParamInfo<File_Namespace::DiskCacheLevel>& info) const {
     std::stringstream ss;
     // clang-format off
-    if (info.param == DiskCacheLevel::none) ss << "NoCache";
-    if (info.param == DiskCacheLevel::fsi) ss << "FsiCache";
-    if (info.param == DiskCacheLevel::non_fsi) ss << "NonFsiCache";
-    if (info.param == DiskCacheLevel::all) ss << "AllCache";
+    if (info.param == File_Namespace::DiskCacheLevel::none) ss << "NoCache";
+    if (info.param == File_Namespace::DiskCacheLevel::fsi) ss << "FsiCache";
+    if (info.param == File_Namespace::DiskCacheLevel::non_fsi) ss << "NonFsiCache";
+    if (info.param == File_Namespace::DiskCacheLevel::all) ss << "AllCache";
     // clang-format on
     return ss.str();
   }
@@ -540,6 +573,7 @@ TEST_P(CacheControllingSelectQueryTest, DefaultLocalParquetServer) {
   sql(query);
   TQueryResult result;
   sql(result, "SELECT * FROM test_foreign_table;");
+
   assertResultSetEqual({{"a", i(1), 1.1},
                         {"aa", i(1), 1.1},
                         {"aa", i(2), 2.2},
@@ -552,19 +586,21 @@ TEST_P(CacheControllingSelectQueryTest, DefaultLocalParquetServer) {
 // Create table with multiple fragments with file buffers less than size of a
 // fragment Includes both fixed and variable length data
 TEST_P(CacheControllingSelectQueryTest, MultipleDataBlocksPerFragment) {
-  const auto& query =
-      getCreateForeignTableQuery("(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE)",
-                                 {{"buffer_size", "25"}, {"fragment_size", "64"}},
-                                 "0_255",
-                                 "csv");
+  const auto& query = getCreateForeignTableQuery(
+      "(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE, txt_arr TEXT[])",
+      {{"buffer_size", "25"}, {"fragment_size", "64"}},
+      "0_255",
+      "csv");
   sql(query);
 
   // Check that data is correct
   {
-    std::vector<std::vector<TargetValue>> expected_result_set;
+    std::vector<std::vector<NullableTargetValue>> expected_result_set;
     for (int number = 0; number < 256; number++) {
-      expected_result_set.push_back(
-          {i(number), std::to_string(number), std::to_string(number)});
+      expected_result_set.push_back({i(number),
+                                     std::to_string(number),
+                                     std::to_string(number),
+                                     array({std::to_string(number)})});
     }
     TQueryResult result;
     sql(result, "SELECT * FROM test_foreign_table ORDER BY i;");
@@ -573,20 +609,24 @@ TEST_P(CacheControllingSelectQueryTest, MultipleDataBlocksPerFragment) {
 
   // Check that WHERE statements filter numerical data correctly
   {
-    std::vector<std::vector<TargetValue>> expected_result_set;
+    std::vector<std::vector<NullableTargetValue>> expected_result_set;
     for (int number = 128; number < 256; number++) {
-      expected_result_set.push_back(
-          {i(number), std::to_string(number), std::to_string(number)});
+      expected_result_set.push_back({i(number),
+                                     std::to_string(number),
+                                     std::to_string(number),
+                                     array({std::to_string(number)})});
     }
     TQueryResult result;
     sql(result, "SELECT * FROM test_foreign_table  WHERE i >= 128 ORDER BY i;");
     assertResultSetEqual(expected_result_set, result);
   }
   {
-    std::vector<std::vector<TargetValue>> expected_result_set;
+    std::vector<std::vector<NullableTargetValue>> expected_result_set;
     for (int number = 0; number < 128; number++) {
-      expected_result_set.push_back(
-          {i(number), std::to_string(number), std::to_string(number)});
+      expected_result_set.push_back({i(number),
+                                     std::to_string(number),
+                                     std::to_string(number),
+                                     array({std::to_string(number)})});
     }
     TQueryResult result;
     sql(result, "SELECT * FROM test_foreign_table  WHERE i < 128 ORDER BY i;");
@@ -612,7 +652,7 @@ TEST_P(CacheControllingSelectQueryTest, ParquetNullRowgroups) {
 
 TEST_P(CacheControllingSelectQueryTest, CacheExists) {
   auto cache = getCatalog().getDataMgr().getPersistentStorageMgr()->getDiskCache();
-  if (GetParam() == DiskCacheLevel::none) {
+  if (GetParam() == File_Namespace::DiskCacheLevel::none) {
     ASSERT_EQ(cache, nullptr);
   } else {
     ASSERT_NE(cache, nullptr);
@@ -656,62 +696,39 @@ TEST_F(SelectQueryTest, ParquetStringsAllNullPlacementPermutations) {
         { i(1), "txt1", "txt1", "txt1", "txt1"},
         { i(2), "txt2", "txt2", "txt2", "txt2"},
         { i(3), "txt3", "txt3", "txt3", "txt3"},
-        { i(4), "", "", "", "" },
+        { i(4), Null, Null, Null, Null },
         { i(5), "txt5", "txt5", "txt5", "txt5"},
         { i(6), "txt6", "txt6", "txt6", "txt6"},
         { i(7), "txt7", "txt7", "txt7", "txt7"},
-        { i(8), "", "", "", "" },
+        { i(8), Null, Null, Null, Null },
         { i(9), "txt9", "txt9", "txt9", "txt9"},
         { i(10), "txt10", "txt10", "txt10", "txt10"},
         { i(11), "txt11", "txt11", "txt11", "txt11"},
-        { i(12), "", "", "", "" },
-        { i(13), "", "", "", "" },
-        { i(14), "", "", "", "" },
+        { i(12), Null, Null, Null, Null },
+        { i(13), Null, Null, Null, Null },
+        { i(14), Null, Null, Null, Null },
         { i(15), "txt15", "txt15", "txt15", "txt15"},
-        { i(16), "", "", "", "" },
+        { i(16), Null, Null, Null, Null },
         { i(17), "txt17", "txt17", "txt17", "txt17"},
-        { i(18), "", "", "", "" },
+        { i(18), Null, Null, Null, Null },
         { i(19), "txt19", "txt19", "txt19", "txt19"},
-        { i(20), "", "", "", "" },
-        { i(21), "", "", "", "" },
-        { i(22), "", "", "", "" },
-        { i(23), "", "", "", "" },
-        { i(24), "", "", "", "" }
+        { i(20), Null, Null, Null, Null },
+        { i(21), Null, Null, Null, Null },
+        { i(22), Null, Null, Null, Null },
+        { i(23), Null, Null, Null, Null },
+        { i(24), Null, Null, Null, Null }
       },
       result);
   // clang-format on
 }
 
-TEST_F(SelectQueryTest, DISABLED_ParquetStringDictionaryEncodedMetadataTest) {
-  // TODO: This test fails, it highlights a major issue with loading
-  // dictionaries for dict encoded strings upon chunk load time: only an empty
-  // dictionary exists during the first query, thus any comparisons to fixed
-  // string literals will fail until the dictionary exits.
-
+TEST_F(SelectQueryTest, ParquetStringDictionaryEncodedMetadataTest) {
   const auto& query = getCreateForeignTableQuery("(txt TEXT ENCODING DICT (32) )",
                                                  {{"fragment_size", "4"}},
                                                  "strings_repeating",
                                                  "parquet");
   sql(query);
 
-  TQueryResult result;
-  sql(result, "SELECT count(txt) from test_foreign_table WHERE txt = 'a';");
-  assertResultSetEqual({{
-                           i(5),
-                       }},
-                       result);
-}
-
-TEST_F(SelectQueryTest, ParquetStringDictionaryEncodedMetadataTestAfterChunkLoad) {
-  const auto& query = getCreateForeignTableQuery("(txt TEXT ENCODING DICT (32) )",
-                                                 {{"fragment_size", "4"}},
-                                                 "strings_repeating",
-                                                 "parquet");
-  sql(query);
-
-  // Update the metadata of the string dictionary encoded column with the first
-  // query
-  sql("SELECT count(txt) from test_foreign_table WHERE txt = 'a';");
   TQueryResult result;
   sql(result, "SELECT count(txt) from test_foreign_table WHERE txt = 'a';");
   assertResultSetEqual({{
@@ -969,15 +986,103 @@ TEST_F(SelectQueryTest, DirectoryWithDifferentSchema_DifferentNumberOfColumns) {
           "different_parquet_schemas_2/two_col_1_2.parquet\" has 2 columns.");
 }
 
+TEST_F(SelectQueryTest, SchemaMismatch_CSV_Multithreaded) {
+  const auto& query = getCreateForeignTableQuery(
+      "(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE, txt_arr TEXT[], txt_3 TEXT)",
+      {{"buffer_size", "25"}},
+      "0_255",
+      "csv");
+  sql(query);
+  queryAndAssertException("SELECT * FROM test_foreign_table ORDER BY i;",
+                          "Exception: Mismatched number of logical columns: (expected 5 "
+                          "columns, has 4): in file '" +
+                              getDataFilesPath() + "0_255.csv'");
+}
+TEST_F(SelectQueryTest, ParseError) {
+  const auto& query = getCreateForeignTableQuery(
+      "(i INTEGER)", {{"buffer_size", "25"}}, "1badint", "csv");
+  sql(query);
+  queryAndAssertException("SELECT * FROM test_foreign_table;",
+                          "Exception: Parsing failure \""
+                          "Unable to parse -a to INTEGER"
+                          "\" in row \"-a\" in file \"" +
+                              getDataFilesPath() + "1badint.csv\"");
+}
+
+TEST_F(SelectQueryTest, ExistingTableWithFsiDisabled) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (i INTEGER) "s +
+                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      getDataFilesPath() + "/1.csv');";
+  sql(query);
+  g_enable_fsi = false;
+  queryAndAssertException("SELECT * FROM test_foreign_table;",
+                          "Exception: Query cannot be executed for foreign table because "
+                          "FSI is currently disabled.");
+}
+
 INSTANTIATE_TEST_SUITE_P(CachOnOffSelectQueryTests,
                          CacheControllingSelectQueryTest,
-                         ::testing::Values(DiskCacheLevel::none, DiskCacheLevel::fsi),
+                         ::testing::Values(File_Namespace::DiskCacheLevel::none,
+                                           File_Namespace::DiskCacheLevel::fsi),
                          PrintToStringParamName());
 
 INSTANTIATE_TEST_SUITE_P(DataWrapperParameterizedTests,
                          DataWrapperSelectQueryTest,
                          ::testing::Values("csv", "parquet"),
                          PrintToStringParamName());
+
+TEST_P(DataWrapperSelectQueryTest, Int8EmptyAndNullArrayPermutations) {
+  const auto& query = getCreateForeignTableQuery(
+      "(index INT, tinyint_arr_0 TINYINT[], tinyint_arr_1 TINYINT[],"
+      "tinyint_arr_2 TINYINT[], tinyint_arr_3 TINYINT[], tinyint_arr_4 TINYINT[],"
+      "tinyint_arr_5 TINYINT[], tinyint_arr_6 TINYINT[], tinyint_arr_7 TINYINT[],"
+      "tinyint_arr_8 TINYINT[], tinyint_arr_9 TINYINT[], tinyint_arr_10 TINYINT[],"
+      "tinyint_arr_11 TINYINT[], tinyint_arr_12 TINYINT[], tinyint_arr_13 TINYINT[],"
+      "tinyint_arr_14 TINYINT[], tinyint_arr_15 TINYINT[], tinyint_arr_16 TINYINT[],"
+      "tinyint_arr_17 TINYINT[], tinyint_arr_18 TINYINT[], tinyint_arr_19 TINYINT[],"
+      "tinyint_arr_20 TINYINT[], tinyint_arr_21 TINYINT[], tinyint_arr_22 TINYINT[],"
+      "tinyint_arr_23 TINYINT[] )",
+      "int8_empty_and_null_array_permutations",
+      GetParam());
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table ORDER BY index;");
+
+  // clang-format off
+  assertResultSetEqual(
+    {
+      {
+        i(1),Null,Null,Null,Null,Null,Null,array({i(1)}),array({i(1)}),
+        array({i(1)}), array({i(1)}),array({i(1)}),array({i(1)}),array({i(NULL_TINYINT)})
+        ,array({i(NULL_TINYINT)}),array({i(NULL_TINYINT)}),array({i(NULL_TINYINT)}),
+        array({i(NULL_TINYINT)}),array({i(NULL_TINYINT)}),array({}),array({}),array({}),
+        array({}),array({}),array({})
+      },
+      {
+        i(2),array({i(1)}),array({i(1)}),array({i(NULL_TINYINT)}),
+        array({i(NULL_TINYINT)}),array({}),array({}),Null,Null,
+        array({i(NULL_TINYINT)}),array({i(NULL_TINYINT)}),array({}),array({}),Null,
+        Null,array({i(1)}),array({i(1)}),array({}),array({}),Null,Null,
+        array({i(1)}),array({i(1)}),array({i(NULL_TINYINT)}),array({i(NULL_TINYINT)})
+      },
+      {
+        i(3),array({i(NULL_TINYINT)}),array({}),array({i(1)}),array({}),array({i(1)}),
+        array({i(NULL_TINYINT)}),array({i(NULL_TINYINT)}),array({}),Null,array({}),
+        Null,array({i(NULL_TINYINT)}),array({i(1)}),array({}),Null,array({}),
+        Null,array({i(1)}),array({i(1)}),array({i(NULL_TINYINT)}),Null,
+        array({i(NULL_TINYINT)}),Null,array({i(1)})
+      },
+      {
+        i(4),array({}),array({i(NULL_TINYINT)}),array({}),array({i(1)}),
+        array({i(NULL_TINYINT)}),array({i(1)}),array({}),array({i(NULL_TINYINT)}),
+        array({}),Null,array({i(NULL_TINYINT)}),Null,array({}),
+        array({i(1)}),array({}),Null,array({i(1)}),Null,array({i(NULL_TINYINT)}),
+        array({i(1)}),array({i(NULL_TINYINT)}),Null,array({i(1)}),Null
+      },
+    }, result);
+  // clang-format on
+}
 
 TEST_P(DataWrapperSelectQueryTest, AggregateAndGroupBy) {
   const auto& query =
@@ -994,7 +1099,6 @@ TEST_P(DataWrapperSelectQueryTest, AggregateAndGroupBy) {
   // clang-format on
 }
 
-// TODO: implement for parquet when kARRAY support implemented for parquet
 TEST_P(CacheControllingSelectQueryTest, Join) {
   auto query = getCreateForeignTableQuery("(t TEXT, i INTEGER[])", "example_1", "csv");
   sql(query);
@@ -1113,6 +1217,63 @@ TEST_P(CacheControllingSelectQueryTest, CSV_CustomDelimiters) {
     }},
     result);
   // clang-format on
+}
+
+TEST_P(DataWrapperSelectQueryTest, AggregateAndGroupByNull) {
+  const auto& query =
+      getCreateForeignTableQuery("(t TEXT, i INT)", "null_str", GetParam());
+  sql(query);
+  TQueryResult result;
+  sql(result, "select t, count( * )  from test_foreign_table group by 1 order by 1 asc;");
+  // clang-format off
+  assertResultSetEqual({{"a", i(1)},
+                        {"b", i(1)},
+                        {"c", i(1)},
+                        {Null, i(1)}},
+                       result);
+  // clang-format on
+}
+
+TEST_P(DataWrapperSelectQueryTest, ArrayWithNullValues) {
+  const auto& query = getCreateForeignTableQuery(
+      "(index INTEGER, i1 INTEGER[], i2 INTEGER[], i3 INTEGER[])",
+      "null_array",
+      GetParam());
+  sql(query);
+  // clang-format off
+  sqlAndCompareResult("select * from test_foreign_table order by index;",
+                      {{i(1), Null, Null, array({Null_i})},
+                       {i(2), Null, array({i(100)}), array({Null_i, Null_i})},
+                       {i(3), array({i(100)}), array({i(200)}), array({Null_i, i(100)})}});
+  // clang-format on
+}
+
+TEST_P(DataWrapperSelectQueryTest, MissingFileOnCreateTable) {
+  auto query = getCreateForeignTableQuery("(i INTEGER)", {}, "missing_file", GetParam());
+  queryAndAssertFileNotFoundException(getDataFilesPath() + "missing_file." + GetParam(),
+                                      query);
+}
+
+TEST_P(DataWrapperSelectQueryTest, MissingFileOnSelectQuery) {
+  auto file_path = boost::filesystem::absolute("missing_file");
+  boost::filesystem::copy_file(getDataFilesPath() + "0." + GetParam(), file_path);
+  std::string query{"CREATE FOREIGN TABLE test_foreign_table (i INTEGER) "s +
+                    "SERVER omnisci_local_" + GetParam() + " WITH (file_path = '" +
+                    file_path.string() + "');"};
+  sql(query);
+  boost::filesystem::remove_all(file_path);
+  queryAndAssertFileNotFoundException(file_path.string());
+}
+
+TEST_P(DataWrapperSelectQueryTest, EmptyDirectory) {
+  auto dir_path = boost::filesystem::absolute("empty_dir");
+  boost::filesystem::create_directory(dir_path);
+  std::string query{"CREATE FOREIGN TABLE test_foreign_table (i INTEGER) "s +
+                    "SERVER omnisci_local_" + GetParam() + " WITH (file_path = '" +
+                    dir_path.string() + "');"};
+  sql(query);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {});
+  boost::filesystem::remove_all(dir_path);
 }
 
 class CSVFileTypeTests
@@ -1320,10 +1481,12 @@ TEST_F(SelectQueryTest, UnsupportedColumnMapping) {
   const auto& query = getCreateForeignTableQuery(
       "(t TEXT, i BIGINT, f INTEGER)", {}, "example_2", "parquet");
   sql(query);
-  queryAndAssertException(
-      "SELECT * FROM test_foreign_table;",
-      "Exception: Conversion from Parquet type \"DOUBLE\" to OmniSci type \"INTEGER\" is "
-      "not allowed. Please use an appropriate column type.");
+  queryAndAssertException("SELECT * FROM test_foreign_table;",
+                          "Exception: Conversion from Parquet type "
+                          "\"DOUBLE\" to OmniSci type \"INTEGER\" is "
+                          "not allowed. Please use an appropriate column type. Parquet "
+                          "column: double, OmniSci column: f, Parquet file: " +
+                              getDataFilesPath() + +"example_2.parquet.");
 }
 
 TEST_F(SelectQueryTest, NoStatistics) {
@@ -1349,15 +1512,6 @@ TEST_F(SelectQueryTest, RowGroupSizeLargerThanFragmentSize) {
       "size. Please set the table fragment size to a number that is larger than the row "
       "group size. Row group index: 0, row group size: 2, fragment size: 1, file path: " +
           getDataFilesPath() + "row_group_size_2.parquet");
-}
-
-TEST_F(SelectQueryTest, NonUtcTimestamp) {
-  const auto& query = getCreateForeignTableQuery(
-      "(tstamp TIMESTAMP)", {}, "non_utc_timestamp", "parquet");
-  sql(query);
-  queryAndAssertException("SELECT * FROM test_foreign_table;",
-                          "Exception: Non-UTC timezone specified in Parquet file for "
-                          "column \"tstamp\". Only UTC timezone is currently supported.");
 }
 
 TEST_F(SelectQueryTest, DecimalIntEncoding) {
@@ -1521,7 +1675,7 @@ bool does_cache_contain_chunks(Catalog_Namespace::Catalog* cat,
                                const std::string& table_name,
                                const std::vector<std::vector<int>> subkeys) {
   // subkey is chunkey without db, table ids
-  auto td = cat->getMetadataForTable(table_name);
+  auto td = cat->getMetadataForTable(table_name, false);
   ChunkKey table_key{cat->getCurrentDB().dbId, td->tableId};
   auto cache = cat->getDataMgr().getPersistentStorageMgr()->getDiskCache();
 
@@ -1533,54 +1687,6 @@ bool does_cache_contain_chunks(Catalog_Namespace::Catalog* cat,
     }
   }
   return true;
-}
-
-// Check that chunks/metadata are fully cleared in bulk update mode
-TEST_F(RefreshTests, BulkUpdateCacheUpdate) {
-  int fragment_size = 1;
-  std::string filename = "single_file.csv";
-  auto cache = getCatalog().getDataMgr().getPersistentStorageMgr()->getDiskCache();
-  // Create initial files and tables
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-
-  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
-  std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file.csv";
-
-  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
-                      getDataFilesPath() + "append_tmp/" + filename +
-                      "', fragment_size = '" + std::to_string(fragment_size) +
-                      "', REFRESH_UPDATE_TYPE = 'ALL');";
-  sql(query);
-
-  std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
-  // Read from table
-  sqlAndCompareResult(select, {{i(1)}, {i(2)}});
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-  recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
-  size_t mdata_count = cache->getNumMetadataAdded();
-  size_t chunk_count = cache->getNumChunksAdded();
-
-  // Refresh command
-  sql("REFRESH FOREIGN TABLES " + default_name + ";");
-
-  // All  chunks + will be updated
-  size_t update_count = 5;
-  ASSERT_EQ(update_count, cache->getNumMetadataAdded() - mdata_count);
-  // 2 original chunks are recached
-  ASSERT_EQ(2U, cache->getNumChunksAdded() - chunk_count);
-
-  // cache contains original chunks;
-  ASSERT_TRUE(does_cache_contain_chunks(cat, default_name, {{1, 0}, {1, 1}}));
-
-  sqlAndCompareResult(select, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
-  ASSERT_EQ(update_count, cache->getNumMetadataAdded() - mdata_count);
-  // Now all new chunks are cached
-  ASSERT_EQ(update_count, cache->getNumChunksAdded() - chunk_count);
-  ASSERT_TRUE(does_cache_contain_chunks(
-      cat, default_name, {{1, 0}, {1, 1}, {1, 2}, {1, 3}, {1, 4}}));
-
-  bf::remove_all(getDataFilesPath() + "append_tmp");
 }
 
 class RefreshMetadataTypeTest : public SelectQueryTest {};
@@ -1642,6 +1748,15 @@ class RefreshParamTests : public RefreshTests,
     file_type = GetParam();
     RefreshTests::SetUp();
   }
+
+  void assertExpectedCacheStatePostScan(ChunkKey& chunk_key) {
+    bool cache_on_scan = file_type == "csv";
+    if (cache_on_scan) {
+      ASSERT_NE(cache->getCachedChunkIfExists(chunk_key), nullptr);
+    } else {
+      ASSERT_EQ(cache->getCachedChunkIfExists(chunk_key), nullptr);
+    }
+  }
 };
 
 INSTANTIATE_TEST_SUITE_P(RefreshParamTestsParameterizedTests,
@@ -1663,7 +1778,7 @@ TEST_P(RefreshParamTests, SingleTable) {
                 getDataFilesPath() + tmp_file_names[0] + "." + file_type,
                 bf::copy_option::overwrite_if_exists);
 
-  // Confirm chaning file hasn't changed cached results
+  // Confirm changing file hasn't changed cached results
   sqlAndCompareResult("SELECT * FROM " + table_names[0] + ";", {{i(0)}});
   ASSERT_TRUE(isChunkAndMetadataCached(orig_key));
 
@@ -1682,12 +1797,12 @@ TEST_P(RefreshParamTests, FragmentSkip) {
   // Read from table to populate cache.
   sqlAndCompareResult("SELECT * FROM " + table_names[0] + " WHERE i >= 3;", {});
   ChunkKey orig_key0 = getChunkKeyFromTable(*cat, table_names[0], {1, 0});
-  ASSERT_EQ(cache->getCachedChunkIfExists(orig_key0), nullptr);
+  assertExpectedCacheStatePostScan(orig_key0);
   ASSERT_TRUE(cache->isMetadataCached(orig_key0));
 
   sqlAndCompareResult("SELECT * FROM " + table_names[1] + " WHERE i >= 3;", {});
   ChunkKey orig_key1 = getChunkKeyFromTable(*cat, table_names[1], {1, 0});
-  ASSERT_EQ(cache->getCachedChunkIfExists(orig_key1), nullptr);
+  assertExpectedCacheStatePostScan(orig_key1);
   ASSERT_TRUE(cache->isMetadataCached(orig_key1));
 
   // Change underlying file
@@ -1700,24 +1815,24 @@ TEST_P(RefreshParamTests, FragmentSkip) {
 
   // Confirm chaning file hasn't changed cached results
   sqlAndCompareResult("SELECT * FROM " + table_names[0] + " WHERE i >= 3;", {});
-  ASSERT_EQ(cache->getCachedChunkIfExists(orig_key0), nullptr);
+  assertExpectedCacheStatePostScan(orig_key0);
   ASSERT_TRUE(cache->isMetadataCached(orig_key0));
 
   sqlAndCompareResult("SELECT * FROM " + table_names[1] + " WHERE i >= 3;", {});
-  ASSERT_EQ(cache->getCachedChunkIfExists(orig_key1), nullptr);
+  assertExpectedCacheStatePostScan(orig_key1);
   ASSERT_TRUE(cache->isMetadataCached(orig_key1));
 
   // Refresh command
   sql("REFRESH FOREIGN TABLES " + tmp_file_names[0] + ", " + tmp_file_names[1] + ";");
 
   // Compare new results
-  ASSERT_EQ(cache->getCachedChunkIfExists(orig_key0), nullptr);
+  assertExpectedCacheStatePostScan(orig_key0);
   ASSERT_TRUE(cache->isMetadataCached(orig_key0));
-  ASSERT_EQ(cache->getCachedChunkIfExists(orig_key1), nullptr);
+  assertExpectedCacheStatePostScan(orig_key1);
   ASSERT_TRUE(cache->isMetadataCached(orig_key1));
   sqlAndCompareResult("SELECT * FROM " + table_names[0] + " WHERE i >= 3;", {});
   sqlAndCompareResult("SELECT * FROM " + table_names[1] + " WHERE i >= 3;", {{i(3)}});
-  ASSERT_EQ(cache->getCachedChunkIfExists(orig_key0), nullptr);
+  assertExpectedCacheStatePostScan(orig_key0);
   ASSERT_TRUE(cache->isMetadataCached(orig_key0));
   ASSERT_TRUE(isChunkAndMetadataCached(orig_key1));
 }
@@ -1879,7 +1994,7 @@ TEST_P(RefreshParamTests, AddFrags) {
   // Compare new results
   ASSERT_TRUE(isChunkAndMetadataCached(orig_key0));
   ASSERT_TRUE(isChunkAndMetadataCached(orig_key1));
-  ASSERT_EQ(cache->getCachedChunkIfExists(orig_key2), nullptr);
+  assertExpectedCacheStatePostScan(orig_key2);
   ASSERT_TRUE(cache->isMetadataCached(orig_key2));
   sqlAndCompareResult("SELECT * FROM " + table_names[0] + ";", {{i(3)}, {i(4)}, {i(5)}});
 }
@@ -2098,20 +2213,35 @@ class AppendRefreshTest : public RecoverCacheQueryTest,
   void SetUp() override {
     RecoverCacheQueryTest::SetUp();
     sqlDropForeignTable(0, default_name);
+    bf::remove_all(getDataFilesPath() + "append_tmp");
+    recursive_copy(getDataFilesPath() + "append_before",
+                   getDataFilesPath() + "append_tmp");
   }
 
   void TearDown() override {
     sqlDropForeignTable(0, default_name);
     RecoverCacheQueryTest::TearDown();
+    bf::remove_all(getDataFilesPath() + "append_tmp");
+  }
+
+  AppendRefreshTestStruct getParamStruct() { return AppendRefreshTestStruct{GetParam()}; }
+
+  std::string evictString() {
+    return getParamStruct().evict ? " WITH (evict = true)" : " WITH (evict = false)";
+  }
+
+  std::vector<std::vector<int32_t>> createSubKeys(size_t num_chunks) {
+    std::vector<std::vector<int32_t>> chunk_subkeys;
+    for (int32_t i = 0; i < static_cast<int>(num_chunks); ++i) {
+      chunk_subkeys.push_back({1, i});
+    }
+    return chunk_subkeys;
   }
 };
 
 TEST_F(AppendRefreshTest, CSV_MissingFileArchive) {
   int fragment_size = 1;
   std::string filename = "archive_delete_file.zip";
-  // Create initial files and tables
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
 
   std::string query = "CREATE FOREIGN TABLE " + default_name + " (i INTEGER) "s +
                       "SERVER omnisci_local_csv WITH (file_path = '" +
@@ -2133,131 +2263,60 @@ TEST_F(AppendRefreshTest, CSV_MissingFileArchive) {
       "REFRESH FOREIGN TABLES " + default_name + ";",
       "Exception: Foreign table refreshed with APPEND mode missing archive entry "
       "\"single_file_delete_rows.csv\" from file \"archive_delete_file.zip\".");
-
-  bf::remove_all(getDataFilesPath() + "append_tmp");
 }
 
 class FragmentSizesAppendRefreshTest : public AppendRefreshTest {};
 
-INSTANTIATE_TEST_SUITE_P(
-    AppendParamaterizedTests,
-    FragmentSizesAppendRefreshTest,
-    ::testing::Values(
-        AppendRefreshTestParam{1, "csv", "single_file.csv", "single_csv", false},
-        AppendRefreshTestParam{1,
-                               "parquet",
-                               "single_file.parquet",
-                               "single_parquet",
-                               false},
-        AppendRefreshTestParam{1, "csv", "csv_dir_file", "csv_dir", false},
-        AppendRefreshTestParam{1, "parquet", "parquet_dir_file", "parquet_dir", false},
-        AppendRefreshTestParam{1, "csv", "dir_file.zip", "csv_dir_zip", false},
-        AppendRefreshTestParam{1,
-                               "csv",
-                               "csv_dir_file_multi",
-                               "csv_dir_file_multi",
-                               false},
-        AppendRefreshTestParam{1,
-                               "parquet",
-                               "parquet_dir_file_multi",
-                               "parquet_dir_file_multi",
-                               false},
-        AppendRefreshTestParam{1,
-                               "csv",
-                               "dir_file_multi.zip",
-                               "csv_dir_multi_zip",
-                               false},
-        AppendRefreshTestParam{1, "csv", "single_file.zip", "csv_single_zip", false},
-        AppendRefreshTestParam{4, "csv", "single_file.csv", "single_csv", false},
-        AppendRefreshTestParam{4,
-                               "parquet",
-                               "single_file.parquet",
-                               "single_parquet",
-                               false},
-        AppendRefreshTestParam{4, "csv", "csv_dir_file", "csv_dir", false},
-        AppendRefreshTestParam{4, "parquet", "parquet_dir_file", "parquet_dir", false},
-        AppendRefreshTestParam{4, "csv", "dir_file.zip", "csv_dir_zip", false},
-        AppendRefreshTestParam{4,
-                               "csv",
-                               "csv_dir_file_multi",
-                               "csv_dir_file_multi",
-                               false},
-        AppendRefreshTestParam{4,
-                               "parquet",
-                               "parquet_dir_file_multi",
-                               "parquet_dir_file_multi",
-                               false},
-        AppendRefreshTestParam{4,
-                               "csv",
-                               "dir_file_multi.zip",
-                               "csv_dir_multi_zip",
-                               false},
-        AppendRefreshTestParam{4, "csv", "single_file.zip", "csv_single_zip", false},
-        AppendRefreshTestParam{32000000, "csv", "single_file.csv", "single_csv", false},
-        AppendRefreshTestParam{32000000,
-                               "parquet",
-                               "single_file.parquet",
-                               "single_parquet",
-                               false},
-        AppendRefreshTestParam{32000000, "csv", "csv_dir_file", "csv_dir", false},
-        AppendRefreshTestParam{32000000,
-                               "parquet",
-                               "parquet_dir_file",
-                               "parquet_dir",
-                               false},
-        AppendRefreshTestParam{32000000, "csv", "dir_file.zip", "csv_dir_zip"},
-        AppendRefreshTestParam{32000000,
-                               "csv",
-                               "csv_dir_file_multi",
-                               "csv_dir_file_multi",
-                               false},
-        AppendRefreshTestParam{32000000,
-                               "parquet",
-                               "parquet_dir_file_multi",
-                               "parquet_dir_file_multi",
-                               false},
-        AppendRefreshTestParam{32000000,
-                               "csv",
-                               "dir_file_multi.zip",
-                               "csv_dir_multi_zip",
-                               false},
-        AppendRefreshTestParam{32000000,
-                               "csv",
-                               "single_file.zip",
-                               "csv_single_zip",
-                               false},
-        AppendRefreshTestParam{1, "csv", "single_file.csv", "single_csv", true},
-        AppendRefreshTestParam{1,
-                               "parquet",
-                               "single_file.parquet",
-                               "single_parquet",
-                               true},
-        AppendRefreshTestParam{1, "csv", "csv_dir_file", "csv_dir", true},
-        AppendRefreshTestParam{1, "parquet", "parquet_dir_file", "parquet_dir", true},
-        AppendRefreshTestParam{1, "csv", "dir_file.zip", "csv_dir_zip", true},
-        AppendRefreshTestParam{1,
-                               "csv",
-                               "csv_dir_file_multi",
-                               "csv_dir_file_multi",
-                               true},
-        AppendRefreshTestParam{1,
-                               "parquet",
-                               "parquet_dir_file_multi",
-                               "parquet_dir_file_multi",
-                               true},
-        AppendRefreshTestParam{1, "csv", "dir_file_multi.zip", "csv_dir_multi_zip", true},
-        AppendRefreshTestParam{1, "csv", "single_file.zip", "csv_single_zip", true}),
-    PrintToStringParamName());
+INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTestsCsv,
+                         FragmentSizesAppendRefreshTest,
+                         testing::Combine(testing::Values(1, 4, 3200000),
+                                          testing::Values("csv"),
+                                          testing::Values("single_file.csv",
+                                                          "single_file.zip",
+                                                          "csv_dir_file",
+                                                          "csv_dir_file_multi",
+                                                          "dir_file_multi.zip"),
+                                          testing::Values(false),
+                                          testing::Values(false)),
+                         PrintToStringParamName());
+INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTestsParquet,
+                         FragmentSizesAppendRefreshTest,
+                         testing::Combine(testing::Values(1, 4, 3200000),
+                                          testing::Values("parquet"),
+                                          testing::Values("single_file.parquet",
+                                                          "parquet_dir_file",
+                                                          "parquet_dir_file_multi"),
+                                          testing::Values(false),
+                                          testing::Values(false)),
+                         PrintToStringParamName());
+INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTestsCsvRecover,
+                         FragmentSizesAppendRefreshTest,
+                         testing::Combine(testing::Values(1),
+                                          testing::Values("csv"),
+                                          testing::Values("single_file.csv",
+                                                          "single_file.zip",
+                                                          "csv_dir_file",
+                                                          "csv_dir_file_multi",
+                                                          "dir_file_multi.zip"),
+                                          testing::Values(true),
+                                          testing::Values(false)),
+                         PrintToStringParamName());
+INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTestsParquetRecover,
+                         FragmentSizesAppendRefreshTest,
+                         testing::Combine(testing::Values(1),
+                                          testing::Values("parquet"),
+                                          testing::Values("single_file.parquet",
+                                                          "parquet_dir_file",
+                                                          "parquet_dir_file_multi"),
+                                          testing::Values(true),
+                                          testing::Values(false)),
+                         PrintToStringParamName());
 
 TEST_P(FragmentSizesAppendRefreshTest, AppendFrags) {
-  auto& param = GetParam();
+  auto param = getParamStruct();
   int fragment_size = param.fragment_size;
   std::string filename = param.filename;
 
-  // Create initial files and tables
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-
-  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
   std::string file_path =
       getDataFilesPath() + "append_tmp/" + "single_file." + param.wrapper;
 
@@ -2271,53 +2330,168 @@ TEST_P(FragmentSizesAppendRefreshTest, AppendFrags) {
   std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
   // Read from table
   sqlAndCompareResult(select, {{i(1)}, {i(2)}});
+
   bf::remove_all(getDataFilesPath() + "append_tmp");
   recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
 
   if (param.recover_cache) {
     // Reset cache
-    resetPersistentStorageMgr(DiskCacheLevel::fsi);
+    resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::fsi);
   }
-  size_t mdata_count = cache_->getNumMetadataAdded();
-  size_t chunk_count = cache_->getNumChunksAdded();
-  // Refresh command
-  sql("REFRESH FOREIGN TABLES " + default_name + ";");
 
   size_t original_chunks = std::ceil(double(2) / fragment_size);
   size_t final_chunks = std::ceil(double(5) / fragment_size);
-  // All new chunks + last original chunk will be updated
-  size_t update_count = final_chunks - original_chunks + 1;
-  ASSERT_EQ(update_count, cache_->getNumMetadataAdded() - mdata_count);
-  // Only last original chunk is recached
-  ASSERT_EQ(1U, cache_->getNumChunksAdded() - chunk_count);
+  auto cat = &getCatalog();
 
   // cache contains all original chunks
-  {
-    std::vector<std::vector<int>> chunk_subkeys;
-    for (int i = 0; i < static_cast<int>(original_chunks); i++) {
-      chunk_subkeys.push_back({1, i});
-    }
-    ASSERT_TRUE(does_cache_contain_chunks(&getCatalog(), default_name, chunk_subkeys));
-  }
+  ASSERT_TRUE(
+      does_cache_contain_chunks(cat, default_name, createSubKeys(original_chunks)));
+  sqlAndCompareResult("SELECT COUNT(*) FROM "s + default_name + ";", {{i(2)}});
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}});
+
+  // Refresh command
+  sql("REFRESH FOREIGN TABLES " + default_name + ";");
+
   // Check count to ensure metadata is updated
   sqlAndCompareResult("SELECT COUNT(*) FROM "s + default_name + ";", {{i(5)}});
-
   sqlAndCompareResult(select, {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
-  ASSERT_EQ(update_count, cache_->getNumMetadataAdded() - mdata_count);
-  // Now all new chunks are cached
-  ASSERT_EQ(update_count, cache_->getNumChunksAdded() - chunk_count);
+
   ASSERT_EQ(param.recover_cache, isTableDatawrapperRestored(default_name));
 
   // cache contains all original+new chunks
+  ASSERT_TRUE(does_cache_contain_chunks(cat, default_name, createSubKeys(final_chunks)));
+}
+
+// Test that string dictionaries are populated correctly after an append
+class StringDictAppendTest : public AppendRefreshTest {};
+
+INSTANTIATE_TEST_SUITE_P(StringDictAppendParamaterizedTestsCsv,
+                         StringDictAppendTest,
+                         testing::Combine(testing::Values(2, 5, 3200000),
+                                          testing::Values("csv"),
+                                          testing::Values("csv_string_dir"),
+                                          testing::Values(false),
+                                          testing::Values(true, false)),
+                         PrintToStringParamName());
+
+INSTANTIATE_TEST_SUITE_P(StringDictAppendParamaterizedTestsParquet,
+                         StringDictAppendTest,
+                         testing::Combine(testing::Values(2, 5, 3200000),
+                                          testing::Values("parquet"),
+                                          testing::Values("parquet_string_dir"),
+                                          testing::Values(false),
+                                          testing::Values(true, false)),
+                         PrintToStringParamName());
+
+// Single fragment size parameterization for recovering from disk
+INSTANTIATE_TEST_SUITE_P(StringDictAppendParamaterizedTestsCsvFromDisk,
+                         StringDictAppendTest,
+                         testing::Combine(testing::Values(2),
+                                          testing::Values("csv"),
+                                          testing::Values("csv_string_dir"),
+                                          testing::Values(true),
+                                          testing::Values(true, false)),
+                         PrintToStringParamName());
+
+INSTANTIATE_TEST_SUITE_P(StringDictAppendParamaterizedTestsParquetFromDisk,
+                         StringDictAppendTest,
+                         testing::Combine(testing::Values(2),
+                                          testing::Values("parquet"),
+                                          testing::Values("parquet_string_dir"),
+                                          testing::Values(true),
+                                          testing::Values(true, false)),
+                         PrintToStringParamName());
+
+TEST_P(StringDictAppendTest, AppendStringDictFilter) {
+  auto param = getParamStruct();
+  int fragment_size = param.fragment_size;
+  std::string filename = param.filename;
+  std::string query =
+      "CREATE FOREIGN TABLE " + default_name + " (txt TEXT ENCODING DICT (32) ) "s +
+      "SERVER omnisci_local_" + param.wrapper + " WITH (file_path = '" +
+      getDataFilesPath() + "append_tmp/" + filename + "', fragment_size = '" +
+      std::to_string(fragment_size) + "', REFRESH_UPDATE_TYPE = 'APPEND');";
+
+  sql(query);
   {
-    std::vector<std::vector<int>> chunk_subkeys;
-    for (int i = 0; i < static_cast<int>(final_chunks); i++) {
-      chunk_subkeys.push_back({1, i});
-    }
-    ASSERT_TRUE(does_cache_contain_chunks(&getCatalog(), default_name, chunk_subkeys));
+    TQueryResult result;
+
+    sql(result, "SELECT count(txt) from " + default_name + " WHERE txt = 'a';");
+    assertResultSetEqual({{
+                             i(1),
+                         }},
+                         result);
   }
 
+  if (param.recover_cache) {
+    // Reset cache
+    resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::fsi);
+  }
+  // Modify files
   bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
+
+  sql("REFRESH FOREIGN TABLES " + default_name + evictString() + ";");
+  {
+    TQueryResult result;
+    sql(result, "SELECT count(txt) from " + default_name + " WHERE txt = 'aaaa';");
+    assertResultSetEqual({{
+                             i(1),
+                         }},
+                         result);
+  }
+}
+
+TEST_P(StringDictAppendTest, AppendStringDictJoin) {
+  auto param = getParamStruct();
+  int fragment_size = param.fragment_size;
+  std::string name_1 = default_name + "_1";
+  std::string name_2 = default_name + "_2";
+  std::string filename = param.filename;
+  sql("DROP FOREIGN TABLE IF EXISTS " + name_1 + ";");
+  sql("DROP FOREIGN TABLE IF EXISTS " + name_2 + ";");
+  for (auto const& name : {name_1, name_2}) {
+    sql("CREATE FOREIGN TABLE " + name + " (txt TEXT ENCODING DICT (32) ) "s +
+        "SERVER omnisci_local_" + param.wrapper + " WITH (file_path = '" +
+        getDataFilesPath() + "append_tmp/" + filename + "', fragment_size = '" +
+        std::to_string(fragment_size) + "', REFRESH_UPDATE_TYPE = 'APPEND');");
+  }
+
+  std::string join = "SELECT t1.txt, t2.txt FROM " + name_1 + " AS t1 JOIN " + name_2 +
+                     " AS t2 ON t1.txt = t2.txt ORDER BY t1.txt;";
+
+  {
+    TQueryResult result;
+    sql(result, join);
+    assertResultSetEqual({{"a", "a"}, {"aa", "aa"}, {"aaa", "aaa"}}, result);
+  }
+
+  if (param.recover_cache) {
+    // Reset cache
+    resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::fsi);
+  }
+
+  // Modify files
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
+
+  // Refresh command
+  sql("REFRESH FOREIGN TABLES " + name_1 + evictString() + ";");
+  sql("REFRESH FOREIGN TABLES " + name_2 + evictString() + ";");
+
+  {
+    TQueryResult result;
+    sql(result, join);
+    assertResultSetEqual({{"a", "a"},
+                          {"aa", "aa"},
+                          {"aaa", "aaa"},
+                          {"aaaa", "aaaa"},
+                          {"aaaaa", "aaaaa"},
+                          {"aaaaaa", "aaaaaa"}},
+                         result);
+  }
+  sql("DROP FOREIGN TABLE IF EXISTS " + name_1 + ";");
+  sql("DROP FOREIGN TABLE IF EXISTS " + name_2 + ";");
 }
 
 class DataWrapperAppendRefreshTest : public AppendRefreshTest {};
@@ -2326,21 +2500,13 @@ INSTANTIATE_TEST_SUITE_P(
     AppendParamaterizedTests,
     DataWrapperAppendRefreshTest,
     ::testing::Values(
-        AppendRefreshTestParam{1, "csv", "single_file.csv", "single_csv", false},
-        AppendRefreshTestParam{1,
-                               "parquet",
-                               "single_file.parquet",
-                               "single_parquet",
-                               false},
-        AppendRefreshTestParam{1, "csv", "single_file.csv", "single_csv", true},
-        AppendRefreshTestParam{1,
-                               "parquet",
-                               "single_file.parquet",
-                               "single_parquet",
-                               true}));
+        AppendRefreshTestParam{1, "csv", "single_file.csv", false, false},
+        AppendRefreshTestParam{1, "parquet", "single_file.parquet", false, false},
+        AppendRefreshTestParam{1, "csv", "single_file.csv", true, false},
+        AppendRefreshTestParam{1, "parquet", "single_file.parquet", true, false}));
 
 TEST_P(DataWrapperAppendRefreshTest, AppendNothing) {
-  auto& param = GetParam();
+  auto param = getParamStruct();
   int fragment_size = 1;
   std::string filename = "single_file." + param.wrapper;
 
@@ -2356,33 +2522,25 @@ TEST_P(DataWrapperAppendRefreshTest, AppendNothing) {
 
   if (param.recover_cache) {
     // Reset cache
-    resetPersistentStorageMgr(DiskCacheLevel::fsi);
+    resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::fsi);
   }
-  size_t mdata_count = cache_->getNumMetadataAdded();
-  size_t chunk_count = cache_->getNumChunksAdded();
+
+  ASSERT_EQ(cache_->getNumCachedChunks(), 2U);  // Num chunks
+
   // Refresh command
   sql("REFRESH FOREIGN TABLES " + default_name + ";");
 
-  // Only last original chunk is recached
-  ASSERT_EQ(1U, cache_->getNumMetadataAdded() - mdata_count);
-  ASSERT_EQ(1U, cache_->getNumChunksAdded() - chunk_count);
-  // Read from table
+  ASSERT_EQ(cache_->getNumCachedChunks(), 2U);  // Num chunks
+
   sqlAndCompareResult(select, {{i(1)}, {i(2)}});
 
   ASSERT_EQ(param.recover_cache, isTableDatawrapperRestored(default_name));
-
-  // no updates to the cache
-  ASSERT_EQ(1U, cache_->getNumMetadataAdded() - mdata_count);
-  ASSERT_EQ(1U, cache_->getNumChunksAdded() - chunk_count);
 }
 
 TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
   int fragment_size = 1;
-  std::string wrapper = GetParam().wrapper;
+  std::string wrapper = getParamStruct().wrapper;
   std::string filename = "single_file_delete_rows." + wrapper;
-  // Create initial files and tables
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
 
   std::string query = "CREATE FOREIGN TABLE " + default_name + " (i BIGINT) "s +
                       "SERVER omnisci_local_" + wrapper + " WITH (file_path = '" +
@@ -2405,19 +2563,66 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
       "Exception: Refresh of foreign table created with \"APPEND\" update type failed as "
       "file reduced in size: " +
           getDataFilesPath() + "append_tmp/single_file_delete_rows." + wrapper);
+}
 
+TEST_P(DataWrapperAppendRefreshTest, BulkMissingRows) {
+  int fragment_size = 1;
+  std::string wrapper = getParamStruct().wrapper;
+  std::string filename = "single_file_delete_rows." + wrapper;
+
+  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i BIGINT) "s +
+                      "SERVER omnisci_local_" + wrapper + " WITH (file_path = '" +
+                      getDataFilesPath() + "append_tmp/" + filename +
+                      "', fragment_size = '" + std::to_string(fragment_size) +
+                      "', REFRESH_UPDATE_TYPE = 'ALL');";
+  sql(query);
+
+  std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
+  // Read from table
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}});
+
+  // Modify files
   bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
+
+  // Refresh command
+  sql("REFRESH FOREIGN TABLES " + default_name + ";");
+
+  sqlAndCompareResult(select, {{i(1)}});
+}
+
+TEST_P(DataWrapperAppendRefreshTest, MissingRowsEvict) {
+  // Evicting in append mode should allow row deletions
+  int fragment_size = 1;
+  std::string wrapper = getParamStruct().wrapper;
+  std::string filename = "single_file_delete_rows." + wrapper;
+
+  std::string query = "CREATE FOREIGN TABLE " + default_name + " (i BIGINT) "s +
+                      "SERVER omnisci_local_" + wrapper + " WITH (file_path = '" +
+                      getDataFilesPath() + "append_tmp/" + filename +
+                      "', fragment_size = '" + std::to_string(fragment_size) +
+                      "', REFRESH_UPDATE_TYPE = 'APPEND');";
+  sql(query);
+
+  std::string select = "SELECT * FROM "s + default_name + " ORDER BY i;";
+  // Read from table
+  sqlAndCompareResult(select, {{i(1)}, {i(2)}});
+
+  // Modify files
+  bf::remove_all(getDataFilesPath() + "append_tmp");
+  recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
+
+  // Refresh command
+  sql("REFRESH FOREIGN TABLES " + default_name + " WITH (evict=true); ");
+
+  // Check row has been removed
+  sqlAndCompareResult(select, {{i(1)}});
 }
 
 TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
   int fragment_size = 1;
-  std::string wrapper = GetParam().wrapper;
+  std::string wrapper = getParamStruct().wrapper;
   std::string filename = wrapper + "_dir_missing_file";
-
-  // Create initial files and tables
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-
-  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
   std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file." + wrapper;
 
   std::string query = "CREATE FOREIGN TABLE " + default_name + " (i BIGINT) "s +
@@ -2440,21 +2645,14 @@ TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
       "file \"" +
           getDataFilesPath() + "append_tmp/" + filename + "/one_row_2." + wrapper +
           "\" was removed.");
-
-  bf::remove_all(getDataFilesPath() + "append_tmp");
 }
 
 // This tests the use case where there are multiple files in a
 // directory but an update is made to only one of the files.
 TEST_P(DataWrapperAppendRefreshTest, MultifileAppendtoFile) {
   int fragment_size = 1;
-  std::string wrapper = GetParam().wrapper;
+  std::string wrapper = getParamStruct().wrapper;
   std::string filename = wrapper + "_dir_file_multi_bad_append";
-
-  // Create initial files and tables
-  bf::remove_all(getDataFilesPath() + "append_tmp");
-
-  recursive_copy(getDataFilesPath() + "append_before", getDataFilesPath() + "append_tmp");
   std::string file_path = getDataFilesPath() + "append_tmp/" + "single_file." + wrapper;
 
   std::string query = "CREATE FOREIGN TABLE " + default_name + " (i BIGINT) "s +
@@ -2473,8 +2671,6 @@ TEST_P(DataWrapperAppendRefreshTest, MultifileAppendtoFile) {
   // Refresh command
   sql("REFRESH FOREIGN TABLES " + default_name + ";");
   sqlAndCompareResult(select, {{i(1)}, {i(2)}});
-
-  bf::remove_all(getDataFilesPath() + "append_tmp");
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -2551,6 +2747,20 @@ TEST_F(SelectQueryTest, CsvArrayQuotedText) {
   // clang-format on
 }
 
+TEST_F(SelectQueryTest, ParquetArrayInt8EmptyWithFixedLengthArray) {
+  const auto& query = getCreateForeignTableQuery(
+      "(tinyint_arr_empty TINYINT[1])", "int8_empty_array", "parquet");
+  sql(query);
+
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table;",
+
+      "Exception: Detected an empty array being loaded into OmniSci column "
+      "'tinyint_arr_empty' which has a fixed length array type, expecting 1 elements. "
+      "Row group: 0, Parquet column: 'tinyint_arr_empty.list.item', Parquet file: '" +
+          getDataFilesPath() + "int8_empty_array.parquet'");
+}
+
 TEST_F(SelectQueryTest, ParquetArrayDateTimeTypes) {
   const auto& query = getCreateForeignTableQuery(
       "(index INT, time_milli_array TIME[], time_micro_array TIME[],"
@@ -2568,8 +2778,8 @@ TEST_F(SelectQueryTest, ParquetArrayDateTimeTypes) {
   assertResultSetEqual(
       {
           {
-            i(1),array({}), array({}), array({}), array({}), array({}), array({}),
-            array({}), array({})
+            i(1),Null, Null, Null, Null, Null, Null,
+            Null, Null
           },
           {
             i(2),array({"23:59:59", "00:59:59", "12:00:00"}),
@@ -2592,8 +2802,8 @@ TEST_F(SelectQueryTest, ParquetArrayDateTimeTypes) {
             array({"2020-11-10", i(NULL_BIGINT)})
           },
           {
-            i(4),array({}), array({}), array({}),
-            array({}), array({}), array({}), array({}), array({})
+            i(4),Null, Null, Null,
+            Null, Null, Null, Null, Null
           },
           {
             i(5),array({"00:00:01"}),
@@ -2605,18 +2815,32 @@ TEST_F(SelectQueryTest, ParquetArrayDateTimeTypes) {
   // clang-format on
 }
 
-TEST_F(SelectQueryTest, DISABLED_ParquetFixedLengthArrayMalformed) {
-  // TODO: to fix this test, remove the catch clause in BufferMgr::getBuffer
-  // that aborts and does not thrown an exception. Alternatively, write the
-  // test to expect an abort.
+TEST_F(SelectQueryTest, ParquetFixedLengthArrayMalformed) {
   const auto& query = getCreateForeignTableQuery(
       "(bigint_array BIGINT[3])", "array_fixed_len_malformed", "parquet");
   sql(query);
   TQueryResult result;
   queryAndAssertException(
       "SELECT * FROM test_foreign_table;",
-      "Detected a row with 2 elements being loaded into  OmniSci column 'bigint_array' "
-      "which has type fixed length array, expecting 3 elements");
+      "Exception: Detected a row with 2 elements being loaded into OmniSci column "
+      "'bigint_array' which has a fixed length array type, expecting 3 elements. Row "
+      "group: 2, Parquet column: 'i64.list.item', Parquet file: '" +
+          getDataFilesPath() + "array_fixed_len_malformed.parquet'");
+}
+
+TEST_F(SelectQueryTest, ParquetFixedLengthStringArrayWithNullArray) {
+  const auto& query = getCreateForeignTableQuery(
+      "(text_array TEXT[3])", "fixed_length_string_array_with_null_array", "parquet");
+  sql(query);
+  TQueryResult result;
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table;",
+      "Exception: Detected a null array being imported into OmniSci 'text_array' "
+      "column which has a fixed length array type of dictionary encoded text. Currently "
+      "null arrays for this type of column are not allowed. Row group: 0, Parquet "
+      "column: "
+      "'string_array.list.item', Parquet file: '" +
+          getDataFilesPath() + "fixed_length_string_array_with_null_array.parquet'");
 }
 
 TEST_F(SelectQueryTest, ParquetFixedLengthArrayDateTimeTypes) {
@@ -2636,8 +2860,8 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayDateTimeTypes) {
   assertResultSetEqual(
       {
           {
-            i(1),array({}), array({}), array({}), array({}), array({}), array({}),
-            array({}), array({})
+            i(1),Null, Null, Null, Null, Null, Null,
+            Null, Null
           },
           {
             i(2),array({"23:59:59", "00:59:59"}),
@@ -2659,8 +2883,8 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayDateTimeTypes) {
             array({"2020-11-10", i(NULL_BIGINT)})
           },
           {
-            i(4),array({}), array({}), array({}),
-            array({}), array({}), array({}), array({}), array({})
+            i(4),Null, Null, Null,
+            Null, Null, Null, Null, Null
           },
           {
             i(5),array({"00:00:01", "12:00:00"}),
@@ -2699,7 +2923,7 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
         "0.999999982770532,0 0))",
         "MULTIPOLYGON (((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0)))"},
       {
-        i(2), "NULL", "NULL", "NULL", "NULL"
+        i(2), Null, Null, Null, Null
       },
       {
         i(3),
@@ -2725,7 +2949,7 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
         "0.0,0.0 1.99999996554106,0 0)))",
       },
       {
-        i(5), "NULL", "NULL", "NULL", "NULL",
+        i(5), Null, Null, Null, Null
       },
   },
   result);
@@ -2749,7 +2973,7 @@ TEST_F(SelectQueryTest, ParquetNullGeoTypes) {
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
     },
     {
-      i(2), "NULL", "NULL", "NULL", "NULL"
+      i(2), Null, Null, Null, Null
     },
     {
       i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
@@ -2760,7 +2984,7 @@ TEST_F(SelectQueryTest, ParquetNullGeoTypes) {
       "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
     },
     {
-      i(5), "NULL", "NULL", "NULL", "NULL"
+      i(5), Null, Null, Null, Null
     }},
     result);
   // clang-format on
@@ -2803,32 +3027,30 @@ TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
   assertExpectedChunkMetadata(test_chunk_metadata_map);
 }
 
-TEST_F(SelectQueryTest, DISABLED_ParquetMalformedGeoPoint) {
-  // TODO: to fix this test, remove the catch clause in BufferMgr::getBuffer
-  // that aborts and does not thrown an exception. Alternatively, write the
-  // test to expect an abort.
+TEST_F(SelectQueryTest, ParquetMalformedGeoPoint) {
   const auto& query =
       getCreateForeignTableQuery("( p POINT )", "geo_point_malformed", "parquet");
   sql(query);
 
   TQueryResult result;
-  queryAndAssertException("SELECT * FROM test_foreign_table;",
-                          "Failed to extract valid geometry from row 0 for OmniSci "
-                          "column p importing from parquet column point");
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table;",
+      "Exception: Failed to extract valid geometry in row 0 of OmniSci column 'p'. Row "
+      "group: 0, Parquet column: 'point', Parquet file: '" +
+          getDataFilesPath() + "geo_point_malformed.parquet'");
 }
 
-TEST_F(SelectQueryTest, DISABLED_ParquetWrongGeoType) {
-  // TODO: to fix this test, remove the catch clause in BufferMgr::getBuffer
-  // that aborts and does not thrown an exception. Alternatively, write the
-  // test to expect an abort.
+TEST_F(SelectQueryTest, ParquetWrongGeoType) {
   const auto& query =
       getCreateForeignTableQuery("( p LINESTRING )", "geo_point", "parquet");
   sql(query);
 
   TQueryResult result;
-  queryAndAssertException("SELECT * FROM test_foreign_table;",
-                          "Imported geometry from parquet column point doesn't match the "
-                          "geospatial type of OmniSci column p");
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table;",
+      "Exception: Imported geometry doesn't match the geospatial type of OmniSci column "
+      "'p'. Row group: 0, Parquet column: 'point', Parquet file: '" +
+          getDataFilesPath() + "geo_point.parquet'");
 }
 
 TEST_F(SelectQueryTest, ParquetArrayUnsignedIntegerTypes) {
@@ -2855,7 +3077,7 @@ TEST_F(SelectQueryTest, ParquetArrayUnsignedIntegerTypes) {
           array({i(6),i(NULL_INT)}),array({i(6),i(NULL_BIGINT)})
         },
         {
-          i(4),array({}),array({}),array({}),array({})
+          i(4),Null,Null,Null,Null
         },
         {
           i(5),array({i(7)}),array({i(7)}),array({i(7)})
@@ -2888,7 +3110,7 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayUnsignedIntegerTypes) {
           array({i(6),i(NULL_INT)}),array({i(6),i(NULL_BIGINT)})
         },
         {
-          i(4),array({}),array({}),array({}),array({})
+          i(4),Null,Null,Null,Null
         },
         {
           i(5),array({i(7),i(8)}),array({i(7),i(8)}),array({i(7),i(8)})
@@ -3077,9 +3299,9 @@ TEST_P(RowGroupAndFragmentSizeSelectQueryTest, Join) {
   int64_t row_group_size = param.first;
   int64_t fragment_size = param.second;
   std::stringstream filename_stream;
-  filename_stream << "example_row_group_size." << row_group_size;
+  filename_stream << "example_1_row_group_size." << row_group_size;
   auto query =
-      getCreateForeignTableQuery("(a BIGINT, b BIGINT, c BIGINT, d DOUBLE)",
+      getCreateForeignTableQuery("(t TEXT, i INTEGER)",
                                  {{"fragment_size", std::to_string(fragment_size)}},
                                  filename_stream.str(),
                                  "parquet");
@@ -3090,16 +3312,14 @@ TEST_P(RowGroupAndFragmentSizeSelectQueryTest, Join) {
 
   TQueryResult result;
   sql(result,
-      "SELECT t1.a, t1.b, t1.c, t1.d, t2.i, t2.d FROM "
-      "test_foreign_table AS t1 JOIN "
-      "test_foreign_table_2 AS t2 ON t1.a = t2.i ORDER BY t1.a;");
-
-  assertResultSetEqual({{i(1), i(3), i(6), 7.1, i(1), 1.1},
-                        {i(1), i(3), i(6), 7.1, i(1), 1.1},
-                        {i(1), i(3), i(6), 7.1, i(1), 1.1},
-                        {i(2), i(4), i(7), 0.000591, i(2), 2.2},
-                        {i(2), i(4), i(7), 0.000591, i(2), 2.2},
-                        {i(3), i(5), i(8), 1.1, i(3), 3.3}},
+      "SELECT t1.t, t1.i, t2.i, t2.d FROM test_foreign_table AS t1 JOIN "
+      "test_foreign_table_2 AS t2 ON t1.t = t2.t;");
+  assertResultSetEqual({{"a", i(1), i(1), 1.1},
+                        {"aa", Null_i, i(1), 1.1},
+                        {"aa", Null_i, i(2), 2.2},
+                        {"aaa", i(1), i(1), 1.1},
+                        {"aaa", i(1), i(2), 2.2},
+                        {"aaa", i(1), i(3), 3.3}},
                        result);
 }
 
@@ -3154,7 +3374,6 @@ class ForeignStorageCacheQueryTest : public ForeignTableTest {
   inline static const std::string col_name3 = "col3";
   inline static Catalog_Namespace::Catalog* cat;
   inline static ForeignStorageCache* cache;
-  inline static File_Namespace::GlobalFileMgr* gfm;
   inline static const TableDescriptor* td;
   inline static const ColumnDescriptor *cd1, *cd2, *cd3;
   inline static ChunkKey query_chunk_key1, query_chunk_key2, query_chunk_key3,
@@ -3164,7 +3383,6 @@ class ForeignStorageCacheQueryTest : public ForeignTableTest {
     DBHandlerTestFixture::SetUpTestSuite();
     cat = &getCatalog();
     cache = cat->getDataMgr().getPersistentStorageMgr()->getDiskCache();
-    gfm = cache->getGlobalFileMgr();
     sqlDropForeignTable();
   }
 
@@ -3175,7 +3393,7 @@ class ForeignStorageCacheQueryTest : public ForeignTableTest {
         "(" + col_name1 + " TEXT, " + col_name2 + " INTEGER, " + col_name3 + " DOUBLE)",
         table_2_filename,
         "csv");
-    td = cat->getMetadataForTable(default_table_name);
+    td = cat->getMetadataForTable(default_table_name, false);
     cd1 = cat->getMetadataForColumn(td->tableId, col_name1);
     cd2 = cat->getMetadataForColumn(td->tableId, col_name2);
     cd3 = cat->getMetadataForColumn(td->tableId, col_name3);
@@ -3200,9 +3418,35 @@ class ForeignStorageCacheQueryTest : public ForeignTableTest {
     sqlDropForeignTable();
     ForeignTableTest::TearDown();
   }
+
+  static std::shared_ptr<ChunkMetadata> createMetadata(const SQLTypeInfo type,
+                                                       const size_t num_bytes,
+                                                       const size_t num_elements,
+                                                       const std::string& s_min,
+                                                       const std::string& s_max,
+                                                       const bool has_nulls) {
+    auto elem_type = type.is_array() ? type.get_elem_type() : type;
+    Datum min, max;
+    if (elem_type.is_string()) {
+      CHECK(elem_type.get_compression() == kENCODING_DICT);
+      min.intval = std::stoi(s_min);
+      max.intval = std::stoi(s_max);
+    } else {
+      min = StringToDatum(s_min, elem_type);
+      max = StringToDatum(s_max, elem_type);
+    }
+    return std::make_shared<ChunkMetadata>(
+        type, num_bytes, num_elements, ChunkStats{min, max, has_nulls});
+  }
+
+  static void assertMetadataEqual(const std::shared_ptr<ChunkMetadata> left_metadata,
+                                  const std::shared_ptr<ChunkMetadata> right_metadata) {
+    ASSERT_EQ(*left_metadata, *right_metadata) << left_metadata->dump() << "\n"
+                                               << right_metadata->dump() << "\n";
+  }
 };
 
-TEST_F(ForeignStorageCacheQueryTest, CreatePopulateMetadata) {
+TEST_F(ForeignStorageCacheQueryTest, CreateDoesNotPopulateMetadata) {
   sqlDropForeignTable();
   ASSERT_FALSE(cache->isMetadataCached(query_chunk_key1));
   ASSERT_FALSE(cache->isMetadataCached(query_chunk_key2));
@@ -3210,11 +3454,11 @@ TEST_F(ForeignStorageCacheQueryTest, CreatePopulateMetadata) {
   ASSERT_FALSE(cache->hasCachedMetadataForKeyPrefix(query_chunk_key1));
   ASSERT_FALSE(cache->hasCachedMetadataForKeyPrefix(query_table_prefix));
   createTestTable();
-  ASSERT_TRUE(cache->isMetadataCached(query_chunk_key1));
-  ASSERT_TRUE(cache->isMetadataCached(query_chunk_key2));
-  ASSERT_TRUE(cache->isMetadataCached(query_chunk_key3));
-  ASSERT_TRUE(cache->hasCachedMetadataForKeyPrefix(query_chunk_key1));
-  ASSERT_TRUE(cache->hasCachedMetadataForKeyPrefix(query_table_prefix));
+  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key1));
+  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key2));
+  ASSERT_FALSE(cache->isMetadataCached(query_chunk_key3));
+  ASSERT_FALSE(cache->hasCachedMetadataForKeyPrefix(query_chunk_key1));
+  ASSERT_FALSE(cache->hasCachedMetadataForKeyPrefix(query_table_prefix));
 }
 
 TEST_F(ForeignStorageCacheQueryTest, CacheEvictAfterDrop) {
@@ -3243,129 +3487,167 @@ TEST_F(ForeignStorageCacheQueryTest, WideLogicalColumns) {
 TEST_F(ForeignStorageCacheQueryTest, CacheWithLimitCachesWholeChunks) {
   sqlDropForeignTable();
   sqlCreateForeignTable(
-      "(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE)", "0_255", "csv");
+      "(i INTEGER,  txt TEXT, txt_2 TEXT ENCODING NONE, txt_arr TEXT[])", "0_255", "csv");
   sqlAndCompareResult("SELECT SUM(i) FROM (SELECT i FROM " + default_table_name +
                           " ORDER BY i LIMIT 10);",
                       {{i(45)}});
   sqlAndCompareResult("SELECT SUM(i) FROM " + default_table_name + ";", {{i(32640)}});
 }
 
+TEST_F(ForeignStorageCacheQueryTest, ArrayTypes) {
+  sqlDropForeignTable();
+  const auto& query = getCreateForeignTableQuery(
+      "(index int, b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[], f "
+      "FLOAT[], "
+      "tm "
+      "TIME[], tp TIMESTAMP[], "
+      "d DATE[], txt TEXT[], fixedpoint DECIMAL(10,5)[])",
+      {},
+      "array_types",
+      "csv",
+      0,
+      default_table_name,
+      "csv");
+  sql(query);
+  sql("SELECT COUNT(*) FROM " + default_table_name + ";");
+
+  auto td = cat->getMetadataForTable(default_table_name, false);
+  ChunkMetadataVector metadata_vec{};
+  cache->getCachedMetadataVecForKeyPrefix(metadata_vec,
+                                          {cat->getCurrentDB().dbId, td->tableId});
+
+  // clang-format off
+  assertMetadataEqual(metadata_vec[0].second,
+                      createMetadata(kINT, 12, 3, "1", "3", false));
+  // we add 8-byte padding when 1-byte type (boolean[] and tinyint[]) varlen array col
+  // inserts the first row and its array value is one of the following cases:
+  // 1) is null,
+  // 2) has a single elem, (i.e., {true} and {1}) or
+  // 3) an empty array (i.e., {})
+  // and in this test dataset, only boolean[] col matches the second case
+  // --> see file_1.csv where the second column has an array having a single elem: '{true}'
+  // so we need to consider the additional 8-byte adding, so 'numBytes' should become 12 (=4+8) bytes instead of 4
+  assertMetadataEqual(
+      metadata_vec[1].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kBOOLEAN),
+                     12, 3, "false", "true", false));
+  assertMetadataEqual(
+      metadata_vec[2].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kTINYINT),
+                     4, 3, "50", "120", false));
+  assertMetadataEqual(
+      metadata_vec[3].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kSMALLINT),
+                     8, 3, "20000", "31000", false));
+  assertMetadataEqual(
+      metadata_vec[4].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kINT),
+                     16, 3, "200000000", "2100000000", false));
+  assertMetadataEqual(
+      metadata_vec[5].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kBIGINT),
+                     32, 3, "9000000000000000000", "9200000000000000000", false));
+  assertMetadataEqual(
+      metadata_vec[6].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kFLOAT),
+                     16, 3, "10.100000", "1000.122986", false));
+  assertMetadataEqual(
+      metadata_vec[7].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kTIME),
+                     32, 3, "00:00:10", "10:00:00", false));
+  assertMetadataEqual(
+      metadata_vec[8].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kTIMESTAMP),
+                     32, 3, "2000-01-01 00:00:59", "2500-12-31 23:59:59", false));
+  assertMetadataEqual(
+      metadata_vec[9].second,
+      createMetadata(SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kDATE),
+                     32, 3, "2000-01-01", "2500-12-31", false));
+  // Correct metadata for string dict is not yet generated 
+  assertMetadataEqual(
+      metadata_vec[11].second,
+      createMetadata(SQLTypeInfo(kARRAY, 10, 5, false, kENCODING_NONE, 0, kDECIMAL),
+                     48, 3, "1.23000", "6.78000", false));
+  // clang-format on
+}
+
 class CacheDefaultTest : public DBHandlerTestFixture {};
 TEST_F(CacheDefaultTest, Path) {
   auto cat = &getCatalog();
   auto cache = cat->getDataMgr().getPersistentStorageMgr()->getDiskCache();
-  ASSERT_EQ(cache->getGlobalFileMgr()->getBasePath(),
-            to_string(BASE_PATH) + "/omnisci_disk_cache/");
+  ASSERT_EQ(cache->getCacheDirectory(), to_string(BASE_PATH) + "/omnisci_disk_cache");
 }
 
 TEST_F(RecoverCacheQueryTest, RecoverWithoutWrappers) {
-  sqlDropForeignTable();
-  sqlCreateForeignTable("(col1 INTEGER)", "1", "csv");
-
-  auto td = cat_->getMetadataForTable(default_table_name);
-  ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
-  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
-
-  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
-  // Cache is now populated.
-
-  // Reset cache and clear memory representations.
-  resetStorageManagerAndClearTableMemory(table_key);
-
-  // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
-
-  // This query should hit recovered disk data and not need to create datawrappers.
-  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
-
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 1U);
-
-  // Datawrapper should not have been created.
-  ASSERT_FALSE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
-
-  sqlDropForeignTable();
-}
-
-TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandVarLen) {
-  sqlDropForeignTable();
   std::string query = "CREATE FOREIGN TABLE " + default_table_name +
                       " (t TEXT, i BIGINT[]) "s +
                       "SERVER omnisci_local_csv WITH (file_path = '" +
                       getDataFilesPath() + "/" + "example_1_dir_archives/');";
   sql(query);
-  auto td = cat_->getMetadataForTable(default_table_name);
+  auto td = cat_->getMetadataForTable(default_table_name, false);
   ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
   ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
-
-  sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(3)}});
-  ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
-
-  // Reset cache and clear memory representations.
-  resetStorageManagerAndClearTableMemory(table_key);
-
-  // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
-
-  ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
-  ASSERT_TRUE(compareTableDatawrapperMetadataToFile(default_table_name,
-                                                    getWrapperMetadataPath("example_1")));
 
   sqlAndCompareResult("SELECT * FROM " + default_table_name + "  ORDER BY t;",
                       {{"a", array({i(1), i(1), i(1)})},
                        {"aa", array({NULL_BIGINT, i(2), i(2)})},
                        {"aaa", array({i(3), NULL_BIGINT, i(3)})}});
 
-  // 2 data + 1 index chunk
-  ASSERT_EQ(cache_->getNumCachedChunks(), 3U);
-  // Only 2 metadata
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 2U);
-
-  ASSERT_TRUE(isTableDatawrapperRestored(default_table_name));
-  sqlDropForeignTable();
-}
-
-// Check that csv datawrapper metadata is generated and restored correctly for CSV
-// Archives
-TEST_F(RecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemandFromCsvArchive) {
-  sqlDropForeignTable();
-  std::string query = "CREATE FOREIGN TABLE " + default_table_name +
-                      " (t TEXT, i INTEGER[]) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
-                      getDataFilesPath() + "/" + "example_1_multilevel.zip');";
-  sql(query);
-  auto td = cat_->getMetadataForTable(default_table_name);
-  ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
-  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
-
-  sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(3)}});
-
-  ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
-  ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
-  ASSERT_TRUE(compareTableDatawrapperMetadataToFile(
-      default_table_name, getWrapperMetadataPath("example_1_archive")));
-
   // Reset cache and clear memory representations.
   resetStorageManagerAndClearTableMemory(table_key);
-
-  // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
+  ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
 
   sqlAndCompareResult("SELECT * FROM " + default_table_name + "  ORDER BY t;",
                       {{"a", array({i(1), i(1), i(1)})},
-                       {"aa", array({Null_i, i(2), i(2)})},
-                       {"aaa", array({i(3), Null_i, i(3)})}});
-  // 2 columns
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 2U);
-  // extra chunk for varlen
-  ASSERT_EQ(cache_->getNumCachedChunks(), 3U);
+                       {"aa", array({NULL_BIGINT, i(2), i(2)})},
+                       {"aaa", array({i(3), NULL_BIGINT, i(3)})}});
 
+  ASSERT_EQ(cache_->getNumCachedChunks(), 3U);    // 2 data + 1 index chunk
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 2U);  // Only 2 metadata
   ASSERT_TRUE(isTableDatawrapperRestored(default_table_name));
-  sqlDropForeignTable();
 }
+
+class RecoverCacheTest : public RecoverCacheQueryTest,
+                         public ::testing::WithParamInterface<
+                             std::tuple<std::string, std::string, std::string>> {};
+
+TEST_P(RecoverCacheTest, RestoreCache) {
+  auto [name, server, path] = GetParam();
+  sql("CREATE FOREIGN TABLE " + default_table_name + " (t TEXT, i INTEGER[]) "s +
+      "SERVER " + server + " WITH (file_path = '" + getDataFilesPath() + "/" + path +
+      "');");
+
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
+
+  auto td = cat_->getMetadataForTable(default_table_name, false);
+  ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
+  sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(3)}});
+  ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
+
+  // Reset cache and clear memory representations (disk data persists).
+  resetStorageManagerAndClearTableMemory(table_key);
+  ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
+  ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + "  ORDER BY t;",
+                      {{"a", array({i(1), i(1), i(1)})},
+                       {"aa", array({i(NULL_INT), i(2), i(2)})},
+                       {"aaa", array({i(3), i(NULL_INT), i(3)})}});
+
+  ASSERT_EQ(cache_->getNumCachedChunks(), 3U);    // 2 data + 1 index chunk
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 2U);  // Only 2 metadata
+  ASSERT_TRUE(isTableDatawrapperRestored(default_table_name));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    RecoverCacheParameterizedTests,
+    RecoverCacheTest,
+    ::testing::Values(
+        std::make_tuple("csv_archive", "omnisci_local_csv", "example_1_dir_archives/"),
+        std::make_tuple("csv_zip", "omnisci_local_csv", "example_1_multilevel.zip"),
+        std::make_tuple("parquet", "omnisci_local_parquet", "example_1.parquet")),
+    [](const auto& param_info) { return std::get<0>(param_info.param); });
 
 class DataWrapperRecoverCacheQueryTest
     : public RecoverCacheQueryTest,
@@ -3373,42 +3655,39 @@ class DataWrapperRecoverCacheQueryTest
 
 TEST_P(DataWrapperRecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemand) {
   auto wrapper = GetParam();
+  bool cache_during_scan = wrapper == "csv";
 
   sqlDropForeignTable();
   sqlCreateForeignTable("(col1 BIGINT)", "1", wrapper);
 
-  auto td = cat_->getMetadataForTable(default_table_name);
+  auto td = cat_->getMetadataForTable(default_table_name, false);
   ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
   ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
 
   sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(1)}});
   // Cache now has metadata only.
   ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
+  ASSERT_EQ(cache_->getNumCachedChunks(), cache_during_scan ? 1U : 0U);
   ASSERT_TRUE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
 
   // Reset cache and clear memory representations.
   resetStorageManagerAndClearTableMemory(table_key);
 
-  // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
-
   ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
-  ASSERT_TRUE(compareTableDatawrapperMetadataToFile(
-      default_table_name, getWrapperMetadataPath("1", wrapper)));
+  if (wrapper != "csv") {
+    ASSERT_TRUE(compareTableDatawrapperMetadataToFile(
+        default_table_name, getWrapperMetadataPath("1", wrapper)));
+  }
 
   // This query should hit recovered disk data and not need to create datawrappers.
   sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(1)}});
 
   ASSERT_EQ(cache_->getNumCachedMetadata(), 1U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
-  ASSERT_FALSE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
+  ASSERT_EQ(cache_->getNumCachedChunks(), cache_during_scan ? 1U : 0U);
+  ASSERT_TRUE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
 
   sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}});
   ASSERT_EQ(cache_->getNumCachedChunks(), 1U);
-  ASSERT_TRUE(psm_->getForeignStorageMgr()->hasDataWrapperForChunk(key));
-
   sqlDropForeignTable();
 }
 
@@ -3432,7 +3711,7 @@ TEST_P(DataWrapperRecoverCacheQueryTest, AppendData) {
                       "', REFRESH_UPDATE_TYPE = 'APPEND');";
   sql(query);
 
-  auto td = cat_->getMetadataForTable(default_table_name);
+  auto td = cat_->getMetadataForTable(default_table_name, false);
   ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
   ChunkKey table_key{cat_->getCurrentDB().dbId, td->tableId};
 
@@ -3446,10 +3725,6 @@ TEST_P(DataWrapperRecoverCacheQueryTest, AppendData) {
 
   // Reset cache and clear memory representations.
   resetStorageManagerAndClearTableMemory(table_key);
-
-  // Cache should be empty until query prompts recovery from disk
-  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
-  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
 
   // Modify tables on disk
   bf::remove_all(getDataFilesPath() + "append_tmp");
@@ -3485,9 +3760,8 @@ class MockDataWrapper : public foreign_storage::MockForeignDataWrapper {
     }
   }
 
-  void populateChunkBuffers(
-      std::map<ChunkKey, AbstractBuffer*>& required_buffers,
-      std::map<ChunkKey, AbstractBuffer*>& optional_buffers) override {
+  void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
+                            const ChunkToBufferMap& optional_buffers) override {
     if (throw_on_chunk_fetch_) {
       throw std::runtime_error{"populateChunkBuffers mock exception"};
     } else {
@@ -3508,17 +3782,34 @@ class MockDataWrapper : public foreign_storage::MockForeignDataWrapper {
     throw_on_chunk_fetch_ = throw_on_chunk_fetch;
   }
 
-  void serializeDataWrapperInternals(const std::string& file_path) const override{};
+  std::string getSerializedDataWrapper() const override { return ""; };
 
   void restoreDataWrapperInternals(const std::string& file_path,
                                    const ChunkMetadataVector& chunk_metadata) override{};
 
   bool isRestored() const override { return false; };
 
+  void validateServerOptions(const ForeignServer* foreign_server) const override {}
+
+  void validateTableOptions(const ForeignTable* foreign_table) const override {}
+
+  const std::set<std::string_view>& getSupportedTableOptions() const override {
+    return supported_table_options_;
+  }
+
+  void validateUserMappingOptions(const UserMapping* user_mapping,
+                                  const ForeignServer* foreign_server) const override {}
+
+  const std::set<std::string_view>& getSupportedUserMappingOptions() const override {
+    return supported_user_mapping_options_;
+  }
+
  private:
   std::shared_ptr<foreign_storage::ForeignDataWrapper> parent_data_wrapper_;
   std::atomic<bool> throw_on_metadata_scan_;
   std::atomic<bool> throw_on_chunk_fetch_;
+  std::set<std::string_view> supported_table_options_;
+  std::set<std::string_view> supported_user_mapping_options_;
 };
 
 class ScheduledRefreshTest : public RefreshTests {
@@ -3543,6 +3834,7 @@ class ScheduledRefreshTest : public RefreshTests {
   }
 
   void SetUp() override {
+    g_enable_seconds_refresh = true;
     ForeignTableTest::SetUp();
     boost::filesystem::create_directory(REFRESH_TEST_DIR);
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
@@ -3632,7 +3924,7 @@ class ScheduledRefreshTest : public RefreshTests {
   inline static std::atomic<bool> is_program_running_;
 };
 
-TEST_F(ScheduledRefreshTest, BatchMode) {
+TEST_F(ScheduledRefreshTest, DISABLED_BatchMode) {
   setTestFile("0.csv");
   auto query = getCreateScheduledRefreshTableQuery("1S");
   sql(query);
@@ -3644,7 +3936,7 @@ TEST_F(ScheduledRefreshTest, BatchMode) {
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}});
 }
 
-TEST_F(ScheduledRefreshTest, AppendMode) {
+TEST_F(ScheduledRefreshTest, DISABLED_AppendMode) {
   setTestFile("1.csv");
   auto query = getCreateScheduledRefreshTableQuery("1S", "append");
   sql(query);
@@ -3656,7 +3948,7 @@ TEST_F(ScheduledRefreshTest, AppendMode) {
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}, {i(2)}});
 }
 
-TEST_F(ScheduledRefreshTest, OnlyStartDateTime) {
+TEST_F(ScheduledRefreshTest, DISABLED_OnlyStartDateTime) {
   stopScheduler();
   setTestFile("0.csv");
   auto query = getCreateScheduledRefreshTableQuery("", "all");
@@ -3676,7 +3968,7 @@ TEST_F(ScheduledRefreshTest, StartDateTimeInThePast) {
       query, "Exception: REFRESH_START_DATE_TIME cannot be a past date time.");
 }
 
-TEST_F(ScheduledRefreshTest, SecondsInterval) {
+TEST_F(ScheduledRefreshTest, DISABLED_SecondsInterval) {
   stopScheduler();
   auto start_time = getCurrentTime();
   setTestFile("0.csv");
@@ -3695,7 +3987,7 @@ TEST_F(ScheduledRefreshTest, SecondsInterval) {
       next_refresh_time, start_time, refresh_end_time + interval_duration);
 }
 
-TEST_F(ScheduledRefreshTest, HoursInterval) {
+TEST_F(ScheduledRefreshTest, DISABLED_HoursInterval) {
   stopScheduler();
   auto start_time = getCurrentTime();
   setTestFile("0.csv");
@@ -3714,7 +4006,7 @@ TEST_F(ScheduledRefreshTest, HoursInterval) {
       next_refresh_time, start_time, refresh_end_time + interval_duration);
 }
 
-TEST_F(ScheduledRefreshTest, DaysInterval) {
+TEST_F(ScheduledRefreshTest, DISABLED_DaysInterval) {
   stopScheduler();
   auto start_time = getCurrentTime();
   setTestFile("0.csv");
@@ -3773,10 +4065,10 @@ TEST_F(ScheduledRefreshTest, InvalidStartDateTime) {
       "refresh_timing_type = 'scheduled', refresh_start_date_time = "
       "'invalid_date_time');";
   queryAndAssertException(query,
-                          "Exception: Invalid DATE/TIMESTAMP string (INVALID_DATE_TIME)");
+                          "Exception: Invalid TIMESTAMP string (INVALID_DATE_TIME)");
 }
 
-TEST_F(ScheduledRefreshTest, SchedulerStop) {
+TEST_F(ScheduledRefreshTest, DISABLED_SchedulerStop) {
   setTestFile("0.csv");
   auto query = getCreateScheduledRefreshTableQuery("1S");
   sql(query);
@@ -3845,6 +4137,116 @@ TEST_F(ScheduledRefreshTest, DISABLED_PostEvictionError) {
 
   // Assert that new data is fetched
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}});
+}
+
+TEST_F(ScheduledRefreshTest, SecondsIntervalDisabled) {
+  g_enable_seconds_refresh = false;
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("10S");
+  queryAndAssertException(
+      query, "Exception: Invalid value provided for the REFRESH_INTERVAL option.");
+}
+
+class QueryEngineCacheInvalidationTest : public ScheduledRefreshTest,
+                                         public ::testing::WithParamInterface<bool> {
+ protected:
+  void SetUp() override {
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_1;");
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_2;");
+    ScheduledRefreshTest::SetUp();
+  }
+
+  void TearDown() override {
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_1;");
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table_2;");
+    ScheduledRefreshTest::TearDown();
+  }
+
+  void setTestDir(const std::string& src_dir_name) {
+    bf::remove_all(REFRESH_TEST_DIR);
+    recursive_copy(getDataFilesPath() + src_dir_name, REFRESH_TEST_DIR);
+  }
+
+  std::string getCreateScheduledRefreshTableQuery(const std::string& table_name) {
+    auto start_date_time = getCurrentTimeString(1);
+    auto test_file_path = boost::filesystem::canonical(REFRESH_TEST_DIR);
+    std::string query = "CREATE FOREIGN TABLE " + table_name +
+                        " (txt TEXT) server "
+                        "omnisci_local_parquet with (file_path = '" +
+                        test_file_path.string() +
+                        "', refresh_update_type = 'append', refresh_timing_type = "
+                        "'scheduled', refresh_start_date_time = '" +
+                        start_date_time +
+                        "', refresh_interval = '1S', fragment_size = 2);";
+    return query;
+  }
+
+  std::string getCreateTableQuery(const std::string& table_name) {
+    auto test_file_path = boost::filesystem::canonical(REFRESH_TEST_DIR);
+    std::string query = "CREATE FOREIGN TABLE " + table_name +
+                        " (txt TEXT) server "
+                        "omnisci_local_parquet with (file_path = '" +
+                        test_file_path.string() + "', refresh_update_type = 'append'," +
+                        "fragment_size = 2);";
+    return query;
+  }
+
+  void createForeignTestTable(const std::string& table_name) {
+    const auto& use_scheduled_refresh = GetParam();
+    if (use_scheduled_refresh) {
+      sql(getCreateScheduledRefreshTableQuery(table_name));
+    } else {
+      sql(getCreateTableQuery(table_name));
+    }
+  }
+
+  void refreshForeignTables(const std::vector<std::string>& table_names) {
+    const auto& use_scheduled_refresh = GetParam();
+    if (use_scheduled_refresh) {
+      waitTwoRefreshCycles();
+    } else {
+      for (const auto& table_name : table_names) {
+        sql("REFRESH FOREIGN TABLES " + table_name + "  WITH (evict = true) ;");
+      }
+    }
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(ScheduledAndNonScheduledRefreshTest,
+                         QueryEngineCacheInvalidationTest,
+                         ::testing::Values(true, false));
+
+TEST_P(QueryEngineCacheInvalidationTest, StringDictAppendRefreshWithJoinQuery) {
+  const auto& use_scheduled_refresh = GetParam();
+  // TODO: Remove the skipping of the test once outstanding issues with
+  // ScheduledRefreshTest are resolved.
+  if (use_scheduled_refresh) {
+    GTEST_SKIP();
+  }
+  setTestDir("append_before/parquet_string_dir/");
+  createForeignTestTable("test_foreign_table_1");
+  createForeignTestTable("test_foreign_table_2");
+  std::string join_query =
+      "SELECT t1.txt, t2.txt FROM test_foreign_table_1 AS t1 JOIN test_foreign_table_2 "
+      "AS t2 ON t1.txt = t2.txt ORDER BY t1.txt;";
+  {
+    TQueryResult result;
+    sql(result, join_query);
+    assertResultSetEqual({{"a", "a"}, {"aa", "aa"}, {"aaa", "aaa"}}, result);
+  }
+  setTestDir("append_after/parquet_string_dir/");
+  refreshForeignTables({"test_foreign_table_1", "test_foreign_table_2"});
+  {
+    TQueryResult result;
+    sql(result, join_query);
+    assertResultSetEqual({{"a", "a"},
+                          {"aa", "aa"},
+                          {"aaa", "aaa"},
+                          {"aaaa", "aaaa"},
+                          {"aaaaa", "aaaaa"},
+                          {"aaaaaa", "aaaaaa"}},
+                         result);
+  }
 }
 
 class SchemaMismatchTest : public ForeignTableTest,
@@ -3961,8 +4363,9 @@ class AlterForeignTableTest : public ScheduledRefreshTest {
     foreign_table_ = dynamic_cast<const foreign_storage::ForeignTable*>(table);
   }
 
-  void sqlAlterTable(const std::string& option_name, const std::string& option_value) {
-    sql("ALTER FOREIGN TABLE test_foreign_table WITH (" + option_name + " = '" +
+  void sqlAlterForeignTable(const std::string& option_name,
+                            const std::string& option_value) {
+    sql("ALTER FOREIGN TABLE test_foreign_table SET (" + option_name + " = '" +
         option_value + "');");
   }
 
@@ -4013,40 +4416,60 @@ class AlterForeignTableTest : public ScheduledRefreshTest {
         value);
   }
 
+  void SetUp() override {
+    g_enable_seconds_refresh = true;
+    ScheduledRefreshTest::SetUp();
+  }
+
+  void TearDown() override {
+    sql("DROP FOREIGN TABLE IF EXISTS renamed_table;");
+    ScheduledRefreshTest::TearDown();
+  }
+
   inline static const Catalog_Namespace::Catalog* cat_;
   inline static const ForeignTable* foreign_table_;
 };
 
 TEST_F(AlterForeignTableTest, RefreshUpdateTypeAllToAppend) {
-  createScheduledTable("scheduled", "1S", "all", 1);
+  createScheduledTable("manual", "", "all");
   assertOptionEquals("REFRESH_UPDATE_TYPE", "ALL");
-  sqlAlterTable("refresh_update_type", "append");
+  sqlAlterForeignTable("refresh_update_type", "append");
   assertOptionEquals("REFRESH_UPDATE_TYPE", "APPEND");
 }
 TEST_F(AlterForeignTableTest, RefreshUpdateTypeAppendToAll) {
-  createScheduledTable("scheduled", "1S", "append", 1);
+  createScheduledTable("manual", "", "append");
   assertOptionEquals("REFRESH_UPDATE_TYPE", "APPEND");
-  sqlAlterTable("REFRESH_UPDATE_TYPE", "all");
+  sqlAlterForeignTable("REFRESH_UPDATE_TYPE", "all");
   assertOptionEquals("REFRESH_UPDATE_TYPE", "ALL");
 }
 
 TEST_F(AlterForeignTableTest, RefreshIntervalDaysToSeconds) {
-  createScheduledTable("scheduled", "1D", "all", 1);
+  createScheduledTable("scheduled", "1D", "all", 60);
   assertOptionEquals("REFRESH_INTERVAL", "1D");
-  sqlAlterTable("REFRESH_INTERVAL", "1S");
+  sqlAlterForeignTable("REFRESH_INTERVAL", "1S");
   assertOptionEquals("REFRESH_INTERVAL", "1S");
 }
-TEST_F(AlterForeignTableTest, RefreshIntervalSecondsToHoursLowerCase) {
-  createScheduledTable("scheduled", "1S", "all", 1);
+
+TEST_F(AlterForeignTableTest, RefreshIntervalDaysToSecondsWithIntervalDisabled) {
+  g_enable_seconds_refresh = false;
+  createScheduledTable("scheduled", "1D", "all", 60);
+  assertOptionEquals("REFRESH_INTERVAL", "1D");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_INTERVAL = '1S');",
+      "Exception: Invalid value provided for the REFRESH_INTERVAL option.");
+}
+
+TEST_F(AlterForeignTableTest, RefreshIntervalSecondsToDaysLowerCase) {
+  createScheduledTable("scheduled", "1S", "all", 60);
   assertOptionEquals("REFRESH_INTERVAL", "1S");
-  sqlAlterTable("REFRESH_INTERVAL", "2d");
+  sqlAlterForeignTable("REFRESH_INTERVAL", "2d");
   assertOptionEquals("REFRESH_INTERVAL", "2D");
 }
 TEST_F(AlterForeignTableTest, RefreshIntervalSecondsToInvalid) {
-  createScheduledTable("scheduled", "1S", "all", 1);
+  createScheduledTable("scheduled", "1S", "all", 60);
   assertOptionEquals("REFRESH_INTERVAL", "1S");
   queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_INTERVAL = 'SCHEDULED');",
+      "ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_INTERVAL = 'SCHEDULED');",
       "Exception: Invalid value provided for the REFRESH_INTERVAL option.");
   assertOptionEquals("REFRESH_INTERVAL", "1S");
 }
@@ -4055,7 +4478,7 @@ TEST_F(AlterForeignTableTest, RefreshTimingTypeManualToScheduledNoStartDateError
   createScheduledTable("manual");
   assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
   queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_TIMING_TYPE = 'SCHEDULED')",
+      "ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_TIMING_TYPE = 'SCHEDULED')",
       "Exception: REFRESH_START_DATE_TIME option must be provided "
       "for scheduled refreshes.");
   assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
@@ -4064,53 +4487,53 @@ TEST_F(AlterForeignTableTest, RefreshTimingType_ManualToScheduled_StartDate) {
   createScheduledTable("manual");
   assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
   auto start_time = getCurrentTimeString(1);
-  sql("ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_TIMING_TYPE = 'SCHEDULED', "
+  sql("ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_TIMING_TYPE = 'SCHEDULED', "
       "REFRESH_START_DATE_TIME = '" +
       start_time + "')");
   assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
   assertOptionEquals("REFRESH_START_DATE_TIME", start_time);
 }
 TEST_F(AlterForeignTableTest, RefreshTimingTypeScheduledToManual) {
-  createScheduledTable("scheduled", "1S", "all", 1);
+  createScheduledTable("scheduled", "1S", "all", 60);
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(1)}});
   assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
-  sqlAlterTable("REFRESH_TIMING_TYPE", "MANUAL");
+  sqlAlterForeignTable("REFRESH_TIMING_TYPE", "MANUAL");
   assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
 }
 TEST_F(AlterForeignTableTest, RefreshTimingTypeScheduledToManualLowerCase) {
-  createScheduledTable("scheduled", "1S", "all", 1);
+  createScheduledTable("scheduled", "1S", "all", 60);
   assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
-  sqlAlterTable("REFRESH_TIMING_TYPE", "manual");
+  sqlAlterForeignTable("REFRESH_TIMING_TYPE", "manual");
   assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
 }
 TEST_F(AlterForeignTableTest, RefreshTimingTypeScheduledToInvalid) {
-  createScheduledTable("scheduled", "1S", "all", 1);
+  createScheduledTable("scheduled", "1S", "all", 60);
   assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
   queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_TIMING_TYPE = '2D');",
+      "ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_TIMING_TYPE = '2D');",
       "Exception: Invalid value provided for the REFRESH_TIMING_TYPE "
       "option. Value must be \"MANUAL\" or \"SCHEDULED\".");
   assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
 }
 
 TEST_F(AlterForeignTableTest, RefreshStartDateTime) {
-  createScheduledTable("scheduled", "1S", "all", 4);
-  auto start_time = getCurrentTimeString(1);
-  sqlAlterTable("REFRESH_START_DATE_TIME", start_time);
+  createScheduledTable("scheduled", "1S", "all", 120);
+  auto start_time = getCurrentTimeString(60);
+  sqlAlterForeignTable("REFRESH_START_DATE_TIME", start_time);
   assertOptionEquals("REFRESH_START_DATE_TIME", start_time);
 }
 TEST_F(AlterForeignTableTest, RefreshStartDateTimeLowerCase) {
-  createScheduledTable("scheduled", "1S", "all", 4);
-  auto start_time = getCurrentTimeString(1);
+  createScheduledTable("scheduled", "1S", "all", 120);
+  auto start_time = getCurrentTimeString(60);
   boost::algorithm::to_lower(start_time);
-  sqlAlterTable("REFRESH_START_DATE_TIME", start_time);
+  sqlAlterForeignTable("REFRESH_START_DATE_TIME", start_time);
   assertOptionEquals("REFRESH_START_DATE_TIME", start_time);
 }
 TEST_F(AlterForeignTableTest, RefreshStartDateTimeScheduledInPastError) {
-  createScheduledTable("scheduled", "1S", "all", 1);
+  createScheduledTable("scheduled", "1S", "all", 60);
   auto start_time = getCurrentTimeString(-10);
   queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (REFRESH_START_DATE_TIME = '" +
+      "ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_START_DATE_TIME = '" +
           start_time + "');",
       "Exception: REFRESH_START_DATE_TIME cannot be a past date time.");
   assertOptionNotEquals("REFRESH_START_DATE_TIME", start_time);
@@ -4120,7 +4543,7 @@ TEST_F(AlterForeignTableTest, RefreshStartDateTimeScheduledInPastError) {
 TEST_F(AlterForeignTableTest, FilePath) {
   createScheduledTable("manual");
   queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (file_path = '/');",
+      "ALTER FOREIGN TABLE test_foreign_table SET (file_path = '/');",
       "Exception: Altering foreign table option \"FILE_PATH\" is not currently "
       "supported.");
 }
@@ -4128,126 +4551,929 @@ TEST_F(AlterForeignTableTest, FilePath) {
 TEST_F(AlterForeignTableTest, FragmentSize) {
   createScheduledTable("manual");
   queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (fragment_size = 10);",
+      "ALTER FOREIGN TABLE test_foreign_table SET (fragment_size = 10);",
       "Exception: Altering foreign table option \"FRAGMENT_SIZE\" is not currently "
       "supported.");
 }
 
 TEST_F(AlterForeignTableTest, DataWrapperOption) {
   createScheduledTable("manual");
-  queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table WITH (base_path = '/');",
-      "Exception: Invalid foreign table option \"BASE_PATH\".");
+  queryAndAssertException("ALTER FOREIGN TABLE test_foreign_table SET (base_path = '/');",
+                          "Exception: Invalid foreign table option \"BASE_PATH\".");
 }
 
 TEST_F(AlterForeignTableTest, NonExistantOption) {
   createScheduledTable("manual");
-  queryAndAssertException("ALTER FOREIGN TABLE test_foreign_table WITH (foo = '/');",
+  queryAndAssertException("ALTER FOREIGN TABLE test_foreign_table SET (foo = '/');",
                           "Exception: Invalid foreign table option \"FOO\".");
 }
 
-TEST_F(AlterForeignTableTest, TableName) {
-  createScheduledTable("manual");
-  queryAndAssertExceptionSubstr(
+TEST_F(AlterForeignTableTest, TableDoesNotExist) {
+  queryAndAssertException(
       "ALTER FOREIGN TABLE test_foreign_table RENAME TO renamed_table;",
-      "Encountered \"RENAME\"");
+      "Exception: Table/View test_foreign_table for catalog omnisci does not exist, "
+      "could not generate chunk key");
+}
+
+TEST_F(AlterForeignTableTest, Table) {
+  createScheduledTable("manual");
+  sql("ALTER FOREIGN TABLE test_foreign_table RENAME TO renamed_table;");
+  sqlAndCompareResult("SELECT * FROM renamed_table;", {{i(1)}});
+  queryAndAssertExceptionSubstr("SELECT * FROM test_foreign_table;",
+                                "Object 'test_foreign_table' not found");
+}
+
+TEST_F(AlterForeignTableTest, TableAlreadyExists) {
+  createScheduledTable("manual");
+  sqlCreateForeignTable("(i INTEGER)", "0", "csv", {}, 0, "renamed_table");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table RENAME TO renamed_table;",
+      "Exception: Foreign table with name \"test_foreign_table\" can not be renamed to "
+      "\"renamed_table\". A different table with name \"renamed_table\" already exists.");
 }
 
 TEST_F(AlterForeignTableTest, Owner) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table OWNER TO test_user;",
-      "Encountered \"OWNER\"");
+      "Encountered \"OWNER\" at line 1, column 40");
+}
+
+TEST_F(AlterForeignTableTest, ColumnDoesNotExist) {
+  createScheduledTable("manual");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table RENAME COLUMN b TO renamed_column;",
+      "Exception: Column with name \"b\" can not be renamed to \"renamed_column\". "
+      "Column with name \"b\" does not exist.");
 }
 
 TEST_F(AlterForeignTableTest, Column) {
   createScheduledTable("manual");
-  queryAndAssertExceptionSubstr(
-      "ALTER FOREIGN TABLE test_foreign_table RENAME COLUMN i TO renamed_column;",
-      "Encountered \"RENAME\"");
+  sql("ALTER FOREIGN TABLE test_foreign_table RENAME COLUMN i TO renamed_column;");
+  sqlAndCompareResult("SELECT renamed_column FROM test_foreign_table;", {{i(1)}});
+  queryAndAssertExceptionSubstr("SELECT i FROM test_foreign_table;",
+                                "Column 'i' not found in any table");
+}
+
+TEST_F(AlterForeignTableTest, ColumnAlreadyExists) {
+  sqlCreateForeignTable(
+      "(t TEXT, i INTEGER[])", "example_1", "csv", {}, 0, "test_foreign_table");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table RENAME COLUMN i TO t;",
+      "Exception: Column with name \"i\" can not be renamed to \"t\". "
+      "A column with name \"t\" already exists.");
 }
 
 TEST_F(AlterForeignTableTest, Add) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr("ALTER FOREIGN TABLE test_foreign_table ADD a;",
-                                "Encountered \"ADD\"");
+                                "Encountered \"ADD\" at line 1, column 40");
 }
 
 TEST_F(AlterForeignTableTest, AddColumn) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr("ALTER FOREIGN TABLE test_foreign_table ADD COLUMN a;",
-                                "Encountered \"ADD\"");
+                                "Encountered \"ADD\" at line 1, column 40");
 }
 
 TEST_F(AlterForeignTableTest, Drop) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr("ALTER FOREIGN TABLE test_foreign_table DROP i;",
-                                "Encountered \"DROP\"");
+                                "Encountered \"DROP\" at line 1, column 40");
 }
 
 TEST_F(AlterForeignTableTest, DropColumn) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr("ALTER FOREIGN TABLE test_foreign_table DROP COLUMN i;",
-                                "Encountered \"DROP\"");
+                                "Encountered \"DROP\" at line 1, column 40");
 }
 
 TEST_F(AlterForeignTableTest, DropIfExists) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
-      "ALTER FOREIGN TABLE test_foreign_table DROP IF EXISTS i;", "Encountered \"DROP\"");
+      "ALTER FOREIGN TABLE test_foreign_table DROP IF EXISTS i;",
+      "Encountered \"DROP\" at line 1, column 40");
 }
 
 TEST_F(AlterForeignTableTest, AlterType) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table ALTER i TYPE float;",
-      "Encountered \"ALTER\"");
+      "Encountered \"ALTER\" at line 1, column 40");
 }
 
 TEST_F(AlterForeignTableTest, AlterColumnType) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table ALTER COLUMN i TYPE float;",
-      "Encountered \"ALTER\"");
+      "Encountered \"ALTER\" at line 1, column 40");
 }
 
 TEST_F(AlterForeignTableTest, AlterSetDataType) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table ALTER i SET DATA TYPE float;",
-      "Encountered \"ALTER\"");
+      "Encountered \"ALTER\" at line 1, column 40");
 }
 
 TEST_F(AlterForeignTableTest, AlterTypeSetNotNull) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table ALTER i TYPE float SET NOT NULL;",
-      "Encountered \"ALTER\"");
+      "Encountered \"ALTER\" at line 1, column 40");
 }
 
 TEST_F(AlterForeignTableTest, AlterTypeDropNotNull) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table ALTER i TYPE float DROP NOT NULL;",
-      "Encountered \"ALTER\"");
+      "Encountered \"ALTER\" at line 1, column 40");
 }
 
 TEST_F(AlterForeignTableTest, AlterTypeSetEncoding) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table ALTER i TYPE text SET ENCODING DICT(32);",
-      "Encountered \"ALTER\"");
+      "Encountered \"ALTER\" at line 1, column 40");
 }
 
 TEST_F(AlterForeignTableTest, AlterTypeDropEncoding) {
   createScheduledTable("manual");
   queryAndAssertExceptionSubstr(
       "ALTER FOREIGN TABLE test_foreign_table ALTER i TYPE text DROP ENCODING DICT(32);",
-      "Encountered \"ALTER\"");
+      "Encountered \"ALTER\" at line 1, column 40");
+}
+
+TEST_F(AlterForeignTableTest, RenameRegularTable) {
+  createScheduledTable("manual");
+  queryAndAssertException("ALTER TABLE test_foreign_table RENAME to renamed_table;",
+                          "Exception: test_foreign_table is a foreign table. Use "
+                          "ALTER FOREIGN TABLE.");
+}
+
+TEST_F(AlterForeignTableTest, RenameRegularTableColumn) {
+  createScheduledTable("manual");
+  queryAndAssertException("ALTER TABLE test_foreign_table RENAME COLUMN i to a;",
+                          "Exception: test_foreign_table is a foreign table. Use "
+                          "ALTER FOREIGN TABLE.");
+}
+
+TEST_F(AlterForeignTableTest, AddColumnRegularTable) {
+  createScheduledTable("manual");
+  queryAndAssertException("ALTER TABLE test_foreign_table ADD COLUMN t TEXT;",
+                          "Exception: test_foreign_table is a foreign table. Use "
+                          "ALTER FOREIGN TABLE.");
+}
+
+TEST_F(AlterForeignTableTest, DropColumnRegularTable) {
+  createScheduledTable("manual");
+  queryAndAssertException("ALTER TABLE test_foreign_table DROP COLUMN t;",
+                          "Exception: test_foreign_table is a foreign table. Use "
+                          "ALTER FOREIGN TABLE.");
+}
+
+class AlterForeignTableRegularTableTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("DROP TABLE IF EXISTS test_table");
+    sql("DROP TABLE IF EXISTS renamed_table");
+  }
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS test_table");
+    sql("DROP TABLE IF EXISTS renamed_table");
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+TEST_F(AlterForeignTableRegularTableTest, RenameRegularTable) {
+  sql("CREATE TABLE test_table (i INTEGER);");
+  queryAndAssertException("ALTER FOREIGN TABLE test_table RENAME to renamed_table;",
+                          "Exception: test_table is a table. Use ALTER TABLE.");
+}
+
+class AlterForeignTablePermissionTest : public AlterForeignTableTest {
+  void SetUp() override {
+    loginAdmin();
+    AlterForeignTableTest::SetUp();
+    dropTestUserIfExists();
+  }
+  void TearDown() override {
+    loginAdmin();
+    dropTestUserIfExists();
+    AlterForeignTableTest::TearDown();
+  }
+  void dropTestUserIfExists() {
+    try {
+      sql("DROP USER test_user;");
+    } catch (const std::exception& e) {
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      LOG(WARNING) << e.what();
+    }
+  }
+};
+
+TEST_F(AlterForeignTablePermissionTest, NoPermission) {
+  createScheduledTable("manual", "", "all");
+  sql("CREATE USER test_user (password = 'test_pass');");
+  sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE test_foreign_table SET (REFRESH_TIMING_TYPE = "
+      "'SCHEDULED')",
+      "Exception: Current user does not have the privilege to alter foreign table: "
+      "test_foreign_table");
+}
+
+class ParquetCoercionTest : public SelectQueryTest {
+ protected:
+  void createForeignTableWithCoercion(const std::string& coerced_type,
+                                      const std::string& base_file_name) {
+    const auto& query = getCreateForeignTableQuery(
+        "( coerced " + coerced_type + " )", base_file_name, "parquet");
+    sql(query);
+  }
+
+  std::string getCoercionException(const std::string& min_allowed_value,
+                                   const std::string& max_allowed_value,
+                                   const std::string& encountered_value,
+                                   const std::string& base_file_name) {
+    const std::string file_name = getDataFilesPath() + base_file_name + ".parquet";
+    return "Exception: Parquet column contains values that are outside the range of the "
+           "OmniSci "
+           "column type. Consider using a wider column type. Min allowed value: " +
+           min_allowed_value +
+           ". Max allowed "
+           "value: " +
+           max_allowed_value + ". Encountered value: " + encountered_value +
+           ". Error validating statistics of Parquet column "
+           "'value' in row group 0 of Parquet file "
+           "'" +
+           file_name + "'.";
+  }
+};
+
+class ParquetCoercionTestOptionalAnnotation
+    : public ParquetCoercionTest,
+      public ::testing::WithParamInterface<std::string> {};
+
+INSTANTIATE_TEST_SUITE_P(OptionalAnnotationParameterizedTests,
+                         ParquetCoercionTestOptionalAnnotation,
+                         ::testing::Values("", "_no_annotation"));
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToInt) {
+  createForeignTableWithCoercion("INT",
+                                 "ParquetCoercionTypes/coercible_int64" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToIntInformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int64" + GetParam();
+  createForeignTableWithCoercion("INT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException(
+          "-2147483647", "2147483647", "9223372036854775807", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToSmallInt) {
+  createForeignTableWithCoercion("SMALLINT",
+                                 "ParquetCoercionTypes/coercible_int64" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToSmallIntInformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int64" + GetParam();
+  createForeignTableWithCoercion("SMALLINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "9223372036854775807", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToTinyInt) {
+  createForeignTableWithCoercion("TINYINT",
+                                 "ParquetCoercionTypes/coercible_int64" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToTinyIntInformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int64" + GetParam();
+  createForeignTableWithCoercion("TINYINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-127", "127", "9223372036854775807", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToBigIntFixedLengthEncoded32) {
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_int64" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation,
+       Int64ToBigIntFixedLengthEncoded32InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int64" + GetParam();
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (32)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException(
+          "-2147483647", "2147483647", "9223372036854775807", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToBigIntFixedLengthEncoded16) {
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (16)",
+                                 "ParquetCoercionTypes/coercible_int64" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation,
+       Int64ToBigIntFixedLengthEncoded16InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int64" + GetParam();
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (16)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "9223372036854775807", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int64ToBigIntFixedLengthEncoded8) {
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (8)",
+                                 "ParquetCoercionTypes/coercible_int64" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation,
+       Int64ToBigIntFixedLengthEncoded8InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int64" + GetParam();
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (8)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-127", "127", "9223372036854775807", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int32ToSmallInt) {
+  createForeignTableWithCoercion("SMALLINT",
+                                 "ParquetCoercionTypes/coercible_int32" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int32ToSmallIntInformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int32" + GetParam();
+  createForeignTableWithCoercion("SMALLINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "2147483647", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int32ToTinyInt) {
+  createForeignTableWithCoercion("TINYINT",
+                                 "ParquetCoercionTypes/coercible_int32" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int32ToTinyIntInformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int32" + GetParam();
+  createForeignTableWithCoercion("TINYINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-127", "127", "2147483647", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int32ToIntFixedLengthEncoded16) {
+  createForeignTableWithCoercion("INT ENCODING FIXED (16)",
+                                 "ParquetCoercionTypes/coercible_int32" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation,
+       Int32ToIntFixedLengthEncoded16InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int32" + GetParam();
+  createForeignTableWithCoercion("INT ENCODING FIXED (16)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "2147483647", base_file_name));
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation, Int32ToIntFixedLengthEncoded8) {
+  createForeignTableWithCoercion("INT ENCODING FIXED (8)",
+                                 "ParquetCoercionTypes/coercible_int32" + GetParam());
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_P(ParquetCoercionTestOptionalAnnotation,
+       Int32ToIntFixedLengthEncoded8InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int32" + GetParam();
+  createForeignTableWithCoercion("INT ENCODING FIXED (8)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-127", "127", "2147483647", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, Int16ToTinyInt) {
+  createForeignTableWithCoercion("TINYINT", "ParquetCoercionTypes/coercible_int16");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, Int16ToTinyIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_int16";
+  createForeignTableWithCoercion("TINYINT", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("-127", "127", "32767", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, Int16ToSmallIntFixedLengthEncoded8) {
+  createForeignTableWithCoercion("SMALLINT ENCODING FIXED (8)",
+                                 "ParquetCoercionTypes/coercible_int16");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, Int16ToSmallIntFixedLengthEncoded8InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_int16";
+  createForeignTableWithCoercion("SMALLINT ENCODING FIXED (8)", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("-127", "127", "32767", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToBigInt) {
+  createForeignTableWithCoercion("BIGINT", "ParquetCoercionTypes/coercible_uint64");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToBigIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint64";
+  createForeignTableWithCoercion("BIGINT", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("-9223372036854775807",
+                                               "9223372036854775807",
+                                               "18446744073709551615",
+                                               base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToInt) {
+  createForeignTableWithCoercion("INT", "ParquetCoercionTypes/coercible_uint64");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint64";
+  createForeignTableWithCoercion("INT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException(
+          "-2147483647", "2147483647", "18446744073709551615", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToSmallInt) {
+  createForeignTableWithCoercion("SMALLINT", "ParquetCoercionTypes/coercible_uint64");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToSmallIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint64";
+  createForeignTableWithCoercion("SMALLINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "18446744073709551615", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToTinyInt) {
+  createForeignTableWithCoercion("TINYINT", "ParquetCoercionTypes/coercible_uint64");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToTinyIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint64";
+  createForeignTableWithCoercion("TINYINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-127", "127", "18446744073709551615", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToBigIntFixedLengthEncoded32) {
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_uint64");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToBigIntFixedLengthEncoded32InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint64";
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (32)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException(
+          "-2147483647", "2147483647", "18446744073709551615", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToBigIntFixedLengthEncoded16) {
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (16)",
+                                 "ParquetCoercionTypes/coercible_uint64");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToBigIntFixedLengthEncoded16InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint64";
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (16)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "18446744073709551615", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToBigIntFixedLengthEncoded8) {
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (8)",
+                                 "ParquetCoercionTypes/coercible_uint64");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt64ToBigIntFixedLengthEncoded8InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint64";
+  createForeignTableWithCoercion("BIGINT ENCODING FIXED (8)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-127", "127", "18446744073709551615", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToInt) {
+  createForeignTableWithCoercion("INT", "ParquetCoercionTypes/coercible_uint32");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint32";
+  createForeignTableWithCoercion("INT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-2147483647", "2147483647", "4294967295", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToSmallInt) {
+  createForeignTableWithCoercion("SMALLINT", "ParquetCoercionTypes/coercible_uint32");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToSmallIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint32";
+  createForeignTableWithCoercion("SMALLINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "4294967295", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToTinyInt) {
+  createForeignTableWithCoercion("TINYINT", "ParquetCoercionTypes/coercible_uint32");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToTinyIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint32";
+  createForeignTableWithCoercion("TINYINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-127", "127", "4294967295", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToIntFixedLengthEncoded16) {
+  createForeignTableWithCoercion("INT ENCODING FIXED (16)",
+                                 "ParquetCoercionTypes/coercible_uint32");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToIntFixedLengthEncoded16InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint32";
+  createForeignTableWithCoercion("INT ENCODING FIXED (16)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "4294967295", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToIntFixedLengthEncoded8) {
+  createForeignTableWithCoercion("INT ENCODING FIXED (8)",
+                                 "ParquetCoercionTypes/coercible_uint32");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt32ToIntFixedLengthEncoded8InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint32";
+  createForeignTableWithCoercion("INT ENCODING FIXED (8)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-127", "127", "4294967295", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt16ToSmallInt) {
+  createForeignTableWithCoercion("SMALLINT", "ParquetCoercionTypes/coercible_uint16");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt16ToSmallIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint16";
+  createForeignTableWithCoercion("SMALLINT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("-32767", "32767", "65535", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt16ToTinyInt) {
+  createForeignTableWithCoercion("TINYINT", "ParquetCoercionTypes/coercible_uint16");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt16ToTinyIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint16";
+  createForeignTableWithCoercion("TINYINT", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("-127", "127", "65535", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt16ToSmallIntFixedLengthEncoded8) {
+  createForeignTableWithCoercion("SMALLINT ENCODING FIXED (8)",
+                                 "ParquetCoercionTypes/coercible_uint16");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt16ToSmallIntFixedLengthEncoded8InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint16";
+  createForeignTableWithCoercion("SMALLINT ENCODING FIXED (8)", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("-127", "127", "65535", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt8ToTinyIntInformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_uint8";
+  createForeignTableWithCoercion("TINYINT", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("-127", "127", "255", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, UnsignedInt8ToTinyInt) {
+  createForeignTableWithCoercion("TINYINT", "ParquetCoercionTypes/coercible_uint8");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}});
+}
+
+TEST_F(ParquetCoercionTest, TimestampMilliToTimestampFixedLengthEncoded32) {
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_timestamp_milli");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"2020-03-02 09:59:58"}});
+}
+
+TEST_F(ParquetCoercionTest,
+       TimestampMilliToTimestampFixedLengthEncoded32InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_timestamp_milli";
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("1901-12-13 20:45:53",
+                                               "2038-01-19 03:14:07",
+                                               "2038-01-19 03:14:08",
+                                               base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, TimestampMicroToTimestampFixedLengthEncoded32) {
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_timestamp_micro");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"2020-03-02 09:59:58"}});
+}
+
+TEST_F(ParquetCoercionTest,
+       TimestampMicroToTimestampFixedLengthEncoded32InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_timestamp_micro";
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("1901-12-13 20:45:53",
+                                               "2038-01-19 03:14:07",
+                                               "2038-01-19 03:14:08",
+                                               base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, TimestampNanoToTimestampFixedLengthEncoded32) {
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_timestamp_nano");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"2020-03-02 09:59:58"}});
+}
+
+TEST_F(ParquetCoercionTest, TimestampNanoToTimestampFixedLengthEncoded32InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_timestamp_nano";
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("1901-12-13 20:45:53",
+                                               "2038-01-19 03:14:07",
+                                               "2038-01-19 03:14:08",
+                                               base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, Int64NoAnnotationToTimestampSeconds) {
+  const std::string base_file_name = "ParquetCoercionTypes/coercible_int64_no_annotation";
+  createForeignTableWithCoercion("TIMESTAMP (0)", base_file_name);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970 00:02:07"}});
+}
+
+TEST_F(ParquetCoercionTest, Int64NoAnnotationToTimestampMilliseconds) {
+  const std::string base_file_name = "ParquetCoercionTypes/coercible_int64_no_annotation";
+  createForeignTableWithCoercion("TIMESTAMP (3)", base_file_name);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970 00:00:00.127"}});
+}
+
+TEST_F(ParquetCoercionTest, Int64NoAnnotationToTimestampMicroseconds) {
+  const std::string base_file_name = "ParquetCoercionTypes/coercible_int64_no_annotation";
+  createForeignTableWithCoercion("TIMESTAMP (6)", base_file_name);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;",
+                      {{"01/01/1970 00:00:00.000127"}});
+}
+
+TEST_F(ParquetCoercionTest, Int64NoAnnotationToTimestampNanoseconds) {
+  const std::string base_file_name = "ParquetCoercionTypes/coercible_int64_no_annotation";
+  createForeignTableWithCoercion("TIMESTAMP (9)", base_file_name);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;",
+                      {{"01/01/1970 00:00:00.000000127"}});
+}
+
+TEST_F(ParquetCoercionTest, Int64NoAnnotationToTimestampFixedLengthEncoded32) {
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_int64_no_annotation");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970 00:02:07"}});
+}
+
+TEST_F(ParquetCoercionTest,
+       Int64NoAnnotationToTimestampFixedLengthEncoded32InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_int64_no_annotation";
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)", base_file_name);
+  queryAndAssertException("SELECT * FROM test_foreign_table",
+                          getCoercionException("1901-12-13 20:45:53",
+                                               "2038-01-19 03:14:07",
+                                               "292277026596-12-04 15:30:07",
+                                               base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, Int32NoAnnotationToTimestampFixedLengthEncoded32) {
+  createForeignTableWithCoercion("TIMESTAMP (0) ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_int32_no_annotation");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"01/01/1970 00:02:07"}});
+}
+
+TEST_F(ParquetCoercionTest, TimeMilliToTimeFixedLengthEncoded32) {
+  createForeignTableWithCoercion("TIME ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_time_milli");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"23:59:59"}});
+}
+
+TEST_F(ParquetCoercionTest, TimeMicroToTimeFixedLengthEncoded32) {
+  createForeignTableWithCoercion("TIME ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_time_micro");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"23:59:59"}});
+}
+
+TEST_F(ParquetCoercionTest, TimeNanoToTimeFixedLengthEncoded32) {
+  createForeignTableWithCoercion("TIME ENCODING FIXED (32)",
+                                 "ParquetCoercionTypes/coercible_time_nano");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"23:59:59"}});
+}
+
+TEST_F(ParquetCoercionTest, DateToDateFixedLengthEncoded16) {
+  createForeignTableWithCoercion("DATE ENCODING DAYS (16)",
+                                 "ParquetCoercionTypes/coercible_date");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"05/08/1970"}});
+}
+
+TEST_F(ParquetCoercionTest, DateToDateFixedLengthEncoded16InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_date";
+  createForeignTableWithCoercion("DATE ENCODING DAYS (16)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("1880-04-15", "2059-09-18", "2149-06-06", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, TimestampMilliToDateFixedLengthEncoded16) {
+  createForeignTableWithCoercion("DATE ENCODING DAYS (16)",
+                                 "ParquetCoercionTypes/coercible_timestamp_milli");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"03/02/2020"}});
+}
+
+TEST_F(ParquetCoercionTest, TimestampMicroToDateFixedLengthEncoded16) {
+  createForeignTableWithCoercion("DATE ENCODING DAYS (16)",
+                                 "ParquetCoercionTypes/coercible_timestamp_micro");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"03/02/2020"}});
+}
+
+TEST_F(ParquetCoercionTest, TimestampNanoToDateFixedLengthEncoded16) {
+  createForeignTableWithCoercion("DATE ENCODING DAYS (16)",
+                                 "ParquetCoercionTypes/coercible_timestamp_nano");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"03/02/2020"}});
+}
+
+TEST_F(ParquetCoercionTest, TimestampMilliToDateFixedLengthEncoded32) {
+  createForeignTableWithCoercion("DATE ENCODING DAYS (32)",
+                                 "ParquetCoercionTypes/coercible_timestamp_milli");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"03/02/2020"}});
+}
+
+TEST_F(ParquetCoercionTest, TimestampMicroToDateFixedLengthEncoded32) {
+  createForeignTableWithCoercion("DATE ENCODING DAYS (32)",
+                                 "ParquetCoercionTypes/coercible_timestamp_micro");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"03/02/2020"}});
+}
+
+TEST_F(ParquetCoercionTest, TimestampNanoToDateFixedLengthEncoded32) {
+  createForeignTableWithCoercion("DATE ENCODING DAYS (32)",
+                                 "ParquetCoercionTypes/coercible_timestamp_nano");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{"03/02/2020"}});
+}
+
+TEST_F(ParquetCoercionTest, TimestampMilliToDateFixedLengthEncoded16InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_date16_as_timestamp_milli";
+  createForeignTableWithCoercion("DATE ENCODING DAYS (16)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("1880-04-15", "2059-09-18", "2149-06-06", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, TimestampMicroToDateFixedLengthEncoded16InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_date16_as_timestamp_micro";
+  createForeignTableWithCoercion("DATE ENCODING DAYS (16)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("1880-04-15", "2059-09-18", "2149-06-06", base_file_name));
+}
+
+TEST_F(ParquetCoercionTest, TimestampNanoToDateFixedLengthEncoded16InformationLoss) {
+  const std::string base_file_name =
+      "ParquetCoercionTypes/non_coercible_date16_as_timestamp_nano";
+  createForeignTableWithCoercion("DATE ENCODING DAYS (16)", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException("1880-04-15", "2059-09-18", "2149-06-06", base_file_name));
+}
+
+TEST_F(SelectQueryTest, ParquetNotNullWithoutNullOutOfRange) {
+  const auto& query = getCreateForeignTableQuery(
+      "( int8 TINYINT NOT NULL )", "tinyint_without_null_out_of_range", "parquet");
+  sql(query);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      "Exception: Parquet column contains values that are outside the range of the "
+      "OmniSci "
+      "column type. Consider using a wider column type. Min allowed value: -127"
+      ". Max allowed "
+      "value: 127. Encountered value: -128"
+      ". Error validating statistics of Parquet column "
+      "'tinyint' in row group 1 of Parquet file "
+      "'" +
+          getDataFilesPath() + "tinyint_without_null_out_of_range.parquet'.");
+}
+
+TEST_F(SelectQueryTest, ParquetNotNullWithoutNull) {
+  const auto& query = getCreateForeignTableQuery(
+      "( int8 TINYINT NOT NULL )", "tinyint_without_null", "parquet");
+  sql(query);
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{i(127)}, {i(-127)}});
+}
+
+TEST_F(SelectQueryTest, ParquetNotNullWithNull) {
+  const std::string base_file_name = "tinyint_with_null";
+  const std::string file_name = getDataFilesPath() + base_file_name + ".parquet";
+  const auto& query =
+      getCreateForeignTableQuery("( int8 TINYINT NOT NULL )", base_file_name, "parquet");
+  sql(query);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table;",
+      "Exception: A null value was detected in Parquet column 'tinyint' but OmniSci "
+      "column is set to not null in row group 1 of Parquet file '" +
+          file_name + "'.");
+}
+
+TEST_F(ParquetCoercionTest, Float64ToFloat32) {
+  createForeignTableWithCoercion("FLOAT", "ParquetCoercionTypes/coercible_float64");
+  sqlAndCompareResult("SELECT * FROM test_foreign_table;", {{1e-3f}});
+}
+
+TEST_F(ParquetCoercionTest, Float64ToFloat32InformationLoss) {
+  const std::string base_file_name = "ParquetCoercionTypes/non_coercible_float64";
+  createForeignTableWithCoercion("FLOAT", base_file_name);
+  queryAndAssertException(
+      "SELECT * FROM test_foreign_table",
+      getCoercionException(
+          "-340282346638528859811704183484516925440.000000",
+          "340282346638528859811704183484516925440.000000",
+          "179769000000000006323030492138942643493033036433685336215410983289126434148906"
+          "289940615299632196609445533816320312774433484859900046491141051651091672734470"
+          "972759941382582304802812882753059262973637182942535982636884444611376868582636"
+          "745405553206881859340916340092953230149901406738427651121855107737424232448."
+          "000000",
+          base_file_name));
 }
 
 int main(int argc, char** argv) {
   g_enable_fsi = true;
+  g_enable_s3_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 

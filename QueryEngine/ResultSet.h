@@ -29,6 +29,7 @@
 #include "DataMgr/Chunk/Chunk.h"
 #include "ResultSetBufferAccessors.h"
 #include "ResultSetStorage.h"
+#include "Shared/quantile.h"
 #include "TargetValue.h"
 
 #include <atomic>
@@ -148,6 +149,10 @@ class TSerializedRows;
 class ResultSetBuilder;
 
 using AppendedStorage = std::vector<std::unique_ptr<ResultSetStorage>>;
+using PermutationIdx = uint32_t;
+using Permutation = std::vector<PermutationIdx>;
+using PermutationView = VectorView<PermutationIdx>;
+using Comparator = std::function<bool(const PermutationIdx, const PermutationIdx)>;
 
 class ResultSet {
  public:
@@ -158,7 +163,9 @@ class ResultSet {
             const ExecutorDeviceType device_type,
             const QueryMemoryDescriptor& query_mem_desc,
             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-            const Executor* executor);
+            const Catalog_Namespace::Catalog* catalog,
+            const unsigned block_size,
+            const unsigned grid_size);
 
   ResultSet(const std::vector<TargetInfo>& targets,
             const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
@@ -169,7 +176,9 @@ class ResultSet {
             const int device_id,
             const QueryMemoryDescriptor& query_mem_desc,
             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-            const Executor* executor);
+            const Catalog_Namespace::Catalog* catalog,
+            const unsigned block_size,
+            const unsigned grid_size);
 
   ResultSet(const std::shared_ptr<const Analyzer::Estimator>,
             const ExecutorDeviceType device_type,
@@ -183,6 +192,11 @@ class ResultSet {
             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   ~ResultSet();
+
+  std::string toString() const {
+    return typeName(this) + "(targets=" + ::toString(targets_) +
+           ", query_mem_desc=" + ::toString(query_mem_desc_) + ")";
+  }
 
   inline ResultSetRowIterator rowIterator(size_t from_logical_index,
                                           bool translate_strings,
@@ -242,7 +256,9 @@ class ResultSet {
 
   bool isRowAtEmpty(const size_t index) const;
 
-  void sort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n);
+  void sort(const std::list<Analyzer::OrderEntry>& order_entries,
+            size_t top_n,
+            const Executor* executor);
 
   void keepFirstN(const size_t n);
 
@@ -301,6 +317,16 @@ class ResultSet {
 
   bool isExplain() const;
 
+  void setValidationOnlyRes();
+  bool isValidationOnlyRes() const;
+
+  std::string getExplanation() const {
+    if (just_explain_) {
+      return explanation_;
+    }
+    return {};
+  }
+
   bool isGeoColOnGpu(const size_t col_idx) const;
   int getDeviceId() const;
 
@@ -334,7 +360,7 @@ class ResultSet {
     return row_set_mem_owner_;
   }
 
-  const std::vector<uint32_t>& getPermutationBuffer() const;
+  const Permutation& getPermutationBuffer() const;
   const bool isPermutationBufferEmpty() const { return permutation_.empty(); };
 
   void serialize(TSerializedRows& serialized_rows) const;
@@ -400,6 +426,8 @@ class ResultSet {
   ENTRY_TYPE getEntryAt(const size_t row_idx,
                         const size_t target_idx,
                         const size_t slot_idx) const;
+
+  static double calculateQuantile(quantile::TDigest* const t_digest, double const q);
 
  private:
   void advanceCursorToNextEntry(ResultSetRowIterator& iter) const;
@@ -593,73 +621,87 @@ class ResultSet {
     const ResultSet* result_set_;
   };
 
+  using ApproxMedianBuffers = std::vector<std::vector<double>>;
+
   template <typename BUFFER_ITERATOR_TYPE>
   struct ResultSetComparator {
     using BufferIteratorType = BUFFER_ITERATOR_TYPE;
 
     ResultSetComparator(const std::list<Analyzer::OrderEntry>& order_entries,
-                        const bool use_heap,
-                        const ResultSet* result_set)
+                        const ResultSet* result_set,
+                        const PermutationView permutation,
+                        const Executor* executor,
+                        const bool single_threaded)
         : order_entries_(order_entries)
-        , use_heap_(use_heap)
         , result_set_(result_set)
-        , buffer_itr_(result_set) {
+        , permutation_(permutation)
+        , buffer_itr_(result_set)
+        , executor_(executor)
+        , single_threaded_(single_threaded)
+        , approx_median_materialized_buffers_(materializeApproxMedianColumns()) {
       materializeCountDistinctColumns();
     }
 
     void materializeCountDistinctColumns();
+    ApproxMedianBuffers materializeApproxMedianColumns() const;
 
     std::vector<int64_t> materializeCountDistinctColumn(
         const Analyzer::OrderEntry& order_entry) const;
+    ApproxMedianBuffers::value_type materializeApproxMedianColumn(
+        const Analyzer::OrderEntry& order_entry) const;
 
-    bool operator()(const uint32_t lhs, const uint32_t rhs) const;
+    bool operator()(const PermutationIdx lhs, const PermutationIdx rhs) const;
 
-    // TODO(adb): make order_entries_ a pointer
-    const std::list<Analyzer::OrderEntry> order_entries_;
-    const bool use_heap_;
+    const std::list<Analyzer::OrderEntry>& order_entries_;
     const ResultSet* result_set_;
+    const PermutationView permutation_;
     const BufferIteratorType buffer_itr_;
+    const Executor* executor_;
+    const bool single_threaded_;
     std::vector<std::vector<int64_t>> count_distinct_materialized_buffers_;
+    const ApproxMedianBuffers approx_median_materialized_buffers_;
   };
 
-  std::function<bool(const uint32_t, const uint32_t)> createComparator(
-      const std::list<Analyzer::OrderEntry>& order_entries,
-      const bool use_heap) {
+  Comparator createComparator(const std::list<Analyzer::OrderEntry>& order_entries,
+                              const PermutationView permutation,
+                              const Executor* executor,
+                              const bool single_threaded) {
     auto timer = DEBUG_TIMER(__func__);
     if (query_mem_desc_.didOutputColumnar()) {
-      column_wise_comparator_ =
-          std::make_unique<ResultSetComparator<ColumnWiseTargetAccessor>>(
-              order_entries, use_heap, this);
-      return [this](const uint32_t lhs, const uint32_t rhs) -> bool {
-        return (*this->column_wise_comparator_)(lhs, rhs);
+      return [rsc = ResultSetComparator<ColumnWiseTargetAccessor>(
+                  order_entries, this, permutation, executor, single_threaded)](
+                 const PermutationIdx lhs, const PermutationIdx rhs) {
+        return rsc(lhs, rhs);
       };
     } else {
-      row_wise_comparator_ = std::make_unique<ResultSetComparator<RowWiseTargetAccessor>>(
-          order_entries, use_heap, this);
-      return [this](const uint32_t lhs, const uint32_t rhs) -> bool {
-        return (*this->row_wise_comparator_)(lhs, rhs);
+      return [rsc = ResultSetComparator<RowWiseTargetAccessor>(
+                  order_entries, this, permutation, executor, single_threaded)](
+                 const PermutationIdx lhs, const PermutationIdx rhs) {
+        return rsc(lhs, rhs);
       };
     }
   }
 
-  static void topPermutation(
-      std::vector<uint32_t>& to_sort,
-      const size_t n,
-      const std::function<bool(const uint32_t, const uint32_t)> compare);
+  static PermutationView topPermutation(PermutationView,
+                                        const size_t n,
+                                        const Comparator&);
 
-  void sortPermutation(const std::function<bool(const uint32_t, const uint32_t)> compare);
-
-  std::vector<uint32_t> initPermutationBuffer(const size_t start, const size_t step);
+  PermutationView initPermutationBuffer(PermutationView permutation,
+                                        PermutationIdx const begin,
+                                        PermutationIdx const end) const;
 
   void parallelTop(const std::list<Analyzer::OrderEntry>& order_entries,
-                   const size_t top_n);
+                   const size_t top_n,
+                   const Executor* executor);
 
   void baselineSort(const std::list<Analyzer::OrderEntry>& order_entries,
-                    const size_t top_n);
+                    const size_t top_n,
+                    const Executor* executor);
 
   void doBaselineSort(const ExecutorDeviceType device_type,
                       const std::list<Analyzer::OrderEntry>& order_entries,
-                      const size_t top_n);
+                      const size_t top_n,
+                      const Executor* executor);
 
   bool canUseFastBaselineSort(const std::list<Analyzer::OrderEntry>& order_entries,
                               const size_t top_n);
@@ -695,10 +737,12 @@ class ResultSet {
   size_t drop_first_;
   size_t keep_first_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
-  std::vector<uint32_t> permutation_;
+  Permutation permutation_;
 
+  const Catalog_Namespace::Catalog* catalog_;
+  unsigned block_size_{0};
+  unsigned grid_size_{0};
   QueryExecutionTimings timings_;
-  const Executor* executor_;  // TODO(alex): remove
 
   std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks_;
   std::vector<std::shared_ptr<std::list<ChunkIter>>> chunk_iters_;
@@ -722,16 +766,12 @@ class ResultSet {
   bool separate_varlen_storage_valid_;
   std::string explanation_;
   const bool just_explain_;
+  bool for_validation_only_;
   mutable std::atomic<int64_t> cached_row_count_;
   mutable std::mutex row_iteration_mutex_;
 
   // only used by geo
   mutable GeoReturnType geo_return_type_;
-
-  // comparators used for sorting (note that the actual compare function is accessed using
-  // the createComparator method)
-  std::unique_ptr<ResultSetComparator<RowWiseTargetAccessor>> row_wise_comparator_;
-  std::unique_ptr<ResultSetComparator<ColumnWiseTargetAccessor>> column_wise_comparator_;
 
   friend class ResultSetManager;
   friend class ResultSetRowIterator;

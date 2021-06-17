@@ -18,11 +18,12 @@ package com.omnisci.jdbc;
 
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
 import java.util.Properties;
 import java.util.logging.Logger;
 
@@ -31,9 +32,10 @@ import java.util.logging.Logger;
  * @author michael
  */
 public class OmniSciDriver implements java.sql.Driver {
-  static final int DriverMajorVersion = 2;
-  static final int DriverMinorVersion = 1;
-
+  static int DriverMajorVersion = -1;
+  static int DriverMinorVersion = -1;
+  static String DriverVersion = "UNKNOWN";
+  final static String VERSION_FILE = "version.properties";
   final static org.slf4j.Logger logger = LoggerFactory.getLogger(OmniSciDriver.class);
   public static final String OMNISCI_PREFIX = "jdbc:omnisci:";
   public static final String MAPD_PREFIX = "jdbc:mapd:";
@@ -42,6 +44,27 @@ public class OmniSciDriver implements java.sql.Driver {
     try {
       DriverManager.registerDriver(new OmniSciDriver());
     } catch (SQLException e) {
+      e.printStackTrace();
+    }
+
+    try (InputStream input = OmniSciDriver.class.getClassLoader().getResourceAsStream(
+                 VERSION_FILE)) {
+      Properties prop = new Properties();
+      if (input == null) {
+        logger.error("Cannot read " + VERSION_FILE + " file");
+      } else {
+        prop.load(input);
+        DriverVersion = prop.getProperty("version");
+        String[] version = DriverVersion.split("\\.");
+        try {
+          DriverMajorVersion = Integer.parseInt(version[0]);
+          DriverMinorVersion = Integer.parseInt(version[1]);
+        } catch (NumberFormatException ex) {
+          logger.error("Unexpected driver version format in " + VERSION_FILE);
+          DriverVersion = "UNKNOWN";
+        }
+      }
+    } catch (IOException e) {
       e.printStackTrace();
     }
   }
@@ -96,7 +119,7 @@ public class OmniSciDriver implements java.sql.Driver {
   }
 
   @Override
-  public Logger getParentLogger() throws SQLFeatureNotSupportedException {
+  public Logger getParentLogger() {
     return null;
   }
 }

@@ -36,6 +36,36 @@ struct DataframeTableDescriptor : TableDescriptor {
   DataframeTableDescriptor()
       : TableDescriptor(), skipRows(0), delimiter(","), hasHeader(true) {}
 
+  DataframeTableDescriptor(const TableDescriptor& td) {
+    tableId = td.tableId;
+    shard = td.shard;
+    tableName = td.tableName;
+    userId = td.userId;
+    nColumns = td.nColumns;
+    isView = td.isView;
+    viewSQL = td.viewSQL;
+    fragments = td.fragments;
+    fragType = td.fragType;
+    maxFragRows = td.maxFragRows;
+    maxChunkSize = td.maxChunkSize;
+    fragPageSize = td.fragPageSize;
+    maxRows = td.maxRows;
+    partitions = td.partitions;
+    keyMetainfo = td.keyMetainfo;
+    fragmenter = td.fragmenter;
+    nShards = td.nShards;
+    shardedColumnId = td.shardedColumnId;
+    sortedColumnId = td.sortedColumnId;
+    persistenceLevel = td.persistenceLevel;
+    hasDeletedCol = td.hasDeletedCol;
+    columnIdBySpi_ = td.columnIdBySpi_;
+    storageType = td.storageType;
+    mutex_ = td.mutex_;
+    skipRows = 0;
+    delimiter = ",";
+    hasHeader = true;
+  }
+
   virtual ~DataframeTableDescriptor() = default;
 };
 

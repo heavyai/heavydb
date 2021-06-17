@@ -15,6 +15,8 @@
  */
 
 #include "RelAlgExecutor.h"
+#include "DataMgr/ForeignStorage/ForeignStorageException.h"
+#include "DataMgr/ForeignStorage/MetadataPlaceholder.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/CalciteDeserializerUtils.h"
 #include "QueryEngine/CardinalityEstimator.h"
@@ -31,6 +33,7 @@
 #include "QueryEngine/RelAlgTranslator.h"
 #include "QueryEngine/ResultSetBuilder.h"
 #include "QueryEngine/RexVisitor.h"
+#include "QueryEngine/TableOptimizer.h"
 #include "QueryEngine/WindowContext.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/measure.h"
@@ -45,9 +48,11 @@
 #include <numeric>
 
 bool g_skip_intermediate_count{true};
-extern bool g_enable_bump_allocator;
 bool g_enable_interop{false};
 bool g_enable_union{false};
+
+extern bool g_enable_bump_allocator;
+extern size_t g_default_max_groups_buffer_entry_guess;
 
 namespace {
 
@@ -69,6 +74,84 @@ std::unordered_set<PhysicalInput> get_physical_inputs(
   return phys_inputs2;
 }
 
+void set_parallelism_hints(const RelAlgNode& ra_node,
+                           const Catalog_Namespace::Catalog& catalog) {
+  std::map<ChunkKey, std::set<foreign_storage::ForeignStorageMgr::ParallelismHint>>
+      parallelism_hints_per_table;
+  for (const auto& physical_input : get_physical_inputs(&ra_node)) {
+    int table_id = physical_input.table_id;
+    auto table = catalog.getMetadataForTable(table_id, false);
+    if (table && table->storageType == StorageType::FOREIGN_TABLE) {
+      int col_id = catalog.getColumnIdBySpi(table_id, physical_input.col_id);
+      const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
+      auto foreign_table = catalog.getForeignTable(table_id);
+      for (const auto& fragment :
+           foreign_table->fragmenter->getFragmentsForQuery().fragments) {
+        Chunk_NS::Chunk chunk{col_desc};
+        ChunkKey chunk_key = {
+            catalog.getDatabaseId(), table_id, col_id, fragment.fragmentId};
+        // do not include chunk hints that are in CPU memory
+        if (!chunk.isChunkOnDevice(
+                &catalog.getDataMgr(), chunk_key, Data_Namespace::CPU_LEVEL, 0)) {
+          parallelism_hints_per_table[{catalog.getDatabaseId(), table_id}].insert(
+              foreign_storage::ForeignStorageMgr::ParallelismHint{col_id,
+                                                                  fragment.fragmentId});
+        }
+      }
+    }
+  }
+  if (!parallelism_hints_per_table.empty()) {
+    auto foreign_storage_mgr =
+        catalog.getDataMgr().getPersistentStorageMgr()->getForeignStorageMgr();
+    CHECK(foreign_storage_mgr);
+    foreign_storage_mgr->setParallelismHints(parallelism_hints_per_table);
+  }
+}
+
+void prepare_string_dictionaries(const RelAlgNode& ra_node,
+                                 const Catalog_Namespace::Catalog& catalog) {
+  for (const auto& physical_input : get_physical_inputs(&ra_node)) {
+    int table_id = physical_input.table_id;
+    auto table = catalog.getMetadataForTable(table_id, false);
+    if (table && table->storageType == StorageType::FOREIGN_TABLE) {
+      int col_id = catalog.getColumnIdBySpi(table_id, physical_input.col_id);
+      const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
+      auto foreign_table = catalog.getForeignTable(table_id);
+      if (col_desc->columnType.is_dict_encoded_type()) {
+        CHECK(foreign_table->fragmenter != nullptr);
+        for (const auto& fragment :
+             foreign_table->fragmenter->getFragmentsForQuery().fragments) {
+          ChunkKey chunk_key = {
+              catalog.getDatabaseId(), table_id, col_id, fragment.fragmentId};
+          const ChunkMetadataMap& metadata_map = fragment.getChunkMetadataMap();
+          CHECK(metadata_map.find(col_id) != metadata_map.end());
+          if (foreign_storage::is_metadata_placeholder(*(metadata_map.at(col_id)))) {
+            // When this goes out of scope it will stay in CPU cache but become
+            // evictable
+            std::shared_ptr<Chunk_NS::Chunk> chunk =
+                Chunk_NS::Chunk::getChunk(col_desc,
+                                          &(catalog.getDataMgr()),
+                                          chunk_key,
+                                          Data_Namespace::CPU_LEVEL,
+                                          0,
+                                          0,
+                                          0);
+          }
+        }
+      }
+    }
+  }
+}
+
+void prepare_foreign_table_for_execution(const RelAlgNode& ra_node,
+                                         const Catalog_Namespace::Catalog& catalog) {
+  // Iterate through ra_node inputs for types that need to be loaded pre-execution
+  // If they do not have valid metadata, load them into CPU memory to generate
+  // the metadata and leave them ready to be used by the query
+  set_parallelism_hints(ra_node, catalog);
+  prepare_string_dictionaries(ra_node, catalog);
+}
+
 }  // namespace
 
 size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
@@ -86,7 +169,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   query_dag_->resetQueryExecutionState();
   const auto& ra = query_dag_->getRootNode();
 
-  mapd_shared_lock<mapd_shared_mutex> lock(executor_->execute_mutex_);
+  auto lock = executor_->acquireExecuteMutex();
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto phys_inputs = get_physical_inputs(cat_, &ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
@@ -158,8 +241,18 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(executeRelAlgQuery);
 
+  auto run_query = [&](const CompilationOptions& co_in) {
+    auto execution_result =
+        executeRelAlgQueryNoRetry(co_in, eo, just_explain_plan, render_info);
+    if (post_execution_callback_) {
+      VLOG(1) << "Running post execution callback.";
+      (*post_execution_callback_)();
+    }
+    return execution_result;
+  };
+
   try {
-    return executeRelAlgQueryNoRetry(co, eo, just_explain_plan, render_info);
+    return run_query(co);
   } catch (const QueryMustRunOnCpu&) {
     if (!g_allow_cpu_retry) {
       throw;
@@ -171,17 +264,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
   if (render_info) {
     render_info->setForceNonInSituData();
   }
-  return executeRelAlgQueryNoRetry(co_cpu, eo, just_explain_plan, render_info);
+  return run_query(co_cpu);
 }
-
-namespace {
-
-struct ExecutorMutexHolder {
-  mapd_shared_lock<mapd_shared_mutex> shared_lock;
-  mapd_unique_lock<mapd_shared_mutex> unique_lock;
-};
-
-}  // namespace
 
 ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptions& co,
                                                           const ExecutionOptions& eo,
@@ -199,109 +283,102 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   if (g_enable_dynamic_watchdog) {
     executor_->resetInterrupt();
   }
-  std::string query_session = "";
-  std::string query_str = "N/A";
-  if (eo.allow_runtime_query_interrupt || g_enable_runtime_query_interrupt) {
-    // a request of query execution without session id can happen, i.e., test query
-    // if so, we turn back to the original way: a runtime query interrupt
-    // without per-session management (as similar to dynamic watchdog)
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(
-        executor_->executor_session_mutex_);
-    if (query_state_ != nullptr && query_state_->getConstSessionInfo() != nullptr) {
-      query_session = query_state_->getConstSessionInfo()->get_session_id();
-      query_str = query_state_->getQueryStr();
-    } else if (executor_->getCurrentQuerySession(session_read_lock) != query_session) {
-      query_session = executor_->getCurrentQuerySession(session_read_lock);
-    }
+  std::string query_session{""};
+  std::string query_str{"N/A"};
+  std::string query_submitted_time{""};
+  // gather necessary query's info
+  if (query_state_ != nullptr && query_state_->getConstSessionInfo() != nullptr) {
+    query_session = query_state_->getConstSessionInfo()->get_session_id();
+    query_str = query_state_->getQueryStr();
+    query_submitted_time = query_state_->getQuerySubmittedTime();
+  }
 
-    session_read_lock.unlock();
-    if (query_session != "") {
-      // if session is valid, then we allow per-session runtime query interrupt
-      mapd_unique_lock<mapd_shared_mutex> session_write_lock(
-          executor_->executor_session_mutex_);
-      executor_->addToQuerySessionList(query_session, query_str, session_write_lock);
-      session_write_lock.unlock();
-      // hybrid spinlock.  if it fails to acquire a lock, then
-      // it sleeps {g_pending_query_interrupt_freq} millisecond.
+  bool acquire_spin_lock = false;
+  auto validate_or_explain_query =
+      just_explain_plan || eo.just_validate || eo.just_explain || eo.just_calcite_explain;
+  ScopeGuard clearRuntimeInterruptStatus = [this,
+                                            &query_session,
+                                            &render_info,
+                                            &eo,
+                                            &acquire_spin_lock,
+                                            &query_submitted_time,
+                                            &validate_or_explain_query] {
+    // reset the runtime query interrupt status after the end of query execution
+    if (!render_info && !query_session.empty() && eo.allow_runtime_query_interrupt &&
+        !validate_or_explain_query) {
+      executor_->clearQuerySessionStatus(
+          query_session, query_submitted_time, acquire_spin_lock);
+    }
+  };
+
+  if (!render_info && eo.allow_runtime_query_interrupt && !validate_or_explain_query) {
+    // if we reach here, the current query which was waiting an idle executor
+    // within the dispatch queue is now scheduled to the specific executor
+    // (not UNITARY_EXECUTOR)
+    // so we update the query session's status with the executor that takes this query
+    std::tie(query_session, query_str) = executor_->attachExecutorToQuerySession(
+        query_session, query_str, query_submitted_time);
+
+    // For now we can run a single query at a time, so if other query is already
+    // executed by different executor (i.e., when we turn on parallel executor),
+    // we can check the possibility of running this query by using the spinlock.
+    // If it fails to acquire a lock, it sleeps {g_pending_query_interrupt_freq} ms.
+    // And then try to get the lock (and again and again...)
+    if (!query_session.empty()) {
       while (executor_->execute_spin_lock_.test_and_set(std::memory_order_acquire)) {
-        // failed to get the spinlock: check whether query is interrupted
-        mapd_shared_lock<mapd_shared_mutex> session_read_lock(
-            executor_->executor_session_mutex_);
-        bool isQueryInterrupted =
-            executor_->checkIsQuerySessionInterrupted(query_session, session_read_lock);
-        session_read_lock.unlock();
-        if (isQueryInterrupted) {
-          mapd_unique_lock<mapd_shared_mutex> session_write_lock(
-              executor_->executor_session_mutex_);
-          executor_->removeFromQuerySessionList(query_session, session_write_lock);
-          session_write_lock.unlock();
-          throw std::runtime_error(
-              "Query execution has been interrupted (pending query)");
+        try {
+          executor_->checkPendingQueryStatus(query_session);
+        } catch (QueryExecutionError& e) {
+          if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+            throw std::runtime_error(
+                "Query execution has been interrupted (pending query)");
+          }
+          throw e;
+        } catch (...) {
+          throw std::runtime_error("Checking pending query status failed: unknown error");
         }
-        // here it fails to acquire the lock
+        // here it fails to acquire the lock, so sleep...
         std::this_thread::sleep_for(
             std::chrono::milliseconds(g_pending_query_interrupt_freq));
-      };
+      }
+      acquire_spin_lock = true;
+      // now the query is going to be executed, so update the status as "RUNNING"
+      executor_->updateQuerySessionStatus(query_state_,
+                                          QuerySessionStatus::QueryStatus::RUNNING);
     }
-    // currently, atomic_flag does not provide a way to get its current status,
-    // i.e., spinlock.is_locked(), so we additionally lock the execute_mutex_
-    // right after acquiring spinlock to let other part of the code can know
-    // whether there exists a running query on the executor
   }
-  auto aquire_execute_mutex = [](Executor* executor) -> ExecutorMutexHolder {
-    ExecutorMutexHolder ret;
-    if (executor->executor_id_ == Executor::UNITARY_EXECUTOR_ID) {
-      // Only one unitary executor can run at a time
-      ret.unique_lock = mapd_unique_lock<mapd_shared_mutex>(executor->execute_mutex_);
-    } else {
-      ret.shared_lock = mapd_shared_lock<mapd_shared_mutex>(executor->execute_mutex_);
-    }
+  auto acquire_execute_mutex = [](Executor * executor) -> auto {
+    auto ret = executor->acquireExecuteMutex();
     return ret;
   };
-  auto lock = aquire_execute_mutex(executor_);
-  ScopeGuard clearRuntimeInterruptStatus = [this] {
-    // reset the runtime query interrupt status
-    if (g_enable_runtime_query_interrupt) {
-      mapd_shared_lock<mapd_shared_mutex> session_read_lock(
-          executor_->executor_session_mutex_);
-      std::string curSession = executor_->getCurrentQuerySession(session_read_lock);
-      session_read_lock.unlock();
-      mapd_unique_lock<mapd_shared_mutex> session_write_lock(
-          executor_->executor_session_mutex_);
-      executor_->removeFromQuerySessionList(curSession, session_write_lock);
-      executor_->invalidateRunningQuerySession(session_write_lock);
-      executor_->execute_spin_lock_.clear(std::memory_order_release);
-      session_write_lock.unlock();
-      executor_->resetInterrupt();
-      VLOG(1) << "RESET runtime query interrupt status of Executor " << this;
-    }
-  };
+  // now we get the spinlock that means this query is ready to run by the executor
+  // so we acquire executor lock in here to make sure that this executor holds
+  // all necessary resources and at the same time protect them against other executor
+  auto lock = acquire_execute_mutex(executor_);
 
-  if (g_enable_runtime_query_interrupt) {
-    // check whether this query session is already interrupted
+  if (!render_info && !query_session.empty() && eo.allow_runtime_query_interrupt &&
+      !validate_or_explain_query) {
+    // check whether this query session is "already" interrupted
     // this case occurs when there is very short gap between being interrupted and
     // taking the execute lock
-    // if so we interrupt the query session and remove it from the running session list
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(
-        executor_->executor_session_mutex_);
-    bool isAlreadyInterrupted =
-        executor_->checkIsQuerySessionInterrupted(query_session, session_read_lock);
-    session_read_lock.unlock();
-    if (isAlreadyInterrupted) {
-      mapd_unique_lock<mapd_shared_mutex> session_write_lock(
-          executor_->executor_session_mutex_);
-      executor_->removeFromQuerySessionList(query_session, session_write_lock);
-      session_write_lock.unlock();
-      throw std::runtime_error("Query execution has been interrupted");
+    // for instance, the session can fire multiple queries that other queries are waiting
+    // in the spinlock but the user can request the query interruption
+    // if so we have to remove "all" queries initiated by this session and we do in here
+    // without running the query
+    try {
+      executor_->checkPendingQueryStatus(query_session);
+    } catch (QueryExecutionError& e) {
+      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+        throw std::runtime_error("Query execution has been interrupted (pending query)");
+      }
+      throw e;
+    } catch (...) {
+      throw std::runtime_error("Checking pending query status failed: unknown error");
     }
-
-    // make sure to set the running session ID
-    mapd_unique_lock<mapd_shared_mutex> session_write_lock(
-        executor_->executor_session_mutex_);
-    executor_->invalidateRunningQuerySession(session_write_lock);
-    executor_->setCurrentQuerySession(query_session, session_write_lock);
-    session_write_lock.unlock();
   }
+
+  // Notify foreign tables to load prior to caching
+  prepare_foreign_table_for_execution(ra, cat_);
 
   int64_t queue_time_ms = timer_stop(clock_begin);
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
@@ -406,7 +483,6 @@ Executor* RelAlgExecutor::getExecutor() const {
 void RelAlgExecutor::cleanupPostExecution() {
   CHECK(executor_);
   executor_->row_set_mem_owner_ = nullptr;
-  executor_->lit_str_dict_proxy_ = nullptr;
 }
 
 namespace {
@@ -428,6 +504,7 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
     const ExecutionOptions& eo,
     RenderInfo* render_info) {
   INJECT_TIMER(executeRelAlgQueryStep);
+
   auto exe_desc_ptr = seq.getDescriptor(step_idx);
   CHECK(exe_desc_ptr);
   const auto sort = dynamic_cast<const RelSort*>(exe_desc_ptr->getBody());
@@ -463,6 +540,7 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
             eo.just_calcite_explain,
             eo.gpu_input_mem_limit_percent,
             eo.allow_runtime_query_interrupt,
+            eo.running_query_interrupt_freq,
             eo.pending_query_interrupt_freq,
             eo.executor_type,
         };
@@ -475,15 +553,21 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
       }
     }
   }
-  return {executeRelAlgSubSeq(seq,
-                              std::make_pair(step_idx, step_idx + 1),
-                              co,
-                              eo,
-                              render_info,
-                              queue_time_ms_),
-          merge_type(exe_desc_ptr->getBody()),
-          exe_desc_ptr->getBody()->getId(),
-          false};
+  QueryStepExecutionResult result{
+      executeRelAlgSubSeq(seq,
+                          std::make_pair(step_idx, step_idx + 1),
+                          co,
+                          eo,
+                          render_info,
+                          queue_time_ms_),
+      merge_type(exe_desc_ptr->getBody()),
+      exe_desc_ptr->getBody()->getId(),
+      false};
+  if (post_execution_callback_) {
+    VLOG(1) << "Running post execution callback.";
+    (*post_execution_callback_)();
+  }
+  return result;
 }
 
 void RelAlgExecutor::prepareLeafExecution(
@@ -497,10 +581,10 @@ void RelAlgExecutor::prepareLeafExecution(
   }
   queue_time_ms_ = timer_stop(clock_begin);
   executor_->row_set_mem_owner_ =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize());
+      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(), cpu_threads());
+  executor_->row_set_mem_owner_->setDictionaryGenerations(string_dictionary_generations);
   executor_->table_generations_ = table_generations;
   executor_->agg_col_range_cache_ = agg_col_range;
-  executor_->string_dictionary_generations_ = string_dictionary_generations;
 }
 
 ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
@@ -520,7 +604,23 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
 
   time(&now_);
   CHECK(!seq.empty());
-  const auto exec_desc_count = eo.just_explain ? size_t(1) : seq.size();
+
+  auto get_descriptor_count = [&seq, &eo]() -> size_t {
+    if (eo.just_explain) {
+      if (dynamic_cast<const RelLogicalValues*>(seq.getDescriptor(0)->getBody())) {
+        // run the logical values descriptor to generate the result set, then the next
+        // descriptor to generate the explain
+        CHECK_GE(seq.size(), size_t(2));
+        return 2;
+      } else {
+        return 1;
+      }
+    } else {
+      return seq.size();
+    }
+  };
+
+  const auto exec_desc_count = get_descriptor_count();
 
   for (size_t i = 0; i < exec_desc_count; i++) {
     VLOG(1) << "Executing query step " << i;
@@ -613,9 +713,13 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       eo.just_calcite_explain,
       eo.gpu_input_mem_limit_percent,
       eo.allow_runtime_query_interrupt,
+      eo.running_query_interrupt_freq,
       eo.pending_query_interrupt_freq,
       eo.executor_type,
       step_idx == 0 ? eo.outer_fragment_indices : std::vector<size_t>()};
+
+  // Notify foreign tables to load prior to execution
+  prepare_foreign_table_for_execution(*body, cat_);
 
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
@@ -1404,69 +1508,95 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
   co.hoist_literals = false;  // disable literal hoisting as it interferes with dict
                               // encoded string updates
 
-  auto execute_update_for_node =
-      [this, &co, &eo_in](const auto node, auto& work_unit, const bool is_aggregate) {
-        UpdateTransactionParameters update_params(node->getModifiedTableDescriptor(),
-                                                  node->getTargetColumns(),
-                                                  node->getOutputMetainfo(),
-                                                  node->isVarlenUpdateRequired());
+  auto execute_update_for_node = [this, &co, &eo_in](const auto node,
+                                                     auto& work_unit,
+                                                     const bool is_aggregate) {
+    auto table_descriptor = node->getModifiedTableDescriptor();
+    CHECK(table_descriptor);
+    if (node->isVarlenUpdateRequired() && !table_descriptor->hasDeletedCol) {
+      throw std::runtime_error(
+          "UPDATE queries involving variable length columns are only supported on tables "
+          "with the vacuum attribute set to 'delayed'");
+    }
 
-        const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
+    dml_transaction_parameters_ =
+        std::make_unique<UpdateTransactionParameters>(node->getModifiedTableDescriptor(),
+                                                      node->getTargetColumns(),
+                                                      node->getOutputMetainfo(),
+                                                      node->isVarlenUpdateRequired());
 
-        auto execute_update_ra_exe_unit =
-            [this, &co, &eo_in, &table_infos, &update_params](
-                const RelAlgExecutionUnit& ra_exe_unit, const bool is_aggregate) {
-              CompilationOptions co_project = CompilationOptions::makeCpuOnly(co);
+    const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
-              auto eo = eo_in;
-              if (update_params.tableIsTemporary()) {
-                eo.output_columnar_hint = true;
-                co_project.allow_lazy_fetch = false;
-                co_project.filter_on_deleted_column =
-                    false;  // project the entire delete column for columnar update
-              }
+    auto execute_update_ra_exe_unit = [this, &co, &eo_in, &table_infos](
+                                          const RelAlgExecutionUnit& ra_exe_unit,
+                                          const bool is_aggregate) {
+      CompilationOptions co_project = CompilationOptions::makeCpuOnly(co);
 
-              auto update_callback = yieldUpdateCallback(update_params);
-              executor_->executeUpdate(ra_exe_unit,
-                                       table_infos,
-                                       co_project,
-                                       eo,
-                                       cat_,
-                                       executor_->row_set_mem_owner_,
-                                       update_callback,
-                                       is_aggregate);
-              update_params.finalizeTransaction();
-            };
+      auto eo = eo_in;
+      if (dml_transaction_parameters_->tableIsTemporary()) {
+        eo.output_columnar_hint = true;
+        co_project.allow_lazy_fetch = false;
+        co_project.filter_on_deleted_column =
+            false;  // project the entire delete column for columnar update
+      }
 
-        if (update_params.tableIsTemporary()) {
-          // hold owned target exprs during execution if rewriting
-          auto query_rewrite = std::make_unique<QueryRewriter>(table_infos, executor_);
-          // rewrite temp table updates to generate the full column by moving the where
-          // clause into a case if such a rewrite is not possible, bail on the update
-          // operation build an expr for the update target
-          const auto td = update_params.getTableDescriptor();
-          CHECK(td);
-          const auto update_column_names = update_params.getUpdateColumnNames();
-          if (update_column_names.size() > 1) {
-            throw std::runtime_error(
-                "Multi-column update is not yet supported for temporary tables.");
-          }
+      auto update_transaction_parameters =
+          dynamic_cast<UpdateTransactionParameters*>(dml_transaction_parameters_.get());
+      CHECK(update_transaction_parameters);
+      auto update_callback = yieldUpdateCallback(*update_transaction_parameters);
+      try {
+        auto table_update_metadata =
+            executor_->executeUpdate(ra_exe_unit,
+                                     table_infos,
+                                     co_project,
+                                     eo,
+                                     cat_,
+                                     executor_->row_set_mem_owner_,
+                                     update_callback,
+                                     is_aggregate);
+        post_execution_callback_ = [table_update_metadata, this]() {
+          dml_transaction_parameters_->finalizeTransaction(cat_);
+          TableOptimizer table_optimizer{
+              dml_transaction_parameters_->getTableDescriptor(), executor_, cat_};
+          table_optimizer.vacuumFragmentsAboveMinSelectivity(table_update_metadata);
+        };
+      } catch (const QueryExecutionError& e) {
+        throw std::runtime_error(getErrorMessageFromCode(e.getErrorCode()));
+      }
+    };
 
-          auto cd = cat_.getMetadataForColumn(td->tableId, update_column_names.front());
-          CHECK(cd);
-          auto projected_column_to_update =
-              makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, cd->columnId, 0);
-          const auto rewritten_exe_unit = query_rewrite->rewriteColumnarUpdate(
-              work_unit.exe_unit, projected_column_to_update);
-          if (rewritten_exe_unit.target_exprs.front()->get_type_info().is_varlen()) {
-            throw std::runtime_error(
-                "Variable length updates not yet supported on temporary tables.");
-          }
-          execute_update_ra_exe_unit(rewritten_exe_unit, is_aggregate);
-        } else {
-          execute_update_ra_exe_unit(work_unit.exe_unit, is_aggregate);
-        }
-      };
+    if (dml_transaction_parameters_->tableIsTemporary()) {
+      // hold owned target exprs during execution if rewriting
+      auto query_rewrite = std::make_unique<QueryRewriter>(table_infos, executor_);
+      // rewrite temp table updates to generate the full column by moving the where
+      // clause into a case if such a rewrite is not possible, bail on the update
+      // operation build an expr for the update target
+      auto update_transaction_params =
+          dynamic_cast<UpdateTransactionParameters*>(dml_transaction_parameters_.get());
+      CHECK(update_transaction_params);
+      const auto td = update_transaction_params->getTableDescriptor();
+      CHECK(td);
+      const auto update_column_names = update_transaction_params->getUpdateColumnNames();
+      if (update_column_names.size() > 1) {
+        throw std::runtime_error(
+            "Multi-column update is not yet supported for temporary tables.");
+      }
+
+      auto cd = cat_.getMetadataForColumn(td->tableId, update_column_names.front());
+      CHECK(cd);
+      auto projected_column_to_update =
+          makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, cd->columnId, 0);
+      const auto rewritten_exe_unit = query_rewrite->rewriteColumnarUpdate(
+          work_unit.exe_unit, projected_column_to_update);
+      if (rewritten_exe_unit.target_exprs.front()->get_type_info().is_varlen()) {
+        throw std::runtime_error(
+            "Variable length updates not yet supported on temporary tables.");
+      }
+      execute_update_ra_exe_unit(rewritten_exe_unit, is_aggregate);
+    } else {
+      execute_update_ra_exe_unit(work_unit.exe_unit, is_aggregate);
+    }
+  };
 
   if (auto compound = dynamic_cast<const RelCompound*>(node)) {
     auto work_unit =
@@ -1510,7 +1640,8 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
     CHECK(table_descriptor);
     if (!table_descriptor->hasDeletedCol) {
       throw std::runtime_error(
-          "DELETE only supported on tables with the vacuum attribute set to 'delayed'");
+          "DELETE queries are only supported on tables with the vacuum attribute set to "
+          "'delayed'");
     }
 
     const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
@@ -1518,12 +1649,16 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
     auto execute_delete_ra_exe_unit =
         [this, &table_infos, &table_descriptor, &eo_in, &co](const auto& exe_unit,
                                                              const bool is_aggregate) {
-          DeleteTransactionParameters delete_params(table_is_temporary(table_descriptor));
-          auto delete_callback = yieldDeleteCallback(delete_params);
+          dml_transaction_parameters_ =
+              std::make_unique<DeleteTransactionParameters>(table_descriptor);
+          auto delete_params = dynamic_cast<DeleteTransactionParameters*>(
+              dml_transaction_parameters_.get());
+          CHECK(delete_params);
+          auto delete_callback = yieldDeleteCallback(*delete_params);
           CompilationOptions co_delete = CompilationOptions::makeCpuOnly(co);
 
           auto eo = eo_in;
-          if (delete_params.tableIsTemporary()) {
+          if (dml_transaction_parameters_->tableIsTemporary()) {
             eo.output_columnar_hint = true;
             co_delete.filter_on_deleted_column =
                 false;  // project the entire delete column for columnar update
@@ -1531,15 +1666,25 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
             CHECK_EQ(exe_unit.target_exprs.size(), size_t(1));
           }
 
-          executor_->executeUpdate(exe_unit,
-                                   table_infos,
-                                   co_delete,
-                                   eo,
-                                   cat_,
-                                   executor_->row_set_mem_owner_,
-                                   delete_callback,
-                                   is_aggregate);
-          delete_params.finalizeTransaction();
+          try {
+            auto table_update_metadata =
+                executor_->executeUpdate(exe_unit,
+                                         table_infos,
+                                         co_delete,
+                                         eo,
+                                         cat_,
+                                         executor_->row_set_mem_owner_,
+                                         delete_callback,
+                                         is_aggregate);
+            post_execution_callback_ = [table_update_metadata, this]() {
+              dml_transaction_parameters_->finalizeTransaction(cat_);
+              TableOptimizer table_optimizer{
+                  dml_transaction_parameters_->getTableDescriptor(), executor_, cat_};
+              table_optimizer.vacuumFragmentsAboveMinSelectivity(table_update_metadata);
+            };
+          } catch (const QueryExecutionError& e) {
+            throw std::runtime_error(getErrorMessageFromCode(e.getErrorCode()));
+          }
         };
 
     if (table_is_temporary(table_descriptor)) {
@@ -1688,7 +1833,9 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
                                                      co.device_type,
                                                      QueryMemoryDescriptor(),
                                                      nullptr,
-                                                     executor_),
+                                                     executor_->getCatalog(),
+                                                     executor_->blockSize(),
+                                                     executor_->gridSize()),
                          {}};
 
   try {
@@ -1800,13 +1947,14 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
       executor_->buildHashTableForQualifier(partition_key_cond,
                                             query_infos,
                                             memory_level,
-                                            JoinHashTableInterface::HashType::OneToMany,
-                                            column_cache_map);
+                                            JoinType::INVALID,  // for window function
+                                            HashType::OneToMany,
+                                            column_cache_map,
+                                            ra_exe_unit.query_hint);
   if (!join_table_or_err.fail_reason.empty()) {
     throw std::runtime_error(join_table_or_err.fail_reason);
   }
-  CHECK(join_table_or_err.hash_table->getHashType() ==
-        JoinHashTableInterface::HashType::OneToMany);
+  CHECK(join_table_or_err.hash_table->getHashType() == HashType::OneToMany);
   const auto& order_keys = window_func->getOrderKeys();
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   const size_t elem_count = query_infos.front().info.fragments.front().getNumTuples();
@@ -1830,6 +1978,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                             memory_level,
                                             0,
                                             nullptr,
+                                            /*thread_idx=*/0,
                                             chunks_owner,
                                             column_cache_map);
     CHECK_EQ(join_col_elem_count, elem_count);
@@ -1907,10 +2056,6 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
     const RelLogicalValues* logical_values,
     const ExecutionOptions& eo) {
   auto timer = DEBUG_TIMER(__func__);
-  if (eo.just_explain) {
-    throw std::runtime_error("EXPLAIN not supported for LogicalValues");
-  }
-
   QueryMemoryDescriptor query_mem_desc(executor_,
                                        logical_values->getNumRows(),
                                        QueryDescriptionType::Projection,
@@ -2013,11 +2158,75 @@ ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
                                         ExecutorDeviceType::CPU,
                                         QueryMemoryDescriptor(),
                                         executor_->getRowSetMemoryOwner(),
-                                        executor_);
+                                        executor_->getCatalog(),
+                                        executor_->blockSize(),
+                                        executor_->gridSize());
 
   std::vector<TargetMetaInfo> empty_targets;
   return {rs, empty_targets};
 }
+
+namespace {
+int64_t int_value_from_numbers_ptr(const SQLTypeInfo& type_info, const int8_t* data) {
+  size_t sz = 0;
+  switch (type_info.get_type()) {
+    case kTINYINT:
+    case kSMALLINT:
+    case kINT:
+    case kBIGINT:
+    case kTIMESTAMP:
+    case kTIME:
+    case kDATE:
+      sz = type_info.get_logical_size();
+      break;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      CHECK(type_info.get_compression() == kENCODING_DICT);
+      sz = type_info.get_size();
+      break;
+    default:
+      CHECK(false) << "Unexpected sharding key datatype";
+  }
+
+  switch (sz) {
+    case 1:
+      return *(reinterpret_cast<const int8_t*>(data));
+    case 2:
+      return *(reinterpret_cast<const int16_t*>(data));
+    case 4:
+      return *(reinterpret_cast<const int32_t*>(data));
+    case 8:
+      return *(reinterpret_cast<const int64_t*>(data));
+    default:
+      CHECK(false);
+      return 0;
+  }
+}
+
+const TableDescriptor* get_shard_for_key(const TableDescriptor* td,
+                                         const Catalog_Namespace::Catalog& cat,
+                                         const Fragmenter_Namespace::InsertData& data) {
+  auto shard_column_md = cat.getShardColumnMetadataForTable(td);
+  CHECK(shard_column_md);
+  auto sharded_column_id = shard_column_md->columnId;
+  const TableDescriptor* shard{nullptr};
+  for (size_t i = 0; i < data.columnIds.size(); ++i) {
+    if (data.columnIds[i] == sharded_column_id) {
+      const auto shard_tables = cat.getPhysicalTablesDescriptors(td);
+      const auto shard_count = shard_tables.size();
+      CHECK(data.data[i].numbersPtr);
+      auto value = int_value_from_numbers_ptr(shard_column_md->columnType,
+                                              data.data[i].numbersPtr);
+      const size_t shard_idx = SHARD_FOR_KEY(value, shard_count);
+      shard = shard_tables[shard_idx];
+      break;
+    }
+  }
+  return shard;
+}
+
+}  // namespace
 
 ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query) {
   // Note: We currently obtain an executor for this method, but we do not need it.
@@ -2034,11 +2243,6 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
   std::unordered_map<int, std::unique_ptr<uint8_t[]>> col_buffers;
   std::unordered_map<int, std::vector<std::string>> str_col_buffers;
   std::unordered_map<int, std::vector<ArrayDatum>> arr_col_buffers;
-
-  const auto table_descriptor = cat_.getMetadataForTable(table_id);
-  CHECK(table_descriptor);
-  const auto shard_tables = cat_.getPhysicalTablesDescriptors(table_descriptor);
-  const TableDescriptor* shard{nullptr};
 
   for (const int col_id : col_id_list) {
     const auto cd = get_column_descriptor(col_id, table_id, cat_);
@@ -2085,7 +2289,6 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
   Fragmenter_Namespace::InsertData insert_data;
   insert_data.databaseId = cat_.getCurrentDB().dbId;
   insert_data.tableId = table_id;
-  int64_t int_col_val{0};
   for (auto target_entry : targets) {
     auto col_cv = dynamic_cast<const Analyzer::Constant*>(target_entry->get_expr());
     if (!col_cv) {
@@ -2108,30 +2311,30 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
     }
     switch (col_type) {
       case kBOOLEAN: {
-        auto col_data = col_data_bytes;
-        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
-                                          : (col_datum.boolval ? 1 : 0);
+        auto col_data = reinterpret_cast<int8_t*>(col_data_bytes);
+        auto null_bool_val =
+            col_datum.boolval == inline_fixed_encoding_null_val(cd->columnType);
+        *col_data = col_cv->get_is_null() || null_bool_val
+                        ? inline_fixed_encoding_null_val(cd->columnType)
+                        : (col_datum.boolval ? 1 : 0);
         break;
       }
       case kTINYINT: {
         auto col_data = reinterpret_cast<int8_t*>(col_data_bytes);
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
                                           : col_datum.tinyintval;
-        int_col_val = col_datum.tinyintval;
         break;
       }
       case kSMALLINT: {
         auto col_data = reinterpret_cast<int16_t*>(col_data_bytes);
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
                                           : col_datum.smallintval;
-        int_col_val = col_datum.smallintval;
         break;
       }
       case kINT: {
         auto col_data = reinterpret_cast<int32_t*>(col_data_bytes);
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
                                           : col_datum.intval;
-        int_col_val = col_datum.intval;
         break;
       }
       case kBIGINT:
@@ -2140,7 +2343,6 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
         auto col_data = reinterpret_cast<int64_t*>(col_data_bytes);
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType)
                                           : col_datum.bigintval;
-        int_col_val = col_datum.bigintval;
         break;
       }
       case kFLOAT: {
@@ -2164,15 +2366,15 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
           case kENCODING_DICT: {
             switch (cd->columnType.get_size()) {
               case 1:
-                int_col_val = insert_one_dict_str(
+                insert_one_dict_str(
                     reinterpret_cast<uint8_t*>(col_data_bytes), cd, col_cv, cat_);
                 break;
               case 2:
-                int_col_val = insert_one_dict_str(
+                insert_one_dict_str(
                     reinterpret_cast<uint16_t*>(col_data_bytes), cd, col_cv, cat_);
                 break;
               case 4:
-                int_col_val = insert_one_dict_str(
+                insert_one_dict_str(
                     reinterpret_cast<int32_t*>(col_data_bytes), cd, col_cv, cat_);
                 break;
               default:
@@ -2236,10 +2438,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
           for (auto& e : l) {
             auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
             CHECK(c);
-
-            int_col_val = insert_one_dict_str(
-                &p[elemIndex], cd->columnName, elem_ti, c.get(), cat_);
-
+            insert_one_dict_str(&p[elemIndex], cd->columnName, elem_ti, c.get(), cat_);
             elemIndex++;
           }
           arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, is_null));
@@ -2267,11 +2466,6 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
         CHECK(false);
     }
     ++col_idx;
-    if (col_idx == static_cast<size_t>(table_descriptor->shardedColumnId)) {
-      const auto shard_count = shard_tables.size();
-      const size_t shard_idx = SHARD_FOR_KEY(int_col_val, shard_count);
-      shard = shard_tables[shard_idx];
-    }
   }
   for (const auto& kv : col_buffers) {
     insert_data.columnIds.push_back(kv.first);
@@ -2292,17 +2486,31 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
     insert_data.data.push_back(p);
   }
   insert_data.numRows = 1;
-  if (shard) {
-    shard->fragmenter->insertData(insert_data);
+  auto data_memory_holder = import_export::fill_missing_columns(&cat_, insert_data);
+  const auto table_descriptor = cat_.getMetadataForTable(table_id);
+  CHECK(table_descriptor);
+  if (table_descriptor->nShards > 0) {
+    auto shard = get_shard_for_key(table_descriptor, cat_, insert_data);
+    CHECK(shard);
+    shard->fragmenter->insertDataNoCheckpoint(insert_data);
   } else {
-    table_descriptor->fragmenter->insertData(insert_data);
+    table_descriptor->fragmenter->insertDataNoCheckpoint(insert_data);
+  }
+
+  // Ensure checkpoint happens across all shards, if not in distributed
+  // mode (aggregator handles checkpointing in distributed mode)
+  if (!g_cluster &&
+      table_descriptor->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
+    const_cast<Catalog_Namespace::Catalog&>(cat_).checkpointWithAutoRollback(table_id);
   }
 
   auto rs = std::make_shared<ResultSet>(TargetInfoList{},
                                         ExecutorDeviceType::CPU,
                                         QueryMemoryDescriptor(),
                                         executor_->getRowSetMemoryOwner(),
-                                        executor_);
+                                        nullptr,
+                                        0,
+                                        0);
   std::vector<TargetMetaInfo> empty_targets;
   return {rs, empty_targets};
 }
@@ -2350,8 +2558,8 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   if (it != leaf_results_.end()) {
     // Add any transient string literals to the sdp on the agg
     const auto source_work_unit = createSortInputWorkUnit(sort, eo);
-    GroupByAndAggregate::addTransientStringLiterals(
-        source_work_unit.exe_unit, executor_, executor_->row_set_mem_owner_);
+    executor_->addTransientStringLiterals(source_work_unit.exe_unit,
+                                          executor_->row_set_mem_owner_);
     // Handle push-down for LIMIT for multi-node
     auto& aggregated_result = it->second;
     auto& result_rows = aggregated_result.rs;
@@ -2360,7 +2568,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     const auto order_entries = get_order_entries(sort);
     if (limit || offset) {
       if (!order_entries.empty()) {
-        result_rows->sort(order_entries, limit + offset);
+        result_rows->sort(order_entries, limit + offset, executor_);
       }
       result_rows->dropFirstN(offset);
       if (limit) {
@@ -2401,6 +2609,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
         eo.just_calcite_explain,
         eo.gpu_input_mem_limit_percent,
         eo.allow_runtime_query_interrupt,
+        eo.running_query_interrupt_freq,
         eo.pending_query_interrupt_freq,
         eo.executor_type,
     };
@@ -2428,8 +2637,9 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     if (sort->collationCount() != 0 && !rows_to_sort->definitelyHasNoRows() &&
         !use_speculative_top_n(source_work_unit.exe_unit,
                                rows_to_sort->getQueryMemDesc())) {
-      rows_to_sort->sort(source_work_unit.exe_unit.sort_info.order_entries,
-                         limit + offset);
+      const size_t top_n = limit == 0 ? 0 : limit + offset;
+      rows_to_sort->sort(
+          source_work_unit.exe_unit.sort_info.order_entries, top_n, executor_);
     }
     if (limit || offset) {
       if (g_cluster && sort->collationCount() == 0) {
@@ -2468,7 +2678,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
   const size_t scan_total_limit =
       scan_limit ? get_scan_limit(source, scan_limit + offset) : 0;
   size_t max_groups_buffer_entry_guess{
-      scan_total_limit ? scan_total_limit : max_groups_buffer_entry_default_guess};
+      scan_total_limit ? scan_total_limit : g_default_max_groups_buffer_entry_guess};
   SortAlgorithm sort_algorithm{SortAlgorithm::SpeculativeTopN};
   const auto order_entries = get_order_entries(sort);
   SortInfo sort_info{order_entries, sort_algorithm, limit, offset};
@@ -2510,6 +2720,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
                               nullptr,
                               {sort_info.order_entries, sort_algorithm, limit, offset},
                               scan_total_limit,
+                              source_exe_unit.query_hint,
                               source_exe_unit.use_bump_allocator,
                               source_exe_unit.union_all,
                               source_exe_unit.query_state},
@@ -2694,8 +2905,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   VLOG(3) << "body->getId()=" << body->getId() << " body->toString()=" << body->toString()
           << " it==leaf_results_.end()=" << (it == leaf_results_.end());
   if (it != leaf_results_.end()) {
-    GroupByAndAggregate::addTransientStringLiterals(
-        work_unit.exe_unit, executor_, executor_->row_set_mem_owner_);
+    executor_->addTransientStringLiterals(work_unit.exe_unit,
+                                          executor_->row_set_mem_owner_);
     auto& aggregated_result = it->second;
     auto& result_rows = aggregated_result.rs;
     ExecutionResult result(result_rows, aggregated_result.targets_meta);
@@ -2709,6 +2920,11 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
 
   auto ra_exe_unit = decide_approx_count_distinct_implementation(
       work_unit.exe_unit, table_infos, executor_, co.device_type, target_exprs_owned_);
+
+  // register query hint if query_dag_ is valid
+  ra_exe_unit.query_hint =
+      query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults();
+
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
   if (is_window_execution_unit(ra_exe_unit)) {
     CHECK_EQ(table_infos.size(), size_t(1));
@@ -2738,12 +2954,14 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                                                      co.device_type,
                                                      QueryMemoryDescriptor(),
                                                      nullptr,
-                                                     executor_),
+                                                     executor_->getCatalog(),
+                                                     executor_->blockSize(),
+                                                     executor_->gridSize()),
                          {}};
 
-  auto execute_and_handle_errors =
-      [&](const auto max_groups_buffer_entry_guess_in,
-          const bool has_cardinality_estimation) -> ExecutionResult {
+  auto execute_and_handle_errors = [&](const auto max_groups_buffer_entry_guess_in,
+                                       const bool has_cardinality_estimation,
+                                       const bool has_ndv_estimation) -> ExecutionResult {
     // Note that the groups buffer entry guess may be modified during query execution.
     // Create a local copy so we can track those changes if we need to attempt a retry
     // due to OOM
@@ -2761,6 +2979,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                                          column_cache),
               targets_meta};
     } catch (const QueryExecutionError& e) {
+      if (!has_ndv_estimation && e.getErrorCode() < 0) {
+        throw CardinalityEstimationRequired(/*range=*/0);
+      }
       handlePersistentError(e.getErrorCode());
       return handleOutOfMemoryRetry(
           {ra_exe_unit, work_unit.body, local_groups_buffer_entry_guess},
@@ -2779,24 +3000,29 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     auto cached_cardinality = executor_->getCachedCardinality(cache_key);
     auto card = cached_cardinality.second;
     if (cached_cardinality.first && card >= 0) {
-      result = execute_and_handle_errors(card, true);
+      result = execute_and_handle_errors(
+          card, /*has_cardinality_estimation=*/true, /*has_ndv_estimation=*/false);
     } else {
       result = execute_and_handle_errors(
           max_groups_buffer_entry_guess,
-          groups_approx_upper_bound(table_infos) <= g_big_group_threshold);
+          groups_approx_upper_bound(table_infos) <= g_big_group_threshold,
+          /*has_ndv_estimation=*/false);
     }
   } catch (const CardinalityEstimationRequired& e) {
     // check the cardinality cache
     auto cached_cardinality = executor_->getCachedCardinality(cache_key);
     auto card = cached_cardinality.second;
     if (cached_cardinality.first && card >= 0) {
-      result = execute_and_handle_errors(card, true);
+      result = execute_and_handle_errors(card, true, /*has_ndv_estimation=*/true);
     } else {
+      const auto ndv_groups_estimation =
+          getNDVEstimation(work_unit, e.range(), is_agg, co, eo);
       const auto estimated_groups_buffer_entry_guess =
-          2 * std::min(groups_approx_upper_bound(table_infos),
-                       getNDVEstimation(work_unit, e.range(), is_agg, co, eo));
+          ndv_groups_estimation > 0 ? 2 * ndv_groups_estimation
+                                    : 2 * groups_approx_upper_bound(table_infos);
       CHECK_GT(estimated_groups_buffer_entry_guess, size_t(0));
-      result = execute_and_handle_errors(estimated_groups_buffer_entry_guess, true);
+      result = execute_and_handle_errors(
+          estimated_groups_buffer_entry_guess, true, /*has_ndv_estimation=*/true);
       if (!(eo.just_validate || eo.just_explain)) {
         executor_->addToCardinalityCache(cache_key, estimated_groups_buffer_entry_guess);
       }
@@ -2847,6 +3073,11 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_u
                                    nullptr,
                                    false,
                                    column_cache);
+  } catch (const foreign_storage::ForeignStorageException& error) {
+    throw error;
+  } catch (const QueryMustRunOnCpu&) {
+    // force a retry of the top level query on CPU
+    throw;
   } catch (const std::exception& e) {
     LOG(WARNING) << "Failed to run pre-flight filtered count with error " << e.what();
     return std::nullopt;
@@ -2918,7 +3149,9 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                                             co.device_type,
                                                             QueryMemoryDescriptor(),
                                                             nullptr,
-                                                            executor_),
+                                                            executor_->getCatalog(),
+                                                            executor_->blockSize(),
+                                                            executor_->gridSize()),
                                 {}};
 
   const auto table_infos = get_table_infos(ra_exe_unit_in, executor_);
@@ -2935,7 +3168,8 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                    false,
                                    false,
                                    eo.gpu_input_mem_limit_percent,
-                                   false,
+                                   eo.allow_runtime_query_interrupt,
+                                   eo.running_query_interrupt_freq,
                                    eo.pending_query_interrupt_freq,
                                    eo.executor_type,
                                    eo.outer_fragment_indices};
@@ -3043,41 +3277,81 @@ void RelAlgExecutor::handlePersistentError(const int32_t error_code) {
   throw std::runtime_error(getErrorMessageFromCode(error_code));
 }
 
+namespace {
+struct ErrorInfo {
+  const char* code{nullptr};
+  const char* description{nullptr};
+};
+ErrorInfo getErrorDescription(const int32_t error_code) {
+  switch (error_code) {
+    case Executor::ERR_DIV_BY_ZERO:
+      return {.code = "ERR_DIV_BY_ZERO", .description = "Division by zero"};
+    case Executor::ERR_OUT_OF_GPU_MEM:
+      return {.code = "ERR_OUT_OF_GPU_MEM",
+              .description =
+                  "Query couldn't keep the entire working set of columns in GPU memory"};
+    case Executor::ERR_UNSUPPORTED_SELF_JOIN:
+      return {.code = "ERR_UNSUPPORTED_SELF_JOIN",
+              .description = "Self joins not supported yet"};
+    case Executor::ERR_OUT_OF_CPU_MEM:
+      return {.code = "ERR_OUT_OF_CPU_MEM",
+              .description = "Not enough host memory to execute the query"};
+    case Executor::ERR_OVERFLOW_OR_UNDERFLOW:
+      return {.code = "ERR_OVERFLOW_OR_UNDERFLOW",
+              .description = "Overflow or underflow"};
+    case Executor::ERR_OUT_OF_TIME:
+      return {.code = "ERR_OUT_OF_TIME",
+              .description = "Query execution has exceeded the time limit"};
+    case Executor::ERR_INTERRUPTED:
+      return {.code = "ERR_INTERRUPTED",
+              .description = "Query execution has been interrupted"};
+    case Executor::ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED:
+      return {
+          .code = "ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED",
+          .description = "Columnar conversion not supported for variable length types"};
+    case Executor::ERR_TOO_MANY_LITERALS:
+      return {.code = "ERR_TOO_MANY_LITERALS",
+              .description = "Too many literals in the query"};
+    case Executor::ERR_STRING_CONST_IN_RESULTSET:
+      return {.code = "ERR_STRING_CONST_IN_RESULTSET",
+              .description =
+                  "NONE ENCODED String types are not supported as input result set."};
+    case Executor::ERR_OUT_OF_RENDER_MEM:
+      return {.code = "ERR_OUT_OF_RENDER_MEM",
+              .description = "Not enough OpenGL memory to render the query results"};
+    case Executor::ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY:
+      return {.code = "ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY",
+              .description = "Streaming-Top-N not supported in Render Query"};
+    case Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES:
+      return {.code = "ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES",
+              .description = "Multiple distinct values encountered"};
+    case Executor::ERR_GEOS:
+      return {.code = "ERR_GEOS", .description = "ERR_GEOS"};
+    default:
+      return {.code = nullptr, .description = nullptr};
+  }
+}
+
+}  // namespace
+
 std::string RelAlgExecutor::getErrorMessageFromCode(const int32_t error_code) {
   if (error_code < 0) {
     return "Ran out of slots in the query output buffer";
   }
-  switch (error_code) {
-    case Executor::ERR_DIV_BY_ZERO:
-      return "Division by zero";
-    case Executor::ERR_OUT_OF_GPU_MEM:
-      return "Query couldn't keep the entire working set of columns in GPU memory";
-    case Executor::ERR_UNSUPPORTED_SELF_JOIN:
-      return "Self joins not supported yet";
-    case Executor::ERR_OUT_OF_CPU_MEM:
-      return "Not enough host memory to execute the query";
-    case Executor::ERR_OVERFLOW_OR_UNDERFLOW:
-      return "Overflow or underflow";
-    case Executor::ERR_OUT_OF_TIME:
-      return "Query execution has exceeded the time limit";
-    case Executor::ERR_INTERRUPTED:
-      return "Query execution has been interrupted";
-    case Executor::ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED:
-      return "Columnar conversion not supported for variable length types";
-    case Executor::ERR_TOO_MANY_LITERALS:
-      return "Too many literals in the query";
-    case Executor::ERR_STRING_CONST_IN_RESULTSET:
-      return "NONE ENCODED String types are not supported as input result set.";
-    case Executor::ERR_OUT_OF_RENDER_MEM:
-      return "Not enough OpenGL memory to render the query results";
-    case Executor::ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY:
-      return "Streaming-Top-N not supported in Render Query";
-    case Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES:
-      return "Multiple distinct values encountered";
-    case Executor::ERR_GEOS:
-      return "Geos call failure";
+  const auto errorInfo = getErrorDescription(error_code);
+
+  if (errorInfo.code) {
+    return errorInfo.code + ": "s + errorInfo.description;
+  } else {
+    return "Other error: code "s + std::to_string(error_code);
   }
-  return "Other error: code " + std::to_string(error_code);
+}
+
+void RelAlgExecutor::executePostExecutionCallback() {
+  if (post_execution_callback_) {
+    VLOG(1) << "Running post execution callback.";
+    (*post_execution_callback_)();
+  }
 }
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node,
@@ -3310,26 +3584,28 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                               translator,
                                               eo.executor_type);
   CHECK_EQ(compound->size(), target_exprs.size());
-  const RelAlgExecutionUnit exe_unit = {input_descs,
-                                        input_col_descs,
-                                        quals_cf.simple_quals,
-                                        rewrite_quals(quals_cf.quals),
-                                        left_deep_join_quals,
-                                        groupby_exprs,
-                                        target_exprs,
-                                        nullptr,
-                                        sort_info,
-                                        0,
-                                        false,
-                                        std::nullopt,
-                                        query_state_};
+  const RelAlgExecutionUnit exe_unit = {
+      input_descs,
+      input_col_descs,
+      quals_cf.simple_quals,
+      rewrite_quals(quals_cf.quals),
+      left_deep_join_quals,
+      groupby_exprs,
+      target_exprs,
+      nullptr,
+      sort_info,
+      0,
+      query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults(),
+      false,
+      std::nullopt,
+      query_state_};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta = get_targets_meta(compound, rewritten_exe_unit.target_exprs);
   compound->setOutputMetainfo(targets_meta);
   return {rewritten_exe_unit,
           compound,
-          max_groups_buffer_entry_default_guess,
+          g_default_max_groups_buffer_entry_guess,
           std::move(query_rewriter),
           input_permutation,
           left_deep_join_input_sizes};
@@ -3555,21 +3831,23 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
       target_exprs_owned_, scalar_sources, groupby_exprs, aggregate, translator);
   const auto targets_meta = get_targets_meta(aggregate, target_exprs);
   aggregate->setOutputMetainfo(targets_meta);
-  return {RelAlgExecutionUnit{input_descs,
-                              input_col_descs,
-                              {},
-                              {},
-                              {},
-                              groupby_exprs,
-                              target_exprs,
-                              nullptr,
-                              sort_info,
-                              0,
-                              false,
-                              std::nullopt,
-                              query_state_},
+  return {RelAlgExecutionUnit{
+              input_descs,
+              input_col_descs,
+              {},
+              {},
+              {},
+              groupby_exprs,
+              target_exprs,
+              nullptr,
+              sort_info,
+              0,
+              query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults(),
+              false,
+              std::nullopt,
+              query_state_},
           aggregate,
-          max_groups_buffer_entry_default_guess,
+          g_default_max_groups_buffer_entry_guess,
           nullptr};
 }
 
@@ -3625,26 +3903,28 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
 
-  const RelAlgExecutionUnit exe_unit = {input_descs,
-                                        input_col_descs,
-                                        {},
-                                        {},
-                                        left_deep_join_quals,
-                                        {nullptr},
-                                        target_exprs,
-                                        nullptr,
-                                        sort_info,
-                                        0,
-                                        false,
-                                        std::nullopt,
-                                        query_state_};
+  const RelAlgExecutionUnit exe_unit = {
+      input_descs,
+      input_col_descs,
+      {},
+      {},
+      left_deep_join_quals,
+      {nullptr},
+      target_exprs,
+      nullptr,
+      sort_info,
+      0,
+      query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults(),
+      false,
+      std::nullopt,
+      query_state_};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta = get_targets_meta(project, rewritten_exe_unit.target_exprs);
   project->setOutputMetainfo(targets_meta);
   return {rewritten_exe_unit,
           project,
-          max_groups_buffer_entry_default_guess,
+          g_default_max_groups_buffer_entry_guess,
           std::move(query_rewriter),
           input_permutation,
           left_deep_join_input_sizes};
@@ -3711,19 +3991,21 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
           << " target_exprs.size()=" << target_exprs.size()
           << " max_num_tuples=" << max_num_tuples;
 
-  const RelAlgExecutionUnit exe_unit = {input_descs,
-                                        input_col_descs,
-                                        {},  // quals_cf.simple_quals,
-                                        {},  // rewrite_quals(quals_cf.quals),
-                                        {},
-                                        {nullptr},
-                                        target_exprs,
-                                        nullptr,
-                                        sort_info,
-                                        max_num_tuples,
-                                        false,
-                                        logical_union->isAll(),
-                                        query_state_};
+  const RelAlgExecutionUnit exe_unit = {
+      input_descs,
+      input_col_descs,
+      {},  // quals_cf.simple_quals,
+      {},  // rewrite_quals(quals_cf.quals),
+      {},
+      {nullptr},
+      target_exprs,
+      nullptr,
+      sort_info,
+      max_num_tuples,
+      query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults(),
+      false,
+      logical_union->isAll(),
+      query_state_};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
 
@@ -3758,65 +4040,85 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
 
   return {rewritten_exe_unit,
           logical_union,
-          max_groups_buffer_entry_default_guess,
+          g_default_max_groups_buffer_entry_guess,
           std::move(query_rewriter)};
 }
 
 RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUnit(
-    const RelTableFunction* table_func,
+    const RelTableFunction* rel_table_func,
     const bool just_explain,
     const bool is_gpu) {
   std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  auto input_to_nest_level = get_input_nest_levels(table_func, {});
+  auto input_to_nest_level = get_input_nest_levels(rel_table_func, {});
   std::tie(input_descs, input_col_descs, std::ignore) =
-      get_input_desc(table_func, input_to_nest_level, {}, cat_);
+      get_input_desc(rel_table_func, input_to_nest_level, {}, cat_);
   const auto query_infos = get_table_infos(input_descs, executor_);
   RelAlgTranslator translator(
       cat_, query_state_, executor_, input_to_nest_level, {}, now_, just_explain);
   const auto input_exprs_owned =
-      translate_scalar_sources(table_func, translator, ::ExecutorType::Native);
+      translate_scalar_sources(rel_table_func, translator, ::ExecutorType::Native);
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), input_exprs_owned.begin(), input_exprs_owned.end());
-  const auto input_exprs = get_exprs_not_owned(input_exprs_owned);
+  auto input_exprs = get_exprs_not_owned(input_exprs_owned);
 
-  const auto table_function_impl = [=]() {
+  const auto table_function_impl_and_type_infos = [=]() {
     if (is_gpu) {
       try {
         return bind_table_function(
-            table_func->getFunctionName(), input_exprs_owned, is_gpu);
-      } catch (std::runtime_error& e) {
+            rel_table_func->getFunctionName(), input_exprs_owned, is_gpu);
+      } catch (ExtensionFunctionBindingError& e) {
         LOG(WARNING) << "createTableFunctionWorkUnit[GPU]: " << e.what()
-                     << " Redirecting " << table_func->getFunctionName()
+                     << " Redirecting " << rel_table_func->getFunctionName()
                      << " to run on CPU.";
         throw QueryMustRunOnCpu();
       }
     } else {
-      return bind_table_function(
-          table_func->getFunctionName(), input_exprs_owned, is_gpu);
+      try {
+        return bind_table_function(
+            rel_table_func->getFunctionName(), input_exprs_owned, is_gpu);
+      } catch (ExtensionFunctionBindingError& e) {
+        LOG(WARNING) << "createTableFunctionWorkUnit[CPU]: " << e.what();
+        throw;
+      }
     }
   }();
+  const auto& table_function_impl = std::get<0>(table_function_impl_and_type_infos);
+  const auto& table_function_type_infos = std::get<1>(table_function_impl_and_type_infos);
 
   size_t output_row_sizing_param = 0;
   if (table_function_impl.hasUserSpecifiedOutputSizeMultiplier() ||
       table_function_impl.hasUserSpecifiedOutputSizeConstant()) {
-    const auto parameter_index = table_function_impl.getOutputRowSizeParameter();
+    const auto parameter_index =
+        table_function_impl.getOutputRowSizeParameter(table_function_type_infos);
     CHECK_GT(parameter_index, size_t(0));
-    const auto parameter_expr = table_func->getTableFuncInputAt(parameter_index - 1);
-    const auto parameter_expr_literal = dynamic_cast<const RexLiteral*>(parameter_expr);
-    if (!parameter_expr_literal) {
-      throw std::runtime_error(
-          "Provided output buffer sizing parameter is not a literal. Only literal "
-          "values are supported with output buffer sizing configured table "
-          "functions.");
+    if (rel_table_func->countRexLiteralArgs() == table_function_impl.countScalarArgs()) {
+      const auto parameter_expr =
+          rel_table_func->getTableFuncInputAt(parameter_index - 1);
+      const auto parameter_expr_literal = dynamic_cast<const RexLiteral*>(parameter_expr);
+      if (!parameter_expr_literal) {
+        throw std::runtime_error(
+            "Provided output buffer sizing parameter is not a literal. Only literal "
+            "values are supported with output buffer sizing configured table "
+            "functions.");
+      }
+      int64_t literal_val = parameter_expr_literal->getVal<int64_t>();
+      if (literal_val < 0) {
+        throw std::runtime_error("Provided output sizing parameter " +
+                                 std::to_string(literal_val) +
+                                 " must be positive integer.");
+      }
+      output_row_sizing_param = static_cast<size_t>(literal_val);
+    } else {
+      // RowMultiplier not specified in the SQL query. Set it to 1
+      output_row_sizing_param = 1;  // default value for RowMultiplier
+      static Datum d = {DEFAULT_ROW_MULTIPLIER_VALUE};
+      static auto DEFAULT_ROW_MULTIPLIER_EXPR =
+          makeExpr<Analyzer::Constant>(kINT, false, d);
+      // Push the constant 1 to input_exprs
+      input_exprs.insert(input_exprs.begin() + parameter_index - 1,
+                         DEFAULT_ROW_MULTIPLIER_EXPR.get());
     }
-    int64_t literal_val = parameter_expr_literal->getVal<int64_t>();
-    if (literal_val < 0) {
-      throw std::runtime_error("Provided output sizing parameter " +
-                               std::to_string(literal_val) +
-                               " must be positive integer.");
-    }
-    output_row_sizing_param = static_cast<size_t>(literal_val);
   } else if (table_function_impl.hasNonUserSpecifiedOutputSizeConstant()) {
     output_row_sizing_param = table_function_impl.getOutputRowSizeParameter();
   } else {
@@ -3824,15 +4126,30 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   }
 
   std::vector<Analyzer::ColumnVar*> input_col_exprs;
-  size_t index = 0;
-  for (auto input_expr : input_exprs) {
-    if (auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr)) {
-      input_expr->set_type_info(table_function_impl.getInputSQLType(index));
+  size_t input_index = 0;
+  for (const auto& ti : table_function_type_infos) {
+    if (ti.is_column_list()) {
+      for (int i = 0; i < ti.get_dimension(); i++) {
+        auto& input_expr = input_exprs[input_index];
+        auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr);
+        CHECK(col_var);
+        input_expr->set_type_info(
+            ti);  // ti is shared in between all columns in the same column_list
+        input_col_exprs.push_back(col_var);
+        input_index++;
+      }
+    } else if (ti.is_column()) {
+      auto& input_expr = input_exprs[input_index];
+      auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr);
+      CHECK(col_var);
+      input_expr->set_type_info(ti);
       input_col_exprs.push_back(col_var);
+      input_index++;
+    } else {
+      input_index++;
     }
-    index++;
   }
-  CHECK_EQ(input_col_exprs.size(), table_func->getColInputsSize());
+  CHECK_EQ(input_col_exprs.size(), rel_table_func->getColInputsSize());
   std::vector<Analyzer::Expr*> table_func_outputs;
   for (size_t i = 0; i < table_function_impl.getOutputsSize(); i++) {
     const auto ti = table_function_impl.getOutputSQLType(i);
@@ -3847,9 +4164,9 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       table_func_outputs,       // table function projected exprs
       output_row_sizing_param,  // output buffer sizing param
       table_function_impl};
-  const auto targets_meta = get_targets_meta(table_func, exe_unit.target_exprs);
-  table_func->setOutputMetainfo(targets_meta);
-  return {exe_unit, table_func};
+  const auto targets_meta = get_targets_meta(rel_table_func, exe_unit.target_exprs);
+  rel_table_func->setOutputMetainfo(targets_meta);
+  return {exe_unit, rel_table_func};
 }
 
 namespace {
@@ -3933,9 +4250,10 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            target_exprs,
            nullptr,
            sort_info,
-           0},
+           0,
+           query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults()},
           filter,
-          max_groups_buffer_entry_default_guess,
+          g_default_max_groups_buffer_entry_guess,
           nullptr};
 }
 

@@ -16,14 +16,13 @@
 
 #include "ParquetDataWrapper.h"
 
-#include <regex>
+#include <queue>
 
 #include <arrow/filesystem/localfs.h>
 #include <boost/filesystem.hpp>
 
-#include "ForeignDataWrapperShared.h"
+#include "ForeignStorageException.h"
 #include "FsiJsonUtils.h"
-#include "ImportExport/Importer.h"
 #include "LazyParquetChunkLoader.h"
 #include "ParquetShared.h"
 #include "Utils/DdlUtils.h"
@@ -31,17 +30,6 @@
 namespace foreign_storage {
 
 namespace {
-template <typename T>
-std::pair<typename std::map<ChunkKey, T>::iterator,
-          typename std::map<ChunkKey, T>::iterator>
-prefix_range(std::map<ChunkKey, T>& map, const ChunkKey& chunk_key_prefix) {
-  ChunkKey chunk_key_prefix_sentinel = chunk_key_prefix;
-  chunk_key_prefix_sentinel.push_back(std::numeric_limits<int>::max());
-  auto begin = map.lower_bound(chunk_key_prefix);
-  auto end = map.upper_bound(chunk_key_prefix_sentinel);
-  return std::make_pair(begin, end);
-}
-
 void reduce_metadata(std::shared_ptr<ChunkMetadata> reduce_to,
                      std::shared_ptr<ChunkMetadata> reduce_from) {
   CHECK(reduce_to->sqlType == reduce_from->sqlType);
@@ -55,6 +43,10 @@ void reduce_metadata(std::shared_ptr<ChunkMetadata> reduce_to,
   // metadata reducution is done at metadata scan time, both string & geometry
   // columns have no valid stats to reduce beyond `has_nulls`
   if (column_type.is_string() || column_type.is_geometry()) {
+    // Reset to invalid range, as formerly valid metadata
+    // needs to be invalidated during an append for these types
+    reduce_to->chunkStats.max = reduce_from->chunkStats.max;
+    reduce_to->chunkStats.min = reduce_from->chunkStats.min;
     return;
   }
 
@@ -73,8 +65,9 @@ void reduce_metadata(std::shared_ptr<ChunkMetadata> reduce_to,
   encoder_to->getMetadata(updated_metadata);
   reduce_to->chunkStats = updated_metadata->chunkStats;
 }
-
 }  // namespace
+
+ParquetDataWrapper::ParquetDataWrapper() : db_id_(-1), foreign_table_(nullptr) {}
 
 ParquetDataWrapper::ParquetDataWrapper(const int db_id, const ForeignTable* foreign_table)
     : db_id_(db_id)
@@ -84,45 +77,13 @@ ParquetDataWrapper::ParquetDataWrapper(const int db_id, const ForeignTable* fore
     , total_row_count_(0)
     , last_row_group_(0)
     , is_restored_(false)
-    , schema_(std::make_unique<ForeignTableSchema>(db_id, foreign_table)) {
+    , schema_(std::make_unique<ForeignTableSchema>(db_id, foreign_table))
+    , file_reader_cache_(std::make_unique<FileReaderMap>()) {
   auto& server_options = foreign_table->foreign_server->options;
-  if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
-      ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
+  if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
     file_system_ = std::make_shared<arrow::fs::LocalFileSystem>();
   } else {
     UNREACHABLE();
-  }
-}
-
-ParquetDataWrapper::ParquetDataWrapper(const ForeignTable* foreign_table)
-    : db_id_(-1), foreign_table_(foreign_table) {}
-
-void ParquetDataWrapper::validateOptions(const ForeignTable* foreign_table) {
-  for (const auto& entry : foreign_table->options) {
-    const auto& table_options = foreign_table->supported_options;
-    if (std::find(table_options.begin(), table_options.end(), entry.first) ==
-            table_options.end() &&
-        std::find(supported_options_.begin(), supported_options_.end(), entry.first) ==
-            supported_options_.end()) {
-      throw std::runtime_error{"Invalid foreign table option \"" + entry.first + "\"."};
-    }
-  }
-  ParquetDataWrapper data_wrapper{foreign_table};
-  data_wrapper.validateAndGetCopyParams();
-  data_wrapper.validateFilePath();
-}
-
-std::vector<std::string_view> ParquetDataWrapper::getSupportedOptions() {
-  return std::vector<std::string_view>{supported_options_.begin(),
-                                       supported_options_.end()};
-}
-
-void ParquetDataWrapper::validateFilePath() const {
-  auto& server_options = foreign_table_->foreign_server->options;
-  if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
-      ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
-    ddl_utils::validate_allowed_file_path(getConfiguredFilePath(),
-                                          ddl_utils::DataTransferType::IMPORT);
   }
 }
 
@@ -134,11 +95,13 @@ void ParquetDataWrapper::resetParquetMetadata() {
   last_fragment_index_ = 0;
   last_fragment_row_count_ = 0;
   total_row_count_ = 0;
+  file_reader_cache_->clear();
 }
 
 std::list<const ColumnDescriptor*> ParquetDataWrapper::getColumnsToInitialize(
     const Interval<ColumnType>& column_interval) {
-  const auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id_);
+  const auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
+  CHECK(catalog);
   const auto& columns = schema_->getLogicalAndPhysicalColumns();
   auto column_start = column_interval.start;
   auto column_end = column_interval.end;
@@ -155,7 +118,7 @@ std::list<const ColumnDescriptor*> ParquetDataWrapper::getColumnsToInitialize(
 void ParquetDataWrapper::initializeChunkBuffers(
     const int fragment_index,
     const Interval<ColumnType>& column_interval,
-    std::map<ChunkKey, AbstractBuffer*>& required_buffers,
+    const ChunkToBufferMap& required_buffers,
     const bool reserve_buffers_and_set_stats) {
   for (const auto column : getColumnsToInitialize(column_interval)) {
     Chunk_NS::Chunk chunk{column};
@@ -163,20 +126,20 @@ void ParquetDataWrapper::initializeChunkBuffers(
     if (column->columnType.is_varlen_indeed()) {
       data_chunk_key = {
           db_id_, foreign_table_->tableId, column->columnId, fragment_index, 1};
-      auto data_buffer = required_buffers[data_chunk_key];
-      CHECK(data_buffer);
+      CHECK(required_buffers.find(data_chunk_key) != required_buffers.end());
+      auto data_buffer = required_buffers.at(data_chunk_key);
       chunk.setBuffer(data_buffer);
 
       ChunkKey index_chunk_key{
           db_id_, foreign_table_->tableId, column->columnId, fragment_index, 2};
-      auto index_buffer = required_buffers[index_chunk_key];
-      CHECK(index_buffer);
+      CHECK(required_buffers.find(index_chunk_key) != required_buffers.end());
+      auto index_buffer = required_buffers.at(index_chunk_key);
       chunk.setIndexBuffer(index_buffer);
     } else {
       data_chunk_key = {
           db_id_, foreign_table_->tableId, column->columnId, fragment_index};
-      auto data_buffer = required_buffers[data_chunk_key];
-      CHECK(data_buffer);
+      CHECK(required_buffers.find(data_chunk_key) != required_buffers.end());
+      auto data_buffer = required_buffers.at(data_chunk_key);
       chunk.setBuffer(data_buffer);
     }
     chunk.initEncoder();
@@ -250,7 +213,8 @@ void ParquetDataWrapper::addNewFile(const std::string& file_path) {
 }
 
 void ParquetDataWrapper::fetchChunkMetadata() {
-  auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id_);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
+  CHECK(catalog);
   std::set<std::string> new_file_paths;
   auto processed_file_paths = getProcessedFilePaths();
   if (foreign_table_->isAppendMode() && !processed_file_paths.empty()) {
@@ -268,13 +232,17 @@ void ParquetDataWrapper::fetchChunkMetadata() {
     }
 
     // Single file append
+    // If an append occurs with multiple files, then we assume any existing files have
+    // not been altered.  If an append occurs on a single file, then we check to see if
+    // it has changed.
     if (new_file_paths.empty() && all_file_paths.size() == 1) {
       CHECK_EQ(processed_file_paths.size(), static_cast<size_t>(1));
       const auto& file_path = *all_file_paths.begin();
       CHECK_EQ(*processed_file_paths.begin(), file_path);
 
-      std::unique_ptr<parquet::arrow::FileReader> reader;
-      open_parquet_table(file_path, reader, file_system_);
+      // Since an existing file is being appended to we need to update the cached
+      // FileReader as the existing one will be out of date.
+      auto reader = file_reader_cache_->insert(file_path, file_system_);
       size_t row_count = reader->parquet_reader()->metadata()->num_rows();
 
       if (row_count < total_row_count_) {
@@ -286,38 +254,14 @@ void ParquetDataWrapper::fetchChunkMetadata() {
       }
     }
   } else {
+    CHECK(chunk_metadata_map_.empty());
     new_file_paths = getAllFilePaths();
-    chunk_metadata_map_.clear();
     resetParquetMetadata();
   }
 
   if (!new_file_paths.empty()) {
     metadataScanFiles(new_file_paths);
   }
-}
-
-std::string ParquetDataWrapper::getConfiguredFilePath() const {
-  auto& server_options = foreign_table_->foreign_server->options;
-  std::string base_path;
-  if (server_options.find(ForeignServer::STORAGE_TYPE_KEY)->second ==
-      ForeignServer::LOCAL_FILE_STORAGE_TYPE) {
-    auto base_path_entry = server_options.find(ForeignServer::BASE_PATH_KEY);
-    if (base_path_entry == server_options.end()) {
-      throw std::runtime_error{"No base path found in foreign server options."};
-    }
-    base_path = base_path_entry->second;
-  } else {
-    UNREACHABLE();
-  }
-
-  auto file_path_entry = foreign_table_->options.find("FILE_PATH");
-  std::string file_path{};
-  if (file_path_entry != foreign_table_->options.end()) {
-    file_path = file_path_entry->second;
-  }
-  const std::string separator{boost::filesystem::path::preferred_separator};
-  return std::regex_replace(
-      base_path + separator + file_path, std::regex{separator + "{2,}"}, separator);
 }
 
 std::set<std::string> ParquetDataWrapper::getProcessedFilePaths() {
@@ -333,55 +277,39 @@ std::set<std::string> ParquetDataWrapper::getProcessedFilePaths() {
 std::set<std::string> ParquetDataWrapper::getAllFilePaths() {
   auto timer = DEBUG_TIMER(__func__);
   std::set<std::string> file_paths;
-  arrow::fs::FileSelector file_selector{};
-  std::string base_path = getConfiguredFilePath();
-  file_selector.base_dir = base_path;
-  file_selector.recursive = true;
-
-  auto file_info_result = file_system_->GetFileInfo(file_selector);
+  auto file_path = getFullFilePath(foreign_table_);
+  auto file_info_result = file_system_->GetFileInfo(file_path);
   if (!file_info_result.ok()) {
-    // This is expected when `base_path` points to a single file.
-    file_paths.emplace(base_path);
+    throw_file_access_error(file_path, file_info_result.status().message());
   } else {
-    auto& file_info_vector = file_info_result.ValueOrDie();
-    for (const auto& file_info : file_info_vector) {
-      if (file_info.type() == arrow::fs::FileType::File) {
-        file_paths.emplace(file_info.path());
+    auto& file_info = file_info_result.ValueOrDie();
+    if (file_info.type() == arrow::fs::FileType::NotFound) {
+      throw_file_not_found_error(file_path);
+    } else if (file_info.type() == arrow::fs::FileType::File) {
+      file_paths.emplace(file_path);
+    } else {
+      CHECK_EQ(arrow::fs::FileType::Directory, file_info.type());
+      arrow::fs::FileSelector file_selector{};
+      file_selector.base_dir = file_path;
+      file_selector.recursive = true;
+      auto selector_result = file_system_->GetFileInfo(file_selector);
+      if (!selector_result.ok()) {
+        throw_file_access_error(file_path, selector_result.status().message());
+      } else {
+        auto& file_info_vector = selector_result.ValueOrDie();
+        for (const auto& file_info : file_info_vector) {
+          if (file_info.type() == arrow::fs::FileType::File) {
+            file_paths.emplace(file_info.path());
+          }
+        }
       }
-    }
-    if (file_paths.empty()) {
-      throw std::runtime_error{"No file found at given path \"" + base_path + "\"."};
     }
   }
   return file_paths;
 }
 
-import_export::CopyParams ParquetDataWrapper::validateAndGetCopyParams() const {
-  import_export::CopyParams copy_params{};
-  // The file_type argument is never utilized in the context of FSI,
-  // for completeness, set the file_type
-  copy_params.file_type = import_export::FileType::PARQUET;
-  return copy_params;
-}
-
-std::string ParquetDataWrapper::validateAndGetStringWithLength(
-    const std::string& option_name,
-    const size_t expected_num_chars) const {
-  if (auto it = foreign_table_->options.find(option_name);
-      it != foreign_table_->options.end()) {
-    if (it->second.length() != expected_num_chars) {
-      throw std::runtime_error{"Value of \"" + option_name +
-                               "\" foreign table option has the wrong number of "
-                               "characters. Expected " +
-                               std::to_string(expected_num_chars) + " character(s)."};
-    }
-    return it->second;
-  }
-  return "";
-}
-
 void ParquetDataWrapper::metadataScanFiles(const std::set<std::string>& file_paths) {
-  LazyParquetChunkLoader chunk_loader(file_system_);
+  LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get());
   auto row_group_metadata = chunk_loader.metadataScan(file_paths, *schema_);
   auto column_interval =
       Interval<ColumnType>{schema_->getLogicalAndPhysicalColumns().front()->columnId,
@@ -444,8 +372,9 @@ void ParquetDataWrapper::populateChunkMetadata(
 void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
     const int logical_column_id,
     const int fragment_id,
-    std::map<ChunkKey, AbstractBuffer*>& required_buffers) {
-  auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id_);
+    const ChunkToBufferMap& required_buffers) {
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
+  CHECK(catalog);
   const ColumnDescriptor* logical_column =
       schema_->getColumnDescriptor(logical_column_id);
   auto parquet_column_index = schema_->getParquetColumnIndex(logical_column_id);
@@ -455,7 +384,7 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
       logical_column_id + logical_column->columnType.get_physical_cols()};
   initializeChunkBuffers(fragment_id, column_interval, required_buffers, true);
 
-  const auto& row_group_intervals = fragment_to_row_group_interval_map_[fragment_id];
+  const auto& row_group_intervals = fragment_to_row_group_interval_map_.at(fragment_id);
 
   const bool is_dictionary_encoded_string_column =
       logical_column->columnType.is_dict_encoded_string() ||
@@ -478,72 +407,94 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
     if (column_descriptor->columnType.is_varlen_indeed()) {
       ChunkKey data_chunk_key = {
           db_id_, foreign_table_->tableId, column_id, fragment_id, 1};
-      auto buffer = required_buffers[data_chunk_key];
-      CHECK(buffer);
+      auto buffer = required_buffers.at(data_chunk_key);
       chunk.setBuffer(buffer);
       ChunkKey index_chunk_key = {
           db_id_, foreign_table_->tableId, column_id, fragment_id, 2};
-      auto index_buffer = required_buffers[index_chunk_key];
-      CHECK(index_buffer);
+      auto index_buffer = required_buffers.at(index_chunk_key);
       chunk.setIndexBuffer(index_buffer);
     } else {
       ChunkKey chunk_key = {db_id_, foreign_table_->tableId, column_id, fragment_id};
-      auto buffer = required_buffers[chunk_key];
-      CHECK(buffer);
+      auto buffer = required_buffers.at(chunk_key);
       chunk.setBuffer(buffer);
     }
     chunks.emplace_back(chunk);
   }
 
-  LazyParquetChunkLoader chunk_loader(file_system_);
+  LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get());
   auto metadata = chunk_loader.loadChunk(
       row_group_intervals, parquet_column_index, chunks, string_dictionary);
   auto fragmenter = foreign_table_->fragmenter;
-  if (fragmenter) {
-    auto metadata_iter = metadata.begin();
-    for (int column_id = column_interval.start; column_id <= column_interval.end;
-         ++column_id, ++metadata_iter) {
-      auto column = schema_->getColumnDescriptor(column_id);
-      ChunkKey data_chunk_key = {db_id_, foreign_table_->tableId, column_id, fragment_id};
-      if (column->columnType.is_varlen_indeed()) {
-        data_chunk_key.emplace_back(1);
-      }
-      CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
-      auto cached_metadata = chunk_metadata_map_[data_chunk_key];
-      auto updated_metadata = std::make_shared<ChunkMetadata>();
-      *updated_metadata = *cached_metadata;
-      // for certain types, update the metadata statistics
-      if (is_dictionary_encoded_string_column ||
-          logical_column->columnType.is_geometry()) {
-        CHECK(metadata_iter != metadata.end());
-        auto& chunk_metadata_ptr = *metadata_iter;
-        updated_metadata->chunkStats.max = chunk_metadata_ptr->chunkStats.max;
-        updated_metadata->chunkStats.min = chunk_metadata_ptr->chunkStats.min;
-      }
-      CHECK(required_buffers.find(data_chunk_key) != required_buffers.end());
-      updated_metadata->numBytes = required_buffers[data_chunk_key]->size();
-      fragmenter->updateColumnChunkMetadata(column, fragment_id, updated_metadata);
+
+  auto metadata_iter = metadata.begin();
+  for (int column_id = column_interval.start; column_id <= column_interval.end;
+       ++column_id, ++metadata_iter) {
+    auto column = schema_->getColumnDescriptor(column_id);
+    ChunkKey data_chunk_key = {db_id_, foreign_table_->tableId, column_id, fragment_id};
+    if (column->columnType.is_varlen_indeed()) {
+      data_chunk_key.emplace_back(1);
+    }
+    CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
+
+    // Allocate new shared_ptr for metadata so we dont modify old one which may be used
+    // by executor
+    auto cached_metadata_previous = chunk_metadata_map_.at(data_chunk_key);
+    chunk_metadata_map_.at(data_chunk_key) = std::make_shared<ChunkMetadata>();
+    auto cached_metadata = chunk_metadata_map_.at(data_chunk_key);
+    *cached_metadata = *cached_metadata_previous;
+
+    CHECK(required_buffers.find(data_chunk_key) != required_buffers.end());
+    cached_metadata->numBytes = required_buffers.at(data_chunk_key)->size();
+
+    // for certain types, update the metadata statistics
+    // should update the fragmenter, cache, and the internal chunk_metadata_map_
+    if (is_dictionary_encoded_string_column || logical_column->columnType.is_geometry()) {
+      CHECK(metadata_iter != metadata.end());
+      auto& chunk_metadata_ptr = *metadata_iter;
+      cached_metadata->chunkStats.max = chunk_metadata_ptr->chunkStats.max;
+      cached_metadata->chunkStats.min = chunk_metadata_ptr->chunkStats.min;
+
+      // Update stats on buffer so it is saved in cache
+      required_buffers.at(data_chunk_key)
+          ->getEncoder()
+          ->resetChunkStats(cached_metadata->chunkStats);
+    }
+
+    if (fragmenter) {
+      fragmenter->updateColumnChunkMetadata(column, fragment_id, cached_metadata);
     }
   }
 }
 
-void ParquetDataWrapper::populateChunkBuffers(
-    std::map<ChunkKey, AbstractBuffer*>& required_buffers,
-    std::map<ChunkKey, AbstractBuffer*>& optional_buffers) {
-  CHECK(!required_buffers.empty());
-  auto fragment_id = required_buffers.begin()->first[CHUNK_KEY_FRAGMENT_IDX];
+void ParquetDataWrapper::populateChunkBuffers(const ChunkToBufferMap& required_buffers,
+                                              const ChunkToBufferMap& optional_buffers) {
+  ChunkToBufferMap buffers_to_load;
+  buffers_to_load.insert(required_buffers.begin(), required_buffers.end());
+  buffers_to_load.insert(optional_buffers.begin(), optional_buffers.end());
 
-  std::set<int> logical_column_ids;
-  for (const auto& [chunk_key, buffer] : required_buffers) {
-    CHECK_EQ(fragment_id, chunk_key[CHUNK_KEY_FRAGMENT_IDX]);
+  CHECK(!buffers_to_load.empty());
+
+  std::set<ForeignStorageMgr::ParallelismHint> col_frag_hints;
+  for (const auto& [chunk_key, buffer] : buffers_to_load) {
     CHECK_EQ(buffer->size(), static_cast<size_t>(0));
-    const auto column_id =
-        schema_->getLogicalColumn(chunk_key[CHUNK_KEY_COLUMN_IDX])->columnId;
-    logical_column_ids.emplace(column_id);
+    col_frag_hints.emplace(
+        schema_->getLogicalColumn(chunk_key[CHUNK_KEY_COLUMN_IDX])->columnId,
+        chunk_key[CHUNK_KEY_FRAGMENT_IDX]);
   }
 
-  for (const auto column_id : logical_column_ids) {
-    loadBuffersUsingLazyParquetChunkLoader(column_id, fragment_id, required_buffers);
+  auto hints_per_thread = partition_for_threads(col_frag_hints, g_max_import_threads);
+
+  std::vector<std::future<void>> futures;
+  for (const auto& hint_set : hints_per_thread) {
+    futures.emplace_back(std::async(std::launch::async, [&, hint_set, this] {
+      for (const auto& [col_id, frag_id] : hint_set) {
+        loadBuffersUsingLazyParquetChunkLoader(col_id, frag_id, buffers_to_load);
+      }
+    }));
+  }
+
+  for (auto& future : futures) {
+    future.get();
   }
 }
 
@@ -563,8 +514,7 @@ void get_value(const rapidjson::Value& json_val, RowGroupInterval& value) {
   json_utils::get_value_from_object(json_val, value.end_index, "end_index");
 }
 
-void ParquetDataWrapper::serializeDataWrapperInternals(
-    const std::string& file_path) const {
+std::string ParquetDataWrapper::getSerializedDataWrapper() const {
   rapidjson::Document d;
   d.SetObject();
 
@@ -579,8 +529,7 @@ void ParquetDataWrapper::serializeDataWrapperInternals(
       d, last_fragment_row_count_, "last_fragment_row_count", d.GetAllocator());
   json_utils::add_value_to_object(
       d, total_row_count_, "total_row_count", d.GetAllocator());
-
-  json_utils::write_to_file(d, file_path);
+  return json_utils::write_to_string(d);
 }
 
 void ParquetDataWrapper::restoreDataWrapperInternals(

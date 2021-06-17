@@ -14,10 +14,12 @@ yay -S \
     aws-sdk-cpp \
     blosc \
     boost \
+    c-ares \
     clang \
     cmake \
     cuda \
     doxygen \
+    flex \
     gcc \
     gdal \
     geos \
@@ -28,6 +30,7 @@ yay -S \
     intel-tbb \
     jdk-openjdk \
     librdkafka \
+    libuv \
     llvm \
     lz4 \
     maven \

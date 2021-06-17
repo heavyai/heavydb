@@ -1101,3 +1101,4 @@ EXTENSION_NOINLINE bool is_point_size_in_merc_view(const double lon,
 
 #include "ExtensionFunctionsArray.hpp"
 #include "ExtensionFunctionsGeo.hpp"
+#include "ExtensionFunctionsTesting.hpp"

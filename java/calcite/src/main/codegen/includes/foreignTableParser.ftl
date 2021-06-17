@@ -241,6 +241,24 @@ OmniSqlEncoding Encoding() :
     { return new OmniSqlEncoding(type.toString(), size); }
 }
 
+// TODO: Foreign table and server use different object types
+// for processing options. Update to use the same methods/object types
+
+/*
+ * Parse one or more options following the SET keyword.
+ *
+ * SET ( <option> = <value> [, ... ] )
+ */
+OmniSqlOptionsMap SetOptions() :
+{
+    OmniSqlOptionsMap optionMap = new OmniSqlOptionsMap();
+}
+{
+  <SET>
+  optionMap = TableOptions()
+  { return optionMap; }
+}
+
 /*
  * Parse one or more OmniSqlOptions following the WITH keyword.
  *
@@ -249,15 +267,25 @@ OmniSqlEncoding Encoding() :
 OmniSqlOptionsMap WithOptions() :
 {
     OmniSqlOptionsMap optionMap = new OmniSqlOptionsMap();
+}
+{
+  <WITH>
+  optionMap = TableOptions()
+  { return optionMap; }
+}
+
+OmniSqlOptionsMap TableOptions() :
+{
+    OmniSqlOptionsMap optionMap = new OmniSqlOptionsMap();
     OmniSqlOptionPair optionPair = null;
 }
 {
-  <WITH> <LPAREN>
-  optionPair = WithOption()
+  <LPAREN>
+  optionPair = TableOption()
   { optionMap.put(optionPair.getKey(), optionPair.getValue().toString()); }
   (
     <COMMA>
-    optionPair = WithOption()
+    optionPair = TableOption()
     { optionMap.put(optionPair.getKey(), optionPair.getValue().toString()); }
   )*
   <RPAREN>
@@ -269,29 +297,29 @@ OmniSqlOptionsMap WithOptions() :
  *
  * <option> = <value>
  */
-OmniSqlOptionPair WithOption() :
+OmniSqlOptionPair TableOption() :
 {
-    final SqlIdentifier withOption;
-    final String withOptionString;
-    final SqlNode withValue;
+    final SqlIdentifier option;
+    final String optionString;
+    final SqlNode value;
 }
 {
     (
       // Special rule required to handle "escape" option, since ESCAPE is a keyword
       <ESCAPE>
       {
-        withOptionString = "escape";
+        optionString = "escape";
       }
     |
-      withOption = CompoundIdentifier()
+      option = CompoundIdentifier()
       {
-        withOptionString = withOption.toString();
+        optionString = option.toString();
       }
     )
     <EQ>
-    withValue = Literal()
-    { return new OmniSqlOptionPair(withOptionString,
-                                   new OmniSqlSanitizedString(withValue)); }
+    value = Literal()
+    { return new OmniSqlOptionPair(optionString,
+                                   new OmniSqlSanitizedString(value)); }
 }
 
 /*
@@ -340,21 +368,44 @@ SqlDdl SqlRefreshForeignTables(Span s) : {
 /**
  * ALTER FOREIGN TABLE DDL syntax variants:
  *
- * ALTER FOREIGN TABLE <table> [ WITH (<option> = <value> [, ... ] ) ]
+ * ALTER FOREIGN TABLE <table> [ SET (<option> = <value> [, ... ] ) ]
+ * ALTER FOREIGN TABLE <table> RENAME TO <new_table>
+ * ALTER FOREIGN TABLE <table> RENAME COLUMN <old_column> TO <new_column>
  */
 SqlDdl SqlAlterForeignTable(Span s) :
 {
     SqlAlterForeignTable.Builder sqlAlterForeignTableBuilder =
         new SqlAlterForeignTable.Builder();
     SqlIdentifier tableName;
+    SqlIdentifier newTableName;
+    SqlIdentifier oldColumnName;
+    SqlIdentifier newColumnName;
     OmniSqlOptionsMap optionsMap = null;
 }
 {
     <ALTER> <FOREIGN> <TABLE>
     tableName=CompoundIdentifier()
     { sqlAlterForeignTableBuilder.setTableName(tableName.toString()); }
-    optionsMap = WithOptions()
-    { sqlAlterForeignTableBuilder.setOptions(optionsMap); }
+    (
+        <RENAME>
+        (
+            <TO>
+            newTableName=CompoundIdentifier()
+            { sqlAlterForeignTableBuilder.alterTableName(newTableName.toString()); }
+        |
+            <COLUMN>
+            oldColumnName=CompoundIdentifier()
+            <TO>
+            newColumnName=CompoundIdentifier()
+            {
+                sqlAlterForeignTableBuilder.alterColumnName(oldColumnName.toString(),
+                                                            newColumnName.toString());
+            }
+        )
+    |
+        optionsMap = SetOptions()
+        { sqlAlterForeignTableBuilder.alterOptions(optionsMap); }
+    )
     {
         sqlAlterForeignTableBuilder.setPos(s.end(this));
         return sqlAlterForeignTableBuilder.build();

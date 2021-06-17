@@ -41,9 +41,10 @@
     }                                                                             \
   }
 
-DEFINE_ENUM_WITH_STRING_CONVERSIONS(MgrType,
-                                    (FILE_MGR)(CPU_MGR)(GPU_MGR)(GLOBAL_FILE_MGR)(
-                                        PERSISTENT_STORAGE_MGR)(FOREIGN_STORAGE_MGR))
+DEFINE_ENUM_WITH_STRING_CONVERSIONS(
+    MgrType,
+    (CACHING_FILE_MGR)(FILE_MGR)(CPU_MGR)(GPU_MGR)(GLOBAL_FILE_MGR)(
+        PERSISTENT_STORAGE_MGR)(FOREIGN_STORAGE_MGR))
 
 namespace Data_Namespace {
 

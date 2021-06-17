@@ -22,6 +22,7 @@
 #include <gtest/gtest.h>
 
 #include "DBHandlerTestHelpers.h"
+#include "DataMgr/ForeignStorage/AbstractFileStorageDataWrapper.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -29,16 +30,38 @@
 #endif
 
 extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
+
+namespace {
+std::string get_file_server_options() {
+  return
+      // Supported options are returned in a sorted order
+      "BASE_PATH, "
+      "STORAGE_TYPE.";
+}
+
+std::string get_file_storage_types() {
+  return "LOCAL_FILE"
+         ".";
+}
+
+std::string get_data_wrapper_types() {
+  return "OMNISCI_PARQUET, OMNISCI_CSV"
+         ".";
+}
+}  // namespace
 
 class CreateForeignServerTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
     g_enable_fsi = true;
+    g_enable_s3_fsi = true;
     DBHandlerTestFixture::SetUp();
     getCatalog().dropForeignServer("test_server");
   }
 
   void TearDown() override {
+    g_enable_s3_fsi = true;
     getCatalog().dropForeignServer("test_server");
     DBHandlerTestFixture::TearDown();
   }
@@ -52,19 +75,20 @@ class CreateForeignServerTest : public DBHandlerTestFixture {
     ASSERT_EQ(foreign_storage::DataWrapperType::CSV, foreign_server->data_wrapper_type);
     ASSERT_EQ(OMNISCI_ROOT_USER_ID, foreign_server->user_id);
 
-    ASSERT_TRUE(
-        foreign_server->options.find(foreign_storage::ForeignServer::STORAGE_TYPE_KEY) !=
-        foreign_server->options.end());
-    ASSERT_EQ(
-        foreign_storage::ForeignServer::LOCAL_FILE_STORAGE_TYPE,
-        foreign_server->options.find(foreign_storage::ForeignServer::STORAGE_TYPE_KEY)
-            ->second);
+    ASSERT_TRUE(foreign_server->options.find(
+                    foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY) !=
+                foreign_server->options.end());
+    ASSERT_EQ(foreign_storage::AbstractFileStorageDataWrapper::LOCAL_FILE_STORAGE_TYPE,
+              foreign_server->options
+                  .find(foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY)
+                  ->second);
 
-    ASSERT_TRUE(
-        foreign_server->options.find(foreign_storage::ForeignServer::BASE_PATH_KEY) !=
-        foreign_server->options.end());
+    ASSERT_TRUE(foreign_server->options.find(
+                    foreign_storage::AbstractFileStorageDataWrapper::BASE_PATH_KEY) !=
+                foreign_server->options.end());
     ASSERT_EQ("/test_path/",
-              foreign_server->options.find(foreign_storage::ForeignServer::BASE_PATH_KEY)
+              foreign_server->options
+                  .find(foreign_storage::AbstractFileStorageDataWrapper::BASE_PATH_KEY)
                   ->second);
   }
 };
@@ -118,8 +142,7 @@ TEST_F(CreateForeignServerTest, MissingBasePath) {
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(storage_type = 'LOCAL_FILE');"};
-  queryAndAssertException(
-      query, "Exception: Foreign server options must contain \"BASE_PATH\".");
+  sql(query);
 }
 
 TEST_F(CreateForeignServerTest, InvalidOption) {
@@ -127,8 +150,9 @@ TEST_F(CreateForeignServerTest, InvalidOption) {
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(invalid_key = 'value', storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   std::string error_message{
-      "Exception: Invalid option \"INVALID_KEY\". "
-      "Option must be one of the following: STORAGE_TYPE, BASE_PATH."};
+      "Exception: Invalid foreign server option \"INVALID_KEY\". "
+      "Option must be one of the following: " +
+      get_file_server_options()};
   queryAndAssertException(query, error_message);
 }
 
@@ -137,8 +161,9 @@ TEST_F(CreateForeignServerTest, InvalidStorageType) {
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(storage_type = 'INVALID_TYPE', base_path = '/test_path/');"};
   std::string error_message{
-      "Exception: Invalid storage type value. Value must be one of the following: "
-      "LOCAL_FILE."};
+      "Exception: Invalid \"STORAGE_TYPE\" option value. Value must be one of the "
+      "following: " +
+      get_file_storage_types()};
   queryAndAssertException(query, error_message);
 }
 
@@ -156,8 +181,15 @@ TEST_F(CreateForeignServerTest, InvalidDataWrapper) {
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   std::string error_message{
       "Exception: Invalid data wrapper type \"INVALID_WRAPPER\". "
-      "Data wrapper type must be one of the following: OMNISCI_CSV, OMNISCI_PARQUET."};
+      "Data wrapper type must be one of the following: " +
+      get_data_wrapper_types()};
   queryAndAssertException(query, error_message);
+}
+
+TEST_F(CreateForeignServerTest, MissingWithClause) {
+  std::string query{"CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_parquet;"};
+  queryAndAssertException(
+      query, "Exception: Foreign server options must contain \"STORAGE_TYPE\".");
 }
 
 class DropForeignServerTest : public DBHandlerTestFixture {
@@ -207,9 +239,9 @@ TEST_F(DropForeignServerTest, NonExistingServerWithIfExists) {
 }
 
 TEST_F(DropForeignServerTest, NonExistingServerWithoutIfExists) {
-  queryAndAssertException(
-      "DROP SERVER test_server_2;",
-      "Exception: Foreign server with name \"test_server_2\" does not exist.");
+  queryAndAssertException("DROP SERVER test_server_2;",
+                          "Exception: Foreign server with name \"test_server_2\" can not "
+                          "be dropped. Server does not exist.");
 }
 
 TEST_F(DropForeignServerTest, DefaultServers) {
@@ -609,16 +641,14 @@ class ShowForeignServerTest : public DBHandlerTestFixture {
     ASSERT_EQ(num_matches, 1);
   }
   void assertServerLocalCSVFound(const TQueryResult& result) {
-    assertServerResultFound(result,
-                            "omnisci_local_csv",
-                            "OMNISCI_CSV",
-                            "{\"BASE_PATH\":\"/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
+    assertServerResultFound(
+        result, "omnisci_local_csv", "OMNISCI_CSV", "{\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
   }
   void assertServerLocalParquetFound(const TQueryResult& result) {
     assertServerResultFound(result,
                             "omnisci_local_parquet",
                             "OMNISCI_PARQUET",
-                            "{\"BASE_PATH\":\"/\",\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
+                            "{\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
   }
 
   void assertNumResults(const TQueryResult& result, size_t num_results) {
@@ -843,14 +873,14 @@ TEST_F(ShowForeignServerTest, SHOW_PRIVILEGE) {
 
 TEST_F(ShowForeignServerTest, BadTimestamp) {
   std::string query{"SHOW SERVERS WHERE created_at = 'test';"};
-  queryAndAssertException(query, "Exception: Invalid DATE/TIMESTAMP string (test)");
+  queryAndAssertException(query, "Exception: Invalid TIMESTAMP string (test)");
 }
 
 TEST_F(ShowForeignServerTest, BadQuery) {
   std::string query{"SHOW SERVERS WHERE server_name 'x' ;"};
   queryAndAssertException(
       query,
-      "Exception: Parse failed: Encountered \"\\'x\\'\" at line 1, column 32.\nWas "
+      "Exception: SQL Error: Encountered \"\\'x\\'\" at line 1, column 32.\nWas "
       "expecting one of:\n"
       "    \"LIKE\" ...\n    \"=\" ...\n    \".\" ...\n    ");
 }
@@ -989,7 +1019,7 @@ TEST_F(AlterForeignServerTest, SetDataWrapper) {
 
 TEST_F(AlterForeignServerTest, ModifyOption) {
   createTestServer();
-  sql("ALTER SERVER test_server WITH ( base_path = '/new_path/' );");
+  sql("ALTER SERVER test_server SET ( base_path = '/new_path/' );");
   assertExpectedForeignServer(
       createExpectedForeignServer("test_server",
                                   "omnisci_csv",
@@ -1121,10 +1151,11 @@ TEST_F(AlterForeignServerTest, RenameServerToOmniSciPrefix) {
 
 TEST_F(AlterForeignServerTest, InvalidOption) {
   createTestServer();
-  std::string query{"ALTER SERVER test_server WITH (invalid_key = 'value');"};
+  std::string query{"ALTER SERVER test_server SET (invalid_key = 'value');"};
   std::string error_message{
-      "Exception: Invalid option \"INVALID_KEY\". "
-      "Option must be one of the following: STORAGE_TYPE, BASE_PATH."};
+      "Exception: Invalid foreign server option \"INVALID_KEY\". "
+      "Option must be one of the following: " +
+      get_file_server_options()};
   queryAndAssertException(query, error_message);
   assertExpectedForeignServer(
       createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
@@ -1133,11 +1164,12 @@ TEST_F(AlterForeignServerTest, InvalidOption) {
 TEST_F(AlterForeignServerTest, InvalidStorageType) {
   createTestServer();
   std::string query{
-      "ALTER SERVER test_server WITH "
+      "ALTER SERVER test_server SET "
       "(storage_type = 'INVALID_TYPE', base_path = '/test_path/');"};
   std::string error_message{
-      "Exception: Invalid storage type value. Value must be one of the following: "
-      "LOCAL_FILE."};
+      "Exception: Invalid \"STORAGE_TYPE\" option value. Value must be one of the "
+      "following: " +
+      get_file_storage_types()};
 
   queryAndAssertException(query, error_message);
   assertExpectedForeignServer(
@@ -1149,7 +1181,8 @@ TEST_F(AlterForeignServerTest, InvalidDataWrapper) {
   std::string query{"ALTER SERVER test_server SET FOREIGN DATA WRAPPER invalid_wrapper;"};
   std::string error_message{
       "Exception: Invalid data wrapper type \"INVALID_WRAPPER\". "
-      "Data wrapper type must be one of the following: OMNISCI_CSV, OMNISCI_PARQUET."};
+      "Data wrapper type must be one of the following: " +
+      get_data_wrapper_types()};
   queryAndAssertException(query, error_message);
   assertExpectedForeignServer(
       createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
@@ -1157,6 +1190,7 @@ TEST_F(AlterForeignServerTest, InvalidDataWrapper) {
 
 int main(int argc, char** argv) {
   g_enable_fsi = true;
+  g_enable_s3_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 

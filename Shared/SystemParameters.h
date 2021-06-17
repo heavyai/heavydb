@@ -26,6 +26,9 @@
 #include <string>
 
 struct SystemParameters {
+  bool cpu_only = false;            // cpu-only execution
+  int num_gpus = -1;                // number of gpus to use
+  int start_gpu = 0;                // first gpu to use
   size_t cuda_block_size = 0;       // block size for the kernel execution
   size_t cuda_grid_size = 0;        // grid size for the kernel execution
   size_t calcite_max_mem = 1024;    // max memory for calcite jvm in MB
@@ -35,6 +38,8 @@ struct SystemParameters {
   std::string ha_unique_server_id;  // name of the HA unique id for this server
   std::string ha_brokers;           // name of the HA broker
   std::string ha_shared_data;       // name of shared data directory base
+  std::string master_address;       // address the RW master node is located
+  int master_port = 6274;           // port the RW master node is listening on
   bool is_decr_start_epoch;         // are we doing a start epoch decrement?
   size_t cpu_buffer_mem_bytes = 0;  // max size of memory reserved for CPU buffers [bytes]
   size_t gpu_buffer_mem_bytes = 0;  // max size of memory reserved for GPU buffers [bytes]
@@ -67,6 +72,7 @@ struct SystemParameters {
       5000;  // calcite send/receive timeout (connect timeout hard coded to 2s)
   size_t calcite_keepalive = false;  // calcite keepalive connection
   int num_executors = 1;
+  int num_sessions = -1;  // maximum number of user sessions
 
   SystemParameters() : cuda_block_size(0), cuda_grid_size(0), calcite_max_mem(1024) {}
 };

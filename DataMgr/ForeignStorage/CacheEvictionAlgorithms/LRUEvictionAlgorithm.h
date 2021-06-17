@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,7 @@
  */
 
 /**
- * @file	LRUEvictionAlgorithm.h
- * @author	Misiu Godfrey <misiu.godfrey@omnisci.com>
+ * @file LRUEvictionAlgorithm.h
  *
  * This file includes the class specification for the Least Recently Used cache eviction
  * algorithm used by the Foreign Storage Interface (FSI).
@@ -34,11 +33,12 @@
 #include <cstddef>
 #include <list>
 #include "CacheEvictionAlgorithm.h"
+#include "Shared/mapd_shared_mutex.h"
 
 class LRUEvictionAlgorithm : public CacheEvictionAlgorithm {
  public:
   ~LRUEvictionAlgorithm() override {}
-  // Returns the next chunk to evict.
+  // Returns the next chunk to evict and evicts.
   const ChunkKey evictNextChunk() override;
   // Update the algorithm knowing that this chunk was recently touched by the system.
   void touchChunk(const ChunkKey&) override;
@@ -50,4 +50,5 @@ class LRUEvictionAlgorithm : public CacheEvictionAlgorithm {
  private:
   std::list<ChunkKey> cache_items_list_;
   std::map<const ChunkKey, std::list<ChunkKey>::iterator> cache_items_map_;
+  mutable mapd_shared_mutex cache_mutex_;
 };

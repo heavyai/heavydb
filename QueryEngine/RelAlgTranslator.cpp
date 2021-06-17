@@ -245,6 +245,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
             "1 and 100");
       }
     }
+    if (g_cluster && agg_kind == kAPPROX_MEDIAN) {
+      throw std::runtime_error(
+          "APPROX_MEDIAN is not supported in distributed mode at this time.");
+    }
     const auto& arg_ti = arg_expr->get_type_info();
     if (!is_agg_supported_for_type(agg_kind, arg_ti)) {
       throw std::runtime_error("Aggregate on " + arg_ti.get_type_name() +
@@ -263,6 +267,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
                                    rex_literal->getTypeScale(),
                                    rex_literal->getTypePrecision());
   switch (rex_literal->getType()) {
+    case kINT:
+    case kBIGINT: {
+      Datum d;
+      d.bigintval = rex_literal->getVal<int64_t>();
+      return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
+    }
     case kDECIMAL: {
       const auto val = rex_literal->getVal<int64_t>();
       const int precision = rex_literal->getPrecision();
@@ -340,6 +350,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(
     throw std::runtime_error("Scalar sub-query returned multiple rows");
   }
   if (row_count == size_t(0)) {
+    if (row_set->isValidationOnlyRes()) {
+      Datum d{0};
+      return makeExpr<Analyzer::Constant>(rex_subquery->getType(), false, d);
+    }
     throw std::runtime_error("Scalar sub-query returned no results");
   }
   CHECK_EQ(row_count, size_t(1));
@@ -526,9 +540,9 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
 }  // namespace
 
 // Creates an Analyzer expression for an IN subquery which subsequently goes through the
-// regular Executor::codegen() mechanism. The creation of the expression out of subquery's
-// result set is parallelized whenever possible. In addition, take advantage of additional
-// information that elements in the right hand side are constants; see
+// regular Executor::codegen() mechanism. The creation of the expression out of
+// subquery's result set is parallelized whenever possible. In addition, take advantage
+// of additional information that elements in the right hand side are constants; see
 // getInIntegerSetExpr().
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
     const RexOperator* rex_operator) const {
@@ -663,8 +677,8 @@ void fill_integer_in_vals(std::vector<int64_t>& in_vals,
 // therefore it won't be able to handle a right-hand side sub-query with a CASE
 // returning literals on some branches. That case isn't hard too handle either, but
 // it's not clear it's actually important in practice.
-// RelAlgTranslator::getInIntegerSetExpr makes sure, by checking the encodings, that this
-// function isn't called in such cases.
+// RelAlgTranslator::getInIntegerSetExpr makes sure, by checking the encodings, that
+// this function isn't called in such cases.
 void fill_dictionary_encoded_in_vals(
     std::vector<int64_t>& in_vals,
     std::atomic<size_t>& total_in_vals_count,
@@ -1085,7 +1099,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatePlusMinus(
     if (datetime_ti.is_high_precision_timestamp() ||
         rhs_ti.is_high_precision_timestamp()) {
       throw std::runtime_error(
-          "High Precision timestamps are not supported for TIMESTAMPDIFF operation. Use "
+          "High Precision timestamps are not supported for TIMESTAMPDIFF operation. "
+          "Use "
           "DATEDIFF.");
     }
     auto bigint_ti = SQLTypeInfo(kBIGINT, false);
@@ -1263,7 +1278,21 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateItem(
       base->get_type_info().get_elem_type(), false, kARRAY_AT, kONE, base, index);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateNow() const {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentDate() const {
+  constexpr bool is_null = false;
+  Datum datum;
+  datum.bigintval = now_ - now_ % (24 * 60 * 60);  // Assumes 0 < now_.
+  return makeExpr<Analyzer::Constant>(kDATE, is_null, datum);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentTime() const {
+  constexpr bool is_null = false;
+  Datum datum;
+  datum.bigintval = now_ % (24 * 60 * 60);  // Assumes 0 < now_.
+  return makeExpr<Analyzer::Constant>(kTIME, is_null, datum);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentTimestamp() const {
   return Parser::TimestampLiteral::get(now_);
 }
 
@@ -1280,7 +1309,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatetime(
   if (*arg_lit->get_constval().stringval != "NOW"sv) {
     throw std::runtime_error(datetime_err);
   }
-  return translateNow();
+  return translateCurrentTimestamp();
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAbs(
@@ -1427,8 +1456,17 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   if (rex_function->getName() == "ITEM"sv) {
     return translateItem(rex_function);
   }
+  if (rex_function->getName() == "CURRENT_DATE"sv) {
+    return translateCurrentDate();
+  }
+  if (rex_function->getName() == "CURRENT_TIME"sv) {
+    return translateCurrentTime();
+  }
+  if (rex_function->getName() == "CURRENT_TIMESTAMP"sv) {
+    return translateCurrentTimestamp();
+  }
   if (rex_function->getName() == "NOW"sv) {
-    return translateNow();
+    return translateCurrentTimestamp();
   }
   if (rex_function->getName() == "DATETIME"sv) {
     return translateDatetime(rex_function);
@@ -1540,6 +1578,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "ST_Disjoint"sv,
                    "ST_Contains"sv,
                    "ST_Overlaps"sv,
+                   "ST_Approx_Overlaps"sv,
                    "ST_Within"sv)) {
     CHECK_EQ(rex_function->size(), size_t(2));
     return translateBinaryGeoFunction(rex_function);
@@ -1590,19 +1629,29 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   // wrong in the case of multiple implementations of UDF functions
   // that have different return types but Calcite specifies the return
   // type according to the first implementation.
-  auto ext_func_sig = bind_function(rex_function->getName(), arg_expr_list);
-  auto ext_func_args = ext_func_sig.getArgs();
-  CHECK_EQ(arg_expr_list.size(), ext_func_args.size());
-  for (size_t i = 0; i < arg_expr_list.size(); i++) {
-    // fold casts on constants
-    if (auto constant = std::dynamic_pointer_cast<Analyzer::Constant>(arg_expr_list[i])) {
-      auto ext_func_arg_ti = ext_arg_type_to_type_info(ext_func_args[i]);
-      if (ext_func_arg_ti != arg_expr_list[i]->get_type_info()) {
-        arg_expr_list[i] = constant->add_cast(ext_func_arg_ti);
+  SQLTypeInfo ret_ti;
+  try {
+    auto ext_func_sig = bind_function(rex_function->getName(), arg_expr_list);
+
+    auto ext_func_args = ext_func_sig.getArgs();
+    CHECK_EQ(arg_expr_list.size(), ext_func_args.size());
+    for (size_t i = 0; i < arg_expr_list.size(); i++) {
+      // fold casts on constants
+      if (auto constant =
+              std::dynamic_pointer_cast<Analyzer::Constant>(arg_expr_list[i])) {
+        auto ext_func_arg_ti = ext_arg_type_to_type_info(ext_func_args[i]);
+        if (ext_func_arg_ti != arg_expr_list[i]->get_type_info()) {
+          arg_expr_list[i] = constant->add_cast(ext_func_arg_ti);
+        }
       }
     }
+
+    ret_ti = ext_arg_type_to_type_info(ext_func_sig.getRet());
+  } catch (ExtensionFunctionBindingError& e) {
+    LOG(WARNING) << "RelAlgTranslator::translateFunction: " << e.what();
+    throw;
   }
-  auto ret_ti = ext_arg_type_to_type_info(ext_func_sig.getRet());
+
   // By default, the extension function type will not allow nulls. If one of the arguments
   // is nullable, the extension function must also explicitly allow nulls.
   bool arguments_not_null = true;

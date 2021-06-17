@@ -16,13 +16,17 @@
 
 #pragma once
 
-#include "Catalog/ColumnDescriptor.h"
-#include "Catalog/ForeignServer.h"
 #include "DataMgr/ChunkMetadata.h"
 #include "ForeignStorageBuffer.h"
 #include "Shared/types.h"
 
+struct ColumnDescriptor;
 namespace foreign_storage {
+struct ForeignServer;
+struct ForeignTable;
+struct UserMapping;
+using ChunkToBufferMap = std::map<ChunkKey, AbstractBuffer*>;
+
 class ForeignDataWrapper {
  public:
   ForeignDataWrapper() = default;
@@ -46,15 +50,13 @@ class ForeignDataWrapper {
    * row wise data formats)
    */
 
-  virtual void populateChunkBuffers(
-      std::map<ChunkKey, AbstractBuffer*>& required_buffers,
-      std::map<ChunkKey, AbstractBuffer*>& optional_buffers) = 0;
+  virtual void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
+                                    const ChunkToBufferMap& optional_buffers) = 0;
 
   /**
    * Serialize internal state of wrapper into file at given path if implemented
-   * @param file_path - location to save file to
    */
-  virtual void serializeDataWrapperInternals(const std::string& file_path) const = 0;
+  virtual std::string getSerializedDataWrapper() const = 0;
 
   /**
    * Restore internal state of datawrapper
@@ -66,5 +68,73 @@ class ForeignDataWrapper {
 
   // For testing, is this data wrapper restored from disk
   virtual bool isRestored() const = 0;
+
+  /**
+   * Checks that the options for the given foreign server object are valid.
+   * @param foreign_server - foreign server object containing options to be validated
+   */
+  virtual void validateServerOptions(const ForeignServer* foreign_server) const = 0;
+
+  /**
+   * Checks that the options for the given foreign table object are valid.
+   * @param foreign_table - foreign table object containing options to be validated
+   */
+  virtual void validateTableOptions(const ForeignTable* foreign_table) const = 0;
+
+  /**
+   * Gets the set of supported table options for the data wrapper.
+   */
+  virtual const std::set<std::string_view>& getSupportedTableOptions() const = 0;
+
+  /**
+   * Checks that the options for the given user mapping object are valid.
+   * @param user_mapping - user mapping object containing options to be validated
+   */
+  virtual void validateUserMappingOptions(const UserMapping* user_mapping,
+                                          const ForeignServer* foreign_server) const = 0;
+
+  /**
+   * Gets the set of supported user mapping options for the data wrapper.
+   */
+  virtual const std::set<std::string_view>& getSupportedUserMappingOptions() const = 0;
+
+  /**
+    Verifies the schema is supported by this foreign table
+    * @param columns - column descriptors for this table
+   */
+  virtual void validateSchema(const std::list<ColumnDescriptor>& columns) const {};
+
+  /**
+   * ParallelismLevel describes the desired level of parallelism of the data
+   * wrapper. This level controls which `optional_buffers` are passed to
+   * `populateChunkBuffers` with the following behaviour:
+   *
+   * NONE - no additional optional buffers are passed in
+   *
+   * INTRA_FRAGMENT - additional optional buffers which are in the same fragment as the
+   * required buffers
+   *
+   * INTER_FRAGMENT - additional optional buffers which may be in
+   * different fragments than those of the required buffers
+   *
+   * Note, the optional buffers are passed in with the intention of
+   * allowing the data wrapper to employ parallelism in retrieving them. Each subsequent
+   * level allows for a greater degree of parallelism but does not have to be supported.
+   */
+  enum ParallelismLevel { NONE, INTRA_FRAGMENT, INTER_FRAGMENT };
+
+  /**
+   * Gets the desired level of parallelism for the data wrapper when a cache is
+   * in use. This affects the optional buffers that the data wrapper is made
+   * aware of during data requests.
+   */
+  virtual ParallelismLevel getCachedParallelismLevel() const { return NONE; }
+
+  /**
+   * Gets the desired level of parallelism for the data wrapper when no cache
+   * is in use. This affects the optional buffers that the data wrapper is made
+   * aware of during data requests.
+   */
+  virtual ParallelismLevel getNonCachedParallelismLevel() const { return NONE; }
 };
 }  // namespace foreign_storage

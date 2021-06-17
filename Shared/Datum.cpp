@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,16 @@
  * @file		DatumString.cpp
  * @author	Wei Hong <wei@map-d.com>
  * @brief		Functions to convert between strings and Datum
- *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
+#include <algorithm>
 #include <cassert>
+#include <cctype>
+#include <charconv>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -64,7 +67,8 @@ std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
                                                      "EVAL_CONTEXT_TYPE",
                                                      "VOID",
                                                      "CURSOR",
-                                                     "COLUMN"};
+                                                     "COLUMN",
+                                                     "COLUMN_LIST"};
 std::string SQLTypeInfo::comp_name[kENCODING_LAST] =
     {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
 
@@ -118,6 +122,117 @@ int64_t parse_numeric(const std::string_view s, SQLTypeInfo& ti) {
   return result * sign;
 }
 
+namespace {
+
+// Equal to NULL value for nullable types.
+template <typename T>
+T minValue(unsigned const fieldsize) {
+  static_assert(std::is_signed_v<T>);
+  return T(-1) << (fieldsize - 1);
+}
+
+template <typename T>
+T maxValue(unsigned const fieldsize) {
+  return ~minValue<T>(fieldsize);
+}
+
+std::string toString(SQLTypeInfo const& ti, unsigned const fieldsize) {
+  return ti.get_type_name() + '(' + std::to_string(fieldsize) + ')';
+}
+
+// GCC 10 does not support std::from_chars w/ double, so strtold() is used instead.
+// Convert s to long double then round to integer type T.
+// It's not assumed that long double is any particular size; it is to be nice to
+// users who use floating point values where integers are expected. Some platforms
+// may be more accommodating with larger long doubles than others.
+template <typename T, typename U = long double>
+T parseFloatAsInteger(std::string_view s, SQLTypeInfo const& ti) {
+  // Use stack memory if s is small enough before resorting to dynamic memory.
+  constexpr size_t bufsize = 64;
+  char c_str[bufsize];
+  std::string str;
+  char const* str_begin;
+  char* str_end;
+  if (s.size() < bufsize) {
+    s.copy(c_str, s.size());
+    c_str[s.size()] = '\0';
+    str_begin = c_str;
+  } else {
+    str = s;
+    str_begin = str.c_str();
+  }
+  U value = strtold(str_begin, &str_end);
+  if (str_begin == str_end) {
+    throw std::runtime_error("Unable to parse " + std::string(s) + " to " +
+                             ti.get_type_name());
+  } else if (str_begin + s.size() != str_end) {
+    throw std::runtime_error(std::string("Unexpected character \"") + *str_end +
+                             "\" encountered in " + ti.get_type_name() + " value " +
+                             std::string(s));
+  }
+  value = std::round(value);
+  if (!std::isfinite(value)) {
+    throw std::runtime_error("Invalid conversion from \"" + std::string(s) + "\" to " +
+                             ti.get_type_name());
+  } else if (value < static_cast<U>(std::numeric_limits<T>::min()) ||
+             static_cast<U>(std::numeric_limits<T>::max()) < value) {
+    throw std::runtime_error("Integer " + std::string(s) + " is out of range for " +
+                             ti.get_type_name());
+  }
+  return static_cast<T>(value);
+}
+
+// String ends in either "." or ".0".
+inline bool hasCommonSuffix(char const* const ptr, char const* const end) {
+  return *ptr == '.' && (ptr + 1 == end || (ptr[1] == '0' && ptr + 2 == end));
+}
+
+template <typename T>
+T parseInteger(std::string_view s, SQLTypeInfo const& ti) {
+  T retval{0};
+  char const* const end = s.data() + s.size();
+  auto [ptr, error_code] = std::from_chars(s.data(), end, retval);
+  if (ptr != end) {
+    if (error_code != std::errc() || !hasCommonSuffix(ptr, end)) {
+      retval = parseFloatAsInteger<T>(s, ti);
+    }
+  } else if (error_code != std::errc()) {
+    if (error_code == std::errc::result_out_of_range) {
+      throw std::runtime_error("Integer " + std::string(s) + " is out of range for " +
+                               ti.get_type_name());
+    }
+    throw std::runtime_error("Invalid conversion from \"" + std::string(s) + "\" to " +
+                             ti.get_type_name());
+  }
+  // Bounds checking based on SQLTypeInfo.
+  unsigned const fieldsize =
+      ti.get_compression() == kENCODING_FIXED ? ti.get_comp_param() : 8 * sizeof(T);
+  if (fieldsize < 8 * sizeof(T)) {
+    if (maxValue<T>(fieldsize) < retval) {
+      throw std::runtime_error("Integer " + std::string(s) +
+                               " exceeds maximum value for " + toString(ti, fieldsize));
+    } else if (ti.get_notnull()) {
+      if (retval < minValue<T>(fieldsize)) {
+        throw std::runtime_error("Integer " + std::string(s) +
+                                 " exceeds minimum value for " + toString(ti, fieldsize));
+      }
+    } else {
+      if (retval <= minValue<T>(fieldsize)) {
+        throw std::runtime_error("Integer " + std::string(s) +
+                                 " exceeds minimum value for nullable " +
+                                 toString(ti, fieldsize));
+      }
+    }
+  } else if (!ti.get_notnull() && retval == std::numeric_limits<T>::min()) {
+    throw std::runtime_error("Integer " + std::string(s) +
+                             " exceeds minimum value for nullable " +
+                             toString(ti, fieldsize));
+  }
+  return retval;
+}
+
+}  // namespace
+
 /*
  * @brief convert string to a datum
  */
@@ -127,6 +242,7 @@ Datum StringToDatum(std::string_view s, SQLTypeInfo& ti) {
     switch (ti.get_type()) {
       case kARRAY:
       case kCOLUMN:
+      case kCOLUMN_LIST:
         break;
       case kBOOLEAN:
         if (s == "t" || s == "T" || s == "1" || to_upper(std::string(s)) == "TRUE") {
@@ -143,16 +259,16 @@ Datum StringToDatum(std::string_view s, SQLTypeInfo& ti) {
         d.bigintval = parse_numeric(s, ti);
         break;
       case kBIGINT:
-        d.bigintval = std::stoll(std::string(s));
+        d.bigintval = parseInteger<int64_t>(s, ti);
         break;
       case kINT:
-        d.intval = std::stoi(std::string(s));
+        d.intval = parseInteger<int32_t>(s, ti);
         break;
       case kSMALLINT:
-        d.smallintval = std::stoi(std::string(s));
+        d.smallintval = parseInteger<int16_t>(s, ti);
         break;
       case kTINYINT:
-        d.tinyintval = std::stoi(std::string(s));
+        d.tinyintval = parseInteger<int8_t>(s, ti);
         break;
       case kFLOAT:
         d.floatval = std::stof(std::string(s));
@@ -175,7 +291,8 @@ Datum StringToDatum(std::string_view s, SQLTypeInfo& ti) {
       case kMULTIPOLYGON:
         throw std::runtime_error("Internal error: geometry type in StringToDatum.");
       default:
-        throw std::runtime_error("Internal error: invalid type in StringToDatum.");
+        throw std::runtime_error("Internal error: invalid type in StringToDatum: " +
+                                 ti.get_type_name());
     }
   } catch (const std::invalid_argument&) {
     throw std::runtime_error("Invalid conversion from string to " + ti.get_type_name());
@@ -315,22 +432,32 @@ SQLTypes decimal_to_int_type(const SQLTypeInfo& ti) {
   return kNULLT;
 }
 
+// Return decimal_value * 10^dscale
+// where dscale = new_type_info.get_scale() - type_info.get_scale()
 int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
                                        const SQLTypeInfo& type_info,
                                        const SQLTypeInfo& new_type_info) {
-  auto converted_decimal_value = decimal_value;
-  if (new_type_info.get_scale() > type_info.get_scale()) {
-    for (int i = 0; i < new_type_info.get_scale() - type_info.get_scale(); i++) {
-      converted_decimal_value *= 10;
+  constexpr int max_scale = std::numeric_limits<uint64_t>::digits10;  // 19
+  constexpr auto pow10 = shared::powersOf<uint64_t, max_scale + 1>(10);
+  int const dscale = new_type_info.get_scale() - type_info.get_scale();
+  if (dscale < 0) {
+    if (dscale < -max_scale) {
+      return 0;  // +/- 0.09223372036854775807 rounds to 0
     }
-  } else if (new_type_info.get_scale() < type_info.get_scale()) {
-    for (int i = 0; i < type_info.get_scale() - new_type_info.get_scale(); i++) {
-      if (converted_decimal_value > 0) {
-        converted_decimal_value = (converted_decimal_value + 5) / 10;
-      } else {
-        converted_decimal_value = (converted_decimal_value - 5) / 10;
-      }
+    uint64_t const u = std::abs(decimal_value);
+    uint64_t const pow = pow10[-dscale];
+    uint64_t div = u / pow;
+    uint64_t rem = u % pow;
+    div += pow / 2 <= rem;
+    return decimal_value < 0 ? -div : div;
+  } else if (dscale < max_scale) {
+    int64_t retval;
+    if (!__builtin_mul_overflow(decimal_value, pow10[dscale], &retval)) {
+      return retval;
     }
   }
-  return converted_decimal_value;
+  if (decimal_value == 0) {
+    return 0;
+  }
+  throw std::runtime_error("Overflow in DECIMAL-to-DECIMAL conversion.");
 }

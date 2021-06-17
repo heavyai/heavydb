@@ -190,7 +190,13 @@ class CmdStringUtilities {
 
 #define StandardCommand_2(CommandName, CommandOperations) \
   StandardCommand_3(CommandName, CommandOperations, CmdDeterminant)
+#if !BOOST_PP_VARIADICS_MSVC
 #define StandardCommand(...) BOOST_PP_OVERLOAD(StandardCommand_, __VA_ARGS__)(__VA_ARGS__)
+#else
+#define StandardCommand(...)                                                  \
+  BOOST_PP_CAT(BOOST_PP_OVERLOAD(StandardCommand_, __VA_ARGS__)(__VA_ARGS__), \
+               BOOST_PP_EMPTY())
+#endif
 
 //
 // Standard Command Definitions

@@ -19,8 +19,21 @@
 #include "ParquetInPlaceEncoder.h"
 
 namespace foreign_storage {
-template <typename V, typename T>
-class ParquetTimestampEncoder : public TypedParquetInPlaceEncoder<V, T> {
+
+// The following semantics apply to the templated types below.
+//
+// V - type of omnisci data
+// T - physical type of parquet data
+// conversion_denominator - the denominator constant used in converting parquet to omnisci
+// data
+//
+// The `conversion_denominator` template is used instead of a class member to
+// specify it at compile-time versus run-time. In testing this has a major
+// impact on the runtime of the conversion performed by this encoder since the
+// compiler can significantly optimize if this is known at compile time.
+template <typename V, typename T, T conversion_denominator>
+class ParquetTimestampEncoder : public TypedParquetInPlaceEncoder<V, T>,
+                                public ParquetMetadataValidator {
  public:
   ParquetTimestampEncoder(Data_Namespace::AbstractBuffer* buffer,
                           const ColumnDescriptor* column_desciptor,
@@ -28,11 +41,7 @@ class ParquetTimestampEncoder : public TypedParquetInPlaceEncoder<V, T> {
       : TypedParquetInPlaceEncoder<V, T>(buffer,
                                          column_desciptor,
                                          parquet_column_descriptor) {
-    auto timestamp_logical_type = dynamic_cast<const parquet::TimestampLogicalType*>(
-        parquet_column_descriptor->logical_type().get());
-    CHECK(timestamp_logical_type);
-    conversion_denominator_ =
-        get_time_conversion_denominator(timestamp_logical_type->time_unit());
+    CHECK(parquet_column_descriptor->logical_type()->is_timestamp());
   }
 
   void encodeAndCopy(const int8_t* parquet_data_bytes,
@@ -42,14 +51,29 @@ class ParquetTimestampEncoder : public TypedParquetInPlaceEncoder<V, T> {
     omnisci_data_value = convert(parquet_data_value);
   }
 
- private:
-  T convert(const T& value) {
-    return value < 0 && (value % conversion_denominator_ != 0)
-               ? value / conversion_denominator_ - 1
-               : value / conversion_denominator_;
+  void validate(std::shared_ptr<parquet::Statistics> stats,
+                const SQLTypeInfo& column_type) const override {
+    CHECK(column_type.is_timestamp() || column_type.is_date());
+    auto [unencoded_stats_min, unencoded_stats_max] =
+        TypedParquetInPlaceEncoder<V, T>::getUnencodedStats(stats);
+    if (column_type.is_timestamp()) {
+      TimestampBoundsValidator<T>::validateValue(convert(unencoded_stats_max),
+                                                 column_type);
+      TimestampBoundsValidator<T>::validateValue(convert(unencoded_stats_min),
+                                                 column_type);
+    } else if (column_type.is_date()) {
+      DateInSecondsBoundsValidator<T>::validateValue(convert(unencoded_stats_max),
+                                                     column_type);
+      DateInSecondsBoundsValidator<T>::validateValue(convert(unencoded_stats_min),
+                                                     column_type);
+    }
   }
 
-  V conversion_denominator_;
+ private:
+  T convert(const T& value) const {
+    T quotient = value / conversion_denominator;
+    return value < 0 && (value % conversion_denominator != 0) ? quotient - 1 : quotient;
+  }
 };
 
 }  // namespace foreign_storage

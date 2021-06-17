@@ -49,7 +49,8 @@ void set_cuda_context(Data_Namespace::DataMgr* data_mgr, const int device_id) {
 
 void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
                                const std::list<Analyzer::OrderEntry>& order_entries,
-                               const size_t top_n) {
+                               const size_t top_n,
+                               const Executor* executor) {
   CHECK_EQ(size_t(1), order_entries.size());
   CHECK(!query_mem_desc_.didOutputColumnar());
   const auto& oe = order_entries.front();
@@ -88,7 +89,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
   const auto key_bytewidth = query_mem_desc_.getEffectiveKeyWidth();
   if (step > 1) {
     std::vector<std::future<void>> top_futures;
-    std::vector<std::vector<uint32_t>> strided_permutations(step);
+    std::vector<Permutation> strided_permutations(step);
     for (size_t start = 0; start < step; ++start) {
       top_futures.emplace_back(std::async(
           std::launch::async,
@@ -137,8 +138,12 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
       permutation_.insert(
           permutation_.end(), strided_permutation.begin(), strided_permutation.end());
     }
-    auto compare = createComparator(order_entries, true);
-    topPermutation(permutation_, top_n, compare);
+    auto pv = PermutationView(permutation_.data(), permutation_.size());
+    topPermutation(pv, top_n, createComparator(order_entries, pv, executor, false));
+    if (top_n < permutation_.size()) {
+      permutation_.resize(top_n);
+      permutation_.shrink_to_fit();
+    }
     return;
   } else {
     permutation_ =
@@ -171,9 +176,8 @@ bool ResultSet::canUseFastBaselineSort(
 }
 
 Data_Namespace::DataMgr* ResultSet::getDataManager() const {
-  if (executor_) {
-    CHECK(executor_->catalog_);
-    return &executor_->catalog_->getDataMgr();
+  if (catalog_) {
+    return &catalog_->getDataMgr();
   }
   return nullptr;
 }

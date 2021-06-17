@@ -38,10 +38,20 @@ extern bool g_use_table_device_offset;
 extern float g_fraction_code_cache_to_evict;
 extern bool g_cache_string_hash;
 
+extern bool g_enable_left_join_filter_hoisting;
 extern int64_t g_large_ndv_threshold;
 extern size_t g_large_ndv_multiplier;
 extern int64_t g_bitmap_memory_limit;
 extern bool g_enable_calcite_ddl_parser;
+extern bool g_enable_seconds_refresh;
+extern size_t g_approx_quantile_buffer;
+extern size_t g_approx_quantile_centroids;
+extern size_t g_parallel_top_min;
+extern size_t g_parallel_top_max;
+
+namespace Catalog_Namespace {
+extern bool g_log_user_id;
+}
 
 unsigned connect_timeout{20000};
 unsigned recv_timeout{300000};
@@ -93,10 +103,11 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(system_parameters.cpu_buffer_mem_bytes),
                           "Size of memory reserved for CPU buffers, in bytes.");
 
-  help_desc.add_options()(
-      "cpu-only",
-      po::value<bool>(&cpu_only)->default_value(cpu_only)->implicit_value(true),
-      "Run on CPU only, even if GPUs are available.");
+  help_desc.add_options()("cpu-only",
+                          po::value<bool>(&system_parameters.cpu_only)
+                              ->default_value(system_parameters.cpu_only)
+                              ->implicit_value(true),
+                          "Run on CPU only, even if GPUs are available.");
   help_desc.add_options()("cuda-block-size",
                           po::value<size_t>(&system_parameters.cuda_block_size)
                               ->default_value(system_parameters.cuda_block_size),
@@ -156,6 +167,11 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(enable_runtime_query_interrupt)
                               ->implicit_value(true),
                           "Enable runtime query interrupt.");
+  help_desc.add_options()("enable-non-kernel-time-query-interrupt",
+                          po::value<bool>(&enable_non_kernel_time_query_interrupt)
+                              ->default_value(enable_non_kernel_time_query_interrupt)
+                              ->implicit_value(true),
+                          "Enable non-kernel time query interrupt.");
   help_desc.add_options()("pending-query-interrupt-freq",
                           po::value<unsigned>(&pending_query_interrupt_freq)
                               ->default_value(pending_query_interrupt_freq)
@@ -252,6 +268,10 @@ void CommandLineOptions::fillOptions() {
       "max-session-duration",
       po::value<int>(&max_session_duration)->default_value(max_session_duration),
       "Maximum duration of active session.");
+  help_desc.add_options()("num-sessions",
+                          po::value<int>(&system_parameters.num_sessions)
+                              ->default_value(system_parameters.num_sessions),
+                          "Maximum number of active session.");
   help_desc.add_options()(
       "null-div-by-zero",
       po::value<bool>(&g_null_div_by_zero)
@@ -263,10 +283,19 @@ void CommandLineOptions::fillOptions() {
       po::value<size_t>(&num_reader_threads)->default_value(num_reader_threads),
       "Number of reader threads to use.");
   help_desc.add_options()(
+      "max-import-threads",
+      po::value<size_t>(&g_max_import_threads)->default_value(g_max_import_threads),
+      "Max number of default import threads to use (num hardware threads will be used "
+      "instead if lower). Can be overriden with copy statement threads option).");
+  help_desc.add_options()(
       "overlaps-max-table-size-bytes",
       po::value<size_t>(&g_overlaps_max_table_size_bytes)
           ->default_value(g_overlaps_max_table_size_bytes),
       "The maximum size in bytes of the hash table for an overlaps hash join.");
+  help_desc.add_options()("overlaps-target-entries-per-bin",
+                          po::value<double>(&g_overlaps_target_entries_per_bin)
+                              ->default_value(g_overlaps_target_entries_per_bin),
+                          "The target number of hash entries per bin for overlaps join");
   if (!dist_v5_) {
     help_desc.add_options()("port,p",
                             po::value<int>(&system_parameters.omnisci_server_port)
@@ -274,7 +303,8 @@ void CommandLineOptions::fillOptions() {
                             "TCP Port number.");
   }
   help_desc.add_options()("num-gpus",
-                          po::value<int>(&num_gpus)->default_value(num_gpus),
+                          po::value<int>(&system_parameters.num_gpus)
+                              ->default_value(system_parameters.num_gpus),
                           "Number of gpus to use.");
   help_desc.add_options()(
       "read-only",
@@ -289,7 +319,8 @@ void CommandLineOptions::fillOptions() {
       "be using the GPU concurrent with OmniSciDB.");
 
   help_desc.add_options()("start-gpu",
-                          po::value<int>(&start_gpu)->default_value(start_gpu),
+                          po::value<int>(&system_parameters.start_gpu)
+                              ->default_value(system_parameters.start_gpu),
                           "First gpu to use.");
   help_desc.add_options()("trivial-loop-join-threshold",
                           po::value<unsigned>(&g_trivial_loop_join_threshold)
@@ -316,28 +347,36 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(g_enable_experimental_string_functions)
                               ->implicit_value(true),
                           "Enable experimental string functions.");
-#ifdef ENABLE_FSI
   help_desc.add_options()(
       "enable-fsi",
       po::value<bool>(&g_enable_fsi)->default_value(g_enable_fsi)->implicit_value(true),
       "Enable foreign storage interface.");
-  help_desc.add_options()("encryption-key-store",
-                          po::value<std::string>(&encryption_key_store_path),
-                          "Path to directory where encryption related keys will reside.");
-  help_desc.add_options()("disk-cache-level",
-                          po::value<std::string>(&(disk_cache_level))
-                              ->default_value("fsi")
-                              ->implicit_value("fsi"),
-                          "Specify level of disk cache.  Valid options are 'fsi', "
-                          "'non_fsi, 'none', and 'all'.");
   help_desc.add_options()("disk-cache-path",
                           po::value<std::string>(&disk_cache_config.path),
                           "Specify the path for the disk cache.");
+
   help_desc.add_options()(
-      "disk-cache-size-limit",
-      po::value<std::size_t>(&(disk_cache_config.size_limit)),
-      "Specify the maximum size of the the disk cache per table in bytes.");
-#endif  // ENABLE_FSI
+      "disk-cache-level",
+      po::value<std::string>(&(disk_cache_level))->default_value("foreign_tables"),
+      "Specify level of disk cache. Valid options are 'foreign_tables', "
+      "'local_tables', 'none', and 'all'.");
+
+  help_desc.add_options()("disk-cache-size",
+                          po::value<std::uint64_t>(&(disk_cache_config.size_limit)),
+                          "Specify a maximum size for the disk cache in bytes.");
+
+#ifdef HAVE_AWS_S3
+  help_desc.add_options()(
+      "allow-s3-server-privileges",
+      po::value<bool>(&g_allow_s3_server_privileges)
+          ->default_value(g_allow_s3_server_privileges)
+          ->implicit_value(true),
+      "Allow S3 server privileges, if IAM user credentials are not provided. Credentials "
+      "may be specified with "
+      "environment variables (such as AWS_ACCESS_KEY_ID,  AWS_SECRET_ACCESS_KEY, etc), "
+      "an AWS credentials file, or when running on an EC2 instance, with an IAM role "
+      "that is attached to the instance.");
+#endif  // defined(HAVE_AWS_S3)
   help_desc.add_options()(
       "enable-interoperability",
       po::value<bool>(&g_enable_interop)
@@ -366,12 +405,26 @@ void CommandLineOptions::fillOptions() {
           ->default_value(g_enable_stringdict_parallel)
           ->implicit_value(true),
       "Allow StringDictionary to parallelize loads using multiple threads");
+  help_desc.add_options()(
+      "log-user-id",
+      po::value<bool>(&Catalog_Namespace::g_log_user_id)
+          ->default_value(Catalog_Namespace::g_log_user_id)
+          ->implicit_value(true),
+      "Log userId integer in place of the userName (when available).");
   help_desc.add_options()("log-user-origin",
                           po::value<bool>(&log_user_origin)
                               ->default_value(log_user_origin)
                               ->implicit_value(true),
                           "Lookup the origin of inbound connections by IP address/DNS "
                           "name, and print this information as part of stdlog.");
+  help_desc.add_options()(
+      "allowed-import-paths",
+      po::value<std::string>(&allowed_import_paths),
+      "List of allowed root paths that can be used in import operations.");
+  help_desc.add_options()(
+      "allowed-export-paths",
+      po::value<std::string>(&allowed_export_paths),
+      "List of allowed root paths that can be used in export operations.");
   help_desc.add(log_options_.get_options());
 }
 
@@ -390,6 +443,17 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_enable_columnar_output)
           ->implicit_value(true),
       "Enable columnar output for intermediate/final query steps.");
+  developer_desc.add_options()(
+      "enable-left-join-filter-hoisting",
+      po::value<bool>(&g_enable_left_join_filter_hoisting)
+          ->default_value(g_enable_left_join_filter_hoisting)
+          ->implicit_value(true),
+      "Enable hoisting left hand side filters through left joins.");
+  developer_desc.add_options()("optimize-row-init",
+                               po::value<bool>(&g_optimize_row_initialization)
+                                   ->default_value(g_optimize_row_initialization)
+                                   ->implicit_value(true),
+                               "Optimize row initialization.");
   developer_desc.add_options()("enable-legacy-syntax",
                                po::value<bool>(&enable_legacy_syntax)
                                    ->default_value(enable_legacy_syntax)
@@ -401,6 +465,11 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(allow_multifrag)
           ->implicit_value(true),
       "Enable execution over multiple fragments in a single round-trip to GPU.");
+  developer_desc.add_options()("enable-lazy-fetch",
+                               po::value<bool>(&g_enable_lazy_fetch)
+                                   ->default_value(g_enable_lazy_fetch)
+                                   ->implicit_value(true),
+                               "Enable lazy fetch columns in query results.");
   developer_desc.add_options()(
       "enable-shared-mem-group-by",
       po::value<bool>(&g_enable_smem_group_by)
@@ -621,6 +690,12 @@ void CommandLineOptions::fillAdvancedOptions() {
   developer_desc.add_options()(
       "large-ndv-multiplier",
       po::value<size_t>(&g_large_ndv_multiplier)->default_value(g_large_ndv_multiplier));
+  developer_desc.add_options()("approx_quantile_buffer",
+                               po::value<size_t>(&g_approx_quantile_buffer)
+                                   ->default_value(g_approx_quantile_buffer));
+  developer_desc.add_options()("approx_quantile_centroids",
+                               po::value<size_t>(&g_approx_quantile_centroids)
+                                   ->default_value(g_approx_quantile_centroids));
   developer_desc.add_options()(
       "bitmap-memory-limit",
       po::value<int64_t>(&g_bitmap_memory_limit)->default_value(g_bitmap_memory_limit),
@@ -641,6 +716,41 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_enable_calcite_ddl_parser)
           ->implicit_value(true),
       "Enable using Calcite for supported DDL parsing when available.");
+  developer_desc.add_options()(
+      "enable-seconds-refresh-interval",
+      po::value<bool>(&g_enable_seconds_refresh)
+          ->default_value(g_enable_seconds_refresh)
+          ->implicit_value(true),
+      "Enable foreign table seconds refresh interval for testing purposes.");
+  developer_desc.add_options()("enable-auto-metadata-update",
+                               po::value<bool>(&g_enable_auto_metadata_update)
+                                   ->default_value(g_enable_auto_metadata_update)
+                                   ->implicit_value(true),
+                               "Enable automatic metadata update.");
+  developer_desc.add_options()(
+      "parallel-top-min",
+      po::value<size_t>(&g_parallel_top_min)->default_value(g_parallel_top_min),
+      "For ResultSets requiring a heap sort, the number of rows necessary to trigger "
+      "parallelTop() to sort.");
+  developer_desc.add_options()(
+      "parallel-top-max",
+      po::value<size_t>(&g_parallel_top_max)->default_value(g_parallel_top_max),
+      "For ResultSets requiring a heap sort, the maximum number of rows allowed by "
+      "watchdog.");
+  developer_desc.add_options()("vacuum-min-selectivity",
+                               po::value<float>(&g_vacuum_min_selectivity)
+                                   ->default_value(g_vacuum_min_selectivity),
+                               "Minimum selectivity for automatic vacuuming. "
+                               "This specifies the percentage (with a value of 0 "
+                               "implying 0% and a value of 1 implying 100%) of "
+                               "deleted rows in a fragment at which to perform "
+                               "automatic vacuuming. A number greater than 1 can "
+                               "be used to disable automatic vacuuming.");
+  developer_desc.add_options()("enable-automatic-ir-metadata",
+                               po::value<bool>(&g_enable_automatic_ir_metadata)
+                                   ->default_value(g_enable_automatic_ir_metadata)
+                                   ->implicit_value(true),
+                               "Enable automatic IR metadata (debug builds only).");
 }
 
 namespace {
@@ -650,11 +760,7 @@ std::stringstream sanitize_config_file(std::ifstream& in) {
   std::stringstream ss;
   std::string line;
   while (std::getline(in, line)) {
-    // Skip config file only options
-    if (!boost::starts_with(line, "allowed-import-paths") &&
-        !boost::starts_with(line, "allowed-export-paths")) {
-      ss << line << "\n";
-    }
+    ss << line << "\n";
     if (line == "[web]") {
       break;
     }
@@ -700,28 +806,35 @@ void CommandLineOptions::validate() {
     const auto lock_file = boost::filesystem::path(base_path) / "omnisci_server_pid.lck";
     auto pid = std::to_string(getpid());
 
-    int pid_fd = open(lock_file.c_str(), O_RDWR | O_CREAT, 0644);
+#ifdef _WIN32
+    int pid_fd = _open(lock_file.string().c_str(), O_RDWR | O_CREAT, 0644);
+#else
+    int pid_fd = open(lock_file.string().c_str(), O_RDWR | O_CREAT, 0644);
+#endif
     if (pid_fd == -1) {
-      auto err = std::string("Failed to open PID file ") + lock_file.c_str() + ". " +
-                 strerror(errno) + ".";
+      auto err = std::string("Failed to open PID file ") + lock_file.string().c_str() +
+                 ". " + strerror(errno) + ".";
       throw std::runtime_error(err);
     }
+// TODO: support lock on Windows
+#ifndef _WIN32
     if (lockf(pid_fd, F_TLOCK, 0) == -1) {
-      close(pid_fd);
+      ::close(pid_fd);
       auto err = std::string("Another OmniSci Server is using data directory ") +
                  base_path + ".";
       throw std::runtime_error(err);
     }
+#endif
     if (ftruncate(pid_fd, 0) == -1) {
-      close(pid_fd);
-      auto err = std::string("Failed to truncate PID file ") + lock_file.c_str() + ". " +
-                 strerror(errno) + ".";
+      ::close(pid_fd);
+      auto err = std::string("Failed to truncate PID file ") +
+                 lock_file.string().c_str() + ". " + strerror(errno) + ".";
       throw std::runtime_error(err);
     }
     if (write(pid_fd, pid.c_str(), pid.length()) == -1) {
-      close(pid_fd);
-      auto err = std::string("Failed to write PID file ") + lock_file.c_str() + ". " +
-                 strerror(errno) + ".";
+      ::close(pid_fd);
+      auto err = std::string("Failed to write PID file ") + lock_file.string().c_str() +
+                 ". " + strerror(errno) + ".";
       throw std::runtime_error(err);
     }
   }
@@ -750,6 +863,8 @@ void CommandLineOptions::validate() {
   if (vm.count("license-path")) {
     LOG(INFO) << "License key path set to '" << license_path << "'";
   }
+  g_read_only = read_only;
+  LOG(INFO) << " Server read-only mode is " << read_only;
   LOG(INFO) << " Watchdog is set to " << enable_watchdog;
   LOG(INFO) << " Dynamic Watchdog is set to " << enable_dynamic_watchdog;
   if (enable_dynamic_watchdog) {
@@ -762,40 +877,53 @@ void CommandLineOptions::validate() {
     LOG(INFO) << " A frequency of checking running query interrupt request is set to "
               << running_query_interrupt_freq << " (0.0 ~ 1.0)";
   }
+  LOG(INFO) << " Non-kernel time query interrupt is set to "
+            << enable_non_kernel_time_query_interrupt;
 
   LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
-
-  LOG(INFO) << " Maximum Idle session duration " << idle_session_duration;
-
+  LOG(INFO) << " LogUserId is set to " << Catalog_Namespace::g_log_user_id;
+  LOG(INFO) << " Maximum idle session duration " << idle_session_duration;
   LOG(INFO) << " Maximum active session duration " << max_session_duration;
+  LOG(INFO) << " Maximum number of sessions " << system_parameters.num_sessions;
 
-  ddl_utils::FilePathWhitelist::initializeFromConfigFile(system_parameters.config_file);
+  LOG(INFO) << "Allowed import paths is set to " << allowed_import_paths;
+  LOG(INFO) << "Allowed export paths is set to " << allowed_export_paths;
+  ddl_utils::FilePathWhitelist::initialize(
+      base_path, allowed_import_paths, allowed_export_paths);
 
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_catalogs");
+  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/temporary/mapd_catalogs");
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_data");
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_log");
+  g_enable_s3_fsi = false;
 
-  if (disk_cache_level == "fsi") {
+  if (disk_cache_level == "foreign_tables") {
     if (g_enable_fsi) {
-      disk_cache_config.enabled_level = DiskCacheLevel::fsi;
+      disk_cache_config.enabled_level = File_Namespace::DiskCacheLevel::fsi;
       LOG(INFO) << "Disk cache enabled for foreign tables only";
     } else {
       LOG(INFO) << "Cannot enable disk cache for fsi when fsi is disabled.  Defaulted to "
                    "disk cache disabled";
     }
   } else if (disk_cache_level == "all") {
-    disk_cache_config.enabled_level = DiskCacheLevel::all;
+    disk_cache_config.enabled_level = File_Namespace::DiskCacheLevel::all;
     LOG(INFO) << "Disk cache enabled for all tables";
-  } else if (disk_cache_level == "non_fsi") {
-    disk_cache_config.enabled_level = DiskCacheLevel::non_fsi;
+  } else if (disk_cache_level == "local_tables") {
+    disk_cache_config.enabled_level = File_Namespace::DiskCacheLevel::non_fsi;
     LOG(INFO) << "Disk cache enabled for non-FSI tables";
   } else if (disk_cache_level == "none") {
-    disk_cache_config.enabled_level = DiskCacheLevel::none;
+    disk_cache_config.enabled_level = File_Namespace::DiskCacheLevel::none;
     LOG(INFO) << "Disk cache disabled";
   } else {
-    disk_cache_config.enabled_level = DiskCacheLevel::none;
-    LOG(INFO) << "Non-recognized value for disk-cache-level {" << disk_cache_level
-              << "}.  Defaulted to disk cache disabled";
+    throw std::runtime_error{
+        "Unexpected \"disk-cache-level\" value: " + disk_cache_level +
+        ". Valid options are 'foreign_tables', "
+        "'local_tables', 'none', and 'all'."};
+  }
+
+  if (disk_cache_config.size_limit < File_Namespace::CachingFileMgr::getMinimumSize()) {
+    throw std::runtime_error{"disk-cache-size must be at least " +
+                             to_string(File_Namespace::CachingFileMgr::getMinimumSize())};
   }
 
   if (disk_cache_config.path.empty()) {
@@ -815,6 +943,11 @@ void CommandLineOptions::validate() {
   addOptionalFileToBlacklist(system_parameters.ssl_key_file);
   addOptionalFileToBlacklist(system_parameters.ssl_trust_ca_file);
   addOptionalFileToBlacklist(cluster_file);
+
+  if (g_vacuum_min_selectivity < 0) {
+    throw std::runtime_error{"vacuum-min-selectivity cannot be less than 0."};
+  }
+  LOG(INFO) << "Vacuum Min Selectivity: " << g_vacuum_min_selectivity;
 }
 
 boost::optional<int> CommandLineOptions::parse_command_line(
@@ -873,7 +1006,8 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     if (!trim_and_check_file_exists(authMetadata.ca_file_name, "ca file name")) {
       return 1;
     }
-    if (!trim_and_check_file_exists(system_parameters.ssl_trust_store, "ssl trust store")) {
+    if (!trim_and_check_file_exists(system_parameters.ssl_trust_store,
+                                    "ssl trust store")) {
       return 1;
     }
     if (!trim_and_check_file_exists(system_parameters.ssl_keystore, "ssl key store")) {
@@ -890,6 +1024,7 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     g_enable_dynamic_watchdog = enable_dynamic_watchdog;
     g_dynamic_watchdog_time_limit = dynamic_watchdog_time_limit;
     g_enable_runtime_query_interrupt = enable_runtime_query_interrupt;
+    g_enable_non_kernel_time_query_interrupt = enable_non_kernel_time_query_interrupt;
     g_pending_query_interrupt_freq = pending_query_interrupt_freq;
     g_running_query_interrupt_freq = running_query_interrupt_freq;
     g_use_estimator_result_cache = use_estimator_result_cache;
@@ -965,6 +1100,25 @@ boost::optional<int> CommandLineOptions::parse_command_line(
       LOG(INFO) << " HA shared data is " << system_parameters.ha_shared_data;
     }
   }
+
+  boost::algorithm::trim_if(system_parameters.master_address, boost::is_any_of("\"'"));
+  if (!system_parameters.master_address.empty()) {
+    if (!read_only) {
+      LOG(ERROR) << "The master-address setting is only allowed in read-only mode";
+      return 9;
+    }
+    LOG(INFO) << " Master Address is " << system_parameters.master_address;
+    LOG(INFO) << " Master Port is " << system_parameters.master_port;
+  }
+
+  if (g_max_import_threads < 1) {
+    std::cerr << "max-import-threads must be >= 1 (was set to " << g_max_import_threads
+              << ")." << std::endl;
+    return 8;
+  } else {
+    LOG(INFO) << " Max import threads " << g_max_import_threads;
+  }
+
   LOG(INFO) << " cuda block size " << system_parameters.cuda_block_size;
   LOG(INFO) << " cuda grid size  " << system_parameters.cuda_grid_size;
   LOG(INFO) << " Min CPU buffer pool slab size " << system_parameters.min_cpu_slab_size;
@@ -976,9 +1130,10 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   LOG(INFO) << " OmniSci Calcite Port  " << system_parameters.calcite_port;
   LOG(INFO) << " Enable Calcite view optimize "
             << system_parameters.enable_calcite_view_optimize;
-
   LOG(INFO) << " Allow Local Auth Fallback: "
             << (authMetadata.allowLocalAuthFallback ? "enabled" : "disabled");
+  LOG(INFO) << " ParallelTop min threshold: " << g_parallel_top_min;
+  LOG(INFO) << " ParallelTop watchdog max: " << g_parallel_top_max;
 
   boost::algorithm::trim_if(authMetadata.distinguishedName, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.uri, boost::is_any_of("\"'"));

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/ResultSetReductionJIT.h"
 #include "../QueryRunner/QueryRunner.h"
+#include "../Shared/DateConverters.h"
 #include "../Shared/StringTransform.h"
 #include "../Shared/scope.h"
 #include "../SqliteConnector/SqliteConnector.h"
@@ -52,10 +53,12 @@ extern bool g_allow_cpu_retry;
 extern bool g_enable_watchdog;
 extern bool g_skip_intermediate_count;
 extern bool g_use_tbb_pool;
+extern bool g_enable_left_join_filter_hoisting;
 
 extern unsigned g_trivial_loop_join_threshold;
 extern bool g_enable_overlaps_hashjoin;
 extern double g_gpu_mem_limit_percent;
+extern size_t g_parallel_top_min;
 
 extern bool g_enable_window_functions;
 extern bool g_enable_calcite_view_optimize;
@@ -165,18 +168,6 @@ TargetValue run_simple_agg(const string& query_str,
   return crt_row[0];
 }
 
-TargetValue get_first_target(const string& query_str,
-                             const ExecutorDeviceType device_type,
-                             const bool geo_return_geo_tv = true) {
-  auto rows = run_multiple_agg(query_str, device_type);
-  if (geo_return_geo_tv) {
-    rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
-  }
-  auto crt_row = rows->getNextRow(true, true);
-  CHECK_GE(crt_row.size(), size_t(1)) << query_str;
-  return crt_row[0];
-}
-
 inline void run_ddl_statement(const std::string& create_table_stmt) {
   QR::get()->runDDLStatement(create_table_stmt);
 }
@@ -226,7 +217,8 @@ class SQLiteComparator {
                             const ExecutorDeviceType device_type) {
     const auto results =
         QR::get()->runSQL(query_string, device_type, g_hoist_literals, true);
-    const auto arrow_omnisci_results = result_set_arrow_loopback(nullptr, results);
+    const auto arrow_omnisci_results =
+        result_set_arrow_loopback(nullptr, results, device_type);
     compare_impl(
         arrow_omnisci_results.get(), sqlite_query_string, device_type, false, true);
   }
@@ -375,7 +367,7 @@ class SQLiteComparator {
                 int fs = 0;
                 if (*end_str == '.') {
                   end_str++;
-                  uint frac_num;
+                  unsigned int frac_num;
                   int ntotal;
                   sscanf(end_str, "%d%n", &frac_num, &ntotal);
                   fs = parse_fractional_seconds(frac_num, ntotal, omnisci_ti);
@@ -395,8 +387,15 @@ class SQLiteComparator {
                     << errmsg;
               } else {
                 if (is_arrow && omnisci_type == kDATE) {
-                  ASSERT_EQ(*omnisci_as_int_p, timegm(&tm_struct) * kMilliSecsPerSec)
-                      << errmsg;
+                  if (device_type == ExecutorDeviceType::CPU) {
+                    ASSERT_EQ(
+                        *omnisci_as_int_p,
+                        DateConverters::get_epoch_days_from_seconds(timegm(&tm_struct)))
+                        << errmsg;
+                  } else {
+                    ASSERT_EQ(*omnisci_as_int_p, timegm(&tm_struct) * kMilliSecsPerSec)
+                        << errmsg;
+                  }
                 } else {
                   ASSERT_EQ(*omnisci_as_int_p, dimen > 0 ? nsec : timegm(&tm_struct))
                       << errmsg;
@@ -521,6 +520,12 @@ void c_arrow(const std::string& query_string, const ExecutorDeviceType device_ty
   if (g_use_temporary_tables) {                                   \
     LOG(ERROR) << "Tests not valid when using temporary tables."; \
     return;                                                       \
+  }
+
+#define SKIP_IF_SHARDED()                                       \
+  if (g_shard_count) {                                          \
+    LOG(ERROR) << "Tests not valid when using sharded tables."; \
+    return;                                                     \
   }
 
 bool validate_statement_syntax(const std::string& stmt) {
@@ -773,6 +778,41 @@ TEST(Insert, NullArrayNullEmpty) {
   }
 }
 
+TEST(Insert, IntArrayInsert) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS table_int_array;");
+    EXPECT_NO_THROW(run_ddl_statement("CREATE TABLE table_int_array (bi bigint[]);"));
+
+    vector<std::string> vals = {
+        "1", "33000", "650000", "1.2", "-7", "null", "5000000000"};
+    string arr;
+    for (size_t ol = 0; ol < vals.size(); ol++) {
+      arr = "";
+      for (size_t il = 0; il < vals.size(); il++) {
+        size_t pos = (ol + il) % vals.size();
+        arr.append(vals[pos]);
+        if (il < (vals.size() - 1)) {
+          arr.append(",");
+        }
+      }
+      string insString = "INSERT into table_int_array values ({" + arr + "});";
+      EXPECT_NO_THROW(run_multiple_agg(insString, dt));
+    }
+
+    EXPECT_ANY_THROW(
+        run_multiple_agg("INSERT into table_int_array values ({1,34,'roof'});", dt));
+
+    for (size_t ol = 0; ol < vals.size(); ol++) {
+      string selString =
+          "select sum(bi[" + std::to_string(ol + 1) + "]) from table_int_array;";
+      ASSERT_EQ(5000682995, v<int64_t>(run_simple_agg(selString, dt)));
+    }
+
+    run_ddl_statement("DROP TABLE IF EXISTS table_int_array;");
+  }
+}
+
 TEST(Insert, DictBoundary) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -795,6 +835,122 @@ TEST(Insert, DictBoundary) {
     ASSERT_EQ(25,
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM table_with_small_dict WHERE t IS NULL;", dt)));
+  }
+}
+
+namespace {
+void simple_insert_test_omitting_columns(const std::string& table_name,
+                                         ExecutorDeviceType dt) {
+  std::vector<std::pair<std::string, std::string>> columns = {
+      // Also there is an 'i' column, but this one is not optional and cannot be
+      // ommited. It just has integer values from 1 to N.
+      {"id", "61"},
+      {"ia", "ARRAY[1, 2, 3, 2, 1]"},
+      {"b", "False"},
+      {"dt", "Dict str"},
+      {"t", "Str"},
+      {"ls", "LINESTRING (1 1,2 15)"}};
+  for (size_t i = 0; i < columns.size(); ++i) {
+    std::string value =
+        (i == 0 || i == 1 ? columns[i].second : "'" + columns[i].second + "'");
+    EXPECT_NO_THROW(run_multiple_agg("INSERT INTO " + table_name + "(i, " +
+                                         columns[i].first + ") VALUES(" +
+                                         std::to_string(i) + ", " + value + ");",
+                                     dt));
+  }
+  // omitting NOT NULL column
+  EXPECT_THROW(run_multiple_agg("INSERT INTO " + table_name + " (id) VALUES(1);", dt),
+               std::runtime_error);
+  // check the stored data
+  for (size_t i = 0; i < columns.size(); ++i) {
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM " + table_name + " WHERE " +
+                                            columns[i].first + " IS NOT NULL;",
+                                        dt)));
+    std::string eq_cmp = "";
+    if (i == 0) {
+      eq_cmp += columns[i].first + "=" + columns[i].second;
+    } else if (i == 1) {
+      eq_cmp += columns[i].first + "[4]=2";
+    } else if (i == 5) {
+      eq_cmp += "ST_DISTANCE(" + columns[i].first + ", '" + columns[i].second + "') = 0";
+    } else {
+      eq_cmp += columns[i].first + "='" + columns[i].second + "'";
+    }
+    ASSERT_EQ(static_cast<int64_t>(i),
+              v<int64_t>(run_simple_agg(
+                  "SELECT i FROM " + table_name + " WHERE " + eq_cmp + ";", dt)));
+  }
+}
+}  // namespace
+
+TEST(Insert, OmitColumnsWithNulls) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS not_sharded_simple_inserts_table;");
+    EXPECT_NO_THROW(run_ddl_statement(
+        "create table not_sharded_simple_inserts_table(id integer, i integer not null, "
+        "b boolean, dt text encoding dict, t text encoding none, ls linestring, "
+        "ia int[]);"));
+    simple_insert_test_omitting_columns("not_sharded_simple_inserts_table", dt);
+  }
+}
+
+TEST(Insert, OmitColumnsWithNullsSharded) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS sharded_simple_inserts_table;");
+    EXPECT_NO_THROW(run_ddl_statement(
+        "create table sharded_simple_inserts_table(id integer, i integer not null, "
+        "b boolean, dt text encoding dict, t text encoding none, ls linestring, "
+        "ia int[], SHARD KEY (id)) WITH (shard_count = 2);"));
+    simple_insert_test_omitting_columns("sharded_simple_inserts_table", dt);
+  }
+}
+
+namespace {
+void recreate_inserts_test_table() {
+  run_ddl_statement("DROP TABLE IF EXISTS inserts_test_table;");
+  EXPECT_NO_THROW(run_ddl_statement(
+      "CREATE TABLE inserts_test_table(i INTEGER, t TEXT ENCODING NONE, b BOOLEAN)"));
+}
+}  // namespace
+
+TEST(Insert, LessColumnsThanValues) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    recreate_inserts_test_table();
+    EXPECT_THROW(run_multiple_agg("INSERT INTO inserts_test_table (i, t) "
+                                  "VALUES(1, 'One', 'False');",
+                                  dt),
+                 std::runtime_error);
+    recreate_inserts_test_table();
+    EXPECT_THROW(run_multiple_agg("INSERT INTO inserts_test_table (i, t, b) "
+                                  "VALUES(1, 'One', 'False', 156);",
+                                  dt),
+                 std::runtime_error);
+  }
+}
+
+TEST(Insert, MoreColumnsThanValues) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    recreate_inserts_test_table();
+    EXPECT_THROW(run_multiple_agg("INSERT INTO inserts_test_table (i, t, b) "
+                                  "VALUES(1, 'One');",
+                                  dt),
+                 std::runtime_error);
+  }
+}
+
+TEST(Insert, InvalidColumnName) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    recreate_inserts_test_table();
+    EXPECT_THROW(run_multiple_agg("INSERT INTO inserts_test_table (i, tx, b) "
+                                  "VALUES(1, 'One', 'False');",
+                                  dt),
+                 std::runtime_error);
   }
 }
 
@@ -1629,6 +1785,22 @@ TEST(Select, GroupBy) {
   }
 }
 
+TEST(Select, ExecutePlanWithoutGroupBy) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // SQLite doesn't support NOW(), and timestamps may not be exactly equal,
+    // so just test for no throw.
+    EXPECT_NO_THROW(
+        run_multiple_agg("SELECT COUNT(*), NOW(), CURRENT_TIME, CURRENT_DATE, "
+                         "CURRENT_TIMESTAMP FROM test;",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("SELECT x, COUNT(*), NOW(), CURRENT_TIME, CURRENT_DATE, "
+                         "CURRENT_TIMESTAMP FROM test GROUP BY x;",
+                         dt));
+  }
+}
+
 TEST(Select, FilterAndGroupBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -1825,6 +1997,51 @@ TEST(Select, Arrays) {
         run_simple_agg("SELECT arr6_bool FROM array_test WHERE x < 9 AND arr6_bool[1];",
                        dt),
         std::vector<int64_t>({1, 0, 1, 0, 1, 0}));
+
+    // throw exception when comparing full array joins
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_i32 < t2.arr_i32;",
+                                dt),
+                 std::runtime_error);
+
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_i32 <= t2.arr_i32;",
+                                dt),
+                 std::runtime_error);
+
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_i32 > t2.arr_i32;",
+                                dt),
+                 std::runtime_error);
+
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_i32 >= t2.arr_i32;",
+                                dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_i32 <> t2.arr_i32;",
+                                dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_str[1] > t2.arr_str[1];",
+                                dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_str[1] >= t2.arr_str[1];",
+                                dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_str[1] < t2.arr_str[1];",
+                                dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_str[1] <= t2.arr_str[1];",
+                                dt),
+                 std::runtime_error);
+    EXPECT_NO_THROW(
+        run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                       "t1.arr_str[1] <> t2.arr_str[1];",
+                       dt));
   }
 }
 
@@ -2001,10 +2218,30 @@ TEST(Select, CountWithLimitAndOffset) {
                                         dt)));
   }
 
-  // now increase the data
-  for (int i = 0; i < 16; i++) {
-    run_ddl_statement("INSERT INTO count_test SELECT * from count_test;");
+  // now increase the data, by using temporary file
+  {
+    const auto data_path = boost::filesystem::path(
+        "../../Tests/Import/datafiles/ctas_itas_CountWithLimitAndOffset.csv");
+    if (boost::filesystem::exists(data_path)) {
+      boost::filesystem::remove(data_path);
+    }
+    std::ofstream out1(data_path.string());
+    // num_sets (-1) because data started out with 1 set of (10) items
+    int64_t num_sets = static_cast<int64_t>(pow(2, 16)) - 1;
+    for (int i = 0; i < num_sets; i++) {
+      for (int j = 0; j < 10; j++) {
+        if (out1.is_open()) {
+          out1 << j << "\n";
+        }
+      }
+    }
+    out1.close();
+    auto copy_data_str =
+        "COPY count_test FROM \'" + data_path.string() + "\' WITH (HEADER=\'f\');";
+    run_ddl_statement(copy_data_str);
+    boost::filesystem::remove(data_path);
   }
+
   int64_t size = static_cast<int64_t>(pow(2, 16) * 10);
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -2246,6 +2483,172 @@ TEST(Select, ApproxCountDistinct) {
   }
 }
 
+// Additional unit tests for APPROX_MEDIAN are in Quantile/.
+TEST(Select, ApproxMedianSanity) {
+  auto dt = ExecutorDeviceType::CPU;
+  auto approx_median = [dt](std::string const col) {
+    std::string const query = "SELECT APPROX_MEDIAN(" + col + ") FROM test;";
+    return v<double>(run_simple_agg(query, dt));
+  };
+  if (g_aggregator) {
+    try {
+      approx_median("w");
+      EXPECT_TRUE(false) << "Exception expected for approx_median query.";
+    } catch (std::runtime_error const& e) {
+      EXPECT_EQ(std::string(e.what()),
+                "TException - service has thrown: TOmniSciException(error_msg=Exception: "
+                "APPROX_MEDIAN is not supported in distributed mode at this time."
+                ")");
+    } catch (...) {
+      EXPECT_TRUE(false) << "std::runtime_error expected for approx_median query.";
+    }
+  } else {
+    EXPECT_EQ(-7.5, approx_median("w"));
+    EXPECT_EQ(7.0, approx_median("x"));
+    EXPECT_EQ(42.5, approx_median("y"));
+    EXPECT_EQ(101.0, approx_median("z"));
+    EXPECT_EQ(1001.5, approx_median("t"));
+    EXPECT_EQ((double(1.1f) + double(1.2f)) / 2, approx_median("f"));
+    EXPECT_EQ((double(1.1f) + double(101.2f)) / 2, approx_median("ff"));
+    EXPECT_EQ((double(-101.2f) + double(-1000.3f)) / 2, approx_median("fn"));
+    EXPECT_EQ(2.3, approx_median("d"));
+    EXPECT_EQ(-1111.5, approx_median("dn"));
+    EXPECT_EQ((11110.0 / 100 + 22220.0 / 100) / 2, approx_median("dd"));
+    EXPECT_EQ((11110.0 / 100 + 22220.0 / 100) / 2, approx_median("dd_notnull"));
+    EXPECT_EQ(NULL_DOUBLE, approx_median("u"));
+    EXPECT_EQ(2147483647.0, approx_median("ofd"));
+    EXPECT_EQ(-2147483647.5, approx_median("ufd"));
+    EXPECT_EQ(4611686018427387904.0, approx_median("ofq"));
+    EXPECT_EQ(-4611686018427387904.5, approx_median("ufq"));
+    EXPECT_EQ(32767.0, approx_median("smallint_nulls"));
+  }
+}
+
+TEST(Select, ApproxMedianLargeInts) {
+  if (g_aggregator) {
+    LOG(WARNING) << "Skipping ApproxMedianLargeInts tests in distributed mode.";
+  } else {
+    auto dt = ExecutorDeviceType::CPU;
+    auto approx_median = [dt](std::string const col) {
+      std::string const query =
+          "SELECT APPROX_MEDIAN(" + col + ") FROM test_approx_median;";
+      return v<double>(run_simple_agg(query, dt));
+    };
+    run_ddl_statement("DROP TABLE IF EXISTS test_approx_median;");
+    run_ddl_statement("CREATE TABLE test_approx_median (b BIGINT);");
+    run_multiple_agg("INSERT INTO test_approx_median VALUES (-9223372036854775807);", dt);
+    run_multiple_agg("INSERT INTO test_approx_median VALUES ( 9223372036854775807);", dt);
+    EXPECT_EQ(0.0, approx_median("b"));
+  }
+}
+
+TEST(Select, ApproxMedianSort) {
+  if (g_aggregator) {
+    LOG(WARNING) << "Skipping ApproxMedianSort tests in distributed mode.";
+  } else {
+    auto const dt = ExecutorDeviceType::CPU;
+    char const* const prefix =
+        "SELECT t2.x, APPROX_MEDIAN(t0.x) am FROM coalesce_cols_test_2 t2 LEFT JOIN "
+        "coalesce_cols_test_0 t0 ON t2.x=t0.x GROUP BY t2.x ORDER BY am ";
+    std::vector<std::string> const tests{
+        "ASC NULLS FIRST", "ASC NULLS LAST", "DESC NULLS FIRST", "DESC NULLS LAST"};
+    constexpr size_t NROWS = 20;
+    for (size_t t = 0; t < tests.size(); ++t) {
+      std::string const query = prefix + tests[t] + ", x;";
+      auto rows = run_multiple_agg(query, dt);
+      EXPECT_EQ(rows->colCount(), 2u) << query;
+      EXPECT_EQ(rows->rowCount(), NROWS) << query;
+      for (size_t i = 0; i < NROWS; ++i) {
+        switch (t) {
+          case 0:
+            if (i < 10) {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i) + 10)
+                  << query << "i=" << i;
+              EXPECT_EQ(v<double>(rows->getRowAt(i, 1, true)), NULL_DOUBLE)
+                  << query << "i=" << i;
+            } else {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i) - 10)
+                  << query << "i=" << i;
+              EXPECT_EQ(v<double>(rows->getRowAt(i, 1, true)), double(i) - 10)
+                  << query << "i=" << i;
+            }
+            break;
+          case 1:
+            EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i))
+                << query << "i=" << i;
+            if (i < 10) {
+              EXPECT_EQ(v<double>(rows->getRowAt(i, 1, true)), double(i))
+                  << query << "i=" << i;
+            } else {
+              EXPECT_EQ(v<double>(rows->getRowAt(i, 1, true)), NULL_DOUBLE)
+                  << query << "i=" << i;
+            }
+            break;
+          case 2:
+            if (i < 10) {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i) + 10)
+                  << query << "i=" << i;
+              EXPECT_EQ(v<double>(rows->getRowAt(i, 1, true)), NULL_DOUBLE)
+                  << query << "i=" << i;
+            } else {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), 19 - int64_t(i))
+                  << query << "i=" << i;
+              EXPECT_EQ(v<double>(rows->getRowAt(i, 1, true)), 19 - double(i))
+                  << query << "i=" << i;
+            }
+            break;
+          case 3:
+            if (i < 10) {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), 9 - int64_t(i))
+                  << query << "i=" << i;
+              EXPECT_EQ(v<double>(rows->getRowAt(i, 1, true)), 9 - double(i))
+                  << query << "i=" << i;
+            } else {
+              EXPECT_EQ(v<int64_t>(rows->getRowAt(i, 0, true)), int64_t(i))
+                  << query << "i=" << i;
+              EXPECT_EQ(v<double>(rows->getRowAt(i, 1, true)), NULL_DOUBLE)
+                  << query << "i=" << i;
+            }
+            break;
+          default:
+            EXPECT_TRUE(false) << t;
+        }
+      }
+    }
+  }
+}
+
+TEST(Select, ApproxMedianSubqueries) {
+  if (g_aggregator) {
+    LOG(WARNING) << "Skipping ApproxMedianSubqueries tests in distributed mode.";
+  } else {
+    auto const dt = ExecutorDeviceType::CPU;
+    const char* query =
+        "SELECT MIN(am) FROM (SELECT x, APPROX_MEDIAN(w) AS am FROM test GROUP BY x);";
+    EXPECT_EQ(-8.0, v<double>(run_simple_agg(query, dt)));
+    query =
+        "SELECT MAX(am) FROM (SELECT x, APPROX_MEDIAN(w) AS am FROM test GROUP BY x);";
+    EXPECT_EQ(-7.0, v<double>(run_simple_agg(query, dt)));
+  }
+}
+
+// Immerse invokes sql_validate which requires testing.
+TEST(Select, ApproxMedianValidate) {
+  if (g_aggregator) {
+    LOG(WARNING) << "Skipping ApproxMedianValidate tests in distributed mode.";
+  } else {
+    auto const dt = ExecutorDeviceType::CPU;
+    auto eo = QR::defaultExecutionOptionsForRunSQL();
+    eo.just_validate = true;
+    char const* const query = "SELECT APPROX_MEDIAN(x) FROM test;";
+    std::shared_ptr<ResultSet> rows =
+        QR::get()->runSQL(query, CompilationOptions::defaults(dt), std::move(eo));
+    auto crt_row = rows->getNextRow(true, true);
+    CHECK_EQ(1u, crt_row.size()) << query;
+    EXPECT_EQ(NULL_DOUBLE, v<double>(crt_row[0]));
+  }
+}
+
 TEST(Select, ScanNoAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -2399,6 +2802,13 @@ TEST(Select, OrderBy) {
       c("SELECT x, y, SUM(f) FROM test WHERE f IS NOT NULL GROUP BY x, y ORDER BY 3 " +
             order + " LIMIT 1;",
         dt);
+      for (std::string nulls : {" NULLS LAST", " NULLS FIRST"}) {
+        char const* const prefix =
+            "SELECT t2.x, t0.x FROM coalesce_cols_test_2 t2 LEFT JOIN "
+            "coalesce_cols_test_0 t0 ON t2.x=t0.x ORDER BY t0.x ";
+        std::string query = prefix + order + nulls + ", t2.x ASC NULLS LAST;";
+        c(query, dt);
+      }
     }
     c("SELECT * FROM ( SELECT x, y FROM test ORDER BY x, y ASC NULLS FIRST LIMIT 10 ) t0 "
       "LIMIT 5;",
@@ -2420,11 +2830,6 @@ TEST(Select, VariableLengthOrderBy) {
     EXPECT_THROW(
         run_multiple_agg("SELECT arr3_i16 FROM array_test ORDER BY arr3_i16 DESC;", dt),
         std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT p FROM geospatial_test ORDER BY p;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT poly, l, id FROM geospatial_test ORDER BY id, poly;", dt),
-                 std::runtime_error);
   }
 }
 
@@ -2506,7 +2911,7 @@ TEST(Select, GroupByPushDownFilterIntoExprRange) {
         size_t(1),
         rows->rowCount());  // Sqlite does not have a boolean type, so do this for now
     c("SELECT x, COUNT(*) AS n FROM test WHERE x > 7 GROUP BY x ORDER BY x", dt);
-    c("SELECT y, COUNT(*) AS n FROM test WHERE y <= 43 GROUP BY y ORDER BY n DESC", dt);
+    c("SELECT y, COUNT(*) AS n FROM test WHERE y < 43 GROUP BY y ORDER BY n DESC", dt);
     c("SELECT z, COUNT(*) AS n FROM test WHERE z <= 43 AND y > 10 GROUP BY z ORDER BY n "
       "DESC",
       dt);
@@ -2543,6 +2948,7 @@ TEST(Select, DistinctProjection) {
 TEST(Select, Case) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+
     c("SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE "
       "3 END) FROM test;",
       dt);
@@ -2597,6 +3003,27 @@ TEST(Select, Case) {
       "ELSE 'ooops' END AS g, "
       "COUNT(*) FROM test GROUP BY g ORDER BY g;",
       dt);
+    c(R"(SELECT CASE WHEN x = 7 THEN 'a' WHEN x = 8 then 'b' ELSE shared_dict END FROM test GROUP BY 1 ORDER BY 1 ASC;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 7 THEN 'a' WHEN x = 8 then str ELSE str END FROM test GROUP BY 1 ORDER BY 1 ASC;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 7 THEN 'a' WHEN x = 8 then str ELSE shared_dict END FROM test GROUP BY 1 ORDER BY 1 ASC;)",
+      dt);
+    c(R"(SELECT COUNT(*) FROM (SELECT CASE WHEN x = 7 THEN 1 WHEN x = 8 then str ELSE shared_dict END FROM test GROUP BY 1);)",
+      dt);
+    c(R"(SELECT COUNT(*) FROM test WHERE (CASE WHEN x = 7 THEN str ELSE 'b' END) = shared_dict;)",
+      dt);
+    {
+      const auto watchdog_state = g_enable_watchdog;
+      g_enable_watchdog = true;
+      ScopeGuard reset_Watchdog_state = [&watchdog_state] {
+        g_enable_watchdog = watchdog_state;
+      };
+      EXPECT_ANY_THROW(run_multiple_agg(
+          R"(SELECT CASE WHEN x = 7 THEN 'a' WHEN x = 8 then str ELSE fixed_str END FROM test;)",
+          dt));  // Exception: Cast from dictionary-encoded string to none-encoded would
+                 // be slow
+    }
     c("SELECT y AS key0, SUM(CASE WHEN x > 7 THEN x / (x - 7) ELSE 99 END) FROM test "
       "GROUP BY key0 ORDER BY key0;",
       dt);
@@ -3278,19 +3705,19 @@ TEST(Select, TimeSyntaxCheck) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    ASSERT_EQ(1325376000L,
+    ASSERT_EQ(1325376000LL,
               v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(year, CAST('2012-05-08 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
-    ASSERT_EQ(1325376000L,
+    ASSERT_EQ(1325376000LL,
               v<int64_t>(run_simple_agg("SELECT DATE_TRUNC('year', CAST('2012-05-08 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
-    ASSERT_EQ(1325376000L,
+    ASSERT_EQ(1325376000LL,
               v<int64_t>(run_simple_agg("SELECT PG_DATE_TRUNC(year, CAST('2012-05-08 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
-    ASSERT_EQ(1325376000L,
+    ASSERT_EQ(1325376000LL,
               v<int64_t>(run_simple_agg("SELECT PG_DATE_TRUNC('year', CAST('2012-05-08 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
@@ -3391,11 +3818,20 @@ TEST(Select, Time) {
             "SELECT COUNT(*) FROM test WHERE CAST('10/09/1999' AS DATE) > o;", dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE CAST('10/09/99' AS DATE) > o;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
+              v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE CAST('10-Sep-99' AS DATE) > o;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE CAST('9/10/99' AS DATE) > o;", dt)));
     ASSERT_EQ(
         static_cast<int64_t>(g_num_rows + g_num_rows / 2),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE CAST('31/Oct/2013' AS DATE) > o;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE CAST('10/31/13' AS DATE) > o;", dt)));
     // check TIME FORMATS
     ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
@@ -3426,6 +3862,41 @@ TEST(Select, Time) {
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m < NOW();", dt)));
     ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE o IS NULL OR o < CURRENT_DATE;", dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(2 * g_num_rows),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test WHERE o IS NULL OR o < CURRENT_DATE();", dt)));
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE m < CURRENT_TIMESTAMP;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE m < CURRENT_TIMESTAMP();", dt)));
+    ASSERT_TRUE(v<int64_t>(
+        run_simple_agg("SELECT CURRENT_DATE = CAST(CURRENT_TIMESTAMP AS DATE);", dt)));
+    ASSERT_TRUE(
+        v<int64_t>(run_simple_agg("SELECT DATEADD('day', -1, CURRENT_TIMESTAMP) < "
+                                  "CURRENT_DATE AND CURRENT_DATE <= CURRENT_TIMESTAMP;",
+                                  dt)));
+    ASSERT_TRUE(v<int64_t>(run_simple_agg(
+        "SELECT CAST(CURRENT_DATE AS TIMESTAMP) <= CURRENT_TIMESTAMP;", dt)));
+    ASSERT_TRUE(v<int64_t>(run_simple_agg(
+        "SELECT EXTRACT(YEAR FROM CURRENT_DATE) = EXTRACT(YEAR FROM CURRENT_TIMESTAMP)"
+        " AND EXTRACT(MONTH FROM CURRENT_DATE) = EXTRACT(MONTH FROM CURRENT_TIMESTAMP)"
+        " AND EXTRACT(DAY FROM CURRENT_DATE) = EXTRACT(DAY FROM CURRENT_TIMESTAMP)"
+        " AND EXTRACT(HOUR FROM CURRENT_DATE) = 0"
+        " AND EXTRACT(MINUTE FROM CURRENT_DATE) = 0"
+        " AND EXTRACT(SECOND FROM CURRENT_DATE) = 0;",
+        dt)));
+    ASSERT_TRUE(v<int64_t>(run_simple_agg(
+        "SELECT EXTRACT(HOUR FROM CURRENT_TIME()) = EXTRACT(HOUR FROM CURRENT_TIMESTAMP)"
+        " AND EXTRACT(MINUTE FROM CURRENT_TIME) = EXTRACT(MINUTE FROM CURRENT_TIMESTAMP)"
+        " AND EXTRACT(SECOND FROM CURRENT_TIME) = EXTRACT(SECOND FROM CURRENT_TIMESTAMP)"
+        ";",
+        dt)));
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
+              v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE m > timestamp(0) '2014-12-13T000000';",
                   dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
@@ -3436,10 +3907,10 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST(o AS "
                                         "TIMESTAMP) > timestamp(0) '1999-09-10T160000';",
                                         dt)));
-    ASSERT_EQ(14185957950L,
+    ASSERT_EQ(14185957950LL,
               v<int64_t>(run_simple_agg(
                   "SELECT MAX(EXTRACT(EPOCH FROM m) * 10) FROM test;", dt)));
-    ASSERT_EQ(14185152000L,
+    ASSERT_EQ(14185152000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT MAX(EXTRACT(DATEEPOCH FROM m) * 10) FROM test;", dt)));
     ASSERT_EQ(20140,
@@ -3489,58 +3960,77 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOY FROM o) FROM test WHERE o IS NOT NULL;", dt)));
     ASSERT_EQ(
-        936835200L,
+        936835200LL,
         v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(EPOCH FROM o)) FROM test;", dt)));
-    ASSERT_EQ(936835200L,
+    ASSERT_EQ(936835200LL,
               v<int64_t>(run_simple_agg(
                   "SELECT MAX(EXTRACT(DATEEPOCH FROM o)) FROM test;", dt)));
-    // PostgreSQL: SELECT EXTRACT(WEEK FROM TIMESTAMP '2012-01-01 20:15:12') -> 52
-    ASSERT_EQ(52L,
+    ASSERT_EQ(52LL,
               v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(WEEK FROM CAST('2012-01-01 "
                                         "20:15:12' AS TIMESTAMP))) FROM test limit 1;",
                                         dt)));
-    ASSERT_EQ(10L,
+    ASSERT_EQ(
+        1LL,
+        v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(WEEK_SUNDAY FROM CAST('2012-01-01 "
+                                  "20:15:12' AS TIMESTAMP))) FROM test limit 1;",
+                                  dt)));
+    ASSERT_EQ(1LL,
+              v<int64_t>(
+                  run_simple_agg("SELECT MAX(EXTRACT(WEEK_SATURDAY FROM CAST('2012-01-01 "
+                                 "20:15:12' AS TIMESTAMP))) FROM test limit 1;",
+                                 dt)));
+    ASSERT_EQ(10LL,
               v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(WEEK FROM CAST('2008-03-03 "
                                         "20:15:12' AS TIMESTAMP))) FROM test limit 1;",
                                         dt)));
+    ASSERT_EQ(
+        10LL,
+        v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(WEEK_SUNDAY FROM CAST('2008-03-03 "
+                                  "20:15:12' AS TIMESTAMP))) FROM test limit 1;",
+                                  dt)));
+    ASSERT_EQ(10LL,
+              v<int64_t>(
+                  run_simple_agg("SELECT MAX(EXTRACT(WEEK_SATURDAY FROM CAST('2008-03-03 "
+                                 "20:15:12' AS TIMESTAMP))) FROM test limit 1;",
+                                 dt)));
     // Monday
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg("SELECT EXTRACT(DOW FROM CAST('2008-03-03 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
     // Monday
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg("SELECT EXTRACT(ISODOW FROM CAST('2008-03-03 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
     // Sunday
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg("SELECT EXTRACT(DOW FROM CAST('2008-03-02 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
     // Sunday
-    ASSERT_EQ(7L,
+    ASSERT_EQ(7LL,
               v<int64_t>(run_simple_agg("SELECT EXTRACT(ISODOW FROM CAST('2008-03-02 "
                                         "20:15:12' AS TIMESTAMP)) FROM test limit 1;",
                                         dt)));
-    ASSERT_EQ(15000000000L,
+    ASSERT_EQ(15000000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(nanosecond from m) FROM test limit 1;", dt)));
-    ASSERT_EQ(15000000L,
+    ASSERT_EQ(15000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(microsecond from m) FROM test limit 1;", dt)));
-    ASSERT_EQ(15000L,
+    ASSERT_EQ(15000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(millisecond from m) FROM test limit 1;", dt)));
-    ASSERT_EQ(56000000000L,
+    ASSERT_EQ(56000000000LL,
               v<int64_t>(run_simple_agg("SELECT EXTRACT(nanosecond from TIMESTAMP(0) "
                                         "'1999-03-14 23:34:56') FROM test limit 1;",
                                         dt)));
-    ASSERT_EQ(56000000L,
+    ASSERT_EQ(56000000LL,
               v<int64_t>(run_simple_agg("SELECT EXTRACT(microsecond from TIMESTAMP(0) "
                                         "'1999-03-14 23:34:56') FROM test limit 1;",
                                         dt)));
-    ASSERT_EQ(56000L,
+    ASSERT_EQ(56000LL,
               v<int64_t>(run_simple_agg("SELECT EXTRACT(millisecond from TIMESTAMP(0) "
                                         "'1999-03-14 23:34:56') FROM test limit 1;",
                                         dt)));
@@ -3562,7 +4052,7 @@ TEST(Select, Time) {
                                         dt)));
 
     // test DATE format processing
-    ASSERT_EQ(1434844800L,
+    ASSERT_EQ(1434844800LL,
               v<int64_t>(run_simple_agg(
                   "select CAST('2015-06-21' AS DATE) FROM test limit 1;", dt)));
     ASSERT_EQ(
@@ -3584,7 +4074,7 @@ TEST(Select, Time) {
     // test different input formats
     // added new format for customer
     ASSERT_EQ(
-        1434896116L,
+        1434896116LL,
         v<int64_t>(run_simple_agg(
             "select CAST('2015-06-21 14:15:16' AS timestamp) FROM test limit 1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
@@ -3635,47 +4125,47 @@ TEST(Select, Time) {
                                         "CAST('2015-08-21T18:13:14' AS TIMESTAMP);",
                                         dt)));
     // add test for quarterday behaviour
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T04:23:11' AS "
                   "timestamp)) FROM test limit 1;",
                   dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T00:00:00' AS "
                   "timestamp)) FROM test limit 1;",
                   dt)));
-    ASSERT_EQ(2L,
+    ASSERT_EQ(2LL,
               v<int64_t>(run_simple_agg(
                   "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T08:23:11' AS "
                   "timestamp)) FROM test limit 1;",
                   dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T14:23:11' AS "
                   "timestamp)) FROM test limit 1;",
                   dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T23:23:11' AS "
                   "timestamp)) FROM test limit 1;",
                   dt)));
-    ASSERT_EQ(1440115200L,
+    ASSERT_EQ(1440115200LL,
               v<int64_t>(run_simple_agg(
                   "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T04:23:11' AS "
                   "timestamp)) FROM test limit 1;",
                   dt)));
-    ASSERT_EQ(1440136800L,
+    ASSERT_EQ(1440136800LL,
               v<int64_t>(run_simple_agg(
                   "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T08:23:11' AS "
                   "timestamp)) FROM test limit 1;",
                   dt)));
-    ASSERT_EQ(1440158400L,
+    ASSERT_EQ(1440158400LL,
               v<int64_t>(run_simple_agg(
                   "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T13:23:11' AS "
                   "timestamp)) FROM test limit 1;",
                   dt)));
-    ASSERT_EQ(1440180000L,
+    ASSERT_EQ(1440180000LL,
               v<int64_t>(run_simple_agg(
                   "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T23:59:59' AS "
                   "timestamp)) FROM test limit 1;",
@@ -4097,7 +4587,6 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg("SELECT DATEADD('week', 1, o) = TIMESTAMP "
                                         "'1999-09-16 00:00:00' from test limit 1;",
                                         dt)));
-
     ASSERT_EQ(
         1,
         v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(DAY, 1, TIMESTAMP '2009-03-02 "
@@ -4341,6 +4830,16 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(week, DATE '2018-01-02', "
                                         "DATE '2019-03-04') FROM TEST LIMIT 1;",
                                         dt)));
+    ASSERT_EQ(
+        60,
+        v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(week_sunday, DATE '2018-01-02', "
+                                  "DATE '2019-03-04') FROM TEST LIMIT 1;",
+                                  dt)));
+    ASSERT_EQ(
+        60,
+        v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(week_saturday, DATE "
+                                  "'2018-01-02', DATE '2019-03-04') FROM TEST LIMIT 1;",
+                                  dt)));
     ASSERT_EQ(613440,
               v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(minute, DATE '2018-01-02', "
                                         "DATE '2019-03-04') FROM TEST LIMIT 1;",
@@ -4355,9 +4854,9 @@ TEST(Select, Time) {
                                         dt)));
 
     ASSERT_EQ(
-        1418428800L,
+        1418428800LL,
         v<int64_t>(run_simple_agg("SELECT CAST(m AS date) FROM test LIMIT 1;", dt)));
-    ASSERT_EQ(1336435200L,
+    ASSERT_EQ(1336435200LL,
               v<int64_t>(run_simple_agg("SELECT CAST(CAST('2012-05-08 20:15:12' AS "
                                         "TIMESTAMP) AS DATE) FROM test LIMIT 1;",
                                         dt)));
@@ -4388,65 +4887,74 @@ TEST(Select, Time) {
                                         "EXTRACT(DOW from TIMESTAMPADD(HOUR, -5, "
                                         "TIMESTAMP '2017-05-31 1:11:11')) = 2;",
                                         dt)));
+
     std::vector<std::tuple<std::string, int64_t, int64_t>> date_trunc_queries{
         /*TIMESTAMP(0) */
-        std::make_tuple("year, m", 1388534400L, 20),
-        std::make_tuple("month, m", 1417392000L, 20),
-        std::make_tuple("day, m", 1418428800L, 15),
-        std::make_tuple("hour, m", 1418508000L, 15),
-        std::make_tuple("minute, m", 1418509380L, 15),
-        std::make_tuple("second, m", 1418509395L, 15),
-        std::make_tuple("millennium, m", 978307200L, 20),
-        std::make_tuple("century, m", 978307200L, 20),
-        std::make_tuple("decade, m", 1262304000L, 20),
-        std::make_tuple("week, m", 1417996800L, 20),
-        std::make_tuple("nanosecond, m", 1418509395L, 15),
-        std::make_tuple("microsecond, m", 1418509395L, 15),
-        std::make_tuple("millisecond, m", 1418509395L, 15),
+        std::make_tuple("year, m", 1388534400LL, 20),
+        std::make_tuple("month, m", 1417392000LL, 20),
+        std::make_tuple("day, m", 1418428800LL, 15),
+        std::make_tuple("hour, m", 1418508000LL, 15),
+        std::make_tuple("minute, m", 1418509380LL, 15),
+        std::make_tuple("second, m", 1418509395LL, 15),
+        std::make_tuple("millennium, m", 978307200LL, 20),
+        std::make_tuple("century, m", 978307200LL, 20),
+        std::make_tuple("decade, m", 1262304000LL, 20),
+        std::make_tuple("week, m", 1417996800LL, 20),
+        std::make_tuple("week_sunday, m", 1417910400LL, 15),
+        std::make_tuple("week_saturday, m", 1418428800LL, 20),
+        std::make_tuple("nanosecond, m", 1418509395LL, 15),
+        std::make_tuple("microsecond, m", 1418509395LL, 15),
+        std::make_tuple("millisecond, m", 1418509395LL, 15),
         /* TIMESTAMP(3) */
-        std::make_tuple("year, m_3", 1388534400000L, 20),
-        std::make_tuple("month, m_3", 1417392000000L, 20),
-        std::make_tuple("day, m_3", 1418428800000L, 15),
-        std::make_tuple("hour, m_3", 1418508000000L, 15),
-        std::make_tuple("minute, m_3", 1418509380000L, 15),
-        std::make_tuple("second, m_3", 1418509395000L, 15),
-        std::make_tuple("millennium, m_3", 978307200000L, 20),
-        std::make_tuple("century, m_3", 978307200000L, 20),
-        std::make_tuple("decade, m_3", 1262304000000L, 20),
-        std::make_tuple("week, m_3", 1417996800000L, 20),
-        std::make_tuple("nanosecond, m_3", 1418509395323L, 15),
-        std::make_tuple("microsecond, m_3", 1418509395323L, 15),
-        std::make_tuple("millisecond, m_3", 1418509395323L, 15),
+        std::make_tuple("year, m_3", 1388534400000LL, 20),
+        std::make_tuple("month, m_3", 1417392000000LL, 20),
+        std::make_tuple("day, m_3", 1418428800000LL, 15),
+        std::make_tuple("hour, m_3", 1418508000000LL, 15),
+        std::make_tuple("minute, m_3", 1418509380000LL, 15),
+        std::make_tuple("second, m_3", 1418509395000LL, 15),
+        std::make_tuple("millennium, m_3", 978307200000LL, 20),
+        std::make_tuple("century, m_3", 978307200000LL, 20),
+        std::make_tuple("decade, m_3", 1262304000000LL, 20),
+        std::make_tuple("week, m_3", 1417996800000LL, 20),
+        std::make_tuple("week_sunday, m_3", 1417910400000LL, 15),
+        std::make_tuple("week_saturday, m_3", 1418428800000LL, 20),
+        std::make_tuple("nanosecond, m_3", 1418509395323LL, 15),
+        std::make_tuple("microsecond, m_3", 1418509395323LL, 15),
+        std::make_tuple("millisecond, m_3", 1418509395323LL, 15),
         /* TIMESTAMP(6) */
-        std::make_tuple("year, m_6", 915148800000000L, 10),
-        std::make_tuple("month, m_6", 930787200000000L, 10),
-        std::make_tuple("day, m_6", 931651200000000L, 10),
-        std::make_tuple("hour, m_6", 931701600000000L, 10),
-        /* std::make_tuple("minute, m_6", 931701720000000L, 10), // Exception with sort
+        std::make_tuple("year, m_6", 915148800000000LL, 10),
+        std::make_tuple("month, m_6", 930787200000000LL, 10),
+        std::make_tuple("day, m_6", 931651200000000LL, 10),
+        std::make_tuple("hour, m_6", 931701600000000LL, 10),
+        /* std::make_tuple("minute, m_6", 931701720000000LL, 10), // Exception with sort
            watchdog */
-        std::make_tuple("second, m_6", 931701773000000L, 10),
-        std::make_tuple("millennium, m_6", -30578688000000000L, 10),
-        std::make_tuple("century, m_6", -2177452800000000L, 10),
-        std::make_tuple("decade, m_6", 631152000000000L, 10),
-        std::make_tuple("week, m_6", 931132800000000L, 10),
-        std::make_tuple("nanosecond, m_6", 931701773874533L, 10),
-        std::make_tuple("microsecond, m_6", 931701773874533L, 10),
-        std::make_tuple("millisecond, m_6", 931701773874000L, 10),
+        std::make_tuple("second, m_6", 931701773000000LL, 10),
+        std::make_tuple("millennium, m_6", -30578688000000000LL, 10),
+        std::make_tuple("century, m_6", -2177452800000000LL, 10),
+        std::make_tuple("decade, m_6", 631152000000000LL, 10),
+        std::make_tuple("week, m_6", 931132800000000LL, 10),
+        std::make_tuple("week_sunday, m_6", 931651200000000LL, 10),
+        std::make_tuple("week_saturday, m_6", 931564800000000LL, 10),
+        std::make_tuple("nanosecond, m_6", 931701773874533LL, 10),
+        std::make_tuple("microsecond, m_6", 931701773874533LL, 10),
+        std::make_tuple("millisecond, m_6", 931701773874000LL, 10),
         /* TIMESTAMP(9) */
-        std::make_tuple("year, m_9", 1136073600000000000L, 10),
-        std::make_tuple("month, m_9", 1143849600000000000L, 10),
-        std::make_tuple("day, m_9", 1146009600000000000L, 10),
-        std::make_tuple("hour, m_9", 1146020400000000000L, 10),
-        /* std::make_tuple("minute, m_9", 1146023340000000000L, 10), // Exception with
+        std::make_tuple("year, m_9", 1136073600000000000LL, 10),
+        std::make_tuple("month, m_9", 1143849600000000000LL, 10),
+        std::make_tuple("day, m_9", 1146009600000000000LL, 10),
+        std::make_tuple("hour, m_9", 1146020400000000000LL, 10),
+        /* std::make_tuple("minute, m_9", 1146023340000000000LL, 10), // Exception with
            sort watchdog */
-        std::make_tuple("second, m_9", 1146023344000000000L, 10),
-        std::make_tuple("millennium, m_9", 978307200000000000L, 20),
-        std::make_tuple("century, m_9", 978307200000000000L, 20),
-        std::make_tuple("decade, m_9", 946684800000000000L, 10),
-        std::make_tuple("week, m_9", 1145836800000000000L, 10),
-        std::make_tuple("nanosecond, m_9", 1146023344607435125L, 10),
-        std::make_tuple("microsecond, m_9", 1146023344607435000L, 10),
-        std::make_tuple("millisecond, m_9", 1146023344607000000L, 10)};
+        std::make_tuple("second, m_9", 1146023344000000000LL, 10),
+        std::make_tuple("millennium, m_9", 978307200000000000LL, 20),
+        std::make_tuple("century, m_9", 978307200000000000LL, 20),
+        std::make_tuple("decade, m_9", 946684800000000000LL, 10),
+        std::make_tuple("week, m_9", 1145836800000000000LL, 10),
+        std::make_tuple("week_sunday, m_9", 1145750400000000000LL, 10),
+        std::make_tuple("week_saturday, m_9", 1145664000000000000LL, 10),
+        std::make_tuple("nanosecond, m_9", 1146023344607435125LL, 10),
+        std::make_tuple("microsecond, m_9", 1146023344607435000LL, 10),
+        std::make_tuple("millisecond, m_9", 1146023344607000000LL, 10)};
     for (auto& query : date_trunc_queries) {
       const auto one_row = run_multiple_agg(
           "SELECT date_trunc(" + std::get<0>(query) +
@@ -4457,10 +4965,10 @@ TEST(Select, Time) {
           *one_row, std::get<1>(query), std::get<2>(query));
     }
     // Compressed DATE - limits test
-    ASSERT_EQ(4708022400L,
+    ASSERT_EQ(4708022400LL,
               v<int64_t>(run_simple_agg(
                   "select CAST('2119-03-12' AS DATE) FROM test limit 1;", dt)));
-    ASSERT_EQ(7998912000L,
+    ASSERT_EQ(7998912000LL,
               v<int64_t>(run_simple_agg("select CAST(CAST('2223-06-24 23:13:57' AS "
                                         "TIMESTAMP) AS DATE) FROM test limit 1;",
                                         dt)));
@@ -4552,10 +5060,10 @@ TEST(Select, Time) {
                                         "as DATE)) from test limit 1;",
                                         dt)));
     // Compressed DATE - limits test
-    ASSERT_EQ(4708022400L,
+    ASSERT_EQ(4708022400LL,
               v<int64_t>(run_simple_agg(
                   "select CAST('2119-03-12' AS DATE) FROM test limit 1;", dt)));
-    ASSERT_EQ(7998912000L,
+    ASSERT_EQ(7998912000LL,
               v<int64_t>(run_simple_agg("select CAST(CAST('2223-06-24 23:13:57' AS "
                                         "TIMESTAMP) AS DATE) FROM test limit 1;",
                                         dt)));
@@ -4670,117 +5178,135 @@ TEST(Select, DateTruncate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    ASSERT_EQ(1325376000L,
+    ASSERT_EQ(1325376000LL,
               v<int64_t>(run_simple_agg(
                   R"(SELECT DATE_TRUNC(year, CAST('2012-05-08 20:15:12' AS TIMESTAMP));)",
                   dt)));
     ASSERT_EQ(
-        1335830400L,
+        1335830400LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(month, CAST('2012-05-08 20:15:12' AS TIMESTAMP));)",
             dt)));
     ASSERT_EQ(
-        1336435200L,
+        1336435200LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(day, CAST('2012-05-08 20:15:12' AS TIMESTAMP));)", dt)));
-    ASSERT_EQ(1336507200L,
+    ASSERT_EQ(1336507200LL,
               v<int64_t>(run_simple_agg(
                   R"(SELECT DATE_TRUNC(hour, CAST('2012-05-08 20:15:12' AS TIMESTAMP));)",
                   dt)));
     ASSERT_EQ(
-        1336508112L,
+        1336508112LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(second, CAST('2012-05-08 20:15:12' AS TIMESTAMP));)",
             dt)));
     ASSERT_EQ(
-        978307200L,
+        978307200LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(millennium, CAST('2012-05-08 20:15:12' AS TIMESTAMP));)",
             dt)));
     ASSERT_EQ(
-        978307200L,
+        978307200LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(century, CAST('2012-05-08 20:15:12' AS TIMESTAMP));)",
             dt)));
     ASSERT_EQ(
-        1262304000L,
+        1262304000LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(decade, CAST('2012-05-08 20:15:12' AS TIMESTAMP));)",
             dt)));
     ASSERT_EQ(
-        1336508112L,
+        1336508112LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(millisecond, CAST('2012-05-08 20:15:12' AS TIMESTAMP));)",
             dt)));
     ASSERT_EQ(
-        1336508112L,
+        1336508112LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(microsecond, CAST('2012-05-08 20:15:12' AS TIMESTAMP));)",
             dt)));
-    ASSERT_EQ(1336348800L,
+    ASSERT_EQ(1336348800LL,
               v<int64_t>(run_simple_agg(
                   R"(SELECT DATE_TRUNC(week, CAST('2012-05-08 20:15:12' AS TIMESTAMP));)",
                   dt)));
-
-    ASSERT_EQ(-2114380800L,
+    ASSERT_EQ(
+        1336348800LL - 24 * 3600,
+        v<int64_t>(run_simple_agg(
+            R"(SELECT DATE_TRUNC(week_sunday, CAST('2012-05-08 20:15:12' AS TIMESTAMP));)",
+            dt)));
+    ASSERT_EQ(
+        1336348800LL - 48 * 3600,
+        v<int64_t>(run_simple_agg(
+            R"(SELECT DATE_TRUNC(week_saturday, CAST('2012-05-08 20:15:12' AS TIMESTAMP));)",
+            dt)));
+    ASSERT_EQ(-2114380800LL,
               v<int64_t>(run_simple_agg(
                   R"(SELECT DATE_TRUNC(year, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)",
                   dt)));
     ASSERT_EQ(
-        -2104012800L,
+        -2104012800LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(month, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)",
             dt)));
     ASSERT_EQ(
-        -2103408000L,
+        -2103408000LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(day, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)", dt)));
-    ASSERT_EQ(-2103336000L,
+    ASSERT_EQ(-2103336000LL,
               v<int64_t>(run_simple_agg(
                   R"(SELECT DATE_TRUNC(hour, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)",
                   dt)));
     ASSERT_EQ(
-        -2103335088L,
+        -2103335088LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(second, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)",
             dt)));
     ASSERT_EQ(
-        -30578688000L,
+        -30578688000LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(millennium, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)",
             dt)));
     ASSERT_EQ(
-        -2177452800L,
+        -2177452800LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(century, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)",
             dt)));
     ASSERT_EQ(
-        -2208988800L,
+        -2208988800LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(decade, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)",
             dt)));
     ASSERT_EQ(
-        -2103335088L,
+        -2103335088LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(millisecond, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)",
             dt)));
     ASSERT_EQ(
-        -2103335088L,
+        -2103335088LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(microsecond, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)",
             dt)));
-    ASSERT_EQ(-2103753600L,
+    ASSERT_EQ(-2103753600LL,
               v<int64_t>(run_simple_agg(
                   R"(SELECT DATE_TRUNC(week, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)",
                   dt)));
-
     ASSERT_EQ(
-        0L,
+        -2103753600L - 24 * 3600,
+        v<int64_t>(run_simple_agg(
+            R"(SELECT DATE_TRUNC(week_sunday, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)",
+            dt)));
+    ASSERT_EQ(
+        -2103753600L - 48 * 3600,
+        v<int64_t>(run_simple_agg(
+            R"(SELECT DATE_TRUNC(week_saturday, CAST('1903-05-08 20:15:12' AS TIMESTAMP));)",
+            dt)));
+    ASSERT_EQ(
+        0LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(decade, CAST('1972-05-08 20:15:12' AS TIMESTAMP));)",
             dt)));
     ASSERT_EQ(
-        946684800L,
+        946684800LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(decade, CAST('2000-05-08 20:15:12' AS TIMESTAMP));)",
             dt)));
@@ -4796,27 +5322,27 @@ TEST(Select, DateTruncate) {
             R"(SELECT EXTRACT(quarter FROM CAST('2008-03-21 12:12:12' AS timestamp));)",
             dt)));
     ASSERT_EQ(
-        1199145600L,
+        1199145600LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(quarter, CAST('2008-03-21 12:12:12' AS timestamp));)",
             dt)));
     ASSERT_EQ(
-        1230768000L,
+        1230768000LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(quarter, CAST('2009-03-21 12:12:12' AS timestamp));)",
             dt)));
     ASSERT_EQ(
-        1254355200L,
+        1254355200LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(quarter, CAST('2009-11-21 12:12:12' AS timestamp));)",
             dt)));
     ASSERT_EQ(
-        946684800L,
+        946684800LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(quarter, CAST('2000-03-21 12:12:12' AS timestamp));)",
             dt)));
     ASSERT_EQ(
-        -2208988800L,
+        -2208988800LL,
         v<int64_t>(run_simple_agg(
             R"(SELECT DATE_TRUNC(quarter, CAST('1900-03-21 12:12:12' AS timestamp));)",
             dt)));
@@ -4891,6 +5417,16 @@ TEST(Select, DateTruncate) {
             R"(SELECT EXTRACT('epoch' FROM date_trunc('week', dt)) FROM test_date_time ORDER BY dt;)",
             dt),
         {-210124800, -53481600, -259200, 343872000});
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM date_trunc('week_sunday', dt)) FROM test_date_time ORDER BY dt;)",
+            dt),
+        {-210211200, -53568000, -345600, 343785600});
+    check_epoch_result(
+        run_multiple_agg(
+            R"(SELECT EXTRACT('epoch' FROM date_trunc('week_saturday', dt)) FROM test_date_time ORDER BY dt;)",
+            dt),
+        {-210297600, -53654400, -432000, 343699200});
     check_epoch_result(
         run_multiple_agg(
             R"(SELECT EXTRACT('epoch' FROM date_trunc('quarter', dt)) FROM test_date_time ORDER BY dt;)",
@@ -5012,6 +5548,42 @@ TEST(Select, DateTruncate2) {
     ASSERT_EQ("3900-01-01 00:00:00", date_trunc("WEEK", "3900-01-07 23:59:59", dt));
     ASSERT_EQ("3900-01-08 00:00:00", date_trunc("WEEK", "3900-01-08 00:00:00", dt));
     ASSERT_EQ("3900-01-08 00:00:00", date_trunc("WEEK", "3900-01-14 23:59:59", dt));
+
+    // 1899-12-31 is a Sunday (= start of "WEEK_SUNDAY").
+    ASSERT_EQ("1899-12-31 00:00:00",
+              date_trunc("WEEK_SUNDAY", "1899-12-31 00:00:00", dt));
+    ASSERT_EQ("1899-12-31 00:00:00",
+              date_trunc("WEEK_SUNDAY", "1900-01-06 23:59:59", dt));
+    ASSERT_EQ("1900-01-07 00:00:00",
+              date_trunc("WEEK_SUNDAY", "1900-01-07 00:00:00", dt));
+    ASSERT_EQ("1900-01-07 00:00:00",
+              date_trunc("WEEK_SUNDAY", "1900-01-13 23:59:59", dt));
+    ASSERT_EQ("3899-12-31 00:00:00",
+              date_trunc("WEEK_SUNDAY", "3899-12-31 00:00:00", dt));
+    ASSERT_EQ("3899-12-31 00:00:00",
+              date_trunc("WEEK_SUNDAY", "3900-01-06 23:59:59", dt));
+    ASSERT_EQ("3900-01-07 00:00:00",
+              date_trunc("WEEK_SUNDAY", "3900-01-07 00:00:00", dt));
+    ASSERT_EQ("3900-01-07 00:00:00",
+              date_trunc("WEEK_SUNDAY", "3900-01-13 23:59:59", dt));
+
+    // 1899-12-30 is a Saturday (= start of "WEEK_SATURDAY").
+    ASSERT_EQ("1899-12-30 00:00:00",
+              date_trunc("WEEK_SATURDAY", "1899-12-30 00:00:00", dt));
+    ASSERT_EQ("1899-12-30 00:00:00",
+              date_trunc("WEEK_SATURDAY", "1900-01-05 23:59:59", dt));
+    ASSERT_EQ("1900-01-06 00:00:00",
+              date_trunc("WEEK_SATURDAY", "1900-01-06 00:00:00", dt));
+    ASSERT_EQ("1900-01-06 00:00:00",
+              date_trunc("WEEK_SATURDAY", "1900-01-12 23:59:59", dt));
+    ASSERT_EQ("3899-12-30 00:00:00",
+              date_trunc("WEEK_SATURDAY", "3899-12-30 00:00:00", dt));
+    ASSERT_EQ("3899-12-30 00:00:00",
+              date_trunc("WEEK_SATURDAY", "3900-01-05 23:59:59", dt));
+    ASSERT_EQ("3900-01-06 00:00:00",
+              date_trunc("WEEK_SATURDAY", "3900-01-06 00:00:00", dt));
+    ASSERT_EQ("3900-01-06 00:00:00",
+              date_trunc("WEEK_SATURDAY", "3900-01-12 23:59:59", dt));
 
     ASSERT_EQ("1900-01-01 00:00:00", date_trunc("MONTH", "1900-01-01 00:00:00", dt));
     ASSERT_EQ("1900-01-01 00:00:00", date_trunc("MONTH", "1900-01-31 23:59:59", dt));
@@ -5491,6 +6063,105 @@ TEST(Select, CastFromNull) {
   }
 }
 
+TEST(Select, CastRound) {
+  auto const run = [](char const* n, char const* type, ExecutorDeviceType const dt) {
+    return run_simple_agg(std::string("SELECT CAST(") + n + " AS " + type + ");", dt);
+  };
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_EQ(127, v<int64_t>(run("127.4999999999999999", "TINYINT", dt)));
+    EXPECT_ANY_THROW(run("127.5", "TINYINT", dt));  // overflow
+    EXPECT_EQ(-128, v<int64_t>(run("-128.4999999999999999", "TINYINT", dt)));
+    EXPECT_ANY_THROW(run("-128.5", "TINYINT", dt));  // overflow
+
+    EXPECT_EQ(32767, v<int64_t>(run("32767.49999999999999", "SMALLINT", dt)));
+    EXPECT_ANY_THROW(run("32767.5", "SMALLINT", dt));  // overflow
+    EXPECT_EQ(-32768, v<int64_t>(run("-32768.49999999999999", "SMALLINT", dt)));
+    EXPECT_ANY_THROW(run("-32768.5", "SMALLINT", dt));  // overflow
+
+    EXPECT_EQ(2147483647, v<int64_t>(run("2147483647.499999999", "INT", dt)));
+    EXPECT_ANY_THROW(run("2147483647.5", "INT", dt));  // overflow
+    EXPECT_EQ(-2147483648, v<int64_t>(run("-2147483648.499999999", "INT", dt)));
+    EXPECT_ANY_THROW(run("-2147483648.5", "INT", dt));  // overflow
+
+    EXPECT_EQ(std::numeric_limits<int64_t>::max(),
+              v<int64_t>(run("9223372036854775807.", "BIGINT", dt)));
+    EXPECT_ANY_THROW(run("9223372036854775807.0", "BIGINT", dt));  // out of range
+    EXPECT_ANY_THROW(run("9223372036854775807.5", "BIGINT", dt));  // out of range
+    EXPECT_EQ(std::numeric_limits<int64_t>::min(),
+              v<int64_t>(run("-9223372036854775808.", "BIGINT", dt)));
+    EXPECT_ANY_THROW(run("-9223372036854775808.0", "BIGINT", dt));  // out of range
+    EXPECT_ANY_THROW(run("-9223372036854775808.5", "BIGINT", dt));  // out of range
+
+    EXPECT_EQ(1e18f, v<float>(run("999999999999999999", "FLOAT", dt)));
+    EXPECT_EQ(1e10f, v<float>(run("9999999999.99999999", "FLOAT", dt)));
+    EXPECT_EQ(-1e18f, v<float>(run("-999999999999999999", "FLOAT", dt)));
+    EXPECT_EQ(-1e10f, v<float>(run("-9999999999.99999999", "FLOAT", dt)));
+
+    EXPECT_EQ(1e18, v<double>(run("999999999999999999", "DOUBLE", dt)));
+    EXPECT_EQ(1e10, v<double>(run("9999999999.99999999", "DOUBLE", dt)));
+    EXPECT_EQ(-1e18, v<double>(run("-999999999999999999", "DOUBLE", dt)));
+    EXPECT_EQ(-1e10, v<double>(run("-9999999999.99999999", "DOUBLE", dt)));
+
+    EXPECT_ANY_THROW(run("9223372036854775808e0", "BIGINT", dt));  // overflow
+    EXPECT_ANY_THROW(run("9223372036854775807e0", "BIGINT", dt));  // overflow
+    EXPECT_ANY_THROW(run("9223372036854775296e0", "BIGINT", dt));  // overflow
+    // RHS = Largest integer that doesn't overflow when cast to DOUBLE to BIGINT.
+    // LHS = Largest double value less than std::numeric_limits<int64_t>::max().
+    EXPECT_EQ(9223372036854774784ll,
+              v<int64_t>(run("9223372036854775295e0", "BIGINT", dt)));
+    EXPECT_EQ(std::numeric_limits<int64_t>::min(),
+              v<int64_t>(run("-9223372036854775808e0", "BIGINT", dt)));
+    /* These results may be platform-dependent so are not included in tests.
+    EXPECT_EQ(std::numeric_limits<int64_t>::min(),
+              v<int64_t>(run("-9223372036854776959e0", "BIGINT", dt)));
+    EXPECT_ANY_THROW(run("-9223372036854776960e0", "BIGINT", dt));  // overflow
+    */
+
+    // Apply BIGINT tests to DECIMAL
+    EXPECT_ANY_THROW(run("9223372036854775808e0", "DECIMAL", dt));  // overflow
+    EXPECT_ANY_THROW(run("9223372036854775807e0", "DECIMAL", dt));  // overflow
+    EXPECT_ANY_THROW(run("9223372036854775296e0", "DECIMAL", dt));  // overflow
+    EXPECT_EQ(9223372036854774784.0,
+              v<double>(run("9223372036854775295e0", "DECIMAL", dt)));
+    EXPECT_EQ(static_cast<double>(std::numeric_limits<int64_t>::min()),
+              v<double>(run("-9223372036854775808e0", "DECIMAL", dt)));
+
+    EXPECT_ANY_THROW(run("2147483647.5e0", "INT", dt));  // overflow
+    EXPECT_EQ(2147483647, v<int64_t>(run("2147483647.4999e0", "BIGINT", dt)));
+    EXPECT_EQ(std::numeric_limits<int32_t>::min(),
+              v<int64_t>(run("-2147483648.4999e0", "INT", dt)));
+    EXPECT_ANY_THROW(run("-2147483648.5e0", "INT", dt));  // overflow
+
+    EXPECT_ANY_THROW(run("32767.5e0", "SMALLINT", dt));  // overflow
+    EXPECT_EQ(32767, v<int64_t>(run("32767.4999e0", "SMALLINT", dt)));
+    EXPECT_EQ(-32768, v<int64_t>(run("-32768.4999e0", "SMALLINT", dt)));
+    EXPECT_ANY_THROW(run("-32768.5e0", "SMALLINT", dt));  // overflow
+
+    EXPECT_ANY_THROW(run("127.5e0", "TINYINT", dt));  // overflow
+    EXPECT_EQ(127, v<int64_t>(run("127.4999e0", "TINYINT", dt)));
+    EXPECT_EQ(-128, v<int64_t>(run("-128.4999e0", "TINYINT", dt)));
+    EXPECT_ANY_THROW(run("-128.5e0", "TINYINT", dt));  // overflow
+
+    EXPECT_TRUE(
+        v<int64_t>(run_simple_agg("SELECT '292277026596-12-04 15:30:07' = "
+                                  "CAST(9223372036854775807 AS TIMESTAMP(0));",
+                                  dt)));
+    EXPECT_TRUE(
+        v<int64_t>(run_simple_agg("SELECT '292278994-08-17 07:12:55.807' = "
+                                  "CAST(9223372036854775807 AS TIMESTAMP(3));",
+                                  dt)));
+    EXPECT_TRUE(v<int64_t>(
+        run_simple_agg("SELECT CAST('294247-01-10 04:00:54.775807' AS TIMESTAMP(6)) = "
+                       "CAST(9223372036854775807 AS TIMESTAMP(6));",
+                       dt)));
+    EXPECT_TRUE(v<int64_t>(
+        run_simple_agg("SELECT CAST('2262-04-11 23:47:16.854775807' AS TIMESTAMP(9)) = "
+                       "CAST(9223372036854775807 AS TIMESTAMP(9));",
+                       dt)));
+  }
+}
+
 TEST(Select, DropSecondaryDB) {
   run_ddl_statement("CREATE DATABASE SECONDARY_DB;");
   run_ddl_statement("DROP DATABASE SECONDARY_DB;");
@@ -5676,16 +6347,16 @@ TEST(Select, TimeInterval) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     ASSERT_EQ(
-        60 * 60 * 1000L,
+        60 * 60 * 1000LL,
         v<int64_t>(run_simple_agg("SELECT INTERVAL '1' HOUR FROM test LIMIT 1;", dt)));
     ASSERT_EQ(
-        24 * 60 * 60 * 1000L,
+        24 * 60 * 60 * 1000LL,
         v<int64_t>(run_simple_agg("SELECT INTERVAL '1' DAY FROM test LIMIT 1;", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (INTERVAL '1' YEAR)/12 FROM test order by o LIMIT 1;", dt)));
     ASSERT_EQ(
-        1L,
+        1LL,
         v<int64_t>(run_simple_agg(
             "SELECT INTERVAL '1' MONTH FROM test group by m order by m LIMIT 1;", dt)));
     ASSERT_EQ(
@@ -5700,65 +6371,65 @@ TEST(Select, TimeInterval) {
     ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test GROUP BY INTERVAL '1' DAY;", dt)));
-    ASSERT_EQ(3 * 60 * 60 * 1000L,
+    ASSERT_EQ(3 * 60 * 60 * 1000LL,
               v<int64_t>(
                   run_simple_agg("SELECT 3 * INTERVAL '1' HOUR FROM test LIMIT 1;", dt)));
-    ASSERT_EQ(3 * 60 * 60 * 1000L,
+    ASSERT_EQ(3 * 60 * 60 * 1000LL,
               v<int64_t>(
                   run_simple_agg("SELECT INTERVAL '1' HOUR * 3 FROM test LIMIT 1;", dt)));
-    ASSERT_EQ(7L,
+    ASSERT_EQ(7LL,
               v<int64_t>(run_simple_agg(
                   "SELECT INTERVAL '1' MONTH * x FROM test WHERE x <> 8 LIMIT 1;", dt)));
-    ASSERT_EQ(7L,
+    ASSERT_EQ(7LL,
               v<int64_t>(run_simple_agg(
                   "SELECT x * INTERVAL '1' MONTH FROM test WHERE x <> 8 LIMIT 1;", dt)));
-    ASSERT_EQ(42L,
+    ASSERT_EQ(42LL,
               v<int64_t>(run_simple_agg(
                   "SELECT INTERVAL '1' MONTH * y FROM test WHERE y <> 43 LIMIT 1;", dt)));
-    ASSERT_EQ(42L,
+    ASSERT_EQ(42LL,
               v<int64_t>(run_simple_agg(
                   "SELECT y * INTERVAL '1' MONTH FROM test WHERE y <> 43 LIMIT 1;", dt)));
     ASSERT_EQ(
-        1002L,
+        1002LL,
         v<int64_t>(run_simple_agg(
             "SELECT INTERVAL '1' MONTH * t FROM test WHERE t <> 1001 LIMIT 1;", dt)));
     ASSERT_EQ(
-        1002L,
+        1002LL,
         v<int64_t>(run_simple_agg(
             "SELECT t * INTERVAL '1' MONTH FROM test WHERE t <> 1001 LIMIT 1;", dt)));
     ASSERT_EQ(
-        3L,
+        3LL,
         v<int64_t>(run_simple_agg(
             "SELECT INTERVAL '1' MONTH + INTERVAL '2' MONTH FROM test LIMIT 1;", dt)));
     ASSERT_EQ(
-        1388534400L,
+        1388534400LL,
         v<int64_t>(run_simple_agg("SELECT CAST(m AS date) + CAST(TRUNCATE(-1 * "
                                   "(EXTRACT(DOY FROM m) - 1), 0) AS INTEGER) * INTERVAL "
                                   "'1' DAY AS g FROM test GROUP BY g;",
                                   dt)));
     ASSERT_EQ(
-        1417392000L,
+        1417392000LL,
         v<int64_t>(run_simple_agg("SELECT CAST(m AS date) + CAST(TRUNCATE(-1 * "
                                   "(EXTRACT(DAY FROM m) - 1), 0) AS INTEGER) * INTERVAL "
                                   "'1' DAY AS g FROM test GROUP BY g;",
                                   dt)));
-    ASSERT_EQ(1418508000L,
+    ASSERT_EQ(1418508000LL,
               v<int64_t>(run_simple_agg("SELECT CAST(m AS date) + EXTRACT(HOUR FROM m) * "
                                         "INTERVAL '1' HOUR AS g FROM test GROUP BY g;",
                                         dt)));
     ASSERT_EQ(
-        1388534400L,
+        1388534400LL,
         v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(SQL_TSI_DAY, CAST(TRUNCATE(-1 * "
                                   "(EXTRACT(DOY from m) - 1), 0) AS INTEGER), "
                                   "CAST(m AS DATE)) AS g FROM test GROUP BY g;",
                                   dt)));
     ASSERT_EQ(
-        1417392000L,
+        1417392000LL,
         v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(SQL_TSI_DAY, CAST(TRUNCATE(-1 * "
                                   "(EXTRACT(DAY from m) - 1), 0) AS INTEGER), "
                                   "CAST(m AS DATE)) AS g FROM test GROUP BY g;",
                                   dt)));
-    ASSERT_EQ(1418508000L,
+    ASSERT_EQ(1418508000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(SQL_TSI_HOUR, EXTRACT(HOUR from "
                   "m), CAST(m AS DATE)) AS g FROM test GROUP BY g order by g;",
@@ -6005,6 +6676,21 @@ TEST(Select, LogicalValues) {
     EXPECT_ANY_THROW(run_simple_agg("SELECT * FROM (VALUES(1, 'test'));", dt));
 
     EXPECT_ANY_THROW(run_simple_agg("SELECT (1,2);", dt));
+
+    SKIP_ON_AGGREGATOR({
+      const auto query_explain_result =
+          QR::get()->runSelectQuery("SELECT 1+2;",
+                                    dt,
+                                    /*hoist_literals=*/true,
+                                    /*allow_loop_joins=*/false,
+                                    /*just_explain=*/true);
+      const auto explain_result = query_explain_result->getRows();
+      EXPECT_EQ(size_t(1), explain_result->rowCount());
+      const auto crt_row = explain_result->getNextRow(true, true);
+      EXPECT_EQ(size_t(1), crt_row.size());
+      const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
+      EXPECT_TRUE(explain_str.find("IR for the ") == 0);
+    });
   }
 }
 
@@ -6117,6 +6803,12 @@ void import_array_test(const std::string& table_name) {
                                          std::to_string(row_idx + i + 1));
               }
               break;
+            case kDECIMAL:
+              for (size_t i = 0; i < 3; ++i) {
+                array_elems.emplace_back(std::to_string(11 * (row_idx + i + 1)) + "." +
+                                         std::to_string(row_idx + i + 1));
+              }
+              break;
             default:
               CHECK(false);
           }
@@ -6136,7 +6828,7 @@ void import_array_test(const std::string& table_name) {
       }
     }
   }
-  loader->load(import_buffers, g_array_test_row_count);
+  loader->load(import_buffers, g_array_test_row_count, nullptr);
 }
 
 void import_gpu_sort_test() {
@@ -6630,133 +7322,6 @@ void import_corr_in_facts() {
   }
 }
 
-void import_geospatial_test() {
-  const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_test;");
-  run_ddl_statement(geospatial_test);
-  const auto create_ddl = build_create_table_statement(
-      "id INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gp "
-      "GEOMETRY(POINT), gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), gp4326none "
-      "GEOMETRY(POINT,4326) ENCODING NONE, gp900913 GEOMETRY(POINT,900913), gl4326none "
-      "GEOMETRY(LINESTRING,4326) ENCODING NONE, gpoly4326 GEOMETRY(POLYGON,4326)",
-      "geospatial_test",
-      {"", 0},
-      {},
-      2,
-      /*use_temporary_tables=*/g_use_temporary_tables,
-      /*deleted_support=*/true,
-      /*is_replicated=*/false);
-  run_ddl_statement(create_ddl);
-  TestHelpers::ValuesGenerator gen("geospatial_test");
-  for (size_t i = 0; i < g_num_rows; ++i) {
-    const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
-                            ")'"};
-    const std::string linestring{
-        "'LINESTRING(" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " +
-        std::to_string(2 * i) +
-        ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1))
-                 : "") +
-        ")'"};
-    const std::string poly{"'POLYGON((0 0, " + std::to_string(i + 1) + " 0, 0 " +
-                           std::to_string(i + 1) + ", 0 0))'"};
-    const std::string mpoly{"'MULTIPOLYGON(((0 0, " + std::to_string(i + 1) + " 0, 0 " +
-                            std::to_string(i + 1) + ", 0 0)))'"};
-    run_multiple_agg(gen(i,
-                         point,
-                         linestring,
-                         poly,
-                         mpoly,
-                         point,
-                         point,
-                         point,
-                         point,
-                         linestring,
-                         poly),
-                     ExecutorDeviceType::CPU);
-  }
-}
-
-void import_geospatial_join_test(const bool replicate_inner_table = false) {
-  // Create a single fragment inner table that is half the size of the geospatial_test
-  // (outer) table
-  const std::string drop_geospatial_test(
-      "DROP TABLE IF EXISTS geospatial_inner_join_test;");
-  run_ddl_statement(drop_geospatial_test);
-  std::string column_definition =
-      "id INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON";
-  auto create_statement =
-      build_create_table_statement(column_definition,
-                                   "geospatial_inner_join_test",
-                                   {"", 0},
-                                   {},
-                                   20,
-                                   /*use_temporary_tables=*/g_use_temporary_tables,
-                                   /*deleted_support=*/true,
-                                   g_aggregator);
-  run_ddl_statement(create_statement);
-  TestHelpers::ValuesGenerator gen("geospatial_inner_join_test");
-  for (size_t i = 0; i < g_num_rows; i += 2) {
-    const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
-                            ")'"};
-    const std::string linestring{
-        "'LINESTRING(" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " +
-        std::to_string(2 * i) +
-        ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1))
-                 : "") +
-        ")'"};
-    const std::string poly{"'POLYGON((0 0, " + std::to_string(i + 1) + " 0, 0 " +
-                           std::to_string(i + 1) + ", 0 0))'"};
-    const std::string mpoly{"'MULTIPOLYGON(((0 0, " + std::to_string(i + 1) + " 0, 0 " +
-                            std::to_string(i + 1) + ", 0 0)))'"};
-    run_multiple_agg(gen(i, point, linestring, poly, mpoly), ExecutorDeviceType::CPU);
-  }
-}
-
-void import_geospatial_null_test() {
-  const std::string geospatial_null_test("DROP TABLE IF EXISTS geospatial_null_test;");
-  run_ddl_statement(geospatial_null_test);
-  const auto create_ddl = build_create_table_statement(
-      "id INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gpnotnull "
-      "GEOMETRY(POINT) NOT NULL, gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), "
-      "gp4326none GEOMETRY(POINT,4326) ENCODING NONE, gp900913 GEOMETRY(POINT,900913), "
-      "gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, gpoly4326 "
-      "GEOMETRY(POLYGON,4326)",
-      "geospatial_null_test",
-      {"", 0},
-      {},
-      2,
-      /*use_temporary_tables=*/g_use_temporary_tables,
-      /*deleted_support=*/true,
-      /*is_replicated=*/false);
-  run_ddl_statement(create_ddl);
-  TestHelpers::ValuesGenerator gen("geospatial_null_test");
-  for (size_t i = 0; i < g_num_rows; ++i) {
-    const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
-                            ")'"};
-    const std::string linestring{
-        "'LINESTRING(" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " +
-        std::to_string(2 * i) +
-        ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1))
-                 : "") +
-        ")'"};
-    const std::string poly{"'POLYGON((0 0, " + std::to_string(i + 1) + " 0, 0 " +
-                           std::to_string(i + 1) + ", 0 0))'"};
-    const std::string mpoly{"'MULTIPOLYGON(((0 0, " + std::to_string(i + 1) + " 0, 0 " +
-                            std::to_string(i + 1) + ", 0 0)))'"};
-    run_multiple_agg(gen(i,
-                         (i % 2 == 0) ? "NULL" : point,
-                         (i == 1) ? "NULL" : linestring,
-                         (i == 2) ? "NULL" : poly,
-                         (i == 3) ? "NULL" : mpoly,
-                         point,
-                         (i == 4) ? "NULL" : point,
-                         (i == 5) ? "NULL" : point,
-                         (i == 6) ? "NULL" : point,
-                         (i == 7) ? "NULL" : linestring,
-                         (i == 8) ? "NULL" : poly),
-                     ExecutorDeviceType::CPU);
-  }
-}
-
 void import_logical_size_test() {
   const std::string table_name("logical_size_test");
   const std::string drop_old_logical_size_test{"DROP TABLE IF EXISTS " + table_name +
@@ -6999,6 +7564,21 @@ TEST(Select, ArrayUnnest) {
       ASSERT_EQ(1, v<int64_t>(fixed_result_rows->getRowAt(0, 1, true)));
       ASSERT_EQ(0, v<int64_t>(fixed_result_rows->getRowAt(1, 1, true)));
     }
+
+    // unnest groupby, force estimator run
+    const auto big_group_threshold = g_big_group_threshold;
+    ScopeGuard reset_big_group_threshold = [&big_group_threshold] {
+      // this sets the "has estimation" parameter to false for baseline hash groupby of
+      // small tables, forcing the estimator to run
+      g_big_group_threshold = big_group_threshold;
+    };
+    g_big_group_threshold = 1;
+
+    EXPECT_EQ(
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) FROM (SELECT  unnest(arr_str), unnest(arr_float) FROM array_test GROUP BY 1, 2);)",
+            dt)),
+        int64_t(104));
   }
 }
 
@@ -7139,7 +7719,7 @@ TEST(Select, ArrayAnyAndAll) {
                                     dt)));
       power10 *= 10;
     }
-    for (const std::string float_type : {"float", "double"}) {
+    for (const std::string float_type : {"float", "double", "decimal"}) {
       ASSERT_EQ(
           int64_t(g_array_test_row_count),
           v<int64_t>(run_simple_agg(
@@ -7275,17 +7855,30 @@ TEST(Select, GpuSort) {
 }
 
 TEST(Select, SpeculativeTopNSort) {
+  ScopeGuard reset = [orig = g_parallel_top_min] { g_parallel_top_min = orig; };
+  size_t test_values[]{size_t(0), g_parallel_top_min};
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT x, COUNT(*) AS val FROM gpu_sort_test GROUP BY x ORDER BY val DESC LIMIT "
-      "2;",
-      dt);
-    c("SELECT x from (SELECT COUNT(*) AS val, x FROM gpu_sort_test GROUP BY x ORDER BY "
-      "val ASC LIMIT 3);",
-      dt);
-    c("SELECT val from (SELECT y, COUNT(*) AS val FROM gpu_sort_test GROUP BY y ORDER BY "
-      "val DESC LIMIT 3);",
-      dt);
+    for (auto parallel_top_min : test_values) {
+      g_parallel_top_min = parallel_top_min;
+      c("SELECT x, COUNT(*) AS val FROM gpu_sort_test GROUP BY x ORDER BY val DESC LIMIT "
+        "2;",
+        dt);
+      c("SELECT x from (SELECT COUNT(*) AS val, x FROM gpu_sort_test GROUP BY x ORDER BY "
+        "val ASC LIMIT 3);",
+        dt);
+      c("SELECT val from (SELECT y, COUNT(*) AS val FROM gpu_sort_test GROUP BY y ORDER "
+        "BY val DESC LIMIT 3);",
+        dt);
+      c("SELECT w, APPROX_COUNT_DISTINCT(x) acd FROM test GROUP BY w ORDER BY acd LIMIT "
+        "2;",
+        "SELECT w, COUNT(DISTINCT x) acd FROM test GROUP BY w ORDER BY acd LIMIT 2;",
+        dt);
+      c("SELECT w, APPROX_COUNT_DISTINCT(x) acd FROM test GROUP BY w ORDER BY acd DESC "
+        "LIMIT 2;",
+        "SELECT w, COUNT(DISTINCT x) acd FROM test GROUP BY w ORDER BY acd DESC LIMIT 2;",
+        dt);
+    }
   }
 }
 
@@ -7464,7 +8057,7 @@ TEST(Select, ScalarSubquery) {
     ScopeGuard reset_watchdog_state = [&save_watchdog] {
       g_enable_watchdog = save_watchdog;
     };
-    SKIP_ON_AGGREGATOR(
+    THROW_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test GROUP BY x, y HAVING (SELECT str FROM test GROUP BY "
           "str HAVING length(str) = 3 ORDER BY str LIMIT 1) = 'bar';",
           dt));
@@ -7529,6 +8122,39 @@ TEST(Select, DecimalCompression) {
       "decimal_compression_test WHERE big_dec < 0;",
       dt);
   }
+}
+
+TEST(Select, BigintGroupByColCompactionTest) {
+  run_ddl_statement("DROP TABLE IF EXISTS bigint_groupby_col_compaction_test;");
+  run_ddl_statement("CREATE TABLE bigint_groupby_col_compaction_test (c bigint);");
+  run_multiple_agg(
+      "INSERT INTO bigint_groupby_col_compaction_test VALUES(-6312639302689611776);",
+      ExecutorDeviceType::CPU);
+  run_multiple_agg(
+      "INSERT INTO bigint_groupby_col_compaction_test VALUES(-6312639302689611776);",
+      ExecutorDeviceType::CPU);
+  run_multiple_agg(
+      "INSERT INTO bigint_groupby_col_compaction_test VALUES(-6312639302689611776);",
+      ExecutorDeviceType::CPU);
+  run_multiple_agg(
+      "INSERT INTO bigint_groupby_col_compaction_test VALUES(-6336283200715718656);",
+      ExecutorDeviceType::CPU);
+  run_multiple_agg(
+      "INSERT INTO bigint_groupby_col_compaction_test VALUES(-6312639302689603584);",
+      ExecutorDeviceType::CPU);
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    const auto result = run_multiple_agg(
+        "SELECT * FROM bigint_groupby_col_compaction_test GROUP BY c ORDER BY c;", dt);
+    ASSERT_EQ(size_t(3), result->rowCount());
+    const auto row1 = result->getNextRow(true, true);
+    ASSERT_EQ(int64_t(-6336283200715718656), v<int64_t>(row1[0]));
+    const auto row2 = result->getNextRow(true, true);
+    ASSERT_EQ(int64_t(-6312639302689611776), v<int64_t>(row2[0]));
+    const auto row3 = result->getNextRow(true, true);
+    ASSERT_EQ(int64_t(-6312639302689603584), v<int64_t>(row3[0]));
+  }
+  run_ddl_statement("DROP TABLE IF EXISTS bigint_groupby_col_compaction_test;");
 }
 
 TEST(Update, DecimalOverflow) {
@@ -7712,7 +8338,7 @@ TEST(Select, Empty) {
 TEST(Update, Empty) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("UPDATE emptytab SET x = (SELECT x FROM test_inner WHERE emptytab.x = "
+    c("UPDATE emptytab SET x = (SELECT X FROM test_inner WHERE emptytab.x = "
       "test_inner.x);",
       dt);
   }
@@ -7864,6 +8490,77 @@ TEST(Select, Subqueries) {
   }
 }
 
+TEST(Select, Export_Via_Query_Having_Scalar_Subquery) {
+  // EXPORT stmt needs "validation_query" to gather some info from the query
+  // before doing the actual data export
+  // Here, if we do export via custom query having scalar subquery,
+  // we throw "Exception: Scalar sub-query returned no results"
+  // since RexSubquery Analyzer does not know about the validation query
+  // so we have to let subquery analyzer know about that we do process validation query
+  // and keep doing processing instead of throwing the exception
+  if (g_cluster) {
+    // Those queries are executed successfully in both single and dist mode
+    // but in dist test environment, DistributedQueryRunner fails to parse those COPY stmt
+    // with scalar subquery so we skip this in dist test, but see if we can relax this
+    return;
+  }
+  std::string base_path = BASE_PATH;
+  std::string tmp_output_path_str = base_path + "/export_via_subquery.csv";
+  const auto tmp_output_path = boost::filesystem::path(tmp_output_path_str);
+  if (boost::filesystem::exists(tmp_output_path)) {
+    boost::filesystem::remove(tmp_output_path);
+  }
+  const auto query_has_single_res_row =
+      "SELECT x, SUM(f * ff) AS val FROM test GROUP BY x HAVING SUM(f * ff) < (SELECT "
+      "SUM(f * ff) * 0.1 FROM test) ORDER BY val DESC";
+  const auto query_has_empty_res_row =
+      "SELECT x, SUM(f * ff) AS val FROM test GROUP BY x HAVING SUM(f * ff) < (SELECT "
+      "SUM(f * ff) * 0.001 FROM test) ORDER BY val DESC";
+  std::ostringstream oss1;
+  oss1 << "COPY (" << query_has_single_res_row << ") TO \'" << tmp_output_path_str
+       << "\' WITH(header=\'false\');";
+  const auto copy_to_case1 = oss1.str();
+  EXPECT_NO_THROW(run_ddl_statement(copy_to_case1));
+  boost::filesystem::remove(tmp_output_path);
+
+  std::ostringstream oss2;
+  oss2 << "COPY (" << query_has_empty_res_row << ") TO \'" << tmp_output_path_str
+       << "\' WITH(header=\'false\');";
+  const auto copy_to_case2 = oss2.str();
+  EXPECT_NO_THROW(run_ddl_statement(copy_to_case2));
+  boost::filesystem::remove(tmp_output_path);
+
+  run_ddl_statement("DROP VIEW IF EXISTS export_via_subquery;");
+
+  std::ostringstream oss3;
+  oss3 << "CREATE VIEW export_via_subquery AS " << query_has_single_res_row << ";";
+  const auto view_case1 = oss3.str();
+  EXPECT_NO_THROW(run_ddl_statement(view_case1));
+
+  std::ostringstream oss4;
+  oss4 << "COPY ("
+       << "SELECT * FROM export_via_subquery) TO \'" << tmp_output_path_str
+       << "\' WITH(header=\'false\');";
+  const auto copy_via_view_case1 = oss4.str();
+  EXPECT_NO_THROW(run_ddl_statement(copy_via_view_case1));
+  run_ddl_statement("DROP VIEW export_via_subquery;");
+  boost::filesystem::remove(tmp_output_path);
+
+  std::ostringstream oss5;
+  oss5 << "CREATE VIEW export_via_subquery AS " << query_has_empty_res_row << ";";
+  const auto view_case2 = oss5.str();
+  EXPECT_NO_THROW(run_ddl_statement(view_case2));
+
+  std::ostringstream oss6;
+  oss6 << "COPY ("
+       << "SELECT * FROM export_via_subquery) TO \'" << tmp_output_path_str
+       << "\' WITH(header=\'false\');";
+  const auto copy_via_view_case2 = oss6.str();
+  EXPECT_NO_THROW(run_ddl_statement(copy_via_view_case2));
+  run_ddl_statement("DROP VIEW export_via_subquery;");
+  boost::filesystem::remove(tmp_output_path);
+}
+
 TEST(Select, Joins_Arrays) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -7905,7 +8602,124 @@ TEST(Select, Joins_Arrays) {
                                   "array_test.x = "
                                   "test_inner.x;",
                                   dt)));
+    // throw exception for full array joins
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
+                                "t1.arr_i32 = t2.arr_i32;",
+                                dt),
+                 std::runtime_error);
   }
+}
+
+TEST(Select, Joins_Fixed_Size_Array_Multi_Frag) {
+  run_ddl_statement("DROP TABLE IF EXISTS mf_f_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_d_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_i_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_bi_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_ti_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_si_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_t_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS sharded_mf_i_arr");
+
+  run_ddl_statement(
+      "CREATE TABLE mf_f_arr (c2 FLOAT[2], c3 FLOAT[3], c4 FLOAT[4]) WITH (fragment_size "
+      "= 2);");
+  run_ddl_statement(
+      "CREATE TABLE mf_d_arr (c2 DOUBLE[2], c3 DOUBLE[3], c4 DOUBLE[4]) WITH "
+      "(fragment_size = 2);");
+  run_ddl_statement(
+      "CREATE TABLE mf_i_arr (c2 INT[2], c3 INT[3], c4 INT[4]) WITH (fragment_size = "
+      "2);");
+  run_ddl_statement(
+      "CREATE TABLE mf_bi_arr (c2 BIGINT[2], c3 BIGINT[3], c4 BIGINT[4]) WITH "
+      "(fragment_size = 2);");
+  run_ddl_statement(
+      "CREATE TABLE mf_ti_arr (c2 TINYINT[2], c3 TINYINT[3], c4 TINYINT[4]) WITH "
+      "(fragment_size = 2);");
+  run_ddl_statement(
+      "CREATE TABLE mf_si_arr (c2 SMALLINT[2], c3 SMALLINT[3], c4 SMALLINT[4]) WITH "
+      "(fragment_size = 2);");
+  run_ddl_statement(
+      "CREATE TABLE mf_t_arr (t2 TEXT[2] ENCODING DICT(32)) with (fragment_size = 2);");
+  run_ddl_statement(
+      "CREATE TABLE sharded_mf_i_arr (x INT, c2 INT[2], c3 INT[3], c4 INT[4], SHARD KEY "
+      "(x)) WITH (shard_count = 2, fragment_size = 1);");
+
+  auto insert_values = [&](const std::string& table_name) {
+    for (int i = 1; i < 6; i++) {
+      std::ostringstream oss;
+      oss << "INSERT INTO " << table_name << " VALUES (";
+      if (table_name.compare("sharded_mf_i_arr") == 0) {
+        oss << i << ", ";
+      }
+      oss << "{" << i << ", " << i + 1 << "}, ";
+      oss << "{" << i << ", " << i + 1 << ", " << i + 2 << "}, ";
+      oss << "{" << i << ", " << i + 1 << ", " << i + 2 << ", " << i + 3 << "});";
+      run_multiple_agg(oss.str(), ExecutorDeviceType::CPU);
+    }
+  };
+
+  insert_values("mf_f_arr");
+  insert_values("mf_d_arr");
+  insert_values("mf_i_arr");
+  insert_values("mf_bi_arr");
+  insert_values("mf_ti_arr");
+  insert_values("mf_si_arr");
+  insert_values("sharded_mf_i_arr");
+
+  run_multiple_agg("INSERT INTO mf_t_arr VALUES ({'1', '22'});", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO mf_t_arr VALUES ({'2', '33'});", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO mf_t_arr VALUES ({'3', '44'});", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO mf_t_arr VALUES ({'4', '55'});", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO mf_t_arr VALUES ({'5', '66'});", ExecutorDeviceType::CPU);
+
+  auto test_query = [&](const std::string& table_name, ExecutorDeviceType dt) {
+    std::ostringstream oss;
+    oss << "SELECT COUNT(1) FROM " << table_name << " t1, " << table_name << " t2 WHERE ";
+    auto common_part = oss.str();
+    auto q1{common_part + "t1.c2[1] = t2.c2[1];"};
+    ASSERT_EQ(int64_t(5), v<int64_t>(run_simple_agg(q1, dt)));
+
+    auto q2{common_part + "t1.c3[1] = t2.c3[1];"};
+    ASSERT_EQ(int64_t(5), v<int64_t>(run_simple_agg(q2, dt)));
+
+    auto q3{common_part + "t1.c4[1] = t2.c4[1];"};
+    ASSERT_EQ(int64_t(5), v<int64_t>(run_simple_agg(q3, dt)));
+
+    auto q4{common_part + "t1.c2[2] = t2.c2[2] and t1.c2[1] = t1.c2[1];"};
+    ASSERT_EQ(int64_t(5), v<int64_t>(run_simple_agg(q4, dt)));
+
+    auto q5{common_part + "t1.c3[2] = t2.c3[2] and t1.c3[1] = t1.c3[1];"};
+    ASSERT_EQ(int64_t(5), v<int64_t>(run_simple_agg(q5, dt)));
+
+    auto q6{common_part + "t1.c4[2] = t2.c4[2] and t1.c4[1] = t1.c4[1];"};
+    ASSERT_EQ(int64_t(5), v<int64_t>(run_simple_agg(q6, dt)));
+  };
+
+  // skip to test GPU device until we fix the #5425 issue
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    test_query("mf_f_arr", dt);
+    test_query("mf_d_arr", dt);
+    test_query("mf_i_arr", dt);
+    test_query("mf_bi_arr", dt);
+    test_query("mf_ti_arr", dt);
+    test_query("mf_si_arr", dt);
+    test_query("sharded_mf_i_arr", dt);
+    ASSERT_EQ(
+        int64_t(5),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(1) FROM mf_t_arr r1, mf_t_arr r2 WHERE r1.t2[1] = r2.t2[1]",
+            dt)));
+  }
+
+  run_ddl_statement("DROP TABLE IF EXISTS mf_f_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_d_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_i_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_bi_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_ti_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_si_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS sharded_mf_i_arr");
+  run_ddl_statement("DROP TABLE IF EXISTS mf_t_arr");
 }
 
 TEST(Select, Joins_ShardedEmptyTable) {
@@ -7953,7 +8767,7 @@ TEST(Select, Joins_ImplicitJoins) {
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x;", dt);
     c("SELECT COUNT(*) FROM test, hash_join_test WHERE test.t = hash_join_test.t;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x < test_inner.x + 1;", dt);
-    SKIP_ON_AGGREGATOR(
+    THROW_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str = test_inner.str;",
           dt));
     c("SELECT test_inner.x, COUNT(*) AS n FROM test, test_inner WHERE test.x = "
@@ -7993,11 +8807,11 @@ TEST(Select, Joins_ImplicitJoins) {
       "'foo';",
       dt);
 
-    SKIP_ON_AGGREGATOR(
+    THROW_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt));
-    SKIP_ON_AGGREGATOR(
+    THROW_ON_AGGREGATOR(
         c("SELECT SUM(b.y) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt));
-    SKIP_ON_AGGREGATOR(
+    THROW_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.str = b.str;", dt));
     c("SELECT COUNT(*) FROM test, test_inner WHERE (test.x = test_inner.x AND test.y = "
       "42 AND test_inner.str = 'foo') "
@@ -8012,7 +8826,7 @@ TEST(Select, Joins_ImplicitJoins) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, join_test "
                                         "WHERE test.rowid = join_test.rowid;",
                                         dt)));
-    SKIP_ON_AGGREGATOR(
+    SKIP_ON_AGGREGATOR(  // no guarantee of equivalent rowid
         ASSERT_EQ(7,
                   v<int64_t>(run_simple_agg("SELECT test.x FROM test, test_inner WHERE "
                                             "test.x = test_inner.x AND test.rowid = 9;",
@@ -8153,11 +8967,9 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
     ScopeGuard reset = [watchdog_state] { g_enable_watchdog = watchdog_state; };
     g_enable_watchdog = false;
     // TODO: crashes with transient_int_to_str_.end() failure in StringDictionaryProxy
-    SKIP_ON_AGGREGATOR(
-        c("SELECT str FROM test JOIN (SELECT 'foo' AS val, 12345 AS cnt) subq ON "
-          "test.str = "
-          "subq.val;",
-          dt));
+    SKIP_ON_AGGREGATOR(c(
+        R"(SELECT str FROM test JOIN (SELECT 'foo' AS val, 12345 AS cnt) subq ON test.str = subq.val;)",
+        dt));
   }
 }
 
@@ -8411,12 +9223,6 @@ TEST(Select, Joins_Negative_ShardKey) {
 }
 
 TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
-  const auto save_watchdog = g_enable_watchdog;
-  g_enable_watchdog = false;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner "
@@ -8531,12 +9337,65 @@ TEST(Select, Joins_InnerJoin_Filters) {
   }
 }
 
-TEST(Select, Joins_LeftOuterJoin) {
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
+TEST(Select, Joins_LeftJoinFiltered) {
+  // unable to flip the flag on the leaf nodes, and we are interested in codegen which
+  // should be mode agnostic
+  SKIP_ALL_ON_AGGREGATOR();
+
+  const bool left_join_hoisting_state = g_enable_left_join_filter_hoisting;
+  ScopeGuard reset = [left_join_hoisting_state] {
+    g_enable_left_join_filter_hoisting = left_join_hoisting_state;
   };
 
+  auto check_explain_result = [](const std::string& query,
+                                 const ExecutorDeviceType dt,
+                                 const bool enable_filter_hoisting) {
+    const auto query_explain_result =
+        QR::get()->runSelectQuery(query,
+                                  dt,
+                                  /*hoist_literals=*/true,
+                                  /*allow_loop_joins=*/false,
+                                  /*just_explain=*/true);
+    const auto explain_result = query_explain_result->getRows();
+    EXPECT_EQ(size_t(1), explain_result->rowCount());
+    const auto crt_row = explain_result->getNextRow(true, true);
+    EXPECT_EQ(size_t(1), crt_row.size());
+    const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
+    const auto n = explain_str.find("hoisted_left_join_filters_");
+    const bool condition = n == std::string::npos;
+    if (enable_filter_hoisting) {
+      // expect a match
+      EXPECT_FALSE(condition);
+    } else {
+      // expect no match
+      EXPECT_TRUE(condition);
+    }
+  };
+
+  for (bool enable_filter_hoisting : {false, true}) {
+    g_enable_left_join_filter_hoisting = enable_filter_hoisting;
+
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+
+      {
+        const std::string query =
+            R"(SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test.x = test_inner.x WHERE test.y > 42;)";
+        c(query, dt);
+        check_explain_result(query, dt, enable_filter_hoisting);
+      }
+
+      {
+        const std::string query =
+            R"(SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test.x = test_inner.x LEFT JOIN test_inner_x ON test.x = test_inner_x.x WHERE test.y > 42;)";
+        c(query, dt);
+        check_explain_result(query, dt, enable_filter_hoisting);
+      }
+    }
+  }
+}
+
+TEST(Select, Joins_LeftOuterJoin) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = "
@@ -8728,18 +9587,45 @@ TEST(Select, Joins_LeftJoin_Filters) {
       "ON a.x = b.x ORDER BY a.x, "
       "b.str;",
       dt);
+    // Bad join ordering
     SKIP_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7;",
           dt));
-    SKIP_ON_AGGREGATOR(
-        c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7 "
-          "ORDER BY a.x, b.str;",
-          dt));
+    SKIP_ON_AGGREGATOR(c(
+        R"(SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7 ORDER BY a.x, b.str;)",
+        dt));
     THROW_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x WHERE a.x = 7;",
           dt));
     THROW_ON_AGGREGATOR(c(
         "SELECT a.x FROM join_test a LEFT JOIN test b ON a.x = b.x WHERE a.x = 7;", dt));
+    // fold left join -> inner join optimization testing
+    c(R"(SELECT a.o1, count(*) FROM test a LEFT JOIN test_inner b ON a.o1 = b.dt16 WHERE b.dt16 < '2020-01-01' GROUP BY 1;)",
+      dt);
+    c(R"(SELECT a.x, count(*) FROM test a LEFT JOIN test_inner b ON a.x = b.y WHERE a.x = cast('7' as integer) GROUP BY 1 ORDER BY 2;)",
+      dt);
+    c(R"(SELECT a.x, count(*) FROM test a LEFT JOIN test_inner b ON a.x = b.y WHERE a.x = cast('7' as integer) AND b.y IS NOT NULL GROUP BY 1 ORDER BY 1;)",
+      dt);
+    c(R"(SELECT a.x, count(*) FROM test a LEFT JOIN test_inner b ON a.x = b.y WHERE b.y IS NOT NULL GROUP BY 1 ORDER BY 1;)",
+      dt);
+    c(R"(SELECT a.o1, count(*) FROM test a LEFT JOIN test_empty b ON a.o1 = b.o1 GROUP BY 1 ORDER BY 2;)",
+      dt);
+    c(R"(SELECT a.o1, count(*) FROM test a LEFT JOIN test_empty b ON a.o1 = b.o1 WHERE (a.o1 >= '1990-01-01') GROUP BY 1 ORDER BY 2;)",
+      dt);
+    {
+      auto result = run_multiple_agg(
+          R"(SELECT a.o1, count(*) FROM test a LEFT JOIN test_empty b ON a.o1 = b.o1 WHERE (a.o1 >= DATE '1990-01-01') GROUP BY 1 ORDER BY 2;)",
+          dt);
+      EXPECT_EQ(result->rowCount(), size_t(1));
+    }
+    {
+      auto result = run_multiple_agg(
+          R"(SELECT a.o1, count(*) FROM test a LEFT JOIN test_empty b ON a.o1 = b.o1 WHERE (a.o1 >= DATE '1990-01-01' AND b.o1 IS NOT NULL) GROUP BY 1 ORDER BY 2;)",
+          dt);
+      EXPECT_EQ(result->rowCount(), size_t(0));
+    }
+    c(R"(SELECT a.o1, count(*) FROM test a LEFT JOIN test_empty b ON a.o1 = b.o1 WHERE (a.o1 >= CAST('1990-01-01' AS DATE)) GROUP BY 1 ORDER BY 2;)",
+      dt);
   }
 }
 
@@ -8916,36 +9802,17 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
       "null and a < 0 order by a,b,c,d,e,f;",
       dt);
 
-    // reverse column order in outer join predicate
-    c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on d = a "
-      "where d is not null and a < 0 order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and d is not "
-      "null and a < 0 order by a,b,c,d,e,f;",
-      dt);
-
-    c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "where a < 0 order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and a < 0 "
-      "order by a,b,c,d,e,f;",
-      dt);
-
-    c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on b = e "
-      "where b is not null and a < 0 order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where b = e and b is not "
-      "null and a < 0 order by a,b,c,d,e,f;",
-      dt);
-
     //    b) return a single matching row
     c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "where a is not null order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and a is not "
+      "where d is not null order by a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and d is not "
       "null order by a,b,c,d,e,f;",
       dt);
 
     //    c) return multiple matching rows (four rows)
     c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on b = e "
-      "where b > 1 order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where b = e and b > 1 "
+      "where e > 1 order by a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where b = e and e > 1 "
       "order by a,b,c,d,e,f",
       dt);
 
@@ -9088,43 +9955,30 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
     // 3. execute left outer join via inner join
     //    a) return zero matching row
     c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and b = e where a is not null and b is not null and d < 1 order by a,b,c,d,e,f;",
+      "and b = e where a is not null and e is not null and d < 1 order by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and b = e and "
-      "a is not null and b is not null and d < 1 order by a,b,c,d,e,f;",
-      dt);
-
-    c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and c = f where a is not null and c is not null and d < 1 order by a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and c = f and "
-      "a is not null and c is not null and d < 1 order by a,b,c,d,e,f;",
+      "a is not null and e is not null and d < 1 order by a,b,c,d,e,f;",
       dt);
 
     c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on c = f "
-      "and b = e where c is not null and b is not null and f > 4 order by a,b,c,d,e,f;",
+      "and b = e where f > 4 order by a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where c = f and b = e and "
-      "c is not null and b is not null and f > 4 order by a,b,c,d,e,f;",
+      "f > 4 order by a,b,c,d,e,f;",
       dt);
 
     //    b) return a single matching row
     c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and b = e where a is not null and b is not null and d < 999999 order by "
+      "and b = e where a is not null and e is not null and d < 999999 order by "
       "a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and b = e and "
-      "a is not null and b is not null and d < 999999 order by a,b,c,d,e,f;",
-      dt);
-
-    c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
-      "and c = f where a is not null and c is not null and d < 9999999 order by "
-      "a,b,c,d,e,f;",
-      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and c = f and "
-      "a is not null and c is not null and d < 9999999 order by a,b,c,d,e,f;",
+      "a is not null and e is not null and d < 999999 order by a,b,c,d,e,f;",
       dt);
 
     c("select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on c = f "
-      "and b = e where c is not null and b is not null and e < 9999999 order by "
+      "and b = e where e < 9999999 order by "
       "a,b,c,d,e,f;",
       "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where c = f and b = e and "
-      "c is not null and b is not null and e < 9999999 order by a,b,c,d,e,f;",
+      "c is not null and e < 9999999 order by a,b,c,d,e,f;",
       dt);
 
     {
@@ -9206,6 +10060,99 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
           "join (select a, b, c from outer_join_foo where c is not null) tmp on tmp.a = "
           "foo.a and tmp.b = foo.b and tmp.c = foo.c order by 1, 2;";
       c(test_query10, test_query10, dt);
+    }
+
+    {
+      // [BE-5764] null rejection rule issue v3
+      // reported query
+      run_ddl_statement("DROP TABLE IF EXISTS BE_5764_a;");
+      run_ddl_statement("DROP TABLE IF EXISTS BE_5764_b;");
+      run_ddl_statement(
+          "CREATE TABLE BE_5764_a (text_ TEXT, days_ DATE ENCODING DAYS(16));");
+      run_ddl_statement(
+          "CREATE TABLE BE_5764_b (text_ TEXT, days_ DATE ENCODING DAYS(16)) WITH "
+          "(PARTITIONS='REPLICATED');");
+      run_multiple_agg("INSERT INTO BE_5764_a VALUES ('A', '2021-01-01');",
+                       ExecutorDeviceType::CPU);
+      auto q1_res = run_multiple_agg(
+          "SELECT BE_5764_a.days_ FROM BE_5764_a LEFT JOIN BE_5764_b ON (BE_5764_a.days_ "
+          "= BE_5764_b.days_) WHERE (BE_5764_a.days_ >= '2020-11-20') GROUP BY 1;",
+          dt);
+      auto q2_res = run_multiple_agg(
+          "SELECT BE_5764_a.days_ FROM BE_5764_a LEFT JOIN BE_5764_b ON (BE_5764_a.days_ "
+          "= BE_5764_b.days_) WHERE (BE_5764_a.days_ >= DATE '2020-11-20') GROUP BY 1;",
+          dt);
+      CHECK_EQ(q1_res->rowCount(), (size_t)1);
+      CHECK_EQ(q1_res->rowCount(), q2_res->rowCount());
+    }
+
+    {
+      // [BE-6037] null rejection rule issue v4: IS NOT NULL filter epxr connected via
+      // OR-logic
+      run_ddl_statement("DROP TABLE IF EXISTS BE_6037_a;");
+      run_ddl_statement("DROP TABLE IF EXISTS BE_6037_b;");
+      run_ddl_statement("DROP TABLE IF EXISTS BE_6037_c;");
+      g_sqlite_comparator.query("DROP TABLE IF EXISTS BE_6037_a;");
+      g_sqlite_comparator.query("DROP TABLE IF EXISTS BE_6037_b;");
+      g_sqlite_comparator.query("DROP TABLE IF EXISTS BE_6037_c;");
+      run_ddl_statement("CREATE TABLE BE_6037_a (id INT);");
+      run_ddl_statement(
+          "CREATE TABLE BE_6037_b (id INT) WITH (PARTITIONS='REPLICATED');");
+      run_ddl_statement(
+          "CREATE TABLE BE_6037_c (id INT) WITH (PARTITIONS='REPLICATED');");
+      g_sqlite_comparator.query("CREATE TABLE BE_6037_a (id INT);");
+      g_sqlite_comparator.query("CREATE TABLE BE_6037_b (id INT);");
+      g_sqlite_comparator.query("CREATE TABLE BE_6037_c (id INT);");
+      auto insert_stmt = [](const std::string& tbl_name, const int val) {
+        std::ostringstream oss;
+        oss << "INSERT INTO " << tbl_name << " VALUES (" << val << ");";
+        return oss.str();
+      };
+      for (int i = 1; i <= 12; i++) {
+        auto insert_stmt_a = insert_stmt("BE_6037_a", i);
+        run_multiple_agg(insert_stmt_a, ExecutorDeviceType::CPU);
+        g_sqlite_comparator.query(insert_stmt_a);
+        if (i % 2 == 0) {
+          auto insert_stmt_b = insert_stmt("BE_6037_b", i);
+          g_sqlite_comparator.query(insert_stmt_b);
+          run_multiple_agg(insert_stmt_b, ExecutorDeviceType::CPU);
+        }
+        if (i % 3 == 0) {
+          auto insert_stmt_c = insert_stmt("BE_6037_c", i);
+          g_sqlite_comparator.query(insert_stmt_c);
+          run_multiple_agg(insert_stmt_c, ExecutorDeviceType::CPU);
+        }
+      }
+      auto q1 =
+          "SELECT COUNT(1) FROM BE_6037_a r1 LEFT JOIN BE_6037_b r2 ON r1.id = r2.id "
+          "LEFT JOIN BE_6037_c r3 ON r1.id = r3.id WHERE r2.id IS NOT NULL OR r3.id IS "
+          "NOT NULL;";
+      auto q2 =
+          "SELECT COUNT(1) FROM (SELECT r1.id a, r2.id b, r3.id c FROM BE_6037_a r1 LEFT "
+          "JOIN BE_6037_b r2 ON r1.id = r2.id LEFT JOIN BE_6037_c r3 ON r1.id = r3.id) "
+          "WHERE b IS NOT NULL OR c IS NOT NULL;";
+      auto q3 =
+          "SELECT COUNT(1) FROM BE_6037_a r1 LEFT JOIN BE_6037_b r2 ON r1.id = r2.id "
+          "LEFT JOIN BE_6037_c r3 ON r1.id = r3.id WHERE r1.id IS NOT NULL AND r2.id IS "
+          "NOT NULL OR r3.id IS NOT NULL;";
+      auto q4 =
+          "SELECT COUNT(1) FROM BE_6037_a r1 LEFT JOIN BE_6037_b r2 ON r1.id = r2.id "
+          "LEFT JOIN BE_6037_c r3 ON r1.id = r3.id WHERE (r1.id IS NOT NULL AND r2.id IS "
+          "NOT NULL) OR r3.id IS NOT NULL;";
+      auto q5 =
+          "SELECT COUNT(1) FROM BE_6037_a r1 LEFT JOIN BE_6037_b r2 ON r1.id = r2.id "
+          "LEFT JOIN BE_6037_c r3 ON r1.id = r3.id WHERE r1.id IS NOT NULL AND (r2.id IS "
+          "NOT NULL OR r3.id IS NOT NULL);";
+      auto q6 =
+          "SELECT COUNT(1) FROM BE_6037_a r1 LEFT JOIN BE_6037_b r2 ON r1.id = r2.id "
+          "LEFT JOIN BE_6037_c r3 ON r1.id = r3.id WHERE r1.id IS NOT NULL OR (r2.id IS "
+          "NOT NULL AND r3.id IS NOT NULL);";
+      c(q1, dt);
+      c(q2, dt);
+      c(q3, dt);
+      c(q4, dt);
+      c(q5, dt);
+      c(q6, dt);
     }
   }
 }
@@ -9357,6 +10304,8 @@ TEST(Select, Joins_ComplexQueries) {
     c("SELECT * FROM (SELECT test.x, test.y, d, f FROM test JOIN test_inner ON "
       "test.x = test_inner.x ORDER BY f ASC LIMIT 4) ORDER BY d DESC;",
       dt);
+    c(R"(SELECT c.x, count(*) as total FROM (SELECT x, y FROM test WHERE x < 8) c JOIN test_inner ON UNLIKELY(ROUND(c.x, 1) = test_inner.x) GROUP BY c.x;)",
+      dt);
   }
 }
 
@@ -9439,8 +10388,6 @@ TEST(Select, Joins_OneOuterExpression) {
 }
 
 TEST(Select, Joins_Subqueries) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (g_enable_columnar_output) {
     // TODO(adb): fixup these tests under columnar
     return;
@@ -9450,11 +10397,9 @@ TEST(Select, Joins_Subqueries) {
     SKIP_NO_GPU();
 
     // Subquery loop join
-    {
+    THROW_ON_AGGREGATOR({
       auto result_rows = run_multiple_agg(
-          "SELECT t, n FROM (SELECT UNNEST(arr_str) as t, COUNT(*) as n FROM  array_test "
-          "GROUP BY t ORDER BY n DESC), unnest_join_test WHERE t <> x ORDER BY t "
-          "LIMIT 1;",
+          R"(SELECT t, n FROM (SELECT UNNEST(arr_str) as t, COUNT(*) as n FROM  array_test GROUP BY t ORDER BY n DESC), unnest_join_test WHERE t <> x ORDER BY t LIMIT 1;)",
           dt);
 
       ASSERT_EQ(size_t(1), result_rows->rowCount());
@@ -9462,10 +10407,10 @@ TEST(Select, Joins_Subqueries) {
       ASSERT_EQ(size_t(2), crt_row.size());
       ASSERT_EQ("aa", boost::get<std::string>(v<NullableString>(crt_row[0])));
       ASSERT_EQ(1, v<int64_t>(crt_row[1]));
-    }
+    })
 
     // Subquery equijoin requiring string translation
-    {
+    SKIP_ON_AGGREGATOR({
       const auto table_reordering_state = g_from_table_reordering;
       g_from_table_reordering = false;  // disable from table reordering
       ScopeGuard reset_from_table_reordering_state = [&table_reordering_state] {
@@ -9492,7 +10437,7 @@ TEST(Select, Joins_Subqueries) {
         "'hello' ELSE str END str1, COUNT(*) n FROM test GROUP BY str ORDER BY str ASC), "
         "table_inner WHERE str1 = table_inner.str2 ORDER BY str1;",
         dt);
-    }
+    })
   }
 }
 
@@ -9897,6 +10842,27 @@ TEST(Select, Views) {
   run_test();
 }
 
+TEST(Select, ViewHavingSelfJoin) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+
+  auto run_test = [](bool calcite_view_opt_state) {
+    auto calcite_view_optimization_state = g_enable_calcite_view_optimize;
+    ScopeGuard reset_calcite_view_opt = [&calcite_view_optimization_state] {
+      g_enable_calcite_view_optimize = calcite_view_optimization_state;
+    };
+    g_enable_calcite_view_optimize = calcite_view_opt_state;
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+      c("SELECT * FROM view_self_join_v1;", dt);
+      c("SELECT * FROM view_self_join_v2;", dt);
+      c("SELECT * FROM view_self_join_v3;", dt);
+    }
+  };
+  run_test(true);
+  run_test(false);
+}
+
 TEST(Select, CreateTableAsSelect) {
   SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
@@ -9908,6 +10874,14 @@ TEST(Select, CreateTableAsSelect) {
     c("SELECT f, COUNT(*) FROM ctas_test GROUP BY f;", dt);
     c("SELECT d, COUNT(*) FROM ctas_test GROUP BY d;", dt);
     c("SELECT COUNT(*) FROM empty_ctas_test;", dt);
+    c("SELECT x, w, y, z, b, f, ff, d, fx FROM ctas_test_full ORDER BY x, w, y, z, "
+      "b, f, ff, d, fx;",
+      dt);
+    c("SELECT count(dn), count(fn), count(null_str) FROM ctas_test_full;", dt);
+    c("SELECT str, count(*) FROM ctas_test_full GROUP BY str ORDER BY 2;", dt);
+    c("SELECT m, m_3, m_6, m_9, n, o, o1, o2 FROM ctas_test_full ORDER BY m, m_3, m_6, "
+      "m_9, n, o, o1, o2;",
+      dt);
   }
 }
 
@@ -10525,7 +11499,7 @@ TEST(Select, Datediff) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     EXPECT_EQ(
-        999999997L,
+        999999997LL,
         datediff(
             "nanosecond", "1950-01-02 12:34:56.000000003", "1950-01-02 12:34:57", dt));
     EXPECT_EQ(
@@ -10537,7 +11511,7 @@ TEST(Select, Datediff) {
         datediff(
             "nanosecond", "1950-01-02 12:34:56.000000003", "1950-01-02 12:34:55", dt));
     EXPECT_EQ(
-        999999997L,
+        999999997LL,
         datediff(
             "nanosecond", "2000-01-02 12:34:56.000000003", "2000-01-02 12:34:57", dt));
     EXPECT_EQ(
@@ -10677,23 +11651,23 @@ TEST(Select, Datediff) {
     EXPECT_EQ(2556698 * 24,
               datediff("hour", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.003", dt));
     EXPECT_EQ(
-        2556698 * 24 * 60L - 1,
+        2556698 * 24 * 60LL - 1,
         datediff("minute", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.002", dt));
     EXPECT_EQ(
-        2556698 * 24 * 60L,
+        2556698 * 24 * 60LL,
         datediff("minute", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.003", dt));
     EXPECT_EQ(
-        2556698 * 24 * 60L * 60 - 1,
+        2556698 * 24 * 60LL * 60 - 1,
         datediff("second", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.002", dt));
     EXPECT_EQ(
-        2556698 * 24 * 60L * 60,
+        2556698 * 24 * 60LL * 60,
         datediff("second", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.003", dt));
     EXPECT_EQ(
-        2556698 * 24 * 60L * 60 * 1000 - 1,
+        2556698 * 24 * 60LL * 60 * 1000 - 1,
         datediff(
             "millisecond", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.002", dt));
     EXPECT_EQ(
-        2556698 * 24 * 60L * 60 * 1000,
+        2556698 * 24 * 60LL * 60 * 1000,
         datediff(
             "millisecond", "1900-02-15 12:00:00.003", "8900-02-15 12:00:00.003", dt));
   }
@@ -10703,498 +11677,533 @@ TEST(Select, TimestampPrecision) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     /* ---DATE TRUNCATE--- */
-    ASSERT_EQ(978307200000L,
+    ASSERT_EQ(978307200000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(millennium, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(978307200000L,
+    ASSERT_EQ(978307200000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(century, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1262304000000L,
+    ASSERT_EQ(1262304000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(decade, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1388534400000L,
+    ASSERT_EQ(1388534400000LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATE_TRUNC(year, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1417392000000L,
+    ASSERT_EQ(1417392000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(month, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1417996800000L,
+    ASSERT_EQ(1417996800000LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATE_TRUNC(week, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1417910400000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATE_TRUNC(week_sunday, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418428800000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATE_TRUNC(week_saturday, m_3) FROM test limit 1;", dt)));
     ASSERT_EQ(
-        1418428800000L,
+        1418428800000LL,
         v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(day, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418508000000L,
+    ASSERT_EQ(1418508000000LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATE_TRUNC(hour, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509380000L,
+    ASSERT_EQ(1418509380000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(minute, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395000L,
+    ASSERT_EQ(1418509395000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(second, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395323L,
+    ASSERT_EQ(1418509395323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(millisecond, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395323L,
+    ASSERT_EQ(1418509395323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(microsecond, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395323L,
+    ASSERT_EQ(1418509395323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(nanosecond, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(-30578688000000000L,
+    ASSERT_EQ(-30578688000000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(millennium, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(-2177452800000000L,
+    ASSERT_EQ(-2177452800000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(century, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(631152000000000L,
+    ASSERT_EQ(631152000000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(decade, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(915148800000000L,
+    ASSERT_EQ(915148800000000LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATE_TRUNC(year, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(930787200000000L,
+    ASSERT_EQ(930787200000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(month, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931132800000000L,
+    ASSERT_EQ(931132800000000LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATE_TRUNC(week, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931651200000000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATE_TRUNC(week_sunday, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931564800000000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATE_TRUNC(week_saturday, m_6) FROM test limit 1;", dt)));
     ASSERT_EQ(
-        931651200000000L,
+        931651200000000LL,
         v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(day, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701600000000L,
+    ASSERT_EQ(931701600000000LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATE_TRUNC(hour, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701720000000L,
+    ASSERT_EQ(931701720000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(minute, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701773000000L,
+    ASSERT_EQ(931701773000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(second, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701773874000L,
+    ASSERT_EQ(931701773874000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(millisecond, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701773874533L,
+    ASSERT_EQ(931701773874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(microsecond, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701773874533L,
+    ASSERT_EQ(931701773874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(nanosecond, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(978307200000000000L,
+    ASSERT_EQ(978307200000000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(millennium, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(978307200000000000L,
+    ASSERT_EQ(978307200000000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(century, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(946684800000000000L,
+    ASSERT_EQ(946684800000000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(decade, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1136073600000000000L,
+    ASSERT_EQ(1136073600000000000LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATE_TRUNC(year, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1143849600000000000L,
+    ASSERT_EQ(1143849600000000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(month, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1145836800000000000L,
+    ASSERT_EQ(1145836800000000000LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATE_TRUNC(week, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1145750400000000000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATE_TRUNC(week_sunday, m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1145664000000000000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATE_TRUNC(week_saturday, m_9) FROM test limit 1;", dt)));
     ASSERT_EQ(
-        1146009600000000000L,
+        1146009600000000000LL,
         v<int64_t>(run_simple_agg("SELECT DATE_TRUNC(day, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146020400000000000L,
+    ASSERT_EQ(1146020400000000000LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATE_TRUNC(hour, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023340000000000L,
+    ASSERT_EQ(1146023340000000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(minute, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023344000000000L,
+    ASSERT_EQ(1146023344000000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(second, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023344607000000L,
+    ASSERT_EQ(1146023344607000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(millisecond, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023344607435000L,
+    ASSERT_EQ(1146023344607435000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(microsecond, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023344607435125L,
+    ASSERT_EQ(1146023344607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(nanosecond, m_9) FROM test limit 1;", dt)));
     /* ---Extract --- */
-    ASSERT_EQ(1146023344L,
+    ASSERT_EQ(1146023344LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(epoch from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146009600L,
+    ASSERT_EQ(1146009600LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(dateepoch from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(4607435125L,
+    ASSERT_EQ(4607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(nanosecond from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(4607435L,
+    ASSERT_EQ(4607435LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(microsecond from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(4607L,
+    ASSERT_EQ(4607LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(millisecond from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(second from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(49L,
+    ASSERT_EQ(49LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(minute from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(hour from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(
                   run_simple_agg("SELECT EXTRACT(dow from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(isodow from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(17L,
+    ASSERT_EQ(17LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(week from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(26L,
+    ASSERT_EQ(17LL,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(week_sunday from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(17LL,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(week_saturday from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(26LL,
               v<int64_t>(
                   run_simple_agg("SELECT EXTRACT(day from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(116L,
+    ASSERT_EQ(116LL,
               v<int64_t>(
                   run_simple_agg("SELECT EXTRACT(doy from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(month from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(2L,
+    ASSERT_EQ(2LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(quarter from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(quarterday from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(2006L,
+    ASSERT_EQ(2006LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(year from m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701773L,
+    ASSERT_EQ(931701773LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(epoch from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931651200L,
+    ASSERT_EQ(931651200LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(dateepoch from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(53874533000L,
+    ASSERT_EQ(53874533000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(nanosecond from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(53874533L,
+    ASSERT_EQ(53874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(microsecond from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(53874L,
+    ASSERT_EQ(53874LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(millisecond from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(53L,
+    ASSERT_EQ(53LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(second from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(2L,
+    ASSERT_EQ(2LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(minute from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(14L,
+    ASSERT_EQ(14LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(hour from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(
                   run_simple_agg("SELECT EXTRACT(dow from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(7L,
+    ASSERT_EQ(7LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(isodow from m_6) FROM test limit 1;", dt)));
-    // PostgreSQL: SELECT EXTRACT(week from TIMESTAMP '1999-07-11 14:02:53.874533') -> 27
-    ASSERT_EQ(27L,
+    ASSERT_EQ(27LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(week from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(11L,
+    ASSERT_EQ(28LL,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(week_sunday from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(28LL,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(week_saturday from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(11LL,
               v<int64_t>(
                   run_simple_agg("SELECT EXTRACT(day from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(192L,
+    ASSERT_EQ(192LL,
               v<int64_t>(
                   run_simple_agg("SELECT EXTRACT(doy from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(7L,
+    ASSERT_EQ(7LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(month from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(quarter from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(quarterday from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(1999L,
+    ASSERT_EQ(1999LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(year from m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395L,
+    ASSERT_EQ(1418509395LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(epoch from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418428800L,
+    ASSERT_EQ(1418428800LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(dateepoch from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(15323000000L,
+    ASSERT_EQ(15323000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(nanosecond from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(15323000L,
+    ASSERT_EQ(15323000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(microsecond from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(15323L,
+    ASSERT_EQ(15323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(millisecond from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(15L,
+    ASSERT_EQ(15LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(second from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(23L,
+    ASSERT_EQ(23LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(minute from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(22L,
+    ASSERT_EQ(22LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(hour from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(6L,
+    ASSERT_EQ(6LL,
               v<int64_t>(
                   run_simple_agg("SELECT EXTRACT(dow from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(6L,
+    ASSERT_EQ(6LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(isodow from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(50L,
+    ASSERT_EQ(50LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(week from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(13L,
+    ASSERT_EQ(50LL,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(week_sunday from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(50LL,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(week_saturday from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(13LL,
               v<int64_t>(
                   run_simple_agg("SELECT EXTRACT(day from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(347L,
+    ASSERT_EQ(347LL,
               v<int64_t>(
                   run_simple_agg("SELECT EXTRACT(doy from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(12L,
+    ASSERT_EQ(12LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(month from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(quarter from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(quarterday from m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(2014L,
+    ASSERT_EQ(2014LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(year from m_3) FROM test limit 1;", dt)));
 
     /* ---DATE PART --- */
-    ASSERT_EQ(2014L,
+    ASSERT_EQ(2014LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATEPART('year', m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('quarter', m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(12L,
+    ASSERT_EQ(12LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('month', m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(347L,
+    ASSERT_EQ(347LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('dayofyear', m_3) FROM test limit 1;", dt)));
     ASSERT_EQ(
-        13L,
+        13LL,
         v<int64_t>(run_simple_agg("SELECT DATEPART('day', m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(22L,
+    ASSERT_EQ(22LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATEPART('hour', m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(23L,
+    ASSERT_EQ(23LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('minute', m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(15L,
+    ASSERT_EQ(15LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('second', m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(15323L,
+    ASSERT_EQ(15323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('millisecond', m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(15323000L,
+    ASSERT_EQ(15323000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('microsecond', m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(15323000000L,
+    ASSERT_EQ(15323000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('nanosecond', m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1999L,
+    ASSERT_EQ(1999LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATEPART('year', m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('quarter', m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(7L,
+    ASSERT_EQ(7LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('month', m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(192L,
+    ASSERT_EQ(192LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('dayofyear', m_6) FROM test limit 1;", dt)));
     ASSERT_EQ(
-        11L,
+        11LL,
         v<int64_t>(run_simple_agg("SELECT DATEPART('day', m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(14L,
+    ASSERT_EQ(14LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATEPART('hour', m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(2L,
+    ASSERT_EQ(2LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('minute', m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(53L,
+    ASSERT_EQ(53LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('second', m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(53874L,
+    ASSERT_EQ(53874LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('millisecond', m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(53874533L,
+    ASSERT_EQ(53874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('microsecond', m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(53874533000L,
+    ASSERT_EQ(53874533000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('nanosecond', m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(2006L,
+    ASSERT_EQ(2006LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATEPART('year', m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(2L,
+    ASSERT_EQ(2LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('quarter', m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('month', m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(116L,
+    ASSERT_EQ(116LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('dayofyear', m_9) FROM test limit 1;", dt)));
     ASSERT_EQ(
-        26L,
+        26LL,
         v<int64_t>(run_simple_agg("SELECT DATEPART('day', m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATEPART('hour', m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(49L,
+    ASSERT_EQ(49LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('minute', m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('second', m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(4607L,
+    ASSERT_EQ(4607LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('millisecond', m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(4607435L,
+    ASSERT_EQ(4607435LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('microsecond', m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(4607435125L,
+    ASSERT_EQ(4607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('nanosecond', m_9) FROM test limit 1;", dt)));
     EXPECT_ANY_THROW(run_simple_agg("SELECT DATEPART(NULL, m_9) FROM test limit 1;", dt));
     /* ---DATE ADD --- */
-    ASSERT_EQ(1177559344607435125L,
+    ASSERT_EQ(1177559344607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('year',1, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1153885744607435125L,
+    ASSERT_EQ(1153885744607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('quarter', 1, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1148615344607435125L,
+    ASSERT_EQ(1148615344607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('month', 1, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146109744607435125L,
+    ASSERT_EQ(1146109744607435125LL,
               v<int64_t>(
                   run_simple_agg("SELECT DATEADD('day',1, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146026944607435125L,
+    ASSERT_EQ(1146026944607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('hour', 1, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023404607435125L,
+    ASSERT_EQ(1146023404607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('minute', 1, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023403607435125L,
+    ASSERT_EQ(1146023403607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('second', 59, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023344932435125L,
+    ASSERT_EQ(1146023344932435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('millisecond', 325 , m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023344607960125L,
+    ASSERT_EQ(1146023344607960125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('microsecond', 525, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023344607436000L,
+    ASSERT_EQ(1146023344607436000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('nanosecond', 875, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1026396173874533L,
+    ASSERT_EQ(1026396173874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('year',3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(955461773874533L,
+    ASSERT_EQ(955461773874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('quarter', 3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(947599373874533L,
+    ASSERT_EQ(947599373874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('month', 6, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(932824973874533L,
+    ASSERT_EQ(932824973874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('day',13, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931734173874533L,
+    ASSERT_EQ(931734173874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('hour', 9, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931704053874533L,
+    ASSERT_EQ(931704053874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('minute', 38, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701783874533L,
+    ASSERT_EQ(931701783874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('second', 10, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701773885533L,
+    ASSERT_EQ(931701773885533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('millisecond', 11 , m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701773874678L,
+    ASSERT_EQ(931701773874678LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('microsecond', 145, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701773874533L,
+    ASSERT_EQ(931701773874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('nanosecond', 875, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(1734128595323L,
+    ASSERT_EQ(1734128595323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('year',10, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1450045395323L,
+    ASSERT_EQ(1450045395323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('quarter', 4, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1423866195323L,
+    ASSERT_EQ(1423866195323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('month', 2, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1419805395323L,
+    ASSERT_EQ(1419805395323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('day',15, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418516595323L,
+    ASSERT_EQ(1418516595323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('hour', 2, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418510055323L,
+    ASSERT_EQ(1418510055323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('minute', 11, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509415323L,
+    ASSERT_EQ(1418509415323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('second', 20, m_3) FROM test limit 1;", dt)));
     ASSERT_EQ(1418509395553,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('millisecond', 230 , m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395323L,
+    ASSERT_EQ(1418509395323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('microsecond', 145, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395323L,
+    ASSERT_EQ(1418509395323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('nanosecond', 875, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395323L,
+    ASSERT_EQ(1418509395323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('nanosecond', 145000, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395553L,
+    ASSERT_EQ(1418509395553LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('microsecond', 230000, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509396553L,
+    ASSERT_EQ(1418509396553LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('millisecond', 1230, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701774885533L,
+    ASSERT_EQ(931701774885533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('millisecond', 1011 , m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701774874678L,
+    ASSERT_EQ(931701774874678LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('microsecond', 1000145, m_6) FROM test limit 1;", dt)));
     ASSERT_EQ(
-        931701774874533L,
+        931701774874533LL,
         v<int64_t>(run_simple_agg(
             "SELECT DATEADD('nanosecond', 1000000875, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023345932435125L,
+    ASSERT_EQ(1146023345932435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('millisecond', 1325 , m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023345607960125L,
+    ASSERT_EQ(1146023345607960125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEADD('microsecond', 1000525, m_9) FROM test limit 1;", dt)));
     ASSERT_EQ(
-        1146023345607436000L,
+        1146023345607436000LL,
         v<int64_t>(run_simple_agg(
             "SELECT DATEADD('nanosecond', 1000000875, m_9) FROM test limit 1;", dt)));
     EXPECT_ANY_THROW(
@@ -11202,112 +12211,112 @@ TEST(Select, TimestampPrecision) {
     EXPECT_ANY_THROW(run_simple_agg(
         "SELECT DATEADD('microsecond', NULL, m_9) FROM test LIMIT 1;", dt));
     /* ---DATE DIFF --- */
-    ASSERT_EQ(1146023344607435125L - 931701773874533000L,
+    ASSERT_EQ(1146023344607435125LL - 931701773874533000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m_6, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701773874533000L - 1146023344607435125L,
+    ASSERT_EQ(931701773874533000LL - 1146023344607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m_9, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023344607435125L - 1418509395323000000L,
+    ASSERT_EQ(1146023344607435125LL - 1418509395323000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m_3, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395323000000L - 1146023344607435125L,
+    ASSERT_EQ(1418509395323000000LL - 1146023344607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m_9, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023344607435125L - 1418509395000000000L,
+    ASSERT_EQ(1146023344607435125LL - 1418509395000000000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395000000000L - 1146023344607435125L,
+    ASSERT_EQ(1418509395000000000LL - 1146023344607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m_9, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((1146023344607435125L - 931701773874533000L) / 1000L,
+    ASSERT_EQ((1146023344607435125LL - 931701773874533000LL) / 1000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('microsecond', m_6, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533000L - 1146023344607435125L) / 1000L,
+    ASSERT_EQ((931701773874533000LL - 1146023344607435125LL) / 1000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('microsecond', m_9, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1146023344607435125L - 1418509395323000000L) / 1000L,
+    ASSERT_EQ((1146023344607435125LL - 1418509395323000000LL) / 1000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('microsecond', m_3, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323000000L - 1146023344607435125L) / 1000L,
+    ASSERT_EQ((1418509395323000000LL - 1146023344607435125LL) / 1000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('microsecond', m_9, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((1146023344607435125L - 1418509395000000000L) / 1000L,
+    ASSERT_EQ((1146023344607435125LL - 1418509395000000000LL) / 1000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('microsecond', m, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000000000L - 1146023344607435125L) / 1000L,
+    ASSERT_EQ((1418509395000000000LL - 1146023344607435125LL) / 1000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('microsecond', m_9, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((1146023344607435125L - 931701773874533000L) / (1000L * 1000L),
+    ASSERT_EQ((1146023344607435125LL - 931701773874533000LL) / (1000LL * 1000LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m_6, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533000L - 1146023344607435125L) / (1000L * 1000L),
+    ASSERT_EQ((931701773874533000LL - 1146023344607435125LL) / (1000LL * 1000LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m_9, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1146023344607435125L - 1418509395323000000L) / (1000L * 1000L),
+    ASSERT_EQ((1146023344607435125LL - 1418509395323000000LL) / (1000LL * 1000LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m_3, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323000000L - 1146023344607435125L) / (1000L * 1000L),
+    ASSERT_EQ((1418509395323000000LL - 1146023344607435125LL) / (1000LL * 1000LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m_9, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((1146023344607435125L - 1418509395000000000L) / (1000L * 1000L),
+    ASSERT_EQ((1146023344607435125LL - 1418509395000000000LL) / (1000LL * 1000LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000000000L - 1146023344607435125L) / (1000L * 1000L),
+    ASSERT_EQ((1418509395000000000LL - 1146023344607435125LL) / (1000LL * 1000LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m_9, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((1146023344607435125L - 931701773874533L * 1000) / 1000000000,
+    ASSERT_EQ((1146023344607435125LL - 931701773874533LL * 1000) / 1000000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_6, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L * 1000 - 1146023344607435125L) / 1000000000,
+    ASSERT_EQ((931701773874533LL * 1000 - 1146023344607435125LL) / 1000000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_9, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1146023344607435125L - 1418509395323L * 1000000) / 1000000000,
+    ASSERT_EQ((1146023344607435125LL - 1418509395323LL * 1000000) / 1000000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_3, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L * 1000000 - 1146023344607435125L) / 1000000000,
+    ASSERT_EQ((1418509395323LL * 1000000 - 1146023344607435125LL) / 1000000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_9, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((1146023344607435125L - 1418509395L * 1000000000) / 1000000000,
+    ASSERT_EQ((1146023344607435125LL - 1418509395LL * 1000000000) / 1000000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395L * 1000000000 - 1146023344607435125L) / 1000000000,
+    ASSERT_EQ((1418509395LL * 1000000000 - 1146023344607435125LL) / 1000000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_9, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((3572026L),
+    ASSERT_EQ((3572026LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m_6, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((-3572026L),
+    ASSERT_EQ((-3572026LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m_9, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(-4541434L,
+    ASSERT_EQ(-4541434LL,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m_3, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((4541434L),
+    ASSERT_EQ((4541434LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m_9, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((-4541434L),
+    ASSERT_EQ((-4541434LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((4541434L),
+    ASSERT_EQ((4541434LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m_9, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((59533L),
+    ASSERT_EQ((59533LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m_6, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((-59533L),
+    ASSERT_EQ((-59533LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m_9, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((-75690L),
+    ASSERT_EQ((-75690LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m_3, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((75690L),
+    ASSERT_EQ((75690LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m_9, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((-75690L),
+    ASSERT_EQ((-75690LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ((75690L),
+    ASSERT_EQ((75690LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m_9, m) FROM test limit 1;", dt)));
     ASSERT_EQ((2480),
@@ -11364,88 +12373,90 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ((8),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('year', m_9, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L - 1418509395323000L) * 1000,
+    ASSERT_EQ((931701773874533LL - 1418509395323000LL) * 1000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m_3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323000L - 931701773874533L) * 1000,
+    ASSERT_EQ((1418509395323000LL - 931701773874533LL) * 1000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m_6, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L - 1418509395000000L) * 1000,
+    ASSERT_EQ((931701773874533LL - 1418509395000000LL) * 1000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000000L - 931701773874533L) * 1000,
+    ASSERT_EQ((1418509395000000LL - 931701773874533LL) * 1000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m_6, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L - 1418509395323000L),
+    ASSERT_EQ((931701773874533LL - 1418509395323000LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('microsecond', m_3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323000L - 931701773874533L),
+    ASSERT_EQ((1418509395323000LL - 931701773874533LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('microsecond', m_6, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L - 1418509395000000L),
+    ASSERT_EQ((931701773874533LL - 1418509395000000LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('microsecond', m, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000000L - 931701773874533L),
+    ASSERT_EQ((1418509395000000LL - 931701773874533LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('microsecond', m_6, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L - 1418509395323000L) / (1000L),
+    ASSERT_EQ((931701773874533LL - 1418509395323000LL) / (1000LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m_3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323000L - 931701773874533L) / (1000L),
+    ASSERT_EQ((1418509395323000LL - 931701773874533LL) / (1000LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m_6, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L - 1418509395000000L) / (1000L),
+    ASSERT_EQ((931701773874533LL - 1418509395000000LL) / (1000LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000000L - 931701773874533L) / (1000L),
+    ASSERT_EQ((1418509395000000LL - 931701773874533LL) / (1000LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m_6, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L - 1418509395323L * 1000) / 1000000,
+    ASSERT_EQ((931701773874533LL - 1418509395323LL * 1000) / 1000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L * 1000 - 931701773874533L) / 1000000,
+    ASSERT_EQ((1418509395323LL * 1000 - 931701773874533LL) / 1000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_6, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L - 1418509395L * 1000000) / 1000000,
+    ASSERT_EQ((931701773874533LL - 1418509395LL * 1000000) / 1000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395L * 1000000 - 931701773874533L) / 1000000,
+    ASSERT_EQ((1418509395LL * 1000000 - 931701773874533LL) / 1000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_6, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L / 1000000 - 1418509395323 / 1000L) / (60),
+    ASSERT_EQ((931701773874533LL / 1000000 - 1418509395323 / 1000LL) / (60),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m_3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L / 1000 - 931701773874533L / 1000000) / (60L),
+    ASSERT_EQ((1418509395323LL / 1000 - 931701773874533LL / 1000000) / (60LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m_6, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L / 1000000 - 1418509395L) / (60),
+    ASSERT_EQ((931701773874533LL / 1000000 - 1418509395LL) / (60),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395L - 931701773874533L / 1000000) / (60),
+    ASSERT_EQ((1418509395LL - 931701773874533LL / 1000000) / (60),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m_6, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L / 1000000 - 1418509395323L / 1000) / (60L * 60L),
+    ASSERT_EQ((931701773874533LL / 1000000 - 1418509395323LL / 1000) / (60LL * 60LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m_3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L / 1000 - 931701773874533L / 1000000) / (60L * 60L),
+    ASSERT_EQ((1418509395323LL / 1000 - 931701773874533LL / 1000000) / (60LL * 60LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m_6, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L / 1000000 - 1418509395L) / (60L * 60L),
+    ASSERT_EQ((931701773874533LL / 1000000 - 1418509395LL) / (60LL * 60LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395L - 931701773874533L / 1000000) / (60L * 60L),
+    ASSERT_EQ((1418509395LL - 931701773874533LL / 1000000) / (60LL * 60LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m_6, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L / 1000000 - 1418509395323L / 1000) / (60L * 60L * 24L),
-              v<int64_t>(run_simple_agg(
-                  "SELECT DATEDIFF('day', m_3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L / 1000 - 931701773874533L / 1000000) / (60L * 60L * 24L),
-              v<int64_t>(run_simple_agg(
-                  "SELECT DATEDIFF('day', m_6, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((931701773874533L / 1000000 - 1418509395L) / (60L * 60L * 24L),
+    ASSERT_EQ(
+        (931701773874533LL / 1000000 - 1418509395323LL / 1000) / (60LL * 60LL * 24LL),
+        v<int64_t>(
+            run_simple_agg("SELECT DATEDIFF('day', m_3, m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(
+        (1418509395323LL / 1000 - 931701773874533LL / 1000000) / (60LL * 60LL * 24LL),
+        v<int64_t>(
+            run_simple_agg("SELECT DATEDIFF('day', m_6, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ((931701773874533LL / 1000000 - 1418509395LL) / (60LL * 60LL * 24LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('day', m, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395L - 931701773874533L / 1000000) / (60L * 60L * 24L),
+    ASSERT_EQ((1418509395LL - 931701773874533LL / 1000000) / (60LL * 60LL * 24LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('day', m_6, m) FROM test limit 1;", dt)));
     ASSERT_EQ(185,
@@ -11472,48 +12483,50 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(-15,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('year', m, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000L - 1418509395323L) * 1000000,
+    ASSERT_EQ((1418509395000LL - 1418509395323LL) * 1000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m_3, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L - 1418509395000) * 1000000,
+    ASSERT_EQ((1418509395323LL - 1418509395000) * 1000000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('nanosecond', m, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000L - 1418509395323L) * 1000,
+    ASSERT_EQ((1418509395000LL - 1418509395323LL) * 1000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('microsecond', m_3, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L - 1418509395000L) * 1000,
+    ASSERT_EQ((1418509395323LL - 1418509395000LL) * 1000,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('microsecond', m, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000L - 1418509395323L),
+    ASSERT_EQ((1418509395000LL - 1418509395323LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m_3, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L - 1418509395000L),
+    ASSERT_EQ((1418509395323LL - 1418509395000LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('millisecond', m, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000L - 1418509395323L) / (1000L),
+    ASSERT_EQ((1418509395000LL - 1418509395323LL) / (1000LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m_3, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L - 1418509395000L) / (1000L),
+    ASSERT_EQ((1418509395323LL - 1418509395000LL) / (1000LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('second', m, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000L - 1418509395323L) / (1000L * 60L),
+    ASSERT_EQ((1418509395000LL - 1418509395323LL) / (1000LL * 60LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m_3, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L - 1418509395000L) / (1000L * 60L),
+    ASSERT_EQ((1418509395323LL - 1418509395000LL) / (1000LL * 60LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('minute', m, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000L - 1418509395323L) / (1000L * 1000L * 60L * 60L),
+    ASSERT_EQ((1418509395000LL - 1418509395323LL) / (1000LL * 1000LL * 60LL * 60LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m_3, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L - 1418509395000L) / (1000L * 1000L * 60L * 60L),
+    ASSERT_EQ((1418509395323LL - 1418509395000LL) / (1000LL * 1000LL * 60LL * 60LL),
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('hour', m, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395000L - 1418509395323L) / (1000L * 1000L * 60L * 60L * 24L),
-              v<int64_t>(run_simple_agg(
-                  "SELECT DATEDIFF('day', m_3, m) FROM test limit 1;", dt)));
-    ASSERT_EQ((1418509395323L - 1418509395000L) / (1000L * 1000L * 60L * 60L * 24L),
-              v<int64_t>(run_simple_agg(
-                  "SELECT DATEDIFF('day', m, m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(
+        (1418509395000LL - 1418509395323LL) / (1000LL * 1000LL * 60LL * 60LL * 24LL),
+        v<int64_t>(
+            run_simple_agg("SELECT DATEDIFF('day', m_3, m) FROM test limit 1;", dt)));
+    ASSERT_EQ(
+        (1418509395323LL - 1418509395000LL) / (1000LL * 1000LL * 60LL * 60LL * 24LL),
+        v<int64_t>(
+            run_simple_agg("SELECT DATEDIFF('day', m, m_3) FROM test limit 1;", dt)));
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('month', m_3, m) FROM test limit 1;", dt)));
@@ -11529,188 +12542,188 @@ TEST(Select, TimestampPrecision) {
     EXPECT_ANY_THROW(
         run_simple_agg("SELECT DATEDIFF(NULL, m, m_3) FROM test limit 1;", dt));
     /* ---TIMESTAMPADD --- */
-    ASSERT_EQ(1177559344607435125L,
+    ASSERT_EQ(1177559344607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(YEAR,1, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1153885744607435125L,
+    ASSERT_EQ(1153885744607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(QUARTER, 1, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1148615344607435125L,
+    ASSERT_EQ(1148615344607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(MONTH, 1, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146109744607435125L,
+    ASSERT_EQ(1146109744607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(DAY,1, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146026944607435125L,
+    ASSERT_EQ(1146026944607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(HOUR, 1, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023404607435125L,
+    ASSERT_EQ(1146023404607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(MINUTE, 1, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023403607435125L,
+    ASSERT_EQ(1146023403607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(SECOND, 59, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1026396173874533L,
+    ASSERT_EQ(1026396173874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(YEAR,3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(955461773874533L,
+    ASSERT_EQ(955461773874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(QUARTER, 3, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(947599373874533L,
+    ASSERT_EQ(947599373874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(MONTH, 6, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(932824973874533L,
+    ASSERT_EQ(932824973874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(DAY,13, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931734173874533L,
+    ASSERT_EQ(931734173874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(HOUR, 9, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931704053874533L,
+    ASSERT_EQ(931704053874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(MINUTE, 38, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701783874533L,
+    ASSERT_EQ(931701783874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(SECOND, 10, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(1734128595323L,
+    ASSERT_EQ(1734128595323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(YEAR,10, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1450045395323L,
+    ASSERT_EQ(1450045395323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(QUARTER, 4, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1423866195323L,
+    ASSERT_EQ(1423866195323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(MONTH, 2, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1419805395323L,
+    ASSERT_EQ(1419805395323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(DAY,15, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418516595323L,
+    ASSERT_EQ(1418516595323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(HOUR, 2, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418510055323L,
+    ASSERT_EQ(1418510055323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(MINUTE, 11, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509415323L,
+    ASSERT_EQ(1418509415323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(SECOND, 20, m_3) FROM test limit 1;", dt)));
 
     /* ---INTERVAL --- */
-    ASSERT_EQ(1177559344607435125L,
+    ASSERT_EQ(1177559344607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_9 + INTERVAL '1' year) from test limit 1;", dt)));
-    ASSERT_EQ(1148615344607435125L,
+    ASSERT_EQ(1148615344607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_9 + INTERVAL '1' month) from test limit 1;", dt)));
-    ASSERT_EQ(1146109744607435125L,
+    ASSERT_EQ(1146109744607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_9 + INTERVAL '1' day) from test limit 1;", dt)));
-    ASSERT_EQ(1146026944607435125L,
+    ASSERT_EQ(1146026944607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_9 + INTERVAL '1' hour) from test limit 1;", dt)));
-    ASSERT_EQ(1146023404607435125L,
+    ASSERT_EQ(1146023404607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_9 + INTERVAL '1' minute) from test limit 1;", dt)));
-    ASSERT_EQ(1146023345607435125L,
+    ASSERT_EQ(1146023345607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_9 + INTERVAL '1' second) from test limit 1;", dt)));
-    ASSERT_EQ(1114487344607435125L,
+    ASSERT_EQ(1114487344607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_9 - INTERVAL '1' year) from test limit 1;", dt)));
-    ASSERT_EQ(1143344944607435125L,
+    ASSERT_EQ(1143344944607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_9 - INTERVAL '1' month) from test limit 1;", dt)));
-    ASSERT_EQ(1145936944607435125L,
+    ASSERT_EQ(1145936944607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_9 - INTERVAL '1' day) from test limit 1;", dt)));
-    ASSERT_EQ(1146019744607435125L,
+    ASSERT_EQ(1146019744607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_9 - INTERVAL '1' hour) from test limit 1;", dt)));
-    ASSERT_EQ(1146023284607435125L,
+    ASSERT_EQ(1146023284607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_9 - INTERVAL '1' minute) from test limit 1;", dt)));
-    ASSERT_EQ(1146023343607435125L,
+    ASSERT_EQ(1146023343607435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_9 - INTERVAL '1' second) from test limit 1;", dt)));
-    ASSERT_EQ(963324173874533L,
+    ASSERT_EQ(963324173874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_6 + INTERVAL '1' year) from test limit 1;", dt)));
-    ASSERT_EQ(934380173874533L,
+    ASSERT_EQ(934380173874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_6 + INTERVAL '1' month) from test limit 1;", dt)));
-    ASSERT_EQ(931788173874533L,
+    ASSERT_EQ(931788173874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_6 + INTERVAL '1' day) from test limit 1;", dt)));
-    ASSERT_EQ(931705373874533L,
+    ASSERT_EQ(931705373874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_6 + INTERVAL '1' hour) from test limit 1;", dt)));
-    ASSERT_EQ(931701833874533L,
+    ASSERT_EQ(931701833874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_6 + INTERVAL '1' minute) from test limit 1;", dt)));
-    ASSERT_EQ(931701774874533L,
+    ASSERT_EQ(931701774874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_6 + INTERVAL '1' second) from test limit 1;", dt)));
-    ASSERT_EQ(900165773874533L,
+    ASSERT_EQ(900165773874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_6 - INTERVAL '1' year) from test limit 1;", dt)));
-    ASSERT_EQ(929109773874533L,
+    ASSERT_EQ(929109773874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_6 - INTERVAL '1' month) from test limit 1;", dt)));
-    ASSERT_EQ(931615373874533L,
+    ASSERT_EQ(931615373874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_6 - INTERVAL '1' day) from test limit 1;", dt)));
-    ASSERT_EQ(931698173874533L,
+    ASSERT_EQ(931698173874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_6 - INTERVAL '1' hour) from test limit 1;", dt)));
-    ASSERT_EQ(931701713874533L,
+    ASSERT_EQ(931701713874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_6 - INTERVAL '1' minute) from test limit 1;", dt)));
-    ASSERT_EQ(931701772874533L,
+    ASSERT_EQ(931701772874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_6 - INTERVAL '1' second) from test limit 1;", dt)));
-    ASSERT_EQ(1450045395323L,
+    ASSERT_EQ(1450045395323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_3 + INTERVAL '1' year) from test limit 1;", dt)));
-    ASSERT_EQ(1421187795323L,
+    ASSERT_EQ(1421187795323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_3 + INTERVAL '1' month) from test limit 1;", dt)));
-    ASSERT_EQ(1418595795323L,
+    ASSERT_EQ(1418595795323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_3 + INTERVAL '1' day) from test limit 1;", dt)));
-    ASSERT_EQ(1418512995323L,
+    ASSERT_EQ(1418512995323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_3 + INTERVAL '1' hour) from test limit 1;", dt)));
-    ASSERT_EQ(1418509455323L,
+    ASSERT_EQ(1418509455323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_3 + INTERVAL '1' minute) from test limit 1;", dt)));
-    ASSERT_EQ(1418509396323L,
+    ASSERT_EQ(1418509396323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_3 + INTERVAL '1' second) from test limit 1;", dt)));
-    ASSERT_EQ(1386973395323L,
+    ASSERT_EQ(1386973395323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_3 - INTERVAL '1' year) from test limit 1;", dt)));
-    ASSERT_EQ(1415917395323L,
+    ASSERT_EQ(1415917395323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_3 - INTERVAL '1' month) from test limit 1;", dt)));
-    ASSERT_EQ(1418422995323L,
+    ASSERT_EQ(1418422995323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_3 - INTERVAL '1' day) from test limit 1;", dt)));
-    ASSERT_EQ(1418505795323L,
+    ASSERT_EQ(1418505795323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_3 - INTERVAL '1' hour) from test limit 1;", dt)));
-    ASSERT_EQ(1418509335323L,
+    ASSERT_EQ(1418509335323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_3 - INTERVAL '1' minute) from test limit 1;", dt)));
-    ASSERT_EQ(1418509394323L,
+    ASSERT_EQ(1418509394323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT (m_3 - INTERVAL '1' second) from test limit 1;", dt)));
 
     /*--- High Precision Timestamps Casts with intervals---*/
     ASSERT_EQ(
-        1146023345L,
+        1146023345LL,
         v<int64_t>(run_simple_agg(
             "SELECT (cast(m_9 as timestamp(0)) + INTERVAL '1' second) from test limit 1;",
             dt)));
     ASSERT_EQ(
-        1146023343607L,
+        1146023343607LL,
         v<int64_t>(run_simple_agg(
             "SELECT (cast(m_9 as timestamp(3)) - INTERVAL '1' second) from test limit 1;",
             dt)));
@@ -11720,47 +12733,47 @@ TEST(Select, TimestampPrecision) {
             "SELECT (cast(m_9 as timestamp(6)) + INTERVAL '1' minute) from test limit 1;",
             dt)));
     ASSERT_EQ(
-        931705373L,
+        931705373LL,
         v<int64_t>(run_simple_agg(
             "SELECT (cast(m_6 as timestamp(0)) + INTERVAL '1' hour) from test limit 1;",
             dt)));
     ASSERT_EQ(
-        931698173874L,
+        931698173874LL,
         v<int64_t>(run_simple_agg(
             "SELECT (cast(m_6 as timestamp(3)) - INTERVAL '1' hour) from test limit 1;",
             dt)));
     ASSERT_EQ(
-        931701833874533000L,
+        931701833874533000LL,
         v<int64_t>(run_simple_agg(
             "SELECT (cast(m_6 as timestamp(9)) + INTERVAL '1' minute) from test limit 1;",
             dt)));
     ASSERT_EQ(
-        1450045395L,
+        1450045395LL,
         v<int64_t>(run_simple_agg(
             "SELECT (cast(m_3 as timestamp(0)) + INTERVAL '1' year) from test limit 1;",
             dt)));
     ASSERT_EQ(
-        1386973395323000L,
+        1386973395323000LL,
         v<int64_t>(run_simple_agg(
             "SELECT (cast(m_3 as timestamp(6)) - INTERVAL '1' year) from test limit 1;",
             dt)));
     ASSERT_EQ(
-        1450045395323000000L,
+        1450045395323000000LL,
         v<int64_t>(run_simple_agg(
             "SELECT (cast(m_3 as timestamp(9)) + INTERVAL '1' year) from test limit 1;",
             dt)));
     ASSERT_EQ(
-        1418509335000L,
+        1418509335000LL,
         v<int64_t>(run_simple_agg(
             "SELECT (cast(m as timestamp(3)) - INTERVAL '1' minute) from test limit 1;",
             dt)));
     ASSERT_EQ(
-        1418505795000000L,
+        1418505795000000LL,
         v<int64_t>(run_simple_agg(
             "SELECT (cast(m as timestamp(6)) - INTERVAL '1' hour) from test limit 1;",
             dt)));
     ASSERT_EQ(
-        1418509455000000000L,
+        1418509455000000000LL,
         v<int64_t>(run_simple_agg(
             "SELECT (cast(m as timestamp(9)) + INTERVAL '1' minute) from test limit 1;",
             dt)));
@@ -12683,31 +13696,31 @@ TEST(Select, TimestampPrecision) {
                                   "TIMESTAMP(9) '2017-05-31 1:12:11.123120000';",
                                   dt)));
 
-    ASSERT_EQ(1146023344932435125L,
+    ASSERT_EQ(1146023344932435125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(MILLISECOND, 325 , m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023344607960125L,
+    ASSERT_EQ(1146023344607960125LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(MICROSECOND, 525, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(1146023344607436000L,
+    ASSERT_EQ(1146023344607436000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(NANOSECOND, 875, m_9) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701773885533L,
+    ASSERT_EQ(931701773885533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(MILLISECOND, 11 , m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701773874678L,
+    ASSERT_EQ(931701773874678LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(MICROSECOND, 145, m_6) FROM test limit 1;", dt)));
-    ASSERT_EQ(931701773874533L,
+    ASSERT_EQ(931701773874533LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(NANOSECOND, 875, m_6) FROM test limit 1;", dt)));
     ASSERT_EQ(1418509395553,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(MILLISECOND, 230 , m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395323L,
+    ASSERT_EQ(1418509395323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(MICROSECOND, 145, m_3) FROM test limit 1;", dt)));
-    ASSERT_EQ(1418509395323L,
+    ASSERT_EQ(1418509395323LL,
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(NANOSECOND, 875, m_3) FROM test limit 1;", dt)));
     ASSERT_EQ(5,
@@ -12887,64 +13900,64 @@ TEST(Select, TimestampPrecisionFormat) {
         "01:02:03.000003046777Z', '2012-05-22 01:02:03.000000003046777Z');",
         dt));
 
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg("SELECT count(ts_3) FROM ts_format where "
                                         "extract(epoch from ts_3) = 1337648523 "
                                         "AND extract('millisecond' from ts_3) = 3000;",
                                         dt)));
-    ASSERT_EQ(2L,
+    ASSERT_EQ(2LL,
               v<int64_t>(run_simple_agg("SELECT count(ts_3) FROM ts_format where "
                                         "extract(epoch from ts_3) = 1337648523 "
                                         "AND extract('millisecond' from ts_3) = 3100;",
                                         dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg("SELECT count(ts_3) FROM ts_format where "
                                         "extract(epoch from ts_3) = 1337648523 "
                                         "AND extract('millisecond' from ts_3) = 3030;",
                                         dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg("SELECT count(ts_3) FROM ts_format where "
                                         "extract(epoch from ts_3) = 1337648523 "
                                         "AND extract('millisecond' from ts_3) = 3003;",
                                         dt)));
 
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT count(ts_6) FROM ts_format where extract(epoch from ts_6) = "
                   "1337648523 AND extract('microsecond' from ts_6) = 3000000;",
                   dt)));
-    ASSERT_EQ(2L,
+    ASSERT_EQ(2LL,
               v<int64_t>(run_simple_agg(
                   "SELECT count(ts_6) FROM ts_format where extract(epoch from ts_6) = "
                   "1337648523 AND extract('microsecond' from ts_6) = 3100000;",
                   dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT count(ts_6) FROM ts_format where extract(epoch from ts_6) = "
                   "1337648523 AND extract('microsecond' from ts_6) = 3030000;",
                   dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT count(ts_6) FROM ts_format where extract(epoch from ts_6) = "
                   "1337648523 AND extract('microsecond' from ts_6) = 3000003;",
                   dt)));
 
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT count(ts_9) FROM ts_format where extract(epoch from ts_9) = "
                   "1337648523 AND extract('nanosecond' from ts_9) = 3000000000;",
                   dt)));
-    ASSERT_EQ(2L,
+    ASSERT_EQ(2LL,
               v<int64_t>(run_simple_agg(
                   "SELECT count(ts_9) FROM ts_format where extract(epoch from ts_9) = "
                   "1337648523 AND extract('nanosecond' from ts_9) = 3100000000;",
                   dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT count(ts_9) FROM ts_format where extract(epoch from ts_9) = "
                   "1337648523 AND extract('nanosecond' from ts_9) = 3030000000;",
                   dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT count(ts_9) FROM ts_format where extract(epoch from ts_9) = "
                   "1337648523 AND extract('nanosecond' from ts_9) = 3000000003;",
@@ -13244,578 +14257,1011 @@ TEST(Select, TimestampCastAggregates) {
 TEST(Select, ExtractFromNegativeTimes) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    ASSERT_EQ(11L,
+    ASSERT_EQ(11LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DAY FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOW FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
-    ASSERT_EQ(345L,
+    ASSERT_EQ(345LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOY FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
-    ASSERT_EQ(-1769003452L,
+    ASSERT_EQ(-1769003452LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(EPOCH FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
-    ASSERT_EQ(10L,
+    ASSERT_EQ(10LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(HOUR FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(ISODOW FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
     ASSERT_EQ(
-        8000000L,
+        8000000LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
     ASSERT_EQ(
-        8000L,
+        8000LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
-    ASSERT_EQ(9L,
+    ASSERT_EQ(9LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MINUTE FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
-    ASSERT_EQ(12L,
+    ASSERT_EQ(12LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MONTH FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(QUARTER FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
-    ASSERT_EQ(8L,
+    ASSERT_EQ(8LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(SECOND FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
-    ASSERT_EQ(50L,
+    ASSERT_EQ(50LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
-    ASSERT_EQ(1913L,
+    ASSERT_EQ(
+        50LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(
+        49LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
+    ASSERT_EQ(1913LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-12-11 10:09:08');", dt)));
-    ASSERT_EQ(11L,
+    ASSERT_EQ(11LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DAY FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOW FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
-    ASSERT_EQ(345L,
+    ASSERT_EQ(345LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOY FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
-    ASSERT_EQ(-1769003460L,
+    ASSERT_EQ(-1769003460LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(EPOCH FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
-    ASSERT_EQ(10L,
+    ASSERT_EQ(10LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(HOUR FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(ISODOW FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
-    ASSERT_EQ(9L,
+    ASSERT_EQ(9LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MINUTE FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
-    ASSERT_EQ(12L,
+    ASSERT_EQ(12LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MONTH FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(QUARTER FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(SECOND FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
-    ASSERT_EQ(50L,
+    ASSERT_EQ(50LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
-    ASSERT_EQ(1913L,
+    ASSERT_EQ(
+        50LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(
+        49LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
+    ASSERT_EQ(1913LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-12-11 10:09:00');", dt)));
-    ASSERT_EQ(11L,
+    ASSERT_EQ(11LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DAY FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOW FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
-    ASSERT_EQ(345L,
+    ASSERT_EQ(345LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOY FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
-    ASSERT_EQ(-1769004000L,
+    ASSERT_EQ(-1769004000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(EPOCH FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
-    ASSERT_EQ(10L,
+    ASSERT_EQ(10LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(HOUR FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(ISODOW FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MINUTE FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
-    ASSERT_EQ(12L,
+    ASSERT_EQ(12LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MONTH FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(QUARTER FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(SECOND FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
-    ASSERT_EQ(50L,
+    ASSERT_EQ(50LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
-    ASSERT_EQ(1913L,
+    ASSERT_EQ(
+        50LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(
+        49LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
+    ASSERT_EQ(1913LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-12-11 10:00:00');", dt)));
-    ASSERT_EQ(11L,
+    ASSERT_EQ(11LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DAY FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOW FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
-    ASSERT_EQ(345L,
+    ASSERT_EQ(345LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOY FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
-    ASSERT_EQ(-1769040000L,
+    ASSERT_EQ(-1769040000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(EPOCH FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(HOUR FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(ISODOW FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MINUTE FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
-    ASSERT_EQ(12L,
+    ASSERT_EQ(12LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MONTH FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(QUARTER FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(SECOND FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
-    ASSERT_EQ(50L,
+    ASSERT_EQ(50LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
-    ASSERT_EQ(1913L,
+    ASSERT_EQ(
+        50LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(
+        49LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
+    ASSERT_EQ(1913LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-12-11 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DAY FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOW FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
-    ASSERT_EQ(335L,
+    ASSERT_EQ(335LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOY FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
-    ASSERT_EQ(-1769904000L,
+    ASSERT_EQ(-1769904000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(EPOCH FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(HOUR FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(ISODOW FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MINUTE FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
-    ASSERT_EQ(12L,
+    ASSERT_EQ(12LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MONTH FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(QUARTER FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(SECOND FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
-    ASSERT_EQ(49L,
+    ASSERT_EQ(49LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
-    ASSERT_EQ(1913L,
+    ASSERT_EQ(
+        49LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        48LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
+    ASSERT_EQ(1913LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-12-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DAY FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOW FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOY FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
-    ASSERT_EQ(-1798761600L,
+    ASSERT_EQ(-1798761600LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(EPOCH FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(HOUR FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(ISODOW FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MINUTE FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MONTH FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(QUARTER FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(SECOND FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
-    ASSERT_EQ(1913L,
+    ASSERT_EQ(
+        1LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        53LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1913LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '1913-01-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DAY FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOW FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOY FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(EPOCH FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(HOUR FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(ISODOW FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MINUTE FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MONTH FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(QUARTER FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(SECOND FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
-    ASSERT_EQ(1970L,
+    ASSERT_EQ(
+        53LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        52LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
+    ASSERT_EQ(1970LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '1970-01-01 00:00:00');", dt)));
-    ASSERT_EQ(11L,
+    ASSERT_EQ(11LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DAY FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOW FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
-    ASSERT_EQ(345L,
+    ASSERT_EQ(345LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOY FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
-    ASSERT_EQ(1386756548L,
+    ASSERT_EQ(1386756548LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(EPOCH FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
-    ASSERT_EQ(10L,
+    ASSERT_EQ(10LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(HOUR FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(ISODOW FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
     ASSERT_EQ(
-        8000000L,
+        8000000LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
     ASSERT_EQ(
-        8000L,
+        8000LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
-    ASSERT_EQ(9L,
+    ASSERT_EQ(9LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MINUTE FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
-    ASSERT_EQ(12L,
+    ASSERT_EQ(12LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MONTH FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(QUARTER FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
-    ASSERT_EQ(8L,
+    ASSERT_EQ(8LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(SECOND FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
-    ASSERT_EQ(50L,
+    ASSERT_EQ(50LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
-    ASSERT_EQ(2013L,
+    ASSERT_EQ(
+        50LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(
+        50LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
+    ASSERT_EQ(2013LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-12-11 10:09:08');", dt)));
-    ASSERT_EQ(11L,
+    ASSERT_EQ(11LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DAY FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOW FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
-    ASSERT_EQ(345L,
+    ASSERT_EQ(345LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOY FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
-    ASSERT_EQ(1386756540L,
+    ASSERT_EQ(1386756540LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(EPOCH FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
-    ASSERT_EQ(10L,
+    ASSERT_EQ(10LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(HOUR FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(ISODOW FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
-    ASSERT_EQ(9L,
+    ASSERT_EQ(9LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MINUTE FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
-    ASSERT_EQ(12L,
+    ASSERT_EQ(12LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MONTH FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(QUARTER FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(SECOND FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
-    ASSERT_EQ(50L,
+    ASSERT_EQ(50LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
-    ASSERT_EQ(2013L,
+    ASSERT_EQ(
+        50LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(
+        50LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
+    ASSERT_EQ(2013LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-12-11 10:09:00');", dt)));
-    ASSERT_EQ(11L,
+    ASSERT_EQ(11LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DAY FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOW FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
-    ASSERT_EQ(345L,
+    ASSERT_EQ(345LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOY FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
-    ASSERT_EQ(1386756000L,
+    ASSERT_EQ(1386756000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(EPOCH FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
-    ASSERT_EQ(10L,
+    ASSERT_EQ(10LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(HOUR FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(ISODOW FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MINUTE FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
-    ASSERT_EQ(12L,
+    ASSERT_EQ(12LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MONTH FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(QUARTER FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(SECOND FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
-    ASSERT_EQ(50L,
+    ASSERT_EQ(50LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
-    ASSERT_EQ(2013L,
+    ASSERT_EQ(
+        50LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(
+        50LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
+    ASSERT_EQ(2013LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-12-11 10:00:00');", dt)));
-    ASSERT_EQ(11L,
+    ASSERT_EQ(11LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DAY FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOW FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
-    ASSERT_EQ(345L,
+    ASSERT_EQ(345LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOY FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
-    ASSERT_EQ(1386720000L,
+    ASSERT_EQ(1386720000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(EPOCH FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(HOUR FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
-    ASSERT_EQ(3L,
+    ASSERT_EQ(3LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(ISODOW FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MINUTE FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
-    ASSERT_EQ(12L,
+    ASSERT_EQ(12LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MONTH FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(QUARTER FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(SECOND FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
-    ASSERT_EQ(50L,
+    ASSERT_EQ(50LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
-    ASSERT_EQ(2013L,
+    ASSERT_EQ(
+        50LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(
+        50LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
+    ASSERT_EQ(2013LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-12-11 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DAY FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOW FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
-    ASSERT_EQ(335L,
+    ASSERT_EQ(335LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOY FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
-    ASSERT_EQ(1385856000L,
+    ASSERT_EQ(1385856000LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(EPOCH FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(HOUR FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
-    ASSERT_EQ(7L,
+    ASSERT_EQ(7LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(ISODOW FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MINUTE FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
-    ASSERT_EQ(12L,
+    ASSERT_EQ(12LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MONTH FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
-    ASSERT_EQ(4L,
+    ASSERT_EQ(4LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(QUARTER FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(SECOND FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
-    ASSERT_EQ(48L,
+    ASSERT_EQ(48LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
-    ASSERT_EQ(2013L,
+    ASSERT_EQ(
+        49LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        49LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
+    ASSERT_EQ(2013LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-12-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DAY FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
-    ASSERT_EQ(2L,
+    ASSERT_EQ(2LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOW FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(DOY FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
-    ASSERT_EQ(1356998400L,
+    ASSERT_EQ(1356998400LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(EPOCH FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(HOUR FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
-    ASSERT_EQ(2L,
+    ASSERT_EQ(2LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(ISODOW FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MICROSECOND FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
     ASSERT_EQ(
-        0L,
+        0LL,
         v<int64_t>(run_simple_agg(
             "SELECT EXTRACT(MILLISECOND FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MINUTE FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(MONTH FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(QUARTER FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
-    ASSERT_EQ(0L,
+    ASSERT_EQ(0LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(SECOND FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
-    ASSERT_EQ(1L,
+    ASSERT_EQ(1LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(WEEK FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
-    ASSERT_EQ(2013L,
+    ASSERT_EQ(
+        1LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(
+        1LL,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+    ASSERT_EQ(2013LL,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(YEAR FROM TIMESTAMP '2013-01-01 00:00:00');", dt)));
+  }
+}
+
+// Week 1 always includes Jan 4. There are 3*4*7 = 84 tests below:
+//  * 3 for WEEK, WEEK_SUNDAY, WEEK_SATURDAY
+//  * 4 for:
+//     * Last second before week 1
+//     * First second of week 1
+//     * Last second of week 1
+//     * First second of week 2
+//  * 7 years for which Jan 4 falls on a different day of the week.
+TEST(Select, WeekOne) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // 2009 Jan 4 is a Sunday
+    EXPECT_EQ(52L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2008-12-28 23:59:59');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2008-12-29 00:00:00');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2009-01-04 23:59:59');", dt)));
+    EXPECT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2009-01-05 00:00:00');", dt)));
+    EXPECT_EQ(
+        53L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2009-01-03 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2009-01-04 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2009-01-10 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2009-01-11 00:00:00');", dt)));
+    EXPECT_EQ(
+        53L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2009-01-02 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2009-01-03 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2009-01-09 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2009-01-10 00:00:00');", dt)));
+    // 2010 Jan 4 is a Monday
+    EXPECT_EQ(53L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2010-01-03 23:59:59');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2010-01-04 00:00:00');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2010-01-10 23:59:59');", dt)));
+    EXPECT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2010-01-11 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2010-01-02 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2010-01-03 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2010-01-09 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2010-01-10 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2010-01-01 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2010-01-02 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2010-01-08 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2010-01-09 00:00:00');", dt)));
+    // 2005 Jan 4 is a Tuesday
+    EXPECT_EQ(53L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2005-01-02 23:59:59');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2005-01-03 00:00:00');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2005-01-09 23:59:59');", dt)));
+    EXPECT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2005-01-10 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2005-01-01 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2005-01-02 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2005-01-08 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2005-01-09 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2004-12-31 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2005-01-01 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2005-01-07 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2005-01-08 00:00:00');", dt)));
+    // 2012 Jan 4 is a Wednesday
+    EXPECT_EQ(52L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2012-01-01 23:59:59');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2012-01-02 00:00:00');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2012-01-08 23:59:59');", dt)));
+    EXPECT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2012-01-09 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2011-12-31 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2012-01-01 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2012-01-07 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2012-01-08 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2011-12-30 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2011-12-31 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2012-01-06 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2012-01-07 00:00:00');", dt)));
+    // 2007 Jan 4 is a Thursday
+    EXPECT_EQ(52L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2006-12-31 23:59:59');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2007-01-01 00:00:00');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2007-01-07 23:59:59');", dt)));
+    EXPECT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2007-01-08 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2006-12-30 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2006-12-31 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2007-01-06 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2007-01-07 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2006-12-29 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2006-12-30 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2007-01-05 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2007-01-06 00:00:00');", dt)));
+    // 2008 Jan 4 is a Friday
+    EXPECT_EQ(52L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2007-12-30 23:59:59');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2007-12-31 00:00:00');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2008-01-06 23:59:59');", dt)));
+    EXPECT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2008-01-07 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2007-12-29 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2007-12-30 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2008-01-05 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2008-01-06 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2007-12-28 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2007-12-29 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2008-01-04 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2008-01-05 00:00:00');", dt)));
+    // 2003 Jan 4 is a Saturday
+    EXPECT_EQ(52L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2002-12-29 23:59:59');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2002-12-30 00:00:00');", dt)));
+    EXPECT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2003-01-05 23:59:59');", dt)));
+    EXPECT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(WEEK FROM TIMESTAMP '2003-01-06 00:00:00');", dt)));
+    EXPECT_EQ(
+        52L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2002-12-28 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2002-12-29 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2003-01-04 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SUNDAY FROM TIMESTAMP '2003-01-05 00:00:00');", dt)));
+    EXPECT_EQ(
+        53L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2003-01-03 23:59:59');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2003-01-04 00:00:00');", dt)));
+    EXPECT_EQ(
+        1L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2003-01-10 23:59:59');", dt)));
+    EXPECT_EQ(
+        2L,
+        v<int64_t>(run_simple_agg(
+            "SELECT EXTRACT(WEEK_SATURDAY FROM TIMESTAMP '2003-01-11 00:00:00');", dt)));
   }
 }
 
@@ -13835,13 +15281,7 @@ TEST(Truncate, Count) {
   run_ddl_statement("drop table trunc_test;");
 }
 
-TEST(Update, VarlenSmartSwitch) {
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-  g_enable_watchdog = false;
-
+TEST(Update, BasicVarlenUpdate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -13926,19 +15366,7 @@ TEST(Update, VarlenSmartSwitch) {
     }
 
     // Test RelCompound-driven update
-
-    auto y_pre_rowid_1 =
-        v<int64_t>(run_simple_agg("select rowid from smartswitch where y[1]=1;", dt));
     run_multiple_agg("update smartswitch set y=ARRAY[9,10,11,12] where y[1]=1;", dt);
-    auto y_post_rowid_1 =
-        v<int64_t>(run_simple_agg("select rowid from smartswitch where y[1]=9 and "
-                                  "y[2]=10 and y[3]=11 and y[4]=12 and z='Flake';",
-                                  dt));
-
-    // Internal insert-delete cycle should create a new rowid
-    // This test validates that the CTAS varlen update path was used; the rowid change is
-    // evidence
-    ASSERT_NE(y_pre_rowid_1, y_post_rowid_1);
 
     ASSERT_EQ(int64_t(2),
               v<int64_t>(run_simple_agg("select count(y) from smartswitch where y[1]=9 "
@@ -14020,12 +15448,6 @@ TEST(Update, SimpleFilter) {
 }
 
 TEST(Update, Text) {
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-  g_enable_watchdog = false;
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -14051,17 +15473,9 @@ TEST(Update, Text) {
               v<int64_t>(run_simple_agg(
                   "select count(t) from text_default where t='pizza';", dt)));
   }
-
-  g_enable_watchdog = save_watchdog;
 }
 
 TEST(Update, TextINVariant) {
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-  g_enable_watchdog = false;
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -14085,12 +15499,6 @@ TEST(Update, TextINVariant) {
 }
 
 TEST(Update, TextEncodingDict16) {
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-  g_enable_watchdog = false;
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -14128,12 +15536,6 @@ TEST(Update, TextEncodingDict16) {
 }
 
 TEST(Update, TextEncodingDict8) {
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-  g_enable_watchdog = false;
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -15002,7 +16404,6 @@ TEST(Update, ImplicitCastToNumericTypes) {
     EXPECT_ANY_THROW(
         run_multiple_agg("update inttest set i=cast( 'nonsense' as varchar );", dt));
     run_multiple_agg("update inttest set i=cast( '128.90' as varchar );", dt);
-    EXPECT_EQ(int64_t(128), v<int64_t>(run_simple_agg("select i from inttest;", dt)));
 
     run_multiple_agg("update inttest set i=cast( '2000-01-01 10:11:12' as timestamp );",
                      dt);
@@ -15040,7 +16441,6 @@ TEST(Update, ImplicitCastToNumericTypes) {
     EXPECT_ANY_THROW(
         run_multiple_agg("update sinttest set i=cast( 'nonsense' as varchar );", dt));
     run_multiple_agg("update sinttest set i=cast( '128.90' as varchar );", dt);
-    EXPECT_EQ(int64_t(128), v<int64_t>(run_simple_agg("select i from sinttest;", dt)));
 
     run_multiple_agg("update sinttest set i=cast( '2000-01-01 10:11:12' as timestamp );",
                      dt);
@@ -15078,7 +16478,6 @@ TEST(Update, ImplicitCastToNumericTypes) {
     EXPECT_ANY_THROW(
         run_multiple_agg("update binttest set i=cast( 'nonsense' as varchar );", dt));
     run_multiple_agg("update binttest set i=cast( '128.90' as varchar );", dt);
-    EXPECT_EQ(int64_t(128), v<int64_t>(run_simple_agg("select i from binttest;", dt)));
 
     run_multiple_agg("update binttest set i=cast( '2000-01-01 10:11:12' as timestamp );",
                      dt);
@@ -15333,21 +16732,18 @@ TEST(Update, ImplicitCastToTimestamp8) {
     EXPECT_NO_THROW(run_multiple_agg(
         "update tstamp set t1=cast( '1989-01-01 00:00:00' as timestamp );", dt));
     EXPECT_NO_THROW(run_multiple_agg("update tstamp set t1=cast( '2000' as date );", dt));
-    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 2000.00 as float );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 2123.444 as double );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 1235 as integer );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 12 as smallint );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 9 as bigint );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update tstamp set t1=cast( 'False' as boolean );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update tstamp set t1=cast( '1234.00' as decimal );", dt),
-        std::runtime_error);
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp set t1=cast( 2000.00 as float );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp set t1=cast( 2123.444 as double );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp set t1=cast( 1235 as integer );", dt));
+    EXPECT_NO_THROW(run_multiple_agg("update tstamp set t1=cast( 12 as smallint );", dt));
+    EXPECT_NO_THROW(run_multiple_agg("update tstamp set t1=cast( 9 as bigint );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp set t1=cast( 'False' as boolean );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp set t1=cast( '1234.00' as decimal );", dt));
 
     run_ddl_statement("drop table tstamp;");
   }
@@ -15388,23 +16784,19 @@ TEST(Update, ImplicitCastToTimestamp4) {
         "update tstamp4 set t1=cast( '1989-01-01 00:00:00' as timestamp );", dt));
     EXPECT_NO_THROW(
         run_multiple_agg("update tstamp4 set t1=cast( '2000' as date );", dt));
-    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( 2000.00 as float );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update tstamp4 set t1=cast( 2123.444 as double );", dt),
-        std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( 1235 as integer );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( 12 as smallint );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update tstamp4 set t1=cast( 9 as bigint );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update tstamp4 set t1=cast( 'False' as boolean );", dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update tstamp4 set t1=cast( '1234.00' as decimal );", dt),
-        std::runtime_error);
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp4 set t1=cast( 2000.00 as float );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp4 set t1=cast( 2123.444 as double );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp4 set t1=cast( 1235 as integer );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp4 set t1=cast( 12 as smallint );", dt));
+    EXPECT_NO_THROW(run_multiple_agg("update tstamp4 set t1=cast( 9 as bigint );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp4 set t1=cast( 'False' as boolean );", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update tstamp4 set t1=cast( '1234.00' as decimal );", dt));
 
     run_ddl_statement("drop table tstamp4;");
   }
@@ -15511,7 +16903,7 @@ TEST(Delete, ShardedTableDeleteTest) {
                                                    g_use_temporary_tables,
                                                    true,
                                                    false));
-    ScopeGuard drop_table = [] { run_ddl_statement("DROP TABLE IF EXISTS shard_key;"); };
+    ScopeGuard drop_table = [] { run_ddl_statement("DROP TABLE IF EXISTS shardkey;"); };
 
     run_multiple_agg("insert into shardkey values (1,2);", dt);
     run_multiple_agg("insert into shardkey values (3,4);", dt);
@@ -15642,12 +17034,6 @@ TEST(Join, InnerJoin_TwoTables) {
 TEST(Join, InnerJoin_AtLeastThreeTables) {
   SKIP_ALL_ON_AGGREGATOR();
 
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-  g_enable_watchdog = false;
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner "
@@ -15757,12 +17143,6 @@ TEST(Join, InnerJoin_Filters) {
 
 TEST(Join, LeftOuterJoin) {
   SKIP_ALL_ON_AGGREGATOR();
-
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-  g_enable_watchdog = false;
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -16176,12 +17556,6 @@ TEST(Delete, MultiDelete) {
 }
 
 TEST(Delete, Joins_ImplicitJoins) {
-  const auto save_watchdog = g_enable_watchdog;
-  ScopeGuard reset_watchdog_state = [&save_watchdog] {
-    g_enable_watchdog = save_watchdog;
-  };
-  g_enable_watchdog = false;
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("DELETE FROM test WHERE test.x = 8;", dt);
@@ -16238,12 +17612,12 @@ TEST(Delete, Joins_ImplicitJoins) {
       "test_inner.x;",
       dt);
     c("SELECT bar.str FROM test, bar WHERE test.str = bar.str;", dt);
-    SKIP_ON_AGGREGATOR(ASSERT_EQ(
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(  // rowid not supported in distributed
         int64_t(3),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;",
             dt))));
-    SKIP_ON_AGGREGATOR(
+    SKIP_ON_AGGREGATOR(  // rowid not supported in distributed
         ASSERT_EQ(7,
                   v<int64_t>(run_simple_agg("SELECT test.x FROM test, test_inner WHERE "
                                             "test.x = test_inner.x AND test.rowid = 9;",
@@ -16432,1914 +17806,6 @@ TEST(Select, Deleted) {
   }
 }
 #endif
-
-TEST(Select, GeoSpatial_Basics) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(*) FROM geospatial_test where p IS NOT NULL;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(0),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(*) FROM geospatial_test where poly IS NULL;", dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(g_num_rows),
-        v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(p,p) < 0.1;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg("SELECT count(p) FROM geospatial_test;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg("SELECT count(l) FROM geospatial_test;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg("SELECT count(poly) FROM geospatial_test;", dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(g_num_rows),
-        v<int64_t>(run_simple_agg("SELECT count(mpoly) FROM geospatial_test;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_Distance('POINT(0 0)', p) < 100.0;",
-                                        dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(7),
-        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                  "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 9;",
-                                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(5),
-        v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(p,l) < 2.0;", dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(1),
-        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
-                                  "WHERE ST_Distance('LINESTRING(-1 0, 0 1)', p) < 0.8;",
-                                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(2),
-        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
-                                  "WHERE ST_Distance('LINESTRING(-1 0, 0 1)', p) < 1.1;",
-                                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(3),
-        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
-                                  "WHERE ST_Distance(p, 'LINESTRING(-1 0, 0 1)') < 2.5;",
-                                  dt)));
-
-    // SRID mismatch
-    EXPECT_THROW(run_simple_agg("SELECT ST_Distance('POINT(0 0)', "
-                                "ST_Transform(ST_SetSRID(p, 4326), 900913)) "
-                                "FROM geospatial_test limit 1;",
-                                dt),
-                 std::runtime_error);
-    // Unsupported aggs
-    EXPECT_ANY_THROW(run_simple_agg("SELECT MIN(p) FROM geospatial_test;", dt));
-    EXPECT_ANY_THROW(run_simple_agg("SELECT MAX(p) FROM geospatial_test;", dt));
-    EXPECT_ANY_THROW(run_simple_agg("SELECT AVG(p) FROM geospatial_test;", dt));
-    EXPECT_ANY_THROW(run_simple_agg("SELECT SUM(p) FROM geospatial_test;", dt));
-    EXPECT_ANY_THROW(run_simple_agg(
-        "SELECT COUNT(*) FROM geospatial_test a, geospatial_test b WHERE a.p = b.p;",
-        dt));
-  }
-}
-
-TEST(Select, GeoSpatial_Null) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(*) FROM geospatial_null_test where p IS NOT NULL;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(*) FROM geospatial_null_test where p IS NULL;", dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(g_num_rows / 2),
-        v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM geospatial_null_test WHERE ST_Distance(p,p) < 0.1;",
-            dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(g_num_rows / 2),
-        v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM geospatial_null_test WHERE ST_Distance(p,p) IS NULL;",
-            dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test WHERE "
-                                        "ST_Distance(l,gpnotnull) IS NULL;",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(gpnotnull) FROM geospatial_null_test;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(ST_X(p)) FROM geospatial_null_test;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows - 1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(ST_X(gp4326)) FROM geospatial_null_test;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test WHERE "
-                                        "ST_Distance('POINT(0 0)', p) < 100.0;",
-                                        dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(3),
-        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test WHERE "
-                                  "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 9;",
-                                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(1),
-        v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM geospatial_null_test WHERE ST_Distance(p,l) < 2.0;",
-            dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test WHERE "
-                                        "ST_Distance(p,gpnotnull) >= 0.0;",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(2),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test WHERE "
-                                        "ST_Distance(gp4326,gp4326none) IS NULL;",
-                                        dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(2),
-        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test "
-                                  "WHERE ST_Distance('LINESTRING(-1 0, 0 1)', p) < 6.0;",
-                                  dt)));
-
-    ASSERT_EQ("POINT (1 1)",
-              boost::get<std::string>(v<NullableString>(run_simple_agg(
-                  "SELECT p FROM geospatial_null_test WHERE id = 1;", dt, false))));
-    ASSERT_EQ("NULL",
-              boost::get<std::string>(v<NullableString>(run_simple_agg(
-                  "SELECT p FROM geospatial_null_test WHERE id = 2;", dt, false))));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Contains(poly,p) FROM geospatial_null_test WHERE id=1;",
-                  dt,
-                  false)));
-    ASSERT_EQ(
-        static_cast<int64_t>(1),
-        v<int64_t>(run_simple_agg(
-            "SELECT ST_Contains(poly,p) IS NULL FROM geospatial_null_test WHERE id=2;",
-            dt,
-            false)));
-  }
-}
-
-TEST(Select, GeoSpatial_Projection) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    // Select *
-    {
-      const auto rows =
-          run_multiple_agg("SELECT * FROM geospatial_test WHERE id = 1", dt);
-      const auto row = rows->getNextRow(false, false);
-      ASSERT_EQ(row.size(), size_t(11));
-    }
-
-    // Projection (return GeoTargetValue)
-    compare_geo_target(run_simple_agg("SELECT p FROM geospatial_test WHERE id = 1;", dt),
-                       GeoPointTargetValue({1., 1.}));
-    compare_geo_target(run_simple_agg("SELECT l FROM geospatial_test WHERE id = 1;", dt),
-                       GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.}));
-    compare_geo_target(
-        run_simple_agg("SELECT poly FROM geospatial_test WHERE id = 1;", dt),
-        GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}));
-    compare_geo_target(
-        run_simple_agg("SELECT mpoly FROM geospatial_test WHERE id = 1;", dt),
-        GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1}));
-
-    // Sample() version of above
-    THROW_ON_AGGREGATOR(compare_geo_target(
-        run_simple_agg("SELECT SAMPLE(p) FROM geospatial_test WHERE id = 1;", dt),
-        GeoPointTargetValue({1., 1.})));
-    THROW_ON_AGGREGATOR(compare_geo_target(
-        run_simple_agg("SELECT SAMPLE(l) FROM geospatial_test WHERE id = 1;", dt),
-        GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.})));
-    THROW_ON_AGGREGATOR(compare_geo_target(
-        run_simple_agg("SELECT SAMPLE(poly) FROM geospatial_test WHERE id = 1;", dt),
-        GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3})));
-    THROW_ON_AGGREGATOR(compare_geo_target(
-        run_simple_agg("SELECT SAMPLE(mpoly) FROM geospatial_test WHERE id = 1;", dt),
-        GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1})));
-
-    // Sample() version of above with GROUP BY
-    compare_geo_target(
-        run_simple_agg("SELECT SAMPLE(p) FROM geospatial_test WHERE id = 1 GROUP BY id;",
-                       dt),
-        GeoPointTargetValue({1., 1.}));
-    compare_geo_target(
-        run_simple_agg("SELECT SAMPLE(l) FROM geospatial_test WHERE id = 1 GROUP BY id;",
-                       dt),
-        GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.}));
-    compare_geo_target(
-        run_simple_agg(
-            "SELECT SAMPLE(poly) FROM geospatial_test WHERE id = 1 GROUP BY id;", dt),
-        GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}));
-    compare_geo_target(
-        run_simple_agg(
-            "SELECT SAMPLE(mpoly) FROM geospatial_test WHERE id = 1 GROUP BY id;", dt),
-        GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1}));
-
-    // Sample() with compression
-    compare_geo_target(
-        run_simple_agg(
-            "SELECT SAMPLE(gp4326) FROM geospatial_test WHERE id = 1 GROUP BY id;", dt),
-        GeoPointTargetValue({1., 1.}),
-        0.01);
-    compare_geo_target(
-        run_simple_agg(
-            "SELECT SAMPLE(gpoly4326) FROM geospatial_test WHERE id = 1 GROUP BY id;",
-            dt),
-        GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}),
-        0.01);
-
-    // Reductions (TODO: It would be nice to have some correctness, but for now we ensure
-    // these queries run without crashing)
-    EXPECT_NO_THROW(run_simple_agg(
-        "SELECT SAMPLE(mpoly) FROM geospatial_test WHERE id > 2 GROUP BY id", dt));
-    EXPECT_NO_THROW(run_simple_agg(
-        "SELECT SAMPLE(gpoly4326) FROM geospatial_test WHERE id > 2 GROUP BY id", dt));
-
-    // Sample with multiple aggs
-    {
-      const auto rows = run_multiple_agg(
-          "SELECT COUNT(*), SAMPLE(l) FROM geospatial_test WHERE id = 1 GROUP BY id;",
-          dt);
-      rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
-      const auto row = rows->getNextRow(false, false);
-      CHECK_EQ(row.size(), size_t(2));
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(row[0]));
-      compare_geo_target(row[1], GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.}));
-    }
-    {
-      const auto rows = run_multiple_agg(
-          "SELECT COUNT(*), SAMPLE(poly) FROM geospatial_test WHERE id = 1 GROUP BY id;",
-          dt);
-      rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
-      const auto row = rows->getNextRow(false, false);
-      CHECK_EQ(row.size(), size_t(2));
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(row[0]));
-      compare_geo_target(row[1], GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}));
-    }
-    {
-      const auto rows = run_multiple_agg(
-          "SELECT COUNT(*), SAMPLE(ST_X(p)), SAMPLE(ST_Y(p)) FROM geospatial_test WHERE "
-          "id = 1 GROUP BY id;",
-          dt);
-      rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
-      const auto row = rows->getNextRow(false, false);
-      CHECK_EQ(row.size(), size_t(3));
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(row[0]));
-      ASSERT_EQ(static_cast<double>(1.0), v<double>(row[1]));
-      ASSERT_EQ(static_cast<double>(1.0), v<double>(row[2]));
-    }
-
-    ASSERT_EQ(
-        static_cast<int64_t>(1),
-        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                  "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
-                                  dt)));
-    compare_geo_target(
-        run_simple_agg("SELECT p FROM geospatial_test WHERE "
-                       "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
-                       dt),
-        GeoPointTargetValue({0, 0}));
-
-    compare_geo_target(
-        get_first_target("SELECT p, l FROM geospatial_test WHERE "
-                         "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
-                         dt),
-        GeoPointTargetValue({0, 0}));
-    compare_geo_target(
-        get_first_target("SELECT p, ST_Distance(ST_GeomFromText('POINT(0 0)'), p), l "
-                         "FROM geospatial_test "
-                         "WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
-                         dt),
-        GeoPointTargetValue({0, 0}));
-    compare_geo_target(
-        get_first_target("SELECT l, ST_Distance(ST_GeomFromText('POINT(0 0)'), p), p "
-                         "FROM geospatial_test "
-                         "WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
-                         dt),
-        GeoLineStringTargetValue({0., 0., 0., 0.}));
-    ASSERT_EQ(
-        static_cast<double>(0.),
-        v<double>(get_first_target("SELECT ST_Distance(ST_GeomFromText('POINT(0 0)'), "
-                                   "p), p, l FROM geospatial_test WHERE "
-                                   "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
-                                   dt)));
-
-    compare_geo_target(
-        run_simple_agg("SELECT l FROM geospatial_test WHERE "
-                       "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
-                       dt),
-        GeoLineStringTargetValue({0., 0., 0., 0.}));
-    compare_geo_target(
-        run_simple_agg("SELECT l FROM geospatial_test WHERE "
-                       "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) BETWEEN 7 AND 8;",
-                       dt),
-        GeoLineStringTargetValue({5., 0., 10., 10., 11., 11.}));
-    compare_geo_target(
-        run_simple_agg("SELECT gp4326 FROM geospatial_test WHERE "
-                       "ST_Distance(ST_GeomFromText('POINT(0 0)'), "
-                       "p) > 1 AND ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 2",
-                       dt),
-        GeoPointTargetValue({0.9999, 0.9999}),
-        0.01);
-
-    // Projection (return WKT strings)
-    ASSERT_EQ("POINT (1 1)",
-              boost::get<std::string>(v<NullableString>(run_simple_agg(
-                  "SELECT p FROM geospatial_test WHERE id = 1;", dt, false))));
-    ASSERT_EQ("LINESTRING (1 0,2 2,3 3)",
-              boost::get<std::string>(v<NullableString>(run_simple_agg(
-                  "SELECT l FROM geospatial_test WHERE id = 1;", dt, false))));
-    ASSERT_EQ("POLYGON ((0 0,2 0,0 2,0 0))",
-              boost::get<std::string>(v<NullableString>(run_simple_agg(
-                  "SELECT poly FROM geospatial_test WHERE id = 1;", dt, false))));
-    ASSERT_EQ("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))",
-              boost::get<std::string>(v<NullableString>(run_simple_agg(
-                  "SELECT mpoly FROM geospatial_test WHERE id = 1;", dt, false))));
-    ASSERT_EQ("LINESTRING (5 0,10 10,11 11)",
-              boost::get<std::string>(v<NullableString>(run_simple_agg(
-                  "SELECT l FROM geospatial_test WHERE "
-                  "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) BETWEEN 7 AND 8;",
-                  dt,
-                  false))));
-    ASSERT_EQ("LINESTRING (0 0,0 0)",
-              boost::get<std::string>(v<NullableString>(
-                  get_first_target("SELECT l, p FROM geospatial_test WHERE "
-                                   "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
-                                   dt,
-                                   false))));
-    ASSERT_EQ("POINT (0 0)",
-              boost::get<std::string>(v<NullableString>(
-                  get_first_target("SELECT p, l FROM geospatial_test WHERE "
-                                   "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
-                                   dt,
-                                   false))));
-    ASSERT_EQ(
-        "POINT (2 2)",
-        boost::get<std::string>(v<NullableString>(run_simple_agg(
-            "SELECT ST_GeomFromText('POINT(2 2)') FROM geospatial_test WHERE id = 2;",
-            dt,
-            false))));
-    ASSERT_EQ(
-        "POINT (2 2)",
-        boost::get<std::string>(v<NullableString>(run_simple_agg(
-            "SELECT ST_Point(2,2) FROM geospatial_test WHERE id = 2;", dt, false))));
-    // requires punt to CPU
-    SKIP_ON_AGGREGATOR(ASSERT_EQ(
-        "POINT (2 2)",
-        boost::get<std::string>(v<NullableString>(run_simple_agg(
-            "SELECT ST_Point(id,id) FROM geospatial_test WHERE id = 2;", dt, false)))));
-    SKIP_ON_AGGREGATOR(ASSERT_EQ(
-        "POINT (2 2)",
-        boost::get<std::string>(v<NullableString>(run_simple_agg(
-            "SELECT ST_SetSRID(ST_Point(id,id),4326) FROM geospatial_test WHERE id = 2;",
-            dt,
-            false)))));
-
-    // ST_Distance
-    ASSERT_NEAR(static_cast<double>(2.0),
-                v<double>(run_simple_agg(
-                    "SELECT ST_Distance('LINESTRING(-2 2, 2 2)', 'LINESTRING(4 2, 4 3)') "
-                    "from geospatial_test limit 1;",
-                    dt)),
-                static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(0.0),
-                v<double>(run_simple_agg("SELECT ST_Distance('LINESTRING(-2 2, 2 2, 2 "
-                                         "0)', 'LINESTRING(4 0, 0 -4, -4 0, 0 4)') "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(0.31),
-                v<double>(run_simple_agg("SELECT ST_Distance('LINESTRING(-2 2, 2 2, 2 "
-                                         "0)', 'LINESTRING(4 0, 0 -4, -4 0, 0 5)') "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(3.0),
-                v<double>(run_simple_agg(
-                    "SELECT ST_Distance(ST_GeomFromText('POINT(5 -1)'),"
-                    "ST_GeomFromText('POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2))')) "
-                    "from geospatial_test limit 1;",
-                    dt)),
-                static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(0.0),
-                v<double>(run_simple_agg("SELECT ST_Distance(ST_GeomFromText("
-                                         "'POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2))'), "
-                                         "ST_GeomFromText('POINT(0.5 0.5)')) "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.01));
-    ASSERT_NEAR(
-        static_cast<double>(0.5),
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance(ST_GeomFromText("
-            "'POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2), (1 1, -1 1, -1 -1, 1 -1, 1 1))'), "
-            "ST_GeomFromText('POINT(0.5 0.5)')) "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(0.0),
-                v<double>(run_simple_agg("SELECT ST_Distance(ST_GeomFromText("
-                                         "'POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2))'), "
-                                         "ST_GeomFromText('LINESTRING(0.5 0.5, 0.7 0.75, "
-                                         "-0.3 -0.3, -0.82 0.12, 0.3 0.64)')) "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.01));
-    ASSERT_NEAR(
-        static_cast<double>(0.18),
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance(ST_GeomFromText("
-            "'POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2), (1 1, -1 1, -1 -1, 1 -1, 1 1))'), "
-            "ST_GeomFromText('LINESTRING(0.5 0.5, 0.7 0.75, -0.3 -0.3, -0.82 0.12, 0.3 "
-            "0.64)')) "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(0.0),
-                v<double>(run_simple_agg(
-                    "SELECT ST_Distance("
-                    "'POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2))', "
-                    "'POLYGON((0.5 0.5, -0.5 0.5, -0.5 -0.5, 0.5 -0.5, 0.5 0.5))') "
-                    "from geospatial_test limit 1;",
-                    dt)),
-                static_cast<double>(0.01));
-    ASSERT_NEAR(
-        static_cast<double>(0.5),
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance("
-            "'POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2), (1 1, -1 1, -1 -1, 1 -1, 1 1))', "
-            "'POLYGON((0.5 0.5, -0.5 0.5, -0.5 -0.5, 0.5 -0.5, 0.5 0.5))') "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-    ASSERT_NEAR(
-        static_cast<double>(2.0),
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance("
-            "'POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2), (1 1, -1 1, -1 -1, 1 -1, 1 1))', "
-            "'POLYGON((4 2, 5 2, 5 3, 4 3, 4 2))') "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-    ASSERT_NEAR(
-        static_cast<double>(1.4142),
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance("
-            "'POLYGON((0 0, 4 0, 4 4, 2 5, 0 4, 0 0), (1 1, 1 3, 2 4, 3 3, 3 1, 1 1))', "
-            "'POLYGON((5 5, 8 2, 8 4, 5 5))') "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-    ASSERT_NEAR(
-        static_cast<double>(0.0),
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance("
-            "'POLYGON((0 0, 4 0, 4 4, 2 5, 0 4, 0 0), (1 1, 1 3, 2 4, 3 3, 3 1, 1 1))', "
-            "'POLYGON((3.5 3.5, 8 2, 8 4, 3.5 3.5))') "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-    ASSERT_NEAR(
-        static_cast<double>(0.0),
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance("
-            "'POLYGON((0 0, 4 0, 4 4, 2 5, 0 4, 0 0), (1 1, 1 3, 2 4, 3 3, 3 1, 1 1))', "
-            "'POLYGON((8 2, 8 4, 2 2, 8 2))') "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(2.0),
-                v<double>(run_simple_agg("SELECT ST_Distance("
-                                         "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
-                                         "((1 1, -1 1, -1 -1, 1 -1, 1 1)))', "
-                                         "'POINT(4 2)') "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(2.0),
-                v<double>(run_simple_agg("SELECT ST_Distance("
-                                         "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
-                                         "((1 1, -1 1, -1 -1, 1 -1, 1 1)))', "
-                                         "'LINESTRING(4 2, 5 3)') "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(2.0),
-                v<double>(run_simple_agg("SELECT ST_Distance("
-                                         "'LINESTRING(4 2, 5 3)', "
-                                         "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
-                                         "((1 1, -1 1, -1 -1, 1 -1, 1 1)))') "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(2.0),
-                v<double>(run_simple_agg("SELECT ST_Distance("
-                                         "'POLYGON((4 2, 5 3, 4 3))', "
-                                         "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
-                                         "((1 1, -1 1, -1 -1, 1 -1, 1 1)))') "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(2.0),
-                v<double>(run_simple_agg("SELECT ST_Distance("
-                                         "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
-                                         "((1 1, -1 1, -1 -1, 1 -1, 1 1)))', "
-                                         "'POLYGON((4 2, 5 3, 4 3))') "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(1.4142),
-                v<double>(run_simple_agg("SELECT ST_Distance("
-                                         "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
-                                         "((1 1, -1 1, -1 -1, 1 -1, 1 1)))', "
-                                         "'MULTIPOLYGON(((4 2, 5 3, 4 3)), "
-                                         "((3 3, 4 3, 3 4)))') "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.01));
-
-    ASSERT_NEAR(static_cast<double>(25.4558441),
-                v<double>(run_simple_agg(
-                    "SELECT ST_MaxDistance('POINT(1 1)', 'LINESTRING (9 0,18 18,19 19)') "
-                    "FROM geospatial_test limit 1;",
-                    dt)),
-                static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(26.87005768),
-                v<double>(run_simple_agg("SELECT Max(ST_MaxDistance(l, 'POINT(0 0)')) "
-                                         "FROM geospatial_test;",
-                                         dt)),
-                static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(14.142135),
-                v<double>(run_simple_agg(
-                    " SELECT Max(ST_MaxDistance(p, l)) FROM geospatial_test;", dt)),
-                static_cast<double>(0.01));
-
-    // Geodesic distance between Paris and LA geographic points: ~9105km
-    ASSERT_NEAR(
-        static_cast<double>(9105643.0),
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance(ST_GeogFromText('POINT(-118.4079 33.9434)', 4326), "
-            "ST_GeogFromText('POINT(2.5559 49.0083)', 4326)) "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(10000.0));
-    // Geodesic distance between Paris and LA geometry points cast as geography points:
-    // ~9105km
-    ASSERT_NEAR(static_cast<double>(9105643.0),
-                v<double>(run_simple_agg(
-                    "SELECT ST_Distance(CastToGeography(ST_GeomFromText('POINT(-118.4079 "
-                    "33.9434)', 4326)), "
-                    "cast (ST_GeomFromText('POINT(2.5559 49.0083)', 4326) as geography)) "
-                    "from geospatial_test limit 1;",
-                    dt)),
-                static_cast<double>(10000.0));
-    // Cartesian distance between Paris and LA calculated from wgs84 degrees
-    ASSERT_NEAR(
-        static_cast<double>(121.89),
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance(ST_GeomFromText('POINT(-118.4079 33.9434)', 4326), "
-            "ST_GeomFromText('POINT(2.5559 49.0083)', 4326)) "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(1.0));
-    ASSERT_NEAR(
-        static_cast<double>(121.89),
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance('POINT(-118.4079 33.9434)', 'POINT(2.5559 49.0083)') "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(1.0));
-    // Cartesian distance between Paris and LA wgs84 coords transformed to web merc
-    ASSERT_NEAR(
-        static_cast<double>(13653148.0),
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance("
-            "ST_Transform(ST_GeomFromText('POINT(-118.4079 33.9434)', 4326), 900913), "
-            "ST_Transform(ST_GeomFromText('POINT(2.5559 49.0083)', 4326), 900913)) "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(10000.0));
-
-    // ST_Length
-    // Cartesian length of a planar path
-    ASSERT_NEAR(static_cast<double>(5.65685),
-                v<double>(run_simple_agg(
-                    "SELECT ST_Length('LINESTRING(1 0, 0 1, -1 0, 0 -1, 1 0)') "
-                    "from geospatial_test limit 1;",
-                    dt)),
-                static_cast<double>(0.0001));
-    // Geodesic length of a geographic path, in meters
-    ASSERT_NEAR(
-        static_cast<double>(617121.626),
-        v<double>(run_simple_agg(
-            "SELECT ST_Length(CAST (ST_GeomFromText('LINESTRING(-76.6168198439371 "
-            "39.9703199555959, -80.5189990254673 40.6493554919257, -82.5189990254673 "
-            "42.6493554919257)', 4326) as GEOGRAPHY)) "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-
-    // ST_Perimeter
-    // Cartesian perimeter of a planar polygon
-    ASSERT_NEAR(static_cast<double>(5.65685),
-                v<double>(run_simple_agg("SELECT ST_Perimeter('POLYGON("
-                                         "(1 0, 0 1, -1 0, 0 -1, 1 0),"
-                                         "(0.1 0, 0 0.1, -0.1 0, 0 -0.1, 0.1 0))') "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.0001));
-    // Geodesic perimeter of a polygon geography, in meters
-    ASSERT_NEAR(
-        static_cast<double>(1193066.02892),
-        v<double>(run_simple_agg(
-            "SELECT ST_Perimeter(ST_GeogFromText('POLYGON((-76.6168198439371 "
-            "39.9703199555959, -80.5189990254673 40.6493554919257, -82.5189990254673 "
-            "42.6493554919257, -76.6168198439371 39.9703199555959))', 4326)) "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-    // Cartesian perimeter of a planar multipolygon
-    ASSERT_NEAR(static_cast<double>(4 * 1.41421 + 4 * 2.82842),
-                v<double>(run_simple_agg("SELECT ST_Perimeter('MULTIPOLYGON("
-                                         "((1 0, 0 1, -1 0, 0 -1, 1 0),"
-                                         " (0.1 0, 0 0.1, -0.1 0, 0 -0.1, 0.1 0)), "
-                                         "((2 0, 0 2, -2 0, 0 -2, 2 0),"
-                                         " (0.2 0, 0 0.2, -0.2 0, 0 -0.2, 0.2 0)))') "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.0001));
-    // Geodesic perimeter of a polygon geography, in meters
-    ASSERT_NEAR(
-        static_cast<double>(1193066.02892 + 1055903.62342 + 907463.55601),
-        v<double>(run_simple_agg(
-            "SELECT ST_Perimeter(ST_GeogFromText('MULTIPOLYGON("
-            "((-76.6168198439371 39.9703199555959, -80.5189990254673 40.6493554919257,"
-            "  -82.5189990254673 42.6493554919257, -76.6168198439371 39.9703199555959)), "
-            "((-66.6168198439371 49.9703199555959, -70.5189990254673 50.6493554919257,"
-            "  -72.5189990254673 52.6493554919257, -66.6168198439371 49.9703199555959)), "
-            "((-56.6168198439371 59.9703199555959, -60.5189990254673 60.6493554919257,"
-            "  -62.5189990254673 62.6493554919257, -56.6168198439371 59.9703199555959)))'"
-            ", 4326)) from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-
-    // ST_Area
-    // Area of a planar polygon
-    ASSERT_NEAR(static_cast<double>(2.0 - 0.02),
-                v<double>(run_simple_agg("SELECT ST_Area('POLYGON("
-                                         "(1 0, 0 1, -1 0, 0 -1, 1 0),"
-                                         "(0.1 0, 0 0.1, -0.1 0, 0 -0.1, 0.1 0))') "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.0001));
-    // Area of a planar multipolygon
-    ASSERT_NEAR(static_cast<double>(2.0 - 0.02 + 8.0 - 0.08),
-                v<double>(run_simple_agg("SELECT ST_Area('MULTIPOLYGON("
-                                         "((1 0, 0 1, -1 0, 0 -1, 1 0),"
-                                         " (0.1 0, 0 0.1, -0.1 0, 0 -0.1, 0.1 0)), "
-                                         "((2 0, 0 2, -2 0, 0 -2, 2 0),"
-                                         " (0.2 0, 0 0.2, -0.2 0, 0 -0.2, 0.2 0)))') "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.0001));
-
-    // ST_Intersects
-    ASSERT_EQ(static_cast<int64_t>(0),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Intersects("
-                  "ST_GeomFromText('POINT(0.9 0.9)'), "
-                  "ST_GeomFromText('POINT(1.1 1.1)')) FROM geospatial_test limit 1;",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg("SELECT ST_Intersects("
-                                        "ST_GeomFromText('POINT(1 1)'), "
-                                        "ST_GeomFromText('LINESTRING(2 0, 0 2, -2 0, 0 "
-                                        "-2)')) FROM geospatial_test limit 1;",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(0),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Intersects("
-                  "ST_GeomFromText('LINESTRING(2 0, 0 2, -2 0, 0 -2)'), "
-                  "ST_GeomFromText('POINT(1 0)')) FROM geospatial_test limit 1;",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(0),
-              v<int64_t>(run_simple_agg("SELECT ST_Intersects("
-                                        "ST_GeomFromText('POINT(1 1)'), "
-                                        "ST_GeomFromText('POLYGON((0 0, 1 0, 0 1, 0 "
-                                        "0))')) FROM geospatial_test limit 1;",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Intersects("
-                  "ST_GeomFromText('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), "
-                  "ST_GeomFromText('POINT(1 1)')) FROM geospatial_test limit 1;",
-                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(0),
-        v<int64_t>(run_simple_agg(
-            "SELECT ST_Intersects("
-            "ST_GeomFromText('POINT(1 1)'), "
-            "ST_GeomFromText('MULTIPOLYGON(((5 5, 6 6, 5 6)), ((0 0, 1 0, 0 1, 0 0)))')) "
-            " FROM geospatial_test limit 1;",
-            dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Intersects("
-                  "ST_GeomFromText('MULTIPOLYGON(((0 0, 2 0, 2 2, 0 2, 0 0)), ((5 5, 6 "
-                  "6, 5 6)))'), "
-                  "ST_GeomFromText('POINT(1 1)')) FROM geospatial_test limit 1;",
-                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(1),
-        v<int64_t>(run_simple_agg("SELECT ST_Intersects("
-                                  "ST_GeomFromText('LINESTRING(1 1, 0.5 1.5, 2 4)'), "
-                                  "ST_GeomFromText('LINESTRING(2 0, 0 2, -2 0, 0 -2)')) "
-                                  "FROM geospatial_test limit 1;",
-                                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(0),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Intersects("
-                  "ST_GeomFromText('LINESTRING(1 1, 0.5 1.5, 1.5 1, 1.5 1.5)'), "
-                  "ST_GeomFromText('LINESTRING(1 0, 0 1, -1 0, 0 -1)')) FROM "
-                  "geospatial_test limit 1;",
-                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(0),
-        v<int64_t>(run_simple_agg("SELECT ST_Intersects("
-                                  "ST_GeomFromText('LINESTRING(3 3, 3 2, 2.1 2.1)'), "
-                                  "ST_GeomFromText('POLYGON((2 2, 0 1, -2 2, -2 0, 2 0, "
-                                  "2 2))')) FROM geospatial_test limit 1;",
-                                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(1),
-        v<int64_t>(run_simple_agg(
-            "SELECT ST_Intersects("
-            "ST_GeomFromText('POLYGON((2 2, 0 1, -2 2, -2 0, 2 0, 2 2))'), "
-            "ST_GeomFromText('LINESTRING(3 3, 3 2, 2 2)')) FROM geospatial_test limit 1;",
-            dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(0),
-        v<int64_t>(run_simple_agg("SELECT ST_Intersects("
-                                  "ST_GeomFromText('LINESTRING(3 3, 3 2, 2.1 2.1)'), "
-                                  "ST_GeomFromText('MULTIPOLYGON(((5 5, 6 6, 5 6)), ((2 "
-                                  "2, 0 1, -2 2, -2 0, 2 0, 2 2)))')) "
-                                  " FROM geospatial_test limit 1;",
-                                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(1),
-        v<int64_t>(run_simple_agg(
-            "SELECT ST_Intersects("
-            "ST_GeomFromText('MULTIPOLYGON(((2 2, 0 1, -2 2, -2 0, 2 0, 2 2)), ((5 5, 6 "
-            "6, 5 6)))'), "
-            "ST_GeomFromText('LINESTRING(3 3, 3 2, 2 2)')) FROM geospatial_test limit 1;",
-            dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Intersects("
-                  "ST_GeomFromText('POLYGON((-118.66313066279504 44.533565793694436,"
-                  "-115.28301791070872 44.533565793694436,-115.28301791070872 "
-                  "46.49961643537853,"
-                  "-118.66313066279504 46.49961643537853,-118.66313066279504 "
-                  "44.533565793694436))'),"
-                  "ST_GeomFromText('LINESTRING (-118.526348964556 45.6369689645418,"
-                  "-118.568716970537 45.552529965319,-118.604668964913 45.5192699867856,"
-                  "-118.700612922525 45.4517749629224)')) from test limit 1;",
-                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(1),
-        v<int64_t>(run_simple_agg(
-            "SELECT ST_Intersects("
-            "ST_GeomFromText('POLYGON((-165.27254008488316 60.286744877866084,"
-            "-164.279755308478 60.286744877866084, -164.279755308478 60.818880025426154,"
-            "-165.27254008488316 60.818880025426154))', 4326), "
-            "ST_GeomFromText('MULTIPOLYGON (((-165.273152946156 60.5488599839382,"
-            "-165.244307548387 60.4963022239955,-165.23881195357 60.4964759808483,"
-            "-165.234271979534 60.4961199595109,-165.23165799921 60.496354988076,"
-            "-165.229399998313 60.4973489979735,-165.225239975948 60.4977589987674,"
-            "-165.217958113746 60.4974514248303,-165.21276192051 60.4972319866052)))', "
-            "4326)) FROM geospatial_test limit "
-            "1;",
-            dt)));
-
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM geospatial_test WHERE ST_Intersects(p,p);", dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(
-                  run_simple_agg("SELECT count(*) FROM geospatial_test "
-                                 "WHERE ST_Intersects(p, ST_GeomFromText('POINT(0 0)'));",
-                                 dt)));
-    ASSERT_EQ(static_cast<int64_t>(6),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(*) FROM geospatial_test "
-                  "WHERE ST_Intersects(p, ST_GeomFromText('LINESTRING(0 0, 5 5)'));",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(*) FROM geospatial_test "
-                  "WHERE ST_Intersects(p, ST_GeomFromText('LINESTRING(0 0, 15 15)'));",
-                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(6),
-        v<int64_t>(run_simple_agg(
-            "SELECT count(*) FROM geospatial_test "
-            "WHERE ST_Intersects(l, ST_GeomFromText('LINESTRING(0.5 0.5, 6.5 0.5)'));",
-            dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(6),
-        v<int64_t>(run_simple_agg(
-            "SELECT count(*) FROM geospatial_test "
-            "WHERE ST_Intersects(poly, ST_GeomFromText('LINESTRING(0 4.5, 7 0.5)'));",
-            dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(6),
-        v<int64_t>(run_simple_agg(
-            "SELECT count(*) FROM geospatial_test "
-            "WHERE ST_Intersects(mpoly, ST_GeomFromText('LINESTRING(0 4.5, 7 0.5)'));",
-            dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(6),
-        v<int64_t>(run_simple_agg("SELECT count(*) FROM geospatial_test "
-                                  "WHERE ST_Intersects(l, ST_GeomFromText('POLYGON((0.5 "
-                                  "0.5, 6.5 0.5, 3 0.1))'));",
-                                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(6),
-        v<int64_t>(run_simple_agg("SELECT count(*) FROM geospatial_test "
-                                  "WHERE ST_Intersects(poly, ST_GeomFromText('POLYGON((0 "
-                                  "4.5, 7 0.5, 10 10))'));",
-                                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(6),
-        v<int64_t>(run_simple_agg("SELECT count(*) FROM geospatial_test "
-                                  "WHERE ST_Intersects(mpoly, "
-                                  "ST_GeomFromText('POLYGON((0 4.5, 7 0.5, 10 10))'));",
-                                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(6),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(*) FROM geospatial_test "
-                  "WHERE ST_Intersects(l, ST_GeomFromText('MULTIPOLYGON(((0.5 0.5, 6.5 "
-                  "0.5, 3 0.1)))'));",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(6),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(*) FROM geospatial_test "
-                  "WHERE ST_Intersects(poly, ST_GeomFromText('MULTIPOLYGON(((0 4.5, 7 "
-                  "0.5, 10 10)))'));",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(6),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(*) FROM geospatial_test "
-                  "WHERE ST_Intersects(mpoly, ST_GeomFromText('MULTIPOLYGON(((0 4.5, 7 "
-                  "0.5, 10 10)))'));",
-                  dt)));
-
-    // ST_Disjoint
-    ASSERT_EQ(
-        static_cast<int64_t>(0),
-        v<int64_t>(run_simple_agg(
-            "SELECT ST_Disjoint("
-            "ST_GeomFromText('POLYGON((2 2, 0 1, -2 2, -2 0, 2 0, 2 2))'), "
-            "ST_GeomFromText('LINESTRING(3 3, 3 2, 2 2)')) FROM geospatial_test limit 1;",
-            dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(1),
-        v<int64_t>(run_simple_agg("SELECT ST_Disjoint("
-                                  "ST_GeomFromText('LINESTRING(3 3, 3 2, 2.1 2.1)'), "
-                                  "ST_GeomFromText('MULTIPOLYGON(((5 5, 6 6, 5 6)), ((2 "
-                                  "2, 0 1, -2 2, -2 0, 2 0, 2 2)))')) "
-                                  " FROM geospatial_test limit 1;",
-                                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(1),
-        v<int64_t>(run_simple_agg("SELECT ST_Disjoint("
-                                  "ST_GeomFromText('POLYGON((3 3, 3 2, 2.1 2.1))'), "
-                                  "ST_GeomFromText('MULTIPOLYGON(((5 5, 6 6, 5 6)), ((2 "
-                                  "2, 0 1, -2 2, -2 0, 2 0, 2 2)))')) "
-                                  " FROM geospatial_test limit 1;",
-                                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(0),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM geospatial_test WHERE ST_Disjoint(p,p);", dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(g_num_rows - 1),
-        v<int64_t>(run_simple_agg("SELECT count(*) FROM geospatial_test "
-                                  "WHERE ST_Disjoint(p, ST_GeomFromText('POINT(0 0)'));",
-                                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows - 6),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(*) FROM geospatial_test "
-                  "WHERE ST_Disjoint(p, ST_GeomFromText('LINESTRING(0 0, 5 5)'));",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(0),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(*) FROM geospatial_test "
-                  "WHERE ST_Disjoint(p, ST_GeomFromText('LINESTRING(0 0, 15 15)'));",
-                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(g_num_rows - 6),
-        v<int64_t>(run_simple_agg(
-            "SELECT count(*) FROM geospatial_test "
-            "WHERE ST_Disjoint(l, ST_GeomFromText('LINESTRING(0.5 0.5, 6.5 0.5)'));",
-            dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows - 6),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(*) FROM geospatial_test "
-                  "WHERE ST_Disjoint(poly, ST_GeomFromText('LINESTRING(0 4.5, 7 0.5)'));",
-                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(g_num_rows - 6),
-        v<int64_t>(run_simple_agg(
-            "SELECT count(*) FROM geospatial_test "
-            "WHERE ST_Disjoint(mpoly, ST_GeomFromText('LINESTRING(0 4.5, 7 0.5)'));",
-            dt)));
-
-    // ST_Contains, ST_Within
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,p);", dt)));
-    ASSERT_EQ(static_cast<int64_t>(2),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM geospatial_test WHERE "
-                  "ST_Contains('POINT(0 0)', p) OR ST_Contains('POINT(1 1)', p);",
-                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(1),
-        v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains('POINT(0 0)', p);",
-            dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(gp4326none, "
-                  "ST_GeomFromText('POINT(1 1)', 4326));",
-                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(1),
-        v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains('POINT(0 0)', l);",
-            dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_Within('POINT(10.5 10.5)', l);",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,l);", dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(l,p);", dt)));
-
-    ASSERT_EQ(static_cast<int64_t>(0),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_Contains(poly, 'POINT(-1 -1)');",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_Contains(poly, 'POINT(0.1 0.1)');",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_Within('POINT(0.1 0.1)', poly);",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(gpoly4326, "
-                  "ST_GeomFromText('POINT(0.1 0.1)', 4326));",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),  // polygon containing a point
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Contains("
-                  "ST_GeomFromText('POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0))'), "
-                  "ST_GeomFromText('POINT(0 0)')) FROM geospatial_test limit 1;",
-                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(
-            0),  // same polygon but with a hole in the middle that the point falls into
-        v<int64_t>(run_simple_agg(
-            "SELECT ST_Contains("
-            "'POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0),(1 0, 0 1, -1 0, 0 -1, 1 0))', "
-            "'POINT(0.1 0.1)') FROM geospatial_test limit 1;",
-            dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(1),  // back to true if we combine the holed polygon with one
-                                  // more in a multipolygon
-        v<int64_t>(run_simple_agg(
-            "SELECT ST_Contains("
-            "'MULTIPOLYGON(((2 0, 0 2, -2 0, 0 -2, 2 0),(1 0, 0 1, -1 0, 0 -1, 1 0)), "
-            "((2 0, 0 2, -2 0, 0 -2, 1 -2, 2 -1)))', "
-            "'POINT(0.1 0.1)') FROM geospatial_test limit 1;",
-            dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(1),  // last query but for 4326 objects
-        v<int64_t>(run_simple_agg(
-            "SELECT ST_Contains("
-            "ST_GeomFromText('MULTIPOLYGON(((2 0, 0 2, -2 0, 0 -2, 2 0),(1 0, 0 1, -1 0, "
-            "0 -1, 1 0)), "
-            "((2 0, 0 2, -2 0, 0 -2, 1 -2, 2 -1)))', 4326), "
-            "ST_GeomFromText('POINT(0.1 0.1)', 4326)) FROM geospatial_test limit 1;",
-            dt)));
-
-    ASSERT_EQ(static_cast<int64_t>(1),  // point in polygon, on left edge
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Contains("
-                  "ST_GeomFromText('POLYGON((0 -1, 2 1, 0 1))'), "
-                  "ST_GeomFromText('POINT(0 0)')) FROM geospatial_test limit 1;",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),  // point in polygon, on right edge
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Contains("
-                  "ST_GeomFromText('POLYGON((0 -1, 2 1, 0 1))'), "
-                  "ST_GeomFromText('POINT(1 0)')) FROM geospatial_test limit 1;",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),  // point in polygon, touch+leave
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Contains("
-                  "ST_GeomFromText('POLYGON((0 -1, 2 1, 3 0, 5 2, 0 2, -1 0))'), "
-                  "ST_GeomFromText('POINT(0 0)')) FROM geospatial_test limit 1;",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),  // point in polygon, touch+overlay+leave
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Contains("
-                  "ST_GeomFromText('POLYGON((0 -1, 2 1, 3 0, 4 0, 5 2, 0 2, -1 0))'), "
-                  "ST_GeomFromText('POINT(0 0)')) FROM geospatial_test limit 1;",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),  // point in polygon, touch+cross
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Contains("
-                  "ST_GeomFromText('POLYGON((0 -1, 2 1, 3 0, 4 -1, 5 2, 0 2, -1 0))'), "
-                  "ST_GeomFromText('POINT(0 0)')) FROM geospatial_test limit 1;",
-                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(1),  // point in polygon, touch+overlay+cross
-        v<int64_t>(run_simple_agg(
-            "SELECT ST_Contains("
-            "ST_GeomFromText('POLYGON((0 -1, 2 1, 3 0, 4 0, 4.5 -1, 5 2, 0 2, -1 0))'), "
-            "ST_GeomFromText('POINT(0 0)')) FROM geospatial_test limit 1;",
-            dt)));
-    ASSERT_EQ(static_cast<int64_t>(0),  // point in polygon, check yray redundancy
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Contains("
-                  "ST_GeomFromText('POLYGON((0 -1, 2 1, 3 0, 5 2, 0 2, -1 0))'), "
-                  "ST_GeomFromText('POINT(2 0)')) FROM geospatial_test limit 1;",
-                  dt)));
-
-    ASSERT_EQ(static_cast<int64_t>(1),  // polygon containing linestring
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Contains("
-                  "ST_GeomFromText('POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0))'), "
-                  "ST_GeomFromText('LINESTRING(1 0, 0 1, -1 0, 0 -1, 1 0)')) "
-                  "FROM geospatial_test limit 1;",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(0),  // polygon containing only a part of linestring
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Contains("
-                  "ST_GeomFromText('POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0))'), "
-                  "ST_GeomFromText('LINESTRING(1 0, 0 1, -1 0, 0 -1, 3 0)')) "
-                  "FROM geospatial_test limit 1;",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(0),    // polygon containing linestring vertices
-              v<int64_t>(run_simple_agg(  // but not all of linestring's segments
-                  "SELECT ST_Contains("
-                  "ST_GeomFromText('POLYGON((2 2, 0 1, -2 2, -2 0, 2 0, 2 2))'), "
-                  "ST_GeomFromText('LINESTRING(1.5 1.5, -1.5 1.5, 0 0.5, 1.5 1.5)')) "
-                  "FROM geospatial_test limit 1;",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),  // polygon containing another polygon
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Contains("
-                  "ST_GeomFromText('POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0))'), "
-                  "ST_GeomFromText('POLYGON((1 0, 0 1, -1 0, 0 -1, 1 0))')) "
-                  "FROM geospatial_test limit 1;",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),  // multipolygon containing linestring
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Contains("
-                  "ST_GeomFromText('MULTIPOLYGON(((3 3, 4 3, 4 4)), "
-                  "((2 0, 0 2, -2 0, 0 -2, 2 0)))'), "
-                  "ST_GeomFromText('LINESTRING(1 0, 0 1, -1 0, 0 -1, 1 0)')) "
-                  "FROM geospatial_test limit 1;",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(0),    // multipolygon containing linestring vertices
-              v<int64_t>(run_simple_agg(  // but not all of linestring's segments
-                  "SELECT ST_Contains("
-                  "ST_GeomFromText('MULTIPOLYGON(((2 2, 0 1, -2 2, -2 0, 2 0, 2 2)), "
-                  "((3 3, 4 3, 4 4)))'), "
-                  "ST_GeomFromText('LINESTRING(1.5 1.5, -1.5 1.5, 0 0.5, 1.5 1.5)')) "
-                  "FROM geospatial_test limit 1;",
-                  dt)));
-    // Tolerance
-    ASSERT_EQ(static_cast<int64_t>(1),  // point containing an extremely close point
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_Contains("
-                  "ST_GeomFromText('POINT(2.1100000001 -1.7229999999    )'), "
-                  "ST_GeomFromText('POINT(2.11         -1.723)')) FROM geospatial_test "
-                  "limit 1;",
-                  dt)));
-    ASSERT_EQ(static_cast<int64_t>(0),  // point not containing a very close point
-              v<int64_t>(run_simple_agg("SELECT ST_Contains("
-                                        "ST_GeomFromText('POINT(2.11      -1.723    )'), "
-                                        "ST_GeomFromText('POINT(2.1100001 -1.7229999)')) "
-                                        "FROM geospatial_test limit 1;",
-                                        dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(1),  // linestring containing an extremely close point
-        v<int64_t>(run_simple_agg(
-            "SELECT ST_Contains("
-            "ST_GeomFromText('LINESTRING(1 -1.0000000001, 3 -1.0000000001)'), "
-            "ST_GeomFromText('POINT(0.9999999992 -1)')) FROM geospatial_test limit 1;",
-            dt)));
-
-    // ST_DWithin, ST_DFullyWithin
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg("SELECT ST_DWithin("
-                                        "'POLYGON((4 2, 5 3, 4 3))', "
-                                        "'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), "
-                                        "((1 1, -1 1, -1 -1, 1 -1, 1 1)))', "
-                                        "3.0) from geospatial_test limit 1;",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg("SELECT ST_DFullyWithin("
-                                        "'POINT(1 1)', 'LINESTRING (9 0,18 18,19 19)', "
-                                        "26.0) AND NOT ST_DFullyWithin("
-                                        "'LINESTRING (9 0,18 18,19 19)', 'POINT(1 1)', "
-                                        "25.0)  from geospatial_test limit 1;",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(7),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_DWithin(l, 'POINT(-1 -1)', 8.0);",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(3),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_DFullyWithin(l, 'POINT(-1 -1)', 8.0);",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(5),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_DWithin(poly, 'POINT(5 5)', 3.0);",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(6),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_DWithin(poly, 'POINT(5 5)', id);",
-                                        dt)));
-    // Check if Paris and LA are within a 10000km geodesic distance
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_DWithin(ST_GeogFromText('POINT(-118.4079 33.9434)', 4326), "
-                  "ST_GeogFromText('POINT(2.5559 49.0083)', 4326), 10000000.0) "
-                  "from geospatial_test limit 1;",
-                  dt)));
-    // TODO: ST_DWithin support for geographic paths, needs geodesic
-    // ST_Distance(linestring)
-
-    // Coord accessors
-    ASSERT_NEAR(static_cast<double>(-118.4079),
-                v<double>(run_simple_agg("SELECT ST_X('POINT(-118.4079 33.9434)') "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.0));
-    ASSERT_NEAR(static_cast<double>(33.9434),
-                v<double>(run_simple_agg(
-                    "SELECT ST_Y(ST_GeomFromText('POINT(-118.4079 33.9434)', 4326)) "
-                    "from geospatial_test limit 1;",
-                    dt)),
-                static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(4021204.558),
-                v<double>(run_simple_agg(
-                    "SELECT ST_Y(ST_Transform("
-                    "ST_GeomFromText('POINT(-118.4079 33.9434)', 4326), 900913)) "
-                    "from geospatial_test limit 1;",
-                    dt)),
-                static_cast<double>(0.01));
-
-    ASSERT_NEAR(static_cast<double>(-118.4079),
-                v<double>(run_simple_agg("SELECT ST_XMax('POINT(-118.4079 33.9434)') "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.0));
-    ASSERT_NEAR(
-        static_cast<double>(3960189.382),
-        v<double>(run_simple_agg(
-            "SELECT ST_YMax('MULTIPOLYGON "
-            "(((-13201820.2402333 3957482.147359,-13189665.9329505 3960189.38265416,"
-            "-13176924.0813953 3949756.56479131)))') "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(4021204.558),
-                v<double>(run_simple_agg(
-                    "SELECT ST_YMin(ST_Transform(ST_GeomFromText("
-                    "'LINESTRING (-118.4079 33.9434, 2.5559 49.0083)', 4326), 900913)) "
-                    "from geospatial_test limit 1;",
-                    dt)),
-                static_cast<double>(0.01));
-
-    SKIP_ON_AGGREGATOR(ASSERT_NEAR(
-        static_cast<double>(5),
-        v<double>(run_simple_agg(
-            "SELECT ST_XMax(p) from geospatial_test order by id limit 1 offset 5;", dt)),
-        static_cast<double>(0.0)));
-    SKIP_ON_AGGREGATOR(ASSERT_NEAR(
-        static_cast<double>(1.0),
-        v<double>(run_simple_agg(
-            "SELECT ST_YMin(gp4326) from geospatial_test limit 1 offset 1;", dt)),
-        static_cast<double>(0.001)));
-    ASSERT_NEAR(
-        static_cast<double>(2 * 7 + 1),
-        v<double>(run_simple_agg(
-            "SELECT ST_XMax(l) from geospatial_test order by id limit 1 offset 7;", dt)),
-        static_cast<double>(0.0));
-    ASSERT_NEAR(
-        static_cast<double>(2 + 1),
-        v<double>(run_simple_agg(
-            "SELECT ST_YMax(mpoly) from geospatial_test order by id limit 1 offset 2;",
-            dt)),
-        static_cast<double>(0.0));
-
-    // Point accessors, Linestring indexing
-    ASSERT_NEAR(
-        static_cast<double>(34.274647),
-        v<double>(run_simple_agg(
-            "SELECT ST_Y(ST_PointN(ST_GeomFromText('LINESTRING(-118.243683 34.052235, "
-            "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
-            "-122.446747 37.733795)', 4326), 2)) "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-    ASSERT_NEAR(
-        static_cast<double>(-122.446747),
-        v<double>(run_simple_agg(
-            "SELECT ST_X(ST_EndPoint(ST_GeomFromText('LINESTRING(-118.243683 34.052235, "
-            "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
-            "-122.446747 37.733795)', 4326))) "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-    ASSERT_NEAR(
-        static_cast<double>(
-            557637.370),  // geodesic distance between first and end points: LA - SF trip
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance(ST_PointN(ST_GeogFromText("
-            "'LINESTRING(-118.243683 34.052235, "
-            "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
-            "-122.446747 37.733795)', 4326), 1), "
-            "ST_EndPoint(ST_GeogFromText("
-            "'LINESTRING(-118.243683 34.052235, "
-            "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
-            "-122.446747 37.733795)', 4326))) "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-    ASSERT_NEAR(
-        static_cast<double>(
-            5.587),  // cartesian distance in degrees, same points: LA - SF trip
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance(ST_PointN(ST_GeomFromText("
-            "'LINESTRING(-118.243683 34.052235, "
-            "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
-            "-122.446747 37.733795)', 4326), 1), "
-            "ST_EndPoint(ST_GeomFromText("
-            "'LINESTRING(-118.243683 34.052235, "
-            "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
-            "-122.446747 37.733795)', 4326))) "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-    ASSERT_NEAR(
-        static_cast<double>(689217.783),  // cartesian distance between merc-transformed
-                                          // first and end points
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance(ST_StartPoint(ST_Transform(ST_GeomFromText("
-            "'LINESTRING(-118.243683 34.052235, "
-            "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
-            "-122.446747 37.733795)', 4326), 900913)), "
-            "ST_EndPoint(ST_Transform(ST_GeomFromText("
-            "'LINESTRING(-118.243683 34.052235, "
-            "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
-            "-122.446747 37.733795)', 4326), 900913))) "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-    // Linestring: check that runaway indices are controlled
-    ASSERT_NEAR(
-        static_cast<double>(-122.446747),  // stop at endpoint
-        v<double>(run_simple_agg(
-            "SELECT ST_X(ST_PointN(ST_GeomFromText("
-            "'LINESTRING(-118.243683 34.052235, "
-            "-119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, "
-            "-122.446747 37.733795)', 4326), 1000000)) "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.01));
-    // Check linestring indexing on ST_Contains(LINESTRING,LINESTRING) and ST_Distance
-    ASSERT_EQ(
-        static_cast<int64_t>(g_num_rows),
-        v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(l,ST_StartPoint(l));",
-            dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(g_num_rows),
-        v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(l,ST_EndPoint(l));",
-            dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_Contains(ST_PointN(l,1),ST_EndPoint(l));",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_Distance(l,ST_StartPoint(l))=0.0;",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_Distance(ST_EndPoint(l),l)=0.0;",
-                                        dt)));
-
-    // Point geometries, literals in different spatial references, transforms
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_Distance('POINT(0 0)', gp) < 100.0;",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(4),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
-                                        "ST_Distance(ST_GeogFromText('POINT(0 0)', "
-                                        "4326), CastToGeography(gp4326)) < 500000.0;",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(4),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM geospatial_test WHERE "
-                  "ST_Distance(ST_GeomFromText('POINT(0 0)', 900913), gp900913) < 5.0;",
-                  dt)));
-    ASSERT_EQ(
-        static_cast<int64_t>(4),
-        v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM geospatial_test WHERE "
-            "ST_Distance(ST_Transform(ST_GeomFromText('POINT(0 0)', 4326), 900913), "
-            "ST_Transform(gp4326, 900913)) < 500000.0;",
-            dt)));
-
-    // Test some exceptions
-    // Point coord accessor used on a non-POINT, in this case unindexed LINESTRING
-    // (missing ST_POINTN)
-    EXPECT_THROW(run_simple_agg(
-                     "SELECT ST_Y(ST_GeogFromText("
-                     "'LINESTRING(-118.243683 34.052235, -119.229034 34.274647)', 4326)) "
-                     "from geospatial_test limit 1;",
-                     dt),
-                 std::runtime_error);
-    // Two accessors in a row
-    EXPECT_THROW(
-        run_simple_agg(
-            "SELECT ST_X(ST_Y(ST_GeogFromText('POINT(-118.243683 34.052235)', 4326))) "
-            "from geospatial_test limit 1;",
-            dt),
-        std::runtime_error);
-    // Coord order reversed, longitude value is out of latitude range
-    EXPECT_THROW(run_simple_agg(
-                     "SELECT ST_Y(ST_GeogFromText('POINT(34.052235 -118.243683)', 4326)) "
-                     "from geospatial_test limit 1;",
-                     dt),
-                 std::runtime_error);
-    // Linestring accessor on a non-LINESTRING
-    EXPECT_THROW(
-        run_simple_agg("SELECT ST_X(ST_ENDPOINT('POINT(-118.243683 34.052235)')) "
-                       "from geospatial_test limit 1;",
-                       dt),
-        std::runtime_error);
-
-    // ST_NRings
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_NRings(poly) from geospatial_test limit 1;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_NRings(mpoly) from geospatial_test limit 1;", dt)));
-
-    // ST_NPoints
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_NPoints(p) from geospatial_test LIMIT 1;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(3),
-              v<int64_t>(run_simple_agg("SELECT ST_NPoints(l) FROM geospatial_test ORDER "
-                                        "BY ST_NPoints(l) DESC LIMIT 1;",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(3),
-              v<int64_t>(run_simple_agg("SELECT ST_NPoints(poly) FROM geospatial_test "
-                                        "ORDER BY ST_NPoints(l) DESC LIMIT 1;",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(3),
-              v<int64_t>(run_simple_agg("SELECT ST_NPoints(mpoly) FROM geospatial_test "
-                                        "ORDER BY ST_NPoints(l) DESC LIMIT 1;",
-                                        dt)));
-
-    // ST_SRID, ST_SetSRID
-    ASSERT_EQ(static_cast<int64_t>(0),
-              v<int64_t>(
-                  run_simple_agg("SELECT ST_SRID(p) from geospatial_test limit 1;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(4326),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_SRID(gp4326) from geospatial_test limit 1;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(900913),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_SRID(gp900913) from geospatial_test limit 1;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(4326),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_SRID(ST_GeogFromText('POINT(-118.243683 34.052235)', 4326)) "
-                  "from geospatial_test limit 1;",
-                  dt)));
-    // Geodesic distance between Paris and LA: ~9105km
-    ASSERT_NEAR(static_cast<double>(9105643.0),
-                v<double>(run_simple_agg("SELECT ST_Distance("
-                                         "CastToGeography(ST_SetSRID(ST_GeomFromText('"
-                                         "POINT(-118.4079 33.9434)'), 4326)), "
-                                         "CastToGeography(ST_SetSRID(ST_GeomFromText('"
-                                         "POINT(2.5559 49.0083)'), 4326))) "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(10000.0));
-
-    // SQLw/out geo support
-    EXPECT_THROW(run_multiple_agg("SELECT count(distinct p) FROM geospatial_test;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("SELECT approx_count_distinct(p) FROM geospatial_test;", dt),
-        std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT avg(p) FROM geospatial_test;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("SELECT p, count(*) FROM geospatial_test GROUP BY p;", dt),
-        std::runtime_error);
-
-    // ST_Point geo constructor
-    ASSERT_NEAR(
-        static_cast<double>(1.4142135),
-        v<double>(run_simple_agg("SELECT ST_Distance(ST_Point(0,0), ST_Point(1,1)) "
-                                 "from geospatial_test limit 1;",
-                                 dt)),
-        static_cast<double>(0.00001));
-    ASSERT_NEAR(
-        static_cast<double>(1.34536240),
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance(ST_Point(f + 0.2, d - 0.1), ST_Point(f * 2.0, d/2)) "
-            "from test limit 1;",
-            dt)),
-        static_cast<double>(0.00001));
-    // Cartesian distance between Paris and LA, point constructors
-    ASSERT_NEAR(
-        static_cast<double>(13653148.0),
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance("
-            "ST_Transform(ST_SetSRID(ST_Point(-118.4079, 33.9434), 4326), 900913), "
-            "ST_Transform(ST_SetSRID(ST_Point(2.5559, 49.0083), 4326), 900913)) "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(10000.0));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(
-                  run_simple_agg("SELECT ST_Intersects("
-                                 "ST_GeomFromText('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), "
-                                 "ST_Point(f - 0.1, 3.0 - d/f )) FROM test limit 1;",
-                                 dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM geospatial_test WHERE "
-                  "ST_Contains(poly, ST_Point(0.1 + ST_NRings(poly)/10.0, 0.1));",
-                  dt)));
-
-    // ST_Centroid geo constructor
-    ASSERT_NEAR(static_cast<double>(0.0),
-                v<double>(run_simple_agg(
-                    "SELECT ST_Distance('POINT(1 1)', ST_Centroid('POINT(1 1)')) "
-                    "from geospatial_test limit 1;",
-                    dt)),
-                static_cast<double>(0.00001));
-    ASSERT_NEAR(static_cast<double>(0.0),
-                v<double>(run_simple_agg("SELECT ST_Distance('POINT(-6.0 40.5)', "
-                                         "ST_Centroid('LINESTRING(-20 35, 8 46)')) "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.00001));
-    ASSERT_NEAR(static_cast<double>(0.0),
-                v<double>(run_simple_agg("SELECT ST_Distance('POINT(1.3333333 1)', "
-                                         "ST_Centroid('LINESTRING(0 0, 2 0, 2 2, 0 2)')) "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.00001));
-    ASSERT_NEAR(
-        static_cast<double>(0.0),
-        v<double>(run_simple_agg("SELECT ST_Distance('POINT(1 1)', "
-                                 "ST_Centroid('LINESTRING(0 0, 2 0, 2 2, 0 2, 0 0)')) "
-                                 "from geospatial_test limit 1;",
-                                 dt)),
-        static_cast<double>(0.00001));
-    ASSERT_NEAR(static_cast<double>(0.0),
-                v<double>(run_simple_agg("SELECT ST_Distance('POINT(1 1)', "
-                                         "ST_Centroid('POLYGON((0 0, 2 0, 2 2, 0 2))')) "
-                                         "from geospatial_test limit 1;",
-                                         dt)),
-                static_cast<double>(0.00001));
-    ASSERT_NEAR(static_cast<double>(0.0),
-                v<double>(run_simple_agg(
-                    "SELECT ST_Distance('POINT(10.9291 50.68245)', "
-                    "ST_Centroid('POLYGON((10.9099 50.6917,10.9483 50.6917,10.9483 "
-                    "50.6732,10.9099 50.6732,10.9099 50.6917))')) "
-                    "from geospatial_test limit 1;",
-                    dt)),
-                static_cast<double>(0.0001));
-    ASSERT_NEAR(
-        static_cast<double>(0.0),
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance('POINT(0.166666666 0.933333333)', "
-            "ST_Centroid('MULTIPOLYGON(((1 0,2 1,2 0,1 0)),((-1 -1,2 2,-1 2,-1 -1)))')) "
-            "from geospatial_test limit 1;",
-            dt)),
-        static_cast<double>(0.00001));
-    // Degenerate input geometries triggering fall backs to linestring and point centroids
-    // zero-area, non-zero-length: fall back to linestring centroid
-    ASSERT_NEAR(
-        static_cast<double>(0.0),
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance('POINT(1.585786 1.0)', ST_Centroid('MULTIPOLYGON(((0 0, "
-            "2 2, 0 2, 2 0, 0 0)),((3 0, 3 2, 3 1, 3 0)))'));",
-            dt)),
-        static_cast<double>(0.0001));
-    ASSERT_NEAR(static_cast<double>(0.0),
-                v<double>(run_simple_agg(
-                    "SELECT ST_Distance('POINT(1.0 1.0)', ST_Centroid('MULTIPOLYGON(((0 "
-                    "0, 1 0, 2 0)),((0 2, 1 2, 2 2)))'));",
-                    dt)),
-                static_cast<double>(0.0001));
-    // zero-area, zero-length: point centroid
-    ASSERT_NEAR(static_cast<double>(0.0),
-                v<double>(run_simple_agg(
-                    "SELECT ST_Distance('POINT(1.5 1.5)', ST_Centroid('MULTIPOLYGON(((0 "
-                    "0, 0 0, 0 0, 0 0)),((3 3, 3 3, 3 3, 3 3)))'));",
-                    dt)),
-                static_cast<double>(0.0001));
-    // zero-area, non-zero-length: linestring centroid
-    ASSERT_NEAR(
-        static_cast<double>(0.0),
-        v<double>(run_simple_agg("SELECT ST_Distance('POINT(1.0 1.0)', "
-                                 "ST_Centroid('POLYGON((0 0, 2 2, 0 2, 2 0, 0 0))'));",
-                                 dt)),
-        static_cast<double>(0.0001));
-    // zero-area, zero-length: point centroid
-    ASSERT_NEAR(static_cast<double>(0.0),
-                v<double>(run_simple_agg("SELECT ST_Distance('POINT(3.0 3.0)', "
-                                         "ST_Centroid('POLYGON((3 3, 3 3, 3 3, 3 3))'));",
-                                         dt)),
-                static_cast<double>(0.0001));
-    // zero-length: fallback to point centroid
-    ASSERT_NEAR(
-        static_cast<double>(0.0),
-        v<double>(run_simple_agg("SELECT ST_Distance('POINT(0 89)', "
-                                 "ST_CENTROID('LINESTRING(0 89, 0 89, 0 89, 0 89)'));",
-                                 dt)),
-        static_cast<double>(0.0001));
-  }
-}
-
-TEST(Select, GeoSpatial_Geos) {
-  // SKIP_ALL_ON_AGGREGATOR();
-
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    // Currently not supporting cpu retry in distributed, just throwing in gpu mode
-    if (g_aggregator && dt == ExecutorDeviceType::GPU) {
-      LOG(WARNING) << "Skipping Geos tests on distributed GPU";
-      continue;
-    }
-
-#ifdef ENABLE_GEOS
-    // geos-backed ST functions:
-    // Measuring ST_Area of geometry generated by geos-backed function to disregard
-    // coordinate ordering chosen by geos and also to test interoperability with
-    // natively supported ST functions
-    // poly id=2: POLYGON (((0 0,3 0,0 3,0 0))
-    // ST_Intersection with poly: MULTIPOLYGON (((1 2,1 1,2 1,1 2)))
-    ASSERT_NEAR(
-        static_cast<double>(0.5),
-        v<double>(run_simple_agg(
-            "SELECT ST_Area(ST_Intersection(poly, 'POLYGON((1 1,3 1,3 3,1 3,1 1))')) "
-            "FROM geospatial_test WHERE id = 2;",
-            dt)),
-        static_cast<double>(0.00001));
-    // ST_Union with poly: MULTIPOLYGON (((2 1,3 1,3 3,1 3,1 2,0 3,0 0,3 0,2 1)))
-    ASSERT_NEAR(static_cast<double>(8.0),
-                v<double>(run_simple_agg(
-                    "SELECT ST_Area(ST_Union(poly, 'POLYGON((1 1,3 1,3 3,1 3,1 1))')) "
-                    "FROM geospatial_test WHERE id = 2;",
-                    dt)),
-                static_cast<double>(0.00001));
-    // ST_Difference with poly:  MULTIPOLYGON (((2 1,1 1,1 2,0 3,0 0,3 0,2 1)))
-    ASSERT_NEAR(
-        static_cast<double>(4.0),
-        v<double>(run_simple_agg(
-            "SELECT ST_Area(ST_Difference(poly, 'POLYGON((1 1,3 1,3 3,1 3,1 1))')) "
-            "FROM geospatial_test WHERE id = 2;",
-            dt)),
-        static_cast<double>(0.00001));
-    // ST_Buffer of poly, 0 width: MULTIPOLYGON (((0 0,3 0,0 3,0 0)))
-    ASSERT_NEAR(static_cast<double>(4.5),
-                v<double>(run_simple_agg("SELECT ST_Area(ST_Buffer(poly, 0.0)) "
-                                         "FROM geospatial_test WHERE id = 2;",
-                                         dt)),
-                static_cast<double>(0.00001));
-    // ST_Buffer of poly, 0.1 width: huge rounded MULTIPOLYGON wrapped around poly
-    ASSERT_NEAR(static_cast<double>(5.539),
-                v<double>(run_simple_agg("SELECT ST_Area(ST_Buffer(poly, 0.1)) "
-                                         "FROM geospatial_test WHERE id = 2;",
-                                         dt)),
-                static_cast<double>(0.05));
-    // ST_Buffer on a point, 1.0 width: almost a circle, with area close to Pi
-    ASSERT_NEAR(static_cast<double>(3.14159),
-                v<double>(run_simple_agg("SELECT ST_Area(ST_Buffer(p, 1.0)) "
-                                         "FROM geospatial_test WHERE id = 3;",
-                                         dt)),
-                static_cast<double>(0.03));
-    // ST_Buffer on a point, 1.0 width: distance to buffer
-    ASSERT_NEAR(
-        static_cast<double>(2.0),
-        v<double>(run_simple_agg("SELECT ST_Distance(ST_Buffer(p, 1.0), 'POINT(0 3)') "
-                                 "FROM geospatial_test WHERE id = 3;",
-                                 dt)),
-        static_cast<double>(0.03));
-    // ST_Buffer on a linestring, 1.0 width: two 10-unit segments
-    // each segment is buffered by ~2x10 wide stretch (2 * 2 * 10) plus circular areas
-    // around mid- and endpoints
-    ASSERT_NEAR(static_cast<double>(42.9018),
-                v<double>(run_simple_agg(
-                    "SELECT ST_Area(ST_Buffer('LINESTRING(0 0, 10 0, 10 10)', 1.0)) "
-                    "FROM geospatial_test WHERE id = 3;",
-                    dt)),
-                static_cast<double>(0.03));
-    // ST_IsValid
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_IsValid(poly) from geospatial_test limit 1;", dt)));
-    // ST_IsValid: invalid: self-intersecting poly
-    ASSERT_EQ(
-        static_cast<int64_t>(0),
-        v<int64_t>(run_simple_agg("SELECT ST_IsValid('POLYGON((0 0,1 1,1 0,0 1,0 0))') "
-                                  "from geospatial_test limit 1;",
-                                  dt)));
-    // ST_IsValid: invalid: intersecting polys in a multipolygon
-    ASSERT_EQ(
-        static_cast<int64_t>(0),
-        v<int64_t>(run_simple_agg(
-            "SELECT ST_IsValid('MULTIPOLYGON(((1 1,3 1,3 3,1 3)),((2 2,2 4,4 4,4 2)))') "
-            "from geospatial_test limit 1;",
-            dt)));
-    // geos-backed ST_Union(MULTIPOLYGON,MULTIPOLYGON)
-    ASSERT_NEAR(
-        static_cast<double>(14.0),
-        v<double>(run_simple_agg("SELECT ST_Area(ST_Union('MULTIPOLYGON(((0 0,2 "
-                                 "0,2 2,0 2)),((4 4,6 4,6 6,4 6)))', "
-                                 "'MULTIPOLYGON(((1 1,3 1,3 3,1 3,1 1)),((5 5,7 5,7 7,5 "
-                                 "7)))')) FROM geospatial_test WHERE id = 2;",
-                                 dt)),
-        static_cast<double>(0.001));
-    // geos-backed ST_Intersection(MULTIPOLYGON,MULTIPOLYGON)
-    ASSERT_NEAR(
-        static_cast<double>(2.0),
-        v<double>(run_simple_agg("SELECT ST_Area(ST_Intersection('MULTIPOLYGON(((0 0,2 "
-                                 "0,2 2,0 2)),((4 4,6 4,6 6,4 6)))', "
-                                 "'MULTIPOLYGON(((1 1,3 1,3 3,1 3,1 1)),((5 5,7 5,7 7,5 "
-                                 "7)))')) FROM geospatial_test WHERE id = 2;",
-                                 dt)),
-        static_cast<double>(0.001));
-    // geos-backed ST_Intersection(POLYGON,MULTIPOLYGON)
-    ASSERT_NEAR(static_cast<double>(3.0),
-                v<double>(run_simple_agg(
-                    "SELECT ST_Area(ST_Intersection('POLYGON((2 2,2 6,7 6,7 2))', "
-                    "'MULTIPOLYGON(((1 1,3 1,3 3,1 3,1 1)),((5 5,7 5,7 7,5 "
-                    "7)))')) FROM geospatial_test WHERE id = 2;",
-                    dt)),
-                static_cast<double>(0.001));
-    // geos-backed ST_Intersection(POLYGON,MULTIPOLYGON) returning a POINT
-    ASSERT_NEAR(static_cast<double>(2.828427),
-                v<double>(run_simple_agg(
-                    "SELECT ST_Distance('POINT(0 0)',ST_Intersection('POLYGON((2 2,2 6,7 "
-                    "6,7 2))', 'MULTIPOLYGON(((1 1,2 1,2 2,1 2,1 1)))')) FROM "
-                    "geospatial_test WHERE id = 2;",
-                    dt)),
-                static_cast<double>(0.001));
-    // geos-backed ST_Intersection returning GEOMETRYCOLLECTION EMPTY
-    ASSERT_NEAR(
-        static_cast<double>(0.0),
-        v<double>(run_simple_agg("SELECT ST_Area(ST_Intersection('POLYGON((3 3,3 6,7 6,7 "
-                                 "3))', 'MULTIPOLYGON(((1 1,2 1,2 2,1 2,1 1)))')) FROM "
-                                 "geospatial_test WHERE id = 2;",
-                                 dt)),
-        static_cast<double>(0.001));
-    // geos-backed ST_IsEmpty on ST_Intersection returning GEOMETRYCOLLECTION EMPTY
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_IsEmpty(ST_Intersection('POLYGON((3 3,3 6,7 6,7 3))', "
-                  "'MULTIPOLYGON(((1 1,2 1,2 2,1 2,1 1)))')) FROM "
-                  "geospatial_test WHERE id = 2;",
-                  dt)));
-    // geos-backed ST_IsEmpty on ST_Intersection returning non-empty geo
-    ASSERT_EQ(static_cast<int64_t>(0),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_IsEmpty(ST_Intersection('POLYGON((3 3,3 6,7 6,7 3))', "
-                  "'MULTIPOLYGON(((1 1,4 1,4 4,1 4,1 1)))')) FROM "
-                  "geospatial_test WHERE id = 2;",
-                  dt)));
-    // geos runtime support for geometry decompression
-    ASSERT_NEAR(static_cast<double>(4.5),
-                v<double>(run_simple_agg("SELECT ST_Area(ST_Buffer(gpoly4326, 0.0)) "
-                                         "FROM geospatial_test WHERE id = 2;",
-                                         dt)),
-                static_cast<double>(0.00001));
-    // geos runtime doesn't support geometry transforms
-    EXPECT_THROW(
-        run_simple_agg("SELECT ST_Area(ST_Transform(ST_Buffer(gpoly4326, 0.1), 900913)) "
-                       "FROM geospatial_test WHERE id = 2;",
-                       dt),
-        std::runtime_error);
-    // Handling geos returning a MULTIPOINT
-    ASSERT_NEAR(
-        static_cast<double>(0.9),
-        v<double>(run_simple_agg(
-            "SELECT ST_Distance(ST_Union('POINT(2 1)', 'POINT(3 0)'), 'POINT(2 0.1)');",
-            dt)),
-        static_cast<double>(0.00001));
-    // Handling geos returning a LINESTRING
-    ASSERT_NEAR(
-        static_cast<double>(0.8062257740),
-        v<double>(run_simple_agg("SELECT ST_Distance(ST_Union('LINESTRING(2 1, 3 1)', "
-                                 "'LINESTRING(3 1, 4 1, 3 0)'), 'POINT(2.2 0.1)');",
-                                 dt)),
-        static_cast<double>(0.00001));
-    // Handling geos returning a MULTILINESTRING
-    ASSERT_NEAR(
-        static_cast<double>(0.9),
-        v<double>(run_simple_agg("SELECT ST_Distance(ST_Union('LINESTRING(2 1, 3 1)', "
-                                 "'LINESTRING(3 -1, 2 -1)'), 'POINT(2 0.1)');",
-                                 dt)),
-        static_cast<double>(0.00001));
-    // Handling geos returning a GEOMETRYCOLLECTION
-    ASSERT_NEAR(
-        static_cast<double>(0.9),
-        v<double>(run_simple_agg("SELECT ST_Distance(ST_Union('LINESTRING(2 1, 3 1)', "
-                                 "'POINT(2 -1)'), 'POINT(2 0.1)');",
-                                 dt)),
-        static_cast<double>(0.00001));
-    // ST_IsValid: geos validation of SRID-carrying geometries
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT ST_IsValid(gpoly4326) FROM geospatial_test limit 1;", dt)));
-    // geos runtime doesn't yet support input geo transforms
-    EXPECT_THROW(run_simple_agg("SELECT ST_IsEmpty(ST_Transform(gpoly4326, 900913)) "
-                                "FROM geospatial_test limit 1;",
-                                dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_simple_agg("SELECT ST_Buffer(ST_Transform(gpoly4326, 900913), 1) "
-                                "FROM geospatial_test limit 1;",
-                                dt),
-                 std::runtime_error);
-    // geos runtime doesn't yet support output geo transforms
-    EXPECT_THROW(
-        run_simple_agg("SELECT ST_Area(ST_Transform(ST_Buffer(gpoly4326, 0), 900913)) "
-                       "FROM geospatial_test limit 1;",
-                       dt),
-        std::runtime_error);
-#else
-    // geos disabled, expect throws
-    EXPECT_THROW(
-        run_simple_agg(
-            "SELECT ST_Area(ST_Intersection(poly, 'POLYGON((1 1,3 1,3 3,1 3,1 1))')) "
-            "FROM geospatial_test WHERE id = 2;",
-            dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_simple_agg(
-            "SELECT ST_Area(ST_Difference(poly, 'POLYGON((1 1,3 1,3 3,1 3,1 1))')) "
-            "FROM geospatial_test WHERE id = 2;",
-            dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_simple_agg("SELECT ST_IsValid(poly) from geospatial_test limit 1;", dt),
-        std::runtime_error);
-    EXPECT_THROW(run_simple_agg("SELECT ST_Area(ST_Buffer(poly, 0.1)) "
-                                "FROM geospatial_test WHERE id = 2;",
-                                dt),
-                 std::runtime_error);
-#endif
-  }
-}
-
-TEST(Select, GeoSpatial_GeoJoin) {
-  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
-  g_enable_overlaps_hashjoin = false;
-  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state] {
-    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
-  };
-
-  // Test loop joins
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    ASSERT_EQ(static_cast<int64_t>(0),
-              v<int64_t>(run_simple_agg(
-                  "SELECT a.id FROM geospatial_test a JOIN geospatial_inner_join_test "
-                  "b ON ST_Intersects(b.poly, a.poly) ORDER BY a.id;",
-                  dt)));
-
-    ASSERT_NO_THROW(run_simple_agg(
-        "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
-        "b ON ST_Contains(b.poly, a.p);",
-        dt,
-        true,
-        false));
-
-    SKIP_ON_AGGREGATOR(ASSERT_EQ(
-        static_cast<int64_t>(1),
-        v<int64_t>(run_simple_agg(
-            "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
-            "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2 OFFSET 1;",
-            dt,
-            true,
-            false))));
-
-    const auto trivial_loop_join_state = g_trivial_loop_join_threshold;
-    g_trivial_loop_join_threshold = 1;
-    ScopeGuard reset_loop_join_state = [&trivial_loop_join_state] {
-      g_trivial_loop_join_threshold = trivial_loop_join_state;
-    };
-
-    SKIP_ON_AGGREGATOR(EXPECT_THROW(
-        run_multiple_agg(
-            "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
-            "b ON ST_Contains(b.poly, a.p);",
-            dt,
-            false),
-        std::runtime_error));
-
-    // Geometry projection not supported for outer joins
-    SKIP_ON_AGGREGATOR(EXPECT_THROW(
-        run_multiple_agg(
-            "SELECT b.poly FROM geospatial_test a LEFT JOIN geospatial_inner_join_test "
-            "b ON ST_Contains(b.poly, a.p);",
-            dt,
-            false),
-        std::runtime_error));
-  }
-
-  g_enable_overlaps_hashjoin = true;
-
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-
-    // Test query rewrite for simple project
-    ASSERT_NO_THROW(run_simple_agg(
-        "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
-        "b ON ST_Contains(b.poly, a.p);",
-        dt));
-
-    ASSERT_EQ(static_cast<int64_t>(0),
-              v<int64_t>(run_simple_agg(
-                  "SELECT a.id FROM geospatial_test a JOIN geospatial_inner_join_test "
-                  "b ON ST_Intersects(b.poly, a.poly) ORDER BY a.id;",
-                  dt)));
-
-    SKIP_ON_AGGREGATOR(ASSERT_EQ(
-        static_cast<int64_t>(1),
-        v<int64_t>(run_simple_agg(
-            "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
-            "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2 OFFSET 1;",
-            dt))));
-
-    ASSERT_EQ(
-        static_cast<int64_t>(3),
-        v<int64_t>(run_simple_agg(
-            "SELECT count(*) FROM geospatial_test a INNER JOIN "
-            "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p) WHERE b.id = 4",
-            dt)));
-    // re-run to test hash join cache (currently CPU only)
-    ASSERT_EQ(
-        static_cast<int64_t>(3),
-        v<int64_t>(run_simple_agg(
-            "SELECT count(*) FROM geospatial_test a INNER JOIN "
-            "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p) WHERE b.id = 4",
-            dt)));
-
-    // with compression
-    SKIP_ON_AGGREGATOR(ASSERT_EQ(
-        static_cast<int64_t>(1),
-        v<int64_t>(run_simple_agg(
-            "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
-            "b ON ST_Contains(ST_SetSRID(b.poly, 4326), a.gp4326) WHERE b.id = 2 "
-            "OFFSET 1;",
-            dt))));
-
-    ASSERT_EQ(static_cast<int64_t>(3),
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(*) FROM geospatial_test a INNER JOIN "
-                  "geospatial_inner_join_test b ON ST_Contains(ST_SetSRID(b.poly, 4326), "
-                  "a.gp4326) WHERE b.id = 4;",
-                  dt)));
-  }
-}
 
 TEST(Rounding, ROUND) {
   SKIP_ALL_ON_AGGREGATOR();
@@ -18916,38 +18382,65 @@ TEST(Select, WindowFunctionCumeDist) {
   c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
 }
 
+TEST(Select, WindowFunctionFiltered) {
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  std::string part1 =
+      R"(SELECT max(CASE WHEN y <> 'aaa' THEN t ELSE NULL END) OVER (PARTITION BY x ORDER BY t ASC) AS labelrank_max_filtered FROM test_window_func ORDER BY t ASC)";
+  std::string part2 = R"(, y ASC, labelrank_max_filtered ASC)";
+  c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+}
+
+// lag(expr, offset)
+// lead(expr, offset)
+// SQLite: "If the offset argument is provided, then it must be a non-negative integer."
+// https://www.sqlite.org/windowfunctions.html
+// OmniSci allows for offset < 0, so we swap LAG and LEAD and use -offset to test.
+// SQLite : ASC -> ASC NULLS FIRST
+// OmniSci: ASC -> ASC NULLS LAST
+// and vice-versa for DESC. To prevent conflict, add NULLS FIRST/LAST if there are NULLS.
 TEST(Select, WindowFunctionLag) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   // First test default lag (1)
   {
     std::string part1 =
-        "SELECT x, y, LAG(x + 5) OVER (PARTITION BY y ORDER BY x ASC) l FROM "
-        "test_window_func ORDER BY x ASC";
-    std::string part2 = ", y ASC, l ASC";
-    c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+        "SELECT x, y, LAG(x + 5) OVER (PARTITION BY y ORDER BY x ASC NULLS LAST) l FROM "
+        "test_window_func ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST, l ASC NULLS "
+        "FIRST;";
+    c(part1, dt);
   }
   {
     std::string part1 =
-        "SELECT x, LAG(y) OVER (PARTITION BY y ORDER BY x ASC) l FROM test_window_func "
-        "ORDER BY x ASC";
-    std::string part2 = ", l ASC";
-    c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+        "SELECT x, LAG(y) OVER (PARTITION BY y ORDER BY x ASC NULLS LAST) l FROM "
+        "test_window_func ORDER BY x ASC NULLS FIRST, l ASC NULLS FIRST;";
+    c(part1, dt);
   }
 
   for (int lag = -5; lag <= 5; ++lag) {
     {
       std::string part1 =
           "SELECT x, y, LAG(x + 5, " + std::to_string(lag) +
-          ") OVER (PARTITION BY y ORDER BY x ASC) l FROM test_window_func ORDER BY x ASC";
-      std::string part2 = ", y ASC, l ASC";
-      c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+          ") OVER (PARTITION BY y ORDER BY x ASC NULLS FIRST) l FROM test_window_func "
+          "ORDER BY x ASC NULLS LAST, y ASC NULLS LAST, l ASC NULLS LAST;";
+      if (lag < 0) {
+        std::string sqlite = boost::replace_first_copy(part1, "LAG", "LEAD");
+        boost::erase_first(sqlite, "-");
+        c(part1, sqlite, dt);
+      } else {
+        c(part1, dt);
+      }
     }
     {
       std::string part1 =
           "SELECT x, LAG(y, " + std::to_string(lag) +
-          ") OVER (PARTITION BY y ORDER BY x ASC) l FROM test_window_func ORDER BY x ASC";
-      std::string part2 = ", l ASC";
-      c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+          ") OVER (PARTITION BY y ORDER BY x ASC NULLS LAST) l FROM test_window_func "
+          "ORDER BY x ASC NULLS FIRST, l ASC NULLS FIRST;";
+      if (lag < 0) {
+        std::string sqlite = boost::replace_first_copy(part1, "LAG", "LEAD");
+        boost::erase_first(sqlite, "-");
+        c(part1, sqlite, dt);
+      } else {
+        c(part1, dt);
+      }
     }
   }
 }
@@ -18956,16 +18449,16 @@ TEST(Select, WindowFunctionFirst) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   {
     std::string part1 =
-        "SELECT x, y, FIRST_VALUE(x + 5) OVER (PARTITION BY y ORDER BY x ASC) f FROM "
-        "test_window_func ORDER BY x ASC";
-    std::string part2 = ", y ASC, f ASC;";
+        "SELECT x, y, FIRST_VALUE(x + 5) OVER (PARTITION BY y ORDER BY x ASC NULLS LAST) "
+        "f FROM test_window_func ORDER BY x ASC";
+    std::string part2 = ", y ASC NULLS LAST, f ASC;";
     c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
   }
   {
     std::string part1 =
         "SELECT x, FIRST_VALUE(y) OVER (PARTITION BY t ORDER BY x ASC) f FROM "
         "test_window_func ORDER BY x ASC";
-    std::string part2 = ", f ASC;";
+    std::string part2 = ", f ASC NULLS LAST;";
     c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
   }
 }
@@ -18975,14 +18468,14 @@ TEST(Select, WindowFunctionLead) {
   // First test default lead (1)
   {
     std::string part1 =
-        "SELECT x, y, LEAD(x) OVER (PARTITION BY y ORDER BY x DESC) l FROM "
+        "SELECT x, y, LEAD(x) OVER (PARTITION BY y ORDER BY x DESC NULLS FIRST) l FROM "
         "test_window_func ORDER BY x ASC";
-    std::string part2 = ", y ASC, l ASC";
+    std::string part2 = ", y ASC NULLS LAST, l ASC";
     c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
   }
   {
     std::string part1 =
-        "SELECT x, LEAD(y) OVER (PARTITION BY y ORDER BY x DESC) l FROM "
+        "SELECT x, LEAD(y) OVER (PARTITION BY y ORDER BY x DESC NULLS FIRST) l FROM "
         "test_window_func ORDER BY x ASC";
     std::string part2 = ", l ASC";
     c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
@@ -18990,18 +18483,30 @@ TEST(Select, WindowFunctionLead) {
 
   for (int lead = -5; lead <= 5; ++lead) {
     {
-      std::string part1 = "SELECT x, y, LEAD(x, " + std::to_string(lead) +
-                          ") OVER (PARTITION BY y ORDER BY x DESC) l FROM "
-                          "test_window_func ORDER BY x ASC";
-      std::string part2 = ", y ASC, l ASC";
-      c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+      std::string part1 =
+          "SELECT x, y, LEAD(x, " + std::to_string(lead) +
+          ") OVER (PARTITION BY y ORDER BY x DESC NULLS FIRST) l FROM test_window_func "
+          "ORDER BY x ASC NULLS FIRST, y ASC NULLS LAST, l ASC NULLS FIRST;";
+      if (lead < 0) {
+        std::string sqlite = boost::replace_first_copy(part1, "LEAD", "LAG");
+        boost::erase_first(sqlite, "-");
+        c(part1, sqlite, dt);
+      } else {
+        c(part1, dt);
+      }
     }
     {
-      std::string part1 = "SELECT x, LEAD(y, " + std::to_string(lead) +
-                          ") OVER (PARTITION BY y ORDER BY x DESC) l FROM "
-                          "test_window_func ORDER BY x ASC";
-      std::string part2 = ", l ASC";
-      c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+      std::string part1 =
+          "SELECT x, LEAD(y, " + std::to_string(lead) +
+          ") OVER (PARTITION BY y ORDER BY x DESC NULLS FIRST) l FROM test_window_func "
+          "ORDER BY x ASC NULLS FIRST, l ASC NULLS FIRST;";
+      if (lead < 0) {
+        std::string sqlite = boost::replace_first_copy(part1, "LEAD", "LAG");
+        boost::erase_first(sqlite, "-");
+        c(part1, sqlite, dt);
+      } else {
+        c(part1, dt);
+      }
     }
   }
 }
@@ -19816,34 +19321,6 @@ TEST(Select, VariableLengthAggs) {
                      "SELECT x, AVG(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
                  std::runtime_error);
 
-    // geometry:
-    if (!g_use_temporary_tables) {
-      // Geospatial not yet supported in temporary tables
-      {
-        std::string query("SELECT id, COUNT(poly) FROM geospatial_test GROUP BY id;");
-        auto result = run_multiple_agg(query, dt);
-        ASSERT_EQ(result->rowCount(), size_t(g_num_rows));
-      }
-      EXPECT_THROW(
-          run_multiple_agg(
-              "SELECT id, MIN(p) FROM geospatial_test GROUP BY id ORDER BY id DESC;", dt),
-          std::runtime_error);
-      EXPECT_THROW(
-          run_multiple_agg(
-              "SELECT id, MAX(l) FROM geospatial_test GROUP BY id ORDER BY id DESC;", dt),
-          std::runtime_error);
-      EXPECT_THROW(
-          run_multiple_agg(
-              "SELECT id, SUM(poly) FROM geospatial_test GROUP BY id ORDER BY id DESC;",
-              dt),
-          std::runtime_error);
-      EXPECT_THROW(
-          run_multiple_agg(
-              "SELECT id, AVG(mpoly) FROM geospatial_test GROUP BY id ORDER BY id DESC;",
-              dt),
-          std::runtime_error);
-    }
-
     // arrays:
     {
       std::string query("SELECT x, COUNT(arr_i16) FROM array_test GROUP BY x;");
@@ -20120,6 +19597,86 @@ TEST(Select, SampleRatio) {
     EXPECT_NO_THROW(run_multiple_agg("SELECT sample_ratio(d) FROM test LIMIT 1;", dt));
     EXPECT_NO_THROW(
         run_multiple_agg("SELECT sample_ratio(arr_i64[0]) FROM array_test LIMIT 1;", dt));
+  }
+}
+
+TEST(Select, OffsetInFragment) {
+  // Skip test in sharded/distributed situations, as otherwise we have to replicate much
+  // of logic of how we shard strings to compute the number rows of test table that will
+  // be distributed to each shard
+  // TODO: consider creating simple integer sharded table specific for this test
+  SKIP_IF_SHARDED();
+  SKIP_ALL_ON_AGGREGATOR();
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // With fragment_size of 2, we should have 10 frags
+    EXPECT_EQ(10,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE offset_in_fragment() = 1;", dt)));
+    EXPECT_EQ(
+        10,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test WHERE offset_in_fragment() = CAST(1 AS INT);",
+            dt)));
+    EXPECT_EQ(10,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE offset_in_fragment() < 1;", dt)));
+    EXPECT_EQ(20,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE offset_in_fragment() <= 1;", dt)));
+    EXPECT_EQ(
+        10,
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE offset_in_fragment() "
+                                  "<= 1 AND offset_in_fragment() != 0;",
+                                  dt)));
+    EXPECT_EQ(
+        1,
+        v<int64_t>(run_simple_agg("SELECT CAST(AVG(offset_in_fragment()) AS BIGINT) FROM "
+                                  "test WHERE offset_in_fragment() > 0;",
+                                  dt)));
+    const auto num_rows = v<int64_t>(run_simple_agg(
+        "SELECT COUNT(*) FROM (SELECT COUNT(*) FROM test WHERE offset_in_fragment() <= "
+        "10 GROUP BY MOD(offset_in_fragment(), 2));",
+        dt));
+    EXPECT_EQ(num_rows, 2);
+  }
+}
+
+// Additional integer parsing tests in ImportTestInt.ImportBadInt and ImportGoodInt.
+TEST(Select, ParseIntegerExceptions) {
+  struct TestPair {
+    std::string query;
+    std::string exception;
+  };
+  std::vector<TestPair> const tests{
+      {"SELECT * FROM test WHERE ''=2147483647;",
+       "Invalid conversion from \"\" to INTEGER"},
+      {"SELECT * FROM test WHERE ''=2147483648;",
+       "Invalid conversion from \"\" to BIGINT"},
+      {"SELECT * FROM test WHERE '9223372036854775808'=9223372036854775807;",
+       "Integer 9223372036854775808 is out of range for BIGINT"},
+      {"SELECT * FROM test WHERE '1e3.0'=1;",
+       "Unexpected character \".\" encountered in INTEGER value 1e3.0"}};
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (auto const& test : tests) {
+      try {
+        run_multiple_agg(test.query, dt);
+        EXPECT_TRUE(false) << "Exception expected for query: " << test.query;
+      } catch (std::runtime_error const& e) {
+        if (g_aggregator) {
+          EXPECT_EQ(
+              e.what(),
+              "TException - service has thrown: TOmniSciException(error_msg=Exception: " +
+                  test.exception + ')');
+        } else {
+          EXPECT_EQ(e.what(), test.exception);
+        }
+      } catch (...) {
+        EXPECT_TRUE(false) << "std::runtime_error expected for query: " << test.query;
+      }
+    }
   }
 }
 
@@ -21122,9 +20679,10 @@ int create_and_populate_tables(const bool use_temporary_tables,
     std::string columns_definition{
         "x int not null, arr_i16 smallint[], arr_i32 int[], arr_i64 bigint[], arr_str "
         "text[] encoding dict, arr_float float[], arr_double double[], arr_bool "
-        "boolean[], real_str text encoding none, arr3_i8 tinyint[3], arr3_i16 "
+        "boolean[], arr_decimal decimal(18,6)[], real_str text encoding none, arr3_i8 "
+        "tinyint[3], arr3_i16 "
         "smallint[3], arr3_i32 int[3], arr3_i64 bigint[3], arr3_float float[3], "
-        "arr3_double double[3], arr6_bool boolean[6]"};
+        "arr3_double double[3], arr6_bool boolean[6], arr3_decimal decimal(18,6)[3]"};
     const std::string create_array_test =
         build_create_table_statement(columns_definition,
                                      "array_test",
@@ -21326,23 +20884,6 @@ int create_and_populate_tables(const bool use_temporary_tables,
     return -EEXIST;
   }
   try {
-    import_geospatial_null_test();
-  } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create table 'geospatial_null_test'";
-    return -EEXIST;
-  }
-  try {
-    import_geospatial_test();
-  } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create table 'geospatial_test'";
-    return -EEXIST;
-  }
-  try {
-    import_geospatial_join_test(g_aggregator);
-  } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create table 'geospatial_inner_join_test'";
-  }
-  try {
     const std::string drop_old_empty{"DROP TABLE IF EXISTS emptytab;"};
     run_ddl_statement(drop_old_empty);
     g_sqlite_comparator.query(drop_old_empty);
@@ -21457,6 +20998,19 @@ int create_views() {
       "CREATE VIEW join_view_test AS SELECT a.x AS x FROM test a JOIN test_inner b ON "
       "a.str = b.str;"};
   const std::string drop_old_join_view{"DROP VIEW IF EXISTS join_view_test;"};
+  const std::string drop_self_join_view1{"DROP VIEW IF EXISTS view_self_join_v1;"};
+  const std::string drop_self_join_view2{"DROP VIEW IF EXISTS view_self_join_v2;"};
+  const std::string drop_self_join_view3{"DROP VIEW IF EXISTS view_self_join_v3;"};
+  const std::string create_self_join_view1{
+      "CREATE VIEW view_self_join_v1 AS SELECT count(1) FROM test r1, test r2 where r1.x "
+      "= r2.x;"};
+  const std::string create_self_join_view2{
+      "CREATE VIEW view_self_join_v2 AS SELECT count(1) FROM test r1 INNER JOIN test r2 "
+      "on (r1.x = r2.x);"};
+  const std::string create_self_join_view3{
+      "CREATE VIEW view_self_join_v3 AS SELECT count(1) FROM test r1 LEFT JOIN test r2 "
+      "on (r1.x = r2.x);"};
+
   try {
     run_ddl_statement(drop_old_view);
     run_ddl_statement(create_view_test);
@@ -21485,6 +21039,48 @@ int create_views() {
     LOG(ERROR) << "Failed to (re-)create view 'join_view_test' -- g_sqlite_comparator";
     return -EEXIST;
   }
+  try {
+    run_ddl_statement(drop_self_join_view1);
+    run_ddl_statement(create_self_join_view1);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create view 'view_self_join_v1' -- run_ddl_statement";
+    return -EEXIST;
+  }
+  try {
+    g_sqlite_comparator.query(drop_self_join_view1);
+    g_sqlite_comparator.query(create_self_join_view1);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create view 'view_self_join_v1' -- g_sqlite_comparator";
+    return -EEXIST;
+  }
+  try {
+    run_ddl_statement(drop_self_join_view2);
+    run_ddl_statement(create_self_join_view2);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create view 'view_self_join_v2' -- run_ddl_statement";
+    return -EEXIST;
+  }
+  try {
+    g_sqlite_comparator.query(drop_self_join_view2);
+    g_sqlite_comparator.query(create_self_join_view2);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create view 'view_self_join_v2' -- g_sqlite_comparator";
+    return -EEXIST;
+  }
+  try {
+    run_ddl_statement(drop_self_join_view3);
+    run_ddl_statement(create_self_join_view3);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create view 'view_self_join_v3' -- run_ddl_statement";
+    return -EEXIST;
+  }
+  try {
+    g_sqlite_comparator.query(drop_self_join_view3);
+    g_sqlite_comparator.query(create_self_join_view3);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create view 'view_self_join_v3' -- g_sqlite_comparator";
+    return -EEXIST;
+  }
   return 0;
 }
 
@@ -21500,6 +21096,22 @@ int create_as_select() {
     g_sqlite_comparator.query(create_ctas_test);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'ctas_test'";
+    return -EEXIST;
+  }
+  return 0;
+}
+
+int create_as_select_full() {
+  try {
+    const std::string drop_ctas_test{"DROP TABLE IF EXISTS ctas_test_full;"};
+    run_ddl_statement(drop_ctas_test);
+    g_sqlite_comparator.query(drop_ctas_test);
+    const std::string create_ctas_test{
+        "CREATE TABLE ctas_test_full AS SELECT * FROM test;"};
+    run_ddl_statement(create_ctas_test);
+    g_sqlite_comparator.query(create_ctas_test);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'ctas_test_full'";
     return -EEXIST;
   }
   return 0;
@@ -21624,9 +21236,6 @@ void drop_tables() {
   const std::string drop_outer_join_bar{"DROP TABLE IF EXISTS outer_join_bar;"};
   run_ddl_statement(drop_outer_join_bar);
   g_sqlite_comparator.query(drop_outer_join_bar);
-  if (!g_use_temporary_tables) {
-    run_ddl_statement("DROP TABLE geospatial_test;");
-  }
   const std::string drop_test_in_bitmap{"DROP TABLE test_in_bitmap;"};
   g_sqlite_comparator.query(drop_test_in_bitmap);
   run_ddl_statement(drop_test_in_bitmap);
@@ -21670,6 +21279,13 @@ void drop_views() {
   const std::string drop_join_view_test{"DROP VIEW join_view_test;"};
   run_ddl_statement(drop_join_view_test);
   g_sqlite_comparator.query(drop_join_view_test);
+
+  run_ddl_statement("DROP VIEW IF EXISTS view_self_join_v1;");
+  run_ddl_statement("DROP VIEW IF EXISTS view_self_join_v2;");
+  run_ddl_statement("DROP VIEW IF EXISTS view_self_join_v3;");
+  g_sqlite_comparator.query("DROP VIEW IF EXISTS view_self_join_v1;");
+  g_sqlite_comparator.query("DROP VIEW IF EXISTS view_self_join_v2;");
+  g_sqlite_comparator.query("DROP VIEW IF EXISTS view_self_join_v3;");
 }
 
 }  // namespace
@@ -21730,6 +21346,8 @@ int main(int argc, char** argv) {
                          ->default_value(g_use_tbb_pool)
                          ->implicit_value(true),
                      "Use TBB thread pool implementation for query dispatch.");
+  desc.add_options()("use-disk-cache",
+                     "Use the disk cache for all tables with minimum size settings.");
 
   desc.add_options()(
       "test-help",
@@ -21765,7 +21383,14 @@ int main(int argc, char** argv) {
   g_enable_window_functions = true;
   g_enable_interop = false;
 
-  QR::init(BASE_PATH);
+  File_Namespace::DiskCacheConfig disk_cache_config{};
+  if (vm.count("use-disk-cache")) {
+    disk_cache_config = File_Namespace::DiskCacheConfig{
+        File_Namespace::DiskCacheConfig::getDefaultPath(std::string(BASE_PATH)),
+        File_Namespace::DiskCacheLevel::all};
+  }
+
+  QR::init(&disk_cache_config, BASE_PATH);
   if (vm.count("with-sharding")) {
     g_shard_count = choose_shard_count();
   }
@@ -21795,6 +21420,9 @@ int main(int argc, char** argv) {
     }
     if (!err && !g_use_temporary_tables) {
       SKIP_ON_AGGREGATOR(err = create_as_select());
+    }
+    if (!err && !g_use_temporary_tables) {
+      SKIP_ON_AGGREGATOR(err = create_as_select_full());
     }
     if (!err && !g_use_temporary_tables) {
       SKIP_ON_AGGREGATOR(err = create_as_select_empty());

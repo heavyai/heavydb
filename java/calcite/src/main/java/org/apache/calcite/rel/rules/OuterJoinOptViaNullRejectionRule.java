@@ -33,6 +33,8 @@ import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.tools.RelBuilderFactory;
 import org.apache.calcite.util.mapping.Mappings;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -69,6 +71,8 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
   //  they can make join cols to be null rejected
 
   public static Set<String> visitedJoinMemo = new HashSet<>();
+  final static Logger MAPDLOGGER =
+          LoggerFactory.getLogger(OuterJoinOptViaNullRejectionRule.class);
 
   public OuterJoinOptViaNullRejectionRule(RelBuilderFactory relBuilderFactory) {
     super(operand(RelNode.class, operand(Join.class, null, any())),
@@ -129,7 +133,8 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
               originalRightJoinCols,
               originalLeftJoinColToColNameMap,
               originalRightJoinColToColNameMap);
-    } else if (joinCond.getKind() == SqlKind.AND || joinCond.getKind() == SqlKind.OR) {
+      // we only consider ANDED exprs
+    } else if (joinCond.getKind() == SqlKind.AND) {
       for (RexNode n : joinCond.getOperands()) {
         if (n instanceof RexCall) {
           RexCall op = (RexCall) n;
@@ -176,38 +181,22 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
     // and collect join column info used in target join nodes to be translated
     Set<Integer> nullRejectedLeftJoinCols = new HashSet<>();
     Set<Integer> nullRejectedRightJoinCols = new HashSet<>();
+    boolean hasExprsConnectedViaOR = false;
     for (LogicalFilter filter : collectedFilterNodes) {
-      List<RexNode> filterExprs = filter.getChildExps();
-      for (RexNode node : filterExprs) {
-        if (node instanceof RexCall) {
-          RexCall curExpr = (RexCall) node;
-          if (curExpr.getKind() == SqlKind.AND || curExpr.getKind() == SqlKind.OR) {
-            for (RexNode n : curExpr.getOperands()) {
-              if (n instanceof RexCall) {
-                RexCall c = (RexCall) n;
-                if (isCandidateFilterPred(c)) {
-                  RexInputRef col = (RexInputRef) c.getOperands().get(0);
-                  int colId = col.getIndex();
-                  boolean leftFilter = leftJoinCols.contains(colId);
-                  boolean rightFilter = rightJoinCols.contains(colId);
-                  if (leftFilter && rightFilter) {
-                    // here we currently do not have a concrete column tracing logic
-                    // so it may become a source of plan issue, so we disable this opt
-                    return;
-                  }
-                  addNullRejectedJoinCols(c,
-                          filter,
-                          nullRejectedLeftJoinCols,
-                          nullRejectedRightJoinCols,
-                          leftJoinColToColNameMap,
-                          rightJoinColToColNameMap);
-                }
-              }
-            }
-          } else {
-            if (curExpr instanceof RexCall) {
-              if (isCandidateFilterPred(curExpr)) {
-                RexInputRef col = (RexInputRef) curExpr.getOperands().get(0);
+      RexNode node = filter.getCondition();
+      if (node instanceof RexCall) {
+        RexCall curExpr = (RexCall) node;
+        // we only consider ANDED exprs
+        if (curExpr.getKind() == SqlKind.OR) {
+          hasExprsConnectedViaOR = true;
+          break;
+        }
+        if (curExpr.getKind() == SqlKind.AND) {
+          for (RexNode n : curExpr.getOperands()) {
+            if (n instanceof RexCall) {
+              RexCall c = (RexCall) n;
+              if (isCandidateFilterPred(c)) {
+                RexInputRef col = (RexInputRef) c.getOperands().get(0);
                 int colId = col.getIndex();
                 boolean leftFilter = leftJoinCols.contains(colId);
                 boolean rightFilter = rightJoinCols.contains(colId);
@@ -216,7 +205,7 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
                   // so it may become a source of plan issue, so we disable this opt
                   return;
                 }
-                addNullRejectedJoinCols(curExpr,
+                addNullRejectedJoinCols(c,
                         filter,
                         nullRejectedLeftJoinCols,
                         nullRejectedRightJoinCols,
@@ -225,8 +214,34 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
               }
             }
           }
+        } else {
+          if (curExpr instanceof RexCall) {
+            if (isCandidateFilterPred(curExpr)) {
+              RexInputRef col = (RexInputRef) curExpr.getOperands().get(0);
+              int colId = col.getIndex();
+              boolean leftFilter = leftJoinCols.contains(colId);
+              boolean rightFilter = rightJoinCols.contains(colId);
+              if (leftFilter && rightFilter) {
+                // here we currently do not have a concrete column tracing logic
+                // so it may become a source of plan issue, so we disable this opt
+                return;
+              }
+              addNullRejectedJoinCols(curExpr,
+                      filter,
+                      nullRejectedLeftJoinCols,
+                      nullRejectedRightJoinCols,
+                      leftJoinColToColNameMap,
+                      rightJoinColToColNameMap);
+            }
+          }
         }
       }
+    }
+
+    // we skip to optimize this query since analyzing complex filter exprs
+    // connected via OR condition is complex and risky
+    if (hasExprsConnectedViaOR) {
+      return;
     }
 
     if (!capturedFilterPredFromJoin.isEmpty()) {
@@ -292,7 +307,7 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
       }
     } else if (join.getJoinType() == JoinRelType.LEFT) {
       // 3) left -> inner
-      if (leftNullRejected) {
+      if (rightNullRejected) {
         newJoinNode = join.copy(join.getTraitSet(),
                 join.getCondition(),
                 join.getLeft(),
@@ -448,8 +463,12 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
             || SqlKind.BINARY_EQUALITY.contains(opKind));
   }
 
+  boolean isNotNullFilter(RexCall c) {
+    return (c.op.kind == SqlKind.IS_NOT_NULL && c.operands.size() == 1);
+  }
+
   boolean isCandidateFilterPred(RexCall c) {
-    return ((c.op.kind == SqlKind.IS_NOT_NULL && c.operands.size() == 1)
+    return (isNotNullFilter(c)
             || (c.operands.size() == 2 && isComparisonOp(c)
                     && c.operands.get(0) instanceof RexInputRef
                     && c.operands.get(1) instanceof RexLiteral));

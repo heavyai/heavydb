@@ -17,6 +17,261 @@
 #include "Geospatial/Compression.h"
 #include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/Execute.h"
+#include "QueryEngine/GeoOperators/API.h"
+#include "QueryEngine/GeoOperators/Codegen.h"
+
+ArrayLoadCodegen CodeGenerator::codegenGeoArrayLoadAndNullcheck(llvm::Value* byte_stream,
+                                                                llvm::Value* pos,
+                                                                const SQLTypeInfo& ti,
+                                                                CgenState* cgen_state) {
+  CHECK(byte_stream);
+
+  const auto key = std::make_pair(byte_stream, pos);
+  auto cache_itr = cgen_state->array_load_cache_.find(key);
+  if (cache_itr != cgen_state->array_load_cache_.end()) {
+    return cache_itr->second;
+  }
+  const bool is_nullable = !ti.get_notnull();
+  CHECK(ti.get_type() == kPOINT);  // TODO: lift this
+
+  auto pt_arr_buf =
+      cgen_state->emitExternalCall("array_buff",
+                                   llvm::Type::getInt8PtrTy(cgen_state->context_),
+                                   {key.first, key.second});
+  llvm::Value* pt_is_null{nullptr};
+  if (is_nullable) {
+    pt_is_null = cgen_state->emitExternalCall("point_coord_array_is_null",
+                                              llvm::Type::getInt1Ty(cgen_state->context_),
+                                              {key.first, key.second});
+  }
+  ArrayLoadCodegen arr_load{pt_arr_buf, nullptr, pt_is_null};
+  cgen_state->array_load_cache_.insert(std::make_pair(key, arr_load));
+  return arr_load;
+}
+
+std::vector<llvm::Value*> CodeGenerator::codegenGeoColumnVar(
+    const Analyzer::GeoColumnVar* geo_col_var,
+    const bool fetch_columns,
+    const CompilationOptions& co) {
+  const auto& ti = geo_col_var->get_type_info();
+  if (ti.get_type() == kPOINT) {
+    // create a new operand which is just the coords and codegen it
+    const auto catalog = executor()->getCatalog();
+    CHECK(catalog);
+    const auto coords_column_id = geo_col_var->get_column_id() + 1;  // + 1 for coords
+    auto coords_cd =
+        get_column_descriptor(coords_column_id, geo_col_var->get_table_id(), *catalog);
+    CHECK(coords_cd);
+
+    const auto coords_col_var = Analyzer::ColumnVar(coords_cd->columnType,
+                                                    geo_col_var->get_table_id(),
+                                                    coords_column_id,
+                                                    geo_col_var->get_rte_idx());
+    const auto coords_lv = codegen(&coords_col_var, /*fetch_columns=*/true, co);
+    CHECK_EQ(coords_lv.size(), size_t(1));  // ptr
+    return coords_lv;
+  } else {
+    UNREACHABLE() << geo_col_var->toString();
+  }
+  return {};
+}
+
+std::vector<llvm::Value*> CodeGenerator::codegenGeoExpr(const Analyzer::GeoExpr* expr,
+                                                        const CompilationOptions& co) {
+  auto geo_constant = dynamic_cast<const Analyzer::GeoConstant*>(expr);
+  if (geo_constant) {
+    return codegenGeoConstant(geo_constant, co);
+  }
+  auto geo_operator = dynamic_cast<const Analyzer::GeoOperator*>(expr);
+  if (geo_operator) {
+    return codegenGeoOperator(geo_operator, co);
+  }
+  auto geo_function = dynamic_cast<const Analyzer::GeoFunctionOperator*>(expr);
+  if (geo_function) {
+    return codegenGeoFunctionOperator(geo_function, co);
+  }
+  UNREACHABLE() << expr->toString();
+  return {};
+}
+
+std::vector<llvm::Value*> CodeGenerator::codegenGeoConstant(
+    const Analyzer::GeoConstant* geo_constant,
+    const CompilationOptions& co) {
+  std::vector<llvm::Value*> ret;
+  for (size_t i = 0; i < geo_constant->physicalCols(); i++) {
+    auto physical_constant = geo_constant->makePhysicalConstant(i);
+    auto operand_lvs = codegen(physical_constant.get(), /*fetch_columns=*/true, co);
+    CHECK_EQ(operand_lvs.size(), size_t(2));
+    ret.insert(ret.end(), operand_lvs.begin(), operand_lvs.end());
+  }
+  return ret;
+}
+
+std::vector<llvm::Value*> CodeGenerator::codegenGeoOperator(
+    const Analyzer::GeoOperator* geo_operator,
+    const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+
+  if (geo_operator->getName() == "ST_X" || geo_operator->getName() == "ST_Y") {
+    const auto key = geo_operator->toString();
+    auto geo_target_cache_it = cgen_state_->geo_target_cache_.find(key);
+    if (geo_target_cache_it != cgen_state_->geo_target_cache_.end()) {
+      return {geo_target_cache_it->second};
+    }
+  }
+
+  const auto catalog = executor()->getCatalog();
+  CHECK(catalog);
+
+  auto op_codegen = spatial_type::Codegen::init(geo_operator, catalog);
+  CHECK(op_codegen);
+
+  std::vector<llvm::Value*> load_lvs;
+  for (size_t i = 0; i < op_codegen->size(); i++) {
+    auto intermediate_lvs =
+        codegen(op_codegen->getOperand(i), /*fetch_columns=*/true, co);
+    load_lvs.insert(load_lvs.end(), intermediate_lvs.begin(), intermediate_lvs.end());
+  }
+  const auto pos_arg_operand = op_codegen->getPositionOperand();
+  auto [arg_lvs, null_lv] = op_codegen->codegenLoads(
+      load_lvs, pos_arg_operand ? posArg(pos_arg_operand) : nullptr, cgen_state_);
+
+  std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
+  if (op_codegen->isNullable()) {
+    nullcheck_codegen =
+        std::make_unique<NullCheckCodegen>(cgen_state_,
+                                           executor(),
+                                           null_lv,
+                                           op_codegen->getNullType(),
+                                           op_codegen->getName() + "_nullcheck");
+  }
+
+  return op_codegen->codegen(
+      arg_lvs, nullcheck_codegen ? nullcheck_codegen.get() : nullptr, cgen_state_);
+}
+
+namespace {
+
+// TODO: de-dupe
+std::string suffix(SQLTypes type) {
+  if (type == kPOINT) {
+    return std::string("_Point");
+  }
+  if (type == kLINESTRING) {
+    return std::string("_LineString");
+  }
+  if (type == kPOLYGON) {
+    return std::string("_Polygon");
+  }
+  if (type == kMULTIPOLYGON) {
+    return std::string("_MultiPolygon");
+  }
+  throw std::runtime_error("Unsupported argument type");
+}
+
+}  // namespace
+
+std::vector<llvm::Value*> CodeGenerator::codegenGeoFunctionOperator(
+    const Analyzer::GeoFunctionOperator* geo_func_oper,
+    const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+
+  if (geo_func_oper->getName() == "ST_Perimeter" ||
+      geo_func_oper->getName() == "ST_Area") {
+    const auto operand = geo_func_oper->getArg(0);
+    const auto& arg_ti = operand->get_type_info();
+    const uint32_t coords_elem_sz_bytes =
+        arg_ti.get_compression() == kENCODING_GEOINT ? 1 : 8;
+
+    const bool is_nullable = !arg_ti.get_notnull();
+    std::string size_fn_name = "array_size";
+    if (is_nullable) {
+      size_fn_name += "_nullable";
+    }
+
+    auto operand_lvs = codegen(operand, /*fetch_columns=*/true, co);
+    if (dynamic_cast<const Analyzer::ColumnVar*>(operand)) {
+      CHECK_EQ(operand_lvs.size(),
+               size_t(arg_ti.get_physical_coord_cols()));  // chunk iter ptr
+      // this will give us back the byte stream -- add codegen for the array loads
+      std::vector<llvm::Value*> array_operand_lvs;
+      for (size_t i = 0; i < operand_lvs.size(); i++) {
+        auto lv = operand_lvs[i];
+        array_operand_lvs.push_back(
+            cgen_state_->emitExternalCall("array_buff",
+                                          llvm::Type::getInt8PtrTy(cgen_state_->context_),
+                                          {lv, posArg(operand)}));
+        const auto ptr_type = llvm::dyn_cast_or_null<llvm::PointerType>(lv->getType());
+        CHECK(ptr_type);
+        const auto elem_type = ptr_type->getElementType();
+        CHECK(elem_type);
+        std::vector<llvm::Value*> array_sz_args{
+            lv,
+            posArg(operand),
+            cgen_state_->llInt(log2_bytes(i == 0 ? coords_elem_sz_bytes : 4))};
+        if (is_nullable) {
+          array_sz_args.push_back(
+              cgen_state_->llInt(static_cast<int32_t>(inline_int_null_value<int32_t>())));
+        }
+        array_operand_lvs.push_back(cgen_state_->emitExternalCall(
+            size_fn_name, get_int_type(32, cgen_state_->context_), array_sz_args));
+      }
+      operand_lvs = array_operand_lvs;
+    }
+    CHECK_EQ(operand_lvs.size(),
+             size_t(2 * arg_ti.get_physical_coord_cols()));  // array ptr and size
+
+    const bool is_geodesic =
+        arg_ti.get_subtype() == kGEOGRAPHY && arg_ti.get_output_srid() == 4326;
+    std::string func_name = geo_func_oper->getName();
+
+    std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
+    if (is_nullable) {
+      auto null_check_operand_lv = operand_lvs[1];
+      if (null_check_operand_lv->getType() !=
+          llvm::Type::getInt32Ty(cgen_state_->context_)) {
+        CHECK(null_check_operand_lv->getType() ==
+              llvm::Type::getInt64Ty(cgen_state_->context_));
+        // Geos functions come out 64-bit, cast down to 32 for now
+        auto& builder = cgen_state_->ir_builder_;
+        null_check_operand_lv = builder.CreateTrunc(
+            null_check_operand_lv, llvm::Type::getInt32Ty(cgen_state_->context_));
+      }
+      nullcheck_codegen =
+          std::make_unique<NullCheckCodegen>(cgen_state_,
+                                             executor(),
+                                             null_check_operand_lv,  // coords size
+                                             SQLTypeInfo(kINT),
+                                             func_name + "_nullcheck");
+    }
+
+    CHECK(arg_ti.get_type() == kPOLYGON || arg_ti.get_type() == kMULTIPOLYGON);
+    func_name += suffix(arg_ti.get_type());
+    if (is_geodesic && geo_func_oper->getName() == "ST_Perimeter") {
+      func_name += "_Geodesic";
+    }
+    // push back ic, isr, osr for now
+    operand_lvs.push_back(
+        cgen_state_->llInt(Geospatial::get_compression_scheme(arg_ti)));  // ic
+    operand_lvs.push_back(cgen_state_->llInt(arg_ti.get_input_srid()));   // in srid
+    operand_lvs.push_back(cgen_state_->llInt(arg_ti.get_output_srid()));  // out srid
+
+    const auto& ret_ti = geo_func_oper->get_type_info();
+    CHECK(ret_ti.get_type() == kDOUBLE || ret_ti.get_type() == kFLOAT);
+    auto ret = cgen_state_->emitExternalCall(
+        func_name,
+        ret_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
+                                     : llvm::Type::getFloatTy(cgen_state_->context_),
+        operand_lvs);
+    if (is_nullable) {
+      ret = nullcheck_codegen->finalize(
+          cgen_state_->inlineFpNull(geo_func_oper->get_type_info()), ret);
+    }
+    return {ret};
+  }
+  UNREACHABLE() << geo_func_oper->toString();
+  return {};
+}
 
 std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
     const Analyzer::GeoUOper* geo_expr,

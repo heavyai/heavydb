@@ -17,18 +17,12 @@
 #ifndef OMNISCI_MATHUTILS_H
 #define OMNISCI_MATHUTILS_H
 
-bool isPowOfTwo(unsigned n) {
-  return (n & (n - 1)) == 0;
-}
+namespace shared {
 
-unsigned getExpOfTwo(unsigned n) {
-  unsigned i = 0;
+bool isPowOfTwo(unsigned n);
 
-  while ((n = n >> 1)) {
-    ++i;
-  }
+unsigned getExpOfTwo(unsigned n);
 
-  return i;
-}
+}  // namespace shared
 
 #endif  // OMNISCI_MATHUTILS_H

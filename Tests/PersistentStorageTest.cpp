@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "DBHandlerTestHelpers.h"
+
 #include "DataMgr/PersistentStorageMgr/MutableCachePersistentStorageMgr.h"
 #include "DataMgr/PersistentStorageMgr/PersistentStorageMgr.h"
 #include "DataMgrTestHelpers.h"
@@ -38,7 +38,7 @@ class PersistentStorageMgrTest : public testing::Test {
 
 TEST_F(PersistentStorageMgrTest, DiskCache_CustomPath) {
   PersistentStorageMgr psm(data_path, 0, {cache_path_, DiskCacheLevel::fsi});
-  ASSERT_EQ(psm.getDiskCache()->getGlobalFileMgr()->getBasePath(), cache_path_ + "/");
+  ASSERT_EQ(psm.getDiskCache()->getCacheDirectory(), cache_path_);
 }
 
 TEST_F(PersistentStorageMgrTest, DiskCache_InitializeWithoutCache) {
@@ -48,15 +48,15 @@ TEST_F(PersistentStorageMgrTest, DiskCache_InitializeWithoutCache) {
 
 TEST_F(PersistentStorageMgrTest, MutableDiskCache_CustomPath) {
   MutableCachePersistentStorageMgr psm(data_path, 0, {cache_path_, DiskCacheLevel::all});
-  ASSERT_EQ(psm.getDiskCache()->getGlobalFileMgr()->getBasePath(), cache_path_ + "/");
+  ASSERT_EQ(psm.getDiskCache()->getCacheDirectory(), cache_path_);
 }
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   g_enable_fsi = true;
-
   int err{0};
+
   try {
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {

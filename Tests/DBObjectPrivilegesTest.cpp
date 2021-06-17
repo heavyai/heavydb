@@ -34,7 +34,7 @@ namespace {
 std::shared_ptr<Calcite> g_calcite;
 bool g_aggregator{false};
 
-Catalog_Namespace::UserMetadata user;
+Catalog_Namespace::UserMetadata g_user;
 std::vector<DBObject> privObjects;
 
 auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
@@ -52,39 +52,39 @@ inline auto sql(std::string_view sql_stmts) {
 
 struct Users {
   void setup_users() {
-    if (!sys_cat.getMetadataForUser("Chelsea", user)) {
+    if (!sys_cat.getMetadataForUser("Chelsea", g_user)) {
       sys_cat.createUser("Chelsea", "password", true, "", true);
-      CHECK(sys_cat.getMetadataForUser("Chelsea", user));
+      CHECK(sys_cat.getMetadataForUser("Chelsea", g_user));
     }
-    if (!sys_cat.getMetadataForUser("Arsenal", user)) {
+    if (!sys_cat.getMetadataForUser("Arsenal", g_user)) {
       sys_cat.createUser("Arsenal", "password", false, "", true);
-      CHECK(sys_cat.getMetadataForUser("Arsenal", user));
+      CHECK(sys_cat.getMetadataForUser("Arsenal", g_user));
     }
-    if (!sys_cat.getMetadataForUser("Juventus", user)) {
+    if (!sys_cat.getMetadataForUser("Juventus", g_user)) {
       sys_cat.createUser("Juventus", "password", false, "", true);
-      CHECK(sys_cat.getMetadataForUser("Juventus", user));
+      CHECK(sys_cat.getMetadataForUser("Juventus", g_user));
     }
-    if (!sys_cat.getMetadataForUser("Bayern", user)) {
+    if (!sys_cat.getMetadataForUser("Bayern", g_user)) {
       sys_cat.createUser("Bayern", "password", false, "", true);
-      CHECK(sys_cat.getMetadataForUser("Bayern", user));
+      CHECK(sys_cat.getMetadataForUser("Bayern", g_user));
     }
   }
   void drop_users() {
-    if (sys_cat.getMetadataForUser("Chelsea", user)) {
+    if (sys_cat.getMetadataForUser("Chelsea", g_user)) {
       sys_cat.dropUser("Chelsea");
-      CHECK(!sys_cat.getMetadataForUser("Chelsea", user));
+      CHECK(!sys_cat.getMetadataForUser("Chelsea", g_user));
     }
-    if (sys_cat.getMetadataForUser("Arsenal", user)) {
+    if (sys_cat.getMetadataForUser("Arsenal", g_user)) {
       sys_cat.dropUser("Arsenal");
-      CHECK(!sys_cat.getMetadataForUser("Arsenal", user));
+      CHECK(!sys_cat.getMetadataForUser("Arsenal", g_user));
     }
-    if (sys_cat.getMetadataForUser("Juventus", user)) {
+    if (sys_cat.getMetadataForUser("Juventus", g_user)) {
       sys_cat.dropUser("Juventus");
-      CHECK(!sys_cat.getMetadataForUser("Juventus", user));
+      CHECK(!sys_cat.getMetadataForUser("Juventus", g_user));
     }
-    if (sys_cat.getMetadataForUser("Bayern", user)) {
+    if (sys_cat.getMetadataForUser("Bayern", g_user)) {
       sys_cat.dropUser("Bayern");
-      CHECK(!sys_cat.getMetadataForUser("Bayern", user));
+      CHECK(!sys_cat.getMetadataForUser("Bayern", g_user));
     }
   }
   Users() { setup_users(); }
@@ -561,7 +561,7 @@ TEST(Roles, RecursiveRoleCheckTest) {
 }
 
 TEST_F(DatabaseObject, AccessDefaultsTest) {
-  auto cat_mapd = Catalog_Namespace::Catalog::get(OMNISCI_DEFAULT_DB);
+  auto cat_mapd = sys_cat.getCatalog(OMNISCI_DEFAULT_DB);
   DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(*cat_mapd);
@@ -578,11 +578,8 @@ TEST_F(DatabaseObject, SqlEditorAccessTest) {
 
   CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Juventus", user_meta));
-  session_juve.reset(
-      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
-                                         user_meta,
-                                         ExecutorDeviceType::GPU,
-                                         ""));
+  session_juve.reset(new Catalog_Namespace::SessionInfo(
+      sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_juve->getCatalog();
   DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
@@ -628,11 +625,8 @@ TEST_F(DatabaseObject, DBLoginAccessTest) {
 
   CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Bayern", user_meta));
-  session_juve.reset(
-      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
-                                         user_meta,
-                                         ExecutorDeviceType::GPU,
-                                         ""));
+  session_juve.reset(new Catalog_Namespace::SessionInfo(
+      sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_juve->getCatalog();
   DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
@@ -677,11 +671,8 @@ TEST_F(DatabaseObject, TableAccessTest) {
 
   CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
-  session_ars.reset(
-      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
-                                         user_meta,
-                                         ExecutorDeviceType::GPU,
-                                         ""));
+  session_ars.reset(new Catalog_Namespace::SessionInfo(
+      sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   AccessPrivileges bayern_privs;
@@ -735,11 +726,8 @@ TEST_F(DatabaseObject, ViewAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
   CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
-  session_ars.reset(
-      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
-                                         user_meta,
-                                         ExecutorDeviceType::GPU,
-                                         ""));
+  session_ars.reset(new Catalog_Namespace::SessionInfo(
+      sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_VIEW));
@@ -784,11 +772,8 @@ TEST_F(DatabaseObject, DashboardAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
   CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
-  session_ars.reset(
-      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
-                                         user_meta,
-                                         ExecutorDeviceType::GPU,
-                                         ""));
+  session_ars.reset(new Catalog_Namespace::SessionInfo(
+      sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DASHBOARD));
@@ -833,11 +818,8 @@ TEST_F(DatabaseObject, DatabaseAllTest) {
 
   CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
-  session_ars.reset(
-      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
-                                         user_meta,
-                                         ExecutorDeviceType::GPU,
-                                         ""));
+  session_ars.reset(new Catalog_Namespace::SessionInfo(
+      sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DATABASE));
@@ -1180,12 +1162,12 @@ TEST_F(ViewObject, CalciteViewResolution) {
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_deleted_from.size(), (size_t)0);
-  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from[0], "bill_table");
+  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from[0][0], "bill_table");
   EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.resolved_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.resolved_accessed_objects.tables_updated_in.size(), (size_t)0);
   EXPECT_EQ(result.resolved_accessed_objects.tables_deleted_from.size(), (size_t)0);
-  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0], "bill_table");
+  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0][0], "bill_table");
 
   auto query_state2 =
       QR::create_query_state(QR::get()->getSession(), "select * from bill_view");
@@ -1200,12 +1182,12 @@ TEST_F(ViewObject, CalciteViewResolution) {
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_deleted_from.size(), (size_t)0);
-  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from[0], "bill_view");
+  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from[0][0], "bill_view");
   EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.resolved_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.resolved_accessed_objects.tables_updated_in.size(), (size_t)0);
   EXPECT_EQ(result.resolved_accessed_objects.tables_deleted_from.size(), (size_t)0);
-  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0], "bill_table");
+  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0][0], "bill_table");
 
   auto query_state3 =
       QR::create_query_state(QR::get()->getSession(), "select * from bill_view_outer");
@@ -1220,12 +1202,13 @@ TEST_F(ViewObject, CalciteViewResolution) {
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_deleted_from.size(), (size_t)0);
-  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from[0], "bill_view_outer");
+  EXPECT_EQ(result.primary_accessed_objects.tables_selected_from[0][0],
+            "bill_view_outer");
   EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.resolved_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.resolved_accessed_objects.tables_updated_in.size(), (size_t)0);
   EXPECT_EQ(result.resolved_accessed_objects.tables_deleted_from.size(), (size_t)0);
-  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0], "bill_table");
+  EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0][0], "bill_table");
 }
 
 TEST_F(DashboardObject, AccessDefaultsTest) {
@@ -1543,6 +1526,17 @@ TEST_F(ServerObject, AccessWithGrantRevokeAllCompound) {
   EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), true);
   EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
 
+  // All users should still have SERVER_USAGE privileges, check that this is true
+  server_priv.reset();
+  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::SERVER_USAGE));
+  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
+  privObjects.clear();
+  privObjects.push_back(server_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
+
   // Revoke ALL_SERVER privileges
   server_priv.reset();
   ASSERT_NO_THROW(server_priv.add(AccessPrivileges::ALL_SERVER));
@@ -1568,6 +1562,17 @@ TEST_F(ServerObject, AccessWithGrantRevokeAllCompound) {
   // users no longer have the ALTER_SERVER privileges, check that this is true
   server_priv.reset();
   ASSERT_NO_THROW(server_priv.add(AccessPrivileges::ALTER_SERVER));
+  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
+  privObjects.clear();
+  privObjects.push_back(server_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
+  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), false);
+  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
+
+  // users no longer have the SERVER_USAGE privileges, check that this is true
+  server_priv.reset();
+  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::SERVER_USAGE));
   ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
   privObjects.clear();
   privObjects.push_back(server_object);
@@ -1780,7 +1785,7 @@ TEST(DBObject, LoadKey) {
                     tbname + ";");
 
   // test the LoadKey() function
-  auto cat = Catalog_Namespace::Catalog::get(OMNISCI_DEFAULT_DB);
+  auto cat = sys_cat.getCatalog(OMNISCI_DEFAULT_DB);
 
   DBObject dbo1(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   DBObject dbo2(tbname, DBObjectType::TableDBObjectType);
@@ -1860,10 +1865,7 @@ std::unique_ptr<QR> get_qr_for_user(
     const std::string& user_name,
     const Catalog_Namespace::UserMetadata& user_metadata) {
   auto session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get(user_name),
-      user_metadata,
-      ExecutorDeviceType::CPU,
-      "");
+      sys_cat.getCatalog(user_name), user_metadata, ExecutorDeviceType::CPU, "");
   return std::make_unique<QR>(std::move(session));
 }
 
@@ -1974,7 +1976,7 @@ TEST(SysCatalog, RenameUser_ReloginWithOldName) {
       sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
 
   auto chuck_session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get("nydb"s), user_meta2, ExecutorDeviceType::CPU, "");
+      sys_cat.getCatalog("nydb"s), user_meta2, ExecutorDeviceType::CPU, "");
   auto chuck_qr = std::make_unique<QR>(std::move(chuck_session));
   EXPECT_NO_THROW(chuck_qr->runDDLStatement("create table chaos ( x integer );"));
   EXPECT_NO_THROW(
@@ -2032,10 +2034,7 @@ TEST(SysCatalog, RenameUser_CheckPrivilegeTransfer) {
       sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
 
   auto rom_session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get("Ferengi"s),
-      user_meta2,
-      ExecutorDeviceType::CPU,
-      "");
+      sys_cat.getCatalog("Ferengi"s), user_meta2, ExecutorDeviceType::CPU, "");
   auto rom_qr = std::make_unique<QR>(std::move(rom_session));
 
   EXPECT_NO_THROW(
@@ -2060,10 +2059,7 @@ TEST(SysCatalog, RenameUser_CheckPrivilegeTransfer) {
       sys_cat.login(database_out, username_out, "password"s, user_meta3, false));
 
   auto renamed_quark_session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get("Ferengi"s),
-      user_meta3,
-      ExecutorDeviceType::CPU,
-      "");
+      sys_cat.getCatalog("Ferengi"s), user_meta3, ExecutorDeviceType::CPU, "");
   auto renamed_quark_qr = std::make_unique<QR>(std::move(renamed_quark_session));
 
   EXPECT_NO_THROW(renamed_quark_qr->runSQL("select * from bank_account;", dt));
@@ -2103,10 +2099,7 @@ TEST(SysCatalog, RenameUser_SuperUserRenameCheck) {
       sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
 
   auto rom_session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get("Ferengi"s),
-      user_meta2,
-      ExecutorDeviceType::CPU,
-      "");
+      sys_cat.getCatalog("Ferengi"s), user_meta2, ExecutorDeviceType::CPU, "");
   auto rom_qr = std::make_unique<QR>(std::move(rom_session));
   EXPECT_THROW(rom_qr->runDDLStatement("ALTER USER quark RENAME TO renamed_quark;"),
                std::runtime_error);
@@ -2293,7 +2286,7 @@ TEST(SysCatalog, RenameDatabase_ExistingDB) {
 
 TEST(SysCatalog, RenameDatabase_FailedCopy) {
   using namespace std::string_literals;
-  auto trash_file_path = sys_cat.getBasePath() + "/mapd_catalogs/trash";
+  auto trash_file_path = sys_cat.getCatalogBasePath() + "/mapd_catalogs/trash";
 
   ScopeGuard s = [&trash_file_path] {
     boost::filesystem::remove(trash_file_path);
@@ -2382,6 +2375,9 @@ TEST(SysCatalog, RenameDatabase_PrivsTest) {
   EXPECT_NO_THROW(
       rom_qr->runDDLStatement("ALTER DATABASE Ferengi RENAME TO grandnagus;"));
 
+  // Clear session (similar to what is done in DBHandler after a database rename).
+  rom_qr->clearSessionId();
+
   rename_successful = true;
 
   Catalog_Namespace::UserMetadata user_meta3;
@@ -2394,6 +2390,115 @@ TEST(SysCatalog, RenameDatabase_PrivsTest) {
 
   EXPECT_NO_THROW(quark_qr->runSQL("select * from bank_account;", dt));
   EXPECT_NO_THROW(quark_qr->runSQL("select * from riches;", dt));
+}
+
+TEST(SysCatalog, DropDatabase_ByOwner) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
+  const std::string username = "theowner";
+  const std::string dbname = "thedb";
+
+  ScopeGuard scope_guard = [&] {
+    try {
+      run_ddl_statement("DROP USER " + username + ";");
+    } catch (...) {
+    }
+    run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
+  };
+
+  run_ddl_statement("CREATE USER " + username + " (password='password');");
+  run_ddl_statement("CREATE DATABASE " + dbname + " (owner='" + username + "');");
+  run_ddl_statement("ALTER USER " + username + " (default_db='" + dbname + "');");
+
+  Catalog_Namespace::UserMetadata user_meta;
+  std::string username_out{username};
+  std::string dbname_out{dbname};
+
+  ASSERT_NO_THROW(sys_cat.login(dbname_out, username_out, "password", user_meta, false));
+  EXPECT_EQ(dbname, dbname_out);
+
+  auto qr = get_qr_for_user(dbname, user_meta);
+  EXPECT_NO_THROW(qr->runDDLStatement("DROP DATABASE " + dbname + ";"));
+}
+
+TEST(SysCatalog, DropDatabase_ByNonOwner) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
+  const std::string username = "theowner";
+  const std::string dbname = "thedb";
+
+  ScopeGuard scope_guard = [&] {
+    try {
+      run_ddl_statement("DROP USER " + username + ";");
+    } catch (...) {
+    }
+    try {
+      run_ddl_statement("DROP USER not" + username + ";");
+    } catch (...) {
+    }
+    run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
+  };
+
+  run_ddl_statement("CREATE USER " + username + " (password='password');");
+  run_ddl_statement("CREATE USER not" + username + " (password='password');");
+  run_ddl_statement("CREATE DATABASE " + dbname + " (owner='" + username + "');");
+  run_ddl_statement("ALTER USER " + username + " (default_db='" + dbname + "');");
+  run_ddl_statement("ALTER USER not" + username + " (default_db='" + dbname + "');");
+
+  Catalog_Namespace::UserMetadata user_meta;
+  std::string username_out{"not" + username};
+  std::string dbname_out{dbname};
+
+  ASSERT_NO_THROW(sys_cat.login(dbname_out, username_out, "password", user_meta, false));
+  EXPECT_EQ(dbname, dbname_out);
+
+  auto qr = get_qr_for_user(dbname, user_meta);
+  EXPECT_THROW(qr->runDDLStatement("DROP DATABASE " + dbname + ";"), std::runtime_error);
+}
+
+TEST(SysCatalog, DropDatabase_BySuperUser) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
+  const std::string username = "theowner";
+  const std::string dbname = "thedb";
+
+  ScopeGuard scope_guard = [&] {
+    try {
+      run_ddl_statement("DROP USER " + username + ";");
+    } catch (...) {
+    }
+    try {
+      run_ddl_statement("DROP USER not" + username + ";");
+    } catch (...) {
+    }
+    run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
+  };
+
+  run_ddl_statement("CREATE USER " + username + " (password='password');");
+  run_ddl_statement("CREATE USER not" + username +
+                    " (password='password',is_super='true');");
+  run_ddl_statement("CREATE DATABASE " + dbname + " (owner='" + username + "');");
+  run_ddl_statement("ALTER USER " + username + " (default_db='" + dbname + "');");
+  run_ddl_statement("ALTER USER not" + username + " (default_db='" + dbname + "');");
+
+  Catalog_Namespace::UserMetadata user_meta;
+  std::string username_out{"not" + username};
+  std::string dbname_out{dbname};
+
+  ASSERT_NO_THROW(sys_cat.login(dbname_out, username_out, "password", user_meta, false));
+  EXPECT_EQ(dbname, dbname_out);
+
+  auto alternate_qr = get_qr_for_user(dbname, user_meta);
+  EXPECT_NO_THROW(alternate_qr->runDDLStatement("DROP DATABASE " + dbname + ";"));
 }
 
 TEST(SysCatalog, GetDatabaseList) {
@@ -3009,6 +3114,7 @@ class ForeignTableAndTablePermissionsTest
     TablePermissionsTest::SetUp();
     if (g_aggregator && GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
       LOG(INFO) << "Test fixture not supported in distributed mode.";
+      GTEST_SKIP();
       return;
     }
     switch (GetParam()) {
@@ -3024,16 +3130,23 @@ class ForeignTableAndTablePermissionsTest
   }
 };
 
+class ForeignTablePermissionsTest : public TablePermissionsTest {
+ protected:
+  void SetUp() override {
+    TablePermissionsTest::SetUp();
+    if (g_aggregator) {
+      LOG(INFO) << "Test not supported in distributed mode.";
+      GTEST_SKIP();
+    }
+  }
+};
+
 INSTANTIATE_TEST_SUITE_P(ForeignTableAndTablePermissionsTest,
                          ForeignTableAndTablePermissionsTest,
                          ::testing::Values(ddl_utils::TableType::FOREIGN_TABLE,
                                            ddl_utils::TableType::TABLE));
 
-TEST_F(TablePermissionsTest, ForeignTableGrantRevokeDropPrivilege) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
+TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeDropPrivilege) {
   std::string privilege{"DROP"};
   std::string query{"DROP FOREIGN TABLE test_table;"};
   std::string no_privilege_exception{
@@ -3064,7 +3177,7 @@ TEST_P(ForeignTableAndTablePermissionsTest, GrantRevokeSelectPrivilege) {
     // mode for regular tables (DistributedQueryRunner::init can not be run
     // more than once.)
     LOG(INFO) << "Test not supported in distributed mode.";
-    return;
+    GTEST_SKIP();
   }
   std::string privilege{"SELECT"};
   std::string query{"SELECT * FROM test_table;"};
@@ -3077,11 +3190,7 @@ TEST_P(ForeignTableAndTablePermissionsTest, GrantRevokeSelectPrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
-TEST_F(TablePermissionsTest, ForeignTableGrantRevokeDeletePrivilege) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
+TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeDeletePrivilege) {
   std::string privilege{"DELETE"};
   std::string query{"DELETE FROM test_table WHERE i = 1;"};
   std::string no_privilege_exception{
@@ -3112,11 +3221,7 @@ TEST_F(TablePermissionsTest, TableGrantRevokeDeletePrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
-TEST_F(TablePermissionsTest, ForeignTableGrantRevokeInsertPrivilege) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
+TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeInsertPrivilege) {
   std::string privilege{"INSERT"};
   std::string query{"INSERT INTO test_table VALUES (2);"};
   std::string no_privilege_exception{
@@ -3143,11 +3248,7 @@ TEST_F(TablePermissionsTest, TableGrantRevokeInsertPrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
-TEST_F(TablePermissionsTest, ForeignTableGrantRevokeTruncatePrivilege) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
+TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeTruncatePrivilege) {
   std::string privilege{"TRUNCATE"};
   std::string query{"TRUNCATE TABLE test_table;"};
   std::string no_privilege_exception{
@@ -3176,11 +3277,7 @@ TEST_F(TablePermissionsTest, TableGrantRevokeTruncatePrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
-TEST_F(TablePermissionsTest, ForeignTableGrantRevokeUpdatePrivilege) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
+TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeUpdatePrivilege) {
   std::string privilege{"UPDATE"};
   std::string query{"UPDATE test_table SET i = 2 WHERE i = 1;"};
   std::string no_privilege_exception{
@@ -3198,10 +3295,6 @@ TEST_F(TablePermissionsTest, ForeignTableGrantRevokeUpdatePrivilege) {
 }
 
 TEST_F(TablePermissionsTest, TableGrantRevokeUpdatePrivilege) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
   std::string privilege{"UPDATE"};
   std::string query{"UPDATE test_table SET i = 2 WHERE i = 1;"};
   std::string no_privilege_exception{
@@ -3241,14 +3334,10 @@ TEST_F(TablePermissionsTest, TableGrantRevokeAlterTablePrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
-TEST_F(TablePermissionsTest, TableGrantRevokeAlterForeignTablePrivilege) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
+TEST_F(ForeignTablePermissionsTest, TableGrantRevokeAlterForeignTablePrivilege) {
   std::string privilege{"ALTER"};
   std::string query{
-      "ALTER FOREIGN TABLE test_table WITH (refresh_update_type = 'append');"};
+      "ALTER FOREIGN TABLE test_table SET (refresh_update_type = 'append');"};
   std::string no_privilege_exception{
       "Exception: Current user does not have the privilege to alter foreign table: "
       "test_table"};
@@ -3259,17 +3348,23 @@ TEST_F(TablePermissionsTest, TableGrantRevokeAlterForeignTablePrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
-TEST_F(TablePermissionsTest, ForeignTableAllPrivileges) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
+TEST_F(TablePermissionsTest, TableRenameTablePrivilege) {
+  std::string privilege{"ALTER"};
+  std::string query{"RENAME TABLE test_table TO renamed_test_table;"};
+  std::string no_privilege_exception{
+      "Exception: Current user does not have the privilege to alter table: test_table"};
+  createTestTable();
+  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
+  queryAsTestUserWithPrivilege(query, privilege);
+}
+
+TEST_F(ForeignTablePermissionsTest, ForeignTableAllPrivileges) {
   createTestForeignTable();
   sql("GRANT ALL ON TABLE test_table TO test_user;");
   login("test_user", "test_pass");
   runQuery("SHOW CREATE TABLE test_table;");
   runQuery("SELECT * FROM test_table;");
-  runQuery("ALTER FOREIGN TABLE test_table WITH (refresh_update_type = 'append');");
+  runQuery("ALTER FOREIGN TABLE test_table SET (refresh_update_type = 'append');");
   runQuery("DROP FOREIGN TABLE test_table;");
 }
 
@@ -3292,11 +3387,7 @@ TEST_F(TablePermissionsTest, TableAllPrivileges) {
   runQuery("DROP TABLE test_table;");
 }
 
-TEST_F(TablePermissionsTest, ForeignTableGrantRevokeCreateTablePrivilege) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
+TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeCreateTablePrivilege) {
   login("test_user", "test_pass");
   executeLambdaAndAssertException([this] { createTestForeignTable(); },
                                   "Exception: Foreign table \"test_table\" will not be "
@@ -3318,6 +3409,312 @@ TEST_F(TablePermissionsTest, ForeignTableGrantRevokeCreateTablePrivilege) {
   // clean up permissions
   switchToAdmin();
   sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
+}
+
+TEST_F(ForeignTablePermissionsTest, ForeignTableRefreshOwner) {
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  createTestForeignTable();
+  runQuery("REFRESH FOREIGN TABLES test_table;");
+  // clean up permissions
+  switchToAdmin();
+  sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
+}
+
+TEST_F(ForeignTablePermissionsTest, ForeignTableRefreshSuperUser) {
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  createTestForeignTable();
+  switchToAdmin();
+  runQuery("REFRESH FOREIGN TABLES test_table;");
+  // clean up permissions
+  sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
+}
+
+TEST_F(ForeignTablePermissionsTest, ForeignTableRefreshNonOwner) {
+  createTestForeignTable();
+  sql("GRANT ALL ON TABLE test_table TO test_user;");
+  login("test_user", "test_pass");
+  runQueryAndAssertException(
+      "REFRESH FOREIGN TABLES test_table;",
+      "Exception: REFRESH FOREIGN TABLES failed on table \"test_table\". It can only be "
+      "executed by super user or owner of the object.");
+}
+
+class ServerPrivApiTest : public DBHandlerTestFixture {
+ protected:
+  static void SetUpTestSuite() {
+    createDBHandler();
+    switchToAdmin();
+    createTestUser("test_user");
+    createTestUser("test_user_2");
+  }
+
+  static void TearDownTestSuite() {
+    dropTestUser("test_user");
+    dropTestUser("test_user_2");
+  }
+
+  void SetUp() override {
+    if (g_aggregator) {
+      LOG(INFO) << "Test fixture not supported in distributed mode.";
+      GTEST_SKIP();
+      return;
+    }
+    g_enable_fsi = true;
+    DBHandlerTestFixture::SetUp();
+    loginAdmin();
+    dropServer();
+    createTestServer();
+  }
+
+  void TearDown() override {
+    g_enable_fsi = true;
+    loginAdmin();
+    dropServer();
+    revokeTestUserServerPrivileges("test_user");
+    revokeTestUserServerPrivileges("test_user_2");
+  }
+  static void createTestUser(std::string name) {
+    sql("CREATE USER  " + name + " (password = 'test_pass');");
+    sql("GRANT ACCESS ON DATABASE omnisci TO  " + name + ";");
+  }
+
+  static void dropTestUser(std::string name) {
+    try {
+      sql("DROP USER " + name + ";");
+    } catch (const std::exception& e) {
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      LOG(WARNING) << e.what();
+    }
+  }
+
+  void revokeTestUserServerPrivileges(std::string name) {
+    sql("REVOKE ALL ON DATABASE omnisci FROM " + name + ";");
+    sql("GRANT ACCESS ON DATABASE omnisci TO " + name + ";");
+  }
+  void createTestServer() {
+    sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+        "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
+  }
+
+  void dropServer() { sql("DROP SERVER IF EXISTS test_server;"); }
+
+  void assertExpectedDBObj(std::vector<TDBObject>& db_objs,
+                           std::string name,
+                           TDBObjectType::type obj_type,
+                           std::vector<bool> privs,
+                           std::string grantee_name,
+                           TDBObjectType::type priv_type) {
+    bool obj_found = false;
+    for (const auto& db_obj : db_objs) {
+      if ((db_obj.objectName == name) && (db_obj.objectType == obj_type) &&
+          (db_obj.privs == privs) && (db_obj.grantee == grantee_name) &&
+          (db_obj.privilegeObjectType == priv_type)) {
+        obj_found = true;
+        break;
+      };
+    }
+    ASSERT_TRUE(obj_found);
+  }
+
+  void assertDBAccessObj(std::vector<TDBObject>& db_objs) {
+    assertExpectedDBObj(db_objs,
+                        "omnisci",
+                        TDBObjectType::DatabaseDBObjectType,
+                        {0, 0, 0, 1},
+                        "test_user",
+                        TDBObjectType::DatabaseDBObjectType);
+  }
+  void assertSuperAccessObj(std::vector<TDBObject>& db_objs) {
+    assertExpectedDBObj(db_objs,
+                        "super",
+                        TDBObjectType::AbstractDBObjectType,
+                        {1, 1, 1, 1},
+                        "admin",
+                        TDBObjectType::ServerDBObjectType);
+  }
+};
+
+TEST_F(ServerPrivApiTest, CreateForGrantee) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
+  ASSERT_EQ(priv_objs.size(), 2u);
+  assertDBAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "omnisci",
+                      TDBObjectType::DatabaseDBObjectType,
+                      {1, 0, 0, 0},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, DropForGrantee) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT DROP SERVER ON DATABASE omnisci TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
+  ASSERT_EQ(priv_objs.size(), 2u);
+  assertDBAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "omnisci",
+                      TDBObjectType::DatabaseDBObjectType,
+                      {0, 1, 0, 0},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, AlterForGrantee) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT ALTER SERVER ON DATABASE omnisci TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
+  ASSERT_EQ(priv_objs.size(), 2u);
+  assertDBAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "omnisci",
+                      TDBObjectType::DatabaseDBObjectType,
+                      {0, 0, 1, 0},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, AlterOnServerGrantee) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT ALTER ON SERVER test_server TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
+  ASSERT_EQ(priv_objs.size(), 2u);
+  assertDBAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "test_server",
+                      TDBObjectType::ServerDBObjectType,
+                      {0, 0, 1, 0},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, UsageForGrantee) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT SERVER USAGE ON DATABASE omnisci TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
+  ASSERT_EQ(priv_objs.size(), 2u);
+  assertDBAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "omnisci",
+                      TDBObjectType::DatabaseDBObjectType,
+                      {0, 0, 0, 1},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, UsageOnServerGrantee) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT USAGE ON SERVER test_server TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
+  ASSERT_EQ(priv_objs.size(), 2u);
+  assertDBAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "test_server",
+                      TDBObjectType::ServerDBObjectType,
+                      {0, 0, 0, 1},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, GetDBObjNonSuser) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
+  ASSERT_EQ(priv_objs.size(), 2u);
+  assertDBAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "omnisci",
+                      TDBObjectType::DatabaseDBObjectType,
+                      {1, 0, 0, 0},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, GetDBObjNoAccess) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user_2;");
+  login("test_user", "test_pass");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user_2");
+  // no privs returned
+  ASSERT_EQ(priv_objs.size(), 0u);
+}
+
+TEST_F(ServerPrivApiTest, AlterOnServerObjectPrivs) {
+  sql("GRANT ALTER ON SERVER test_server TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  login("test_user", "test_pass");
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  db_handler->get_db_object_privs(
+      priv_objs, session_id, "test_server", TDBObjectType::ServerDBObjectType);
+  ASSERT_EQ(priv_objs.size(), 1u);
+  assertExpectedDBObj(priv_objs,
+                      "test_server",
+                      TDBObjectType::ServerDBObjectType,
+                      {0, 0, 1, 0},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, AlterOnServerObjectPrivsSuper) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT ALTER ON SERVER test_server TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_object_privs(
+      priv_objs, session_id, "test_server", TDBObjectType::ServerDBObjectType);
+  ASSERT_EQ(priv_objs.size(), 2u);
+  // Suser access obj returned when calling as suser
+  assertSuperAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "test_server",
+                      TDBObjectType::ServerDBObjectType,
+                      {0, 0, 1, 0},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+TEST_F(ServerPrivApiTest, UsageOnServerObjectPrivs) {
+  sql("GRANT USAGE ON SERVER test_server TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  login("test_user", "test_pass");
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  db_handler->get_db_object_privs(
+      priv_objs, session_id, "test_server", TDBObjectType::ServerDBObjectType);
+  ASSERT_EQ(priv_objs.size(), 1u);
+  assertExpectedDBObj(priv_objs,
+                      "test_server",
+                      TDBObjectType::ServerDBObjectType,
+                      {0, 0, 0, 1},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
+}
+
+TEST_F(ServerPrivApiTest, UsageOnServerObjectPrivsSuper) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sql("GRANT USAGE ON SERVER test_server TO test_user;");
+  std::vector<TDBObject> priv_objs;
+  db_handler->get_db_object_privs(
+      priv_objs, session_id, "test_server", TDBObjectType::ServerDBObjectType);
+  ASSERT_EQ(priv_objs.size(), 2u);
+  // Suser access obj returned when calling as suser
+  assertSuperAccessObj(priv_objs);
+  assertExpectedDBObj(priv_objs,
+                      "test_server",
+                      TDBObjectType::ServerDBObjectType,
+                      {0, 0, 0, 1},
+                      "test_user",
+                      TDBObjectType::ServerDBObjectType);
 }
 
 int main(int argc, char* argv[]) {

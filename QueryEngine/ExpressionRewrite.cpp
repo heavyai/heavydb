@@ -434,6 +434,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
       casts_.insert({unvisited_operand, ti});
     }
     const auto operand = visit(unvisited_operand);
+
     const auto& operand_ti = operand->get_type_info();
     const auto operand_type =
         operand_ti.is_decimal() ? decimal_to_int_type(operand_ti) : operand_ti.get_type();
@@ -727,6 +728,8 @@ namespace {
 static const std::unordered_set<std::string> overlaps_supported_functions = {
     "ST_Contains_MultiPolygon_Point",
     "ST_Contains_Polygon_Point",
+    "ST_cContains_MultiPolygon_Point",  // compressed coords version
+    "ST_cContains_Polygon_Point",
     "ST_Contains_Polygon_Polygon",
     "ST_Contains_Polygon_MultiPolygon",
     "ST_Contains_MultiPolygon_MultiPolygon",
@@ -736,6 +739,8 @@ static const std::unordered_set<std::string> overlaps_supported_functions = {
     "ST_Intersects_Polygon_MultiPolygon",
     "ST_Intersects_MultiPolygon_MultiPolygon",
     "ST_Intersects_MultiPolygon_Polygon",
+    "ST_Intersects_MultiPolygon_Point",
+    "ST_Approx_Overlaps_MultiPolygon_Point",
     "ST_Overlaps"};
 
 static const std::unordered_set<std::string> requires_many_to_many = {
@@ -814,7 +819,7 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
       CHECK(rewritten_lhs);
       const auto& lhs_ti = rewritten_lhs->get_type_info();
 
-      if (!lhs_ti.is_geometry()) {
+      if (!lhs_ti.is_geometry() && !is_constructed_point(rewritten_lhs.get())) {
         // TODO(adb): If ST_Contains is passed geospatial literals instead of columns, the
         // function will be expanded during translation rather than during code
         // generation. While this scenario does not make sense for the overlaps join, we
@@ -824,8 +829,8 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
         // mean the function has not been expanded to the physical types, yet.
 
         LOG(INFO) << "Unable to rewrite " << func_oper->getName()
-                  << " to overlaps conjunction. LHS input type is not a geospatial "
-                     "type. Are both inputs geospatial columns?\n"
+                  << " to overlaps conjunction. LHS input type is neither a geospatial "
+                     "column nor a constructed point\n"
                   << func_oper->toString();
 
         return boost::none;
@@ -861,7 +866,11 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
           kBOOLEAN, kOVERLAPS, kONE, rewritten_lhs, rewritten_rhs);
 
       VLOG(1) << "Successfully converted to overlaps join";
-      return OverlapsJoinConjunction{{expr}, {overlaps_oper}};
+      if (func_oper->getName() == "ST_Approx_Overlaps_MultiPolygon_Point"sv) {
+        return OverlapsJoinConjunction{{}, {overlaps_oper}};
+      } else {
+        return OverlapsJoinConjunction{{expr}, {overlaps_oper}};
+      }
     } else {
       VLOG(1) << "Overlaps join not enabled for " << func_oper->getName();
     }

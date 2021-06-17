@@ -312,7 +312,8 @@ void set_once_fatal_func(FatalFunc fatal_func) {
 }
 
 void shutdown() {
-  boost::log::core::get()->remove_all_sinks();
+  static std::once_flag logger_flag;
+  std::call_once(logger_flag, []() { boost::log::core::get()->remove_all_sinks(); });
 }
 
 namespace {

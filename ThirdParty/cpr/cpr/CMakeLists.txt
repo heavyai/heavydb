@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.7)
+cmake_minimum_required(VERSION 3.16)
 
 # Allow use of project folders for IDEs like Visual Studio, so we
 # could organize projects into relevant folders: "cpr", "tests" & "external (libraries)".

@@ -27,7 +27,7 @@ bool Executor::isArchMaxwell(const ExecutorDeviceType dt) const {
          catalog_->getDataMgr().getCudaMgr()->isArchMaxwell();
 }
 
-bool GroupByAndAggregate::needsUnnestDoublePatch(llvm::Value* val_ptr,
+bool GroupByAndAggregate::needsUnnestDoublePatch(llvm::Value const* val_ptr,
                                                  const std::string& agg_base_name,
                                                  const bool threads_share_memory,
                                                  const CompilationOptions& co) const {

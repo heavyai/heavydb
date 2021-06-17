@@ -19,6 +19,6 @@
 
 namespace Data_Namespace {
 enum MemoryLevel { DISK_LEVEL = 0, CPU_LEVEL = 1, GPU_LEVEL = 2 };
-}
+}  // namespace Data_Namespace
 
 #endif  // MEMORYLEVEL_H

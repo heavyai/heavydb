@@ -1,0 +1,10 @@
+{
+  "statementType": "DDL",
+  "payload": {
+    "alterType": "RENAME_COLUMN",
+    "tableName": "test_table",
+    "oldColumnName": "old_column",
+    "newColumnName": "new_column",
+    "command": "ALTER_FOREIGN_TABLE"
+  }
+}

@@ -50,6 +50,7 @@ class QueryExecutionContext : boost::noncopyable {
                         std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                         const bool output_columnar,
                         const bool sort_on_gpu,
+                        const size_t thread_idx,
                         RenderInfo*);
 
   ResultSetPtr getRowSet(const RelAlgExecutionUnit& ra_exe_unit,
@@ -73,6 +74,7 @@ class QueryExecutionContext : boost::noncopyable {
       const size_t shared_memory_size,
       int32_t* error_code,
       const uint32_t num_tables,
+      const bool allow_runtime_interrupt,
       const std::vector<int64_t>& join_hash_tables,
       RenderAllocatorMap* render_allocator_map);
 

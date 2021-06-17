@@ -62,3 +62,8 @@ class QueryExecutionError : public std::runtime_error {
   int32_t error_code_;
   boost::optional<QueryExecutionProperties> execution_props_;
 };
+
+class ReductionRanOutOfSlots : public std::runtime_error {
+ public:
+  ReductionRanOutOfSlots() : std::runtime_error("ReductionRanOutOfSlots") {}
+};

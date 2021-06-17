@@ -50,7 +50,11 @@ const char* get_extract_function_name(ExtractField field) {
     case kDAY:
       return "extract_day";
     case kWEEK:
-      return "extract_week";
+      return "extract_week_monday";
+    case kWEEK_SUNDAY:
+      return "extract_week_sunday";
+    case kWEEK_SATURDAY:
+      return "extract_week_saturday";
     case kDOY:
       return "extract_day_of_year";
     case kMONTH:
@@ -108,16 +112,15 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::ExtractExpr* extract_expr,
     llvm::BasicBlock* extract_nullcheck_bb{nullptr};
     llvm::PHINode* extract_nullcheck_value{nullptr};
     {
-      GroupByAndAggregate::DiamondCodegen null_check(
-          cgen_state_->ir_builder_.CreateICmp(
-              llvm::ICmpInst::ICMP_EQ,
-              from_expr,
-              cgen_state_->inlineIntNull(extract_expr_ti)),
-          executor(),
-          false,
-          "extract_nullcheck",
-          nullptr,
-          false);
+      DiamondCodegen null_check(cgen_state_->ir_builder_.CreateICmp(
+                                    llvm::ICmpInst::ICMP_EQ,
+                                    from_expr,
+                                    cgen_state_->inlineIntNull(extract_expr_ti)),
+                                executor(),
+                                false,
+                                "extract_nullcheck",
+                                nullptr,
+                                false);
       // generate a phi node depending on whether we got a null or not
       extract_nullcheck_bb = llvm::BasicBlock::Create(
           cgen_state_->context_, "extract_nullcheck_bb", cgen_state_->current_func_);

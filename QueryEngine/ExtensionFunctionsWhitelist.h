@@ -67,7 +67,18 @@ enum class ExtArgumentType {
   ColumnInt64,
   ColumnFloat,
   ColumnDouble,
-  ColumnBool
+  ColumnBool,
+  TextEncodingNone,
+  TextEncodingDict8,
+  TextEncodingDict16,
+  TextEncodingDict32,
+  ColumnListInt8,
+  ColumnListInt16,
+  ColumnListInt32,
+  ColumnListInt64,
+  ColumnListFloat,
+  ColumnListDouble,
+  ColumnListBool
 };
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type);
@@ -88,8 +99,12 @@ class ExtensionFunction {
   std::string toString() const;
   std::string toStringSQL() const;
 
-  bool isGPU() const { return (name_.find("_cpu_") == std::string::npos); }
-  bool isCPU() const { return (name_.find("_gpu_") == std::string::npos); }
+  inline bool isGPU() const {
+    return (name_.find("_cpu_", name_.find("__")) == std::string::npos);
+  }
+  inline bool isCPU() const {
+    return (name_.find("_gpu_", name_.find("__")) == std::string::npos);
+  }
 
  private:
   const std::string name_;
@@ -129,7 +144,8 @@ class ExtensionFunctionsWhitelist {
   static std::string toStringSQL(const ExtArgumentType& sig_type);
 
   static std::vector<std::string> getLLVMDeclarations(
-      const std::unordered_set<std::string>& udf_decls);
+      const std::unordered_set<std::string>& udf_decls,
+      const bool is_gpu = false);
 
  private:
   static void addCommon(
@@ -137,9 +153,11 @@ class ExtensionFunctionsWhitelist {
       const std::string& json_func_sigs);
 
  private:
-  // Function overloading not supported, they're uniquely identified by name.
+  // Compiletime UDFs defined in ExtensionFunctions.hpp
   static std::unordered_map<std::string, std::vector<ExtensionFunction>> functions_;
+  // Loadtime UDFs defined via omnisci server --udf argument
   static std::unordered_map<std::string, std::vector<ExtensionFunction>> udf_functions_;
+  // Runtime UDFs defined via thrift interface.
   static std::unordered_map<std::string, std::vector<ExtensionFunction>>
       rt_udf_functions_;
 };

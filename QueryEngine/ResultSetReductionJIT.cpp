@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,8 @@
 #include "Execute.h"
 #include "IRCodegenUtils.h"
 #include "LLVMFunctionAttributesUtil.h"
-
 #include "Shared/likely.h"
+#include "Shared/quantile.h"
 
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/IR/Function.h>
@@ -43,6 +43,8 @@ namespace {
 
 // Error code to be returned when the watchdog timer triggers during the reduction.
 const int32_t WATCHDOG_ERROR{-1};
+// Error code to be returned when the interrupt is triggered during the reduction.
+const int32_t INTERRUPT_ERROR{10};
 // Use the interpreter, not the JIT, for a number of entries lower than the threshold.
 const size_t INTERP_THRESHOLD{25};
 
@@ -409,7 +411,7 @@ void varlen_buffer_sample(int8_t* this_ptr1,
 
 }  // namespace
 
-extern "C" void serialized_varlen_buffer_sample(
+extern "C" RUNTIME_EXPORT void serialized_varlen_buffer_sample(
     const void* serialized_varlen_buffer_handle,
     int8_t* this_ptr1,
     int8_t* this_ptr2,
@@ -439,11 +441,12 @@ extern "C" void serialized_varlen_buffer_sample(
 // Wrappers to be called from the generated code, sharing implementation with the rest of
 // the system.
 
-extern "C" void count_distinct_set_union_jit_rt(const int64_t new_set_handle,
-                                                const int64_t old_set_handle,
-                                                const void* that_qmd_handle,
-                                                const void* this_qmd_handle,
-                                                const int64_t target_logical_idx) {
+extern "C" RUNTIME_EXPORT void count_distinct_set_union_jit_rt(
+    const int64_t new_set_handle,
+    const int64_t old_set_handle,
+    const void* that_qmd_handle,
+    const void* this_qmd_handle,
+    const int64_t target_logical_idx) {
   const auto that_qmd = reinterpret_cast<const QueryMemoryDescriptor*>(that_qmd_handle);
   const auto this_qmd = reinterpret_cast<const QueryMemoryDescriptor*>(this_qmd_handle);
   const auto& new_count_distinct_desc =
@@ -456,16 +459,30 @@ extern "C" void count_distinct_set_union_jit_rt(const int64_t new_set_handle,
       new_set_handle, old_set_handle, new_count_distinct_desc, old_count_distinct_desc);
 }
 
-extern "C" void get_group_value_reduction_rt(int8_t* groups_buffer,
-                                             const int8_t* key,
-                                             const uint32_t key_count,
-                                             const void* this_qmd_handle,
-                                             const int8_t* that_buff,
-                                             const uint32_t that_entry_idx,
-                                             const uint32_t that_entry_count,
-                                             const uint32_t row_size_bytes,
-                                             int64_t** buff_out,
-                                             uint8_t* empty) {
+extern "C" RUNTIME_EXPORT void approx_median_jit_rt(const int64_t new_set_handle,
+                                                    const int64_t old_set_handle,
+                                                    const void* that_qmd_handle,
+                                                    const void* this_qmd_handle,
+                                                    const int64_t target_logical_idx) {
+  auto* incoming = reinterpret_cast<quantile::TDigest*>(new_set_handle);
+  if (incoming->centroids().capacity()) {
+    auto* accumulator = reinterpret_cast<quantile::TDigest*>(old_set_handle);
+    accumulator->allocate();
+    accumulator->mergeTDigest(*incoming);
+  }
+}
+
+extern "C" RUNTIME_EXPORT void get_group_value_reduction_rt(
+    int8_t* groups_buffer,
+    const int8_t* key,
+    const uint32_t key_count,
+    const void* this_qmd_handle,
+    const int8_t* that_buff,
+    const uint32_t that_entry_idx,
+    const uint32_t that_entry_count,
+    const uint32_t row_size_bytes,
+    int64_t** buff_out,
+    uint8_t* empty) {
   const auto& this_qmd = *reinterpret_cast<const QueryMemoryDescriptor*>(this_qmd_handle);
   const auto gvi =
       result_set::get_group_value_reduction(reinterpret_cast<int64_t*>(groups_buffer),
@@ -482,9 +499,17 @@ extern "C" void get_group_value_reduction_rt(int8_t* groups_buffer,
   *empty = gvi.second;
 }
 
-extern "C" uint8_t check_watchdog_rt(const size_t sample_seed) {
+extern "C" RUNTIME_EXPORT uint8_t check_watchdog_rt(const size_t sample_seed) {
   if (UNLIKELY(g_enable_dynamic_watchdog && (sample_seed & 0x3F) == 0 &&
                dynamic_watchdog())) {
+    return true;
+  }
+  return false;
+}
+
+extern "C" uint8_t check_interrupt_rt(const size_t sample_seed) {
+  // this func is called iff we enable runtime query interrupt
+  if (UNLIKELY((sample_seed & 0xFFFF) == 0 && check_interrupt())) {
     return true;
   }
   return false;
@@ -970,22 +995,24 @@ void generate_loop_body(For* for_loop,
                         Value* serialized_varlen_buffer) {
   const auto that_entry_idx = for_loop->add<BinaryOperator>(
       BinaryOperator::BinaryOp::Add, for_loop->iter(), start_index, "that_entry_idx");
-  const auto watchdog_sample_seed =
+  const auto sample_seed =
       for_loop->add<Cast>(Cast::CastOp::SExt, that_entry_idx, Type::Int64, "");
-  const auto watchdog_triggered =
-      for_loop->add<ExternalCall>("check_watchdog_rt",
-                                  Type::Int8,
-                                  std::vector<const Value*>{watchdog_sample_seed},
-                                  "");
-  const auto watchdog_triggered_bool =
-      for_loop->add<ICmp>(ICmp::Predicate::NE,
-                          watchdog_triggered,
-                          ir_reduce_loop->addConstant<ConstantInt>(0, Type::Int8),
-                          "");
-  for_loop->add<ReturnEarly>(
-      watchdog_triggered_bool,
-      ir_reduce_loop->addConstant<ConstantInt>(WATCHDOG_ERROR, Type::Int32),
-      "");
+  if (g_enable_dynamic_watchdog || g_enable_non_kernel_time_query_interrupt) {
+    const auto checker_rt_name =
+        g_enable_dynamic_watchdog ? "check_watchdog_rt" : "check_interrupt_rt";
+    const auto error_code = g_enable_dynamic_watchdog ? WATCHDOG_ERROR : INTERRUPT_ERROR;
+    const auto checker_triggered = for_loop->add<ExternalCall>(
+        checker_rt_name, Type::Int8, std::vector<const Value*>{sample_seed}, "");
+    const auto interrupt_triggered_bool =
+        for_loop->add<ICmp>(ICmp::Predicate::NE,
+                            checker_triggered,
+                            ir_reduce_loop->addConstant<ConstantInt>(0, Type::Int8),
+                            "");
+    for_loop->add<ReturnEarly>(
+        interrupt_triggered_bool,
+        ir_reduce_loop->addConstant<ConstantInt>(error_code, Type::Int32),
+        "");
+  }
   const auto reduce_rc =
       for_loop->add<Call>(ir_reduce_one_entry_idx,
                           std::vector<const Value*>{this_buff,
@@ -1130,6 +1157,11 @@ void ResultSetReductionJIT::reduceOneAggregateSlot(Value* this_ptr1,
       emit_aggregate_one_count(this_ptr1, that_ptr1, chosen_bytes, ir_reduce_one_entry);
       break;
     }
+    case kAPPROX_MEDIAN:
+      CHECK_EQ(chosen_bytes, static_cast<int8_t>(sizeof(int64_t)));
+      reduceOneApproxMedianSlot(
+          this_ptr1, that_ptr1, target_logical_idx, ir_reduce_one_entry);
+      break;
     case kAVG: {
       // Ignore float argument compaction for count component for fear of its overflow
       emit_aggregate_one_count(this_ptr2,
@@ -1185,6 +1217,28 @@ void ResultSetReductionJIT::reduceOneCountDistinctSlot(
   const auto that_qmd_arg = ir_reduce_one_entry->arg(3);
   ir_reduce_one_entry->add<ExternalCall>(
       "count_distinct_set_union_jit_rt",
+      Type::Void,
+      std::vector<const Value*>{
+          new_set_handle,
+          old_set_handle,
+          that_qmd_arg,
+          this_qmd_arg,
+          ir_reduce_one_entry->addConstant<ConstantInt>(target_logical_idx, Type::Int64)},
+      "");
+}
+
+void ResultSetReductionJIT::reduceOneApproxMedianSlot(
+    Value* this_ptr1,
+    Value* that_ptr1,
+    const size_t target_logical_idx,
+    Function* ir_reduce_one_entry) const {
+  CHECK_LT(target_logical_idx, query_mem_desc_.getCountDistinctDescriptorsSize());
+  const auto old_set_handle = emit_load_i64(this_ptr1, ir_reduce_one_entry);
+  const auto new_set_handle = emit_load_i64(that_ptr1, ir_reduce_one_entry);
+  const auto this_qmd_arg = ir_reduce_one_entry->arg(2);
+  const auto that_qmd_arg = ir_reduce_one_entry->arg(3);
+  ir_reduce_one_entry->add<ExternalCall>(
+      "approx_median_jit_rt",
       Type::Void,
       std::vector<const Value*>{
           new_set_handle,

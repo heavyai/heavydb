@@ -23,7 +23,6 @@
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
 #include "CudaMgr/CudaMgr.h"
-#include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "FileMgr/GlobalFileMgr.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
 
@@ -43,24 +42,29 @@ namespace Data_Namespace {
 
 DataMgr::DataMgr(const std::string& dataDir,
                  const SystemParameters& system_parameters,
+                 std::unique_ptr<CudaMgr_Namespace::CudaMgr> cudaMgr,
                  const bool useGpus,
-                 const int numGpus,
-                 const int startGpu,
                  const size_t reservedGpuMem,
                  const size_t numReaderThreads,
-                 const DiskCacheConfig cache_config)
-    : dataDir_(dataDir) {
+                 const File_Namespace::DiskCacheConfig cache_config)
+    : cudaMgr_{std::move(cudaMgr)}
+    , dataDir_{dataDir}
+    , hasGpus_{false}
+    , reservedGpuMem_{reservedGpuMem} {
   if (useGpus) {
-    try {
-      cudaMgr_ = std::make_unique<CudaMgr_Namespace::CudaMgr>(numGpus, startGpu);
-      reservedGpuMem_ = reservedGpuMem;
+    if (cudaMgr_) {
       hasGpus_ = true;
-    } catch (const std::exception& e) {
-      LOG(ERROR) << "Unable to instantiate CudaMgr, falling back to CPU-only mode. "
-                 << e.what();
+    } else {
+      LOG(ERROR) << "CudaMgr instance is invalid, falling back to CPU-only mode.";
       hasGpus_ = false;
     }
   } else {
+    // NOTE: useGpus == false with a valid cudaMgr is a potentially valid configuration.
+    // i.e. QueryEngine can be set to cpu-only for a cuda-enabled build, but still have
+    // rendering enabled. The renderer would require a CudaMgr in this case, in addition
+    // to a GpuCudaBufferMgr for cuda-backed thrust allocations.
+    // We're still setting hasGpus_ to false in that case tho to enforce cpu-only query
+    // execution.
     hasGpus_ = false;
   }
 
@@ -158,7 +162,7 @@ size_t DataMgr::getTotalSystemMemory() {
 }
 
 // This function exists for testing purposes so that we can test a reset of the cache.
-void DataMgr::resetPersistentStorage(const DiskCacheConfig& cache_config,
+void DataMgr::resetPersistentStorage(const File_Namespace::DiskCacheConfig& cache_config,
                                      const size_t num_reader_threads,
                                      const SystemParameters& sys_params) {
   int numLevels = bufferMgrs_.size();
@@ -174,7 +178,7 @@ void DataMgr::resetPersistentStorage(const DiskCacheConfig& cache_config,
 
 void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                            const size_t userSpecifiedNumReaderThreads,
-                           const DiskCacheConfig& cache_config) {
+                           const File_Namespace::DiskCacheConfig& cache_config) {
   // no need for locking, as this is only called in the constructor
   bufferMgrs_.resize(2);
   bufferMgrs_[0].push_back(PersistentStorageMgr::createPersistentStorageMgr(
@@ -198,7 +202,7 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
   LOG(INFO) << "Max CPU Slab Size is " << (float)maxCpuSlabSize / (1024 * 1024) << "MB";
   LOG(INFO) << "Max memory pool size for CPU is " << (float)cpuBufferSize / (1024 * 1024)
             << "MB";
-  if (hasGpus_) {
+  if (hasGpus_ || cudaMgr_) {
     LOG(INFO) << "Reserved GPU memory is " << (float)reservedGpuMem_ / (1024 * 1024)
               << "MB includes render buffer allocation";
     bufferMgrs_.resize(3);
@@ -389,7 +393,7 @@ void DataMgr::clearMemory(const MemoryLevel memLevel) {
         bufferMgrs_[memLevel][gpuNum]->clearSlabs();
       }
     } else {
-      throw std::runtime_error("Unable to clear GPU memory: No GPUs detected");
+      LOG(WARNING) << "Unable to clear GPU memory: No GPUs detected";
     }
   } else {
     bufferMgrs_[memLevel][0]->clearSlabs();
@@ -405,6 +409,7 @@ bool DataMgr::isBufferOnDevice(const ChunkKey& key,
 
 void DataMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                               const ChunkKey& keyPrefix) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   bufferMgrs_[0][0]->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, keyPrefix);
 }
 
@@ -483,6 +488,8 @@ void DataMgr::copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer) {
 
 void DataMgr::checkpoint(const int db_id, const int tb_id) {
   // TODO(adb): do we need a buffer mgr lock here?
+  // MAT Yes to reduce Parallel Executor TSAN issues (and correctness for now)
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {
     // use reverse iterator so we start at GPU level, then CPU then DISK
     for (auto deviceIt = levelIt->begin(); deviceIt != levelIt->end(); ++deviceIt) {
@@ -491,8 +498,21 @@ void DataMgr::checkpoint(const int db_id, const int tb_id) {
   }
 }
 
+void DataMgr::checkpoint(const int db_id,
+                         const int table_id,
+                         const MemoryLevel memory_level) {
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
+  CHECK_LT(static_cast<size_t>(memory_level), bufferMgrs_.size());
+  CHECK_LT(static_cast<size_t>(memory_level), levelSizes_.size());
+  for (int device_id = 0; device_id < levelSizes_[memory_level]; device_id++) {
+    bufferMgrs_[memory_level][device_id]->checkpoint(db_id, table_id);
+  }
+}
+
 void DataMgr::checkpoint() {
   // TODO(adb): SAA
+  // MAT Yes to reduce Parallel Executor TSAN issues (and correctness for now)
+  std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {
     // use reverse iterator so we start at GPU level, then CPU then DISK
     for (auto deviceIt = levelIt->begin(); deviceIt != levelIt->end(); ++deviceIt) {
@@ -526,6 +546,11 @@ File_Namespace::GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
       dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
   CHECK(global_file_mgr);
   return global_file_mgr;
+}
+
+std::shared_ptr<ForeignStorageInterface> DataMgr::getForeignStorageInterface() const {
+  return dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])
+      ->getForeignStorageInterface();
 }
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem_info) {

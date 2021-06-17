@@ -82,10 +82,10 @@ class SQLImporter_args {
     sb.append(
             "[-d <other database JDBC drive class>] -c <other database JDBC connection string>\n");
     sb.append(
-            "-su <other database user> -sp <other database user password> -su <other database sql statement>\n");
+            "-su <other database user> -sp <other database user password> -ss <other database sql statement>\n");
     sb.append(
             "-t <OmniSci target table> -b <transfer buffer size> -f <table fragment size>\n");
-    sb.append("[-tr] -i <init commands file>\n");
+    sb.append("[-tr] [-adtf] [-nprg] -i <init commands file>\n");
     sb.append("\nSQLImporter -h | --help\n\n");
 
     HelpFormatter formatter = new HelpFormatter();
@@ -151,7 +151,7 @@ class SQLImporter_args {
                               .build());
     options.addOption(
             Option.builder()
-                    .desc("Inseure TLS - do not validate server OmniSci server credentials")
+                    .desc("Insecure TLS - do not validate server OmniSci server credentials")
                     .longOpt("insecure")
                     .build());
 
@@ -208,11 +208,24 @@ class SQLImporter_args {
                               .desc("Truncate table if it exists")
                               .longOpt("truncate")
                               .build());
+
     options.addOption(Option.builder("i")
                               .hasArg()
                               .desc("File containing init command for DB")
                               .longOpt("initializeFile")
                               .build());
+
+    options.addOption(
+            Option.builder("adtf")
+                    .desc("Allow double to float conversion, note precision will be reduced")
+                    .longOpt("AllowDoubleToFloat")
+                    .build());
+
+    options.addOption(
+            Option.builder("nprg")
+                    .desc("Do not assign Render Groups to Polygons (faster import, but not renderable)")
+                    .longOpt("noPolyRenderGroups")
+                    .build());
   }
 
   private Option setOptionRequired(Option option) {
@@ -386,6 +399,8 @@ public class SQLImporter {
         cols.add(col);
       }
 
+      boolean assignRenderGroups = !cmd.hasOption("noPolyRenderGroups");
+
       // read data from old DB
       while (rs.next()) {
         for (int i = 1; i <= md.getColumnCount(); i++) {
@@ -401,8 +416,13 @@ public class SQLImporter {
         if (bufferCount == bufferSize) {
           bufferCount = 0;
           // send the buffer to mapD
-          client.load_table_binary_columnar(
-                  session, cmd.getOptionValue("targetTable"), cols); // old
+          if (assignRenderGroups) {
+            client.load_table_binary_columnar_polys(
+                    session, cmd.getOptionValue("targetTable"), cols, null, true);
+          } else {
+            client.load_table_binary_columnar(
+                    session, cmd.getOptionValue("targetTable"), cols, null);
+          }
           // recreate columnar store for use
           for (int i = 1; i <= md.getColumnCount(); i++) {
             resetBinaryColumn(i, md, bufferSize, cols.get(i - 1));
@@ -415,19 +435,31 @@ public class SQLImporter {
       }
       if (bufferCount > 0) {
         // send the LAST buffer to mapD
-        client.load_table_binary_columnar(
-                session, cmd.getOptionValue("targetTable"), cols);
+        if (assignRenderGroups) {
+          client.load_table_binary_columnar_polys(
+                  session, cmd.getOptionValue("targetTable"), cols, null, true);
+        } else {
+          client.load_table_binary_columnar(
+                  session, cmd.getOptionValue("targetTable"), cols, null);
+        }
         bufferCount = 0;
       }
+
+      // dump render group assignment data immediately
+      if (assignRenderGroups) {
+        client.load_table_binary_columnar_polys(
+                session, cmd.getOptionValue("targetTable"), null, null, false);
+      }
+
       LOGGER.info("result set count is " + resultCount + " read time is "
               + (System.currentTimeMillis() - timer) + "ms");
 
       // Clean-up environment
       rs.close();
       stmt.close();
+      conn.close();
 
       totalTime = System.currentTimeMillis() - startTime;
-      conn.close();
     } catch (SQLException se) {
       LOGGER.error("SQLException - " + se.toString());
       se.printStackTrace();
@@ -452,8 +484,19 @@ public class SQLImporter {
       } catch (SQLException se) {
         LOGGER.error("SQlException in close - " + se.toString());
         se.printStackTrace();
-      } // end finally try
-    } // end try
+      }
+      try {
+        if (session != null) {
+          client.disconnect(session);
+        }
+      } catch (TOmniSciException ex) {
+        LOGGER.error("TOmniSciException - in finalization " + ex.toString());
+        ex.printStackTrace();
+      } catch (TException ex) {
+        LOGGER.error("TException - in finalization" + ex.toString());
+        ex.printStackTrace();
+      }
+    }
   }
 
   private void run_init(Connection conn) {
@@ -521,9 +564,9 @@ public class SQLImporter {
       if (!dstColumns.get(i - 1).getCol_name().equalsIgnoreCase(
                   srcColumns.getColumnName(i))) {
         LOGGER.error(
-                "Destination table does not have matching column in same order for column number"
+                "Destination table does not have matching column in same order for column number "
                 + i + " destination column name is " + dstColumns.get(i - 1).col_name
-                + " versus Select " + srcColumns.getColumnName(i));
+                + " versus target column " + srcColumns.getColumnName(i));
         exit(1);
       }
       TDatumType dstType = dstColumns.get(i - 1).getCol_type().getType();
@@ -558,6 +601,9 @@ public class SQLImporter {
           // Fall through and try double
         case java.sql.Types.DOUBLE:
           match |= dstType == TDatumType.DOUBLE;
+          if (cmd.hasOption("AllowDoubleToFloat")) {
+            match |= dstType == TDatumType.FLOAT;
+          }
           break;
         case java.sql.Types.TIME:
           match = dstType == TDatumType.TIME;
@@ -579,11 +625,13 @@ public class SQLImporter {
         case java.sql.Types.CHAR:
         case java.sql.Types.LONGVARCHAR:
         case java.sql.Types.LONGNVARCHAR:
-          match = dstType == TDatumType.STR;
+          match = (dstType == TDatumType.STR || dstType == TDatumType.POINT
+                  || dstType == TDatumType.POLYGON || dstType == TDatumType.MULTIPOLYGON
+                  || dstType == TDatumType.LINESTRING);
           break;
         case java.sql.Types.OTHER:
-          // NOTE: I ignore subtypes (geography vs geopetry vs none) here just because it
-          // makes no difference for OmniSciDB at the moment
+          // NOTE: I ignore subtypes (geography vs geopetry vs none) here just because
+          // it makes no difference for OmniSciDB at the moment
           Db_vendor_types.GisType gisType =
                   vendor_types.find_gis_type(otherdb_conn, srcColumns, i);
           if (gisType.srid != dstScale) {
@@ -751,7 +799,7 @@ public class SQLImporter {
   }
 
   private void executeMapDCommand(String sql) {
-    LOGGER.info(" run comamnd :" + sql);
+    LOGGER.info("Run Command - " + sql);
 
     try {
       TQueryResult sqlResult = client.sql_execute(session, sql + ";", true, null, -1, -1);

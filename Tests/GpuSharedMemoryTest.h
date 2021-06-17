@@ -41,7 +41,7 @@
 class StrideNumberGenerator : public NumberGenerator {
  public:
   StrideNumberGenerator(const int64_t start, const int64_t stride)
-      : crt_(start), stride_(stride) {}
+      : crt_(start), stride_(stride), start_(start) {}
 
   int64_t getNextValue() override {
     const auto crt = crt_;

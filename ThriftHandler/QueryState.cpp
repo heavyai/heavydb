@@ -23,6 +23,7 @@
 #include "QueryState.h"
 #include "Catalog/Catalog.h"
 #include "Catalog/SessionInfo.h"
+#include "Shared/toString.h"
 
 #include <algorithm>
 #include <iomanip>
@@ -47,7 +48,7 @@ SessionData::SessionData(
     std::shared_ptr<Catalog_Namespace::SessionInfo const> const& session_info)
     : session_info(session_info)
     , db_name(session_info->getCatalog().getCurrentDB().dbName)
-    , user_name(session_info->get_currentUser().userName)
+    , user_name(session_info->get_currentUser().userLoggable())
     , public_session_id(session_info->get_public_session_id()) {}
 
 std::atomic<query_state::Id> QueryState::s_next_id{0};
@@ -59,7 +60,8 @@ QueryState::QueryState(
     , session_data_(session_info ? boost::make_optional<SessionData>(session_info)
                                  : boost::none)
     , query_str_(std::move(query_str))
-    , logged_(false) {}
+    , logged_(false)
+    , submitted_(::toString(std::chrono::system_clock::now())) {}
 
 QueryStateProxy QueryState::createQueryStateProxy() {
   return createQueryStateProxy(events_.end());
@@ -85,6 +87,15 @@ std::shared_ptr<Catalog_Namespace::SessionInfo const> QueryState::getConstSessio
     // This can happen for a query on a database that is simultaneously dropped.
     throw std::runtime_error("session_info requested but has expired.");
   }
+}
+
+void QueryState::setQuerySubmittedTime(const std::string& t) {
+  std::lock_guard<std::mutex> lock(events_mutex_);
+  submitted_ = t;
+}
+const std::string QueryState::getQuerySubmittedTime() const {
+  std::lock_guard<std::mutex> lock(events_mutex_);
+  return submitted_;
 }
 
 // Assumes query_state_ is not null, and events_mutex_ is locked for this.
@@ -160,7 +171,8 @@ struct SessionInfoFormatter {
 
 std::ostream& operator<<(std::ostream& os, SessionInfoFormatter const& formatter) {
   return os << QuoteFormatter{formatter.session_info.getCatalog().getCurrentDB().dbName}
-            << ' ' << QuoteFormatter{formatter.session_info.get_currentUser().userName}
+            << ' '
+            << QuoteFormatter{formatter.session_info.get_currentUser().userLoggable()}
             << ' ' << formatter.session_info.get_public_session_id();
 }
 

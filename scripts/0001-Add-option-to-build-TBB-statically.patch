@@ -1,0 +1,82 @@
+From 2d9df245c7084ea187ceeafdd31ea9767e3a4bea Mon Sep 17 00:00:00 2001
+From: Andrew Seidl <dev@aas.io>
+Date: Fri, 18 Dec 2020 15:24:34 -0600
+Subject: [PATCH] Add option to build TBB statically
+
+Resolves #297
+---
+ CMakeLists.txt                     | 2 ++
+ src/tbb/CMakeLists.txt             | 2 +-
+ src/tbbbind/CMakeLists.txt         | 2 +-
+ src/tbbmalloc/CMakeLists.txt       | 2 +-
+ src/tbbmalloc_proxy/CMakeLists.txt | 2 +-
+ 5 files changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b3a491cf..b144b427 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -99,6 +99,8 @@ option(TBB4PY_BUILD "Enable tbb4py build" OFF)
+ option(TBB_CPF "Enable preview features of the library" OFF)
+ option(TBB_FIND_PACKAGE "Enable search for external oneTBB using find_package instead of build from sources" OFF)
+ 
++option(BUILD_SHARED_LIBS "Build shared libraries" ON)
++
+ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+     set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
+     message(STATUS "CMAKE_BUILD_TYPE is not specified. Using default: ${CMAKE_BUILD_TYPE}")
+diff --git a/src/tbb/CMakeLists.txt b/src/tbb/CMakeLists.txt
+index 297e9b1a..3c30ecfa 100644
+--- a/src/tbb/CMakeLists.txt
++++ b/src/tbb/CMakeLists.txt
+@@ -12,7 +12,7 @@
+ # See the License for the specific language governing permissions and
+ # limitations under the License.
+ 
+-add_library(tbb SHARED
++add_library(tbb
+     allocator.cpp
+     arena.cpp
+     arena_slot.cpp
+diff --git a/src/tbbbind/CMakeLists.txt b/src/tbbbind/CMakeLists.txt
+index 4fdc6c52..9432c41b 100644
+--- a/src/tbbbind/CMakeLists.txt
++++ b/src/tbbbind/CMakeLists.txt
+@@ -17,7 +17,7 @@ macro(tbbbind_build TBBBIND_NAME HWLOC_VERSION)
+     if (NOT HWLOC_FOUND)
+         message(STATUS "HWLOC ${HWLOC_VERSION} was not found, the corresponding TBBBind library target was disabled.")
+     else()
+-        add_library(${TBBBIND_NAME} SHARED tbb_bind.cpp)
++        add_library(${TBBBIND_NAME} tbb_bind.cpp)
+         add_library(TBB::${TBBBIND_NAME} ALIAS ${TBBBIND_NAME})
+ 
+         target_compile_definitions(${TBBBIND_NAME} PRIVATE __TBBBIND_BUILD)
+diff --git a/src/tbbmalloc/CMakeLists.txt b/src/tbbmalloc/CMakeLists.txt
+index 707bd153..2394201e 100644
+--- a/src/tbbmalloc/CMakeLists.txt
++++ b/src/tbbmalloc/CMakeLists.txt
+@@ -12,7 +12,7 @@
+ # See the License for the specific language governing permissions and
+ # limitations under the License.
+ 
+-add_library(tbbmalloc SHARED
++add_library(tbbmalloc
+     backend.cpp
+     backref.cpp
+     frontend.cpp
+diff --git a/src/tbbmalloc_proxy/CMakeLists.txt b/src/tbbmalloc_proxy/CMakeLists.txt
+index 21dcda95..af302bd1 100644
+--- a/src/tbbmalloc_proxy/CMakeLists.txt
++++ b/src/tbbmalloc_proxy/CMakeLists.txt
+@@ -12,7 +12,7 @@
+ # See the License for the specific language governing permissions and
+ # limitations under the License.
+ 
+-add_library(tbbmalloc_proxy SHARED
++add_library(tbbmalloc_proxy
+     function_replacement.cpp
+     proxy.cpp)
+ 
+-- 
+2.29.2
+

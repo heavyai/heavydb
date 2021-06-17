@@ -33,7 +33,9 @@
 #include <memory>
 #include <vector>
 
-extern "C" void print_iterators(const int64_t i, const int64_t j, const int64_t k) {
+extern "C" RUNTIME_EXPORT void print_iterators(const int64_t i,
+                                               const int64_t j,
+                                               const int64_t k) {
   printf("%ld, %ld, %ld\n", i, j, k);
 }
 

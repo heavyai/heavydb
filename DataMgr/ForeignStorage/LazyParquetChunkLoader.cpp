@@ -25,7 +25,8 @@
 #include <parquet/statistics.h>
 #include <parquet/types.h>
 
-#include "ForeignDataWrapperShared.h"
+#include "ForeignStorageException.h"
+#include "ParquetDateFromTimestampEncoder.h"
 #include "ParquetDateInSecondsEncoder.h"
 #include "ParquetDecimalEncoder.h"
 #include "ParquetFixedLengthArrayEncoder.h"
@@ -180,108 +181,246 @@ std::shared_ptr<ParquetEncoder> create_parquet_decimal_encoder(
   return {};
 }
 
+/**
+ * @brief Create a signed or unsigned integral parquet encoder using types.
+ *
+ * @param buffer - buffer used within the encoder
+ * @param omnisci_data_type_byte_size - size in number of bytes of OmniSci type
+ * @param parquet_data_type_byte_size - size in number of bytes of Parquet physical type
+ * @param is_signed - flag indicating if Parquet column is signed
+ *
+ * @return a std::shared_ptr to an integral encoder
+ *
+ * See the documentation for ParquetFixedLengthEncoder and
+ * ParquetUnsignedFixedLengthEncoder for a description of the semantics of the
+ * templated types `V`, `T`, and `U`.
+ */
+template <typename V, typename T, typename U>
+std::shared_ptr<ParquetEncoder>
+create_parquet_signed_or_unsigned_integral_encoder_with_types(
+    AbstractBuffer* buffer,
+    const size_t omnisci_data_type_byte_size,
+    const size_t parquet_data_type_byte_size,
+    const bool is_signed) {
+  if (is_signed) {
+    return std::make_shared<ParquetFixedLengthEncoder<V, T>>(
+        buffer, omnisci_data_type_byte_size, parquet_data_type_byte_size);
+  } else {
+    return std::make_shared<ParquetUnsignedFixedLengthEncoder<V, T, U>>(
+        buffer, omnisci_data_type_byte_size, parquet_data_type_byte_size);
+  }
+}
+
+/**
+ * @brief Create a integral parquet encoder using types.
+ *
+ * @param buffer - buffer used within the encoder
+ * @param omnisci_data_type_byte_size - size in number of bytes of OmniSci type
+ * @param parquet_data_type_byte_size - size in number of bytes of Parquet physical type
+ * @param bit_width - bit width specified for the Parquet column
+ * @param is_signed - flag indicating if Parquet column is signed
+ *
+ * @return a std::shared_ptr to an integral encoder
+ *
+ * See the documentation for ParquetFixedLengthEncoder and
+ * ParquetUnsignedFixedLengthEncoder for a description of the semantics of the
+ * templated type `V`.
+ *
+ * Note, this function determines the appropriate bit depth integral encoder to
+ * create, while `create_parquet_signed_or_unsigned_integral_encoder_with_types`
+ * determines whether to create a signed or unsigned integral encoder.
+ */
+template <typename V>
+std::shared_ptr<ParquetEncoder> create_parquet_integral_encoder_with_omnisci_type(
+    AbstractBuffer* buffer,
+    const size_t omnisci_data_type_byte_size,
+    const size_t parquet_data_type_byte_size,
+    const int bit_width,
+    const bool is_signed) {
+  switch (bit_width) {
+    case 8:
+      return create_parquet_signed_or_unsigned_integral_encoder_with_types<V,
+                                                                           int32_t,
+                                                                           uint8_t>(
+          buffer, omnisci_data_type_byte_size, parquet_data_type_byte_size, is_signed);
+    case 16:
+      return create_parquet_signed_or_unsigned_integral_encoder_with_types<V,
+                                                                           int32_t,
+                                                                           uint16_t>(
+          buffer, omnisci_data_type_byte_size, parquet_data_type_byte_size, is_signed);
+    case 32:
+      return create_parquet_signed_or_unsigned_integral_encoder_with_types<V,
+                                                                           int32_t,
+                                                                           uint32_t>(
+          buffer, omnisci_data_type_byte_size, parquet_data_type_byte_size, is_signed);
+    case 64:
+      return create_parquet_signed_or_unsigned_integral_encoder_with_types<V,
+                                                                           int64_t,
+                                                                           uint64_t>(
+          buffer, omnisci_data_type_byte_size, parquet_data_type_byte_size, is_signed);
+    default:
+      UNREACHABLE();
+  }
+  return {};
+}
+
 std::shared_ptr<ParquetEncoder> create_parquet_integral_encoder(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column,
     AbstractBuffer* buffer,
     const bool is_metadata_scan) {
   auto column_type = omnisci_column->columnType;
+  auto physical_type = parquet_column->physical_type();
+
+  int bit_width = -1;
+  int is_signed = false;
+  // handle the integral case with no Parquet annotation
+  if (parquet_column->logical_type()->is_none() && column_type.is_integer()) {
+    if (physical_type == parquet::Type::INT32) {
+      bit_width = 32;
+    } else if (physical_type == parquet::Type::INT64) {
+      bit_width = 64;
+    } else {
+      UNREACHABLE();
+    }
+    is_signed = true;
+  }
+  // handle the integral case with Parquet annotation
   if (auto int_logical_column = dynamic_cast<const parquet::IntLogicalType*>(
           parquet_column->logical_type().get())) {
-    if (int_logical_column->is_signed()) {  // signed
-      switch (column_type.get_size()) {
-        case 8:
-          CHECK(column_type.get_compression() == kENCODING_NONE);
-          return std::make_shared<ParquetFixedLengthEncoder<int64_t, int64_t>>(
+    bit_width = int_logical_column->bit_width();
+    is_signed = int_logical_column->is_signed();
+  }
+
+  if (bit_width == -1) {  // no valid logical type (with or without annotation) found
+    return {};
+  }
+
+  const size_t omnisci_data_type_byte_size = column_type.get_size();
+  const size_t parquet_data_type_byte_size = parquet::GetTypeByteSize(physical_type);
+
+  switch (omnisci_data_type_byte_size) {
+    case 8:
+      CHECK(column_type.get_compression() == kENCODING_NONE);
+      return create_parquet_integral_encoder_with_omnisci_type<int64_t>(
+          buffer,
+          omnisci_data_type_byte_size,
+          parquet_data_type_byte_size,
+          bit_width,
+          is_signed);
+    case 4:
+      if (is_metadata_scan && column_type.get_type() == kBIGINT) {
+        return create_parquet_integral_encoder_with_omnisci_type<int64_t>(
+            buffer,
+            omnisci_data_type_byte_size,
+            parquet_data_type_byte_size,
+            bit_width,
+            is_signed);
+      }
+      return create_parquet_integral_encoder_with_omnisci_type<int32_t>(
+          buffer,
+          omnisci_data_type_byte_size,
+          parquet_data_type_byte_size,
+          bit_width,
+          is_signed);
+    case 2:
+      if (is_metadata_scan) {
+        switch (column_type.get_type()) {
+          case kBIGINT:
+            return create_parquet_integral_encoder_with_omnisci_type<int64_t>(
+                buffer,
+                omnisci_data_type_byte_size,
+                parquet_data_type_byte_size,
+                bit_width,
+                is_signed);
+          case kINT:
+            return create_parquet_integral_encoder_with_omnisci_type<int32_t>(
+                buffer,
+                omnisci_data_type_byte_size,
+                parquet_data_type_byte_size,
+                bit_width,
+                is_signed);
+          case kSMALLINT:
+            break;
+          default:
+            UNREACHABLE();
+        }
+      }
+      return create_parquet_integral_encoder_with_omnisci_type<int16_t>(
+          buffer,
+          omnisci_data_type_byte_size,
+          parquet_data_type_byte_size,
+          bit_width,
+          is_signed);
+    case 1:
+      if (is_metadata_scan) {
+        switch (column_type.get_type()) {
+          case kBIGINT:
+            return create_parquet_integral_encoder_with_omnisci_type<int64_t>(
+                buffer,
+                omnisci_data_type_byte_size,
+                parquet_data_type_byte_size,
+                bit_width,
+                is_signed);
+          case kINT:
+            return create_parquet_integral_encoder_with_omnisci_type<int32_t>(
+                buffer,
+                omnisci_data_type_byte_size,
+                parquet_data_type_byte_size,
+                bit_width,
+                is_signed);
+          case kSMALLINT:
+            return create_parquet_integral_encoder_with_omnisci_type<int16_t>(
+                buffer,
+                omnisci_data_type_byte_size,
+                parquet_data_type_byte_size,
+                bit_width,
+                is_signed);
+          case kTINYINT:
+            break;
+          default:
+            UNREACHABLE();
+        }
+      }
+      return create_parquet_integral_encoder_with_omnisci_type<int8_t>(
+          buffer,
+          omnisci_data_type_byte_size,
+          parquet_data_type_byte_size,
+          bit_width,
+          is_signed);
+    default:
+      UNREACHABLE();
+  }
+  return {};
+}
+
+std::shared_ptr<ParquetEncoder> create_parquet_floating_point_encoder(
+    const ColumnDescriptor* omnisci_column,
+    const parquet::ColumnDescriptor* parquet_column,
+    AbstractBuffer* buffer) {
+  auto column_type = omnisci_column->columnType;
+  if (!column_type.is_fp()) {
+    return {};
+  }
+  CHECK_EQ(column_type.get_compression(), kENCODING_NONE);
+  switch (column_type.get_type()) {
+    case kFLOAT:
+      switch (parquet_column->physical_type()) {
+        case parquet::Type::FLOAT:
+          return std::make_shared<ParquetFixedLengthEncoder<float, float>>(
               buffer, omnisci_column, parquet_column);
-        case 4:
-          if (is_metadata_scan && column_type.get_type() == kBIGINT) {
-            return std::make_shared<ParquetFixedLengthEncoder<int64_t, int32_t>>(
-                buffer, omnisci_column, parquet_column);
-          }
-          return std::make_shared<ParquetFixedLengthEncoder<int32_t, int32_t>>(
-              buffer, omnisci_column, parquet_column);
-        case 2:
-          if (is_metadata_scan) {
-            switch (column_type.get_type()) {
-              case kBIGINT:
-                return std::make_shared<ParquetFixedLengthEncoder<int64_t, int32_t>>(
-                    buffer, omnisci_column, parquet_column);
-              case kINT:
-                return std::make_shared<ParquetFixedLengthEncoder<int32_t, int32_t>>(
-                    buffer, omnisci_column, parquet_column);
-              case kSMALLINT:
-                break;
-              default:
-                UNREACHABLE();
-            }
-          }
-          return std::make_shared<ParquetFixedLengthEncoder<int16_t, int32_t>>(
-              buffer, omnisci_column, parquet_column);
-        case 1:
-          if (is_metadata_scan) {
-            switch (column_type.get_type()) {
-              case kBIGINT:
-                return std::make_shared<ParquetFixedLengthEncoder<int64_t, int32_t>>(
-                    buffer, omnisci_column, parquet_column);
-              case kINT:
-                return std::make_shared<ParquetFixedLengthEncoder<int32_t, int32_t>>(
-                    buffer, omnisci_column, parquet_column);
-              case kSMALLINT:
-                return std::make_shared<ParquetFixedLengthEncoder<int16_t, int32_t>>(
-                    buffer, omnisci_column, parquet_column);
-              case kTINYINT:
-                break;
-              default:
-                UNREACHABLE();
-            }
-          }
-          return std::make_shared<ParquetFixedLengthEncoder<int8_t, int32_t>>(
+        case parquet::Type::DOUBLE:
+          return std::make_shared<ParquetFixedLengthEncoder<float, double>>(
               buffer, omnisci_column, parquet_column);
         default:
           UNREACHABLE();
       }
-    } else {  // unsigned, requires using a larger bit depth signed integer within omnisci
-              // to prevent the possibility of loss of information
-      switch (column_type.get_size()) {
-        case 8:
-          CHECK(column_type.get_compression() == kENCODING_NONE);
-          return std::make_shared<
-              ParquetUnsignedFixedLengthEncoder<int64_t, int32_t, uint32_t>>(
-              buffer, omnisci_column, parquet_column);
-        case 4:
-          if (is_metadata_scan && column_type.get_type() == kBIGINT) {
-            return std::make_shared<
-                ParquetUnsignedFixedLengthEncoder<int64_t, int32_t, uint16_t>>(
-                buffer, omnisci_column, parquet_column);
-          }
-          return std::make_shared<
-              ParquetUnsignedFixedLengthEncoder<int32_t, int32_t, uint16_t>>(
-              buffer, omnisci_column, parquet_column);
-        case 2:
-          if (is_metadata_scan) {
-            switch (column_type.get_type()) {
-              case kBIGINT:
-                return std::make_shared<
-                    ParquetUnsignedFixedLengthEncoder<int64_t, int32_t, uint8_t>>(
-                    buffer, omnisci_column, parquet_column);
-              case kINT:
-                return std::make_shared<
-                    ParquetUnsignedFixedLengthEncoder<int32_t, int32_t, uint8_t>>(
-                    buffer, omnisci_column, parquet_column);
-              case kSMALLINT:
-                break;
-              default:
-                UNREACHABLE();
-            }
-          }
-          return std::make_shared<
-              ParquetUnsignedFixedLengthEncoder<int16_t, int32_t, uint8_t>>(
-              buffer, omnisci_column, parquet_column);
-        default:
-          UNREACHABLE();
-      }
-    }
+    case kDOUBLE:
+      CHECK(parquet_column->physical_type() == parquet::Type::DOUBLE);
+      return std::make_shared<ParquetFixedLengthEncoder<double, double>>(
+          buffer, omnisci_column, parquet_column);
+    default:
+      UNREACHABLE();
   }
   return {};
 }
@@ -292,23 +431,11 @@ std::shared_ptr<ParquetEncoder> create_parquet_none_type_encoder(
     AbstractBuffer* buffer) {
   auto column_type = omnisci_column->columnType;
   if (parquet_column->logical_type()->is_none() &&
-      !omnisci_column->columnType.is_string()) {  // boolean, int32, int64, float & double
+      !omnisci_column->columnType.is_string()) {  // boolean
     if (column_type.get_compression() == kENCODING_NONE) {
       switch (column_type.get_type()) {
-        case kBIGINT:
-          return std::make_shared<ParquetFixedLengthEncoder<int64_t, int64_t>>(
-              buffer, omnisci_column, parquet_column);
-        case kINT:
-          return std::make_shared<ParquetFixedLengthEncoder<int32_t, int32_t>>(
-              buffer, omnisci_column, parquet_column);
         case kBOOLEAN:
           return std::make_shared<ParquetFixedLengthEncoder<int8_t, bool>>(
-              buffer, omnisci_column, parquet_column);
-        case kFLOAT:
-          return std::make_shared<ParquetFixedLengthEncoder<float, float>>(
-              buffer, omnisci_column, parquet_column);
-        case kDOUBLE:
-          return std::make_shared<ParquetFixedLengthEncoder<double, double>>(
               buffer, omnisci_column, parquet_column);
         default:
           UNREACHABLE();
@@ -320,21 +447,141 @@ std::shared_ptr<ParquetEncoder> create_parquet_none_type_encoder(
   return {};
 }
 
-std::shared_ptr<ParquetEncoder> create_parquet_timestamp_encoder(
+template <typename V, typename T>
+std::shared_ptr<ParquetEncoder> create_parquet_timestamp_encoder_with_types(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column,
     AbstractBuffer* buffer) {
-  auto column_type = omnisci_column->columnType;
-  if (parquet_column->logical_type()->is_timestamp()) {
-    auto precision = column_type.get_precision();
-    CHECK(column_type.get_compression() == kENCODING_NONE);
-    if (precision == 0) {
-      return std::make_shared<ParquetTimestampEncoder<int64_t, int64_t>>(
-          buffer, omnisci_column, parquet_column);
-    } else {
-      return std::make_shared<ParquetFixedLengthEncoder<int64_t, int64_t>>(
-          buffer, omnisci_column, parquet_column);
+  if (auto timestamp_logical_type = dynamic_cast<const parquet::TimestampLogicalType*>(
+          parquet_column->logical_type().get())) {
+    switch (timestamp_logical_type->time_unit()) {
+      case parquet::LogicalType::TimeUnit::MILLIS:
+        return std::make_shared<ParquetTimestampEncoder<V, T, 1000L>>(
+            buffer, omnisci_column, parquet_column);
+      case parquet::LogicalType::TimeUnit::MICROS:
+        return std::make_shared<ParquetTimestampEncoder<V, T, 1000L * 1000L>>(
+            buffer, omnisci_column, parquet_column);
+      case parquet::LogicalType::TimeUnit::NANOS:
+        return std::make_shared<ParquetTimestampEncoder<V, T, 1000L * 1000L * 1000L>>(
+            buffer, omnisci_column, parquet_column);
+      default:
+        UNREACHABLE();
     }
+  } else {
+    UNREACHABLE();
+  }
+  return {};
+}
+
+template <typename V, typename T>
+std::shared_ptr<ParquetEncoder> create_parquet_date_from_timestamp_encoder_with_types(
+    const ColumnDescriptor* omnisci_column,
+    const parquet::ColumnDescriptor* parquet_column,
+    AbstractBuffer* buffer) {
+  if (auto timestamp_logical_type = dynamic_cast<const parquet::TimestampLogicalType*>(
+          parquet_column->logical_type().get())) {
+    switch (timestamp_logical_type->time_unit()) {
+      case parquet::LogicalType::TimeUnit::MILLIS:
+        return std::make_shared<
+            ParquetDateFromTimestampEncoder<V, T, 1000L * kSecsPerDay>>(
+            buffer, omnisci_column, parquet_column);
+      case parquet::LogicalType::TimeUnit::MICROS:
+        return std::make_shared<
+            ParquetDateFromTimestampEncoder<V, T, 1000L * 1000L * kSecsPerDay>>(
+            buffer, omnisci_column, parquet_column);
+      case parquet::LogicalType::TimeUnit::NANOS:
+        return std::make_shared<
+            ParquetDateFromTimestampEncoder<V, T, 1000L * 1000L * 1000L * kSecsPerDay>>(
+            buffer, omnisci_column, parquet_column);
+      default:
+        UNREACHABLE();
+    }
+  } else {
+    UNREACHABLE();
+  }
+  return {};
+}
+
+std::shared_ptr<ParquetEncoder> create_parquet_timestamp_encoder(
+    const ColumnDescriptor* omnisci_column,
+    const parquet::ColumnDescriptor* parquet_column,
+    AbstractBuffer* buffer,
+    const bool is_metadata_scan) {
+  auto column_type = omnisci_column->columnType;
+  auto precision = column_type.get_precision();
+  if (parquet_column->logical_type()->is_timestamp()) {
+    if (column_type.get_compression() == kENCODING_NONE) {
+      if (precision == 0) {
+        return create_parquet_timestamp_encoder_with_types<int64_t, int64_t>(
+            omnisci_column, parquet_column, buffer);
+      } else {
+        return std::make_shared<ParquetFixedLengthEncoder<int64_t, int64_t>>(
+            buffer, omnisci_column, parquet_column);
+      }
+    } else if (column_type.get_compression() == kENCODING_FIXED) {
+      CHECK(column_type.get_comp_param() == 32);
+      if (is_metadata_scan) {
+        return create_parquet_timestamp_encoder_with_types<int64_t, int64_t>(
+            omnisci_column, parquet_column, buffer);
+      } else {
+        return create_parquet_timestamp_encoder_with_types<int32_t, int64_t>(
+            omnisci_column, parquet_column, buffer);
+      }
+    }
+  } else if (parquet_column->logical_type()->is_none() && column_type.is_timestamp()) {
+    if (parquet_column->physical_type() == parquet::Type::INT32) {
+      CHECK(column_type.get_compression() == kENCODING_FIXED &&
+            column_type.get_comp_param() == 32);
+      if (is_metadata_scan) {
+        return std::make_shared<ParquetFixedLengthEncoder<int64_t, int32_t>>(
+            buffer, omnisci_column, parquet_column);
+      } else {
+        return std::make_shared<ParquetFixedLengthEncoder<int32_t, int32_t>>(
+            buffer, omnisci_column, parquet_column);
+      }
+    } else if (parquet_column->physical_type() == parquet::Type::INT64) {
+      if (column_type.get_compression() == kENCODING_NONE) {
+        return std::make_shared<ParquetFixedLengthEncoder<int64_t, int64_t>>(
+            buffer, omnisci_column, parquet_column);
+      } else if (column_type.get_compression() == kENCODING_FIXED) {
+        CHECK(column_type.get_comp_param() == 32);
+        if (is_metadata_scan) {
+          return std::make_shared<ParquetFixedLengthEncoder<int64_t, int64_t>>(
+              buffer, omnisci_column, parquet_column);
+        } else {
+          return std::make_shared<ParquetFixedLengthEncoder<int32_t, int64_t>>(
+              buffer, omnisci_column, parquet_column);
+        }
+      }
+    } else {
+      UNREACHABLE();
+    }
+  }
+  return {};
+}
+
+template <typename V, typename T>
+std::shared_ptr<ParquetEncoder> create_parquet_time_encoder_with_types(
+    const ColumnDescriptor* omnisci_column,
+    const parquet::ColumnDescriptor* parquet_column,
+    AbstractBuffer* buffer) {
+  if (auto time_logical_type = dynamic_cast<const parquet::TimeLogicalType*>(
+          parquet_column->logical_type().get())) {
+    switch (time_logical_type->time_unit()) {
+      case parquet::LogicalType::TimeUnit::MILLIS:
+        return std::make_shared<ParquetTimeEncoder<V, T, 1000L>>(
+            buffer, omnisci_column, parquet_column);
+      case parquet::LogicalType::TimeUnit::MICROS:
+        return std::make_shared<ParquetTimeEncoder<V, T, 1000L * 1000L>>(
+            buffer, omnisci_column, parquet_column);
+      case parquet::LogicalType::TimeUnit::NANOS:
+        return std::make_shared<ParquetTimeEncoder<V, T, 1000L * 1000L * 1000L>>(
+            buffer, omnisci_column, parquet_column);
+      default:
+        UNREACHABLE();
+    }
+  } else {
+    UNREACHABLE();
   }
   return {};
 }
@@ -349,22 +596,71 @@ std::shared_ptr<ParquetEncoder> create_parquet_time_encoder(
           parquet_column->logical_type().get())) {
     if (column_type.get_compression() == kENCODING_NONE) {
       if (time_logical_column->time_unit() == parquet::LogicalType::TimeUnit::MILLIS) {
-        return std::make_shared<ParquetTimeEncoder<int64_t, int32_t>>(
-            buffer, omnisci_column, parquet_column);
+        return create_parquet_time_encoder_with_types<int64_t, int32_t>(
+            omnisci_column, parquet_column, buffer);
       } else {
-        return std::make_shared<ParquetTimeEncoder<int64_t, int64_t>>(
-            buffer, omnisci_column, parquet_column);
+        return create_parquet_time_encoder_with_types<int64_t, int64_t>(
+            omnisci_column, parquet_column, buffer);
       }
     } else if (column_type.get_compression() == kENCODING_FIXED) {
       if (is_metadata_scan) {
-        return std::make_shared<ParquetTimeEncoder<int64_t, int32_t>>(
-            buffer, omnisci_column, parquet_column);
+        if (time_logical_column->time_unit() == parquet::LogicalType::TimeUnit::MILLIS) {
+          CHECK(parquet_column->physical_type() == parquet::Type::INT32);
+          return create_parquet_time_encoder_with_types<int64_t, int32_t>(
+              omnisci_column, parquet_column, buffer);
+        } else {
+          CHECK(time_logical_column->time_unit() ==
+                    parquet::LogicalType::TimeUnit::MICROS ||
+                time_logical_column->time_unit() ==
+                    parquet::LogicalType::TimeUnit::NANOS);
+          CHECK(parquet_column->physical_type() == parquet::Type::INT64);
+          return create_parquet_time_encoder_with_types<int64_t, int64_t>(
+              omnisci_column, parquet_column, buffer);
+        }
       } else {
-        return std::make_shared<ParquetTimeEncoder<int32_t, int32_t>>(
-            buffer, omnisci_column, parquet_column);
+        if (time_logical_column->time_unit() == parquet::LogicalType::TimeUnit::MILLIS) {
+          CHECK(parquet_column->physical_type() == parquet::Type::INT32);
+          return create_parquet_time_encoder_with_types<int32_t, int32_t>(
+              omnisci_column, parquet_column, buffer);
+        } else {
+          CHECK(time_logical_column->time_unit() ==
+                    parquet::LogicalType::TimeUnit::MICROS ||
+                time_logical_column->time_unit() ==
+                    parquet::LogicalType::TimeUnit::NANOS);
+          CHECK(parquet_column->physical_type() == parquet::Type::INT64);
+          return create_parquet_time_encoder_with_types<int32_t, int64_t>(
+              omnisci_column, parquet_column, buffer);
+        }
       }
     } else {
       UNREACHABLE();
+    }
+  }
+  return {};
+}
+
+std::shared_ptr<ParquetEncoder> create_parquet_date_from_timestamp_encoder(
+    const ColumnDescriptor* omnisci_column,
+    const parquet::ColumnDescriptor* parquet_column,
+    AbstractBuffer* buffer,
+    const bool is_metadata_scan) {
+  auto column_type = omnisci_column->columnType;
+  if (parquet_column->logical_type()->is_timestamp() && column_type.is_date()) {
+    CHECK(column_type.get_compression() == kENCODING_DATE_IN_DAYS);
+    if (is_metadata_scan) {
+      return create_parquet_timestamp_encoder_with_types<int64_t, int64_t>(
+          omnisci_column, parquet_column, buffer);
+    } else {
+      if (column_type.get_comp_param() ==
+          0) {  // DATE ENCODING FIXED (32) uses comp param 0
+        return create_parquet_date_from_timestamp_encoder_with_types<int32_t, int64_t>(
+            omnisci_column, parquet_column, buffer);
+      } else if (column_type.get_comp_param() == 16) {
+        return create_parquet_date_from_timestamp_encoder_with_types<int16_t, int64_t>(
+            omnisci_column, parquet_column, buffer);
+      } else {
+        UNREACHABLE();
+      }
     }
   }
   return {};
@@ -376,14 +672,22 @@ std::shared_ptr<ParquetEncoder> create_parquet_date_encoder(
     AbstractBuffer* buffer,
     const bool is_metadata_scan) {
   auto column_type = omnisci_column->columnType;
-  if (parquet_column->logical_type()->is_date()) {
+  if (parquet_column->logical_type()->is_date() && column_type.is_date()) {
     if (column_type.get_compression() == kENCODING_DATE_IN_DAYS) {
       if (is_metadata_scan) {
         return std::make_shared<ParquetDateInSecondsEncoder>(
             buffer, omnisci_column, parquet_column);
       } else {
-        return std::make_shared<ParquetFixedLengthEncoder<int32_t, int32_t>>(
-            buffer, omnisci_column, parquet_column);
+        if (column_type.get_comp_param() ==
+            0) {  // DATE ENCODING FIXED (32) uses comp param 0
+          return std::make_shared<ParquetFixedLengthEncoder<int32_t, int32_t>>(
+              buffer, omnisci_column, parquet_column);
+        } else if (column_type.get_comp_param() == 16) {
+          return std::make_shared<ParquetFixedLengthEncoder<int16_t, int32_t>>(
+              buffer, omnisci_column, parquet_column);
+        } else {
+          UNREACHABLE();
+        }
       }
     } else if (column_type.get_compression() == kENCODING_NONE) {  // for array types
       return std::make_shared<ParquetDateInSecondsEncoder>(
@@ -465,6 +769,35 @@ std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
     std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
     const bool is_metadata_scan);
 
+/**
+ * @brief Create a Parquet specific encoder for a Parquet to OmniSci mapping.
+ *
+ * @param omnisci_column - the descriptor of OmniSci column
+ * @param parquet_column - the descriptor of Parquet column
+ * @param chunks - list of chunks to populate (the case of more than one chunk
+ * happens only if a logical column expands to multiple physical columns)
+ * @param string_dictionary - string dictionary used in encoding for string dictionary
+ * encoded columns
+ * @param chunk_metadata - similar to the list of chunks, a list of chunk metadata that is
+ * populated
+ * @param is_metadata_scan - a flag indicating if the encoders created should be for a
+ * metadata scan
+ *
+ * @return  An appropriate Parquet encoder for the use case defined by the Parquet to
+ * OmniSci mapping.
+ *
+ * Notes:
+ *
+ * - In the case of a metadata scan, the type of the encoder created may
+ *   significantly change (for example in bit width.) This is because it is
+ *   common for OmniSci to store metadata in a different format altogether
+ *   than the data itself (see for example FixedLengthEncoder.)
+ * - This function and the function `isColumnMappingSupported` work in
+ *   conjunction with each other. For example, once a mapping is known to be
+ *   allowed (since `isColumnMappingSupported` returned true) this
+ *   function does not have to check many corner cases exhaustively as it would
+ *   be redundant with what was checked in `isColumnMappingSupported`.
+ */
 std::shared_ptr<ParquetEncoder> create_parquet_encoder(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column,
@@ -494,14 +827,22 @@ std::shared_ptr<ParquetEncoder> create_parquet_encoder(
     return encoder;
   }
   if (auto encoder =
-          create_parquet_none_type_encoder(omnisci_column, parquet_column, buffer)) {
+          create_parquet_floating_point_encoder(omnisci_column, parquet_column, buffer)) {
+    return encoder;
+  }
+  if (auto encoder = create_parquet_timestamp_encoder(
+          omnisci_column, parquet_column, buffer, is_metadata_scan)) {
     return encoder;
   }
   if (auto encoder =
-          create_parquet_timestamp_encoder(omnisci_column, parquet_column, buffer)) {
+          create_parquet_none_type_encoder(omnisci_column, parquet_column, buffer)) {
     return encoder;
   }
   if (auto encoder = create_parquet_time_encoder(
+          omnisci_column, parquet_column, buffer, is_metadata_scan)) {
+    return encoder;
+  }
+  if (auto encoder = create_parquet_date_from_timestamp_encoder(
           omnisci_column, parquet_column, buffer, is_metadata_scan)) {
     return encoder;
   }
@@ -571,6 +912,33 @@ std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
   return encoder;
 }
 
+void validate_definition_levels(
+    const parquet::ParquetFileReader* reader,
+    const int row_group_index,
+    const int column_index,
+    const int16_t* def_levels,
+    const int64_t num_levels,
+    const parquet::ColumnDescriptor* parquet_column_descriptor) {
+  bool is_valid_parquet_list = is_valid_parquet_list_column(parquet_column_descriptor);
+  if (!is_valid_parquet_list) {
+    return;
+  }
+  std::unique_ptr<parquet::RowGroupMetaData> group_metadata =
+      reader->metadata()->RowGroup(row_group_index);
+  auto column_metadata = group_metadata->ColumnChunk(column_index);
+  auto stats = validate_and_get_column_metadata_statistics(column_metadata.get());
+  if (!stats->HasMinMax()) {
+    auto find_it = std::find_if(def_levels,
+                                def_levels + num_levels,
+                                [](const int16_t def_level) { return def_level == 3; });
+    if (find_it != def_levels + num_levels) {
+      throw std::runtime_error(
+          "No minimum and maximum statistic set in list column but non-null & non-empty "
+          "array/value detected.");
+    }
+  }
+}
+
 void validate_max_repetition_and_definition_level(
     const ColumnDescriptor* omnisci_column_descriptor,
     const parquet::ColumnDescriptor* parquet_column_descriptor) {
@@ -621,83 +989,6 @@ void resize_values_buffer(const ColumnDescriptor* omnisci_column,
   values.resize(values_size);
 }
 
-std::list<std::unique_ptr<ChunkMetadata>> append_row_groups(
-    const std::vector<RowGroupInterval>& row_group_intervals,
-    const int parquet_column_index,
-    const ColumnDescriptor* column_descriptor,
-    std::list<Chunk_NS::Chunk>& chunks,
-    StringDictionary* string_dictionary,
-    std::shared_ptr<arrow::fs::FileSystem> file_system) {
-  std::list<std::unique_ptr<ChunkMetadata>> chunk_metadata;
-  // `def_levels` and `rep_levels` below are used to store the read definition
-  // and repetition levels of the Dremel encoding implemented by the Parquet
-  // format
-  std::vector<int16_t> def_levels(LazyParquetChunkLoader::batch_reader_num_elements);
-  std::vector<int16_t> rep_levels(LazyParquetChunkLoader::batch_reader_num_elements);
-  std::vector<int8_t> values;
-
-  CHECK(!row_group_intervals.empty());
-  std::unique_ptr<parquet::arrow::FileReader> first_file_reader;
-  const auto& first_file_path = row_group_intervals.front().file_path;
-  open_parquet_table(first_file_path, first_file_reader, file_system);
-  auto first_parquet_column_descriptor =
-      get_column_descriptor(first_file_reader.get(), parquet_column_index);
-  resize_values_buffer(column_descriptor, first_parquet_column_descriptor, values);
-  auto encoder = create_parquet_encoder(column_descriptor,
-                                        first_parquet_column_descriptor,
-                                        chunks,
-                                        string_dictionary,
-                                        chunk_metadata);
-  CHECK(encoder.get());
-
-  for (const auto& row_group_interval : row_group_intervals) {
-    std::unique_ptr<parquet::arrow::FileReader> file_reader;
-    open_parquet_table(row_group_interval.file_path, file_reader, file_system);
-
-    int num_row_groups, num_columns;
-    std::tie(num_row_groups, num_columns) = get_parquet_table_size(file_reader);
-    CHECK(row_group_interval.start_index >= 0 &&
-          row_group_interval.end_index < num_row_groups);
-    CHECK(parquet_column_index >= 0 && parquet_column_index < num_columns);
-
-    parquet::ParquetFileReader* parquet_reader = file_reader->parquet_reader();
-    auto parquet_column_descriptor =
-        get_column_descriptor(file_reader.get(), parquet_column_index);
-    validate_equal_column_descriptor(first_parquet_column_descriptor,
-                                     parquet_column_descriptor,
-                                     first_file_path,
-                                     row_group_interval.file_path);
-
-    validate_max_repetition_and_definition_level(column_descriptor,
-                                                 parquet_column_descriptor);
-    int64_t values_read = 0;
-    for (int row_group_index = row_group_interval.start_index;
-         row_group_index <= row_group_interval.end_index;
-         ++row_group_index) {
-      auto group_reader = parquet_reader->RowGroup(row_group_index);
-      std::shared_ptr<parquet::ColumnReader> col_reader =
-          group_reader->Column(parquet_column_index);
-
-      while (col_reader->HasNext()) {
-        int64_t levels_read =
-            parquet::ScanAllValues(LazyParquetChunkLoader::batch_reader_num_elements,
-                                   def_levels.data(),
-                                   rep_levels.data(),
-                                   reinterpret_cast<uint8_t*>(values.data()),
-                                   &values_read,
-                                   col_reader.get());
-        encoder->appendData(def_levels.data(),
-                            rep_levels.data(),
-                            values_read,
-                            levels_read,
-                            !col_reader->HasNext(),
-                            values.data());
-      }
-    }
-  }
-  return chunk_metadata;
-}
-
 bool validate_decimal_mapping(const ColumnDescriptor* omnisci_column,
                               const parquet::ColumnDescriptor* parquet_column) {
   if (auto decimal_logical_column = dynamic_cast<const parquet::DecimalLogicalType*>(
@@ -712,97 +1003,116 @@ bool validate_decimal_mapping(const ColumnDescriptor* omnisci_column,
   return false;
 }
 
-bool validate_integral_mapping(const ColumnDescriptor* omnisci_column,
-                               const parquet::ColumnDescriptor* parquet_column) {
-  if (auto int_logical_column = dynamic_cast<const parquet::IntLogicalType*>(
-          parquet_column->logical_type().get())) {
-    if (int_logical_column->is_signed()) {  // signed
-      if (omnisci_column->columnType.get_compression() == kENCODING_NONE) {
-        switch (int_logical_column->bit_width()) {
-          case 64:
-            return omnisci_column->columnType.get_type() == kBIGINT;
-          case 32:
-            return omnisci_column->columnType.get_type() == kINT;
-          case 16:
-            return omnisci_column->columnType.get_type() == kSMALLINT;
-          case 8:
-            return omnisci_column->columnType.get_type() == kTINYINT;
-          default:
-            UNREACHABLE();
-        }
-      } else if (omnisci_column->columnType.get_compression() == kENCODING_FIXED) {
-        return omnisci_column->columnType.get_comp_param() ==
-               int_logical_column->bit_width();
-      }
-    } else {  // unsigned
-      if (omnisci_column->columnType.get_compression() == kENCODING_NONE) {
-        switch (int_logical_column->bit_width()) {
-          case 64:
-            return false;
-          case 32:
-            return omnisci_column->columnType.get_type() == kBIGINT;
-          case 16:
-            return omnisci_column->columnType.get_type() == kINT;
-          case 8:
-            return omnisci_column->columnType.get_type() == kSMALLINT;
-          default:
-            UNREACHABLE();
-        }
-      } else if (omnisci_column->columnType.get_compression() == kENCODING_FIXED) {
-        switch (int_logical_column->bit_width()) {
-          case 64:
-          case 32:
-            return false;
-          case 16:
-            return omnisci_column->columnType.get_comp_param() == 32;
-          case 8:
-            return omnisci_column->columnType.get_comp_param() == 16;
-          default:
-            UNREACHABLE();
-        }
-      }
-    }
+bool validate_floating_point_mapping(const ColumnDescriptor* omnisci_column,
+                                     const parquet::ColumnDescriptor* parquet_column) {
+  if (!omnisci_column->columnType.is_fp()) {
+    return false;
+  }
+  // check if mapping is a valid coerced or non-coerced floating point mapping
+  // with no annotation (floating point columns have no annotation in the
+  // Parquet specification)
+  if (omnisci_column->columnType.get_compression() == kENCODING_NONE) {
+    return (parquet_column->physical_type() == parquet::Type::DOUBLE) ||
+           (parquet_column->physical_type() == parquet::Type::FLOAT &&
+            omnisci_column->columnType.get_type() == kFLOAT);
   }
   return false;
 }
 
+bool validate_integral_mapping(const ColumnDescriptor* omnisci_column,
+                               const parquet::ColumnDescriptor* parquet_column) {
+  if (!omnisci_column->columnType.is_integer()) {
+    return false;
+  }
+  if (auto int_logical_column = dynamic_cast<const parquet::IntLogicalType*>(
+          parquet_column->logical_type().get())) {
+    CHECK(omnisci_column->columnType.get_compression() == kENCODING_NONE ||
+          omnisci_column->columnType.get_compression() == kENCODING_FIXED);
+    const int bits_per_byte = 8;
+    // unsigned types are permitted to map to a wider integral type in order to avoid
+    // precision loss
+    const int bit_widening_factor = int_logical_column->is_signed() ? 1 : 2;
+    return omnisci_column->columnType.get_size() * bits_per_byte <=
+           int_logical_column->bit_width() * bit_widening_factor;
+  }
+  // check if mapping is a valid coerced or non-coerced integral mapping with no
+  // annotation
+  if ((omnisci_column->columnType.get_compression() == kENCODING_NONE ||
+       omnisci_column->columnType.get_compression() == kENCODING_FIXED)) {
+    return (parquet_column->physical_type() == parquet::Type::INT64) ||
+           (parquet_column->physical_type() == parquet::Type::INT32 &&
+            omnisci_column->columnType.get_size() <= 4);
+  }
+  return false;
+}
+
+bool is_nanosecond_precision(const ColumnDescriptor* omnisci_column) {
+  return omnisci_column->columnType.get_dimension() == 9;
+}
+
+bool is_nanosecond_precision(
+    const parquet::TimestampLogicalType* timestamp_logical_column) {
+  return timestamp_logical_column->time_unit() == parquet::LogicalType::TimeUnit::NANOS;
+}
+
+bool is_microsecond_precision(const ColumnDescriptor* omnisci_column) {
+  return omnisci_column->columnType.get_dimension() == 6;
+}
+
+bool is_microsecond_precision(
+    const parquet::TimestampLogicalType* timestamp_logical_column) {
+  return timestamp_logical_column->time_unit() == parquet::LogicalType::TimeUnit::MICROS;
+}
+
+bool is_millisecond_precision(const ColumnDescriptor* omnisci_column) {
+  return omnisci_column->columnType.get_dimension() == 3;
+}
+
+bool is_millisecond_precision(
+    const parquet::TimestampLogicalType* timestamp_logical_column) {
+  return timestamp_logical_column->time_unit() == parquet::LogicalType::TimeUnit::MILLIS;
+}
+
 bool validate_none_type_mapping(const ColumnDescriptor* omnisci_column,
                                 const parquet::ColumnDescriptor* parquet_column) {
-  return parquet_column->logical_type()->is_none() &&
-         omnisci_column->columnType.get_compression() == kENCODING_NONE &&
-         ((parquet_column->physical_type() == parquet::Type::BOOLEAN &&
-           omnisci_column->columnType.get_type() == kBOOLEAN) ||
-          (parquet_column->physical_type() == parquet::Type::INT32 &&
-           omnisci_column->columnType.get_type() == kINT) ||
-          (parquet_column->physical_type() == parquet::Type::INT64 &&
-           omnisci_column->columnType.get_type() == kBIGINT) ||
-          (parquet_column->physical_type() == parquet::Type::FLOAT &&
-           omnisci_column->columnType.get_type() == kFLOAT) ||
-          (parquet_column->physical_type() == parquet::Type::DOUBLE &&
-           omnisci_column->columnType.get_type() == kDOUBLE));
+  bool is_none_encoded_mapping =
+      omnisci_column->columnType.get_compression() == kENCODING_NONE &&
+      (parquet_column->physical_type() == parquet::Type::BOOLEAN &&
+       omnisci_column->columnType.get_type() == kBOOLEAN);
+  return parquet_column->logical_type()->is_none() && is_none_encoded_mapping;
 }
 
 bool validate_timestamp_mapping(const ColumnDescriptor* omnisci_column,
                                 const parquet::ColumnDescriptor* parquet_column) {
   if (!(omnisci_column->columnType.get_type() == kTIMESTAMP &&
-        omnisci_column->columnType.get_compression() == kENCODING_NONE)) {
+        ((omnisci_column->columnType.get_compression() == kENCODING_NONE) ||
+         (omnisci_column->columnType.get_compression() == kENCODING_FIXED &&
+          omnisci_column->columnType.get_comp_param() == 32)))) {
     return false;
   }
+  // check the annotated case
   if (auto timestamp_logical_column = dynamic_cast<const parquet::TimestampLogicalType*>(
           parquet_column->logical_type().get())) {
-    if (!timestamp_logical_column->is_adjusted_to_utc()) {
-      return false;
+    if (omnisci_column->columnType.get_compression() == kENCODING_NONE) {
+      return omnisci_column->columnType.get_dimension() == 0 ||
+             ((is_nanosecond_precision(omnisci_column) &&
+               is_nanosecond_precision(timestamp_logical_column)) ||
+              (is_microsecond_precision(omnisci_column) &&
+               is_microsecond_precision(timestamp_logical_column)) ||
+              (is_millisecond_precision(omnisci_column) &&
+               is_millisecond_precision(timestamp_logical_column)));
     }
-    return omnisci_column->columnType.get_dimension() == 0 ||
-           ((omnisci_column->columnType.get_dimension() == 9 &&
-             timestamp_logical_column->time_unit() ==
-                 parquet::LogicalType::TimeUnit::NANOS) ||
-            (omnisci_column->columnType.get_dimension() == 6 &&
-             timestamp_logical_column->time_unit() ==
-                 parquet::LogicalType::TimeUnit::MICROS) ||
-            (omnisci_column->columnType.get_dimension() == 3 &&
-             timestamp_logical_column->time_unit() ==
-                 parquet::LogicalType::TimeUnit::MILLIS));
+    if (omnisci_column->columnType.get_compression() == kENCODING_FIXED) {
+      return omnisci_column->columnType.get_dimension() == 0;
+    }
+  }
+  // check the unannotated case
+  if (parquet_column->logical_type()->is_none() &&
+      ((parquet_column->physical_type() == parquet::Type::INT32 &&
+        omnisci_column->columnType.get_compression() == kENCODING_FIXED &&
+        omnisci_column->columnType.get_comp_param() == 32) ||
+       parquet_column->physical_type() == parquet::Type::INT64)) {
+    return true;
   }
   return false;
 }
@@ -815,13 +1125,8 @@ bool validate_time_mapping(const ColumnDescriptor* omnisci_column,
           omnisci_column->columnType.get_comp_param() == 32)))) {
     return false;
   }
-  if (auto time_logical_column = dynamic_cast<const parquet::TimeLogicalType*>(
-          parquet_column->logical_type().get())) {
-    if (!time_logical_column->is_adjusted_to_utc()) {
-      return false;
-    }
-    return omnisci_column->columnType.get_compression() == kENCODING_NONE ||
-           time_logical_column->time_unit() == parquet::LogicalType::TimeUnit::MILLIS;
+  if (parquet_column->logical_type()->is_time()) {
+    return true;
   }
   return false;
 }
@@ -830,14 +1135,17 @@ bool validate_date_mapping(const ColumnDescriptor* omnisci_column,
                            const parquet::ColumnDescriptor* parquet_column) {
   if (!(omnisci_column->columnType.get_type() == kDATE &&
         ((omnisci_column->columnType.get_compression() == kENCODING_DATE_IN_DAYS &&
-          omnisci_column->columnType.get_comp_param() ==
-              0)  // DATE ENCODING DAYS (32) specifies comp_param of 0
-         || omnisci_column->columnType.get_compression() ==
-                kENCODING_NONE  // for array types
+          (omnisci_column->columnType.get_comp_param() ==
+               0  // DATE ENCODING DAYS (32) specifies comp_param of 0
+           || omnisci_column->columnType.get_comp_param() == 16)) ||
+         omnisci_column->columnType.get_compression() ==
+             kENCODING_NONE  // for array types
          ))) {
     return false;
   }
-  return parquet_column->logical_type()->is_date();
+  return parquet_column->logical_type()->is_date() ||
+         parquet_column->logical_type()
+             ->is_timestamp();  // to support TIMESTAMP -> DATE coercion
 }
 
 bool validate_string_mapping(const ColumnDescriptor* omnisci_column,
@@ -904,9 +1212,9 @@ void validate_allowed_mapping(const parquet::ColumnDescriptor* parquet_column,
       CHECK(timestamp_type);
 
       if (!timestamp_type->is_adjusted_to_utc()) {
-        throw std::runtime_error{
-            "Non-UTC timezone specified in Parquet file for column \"" +
-            omnisci_column->columnName + "\". Only UTC timezone is currently supported."};
+        LOG(WARNING) << "Non-UTC timezone specified in Parquet file for column \""
+                     << omnisci_column->columnName
+                     << "\". Only UTC timezone is currently supported.";
       }
     }
     std::string parquet_type;
@@ -962,7 +1270,15 @@ void validate_column_mapping_and_row_group_metadata(
   auto column_it = schema.getLogicalColumns().begin();
   for (int i = 0; i < file_metadata->num_columns(); ++i, ++column_it) {
     const parquet::ColumnDescriptor* descr = file_metadata->schema()->Column(i);
-    validate_allowed_mapping(descr, *column_it);
+    try {
+      validate_allowed_mapping(descr, *column_it);
+    } catch (std::runtime_error& e) {
+      std::stringstream error_message;
+      error_message << e.what() << " Parquet column: " << descr->name()
+                    << ", OmniSci column: " << (*column_it)->columnName
+                    << ", Parquet file: " << file_path << ".";
+      throw std::runtime_error(error_message.str());
+    }
 
     auto fragment_size = schema.getForeignTable()->maxFragRows;
     int64_t max_row_group_size = 0;
@@ -980,7 +1296,12 @@ void validate_column_mapping_and_row_group_metadata(
       if (contains_metadata) {
         auto stats = column_chunk->statistics();
         bool is_all_nulls = stats->null_count() == column_chunk->num_values();
-        if (!stats->HasMinMax() && !is_all_nulls) {
+        bool is_list = is_valid_parquet_list_column(file_metadata->schema()->Column(i));
+        // Given a list, it is possible it has no min or max if it is comprised
+        // only of empty lists & nulls. This can not be detected by comparing
+        // the null count; therefore we afford list types the benefit of the
+        // doubt in this situation.
+        if (!(stats->HasMinMax() || is_all_nulls || is_list)) {
           contains_metadata = false;
         }
       }
@@ -1002,16 +1323,15 @@ void validate_parquet_metadata(
     const std::string& file_path,
     const ForeignTableSchema& schema) {
   validate_number_of_columns(file_metadata, file_path, schema);
-
   validate_column_mapping_and_row_group_metadata(file_metadata, file_path, schema);
 }
 
-void metadata_scan_rowgroup_interval(
+std::list<RowGroupMetadata> metadata_scan_rowgroup_interval(
     const std::map<int, std::shared_ptr<ParquetEncoder>>& encoder_map,
     const RowGroupInterval& row_group_interval,
-    const std::unique_ptr<parquet::arrow::FileReader>& reader,
-    const ForeignTableSchema& schema,
-    std::list<RowGroupMetadata>& row_group_metadata) {
+    const ReaderPtr& reader,
+    const ForeignTableSchema& schema) {
+  std::list<RowGroupMetadata> row_group_metadata;
   auto column_interval =
       Interval<ColumnType>{schema.getLogicalAndPhysicalColumns().front()->columnId,
                            schema.getLogicalAndPhysicalColumns().back()->columnId};
@@ -1034,17 +1354,26 @@ void metadata_scan_rowgroup_interval(
       auto encoder_map_iter =
           encoder_map.find(schema.getLogicalColumn(column_id)->columnId);
       CHECK(encoder_map_iter != encoder_map.end());
-      auto metadata = encoder_map_iter->second->getRowGroupMetadata(
-          group_metadata.get(), parquet_column_index, column_descriptor->columnType);
-      row_group_metadata_item.column_chunk_metadata.emplace_back(metadata);
+      try {
+        auto metadata = encoder_map_iter->second->getRowGroupMetadata(
+            group_metadata.get(), parquet_column_index, column_descriptor->columnType);
+        row_group_metadata_item.column_chunk_metadata.emplace_back(metadata);
+      } catch (const std::exception& e) {
+        std::stringstream error_message;
+        error_message << e.what() << " in row group " << row_group << " of Parquet file '"
+                      << row_group_interval.file_path << "'.";
+        throw std::runtime_error(error_message.str());
+      }
     }
   }
+  return row_group_metadata;
 }
 
-void populate_encoder_map(std::map<int, std::shared_ptr<ParquetEncoder>>& encoder_map,
-                          const Interval<ColumnType>& column_interval,
-                          const ForeignTableSchema& schema,
-                          const std::unique_ptr<parquet::arrow::FileReader>& reader) {
+std::map<int, std::shared_ptr<ParquetEncoder>> populate_encoder_map(
+    const Interval<ColumnType>& column_interval,
+    const ForeignTableSchema& schema,
+    const ReaderPtr& reader) {
+  std::map<int, std::shared_ptr<ParquetEncoder>> encoder_map;
   auto file_metadata = reader->parquet_reader()->metadata();
   for (int column_id = column_interval.start; column_id <= column_interval.end;
        column_id++) {
@@ -1055,9 +1384,100 @@ void populate_encoder_map(std::map<int, std::shared_ptr<ParquetEncoder>>& encode
         create_parquet_encoder(column_descriptor, parquet_column_descriptor);
     column_id += column_descriptor->columnType.get_physical_cols();
   }
+  return encoder_map;
 }
-
 }  // namespace
+
+std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroups(
+    const std::vector<RowGroupInterval>& row_group_intervals,
+    const int parquet_column_index,
+    const ColumnDescriptor* column_descriptor,
+    std::list<Chunk_NS::Chunk>& chunks,
+    StringDictionary* string_dictionary) {
+  auto timer = DEBUG_TIMER(__func__);
+  std::list<std::unique_ptr<ChunkMetadata>> chunk_metadata;
+  // `def_levels` and `rep_levels` below are used to store the read definition
+  // and repetition levels of the Dremel encoding implemented by the Parquet
+  // format
+  std::vector<int16_t> def_levels(LazyParquetChunkLoader::batch_reader_num_elements);
+  std::vector<int16_t> rep_levels(LazyParquetChunkLoader::batch_reader_num_elements);
+  std::vector<int8_t> values;
+
+  CHECK(!row_group_intervals.empty());
+  const auto& first_file_path = row_group_intervals.front().file_path;
+
+  auto first_file_reader = file_reader_cache_->getOrInsert(first_file_path, file_system_);
+  auto first_parquet_column_descriptor =
+      get_column_descriptor(first_file_reader, parquet_column_index);
+  resize_values_buffer(column_descriptor, first_parquet_column_descriptor, values);
+  auto encoder = create_parquet_encoder(column_descriptor,
+                                        first_parquet_column_descriptor,
+                                        chunks,
+                                        string_dictionary,
+                                        chunk_metadata);
+  CHECK(encoder.get());
+
+  for (const auto& row_group_interval : row_group_intervals) {
+    const auto& file_path = row_group_interval.file_path;
+    auto file_reader = file_reader_cache_->getOrInsert(file_path, file_system_);
+
+    auto [num_row_groups, num_columns] = get_parquet_table_size(file_reader);
+    CHECK(row_group_interval.start_index >= 0 &&
+          row_group_interval.end_index < num_row_groups);
+    CHECK(parquet_column_index >= 0 && parquet_column_index < num_columns);
+
+    parquet::ParquetFileReader* parquet_reader = file_reader->parquet_reader();
+    auto parquet_column_descriptor =
+        get_column_descriptor(file_reader, parquet_column_index);
+    validate_equal_column_descriptor(first_parquet_column_descriptor,
+                                     parquet_column_descriptor,
+                                     first_file_path,
+                                     file_path);
+
+    validate_max_repetition_and_definition_level(column_descriptor,
+                                                 parquet_column_descriptor);
+    int64_t values_read = 0;
+    for (int row_group_index = row_group_interval.start_index;
+         row_group_index <= row_group_interval.end_index;
+         ++row_group_index) {
+      auto group_reader = parquet_reader->RowGroup(row_group_index);
+      std::shared_ptr<parquet::ColumnReader> col_reader =
+          group_reader->Column(parquet_column_index);
+
+      try {
+        while (col_reader->HasNext()) {
+          int64_t levels_read =
+              parquet::ScanAllValues(LazyParquetChunkLoader::batch_reader_num_elements,
+                                     def_levels.data(),
+                                     rep_levels.data(),
+                                     reinterpret_cast<uint8_t*>(values.data()),
+                                     &values_read,
+                                     col_reader.get());
+
+          validate_definition_levels(parquet_reader,
+                                     row_group_index,
+                                     parquet_column_index,
+                                     def_levels.data(),
+                                     levels_read,
+                                     parquet_column_descriptor);
+
+          encoder->appendData(def_levels.data(),
+                              rep_levels.data(),
+                              values_read,
+                              levels_read,
+                              !col_reader->HasNext(),
+                              values.data());
+        }
+      } catch (const std::exception& error) {
+        throw ForeignStorageException(
+            std::string(error.what()) + " Row group: " + std::to_string(row_group_index) +
+            ", Parquet column: '" + col_reader->descr()->path()->ToDotString() +
+            "', Parquet file: '" + file_path + "'");
+      }
+    }
+  }
+  return chunk_metadata;
+}
 
 bool LazyParquetChunkLoader::isColumnMappingSupported(
     const ColumnDescriptor* omnisci_column,
@@ -1069,6 +1489,9 @@ bool LazyParquetChunkLoader::isColumnMappingSupported(
     return true;
   }
   if (validate_decimal_mapping(omnisci_column, parquet_column)) {
+    return true;
+  }
+  if (validate_floating_point_mapping(omnisci_column, parquet_column)) {
     return true;
   }
   if (validate_integral_mapping(omnisci_column, parquet_column)) {
@@ -1093,8 +1516,9 @@ bool LazyParquetChunkLoader::isColumnMappingSupported(
 }
 
 LazyParquetChunkLoader::LazyParquetChunkLoader(
-    std::shared_ptr<arrow::fs::FileSystem> file_system)
-    : file_system_(file_system) {}
+    std::shared_ptr<arrow::fs::FileSystem> file_system,
+    FileReaderMap* file_map)
+    : file_system_(file_system), file_reader_cache_(file_map) {}
 
 std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::loadChunk(
     const std::vector<RowGroupInterval>& row_group_intervals,
@@ -1107,40 +1531,79 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::loadChunk(
   auto buffer = chunk.getBuffer();
   CHECK(buffer);
 
-  auto metadata = append_row_groups(row_group_intervals,
+  try {
+    auto metadata = appendRowGroups(row_group_intervals,
                                     parquet_column_index,
                                     column_descriptor,
                                     chunks,
-                                    string_dictionary,
-                                    file_system_);
-  return metadata;
+                                    string_dictionary);
+    return metadata;
+  } catch (const std::exception& error) {
+    throw ForeignStorageException(error.what());
+  }
+
+  return {};
 }
 
 std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
     const std::set<std::string>& file_paths,
     const ForeignTableSchema& schema) {
-  std::list<RowGroupMetadata> row_group_metadata;
+  auto timer = DEBUG_TIMER(__func__);
   auto column_interval =
       Interval<ColumnType>{schema.getLogicalAndPhysicalColumns().front()->columnId,
                            schema.getLogicalAndPhysicalColumns().back()->columnId};
   CHECK(!file_paths.empty());
-  std::unique_ptr<parquet::arrow::FileReader> first_file_reader;
-  const auto& first_file_path = *file_paths.begin();
-  open_parquet_table(first_file_path, first_file_reader, file_system_);
-  std::map<int, std::shared_ptr<ParquetEncoder>> encoder_map;
-  for (const auto& file_path : file_paths) {
-    std::unique_ptr<parquet::arrow::FileReader> reader;
-    open_parquet_table(file_path, reader, file_system_);
-    validate_equal_schema(
-        first_file_reader.get(), reader.get(), first_file_path, file_path);
-    int num_row_groups = get_parquet_table_size(reader).first;
-    auto row_group_interval = RowGroupInterval{file_path, 0, num_row_groups - 1};
-    validate_parquet_metadata(reader->parquet_reader()->metadata(), file_path, schema);
-    if (file_path == first_file_path) {
-      populate_encoder_map(encoder_map, column_interval, schema, first_file_reader);
-    }
-    metadata_scan_rowgroup_interval(
-        encoder_map, row_group_interval, reader, schema, row_group_metadata);
+
+  // The encoder map needs to be populated before we can start scanning rowgroups, so we
+  // peel the first file_path out of the async loop below to perform population.
+  const auto& first_path = *file_paths.begin();
+  auto first_reader = file_reader_cache_->insert(first_path, file_system_);
+  validate_parquet_metadata(
+      first_reader->parquet_reader()->metadata(), first_path, schema);
+  auto encoder_map = populate_encoder_map(column_interval, schema, first_reader);
+  const auto num_row_groups = get_parquet_table_size(first_reader).first;
+  auto row_group_metadata = metadata_scan_rowgroup_interval(
+      encoder_map, {first_path, 0, num_row_groups - 1}, first_reader, schema);
+
+  // We want each (filepath->FileReader) pair in the cache to be initialized before we
+  // multithread so that we are not adding keys in a concurrent environment, so we add
+  // cache entries for each path and initialize to an empty unique_ptr if the file has not
+  // yet been opened.
+  // Since we have already performed the first iteration, we skip it in the thread groups
+  // so as not to process it twice.
+  std::set<std::string> cache_subset;
+  for (auto path_it = ++(file_paths.begin()); path_it != file_paths.end(); ++path_it) {
+    file_reader_cache_->initializeIfEmpty(*path_it);
+    cache_subset.insert(*path_it);
+  }
+
+  // Iterate asyncronously over any paths beyond the first.
+  auto paths_per_thread = partition_for_threads(cache_subset, g_max_import_threads);
+  std::vector<std::future<std::list<RowGroupMetadata>>> futures;
+  for (const auto& path_group : paths_per_thread) {
+    futures.emplace_back(std::async(
+        std::launch::async,
+        [&](const auto& paths, const auto& file_reader_cache) {
+          std::list<RowGroupMetadata> reduced_metadata;
+          for (const auto& path : paths.get()) {
+            auto reader = file_reader_cache.get().getOrInsert(path, file_system_);
+            validate_equal_schema(first_reader, reader, first_path, path);
+            validate_parquet_metadata(reader->parquet_reader()->metadata(), path, schema);
+            const auto num_row_groups = get_parquet_table_size(reader).first;
+            const auto interval = RowGroupInterval{path, 0, num_row_groups - 1};
+            reduced_metadata.splice(
+                reduced_metadata.end(),
+                metadata_scan_rowgroup_interval(encoder_map, interval, reader, schema));
+          }
+          return reduced_metadata;
+        },
+        std::ref(path_group),
+        std::ref(*file_reader_cache_)));
+  }
+
+  // Reduce all the row_group results.
+  for (auto& future : futures) {
+    row_group_metadata.splice(row_group_metadata.end(), future.get());
   }
   return row_group_metadata;
 }

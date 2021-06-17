@@ -5,8 +5,10 @@ SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 if [ "$TSAN" = "true" ]; then
   ARROW_TSAN="-DARROW_JEMALLOC=OFF -DARROW_USE_TSAN=ON"
+  TBB_TSAN="-fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
 elif [ "$TSAN" = "false" ]; then
   ARROW_TSAN="-DARROW_JEMALLOC=BUNDLED"
+  TBB_TSAN=""
 fi
 
 function download() {
@@ -15,6 +17,10 @@ function download() {
 
 function extract() {
     tar xvf "$1"
+}
+
+function cmake_build_and_install() {
+  cmake --build . --parallel && cmake --install .
 }
 
 function makej() {
@@ -63,12 +69,12 @@ function install_cmake() {
   CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-${CMAKE_VERSION}.tar.gz
 }
 
-ARROW_VERSION=apache-arrow-1.0.0
+ARROW_VERSION=apache-arrow-3.0.0
 
 function install_arrow() {
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
   extract $ARROW_VERSION.tar.gz
-
+  
   mkdir -p arrow-$ARROW_VERSION/cpp/build
   pushd arrow-$ARROW_VERSION/cpp/build
   cmake \
@@ -133,16 +139,16 @@ function install_awscpp() {
     mkdir build
     cd build
     cmake \
+        -GNinja \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=$PREFIX \
-        -DBUILD_ONLY="s3;transfer;config" \
+        -DBUILD_ONLY="s3;transfer;config;sts;cognito-identity;identity-management" \
         -DBUILD_SHARED_LIBS=0 \
         -DCUSTOM_MEMORY_MANAGEMENT=0 \
         -DCPP_STANDARD=$CPP_STANDARD \
         -DENABLE_TESTING=off \
         ..
-    make $*
-    make_install
+    cmake_build_and_install
     popd
 }
 
@@ -228,6 +234,47 @@ function install_geos() {
 
 }
 
+FOLLY_VERSION=2021.02.01.00
+FMT_VERSION=7.1.3
+function install_folly() {
+  # Folly depends on fmt
+  download https://github.com/fmtlib/fmt/archive/$FMT_VERSION.tar.gz
+  extract $FMT_VERSION.tar.gz
+  BUILD_DIR="fmt-$FMT_VERSION/build"
+  mkdir -p $BUILD_DIR
+  pushd $BUILD_DIR
+  cmake -GNinja \
+        -DCMAKE_CXX_FLAGS="-fPIC" \
+        -DFMT_DOC=OFF \
+        -DFMT_TEST=OFF \
+        -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+  cmake_build_and_install
+  popd
+
+  download https://github.com/facebook/folly/archive/v$FOLLY_VERSION.tar.gz
+  extract v$FOLLY_VERSION.tar.gz
+  pushd folly-$FOLLY_VERSION/build/
+
+  source /etc/os-release
+  if [ "$ID" == "ubuntu"  ] ; then
+    FOLLY_SHARED=ON
+  else
+    FOLLY_SHARED=OFF
+  fi
+
+  # jemalloc disabled due to issue with clang build on Ubuntu
+  # see: https://github.com/facebook/folly/issues/976
+  cmake -GNinja \
+        -DCMAKE_CXX_FLAGS="-fPIC -pthread" \
+        -DFOLLY_USE_JEMALLOC=OFF \
+        -DBUILD_SHARED_LIBS=${FOLLY_SHARED} \
+        -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+  cmake_build_and_install
+
+  popd
+}
+
+
 RDKAFKA_VERSION=1.1.0
 
 function install_rdkafka() {
@@ -256,7 +303,7 @@ function install_rdkafka() {
     popd
 }
 
-GO_VERSION=1.14
+GO_VERSION=1.15.6
 
 function install_go() {
     VERS=${GO_VERSION}
@@ -279,22 +326,46 @@ function install_ninja() {
   mv ninja $PREFIX/bin/
 }
 
-TBB_VERSION=2020.2
+MAVEN_VERSION=3.6.3
+
+function install_maven() {
+    download ${HTTP_DEPS}/apache-maven-${MAVEN_VERSION}-bin.tar.gz
+    extract apache-maven-${MAVEN_VERSION}-bin.tar.gz
+    rm -rf $PREFIX/maven || true
+    mv apache-maven-${MAVEN_VERSION} $PREFIX/maven
+}
+
+TBB_VERSION=2020.3
 
 function install_tbb() {
   download https://github.com/oneapi-src/oneTBB/archive/v${TBB_VERSION}.tar.gz
   extract v${TBB_VERSION}.tar.gz
   pushd oneTBB-${TBB_VERSION}
   if [ "$1" == "static" ]; then
-    make extra_inc=big_iron.inc
+    make CXXFLAGS="${TBB_TSAN}" extra_inc=big_iron.inc
     install -d $PREFIX/lib
     install -m755 build/linux_*/*.a* $PREFIX/lib
   else
-    make
+    make CXXFLAGS="${TBB_TSAN}"
     install -d $PREFIX/lib
     install -m755 build/linux_*/*.so* $PREFIX/lib
   fi
   install -d $PREFIX/include
   cp -R include/tbb $PREFIX/include
+  popd
+}
+
+LIBUV_VERSION=1.41.0
+
+function install_libuv() {
+  download https://dist.libuv.org/dist/v${LIBUV_VERSION}/libuv-v${LIBUV_VERSION}.tar.gz
+  extract libuv-v${LIBUV_VERSION}.tar.gz
+  pushd libuv-v${LIBUV_VERSION}
+  mkdir -p build
+  pushd build
+  cmake -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+  makej
+  make_install
+  popd
   popd
 }

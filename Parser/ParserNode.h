@@ -1005,7 +1005,8 @@ struct DistributedConnector
                                        std::string& sql_query_string) = 0;
   virtual std::vector<AggregatedResult> query(QueryStateProxy,
                                               std::string& sql_query_string,
-                                              std::vector<size_t> outer_frag_indices) = 0;
+                                              std::vector<size_t> outer_frag_indices,
+                                              bool allow_interrupt) = 0;
   virtual void checkpoint(const Catalog_Namespace::SessionInfo& parent_session_info,
                           int tableId) = 0;
   virtual void rollback(const Catalog_Namespace::SessionInfo& parent_session_info,
@@ -1020,10 +1021,12 @@ struct LocalConnector : public DistributedConnector {
   AggregatedResult query(QueryStateProxy,
                          std::string& sql_query_string,
                          std::vector<size_t> outer_frag_indices,
-                         bool validate_only);
+                         bool validate_only,
+                         bool allow_interrupt);
   std::vector<AggregatedResult> query(QueryStateProxy,
                                       std::string& sql_query_string,
-                                      std::vector<size_t> outer_frag_indices) override;
+                                      std::vector<size_t> outer_frag_indices,
+                                      bool allow_interrupt) override;
   size_t leafCount() override { return 1; };
   void insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
                         const size_t leaf_idx,
@@ -1079,6 +1082,7 @@ class CreateDataframeStmt : public CreateTableBaseStmt {
 class InsertIntoTableAsSelectStmt : public DDLStmt {
  public:
   // ITAS constructor
+  InsertIntoTableAsSelectStmt(const rapidjson::Value& payload);
   InsertIntoTableAsSelectStmt(const std::string* table_name,
                               const std::string* select_query,
                               std::list<std::string*>* c)
@@ -1094,7 +1098,10 @@ class InsertIntoTableAsSelectStmt : public DDLStmt {
     delete select_query;
   }
 
-  void populateData(QueryStateProxy, bool validate_table);
+  void populateData(QueryStateProxy,
+                    const TableDescriptor* td,
+                    bool validate_table,
+                    bool for_CTAS = false);
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
   std::string& get_table() { return table_name_; }
@@ -1140,12 +1147,36 @@ class CreateTableAsSelectStmt : public InsertIntoTableAsSelectStmt {
 };
 
 /*
+ * @type AlterTableStmt
+ * @brief ALTER TABLE statement
+ *
+ * AlterTableStmt is more a composite Stmt in that it relies upon several other Stmts to
+ * handle the execution.
+ */
+
+class AlterTableStmt : public DDLStmt {
+ public:
+  static void delegateExecute(const rapidjson::Value& payload,
+                              const Catalog_Namespace::SessionInfo& session);
+
+  const std::string* get_table() const { return table.get(); }
+
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
+
+ private:
+  std::unique_ptr<std::string> table;
+  const rapidjson::Value payload;
+};
+
+/*
  * @type DropTableStmt
  * @brief DROP TABLE statement
  */
 class DropTableStmt : public DDLStmt {
  public:
   DropTableStmt(std::string* tab, bool i) : table(tab), if_exists(i) {}
+  DropTableStmt(const rapidjson::Value& payload);
+
   const std::string* get_table() const { return table.get(); }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
@@ -1273,16 +1304,22 @@ class RenameUserStmt : public DDLStmt {
 
 class RenameTableStmt : public DDLStmt {
  public:
-  RenameTableStmt(std::string* tab, std::string* new_tab_name)
-      : table(tab), new_table_name(new_tab_name) {}
+  using TableNamePair =
+      std::pair<std::unique_ptr<std::string>, std::unique_ptr<std::string>>;
 
-  const std::string* get_prev_table() const { return table.get(); }
-  const std::string* get_new_table() const { return new_table_name.get(); }
+  // when created via ddl
+  RenameTableStmt(const rapidjson::Value& payload);
+
+  // to rename a single table
+  RenameTableStmt(std::string* tab_name, std::string* new_tab_name);
+
+  // to rename multiple tables
+  RenameTableStmt(std::list<std::pair<std::string, std::string>> tableNames);
+
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:
-  std::unique_ptr<std::string> table;
-  std::unique_ptr<std::string> new_table_name;
+  std::list<TableNamePair> tablesToRename;
 };
 
 class RenameColumnStmt : public DDLStmt {
@@ -1331,6 +1368,16 @@ class DropColumnStmt : public DDLStmt {
  private:
   std::unique_ptr<std::string> table;
   std::list<std::unique_ptr<std::string>> columns;
+};
+
+class AlterTableParamStmt : public DDLStmt {
+ public:
+  AlterTableParamStmt(std::string* tab, NameValueAssign* p) : table(tab), param(p) {}
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
+
+ private:
+  std::unique_ptr<std::string> table;
+  std::unique_ptr<NameValueAssign> param;
 };
 
 /*
@@ -1871,6 +1918,8 @@ class CreateViewStmt : public DDLStmt {
 class DropViewStmt : public DDLStmt {
  public:
   DropViewStmt(std::string* v, bool i) : view_name(v), if_exists(i) {}
+  DropViewStmt(const rapidjson::Value& payload);
+
   const std::string* get_view_name() const { return view_name.get(); }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
@@ -2100,6 +2149,21 @@ struct DefaultValidate<IntLiteral> {
     const auto val = static_cast<const IntLiteral*>(t->get_value())->get_intval();
     if (val <= 0) {
       throw std::runtime_error(property_name + " must be a positive number.");
+    }
+    return val;
+  }
+};
+
+struct PositiveOrZeroValidate {
+  template <typename T>
+  decltype(auto) operator()(T t) {
+    const std::string property_name(boost::to_upper_copy<std::string>(*t->get_name()));
+    if (!dynamic_cast<const IntLiteral*>(t->get_value())) {
+      throw std::runtime_error(property_name + " must be an integer literal.");
+    }
+    const auto val = static_cast<const IntLiteral*>(t->get_value())->get_intval();
+    if (val < 0) {
+      throw std::runtime_error(property_name + " must be greater than or equal to 0.");
     }
     return val;
   }

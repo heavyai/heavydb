@@ -16,7 +16,7 @@
 #include "QueryEngine/EquiJoinCondition.h"
 
 #include "Analyzer/Analyzer.h"
-#include "QueryEngine/JoinHashTable/HashJoinRuntime.h"
+#include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
 #include "QueryEngine/RangeTableIndexVisitor.h"
 
 namespace {

@@ -24,6 +24,7 @@ namespace foreign_storage {
 
 // helper functions for serializing/deserializing objects to rapidjson value
 namespace json_utils {
+std::string get_type_as_string(const rapidjson::Value& object);
 
 // Forward declare for vector/map functions
 template <class T>
@@ -39,9 +40,9 @@ void get_value_from_object(const rapidjson::Value& object,
 // Basic types (more can be added as required) will be defined in source file
 // int
 void set_value(rapidjson::Value& json_val,
-               const long unsigned int& value,
+               const size_t& value,
                rapidjson::Document::AllocatorType& allocator);
-void get_value(const rapidjson::Value& json_val, long unsigned int& value);
+void get_value(const rapidjson::Value& json_val, size_t& value);
 // unsigned long int / size_t
 void set_value(rapidjson::Value& json_val,
                const int& value,
@@ -52,6 +53,13 @@ void set_value(rapidjson::Value& json_val,
                const std::string& value,
                rapidjson::Document::AllocatorType& allocator);
 void get_value(const rapidjson::Value& json_val, std::string& value);
+
+// int64
+void set_value(rapidjson::Value& json_val,
+               const int64_t& value,
+               rapidjson::Document::AllocatorType& allocator);
+
+void get_value(const rapidjson::Value& json_val, int64_t& value);
 
 // std::vector
 template <class T>
@@ -136,6 +144,8 @@ rapidjson::Document read_from_file(const std::string& file_path);
 
 // Write JSON content (encapsulated by the given Document object) to the given file path
 void write_to_file(const rapidjson::Document& document, const std::string& file_path);
+
+std::string write_to_string(const rapidjson::Document& document);
 
 }  // namespace json_utils
 }  // namespace foreign_storage

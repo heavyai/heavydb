@@ -34,6 +34,7 @@ RUN yum install -y \
         libX11-devel \
         mesa-libGL-devel \
         environment-modules \
+        which \
         PyYAML \
         valgrind && \
     rm -rf /var/cache/yum/*

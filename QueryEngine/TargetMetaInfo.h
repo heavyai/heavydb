@@ -37,6 +37,11 @@ class TargetMetaInfo {
   const SQLTypeInfo& get_type_info() const { return ti_; }
   const SQLTypeInfo& get_physical_type_info() const { return physical_ti_; }
 
+  std::string toString() const {
+    return "TargetMetaInfo(" + resname_ + ", " + ti_.to_string() + ", " +
+           physical_ti_.to_string() + ") ";
+  }
+
  private:
   std::string resname_;
   SQLTypeInfo ti_;

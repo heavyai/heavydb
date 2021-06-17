@@ -97,14 +97,20 @@ class ParserWrapper {
   }
 
   bool isCalcitePathPermissable(bool read_only_mode = false) {
-    return is_calcite_ddl_ || (!is_legacy_ddl_ && !is_optimize && !is_validate &&
-                               isCalcitePermissableDml(read_only_mode) &&
-                               !(explain_type_ == ExplainType::Other));
+    if (is_calcite_ddl_) {
+      return isCalcitePermissableDdl(read_only_mode);
+    }
+    return (!is_legacy_ddl_ && !is_optimize && !is_validate &&
+            isCalcitePermissableDml(read_only_mode) &&
+            !(explain_type_ == ExplainType::Other));
   }
 
   bool isOtherExplain() const { return explain_type_ == ExplainType::Other; }
 
-  bool isCalcitePermissableDml(bool read_only_mode) {
+  bool isCalcitePermissableDml(bool read_only_mode = false) {
+    if (is_itas) {
+      return !read_only_mode;
+    }
     if (read_only_mode) {
       return !is_update_dml;  // If we're read-only, no update/delete DML is permissable
     }
@@ -112,9 +118,15 @@ class ParserWrapper {
            (getDMLType() == ParserWrapper::DMLType::Update);
   }
 
-  bool isCalciteDdl() const { return is_calcite_ddl_; }
+  bool isCalcitePermissableDdl(bool read_only_mode) {
+    if (read_only_mode) {
+      // If we're read-only, no Write/SchemaWrite DDL is permissable
+      return query_type_ != QueryType::Write && query_type_ != QueryType::SchemaWrite;
+    }
+    return true;
+  }
 
-  bool isDistributedDdl() const { return is_distributed_calcite_ddl_; }
+  bool isCalciteDdl() const { return is_calcite_ddl_; }
 
  private:
   DMLType dml_type_ = DMLType::NotDML;
@@ -132,5 +144,4 @@ class ParserWrapper {
 
   bool is_legacy_ddl_ = false;
   bool is_calcite_ddl_ = false;
-  bool is_distributed_calcite_ddl_ = false;
 };

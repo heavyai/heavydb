@@ -23,11 +23,22 @@ public class SqlAlterForeignTable extends SqlDdl implements JsonSerializableDdl 
   /**
    * ALTER FOREIGN TABLE DDL syntax variants:
    *
+   * SET OPTIONS:
    * ALTER FOREIGN TABLE <table> [ WITH (<option> = <value> [, ... ] ) ]
+   * RENAME TABLE
+   * ALTER FOREIGN TABLE <table> RENAME TO <new_table>
+   * RENAME COLUMN:
+   * ALTER FOREIGN TABLE <table> RENAME <column> to <new_column>
    */
+  public enum AlterType { RENAME_TABLE, RENAME_COLUMN, ALTER_OPTIONS }
+
   public static class Builder extends SqlOptionsBuilder {
     private SqlParserPos pos;
+    private AlterType alterType;
     private String tableName;
+    private String newTableName;
+    private String oldColumnName;
+    private String newColumnName;
 
     public void setPos(final SqlParserPos pos) {
       this.pos = pos;
@@ -37,27 +48,61 @@ public class SqlAlterForeignTable extends SqlDdl implements JsonSerializableDdl 
       this.tableName = tableName;
     }
 
-    public void setOptions(final Map<String, String> options) {
+    public void alterOptions(final Map<String, String> options) {
+      this.alterType = AlterType.ALTER_OPTIONS;
       this.options = options;
     }
 
+    public void alterTableName(final String newName) {
+      this.alterType = AlterType.RENAME_TABLE;
+      this.newTableName = newName;
+    }
+
+    public void alterColumnName(final String oldName, final String newName) {
+      this.alterType = AlterType.RENAME_COLUMN;
+      this.oldColumnName = oldName;
+      this.newColumnName = newName;
+    }
+
     public SqlAlterForeignTable build() {
-      return new SqlAlterForeignTable(pos, tableName, super.options);
+      return new SqlAlterForeignTable(pos,
+              alterType,
+              tableName,
+              newTableName,
+              oldColumnName,
+              newColumnName,
+              super.options);
     }
   }
 
   @Expose
+  private AlterType alterType;
+  @Expose
   private String tableName;
+  @Expose
+  private String newTableName;
+  @Expose
+  private String oldColumnName;
+  @Expose
+  private String newColumnName;
   @Expose
   private String command;
   @Expose
   private Map<String, String> options;
 
   public SqlAlterForeignTable(final SqlParserPos pos,
+          final AlterType alterType,
           final String tableName,
+          final String newTableName,
+          final String oldColumnName,
+          final String newColumnName,
           final Map<String, String> options) {
     super(OPERATOR, pos);
+    this.alterType = alterType;
     this.tableName = tableName;
+    this.newTableName = newTableName;
+    this.oldColumnName = oldColumnName;
+    this.newColumnName = newColumnName;
     this.options = options;
     this.command = OPERATOR.getName();
   }

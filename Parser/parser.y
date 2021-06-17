@@ -109,7 +109,7 @@ using namespace Parser;
 %token GEOGRAPHY GEOMETRY GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
 %token IS LANGUAGE LAST LENGTH LIKE LIMIT LINESTRING MOD MULTIPOLYGON NOW NULLX NUMERIC OF OFFSET ON OPEN OPTIMIZE
 %token OPTIMIZED OPTION ORDER PARAMETER POINT POLYGON PRECISION PRIMARY PRIVILEGES PROCEDURE
-%token SERVER SMALLINT SOME TABLE TEMPORARY TEXT THEN TIME TIMESTAMP TINYINT TO TRUNCATE UNION
+%token SERVER SMALLINT SOME TABLE TEMPORARY TEXT THEN TIME TIMESTAMP TINYINT TO TRUNCATE UNION USAGE
 %token PUBLIC REAL REFERENCES RENAME RESTORE REVOKE ROLE ROLLBACK SCHEMA SELECT SET SHARD SHARED SHOW
 %token UNIQUE UPDATE USER VALIDATE VALUES VIEW WHEN WHENEVER WHERE WITH WORK EDIT ACCESS DASHBOARD SQL EDITOR
 
@@ -140,6 +140,7 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| rename_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| add_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_column_statement { $<nodeval>$ = $<nodeval>1; }
+	| alter_table_param_statement { $<nodeval>$ = $<nodeval>1; }
 	| copy_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_database_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_database_statement { $<nodeval>$ = $<nodeval>1; }
@@ -350,6 +351,13 @@ drop_columns:
 drop_column:
 		DROP opt_column column { $<stringval>$ = $<stringval>3; }
 
+alter_table_param_statement:
+	ALTER TABLE table SET name_eq_value 
+	{
+		$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new AlterTableParamStmt(($<stringval>3)->release(), reinterpret_cast<NameValueAssign*>(($<nodeval>5)->release())));
+	}
+	;
+
 copy_table_statement:
 	COPY table FROM STRING opt_with_option_list
 	{
@@ -430,6 +438,10 @@ validate_system_statement:
 		VALIDATE CLUSTER opt_with_option_list
 		{
 			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new ValidateStmt(($<stringval>2)->release(), reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>3)->release())));
+		}
+		| VALIDATE
+		{
+			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new ValidateStmt(new std::string(), nullptr));
 		}
 		;
 
@@ -689,10 +701,6 @@ insert_statement:
 		INSERT INTO table opt_column_commalist VALUES '(' atom_commalist ')'
 		{
 			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new InsertValuesStmt(($<stringval>3)->release(), ($<slistval>4)->release(), reinterpret_cast<std::list<Expr*>*>(($<listval>7)->release())));
-		}
-		| INSERT INTO table opt_column_commalist SELECTSTRING
-		{
-			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new InsertIntoTableAsSelectStmt(($<stringval>3)->release(), ($<stringval>5)->release(), ($<slistval>4)->release()));
 		}
 	;
 
@@ -1196,6 +1204,8 @@ privilege:
 	|	VIEW { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "VIEW"); }
 	|	EDIT { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "EDIT"); }
 	|	ACCESS { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "ACCESS"); }
+	|	USAGE { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "USAGE"); }
+	|	SERVER USAGE { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "SERVER USAGE"); }
 	|	ALTER SERVER { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "ALTER SERVER"); }
 	|	CREATE SERVER { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "CREATE SERVER"); }
 	|	CREATE TABLE { $<stringval>$ = TrackedPtr<std::string>::make(lexer.parsed_str_tokens_ , "CREATE TABLE"); }

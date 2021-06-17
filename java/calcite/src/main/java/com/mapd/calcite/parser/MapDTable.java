@@ -56,7 +56,7 @@ public class MapDTable implements Table {
 
   @Override
   public RelDataType getRowType(RelDataTypeFactory rdtf) {
-    RelDataTypeFactory.FieldInfoBuilder builder = rdtf.builder();
+    RelDataTypeFactory.Builder builder = rdtf.builder();
     for (TColumnType tct : rowInfo.getRow_desc()) {
       MAPDLOGGER.debug("'" + tct.col_name + "'"
               + " \t" + tct.getCol_type().getEncoding() + " \t"

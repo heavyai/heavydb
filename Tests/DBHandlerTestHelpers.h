@@ -16,6 +16,10 @@
 
 #pragma once
 
+#ifndef BASE_PATH
+#define BASE_PATH "./tmp"
+#endif
+
 #include <gtest/gtest.h>
 #include <boost/format.hpp>
 #include <boost/optional.hpp>
@@ -29,7 +33,10 @@ constexpr int64_t False = 0;
 constexpr void* Null = nullptr;
 constexpr int64_t Null_i = NULL_INT;
 
+using NullableTargetValue = boost::variant<TargetValue, void*>;
+
 extern size_t g_leaf_count;
+extern bool g_cluster;
 
 /**
  * Helper class for asserting equality between a result set represented as a boost variant
@@ -66,6 +73,8 @@ class AssertValueEqualsVisitor : public boost::static_visitor<> {
 
   void operator()(const std::string& value) const {
     auto str_value = datum_.val.str_val;
+    EXPECT_TRUE(!datum_.is_null)
+        << boost::format("At row: %d, column: %d") % row_ % column_;
     auto type = column_type_.col_type.type;
     if (isGeo(type) && !datum_.val.arr_val.empty()) {
       throw std::runtime_error{
@@ -140,6 +149,30 @@ class AssertValueEqualsVisitor : public boost::static_visitor<> {
   const size_t column_;
 };
 
+class AssertValueEqualsOrIsNullVisitor : public boost::static_visitor<> {
+ public:
+  AssertValueEqualsOrIsNullVisitor(const TDatum& datum,
+                                   const TColumnType& column_type,
+                                   const size_t row,
+                                   const size_t column)
+      : datum_(datum), column_type_(column_type), row_(row), column_(column) {}
+
+  void operator()(const TargetValue& value) const {
+    boost::apply_visitor(AssertValueEqualsVisitor{datum_, column_type_, row_, column_},
+                         value);
+  }
+
+  void operator()(const void* null) const {
+    EXPECT_TRUE(datum_.is_null)
+        << boost::format("At row: %d, column: %d") % row_ % column_;
+  }
+
+  const TDatum& datum_;
+  const TColumnType& column_type_;
+  const size_t row_;
+  const size_t column_;
+};
+
 /**
  * Helper gtest fixture class for executing SQL queries through DBHandler
  * and asserting result sets.
@@ -153,7 +186,9 @@ class DBHandlerTestFixture : public testing::Test {
     desc.add_options()("cluster",
                        po::value<std::string>(&cluster_config_file_path_),
                        "Path to data leaves list JSON file.");
-
+    desc.add_options()("use-disk-cache",
+                       po::value<bool>(&use_disk_cache_),
+                       "Enable disk cache for all tables.");
     po::variables_map vm;
     po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
     po::notify(vm);
@@ -175,12 +210,15 @@ class DBHandlerTestFixture : public testing::Test {
 
   static void TearDownTestSuite() {}
 
-  static void createDBHandler(DiskCacheLevel cache_level = DiskCacheLevel::fsi) {
+  static void createDBHandler() {
     if (!db_handler_) {
       setupSignalHandler();
 
+      // Whitelist root path for tests by default
+      ddl_utils::FilePathWhitelist::clear();
+      ddl_utils::FilePathWhitelist::initialize(BASE_PATH, "[\"/\"]", "[\"/\"]");
+
       // Based on default values observed from starting up an OmniSci DB server.
-      const bool cpu_only{false};
       const bool allow_multifrag{true};
       const bool jit_debug{false};
       const bool intel_jit_profile{false};
@@ -193,8 +231,6 @@ class DBHandlerTestFixture : public testing::Test {
       const size_t render_mem_bytes{500000000};
       const size_t max_concurrent_render_sessions{500};
       const bool render_compositor_use_last_gpu{false};
-      const int num_gpus{-1};
-      const int start_gpu{0};
       const size_t reserved_gpu_mem{134217728};
       const size_t num_reader_threads{0};
       const bool legacy_syntax{true};
@@ -204,12 +240,17 @@ class DBHandlerTestFixture : public testing::Test {
       system_parameters_.omnisci_server_port = -1;
       system_parameters_.calcite_port = 3280;
 
-      DiskCacheConfig disk_cache_config{std::string(BASE_PATH) + "/omnisci_disk_cache",
-                                        cache_level};
+      File_Namespace::DiskCacheLevel cache_level{File_Namespace::DiskCacheLevel::fsi};
+      if (use_disk_cache_) {
+        cache_level = File_Namespace::DiskCacheLevel::all;
+      }
+      File_Namespace::DiskCacheConfig disk_cache_config{
+          File_Namespace::DiskCacheConfig::getDefaultPath(std::string(BASE_PATH)),
+          cache_level};
+
       db_handler_ = std::make_unique<DBHandler>(db_leaves_,
                                                 string_leaves_,
                                                 BASE_PATH,
-                                                cpu_only,
                                                 allow_multifrag,
                                                 jit_debug,
                                                 intel_jit_profile,
@@ -221,8 +262,6 @@ class DBHandlerTestFixture : public testing::Test {
                                                 render_oom_retry_threshold,
                                                 render_mem_bytes,
                                                 max_concurrent_render_sessions,
-                                                num_gpus,
-                                                start_gpu,
                                                 reserved_gpu_mem,
                                                 render_compositor_use_last_gpu,
                                                 num_reader_threads,
@@ -238,8 +277,12 @@ class DBHandlerTestFixture : public testing::Test {
 #ifdef ENABLE_GEOS
                                                 libgeos_so_filename_,
 #endif
-                                                disk_cache_config);
+                                                disk_cache_config,
+                                                false);
       loginAdmin();
+
+      // Execute on CPU by default
+      db_handler_->set_execution_mode(session_id_, TExecuteMode::CPU);
     }
   }
   virtual void TearDown() override {}
@@ -272,7 +315,8 @@ class DBHandlerTestFixture : public testing::Test {
 
   static void resetCatalog() {
     auto& catalog = getCatalog();
-    catalog.remove(catalog.getCurrentDB().dbName);
+    Catalog_Namespace::SysCatalog::instance().removeCatalog(
+        catalog.getCurrentDB().dbName);
   }
 
   static void loginAdmin() {
@@ -295,7 +339,6 @@ class DBHandlerTestFixture : public testing::Test {
 
   // Login and return the session id to logout later
   static void login(const std::string& user,
-
                     const std::string& pass,
                     const std::string& db,
                     TSessionId& result_id) {
@@ -337,13 +380,43 @@ class DBHandlerTestFixture : public testing::Test {
     ASSERT_EQ(error_message, e.what());
   }
 
+  // sometime error message have non deterministic portions
+  // used to check a meaningful portion of an error message
+  template <typename Lambda>
+  void executeLambdaAndAssertPartialException(Lambda lambda,
+                                              const std::string& error_message) {
+    try {
+      lambda();
+      FAIL() << "An exception should have been thrown for this test case.";
+    } catch (const TOmniSciException& e) {
+      assertPartialExceptionMessage(e, error_message);
+    } catch (const std::runtime_error& e) {
+      assertPartialExceptionMessage(e, error_message);
+    }
+  }
+
+  void assertPartialExceptionMessage(const TOmniSciException& e,
+                                     const std::string& error_message) {
+    ASSERT_TRUE(e.error_msg.find(error_message) != std::string::npos);
+  }
+
+  void assertPartialExceptionMessage(const std::runtime_error& e,
+                                     const std::string& error_message) {
+    ASSERT_TRUE(std::string(e.what()).find(error_message) != std::string::npos);
+  }
+
   void queryAndAssertException(const std::string& sql_statement,
                                const std::string& error_message) {
     executeLambdaAndAssertException([&] { sql(sql_statement); }, error_message);
   }
 
+  void queryAndAssertPartialException(const std::string& sql_statement,
+                                      const std::string& error_message) {
+    executeLambdaAndAssertPartialException([&] { sql(sql_statement); }, error_message);
+  }
+
   void assertResultSetEqual(
-      const std::vector<std::vector<TargetValue>>& expected_result_set,
+      const std::vector<std::vector<NullableTargetValue>>& expected_result_set,
       const TQueryResult actual_result) {
     auto& row_set = actual_result.row_set;
     auto row_count = getRowCount(row_set);
@@ -365,7 +438,7 @@ class DBHandlerTestFixture : public testing::Test {
         auto column_value = row[c];
         auto expected_column_value = expected_result_set[r][c];
         boost::apply_visitor(
-            AssertValueEqualsVisitor{column_value, row_set.row_desc[c], r, c},
+            AssertValueEqualsOrIsNullVisitor{column_value, row_set.row_desc[c], r, c},
             expected_column_value);
       }
     }
@@ -373,7 +446,7 @@ class DBHandlerTestFixture : public testing::Test {
 
   void sqlAndCompareResult(
       const std::string& sql_statement,
-      const std::vector<std::vector<TargetValue>>& expected_result_set) {
+      const std::vector<std::vector<NullableTargetValue>>& expected_result_set) {
     TQueryResult result_set;
     sql(result_set, sql_statement);
     assertResultSetEqual(expected_result_set, result_set);
@@ -442,7 +515,7 @@ class DBHandlerTestFixture : public testing::Test {
         datum_array.emplace_back(datum_item);
       }
     } else {
-      throw std::runtime_error{"Unexpected column data"};
+      // no-op: it is possible for the array to be empty
     }
   }
 
@@ -507,10 +580,13 @@ class DBHandlerTestFixture : public testing::Test {
   static std::string default_pass_;
   static std::string default_db_name_;
   static std::vector<std::string> udf_compiler_options_;
-  static std::string cluster_config_file_path_;
 #ifdef ENABLE_GEOS
   static std::string libgeos_so_filename_;
 #endif
+
+ public:
+  static std::string cluster_config_file_path_;
+  static bool use_disk_cache_;
 };
 
 TSessionId DBHandlerTestFixture::session_id_{};
@@ -530,3 +606,4 @@ std::string DBHandlerTestFixture::cluster_config_file_path_{};
 #ifdef ENABLE_GEOS
 std::string DBHandlerTestFixture::libgeos_so_filename_{};
 #endif
+bool DBHandlerTestFixture::use_disk_cache_{false};

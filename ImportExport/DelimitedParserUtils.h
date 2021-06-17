@@ -102,6 +102,8 @@ size_t find_row_end_pos(size_t& alloc_size,
  * @param row                  Given vector to be populated with parsed fields.
  * @param try_single_thread    In case of parse errors, this will tell if parsing
  * should continue with single thread.
+ * @param filter_empty_lines   Whether to skip empty lines (used when parsing single
+ * columns returned by s3 select, as nulls may be encoded as empty lines)
  *
  * @return Pointer to the next row after the first row is parsed.
  */
@@ -113,7 +115,8 @@ const char* get_row(const char* buf,
                     const bool* is_array,
                     std::vector<T>& row,
                     std::vector<std::unique_ptr<char[]>>& tmp_buffers,
-                    bool& try_single_thread);
+                    bool& try_single_thread,
+                    bool filter_empty_lines);
 
 /**
  * @brief Parses given string array and inserts into given vector of strings.

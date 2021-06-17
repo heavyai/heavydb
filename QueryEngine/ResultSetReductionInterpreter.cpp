@@ -70,7 +70,7 @@ class ReductionInterpreterImpl {
     const auto index = interpreter->vars_[gep->index()->id()];
     auto result_ptr =
         reinterpret_cast<const int8_t*>(base.ptr) + index.int_val * element_size;
-    interpreter->setVar(gep, ReductionInterpreter::EvalValue{.ptr = result_ptr});
+    interpreter->setVar(gep, ReductionInterpreter::MakeEvalValue(result_ptr));
   }
 
   static void runLoad(const Instruction* instruction,
@@ -83,34 +83,32 @@ class ReductionInterpreterImpl {
     switch (source_type) {
       case Type::Int8Ptr: {
         const auto int_val = *reinterpret_cast<const int8_t*>(source.ptr);
-        interpreter->setVar(load, ReductionInterpreter::EvalValue{.int_val = int_val});
+        interpreter->setVar(load, ReductionInterpreter::MakeEvalValue(int_val));
         break;
       }
       case Type::Int32Ptr: {
         const auto int_val = *reinterpret_cast<const int32_t*>(source.ptr);
-        interpreter->setVar(load, ReductionInterpreter::EvalValue{.int_val = int_val});
+        interpreter->setVar(load, ReductionInterpreter::MakeEvalValue(int_val));
         break;
       }
       case Type::Int64Ptr: {
         const auto int_val = *reinterpret_cast<const int64_t*>(source.ptr);
-        interpreter->setVar(load, ReductionInterpreter::EvalValue{.int_val = int_val});
+        interpreter->setVar(load, ReductionInterpreter::MakeEvalValue(int_val));
         break;
       }
       case Type::FloatPtr: {
         const auto float_val = *reinterpret_cast<const float*>(source.ptr);
-        interpreter->setVar(load,
-                            ReductionInterpreter::EvalValue{.float_val = float_val});
+        interpreter->setVar(load, ReductionInterpreter::MakeEvalValue(float_val));
         break;
       }
       case Type::DoublePtr: {
         const auto double_val = *reinterpret_cast<const double*>(source.ptr);
-        interpreter->setVar(load,
-                            ReductionInterpreter::EvalValue{.double_val = double_val});
+        interpreter->setVar(load, ReductionInterpreter::MakeEvalValue(double_val));
         break;
       }
       case Type::Int64PtrPtr: {
         const auto int_ptr_val = *reinterpret_cast<const int64_t* const*>(source.ptr);
-        interpreter->setVar(load, ReductionInterpreter::EvalValue{.ptr = int_ptr_val});
+        interpreter->setVar(load, ReductionInterpreter::MakeEvalValue(int_ptr_val));
         break;
       }
       default: {
@@ -142,7 +140,7 @@ class ReductionInterpreterImpl {
         LOG(FATAL) << "Predicate not supported: " << static_cast<int>(icmp->predicate());
       }
     }
-    interpreter->setVar(icmp, ReductionInterpreter::EvalValue{.int_val = result});
+    interpreter->setVar(icmp, ReductionInterpreter::MakeEvalValue(result));
   }
 
   static void runBinaryOperator(const Instruction* instruction,
@@ -167,8 +165,7 @@ class ReductionInterpreterImpl {
                    << static_cast<int>(binary_operator->op());
       }
     }
-    interpreter->setVar(binary_operator,
-                        ReductionInterpreter::EvalValue{.int_val = result});
+    interpreter->setVar(binary_operator, ReductionInterpreter::MakeEvalValue(result));
   }
 
   static void runCast(const Instruction* instruction,
@@ -182,13 +179,12 @@ class ReductionInterpreterImpl {
       case Cast::CastOp::Trunc:
       case Cast::CastOp::SExt: {
         CHECK(is_integer_type(cast->source()->type()));
-        interpreter->setVar(cast,
-                            ReductionInterpreter::EvalValue{.int_val = source.int_val});
+        interpreter->setVar(cast, ReductionInterpreter::MakeEvalValue(source.int_val));
         break;
       }
       case Cast::CastOp::BitCast: {
         CHECK(is_pointer_type(cast->source()->type()));
-        interpreter->setVar(cast, ReductionInterpreter::EvalValue{.ptr = source.ptr});
+        interpreter->setVar(cast, ReductionInterpreter::MakeEvalValue(source.ptr));
         break;
       }
       default: {
@@ -257,9 +253,9 @@ class ReductionInterpreterImpl {
     CHECK(is_integer_type(alloca->array_size()->type()));
     const auto array_size = interpreter->vars_[alloca->array_size()->id()];
     interpreter->alloca_buffers_.emplace_back(element_size * array_size.int_val);
-    interpreter->setVar(alloca,
-                        ReductionInterpreter::EvalValue{
-                            .mutable_ptr = interpreter->alloca_buffers_.back().data()});
+    ReductionInterpreter::EvalValue eval_value;
+    eval_value.mutable_ptr = interpreter->alloca_buffers_.back().data();
+    interpreter->setVar(alloca, eval_value);
   }
 
   static void runMemCpy(const Instruction* instruction,
@@ -286,7 +282,7 @@ class ReductionInterpreterImpl {
 
     if (cond.int_val) {
       auto rc = interpreter->vars_[error_code->id()].int_val;
-      interpreter->ret_ = ReductionInterpreter::EvalValue{.int_val = rc};
+      interpreter->ret_ = ReductionInterpreter::MakeEvalValue(rc);
     }
   }
 
@@ -302,7 +298,7 @@ class ReductionInterpreterImpl {
     for (int64_t i = start.int_val; i < end.int_val; ++i) {
       // The start and end indices are absolute, but the iteration happens from 0.
       // Subtract the start index before setting the iterator.
-      interpreter->vars_[for_loop->iter()->id()] = {.int_val = i - start.int_val};
+      interpreter->vars_[for_loop->iter()->id()].int_val = i - start.int_val;
       auto ret = ReductionInterpreter::run(for_loop->body(), interpreter->vars_);
       if (ret) {
         interpreter->ret_ = *ret;
@@ -411,14 +407,16 @@ ReductionInterpreter::EvalValue eval_constant(const Constant* constant) {
     case Type::Int8:
     case Type::Int32:
     case Type::Int64: {
-      return {.int_val = static_cast<const ConstantInt*>(constant)->value()};
+      return ReductionInterpreter::MakeEvalValue(
+          static_cast<const ConstantInt*>(constant)->value());
     }
     case Type::Float: {
-      return {.float_val =
-                  static_cast<float>(static_cast<const ConstantFP*>(constant)->value())};
+      return ReductionInterpreter::MakeEvalValue(
+          static_cast<float>(static_cast<const ConstantFP*>(constant)->value()));
     }
     case Type::Double: {
-      return {.double_val = static_cast<const ConstantFP*>(constant)->value()};
+      return ReductionInterpreter::MakeEvalValue(
+          static_cast<const ConstantFP*>(constant)->value());
     }
     default: {
       LOG(FATAL) << "Constant type not supported: " << static_cast<int>(constant->type());

@@ -33,6 +33,7 @@ class SqliteConnector {
  public:
   SqliteConnector(const std::string& dbName, const std::string& dir = ".");
   SqliteConnector(sqlite3* db);
+  SqliteConnector() {}
   virtual ~SqliteConnector();
   virtual void query(const std::string& queryString);
 

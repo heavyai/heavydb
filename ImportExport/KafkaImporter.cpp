@@ -110,12 +110,12 @@ bool msg_consume(RdKafka::Message* message,
         VLOG(1) << "Timestamp: " << tsname << " " << ts.timestamp << std::endl;
       }
 
-      char buffer[message->len() + 1];
-      sprintf(buffer,
+      std::vector<char> buffer(message->len() + 1);
+      sprintf(buffer.data(),
               "%.*s\n",
               static_cast<int>(message->len()),
               static_cast<const char*>(message->payload()));
-      VLOG(1) << "Full Message received is :'" << buffer << "'";
+      VLOG(1) << "Full Message received is :'" << buffer.data() << "'";
 
       char field[MAX_FIELD_LEN];
       size_t field_i = 0;
@@ -124,8 +124,9 @@ bool msg_consume(RdKafka::Message* message,
 
       auto row_desc = row_loader.get_row_descriptor();
 
-      const std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>*
-          xforms[row_desc.size()];
+      std::vector<
+          const std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>*>
+          xforms(row_desc.size());
       for (size_t i = 0; i < row_desc.size(); i++) {
         auto it = transformations.find(row_desc[i].col_name);
         if (it != transformations.end()) {

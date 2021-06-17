@@ -37,6 +37,7 @@ const std::vector<std::string> ParserWrapper::ddl_cmd = {"ARCHIVE",
                                                          "DUMP",
                                                          "OPTIMIZE",
                                                          "REFRESH",
+                                                         "RENAME",
                                                          "RESTORE",
                                                          "REVOKE",
                                                          "SHOW",
@@ -58,6 +59,7 @@ const std::string ParserWrapper::optimize_str = {"optimize"};
 const std::string ParserWrapper::validate_str = {"validate"};
 
 extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
 extern bool g_enable_calcite_ddl_parser;
 
 ParserWrapper::ParserWrapper(std::string query_string) {
@@ -120,6 +122,7 @@ ParserWrapper::ParserWrapper(std::string query_string) {
     is_validate = true;
     return;
   }
+
   query_type_ = QueryType::Read;
   for (std::string ddl : ddl_cmd) {
     is_ddl = boost::istarts_with(query_string, ddl);
@@ -142,7 +145,7 @@ ParserWrapper::ParserWrapper(std::string query_string) {
         }
       }
       if (ddl == "CREATE") {
-        boost::regex ctas_regex{R"(CREATE\s+TABLE.*AS.*SELECT.*)",
+        boost::regex ctas_regex{R"(CREATE\s+TABLE.*(\"|\s)AS(\(|\s)+(SELECT|WITH).*)",
                                 boost::regex::extended | boost::regex::icase};
         if (boost::regex_match(query_string, ctas_regex)) {
           is_ctas = true;
@@ -156,7 +159,6 @@ ParserWrapper::ParserWrapper(std::string query_string) {
                boost::regex_match(query_string, create_view_regex))) {
             is_calcite_ddl_ = true;
             is_legacy_ddl_ = false;
-            is_distributed_calcite_ddl_ = true;
             return;
           }
         }
@@ -181,11 +183,38 @@ ParserWrapper::ParserWrapper(std::string query_string) {
           is_legacy_ddl_ = false;
           return;
         }
+      } else if (ddl == "DROP") {
+        boost::regex drop_table_regex{R"(DROP\s+TABLE.*)",
+                                      boost::regex::extended | boost::regex::icase};
+        boost::regex drop_view_regex{R"(DROP\s+VIEW.*)",
+                                     boost::regex::extended | boost::regex::icase};
+        if (g_enable_calcite_ddl_parser &&
+            (boost::regex_match(query_string, drop_table_regex) ||
+             boost::regex_match(query_string, drop_view_regex))) {
+          is_calcite_ddl_ = true;
+          is_legacy_ddl_ = false;
+          return;
+        }
       } else if (ddl == "KILL") {
         query_type_ = QueryType::Unknown;
         is_calcite_ddl_ = true;
         is_legacy_ddl_ = false;
         return;
+      } else if (ddl == "RENAME") {
+        query_type_ = QueryType::SchemaWrite;
+        is_calcite_ddl_ = true;
+        is_legacy_ddl_ = false;
+        return;
+      } else if (ddl == "ALTER") {
+        query_type_ = QueryType::SchemaWrite;
+        boost::regex alter_table_regex{R"(ALTER\s+TABLE.*)",
+                                       boost::regex::extended | boost::regex::icase};
+        if (g_enable_calcite_ddl_parser &&
+            boost::regex_match(query_string, alter_table_regex)) {
+          is_calcite_ddl_ = true;
+          is_legacy_ddl_ = false;
+          return;
+        }
       }
       is_legacy_ddl_ = !is_calcite_ddl_;
       return;
@@ -202,14 +231,11 @@ ParserWrapper::ParserWrapper(std::string query_string) {
   }
 
   if (dml_type_ == DMLType::Insert) {
-    boost::regex insert_regex{R"(INSERT\s+INTO.*VALUES\s*\(.*)",
-                              boost::regex::extended | boost::regex::icase};
-    if (!boost::regex_match(query_string, insert_regex)) {
-      boost::regex itas_regex{R"(INSERT\s+INTO.*SELECT.*)",
-                              boost::regex::extended | boost::regex::icase};
-      if (boost::regex_match(query_string, itas_regex)) {
-        is_itas = true;
-      }
+    boost::regex itas_regex{R"(INSERT\s+INTO\s+.*(\s+|\(|\")SELECT(\s|\(|\").*)",
+                            boost::regex::extended | boost::regex::icase};
+    if (boost::regex_match(query_string, itas_regex)) {
+      is_itas = true;
+      return;
     }
   }
 }

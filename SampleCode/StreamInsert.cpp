@@ -137,7 +137,7 @@ void wait_disconnet_reconnnect_retry(size_t tries,
   std::cout << "  Waiting  " << copy_params.retry_wait
             << " secs to retry Inserts , will try " << (copy_params.retry_count - tries)
             << " times more " << std::endl;
-  sleep(copy_params.retry_wait);
+  std::this_thread::sleep_for(std::chrono::seconds(copy_params.retry_wait));
 
   closeConnection();
   createConnection(conn_details);
@@ -152,7 +152,7 @@ void do_load(int& nrows,
   for (size_t tries = 0; tries < copy_params.retry_count;
        tries++) {  // allow for retries in case of insert failure
     try {
-      client->load_table(session, table_name, input_rows);
+      client->load_table(session, table_name, input_rows, {});
       nrows += input_rows.size();
       std::cout << nrows << " Rows Inserted, " << nskipped << " rows skipped."
                 << std::endl;
@@ -196,8 +196,9 @@ void stream_insert(
   int nskipped = 0;
   bool backEscape = false;
 
-  const std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>*
-      xforms[row_desc.size()];
+  std::vector<
+      const std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>*>
+      xforms(row_desc.size());
   for (size_t i = 0; i < row_desc.size(); i++) {
     auto it = transformations.find(row_desc[i].col_name);
     if (it != transformations.end()) {

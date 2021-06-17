@@ -30,6 +30,8 @@
 #include "ThriftHandler/QueryState.h"
 #include "gen-cpp/CalciteServer.h"
 
+#include "Shared/Restriction.h"
+
 using QR = QueryRunner::QueryRunner;
 
 namespace {
@@ -136,6 +138,46 @@ TEST_F(ViewObject, Joins) {
         qs2->createQueryStateProxy(), qs2->getQueryStr(), {}, true, false, true, true);
 
     EXPECT_EQ(vresult.plan_result, tresult.plan_result);
+  }
+}
+
+TEST_F(ViewObject, Restrict) {
+  auto session = QR::get()->getSession();
+  CHECK(session);
+
+  {
+    auto qs1 = QR::create_query_state(
+        session,
+        R"(SELECT segment_name FROM attribute_table where segment_name = 'ab' or segment_name = 'ac')");
+    TPlanResult tresult = g_calcite->process(
+        qs1->createQueryStateProxy(), qs1->getQueryStr(), {}, true, false, true, true);
+
+    std::string col = "segment_name";
+    std::vector<std::string> values = {"ab", "ac"};
+    auto rest = std::make_shared<Restriction>(col, values);
+    session->set_restriction(rest);
+
+    auto qs2 =
+        QR::create_query_state(session, "SELECT segment_name FROM attribute_table");
+    TPlanResult resResult = g_calcite->process(
+        qs2->createQueryStateProxy(), qs2->getQueryStr(), {}, true, false, true, true);
+
+    EXPECT_EQ(tresult.plan_result, resResult.plan_result);
+
+    auto qs3 = QR::create_query_state(session, R"(select i1 from table1 where i1 = 1)");
+    TPlanResult riResult = g_calcite->process(
+        qs3->createQueryStateProxy(), qs3->getQueryStr(), {}, true, false, true, true);
+
+    col = "i1";
+    values = {"1"};
+    rest = std::make_shared<Restriction>(col, values);
+    session->set_restriction(rest);
+
+    auto qs4 = QR::create_query_state(session, "select i1 from table1");
+    TPlanResult rrResult = g_calcite->process(
+        qs4->createQueryStateProxy(), qs4->getQueryStr(), {}, true, false, true, true);
+
+    EXPECT_EQ(riResult.plan_result, rrResult.plan_result);
   }
 }
 

@@ -25,6 +25,22 @@
 #include <unordered_set>
 #include <vector>
 
+namespace {
+
+template <typename T>
+constexpr T power(T const a, T const n) {
+  return n ? a * power(a, n - 1) : static_cast<T>(1);
+}
+
+template <typename T, size_t... Indices>
+constexpr std::array<T, sizeof...(Indices)> powersOfImpl(
+    T const a,
+    std::index_sequence<Indices...>) {
+  return {power(a, static_cast<T>(Indices))...};
+}
+
+}  // namespace
+
 namespace shared {
 
 // source is destructively appended to the back of destination.
@@ -141,6 +157,31 @@ inline uint64_t unsignedMod(int64_t num, int64_t den) {
     mod += den;
   }
   return mod;
+}
+
+template <typename T, typename U>
+inline bool contains(const T& container, const U& element) {
+  if (std::find(container.begin(), container.end(), element) == container.end()) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
+// Return constexpr std::array<T, N> of {1, 10, 100, 1000, ..., 10^(N-1)}.
+template <typename T, size_t N>
+constexpr std::array<T, N> powersOf(T const a) {
+  return powersOfImpl<T>(a, std::make_index_sequence<N>{});
+}
+
+// May be constexpr in C++20.
+template <typename TO, typename FROM>
+TO reinterpretBits(FROM const from) {
+  union {
+    FROM const from;
+    TO const to;
+  } const u{.from = from};
+  return u.to;
 }
 
 }  // namespace shared

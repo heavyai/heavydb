@@ -87,11 +87,13 @@ SharedKernelContext::getFragmentResults() {
   return all_fragment_results_;
 }
 
-void ExecutionKernel::run(Executor* executor, SharedKernelContext& shared_context) {
+void ExecutionKernel::run(Executor* executor,
+                          const size_t thread_idx,
+                          SharedKernelContext& shared_context) {
   DEBUG_TIMER("ExecutionKernel::run");
   INJECT_TIMER(kernel_run);
   try {
-    runImpl(executor, shared_context);
+    runImpl(executor, thread_idx, shared_context);
   } catch (const OutOfHostMemory& e) {
     throw QueryExecutionError(Executor::ERR_OUT_OF_CPU_MEM, e.what());
   } catch (const std::bad_alloc& e) {
@@ -109,14 +111,16 @@ void ExecutionKernel::run(Executor* executor, SharedKernelContext& shared_contex
     throw QueryExecutionError(Executor::ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED, e.what());
   } catch (const TooManyLiterals& e) {
     throw QueryExecutionError(Executor::ERR_TOO_MANY_LITERALS, e.what());
-  } catch (const SringConstInResultSet& e) {
+  } catch (const StringConstInResultSet& e) {
     throw QueryExecutionError(Executor::ERR_STRING_CONST_IN_RESULTSET, e.what());
   } catch (const QueryExecutionError& e) {
     throw e;
   }
 }
 
-void ExecutionKernel::runImpl(Executor* executor, SharedKernelContext& shared_context) {
+void ExecutionKernel::runImpl(Executor* executor,
+                              const size_t thread_idx,
+                              SharedKernelContext& shared_context) {
   CHECK(executor);
   const auto memory_level = chosen_device_type == ExecutorDeviceType::GPU
                                 ? Data_Namespace::GPU_LEVEL
@@ -162,7 +166,9 @@ void ExecutionKernel::runImpl(Executor* executor, SharedKernelContext& shared_co
                                                     *catalog,
                                                     *chunk_iterators_ptr,
                                                     chunks,
-                                                    device_allocator.get())
+                                                    device_allocator.get(),
+                                                    thread_idx,
+                                                    eo.allow_runtime_query_interrupt)
                        : executor->fetchChunks(column_fetcher,
                                                ra_exe_unit_,
                                                chosen_device_id,
@@ -172,7 +178,9 @@ void ExecutionKernel::runImpl(Executor* executor, SharedKernelContext& shared_co
                                                *catalog,
                                                *chunk_iterators_ptr,
                                                chunks,
-                                               device_allocator.get());
+                                               device_allocator.get(),
+                                               thread_idx,
+                                               eo.allow_runtime_query_interrupt);
     if (fetch_result.num_rows.empty()) {
       return;
     }
@@ -260,6 +268,7 @@ void ExecutionKernel::runImpl(Executor* executor, SharedKernelContext& shared_co
                                                   executor->getRowSetMemoryOwner(),
                                                   compilation_result.output_columnar,
                                                   query_mem_desc.sortOnGpu(),
+                                                  thread_idx,
                                                   do_render ? render_info_ : nullptr);
     } catch (const OutOfHostMemory& e) {
       throw QueryExecutionError(Executor::ERR_OUT_OF_CPU_MEM);
@@ -292,6 +301,7 @@ void ExecutionKernel::runImpl(Executor* executor, SharedKernelContext& shared_co
                                               chosen_device_id,
                                               start_rowid,
                                               ra_exe_unit_.input_descs.size(),
+                                              eo.allow_runtime_query_interrupt,
                                               do_render ? render_info_ : nullptr);
   } else {
     if (ra_exe_unit_.union_all) {
@@ -314,6 +324,7 @@ void ExecutionKernel::runImpl(Executor* executor, SharedKernelContext& shared_co
                                            ra_exe_unit_.scan_limit,
                                            start_rowid,
                                            ra_exe_unit_.input_descs.size(),
+                                           eo.allow_runtime_query_interrupt,
                                            do_render ? render_info_ : nullptr);
   }
   if (device_results_) {

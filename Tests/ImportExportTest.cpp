@@ -33,6 +33,10 @@
 
 #include "Archive/PosixFileArchive.h"
 #include "Catalog/Catalog.h"
+#ifdef HAVE_AWS_S3
+#include "AwsHelpers.h"
+#include "DataMgr/OmniSciAwsSdk.h"
+#endif  // HAVE_AWS_S3
 #include "Geospatial/GDAL.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
@@ -53,6 +57,7 @@ using namespace TestHelpers;
 extern bool g_use_date_in_days_default_encoding;
 extern size_t g_leaf_count;
 extern bool g_is_test_env;
+extern bool g_allow_s3_server_privileges;
 
 namespace {
 
@@ -360,7 +365,7 @@ TEST(Detect, Numeric) {
   d(kFLOAT, "1.2345678");
   // d(kDOUBLE, "1.2345678901");
   // d(kDOUBLE, "1.23456789012345678901234567890");
-  d(kTEXT, "1.22.22");
+  d(kTIME, "1.22.22");
 }
 
 const char* create_table_trips_to_skip_header = R"(
@@ -673,6 +678,66 @@ TEST_F(ImportTestDate, ImportMixedDates) {
   run_mixed_dates_test();
 }
 
+class ImportTestInt : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    const char* create_table_date = R"(
+    CREATE TABLE inttable(
+      b bigint,
+      b32 bigint encoding fixed(32),
+      b16 bigint encoding fixed(16),
+      b8 bigint encoding fixed(8),
+      bnn bigint not null,
+      bnn32 bigint not null encoding fixed(32),
+      bnn16 bigint not null encoding fixed(16),
+      bnn8 bigint not null encoding fixed(8),
+      i int,
+      i16 int encoding fixed(16),
+      i8 int encoding fixed(8),
+      inn int not null,
+      inn16 int not null encoding fixed(16),
+      inn8 int not null encoding fixed(8),
+      s smallint,
+      s8 smallint encoding fixed(8),
+      snn smallint not null,
+      snn8 smallint not null encoding fixed(8),
+      t tinyint,
+      tnn tinyint not null
+    );
+)";
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists inttable;"));
+    ASSERT_NO_THROW(run_ddl_statement(create_table_date));
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists inttable;"));
+  }
+};
+
+TEST_F(ImportTestInt, ImportBadInt) {
+  SKIP_ALL_ON_AGGREGATOR();  // global variable not available on leaf nodes
+  // this dataset tests that rows outside the allowed valus are rejected
+  // no rows should be added
+  ASSERT_NO_THROW(
+      run_ddl_statement("COPY inttable FROM "
+                        "'../../Tests/Import/datafiles/int_bad_test.txt';"));
+
+  auto rows = run_query("SELECT * FROM inttable;");
+  ASSERT_EQ(size_t(0), rows->entryCount());
+};
+
+TEST_F(ImportTestInt, ImportGoodInt) {
+  SKIP_ALL_ON_AGGREGATOR();  // global variable not available on leaf nodes
+  // this dataset tests that rows inside the allowed values are accepted
+  // all rows should be added
+  ASSERT_NO_THROW(
+      run_ddl_statement("COPY inttable FROM "
+                        "'../../Tests/Import/datafiles/int_good_test.txt';"));
+
+  auto rows = run_query("SELECT * FROM inttable;");
+  ASSERT_EQ(86u, rows->entryCount());
+};
+
 class ImportTestLegacyDate : public ::testing::Test {
  protected:
   void SetUp() override {
@@ -944,6 +1009,12 @@ const char* create_table_with_quoted_fields = R"(
 
 class ImportTest : public ::testing::Test {
  protected:
+#ifdef HAVE_AWS_S3
+  static void SetUpTestSuite() { omnisci_aws_sdk::init_sdk(); }
+
+  static void TearDownTestSuite() { omnisci_aws_sdk::shutdown_sdk(); }
+#endif
+
   void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
     ASSERT_NO_THROW(run_ddl_statement(create_table_trips););
@@ -1285,6 +1356,13 @@ const char* create_table_geo = R"(
     ) WITH (FRAGMENT_SIZE=65000000);
   )";
 
+const char* create_table_geo_transform = R"(
+    CREATE TABLE geospatial_transform (
+      pt0 GEOMETRY(POINT, 4326),
+      pt1 GEOMETRY(POINT)
+    ) WITH (FRAGMENT_SIZE=65000000);
+  )";
+
 void check_geo_import() {
   auto rows = run_query(R"(
       SELECT p1, l, poly, mpoly, p2, p3, p4, trip_distance
@@ -1293,27 +1371,47 @@ void check_geo_import() {
     )");
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(8), crt_row.size());
-  const auto p1 = boost::get<std::string>(v<NullableString>(crt_row[0]));
-  ASSERT_TRUE(p1 == "NULL" ||
-              Geospatial::GeoPoint("POINT (1 1)") == Geospatial::GeoPoint(p1));
-  const auto linestring = boost::get<std::string>(v<NullableString>(crt_row[1]));
-  ASSERT_TRUE(linestring == "NULL" ||
-              Geospatial::GeoLineString("LINESTRING (1 0,2 2,3 3)") ==
-                  Geospatial::GeoLineString(linestring));
-  const auto poly = boost::get<std::string>(v<NullableString>(crt_row[2]));
-  ASSERT_TRUE(Geospatial::GeoPolygon("POLYGON ((0 0,2 0,0 2,0 0))") ==
-              Geospatial::GeoPolygon(poly));
-  const auto mpoly = boost::get<std::string>(v<NullableString>(crt_row[3]));
-  ASSERT_TRUE(mpoly == "NULL" ||
-              Geospatial::GeoMultiPolygon("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))") ==
-                  Geospatial::GeoMultiPolygon(mpoly));
-  const auto p2 = boost::get<std::string>(v<NullableString>(crt_row[4]));
-  ASSERT_TRUE(p2 == "NULL" ||
-              Geospatial::GeoPoint("POINT (1 1)") == Geospatial::GeoPoint(p2));
-  const auto p3 = boost::get<std::string>(v<NullableString>(crt_row[5]));
-  ASSERT_TRUE(Geospatial::GeoPoint("POINT (1 1)") == Geospatial::GeoPoint(p3));
-  const auto p4 = boost::get<std::string>(v<NullableString>(crt_row[6]));
-  ASSERT_TRUE(Geospatial::GeoPoint("POINT (1 1)") == Geospatial::GeoPoint(p4));
+  const auto p1 = v<NullableString>(crt_row[0]);
+  const auto p1_v = boost::get<void*>(&p1);
+  const auto p1_s = boost::get<std::string>(&p1);
+  ASSERT_TRUE(
+      (p1_v && *p1_v == nullptr) ||
+      (p1_s && Geospatial::GeoPoint("POINT (1 1)") == Geospatial::GeoPoint(*p1_s)));
+  const auto linestring = v<NullableString>(crt_row[1]);
+  const auto linestring_v = boost::get<void*>(&linestring);
+  const auto linestring_s = boost::get<std::string>(&linestring);
+  ASSERT_TRUE((linestring_v && *linestring_v == nullptr) ||
+              (linestring_s && Geospatial::GeoLineString("LINESTRING (1 0,2 2,3 3)") ==
+                                   Geospatial::GeoLineString(*linestring_s)));
+  const auto poly = v<NullableString>(crt_row[2]);
+  const auto poly_v = boost::get<void*>(&poly);
+  const auto poly_s = boost::get<std::string>(&poly);
+  ASSERT_TRUE(!poly_v && poly_s &&
+              Geospatial::GeoPolygon("POLYGON ((0 0,2 0,0 2,0 0))") ==
+                  Geospatial::GeoPolygon(*poly_s));
+  const auto mpoly = v<NullableString>(crt_row[3]);
+  const auto mpoly_v = boost::get<void*>(&mpoly);
+  const auto mpoly_s = boost::get<std::string>(&mpoly);
+  ASSERT_TRUE(
+      (mpoly_v && *mpoly_v == nullptr) ||
+      (mpoly_s && Geospatial::GeoMultiPolygon("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))") ==
+                      Geospatial::GeoMultiPolygon(*mpoly_s)));
+  const auto p2 = v<NullableString>(crt_row[4]);
+  const auto p2_v = boost::get<void*>(&p2);
+  const auto p2_s = boost::get<std::string>(&p2);
+  ASSERT_TRUE(
+      (p2_v && *p2_v == nullptr) ||
+      (p2_s && Geospatial::GeoPoint("POINT (1 1)") == Geospatial::GeoPoint(*p2_s)));
+  const auto p3 = v<NullableString>(crt_row[5]);
+  const auto p3_v = boost::get<void*>(&p3);
+  const auto p3_s = boost::get<std::string>(&p3);
+  ASSERT_TRUE(!p3_v && p3_s &&
+              Geospatial::GeoPoint("POINT (1 1)") == Geospatial::GeoPoint(*p3_s));
+  const auto p4 = v<NullableString>(crt_row[6]);
+  const auto p4_v = boost::get<void*>(&p4);
+  const auto p4_s = boost::get<std::string>(&p4);
+  ASSERT_TRUE(!p4_v && p4_s &&
+              Geospatial::GeoPoint("POINT (1 1)") == Geospatial::GeoPoint(*p4_s));
   const auto trip_distance = v<double>(crt_row[7]);
   ASSERT_NEAR(1.0, trip_distance, 1e-7);
 }
@@ -1385,11 +1483,14 @@ class ImportTestGeo : public ::testing::Test {
     import_export::delimited_parser::set_max_buffer_resize(max_buffer_resize_);
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
     ASSERT_NO_THROW(run_ddl_statement(create_table_geo););
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial_transform;"););
+    ASSERT_NO_THROW(run_ddl_statement(create_table_geo_transform););
   }
 
   void TearDown() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table geospatial;"););
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial_transform;"););
   }
 
   inline static size_t max_buffer_resize_ =
@@ -1458,6 +1559,36 @@ TEST_F(ImportTestGeo, CSV_Import_Degenerate) {
   check_geo_import();
   check_geo_num_rows("p1, l, poly, mpoly, p2, p3, p4, trip_distance",
                      6);  // we expect it to drop the 4 rows containing degenerate polys
+}
+
+TEST_F(ImportTestGeo, CSV_Import_Transform_Point_2263) {
+  const auto file_path = boost::filesystem::path(
+      "../../Tests/Import/datafiles/geospatial_transform/point_2263.csv");
+  run_ddl_statement("COPY geospatial_transform FROM '" + file_path.string() +
+                    "' WITH (source_srid=2263);");
+  auto rows = run_query(R"(
+      SELECT count(*) FROM geospatial_transform
+        WHERE ST_Distance(pt0, ST_SetSRID(pt1,4326))<0.00000000001;
+    )");
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size());
+  const auto r_cnt = v<int64_t>(crt_row[0]);
+  ASSERT_EQ(7, r_cnt);
+}
+
+TEST_F(ImportTestGeo, CSV_Import_Transform_Point_Coords_2263) {
+  const auto file_path = boost::filesystem::path(
+      "../../Tests/Import/datafiles/geospatial_transform/point_coords_2263.csv");
+  run_ddl_statement("COPY geospatial_transform FROM '" + file_path.string() +
+                    "' WITH (source_srid=2263);");
+  auto rows = run_query(R"(
+      SELECT count(*) FROM geospatial_transform
+        WHERE ST_Distance(pt0, ST_SetSRID(pt1,4326))<0.00000000001;
+    )");
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size());
+  const auto r_cnt = v<int64_t>(crt_row[0]);
+  ASSERT_EQ(7, r_cnt);
 }
 
 // the remaining tests in this group are incomplete but leave them as placeholders
@@ -1729,6 +1860,123 @@ TEST_F(ImportTest, S3_GCS_One_geo_file) {
                              87,
                              1.0));
 }
+
+class ImportServerPrivilegeTest : public ::testing::Test {
+ protected:
+  inline const static std::string AWS_DUMMY_CREDENTIALS_DIR =
+      to_string(BASE_PATH) + "/aws";
+  inline static std::map<std::string, std::string> aws_environment_;
+
+  static void SetUpTestSuite() {
+    omnisci_aws_sdk::init_sdk();
+    g_allow_s3_server_privileges = true;
+    aws_environment_ = unset_aws_env();
+    create_stub_aws_profile(AWS_DUMMY_CREDENTIALS_DIR);
+  }
+
+  static void TearDownTestSuite() {
+    omnisci_aws_sdk::shutdown_sdk();
+    g_allow_s3_server_privileges = false;
+    restore_aws_env(aws_environment_);
+    boost::filesystem::remove_all(AWS_DUMMY_CREDENTIALS_DIR);
+  }
+
+  void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists test_table_1;"););
+    ASSERT_NO_THROW(run_ddl_statement("create table test_table_1(C1 Int, C2 Text "
+                                      "Encoding None, C3 Text Encoding None)"););
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table test_table_1;"););
+  }
+
+  void importPublicBucket() {
+    std::string query_stmt =
+        "copy test_table_1 from 's3://omnisci-fsi-test-public/FsiDataFiles/0_255.csv';";
+    run_ddl_statement(query_stmt);
+  }
+
+  void importPrivateBucket(std::string s3_access_key = "",
+                           std::string s3_secret_key = "",
+                           std::string s3_session_token = "",
+                           std::string s3_region = "us-west-1") {
+    std::string query_stmt =
+        "copy test_table_1 from 's3://omnisci-fsi-test/FsiDataFiles/0_255.csv' WITH(";
+    if (s3_access_key.size()) {
+      query_stmt += "s3_access_key='" + s3_access_key + "', ";
+    }
+    if (s3_secret_key.size()) {
+      query_stmt += "s3_secret_key='" + s3_secret_key + "', ";
+    }
+    if (s3_session_token.size()) {
+      query_stmt += "s3_session_token='" + s3_session_token + "', ";
+    }
+    if (s3_region.size()) {
+      query_stmt += "s3_region='" + s3_region + "'";
+    }
+    query_stmt += ");";
+    run_ddl_statement(query_stmt);
+  }
+};
+
+TEST_F(ImportServerPrivilegeTest, S3_Public_without_credentials) {
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  EXPECT_NO_THROW(importPublicBucket());
+}
+
+TEST_F(ImportServerPrivilegeTest, S3_Private_without_credentials) {
+  if (is_valid_aws_role()) {
+    GTEST_SKIP();
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  EXPECT_THROW(importPrivateBucket(), std::runtime_error);
+}
+
+TEST_F(ImportServerPrivilegeTest, S3_Private_with_invalid_specified_credentials) {
+  if (!is_valid_aws_key(aws_environment_)) {
+    GTEST_SKIP();
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  EXPECT_THROW(importPrivateBucket("invalid_key", "invalid_secret"), std::runtime_error);
+}
+
+TEST_F(ImportServerPrivilegeTest, S3_Private_with_valid_specified_credentials) {
+  if (!is_valid_aws_key(aws_environment_)) {
+    GTEST_SKIP();
+  }
+  const auto aws_access_key_id = aws_environment_.find("AWS_ACCESS_KEY_ID")->second;
+  const auto aws_secret_access_key =
+      aws_environment_.find("AWS_SECRET_ACCESS_KEY")->second;
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  EXPECT_NO_THROW(importPrivateBucket(aws_access_key_id, aws_secret_access_key));
+}
+
+TEST_F(ImportServerPrivilegeTest, S3_Private_with_env_credentials) {
+  if (!is_valid_aws_key(aws_environment_)) {
+    GTEST_SKIP();
+  }
+  restore_aws_keys(aws_environment_);
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  EXPECT_NO_THROW(importPrivateBucket());
+  unset_aws_keys();
+}
+
+TEST_F(ImportServerPrivilegeTest, S3_Private_with_profile_credentials) {
+  if (!is_valid_aws_key(aws_environment_)) {
+    GTEST_SKIP();
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, true, aws_environment_);
+  EXPECT_NO_THROW(importPrivateBucket());
+}
+
+TEST_F(ImportServerPrivilegeTest, S3_Private_with_role_credentials) {
+  if (!is_valid_aws_role()) {
+    GTEST_SKIP();
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  EXPECT_NO_THROW(importPrivateBucket());
+}
 #endif  // HAVE_AWS_S3
 
 class ExportTest : public ::testing::Test {
@@ -1749,10 +1997,12 @@ class ExportTest : public ::testing::Test {
 
   void removeAllFilesFromExport() {
     boost::filesystem::path path_to_remove(BASE_PATH "/mapd_export/");
-    for (boost::filesystem::directory_iterator end_dir_it, it(path_to_remove);
-         it != end_dir_it;
-         ++it) {
-      boost::filesystem::remove_all(it->path());
+    if (boost::filesystem::exists(path_to_remove)) {
+      for (boost::filesystem::directory_iterator end_dir_it, it(path_to_remove);
+           it != end_dir_it;
+           ++it) {
+        boost::filesystem::remove_all(it->path());
+      }
     }
   }
 

@@ -23,7 +23,9 @@
 #include "../UsedColumnsVisitor.h"
 #include "ColSlotContext.h"
 
-bool g_enable_smem_group_by{true };
+#include <boost/algorithm/cxx11/any_of.hpp>
+
+bool g_enable_smem_group_by{true};
 extern bool g_enable_columnar_output;
 
 namespace {
@@ -33,6 +35,10 @@ bool is_int_and_no_bigger_than(const SQLTypeInfo& ti, const size_t byte_width) {
     return false;
   }
   return get_bit_width(ti) <= (byte_width * 8);
+}
+
+bool is_valid_int32_range(const ExpressionRange& range) {
+  return range.getIntMin() > INT32_MIN && range.getIntMax() < EMPTY_KEY_32 - 1;
 }
 
 std::vector<int64_t> target_expr_group_by_indices(
@@ -116,7 +122,7 @@ int8_t pick_baseline_key_component_width(const ExpressionRange& range,
       if (group_col_width == sizeof(int64_t) && range.hasNulls()) {
         return sizeof(int64_t);
       }
-      return range.getIntMax() < EMPTY_KEY_32 - 1 ? sizeof(int32_t) : sizeof(int64_t);
+      return is_valid_int32_range(range) ? sizeof(int32_t) : sizeof(int64_t);
     case ExpressionRangeType::Float:
     case ExpressionRangeType::Double:
       return sizeof(int64_t);  // No compaction for floating point yet.
@@ -173,6 +179,46 @@ bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
   }
 
   return false;
+}
+
+template <class T>
+inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
+  std::vector<int8_t> col_widths;
+  size_t col_expr_idx = 0;
+  for (const auto col_expr : col_expr_list) {
+    if (!col_expr) {
+      // row index
+      col_widths.push_back(sizeof(int64_t));
+    } else {
+      const auto agg_info = get_target_info(col_expr, g_bigint_count);
+      const auto chosen_type = get_compact_type(agg_info);
+      if ((chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE) ||
+          chosen_type.is_array()) {
+        col_widths.push_back(sizeof(int64_t));
+        col_widths.push_back(sizeof(int64_t));
+        ++col_expr_idx;
+        continue;
+      }
+      if (chosen_type.is_geometry()) {
+        for (auto i = 0; i < chosen_type.get_physical_coord_cols(); ++i) {
+          col_widths.push_back(sizeof(int64_t));
+          col_widths.push_back(sizeof(int64_t));
+        }
+        ++col_expr_idx;
+        continue;
+      }
+      const auto col_expr_bitwidth = get_bit_width(chosen_type);
+      CHECK_EQ(size_t(0), col_expr_bitwidth % 8);
+      col_widths.push_back(static_cast<int8_t>(col_expr_bitwidth >> 3));
+      // for average, we'll need to keep the count as well
+      if (agg_info.agg_kind == kAVG) {
+        CHECK(agg_info.is_agg);
+        col_widths.push_back(sizeof(int64_t));
+      }
+    }
+    ++col_expr_idx;
+  }
+  return col_widths;
 }
 
 }  // namespace
@@ -372,6 +418,15 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       streaming_top_n);
 }
 
+namespace {
+bool anyOf(std::vector<Analyzer::Expr*> const& target_exprs, SQLAgg const agg_kind) {
+  return boost::algorithm::any_of(target_exprs, [agg_kind](Analyzer::Expr const* expr) {
+    auto const* const agg = dynamic_cast<Analyzer::AggExpr const*>(expr);
+    return agg && agg->get_aggtype() == agg_kind;
+  });
+}
+}  // namespace
+
 QueryMemoryDescriptor::QueryMemoryDescriptor(
     const Executor* executor,
     const RelAlgExecutionUnit& ra_exe_unit,
@@ -428,17 +483,19 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
         output_columnar_ = output_columnar_hint;
         break;
       case QueryDescriptionType::GroupByPerfectHash:
-        output_columnar_ =
-            output_columnar_hint && QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
-                                        count_distinct_descriptors_);
+        output_columnar_ = output_columnar_hint &&
+                           QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
+                               count_distinct_descriptors_) &&
+                           !anyOf(ra_exe_unit.target_exprs, kAPPROX_MEDIAN);
         break;
       case QueryDescriptionType::GroupByBaselineHash:
         output_columnar_ = output_columnar_hint;
         break;
       case QueryDescriptionType::NonGroupedAggregate:
-        output_columnar_ =
-            output_columnar_hint && QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
-                                        count_distinct_descriptors_);
+        output_columnar_ = output_columnar_hint &&
+                           QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
+                               count_distinct_descriptors_) &&
+                           !anyOf(ra_exe_unit.target_exprs, kAPPROX_MEDIAN);
         break;
       default:
         output_columnar_ = false;
@@ -614,6 +671,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool output_columnar,
     const bool sort_on_gpu,
+    const size_t thread_idx,
     RenderInfo* render_info) const {
   auto timer = DEBUG_TIMER(__func__);
   if (frag_offsets.empty()) {
@@ -632,6 +690,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
                                 row_set_mem_owner,
                                 output_columnar,
                                 sort_on_gpu,
+                                thread_idx,
                                 render_info));
 }
 
@@ -900,6 +959,23 @@ size_t QueryMemoryDescriptor::getNextColOffInBytes(const int8_t* col_ptr,
   }
 }
 
+size_t QueryMemoryDescriptor::getNextColOffInBytesRowOnly(const int8_t* col_ptr,
+                                                          const size_t col_idx) const {
+  const auto chosen_bytes = getPaddedSlotWidthBytes(col_idx);
+  const auto total_slot_count = getSlotCount();
+  if (col_idx + 1 == total_slot_count) {
+    return static_cast<size_t>(align_to_int64(col_ptr + chosen_bytes) - col_ptr);
+  }
+
+  const auto next_chosen_bytes = getPaddedSlotWidthBytes(col_idx + 1);
+
+  if (next_chosen_bytes == sizeof(int64_t)) {
+    return static_cast<size_t>(align_to_int64(col_ptr + chosen_bytes) - col_ptr);
+  } else {
+    return chosen_bytes;
+  }
+}
+
 size_t QueryMemoryDescriptor::getBufferSizeBytes(
     const RelAlgExecutionUnit& ra_exe_unit,
     const unsigned thread_count,
@@ -1122,6 +1198,7 @@ std::string QueryMemoryDescriptor::toString() const {
   str += "\tOutput Columnar: " + ::toString(output_columnar_) + "\n";
   str += "\tRender Output: " + ::toString(render_output_) + "\n";
   str += "\tUse Baseline Sort: " + ::toString(must_use_baseline_sort_) + "\n";
+  str += "\tIs Table Function: " + ::toString(is_table_function_) + "\n";
   return str;
 }
 

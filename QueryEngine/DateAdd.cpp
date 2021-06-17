@@ -75,9 +75,9 @@ class MonthDaySecond {
 
 }  // namespace
 
-extern "C" ALWAYS_INLINE DEVICE int64_t DateAdd(DateaddField field,
-                                                const int64_t number,
-                                                const int64_t timeval) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t DateAdd(DateaddField field,
+                                                               const int64_t number,
+                                                               const int64_t timeval) {
   switch (field) {
     case daSECOND:
       return timeval + number;
@@ -113,10 +113,11 @@ extern "C" ALWAYS_INLINE DEVICE int64_t DateAdd(DateaddField field,
 }
 
 // The dimension of the return value is always equal to the timeval dimension.
-extern "C" ALWAYS_INLINE DEVICE int64_t DateAddHighPrecision(DateaddField field,
-                                                             const int64_t number,
-                                                             const int64_t timeval,
-                                                             const int32_t dim) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
+DateAddHighPrecision(DateaddField field,
+                     const int64_t number,
+                     const int64_t timeval,
+                     const int32_t dim) {
   // Valid only for i=0, 3, 6, 9.
   constexpr unsigned pow10[10]{
       1, 0, 0, 1000, 0, 0, 1000 * 1000, 0, 0, 1000 * 1000 * 1000};
@@ -141,17 +142,18 @@ extern "C" ALWAYS_INLINE DEVICE int64_t DateAddHighPrecision(DateaddField field,
   }
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t DateAddNullable(const DateaddField field,
-                                                        const int64_t number,
-                                                        const int64_t timeval,
-                                                        const int64_t null_val) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
+DateAddNullable(const DateaddField field,
+                const int64_t number,
+                const int64_t timeval,
+                const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
   return DateAdd(field, number, timeval);
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t
 DateAddHighPrecisionNullable(const DateaddField field,
                              const int64_t number,
                              const int64_t timeval,

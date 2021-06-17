@@ -29,6 +29,7 @@ using cost_t = unsigned;
 using node_t = size_t;
 
 static std::unordered_map<SQLTypes, cost_t> GEO_TYPE_COSTS{{kPOINT, 60},
+                                                           {kARRAY, 60},
                                                            {kLINESTRING, 70},
                                                            {kPOLYGON, 80},
                                                            {kMULTIPOLYGON, 90}};
@@ -42,7 +43,7 @@ std::pair<cost_t, cost_t> get_join_qual_cost(const Analyzer::Expr* qual,
     for (size_t i = 0; i < func_oper->getArity(); i++) {
       const auto arg_expr = func_oper->getArg(i);
       const auto& ti = arg_expr->get_type_info();
-      if (ti.is_geometry()) {
+      if (ti.is_geometry() || is_constructed_point(arg_expr)) {
         geo_types_for_func.push_back(ti.get_type());
       }
     }
@@ -143,7 +144,7 @@ struct TraversalEdge {
   cost_t join_cost;
 };
 
-// Builds dependency tracking based on left joins and based on geo costs.
+// Builds dependency tracking based on left joins
 SchedulingDependencyTracking build_dependency_tracking(
     const JoinQualsPerNestingLevel& left_deep_join_quals,
     const std::vector<std::map<node_t, cost_t>>& join_cost_graph) {
@@ -155,22 +156,6 @@ SchedulingDependencyTracking build_dependency_tracking(
   for (size_t level_idx = 0; level_idx < left_deep_join_quals.size(); ++level_idx) {
     if (left_deep_join_quals[level_idx].type == JoinType::LEFT) {
       dependency_tracking.addEdge(level_idx, level_idx + 1);
-    }
-  }
-  // Add directed graph edges for geojoin type dependencies.
-  // See also start_it inside traverse_join_cost_graph(). These
-  // edges prevent start_it from pointing to a table with a
-  // geojoin type dependency as defined by GEO_TYPE_COSTS.
-  for (size_t idx1 = 0; idx1 < join_cost_graph.size(); ++idx1) {
-    for (auto& inner_map : join_cost_graph[idx1]) {
-      auto& idx2 = inner_map.first;
-      auto& cost_forward = inner_map.second;
-      auto reverse_it = join_cost_graph[idx2].find(idx1);
-      CHECK(reverse_it != join_cost_graph[idx2].end());
-      auto& cost_backward = reverse_it->second;
-      if (cost_forward > cost_backward) {
-        dependency_tracking.addEdge(idx1, idx2);
-      }
     }
   }
   return dependency_tracking;
@@ -211,8 +196,36 @@ std::vector<node_t> traverse_join_cost_graph(
     CHECK(start_it != remaining_nest_levels.end());
     std::priority_queue<TraversalEdge, std::vector<TraversalEdge>, decltype(compare_edge)>
         worklist(compare_edge);
-    worklist.push(TraversalEdge{*start_it, 0});
-    const auto it_ok = visited.insert(*start_it);
+    //  look at all edges, compare the
+    //  cost of our edge vs theirs, and pick the best start edge
+    node_t start = *start_it;
+    TraversalEdge start_edge{start, 0};
+    VLOG(2) << "Table reordering starting with nest level " << start;
+    for (const auto& graph_edge : join_cost_graph[*start_it]) {
+      const node_t succ = graph_edge.first;
+      if (!schedulable_node(succ)) {
+        continue;
+      }
+      const TraversalEdge succ_edge{succ, graph_edge.second};
+      for (const auto& successor_edge : join_cost_graph[succ]) {
+        if (successor_edge.first == start) {
+          start_edge.join_cost = successor_edge.second;
+          // lhs cost / num tuples less than rhs cost if compare edge is true, swap nest
+          // levels
+          if (compare_edge(start_edge, succ_edge)) {
+            VLOG(2) << "Table reordering changing start nest level from " << start
+                    << " to " << succ;
+            start = succ;
+            start_edge = succ_edge;
+          }
+        }
+      }
+    }
+    VLOG(2) << "Table reordering picked start nest level " << start << " with cost "
+            << start_edge.join_cost;
+    CHECK_EQ(start, start_edge.nest_level);
+    worklist.push(start_edge);
+    const auto it_ok = visited.insert(start);
     CHECK(it_ok.second);
     while (!worklist.empty()) {
       // Extract a node and add it to the permutation.
@@ -255,7 +268,7 @@ std::vector<node_t> get_node_input_permutation(
     if (lhs_edge.join_cost == rhs_edge.join_cost) {
       return compare_node(lhs_edge.nest_level, rhs_edge.nest_level);
     }
-    return lhs_edge.join_cost < rhs_edge.join_cost;
+    return lhs_edge.join_cost > rhs_edge.join_cost;
   };
   return traverse_join_cost_graph(
       join_cost_graph, table_infos, compare_node, compare_edge, left_deep_join_quals);

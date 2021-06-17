@@ -4,14 +4,14 @@
 Data Flow
 ==================================
 
-A SQL query is essentially a series of transformations on some input data. While the input to the query engine is a SQL query, the query engine (and more so, the ``Exectutor``) can be thought of a black box which builds a transformation, loads data, applies the transformation, and returns the result. In the following section, we provide a summary of how data flows through the system, from physical storage on disk through the memory hierarchy to the output.
+A SQL query is essentially a series of transformations on some input data. While the input to the query engine is a SQL query, the query engine (and more so, the ``Executor``) can be thought of a black box which builds a transformation, loads data, applies the transformation, and returns the result. In the following section, we provide a summary of how data flows through the system, from physical storage on disk through the memory hierarchy to the output.
 
 Input Data
 ==========
 
 All requests for input data start from the ``Executor``. The executor loads chunks required for a query to device memory by making a call into the standalone ``ColumnFetcher`` class. The ``ColumnFetcher`` makes calls directly into the buffer manager hierarchy and storage layer to ensure requested chunks are available in the appropriate memory level for the device. 
 
-The following schematic illustrates the proess for requesting inputs for a query step, from storage through to the execution device (in this example, a GPU). 
+The following schematic illustrates the process for requesting inputs for a query step, from storage through to the execution device (in this example, a GPU). 
 
 .. uml::
     :align: center

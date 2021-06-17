@@ -14,6 +14,40 @@
  limitations under the License.
 -->
 
+
+
+
+SqlNodeList SimpleIdentifierNodeList() :
+{
+    SqlIdentifier id;
+    final List<SqlNode> list = new ArrayList<SqlNode>();
+}
+{
+    id = SimpleIdentifier() {list.add(id);}
+    (
+        <COMMA> id = SimpleIdentifier() {
+            list.add(id);
+        }
+    )*
+    { return new SqlNodeList(list, SqlParserPos.ZERO); }
+}
+
+SqlNodeList RawTableElementList() :
+{
+    final Span s;
+    final List<SqlNode> list = new ArrayList<SqlNode>();
+}
+{
+    { s = span(); }
+    TableElement(list)
+    (
+        <COMMA> TableElement(list)
+    )*
+    {
+        return new SqlNodeList(list, s.end(this));
+    }
+}
+
 SqlNodeList TableElementList() :
 {
     final Span s;
@@ -87,8 +121,6 @@ SqlTypeNameSpec OmniSciArrayTypeName(Span s) :
         <DATE> { sqlTypeName = SqlTypeName.DATE; }
     |
         <TIME> { sqlTypeName = SqlTypeName.TIME; }
-    |
-        <TIMESTAMP> { sqlTypeName = SqlTypeName.TIMESTAMP; }
     )
      <LBRACKET>
     (
@@ -102,7 +134,7 @@ SqlTypeNameSpec OmniSciArrayTypeName(Span s) :
     }
 }
 
-// Parse sql type name that allow arrays
+// Parse DECIMAL that allows arrays
 SqlTypeNameSpec OmniSciDecimalArrayTypeName(Span s) :
 {
     final SqlTypeName sqlTypeName;
@@ -121,6 +153,33 @@ SqlTypeNameSpec OmniSciDecimalArrayTypeName(Span s) :
         ]
         <RPAREN>
     )
+     <LBRACKET>
+    (
+        size = UnsignedIntLiteral()
+        <RBRACKET>
+    |
+        <RBRACKET>
+    )
+    {
+        return new OmniSciTypeNameSpec(sqlTypeName, false, size, precision, scale, s.end(this));
+    }
+}
+
+// Parse sql TIMESTAMP that allow arrays 
+SqlTypeNameSpec OmniSciTimestampArrayTypeName(Span s) :
+{
+    final SqlTypeName sqlTypeName;
+    Integer size = -1;
+    Integer precision = -1;
+    final Integer scale = -1;
+}
+{
+    <TIMESTAMP> { sqlTypeName = SqlTypeName.TIMESTAMP; }
+    [
+        <LPAREN>
+        precision = UnsignedIntLiteral()
+        <RPAREN>
+    ]
      <LBRACKET>
     (
         size = UnsignedIntLiteral()
@@ -212,6 +271,9 @@ SqlTypeNameSpec OmniSciTypeName() :
 <#-- put custom data types in front of Calcite core data types -->
         LOOKAHEAD(2)
         typeNameSpec = OmniSciArrayTypeName(s)
+    |
+        LOOKAHEAD(5)
+        typeNameSpec = OmniSciTimestampArrayTypeName(s)
     |
         LOOKAHEAD(7)
         typeNameSpec = OmniSciDecimalArrayTypeName(s)
@@ -442,6 +504,181 @@ SqlCreate SqlCreateTable(Span s, boolean replace) :
     }
 }
 
+
+/*
+ * Drop a table using the following syntax:
+ *
+ * DROP TABLE [ IF EXISTS ] <table_name>
+ */
+SqlDrop SqlDropTable(Span s, boolean replace) :
+{
+    final boolean ifExists;
+    final SqlIdentifier tableName;
+}
+{
+    <TABLE>
+    ifExists = IfExistsOpt()
+    tableName = CompoundIdentifier()
+    {
+        return new SqlDropTable(s.end(this), ifExists, tableName.toString());
+    }
+}
+
+
+/*
+ * Rename table(s) using the following syntax:
+ *
+ * RENAME TABLE <table_name> TO <new_table_name> [, <table_name_n> TO <new_table_name_n>]
+ */
+SqlRenameTable SqlRenameTable(Span s) :
+{   
+    SqlIdentifier tableName;
+    SqlIdentifier newTableName;
+    final List<Pair<String, String>> tableNames = new ArrayList<Pair<String, String>>();
+}
+{
+    <RENAME>
+    <TABLE>
+    tableName = CompoundIdentifier()
+    <TO>
+    newTableName = CompoundIdentifier()
+    { tableNames.add(new Pair<String, String>(tableName.toString(), newTableName.toString())); }
+    (
+        <COMMA>
+        tableName = CompoundIdentifier()
+        <TO>
+        newTableName = CompoundIdentifier()
+        { tableNames.add(new Pair<String, String>(tableName.toString(), newTableName.toString())); }
+    )*
+    {
+        return new SqlRenameTable(s.end(this), tableNames);
+    }
+}
+
+/*
+ * Alter a table using the following syntax:
+ *
+ * ALTER TABLE <table_name>
+ *
+ */
+SqlDdl SqlAlterTable(Span s) :
+{
+    SqlAlterTable.Builder sqlAlterTableBuilder = new SqlAlterTable.Builder();
+    SqlIdentifier tableName;
+    SqlIdentifier newTableName;
+    SqlIdentifier columnName;
+    SqlIdentifier newColumnName;
+    SqlIdentifier columnType;
+    SqlIdentifier encodingSpec;
+    boolean notNull = false;
+    SqlNodeList columnList = null;
+}
+{
+    <ALTER>
+    <TABLE>
+    tableName=CompoundIdentifier()
+    {
+        sqlAlterTableBuilder.setTableName(tableName.toString());
+    }
+    (
+        <RENAME>
+        (
+            <TO>
+            newTableName = CompoundIdentifier()
+            {
+                sqlAlterTableBuilder.alterTableName(newTableName.toString());
+            }
+        |
+            <COLUMN>
+            columnName = CompoundIdentifier()
+            <TO>
+            newColumnName = CompoundIdentifier()
+            {
+                sqlAlterTableBuilder.alterColumnName(columnName.toString(), newColumnName.toString());
+            }
+        )
+    |
+        <DROP>
+        <COLUMN>
+        columnList = SimpleIdentifierNodeList()
+        {
+            sqlAlterTableBuilder.dropColumn(columnList);
+        }
+    |
+        <ADD>
+        [<COLUMN>]
+        (
+            columnList = TableElementList()
+            |
+            columnList = RawTableElementList()
+        )
+        {
+            sqlAlterTableBuilder.addColumnList(columnList);
+        }
+    |
+        <SET>
+        Option(sqlAlterTableBuilder)
+        (
+            <COMMA>
+            Option(sqlAlterTableBuilder)
+        )*
+        {
+            sqlAlterTableBuilder.alterOptions();
+        }
+    )
+    {
+        sqlAlterTableBuilder.setPos(s.end(this));
+
+        // Builder implementation
+        return sqlAlterTableBuilder.build();
+
+    }
+}
+
+
+/* 
+ * Insert into table(s) using the following syntax:
+ *
+ * INSERT INTO <table_name> [columns] <select>
+ */
+SqlInsertIntoTable SqlInsertIntoTable(Span s) :
+{
+    final SqlIdentifier table;
+    final SqlNode query;
+    SqlNodeList columnList = null;
+}
+{
+    <INSERT>
+    <INTO>
+    table = CompoundIdentifier()
+    (
+        LOOKAHEAD(SqlSelect())
+        query = SqlSelect()
+    |
+        LOOKAHEAD(2)
+        <LPAREN>
+        query = SqlSelect()
+        <RPAREN>
+    |
+        columnList = ParenthesizedSimpleIdentifierList()
+        (
+            query = SqlSelect()
+        |
+            <LPAREN>
+            query = SqlSelect()
+            <RPAREN>            
+        )
+    )
+    {
+        return new SqlInsertIntoTable(s.end(this), table, query, columnList);
+    }
+}
+
+/*
+ * Create a view using the following syntax:
+ *
+ * CREATE VIEW [ IF NOT EXISTS ] <view_name> [(columns)] [AS <query>]
+ */
 SqlCreate SqlCreateView(Span s, boolean replace) :
 {
     final boolean ifNotExists;
@@ -453,7 +690,30 @@ SqlCreate SqlCreateView(Span s, boolean replace) :
     <VIEW> ifNotExists = IfNotExistsOpt() id = CompoundIdentifier()
     [ columnList = ParenthesizedSimpleIdentifierList() ]
     <AS> query = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY) {
+        if (columnList != null && columnList.size() > 0) {
+            throw new ParseException("Column list aliases in views are not yet supported.");
+        }
         return SqlDdlNodes.createView(s.end(this), replace, ifNotExists, id, columnList,
             query);
     }
 }
+
+/*
+ * Drop a view using the following syntax:
+ *
+ * DROP VIEW [ IF EXISTS ] <view_name>
+ */
+SqlDrop SqlDropView(Span s, boolean replace) :
+{
+    final boolean ifExists;
+    final SqlIdentifier viewName;
+}
+{
+    <VIEW>
+    ifExists = IfExistsOpt()
+    viewName = CompoundIdentifier()
+    {
+        return new SqlDropView(s.end(this), ifExists, viewName.toString());
+    }
+}
+

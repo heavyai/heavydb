@@ -39,6 +39,7 @@
 #include <random>
 #include <regex>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <typeinfo>
 
@@ -55,6 +56,7 @@
 #include "LockMgr/LockMgr.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/CalciteDeserializerUtils.h"
+#include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/JsonAccessors.h"
@@ -80,15 +82,25 @@ using Catalog_Namespace::SysCatalog;
 using namespace std::string_literals;
 
 using TableDefFuncPtr = boost::function<void(TableDescriptor&,
-                                             const NameValueAssign*,
+                                             const Parser::NameValueAssign*,
                                              const std::list<ColumnDescriptor>& columns)>;
 
 using DataframeDefFuncPtr =
     boost::function<void(DataframeTableDescriptor&,
-                         const NameValueAssign*,
+                         const Parser::NameValueAssign*,
                          const std::list<ColumnDescriptor>& columns)>;
 
 namespace Parser {
+bool checkInterrupt(const QuerySessionId& query_session, Executor* executor) {
+  if (g_enable_non_kernel_time_query_interrupt) {
+    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+    const auto isInterrupted =
+        executor->checkIsQuerySessionInterrupted(query_session, session_read_lock);
+    return isInterrupted;
+  }
+  return false;
+}
+
 std::shared_ptr<Analyzer::Expr> NullLiteral::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
@@ -220,10 +232,6 @@ std::shared_ptr<Analyzer::Expr> ArrayLiteral::analyze(
     } else if (set_subtype) {
       ti.set_subtype(subtype);
       set_subtype = false;
-    } else {
-      if (ti.get_subtype() != subtype) {
-        throw std::runtime_error("ARRAY element literals should be of the same type.");
-      }
     }
     value_exprs.push_back(e);
   }
@@ -929,10 +937,15 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
     const std::shared_ptr<Analyzer::Expr> else_e_in) {
   SQLTypeInfo ti;
   bool has_agg = false;
+  std::set<int> dictionary_ids;
+
   for (auto& p : expr_pair_list) {
     auto e1 = p.first;
     CHECK(e1->get_type_info().is_boolean());
     auto e2 = p.second;
+    if (e2->get_type_info().is_dict_encoded_string()) {
+      dictionary_ids.insert(e2->get_type_info().get_comp_param());
+    }
     if (ti.get_type() == kNULLT) {
       ti = e2->get_type_info();
     } else if (e2->get_type_info().get_type() == kNULLT) {
@@ -963,6 +976,9 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
       ti.set_notnull(false);
       else_e->set_type_info(ti);
     } else if (ti != else_e->get_type_info()) {
+      if (else_e->get_type_info().is_dict_encoded_string()) {
+        dictionary_ids.insert(else_e->get_type_info().get_comp_param());
+      }
       ti.set_notnull(false);
       if (ti.is_string() && else_e->get_type_info().is_string()) {
         ti = Analyzer::BinOper::common_string_type(ti, else_e->get_type_info());
@@ -998,7 +1014,20 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
     throw std::runtime_error(
         "Can't deduce the type for case expressions, all branches null");
   }
-  return makeExpr<Analyzer::CaseExpr>(ti, has_agg, cast_expr_pair_list, else_e);
+
+  auto case_expr = makeExpr<Analyzer::CaseExpr>(ti, has_agg, cast_expr_pair_list, else_e);
+  if (ti.get_compression() != kENCODING_DICT && dictionary_ids.size() == 1 &&
+      *(dictionary_ids.begin()) > 0) {
+    // the above logic makes two assumptions when strings are present. 1) that all types
+    // in the case statement are either null or strings, and 2) that none-encoded strings
+    // will always win out over dict encoding. If we only have one dictionary, and that
+    // dictionary is not a transient dictionary, we can cast the entire case to be dict
+    // encoded and use transient dictionaries for any literals
+    ti.set_compression(kENCODING_DICT);
+    ti.set_comp_param(*dictionary_ids.begin());
+    case_expr->add_cast(ti);
+  }
+  return case_expr;
 }
 
 std::string CaseExpr::to_string() const {
@@ -1525,10 +1554,6 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog,
         }
       }
     }
-    if (catalog.getAllColumnMetadataForTable(td->tableId, false, false, true).size() !=
-        result_col_list.size()) {
-      throw std::runtime_error("Insert into a subset of columns is not supported yet.");
-    }
   }
   query.set_result_col_list(result_col_list);
 }
@@ -1542,7 +1567,7 @@ size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& ca
   if (td->isView) {
     throw std::runtime_error("Insert to views is not supported yet.");
   }
-
+  foreign_storage::validate_non_foreign_table_write(td);
   if (td->partitions == "REPLICATED") {
     throw std::runtime_error("Cannot determine leaf on replicated table.");
   }
@@ -1558,6 +1583,8 @@ size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& ca
   size_t indexOfShardColumn = 0;
   const ColumnDescriptor* shardColumn = catalog.getShardColumnMetadataForTable(td);
   CHECK(shardColumn);
+  auto shard_count = td->nShards * num_leafs;
+  int64_t shardId = 0;
 
   if (column_list.empty()) {
     auto all_cols =
@@ -1574,7 +1601,9 @@ size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& ca
     }
 
     if (indexOfShardColumn == column_list.size()) {
-      throw std::runtime_error("No value defined for shard column.");
+      shardId = SHARD_FOR_KEY(inline_fixed_encoding_null_val(shardColumn->columnType),
+                              shard_count);
+      return shardId / td->nShards;
     }
   }
 
@@ -1597,10 +1626,6 @@ size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& ca
   CHECK(con);
 
   Datum d = con->get_constval();
-
-  auto shard_count = td->nShards * num_leafs;
-  int64_t shardId = 0;
-
   if (con->get_is_null()) {
     shardId = SHARD_FOR_KEY(inline_fixed_encoding_null_val(shardColumn->columnType),
                             shard_count);
@@ -1650,10 +1675,20 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
   std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist =
       query.get_targetlist_nonconst();
   const auto tableId = query.get_result_table_id();
-  const std::list<const ColumnDescriptor*> non_phys_cols =
-      catalog.getAllColumnMetadataForTable(tableId, false, false, false);
-  if (non_phys_cols.size() != value_list.size()) {
-    throw std::runtime_error("Insert has more target columns than expressions.");
+  if (!column_list.empty()) {
+    if (value_list.size() != column_list.size()) {
+      throw std::runtime_error(
+          "Numbers of columns and values don't match for the "
+          "insert.");
+    }
+  } else {
+    const std::list<const ColumnDescriptor*> non_phys_cols =
+        catalog.getAllColumnMetadataForTable(tableId, false, false, false);
+    if (non_phys_cols.size() != value_list.size()) {
+      throw std::runtime_error(
+          "Number of columns in table does not match the list of values given in the "
+          "insert.");
+    }
   }
   std::list<int>::const_iterator it = query.get_result_col_list().begin();
   for (auto& v : value_list) {
@@ -1705,6 +1740,10 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
                 *geo_string, import_ti, coords, bounds, ring_sizes, poly_rings)) {
           throw std::runtime_error("Cannot read geometry to insert into column " +
                                    cd->columnName);
+        }
+        if (coords.empty()) {
+          // Importing from geo_string WKT resulted in empty coords: dealing with a NULL
+          is_null = true;
         }
         if (cd->columnType.get_type() != import_ti.get_type()) {
           // allow POLYGON to be inserted into MULTIPOLYGON column
@@ -1870,12 +1909,15 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
           catalog, result_table_id);
+  // NOTE(max): we do the same checks as below just a few calls earlier in analyze().
+  // Do we keep those intentionally to make sure nothing changed in between w/o
+  // catalog locks or is it just a duplicate work?
   auto td = td_with_lock();
   CHECK(td);
-
   if (td->isView) {
     throw std::runtime_error("Singleton inserts on views is not supported.");
   }
+  foreign_storage::validate_non_foreign_table_write(td);
 
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   RelAlgExecutor ra_executor(executor.get(), catalog);
@@ -2128,6 +2170,19 @@ decltype(auto) get_sort_column_def(TableDescriptor& td,
   });
 }
 
+decltype(auto) get_max_rollback_epochs_def(TableDescriptor& td,
+                                           const NameValueAssign* p,
+                                           const std::list<ColumnDescriptor>& columns) {
+  auto assignment = [&td](const auto val) {
+    td.maxRollbackEpochs =
+        val < 0 ? -1 : val;  // Anything < 0 means unlimited rollbacks. Note that 0
+                             // still means keeping a shadow copy of data/metdata
+                             // between epochs so bad writes can be rolled back
+  };
+  return get_property_value<IntLiteral, decltype(assignment), PositiveOrZeroValidate>(
+      p, assignment);
+}
+
 static const std::map<const std::string, const TableDefFuncPtr> tableDefFuncMap = {
     {"fragment_size"s, get_frag_size_def},
     {"max_chunk_size"s, get_max_chunk_size_def},
@@ -2137,7 +2192,8 @@ static const std::map<const std::string, const TableDefFuncPtr> tableDefFuncMap 
     {"shard_count"s, get_shard_count_def},
     {"vacuum"s, get_vacuum_def},
     {"sort_column"s, get_sort_column_def},
-    {"storage_type"s, get_storage_type}};
+    {"storage_type"s, get_storage_type},
+    {"max_rollback_epochs", get_max_rollback_epochs_def}};
 
 void get_table_definitions(TableDescriptor& td,
                            const std::unique_ptr<NameValueAssign>& p,
@@ -2146,8 +2202,9 @@ void get_table_definitions(TableDescriptor& td,
   if (it == tableDefFuncMap.end()) {
     throw std::runtime_error(
         "Invalid CREATE TABLE option " + *p->get_name() +
-        ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE, PAGE_SIZE, MAX_ROWS, "
-        "PARTITIONS, SHARD_COUNT, VACUUM, SORT_COLUMN, or STORAGE_TYPE.");
+        ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE, PAGE_SIZE, MAX_ROLLBACK_EPOCHS, "
+        "MAX_ROWS, "
+        "PARTITIONS, SHARD_COUNT, VACUUM, SORT_COLUMN, STORAGE_TYPE.");
   }
   return it->second(td, p.get(), columns);
 }
@@ -2159,7 +2216,8 @@ void get_table_definitions_for_ctas(TableDescriptor& td,
   if (it == tableDefFuncMap.end()) {
     throw std::runtime_error(
         "Invalid CREATE TABLE AS option " + *p->get_name() +
-        ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE, PAGE_SIZE, MAX_ROWS, "
+        ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE, PAGE_SIZE, MAX_ROLLBACK_EPOCHS, "
+        "MAX_ROWS, "
         "PARTITIONS, SHARD_COUNT, VACUUM, SORT_COLUMN, STORAGE_TYPE or "
         "USE_SHARED_DICTIONARIES.");
   }
@@ -2513,7 +2571,8 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                                         const std::string select_stmt,
                                         std::vector<TargetMetaInfo>& targets,
                                         bool validate_only = false,
-                                        std::vector<size_t> outer_fragment_indices = {}) {
+                                        std::vector<size_t> outer_fragment_indices = {},
+                                        bool allow_interrupt = false) {
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
 
@@ -2531,10 +2590,14 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
       calcite_mgr
           ->process(query_state_proxy, pg_shim(select_stmt), {}, true, false, false, true)
           .plan_result;
-  RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
+  RelAlgExecutor ra_executor(executor.get(),
+                             catalog,
+                             query_ra,
+                             query_state_proxy.getQueryState().shared_from_this());
   CompilationOptions co = CompilationOptions::defaults(device_type);
   const auto& query_hints = ra_executor.getParsedQueryHints();
-  if (query_hints.cpu_mode) {
+  const auto cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
+  if (cpu_mode_enabled) {
     co.device_type = ExecutorDeviceType::CPU;
   }
   co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
@@ -2551,16 +2614,19 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                          10000,
                          false,
                          false,
-                         0.9,
-                         false,
                          1000,
+                         allow_interrupt,
+                         g_running_query_interrupt_freq,
+                         g_pending_query_interrupt_freq,
                          ExecutorType::Native,
                          outer_fragment_indices};
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
                                                      nullptr,
-                                                     nullptr),
+                                                     nullptr,
+                                                     0,
+                                                     0),
                          {}};
   result = ra_executor.executeRelAlgQuery(co, eo, false, nullptr);
   targets = result.getTargetsMeta();
@@ -2590,31 +2656,55 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
           .plan_result;
   RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
   const auto& query_hints = ra_executor.getParsedQueryHints();
-  CompilationOptions co = {query_hints.cpu_mode ? ExecutorDeviceType::CPU : device_type,
+  const bool cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
+  CompilationOptions co = {cpu_mode_enabled ? ExecutorDeviceType::CPU : device_type,
                            true,
                            ExecutorOptLevel::LoopStrengthReduction,
                            false};
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
-  ExecutionOptions eo = {
-      false, true, false, true, false, false, false, false, 10000, false, false, 0.9};
+  ExecutionOptions eo = {false,
+                         true,
+                         false,
+                         true,
+                         false,
+                         false,
+                         false,
+                         false,
+                         10000,
+                         false,
+                         false,
+                         0.9,
+                         false};
   return ra_executor.getOuterFragmentCount(co, eo);
 }
 
 AggregatedResult LocalConnector::query(QueryStateProxy query_state_proxy,
                                        std::string& sql_query_string,
                                        std::vector<size_t> outer_frag_indices,
-                                       bool validate_only) {
-  auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
+                                       bool validate_only,
+                                       bool allow_interrupt) {
   // TODO(PS): Should we be using the shimmed query in getResultSet?
   std::string pg_shimmed_select_query = pg_shim(sql_query_string);
 
   std::vector<TargetMetaInfo> target_metainfos;
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
+  auto query_session = session ? session->get_session_id() : "";
+  auto query_submitted_time = query_state_proxy.getQueryState().getQuerySubmittedTime();
+  if (allow_interrupt && !validate_only && !query_session.empty()) {
+    executor->enrollQuerySession(query_session,
+                                 sql_query_string,
+                                 query_submitted_time,
+                                 Executor::UNITARY_EXECUTOR_ID,
+                                 QuerySessionStatus::QueryStatus::PENDING_EXECUTOR);
+  }
   auto result_rows = getResultSet(query_state_proxy,
                                   sql_query_string,
                                   target_metainfos,
                                   validate_only,
-                                  outer_frag_indices);
+                                  outer_frag_indices,
+                                  allow_interrupt);
   AggregatedResult res = {result_rows, target_metainfos};
   return res;
 }
@@ -2622,8 +2712,10 @@ AggregatedResult LocalConnector::query(QueryStateProxy query_state_proxy,
 std::vector<AggregatedResult> LocalConnector::query(
     QueryStateProxy query_state_proxy,
     std::string& sql_query_string,
-    std::vector<size_t> outer_frag_indices) {
-  auto res = query(query_state_proxy, sql_query_string, outer_frag_indices, false);
+    std::vector<size_t> outer_frag_indices,
+    bool allow_interrupt) {
+  auto res = query(
+      query_state_proxy, sql_query_string, outer_frag_indices, false, allow_interrupt);
   return {res};
 }
 
@@ -2696,14 +2788,32 @@ std::list<ColumnDescriptor> LocalConnector::getColumnDescriptors(AggregatedResul
   return column_descriptors;
 }
 
+InsertIntoTableAsSelectStmt::InsertIntoTableAsSelectStmt(
+    const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("name"));
+  table_name_ = json_str(payload["name"]);
+
+  CHECK(payload.HasMember("query"));
+  select_query_ = json_str(payload["query"]);
+
+  boost::replace_all(select_query_, "\n", " ");
+  select_query_ = "(" + select_query_ + ")";
+
+  if (payload.HasMember("columns")) {
+    CHECK(payload["columns"].IsArray());
+    for (auto& column : payload["columns"].GetArray()) {
+      std::string s = json_str(column);
+      column_list_.emplace_back(std::unique_ptr<std::string>(new std::string(s)));
+    }
+  }
+}
+
 void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy,
-                                               bool validate_table) {
+                                               const TableDescriptor* td,
+                                               bool validate_table,
+                                               bool for_CTAS) {
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
-  const auto td_with_lock =
-      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
-          catalog, table_name_);
-  const auto td = td_with_lock();
   foreign_storage::validate_non_foreign_table_write(td);
 
   LocalConnector local_connector;
@@ -2723,7 +2833,6 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
     if (column_list_.empty()) {
       auto list = catalog.getAllColumnMetadataForTable(td->tableId, false, false, false);
       target_column_descriptors = {std::begin(list), std::end(list)};
-
     } else {
       for (auto& c : column_list_) {
         const ColumnDescriptor* cd = catalog.getMetadataForColumn(td->tableId, *c);
@@ -2738,10 +2847,6 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
   };
 
   bool is_temporary = table_is_temporary(td);
-
-  // Don't allow simultaneous inserts
-  const auto insert_data_lock =
-      lockmgr::InsertDataLockMgr::getWriteLockForTable(catalog, table_name_);
 
   if (validate_table) {
     // check access privileges
@@ -2760,15 +2865,11 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
     // only validate the select query so we get the target types
     // correctly, but do not populate the result set
-    auto result = local_connector.query(query_state_proxy, select_query_, {}, true);
+    auto result = local_connector.query(query_state_proxy, select_query_, {}, true, true);
     auto source_column_descriptors = local_connector.getColumnDescriptors(result, false);
 
     std::vector<const ColumnDescriptor*> target_column_descriptors =
         get_target_column_descriptors(td);
-    if (catalog.getAllColumnMetadataForTable(td->tableId, false, false, false).size() !=
-        target_column_descriptors.size()) {
-      throw std::runtime_error("Insert into a subset of columns is not supported yet.");
-    }
 
     if (source_column_descriptors.size() != target_column_descriptors.size()) {
       throw std::runtime_error("The number of source and target columns does not match.");
@@ -2877,12 +2978,13 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
   Fragmenter_Namespace::InsertDataLoader insertDataLoader(*leafs_connector_);
   auto target_column_descriptors = get_target_column_descriptors(td);
-
   auto outer_frag_count =
       leafs_connector_->getOuterFragmentCount(query_state_proxy, select_query_);
 
   size_t outer_frag_end = outer_frag_count == 0 ? 1 : outer_frag_count;
-
+  auto query_session = session ? session->get_session_id() : "";
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  std::string work_type_str = for_CTAS ? "CTAS" : "ITAS";
   try {
     for (size_t outer_frag_idx = 0; outer_frag_idx < outer_frag_end; outer_frag_idx++) {
       std::vector<size_t> allowed_outer_fragment_indices;
@@ -2892,11 +2994,39 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
       }
 
       const auto query_clock_begin = timer_start();
-      std::vector<AggregatedResult> query_results = leafs_connector_->query(
-          query_state_proxy, select_query_, allowed_outer_fragment_indices);
+      std::vector<AggregatedResult> query_results =
+          leafs_connector_->query(query_state_proxy,
+                                  select_query_,
+                                  allowed_outer_fragment_indices,
+                                  g_enable_non_kernel_time_query_interrupt);
       total_source_query_time_ms += timer_stop(query_clock_begin);
 
+      auto start_time = query_state_proxy.getQueryState().getQuerySubmittedTime();
+      auto query_str = "INSERT_DATA for " + work_type_str;
+      if (g_enable_non_kernel_time_query_interrupt) {
+        // In the clean-up phase of the query execution for collecting aggregated result
+        // of SELECT query, we remove its query session info, so we need to enroll the
+        // session info again
+        executor->enrollQuerySession(query_session,
+                                     query_str,
+                                     start_time,
+                                     Executor::UNITARY_EXECUTOR_ID,
+                                     QuerySessionStatus::QueryStatus::RUNNING);
+      }
+
+      ScopeGuard clearInterruptStatus = [executor, &query_session, &start_time] {
+        // this data population is non-kernel operation, so we manually cleanup
+        // the query session info in the cleanup phase
+        if (g_enable_non_kernel_time_query_interrupt) {
+          executor->clearQuerySessionStatus(query_session, start_time, false);
+        }
+      };
+
       for (auto& res : query_results) {
+        if (UNLIKELY(checkInterrupt(query_session, executor))) {
+          throw std::runtime_error(
+              "Query execution has been interrupted while performing " + work_type_str);
+        }
         auto result_rows = res.rs;
         result_rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
         const auto num_rows = result_rows->rowCount();
@@ -2910,13 +3040,13 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
         size_t leaf_count = leafs_connector_->leafCount();
 
         size_t max_number_of_rows_per_package =
-            std::min(num_rows / leaf_count, 64UL * 1024UL);
+            std::min(num_rows / leaf_count, size_t(64 * 1024));
 
         size_t start_row = 0;
         size_t num_rows_to_process = std::min(num_rows, max_number_of_rows_per_package);
 
         // ensure that at least one row is being processed
-        num_rows_to_process = std::max(num_rows_to_process, 1UL);
+        num_rows_to_process = std::max(num_rows_to_process, size_t(1));
 
         std::vector<std::unique_ptr<TargetValueConverter>> value_converters;
 
@@ -2930,61 +3060,119 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
         std::atomic<size_t> row_idx{0};
 
-        auto convert_function = [&result_rows,
-                                 &value_converters,
-                                 &row_idx,
-                                 &num_rows_to_process,
-                                 &thread_start_idx,
-                                 &thread_end_idx](const int thread_id) {
-          const int num_cols = value_converters.size();
-          const size_t start = thread_start_idx[thread_id];
-          const size_t end = thread_end_idx[thread_id];
-          size_t idx = 0;
-          for (idx = start; idx < end; ++idx) {
-            const auto result_row = result_rows->getRowAtNoTranslations(idx);
-            if (!result_row.empty()) {
-              size_t target_row = row_idx.fetch_add(1);
-
-              if (target_row >= num_rows_to_process) {
-                break;
-              }
-
-              for (unsigned int col = 0; col < num_cols; col++) {
-                const auto& mapd_variant = result_row[col];
-                value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
-              }
-            }
-          }
-
-          thread_start_idx[thread_id] = idx;
-        };
-
-        auto single_threaded_convert_function = [&result_rows,
-                                                 &value_converters,
-                                                 &row_idx,
-                                                 &num_rows_to_process,
-                                                 &thread_start_idx,
-                                                 &thread_end_idx](const int thread_id) {
-          const int num_cols = value_converters.size();
-          const size_t start = thread_start_idx[thread_id];
-          const size_t end = thread_end_idx[thread_id];
-          size_t idx = 0;
-          for (idx = start; idx < end; ++idx) {
+        auto do_work = [&result_rows, &num_rows_to_process, &value_converters, &row_idx](
+                           const size_t idx,
+                           const size_t end,
+                           const size_t num_cols,
+                           const size_t thread_id,
+                           bool& stop_convert) {
+          const auto result_row = result_rows->getRowAtNoTranslations(idx);
+          if (!result_row.empty()) {
             size_t target_row = row_idx.fetch_add(1);
-
             if (target_row >= num_rows_to_process) {
-              break;
+              stop_convert = true;
+              return;
             }
-            const auto result_row = result_rows->getNextRow(false, false);
-            CHECK(!result_row.empty());
             for (unsigned int col = 0; col < num_cols; col++) {
               const auto& mapd_variant = result_row[col];
               value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
             }
           }
+        };
 
+        auto convert_function = [&thread_start_idx,
+                                 &thread_end_idx,
+                                 &value_converters,
+                                 &executor,
+                                 &query_session,
+                                 &work_type_str,
+                                 &do_work](const int thread_id) {
+          const int num_cols = value_converters.size();
+          const size_t start = thread_start_idx[thread_id];
+          const size_t end = thread_end_idx[thread_id];
+          size_t idx = 0;
+          bool stop_convert = false;
+          if (g_enable_non_kernel_time_query_interrupt) {
+            size_t local_idx = 0;
+            for (idx = start; idx < end; ++idx, ++local_idx) {
+              if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
+                           checkInterrupt(query_session, executor))) {
+                throw std::runtime_error(
+                    "Query execution has been interrupted while performing " +
+                    work_type_str);
+              }
+              do_work(idx, end, num_cols, thread_id, stop_convert);
+              if (stop_convert) {
+                break;
+              }
+            }
+          } else {
+            for (idx = start; idx < end; ++idx) {
+              do_work(idx, end, num_cols, thread_id, stop_convert);
+              if (stop_convert) {
+                break;
+              }
+            }
+          }
           thread_start_idx[thread_id] = idx;
         };
+
+        auto single_threaded_value_converter =
+            [&row_idx, &num_rows_to_process, &value_converters, &result_rows](
+                const size_t idx,
+                const size_t end,
+                const size_t num_cols,
+                bool& stop_convert) {
+              size_t target_row = row_idx.fetch_add(1);
+              if (target_row >= num_rows_to_process) {
+                stop_convert = true;
+                return;
+              }
+              const auto result_row = result_rows->getNextRow(false, false);
+              CHECK(!result_row.empty());
+              for (unsigned int col = 0; col < num_cols; col++) {
+                const auto& mapd_variant = result_row[col];
+                value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
+              }
+            };
+
+        auto single_threaded_convert_function =
+            [&value_converters,
+             &thread_start_idx,
+             &thread_end_idx,
+             &executor,
+             &query_session,
+             &work_type_str,
+             &single_threaded_value_converter](const int thread_id) {
+              const int num_cols = value_converters.size();
+              const size_t start = thread_start_idx[thread_id];
+              const size_t end = thread_end_idx[thread_id];
+              size_t idx = 0;
+              bool stop_convert = false;
+              if (g_enable_non_kernel_time_query_interrupt) {
+                size_t local_idx = 0;
+                for (idx = start; idx < end; ++idx, ++local_idx) {
+                  if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
+                               checkInterrupt(query_session, executor))) {
+                    throw std::runtime_error(
+                        "Query execution has been interrupted while performing " +
+                        work_type_str);
+                  }
+                  single_threaded_value_converter(idx, end, num_cols, stop_convert);
+                  if (stop_convert) {
+                    break;
+                  }
+                }
+              } else {
+                for (idx = start; idx < end; ++idx) {
+                  single_threaded_value_converter(idx, end, num_cols, stop_convert);
+                  if (stop_convert) {
+                    break;
+                  }
+                }
+              }
+              thread_start_idx[thread_id] = idx;
+            };
 
         if (can_go_parallel) {
           const size_t entryCount = result_rows->entryCount();
@@ -2997,16 +3185,9 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
             thread_start_idx[i] = start_entry;
             thread_end_idx[i] = end_entry;
           }
-
         } else {
           thread_start_idx[0] = 0;
           thread_end_idx[0] = result_rows->entryCount();
-        }
-
-        std::shared_ptr<Executor> executor;
-
-        if (g_enable_experimental_string_functions) {
-          executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
         }
 
         while (start_row < num_rows) {
@@ -3054,23 +3235,22 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           }
 
           // finalize the insert data
-          {
-            auto finalizer_func =
-                [](std::unique_ptr<TargetValueConverter>::pointer targetValueConverter) {
-                  targetValueConverter->finalizeDataBlocksForInsertData();
-                };
-            std::vector<std::future<void>> worker_threads;
-            for (auto& converterPtr : value_converters) {
-              worker_threads.push_back(
-                  std::async(std::launch::async, finalizer_func, converterPtr.get()));
-            }
+          auto finalizer_func =
+              [](std::unique_ptr<TargetValueConverter>::pointer targetValueConverter) {
+                targetValueConverter->finalizeDataBlocksForInsertData();
+              };
 
-            for (auto& child : worker_threads) {
-              child.wait();
-            }
-            for (auto& child : worker_threads) {
-              child.get();
-            }
+          std::vector<std::future<void>> worker_threads;
+          for (auto& converterPtr : value_converters) {
+            worker_threads.push_back(
+                std::async(std::launch::async, finalizer_func, converterPtr.get()));
+          }
+
+          for (auto& child : worker_threads) {
+            child.wait();
+          }
+          for (auto& child : worker_threads) {
+            child.get();
           }
 
           Fragmenter_Namespace::InsertData insert_data;
@@ -3080,11 +3260,19 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           insert_data.numRows = num_rows_to_process;
 
           for (int col_idx = 0; col_idx < target_column_descriptors.size(); col_idx++) {
+            if (UNLIKELY(g_enable_non_kernel_time_query_interrupt &&
+                         checkInterrupt(query_session, executor))) {
+              throw std::runtime_error(
+                  "Query execution has been interrupted while performing " +
+                  work_type_str);
+            }
             value_converters[col_idx]->addDataBlocksToInsertData(insert_data);
           }
           total_target_value_translate_time_ms += timer_stop(translate_clock_begin);
 
           const auto data_load_clock_begin = timer_start();
+          auto data_memory_holder =
+              import_export::fill_missing_columns(&catalog, insert_data);
           insertDataLoader.insertData(*session, insert_data);
           total_data_load_time_ms += timer_stop(data_load_clock_begin);
 
@@ -3125,7 +3313,73 @@ void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& 
       &session_copy, boost::null_deleter());
   auto query_state = query_state::QueryState::create(session_ptr, select_query_);
   auto stdlog = STDLOG(query_state);
-  populateData(query_state->createQueryStateProxy(), true);
+  auto& catalog = session_ptr->getCatalog();
+
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
+  if (catalog.getMetadataForTable(table_name_) == nullptr) {
+    throw std::runtime_error("ITAS failed: table " + table_name_ + " does not exist.");
+  }
+
+  lockmgr::LockedTableDescriptors locks;
+  std::vector<std::string> tables;
+
+  // get the table info
+  auto calcite_mgr = catalog.getCalciteMgr();
+
+  // TODO MAT this should actually get the global or the session parameter for
+  // view optimization
+  const auto result = calcite_mgr->process(query_state->createQueryStateProxy(),
+                                           pg_shim(select_query_),
+                                           {},
+                                           true,
+                                           false,
+                                           false,
+                                           true);
+
+  for (auto& tab : result.resolved_accessed_objects.tables_selected_from) {
+    tables.emplace_back(tab[0]);
+  }
+  tables.emplace_back(table_name_);
+
+  // force sort into tableid order in case of name change to guarantee fixed order of
+  // mutex access
+  std::sort(tables.begin(),
+            tables.end(),
+            [&catalog](const std::string& a, const std::string& b) {
+              return catalog.getMetadataForTable(a, false)->tableId <
+                     catalog.getMetadataForTable(b, false)->tableId;
+            });
+
+  tables.erase(unique(tables.begin(), tables.end()), tables.end());
+  for (const auto& table : tables) {
+    locks.emplace_back(
+        std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
+            lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+                catalog, table)));
+    if (table == table_name_) {
+      // Aquire an insert data lock for updates/deletes, consistent w/ insert. The
+      // table data lock will be aquired in the fragmenter during checkpoint.
+      locks.emplace_back(
+          std::make_unique<lockmgr::TableInsertLockContainer<lockmgr::WriteLock>>(
+              lockmgr::TableInsertLockContainer<lockmgr::WriteLock>::acquire(
+                  catalog.getDatabaseId(), (*locks.back())())));
+    } else {
+      locks.emplace_back(
+          std::make_unique<lockmgr::TableDataLockContainer<lockmgr::ReadLock>>(
+              lockmgr::TableDataLockContainer<lockmgr::ReadLock>::acquire(
+                  catalog.getDatabaseId(), (*locks.back())())));
+    }
+  }
+
+  const TableDescriptor* td = catalog.getMetadataForTable(table_name_);
+  try {
+    populateData(query_state->createQueryStateProxy(), td, true, false);
+  } catch (...) {
+    throw;
+  }
 }
 
 void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -3134,12 +3388,16 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
       &session_copy, boost::null_deleter());
   auto query_state = query_state::QueryState::create(session_ptr, select_query_);
   auto stdlog = STDLOG(query_state);
-
   LocalConnector local_connector;
   auto& catalog = session.getCatalog();
   bool create_table = nullptr == leafs_connector_;
 
+  std::set<std::string> select_tables;
   if (create_table) {
+    const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+            legacylockmgr::ExecutorOuterLock, true));
+
     // check access privileges
     if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
                                          AccessPrivileges::CREATE_TABLE)) {
@@ -3155,12 +3413,33 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
                                " already exists and no data was loaded.");
     }
 
+    // get the table info
+    auto calcite_mgr = catalog.getCalciteMgr();
+
+    // TODO MAT this should actually get the global or the session parameter for
+    // view optimization
+    const auto result = calcite_mgr->process(query_state->createQueryStateProxy(),
+                                             pg_shim(select_query_),
+                                             {},
+                                             true,
+                                             false,
+                                             false,
+                                             true);
+
+    // TODO 12 Apr 2021 MAT schema change need to keep schema in future
+    // just keeping it moving for now
+    for (auto& tab : result.resolved_accessed_objects.tables_selected_from) {
+      select_tables.insert(tab[0]);
+    }
+
     // only validate the select query so we get the target types
     // correctly, but do not populate the result set
-    auto result = local_connector.query(
-        query_state->createQueryStateProxy(), select_query_, {}, true);
+    // we currently have exclusive access to the system so this is safe
+    auto validate_result = local_connector.query(
+        query_state->createQueryStateProxy(), select_query_, {}, true, false);
+
     const auto column_descriptors_for_create =
-        local_connector.getColumnDescriptors(result, true);
+        local_connector.getColumnDescriptors(validate_result, true);
 
     // some validation as the QE might return some out of range column types
     for (auto& cd : column_descriptors_for_create) {
@@ -3180,6 +3459,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
     td.fragPageSize = DEFAULT_PAGE_SIZE;
     td.maxRows = DEFAULT_MAX_ROWS;
+    td.maxRollbackEpochs = DEFAULT_MAX_ROLLBACK_EPOCHS;
     if (is_temporary_) {
       td.persistenceLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
     } else {
@@ -3210,7 +3490,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
     if (use_shared_dictionaries) {
       const auto source_column_descriptors =
-          local_connector.getColumnDescriptors(result, false);
+          local_connector.getColumnDescriptors(validate_result, false);
       const auto mapping = catalog.getDictionaryToColumnMapping();
 
       for (auto& source_cd : source_column_descriptors) {
@@ -3247,8 +3527,50 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
         session.get_currentUser(), td.tableName, TableDBObjectType, catalog);
   }
 
+  // note there is a time where we do not have any executor outer lock here. someone could
+  // come along and mess with the data or other tables.
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
+  lockmgr::LockedTableDescriptors locks;
+  std::vector<std::string> tables;
+  tables.insert(tables.end(), select_tables.begin(), select_tables.end());
+  CHECK_EQ(tables.size(), select_tables.size());
+  tables.emplace_back(table_name_);
+  // force sort into tableid order in case of name change to guarantee fixed order of
+  // mutex access
+  std::sort(tables.begin(),
+            tables.end(),
+            [&catalog](const std::string& a, const std::string& b) {
+              return catalog.getMetadataForTable(a, false)->tableId <
+                     catalog.getMetadataForTable(b, false)->tableId;
+            });
+  tables.erase(unique(tables.begin(), tables.end()), tables.end());
+  for (const auto& table : tables) {
+    locks.emplace_back(
+        std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
+            lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+                catalog, table)));
+    if (table == table_name_) {
+      // Aquire an insert data lock for updates/deletes, consistent w/ insert. The
+      // table data lock will be aquired in the fragmenter during checkpoint.
+      locks.emplace_back(
+          std::make_unique<lockmgr::TableInsertLockContainer<lockmgr::WriteLock>>(
+              lockmgr::TableInsertLockContainer<lockmgr::WriteLock>::acquire(
+                  catalog.getDatabaseId(), (*locks.back())())));
+    } else {
+      locks.emplace_back(
+          std::make_unique<lockmgr::TableDataLockContainer<lockmgr::ReadLock>>(
+              lockmgr::TableDataLockContainer<lockmgr::ReadLock>::acquire(
+                  catalog.getDatabaseId(), (*locks.back())())));
+    }
+  }
+
+  const TableDescriptor* td = catalog.getMetadataForTable(table_name_);
+
   try {
-    populateData(query_state->createQueryStateProxy(), false);
+    populateData(query_state->createQueryStateProxy(), td, false, true);
   } catch (...) {
     if (!g_cluster) {
       const TableDescriptor* created_td = catalog.getMetadataForTable(table_name_);
@@ -3257,6 +3579,16 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
       }
     }
     throw;
+  }
+}
+
+DropTableStmt::DropTableStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("tableName"));
+  table = std::make_unique<std::string>(json_str(payload["tableName"]));
+
+  if_exists = false;
+  if (payload.HasMember("ifExists")) {
+    if_exists = json_bool(payload["ifExists"]);
   }
 }
 
@@ -3305,6 +3637,191 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   DeleteTriggeredCacheInvalidator::invalidateCaches();
 }
 
+void AlterTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {}
+
+void AlterTableStmt::delegateExecute(const rapidjson::Value& payload,
+                                     const Catalog_Namespace::SessionInfo& session) {
+  CHECK(payload.HasMember("tableName"));
+  auto tableName = json_str(payload["tableName"]);
+
+  CHECK(payload.HasMember("alterType"));
+  auto type = json_str(payload["alterType"]);
+
+  if (type == "RENAME_TABLE") {
+    CHECK(payload.HasMember("newTableName"));
+    auto newTableName = json_str(payload["newTableName"]);
+    Parser::RenameTableStmt(new std::string(tableName), new std::string(newTableName))
+        .execute(session);
+
+  } else if (type == "RENAME_COLUMN") {
+    CHECK(payload.HasMember("columnName"));
+    auto columnName = json_str(payload["columnName"]);
+    CHECK(payload.HasMember("newColumnName"));
+    auto newColumnName = json_str(payload["newColumnName"]);
+    Parser::RenameColumnStmt(new std::string(tableName),
+                             new std::string(columnName),
+                             new std::string(newColumnName))
+        .execute(session);
+
+  } else if (type == "ADD_COLUMN") {
+    CHECK(payload.HasMember("columnData"));
+    CHECK(payload["columnData"].IsArray());
+
+    // TODO : Shares alot of code below with CREATE_TABLE -> try to merge these two ?
+    //  unique_ptr vs regular
+
+    // New Columns go into this list
+    std::list<ColumnDef*>* table_element_list_ = new std::list<ColumnDef*>;
+
+    const auto elements = payload["columnData"].GetArray();
+    for (const auto& element : elements) {
+      CHECK(element.IsObject());
+      CHECK(element.HasMember("type"));
+      if (json_str(element["type"]) == "SQL_COLUMN_DECLARATION") {
+        CHECK(element.HasMember("name"));
+        auto col_name = std::make_unique<std::string>(json_str(element["name"]));
+        CHECK(element.HasMember("sqltype"));
+        const auto sql_types = to_sql_type(json_str(element["sqltype"]));
+
+        // decimal / numeric precision / scale
+        int precision = -1;
+        int scale = -1;
+        if (element.HasMember("precision")) {
+          precision = json_i64(element["precision"]);
+        }
+        if (element.HasMember("scale")) {
+          scale = json_i64(element["scale"]);
+        }
+
+        std::optional<int64_t> array_size;
+        if (element.HasMember("arraySize")) {
+          // We do not yet support geo arrays
+          array_size = json_i64(element["arraySize"]);
+        }
+        std::unique_ptr<SQLType> sql_type;
+        if (element.HasMember("subtype")) {
+          CHECK(element.HasMember("coordinateSystem"));
+          const auto subtype_sql_types = to_sql_type(json_str(element["subtype"]));
+          sql_type = std::make_unique<SQLType>(
+              subtype_sql_types,
+              static_cast<int>(sql_types),
+              static_cast<int>(json_i64(element["coordinateSystem"])),
+              false);
+        } else if (precision > 0 && scale > 0) {
+          sql_type = std::make_unique<SQLType>(sql_types,
+                                               precision,
+                                               scale,
+                                               /*is_array=*/array_size.has_value(),
+                                               array_size ? *array_size : -1);
+        } else if (precision > 0) {
+          sql_type = std::make_unique<SQLType>(sql_types,
+                                               precision,
+                                               0,
+                                               /*is_array=*/array_size.has_value(),
+                                               array_size ? *array_size : -1);
+        } else {
+          sql_type = std::make_unique<SQLType>(sql_types,
+                                               /*is_array=*/array_size.has_value(),
+                                               array_size ? *array_size : -1);
+        }
+        CHECK(sql_type);
+
+        CHECK(element.HasMember("nullable"));
+        const auto nullable = json_bool(element["nullable"]);
+        std::unique_ptr<ColumnConstraintDef> constraint_def;
+        if (!nullable) {
+          StringLiteral* str_literal = nullptr;
+          if (element.HasMember("expression") && !element["expression"].IsNull()) {
+            std::string* defaultval = new std::string(json_str(element["expression"]));
+            boost::algorithm::trim_if(*defaultval, boost::is_any_of(" \"'`"));
+            str_literal = new StringLiteral(defaultval);
+          }
+
+          constraint_def =
+              std::make_unique<ColumnConstraintDef>(/*notnull=*/true,
+                                                    /*unique=*/false,
+                                                    /*primarykey=*/false,
+                                                    /*defaultval=*/str_literal);
+        }
+        std::unique_ptr<CompressDef> compress_def;
+        if (element.HasMember("encodingType") && !element["encodingType"].IsNull()) {
+          std::string encoding_type = json_str(element["encodingType"]);
+          CHECK(element.HasMember("encodingSize"));
+          auto encoding_name =
+              std::make_unique<std::string>(json_str(element["encodingType"]));
+          compress_def = std::make_unique<CompressDef>(encoding_name.release(),
+                                                       json_i64(element["encodingSize"]));
+        }
+        auto col_def = new ColumnDef(col_name.release(),
+                                     sql_type.release(),
+                                     compress_def ? compress_def.release() : nullptr,
+                                     constraint_def ? constraint_def.release() : nullptr);
+        table_element_list_->emplace_back(col_def);
+
+      } else {
+        LOG(FATAL) << "Unsupported element type for ALTER TABLE: "
+                   << element["type"].GetString();
+      }
+    }
+
+    Parser::AddColumnStmt(new std::string(tableName), table_element_list_)
+        .execute(session);
+
+  } else if (type == "DROP_COLUMN") {
+    CHECK(payload.HasMember("columnData"));
+    auto columnData = json_str(payload["columnData"]);
+    // Convert columnData to std::list<std::string*>*
+    //    allocate std::list<> as DropColumnStmt will delete it;
+    std::list<std::string*>* cols = new std::list<std::string*>;
+    std::vector<std::string> cols1;
+    boost::split(cols1, columnData, boost::is_any_of(","));
+    for (auto s : cols1) {
+      // strip leading/trailing spaces/quotes/single quotes
+      boost::algorithm::trim_if(s, boost::is_any_of(" \"'`"));
+      std::string* str = new std::string(s);
+      cols->emplace_back(str);
+    }
+
+    Parser::DropColumnStmt(new std::string(tableName), cols).execute(session);
+
+  } else if (type == "ALTER_OPTIONS") {
+    CHECK(payload.HasMember("options"));
+
+    if (payload["options"].IsObject()) {
+      for (const auto& option : payload["options"].GetObject()) {
+        std::string* option_name = new std::string(json_str(option.name));
+        Literal* literal_value;
+        if (option.value.IsString()) {
+          std::string literal_string = json_str(option.value);
+
+          // iff this string can be converted to INT
+          //   ... do so because it is necessary for AlterTableParamStmt
+          std::size_t sz;
+          int iVal = std::stoi(literal_string, &sz);
+          if (sz == literal_string.size()) {
+            literal_value = new IntLiteral(iVal);
+          } else {
+            literal_value = new StringLiteral(&literal_string);
+          }
+        } else if (option.value.IsInt() || option.value.IsInt64()) {
+          literal_value = new IntLiteral(json_i64(option.value));
+        } else if (option.value.IsNull()) {
+          literal_value = new NullLiteral();
+        } else {
+          throw std::runtime_error("Unable to handle literal for " + *option_name);
+        }
+        CHECK(literal_value);
+
+        NameValueAssign* p1 = new NameValueAssign(option_name, literal_value);
+        Parser::AlterTableParamStmt(new std::string(tableName), p1).execute(session);
+      }
+
+    } else {
+      CHECK(payload["options"].IsNull());
+    }
+  }
+}
+
 void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
@@ -3330,7 +3847,7 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   privObjects.push_back(dbObject);
   if (!SysCatalog::instance().checkPrivileges(session.get_currentUser(), privObjects)) {
     throw std::runtime_error("Table " + *table + " will not be truncated. User " +
-                             session.get_currentUser().userName +
+                             session.get_currentUser().userLoggable() +
                              " has no proper privileges.");
   }
 
@@ -3396,6 +3913,88 @@ void RenameDatabaseStmt::execute(const Catalog_Namespace::SessionInfo& session) 
   SysCatalog::instance().renameDatabase(*database_name_, *new_database_name_);
 }
 
+RenameTableStmt::RenameTableStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("command"));
+
+  CHECK(payload.HasMember("tableNames"));
+  CHECK(payload["tableNames"].IsArray());
+  const auto elements = payload["tableNames"].GetArray();
+  for (const auto& element : elements) {
+    CHECK(element.HasMember("name"));
+    CHECK(element.HasMember("newName"));
+    tablesToRename.emplace_back(new std::string(json_str(element["name"])),
+                                new std::string(json_str(element["newName"])));
+  }
+}
+
+RenameTableStmt::RenameTableStmt(std::string* tab_name, std::string* new_tab_name) {
+  tablesToRename.emplace_back(tab_name, new_tab_name);
+}
+
+RenameTableStmt::RenameTableStmt(
+    std::list<std::pair<std::string, std::string>> tableNames) {
+  for (auto item : tableNames) {
+    tablesToRename.emplace_back(new std::string(item.first),
+                                new std::string(item.second));
+  }
+}
+
+using SubstituteMap = std::map<std::string, std::string>;
+
+// Namespace fns used to track a left-to-right execution of RENAME TABLE
+//   and verify that the command should be (entirely/mostly) valid
+//
+namespace {
+
+static constexpr char const* EMPTY_NAME{""};
+
+std::string generateUniqueTableName(std::string name) {
+  // TODO - is there a "better" way to create a tmp name for the table
+  std::time_t result = std::time(nullptr);
+  return name + "_tmp" + std::to_string(result);
+}
+
+void recordRename(SubstituteMap& sMap, std::string oldName, std::string newName) {
+  sMap[oldName] = newName;
+}
+
+std::string loadTable(Catalog_Namespace::Catalog& catalog,
+                      SubstituteMap& sMap,
+                      std::string tableName) {
+  if (sMap.find(tableName) != sMap.end()) {
+    if (sMap[tableName] == EMPTY_NAME)
+      return tableName;
+    return sMap[tableName];
+  } else {
+    // lookup table in src catalog
+    const TableDescriptor* td = catalog.getMetadataForTable(tableName);
+    if (td) {
+      sMap[tableName] = tableName;
+    } else {
+      sMap[tableName] = EMPTY_NAME;
+    }
+  }
+  return tableName;
+}
+
+bool hasData(SubstituteMap& sMap, std::string tableName) {
+  // assumes loadTable has been previously called
+  return (sMap[tableName] != EMPTY_NAME);
+}
+
+void checkNameSubstition(SubstituteMap& sMap) {
+  // Substition map should be clean at end of rename:
+  //    all items in map must (map to self) or (map to EMPTY_STRING) by end
+
+  for (auto it : sMap) {
+    if ((it.second) != EMPTY_NAME && (it.first) != (it.second)) {
+      throw std::runtime_error(
+          "Error: Attempted to overwrite and lose data in table: \'" + (it.first) + "\'");
+    }
+  }
+}
+}  // namespace
+
 void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
@@ -3404,18 +4003,75 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
-  const auto td_with_lock =
-      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-          catalog, *table, false);
-  const auto td = td_with_lock();
-  CHECK(td);
+  // accumulated vector of table names: oldName->newName
+  std::vector<std::pair<std::string, std::string>> names;
 
-  check_alter_table_privilege(session, td);
-  if (catalog.getMetadataForTable(*new_table_name) != nullptr) {
-    throw std::runtime_error("Table or View " + *new_table_name + " already exists.");
+  SubstituteMap tableSubtituteMap;
+
+  for (auto& item : tablesToRename) {
+    std::string curTableName = *(item.first);
+    std::string newTableName = *(item.second);
+
+    // Note: if rename (a->b, b->a)
+    //    requires a tmp name change (a->tmp, b->a, tmp->a),
+    //    inject that here because
+    //         catalog.renameTable() assumes cleanliness else will fail
+
+    std::string altCurTableName = loadTable(catalog, tableSubtituteMap, curTableName);
+    std::string altNewTableName = loadTable(catalog, tableSubtituteMap, newTableName);
+
+    if (altCurTableName != curTableName && altCurTableName != EMPTY_NAME) {
+      // rename is a one-shot deal, reset the mapping once used
+      recordRename(tableSubtituteMap, curTableName, curTableName);
+    }
+
+    // Check to see if the command (as-entered) will likely execute cleanly (logic-wise)
+    //     src tables exist before coping from
+    //     destination table collisions
+    //         handled (a->b, b->a)
+    //         or flagged (pre-existing a,b ... "RENAME TABLE a->c, b->c" )
+    //     handle mulitple chained renames, tmp names (a_>tmp, b->a, tmp->a)
+    //     etc.
+    //
+    if (hasData(tableSubtituteMap, altCurTableName)) {
+      const TableDescriptor* td = catalog.getMetadataForTable(altCurTableName);
+      if (td) {
+        // any table that pre-exists must pass these tests
+        validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
+        check_alter_table_privilege(session, td);
+      }
+
+      if (hasData(tableSubtituteMap, altNewTableName)) {
+        std::string tmpNewTableName = generateUniqueTableName(altNewTableName);
+        // rename: newTableName to tmpNewTableName to get it out of the way
+        //    because it was full
+        recordRename(tableSubtituteMap, altCurTableName, EMPTY_NAME);
+        recordRename(tableSubtituteMap, altNewTableName, tmpNewTableName);
+        recordRename(tableSubtituteMap, tmpNewTableName, tmpNewTableName);
+        names.push_back(
+            std::pair<std::string, std::string>(altNewTableName, tmpNewTableName));
+        names.push_back(
+            std::pair<std::string, std::string>(altCurTableName, altNewTableName));
+      } else {
+        // rename: curNewTableName to newTableName
+        recordRename(tableSubtituteMap, altCurTableName, EMPTY_NAME);
+        recordRename(tableSubtituteMap, altNewTableName, altNewTableName);
+        names.push_back(
+            std::pair<std::string, std::string>(altCurTableName, altNewTableName));
+      }
+    } else {
+      throw std::runtime_error("Source table \'" + curTableName + "\' does not exist.");
+    }
   }
-  catalog.renameTable(td, *new_table_name);
-}
+  checkNameSubstition(tableSubtituteMap);
+
+  catalog.renameTable(names);
+
+  // just to be explicit, clean out the list, the unique_ptr will delete
+  while (!tablesToRename.empty()) {
+    tablesToRename.pop_front();
+  }
+}  // namespace Parser
 
 void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef) {
   bool not_null;
@@ -3441,6 +4097,7 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
     if (td->isView) {
       throw std::runtime_error("Adding columns to a view is not supported.");
     }
+    validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
     if (table_is_temporary(td)) {
       throw std::runtime_error(
           "Adding columns to temporary tables is not yet supported.");
@@ -3484,9 +4141,9 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         "option.");
   }
 
-  // Do not take a data write lock, as the fragmenter may call `deleteFragments` during
-  // a cap operation. Note that the schema write lock will prevent concurrent inserts
-  // along with all other queries.
+  // Do not take a data write lock, as the fragmenter may call `deleteFragments`
+  // during a cap operation. Note that the schema write lock will prevent concurrent
+  // inserts along with all other queries.
 
   catalog.getSqliteConnector().query("BEGIN TRANSACTION");
   try {
@@ -3512,8 +4169,12 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
 
     std::unique_ptr<import_export::Loader> loader(new import_export::Loader(catalog, td));
-    auto import_buffers = import_export::setup_column_loaders(td, loader.get());
-    loader->setReplicating(true);
+    std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
+    for (const auto& cd : cds) {
+      import_buffers.emplace_back(std::make_unique<import_export::TypedImportBuffer>(
+          &cd.second, loader->getStringDict(&cd.second)));
+    }
+    loader->setAddingColumns(true);
 
     // set_geo_physical_import_buffer below needs a sorted import_buffers
     std::sort(import_buffers.begin(),
@@ -3562,7 +4223,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
             if (coldef != nullptr ||
                 skip_physical_cols-- <= 0) {  // skip non-null phy col
               import_buffer->add_value(
-                  cd, defaultval, isnull, import_export::CopyParams(), nrows);
+                  cd, defaultval, isnull, import_export::CopyParams());
               if (cd->columnType.is_geometry()) {
                 std::vector<double> coords, bounds;
                 std::vector<int> ring_sizes, poly_rings;
@@ -3586,8 +4247,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                                                                         bounds,
                                                                         ring_sizes,
                                                                         poly_rings,
-                                                                        render_group,
-                                                                        nrows);
+                                                                        render_group);
                 // skip following phy cols
                 skip_physical_cols = cd->columnType.get_physical_cols();
               }
@@ -3598,7 +4258,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       }
     }
 
-    if (!loader->loadNoCheckpoint(import_buffers, nrows)) {
+    if (!loader->loadNoCheckpoint(import_buffers, nrows, &session)) {
       throw std::runtime_error("loadNoCheckpoint failed!");
     }
     catalog.roll(true);
@@ -3626,6 +4286,7 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!td) {
     throw std::runtime_error("Table " + *table + " does not exist.");
   }
+  validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
   if (td->isView) {
     throw std::runtime_error("Dropping a column from a view is not supported.");
   }
@@ -3696,6 +4357,7 @@ void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           catalog, *table, false);
   const auto td = td_with_lock();
   CHECK(td);
+  validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
 
   check_alter_table_privilege(session, td);
   const ColumnDescriptor* cd = catalog.getMetadataForColumn(td->tableId, *column);
@@ -3706,6 +4368,66 @@ void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Column " + *new_column_name + " already exists.");
   }
   catalog.renameColumn(td, cd, *new_column_name);
+}
+
+void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  enum TableParamType { MaxRollbackEpochs, Epoch, MaxRows };
+  static const std::unordered_map<std::string, TableParamType> param_map = {
+      {"max_rollback_epochs", TableParamType::MaxRollbackEpochs},
+      {"epoch", TableParamType::Epoch},
+      {"max_rows", TableParamType::MaxRows}};
+  // Below is to ensure that executor is not currently executing on table when we might be
+  // changing it's storage. Question: will/should catalog write lock take care of this?
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+  auto& catalog = session.getCatalog();
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+          catalog, *table, false);
+  const auto td = td_with_lock();
+  if (!td) {
+    throw std::runtime_error("Table " + *table + " does not exist.");
+  }
+  if (td->isView) {
+    throw std::runtime_error("Setting parameters for a view is not supported.");
+  }
+  if (table_is_temporary(td)) {
+    throw std::runtime_error(
+        "Setting parameters for a temporary table is not yet supported.");
+  }
+  check_alter_table_privilege(session, td);
+
+  std::string param_name(*param->get_name());
+  boost::algorithm::to_lower(param_name);
+  const IntLiteral* val_int_literal = dynamic_cast<const IntLiteral*>(param->get_value());
+  if (val_int_literal == nullptr) {
+    throw std::runtime_error("Table parameters should be integers.");
+  }
+  const int64_t param_val = val_int_literal->get_intval();
+
+  const auto param_it = param_map.find(param_name);
+  if (param_it == param_map.end()) {
+    throw std::runtime_error(param_name + " is not a settable table parameter.");
+  }
+  switch (param_it->second) {
+    case MaxRollbackEpochs: {
+      catalog.setMaxRollbackEpochs(td->tableId, param_val);
+      break;
+    }
+    case Epoch: {
+      catalog.setTableEpoch(catalog.getDatabaseId(), td->tableId, param_val);
+      break;
+    }
+    case MaxRows: {
+      catalog.setMaxRows(td->tableId, param_val);
+      break;
+    }
+    default: {
+      UNREACHABLE() << "Unexpected TableParamType value: " << param_it->second
+                    << ", key: " << param_it->first;
+    }
+  }
 }
 
 void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -3731,10 +4453,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         *file_pattern, ddl_utils::DataTransferType::IMPORT, true);
   }
 
-  size_t rows_completed = 0;
-  size_t rows_rejected = 0;
   size_t total_time = 0;
-  bool load_truncated = false;
 
   // Prevent simultaneous import / truncate (see TruncateTableStmt::execute)
   const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
@@ -3769,7 +4488,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
     privObjects.push_back(dbObject);
     if (!SysCatalog::instance().checkPrivileges(session.get_currentUser(), privObjects)) {
       throw std::runtime_error("Violation of access privileges: user " +
-                               session.get_currentUser().userName +
+                               session.get_currentUser().userLoggable() +
                                " has no insert privileges for table " + *table + ".");
     }
   }
@@ -3852,6 +4571,13 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
           throw std::runtime_error("Option s3_secret_key must be a string.");
         }
         copy_params.s3_secret_key = *str_literal->get_stringval();
+      } else if (boost::iequals(*p->get_name(), "s3_session_token")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option s3_session_token must be a string.");
+        }
+        copy_params.s3_session_token = *str_literal->get_stringval();
       } else if (boost::iequals(*p->get_name(), "s3_region")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -4035,6 +4761,18 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
           throw std::runtime_error("geo_explode_collections option must be a boolean.");
         }
         copy_params.geo_explode_collections = bool_from_string_literal(str_literal);
+      } else if (boost::iequals(*p->get_name(), "source_srid")) {
+        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+        if (int_literal == nullptr) {
+          throw std::runtime_error("'source_srid' option must be an integer");
+        }
+        const int srid = int_literal->get_intval();
+        if (copy_params.file_type == import_export::FileType::DELIMITED) {
+          copy_params.source_srid = srid;
+        } else {
+          throw std::runtime_error(
+              "'source_srid' option can only be used on csv/tsv files");
+        }
       } else {
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }
@@ -4065,31 +4803,49 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
 
       // regular import
       auto importer = importer_factory(catalog, td, file_path, copy_params);
-      auto ms = measure<>::execution([&]() {
-        auto res = importer->import();
-        rows_completed += res.rows_completed;
-        rows_rejected += res.rows_rejected;
-        load_truncated = res.load_truncated;
-      });
-      total_time += ms;
+      auto start_time = ::toString(std::chrono::system_clock::now());
+      auto prev_table_epoch = importer->getLoader()->getTableEpochs();
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+      auto query_session = session.get_session_id();
+      auto query_str = "COPYING " + td->tableName;
+      if (g_enable_non_kernel_time_query_interrupt) {
+        executor->enrollQuerySession(query_session,
+                                     query_str,
+                                     start_time,
+                                     Executor::UNITARY_EXECUTOR_ID,
+                                     QuerySessionStatus::QueryStatus::RUNNING);
+      }
 
+      ScopeGuard clearInterruptStatus =
+          [executor, &query_str, &query_session, &start_time, &importer] {
+            // reset the runtime query interrupt status
+            if (g_enable_non_kernel_time_query_interrupt) {
+              executor->clearQuerySessionStatus(query_session, start_time, false);
+            }
+          };
+      import_export::ImportStatus import_result;
+      auto ms =
+          measure<>::execution([&]() { import_result = importer->import(&session); });
+      total_time += ms;
       // results
-      if (load_truncated || rows_rejected > copy_params.max_reject) {
+      if (!import_result.load_failed &&
+          import_result.rows_rejected > copy_params.max_reject) {
         LOG(ERROR) << "COPY exited early due to reject records count during multi file "
                       "processing ";
         // if we have crossed the truncated load threshold
-        load_truncated = true;
+        import_result.load_failed = true;
+        import_result.load_msg =
+            "COPY exited early due to reject records count during multi file "
+            "processing ";
         success = false;
       }
-      if (!load_truncated) {
-        tr = std::string("Loaded: " + std::to_string(rows_completed) +
-                         " recs, Rejected: " + std::to_string(rows_rejected) +
-                         " recs in " + std::to_string((double)total_time / 1000.0) +
-                         " secs");
+      if (!import_result.load_failed) {
+        tr = std::string(
+            "Loaded: " + std::to_string(import_result.rows_completed) +
+            " recs, Rejected: " + std::to_string(import_result.rows_rejected) +
+            " recs in " + std::to_string((double)total_time / 1000.0) + " secs");
       } else {
-        tr = std::string("Loader truncated due to reject count.  Processed : " +
-                         std::to_string(rows_completed) + " recs, Rejected: " +
-                         std::to_string(rows_rejected) + " recs in " +
+        tr = std::string("Loader Failed due to : " + import_result.load_msg + " in " +
                          std::to_string((double)total_time / 1000.0) + " secs");
       }
     } else {
@@ -4099,7 +4855,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
 
   return_message.reset(new std::string(tr));
   LOG(INFO) << tr;
-}
+}  // namespace Parser
 
 // CREATE ROLE payroll_dept_role;
 void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -4251,6 +5007,10 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(
            {AccessPrivileges::ALTER_SERVER, ServerDBObjectType}},
           {{"ALTER"s, ServerDBObjectType},
            {AccessPrivileges::ALTER_SERVER, ServerDBObjectType}},
+          {{"USAGE"s, ServerDBObjectType},
+           {AccessPrivileges::SERVER_USAGE, ServerDBObjectType}},
+          {{"SERVER USAGE"s, DatabaseDBObjectType},
+           {AccessPrivileges::SERVER_USAGE, ServerDBObjectType}},
 
           {{"VIEW SQL EDITOR"s, DatabaseDBObjectType},
            {AccessPrivileges::VIEW_SQL_EDITOR, DatabaseDBObjectType}},
@@ -4469,7 +5229,8 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (std::find(get_grantees().begin(), get_grantees().end(), OMNISCI_ROOT_USER) !=
       get_grantees().end()) {
     throw std::runtime_error(
-        "Request to revoke role failed because privileges can not be revoked from mapd "
+        "Request to revoke role failed because privileges can not be revoked from "
+        "mapd "
         "root user.");
   }
   SysCatalog::instance().revokeRoleBatch(get_roles(), get_grantees());
@@ -4513,8 +5274,6 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto stdlog = STDLOG(query_state);
   auto query_state_proxy = query_state->createQueryStateProxy();
 
-  auto& catalog = session.getCatalog();
-
   LocalConnector local_connector;
 
   if (!leafs_connector_) {
@@ -4537,8 +5296,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Invalid file path for COPY TO");
   } else if (!boost::filesystem::path(*file_path).is_absolute()) {
     std::string file_name = boost::filesystem::path(*file_path).filename().string();
-    std::string file_dir =
-        catalog.getBasePath() + "/mapd_export/" + session.get_session_id() + "/";
+    std::string file_dir = g_base_path + "/mapd_export/" + session.get_session_id() + "/";
     if (!boost::filesystem::exists(file_dir)) {
       if (!boost::filesystem::create_directories(file_dir)) {
         throw std::runtime_error("Directory " + file_dir + " cannot be created.");
@@ -4546,15 +5304,15 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
     *file_path = file_dir + file_name;
   } else {
-    // Above branch will create a new file in the mapd_export directory. If that path is
-    // not exercised, go through applicable file path validations.
+    // Above branch will create a new file in the mapd_export directory. If that path
+    // is not exercised, go through applicable file path validations.
     ddl_utils::validate_allowed_file_path(*file_path,
                                           ddl_utils::DataTransferType::EXPORT);
   }
 
   // get column info
   auto column_info_result =
-      local_connector.query(query_state_proxy, *select_stmt, {}, true);
+      local_connector.query(query_state_proxy, *select_stmt, {}, true, false);
 
   // create exporter for requested file type
   auto query_exporter = import_export::QueryExporter::create(file_type);
@@ -4587,7 +5345,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
     // run the query
     std::vector<AggregatedResult> query_results = leafs_connector_->query(
-        query_state_proxy, *select_stmt, allowed_outer_fragment_indices);
+        query_state_proxy, *select_stmt, allowed_outer_fragment_indices, false);
 
     // export the results
     query_exporter->exportResults(query_results);
@@ -4814,10 +5572,20 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   td.maxRows = DEFAULT_MAX_ROWS;
   catalog.createTable(td, {}, {}, true);
 
-  // TODO (max): It's transactionally unsafe, should be fixed: we may create object w/o
-  // privileges
+  // TODO (max): It's transactionally unsafe, should be fixed: we may create object
+  // w/o privileges
   SysCatalog::instance().createDBObject(
       session.get_currentUser(), view_name_, ViewDBObjectType, catalog);
+}
+
+DropViewStmt::DropViewStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("viewName"));
+  view_name = std::make_unique<std::string>(json_str(payload["viewName"]));
+
+  if_exists = false;
+  if (payload.HasMember("ifExists")) {
+    if_exists = json_bool(payload["ifExists"]);
+  }
 }
 
 void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -4897,10 +5665,6 @@ void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  if (!session.get_currentUser().isSuper) {
-    throw std::runtime_error("DROP DATABASE command can only be executed by super user.");
-  }
-
   const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
@@ -4915,7 +5679,8 @@ void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   if (!session.get_currentUser().isSuper &&
       session.get_currentUser().userId != db.dbOwner) {
-    throw std::runtime_error("Only the super user or the owner can drop database.");
+    throw std::runtime_error(
+        "DROP DATABASE command can only be executed by the owner or by a super user.");
   }
 
   SysCatalog::instance().dropDatabase(db);
@@ -5085,9 +5850,20 @@ void execute_calcite_ddl(
   if (ddl_command == "CREATE_TABLE") {
     auto create_table_stmt = Parser::CreateTableStmt(payload);
     create_table_stmt.execute(*session_ptr);
+  } else if (ddl_command == "DROP_TABLE") {
+    auto drop_table_stmt = Parser::DropTableStmt(payload);
+    drop_table_stmt.execute(*session_ptr);
   } else if (ddl_command == "CREATE_VIEW") {
     auto create_view_stmt = Parser::CreateViewStmt(payload);
     create_view_stmt.execute(*session_ptr);
+  } else if (ddl_command == "DROP_VIEW") {
+    auto drop_view_stmt = Parser::DropViewStmt(payload);
+    drop_view_stmt.execute(*session_ptr);
+  } else if (ddl_command == "RENAME_TABLE") {
+    auto rename_table_stmt = Parser::RenameTableStmt(payload);
+    rename_table_stmt.execute(*session_ptr);
+  } else if (ddl_command == "ALTER_TABLE") {
+    Parser::AlterTableStmt::delegateExecute(payload, *session_ptr);
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }

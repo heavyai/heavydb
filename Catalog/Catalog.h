@@ -41,6 +41,7 @@
 
 #include "Calcite/Calcite.h"
 #include "Catalog/ColumnDescriptor.h"
+#include "Catalog/CustomExpression.h"
 #include "Catalog/DashboardDescriptor.h"
 #include "Catalog/DictDescriptor.h"
 #include "Catalog/ForeignServer.h"
@@ -49,6 +50,7 @@
 #include "Catalog/SessionInfo.h"
 #include "Catalog/SysCatalog.h"
 #include "Catalog/TableDescriptor.h"
+#include "Catalog/TableMetadata.h"
 #include "Catalog/Types.h"
 #include "DataMgr/DataMgr.h"
 #include "QueryEngine/CompilationOptions.h"
@@ -74,6 +76,9 @@ class TableArchiver;
 #define SPIMAP_GEO_PHYSICAL_INPUT(c, i) \
   (SPIMAP_MAGIC1 + (unsigned)(SPIMAP_MAGIC2 * ((c) + 1) + (i)))
 
+namespace File_Namespace {
+struct FileMgrParams;
+}
 namespace Catalog_Namespace {
 struct TableEpochInfo {
   int32_t table_id, table_epoch, leaf_index{-1};
@@ -110,6 +115,11 @@ class Catalog final {
           const std::vector<LeafHostInfo>& string_dict_hosts,
           std::shared_ptr<Calcite> calcite,
           bool is_new_db);
+  /**
+   * @brief Constructor builds a hollow catalog
+   * used during constructor of other catalogs
+   */
+  Catalog();
 
   /**
    * @brief Destructor - deletes all
@@ -135,13 +145,13 @@ class Catalog final {
   void dropTable(const TableDescriptor* td);
   void truncateTable(const TableDescriptor* td);
   void renameTable(const TableDescriptor* td, const std::string& newTableName);
+  void renameTable(std::vector<std::pair<std::string, std::string>>& names);
   void renameColumn(const TableDescriptor* td,
                     const ColumnDescriptor* cd,
                     const std::string& newColumnName);
   void addColumn(const TableDescriptor& td, ColumnDescriptor& cd);
   void dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd);
-  void removeChunks(const int table_id);
-  void removeFragmenterForTable(const int table_id);
+  void removeFragmenterForTable(const int table_id) const;
 
   const std::map<int, const ColumnDescriptor*> getDictionaryToColumnMapping();
 
@@ -180,6 +190,10 @@ class Catalog final {
   const LinkDescriptor* getMetadataForLink(int linkId) const;
 
   const foreign_storage::ForeignTable* getForeignTableUnlocked(int tableId) const;
+  const foreign_storage::ForeignTable* getForeignTable(
+      const std::string& tableName) const;
+
+  const foreign_storage::ForeignTable* getForeignTable(int table_id) const;
 
   /**
    * @brief Returns a list of pointers to constant ColumnDescriptor structs for all the
@@ -208,7 +222,7 @@ class Catalog final {
   const DBMetadata& getCurrentDB() const { return currentDB_; }
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
   std::shared_ptr<Calcite> getCalciteMgr() const { return calciteMgr_; }
-  const std::string& getBasePath() const { return basePath_; }
+  const std::string& getCatalogBasePath() const { return basePath_; }
 
   const DictDescriptor* getMetadataForDict(int dict_ref, bool loadDict = true) const;
   const DictDescriptor* getMetadataForDictUnlocked(int dict_ref, bool loadDict) const;
@@ -218,7 +232,8 @@ class Catalog final {
   const ColumnDescriptor* getShardColumnMetadataForTable(const TableDescriptor* td) const;
 
   std::vector<const TableDescriptor*> getPhysicalTablesDescriptors(
-      const TableDescriptor* logicalTableDesc) const;
+      const TableDescriptor* logical_table_desc,
+      bool populate_fragmenter = true) const;
 
   /**
    * Get names of all tables accessible to user.
@@ -232,16 +247,32 @@ class Catalog final {
       const UserMetadata& user,
       const GetTablesType get_tables_type) const;
 
+  /**
+   * Get table descriptors of all tables accessible to user.
+   *
+   * @param user - user to retrieve table descriptors for
+   * @param get_tables_type - enum indicating if tables, views or tables & views
+   * should be returned
+   * @return table_descriptors - vector of table descriptors accessible by user
+   */
+
+  std::vector<TableMetadata> getTablesMetadataForUser(
+      const UserMetadata& user_metadata,
+      const GetTablesType get_tables_type,
+      const std::string& filter_table_name) const;
+
   int32_t getTableEpoch(const int32_t db_id, const int32_t table_id) const;
   void setTableEpoch(const int db_id, const int table_id, const int new_epoch);
+  void setMaxRollbackEpochs(const int32_t table_id, const int32_t max_rollback_epochs);
+  void setMaxRows(const int32_t table_id, const int64_t max_rows);
 
   std::vector<TableEpochInfo> getTableEpochs(const int32_t db_id,
                                              const int32_t table_id) const;
   void setTableEpochs(const int32_t db_id,
-                      const std::vector<TableEpochInfo>& table_epochs);
+                      const std::vector<TableEpochInfo>& table_epochs) const;
 
   void setTableEpochsLogExceptions(const int32_t db_id,
-                                   const std::vector<TableEpochInfo>& table_epochs);
+                                   const std::vector<TableEpochInfo>& table_epochs) const;
 
   int getDatabaseId() const { return currentDB_.dbId; }
   SqliteConnector& getSqliteConnector() { return sqliteConnector_; }
@@ -251,18 +282,6 @@ class Catalog final {
   void getDictionary(const ColumnDescriptor& cd,
                      std::map<int, StringDictionary*>& stringDicts);
 
-  static void set(const std::string& dbName, std::shared_ptr<Catalog> cat);
-  static std::shared_ptr<Catalog> get(const std::string& dbName);
-  static std::shared_ptr<Catalog> get(const int32_t db_id);
-  static std::shared_ptr<Catalog> checkedGet(const int32_t db_id);
-  static std::shared_ptr<Catalog> get(const std::string& basePath,
-                                      const DBMetadata& curDB,
-                                      std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-                                      const std::vector<LeafHostInfo>& string_dict_hosts,
-                                      std::shared_ptr<Calcite> calcite,
-                                      bool is_new_db);
-  static void remove(const std::string& dbName);
-
   const bool checkMetadataForDeletedRecs(const TableDescriptor* td, int column_id) const;
   const ColumnDescriptor* getDeletedColumn(const TableDescriptor* td) const;
   const ColumnDescriptor* getDeletedColumnIfRowsDeleted(const TableDescriptor* td) const;
@@ -271,12 +290,10 @@ class Catalog final {
   void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
   int getLogicalTableId(const int physicalTableId) const;
   void checkpoint(const int logicalTableId) const;
-  void checkpointWithAutoRollback(const int logical_table_id);
+  void checkpointWithAutoRollback(const int logical_table_id) const;
   std::string name() const { return getCurrentDB().dbName; }
   void eraseDBData();
   void eraseTablePhysicalData(const TableDescriptor* td);
-  void vacuumDeletedRows(const TableDescriptor* td) const;
-  void vacuumDeletedRows(const int logicalTableId) const;
   void setForReload(const int32_t tableId);
 
   std::vector<std::string> getTableDataDirectories(const TableDescriptor* td) const;
@@ -451,6 +468,81 @@ class Catalog final {
                               foreign_storage::OptionsMap& options_map,
                               bool clear_existing_options = true);
 
+  void updateLeaf(const LeafHostInfo& string_dict_host);
+
+  // For testing purposes only
+  void setUncappedTableEpoch(const std::string& table_name);
+
+  // Methods for accessing and updating custom expressions
+
+  /**
+   * Gets the DDL statement used to create the custom expressions table.
+   *
+   * @param if_not_exists - flag the indicates whether or not to include the "IF NOT
+   * EXISTS" phrase in the DDL statement.
+   * @return string containing DDL statement
+   */
+  static const std::string getCustomExpressionsSchema(bool if_not_exists = false);
+
+  /**
+   * Creates a new custom expression.
+   *
+   * @param custom_expression - unique pointer to struct containing custom expression
+   * details.
+   * @return id of created custom expression
+   */
+  int32_t createCustomExpression(std::unique_ptr<CustomExpression> custom_expression);
+
+  /**
+   * Gets a pointer to the custom expression object with the given id.
+   *
+   * @param custom_expression_id - id of custom expression to get
+   * @return pointer to custom expression object. nullptr is returned if no custom
+   * expression is found for the given id.
+   */
+  const CustomExpression* getCustomExpression(int32_t custom_expression_id) const;
+
+  /**
+   * Gets a pointer to a struct containing custom expression details fetched from storage.
+   * This is intended for use in tests, when asserting that expected custom expression
+   * data is persisted.
+   *
+   * @param custom_expression_id - id of custom expression to get
+   * @return pointer to custom expression object. nullptr is returned if no custom
+   * expression is found for the given id.
+   */
+  const std::unique_ptr<const CustomExpression> getCustomExpressionFromStorage(
+      int32_t custom_expression_id);
+
+  /**
+   * Gets pointers to all the custom expression objects that the given user has access to.
+   * For custom expressions that are associated with a table data source, custom
+   * expressions for tables that the given user has SELECT access to are returned.
+   *
+   * @param user - user for which to get accessible custom expressions
+   * @return pointer to custom expression objects that the given user has access to
+   */
+  std::vector<const CustomExpression*> getCustomExpressionsForUser(
+      const UserMetadata& user) const;
+
+  /**
+   * Updates the custom expression for the given id with the given expression json string.
+   *
+   * @param custom_expression_id - id of custom expression to update
+   * @param expression_json - expression json string to be set
+   */
+  void updateCustomExpression(int32_t custom_expression_id,
+                              const std::string& expression_json);
+
+  /**
+   * Deletes custom expressions with the given ids.
+   *
+   * @param custom_expression_ids - ids of custom expressions to delete
+   * @param do_soft_delete - flag indicating whether or not to do a soft delete
+   */
+  void deleteCustomExpressions(const std::vector<int32_t>& custom_expression_ids,
+                               bool do_soft_delete);
+
  protected:
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();
@@ -467,8 +559,8 @@ class Catalog final {
   void updatePageSize();
   void updateDeletedColumnIndicator();
   void updateFrontendViewsToDashboards();
-  void createFsiSchemasAndDefaultServers();
-  void dropFsiSchemasAndTables();
+  void updateCustomExpressionsSchema();
+  void updateFsiSchemas();
   void recordOwnershipOfObjectsInObjectPermissions();
   void checkDateInDaysColumnMigration();
   void createDashboardSystemRoles();
@@ -499,6 +591,8 @@ class Catalog final {
   void executeDropTableSqliteQueries(const TableDescriptor* td);
   void doTruncateTable(const TableDescriptor* td);
   void renamePhysicalTable(const TableDescriptor* td, const std::string& newTableName);
+  void renamePhysicalTable(std::vector<std::pair<std::string, std::string>>& names,
+                           std::vector<int>& tableIds);
   void instantiateFragmenter(TableDescriptor* td) const;
   void getAllColumnMetadataForTableImpl(const TableDescriptor* td,
                                         std::list<const ColumnDescriptor*>& colDescs,
@@ -531,9 +625,10 @@ class Catalog final {
   LinkDescriptorMapById linkDescriptorMapById_;
   ForeignServerMap foreignServerMap_;
   ForeignServerMapById foreignServerMapById_;
+  CustomExpressionMapById custom_expr_map_by_id_;
 
   SqliteConnector sqliteConnector_;
-  DBMetadata currentDB_;
+  const DBMetadata currentDB_;
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
 
   const std::vector<LeafHostInfo> string_dict_hosts_;
@@ -554,7 +649,10 @@ class Catalog final {
   ColumnDescriptorsForRoll columnDescriptorsForRoll;
 
  private:
-  static std::map<std::string, std::shared_ptr<Catalog>> mapd_cat_map_;
+  void gatherAdditionalInfo(std::vector<std::string>& additional_info,
+                            std::set<std::string>& shared_dict_column_names,
+                            const TableDescriptor* td) const;
+  std::string quoteIfRequired(const std::string& column_name) const;
   DeletedColumnPerTableMap deletedColumnPerTable_;
   void adjustAlteredTableFiles(
       const std::string& temp_data_dir,
@@ -573,6 +671,18 @@ class Catalog final {
                                const std::string& property,
                                const std::string& value);
 
+  void alterPhysicalTableMetadata(const TableDescriptor* td,
+                                  const TableDescriptorUpdateParams& table_update_params);
+  void alterTableMetadata(const TableDescriptor* td,
+                          const TableDescriptorUpdateParams& table_update_params);
+  void setTableFileMgrParams(const int table_id,
+                             const File_Namespace::FileMgrParams& file_mgr_params);
+  bool filterTableByTypeAndUser(const TableDescriptor* td,
+                                const UserMetadata& user_metadata,
+                                const GetTablesType get_tables_type) const;
+
+  TableDescriptor* getMutableMetadataForTableUnlocked(int tableId);
+
   /**
    * Same as createForeignServer() but without acquiring locks. This should only be called
    * from within a function/code block that already acquires appropriate locks.
@@ -584,6 +694,12 @@ class Catalog final {
   foreign_storage::ForeignTable* getForeignTableUnlocked(
       const std::string& tableName) const;
 
+  const Catalog* getObjForLock();
+  void removeChunksUnlocked(const int table_id) const;
+
+  void buildCustomExpressionsMap();
+  std::unique_ptr<CustomExpression> getCustomExpressionFromConnector(size_t row);
+
  public:
   mutable std::mutex sqliteMutex_;
   mutable mapd_shared_mutex sharedMutex_;
@@ -591,6 +707,7 @@ class Catalog final {
   mutable std::atomic<std::thread::id> thread_holding_write_lock;
   // assuming that you never call into a catalog from another catalog via the same thread
   static thread_local bool thread_holds_read_lock;
+  bool initialized_ = false;
 };
 
 }  // namespace Catalog_Namespace

@@ -51,6 +51,10 @@ class TExtArgumentType(object):
     ColumnFloat = 31
     ColumnDouble = 32
     ColumnBool = 33
+    TextEncodingNone = 34
+    TextEncodingDict8 = 35
+    TextEncodingDict16 = 36
+    TextEncodingDict32 = 37
 
     _VALUES_TO_NAMES = {
         0: "Int8",
@@ -87,6 +91,10 @@ class TExtArgumentType(object):
         31: "ColumnFloat",
         32: "ColumnDouble",
         33: "ColumnBool",
+        34: "TextEncodingNone",
+        35: "TextEncodingDict8",
+        36: "TextEncodingDict16",
+        37: "TextEncodingDict32",
     }
 
     _NAMES_TO_VALUES = {
@@ -124,24 +132,28 @@ class TExtArgumentType(object):
         "ColumnFloat": 31,
         "ColumnDouble": 32,
         "ColumnBool": 33,
+        "TextEncodingNone": 34,
+        "TextEncodingDict8": 35,
+        "TextEncodingDict16": 36,
+        "TextEncodingDict32": 37,
     }
 
 
 class TOutputBufferSizeType(object):
-    kUserSpecifiedConstantParameter = 0
-    kUserSpecifiedRowMultiplier = 1
-    kConstant = 2
+    kConstant = 0
+    kUserSpecifiedConstantParameter = 1
+    kUserSpecifiedRowMultiplier = 2
 
     _VALUES_TO_NAMES = {
-        0: "kUserSpecifiedConstantParameter",
-        1: "kUserSpecifiedRowMultiplier",
-        2: "kConstant",
+        0: "kConstant",
+        1: "kUserSpecifiedConstantParameter",
+        2: "kUserSpecifiedRowMultiplier",
     }
 
     _NAMES_TO_VALUES = {
-        "kUserSpecifiedConstantParameter": 0,
-        "kUserSpecifiedRowMultiplier": 1,
-        "kConstant": 2,
+        "kConstant": 0,
+        "kUserSpecifiedConstantParameter": 1,
+        "kUserSpecifiedRowMultiplier": 2,
     }
 
 

@@ -20,6 +20,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <boost/filesystem.hpp>
 
 #include "Catalog/ForeignTable.h"
 #include "Catalog/TableDescriptor.h"
@@ -28,12 +29,14 @@
 #include "TestHelpers.h"
 #include "Utils/DdlUtils.h"
 
-#ifndef BASE_PATH
-#define BASE_PATH "./tmp"
-#endif
-
 extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
 extern bool g_enable_calcite_ddl_parser;
+
+using namespace std;
+using namespace TestHelpers;
+
+namespace bf = boost::filesystem;
 
 namespace {
 struct ColumnAttributes {
@@ -117,13 +120,16 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
   }
 
   std::string getTestFilePath() {
-    return boost::filesystem::canonical("../../Tests/FsiDataFiles/example_1.csv")
-        .string();
+    return bf::canonical("../../Tests/FsiDataFiles/example_1.csv").string();
   }
 
-  void createTestUser() {
+  int createTestUser() {
     sql("CREATE USER test_user (password = 'test_pass');");
     sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+    Catalog_Namespace::UserMetadata user_metadata;
+    Catalog_Namespace::SysCatalog::instance().getMetadataForUser("test_user",
+                                                                 user_metadata);
+    return user_metadata.userId;
   }
 
   void dropTestUser() {
@@ -134,6 +140,16 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
       // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
       LOG(WARNING) << e.what();
     }
+  }
+
+  std::string getTableDirPath() {
+    const auto& catalog = getCatalog();
+    auto base_path = catalog.getDataMgr().getGlobalFileMgr()->getBasePath();
+    auto td = catalog.getMetadataForTable("test_foreign_table", false);
+    CHECK(td);
+    auto table_dir_path = base_path + "table_" + std::to_string(catalog.getDatabaseId()) +
+                          "_" + std::to_string(td->tableId);
+    return table_dir_path;
   }
 };
 
@@ -167,13 +183,13 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
                           const ddl_utils::TableType table_type,
                           const std::string& table_name,
                           const int column_count,
-                          const int user_id = 0,
+                          const int user_id = OMNISCI_ROOT_USER_ID,
                           const int max_fragment_size = DEFAULT_FRAGMENT_ROWS) {
     EXPECT_EQ(table_name, td->tableName);
     EXPECT_EQ(Fragmenter_Namespace::FragmenterType::INSERT_ORDER, td->fragType);
     EXPECT_EQ(max_fragment_size, td->maxFragRows);
-    EXPECT_EQ(DEFAULT_MAX_CHUNK_SIZE, td->maxChunkSize);
-    EXPECT_EQ(DEFAULT_PAGE_SIZE, td->fragPageSize);
+    EXPECT_EQ(size_t(DEFAULT_MAX_CHUNK_SIZE), size_t(td->maxChunkSize));
+    EXPECT_EQ(size_t(DEFAULT_PAGE_SIZE), size_t(td->fragPageSize));
     EXPECT_EQ(DEFAULT_MAX_ROWS, td->maxRows);
     EXPECT_EQ(user_id, td->userId);
     EXPECT_EQ(Data_Namespace::MemoryLevel::DISK_LEVEL, td->persistenceLevel);
@@ -702,22 +718,16 @@ TEST_P(CreateTableTest, GeoTypes) {
 }
 
 TEST_P(CreateTableTest, ArrayTypes) {
-  std::string query =
-      getCreateTableQuery(GetParam(),
-                          "test_table",
-                          "(t TINYINT[], t2 TINYINT[1], i INTEGER[], i2 INTEGER[1], bint "
-                          "BIGINT[], bint2 BIGINT[1], "
-                          "txt TEXT[] ENCODING DICT(32), txt2 TEXT[1] ENCODING DICT(32), "
-                          "f FLOAT[], f2 FLOAT[1], "
-                          "d DOUBLE[], d2 DOUBLE[1], dc DECIMAL(18,6)[], dc2 "
-                          "DECIMAL(18,6)[1], b BOOLEAN[], b2 BOOLEAN[1],"
-                          "dt DATE[], dt2 DATE[1], tm TIME[], tm2 TIME[1], tp "
-                          "TIMESTAMP[], tp2 TIMESTAMP[1])");
+  std::string query = getCreateTableQuery(
+      GetParam(),
+      "test_table",
+      R"((t TINYINT[], t2 TINYINT[1], i INTEGER[], i2 INTEGER[1], bint BIGINT[], bint2 BIGINT[1],
+      txt TEXT[] ENCODING DICT(32), txt2 TEXT[1] ENCODING DICT(32), f FLOAT[], f2 FLOAT[1], d DOUBLE[], d2 DOUBLE[1], dc DECIMAL(18,6)[], dc2 DECIMAL(18,6)[1], b BOOLEAN[], b2 BOOLEAN[1], dt DATE[], dt2 DATE[1], tm TIME[], tm2 TIME[1], tp TIMESTAMP[], tp2 TIMESTAMP[1], tp3 TIMESTAMP(3)[], tp4 TIMESTAMP(9)[1]))");
   sql(query);
 
   auto& catalog = getCatalog();
   auto table = catalog.getMetadataForTable("test_table", false);
-  assertTableDetails(table, GetParam(), "test_table", 22);
+  assertTableDetails(table, GetParam(), "test_table", 24);
 
   auto columns = catalog.getAllColumnMetadataForTable(table->tableId, true, true, true);
   auto it = columns.begin();
@@ -912,6 +922,26 @@ TEST_P(CreateTableTest, ArrayTypes) {
   expected_attributes.type = kARRAY;
   expected_attributes.sub_type = kTIMESTAMP;
   assertColumnDetails(expected_attributes, column);
+
+  std::advance(it, 1);
+  column = *it;
+  expected_attributes = {};
+  expected_attributes.column_name = "tp3";
+  expected_attributes.size = -1;
+  expected_attributes.type = kARRAY;
+  expected_attributes.sub_type = kTIMESTAMP;
+  expected_attributes.precision = 3;
+  assertColumnDetails(expected_attributes, column);
+
+  std::advance(it, 1);
+  column = *it;
+  expected_attributes = {};
+  expected_attributes.column_name = "tp4";
+  expected_attributes.size = 8;
+  expected_attributes.type = kARRAY;
+  expected_attributes.sub_type = kTIMESTAMP;
+  expected_attributes.precision = 9;
+  assertColumnDetails(expected_attributes, column);
 }
 
 TEST_P(CreateTableTest, FixedEncodingForNonNumberOrTimeType) {
@@ -1042,7 +1072,7 @@ TEST_P(CreateTableTest, UnauthorizedUser) {
 }
 
 TEST_P(CreateTableTest, AuthorizedUser) {
-  createTestUser();
+  auto user_id = createTestUser();
   sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
   login("test_user", "test_pass");
 
@@ -1050,7 +1080,7 @@ TEST_P(CreateTableTest, AuthorizedUser) {
 
   auto& catalog = getCatalog();
   auto table = catalog.getMetadataForTable("test_table", false);
-  assertTableDetails(table, GetParam(), "test_table", 1, 1);
+  assertTableDetails(table, GetParam(), "test_table", 1, user_id);
 
   auto column = catalog.getMetadataForColumn(table->tableId, "col1");
   ColumnAttributes expected_attributes{};
@@ -1096,7 +1126,7 @@ TEST_P(NegativePrecisionOrDimensionTest, NegativePrecisionOrDimension) {
     FAIL() << "An exception should have been thrown for this test case.";
   } catch (const TOmniSciException& e) {
     if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
-      ASSERT_TRUE(e.error_msg.find("Exception: Parse failed") != std::string::npos);
+      ASSERT_TRUE(e.error_msg.find("Exception: SQL Error") != std::string::npos);
     } else {
       if (!g_enable_calcite_ddl_parser) {
         ASSERT_EQ("Exception: No negative number in type definition.", e.error_msg);
@@ -1149,14 +1179,20 @@ INSTANTIATE_TEST_SUITE_P(
     });
 
 class CreateForeignTableTest : public CreateAndDropTableDdlTest {
+ protected:
   void SetUp() override {
     CreateAndDropTableDdlTest::SetUp();
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    dropTestUser();
   }
 
   void TearDown() override {
     g_enable_fsi = true;
+    g_enable_s3_fsi = false;
+    loginAdmin();
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    sql("DROP SERVER IF EXISTS test_server;");
+    dropTestUser();
     CreateAndDropTableDdlTest::TearDown();
   }
 };
@@ -1167,7 +1203,8 @@ TEST_F(CreateForeignTableTest, NonExistentServer) {
       "non_existent_server;"};
   queryAndAssertException(
       query,
-      "Exception: Foreign server with name \"non_existent_server\" does not exist.");
+      "Exception: Foreign Table with name \"test_foreign_table\" can not be created. "
+      "Associated foreign server with name \"non_existent_server\" does not exist.");
 }
 
 TEST_F(CreateForeignTableTest, DefaultCsvFileServerName) {
@@ -1195,7 +1232,8 @@ TEST_F(CreateForeignTableTest, InvalidTableOption) {
 TEST_F(CreateForeignTableTest, WrongTableOptionCharacterSize) {
   std::string query{
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (delimiter = ',,');"};
+      "SERVER omnisci_local_csv WITH (delimiter = ',,', file_path = '" +
+      getTestFilePath() + "');"};
   queryAndAssertException(query,
                           "Exception: Value of \"DELIMITER\" foreign table option has "
                           "the wrong number of characters. "
@@ -1205,7 +1243,8 @@ TEST_F(CreateForeignTableTest, WrongTableOptionCharacterSize) {
 TEST_F(CreateForeignTableTest, InvalidTableOptionBooleanValue) {
   std::string query{
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (header = 'value');"};
+      "SERVER omnisci_local_csv WITH (header = 'value', file_path = '" +
+      getTestFilePath() + "');"};
   queryAndAssertException(
       query,
       "Exception: Invalid boolean value specified for \"HEADER\" foreign table option. "
@@ -1218,6 +1257,167 @@ TEST_F(CreateForeignTableTest, FsiDisabled) {
       ddl_utils::TableType::FOREIGN_TABLE, "test_foreign_table", "(col1 INTEGER)");
   // Exception differs depending on which parser is enabled
   EXPECT_ANY_THROW(sql(query));
+}
+
+TEST_F(CreateForeignTableTest, DefaultServerWrapperPathMissingCsv) {
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
+      "SERVER omnisci_local_csv;",
+      "Exception: No file_path found for Foreign Table \"test_foreign_table\". "
+      "Table must have either set a \"FILE_PATH\" "
+      "option, or its parent server must have set a \"BASE_PATH\" option.");
+}
+
+TEST_F(CreateForeignTableTest, DefaultServerWrapperPathMissingParquet) {
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
+      "SERVER omnisci_local_parquet;",
+      "Exception: No file_path found for Foreign Table \"test_foreign_table\". "
+      "Table must have either set a \"FILE_PATH\" "
+      "option, or its parent server must have set a \"BASE_PATH\" option.");
+}
+
+TEST_F(CreateForeignTableTest, ServerPathPresentWrapperPathMissing) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = "
+      "'LOCAL_FILE', base_path = '" +
+      bf::canonical("../../Tests/FsiDataFiles/example_1_dir").string() + "');");
+  sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server;");
+  sql("SELECT * FROM test_foreign_table;");
+}
+
+TEST_F(CreateForeignTableTest, ServerPathPresentWrapperPathEmpty) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = "
+      "'LOCAL_FILE', base_path = '" +
+      bf::canonical("../../Tests/FsiDataFiles/example_1_dir").string() + "');");
+  sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server WITH (file_path = '');");
+  sql("SELECT * FROM test_foreign_table;");
+}
+
+TEST_F(CreateForeignTableTest, ServerPathMissingWrapperPathMissing) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = "
+      "'LOCAL_FILE');");
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server;",
+      "Exception: No file_path found for Foreign Table \"test_foreign_table\". "
+      "Table must have either set a \"FILE_PATH\" "
+      "option, or its parent server must have set a \"BASE_PATH\" option.");
+}
+
+TEST_F(CreateForeignTableTest, UnsupportedOption) {
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
+      "SERVER omnisci_local_csv WITH (file_path = '" +
+          getTestFilePath() + "', shard_count = 4);",
+      "Exception: Invalid foreign table option \"SHARD_COUNT\".");
+}
+
+TEST_F(CreateForeignTableTest, ServerPathMissingWrapperPathRelative) {
+  sql("CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
+      "SERVER omnisci_local_csv WITH (file_path = '../../Tests/FsiDataFiles/0.csv');");
+  sql("SELECT * FROM test_foreign_table;");
+}
+
+TEST_F(CreateForeignTableTest, S3SelectWrongServer) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
+                      "SERVER omnisci_local_csv WITH (S3_ACCESS_TYPE = 'S3_SELECT', "
+                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  queryAndAssertException(
+      query,
+      "Exception: The \"S3_ACCESS_TYPE\" option is only valid for foreign tables using "
+      "servers with \"STORAGE_TYPE\" option value of \"AWS_S3\".");
+}
+
+TEST_F(CreateForeignTableTest, UnauthorizedServerUsage) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
+  createTestUser();
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server WITH (file_path = '../../Tests/FsiDataFiles/0.csv');",
+      "Exception: Current user does not have USAGE privilege on foreign server: "
+      "test_server");
+}
+
+TEST_F(CreateForeignTableTest, AuthorizedServerUsage) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
+  createTestUser();
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT USAGE ON SERVER test_server TO test_user;");
+  login("test_user", "test_pass");
+  sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server WITH (file_path = '" +
+      getTestFilePath() + "');");
+  sql("SELECT * FROM test_foreign_table;");
+}
+
+TEST_F(CreateForeignTableTest, AuthorizedDatabaseServerUser) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
+  createTestUser();
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT SERVER USAGE ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server WITH (file_path = '" +
+      getTestFilePath() + "');");
+  sql("SELECT * FROM test_foreign_table;");
+}
+
+TEST_F(CreateForeignTableTest, NonSuserServerOwnerUsage) {
+  createTestUser();
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  login("test_user", "test_pass");
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
+  sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server WITH (file_path = '" +
+      getTestFilePath() + "');");
+  sql("SELECT * FROM test_foreign_table;");
+}
+
+TEST_F(CreateForeignTableTest, RevokedServerUsage) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
+  createTestUser();
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT USAGE ON SERVER test_server TO test_user;");
+  sql("REVOKE USAGE ON SERVER test_server FROM test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server WITH (file_path = '../../Tests/FsiDataFiles/0.csv');",
+      "Exception: Current user does not have USAGE privilege on foreign server: "
+      "test_server");
+}
+
+TEST_F(CreateForeignTableTest, RevokedDatabaseServerUsage) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
+  createTestUser();
+  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT SERVER USAGE ON DATABASE omnisci TO test_user;");
+  sql("REVOKE SERVER USAGE ON DATABASE omnisci FROM test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
+      "SERVER test_server WITH (file_path = '../../Tests/FsiDataFiles/0.csv');",
+      "Exception: Current user does not have USAGE privilege on foreign server: "
+      "test_server");
+}
+
+TEST_F(CreateForeignTableTest, TableDirectoryIsNotCreated) {
+  sql(getCreateTableQuery(ddl_utils::TableType::FOREIGN_TABLE,
+                          "test_foreign_table",
+                          "(t TEXT, i INTEGER[])"));
+  sql("SELECT * FROM test_foreign_table;");
+  ASSERT_FALSE(boost::filesystem::exists(getTableDirPath()));
 }
 
 class DropTableTest : public CreateAndDropTableDdlTest,
@@ -1249,7 +1449,9 @@ TEST_P(DropTableTest, NonExistingTableWithIfExists) {
 
 TEST_P(DropTableTest, NonExistentTableWithoutIfExists) {
   std::string query = getDropTableQuery(GetParam(), "test_table_2");
-  queryAndAssertException(query, "Exception: Table/View test_table_2 does not exist.");
+  queryAndAssertException(query,
+                          "Exception: Table/View test_table_2 for catalog omnisci does "
+                          "not exist, could not generate chunk key");
 }
 
 TEST_P(DropTableTest, UnauthorizedUser) {
@@ -1289,13 +1491,45 @@ TEST_P(CreateTableTest, InvalidSyntax) {
     FAIL() << "An exception should have been thrown for this test case.";
   } catch (const TOmniSciException& e) {
     if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
-      ASSERT_TRUE(e.error_msg.find("Exception: Parse failed") != std::string::npos);
+      ASSERT_TRUE(e.error_msg.find("Exception: SQL Error") != std::string::npos);
     } else {
       if (!g_enable_calcite_ddl_parser) {
         ASSERT_EQ("Exception: Syntax error at: INTEGER", e.error_msg);
       }
     }
   }
+}
+
+TEST_P(CreateTableTest, InvalidColumnDefinition) {
+  std::string query =
+      getCreateTableQuery(GetParam(), "test_table", "(str TEXT ENCODING DICT(8), test)");
+  try {
+    sql(query);
+    FAIL() << "An exception should have been thrown for this test case.";
+  } catch (const TOmniSciException& e) {
+    if (GetParam() == ddl_utils::TableType::TABLE) {
+      ASSERT_TRUE(
+          e.error_msg.find(
+              "Exception: Exception occurred: Column definition for table test_table") !=
+          std::string::npos);
+    }
+  }
+}
+
+TEST_P(CreateTableTest, RealAlias) {
+  // TODO(vancouver: support for FSI)
+  if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
+    LOG(ERROR) << "REAL alias not yet supported for FSI.";
+    return;
+  }
+
+  std::string query = getCreateTableQuery(GetParam(), "test_table", "(f REAL)");
+  sql(query);
+  auto td = getCatalog().getMetadataForTable("test_table", false);
+  ASSERT_TRUE(td);
+  auto cd = getCatalog().getMetadataForColumn(td->tableId, "f");
+  ASSERT_TRUE(cd);
+  ASSERT_EQ(cd->columnType.get_type(), kFLOAT);
 }
 
 INSTANTIATE_TEST_SUITE_P(CreateAndDropTableDdlTest,
@@ -1337,6 +1571,7 @@ TEST_F(DropTableTypeMismatchTest, View_DropCommandForOtherTableTypes) {
 
   sql("DROP VIEW test_view;");
   ASSERT_EQ(nullptr, getCatalog().getMetadataForTable("test_view", false));
+  sql("DROP TABLE test_table");
 }
 
 TEST_F(DropTableTypeMismatchTest, ForeignTable_DropCommandForOtherTableTypes) {
@@ -1378,6 +1613,251 @@ TEST_F(DropForeignTableTest, FsiDisabled) {
       "Exception: test_foreign_table is a foreign table. Use DROP FOREIGN TABLE.");
 }
 
+class CreateViewUnsupportedTest : public CreateAndDropTableDdlTest {
+ protected:
+  void SetUp() override {
+    CreateAndDropTableDdlTest::SetUp();
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "test_table", true));
+    dropTestUser();
+  }
+
+  void TearDown() override {
+    g_enable_fsi = true;
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "test_table", true));
+    dropTestUser();
+    CreateAndDropTableDdlTest::TearDown();
+  }
+};
+
+TEST_F(CreateViewUnsupportedTest, Basics) {
+  sql(getCreateTableQuery(
+      ddl_utils::TableType::TABLE, "test_table", "(col1 INTEGER, col2 FLOAT)"));
+  queryAndAssertException(
+      "CREATE VIEW showcreateviewtest (c1, c2) AS SELECT * FROM showcreatetabletest;",
+      "Exception: SQL Error: Column list aliases in views are not yet supported.");
+}
+
+class CreateNonReservedKeywordsTest : public CreateAndDropTableDdlTest {
+ protected:
+  void SetUp() override {
+    CreateAndDropTableDdlTest::SetUp();
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "test_table", true));
+    dropTestUser();
+  }
+
+  void TearDown() override {
+    g_enable_fsi = true;
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "test_table", true));
+    dropTestUser();
+    CreateAndDropTableDdlTest::TearDown();
+  }
+};
+
+TEST_F(CreateNonReservedKeywordsTest, NonReservedKeywords) {
+  sql(getCreateTableQuery(
+      ddl_utils::TableType::TABLE,
+      "test_table",
+      R"((QUERY text, QUERIES text, SESSIONS int[], TABLES text[], databases DECIMAL(6, 2), servers int, mapping int, owner float, rename double, disk point, cache polygon, stored date))"));
+  sql("SELECT query FROM test_table LIMIT 1");
+}
+
+TEST_F(CreateNonReservedKeywordsTest, NonReservedAndReserved) {
+  EXPECT_ANY_THROW(sql(getCreateTableQuery(
+      ddl_utils::TableType::TABLE,
+      "test_table",
+      R"((POLYGON INT, QUERY text, QUERIES text, SESSIONS int[], TABLES text[], databases DECIMAL(6, 2), servers int, mapping int, owner float, rename double, disk point, cache polygon))")));
+}
+
+TEST_F(CreateNonReservedKeywordsTest, NonReservedRename) {
+  sql(getCreateTableQuery(ddl_utils::TableType::TABLE, "test_table", R"((QUERY text))"));
+  sql("ALTER TABLE test_table RENAME COLUMN QUERY to virtual;");
+}
+
+class RenameTableTest : public CreateAndDropTableDdlTest {
+ protected:
+  void SetUp() override {
+    CreateAndDropTableDdlTest::SetUp();
+
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "A", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "B", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "C", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "D", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "E", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "F", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "G", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "H", true));
+    dropTestUser();
+
+    sql("CREATE TABLE A (Name text);");
+    sql("INSERT INTO  A (Name) values ('A');");
+
+    sql("CREATE TABLE B (Name text);");
+    sql("INSERT INTO  B (Name) values ('B');");
+
+    sql("CREATE TABLE C (Name text);");
+    sql("INSERT INTO  C (Name) values ('C');");
+
+    sql("CREATE TABLE D (Name text);");
+    sql("INSERT INTO  D (Name) values ('D');");
+
+    sql("CREATE TABLE E (Name text);");
+    sql("INSERT INTO  E (Name) values ('E');");
+  }
+
+  void TearDown() override {
+    g_enable_fsi = true;
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "A", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "B", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "C", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "D", true));
+    sql(getDropTableQuery(ddl_utils::TableType::TABLE, "E", true));
+    dropTestUser();
+
+    CreateAndDropTableDdlTest::TearDown();
+  }
+};
+
+TEST_F(RenameTableTest, SimpleRename) {
+  // rename
+  sql("RENAME TABLE A to F;");
+  sql("RENAME TABLE B to G, C to H;");
+
+  // verify
+  sqlAndCompareResult("SELECT count(*) FROM F WHERE Name = 'A';", {{i(1)}});
+  sqlAndCompareResult("SELECT count(*) FROM G WHERE Name = 'B';", {{i(1)}});
+  sqlAndCompareResult("SELECT count(*) FROM H WHERE Name = 'C';", {{i(1)}});
+
+  // reset
+  sql("RENAME TABLE F TO A, G TO B, H TO C;");
+}
+
+TEST_F(RenameTableTest, SwapRename) {
+  // swap
+  sql("RENAME TABLE D to E, E to D");
+
+  // verify
+  sqlAndCompareResult("SELECT count(*) FROM D WHERE Name = 'E';", {{i(1)}});
+  sqlAndCompareResult("SELECT count(*) FROM E WHERE Name = 'D';", {{i(1)}});
+
+  // rotate
+  sql("RENAME TABLE A TO B, B TO C, C TO A");
+
+  // verify
+  sqlAndCompareResult("SELECT count(*) FROM A WHERE Name = 'C';", {{i(1)}});
+  sqlAndCompareResult("SELECT count(*) FROM B WHERE Name = 'A';", {{i(1)}});
+  sqlAndCompareResult("SELECT count(*) FROM C WHERE Name = 'B';", {{i(1)}});
+
+  // reset
+  sql("RENAME TABLE D TO E, E TO D;");
+  sql("RENAME TABLE C TO B, B TO A, A TO C;");
+}
+
+TEST_F(RenameTableTest, ErrorChecks) {
+  // ERROR, expect no change, as would trigger an overwrite of B
+
+  executeLambdaAndAssertException(
+      [] { sql("RENAME TABLE A to B"); },
+      "Exception: Error: Attempted to overwrite and lose data in table: 'B'");
+
+  // verify no change
+  sqlAndCompareResult("SELECT count(*) FROM A WHERE Name = 'A';", {{i(1)}});
+  sqlAndCompareResult("SELECT count(*) FROM B WHERE Name = 'B';", {{i(1)}});
+
+  // ERROR, expect no change, as would trigger an overwrite
+  executeLambdaAndAssertException(
+      [] { sql("RENAME TABLE A to C, B TO C"); },
+      "Exception: Error: Attempted to overwrite and lose data in table: 'C'");
+
+  // verify no name change
+  sqlAndCompareResult("SELECT count(*) FROM A WHERE Name = 'A';", {{i(1)}});
+  sqlAndCompareResult("SELECT count(*) FROM B WHERE Name = 'B';", {{i(1)}});
+
+  // ERROR, expect no change, table Z is non-existant
+  executeLambdaAndAssertException([] { sql("RENAME TABLE Z TO A"); },
+                                  "Exception: Source table 'Z' does not exist.");
+
+  // verify
+  sqlAndCompareResult("SELECT count(*) FROM A WHERE Name = 'A';", {{i(1)}});
+}
+
+class CreateShardedTableTest : public CreateAndDropTableDdlTest {
+  void SetUp() override {
+    CreateAndDropTableDdlTest::SetUp();
+    sql("DROP TABLE IF EXISTS test_table;");
+  }
+
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS test_table;");
+    CreateAndDropTableDdlTest::TearDown();
+  }
+};
+
+TEST_F(CreateShardedTableTest, ShardedTableName) {
+  sql("CREATE TABLE test_table (i INT, SHARD KEY(i)) WITH "
+      "(shard_count = 2);");
+
+  auto& catalog = getCatalog();
+  auto logical_table = catalog.getMetadataForTable("test_table", false);
+  ASSERT_NE(logical_table, nullptr);
+  ASSERT_EQ(2, logical_table->nShards);
+  ASSERT_EQ(-1, logical_table->shard);
+  ASSERT_EQ("test_table", logical_table->tableName);
+
+  auto physical_tables = catalog.getPhysicalTablesDescriptors(logical_table);
+  ASSERT_EQ(static_cast<size_t>(2), physical_tables.size());
+
+  ASSERT_NE(physical_tables[0], nullptr);
+  ASSERT_EQ(2, physical_tables[0]->nShards);
+  ASSERT_EQ(0, physical_tables[0]->shard);
+  ASSERT_EQ("test_table_shard_#1", physical_tables[0]->tableName);
+
+  ASSERT_NE(physical_tables[1], nullptr);
+  ASSERT_EQ(2, physical_tables[1]->nShards);
+  ASSERT_EQ(1, physical_tables[1]->shard);
+  ASSERT_EQ("test_table_shard_#2", physical_tables[1]->tableName);
+}
+
+class MaxRollbackEpochsTest : public CreateAndDropTableDdlTest {
+ protected:
+  void SetUp() override {
+    CreateAndDropTableDdlTest::SetUp();
+    sql("DROP TABLE IF EXISTS test_table;");
+  }
+
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS test_table;");
+    CreateAndDropTableDdlTest::TearDown();
+  }
+
+  void assertEpochCeilingAndFloor(int64_t epoch_ceiling, int64_t epoch_floor) {
+    TQueryResult result;
+    sql(result, "show table details test_table;");
+
+    ASSERT_EQ("max_epoch", result.row_set.row_desc[9].col_name);
+    ASSERT_EQ(epoch_ceiling, result.row_set.columns[9].data.int_col[0]);
+
+    ASSERT_EQ("min_epoch_floor", result.row_set.row_desc[10].col_name);
+    ASSERT_EQ(epoch_floor, result.row_set.columns[10].data.int_col[0]);
+  }
+};
+
+TEST_F(MaxRollbackEpochsTest, CreateTableDefaultValue) {
+  sql("CREATE TABLE test_table (col1 INTEGER);");
+
+  auto& catalog = getCatalog();
+  auto table = catalog.getMetadataForTable("test_table", false);
+  ASSERT_EQ(table->maxRollbackEpochs, DEFAULT_MAX_ROLLBACK_EPOCHS);
+
+  // Sanity test to ensure that default max_rollback_epoch is in effect
+  for (int i = 0; i < DEFAULT_MAX_ROLLBACK_EPOCHS; i++) {
+    sql("INSERT INTO test_table VALUES (10);");
+  }
+  assertEpochCeilingAndFloor(DEFAULT_MAX_ROLLBACK_EPOCHS, 0);
+
+  sql("INSERT INTO test_table VALUES (10);");
+  assertEpochCeilingAndFloor(DEFAULT_MAX_ROLLBACK_EPOCHS + 1, 1);
+}
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
@@ -1391,5 +1871,6 @@ int main(int argc, char** argv) {
   }
 
   g_enable_fsi = false;
+
   return err;
 }

@@ -46,14 +46,14 @@ class SortedOrderFragmenter : public InsertOrderFragmenter {
                               defaultInsertLevel) {}
 
   ~SortedOrderFragmenter() override {}
-  void insertData(InsertData& insertDataStruct) override {
-    sortData(insertDataStruct);
-    InsertOrderFragmenter::insertData(insertDataStruct);
+  void insertData(InsertData& insert_data_struct) override {
+    sortData(insert_data_struct);
+    InsertOrderFragmenter::insertData(insert_data_struct);
   }
 
-  void insertDataNoCheckpoint(InsertData& insertDataStruct) override {
-    sortData(insertDataStruct);
-    InsertOrderFragmenter::insertDataNoCheckpoint(insertDataStruct);
+  void insertDataNoCheckpoint(InsertData& insert_data_struct) override {
+    sortData(insert_data_struct);
+    InsertOrderFragmenter::insertDataNoCheckpoint(insert_data_struct);
   }
 
   SortedOrderFragmenter(SortedOrderFragmenter&&) = default;

@@ -119,7 +119,9 @@ std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
 namespace {
 
 // Returns the LLVM name for `type`.
-std::string serialize_type(const ExtArgumentType type, bool byval = true) {
+std::string serialize_type(const ExtArgumentType type,
+                           bool byval = true,
+                           bool declare = false) {
   switch (type) {
     case ExtArgumentType::Bool:
       return "i8";  // clang converts bool to i8
@@ -189,6 +191,28 @@ std::string serialize_type(const ExtArgumentType type, bool byval = true) {
       return (byval ? "{double*, i64}" : "i8*");
     case ExtArgumentType::ColumnBool:
       return (byval ? "{i1*, i64}" : "i8*");
+    case ExtArgumentType::TextEncodingNone:
+      return (declare ? "{i8*, i32}*" : "text_encoding_node");
+    case ExtArgumentType::TextEncodingDict8:
+      return "text_encoding_dict8";
+    case ExtArgumentType::TextEncodingDict16:
+      return "text_encoding_dict16";
+    case ExtArgumentType::TextEncodingDict32:
+      return "text_encoding_dict32";
+    case ExtArgumentType::ColumnListInt8:
+      return (declare ? "{i8**, i64, i64}*" : "column_list_int8");
+    case ExtArgumentType::ColumnListInt16:
+      return (declare ? "{i8**, i64, i64}*" : "column_list_int16");
+    case ExtArgumentType::ColumnListInt32:
+      return (declare ? "{i8**, i64, i64}*" : "column_list_int32");
+    case ExtArgumentType::ColumnListInt64:
+      return (declare ? "{i8**, i64, i64}*" : "column_list_int64");
+    case ExtArgumentType::ColumnListFloat:
+      return (declare ? "{i8**, i64, i64}*" : "column_list_float");
+    case ExtArgumentType::ColumnListDouble:
+      return (declare ? "{i8**, i64, i64}*" : "column_list_double");
+    case ExtArgumentType::ColumnListBool:
+      return (declare ? "{i8**, i64, i64}*" : "column_list_bool");
     default:
       CHECK(false);
   }
@@ -211,18 +235,6 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
   /* This function is mostly used for scalar types.
      For non-scalar types, NULL is returned as a placeholder.
    */
-
-  auto generate_array_type = [](const auto subtype) {
-    auto ti = SQLTypeInfo(kARRAY, false);
-    ti.set_subtype(subtype);
-    return ti;
-  };
-
-  auto generate_column_type = [](const auto subtype) {
-    auto ti = SQLTypeInfo(kCOLUMN, false);
-    ti.set_subtype(subtype);
-    return ti;
-  };
 
   switch (ext_arg_type) {
     case ExtArgumentType::Bool:
@@ -267,9 +279,29 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
       return generate_column_type(kDOUBLE);
     case ExtArgumentType::ColumnBool:
       return generate_column_type(kBOOLEAN);
+    case ExtArgumentType::TextEncodingNone:
+      return SQLTypeInfo(kTEXT, false, kENCODING_NONE);
+    case ExtArgumentType::TextEncodingDict8:
+    case ExtArgumentType::TextEncodingDict16:
+    case ExtArgumentType::TextEncodingDict32:
+      return SQLTypeInfo(kTEXT, false, kENCODING_DICT);
+    case ExtArgumentType::ColumnListInt8:
+      return generate_column_type(kTINYINT);
+    case ExtArgumentType::ColumnListInt16:
+      return generate_column_type(kSMALLINT);
+    case ExtArgumentType::ColumnListInt32:
+      return generate_column_type(kINT);
+    case ExtArgumentType::ColumnListInt64:
+      return generate_column_type(kBIGINT);
+    case ExtArgumentType::ColumnListFloat:
+      return generate_column_type(kFLOAT);
+    case ExtArgumentType::ColumnListDouble:
+      return generate_column_type(kDOUBLE);
+    case ExtArgumentType::ColumnListBool:
+      return generate_column_type(kBOOLEAN);
     default:
-      LOG(WARNING) << "ExtArgumentType `" << serialize_type(ext_arg_type)
-                   << "` cannot be converted to SQLTypeInfo. Returning nulltype.";
+      LOG(FATAL) << "ExtArgumentType `" << serialize_type(ext_arg_type)
+                 << "` cannot be converted to SQLTypeInfo.";
   }
   return SQLTypeInfo(kNULLT, false);
 }
@@ -397,6 +429,28 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "MULTIPOLYGON";
     case ExtArgumentType::Void:
       return "VOID";
+    case ExtArgumentType::TextEncodingNone:
+      return "TEXT ENCODING NONE";
+    case ExtArgumentType::TextEncodingDict8:
+      return "TEXT ENCODING DICT(8)";
+    case ExtArgumentType::TextEncodingDict16:
+      return "TEXT ENCODING DICT(16)";
+    case ExtArgumentType::TextEncodingDict32:
+      return "TEXT ENCODING DICT(32)";
+    case ExtArgumentType::ColumnListInt8:
+      return "COLUMNLIST<TINYINT>";
+    case ExtArgumentType::ColumnListInt16:
+      return "COLUMNLIST<SMALLINT>";
+    case ExtArgumentType::ColumnListInt32:
+      return "COLUMNLIST<INT>";
+    case ExtArgumentType::ColumnListInt64:
+      return "COLUMNLIST<BIGINT>";
+    case ExtArgumentType::ColumnListFloat:
+      return "COLUMNLIST<FLOAT>";
+    case ExtArgumentType::ColumnListDouble:
+      return "COLUMNLIST<DOUBLE>";
+    case ExtArgumentType::ColumnListBool:
+      return "COLUMNLIST<BOOLEAN>";
     default:
       UNREACHABLE();
   }
@@ -420,7 +474,8 @@ std::string ExtensionFunction::toStringSQL() const {
 
 // Converts the extension function signatures to their LLVM representation.
 std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
-    const std::unordered_set<std::string>& udf_decls) {
+    const std::unordered_set<std::string>& udf_decls,
+    const bool is_gpu) {
   std::vector<std::string> declarations;
   for (const auto& kv : functions_) {
     const auto& signatures = kv.second;
@@ -451,15 +506,20 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
   }
 
   for (const auto& kv : table_functions::TableFunctionsFactory::functions_) {
-    if (kv.second.isRuntime()) {
+    if (kv.second.isRuntime() || kv.second.useDefaultSizer()) {
       // Runtime UDTFs are defined in LLVM/NVVM IR module
+      // UDTFs using default sizer share LLVM IR
+      continue;
+    }
+    if (!((is_gpu && kv.second.isGPU()) || (!is_gpu && kv.second.isCPU()))) {
       continue;
     }
     std::string decl_prefix{"declare " + serialize_type(ExtArgumentType::Int32) + " @" +
                             kv.first};
     std::vector<std::string> arg_strs;
     for (const auto arg : kv.second.getArgs(/* ensure_column = */ true)) {
-      arg_strs.push_back(serialize_type(arg, /* byval= */ kv.second.isRuntime()));
+      arg_strs.push_back(
+          serialize_type(arg, /* byval= */ kv.second.isRuntime(), /* declare= */ true));
     }
     declarations.push_back(decl_prefix + "(" + boost::algorithm::join(arg_strs, ", ") +
                            ");");
@@ -571,6 +631,39 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "{i1*, i64}" || type_name == "{bool*, i64}") {
     return ExtArgumentType::ColumnBool;
+  }
+  if (type_name == "text_encoding_none") {
+    return ExtArgumentType::TextEncodingNone;
+  }
+  if (type_name == "text_encoding_dict8") {
+    return ExtArgumentType::TextEncodingDict8;
+  }
+  if (type_name == "text_encoding_dict16") {
+    return ExtArgumentType::TextEncodingDict16;
+  }
+  if (type_name == "text_encoding_dict32") {
+    return ExtArgumentType::TextEncodingDict32;
+  }
+  if (type_name == "column_list_int8") {
+    return ExtArgumentType::ColumnListInt8;
+  }
+  if (type_name == "column_list_int16") {
+    return ExtArgumentType::ColumnListInt16;
+  }
+  if (type_name == "column_list_int32") {
+    return ExtArgumentType::ColumnListInt32;
+  }
+  if (type_name == "column_list_int64") {
+    return ExtArgumentType::ColumnListInt64;
+  }
+  if (type_name == "column_list_float") {
+    return ExtArgumentType::ColumnListFloat;
+  }
+  if (type_name == "column_list_double") {
+    return ExtArgumentType::ColumnListDouble;
+  }
+  if (type_name == "column_list_bool") {
+    return ExtArgumentType::ColumnListBool;
   }
   CHECK(false);
   return ExtArgumentType::Int16;

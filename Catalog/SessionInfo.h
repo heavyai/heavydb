@@ -31,6 +31,7 @@
 
 #include "Catalog/SysCatalog.h"
 #include "QueryEngine/CompilationOptions.h"
+#include "Shared/Restriction.h"
 #include "SqliteConnector/SqliteConnector.h"
 
 #include "LeafHostInfo.h"
@@ -61,8 +62,12 @@ class SessionInfo {
       , currentUser_(s.currentUser_)
       , executor_device_type_(static_cast<ExecutorDeviceType>(s.executor_device_type_))
       , session_id_(s.session_id_)
-      , public_session_id_(s.public_session_id_) {}
-  Catalog& getCatalog() const { return *catalog_; }
+      , public_session_id_(s.public_session_id_)
+      , restriction_(s.restriction_) {}
+  Catalog& getCatalog() const {
+    CHECK(catalog_);
+    return *catalog_;
+  }
   std::shared_ptr<Catalog> get_catalog_ptr() const { return catalog_; }
   void set_catalog_ptr(std::shared_ptr<Catalog> c) { catalog_ = c; }
   const UserMetadata& get_currentUser() const { return currentUser_; }
@@ -83,6 +88,8 @@ class SessionInfo {
   void set_connection_info(const std::string& connection) {
     connection_info_ = connection;
   }
+  void set_restriction(std::shared_ptr<Restriction> r) { restriction_ = r; }
+  std::shared_ptr<Restriction> get_restriction_ptr() const { return restriction_; }
 
  private:
   std::shared_ptr<Catalog> catalog_;
@@ -92,6 +99,7 @@ class SessionInfo {
   std::atomic<time_t> last_used_time_;  // for tracking active session duration
   std::atomic<time_t> start_time_;      // for invalidating session after tolerance period
   const std::string public_session_id_;
+  std::shared_ptr<Restriction> restriction_;
   std::string
       connection_info_;  // String containing connection protocol (tcp/http) and address
   std::string public_session_id() const;

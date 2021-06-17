@@ -29,11 +29,13 @@ import com.omnisci.thrift.calciteserver.TCompletionHintType;
 import com.omnisci.thrift.calciteserver.TExtArgumentType;
 import com.omnisci.thrift.calciteserver.TFilterPushDownInfo;
 import com.omnisci.thrift.calciteserver.TPlanResult;
+import com.omnisci.thrift.calciteserver.TRestriction;
 import com.omnisci.thrift.calciteserver.TUserDefinedFunction;
 import com.omnisci.thrift.calciteserver.TUserDefinedTableFunction;
 
 import org.apache.calcite.prepare.MapDPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
+import org.apache.calcite.rel.rules.Restriction;
 import org.apache.calcite.runtime.CalciteContextException;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.parser.SqlParseException;
@@ -77,6 +79,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
 
   private String udfRTSigsJson = "";
   Map<String, ExtensionFunction> udfRTSigs = null;
+
+  Map<String, ExtensionFunction> udtfSigs = null;
 
   private SockTransportProperties skT;
   private Map<String, ExtensionFunction> extSigs = null;
@@ -132,11 +136,12 @@ public class CalciteServerHandler implements CalciteServer.Iface {
   public TPlanResult process(String user,
           String session,
           String catalog,
-          String sqlText,
+          String queryText,
           java.util.List<TFilterPushDownInfo> thriftFilterPushDownInfo,
           boolean legacySyntax,
           boolean isExplain,
-          boolean isViewOptimize) throws InvalidParseRequest, TException {
+          boolean isViewOptimize,
+          TRestriction restriction) throws InvalidParseRequest, TException {
     long timer = System.currentTimeMillis();
     callCount++;
 
@@ -149,17 +154,28 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       MAPDLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-1, msg);
     }
-    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort);
+    Restriction rest = null;
+    if (restriction != null && !restriction.column.isEmpty()) {
+      rest = new Restriction(restriction.column, restriction.values);
+    }
+    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort, rest);
     MAPDLOGGER.debug("process was called User: " + user + " Catalog: " + catalog
-            + " sql: " + sqlText);
+            + " sql: " + queryText);
     parser.setUser(mapDUser);
     CURRENT_PARSER.set(parser);
 
     // need to trim the sql string as it seems it is not trimed prior to here
-    sqlText = sqlText.trim();
+    boolean isRAQuery = false;
+
+    if (queryText.startsWith("execute calcite")) {
+      queryText = queryText.replaceFirst("execute calcite", "");
+      isRAQuery = true;
+    }
+
+    queryText = queryText.trim();
     // remove last charcter if it is a ;
-    if (sqlText.length() > 0 && sqlText.charAt(sqlText.length() - 1) == ';') {
-      sqlText = sqlText.substring(0, sqlText.length() - 1);
+    if (queryText.length() > 0 && queryText.charAt(queryText.length() - 1) == ';') {
+      queryText = queryText.substring(0, queryText.length() - 1);
     }
     String jsonResult;
     SqlIdentifierCapturer capturer;
@@ -172,47 +188,56 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         filterPushDownInfo.add(new MapDParserOptions.FilterPushDownInfo(
                 req.input_prev, req.input_start, req.input_next));
       }
-      Pair<String, SqlIdentifierCapturer> res;
-      SqlNode node;
-      try {
-        MapDParserOptions parserOptions = new MapDParserOptions(
-                filterPushDownInfo, legacySyntax, isExplain, isViewOptimize);
-        res = parser.process(sqlText, parserOptions);
+      MapDParserOptions parserOptions = new MapDParserOptions(
+              filterPushDownInfo, legacySyntax, isExplain, isViewOptimize);
+
+      if (!isRAQuery) {
+        Pair<String, SqlIdentifierCapturer> res;
+        SqlNode node;
+
+        res = parser.process(queryText, parserOptions);
         jsonResult = res.left;
-      } catch (ValidationException ex) {
-        String msg = "Validation: " + ex.getMessage();
-        MAPDLOGGER.error(msg, ex);
-        throw ex;
-      } catch (RelConversionException ex) {
-        String msg = " RelConversion failed: " + ex.getMessage();
-        MAPDLOGGER.error(msg, ex);
-        throw ex;
+        capturer = res.right;
+
+        primaryAccessedObjects.tables_selected_from = new ArrayList<>(capturer.selects);
+        primaryAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
+        primaryAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
+        primaryAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
+
+        // also resolve all the views in the select part
+        // resolution of the other parts is not
+        // necessary as these cannot be views
+        resolvedAccessedObjects.tables_selected_from =
+                new ArrayList<>(parser.resolveSelectIdentifiers(capturer));
+        resolvedAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
+        resolvedAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
+        resolvedAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
+
+      } else {
+        jsonResult = parser.optimizeRAQuery(queryText, parserOptions);
       }
-      capturer = res.right;
-
-      primaryAccessedObjects.tables_selected_from = new ArrayList<>(capturer.selects);
-      primaryAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
-      primaryAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
-      primaryAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
-
-      // also resolve all the views in the select part
-      // resolution of the other parts is not
-      // necessary as these cannot be views
-      resolvedAccessedObjects.tables_selected_from =
-              new ArrayList<>(parser.resolveSelectIdentifiers(capturer));
-      resolvedAccessedObjects.tables_inserted_into = new ArrayList<>(capturer.inserts);
-      resolvedAccessedObjects.tables_updated_in = new ArrayList<>(capturer.updates);
-      resolvedAccessedObjects.tables_deleted_from = new ArrayList<>(capturer.deletes);
-
     } catch (SqlParseException ex) {
-      String msg = "Parse failed: " + ex.getMessage();
-      MAPDLOGGER.error(msg, ex);
+      String msg = "SQL Error: " + ex.getMessage();
+      MAPDLOGGER.error(msg);
       throw new InvalidParseRequest(-2, msg);
-    } catch (CalciteContextException ex) {
-      String msg = "Validate failed: " + ex.getMessage();
-      MAPDLOGGER.error(msg, ex);
+    } catch (org.apache.calcite.tools.ValidationException ex) {
+      String msg = "SQL Error: " + ex.getMessage();
+      if (ex.getCause() != null
+              && (ex.getCause().getClass() == CalciteContextException.class)) {
+        msg = "SQL Error: " + ex.getCause().getMessage();
+      }
+      MAPDLOGGER.error(msg);
       throw new InvalidParseRequest(-3, msg);
+    } catch (CalciteContextException ex) {
+      String msg = ex.getMessage();
+      MAPDLOGGER.error(msg);
+      throw new InvalidParseRequest(-6, msg);
+    } catch (RelConversionException ex) {
+      String msg = "Failed to generate relational algebra for query " + ex.getMessage();
+      MAPDLOGGER.error(msg, ex);
+      throw new InvalidParseRequest(-5, msg);
     } catch (Throwable ex) {
+      MAPDLOGGER.error(ex.getClass().toString());
       String msg = "Exception occurred: " + ex.getMessage();
       MAPDLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-4, msg);
@@ -224,7 +249,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       } catch (Exception ex) {
         String msg = "Could not return parse object: " + ex.getMessage();
         MAPDLOGGER.error(msg, ex);
-        throw new InvalidParseRequest(-4, msg);
+        throw new InvalidParseRequest(-7, msg);
       }
     }
 
@@ -308,7 +333,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       MAPDLOGGER.error(msg, ex);
       throw new TException(msg);
     }
-    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort);
+    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort, null);
     MAPDLOGGER.debug("getCompletionHints was called User: " + user
             + " Catalog: " + catalog + " sql: " + sql);
     parser.setUser(mapDUser);
@@ -342,38 +367,51 @@ public class CalciteServerHandler implements CalciteServer.Iface {
   }
 
   @Override
-  public void setRuntimeExtensionFunctions(
-          List<TUserDefinedFunction> udfs, List<TUserDefinedTableFunction> udtfs) {
-    // Clean up previously defined Runtime UDFs
-    if (udfRTSigs != null) {
-      for (String name : udfRTSigs.keySet()) extSigs.remove(name);
-      udfRTSigsJson = "";
-      udfRTSigs.clear();
-    } else {
-      udfRTSigs = new HashMap<String, ExtensionFunction>();
-    }
-
-    for (TUserDefinedFunction udf : udfs) {
-      udfRTSigs.put(udf.name, toExtensionFunction(udf));
-    }
-
-    for (TUserDefinedTableFunction udtf : udtfs) {
-      udfRTSigs.put(udtf.name, toExtensionFunction(udtf));
-    }
-
-    // Avoid overwritting compiled and Loadtime UDFs:
-    for (String name : udfRTSigs.keySet()) {
-      if (extSigs.containsKey(name)) {
-        MAPDLOGGER.error("Extension function `" + name
-                + "` exists. Skipping runtime extenension function with the same name.");
-        udfRTSigs.remove(name);
+  public void setRuntimeExtensionFunctions(List<TUserDefinedFunction> udfs,
+          List<TUserDefinedTableFunction> udtfs,
+          boolean isruntime) {
+    if (isruntime) {
+      // Clean up previously defined Runtime UDFs
+      if (udfRTSigs != null) {
+        for (String name : udfRTSigs.keySet()) extSigs.remove(name);
+        udfRTSigsJson = "";
+        udfRTSigs.clear();
+      } else {
+        udfRTSigs = new HashMap<String, ExtensionFunction>();
       }
-    }
 
-    // udfRTSigsJson will contain only the signatures of UDFs:
-    udfRTSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(udfRTSigs);
-    // Expose RT UDFs to Calcite server:
-    extSigs.putAll(udfRTSigs);
+      for (TUserDefinedFunction udf : udfs) {
+        udfRTSigs.put(udf.name, toExtensionFunction(udf));
+      }
+
+      for (TUserDefinedTableFunction udtf : udtfs) {
+        udfRTSigs.put(udtf.name, toExtensionFunction(udtf));
+      }
+
+      // Avoid overwritting compiled and Loadtime UDFs:
+      for (String name : udfRTSigs.keySet()) {
+        if (extSigs.containsKey(name)) {
+          MAPDLOGGER.error("Extension function `" + name
+                  + "` exists. Skipping runtime extenension function with the same name.");
+          udfRTSigs.remove(name);
+        }
+      }
+      // udfRTSigsJson will contain only the signatures of UDFs:
+      udfRTSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(udfRTSigs);
+      // Expose RT UDFs to Calcite server:
+      extSigs.putAll(udfRTSigs);
+    } else {
+      // currently only LoadTime UDTFs can be registered via calcite thrift interface
+      if (udtfSigs == null) {
+        udtfSigs = new HashMap<String, ExtensionFunction>();
+      }
+
+      for (TUserDefinedTableFunction udtf : udtfs) {
+        udtfSigs.put(udtf.name, toExtensionFunction(udtf));
+      }
+
+      extSigs.putAll(udtfSigs);
+    }
 
     calciteParserFactory.updateOperatorTable();
   }
@@ -475,6 +513,28 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.GeoPolygon;
       case GeoMultiPolygon:
         return ExtensionFunction.ExtArgumentType.GeoMultiPolygon;
+      case TextEncodingNone:
+        return ExtensionFunction.ExtArgumentType.TextEncodingNone;
+      case TextEncodingDict8:
+        return ExtensionFunction.ExtArgumentType.TextEncodingDict8;
+      case TextEncodingDict16:
+        return ExtensionFunction.ExtArgumentType.TextEncodingDict16;
+      case TextEncodingDict32:
+        return ExtensionFunction.ExtArgumentType.TextEncodingDict32;
+      case ColumnListInt8:
+        return ExtensionFunction.ExtArgumentType.ColumnListInt8;
+      case ColumnListInt16:
+        return ExtensionFunction.ExtArgumentType.ColumnListInt16;
+      case ColumnListInt32:
+        return ExtensionFunction.ExtArgumentType.ColumnListInt32;
+      case ColumnListInt64:
+        return ExtensionFunction.ExtArgumentType.ColumnListInt64;
+      case ColumnListFloat:
+        return ExtensionFunction.ExtArgumentType.ColumnListFloat;
+      case ColumnListDouble:
+        return ExtensionFunction.ExtArgumentType.ColumnListDouble;
+      case ColumnListBool:
+        return ExtensionFunction.ExtArgumentType.ColumnListBool;
       default:
         MAPDLOGGER.error("toExtArgumentType: unknown type " + type);
         return null;

@@ -121,7 +121,8 @@ class TableSchemaLockContainer<ReadLock>
     const auto td = cat.getMetadataForTable(table_id);
     if (!td) {
       throw std::runtime_error("Table/View ID " + std::to_string(table_id) +
-                               " does not exist.");
+                               " for catalog " + cat.getCurrentDB().dbName +
+                               " does not exist. Cannot aquire read lock");
     }
     VLOG(1) << "Acquiring Table Schema Read Lock for table: " << td->tableName;
     return TableSchemaLockContainer<ReadLock>(
@@ -153,7 +154,8 @@ class TableSchemaLockContainer<WriteLock>
     const auto td = cat.getMetadataForTable(table_id);
     if (!td) {
       throw std::runtime_error("Table/View ID " + std::to_string(table_id) +
-                               " does not exist.");
+                               " for catalog " + cat.getCurrentDB().dbName +
+                               " does not exist. Cannot aquire write lock");
     }
     VLOG(1) << "Acquiring Table Schema Write Lock for table: " << td->tableName;
     return TableSchemaLockContainer<WriteLock>(

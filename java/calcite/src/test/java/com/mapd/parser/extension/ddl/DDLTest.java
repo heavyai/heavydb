@@ -31,7 +31,7 @@ public class DDLTest {
 
   TPlanResult processDdlCommand(final String ddlCommand) throws Exception {
     return calciteServerHandler.process(
-            "", "", "", ddlCommand, new ArrayList<>(), false, false, false);
+            "", "", "", ddlCommand, new ArrayList<>(), false, false, false, null);
   }
 
   JsonObject getJsonFromFile(final String fileName) throws Exception {

@@ -63,9 +63,8 @@ struct InsertData {
   size_t numRows;              /// the number of rows being inserted
   std::vector<DataBlockPtr> data;  /// points to the start of the data block per column
                                    /// for the row(s) being inserted
-  int64_t replicate_count =
-      0;  /// count to replicate values of column(s); used only for ALTER ADD column
-  std::vector<bool> bypass;  // bypass corresponding columnIds[]
+  std::vector<bool> is_default;    /// data for such columns consist of a single
+                                   /// replicated element (NULL or DEFAULT)
 };
 
 /**

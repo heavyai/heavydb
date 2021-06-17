@@ -256,7 +256,26 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("GeoMultiPolygon")) {
       return ExtensionFunction.ExtArgumentType.GeoMultiPolygon;
     }
-
+    if (type_name.equals("ColumnList<int8_t>") || type_name.equals("ColumnList<char>")) {
+      return ExtensionFunction.ExtArgumentType.ColumnListInt8;
+    }
+    if (type_name.equals("ColumnList<int16_t>")
+            || type_name.equals("ColumnList<short>")) {
+      return ExtensionFunction.ExtArgumentType.ColumnListInt16;
+    }
+    if (type_name.equals("ColumnList<int32_t>") || type_name.equals("ColumnList<int>")) {
+      return ExtensionFunction.ExtArgumentType.ColumnListInt32;
+    }
+    if (type_name.equals("ColumnList<int64_t>") || type_name.equals("ColumnList<size_t>")
+            || type_name.equals("ColumnList<long>")) {
+      return ExtensionFunction.ExtArgumentType.ColumnListInt64;
+    }
+    if (type_name.equals("ColumnList<float>")) {
+      return ExtensionFunction.ExtArgumentType.ColumnListFloat;
+    }
+    if (type_name.equals("ColumnList<double>")) {
+      return ExtensionFunction.ExtArgumentType.ColumnListDouble;
+    }
     MAPDLOGGER.info(
             "ExtensionfunctionSignatureParser::deserializeType: unknown type_name=`"
             + type_name + "`");

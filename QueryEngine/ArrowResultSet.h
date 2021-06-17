@@ -39,6 +39,7 @@ using ValueArray = boost::variant<std::vector<bool>,
                                   std::vector<int16_t>,
                                   std::vector<int32_t>,
                                   std::vector<int64_t>,
+                                  std::vector<arrow::Decimal128>,
                                   std::vector<float>,
                                   std::vector<double>,
                                   std::vector<std::string>>;
@@ -97,8 +98,11 @@ struct ArrowResult {
 class ArrowResultSet {
  public:
   ArrowResultSet(const std::shared_ptr<ResultSet>& rows,
-                 const std::vector<TargetMetaInfo>& targets_meta);
-  ArrowResultSet(const std::shared_ptr<ResultSet>& rows) : ArrowResultSet(rows, {}) {}
+                 const std::vector<TargetMetaInfo>& targets_meta,
+                 const ExecutorDeviceType device_type = ExecutorDeviceType::CPU);
+  ArrowResultSet(const std::shared_ptr<ResultSet>& rows,
+                 const ExecutorDeviceType device_type = ExecutorDeviceType::CPU)
+      : ArrowResultSet(rows, {}, device_type) {}
 
   ArrowResultSetRowIterator rowIterator(size_t from_index,
                                         bool translate_strings,
@@ -136,13 +140,15 @@ class ArrowResultSet {
       std::shared_ptr<Data_Namespace::DataMgr>& data_mgr);
 
  private:
-  void resultSetArrowLoopback();
+  void resultSetArrowLoopback(
+      const ExecutorDeviceType device_type = ExecutorDeviceType::CPU);
   template <typename Type, typename ArrayType>
   void appendValue(std::vector<TargetValue>& row,
                    const arrow::Array& column,
                    const Type null_val,
                    const size_t idx) const;
 
+  std::shared_ptr<ArrowResult> results_;
   std::shared_ptr<ResultSet> rows_;
   std::vector<TargetMetaInfo> targets_meta_;
   std::shared_ptr<arrow::RecordBatch> record_batch_;
@@ -170,7 +176,8 @@ std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(const ExecutionResult&
 // framework.
 std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
     const ExecutionResult* results,
-    const std::shared_ptr<ResultSet>& rows);
+    const std::shared_ptr<ResultSet>& rows,
+    const ExecutorDeviceType device_type = ExecutorDeviceType::CPU);
 
 class ArrowResultSetConverter {
  public:
@@ -200,7 +207,6 @@ class ArrowResultSetConverter {
     SQLTypes physical_type;
   };
 
- private:
   ArrowResultSetConverter(const std::shared_ptr<ResultSet>& results,
                           const std::vector<std::string>& col_names,
                           const int32_t first_n)
@@ -208,6 +214,7 @@ class ArrowResultSetConverter {
 
   std::shared_ptr<arrow::RecordBatch> convertToArrow() const;
 
+ private:
   std::shared_ptr<arrow::RecordBatch> getArrowBatch(
       const std::shared_ptr<arrow::Schema>& schema) const;
 
@@ -218,7 +225,8 @@ class ArrowResultSetConverter {
     std::shared_ptr<arrow::Buffer> schema;
     std::shared_ptr<arrow::Buffer> records;
   };
-  SerializedArrowOutput getSerializedArrowOutput(arrow::ipc::DictionaryMemo* memo) const;
+  SerializedArrowOutput getSerializedArrowOutput(
+      arrow::ipc::DictionaryFieldMapper* mapper) const;
 
   void initializeColumnBuilder(ColumnBuilder& column_builder,
                                const SQLTypeInfo& col_type,
@@ -238,11 +246,6 @@ class ArrowResultSetConverter {
   std::vector<std::string> col_names_;
   int32_t top_n_;
   ArrowTransport transport_method_;
-
-  // Here we hold temporary buffers for arrow arrays when
-  // array builders are not used.
-  mutable std::vector<std::unique_ptr<int8_t[]>> values_;
-  mutable std::vector<std::unique_ptr<uint8_t[]>> is_valid_;
 
   friend class ArrowResultSet;
 };

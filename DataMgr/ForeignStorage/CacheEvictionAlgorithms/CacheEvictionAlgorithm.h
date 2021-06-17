@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,7 @@
  */
 
 /**
- * @file	CacheEvictionAlgorithm.h
- * @author	Misiu Godfrey <misiu.godfrey@omnisci.com>
+ * @file CacheEvictionAlgorithm.h
  *
  * This file includes the class specification for the cache eviction algorithm interface
  * used by the Foreign Storage Interface (FSI).  This interface can be implemented to

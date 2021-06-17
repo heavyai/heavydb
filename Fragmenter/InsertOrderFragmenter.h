@@ -24,6 +24,7 @@
 #include <map>
 #include <mutex>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "DataMgr/Chunk/Chunk.h"
@@ -84,9 +85,9 @@ class InsertOrderFragmenter : public AbstractFragmenter {
    * @todo be able to fill up current fragment in
    * multi-row insert before creating new fragment
    */
-  void insertData(InsertData& insertDataStruct) override;
+  void insertData(InsertData& insert_data_struct) override;
 
-  void insertDataNoCheckpoint(InsertData& insertDataStruct) override;
+  void insertDataNoCheckpoint(InsertData& insert_data_struct) override;
 
   void dropFragmentsToSize(const size_t maxRows) override;
 
@@ -94,9 +95,9 @@ class InsertOrderFragmenter : public AbstractFragmenter {
                                  const int fragment_id,
                                  const std::shared_ptr<ChunkMetadata> metadata) override;
 
-  void updateChunkStats(
-      const ColumnDescriptor* cd,
-      std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map) override;
+  void updateChunkStats(const ColumnDescriptor* cd,
+                        std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map,
+                        std::optional<Data_Namespace::MemoryLevel> memory_level) override;
 
   FragmentInfo* getFragmentInfo(const int fragment_id) const override;
 
@@ -112,15 +113,16 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   size_t getNumRows() override { return numTuples_; }
   void setNumRows(const size_t numTuples) override { numTuples_ = numTuples; }
 
-  void updateColumn(const Catalog_Namespace::Catalog* catalog,
-                    const TableDescriptor* td,
-                    const ColumnDescriptor* cd,
-                    const int fragment_id,
-                    const std::vector<uint64_t>& frag_offsets,
-                    const std::vector<ScalarTargetValue>& rhs_values,
-                    const SQLTypeInfo& rhs_type,
-                    const Data_Namespace::MemoryLevel memory_level,
-                    UpdelRoll& updel_roll) override;
+  std::optional<ChunkUpdateStats> updateColumn(
+      const Catalog_Namespace::Catalog* catalog,
+      const TableDescriptor* td,
+      const ColumnDescriptor* cd,
+      const int fragment_id,
+      const std::vector<uint64_t>& frag_offsets,
+      const std::vector<ScalarTargetValue>& rhs_values,
+      const SQLTypeInfo& rhs_type,
+      const Data_Namespace::MemoryLevel memory_level,
+      UpdelRoll& updel_roll) override;
 
   void updateColumns(const Catalog_Namespace::Catalog* catalog,
                      const TableDescriptor* td,
@@ -146,11 +148,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   void updateColumnMetadata(const ColumnDescriptor* cd,
                             FragmentInfo& fragment,
                             std::shared_ptr<Chunk_NS::Chunk> chunk,
-                            const bool null,
-                            const double dmax,
-                            const double dmin,
-                            const int64_t lmax,
-                            const int64_t lmin,
+                            const UpdateValuesStats& update_values_stats,
                             const SQLTypeInfo& rhs_type,
                             UpdelRoll& updel_roll) override;
 
@@ -219,11 +217,12 @@ class InsertOrderFragmenter : public AbstractFragmenter {
       const Data_Namespace::MemoryLevel memory_level = Data_Namespace::DISK_LEVEL);
   void deleteFragments(const std::vector<int>& dropFragIds);
 
+  void conditionallyInstantiateFileMgrWithParams();
   void getChunkMetadata();
 
   void lockInsertCheckpointData(const InsertData& insertDataStruct);
-  void insertDataImpl(InsertData& insertDataStruct);
-  void replicateData(const InsertData& insertDataStruct);
+  void insertDataImpl(InsertData& insert_data);
+  void addColumns(const InsertData& insertDataStruct);
 
   InsertOrderFragmenter(const InsertOrderFragmenter&);
   InsertOrderFragmenter& operator=(const InsertOrderFragmenter&);
@@ -238,6 +237,10 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   auto vacuum_varlen_rows(const FragmentInfo& fragment,
                           const std::shared_ptr<Chunk_NS::Chunk>& chunk,
                           const std::vector<uint64_t>& frag_offsets);
+
+ private:
+  bool isAddingNewColumns(const InsertData& insert_data) const;
+  void dropFragmentsToSizeNoInsertLock(const size_t max_rows);
 };
 
 }  // namespace Fragmenter_Namespace

@@ -1,14 +1,6 @@
-from pkg_resources import get_distribution, DistributionNotFound
-
-# module constants
-try:
-    __version__ = get_distribution(__name__).version
-except DistributionNotFound:
-    # package is not installed
-    pass
-
-# clean up
-del get_distribution, DistributionNotFound
+from .version import get_package_version
+__version__ = get_package_version()
+del get_package_version
 
 apilevel = "2.0"
 threadsafety = 2

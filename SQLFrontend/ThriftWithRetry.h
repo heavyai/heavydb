@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <thread>
 #include "gen-cpp/omnisci_types.h"
 
 template <typename SERVICE_ENUM, typename CLIENT_CONTEXT>
@@ -164,7 +165,8 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
       if (which_service == kDISCONNECT) {
         return false;
       }
-      sleep(con_timeout_base * pow(2, try_count));
+      std::this_thread::sleep_for(
+          std::chrono::seconds(con_timeout_base * (1 << try_count)));
       if (which_service != kCONNECT) {
         if (!thrift_with_retry(kCONNECT, context, nullptr, try_count + 1)) {
           return false;

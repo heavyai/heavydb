@@ -17,6 +17,7 @@
 #pragma once
 
 #include "ParquetEncoder.h"
+#include "ParquetMetadataValidator.h"
 #include "ParquetShared.h"
 
 #include <parquet/schema.h>
@@ -26,35 +27,6 @@
 #include "ForeignStorageBuffer.h"
 
 namespace foreign_storage {
-
-inline int64_t get_time_conversion_denominator(
-    const parquet::LogicalType::TimeUnit::unit time_unit) {
-  int64_t conversion_denominator = 0;
-  switch (time_unit) {
-    case parquet::LogicalType::TimeUnit::MILLIS:
-      conversion_denominator = 1000L;
-      break;
-    case parquet::LogicalType::TimeUnit::MICROS:
-      conversion_denominator = 1000L * 1000L;
-      break;
-    case parquet::LogicalType::TimeUnit::NANOS:
-      conversion_denominator = 1000L * 1000L * 1000L;
-      break;
-    default:
-      UNREACHABLE();
-  }
-  return conversion_denominator;
-}
-
-template <typename V, std::enable_if_t<std::is_integral<V>::value, int> = 0>
-inline V get_null_value() {
-  return inline_int_null_value<V>();
-}
-
-template <typename V, std::enable_if_t<std::is_floating_point<V>::value, int> = 0>
-inline V get_null_value() {
-  return inline_fp_null_value<V>();
-}
 
 class ParquetInPlaceEncoder : public ParquetScalarEncoder {
  public:
@@ -212,20 +184,38 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
       const int parquet_column_index,
       const SQLTypeInfo& column_type) override {
     auto metadata = ParquetEncoder::createMetadata(column_type);
+    auto column_metadata = group_metadata->ColumnChunk(parquet_column_index);
 
     // update statistics
-    auto column_metadata = group_metadata->ColumnChunk(parquet_column_index);
     auto parquet_column_descriptor =
         group_metadata->schema()->Column(parquet_column_index);
     auto stats = validate_and_get_column_metadata_statistics(column_metadata.get());
     if (stats->HasMinMax()) {
+      // validate statistics if validation applicable as part of encoding
+      if (auto parquet_scalar_validator = dynamic_cast<ParquetMetadataValidator*>(this)) {
+        try {
+          parquet_scalar_validator->validate(
+              stats, column_type.is_array() ? column_type.get_elem_type() : column_type);
+        } catch (const std::exception& e) {
+          std::stringstream error_message;
+          error_message << e.what() << " Error validating statistics of Parquet column '"
+                        << group_metadata->schema()->Column(parquet_column_index)->name()
+                        << "'";
+          throw std::runtime_error(error_message.str());
+        }
+      }
+
       auto [stats_min, stats_max] = getEncodedStats(parquet_column_descriptor, stats);
       auto updated_chunk_stats = getUpdatedStats(stats_min, stats_max, column_type);
       metadata->fillChunkStats(updated_chunk_stats.min,
                                updated_chunk_stats.max,
                                metadata->chunkStats.has_nulls);
     }
-    metadata->chunkStats.has_nulls = stats->null_count() > 0;
+    auto null_count = stats->null_count();
+    validateNullCount(group_metadata->schema()->Column(parquet_column_index)->name(),
+                      null_count,
+                      column_type);
+    metadata->chunkStats.has_nulls = null_count > 0;
 
     // update sizing
     metadata->numBytes = omnisci_data_type_byte_size_ * column_metadata->num_values();
@@ -236,6 +226,12 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
 
  protected:
   virtual bool encodingIsIdentityForSameTypes() const { return false; }
+
+  std::pair<T, T> getUnencodedStats(std::shared_ptr<parquet::Statistics> stats) const {
+    T stats_min = reinterpret_cast<T*>(stats->EncodeMin().data())[0];
+    T stats_max = reinterpret_cast<T*>(stats->EncodeMax().data())[0];
+    return {stats_min, stats_max};
+  }
 
  private:
   static ChunkStats getUpdatedStats(V& stats_min,

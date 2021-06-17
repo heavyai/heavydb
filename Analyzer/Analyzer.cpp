@@ -24,9 +24,12 @@
 
 #include "Analyzer.h"
 #include "Catalog/Catalog.h"
+#include "Geospatial/Conversion.h"
+#include "Geospatial/Types.h"
 #include "QueryEngine/DateTimeUtils.h"
 #include "RangeTableEntry.h"
 #include "Shared/DateConverters.h"
+#include "Shared/misc.h"
 #include "Shared/sqltypes.h"
 
 #include <algorithm>
@@ -717,37 +720,108 @@ std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info)
 
 namespace {
 
-struct IntFracRepr {
-  const int64_t integral;
-  const int64_t fractional;
-  const int64_t scale;
-};
-
-IntFracRepr decimal_to_int_frac(const int64_t dec, const SQLTypeInfo& ti) {
-  if (ti.get_scale() > 18) {
-    auto truncated_ti = ti;
-    truncated_ti.set_scale(18);
-    auto truncated_dec = dec;
-    for (int i = 0; i < ti.get_scale() - 18; ++i) {
-      truncated_dec /= 10;
-    }
-    return decimal_to_int_frac(truncated_dec, truncated_ti);
+// Return dec * 10^-scale
+template <typename T>
+T floatFromDecimal(int64_t const dec, unsigned const scale) {
+  static_assert(std::is_floating_point_v<T>);
+  constexpr auto pow10 = shared::powersOf<T, 16>(10);
+  T num = static_cast<T>(dec);
+  if (scale == 0) {
+    return num;
   }
-  int64_t integral_part = dec;
-  int64_t scale = 1;
-  for (int i = 0; i < ti.get_scale(); i++) {
-    integral_part /= 10;
-    scale *= 10;
+  T den = pow10[scale & 15];
+  for (unsigned sc = scale >> 4; sc; --sc) {
+    den *= 1e16;
   }
-  return {integral_part, dec - integral_part * scale, scale};
+  return num / den;
 }
 
-template <class T>
-T safe_narrow(const int64_t v) {
-  if (v > std::numeric_limits<T>::max() || v < std::numeric_limits<T>::min()) {
+// Q: Why is there a maxRound() but no minRound()?
+// A: The numerical value of std::numeric_limits<int64_t>::min() is unchanged when cast
+// to either float or double, but std::numeric_limits<intXX_t>::max() is incremented to
+// 2^(XX-1) when cast to float/double for XX in {32,64}, which is an invalid intXX_t
+// value. Thus the maximum float/double that can be cast to a valid integer type must be
+// calculated directly, and not just compared to std::numeric_limits<intXX_t>::max().
+template <typename FLOAT_TYPE, typename INT_TYPE>
+constexpr FLOAT_TYPE maxRound() {
+  static_assert(std::is_integral_v<INT_TYPE> && std::is_floating_point_v<FLOAT_TYPE>);
+  constexpr int dd =
+      std::numeric_limits<INT_TYPE>::digits - std::numeric_limits<FLOAT_TYPE>::digits;
+  if constexpr (0 < dd) {
+    return static_cast<FLOAT_TYPE>(std::numeric_limits<INT_TYPE>::max() - (1ll << dd));
+  } else {
+    return static_cast<FLOAT_TYPE>(std::numeric_limits<INT_TYPE>::max());
+  }
+}
+
+template <typename TO, typename FROM>
+TO safeNarrow(FROM const from) {
+  static_assert(std::is_integral_v<TO> && std::is_integral_v<FROM>);
+  static_assert(sizeof(TO) < sizeof(FROM));
+  if (from < static_cast<FROM>(std::numeric_limits<TO>::min()) ||
+      static_cast<FROM>(std::numeric_limits<TO>::max()) < from) {
     throw std::runtime_error("Overflow or underflow");
   }
-  return static_cast<T>(v);
+  return static_cast<TO>(from);
+}
+
+template <typename T>
+T roundDecimal(int64_t n, unsigned scale) {
+  static_assert(std::is_integral_v<T>);
+  constexpr size_t max_scale = std::numeric_limits<uint64_t>::digits10;  // 19
+  constexpr auto pow10 = shared::powersOf<uint64_t, max_scale + 1>(10);
+  if (scale == 0) {
+    if constexpr (sizeof(T) < sizeof(int64_t)) {
+      return safeNarrow<T>(n);
+    } else {
+      return n;
+    }
+  } else if (max_scale < scale) {
+    return 0;  // 0.09223372036854775807 rounds to 0
+  }
+  uint64_t const u = std::abs(n);
+  uint64_t const pow = pow10[scale];
+  uint64_t div = u / pow;
+  uint64_t rem = u % pow;
+  div += pow / 2 <= rem;
+  if constexpr (sizeof(T) < sizeof(int64_t)) {
+    return safeNarrow<T>(static_cast<int64_t>(n < 0 ? -div : div));
+  } else {
+    return n < 0 ? -div : div;
+  }
+}
+
+template <typename TO, typename FROM>
+TO safeRound(FROM const from) {
+  static_assert(std::is_integral_v<TO> && std::is_floating_point_v<FROM>);
+  constexpr FROM max_float = maxRound<FROM, TO>();
+  FROM const n = std::round(from);
+  if (n < static_cast<FROM>(std::numeric_limits<TO>::min()) || max_float < n) {
+    throw std::runtime_error("Overflow or underflow");
+  }
+  return static_cast<TO>(n);
+}
+
+// Return numeric/decimal representation of from with given scale.
+template <typename T>
+int64_t safeScale(T from, unsigned const scale) {
+  static_assert(std::is_arithmetic_v<T>);
+  constexpr size_t max_scale = std::numeric_limits<int64_t>::digits10;  // 18
+  constexpr auto pow10 = shared::powersOf<int64_t, max_scale + 1>(10);
+  if constexpr (std::is_integral_v<T>) {
+    int64_t retval;
+    if (scale < pow10.size() && !__builtin_mul_overflow(from, pow10[scale], &retval)) {
+      return retval;
+    }
+  } else if constexpr (std::is_floating_point_v<T>) {
+    if (scale < pow10.size()) {
+      return safeRound<int64_t>(from * pow10[scale]);
+    }
+  }
+  if (from == 0) {
+    return 0;
+  }
+  throw std::runtime_error("Overflow or underflow");
 }
 
 }  // namespace
@@ -765,6 +839,7 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
           constval.smallintval = (int16_t)constval.tinyintval;
           break;
         case kBIGINT:
+        case kTIMESTAMP:
           constval.bigintval = (int64_t)constval.tinyintval;
           break;
         case kDOUBLE:
@@ -775,10 +850,7 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
           break;
         case kNUMERIC:
         case kDECIMAL:
-          constval.bigintval = (int64_t)constval.tinyintval;
-          for (int i = 0; i < new_type_info.get_scale(); i++) {
-            constval.bigintval *= 10;
-          }
+          constval.bigintval = safeScale(constval.tinyintval, new_type_info.get_scale());
           break;
         default:
           CHECK(false);
@@ -787,14 +859,15 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
     case kINT:
       switch (new_type_info.get_type()) {
         case kTINYINT:
-          constval.tinyintval = safe_narrow<int8_t>(constval.intval);
+          constval.tinyintval = safeNarrow<int8_t>(constval.intval);
           break;
         case kINT:
           break;
         case kSMALLINT:
-          constval.smallintval = safe_narrow<int16_t>(constval.intval);
+          constval.smallintval = safeNarrow<int16_t>(constval.intval);
           break;
         case kBIGINT:
+        case kTIMESTAMP:
           constval.bigintval = (int64_t)constval.intval;
           break;
         case kDOUBLE:
@@ -805,10 +878,7 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
           break;
         case kNUMERIC:
         case kDECIMAL:
-          constval.bigintval = (int64_t)constval.intval;
-          for (int i = 0; i < new_type_info.get_scale(); i++) {
-            constval.bigintval *= 10;
-          }
+          constval.bigintval = safeScale(constval.intval, new_type_info.get_scale());
           break;
         default:
           CHECK(false);
@@ -817,7 +887,7 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
     case kSMALLINT:
       switch (new_type_info.get_type()) {
         case kTINYINT:
-          constval.tinyintval = safe_narrow<int8_t>(constval.smallintval);
+          constval.tinyintval = safeNarrow<int8_t>(constval.smallintval);
           break;
         case kINT:
           constval.intval = (int32_t)constval.smallintval;
@@ -825,6 +895,7 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
         case kSMALLINT:
           break;
         case kBIGINT:
+        case kTIMESTAMP:
           constval.bigintval = (int64_t)constval.smallintval;
           break;
         case kDOUBLE:
@@ -835,10 +906,7 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
           break;
         case kNUMERIC:
         case kDECIMAL:
-          constval.bigintval = (int64_t)constval.smallintval;
-          for (int i = 0; i < new_type_info.get_scale(); i++) {
-            constval.bigintval *= 10;
-          }
+          constval.bigintval = safeScale(constval.smallintval, new_type_info.get_scale());
           break;
         default:
           CHECK(false);
@@ -847,15 +915,16 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
     case kBIGINT:
       switch (new_type_info.get_type()) {
         case kTINYINT:
-          constval.tinyintval = safe_narrow<int8_t>(constval.bigintval);
+          constval.tinyintval = safeNarrow<int8_t>(constval.bigintval);
           break;
         case kINT:
-          constval.intval = safe_narrow<int32_t>(constval.bigintval);
+          constval.intval = safeNarrow<int32_t>(constval.bigintval);
           break;
         case kSMALLINT:
-          constval.smallintval = safe_narrow<int16_t>(constval.bigintval);
+          constval.smallintval = safeNarrow<int16_t>(constval.bigintval);
           break;
         case kBIGINT:
+        case kTIMESTAMP:
           break;
         case kDOUBLE:
           constval.doubleval = (double)constval.bigintval;
@@ -865,9 +934,7 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
           break;
         case kNUMERIC:
         case kDECIMAL:
-          for (int i = 0; i < new_type_info.get_scale(); i++) {
-            constval.bigintval *= 10;
-          }
+          constval.bigintval = safeScale(constval.bigintval, new_type_info.get_scale());
           break;
         default:
           CHECK(false);
@@ -876,16 +943,17 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
     case kDOUBLE:
       switch (new_type_info.get_type()) {
         case kTINYINT:
-          constval.tinyintval = (int8_t)constval.doubleval;
+          constval.tinyintval = safeRound<int8_t>(constval.doubleval);
           break;
         case kINT:
-          constval.intval = (int32_t)constval.doubleval;
+          constval.intval = safeRound<int32_t>(constval.doubleval);
           break;
         case kSMALLINT:
-          constval.smallintval = (int16_t)constval.doubleval;
+          constval.smallintval = safeRound<int16_t>(constval.doubleval);
           break;
         case kBIGINT:
-          constval.bigintval = (int64_t)constval.doubleval;
+        case kTIMESTAMP:
+          constval.bigintval = safeRound<int64_t>(constval.doubleval);
           break;
         case kDOUBLE:
           break;
@@ -894,10 +962,7 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
           break;
         case kNUMERIC:
         case kDECIMAL:
-          for (int i = 0; i < new_type_info.get_scale(); i++) {
-            constval.doubleval *= 10;
-          }
-          constval.bigintval = (int64_t)constval.doubleval;
+          constval.bigintval = safeScale(constval.doubleval, new_type_info.get_scale());
           break;
         default:
           CHECK(false);
@@ -906,16 +971,17 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
     case kFLOAT:
       switch (new_type_info.get_type()) {
         case kTINYINT:
-          constval.tinyintval = (int8_t)constval.floatval;
+          constval.tinyintval = safeRound<int8_t>(constval.floatval);
           break;
         case kINT:
-          constval.intval = (int32_t)constval.floatval;
+          constval.intval = safeRound<int32_t>(constval.floatval);
           break;
         case kSMALLINT:
-          constval.smallintval = (int16_t)constval.floatval;
+          constval.smallintval = safeRound<int16_t>(constval.floatval);
           break;
         case kBIGINT:
-          constval.bigintval = (int64_t)constval.floatval;
+        case kTIMESTAMP:
+          constval.bigintval = safeRound<int64_t>(constval.floatval);
           break;
         case kDOUBLE:
           constval.doubleval = (double)constval.floatval;
@@ -924,10 +990,7 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
           break;
         case kNUMERIC:
         case kDECIMAL:
-          for (int i = 0; i < new_type_info.get_scale(); i++) {
-            constval.floatval *= 10;
-          }
-          constval.bigintval = (int64_t)constval.floatval;
+          constval.bigintval = safeScale(constval.floatval, new_type_info.get_scale());
           break;
         default:
           CHECK(false);
@@ -937,40 +1000,30 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
     case kDECIMAL:
       switch (new_type_info.get_type()) {
         case kTINYINT:
-          for (int i = 0; i < type_info.get_scale(); i++) {
-            constval.bigintval /= 10;
-          }
-          constval.tinyintval = safe_narrow<int8_t>(constval.bigintval);
+          constval.tinyintval =
+              roundDecimal<int8_t>(constval.bigintval, type_info.get_scale());
           break;
         case kINT:
-          for (int i = 0; i < type_info.get_scale(); i++) {
-            constval.bigintval /= 10;
-          }
-          constval.intval = safe_narrow<int32_t>(constval.bigintval);
+          constval.intval =
+              roundDecimal<int32_t>(constval.bigintval, type_info.get_scale());
           break;
         case kSMALLINT:
-          for (int i = 0; i < type_info.get_scale(); i++) {
-            constval.bigintval /= 10;
-          }
-          constval.smallintval = (int16_t)constval.bigintval;
+          constval.smallintval =
+              roundDecimal<int16_t>(constval.bigintval, type_info.get_scale());
           break;
         case kBIGINT:
-          for (int i = 0; i < type_info.get_scale(); i++) {
-            constval.bigintval /= 10;
-          }
+        case kTIMESTAMP:
+          constval.bigintval =
+              roundDecimal<int64_t>(constval.bigintval, type_info.get_scale());
           break;
-        case kDOUBLE: {
-          const auto int_frac = decimal_to_int_frac(constval.bigintval, type_info);
-          constval.doubleval = int_frac.integral +
-                               static_cast<double>(int_frac.fractional) / int_frac.scale;
+        case kDOUBLE:
+          constval.doubleval =
+              floatFromDecimal<double>(constval.bigintval, type_info.get_scale());
           break;
-        }
-        case kFLOAT: {
-          const auto int_frac = decimal_to_int_frac(constval.bigintval, type_info);
-          constval.floatval = int_frac.integral +
-                              static_cast<double>(int_frac.fractional) / int_frac.scale;
+        case kFLOAT:
+          constval.floatval =
+              floatFromDecimal<float>(constval.bigintval, type_info.get_scale());
           break;
-        }
         case kNUMERIC:
         case kDECIMAL:
           constval.bigintval = convert_decimal_value_to_scale(
@@ -983,16 +1036,16 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
     case kTIMESTAMP:
       switch (new_type_info.get_type()) {
         case kTINYINT:
-          constval.tinyintval = static_cast<int8_t>(constval.bigintval);
+          constval.tinyintval = safeNarrow<int8_t>(constval.bigintval);
           break;
         case kINT:
-          constval.intval = static_cast<int32_t>(constval.bigintval);
+          constval.intval = safeNarrow<int32_t>(constval.bigintval);
           break;
         case kSMALLINT:
-          constval.smallintval = static_cast<int16_t>(constval.bigintval);
+          constval.smallintval = safeNarrow<int16_t>(constval.bigintval);
           break;
         case kBIGINT:
-          constval.bigintval = static_cast<int64_t>(constval.bigintval);
+        case kTIMESTAMP:
           break;
         case kDOUBLE:
           constval.doubleval = static_cast<double>(constval.bigintval);
@@ -1022,6 +1075,7 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
           constval.smallintval = constval.boolval ? 1 : 0;
           break;
         case kBIGINT:
+        case kTIMESTAMP:
           constval.bigintval = constval.boolval ? 1 : 0;
           break;
         case kDOUBLE:
@@ -1136,7 +1190,8 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
     set_null_value();
     return;
   }
-  if (new_type_info.is_number() &&
+  if ((new_type_info.is_number() || new_type_info.get_type() == kTIMESTAMP) &&
+      (new_type_info.get_type() != kTIMESTAMP || type_info.get_type() != kTIMESTAMP) &&
       (type_info.is_number() || type_info.get_type() == kTIMESTAMP ||
        type_info.get_type() == kBOOLEAN)) {
     cast_number(new_type_info);
@@ -2653,6 +2708,9 @@ std::string AggExpr::toString() const {
     case kAPPROX_COUNT_DISTINCT:
       agg = "APPROX_COUNT_DISTINCT";
       break;
+    case kAPPROX_MEDIAN:
+      agg = "APPROX_MEDIAN";
+      break;
     case kSINGLE_VALUE:
       agg = "SINGLE_VALUE";
       break;
@@ -3019,6 +3077,13 @@ void DatetruncExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
   from_expr_->collect_rte_idx(rte_idx_set);
 }
 
+void ArrayExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
+  for (unsigned i = 0; i < getElementCount(); i++) {
+    const auto expr = getElement(i);
+    expr->collect_rte_idx(rte_idx_set);
+  }
+}
+
 void CaseExpr::collect_column_var(
     std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
     bool include_agg) const {
@@ -3055,6 +3120,15 @@ void DatetruncExpr::collect_column_var(
     std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
     bool include_agg) const {
   from_expr_->collect_column_var(colvar_set, include_agg);
+}
+
+void ArrayExpr::collect_column_var(
+    std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+    bool include_agg) const {
+  for (unsigned i = 0; i < getElementCount(); i++) {
+    const auto expr = getElement(i);
+    expr->collect_column_var(colvar_set, include_agg);
+  }
 }
 
 void CaseExpr::check_group_by(
@@ -3218,6 +3292,214 @@ bool FunctionOperWithCustomTypeHandling::operator==(const Expr& rhs) const {
     }
   }
   return true;
+}
+
+namespace {
+
+SQLTypes get_ti_from_geo(const Geospatial::GeoBase* geo) {
+  CHECK(geo);
+  switch (geo->getType()) {
+    case Geospatial::GeoBase::GeoType::kPOINT: {
+      return kPOINT;
+    }
+    case Geospatial::GeoBase::GeoType::kLINESTRING: {
+      return kLINESTRING;
+    }
+    case Geospatial::GeoBase::GeoType::kPOLYGON: {
+      return kPOLYGON;
+    }
+    case Geospatial::GeoBase::GeoType::kMULTIPOLYGON: {
+      return kMULTIPOLYGON;
+    }
+    default:
+      UNREACHABLE();
+      return kNULLT;
+  }
+}
+
+}  // namespace
+
+// TODO: fixup null
+GeoConstant::GeoConstant(std::unique_ptr<Geospatial::GeoBase>&& geo,
+                         const SQLTypeInfo& ti)
+    : GeoExpr(ti), geo_(std::move(geo)) {
+  CHECK(geo_);
+  if (get_ti_from_geo(geo_.get()) != ti.get_type()) {
+    throw std::runtime_error("Conflicting types for geo data " + geo_->getWktString() +
+                             " (type provided: " + ti.get_type_name() + ")");
+  }
+}
+
+std::shared_ptr<Analyzer::Expr> GeoConstant::deep_copy() const {
+  CHECK(geo_);
+  return makeExpr<GeoConstant>(geo_->clone(), type_info);
+}
+
+std::string GeoConstant::toString() const {
+  std::string str{"(GeoConst "};
+  CHECK(geo_);
+  str += geo_->getWktString();
+  str += ") ";
+  return str;
+}
+
+bool GeoConstant::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(GeoConstant)) {
+    return false;
+  }
+  const GeoConstant& rhs_c = dynamic_cast<const GeoConstant&>(rhs);
+  if (type_info != rhs_c.get_type_info() /*|| is_null != rhs_c.get_is_null()*/) {
+    return false;
+  }
+  /* TODO: constant nulls
+  if (is_null && rhs_c.get_is_null()) {
+    return true;
+  }
+
+  */
+  return *geo_ == *rhs_c.geo_;
+}
+
+size_t GeoConstant::physicalCols() const {
+  CHECK(type_info.is_geometry());
+  return type_info.get_physical_coord_cols();
+}
+
+std::shared_ptr<Analyzer::Constant> GeoConstant::makePhysicalConstant(
+    const size_t index) const {
+  // TODO: handle bounds, etc
+  const auto num_phys_coords = type_info.get_physical_coord_cols();
+  CHECK_GE(num_phys_coords, 0);
+  CHECK_LE(index, size_t(num_phys_coords));
+  SQLTypeInfo ti = type_info;
+
+  std::vector<double> coords;
+  std::vector<double> bounds;
+  std::vector<int> ring_sizes;
+  std::vector<int> poly_rings;
+
+  Geospatial::GeoTypesFactory::getGeoColumns(
+      geo_->getWktString(), ti, coords, bounds, ring_sizes, poly_rings);
+
+  if (ti.get_output_srid() == 4326) {
+    // expect geo literals compressed by default
+    CHECK(ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32);
+  }
+
+  switch (index) {
+    case 0:  // coords
+      return Geospatial::convert_coords(coords, ti);
+    case 1:  // ring sizes
+      return Geospatial::convert_rings(ring_sizes);
+    case 2:  // poly rings
+      return Geospatial::convert_rings(poly_rings);
+    default:
+      UNREACHABLE();
+  }
+
+  UNREACHABLE();
+  return nullptr;
+}
+
+GeoOperator::GeoOperator(const SQLTypeInfo& ti,
+                         const std::string& name,
+                         const std::vector<std::shared_ptr<Analyzer::Expr>>& args)
+    : GeoExpr(ti), name_(name), args_(args) {}
+
+std::shared_ptr<Analyzer::Expr> GeoOperator::deep_copy() const {
+  std::vector<std::shared_ptr<Analyzer::Expr>> args;
+  for (size_t i = 0; i < args_.size(); i++) {
+    args.push_back(args_[i]->deep_copy());
+  }
+  return makeExpr<GeoOperator>(type_info, name_, args);
+}
+
+std::string GeoOperator::toString() const {
+  std::string str{"(" + name_ + " "};
+  for (const auto& arg : args_) {
+    str += arg->toString();
+  }
+  str += ")";
+  return str;
+}
+
+bool GeoOperator::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(GeoOperator)) {
+    return false;
+  }
+  const GeoOperator& rhs_go = dynamic_cast<const GeoOperator&>(rhs);
+  if (getName() != rhs_go.getName()) {
+    return false;
+  }
+  if (rhs_go.size() != size()) {
+    return false;
+  }
+  for (size_t i = 0; i < size(); i++) {
+    if (args_[i].get() != rhs_go.getOperand(i)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+size_t GeoOperator::size() const {
+  return args_.size();
+}
+
+Analyzer::Expr* GeoOperator::getOperand(const size_t index) const {
+  CHECK_LT(index, args_.size());
+  return args_[index].get();
+}
+
+GeoFunctionOperator::GeoFunctionOperator(
+    const SQLTypeInfo& ti,
+    const std::string& name,
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& args)
+    : GeoExpr(ti), name_(name), args_(args) {}
+
+std::shared_ptr<Analyzer::Expr> GeoFunctionOperator::deep_copy() const {
+  std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
+  for (size_t i = 0; i < size(); ++i) {
+    args_copy.push_back(getArg(i)->deep_copy());
+  }
+  return makeExpr<Analyzer::GeoFunctionOperator>(type_info, getName(), args_copy);
+}
+
+std::string GeoFunctionOperator::toString() const {
+  std::string str{"(" + name_ + " "};
+  for (const auto& arg : args_) {
+    str += arg->toString();
+  }
+  str += ")";
+  return str;
+}
+
+bool GeoFunctionOperator::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(GeoFunctionOperator)) {
+    return false;
+  }
+  const GeoFunctionOperator& rhs_go = dynamic_cast<const GeoFunctionOperator&>(rhs);
+  if (getName() != rhs_go.getName()) {
+    return false;
+  }
+  if (rhs_go.size() != size()) {
+    return false;
+  }
+  for (size_t i = 0; i < size(); i++) {
+    if (args_[i].get() != rhs_go.getArg(i)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+size_t GeoFunctionOperator::size() const {
+  return args_.size();
+}
+
+Analyzer::Expr* GeoFunctionOperator::getArg(const size_t index) const {
+  CHECK_LT(index, args_.size());
+  return args_[index].get();
 }
 
 }  // namespace Analyzer

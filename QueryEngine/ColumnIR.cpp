@@ -231,7 +231,6 @@ llvm::Value* CodeGenerator::codegenWindowPosition(
       "row_number_window_func",
       {cgen_state_->llInt(reinterpret_cast<const int64_t>(window_func_context->output())),
        pos_arg});
-  window_func_context->setRowNumber(window_position);
   return window_position;
 }
 
@@ -576,6 +575,10 @@ std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
         if (eq_left_op->get_type_info().is_geometry()) {
           // skip cast for a geospatial lhs, since the rhs is likely to be a geospatial
           // physical col without geospatial type info
+          return nullptr;
+        }
+        if (is_constructed_point(eq_left_op)) {
+          // skip cast for a constructed point lhs
           return nullptr;
         }
         const auto eq_left_op_col = dynamic_cast<const Analyzer::ColumnVar*>(eq_left_op);

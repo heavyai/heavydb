@@ -10,6 +10,7 @@ crypto++ | [Boost](<http://www.cryptopp.com/License.txt>) | Signature verificati
 CUDA | [NVIDIA EULA](<http://docs.nvidia.com/cuda/eula/index.html#redistribution-rights>) | GPU access |
 double-conversion | [BSD-like](<https://github.com/google/double-conversion/blob/master/COPYING>) | Folly |
 EGL, KHR | [MIT]() | Rendering Support |
+fmt | [MIT](https://github.com/fmtlib/fmt/blob/master/LICENSE.rst) | Folly |
 Folly | [Apache](https://github.com/facebook/folly/blob/master/LICENSE) | Multiple |
 glbinding | [MIT](<https://github.com/cginternals/glbinding/blob/master/LICENSE>) | OpenGL management |
 gflags | [BSD-like](<https://github.com/gflags/gflags/blob/master/COPYING.txt>) | Folly |
@@ -33,6 +34,7 @@ zlib | [zlib](<http://zlib.net/zlib_license.html>) | PNG support |
 glslang | [BSD BSD-like MIT](https://github.com/KhronosGroup/glslang/blob/master/LICENSE.txt) | Rendering support
 spirv-tools | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Tools/blob/master/LICENSE) | Rendering support
 spirv-cross | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Cross/blob/master/LICENSE) | Rendering support
+Vulkan Memory Allocator | [MIT](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/blob/master/LICENSE.txt) | Rendering support
 --- | --- | --- |
 gdal | [MIT](<http://svn.osgeo.org/gdal/trunk/gdal/LICENSE.TXT>) | GDAL, Geospatial import |
 libexpat | [MIT](<https://github.com/LuaDist/libexpat/blob/master/COPYING>) | GDAL, KML import |
@@ -143,3 +145,6 @@ uber-go/multierr | [MIT](<https://github.com/uber-go/multierr/blob/master/LICENS
 uber-go/zap | [MIT](<https://github.com/uber-go/zap/blob/master/LICENSE.txt>) | Distributed consensus |
 --- | --- | --- |
 geos | [LGPLv2.1](<https://github.com/libgeos/geos/blob/master/COPYING>) | Geo support, dynamic linked |
+--- | --- | --- |
+Canonical Raft | [LGPLv3](<https://github.com/canonical/raft/blob/master/LICENSE>) | Distributed consensus |
+libuv | [MIT](<https://github.com/libuv/libuv/blob/v1.x/LICENSE>) | Distributed consensus |

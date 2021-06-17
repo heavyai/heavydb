@@ -72,9 +72,10 @@ SQLTypeInfo type_from_arrow_field(const arrow::Field& field) {
 }  // namespace
 
 ArrowResultSet::ArrowResultSet(const std::shared_ptr<ResultSet>& rows,
-                               const std::vector<TargetMetaInfo>& targets_meta)
+                               const std::vector<TargetMetaInfo>& targets_meta,
+                               const ExecutorDeviceType device_type)
     : rows_(rows), targets_meta_(targets_meta), crt_row_idx_(0) {
-  resultSetArrowLoopback();
+  resultSetArrowLoopback(device_type);
   auto schema = record_batch_->schema();
   for (int i = 0; i < schema->num_fields(); ++i) {
     std::shared_ptr<arrow::Field> field = schema->field(i);
@@ -213,7 +214,7 @@ size_t ArrowResultSet::rowCount() const {
   return record_batch_->num_rows();
 }
 
-void ArrowResultSet::resultSetArrowLoopback() {
+void ArrowResultSet::resultSetArrowLoopback(const ExecutorDeviceType device_type) {
   std::vector<std::string> col_names;
 
   if (!targets_meta_.empty()) {
@@ -225,36 +226,30 @@ void ArrowResultSet::resultSetArrowLoopback() {
       col_names.push_back("col_" + std::to_string(i));
     }
   }
-  const auto converter = ArrowResultSetConverter(rows_, col_names, -1);
 
-  arrow::ipc::DictionaryMemo schema_memo;
-  const auto serialized_arrow_output = converter.getSerializedArrowOutput(&schema_memo);
+  // We convert the given rows to arrow, which gets serialized
+  // into a buffer by Arrow Wire.
+  auto converter = ArrowResultSetConverter(rows_, col_names, -1);
+  converter.transport_method_ = ArrowTransport::WIRE;
+  converter.device_type_ = device_type;
 
-  arrow::io::BufferReader schema_reader(serialized_arrow_output.schema);
+  // Lifetime of the result buffer is that of ArrowResultSet
+  results_ = std::make_shared<ArrowResult>(converter.getArrowResult());
 
-  ARROW_ASSIGN_OR_THROW(auto schema,
-                        arrow::ipc::ReadSchema(&schema_reader, &dictionary_memo_));
-  CHECK_EQ(schema_memo.num_fields(), dictionary_memo_.num_fields());
+  // Create a reader for reading back serialized
+  arrow::io::BufferReader reader(
+      reinterpret_cast<const uint8_t*>(results_->df_buffer.data()), results_->df_size);
 
-  // add the dictionaries from the serialized output to the newly created memo
-  const auto& serialized_id_to_dict = schema_memo.dictionaries();
-  for (const auto& itr : serialized_id_to_dict) {
-    const auto& id = itr.first;
-    const auto& dict = itr.second;
-    CHECK(!dictionary_memo_.HasDictionary(id));
-    ARROW_THROW_NOT_OK(dictionary_memo_.AddDictionary(id, dict));
-  }
+  ARROW_ASSIGN_OR_THROW(auto batch_reader,
+                        arrow::ipc::RecordBatchStreamReader::Open(&reader));
 
-  arrow::io::BufferReader records_reader(serialized_arrow_output.records);
+  ARROW_THROW_NOT_OK(batch_reader->ReadNext(&record_batch_));
 
-  ARROW_ASSIGN_OR_THROW(
-      record_batch_,
-      arrow::ipc::ReadRecordBatch(schema,
-                                  &dictionary_memo_,
-                                  arrow::ipc::IpcReadOptions::Defaults(),
-                                  &records_reader));
+  // Collect dictionaries from the record batch into the dictionary memo.
+  ARROW_THROW_NOT_OK(
+      arrow::ipc::internal::CollectDictionaries(*record_batch_, &dictionary_memo_));
 
-  CHECK_EQ(schema->num_fields(), record_batch_->num_columns());
+  CHECK_EQ(record_batch_->schema()->num_fields(), record_batch_->num_columns());
 }
 
 std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
@@ -271,7 +266,9 @@ std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
 
 std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
     const ExecutionResult* results,
-    const std::shared_ptr<ResultSet>& rows) {
-  return results ? std::make_unique<ArrowResultSet>(rows, results->getTargetsMeta())
-                 : std::make_unique<ArrowResultSet>(rows);
+    const std::shared_ptr<ResultSet>& rows,
+    const ExecutorDeviceType device_type) {
+  return results ? std::make_unique<ArrowResultSet>(
+                       rows, results->getTargetsMeta(), device_type)
+                 : std::make_unique<ArrowResultSet>(rows, device_type);
 }

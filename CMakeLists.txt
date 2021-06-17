@@ -31,6 +31,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
+string(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_LOWER)
 
 if("${CMAKE_VERSION}" VERSION_GREATER 3.11.999)
   cmake_policy(SET CMP0074 NEW)
@@ -62,7 +63,7 @@ add_definitions("-DMAPD_EDITION_${MAPD_EDITION}")
 string(TOLOWER "${MAPD_EDITION}" MAPD_EDITION_LOWER)
 
 set(MAPD_VERSION_MAJOR "5")
-set(MAPD_VERSION_MINOR "5")
+set(MAPD_VERSION_MINOR "7")
 set(MAPD_VERSION_PATCH "0")
 set(MAPD_VERSION_EXTRA "dev")
 set(MAPD_VERSION_RAW "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}${MAPD_VERSION_EXTRA}")
@@ -133,6 +134,58 @@ if(ENABLE_CUDA)
 else()
   set(CUDA_LIBRARIES "")
   set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-cpu")
+endif()
+
+# CUDA architecture flags
+if("${CMAKE_BUILD_TYPE_LOWER}" STREQUAL "debug")
+  option(ENABLE_ONLY_ONE_ARCH "Enable quicker building for only one GPU arch" ON)
+else()
+  option(ENABLE_ONLY_ONE_ARCH "Enable quicker building for only one GPU arch" OFF)
+endif()
+if(ENABLE_CUDA)
+  if(ENABLE_ONLY_ONE_ARCH)
+    execute_process(
+      COMMAND cmake -S ${CMAKE_SOURCE_DIR}/NvidiaComputeCapability -B NvidiaComputeCapability
+      OUTPUT_QUIET
+      ERROR_QUIET
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    execute_process(
+      COMMAND cmake --build NvidiaComputeCapability
+      OUTPUT_FILE ${CMAKE_BINARY_DIR}/NvidiaComputeCapability/build.out.txt
+      ERROR_FILE ${CMAKE_BINARY_DIR}/NvidiaComputeCapability/build.err.txt
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    set(NVIDIA_COMPUTE_CAPABILITY "")
+    if (EXISTS ${CMAKE_BINARY_DIR}/NvidiaComputeCapability.txt)
+      file(STRINGS ${CMAKE_BINARY_DIR}/NvidiaComputeCapability.txt NVIDIA_COMPUTE_CAPABILITY)
+    endif()
+  endif()
+  if (ENABLE_ONLY_ONE_ARCH AND NOT "${NVIDIA_COMPUTE_CAPABILITY}" STREQUAL "")
+    set (CUDA_COMPILATION_ARCH
+      -gencode=arch=compute_${NVIDIA_COMPUTE_CAPABILITY},code=compute_${NVIDIA_COMPUTE_CAPABILITY}
+      -Wno-deprecated-gpu-targets
+    )
+    add_custom_target(clean_nvidia_compute_capability
+      COMMAND ${CMAKE_BUILD_TOOL} clean
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/NvidiaComputeCapability
+    )
+    add_dependencies(clean-all clean_nvidia_compute_capability)
+    message(STATUS "CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
+  else()
+    set (CUDA_COMPILATION_ARCH
+      -gencode=arch=compute_35,code=compute_35
+      -gencode=arch=compute_50,code=compute_50
+      -gencode=arch=compute_60,code=compute_60
+      -gencode=arch=compute_70,code=compute_70
+      -gencode=arch=compute_75,code=compute_75
+      -Wno-deprecated-gpu-targets
+    )
+    if(ENABLE_ONLY_ONE_ARCH)
+      message(STATUS "ENABLE_ONLY_ONE_ARCH ignored because NvidiaComputeCapability.txt not found or not readable")
+      message(STATUS "CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
+    endif()
+  endif()
 endif()
 
 option(SUPPRESS_NULL_LOGGER_DEPRECATION_WARNINGS "Suppress NullLogger deprecated warnings.")
@@ -221,7 +274,22 @@ if(ENABLE_FOLLY)
     include_directories(${Folly_INCLUDE_DIRS})
     add_definitions("-DHAVE_FOLLY")
     list(APPEND Folly_LIBRARIES ${Glog_LIBRARIES})
+    # TODO: use Folly::folly_deps?
+    if(MSVC)
+      find_package(Libevent REQUIRED)
+      list(APPEND Folly_LIBRARIES libevent::core)
+    endif()
   endif()
+endif()
+
+option(ENABLE_MLPACK "Use mlpack" OFF)
+if(ENABLE_MLPACK)
+  find_package(OpenMP REQUIRED)
+  find_package(Armadillo REQUIRED)
+  find_package(Boost COMPONENTS serialization REQUIRED)
+  find_package(MLPACK REQUIRED)
+  include_directories(${MLPACK_INCLUDE_DIRS})
+  add_definitions("-DHAVE_MLPACK")
 endif()
 
 if(MSVC)
@@ -246,6 +314,10 @@ else()
   if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
   endif()
+endif()
+
+if (ENABLE_MLPACK)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}") 
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
@@ -285,6 +357,7 @@ if(ENABLE_DBE)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
   set(ENABLE_STANDALONE_CALCITE ON)
   add_definitions("-DENABLE_EMBEDDED_DATABASE")
+  add_definitions("-DDBEngine_LIBNAME=\"${CMAKE_SHARED_LIBRARY_PREFIX}DBEngine${CMAKE_SHARED_LIBRARY_SUFFIX}\"")
 endif()
 
 # Code coverage
@@ -328,7 +401,7 @@ find_library(CLANG_LIB clang-cpp)
 find_library(LLVM_LIB LLVM)
 # Deps builds use separate libs for each clang component, while some distros now bundle into a single lib
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin" OR NOT LLVM_LIB)
-  set(LLVM_COMPONENTS support mcjit core irreader option)
+  set(LLVM_COMPONENTS support mcjit core irreader option linker)
 
   option(ENABLE_INTEL_JIT_LISTENER "Enable Intel Vtune JIT Listener" OFF)
   if(ENABLE_INTEL_JIT_LISTENER)
@@ -381,14 +454,9 @@ add_definitions(${CLANG_DEFINITIONS})
 find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale iostreams REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
 
-# CUDA architecture flags
-set (CUDA_COMPILATION_ARCH
-  -gencode=arch=compute_35,code=compute_35
-  -gencode=arch=compute_50,code=compute_50
-  -gencode=arch=compute_60,code=compute_60
-  -gencode=arch=compute_70,code=compute_70
-  -gencode=arch=compute_75,code=compute_75
-)
+# Allow explicit include statements to access third party headers directly.
+# Ex: raft/canonical/include/raft.h
+include_directories(ThirdParty/)
 
 # EGL
 include_directories(ThirdParty/egl)
@@ -406,6 +474,17 @@ if(WIN32)
   set(HAVE_POSIX_REGEX 0)
 endif()
 add_subdirectory(ThirdParty/googlebenchmark)
+
+# aws-sdk
+option(ENABLE_AWS_S3 "Enable AWS S3 support" ON)
+if(ENABLE_AWS_S3)
+  find_package(LibAwsS3)
+  if(NOT LibAwsS3_FOUND)
+    set(ENABLE_AWS_S3 OFF CACHE BOOL "Enable AWS S3 support" FORCE)
+  else()
+    add_definitions("-DHAVE_AWS_S3")
+  endif()
+endif()
 
 # Arrow
 find_package(Arrow REQUIRED)
@@ -427,6 +506,9 @@ if(ENABLE_IMPORT_PARQUET)
 endif()
 
 list(APPEND Arrow_LIBRARIES ${Snappy_LIBRARIES})
+if(ENABLE_AWS_S3)
+  list(INSERT Arrow_LIBRARIES 0 ${LibAwsS3_LIBRARIES})
+endif()
 if (ENABLE_CUDA)
   list(INSERT Arrow_LIBRARIES 0 ${Arrow_GPU_CUDA_LIBRARIES})
 endif()
@@ -442,6 +524,12 @@ add_subdirectory(ThirdParty/linenoise)
 include_directories(ThirdParty/sqlite3)
 add_subdirectory(ThirdParty/sqlite3)
 
+# raft/canonical
+option(ENABLE_CANONICAL_RAFT "Enable Canonical Raft" OFF)
+if(ENABLE_CANONICAL_RAFT)
+  add_subdirectory(ThirdParty/raft/canonical)
+endif()
+
 # rdkafka
 find_package(RdKafka REQUIRED)
 include_directories(${RdKafka_INCLUDE_DIRS})
@@ -449,17 +537,6 @@ include_directories(${RdKafka_INCLUDE_DIRS})
 # libarchive
 find_package(LibArchive REQUIRED)
 include_directories(${LibArchive_INCLUDE_DIRS})
-
-# aws-sdk
-option(ENABLE_AWS_S3 "Enable AWS S3 support" ON)
-if(ENABLE_AWS_S3)
-  find_package(LibAwsS3)
-  if(NOT LibAwsS3_FOUND)
-    set(ENABLE_AWS_S3 OFF CACHE BOOL "Enable AWS S3 support" FORCE)
-  else()
-    add_definitions("-DHAVE_AWS_S3")
-  endif()
-endif()
 
 find_package(CURL REQUIRED QUIET)
 if(CURL_FOUND)
@@ -498,15 +575,10 @@ endif()
 set(gen_cpp_files
     ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h
-    ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_types.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.h
 )
@@ -581,11 +653,6 @@ else()
   set(PROFILER_LIBS "")
 endif()
 
-option(ENABLE_FSI "Enable Foreign Storage Interface" OFF)
-if(ENABLE_FSI)
-  add_definitions("-DENABLE_FSI")
-endif()
-
 add_subdirectory(SqliteConnector)
 
 add_subdirectory(StringDictionary)
@@ -645,11 +712,19 @@ if(ENABLE_FOLLY)
   list(APPEND MAPD_LIBRARIES ${Folly_LIBRARIES})
 endif()
 
+if(ENABLE_MLPACK)
+  list(APPEND MAPD_LIBRARIES ${MLPACK_LIBRARIES} ${ARMADILLO_LIBRARIES})
+endif()
+
 if(ENABLE_LICENSING_AWS)
   list(APPEND MAPD_LIBRARIES AWSMarketplace)
 endif()
 
 list(APPEND MAPD_LIBRARIES ${TBB_LIBS})
+
+if(ENABLE_CANONICAL_RAFT)
+  list(APPEND MAPD_LIBRARIES raft_canonical)
+endif()
 
 option(ENABLE_TESTS "Build unit tests" ON)
 if (ENABLE_TESTS)
@@ -767,7 +842,6 @@ endif(DOXYGEN_FOUND)
 
 # Packaging
 
-string(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_LOWER)
 if(NOT "${CMAKE_BUILD_TYPE_LOWER}" STREQUAL "debug" AND NOT "${CMAKE_BUILD_TYPE_LOWER}" STREQUAL "relwithdebinfo")
   set(CPACK_STRIP_FILES ON)
 else()
@@ -795,6 +869,8 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses" DESTINATION 
 
 # OmniSciTypes.h local includes (for UDF/UDTF)
 install(FILES Shared/funcannotations.h DESTINATION "Shared/" COMPONENT "include")
+install(FILES Shared/InlineNullValues.h DESTINATION "Shared/" COMPONENT "include")
+install(FILES Logger/Logger.h DESTINATION "Logger/" COMPONENT "include")
 
 # Frontend
 option(MAPD_IMMERSE_DOWNLOAD "Download OmniSci Immerse for packaging" OFF)
@@ -841,7 +917,10 @@ if(NOT MVN_EXECUTABLE)
   message(FATAL_ERROR "mvn not found. Install Apache Maven.")
 endif()
 file(GLOB_RECURSE JAVA_POM RELATIVE ${CMAKE_SOURCE_DIR} java/**/pom.xml)
+file(GLOB_RECURSE JAVA_FTL RELATIVE ${CMAKE_SOURCE_DIR} java/calcite/src/main/codegen/includes/*.ftl)
 file(GLOB_RECURSE JAVA_SOURCES RELATIVE ${CMAKE_SOURCE_DIR} java/**/*.java)
+list(FILTER JAVA_SOURCES EXCLUDE REGEX ".*/gen/.*")
+list(FILTER JAVA_SOURCES EXCLUDE REGEX ".*/generated-sources/.*")
 
 set(OMNISCI_JAR_RELEASE_VERSION "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}")
 if("${MAPD_VERSION_EXTRA}" STREQUAL "dev")
@@ -849,6 +928,7 @@ if("${MAPD_VERSION_EXTRA}" STREQUAL "dev")
 endif()
 
 set (OMNISCI_JDBC_JAR "omnisci-jdbc-${OMNISCI_JAR_RELEASE_VERSION}.jar")
+set (OMNISCI_UTILITY_JAR "omnisci-utility-${OMNISCI_JAR_RELEASE_VERSION}.jar")
 
 set(MVN_PATH_COMMAND "")
 if(MSVC) 
@@ -859,24 +939,26 @@ endif()
 
 add_custom_command(
   OUTPUT
-    ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
+    ${CMAKE_BINARY_DIR}/bin/${OMNISCI_UTILITY_JAR}
     ${CMAKE_BINARY_DIR}/bin/${OMNISCI_JDBC_JAR}
     ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar
-    COMMAND ${MVN_PATH_COMMAND} ${MVN_EXECUTABLE} -q clean install -Dthrift.version="${Thrift_VERSION}" -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}"
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
+    COMMAND ${MVN_PATH_COMMAND} ${MVN_EXECUTABLE} -l ${CMAKE_BINARY_DIR}/mvn_build.log -e clean install -Dthrift.version="${Thrift_VERSION}" -Dmaven.compiler.showDeprecation=true -Dmaven.compiler.showWarnings=true -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}" -Djava.net.preferIPv4Stack=true -Dmaven.wagon.http.retryHandler.count=3
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapd/target/${OMNISCI_UTILITY_JAR} ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/omniscijdbc/target/${OMNISCI_JDBC_JAR} ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   DEPENDS
     ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/OmniSci.java
     ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/calciteserver/CalciteServer.java
+    ${CMAKE_SOURCE_DIR}/java/calcite/src/main/codegen/config.fmpp
     ${CMAKE_SOURCE_DIR}/java/pom.xml
     ${CMAKE_SOURCE_DIR}/omnisci.thrift
     ${JAVA_POM}
     ${JAVA_SOURCES}
+    ${JAVA_FTL}
   )
 add_custom_target(mapd_java_components ALL DEPENDS
-  ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
+  ${CMAKE_BINARY_DIR}/bin/${OMNISCI_UTILITY_JAR}
   ${CMAKE_BINARY_DIR}/bin/${OMNISCI_JDBC_JAR}
   ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar)
 add_custom_target(mapd_java_clean
@@ -884,9 +966,14 @@ add_custom_target(mapd_java_clean
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   )
 add_dependencies(clean-all mapd_java_clean)
-install(FILES ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin COMPONENT "jar")
+install(FILES ${CMAKE_SOURCE_DIR}/java/mapd/target/${OMNISCI_UTILITY_JAR} DESTINATION bin COMPONENT "jar")
 install(FILES ${CMAKE_SOURCE_DIR}/java/omniscijdbc/target/${OMNISCI_JDBC_JAR} DESTINATION bin COMPONENT "jar")
 install(FILES ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin COMPONENT "jar")
+
+add_custom_target(maven_populate_cache
+  COMMAND ${MVN_PATH_COMMAND} ${MVN_EXECUTABLE} -q verify -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}"
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
+  )
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${ADDITIONAL_MAKE_CLEAN_FILES}")
 
@@ -899,6 +986,7 @@ install(FILES completion_hints.thrift DESTINATION "." COMPONENT "thrift")
 install(FILES omnisci.thrift DESTINATION "." COMPONENT "thrift")
 install(FILES common.thrift DESTINATION "." COMPONENT "thrift")
 install(FILES QueryEngine/serialized_result_set.thrift DESTINATION "QueryEngine/" COMPONENT "thrift")
+install(FILES QueryEngine/extension_functions.thrift DESTINATION "QueryEngine/" COMPONENT "thrift")
 
 if(NOT PREFER_STATIC_LIBS AND NOT ENABLE_CONDA)
   install(FILES ${Boost_LIBRARIES} DESTINATION ThirdParty/lib)
@@ -925,7 +1013,7 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   install(DIRECTORY docker/sds DESTINATION "docker")
 endif()
 install(FILES docker/README.md DESTINATION "docker")
-if(ENABLE_CUDA)
+if(ENABLE_CUDA OR ENABLE_RENDERING)
   install(FILES docker/Dockerfile.cuda RENAME Dockerfile DESTINATION "docker")
 else()
   install(FILES docker/Dockerfile.cpu RENAME Dockerfile DESTINATION "docker")

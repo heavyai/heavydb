@@ -40,7 +40,7 @@
 
 template <typename T>
 struct EnableBitmaskOps {
-  static const bool enable = false;
+  static constexpr bool enable = false;
 };
 
 template <typename T>
@@ -66,6 +66,13 @@ template <typename T>
 typename std::enable_if_t<EnableBitmaskOps<T>::enable, T> operator&=(T& lhs, T rhs) {
   lhs = lhs & rhs;
   return lhs;
+}
+
+template <typename T>
+typename std::enable_if_t<EnableBitmaskOps<T>::enable, bool> any_bits_set(T t) {
+  using type = typename std::underlying_type_t<T>;
+  constexpr type zero{};
+  return static_cast<type>(t) != zero;
 }
 
 #define ENABLE_BITMASK_OPS(x)        \

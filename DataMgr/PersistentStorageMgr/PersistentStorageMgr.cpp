@@ -16,6 +16,7 @@
 
 #include "PersistentStorageMgr.h"
 #include "Catalog/Catalog.h"
+#include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "DataMgr/ForeignStorage/CachingForeignStorageMgr.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "MutableCachePersistentStorageMgr.h"
@@ -23,7 +24,7 @@
 PersistentStorageMgr* PersistentStorageMgr::createPersistentStorageMgr(
     const std::string& data_dir,
     const size_t num_reader_threads,
-    const DiskCacheConfig& config) {
+    const File_Namespace::DiskCacheConfig& config) {
   if (config.isEnabledForMutableTables()) {
     return new MutableCachePersistentStorageMgr(data_dir, num_reader_threads, config);
   } else {
@@ -31,15 +32,17 @@ PersistentStorageMgr* PersistentStorageMgr::createPersistentStorageMgr(
   }
 }
 
-PersistentStorageMgr::PersistentStorageMgr(const std::string& data_dir,
-                                           const size_t num_reader_threads,
-                                           const DiskCacheConfig& disk_cache_config)
-    : AbstractBufferMgr(0)
-    , global_file_mgr_(
-          std::make_unique<File_Namespace::GlobalFileMgr>(0,
-                                                          data_dir,
-                                                          num_reader_threads))
-    , disk_cache_config_(disk_cache_config) {
+PersistentStorageMgr::PersistentStorageMgr(
+    const std::string& data_dir,
+    const size_t num_reader_threads,
+    const File_Namespace::DiskCacheConfig& disk_cache_config)
+    : AbstractBufferMgr(0), disk_cache_config_(disk_cache_config) {
+  fsi_ = std::make_shared<ForeignStorageInterface>();
+  ::registerArrowForeignStorage(fsi_);
+  ::registerArrowCsvForeignStorage(fsi_);
+
+  global_file_mgr_ = std::make_unique<File_Namespace::GlobalFileMgr>(
+      0, fsi_, data_dir, num_reader_threads);
   disk_cache_ =
       disk_cache_config_.isEnabled()
           ? std::make_unique<foreign_storage::ForeignStorageCache>(disk_cache_config)
@@ -112,11 +115,10 @@ void PersistentStorageMgr::getChunkMetadataVecForKeyPrefix(
   if (isChunkPrefixCacheable(keyPrefix)) {
     if (disk_cache_->hasCachedMetadataForKeyPrefix(keyPrefix)) {
       disk_cache_->getCachedMetadataVecForKeyPrefix(chunk_metadata, keyPrefix);
-      return;
-    } else {  // if we have no cached data attempt a recovery.
-      if (disk_cache_->recoverCacheForTable(chunk_metadata, get_table_key(keyPrefix))) {
-        return;
+      if (isForeignStorage(keyPrefix)) {
+        getForeignStorageMgr()->createDataWrapperIfNotExists(keyPrefix);
       }
+      return;
     }
     getStorageMgrForTableKey(keyPrefix)->getChunkMetadataVecForKeyPrefix(chunk_metadata,
                                                                          keyPrefix);
@@ -199,7 +201,16 @@ bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) const {
   CHECK(has_table_prefix(chunk_key));
   auto db_id = chunk_key[CHUNK_KEY_DB_IDX];
   auto table_id = chunk_key[CHUNK_KEY_TABLE_IDX];
-  auto catalog = Catalog_Namespace::Catalog::checkedGet(db_id);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+
+  // if catalog doesnt exist at this point we must be in an old migration.
+  // Old migration can not, at this point 5.5.1, be using foreign storage
+  // so this hack is to avoid the crash, when migrating old
+  // catalogs that have not been upgraded over time due to issue
+  // [BE-5728]
+  if (!catalog) {
+    return false;
+  }
 
   auto table = catalog->getMetadataForTableImpl(table_id, false);
   CHECK(table);
@@ -226,8 +237,8 @@ foreign_storage::ForeignStorageCache* PersistentStorageMgr::getDiskCache() const
 bool PersistentStorageMgr::isChunkPrefixCacheable(const ChunkKey& chunk_prefix) const {
   CHECK(has_table_prefix(chunk_prefix));
   // If this is an Arrow FSI table then we can't cache it.
-  if (ForeignStorageInterface::lookupBufferManager(chunk_prefix[CHUNK_KEY_DB_IDX],
-                                                   chunk_prefix[CHUNK_KEY_TABLE_IDX])) {
+  if (fsi_->lookupBufferManager(chunk_prefix[CHUNK_KEY_DB_IDX],
+                                chunk_prefix[CHUNK_KEY_TABLE_IDX])) {
     return false;
   }
   return ((disk_cache_config_.isEnabledForMutableTables() &&

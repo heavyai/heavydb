@@ -73,7 +73,9 @@ std::string hide_sensitive_data_from_query(std::string const& query_str) {
   constexpr std::regex::flag_type flags =
       std::regex::ECMAScript | std::regex::icase | std::regex::optimize;
   static const std::initializer_list<std::pair<std::regex, std::string>> rules{
-      {std::regex(R"(\b((?:password|s3_access_key|s3_secret_key)\s*=\s*)'.+?')", flags),
+      {std::regex(
+           R"(\b((?:password|s3_access_key|s3_secret_key|s3_session_token)\s*=\s*)'.+?')",
+           flags),
        "$1'XXXXXXXX'"},
       {std::regex(R"((\\set_license\s+)\S+)", flags), "$1XXXXXXXX"}};
   return std::accumulate(
@@ -230,5 +232,15 @@ std::string get_quoted_string(const std::string& filename, char quote, char esca
   std::stringstream ss;
   ss << std::quoted(filename, quote, escape);  // TODO: prevents string_view Jun 2020
   return ss.str();
+}
+#endif  // __CUDACC__
+
+#ifndef __CUDACC__
+std::string simple_sanitize(const std::string& str) {
+  auto sanitized_str{str};
+  for (auto& c : sanitized_str) {
+    c = (c < 32) ? ' ' : c;
+  }
+  return sanitized_str;
 }
 #endif  // __CUDACC__

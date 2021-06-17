@@ -11,6 +11,12 @@ public class OmniSciHintStrategyTable {
   }
 
   static HintStrategyTable createHintStrategies(HintStrategyTable.Builder builder) {
-    return builder.hintStrategy("cpu_mode", HintPredicates.SET_VAR).build();
+    return builder.hintStrategy("cpu_mode", HintPredicates.SET_VAR)
+            .hintStrategy("overlaps_bucket_threshold", HintPredicates.SET_VAR)
+            .hintStrategy("overlaps_max_size", HintPredicates.SET_VAR)
+            .hintStrategy("overlaps_allow_gpu_build", HintPredicates.SET_VAR)
+            .hintStrategy("overlaps_no_cache", HintPredicates.SET_VAR)
+            .hintStrategy("overlaps_keys_per_bin", HintPredicates.SET_VAR)
+            .build();
   }
 }

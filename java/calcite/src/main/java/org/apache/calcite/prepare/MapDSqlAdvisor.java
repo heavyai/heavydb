@@ -17,6 +17,7 @@
 package org.apache.calcite.prepare;
 
 import org.apache.calcite.sql.advise.SqlAdvisor;
+import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.validate.SqlMoniker;
 import org.apache.calcite.sql.validate.SqlMonikerImpl;
 import org.apache.calcite.sql.validate.SqlMonikerType;
@@ -25,8 +26,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 class MapDSqlAdvisor extends SqlAdvisor {
-  public MapDSqlAdvisor(MapDSqlAdvisorValidator validator) {
-    super(validator);
+  public MapDSqlAdvisor(
+          MapDSqlAdvisorValidator validator, SqlParser.Config parserConfig) {
+    super(validator, parserConfig);
     this.permissionsAwareValidator = validator;
   }
 

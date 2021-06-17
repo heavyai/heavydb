@@ -6,19 +6,9 @@ MAPD_TCP_PORT=${MAPD_TCP_PORT:=6274}
 
 DATA_URL=${DATA_URL:="https://data.mapd.com"}
 
-SAMPLE_PATH=${SAMPLE_PATH:="$PWD/sample_datasets"}
+MAPD_DATA=${MAPD_DATA:="$PWD/data"}
 
 ALLOW_DOWNLOADS=${ALLOW_DOWNLOADS:=true}
-
-MKRES=$(mkdir -p "$SAMPLE_PATH")
-if ! mkdir -p "$SAMPLE_PATH" || [ ! -w "$SAMPLE_PATH" ] ; then
-  SAMPLE_PATH2=$(mktemp -d)
-  echo "Cannot write sample data to: $SAMPLE_PATH"
-  echo "Saving instead to: $SAMPLE_PATH2"
-  echo
-  SAMPLE_PATH=$SAMPLE_PATH2
-  mkdir -p "$SAMPLE_PATH"
-fi
 
 if hash wget 2>/dev/null; then
   GETTER="wget --continue"
@@ -50,11 +40,27 @@ while (( $# )); do
     --no-download)
       ALLOW_DOWNLOADS=false
       ;;
+    --data)
+      shift
+      MAPD_DATA=$1
+      ;;
     *)
       break ;;
   esac
   shift
 done
+
+SAMPLE_PATH=${SAMPLE_PATH:="$MAPD_DATA/mapd_import/sample_datasets"}
+
+MKRES=$(mkdir -p "$SAMPLE_PATH")
+if ! mkdir -p "$SAMPLE_PATH" || [ ! -w "$SAMPLE_PATH" ] ; then
+  SAMPLE_PATH2=$(mktemp -d)
+  echo "Cannot write sample data to: $SAMPLE_PATH"
+  echo "Saving instead to: $SAMPLE_PATH2"
+  echo
+  SAMPLE_PATH=$SAMPLE_PATH2
+  mkdir -p "$SAMPLE_PATH"
+fi
 
 if [ "$ALLOW_DOWNLOADS" = false ] ; then
   GETTER="echo Using: "

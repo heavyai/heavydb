@@ -22,7 +22,13 @@
  **/
 
 #include <rapidjson/document.h>
+#ifndef _WIN32
 #include <termios.h>
+#else
+#include <Shlobj.h>
+#include <windows.h>
+#include "Shared/cleanup_global_namespace.h"
+#endif
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -58,7 +64,7 @@
 #include "Shared/misc.h"
 #include "gen-cpp/OmniSci.h"
 
-#include "linenoise.h"
+#include "include/linenoise.h"
 
 #include "ClientContext.h"
 #include "CommandFunctors.h"
@@ -143,7 +149,7 @@ void copy_table(char const* filepath, char const* table, ClientContext& context)
       input_rows.push_back(row);
       if (input_rows.size() >= LOAD_PATCH_SIZE) {
         try {
-          context.client.load_table(context.session, table, input_rows);
+          context.client.load_table(context.session, table, input_rows, {});
         } catch (TOmniSciException& e) {
           std::cerr << e.error_msg << std::endl;
         }
@@ -151,7 +157,7 @@ void copy_table(char const* filepath, char const* table, ClientContext& context)
       }
     }
     if (input_rows.size() > 0) {
-      context.client.load_table(context.session, table, input_rows);
+      context.client.load_table(context.session, table, input_rows, {});
     }
   } catch (TOmniSciException& e) {
     std::cerr << e.error_msg << std::endl;
@@ -529,19 +535,23 @@ TDatum columnar_val_to_datum(const TColumn& col,
 
 // based on http://www.gnu.org/software/libc/manual/html_node/getpass.html
 std::string mapd_getpass() {
+#ifndef _WIN32
   struct termios origterm, tmpterm;
 
   tcgetattr(STDIN_FILENO, &origterm);
   tmpterm = origterm;
   tmpterm.c_lflag &= ~ECHO;
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &tmpterm);
+#endif
 
   std::cout << "Password: ";
   std::string password;
   std::getline(std::cin, password);
   std::cout << std::endl;
 
+#ifndef _WIN32
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &origterm);
+#endif
 
   return password;
 }
@@ -631,7 +641,9 @@ void omnisql_signal_handler(int signal_number) {
 
 void register_signal_handler() {
   signal(SIGTERM, omnisql_signal_handler);
+#ifndef _WIN32
   signal(SIGKILL, omnisql_signal_handler);
+#endif
   signal(SIGINT, omnisql_signal_handler);
 }
 
@@ -670,12 +682,12 @@ void print_memory_summary(ClientContext& context, std::string memory_level) {
       tss << "            MAX            USE      ALLOCATED           FREE" << std::endl;
     }
   }
-  u_int16_t gpu_num = 0;
+  uint16_t gpu_num = 0;
   for (auto& nodeIt : memory_info) {
     int MB = 1024 * 1024;
-    u_int64_t page_count = 0;
-    u_int64_t free_page_count = 0;
-    u_int64_t used_page_count = 0;
+    uint64_t page_count = 0;
+    uint64_t free_page_count = 0;
+    uint64_t used_page_count = 0;
     for (auto& segIt : nodeIt.node_memory_data) {
       page_count += segIt.num_pages;
       if (segIt.is_free) {
@@ -835,8 +847,7 @@ static std::vector<std::string> stringify_privs(const std::vector<bool>& priv_ma
                                                 TDBObjectType::type type) {
   // Client priviliges print lookup
   std::vector<std::string> priv_strs;
-  static const std::unordered_map<const TDBObjectType::type,
-                                  const std::vector<std::string>>
+  static const std::unordered_map<TDBObjectType::type, const std::vector<std::string>>
       privilege_names_lookup{
           {TDBObjectType::DatabaseDBObjectType,
            {"create"s, "drop"s, "view-sql-editor"s, "login-access"s}},
@@ -852,7 +863,8 @@ static std::vector<std::string> stringify_privs(const std::vector<bool>& priv_ma
           {TDBObjectType::DashboardDBObjectType,
            {"create"s, "delete"s, "view"s, "edit"s}},
           {TDBObjectType::ViewDBObjectType,
-           {"create"s, "drop"s, "select"s, "insert"s, "update"s, "delete"s}}};
+           {"create"s, "drop"s, "select"s, "insert"s, "update"s, "delete"s}},
+          {TDBObjectType::ServerDBObjectType, {"create"s, "drop"s, "alter"s, "usage"s}}};
 
   const auto privilege_names = privilege_names_lookup.find(type);
 
@@ -872,6 +884,7 @@ const size_t priv_col_width = 20;
 
 struct PrivilegeRow {
   std::string object_name;
+  int32_t object_id;
   std::string object_type;
   std::string privilege_object_type;
   std::vector<std::string> privileges;
@@ -879,6 +892,7 @@ struct PrivilegeRow {
 
 std::ostream& operator<<(std::ostream& os, const PrivilegeRow& priv_row) {
   os << std::setw(priv_col_width) << priv_row.object_name;
+  os << std::setw(priv_col_width) << std::to_string(priv_row.object_id);
   os << std::setw(priv_col_width) << priv_row.object_type;
   os << std::setw(priv_col_width) << priv_row.privilege_object_type;
   os << boost::algorithm::join(priv_row.privileges, ", ");
@@ -917,15 +931,16 @@ void get_db_objects_for_grantee(ClientContext& context) {
     std::cout << tss.str() << std::endl;
   };
 
-  const std::string object_names[4] = {"database", "table", "dashboard", "view"};
+  const std::string object_names[5] = {
+      "database", "table", "dashboard", "view", "server"};
   auto type_to_string = [&](TDBObjectType::type type) -> std::string {
     const int type_val = static_cast<int>(type);
-    CHECK(type_val > 0 && type_val < 5);
+    CHECK(type_val > 0 && type_val < 6);
     return object_names[type_val - 1];
   };
 
   const std::vector<std::string> headers = {
-      "ObjectName", "ObjectType", "PrivilegeType", "Privileges"};
+      "ObjectName", "ObjectId", "ObjectType", "PrivilegeType", "Privileges"};
   write_table_header(headers);
   if (thrift_with_retry(kGET_OBJECTS_FOR_GRANTEE, context, nullptr)) {
     std::vector<PrivilegeRow> table_values;
@@ -940,6 +955,7 @@ void get_db_objects_for_grantee(ClientContext& context) {
       }
 
       out_row.object_name = db_object.objectName.c_str();
+      out_row.object_id = db_object.objectId;
       out_row.object_type = type_to_string(db_object.objectType);
       out_row.privilege_object_type = type_to_string(db_object.privilegeObjectType);
       out_row.privileges =
@@ -1261,7 +1277,7 @@ int main(int argc, char** argv) {
    * pointer with a custom free() deleter; no need to free this memory explicitly. */
 
   while (true) {
-    using LineType = std::remove_pointer<__decltype(linenoise(prompt.c_str()))>::type;
+    using LineType = std::remove_pointer<decltype(linenoise(prompt.c_str()))>::type;
     using LineTypePtr = LineType*;
 
     std::unique_ptr<LineType, std::function<void(LineTypePtr)>> smart_line(
@@ -1431,6 +1447,9 @@ int main(int argc, char** argv) {
       if (nullptr != (env = getenv("AWS_SECRET_ACCESS_KEY"))) {
         copy_params.s3_secret_key = env;
       }
+      if (nullptr != (env = getenv("AWS_SESSION_TOKEN"))) {
+        copy_params.s3_session_token = env;
+      }
       detect_table(filepath, copy_params, context);
     } else if (!strncmp(line, "\\historylen", 11)) {
       /* The "/historylen" command will change the history len. */
@@ -1466,8 +1485,12 @@ int main(int argc, char** argv) {
         } else if (args[1] == "table") {
           context.object_type = TDBObjectType::TableDBObjectType;
           get_db_object_privs(context);
+        } else if (args[1] == "server") {
+          context.object_type = TDBObjectType::ServerDBObjectType;
+          get_db_object_privs(context);
         } else {
-          std::cerr << "Object type should be on in { database, table }" << std::endl;
+          std::cerr << "Object type should be one of { database, table, server }"
+                    << std::endl;
         }
       } else {
         std::cerr << "Command object_privileges failed. It requires two parameters: "

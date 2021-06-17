@@ -475,6 +475,17 @@ void RelTableFunction::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
   }
 }
 
+int32_t RelTableFunction::countRexLiteralArgs() const {
+  int32_t literal_args = 0;
+  for (const auto& arg : table_func_inputs_) {
+    const auto rex_literal = dynamic_cast<const RexLiteral*>(arg.get());
+    if (rex_literal) {
+      literal_args += 1;
+    }
+  }
+  return literal_args;
+}
+
 RelTableFunction::RelTableFunction(RelTableFunction const& rhs)
     : RelAlgNode(rhs)
     , function_name_(rhs.function_name_)
@@ -694,6 +705,8 @@ std::unique_ptr<RexLiteral> parse_literal(const rapidjson::Value& expr) {
     return std::unique_ptr<RexLiteral>(new RexLiteral(target_type));
   }
   switch (type) {
+    case kINT:
+    case kBIGINT:
     case kDECIMAL:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
@@ -716,16 +729,25 @@ std::unique_ptr<RexLiteral> parse_literal(const rapidjson::Value& expr) {
                                                           precision,
                                                           type_scale,
                                                           type_precision));
+      } else if (literal.IsInt64()) {
+        return std::make_unique<RexLiteral>(static_cast<double>(literal.GetInt64()),
+                                            type,
+                                            target_type,
+                                            scale,
+                                            precision,
+                                            type_scale,
+                                            type_precision);
+
+      } else if (literal.IsUint64()) {
+        return std::make_unique<RexLiteral>(static_cast<double>(literal.GetUint64()),
+                                            type,
+                                            target_type,
+                                            scale,
+                                            precision,
+                                            type_scale,
+                                            type_precision);
       }
-      CHECK(literal.IsInt64());
-      return std::unique_ptr<RexLiteral>(
-          new RexLiteral(static_cast<double>(json_i64(literal)),
-                         type,
-                         target_type,
-                         scale,
-                         precision,
-                         type_scale,
-                         type_precision));
+      UNREACHABLE() << "Unhandled type: " << literal.GetType();
     }
     case kTEXT:
       return std::unique_ptr<RexLiteral>(new RexLiteral(json_str(literal),
@@ -1044,6 +1066,12 @@ JoinType to_join_type(const std::string& join_type_name) {
   if (join_type_name == "left") {
     return JoinType::LEFT;
   }
+  if (join_type_name == "semi") {
+    return JoinType::SEMI;
+  }
+  if (join_type_name == "anti") {
+    return JoinType::ANTI;
+  }
   throw QueryNotSupported("Join type (" + join_type_name + ") not supported");
 }
 
@@ -1197,43 +1225,47 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept
 
 void handleQueryHint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
                      RelAlgDagBuilder* dag_builder) noexcept {
-  QueryHint query_hints;
+  Hints* hint_delivered = nullptr;
   for (auto node : nodes) {
     const auto agg_node = std::dynamic_pointer_cast<RelAggregate>(node);
     if (agg_node) {
-      if (agg_node->hasHintEnabled("cpu_mode")) {
-        query_hints.cpu_mode = true;
+      if (agg_node->hasDeliveredHint()) {
+        hint_delivered = agg_node->getDeliveredHints();
+        break;
       }
     }
     const auto project_node = std::dynamic_pointer_cast<RelProject>(node);
     if (project_node) {
-      if (project_node->hasHintEnabled("cpu_mode")) {
-        query_hints.cpu_mode = true;
+      if (project_node->hasDeliveredHint()) {
+        hint_delivered = project_node->getDeliveredHints();
+        break;
       }
     }
     const auto scan_node = std::dynamic_pointer_cast<RelScan>(node);
     if (scan_node) {
-      if (scan_node->hasHintEnabled("cpu_mode")) {
-        query_hints.cpu_mode = true;
+      if (scan_node->hasDeliveredHint()) {
+        hint_delivered = scan_node->getDeliveredHints();
+        break;
       }
     }
     const auto join_node = std::dynamic_pointer_cast<RelJoin>(node);
     if (join_node) {
-      if (join_node->hasHintEnabled("cpu_mode")) {
-        query_hints.cpu_mode = true;
+      if (join_node->hasDeliveredHint()) {
+        hint_delivered = join_node->getDeliveredHints();
+        break;
       }
     }
     const auto compound_node = std::dynamic_pointer_cast<RelCompound>(node);
     if (compound_node) {
-      if (compound_node->hasHintEnabled("cpu_mode")) {
-        query_hints.cpu_mode = true;
+      if (compound_node->hasDeliveredHint()) {
+        hint_delivered = compound_node->getDeliveredHints();
+        break;
       }
     }
   }
-  if (query_hints.cpu_mode) {
-    VLOG(1) << "A user forces to run the query on the CPU execution mode";
+  if (hint_delivered && !hint_delivered->empty()) {
+    dag_builder->registerQueryHints(hint_delivered);
   }
-  dag_builder->registerQueryHints(query_hints);
 }
 
 void mark_nops(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
@@ -1605,7 +1637,7 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
 
   auto reset_state = [&crt_pattern, &crt_state]() {
     crt_state = CoalesceState::Initial;
-    decltype(crt_pattern)().swap(crt_pattern);
+    std::vector<size_t>().swap(crt_pattern);
   };
 
   for (RANodeIterator nodeIt(nodes); !nodeIt.allVisited();) {
@@ -2351,11 +2383,9 @@ class RelAlgDispatcher {
               throw std::runtime_error(
                   "Table functions currently only support one ResultSet input");
             }
-
-            const auto prior_node = prev(table_func_ra);
-            CHECK(prior_node);
-            // Forward the values from the prior node as RexInputs
-            for (size_t i = 0; i < prior_node->size(); i++) {
+            auto pos = field(expr_operands[0], "input").GetInt();
+            CHECK_LT(pos, inputs.size());
+            for (size_t i = inputs[pos]->size(); i > 0; i--) {
               table_func_inputs.emplace_back(
                   std::make_unique<RexAbstractInput>(col_inputs.size()));
               col_inputs.emplace_back(table_func_inputs.back().get());
@@ -2382,7 +2412,6 @@ class RelAlgDispatcher {
       table_function_projected_outputs.emplace_back(std::make_unique<RexRef>(i));
       fields.emplace_back("");
     }
-
     return std::make_shared<RelTableFunction>(op_name.GetString(),
                                               inputs,
                                               fields,
@@ -2462,7 +2491,7 @@ class RelAlgDispatcher {
     return {key, val};
   }
 
-  HintExplained parseHintString(std::string& hint_string) {
+  ExplainedQueryHint parseHintString(std::string& hint_string) {
     std::string white_space_delim = " ";
     int l = hint_string.length();
     hint_string = hint_string.erase(0, 1).substr(0, l - 2);
@@ -2471,6 +2500,7 @@ class RelAlgDispatcher {
       // need to parse hint options
       std::vector<std::string> tokens;
       std::string hint_name = hint_string.substr(0, hint_string.find(white_space_delim));
+      auto hint_type = RegisteredQueryHint::translateQueryHint(hint_name);
       bool kv_list_op = false;
       std::string raw_options = hint_string.substr(pos + 8, hint_string.length() - 2);
       if (raw_options.find('{') != std::string::npos) {
@@ -2491,7 +2521,7 @@ class RelAlgDispatcher {
         // handle the last kv pair
         auto kv_pair = getKVOptionPair(raw_options, pos);
         kv_options.emplace(kv_pair.first, kv_pair.second);
-        return {hint_name, true, false, true, kv_options};
+        return {hint_type, true, false, true, kv_options};
       } else {
         std::vector<std::string> list_options;
         while ((pos = raw_options.find(op_delim)) != std::string::npos) {
@@ -2500,12 +2530,13 @@ class RelAlgDispatcher {
         }
         // handle the last option
         list_options.emplace_back(raw_options.substr(0, pos));
-        return {hint_name, true, false, false, list_options};
+        return {hint_type, true, false, false, list_options};
       }
     } else {
       // marker hint: no extra option for this hint
       std::string hint_name = hint_string.substr(0, hint_string.find(white_space_delim));
-      return {hint_name, true, true, false};
+      auto hint_type = RegisteredQueryHint::translateQueryHint(hint_name);
+      return {hint_type, true, true, false};
     }
   }
 
@@ -2576,7 +2607,7 @@ class RelAlgDispatcher {
 RelAlgDagBuilder::RelAlgDagBuilder(const std::string& query_ra,
                                    const Catalog_Namespace::Catalog& cat,
                                    const RenderInfo* render_info)
-    : cat_(cat), render_info_(render_info) {
+    : cat_(cat), render_info_(render_info), query_hint_(RegisteredQueryHint::defaults()) {
   rapidjson::Document query_ast;
   query_ast.Parse(query_ra.c_str());
   VLOG(2) << "Parsing query RA JSON: " << query_ra;
@@ -2598,7 +2629,7 @@ RelAlgDagBuilder::RelAlgDagBuilder(RelAlgDagBuilder& root_dag_builder,
                                    const rapidjson::Value& query_ast,
                                    const Catalog_Namespace::Catalog& cat,
                                    const RenderInfo* render_info)
-    : cat_(cat), render_info_(render_info) {
+    : cat_(cat), render_info_(render_info), query_hint_(RegisteredQueryHint::defaults()) {
   build(query_ast, root_dag_builder);
 }
 
@@ -2684,6 +2715,12 @@ std::string RexSubQuery::toString() const {
 }
 
 std::string RexInput::toString() const {
+  const auto scan_node = dynamic_cast<const RelScan*>(node_);
+  if (scan_node) {
+    auto field_name = scan_node->getFieldName(getIndex());
+    auto table_name = scan_node->getTableDescriptor()->tableName;
+    return ::typeName(this) + "(" + table_name + "." + field_name + ")";
+  }
   return cat(::typeName(this),
              "(node=",
              ::toString(node_),

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@
 #include "ResultSetReductionJIT.h"
 #include "RuntimeFunctions.h"
 #include "Shared/SqlTypesLayout.h"
-
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"
 
@@ -157,21 +156,24 @@ void run_reduction_code(const ReductionCode& reduction_code,
     std::lock_guard<std::mutex> compilation_lock(Executor::compilation_mutex_);
     auto ret = ReductionInterpreter::run(
         reduction_code.ir_reduce_loop.get(),
-        {ReductionInterpreter::EvalValue{.ptr = this_buff},
-         ReductionInterpreter::EvalValue{.ptr = that_buff},
-         ReductionInterpreter::EvalValue{.int_val = start_entry_index},
-         ReductionInterpreter::EvalValue{.int_val = end_entry_index},
-         ReductionInterpreter::EvalValue{.int_val = that_entry_count},
-         ReductionInterpreter::EvalValue{.ptr = this_qmd},
-         ReductionInterpreter::EvalValue{.ptr = that_qmd},
-         ReductionInterpreter::EvalValue{.ptr = serialized_varlen_buffer}});
+        {ReductionInterpreter::MakeEvalValue(this_buff),
+         ReductionInterpreter::MakeEvalValue(that_buff),
+         ReductionInterpreter::MakeEvalValue(start_entry_index),
+         ReductionInterpreter::MakeEvalValue(end_entry_index),
+         ReductionInterpreter::MakeEvalValue(that_entry_count),
+         ReductionInterpreter::MakeEvalValue(this_qmd),
+         ReductionInterpreter::MakeEvalValue(that_qmd),
+         ReductionInterpreter::MakeEvalValue(serialized_varlen_buffer)});
     err = ret.int_val;
   }
   if (err) {
     if (err == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES) {
       throw std::runtime_error("Multiple distinct values encountered");
     }
-
+    if (err == Executor::ERR_INTERRUPTED) {
+      throw std::runtime_error(
+          "Query execution has interrupted during result set reduction");
+    }
     throw std::runtime_error(
         "Query execution has exceeded the time limit or was interrupted during result "
         "set reduction");
@@ -375,9 +377,17 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
 
 namespace {
 
-ALWAYS_INLINE void check_watchdog(const size_t sample_seed) {
-  if (UNLIKELY(g_enable_dynamic_watchdog && (sample_seed & 0x3F) == 0 &&
-               dynamic_watchdog())) {
+ALWAYS_INLINE void check_watchdog() {
+  if (UNLIKELY(dynamic_watchdog())) {
+    // TODO(alex): distinguish between the deadline and interrupt
+    throw std::runtime_error(
+        "Query execution has exceeded the time limit or was interrupted during result "
+        "set reduction");
+  }
+}
+
+ALWAYS_INLINE void check_watchdog_with_seed(const size_t sample_seed) {
+  if (UNLIKELY((sample_seed & 0x3F) == 0 && dynamic_watchdog())) {
     // TODO(alex): distinguish between the deadline and interrupt
     throw std::runtime_error(
         "Query execution has exceeded the time limit or was interrupted during result "
@@ -415,7 +425,13 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
       // should better codify and store this information in the future
       two_slot_target = true;
     }
-
+    if (UNLIKELY(g_enable_non_kernel_time_query_interrupt && check_interrupt())) {
+      throw std::runtime_error(
+          "Query execution was interrupted during result set reduction");
+    }
+    if (g_enable_dynamic_watchdog) {
+      check_watchdog();
+    }
     for (size_t target_slot_idx = slots_for_col.front();
          target_slot_idx < slots_for_col.back() + 1;
          target_slot_idx += 2) {
@@ -423,9 +439,7 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
           this_crt_col_ptr, query_mem_desc_, target_slot_idx);
       const auto that_next_col_ptr = advance_to_next_columnar_target_buff(
           that_crt_col_ptr, query_mem_desc_, target_slot_idx);
-
       for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
-        check_watchdog(entry_idx);
         if (isEmptyEntryColumnar(entry_idx, that_buff)) {
           continue;
         }
@@ -807,7 +821,9 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                                               const size_t that_entry_idx,
                                               const size_t that_entry_count,
                                               const ResultSetStorage& that) const {
-  check_watchdog(that_entry_idx);
+  if (g_enable_dynamic_watchdog) {
+    check_watchdog_with_seed(that_entry_idx);
+  }
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   CHECK(query_mem_desc_.getQueryDescriptionType() ==
         QueryDescriptionType::GroupByBaselineHash);
@@ -1002,8 +1018,7 @@ void ResultSetStorage::moveOneEntryToBuffer(const size_t entry_index,
                                       &src_buff[key_off],
                                       key_count,
                                       key_byte_width,
-                                      row_qw_count,
-                                      nullptr);
+                                      row_qw_count);
   }
   CHECK(new_entries_ptr);
   fill_slots(new_entries_ptr,
@@ -1035,9 +1050,9 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
   for (const auto result_set : result_sets) {
     CHECK_EQ(row_set_mem_owner, result_set->row_set_mem_owner_);
   }
-  const auto executor = result_rs->executor_;
+  const auto catalog = result_rs->catalog_;
   for (const auto result_set : result_sets) {
-    CHECK_EQ(executor, result_set->executor_);
+    CHECK_EQ(catalog, result_set->catalog_);
   }
   if (first_result.query_mem_desc_.getQueryDescriptionType() ==
       QueryDescriptionType::GroupByBaselineHash) {
@@ -1055,7 +1070,9 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
                             ExecutorDeviceType::CPU,
                             query_mem_desc,
                             row_set_mem_owner,
-                            executor));
+                            catalog,
+                            0,
+                            0));
     auto result_storage = rs_->allocateStorage(first_result.target_init_vals_);
     rs_->initializeStorage();
     switch (query_mem_desc.getEffectiveKeyWidth()) {
@@ -1446,7 +1463,7 @@ void ResultSetStorage::reduceOneSlot(
   const bool float_argument_input = takes_float_argument(target_info);
   const auto chosen_bytes = result_set::get_width_for_slot(
       target_slot_idx, float_argument_input, query_mem_desc_);
-  auto init_val = target_init_vals_[init_agg_val_idx];
+  int64_t init_val = target_init_vals_[init_agg_val_idx];  // skip_val for nullable types
 
   if (target_info.is_agg && target_info.agg_kind == kSINGLE_VALUE) {
     reduceOneSlotSingleValue(
@@ -1496,8 +1513,12 @@ void ResultSetStorage::reduceOneSlot(
         }
         break;
       }
+      case kAPPROX_MEDIAN:
+        CHECK_EQ(static_cast<int8_t>(sizeof(int64_t)), chosen_bytes);
+        reduceOneApproxMedianSlot(this_ptr1, that_ptr1, target_logical_idx, that);
+        break;
       default:
-        CHECK(false);
+        UNREACHABLE() << toString(target_info.agg_kind);
     }
   } else {
     switch (chosen_bytes) {
@@ -1562,6 +1583,26 @@ void ResultSetStorage::reduceOneSlot(
       default:
         LOG(FATAL) << "Invalid slot width: " << chosen_bytes;
     }
+  }
+}
+
+void ResultSetStorage::reduceOneApproxMedianSlot(int8_t* this_ptr1,
+                                                 const int8_t* that_ptr1,
+                                                 const size_t target_logical_idx,
+                                                 const ResultSetStorage& that) const {
+  CHECK_LT(target_logical_idx, query_mem_desc_.getCountDistinctDescriptorsSize());
+  static_assert(sizeof(int64_t) == sizeof(quantile::TDigest*));
+  auto* incoming = *reinterpret_cast<quantile::TDigest* const*>(that_ptr1);
+  CHECK(incoming) << "this_ptr1=" << (void*)this_ptr1
+                  << ", that_ptr1=" << (void const*)that_ptr1
+                  << ", target_logical_idx=" << target_logical_idx;
+  if (incoming->centroids().capacity()) {
+    auto* accumulator = *reinterpret_cast<quantile::TDigest**>(this_ptr1);
+    CHECK(accumulator) << "this_ptr1=" << (void*)this_ptr1
+                       << ", that_ptr1=" << (void const*)that_ptr1
+                       << ", target_logical_idx=" << target_logical_idx;
+    accumulator->allocate();
+    accumulator->mergeTDigest(*incoming);
   }
 }
 

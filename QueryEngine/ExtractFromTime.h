@@ -19,7 +19,7 @@
 
 #include <cstdint>
 #include <ctime>
-#include "../Shared/funcannotations.h"
+#include "Shared/funcannotations.h"
 
 static constexpr int64_t kNanoSecsPerSec = 1000000000;
 static constexpr int64_t kMicroSecsPerSec = 1000000;
@@ -87,6 +87,8 @@ enum ExtractField {
   kEPOCH,
   kQUARTERDAY,
   kWEEK,
+  kWEEK_SUNDAY,
+  kWEEK_SATURDAY,
   kDATEEPOCH
 };
 

@@ -45,13 +45,7 @@ struct QueryStepExecutionResult {
   bool is_outermost_query;
 };
 
-struct RelAlgExecutorTraits {
-  using ExecutorType = Executor;
-  using CatalogType = Catalog_Namespace::Catalog;
-  using TableDescriptorType = TableDescriptor;
-};
-
-class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
+class RelAlgExecutor : private StorageIOFacility {
  public:
   using TargetInfoList = std::vector<TargetInfo>;
 
@@ -140,7 +134,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
     CHECK(query_dag_);
     return query_dag_->getSubqueries();
   };
-  const QueryHint getParsedQueryHints() const {
+  RegisteredQueryHint getParsedQueryHints() {
     CHECK(query_dag_);
     return query_dag_->getQueryHints();
   }
@@ -156,6 +150,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
   void cleanupPostExecution();
 
   static std::string getErrorMessageFromCode(const int32_t error_code);
+
+  void executePostExecutionCallback();
 
  private:
   ExecutionResult executeRelAlgQueryNoRetry(const CompilationOptions& co,
@@ -371,7 +367,9 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
   std::unordered_map<unsigned, AggregatedResult> leaf_results_;
   int64_t queue_time_ms_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;
-  static const size_t max_groups_buffer_entry_default_guess{16384};
+
+  std::unique_ptr<TransactionParameters> dml_transaction_parameters_;
+  std::optional<std::function<void()>> post_execution_callback_;
 
   friend class PendingExecutionClosure;
 };

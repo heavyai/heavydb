@@ -319,6 +319,9 @@ void redirect_inputs_of(
   if (std::dynamic_pointer_cast<RelModify>(node)) {
     return;  // NOTE:  Review this.  Not sure about this.
   }
+  if (std::dynamic_pointer_cast<RelTableFunction>(node)) {
+    return;
+  }
   CHECK(std::dynamic_pointer_cast<RelAggregate>(node) ||
         std::dynamic_pointer_cast<RelSort>(node));
   node->replaceInput(src_project, src_project->getAndOwnInput(0));
@@ -570,6 +573,7 @@ class RexInputCollector : public RexVisitor<std::unordered_set<RexInput>> {
 
  public:
   RexInputCollector(const RelAlgNode* node) : node_(node) {}
+
   RetType visitInput(const RexInput* input) const override {
     RetType result;
     if (node_->inputCount() == 1) {

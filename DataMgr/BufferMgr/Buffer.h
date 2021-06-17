@@ -113,6 +113,7 @@ class Buffer : public AbstractBuffer {
    */
   int8_t* getMemoryPtr() override;
 
+  void setMemoryPtr(int8_t* new_ptr) override;
   /// Returns the total number of bytes allocated for the buffer.
   inline size_t reservedSize() const override { return page_size_ * num_pages_; }
 

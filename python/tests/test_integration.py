@@ -67,7 +67,7 @@ class TestIntegration:
     def test_invalid_sql(self, con):
         with pytest.raises(ProgrammingError) as r:
             con.cursor().execute("this is invalid;")
-        r.match("Exception: Parse failed:")
+        r.match("Exception: SQL Error:")
 
     def test_nonexistant_table(self, con):
         with pytest.raises(DatabaseError) as r:

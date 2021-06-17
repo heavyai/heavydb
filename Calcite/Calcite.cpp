@@ -419,17 +419,18 @@ void Calcite::updateMetadata(std::string catalog, std::string table) {
 }
 
 void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info,
-                              std::vector<std::string> tableOrViewNames,
+                              std::vector<std::vector<std::string>> tableOrViewNames,
                               AccessPrivileges tablePrivs,
                               AccessPrivileges viewPrivs) {
+  // TODO MAT this needs to be able to check privileges from other catalogs
   Catalog_Namespace::Catalog& catalog = session_info.getCatalog();
 
   for (auto tableOrViewName : tableOrViewNames) {
     const TableDescriptor* tableMeta =
-        catalog.getMetadataForTable(tableOrViewName, false);
+        catalog.getMetadataForTable(tableOrViewName[0], false);
 
     if (!tableMeta) {
-      throw std::runtime_error("unknown table of view: " + tableOrViewName);
+      throw std::runtime_error("unknown table of view: " + tableOrViewName[0]);
     }
 
     DBObjectKey key;
@@ -442,14 +443,16 @@ void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info
     std::vector<DBObject> privObjects{dbobject};
 
     if (!privs.hasAny()) {
-      throw std::runtime_error("Operation not supported for object " + tableOrViewName);
+      throw std::runtime_error("Operation not supported for object " +
+                               tableOrViewName[0]);
     }
 
     if (!Catalog_Namespace::SysCatalog::instance().checkPrivileges(
             session_info.get_currentUser(), privObjects)) {
       throw std::runtime_error("Violation of access privileges: user " +
-                               session_info.get_currentUser().userName +
-                               " has no proper privileges for object " + tableOrViewName);
+                               session_info.get_currentUser().userLoggable() +
+                               " has no proper privileges for object " +
+                               tableOrViewName[0]);
     }
   }
 }
@@ -552,6 +555,13 @@ TPlanResult Calcite::processImpl(
   LOG(IR) << "SQL query\n" << sql_string << "\nEnd of SQL query";
   LOG(PTX) << "SQL query\n" << sql_string << "\nEnd of SQL query";
 
+  TRestriction restriction;
+  auto rest = user_session_info->get_restriction_ptr();
+  if (rest != nullptr && !rest->column.empty()) {
+    VLOG(1) << "This users session has a restriction : " << *rest;
+    restriction.column = rest->column;
+    restriction.values = rest->values;
+  }
   TPlanResult ret;
   if (server_available_) {
     try {
@@ -570,7 +580,8 @@ TPlanResult Calcite::processImpl(
                                filter_push_down_info,
                                legacy_syntax,
                                is_explain,
-                               is_view_optimize);
+                               is_view_optimize,
+                               restriction);
         clientP.second->close();
       });
 
@@ -676,10 +687,11 @@ std::string Calcite::getRuntimeExtensionFunctionWhitelist() {
 
 void Calcite::setRuntimeExtensionFunctions(
     const std::vector<TUserDefinedFunction>& udfs,
-    const std::vector<TUserDefinedTableFunction>& udtfs) {
+    const std::vector<TUserDefinedTableFunction>& udtfs,
+    bool isruntime) {
   if (server_available_) {
     auto clientP = getClient(remote_calcite_port_);
-    clientP.first->setRuntimeExtensionFunctions(udfs, udtfs);
+    clientP.first->setRuntimeExtensionFunctions(udfs, udtfs, isruntime);
     clientP.second->close();
   } else {
     LOG(FATAL) << "Not routing to Calcite, server is not up";

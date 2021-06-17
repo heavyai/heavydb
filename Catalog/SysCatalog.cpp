@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cassert>
 #include <exception>
+#include <filesystem>
 #include <list>
 #include <memory>
 #include <random>
@@ -47,7 +48,7 @@
 #include "../Shared/measure.h"
 #include "MapDRelease.h"
 #include "RWLocks.h"
-#include "bcrypt.h"
+#include "include/bcrypt.h"
 
 using std::list;
 using std::map;
@@ -58,7 +59,11 @@ using std::vector;
 
 using namespace std::string_literals;
 
+std::string g_base_path;
+
 extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
+extern bool g_read_only;
 
 namespace {
 
@@ -69,15 +74,57 @@ std::string hash_with_bcrypt(const std::string& pwd) {
   return std::string(hash, BCRYPT_HASHSIZE);
 }
 
+// This catalog copy must take place before any other catalog accesses.
+std::filesystem::path copy_catalog_if_read_only(std::filesystem::path base_data_path) {
+  std::filesystem::path catalog_base_data_path;
+
+  // For a read-only server, make a temporary copy of mapd_catalogs.
+  // This catalog copy must take place before any other catalog accesses.
+  if (!g_read_only) {
+    // Catalog directory mapd_catalogs will be in the normal location.
+    catalog_base_data_path = base_data_path;
+  } else {
+    // Catalog directory mapd_catalogs will be in a temporary location.
+    catalog_base_data_path = base_data_path / "temporary";
+
+    // Delete the temporary directory if it exists.
+    // The name "temporary" is hardcoded so nobody should object to its deletion!
+    CHECK_NE(catalog_base_data_path.string().find("temporary"), std::string::npos);
+    CHECK_NE(catalog_base_data_path, base_data_path);
+    if (std::filesystem::exists(catalog_base_data_path)) {
+      std::filesystem::remove_all(catalog_base_data_path);
+    }
+    std::filesystem::create_directories(catalog_base_data_path);
+
+    // Make the temporary copy of the catalog.
+    const auto normal_catalog_path = base_data_path / "mapd_catalogs";
+    const auto temporary_catalog_path = catalog_base_data_path / "mapd_catalogs";
+    LOG(INFO) << "copying catalog from " << normal_catalog_path << " to "
+              << temporary_catalog_path << " for read-only server";
+    std::filesystem::copy(normal_catalog_path,
+                          temporary_catalog_path,
+                          std::filesystem::copy_options::recursive);
+  }
+
+  return catalog_base_data_path;
+}
+
 }  // namespace
 
 namespace Catalog_Namespace {
 
 thread_local bool SysCatalog::thread_holds_read_lock = false;
+std::unique_ptr<SysCatalog> SysCatalog::instance_;
 
 using sys_read_lock = read_lock<SysCatalog>;
 using sys_write_lock = write_lock<SysCatalog>;
 using sys_sqlite_lock = sqlite_lock<SysCatalog>;
+
+bool g_log_user_id{false};  // --log-user-id
+
+std::string UserMetadata::userLoggable() const {
+  return g_log_user_id ? std::to_string(userId) : userName;
+}
 
 auto CommonFileOperations::assembleCatalogName(std::string const& name) {
   return base_path_ + "/mapd_catalogs/" + name;
@@ -119,7 +166,7 @@ void SysCatalog::init(const std::string& basePath,
     sys_write_lock write_lock(this);
     sys_sqlite_lock sqlite_lock(this);
 
-    basePath_ = basePath;
+    basePath_ = copy_catalog_if_read_only(basePath).string();
     dataMgr_ = dataMgr;
     authMetadata_ = &authMetadata;
     pki_server_.reset(new PkiServer(*authMetadata_));
@@ -156,6 +203,8 @@ SysCatalog::~SysCatalog() {
     delete eraseIt->second;
   }
   objectDescriptorMap_.clear();
+
+  cat_map_.clear();
 }
 
 void SysCatalog::initDB() {
@@ -343,6 +392,7 @@ void insertOrUpdateObjectPrivileges(std::unique_ptr<SqliteConnector>& sqliteConn
                                     std::string roleName,
                                     bool userRole,
                                     DBObject& object) {
+  CHECK(object.valid());
   DBObjectKey key = object.getObjectKey();
 
   sqliteConnector->query_with_text_params(
@@ -735,7 +785,6 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
   // can reset it. The username isn't const because SamlServer's
   // login()/authenticate_user() can reset it.
 
-  sys_write_lock write_lock(this);
   if (check_password) {
     loginImpl(username, password, user_meta);
   } else {  // not checking for password so user must exist
@@ -749,8 +798,7 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
   }
   Catalog_Namespace::DBMetadata db_meta;
   getMetadataWithDefaultDB(dbname, username, db_meta, user_meta);
-  return Catalog::get(
-      basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
+  return getCatalog(db_meta, false);
 }
 
 // loginImpl() with no EE code and no SAML code
@@ -771,14 +819,13 @@ std::shared_ptr<Catalog> SysCatalog::switchDatabase(std::string& dbname,
 
   // NOTE(max): register database in Catalog that early to allow ldap
   // and saml create default user and role privileges on databases
-  auto cat =
-      Catalog::get(basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
+  auto cat = getCatalog(db_meta, false);
 
   DBObject dbObject(dbname, DatabaseDBObjectType);
   dbObject.loadKey();
   dbObject.setPrivileges(AccessPrivileges::ACCESS);
   if (!checkPrivileges(user_meta, std::vector<DBObject>{dbObject})) {
-    throw std::runtime_error("Unauthorized Access: user " + username +
+    throw std::runtime_error("Unauthorized Access: user " + user_meta.userLoggable() +
                              " is not allowed to access database " + dbname + ".");
   }
 
@@ -803,12 +850,13 @@ void SysCatalog::createUser(const string& name,
 
   UserMetadata user;
   if (getMetadataForUser(name, user)) {
-    throw runtime_error("User " + name + " already exists.");
+    throw runtime_error("User " + user.userLoggable() + " already exists.");
   }
   if (getGrantee(name)) {
+    std::string const loggable = g_log_user_id ? std::string("") : name + ' ';
     throw runtime_error(
-        "User name " + name +
-        " is same as one of existing grantees. User and role names should be unique.");
+        "User " + loggable +
+        "is same as one of existing grantees. User and role names should be unique.");
   }
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
@@ -853,7 +901,8 @@ void SysCatalog::dropUser(const string& name) {
   try {
     UserMetadata user;
     if (!getMetadataForUser(name, user)) {
-      throw runtime_error("User " + name + " does not exist.");
+      std::string const loggable = g_log_user_id ? std::string("") : name + ' ';
+      throw runtime_error("Cannot drop user. User " + loggable + "does not exist.");
     }
     dropRole_unsafe(name);
     deleteObjectDescriptorMap(name);
@@ -875,8 +924,7 @@ std::vector<std::shared_ptr<Catalog>> SysCatalog::getCatalogsForAllDbs() {
   std::vector<std::shared_ptr<Catalog>> catalogs{};
   const auto& db_metadata_list = getAllDBMetadata();
   for (const auto& db_metadata : db_metadata_list) {
-    catalogs.emplace_back(Catalog::get(
-        basePath_, db_metadata, dataMgr_, string_dict_hosts_, calciteMgr_, false));
+    catalogs.emplace_back(getCatalog(db_metadata, false));
   }
   return catalogs;
 }
@@ -980,18 +1028,20 @@ void SysCatalog::renameUser(std::string const& old_name, std::string const& new_
 
   UserMetadata old_user;
   if (!getMetadataForUser(old_name, old_user)) {
-    throw std::runtime_error("User " + old_name + " doesn't exist.");
+    std::string const loggable = g_log_user_id ? std::string("") : old_name + ' ';
+    throw std::runtime_error("User " + loggable + "doesn't exist.");
   }
 
   UserMetadata new_user;
   if (getMetadataForUser(new_name, new_user)) {
-    throw std::runtime_error("User " + new_name + " already exists.");
+    throw std::runtime_error("User " + new_user.userLoggable() + " already exists.");
   }
 
   if (getGrantee(new_name)) {
+    std::string const loggable = g_log_user_id ? std::string("") : new_name + ' ';
     throw runtime_error(
-        "User name " + new_name +
-        " is same as one of existing grantees. User and role names should be unique.");
+        "Username " + loggable +
+        "is same as one of existing grantees. User and role names should be unique.");
   }
 
   auto transaction_streamer = yieldTransactionStreamer();
@@ -1003,7 +1053,8 @@ void SysCatalog::renameUser(std::string const& old_name, std::string const& new_
   auto q2 = {"UPDATE mapd_object_permissions set roleName=?1 WHERE roleName=?2;"s,
              new_name,
              old_name};
-  transaction_streamer(sqliteConnector_, success_handler, failure_handler, q1, q2);
+  auto q3 = {"UPDATE mapd_roles set userName=?1 WHERE userName=?2;"s, new_name, old_name};
+  transaction_streamer(sqliteConnector_, success_handler, failure_handler, q1, q2, q3);
 }
 
 void SysCatalog::renameDatabase(std::string const& old_name,
@@ -1025,7 +1076,7 @@ void SysCatalog::renameDatabase(std::string const& old_name,
     throw std::runtime_error("Database " + old_name + " does not exists.");
   }
 
-  Catalog::remove(old_db.dbName);
+  removeCatalog(old_db.dbName);
 
   std::string old_catalog_path, new_catalog_path;
   std::tie(old_catalog_path, new_catalog_path) =
@@ -1078,7 +1129,8 @@ void SysCatalog::createDatabase(const string& name, int owner) {
         "bigint, "
         "frag_page_size integer, "
         "max_rows bigint, partitions text, shard_column_id integer, shard integer, "
-        "sort_column_id integer default 0, storage_type text default '',"
+        "sort_column_id integer default 0, storage_type text default '', "
+        "max_rollback_epochs integer default -1, "
         "num_shards integer, key_metainfo TEXT, version_num "
         "BIGINT DEFAULT 1) ");
     dbConn->query(
@@ -1118,6 +1170,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
       dbConn->query(Catalog::getForeignServerSchema());
       dbConn->query(Catalog::getForeignTableSchema());
     }
+    dbConn->query(Catalog::getCustomExpressionsSchema());
   } catch (const std::exception&) {
     dbConn->query("ROLLBACK TRANSACTION");
     boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
@@ -1134,7 +1187,9 @@ void SysCatalog::createDatabase(const string& name, int owner) {
             ")",
         name);
     CHECK(getMetadataForDB(name, db));
-    cat = Catalog::get(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, true);
+
+    cat = getCatalog(db, true);
+
     if (owner != OMNISCI_ROOT_USER_ID) {
       DBObject object(name, DBObjectType::DatabaseDBObjectType);
       object.loadKey(*cat);
@@ -1149,6 +1204,10 @@ void SysCatalog::createDatabase(const string& name, int owner) {
   }
   sqliteConnector_->query("END TRANSACTION");
 
+  // force a migration on the new database
+  removeCatalog(name);
+  cat = getCatalog(db, false);
+
   if (g_enable_fsi) {
     try {
       cat->createDefaultServersIfNotExists();
@@ -1162,8 +1221,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
 void SysCatalog::dropDatabase(const DBMetadata& db) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
-  auto cat =
-      Catalog::get(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, false);
+  auto cat = getCatalog(db, false);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     // remove this database ID from any users that have it set as their default database
@@ -1194,7 +1252,7 @@ void SysCatalog::dropDatabase(const DBMetadata& db) {
     sqliteConnector_->query_with_text_param("DELETE FROM mapd_databases WHERE dbid = ?",
                                             std::to_string(db.dbId));
     cat->eraseDBData();
-    Catalog::remove(db.dbName);
+    removeCatalog(db.dbName);
   } catch (const std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
@@ -1212,6 +1270,7 @@ bool SysCatalog::checkPasswordForUser(const std::string& passwd,
 bool SysCatalog::checkPasswordForUserImpl(const std::string& passwd,
                                           std::string& name,
                                           UserMetadata& user) {
+  sys_read_lock read_lock(this);
   if (!getMetadataForUser(name, user)) {
     // Check password against some fake hash just to waste time so that response times
     // for invalid password and invalid user are similar and a caller can't say the
@@ -1241,15 +1300,17 @@ static bool parseUserMetadataFromSQLite(const std::unique_ptr<SqliteConnector>& 
   user.defaultDbId = conn->isNull(0, 4) ? -1 : conn->getData<int>(0, 4);
   if (conn->isNull(0, 5)) {
     LOG(WARNING)
-        << "User property 'can_login' not set for user " << user.userName
+        << "User property 'can_login' not set for user " << user.userLoggable()
         << ". Disabling login ability. Set the users login ability with \"ALTER USER "
-        << user.userName << " (can_login='true');\".";
+        << (g_log_user_id ? std::string("[username]") : user.userName)
+        << " (can_login='true');\".";
   }
   user.can_login = conn->isNull(0, 5) ? false : conn->getData<bool>(0, 5);
   return true;
 }
 
 bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
+  sys_read_lock read_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
       "SELECT userid, name, passwd_hash, issuper, default_db, can_login FROM mapd_users "
@@ -1332,6 +1393,7 @@ void SysCatalog::getMetadataWithDefaultDB(std::string& dbname,
                                           const std::string& username,
                                           Catalog_Namespace::DBMetadata& db_meta,
                                           UserMetadata& user_meta) {
+  sys_read_lock read_lock(this);
   if (!getMetadataForUser(username, user_meta)) {
     throw std::runtime_error("Invalid credentials.");
   }
@@ -1344,10 +1406,11 @@ void SysCatalog::getMetadataWithDefaultDB(std::string& dbname,
   } else {
     if (user_meta.defaultDbId != -1) {
       if (!getMetadataForDBById(user_meta.defaultDbId, db_meta)) {
+        std::string loggable = g_log_user_id ? std::string("") : ' ' + user_meta.userName;
         throw std::runtime_error(
-            "Server error: User #" + std::to_string(user_meta.userId) + " " +
-            user_meta.userName + " has invalid default_db #" +
-            std::to_string(user_meta.defaultDbId) + " which does not exist.");
+            "Server error: User #" + std::to_string(user_meta.userId) + loggable +
+            " has invalid default_db #" + std::to_string(user_meta.defaultDbId) +
+            " which does not exist.");
       }
       dbname = db_meta.dbName;
       // loaded the user's default database
@@ -1363,6 +1426,7 @@ void SysCatalog::getMetadataWithDefaultDB(std::string& dbname,
 }
 
 bool SysCatalog::getMetadataForDB(const string& name, DBMetadata& db) {
+  sys_read_lock read_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
       "SELECT dbid, name, owner FROM mapd_databases WHERE name = ?", name);
@@ -1447,7 +1511,8 @@ void SysCatalog::createDBObject(const UserMetadata& user,
       grantDBObjectPrivileges_unsafe(user.userName, object, catalog);
       auto* grantee = instance().getUserGrantee(user.userName);
       if (!grantee) {
-        throw runtime_error("User " + user.userName + "  does not exist.");
+        throw runtime_error("Cannot create DBObject. User " + user.userLoggable() +
+                            " does not exist.");
       }
       grantee->grantPrivileges(object);
     }
@@ -1498,6 +1563,7 @@ void SysCatalog::grantDBObjectPrivileges_unsafe(
     DBObject object,
     const Catalog_Namespace::Catalog& catalog) {
   object.loadKey(catalog);
+  CHECK(object.valid());
   if (object.getPrivileges().hasPermission(DatabasePrivileges::ALL) &&
       object.getObjectKey().permissionType == DatabaseDBObjectType) {
     return grantAllOnDatabase_unsafe(granteeName, object, catalog);
@@ -1953,7 +2019,8 @@ bool SysCatalog::hasAnyPrivileges(const UserMetadata& user,
   }
   auto* user_rl = instance().getUserGrantee(user.userName);
   if (!user_rl) {
-    throw runtime_error("User " + user.userName + "  does not exist.");
+    throw runtime_error("Cannot check privileges. User " + user.userLoggable() +
+                        " does not exist.");
   }
   for (std::vector<DBObject>::iterator objectIt = privObjects.begin();
        objectIt != privObjects.end();
@@ -1974,7 +2041,8 @@ bool SysCatalog::checkPrivileges(const UserMetadata& user,
 
   auto* user_rl = instance().getUserGrantee(user.userName);
   if (!user_rl) {
-    throw runtime_error("User " + user.userName + "  does not exist.");
+    throw runtime_error("Cannot check privileges. User " + user.userLoggable() +
+                        " does not exist.");
   }
   for (auto& object : privObjects) {
     if (!user_rl->checkPrivileges(object)) {
@@ -1988,8 +2056,9 @@ bool SysCatalog::checkPrivileges(const std::string& userName,
                                  const std::vector<DBObject>& privObjects) const {
   UserMetadata user;
   if (!instance().getMetadataForUser(userName, user)) {
-    throw runtime_error("Request to check privileges for user " + userName +
-                        " failed because user with this name does not exist.");
+    std::string const loggable = g_log_user_id ? std::string("") : userName + ' ';
+    throw runtime_error("Request to check privileges for user " + loggable +
+                        "failed because user with this name does not exist.");
   }
   return (checkPrivileges(user, privObjects));
 }
@@ -2332,6 +2401,11 @@ void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
                                             bool* is_super) {
   UserMetadata user_meta;
   bool is_super_user = is_super ? *is_super : false;
+  // need to escalate to a write lock
+  // need to unlock the read lock
+  sys_read_lock read_lock(this);
+  read_lock.unlock();
+  sys_write_lock write_lock(this);
   if (!getMetadataForUser(user_name, user_meta)) {
     createUser(user_name, generate_random_string(72), is_super_user, "", true);
     LOG(INFO) << "User " << user_name << " has been created by remote identity provider"
@@ -2416,6 +2490,60 @@ SysCatalog::getGranteesOfSharedDashboards(const std::vector<std::string>& dashbo
   }
   sqliteConnector_->query("END TRANSACTION");
   return active_grantees;
+}
+
+std::shared_ptr<Catalog> SysCatalog::getCatalog(const std::string& dbName) {
+  dbid_to_cat_map::const_accessor cata;
+  if (cat_map_.find(cata, dbName)) {
+    return cata->second;
+  } else {
+    Catalog_Namespace::DBMetadata db_meta;
+    if (getMetadataForDB(dbName, db_meta)) {
+      return getCatalog(db_meta, false);
+    } else {
+      return nullptr;
+    }
+  }
+}
+
+std::shared_ptr<Catalog> SysCatalog::getCatalog(const int32_t db_id) {
+  dbid_to_cat_map::const_accessor cata;
+  for (dbid_to_cat_map::iterator cat_it = cat_map_.begin(); cat_it != cat_map_.end();
+       ++cat_it) {
+    if (cat_it->second->getDatabaseId() == db_id) {
+      return cat_it->second;
+    }
+  }
+  return nullptr;
+}
+
+std::shared_ptr<Catalog> SysCatalog::getCatalog(const DBMetadata& curDB, bool is_new_db) {
+  {
+    dbid_to_cat_map::const_accessor cata;
+    if (cat_map_.find(cata, curDB.dbName)) {
+      return cata->second;
+    }
+  }
+
+  // Catalog doesnt exist
+  // has to be made outside of lock as migration uses cat
+  auto cat = std::make_shared<Catalog>(
+      basePath_, curDB, dataMgr_, string_dict_hosts_, calciteMgr_, is_new_db);
+
+  dbid_to_cat_map::accessor cata;
+
+  if (cat_map_.find(cata, curDB.dbName)) {
+    return cata->second;
+  }
+
+  cat_map_.insert(cata, curDB.dbName);
+  cata->second = cat;
+
+  return cat;
+}
+
+void SysCatalog::removeCatalog(const std::string& dbName) {
+  cat_map_.erase(dbName);
 }
 
 }  // namespace Catalog_Namespace

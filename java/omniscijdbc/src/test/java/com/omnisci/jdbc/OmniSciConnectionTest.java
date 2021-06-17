@@ -33,6 +33,7 @@ public class OmniSciConnectionTest {
     InputStream inputStream = new FileInputStream(initialFile);
     base_properties.load(inputStream);
   }
+
   @Test
   public void tst1_binary_unencrypted() {
     try {
@@ -46,6 +47,93 @@ public class OmniSciConnectionTest {
     } catch (SQLException sq) {
       String err = "Connection test failed " + sq.toString();
       fail(err);
+    }
+  }
+
+  @Test
+  public void tst1_binary_unencrypted_query_url1() {
+    String url = null;
+    try {
+      url = PROPERTIES.getProperty("query_connection_url1");
+      Connection conn = DriverManager.getConnection(url, user, password);
+      assertNotEquals(null, conn);
+      conn.close();
+      boolean closed = conn.isClosed();
+      assertEquals(true, closed);
+
+    } catch (SQLException sq) {
+      String err = "Connection test failed for url  " + url + ":" + sq.toString();
+      fail(err);
+    }
+  }
+  @Test
+  public void tst1_binary_unencrypted_query_url2() {
+    String url = null;
+    url = PROPERTIES.getProperty("query_connection_url2");
+    try {
+      Connection conn = DriverManager.getConnection(url, user, password);
+    } catch (SQLException re) {
+      assertEquals(re.getMessage(), "Invalid value supplied for max rows XXX");
+    }
+  }
+  @Test
+  public void tst1_binary_unencrypted_query_url3() {
+    String url = null;
+    try {
+      url = PROPERTIES.getProperty("query_connection_url3");
+      Connection conn = DriverManager.getConnection(url, user, password);
+      assertNotEquals(null, conn);
+      conn.close();
+      boolean closed = conn.isClosed();
+      assertEquals(true, closed);
+
+    } catch (SQLException sq) {
+      String err = "Connection test failed for url  " + url + ":" + sq.toString();
+      fail(err);
+    }
+  }
+
+  @Test
+  public void tst1_binary_unencrypted_query_url4() {
+    String url = null;
+    try {
+      url = PROPERTIES.getProperty("query_connection_url4");
+      Connection conn = DriverManager.getConnection(url, user, password);
+      assertNotEquals(null, conn);
+      conn.close();
+      boolean closed = conn.isClosed();
+      assertEquals(true, closed);
+
+    } catch (SQLException sq) {
+      String err = "Connection test failed for url  " + url + ":" + sq.toString();
+      fail(err);
+    }
+  }
+
+  @Test
+  public void tst1_binary_unencrypted_query_url5() {
+    String url = null;
+    try {
+      url = PROPERTIES.getProperty("query_connection_url5");
+      Connection conn = DriverManager.getConnection(url);
+      assertNotEquals(null, conn);
+      conn.close();
+      boolean closed = conn.isClosed();
+      assertEquals(true, closed);
+
+    } catch (SQLException sq) {
+      String err = "Connection test failed for url  " + url + ":" + sq.toString();
+      fail(err);
+    }
+  }
+  @Test
+  public void tst1_url_too_long() {
+    try {
+      String url = "jdbc:omnisci:l3:6666:l5:l6:l7:l8:l9:l10:l11:l12:50000:l14:l15";
+      Connection conn = DriverManager.getConnection(url, user, password);
+    } catch (SQLException sq) {
+      assertEquals(sq.getMessage(),
+              "Invalid number of arguments provided in url [15]. Maximum allowed [13]");
     }
   }
   @Test

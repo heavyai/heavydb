@@ -50,7 +50,7 @@ class LeafAggregator {
     CHECK(false);
   }
 
-  std::vector<TQueryResult> forwardQueryToLeaves(
+  std::map<size_t, TQueryResult> forwardQueryToLeaves(
       const Catalog_Namespace::SessionInfo& parent_session_info,
       const std::string& query_str) {
     CHECK(false);
@@ -154,6 +154,18 @@ class LeafAggregator {
   void clear_leaf_cpu_memory(const TSessionId session) { CHECK(false); }
 
   void clear_leaf_gpu_memory(const TSessionId session) { CHECK(false); }
+
+  void set_cur_session(const TSessionId parent_session,
+                       const std::string& start_time_str,
+                       const std::string& label) {
+    CHECK(false);
+  }
+
+  void invalidate_cur_session(const TSessionId parent_session,
+                              const std::string& start_time_str,
+                              const std::string& label) {
+    CHECK(false);
+  }
 
   std::vector<size_t> query_get_outer_fragment_counts(
       const Catalog_Namespace::SessionInfo& parent_session_info,

@@ -77,6 +77,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteOverlapsJoin(
           ra_exe_unit_in.estimator,
           ra_exe_unit_in.sort_info,
           ra_exe_unit_in.scan_limit,
+          ra_exe_unit_in.query_hint,
           ra_exe_unit_in.use_bump_allocator};
 }
 
@@ -275,8 +276,10 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
         // Codegen expects a string value. The string will be
         // resolved to its ID during Constant codegen. Copy the string from the
         // original expr
-        Datum new_string_datum{.stringval = new std::string(
-                                   *original_constant_expr->get_constval().stringval)};
+        Datum datum;
+        datum.stringval =
+            new std::string(*original_constant_expr->get_constval().stringval);
+        Datum new_string_datum{datum};
 
         new_column_value =
             makeExpr<Analyzer::Constant>(column_to_update->get_type_info(),
@@ -284,14 +287,16 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
                                          new_string_datum);
 
         // Roll the string dict generation forward, as we have added a string
-        if (executor_->string_dictionary_generations_.getGeneration(dict_id) > -1) {
-          executor_->string_dictionary_generations_.updateGeneration(
-              dict_id, string_dict->storageEntryCount());
+        auto row_set_mem_owner = executor_->getRowSetMemoryOwner();
+        CHECK(row_set_mem_owner);
+        auto& str_dict_generations = row_set_mem_owner->getStringDictionaryGenerations();
+        if (str_dict_generations.getGeneration(dict_id) > -1) {
+          str_dict_generations.updateGeneration(dict_id,
+                                                string_dict->storageEntryCount());
         } else {
           // Simple update with no filters does not use a CASE, and therefore does not add
           // a valid generation
-          executor_->string_dictionary_generations_.setGeneration(
-              dict_id, string_dict->storageEntryCount());
+          str_dict_generations.setGeneration(dict_id, string_dict->storageEntryCount());
         }
       }
     }
@@ -367,6 +372,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
                                          ra_exe_unit_in.estimator,
                                          ra_exe_unit_in.sort_info,
                                          ra_exe_unit_in.scan_limit,
+                                         ra_exe_unit_in.query_hint,
                                          ra_exe_unit_in.use_bump_allocator,
                                          ra_exe_unit_in.union_all,
                                          ra_exe_unit_in.query_state};
@@ -389,7 +395,8 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarDelete(
     throw std::runtime_error("Delete via join not yet supported for temporary tables.");
   }
 
-  const auto true_datum = Datum{.boolval = true};
+  Datum true_datum;
+  true_datum.boolval = true;
   const auto deleted_constant =
       makeExpr<Analyzer::Constant>(delete_column->get_type_info(), false, true_datum);
 
@@ -466,6 +473,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarDelete(
                                          ra_exe_unit_in.estimator,
                                          ra_exe_unit_in.sort_info,
                                          ra_exe_unit_in.scan_limit,
+                                         ra_exe_unit_in.query_hint,
                                          ra_exe_unit_in.use_bump_allocator,
                                          ra_exe_unit_in.union_all,
                                          ra_exe_unit_in.query_state};

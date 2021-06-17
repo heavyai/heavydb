@@ -51,8 +51,8 @@ struct TargetExprCodegen {
                const std::vector<llvm::Value*>& agg_out_vec,
                llvm::Value* output_buffer_byte_stream,
                llvm::Value* out_row_idx,
-               GroupByAndAggregate::DiamondCodegen& diamond_codegen,
-               GroupByAndAggregate::DiamondCodegen* sample_cfg = nullptr) const;
+               DiamondCodegen& diamond_codegen,
+               DiamondCodegen* sample_cfg = nullptr) const;
 
   void codegenAggregate(GroupByAndAggregate* group_by_and_agg,
                         Executor* executor,
@@ -94,7 +94,7 @@ struct TargetExprCodegenBuilder {
                const std::vector<llvm::Value*>& agg_out_vec,
                llvm::Value* output_buffer_byte_stream,
                llvm::Value* out_row_idx,
-               GroupByAndAggregate::DiamondCodegen& diamond_codegen) const;
+               DiamondCodegen& diamond_codegen) const;
 
   void codegenSampleExpressions(
       GroupByAndAggregate* group_by_and_agg,
@@ -105,7 +105,7 @@ struct TargetExprCodegenBuilder {
       const std::vector<llvm::Value*>& agg_out_vec,
       llvm::Value* output_buffer_byte_stream,
       llvm::Value* out_row_idx,
-      GroupByAndAggregate::DiamondCodegen& diamond_codegen) const;
+      DiamondCodegen& diamond_codegen) const;
 
   void codegenSingleSlotSampleExpression(
       GroupByAndAggregate* group_by_and_agg,
@@ -116,7 +116,7 @@ struct TargetExprCodegenBuilder {
       const std::vector<llvm::Value*>& agg_out_vec,
       llvm::Value* output_buffer_byte_stream,
       llvm::Value* out_row_idx,
-      GroupByAndAggregate::DiamondCodegen& diamond_codegen) const;
+      DiamondCodegen& diamond_codegen) const;
 
   void codegenMultiSlotSampleExpressions(
       GroupByAndAggregate* group_by_and_agg,
@@ -127,7 +127,7 @@ struct TargetExprCodegenBuilder {
       const std::vector<llvm::Value*>& agg_out_vec,
       llvm::Value* output_buffer_byte_stream,
       llvm::Value* out_row_idx,
-      GroupByAndAggregate::DiamondCodegen& diamond_codegen) const;
+      DiamondCodegen& diamond_codegen) const;
 
   llvm::Value* codegenSlotEmptyKey(llvm::Value* agg_col_ptr,
                                    std::vector<llvm::Value*>& target_lvs,

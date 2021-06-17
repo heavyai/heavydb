@@ -37,6 +37,8 @@ SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr) 
       return SQLTypeInfo(kDOUBLE, false);
     case kAPPROX_COUNT_DISTINCT:
       return SQLTypeInfo(kBIGINT, false);
+    case kAPPROX_MEDIAN:
+      return SQLTypeInfo(kDOUBLE, false);
     case kSINGLE_VALUE:
       if (arg_expr->get_type_info().is_varlen()) {
         throw std::runtime_error("SINGLE_VALUE not supported on '" +
@@ -71,6 +73,10 @@ ExtractField to_datepart_field(const std::string& field) {
   } else if (boost::iequals(field, "week") || boost::iequals(field, "ww") ||
              boost::iequals(field, "w") || boost::iequals(field, "sql_tsi_week")) {
     fieldno = kWEEK;
+  } else if (boost::iequals(field, "week_sunday")) {
+    fieldno = kWEEK_SUNDAY;
+  } else if (boost::iequals(field, "week_saturday")) {
+    fieldno = kWEEK_SATURDAY;
   } else if (boost::iequals(field, "hour") || boost::iequals(field, "hh") ||
              boost::iequals(field, "sql_tsi_hour")) {
     fieldno = kHOUR;
@@ -162,6 +168,10 @@ DatetruncField to_datediff_field(const std::string& field) {
   } else if (boost::iequals(field, "week") || boost::iequals(field, "ww") ||
              boost::iequals(field, "w") || boost::iequals(field, "sql_tsi_week")) {
     fieldno = dtWEEK;
+  } else if (boost::iequals(field, "week_sunday")) {
+    fieldno = dtWEEK_SUNDAY;
+  } else if (boost::iequals(field, "week_saturday")) {
+    fieldno = dtWEEK_SATURDAY;
   } else if (boost::iequals(field, "day") || boost::iequals(field, "dd") ||
              boost::iequals(field, "d") || boost::iequals(field, "sql_tsi_day")) {
     fieldno = dtDAY;

@@ -90,9 +90,9 @@ void RenderHandler::clear_cpu_memory() {
   CHECK(impl_);
 }
 
-QueryRenderer::QueryRenderManager* RenderHandler::get_render_manager() {
+std::string RenderHandler::get_renderer_status_json() const {
   CHECK(impl_);
-  return nullptr;
+  return std::string();
 }
 
 void RenderHandler::shutdown() {

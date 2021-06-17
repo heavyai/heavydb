@@ -81,7 +81,9 @@ enum class DataTransferType { IMPORT = 1, EXPORT };
 
 class FilePathWhitelist {
  public:
-  static void initializeFromConfigFile(const std::string& server_config_path);
+  static void initialize(const std::string& data_dir,
+                         const std::string& allowed_import_paths,
+                         const std::string& allowed_export_paths);
   static void validateWhitelistedFilePath(
       const std::vector<std::string>& expanded_file_paths,
       const DataTransferType data_transfer_type);

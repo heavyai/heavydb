@@ -214,8 +214,7 @@ extern "C" __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
                                                         const int64_t* key,
                                                         const uint32_t key_count,
                                                         const uint32_t key_width,
-                                                        const uint32_t row_size_quad,
-                                                        const int64_t* init_vals) {
+                                                        const uint32_t row_size_quad) {
   switch (key_width) {
     case 4:
       return get_matching_group_value(groups_buffer,
@@ -325,7 +324,7 @@ extern "C" __device__ int64_t* get_matching_group_value_columnar(
 }
 
 #include "GroupByRuntime.cpp"
-#include "JoinHashTable/JoinHashTableQueryRuntime.cpp"
+#include "JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp"
 #include "MurmurHash.cpp"
 #include "TopKRuntime.cpp"
 
@@ -1186,6 +1185,7 @@ extern "C" __device__ bool slotEmptyKeyCAS_int8(int8_t* slot,
 #define EXECUTE_INCLUDE
 #include "ArrayOps.cpp"
 #include "DateAdd.cpp"
+#include "GeoOps.cpp"
 #include "StringFunctions.cpp"
 #undef EXECUTE_INCLUDE
 #include "../Utils/Regexp.cpp"

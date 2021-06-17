@@ -48,6 +48,10 @@ class ScalarExprVisitor {
     if (bin_oper) {
       return visitBinOper(bin_oper);
     }
+    const auto geo_expr = dynamic_cast<const Analyzer::GeoExpr*>(expr);
+    if (geo_expr) {
+      return visitGeoExpr(geo_expr);
+    }
     const auto in_values = dynamic_cast<const Analyzer::InValues*>(expr);
     if (in_values) {
       return visitInValues(in_values);
@@ -166,6 +170,10 @@ class ScalarExprVisitor {
     result = aggregateResult(result, visit(bin_oper->get_left_operand()));
     result = aggregateResult(result, visit(bin_oper->get_right_operand()));
     return result;
+  }
+
+  virtual T visitGeoExpr(const Analyzer::GeoExpr* geo_expr) const {
+    return defaultResult();
   }
 
   virtual T visitInValues(const Analyzer::InValues* in_values) const {

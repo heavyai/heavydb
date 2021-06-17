@@ -20,18 +20,23 @@
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/Allocators/CudaAllocator.h"
 #include "QueryEngine/CompilationOptions.h"
-#include "QueryEngine/JoinHashTable/JoinHashTableInterface.h"
+#include "QueryEngine/JoinHashTable/HashJoin.h"
 
-class BaselineHashTable {
+#include "QueryEngine/JoinHashTable/HashTable.h"
+
+class BaselineHashTable : public HashTable {
  public:
   // CPU constructor
   BaselineHashTable(const Catalog_Namespace::Catalog* catalog,
-                    JoinHashTableInterface::HashType layout,
+                    HashType layout,
                     const size_t entry_count,
                     const size_t emitted_keys_count,
                     const size_t hash_table_size)
-      : device_id_(0)
+      : gpu_hash_table_buff_(nullptr)
+#ifdef HAVE_CUDA
+      , device_id_(0)
       , catalog_(catalog)
+#endif
       , layout_(layout)
       , entry_count_(entry_count)
       , emitted_keys_count_(emitted_keys_count) {
@@ -40,13 +45,16 @@ class BaselineHashTable {
 
   // GPU constructor
   BaselineHashTable(const Catalog_Namespace::Catalog* catalog,
-                    JoinHashTableInterface::HashType layout,
+                    HashType layout,
                     const size_t entry_count,
                     const size_t emitted_keys_count,
                     const size_t hash_table_size,
                     const size_t device_id)
-      : device_id_(device_id)
+      : gpu_hash_table_buff_(nullptr)
+#ifdef HAVE_CUDA
+      , device_id_(device_id)
       , catalog_(catalog)
+#endif
       , layout_(layout)
       , entry_count_(entry_count)
       , emitted_keys_count_(emitted_keys_count) {
@@ -70,36 +78,37 @@ class BaselineHashTable {
 #endif
   }
 
-  Data_Namespace::AbstractBuffer* getGpuBuffer() const { return gpu_hash_table_buff_; }
+  int8_t* getGpuBuffer() const override {
+    return gpu_hash_table_buff_ ? gpu_hash_table_buff_->getMemoryPtr() : nullptr;
+  }
 
-  size_t getHashTableBufferSize(const ExecutorDeviceType device_type) const {
+  size_t getHashTableBufferSize(const ExecutorDeviceType device_type) const override {
     if (device_type == ExecutorDeviceType::CPU) {
       return cpu_hash_table_buff_.size() *
              sizeof(decltype(cpu_hash_table_buff_)::value_type);
     } else {
-      const auto gpu_buff = getGpuBuffer();
-      return gpu_buff ? gpu_buff->reservedSize() : 0;
+      return gpu_hash_table_buff_ ? gpu_hash_table_buff_->reservedSize() : 0;
     }
   }
 
-  int8_t* getCpuBuffer() { return cpu_hash_table_buff_.data(); }
-  size_t getCpuBufferSize() { return cpu_hash_table_buff_.size(); }
+  int8_t* getCpuBuffer() override {
+    return reinterpret_cast<int8_t*>(cpu_hash_table_buff_.data());
+  }
 
-  auto getLayout() const { return layout_; }
-  size_t getEntryCount() const { return entry_count_; }
-  size_t getEmittedKeysCount() const { return emitted_keys_count_; }
+  HashType getLayout() const override { return layout_; }
+  size_t getEntryCount() const override { return entry_count_; }
+  size_t getEmittedKeysCount() const override { return emitted_keys_count_; }
 
  private:
   std::vector<int8_t> cpu_hash_table_buff_;
-  Data_Namespace::AbstractBuffer* gpu_hash_table_buff_{nullptr};
+  Data_Namespace::AbstractBuffer* gpu_hash_table_buff_;
+
+#ifdef HAVE_CUDA
   const size_t device_id_;
-
-  // TODO: only required for cuda
   const Catalog_Namespace::Catalog* catalog_;
+#endif
 
-  JoinHashTableInterface::HashType layout_;
-  // size_t key_component_count_;
-  // size_t key_component_width_;
+  HashType layout_;
   size_t entry_count_;         // number of keys in the hash table
   size_t emitted_keys_count_;  // number of keys emitted across all rows
 };

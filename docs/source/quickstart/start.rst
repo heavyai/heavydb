@@ -11,7 +11,7 @@ The `startomnisci` wrapper script may be used to start OmniSciDB in a testing en
 
 * initializes the server `data` directory via ``initdb``, if required
 * starts the OmniSciDB server, ``omnisci_server``
-* offers to download and import a sample dataset, using the `insert_sample_data` script
+* offers to download and import a sample dataset using the `insert_sample_data` script if flag ``--sample-data`` is provided
 
 Assuming you are in the `build` directory, and it is a subdirectory of the `omniscidb` repository, `startomnisci` may be run by:
 

@@ -27,6 +27,9 @@
 #include "ImportExport/DelimitedParserUtils.h"
 #include "Logger/Logger.h"
 
+#include <chrono>
+#include <thread>
+
 using namespace ::apache::thrift;
 
 SQLTypes get_sql_types(const TColumnType& ct) {
@@ -293,7 +296,7 @@ bool RowToColumnLoader::convert_string_to_column(
     std::vector<TStringValue> row,
     const import_export::CopyParams& copy_params) {
   // create datum and push data to column structure from row data
-  uint curr_col = 0;
+  uint64_t curr_col = 0;
   for (TStringValue ts : row) {
     try {
       switch (column_type_info_[curr_col].get_type()) {
@@ -393,13 +396,13 @@ void RowToColumnLoader::closeConnection() {
   }
 }
 
-void RowToColumnLoader::wait_disconnet_reconnnect_retry(
+void RowToColumnLoader::wait_disconnect_reconnect_retry(
     size_t tries,
     import_export::CopyParams copy_params) {
   std::cout << "  Waiting  " << copy_params.retry_wait
             << " secs to retry Inserts , will try " << (copy_params.retry_count - tries)
             << " times more " << std::endl;
-  sleep(copy_params.retry_wait);
+  std::this_thread::sleep_for(std::chrono::seconds(copy_params.retry_wait));
 
   closeConnection();
   createConnection(conn_details_);
@@ -411,7 +414,7 @@ void RowToColumnLoader::do_load(int& nrows,
   for (size_t tries = 0; tries < copy_params.retry_count;
        tries++) {  // allow for retries in case of insert failure
     try {
-      client_->load_table_binary_columnar(session_, table_name_, input_columns_);
+      client_->load_table_binary_columnar(session_, table_name_, input_columns_, {});
       //      client->load_table(session, table_name, input_rows);
       nrows += input_columns_[0].nulls.size();
       std::cout << nrows << " Rows Inserted, " << nskipped << " rows skipped."
@@ -426,10 +429,10 @@ void RowToColumnLoader::do_load(int& nrows,
       return;
     } catch (TOmniSciException& e) {
       std::cerr << "Exception trying to insert data " << e.error_msg << std::endl;
-      wait_disconnet_reconnnect_retry(tries, copy_params);
+      exit(2);
     } catch (TException& te) {
       std::cerr << "Exception trying to insert data " << te.what() << std::endl;
-      wait_disconnet_reconnnect_retry(tries, copy_params);
+      wait_disconnect_reconnect_retry(tries, copy_params);
     }
   }
   std::cerr << "Retries exhausted program terminated" << std::endl;

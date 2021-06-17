@@ -50,8 +50,7 @@
     defined(WITH_JIT_DEBUG)
 #define ALWAYS_INLINE
 #elif defined(ENABLE_EMBEDDED_DATABASE)
-#define ALWAYS_INLINE \
-  __attribute__((always_inline)) __attribute__((__visibility__("hidden")))
+#define ALWAYS_INLINE __attribute__((inline)) __attribute__((__visibility__("protected")))
 #elif defined(_MSC_VER)
 #define ALWAYS_INLINE __inline
 #else
@@ -70,4 +69,10 @@
 #define SUFFIX(name) name##_gpu
 #else
 #define SUFFIX(name) name
+#endif
+
+#ifdef _WIN32
+#define RUNTIME_EXPORT __declspec(dllexport)
+#else
+#define RUNTIME_EXPORT
 #endif

@@ -14,6 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+/* MAT 9 Jan 2021
+ * We have moved this code from calcite 1.25
+ * we keep our own copy as we have added some
+ * special handling of pushdown and correlation handling
+ *
+ * If we make changes from the original source please make
+ * sure you add good comments around the changed block
+ * as each time we move to a new calcite version we need to move
+ * our chnages to the new code
+ *
+ */
 package org.apache.calcite.sql2rel;
 
 import static org.apache.calcite.sql.SqlUtil.stripAs;
@@ -204,8 +216,10 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.BiPredicate;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
+import javax.annotation.Nonnull;
 /**
  * Converts a SQL parse tree (consisting of
  * {@link org.apache.calcite.sql.SqlNode} objects) into a relational algebra
@@ -219,8 +233,6 @@ public class SqlToRelConverter {
   // ~ Static fields/initializers ---------------------------------------------
 
   protected static final Logger SQL2REL_LOGGER = CalciteTrace.getSqlToRelTracer();
-
-  private static final BigDecimal TWO = BigDecimal.valueOf(2L);
 
   /**
    * Size of the smallest IN list that will be converted to a semijoin to a static
@@ -326,7 +338,9 @@ public class SqlToRelConverter {
     this.exprConverter = new SqlNodeToRexConverterImpl(convertletTable);
     this.explainParamCount = 0;
     this.config = new ConfigBuilder().withConfig(config).build();
-    this.relBuilder = config.getRelBuilderFactory().create(cluster, null);
+    this.relBuilder = config.getRelBuilderFactory()
+                              .create(cluster, null)
+                              .transform(config.getRelBuilderConfigTransform());
     this.hintStrategies = config.getHintStrategyTable();
 
     cluster.setHintStrategies(this.hintStrategies);
@@ -335,9 +349,7 @@ public class SqlToRelConverter {
 
   // ~ Methods ----------------------------------------------------------------
 
-  /**
-   * @return the RelOptCluster in use.
-   */
+  /** Returns the RelOptCluster in use. */
   public RelOptCluster getCluster() {
     return cluster;
   }
@@ -389,8 +401,8 @@ public class SqlToRelConverter {
   }
 
   /**
-   * @return mapping of non-correlated sub-queries that have been converted to the
-   *         constants that they evaluate to
+   * Returns the mapping of non-correlated sub-queries that have been converted to
+   * the constants that they evaluate to.
    */
   public Map<SqlNode, RexNode> getMapConvertedNonCorrSubqs() {
     return mapConvertedNonCorrSubqs;
@@ -477,7 +489,7 @@ public class SqlToRelConverter {
    * @return New root relational expression after decorrelation
    */
   public RelNode decorrelate(SqlNode query, RelNode rootRel) {
-    if (!enableDecorrelation()) {
+    if (!config.isDecorrelationEnabled()) {
       return rootRel;
     }
     final RelNode result = decorrelateQuery(rootRel);
@@ -623,7 +635,7 @@ public class SqlToRelConverter {
     if (r instanceof Delta) {
       return requiredCollation(((Delta) r).getInput());
     }
-    throw new AssertionError();
+    throw new AssertionError(r);
   }
 
   /**
@@ -752,9 +764,8 @@ public class SqlToRelConverter {
       for (int i = 0; i < fields.size(); i++) {
         final int origin = origins.get(i);
         RelDataTypeField field = fields.get(i);
-        undoProjects.add(
-                Pair.of((RexNode) new RexInputRef(squished.get(origin), field.getType()),
-                        field.getName()));
+        undoProjects.add(Pair.of(
+                new RexInputRef(squished.get(origin), field.getType()), field.getName()));
       }
 
       rel = LogicalProject.create(
@@ -1235,7 +1246,7 @@ public class SqlToRelConverter {
 
         // This is used when converting window table functions:
         //
-        // select * from table(table emps, descriptor(deptno), interval '3' DAY)
+        // select * from table(tumble(table emps, descriptor(deptno), interval '3' DAY))
         //
         bb.cursors.add(converted.r);
         return;
@@ -2122,8 +2133,7 @@ public class SqlToRelConverter {
                           .build();
     } else {
       // REVIEW danny 2020-04-26: should we unify the normal field aliases and the
-      // item
-      // aliases ?
+      // item aliases ?
       uncollect = relBuilder.push(child)
                           .project(exprs)
                           .uncollect(Collections.emptyList(), operator.withOrdinality)
@@ -2355,7 +2365,7 @@ public class SqlToRelConverter {
             new SqlCallBinding(bb.scope.getValidator(), bb.scope, call);
     if (operator instanceof SqlUserDefinedTableMacro) {
       final SqlUserDefinedTableMacro udf = (SqlUserDefinedTableMacro) operator;
-      final TranslatableTable table = udf.getTable(typeFactory, callBinding.operands());
+      final TranslatableTable table = udf.getTable(callBinding);
       final RelDataType rowType = table.getRowType(typeFactory);
       RelOptTable relOptTable =
               RelOptTableImpl.create(null, rowType, table, udf.getNameAsId().names);
@@ -2367,7 +2377,7 @@ public class SqlToRelConverter {
     Type elementType;
     if (operator instanceof SqlUserDefinedTableFunction) {
       SqlUserDefinedTableFunction udtf = (SqlUserDefinedTableFunction) operator;
-      elementType = udtf.getElementType(typeFactory, callBinding.operands());
+      elementType = udtf.getElementType(callBinding);
     } else {
       elementType = null;
     }
@@ -2467,11 +2477,14 @@ public class SqlToRelConverter {
                 ImmutableBitSet.fromBitSet(shuttle.varCols).union(p.requiredColumns);
       }
 
-      LogicalCorrelate corr =
-              LogicalCorrelate.create(leftRel, innerRel, p.id, requiredCols, joinType);
-      return corr;
+      return LogicalCorrelate.create(leftRel, innerRel, p.id, requiredCols, joinType);
     }
 
+    // MAt 8 Jan 2021 original code
+    // final RelNode node = relBuilder.push(leftRel).push(rightRel).join(joinType,
+    // joinCond).build();
+
+    // MAT 8 Jan 2021 this is Omnisci code
     final Join originalJoin = (Join) RelFactories.DEFAULT_JOIN_FACTORY.createJoin(leftRel,
             rightRel,
             ImmutableList.of(),
@@ -2479,15 +2492,8 @@ public class SqlToRelConverter {
             ImmutableSet.of(),
             joinType,
             false);
-
-    RelNode node;
-    boolean applyPushdown =
-            config.getPushdownJoinCondition().test(bb.getTopNode(), originalJoin);
-    if (applyPushdown) {
-      node = RelOptUtil.pushDownJoinConditions(originalJoin, relBuilder);
-    } else {
-      node = originalJoin;
-    }
+    RelNode node = originalJoin;
+    // MAT 08 Jan 2021 end of OmniSci Code
 
     // If join conditions are pushed down, update the leaves.
     if (node instanceof Project) {
@@ -3879,8 +3885,7 @@ public class SqlToRelConverter {
             }, null, false);
           }
           RelDataType multisetType = validator.getValidatedNodeType(call);
-          ((SqlValidatorImpl) validator)
-                  .setValidatedNodeType(list, multisetType.getComponentType());
+          validator.setValidatedNodeType(list, multisetType.getComponentType());
           input = convertQueryOrInList(usedBb, list, null);
           break;
         case MULTISET_QUERY_CONSTRUCTOR:
@@ -4882,7 +4887,7 @@ public class SqlToRelConverter {
     private final Map<SqlNode, RexNode> aggMapping = new HashMap<>();
     private final Map<AggregateCall, RexNode> aggCallMapping = new HashMap<>();
 
-    /** Are we directly inside a windowed aggregate? */
+    /** Whether we are directly inside a windowed aggregate. */
     private boolean inOver = false;
 
     /**
@@ -5156,7 +5161,6 @@ public class SqlToRelConverter {
               collation,
               type,
               nameMap.get(outerCall.toString()));
-      final AggregatingSelectScope.Resolved r = aggregatingSelectScope.resolved.get();
       RexNode rex = rexBuilder.addAggCall(
               aggCall, groupExprs.size(), aggCalls, aggCallMapping, argTypes);
       aggMapping.put(outerCall, rex);
@@ -5481,7 +5485,8 @@ public class SqlToRelConverter {
 
       if (call.getOperator().getKind() == SqlKind.FILTER) {
         // the WHERE in a FILTER must be tracked too so we can call replaceSubQueries on
-        // it. see https://issues.apache.org/jira/browse/CALCITE-1910
+        // it.
+        // see https://issues.apache.org/jira/browse/CALCITE-1910
         final SqlNode aggCall = call.getOperandList().get(0);
         final SqlNode whereCall = call.getOperandList().get(1);
         list.add(aggCall);
@@ -5491,8 +5496,8 @@ public class SqlToRelConverter {
 
       if (call.getOperator().getKind() == SqlKind.WITHIN_GROUP) {
         // the WHERE in a WITHIN_GROUP must be tracked too so we can call
-        // replaceSubQueries on it. see
-        // https://issues.apache.org/jira/browse/CALCITE-1910
+        // replaceSubQueries on it.
+        // see https://issues.apache.org/jira/browse/CALCITE-1910
         final SqlNode aggCall = call.getOperandList().get(0);
         final SqlNodeList orderList = (SqlNodeList) call.getOperandList().get(1);
         list.add(aggCall);
@@ -5596,6 +5601,12 @@ public class SqlToRelConverter {
     RelBuilderFactory getRelBuilderFactory();
 
     /**
+     * Returns a function that takes a {@link RelBuilder.Config} and returns
+     * another. Default is the identity function.
+     */
+    UnaryOperator<RelBuilder.Config> getRelBuilderConfigTransform();
+
+    /**
      * Returns the hint strategies used to decide how the hints are propagated to
      * the relational expressions. Default is {@link HintStrategyTable#EMPTY}.
      */
@@ -5608,12 +5619,6 @@ public class SqlToRelConverter {
      * Per default returns the vaule of {@link #isExpand()} on all nodes
      */
     BiPredicate<SqlNode, SqlNode> getExpandPredicate();
-
-    /**
-     * Returns if join conditions should be pushed down to the projections, if
-     * possible.
-     */
-    BiPredicate<SqlNode, Join> getPushdownJoinCondition();
   }
 
   /** Builder for a {@link Config}. */
@@ -5624,10 +5629,15 @@ public class SqlToRelConverter {
     private boolean explain;
     private boolean expand = true;
     private int inSubQueryThreshold = DEFAULT_IN_SUB_QUERY_THRESHOLD;
+    private UnaryOperator<RelBuilder.Config> relBuilderConfigTransform =
+            c -> c.withPushJoinCondition(true);
     private RelBuilderFactory relBuilderFactory = RelFactories.LOGICAL_BUILDER;
     private HintStrategyTable hintStrategyTable = HintStrategyTable.EMPTY;
-    private BiPredicate<SqlNode, Join> pushdownJoinCondition;
+    // MAT 08 Jan 2021 OmniSci code
+    // pushdown join condition incurs an extra projection overhead, so remove it (21 Apr
+    // 2021)
     private BiPredicate<SqlNode, SqlNode> expandPredicate;
+    // MAT 08 Jan 2021 OmniSci code ends
 
     private ConfigBuilder() {}
 
@@ -5639,14 +5649,15 @@ public class SqlToRelConverter {
       this.explain = config.isExplain();
       this.expand = config.isExpand();
       this.inSubQueryThreshold = config.getInSubQueryThreshold();
+      this.relBuilderConfigTransform = config.getRelBuilderConfigTransform();
       this.relBuilderFactory = config.getRelBuilderFactory();
       this.hintStrategyTable = config.getHintStrategyTable();
 
+      // MAT 08 Jan 2021 OmniSci code
       if (!(config.getExpandPredicate() instanceof ConfigImpl.DefaultExpandPredicate)) {
         this.expandPredicate = config.getExpandPredicate();
       }
-      this.pushdownJoinCondition = config.getPushdownJoinCondition();
-
+      // MAT 08 Jan 2021 OmniSci code ends
       return this;
     }
 
@@ -5675,14 +5686,15 @@ public class SqlToRelConverter {
       return this;
     }
 
-    public ConfigBuilder withPushdownJoinCondition(BiPredicate<SqlNode, Join> pushdown) {
-      this.pushdownJoinCondition = pushdown;
-      return this;
-    }
-
     public ConfigBuilder withExpandPredicate(BiPredicate<SqlNode, SqlNode> predicate) {
       this.expandPredicate = predicate;
       return this;
+    }
+
+    /** Whether to push down join conditions; default true. */
+    public ConfigBuilder withPushJoinCondition(boolean pushJoinCondition) {
+      return withRelBuilderConfigTransform(Util.andThen(relBuilderConfigTransform,
+              c -> c.withPushJoinCondition(pushJoinCondition)));
     }
 
     @Deprecated // to be removed before 2.0
@@ -5692,6 +5704,12 @@ public class SqlToRelConverter {
 
     public ConfigBuilder withInSubQueryThreshold(int inSubQueryThreshold) {
       this.inSubQueryThreshold = inSubQueryThreshold;
+      return this;
+    }
+
+    public ConfigBuilder withRelBuilderConfigTransform(
+            UnaryOperator<RelBuilder.Config> relBuilderConfigTransform) {
+      this.relBuilderConfigTransform = relBuilderConfigTransform;
       return this;
     }
 
@@ -5712,9 +5730,9 @@ public class SqlToRelConverter {
               createValuesRel,
               explain,
               expand,
-              pushdownJoinCondition,
               expandPredicate,
               inSubQueryThreshold,
+              relBuilderConfigTransform,
               relBuilderFactory,
               hintStrategyTable);
     }
@@ -5731,11 +5749,13 @@ public class SqlToRelConverter {
     private final boolean explain;
     private final boolean expand;
     private final int inSubQueryThreshold;
+    private final UnaryOperator<RelBuilder.Config> relBuilderConfigTransform;
     private final RelBuilderFactory relBuilderFactory;
     private final HintStrategyTable hintStrategyTable;
 
     private final BiPredicate<SqlNode, SqlNode> expandPredicate;
 
+    // MAT 08 Jab 2021 Omnisci code
     private class DefaultExpandPredicate implements BiPredicate<SqlNode, SqlNode> {
       @Override
       public boolean test(SqlNode t, SqlNode u) {
@@ -5743,44 +5763,65 @@ public class SqlToRelConverter {
       }
     }
 
-    private BiPredicate<SqlNode, Join> pushdownJoinCondition =
-            new BiPredicate<SqlNode, Join>() {
-              public boolean test(SqlNode t, Join u) {
-                return true;
-              };
-            };
+    // MAT 08 Jan 2021 OmniSci code ends
 
     private ConfigImpl(boolean decorrelationEnabled,
             boolean trimUnusedFields,
             boolean createValuesRel,
             boolean explain,
             boolean expand,
-            BiPredicate<SqlNode, Join> pushdownJoinCondition,
+            // MAT 08 Jan 2021 OmniSci code
             BiPredicate<SqlNode, SqlNode> expandPredicate,
+            // MAT 08 Jan 2021 Omnisci code ends
             int inSubQueryThreshold,
+            UnaryOperator<RelBuilder.Config> relBuilderConfigTransform,
             RelBuilderFactory relBuilderFactory,
             HintStrategyTable hintStrategyTable) {
       this.decorrelationEnabled = decorrelationEnabled;
       this.trimUnusedFields = trimUnusedFields;
       this.createValuesRel = createValuesRel;
+      // MAT 08 Jan 2021 OmniSci code
       this.explain = explain;
       this.expand = expand;
+      // MAT 08 Jan 2021 OmniSci code ends
       this.inSubQueryThreshold = inSubQueryThreshold;
+      this.relBuilderConfigTransform = relBuilderConfigTransform;
       this.relBuilderFactory = relBuilderFactory;
       this.hintStrategyTable = hintStrategyTable;
-
+      // MAT 08 Jan 2021 OmniSci code
       if (null == expandPredicate) {
         expandPredicate = new DefaultExpandPredicate();
       }
       this.expandPredicate = expandPredicate;
 
-      if (null != pushdownJoinCondition) {
-        this.pushdownJoinCondition = pushdownJoinCondition;
-      }
+      // MAT 08 Jan 2021 OmniSci code ends
     }
 
-    public boolean isConvertTableAccess() {
-      return true;
+    // TODO MAT 08 Jan 2021 add our added types to this equals
+    @Override
+    public boolean equals(Object obj) {
+      return this == obj
+              || obj instanceof ConfigImpl
+              && decorrelationEnabled == ((ConfigImpl) obj).decorrelationEnabled
+              && trimUnusedFields == ((ConfigImpl) obj).trimUnusedFields
+              && createValuesRel == ((ConfigImpl) obj).createValuesRel
+              && explain == ((ConfigImpl) obj).explain
+              && expand == ((ConfigImpl) obj).expand
+              && inSubQueryThreshold == ((ConfigImpl) obj).inSubQueryThreshold
+              && relBuilderFactory == ((ConfigImpl) obj).relBuilderFactory
+              && hintStrategyTable == ((ConfigImpl) obj).hintStrategyTable;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(decorrelationEnabled,
+              trimUnusedFields,
+              createValuesRel,
+              explain,
+              expand,
+              inSubQueryThreshold,
+              relBuilderFactory,
+              hintStrategyTable);
     }
 
     public boolean isDecorrelationEnabled() {
@@ -5807,6 +5848,10 @@ public class SqlToRelConverter {
       return inSubQueryThreshold;
     }
 
+    public UnaryOperator<RelBuilder.Config> getRelBuilderConfigTransform() {
+      return relBuilderConfigTransform;
+    }
+
     public RelBuilderFactory getRelBuilderFactory() {
       return relBuilderFactory;
     }
@@ -5815,12 +5860,10 @@ public class SqlToRelConverter {
       return hintStrategyTable;
     }
 
-    public BiPredicate<SqlNode, Join> getPushdownJoinCondition() {
-      return pushdownJoinCondition;
-    }
-
+    // MAT 08 Jan 2021 OmniSci code
     public BiPredicate<SqlNode, SqlNode> getExpandPredicate() {
       return expandPredicate;
     }
+    // MAT 08 Jan 2021 OmniSci code ends
   }
 }

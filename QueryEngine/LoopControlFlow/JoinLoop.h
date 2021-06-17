@@ -53,13 +53,22 @@ struct JoinLoopDomain {
 // we'll not generate IR for an actual loop.
 class JoinLoop {
  public:
+  using HoistedFiltersCallback = std::function<llvm::BasicBlock*(llvm::BasicBlock*,
+                                                                 llvm::BasicBlock*,
+                                                                 const std::string&,
+                                                                 llvm::Function*,
+                                                                 CgenState*)>;
+
   JoinLoop(const JoinLoopKind,
            const JoinType,
-           const std::function<JoinLoopDomain(const std::vector<llvm::Value*>&)>&,
-           const std::function<llvm::Value*(const std::vector<llvm::Value*>&)>&,
-           const std::function<void(llvm::Value*)>&,
+           const std::function<JoinLoopDomain(const std::vector<llvm::Value*>&)>&
+               iteration_domain_codegen,
+           const std::function<llvm::Value*(const std::vector<llvm::Value*>&)>&
+               outer_condition_match,
+           const std::function<void(llvm::Value*)>& found_outer_matches,
+           const HoistedFiltersCallback& hoisted_filters,
            const std::function<llvm::Value*(const std::vector<llvm::Value*>& prev_iters,
-                                            llvm::Value*)>&,
+                                            llvm::Value*)>& is_deleted,
            const std::string& name = "");
 
   static llvm::BasicBlock* codegen(
@@ -95,6 +104,9 @@ class JoinLoop {
   // Callback provided from the executor which receives the IR boolean value which tracks
   // whether there are matches for the current iteration.
   const std::function<void(llvm::Value*)> found_outer_matches_;
+  // Callback to hoist left hand side filters through the join, evaluating the filters
+  // prior to evaluating the join (but within the same kernel)
+  const HoistedFiltersCallback hoisted_filters_;
   // Callback provided from the executor which returns if the current row (given by
   // position) is deleted. The second argument is true iff the iteration isn't done yet.
   // Useful for UpperBound and Set, which need to avoid fetching the deleted column from a

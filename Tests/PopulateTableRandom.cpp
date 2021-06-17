@@ -138,14 +138,14 @@ size_t random_fill_int8array(std::vector<std::vector<int8_t>>& stringVec,
                              int max_len,
                              size_t& data_volumn) {
   std::default_random_engine gen;
-  std::uniform_int_distribution<int8_t> dist(INT8_MIN, INT8_MAX);
+  std::uniform_int_distribution<short> dist(INT8_MIN, INT8_MAX);
   std::uniform_int_distribution<> len_dist(0, max_len);
   size_t hash = 0;
   for (size_t n = 0; n < num_elems; n++) {
     int len = len_dist(gen);
     std::vector<int8_t> s(len);
     for (int i = 0; i < len; i++) {
-      s[i] = dist(gen);
+      s[i] = static_cast<int8_t>(dist(gen));
       boost::hash_combine(hash, s[i]);
     }
     stringVec[n] = s;
@@ -286,6 +286,7 @@ std::vector<size_t> populate_table_random(const std::string& table_name,
   insert_data.tableId = td->tableId;
   for (const auto& cd : cds) {
     insert_data.columnIds.push_back(cd->columnId);
+    insert_data.is_default.push_back(false);
   }
   insert_data.numRows = num_rows;
   std::vector<std::vector<int8_t>> numbers_vec;

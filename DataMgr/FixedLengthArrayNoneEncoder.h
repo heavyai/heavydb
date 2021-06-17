@@ -169,8 +169,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     }
     switch (type.get_subtype()) {
       case kBOOLEAN: {
-        const bool* bool_array = (bool*)array;
-        return ((int8_t)bool_array[0] == NULL_ARRAY_BOOLEAN);
+        return (array[0] == NULL_ARRAY_BOOLEAN);
       }
       case kINT: {
         const int32_t* int_array = (int32_t*)array;
@@ -217,6 +216,23 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     return false;
   }
 
+  bool resetChunkStats(const ChunkStats& stats) override {
+    auto elem_type = buffer_->getSqlType().get_elem_type();
+    if (DatumEqual(elem_min, stats.min, elem_type) &&
+        DatumEqual(elem_max, stats.max, elem_type) && has_nulls == stats.has_nulls) {
+      return false;
+    }
+    elem_min = stats.min;
+    elem_max = stats.max;
+    has_nulls = stats.has_nulls;
+    return true;
+  }
+
+  void resetChunkStats() override {
+    has_nulls = false;
+    initialized = false;
+  }
+
   Datum elem_min;
   Datum elem_max;
   bool has_nulls;
@@ -241,9 +257,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
         if (array.is_null) {
           break;
         }
-        const bool* bool_array = (bool*)array.pointer;
+        const int8_t* bool_array = array.pointer;
         for (size_t i = 0; i < array.length / sizeof(bool); i++) {
-          if ((int8_t)bool_array[i] == NULL_BOOLEAN) {
+          if (bool_array[i] == NULL_BOOLEAN) {
             has_nulls = true;
           } else if (initialized) {
             elem_min.boolval = std::min(elem_min.boolval, bool_array[i]);

@@ -75,6 +75,7 @@ enum SQLAgg {
   kSUM,
   kCOUNT,
   kAPPROX_COUNT_DISTINCT,
+  kAPPROX_MEDIAN,
   kSAMPLE,
   kSINGLE_VALUE
 };
@@ -104,7 +105,7 @@ enum StorageOption { kDISK = 0, kGPU = 1, kCPU = 2 };
 
 enum ViewRefreshOption { kMANUAL = 0, kAUTO = 1, kIMMEDIATE = 2 };
 
-enum class JoinType { INNER, LEFT, INVALID };
+enum class JoinType { INNER, LEFT, SEMI, ANTI, INVALID };
 
 #ifndef __CUDACC__
 
@@ -125,6 +126,8 @@ inline std::string toString(const SQLAgg& kind) {
       return "COUNT";
     case kAPPROX_COUNT_DISTINCT:
       return "APPROX_COUNT_DISTINCT";
+    case kAPPROX_MEDIAN:
+      return "APPROX_MEDIAN";
     case kSAMPLE:
       return "SAMPLE";
     case kSINGLE_VALUE:

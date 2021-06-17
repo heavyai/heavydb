@@ -110,6 +110,9 @@ inline SQLAgg to_agg_kind(const std::string& agg_name) {
   if (agg_name == std::string("APPROX_COUNT_DISTINCT")) {
     return kAPPROX_COUNT_DISTINCT;
   }
+  if (agg_name == std::string("APPROX_MEDIAN")) {
+    return kAPPROX_MEDIAN;
+  }
   if (agg_name == std::string("SAMPLE") || agg_name == std::string("LAST_SAMPLE")) {
     return kSAMPLE;
   }
@@ -133,6 +136,9 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
     return kSMALLINT;
   }
   if (type_name == std::string("FLOAT")) {
+    return kFLOAT;
+  }
+  if (type_name == std::string("REAL")) {
     return kFLOAT;
   }
   if (type_name == std::string("DOUBLE")) {

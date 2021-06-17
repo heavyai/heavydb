@@ -128,6 +128,7 @@ struct ServerPrivileges {
   static const int32_t CREATE_SERVER = 1 << 0;
   static const int32_t DROP_SERVER = 1 << 1;
   static const int32_t ALTER_SERVER = 1 << 2;
+  static const int32_t SERVER_USAGE = 1 << 3;
 };
 
 struct AccessPrivileges {
@@ -189,6 +190,7 @@ struct AccessPrivileges {
   static const AccessPrivileges CREATE_SERVER;
   static const AccessPrivileges DROP_SERVER;
   static const AccessPrivileges ALTER_SERVER;
+  static const AccessPrivileges SERVER_USAGE;
 };
 
 class DBObject {
@@ -226,6 +228,11 @@ class DBObject {
   std::vector<std::string> toString() const;
   void loadKey();
   void loadKey(const Catalog_Namespace::Catalog& catalog);
+
+  bool valid() {
+    return (objectType_ != AbstractDBObjectType && objectKey_.permissionType != -1 &&
+            objectKey_.dbId != -1);
+  }
 
  private:
   std::string objectName_;

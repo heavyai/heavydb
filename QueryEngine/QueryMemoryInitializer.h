@@ -49,6 +49,7 @@ class QueryMemoryInitializer {
                          RenderInfo* render_info,
                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                          DeviceAllocator* gpu_allocator,
+                         const size_t thread_idx,
                          const Executor* executor);
 
   // Table functions execution constructor
@@ -135,23 +136,23 @@ class QueryMemoryInitializer {
                          const bool output_columnar,
                          const Executor* executor);
 
-  void initGroups(const QueryMemoryDescriptor& query_mem_desc,
-                  int64_t* groups_buffer,
-                  const std::vector<int64_t>& init_vals,
-                  const int32_t groups_buffer_entry_count,
-                  const size_t warp_size,
-                  const Executor* executor);
+  void initRowGroups(const QueryMemoryDescriptor& query_mem_desc,
+                     int64_t* groups_buffer,
+                     const std::vector<int64_t>& init_vals,
+                     const int32_t groups_buffer_entry_count,
+                     const size_t warp_size,
+                     const Executor* executor);
 
   void initColumnarGroups(const QueryMemoryDescriptor& query_mem_desc,
                           int64_t* groups_buffer,
                           const std::vector<int64_t>& init_vals,
                           const Executor* executor);
 
-  void initColumnPerRow(const QueryMemoryDescriptor& query_mem_desc,
-                        int8_t* row_ptr,
-                        const size_t bin,
-                        const std::vector<int64_t>& init_vals,
-                        const std::vector<int64_t>& bitmap_sizes);
+  void initColumnsPerRow(const QueryMemoryDescriptor& query_mem_desc,
+                         int8_t* row_ptr,
+                         const std::vector<int64_t>& init_vals,
+                         const std::vector<int64_t>& bitmap_sizes,
+                         const std::vector<bool>& tdigest_deferred);
 
   void allocateCountDistinctGpuMem(const QueryMemoryDescriptor& query_mem_desc);
 
@@ -163,6 +164,10 @@ class QueryMemoryInitializer {
   int64_t allocateCountDistinctBitmap(const size_t bitmap_byte_sz);
 
   int64_t allocateCountDistinctSet();
+
+  std::vector<bool> allocateTDigests(const QueryMemoryDescriptor& query_mem_desc,
+                                     const bool deferred,
+                                     const Executor* executor);
 
 #ifdef HAVE_CUDA
   GpuGroupByBuffers prepareTopNHeapsDevBuffer(const QueryMemoryDescriptor& query_mem_desc,
@@ -224,6 +229,8 @@ class QueryMemoryInitializer {
 
   DeviceAllocator* device_allocator_{nullptr};
   std::vector<Data_Namespace::AbstractBuffer*> temporary_buffers_;
+
+  const size_t thread_idx_;
 
   friend class Executor;  // Accesses result_sets_
   friend class QueryExecutionContext;

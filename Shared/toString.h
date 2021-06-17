@@ -35,13 +35,18 @@
 #pragma once
 
 #ifndef __CUDACC__
-#if __cplusplus >= 201703L
 
 #define HAVE_TOSTRING
 
+#ifndef _WIN32
 #include <cxxabi.h>
+#endif
+
+#include <chrono>
 #include <iostream>
+#include <set>
 #include <sstream>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -68,17 +73,22 @@
 #endif
 #endif
 
-#define PRINT(EXPR)                                                              \
-  std::cout << __func__ << "#" << __LINE__ << ": " #EXPR "=" << ::toString(EXPR) \
-            << std::endl;
+#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#define PRINT(EXPR)                                                      \
+  std::cout << "[" << __FILENAME__ << ":" << __func__ << "#" << __LINE__ \
+            << "]: " #EXPR "=" << ::toString(EXPR) << std::endl;
 
 template <typename T>
 std::string typeName(const T* v) {
   std::stringstream stream;
   int status;
+#ifdef _WIN32
+  stream << std::string(typeid(T).name());
+#else
   char* demangled = abi::__cxa_demangle(typeid(T).name(), 0, 0, &status);
   stream << std::string(demangled);
   free(demangled);
+#endif
   return stream.str();
 }
 
@@ -148,6 +158,13 @@ std::string toString(const T& v) {
     llvm::raw_string_ostream rso(type_str);
     v.print(rso);
     return "(" + rso.str() + ")";
+  } else if constexpr (std::is_same_v<T, llvm::Type>) {
+    std::string type_str;
+    llvm::raw_string_ostream rso(type_str);
+    v.print(rso);
+    return "(" + rso.str() + ")";
+  } else if constexpr (std::is_same_v<T, llvm::Triple>) {
+    return v.str();
 #endif
   } else if constexpr (std::is_same_v<T, bool>) {
     return v ? "True" : "False";
@@ -164,11 +181,21 @@ std::string toString(const T& v) {
   } else if constexpr (has_toString_v<T>) {
     return v.toString();
   } else if constexpr (get_has_toString_v<T>) {
-    return v.get()->toString();
+    auto ptr = v.get();
+    return (ptr == NULL ? "NULL" : "&" + ptr->toString());
   } else if constexpr (std::is_same_v<T, void*>) {
     std::ostringstream ss;
     ss << std::hex << (uintptr_t)v;
     return "0x" + ss.str();
+  } else if constexpr (std::is_same_v<
+                           T,
+                           std::chrono::time_point<std::chrono::system_clock>>) {
+    std::string s(30, '\0');
+    auto converted_v = (std::chrono::time_point<std::chrono::system_clock>)v;
+    std::time_t ts = std::chrono::system_clock::to_time_t(v);
+    std::strftime(&s[0], s.size(), "%Y-%m-%d %H:%M:%S", std::localtime(&ts));
+    return s + "." +
+           std::to_string((converted_v.time_since_epoch().count() / 1000) % 1000000);
   } else if constexpr (std::is_pointer_v<T>) {
     return (v == NULL ? "NULL" : "&" + toString(*v));
   } else {
@@ -210,6 +237,21 @@ std::string toString(const std::unordered_map<T1, T2>& v) {
 }
 
 template <typename T>
+std::string toString(const std::list<T>& v) {
+  auto result = std::string("[");
+  size_t i = 0;
+  for (const auto& p : v) {
+    if (i) {
+      result += ", ";
+    }
+    result += toString(p);
+    i++;
+  }
+  result += "]";
+  return result;
+}
+
+template <typename T>
 std::string toString(const std::unordered_set<T>& v) {
   auto result = std::string("{");
   size_t i = 0;
@@ -224,5 +266,26 @@ std::string toString(const std::unordered_set<T>& v) {
   return result;
 }
 
-#endif  //  __cplusplus >= 201703L
+template <typename T>
+std::string toString(const std::set<T>& v) {
+  auto result = std::string("{");
+  size_t i = 0;
+  for (const auto& p : v) {
+    if (i) {
+      result += ", ";
+    }
+    result += toString(p);
+    i++;
+  }
+  result += "}";
+  return result;
+}
+
+template <typename T>
+std::string toString(const std::tuple<T, T>& v) {
+  T left, right;
+  std::tie(left, right) = v;
+  return std::string("(") + toString(left) + ", " + toString(right) + ")";
+}
+
 #endif  // __CUDACC__

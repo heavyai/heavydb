@@ -19,35 +19,13 @@
 #include <string>
 #include <unordered_map>
 
-#include "rapidjson/document.h"
-#include "rapidjson/stringbuffer.h"
-#include "rapidjson/writer.h"
-
 #include "Catalog/OptionsContainer.h"
-#include "Shared/StringTransform.h"
+#include "DataMgr/ForeignStorage/ForeignDataWrapperFactory.h"
+
+extern bool g_enable_s3_fsi;
 
 namespace foreign_storage {
-/**
- * @type DataWrapperType
- * @brief Encapsulates an enumeration of foreign data wrapper type strings
- */
-struct DataWrapperType {
-  static constexpr char const* CSV = "OMNISCI_CSV";
-  static constexpr char const* PARQUET = "OMNISCI_PARQUET";
-
-  static constexpr std::array<std::string_view, 2> supported_data_wrapper_types{CSV,
-                                                                                PARQUET};
-};
-
 struct ForeignServer : public OptionsContainer {
-  static constexpr std::string_view STORAGE_TYPE_KEY = "STORAGE_TYPE";
-  static constexpr std::string_view BASE_PATH_KEY = "BASE_PATH";
-  static constexpr std::string_view LOCAL_FILE_STORAGE_TYPE = "LOCAL_FILE";
-  static constexpr std::array<std::string_view, 1> supported_storage_types{
-      LOCAL_FILE_STORAGE_TYPE};
-  static constexpr std::array<std::string_view, 2> all_option_keys{STORAGE_TYPE_KEY,
-                                                                   BASE_PATH_KEY};
-
   int32_t id;
   std::string name;
   std::string data_wrapper_type;
@@ -79,57 +57,14 @@ struct ForeignServer : public OptionsContainer {
       , user_id(user_id) {}
 
   void validate() {
-    validateDataWrapperType();
+    ForeignDataWrapperFactory::validateDataWrapperType(data_wrapper_type);
     validateStorageParameters();
-    validateRecognizedOption();
   }
 
  private:
-  void validateDataWrapperType() {
-    const auto& supported_wrapper_types = DataWrapperType::supported_data_wrapper_types;
-    if (std::find(supported_wrapper_types.begin(),
-                  supported_wrapper_types.end(),
-                  data_wrapper_type) == supported_wrapper_types.end()) {
-      throw std::runtime_error{"Invalid data wrapper type \"" + data_wrapper_type +
-                               "\". Data wrapper type must be one of the following: " +
-                               join(supported_wrapper_types, ", ") + "."};
-    }
-  }
-
   void validateStorageParameters() {
-    if (options.find(STORAGE_TYPE_KEY) == options.end()) {
-      throw std::runtime_error{"Foreign server options must contain \"STORAGE_TYPE\"."};
-    }
-
-    if (std::find(supported_storage_types.begin(),
-                  supported_storage_types.end(),
-                  options.find(STORAGE_TYPE_KEY)->second) ==
-        supported_storage_types.end()) {
-      std::string error_message =
-          "Invalid storage type value. Value must be one of the following: " +
-          join(supported_storage_types, ", ") + ".";
-      throw std::runtime_error{error_message};
-    }
-
-    if (options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
-      if (options.find(BASE_PATH_KEY) == options.end()) {
-        throw std::runtime_error{"Foreign server options must contain \"BASE_PATH\"."};
-      }
-    } else {
-      UNREACHABLE();
-    }
-  }
-
-  void validateRecognizedOption() {
-    for (const auto& entry : options) {
-      if (std::find(all_option_keys.begin(), all_option_keys.end(), entry.first) ==
-          all_option_keys.end()) {
-        std::string error_message =
-            "Invalid option \"" + entry.first + "\"." +
-            " Option must be one of the following: " + join(all_option_keys, ", ") + ".";
-        throw std::runtime_error{error_message};
-      }
-    }
+    ForeignDataWrapperFactory::createForValidation(data_wrapper_type)
+        .validateServerOptions(this);
   }
 };
 }  // namespace foreign_storage

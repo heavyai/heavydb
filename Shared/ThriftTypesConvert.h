@@ -25,7 +25,7 @@
 
 inline TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
   SQLTypes type = type_info.get_type();
-  if (type == kARRAY || type == kCOLUMN) {
+  if (type == kARRAY || type == kCOLUMN || type == kCOLUMN_LIST) {
     type = type_info.get_subtype();
   }
   switch (type) {

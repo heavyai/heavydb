@@ -63,6 +63,8 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
       return {"agg_sum"};
     case kAPPROX_COUNT_DISTINCT:
       return {"agg_approximate_count_distinct"};
+    case kAPPROX_MEDIAN:
+      return {"agg_approx_median"};
     case kSINGLE_VALUE:
       return {"checked_single_agg_id"};
     case kSAMPLE:
@@ -99,8 +101,8 @@ void TargetExprCodegen::codegen(
     const std::vector<llvm::Value*>& agg_out_vec,
     llvm::Value* output_buffer_byte_stream,
     llvm::Value* out_row_idx,
-    GroupByAndAggregate::DiamondCodegen& diamond_codegen,
-    GroupByAndAggregate::DiamondCodegen* sample_cfg) const {
+    DiamondCodegen& diamond_codegen,
+    DiamondCodegen* sample_cfg) const {
   CHECK(group_by_and_agg);
   CHECK(executor);
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
@@ -355,7 +357,7 @@ void TargetExprCodegen::codegenAggregate(
       if (need_skip_null && !is_agg_domain_range_equivalent(target_info.agg_kind)) {
         target_lv = group_by_and_agg->convertNullIfAny(arg_type, target_info, target_lv);
       } else if (is_fp_arg) {
-        target_lv = executor->castToFP(target_lv);
+        target_lv = executor->castToFP(target_lv, arg_type, target_info.sql_type);
       }
       if (!dynamic_cast<const Analyzer::AggExpr*>(target_expr) || arg_expr) {
         target_lv =
@@ -407,6 +409,10 @@ void TargetExprCodegen::codegenAggregate(
       CHECK_EQ(agg_chosen_bytes, sizeof(int64_t));
       CHECK(!chosen_type.is_fp());
       group_by_and_agg->codegenCountDistinct(
+          target_idx, target_expr, agg_args, query_mem_desc, co.device_type);
+    } else if (target_info.agg_kind == kAPPROX_MEDIAN) {
+      CHECK_EQ(agg_chosen_bytes, sizeof(int64_t));
+      group_by_and_agg->codegenApproxMedian(
           target_idx, target_expr, agg_args, query_mem_desc, co.device_type);
     } else {
       const auto& arg_ti = target_info.agg_arg_type;
@@ -520,7 +526,8 @@ void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
   auto target_info = get_target_info(target_expr, g_bigint_count);
   auto arg_expr = agg_arg(target_expr);
   if (arg_expr) {
-    if (target_info.agg_kind == kSINGLE_VALUE || target_info.agg_kind == kSAMPLE) {
+    if (target_info.agg_kind == kSINGLE_VALUE || target_info.agg_kind == kSAMPLE ||
+        target_info.agg_kind == kAPPROX_MEDIAN) {
       target_info.skip_null_val = false;
     } else if (query_mem_desc.getQueryDescriptionType() ==
                    QueryDescriptionType::NonGroupedAggregate &&
@@ -581,7 +588,7 @@ void TargetExprCodegenBuilder::codegen(
     const std::vector<llvm::Value*>& agg_out_vec,
     llvm::Value* output_buffer_byte_stream,
     llvm::Value* out_row_idx,
-    GroupByAndAggregate::DiamondCodegen& diamond_codegen) const {
+    DiamondCodegen& diamond_codegen) const {
   CHECK(group_by_and_agg);
   CHECK(executor);
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
@@ -620,7 +627,7 @@ void TargetExprCodegenBuilder::codegenSampleExpressions(
     const std::vector<llvm::Value*>& agg_out_vec,
     llvm::Value* output_buffer_byte_stream,
     llvm::Value* out_row_idx,
-    GroupByAndAggregate::DiamondCodegen& diamond_codegen) const {
+    DiamondCodegen& diamond_codegen) const {
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
   CHECK(!sample_exprs_to_codegen.empty());
   CHECK(co.device_type == ExecutorDeviceType::GPU);
@@ -657,7 +664,7 @@ void TargetExprCodegenBuilder::codegenSingleSlotSampleExpression(
     const std::vector<llvm::Value*>& agg_out_vec,
     llvm::Value* output_buffer_byte_stream,
     llvm::Value* out_row_idx,
-    GroupByAndAggregate::DiamondCodegen& diamond_codegen) const {
+    DiamondCodegen& diamond_codegen) const {
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
   CHECK_EQ(size_t(1), sample_exprs_to_codegen.size());
   CHECK(!sample_exprs_to_codegen.front().target_info.sql_type.is_varlen());
@@ -684,7 +691,7 @@ void TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions(
     const std::vector<llvm::Value*>& agg_out_vec,
     llvm::Value* output_buffer_byte_stream,
     llvm::Value* out_row_idx,
-    GroupByAndAggregate::DiamondCodegen& diamond_codegen) const {
+    DiamondCodegen& diamond_codegen) const {
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
   CHECK(sample_exprs_to_codegen.size() > 1 ||
         sample_exprs_to_codegen.front().target_info.sql_type.is_varlen());
@@ -718,7 +725,7 @@ void TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions(
 
   auto sample_cas_lv = codegenSlotEmptyKey(agg_col_ptr, target_lvs, executor, init_val);
 
-  GroupByAndAggregate::DiamondCodegen sample_cfg(
+  DiamondCodegen sample_cfg(
       sample_cas_lv, executor, false, "sample_valcheck", &diamond_codegen, false);
 
   for (const auto& target_expr_codegen : sample_exprs_to_codegen) {

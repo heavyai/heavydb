@@ -41,6 +41,8 @@
 #include <utility>
 #include <vector>
 
+#include "tbb/concurrent_hash_map.h"
+
 #include "Grantee.h"
 #include "ObjectRoleDescriptor.h"
 #include "PkiServer.h"
@@ -50,7 +52,8 @@
 #include "LeafHostInfo.h"
 
 #include "../Calcite/Calcite.h"
-#include "../Shared/mapd_shared_mutex.h"
+#include "Shared/Restriction.h"
+#include "Shared/mapd_shared_mutex.h"
 
 const std::string OMNISCI_SYSTEM_CATALOG = "omnisci_system_catalog";
 const std::string OMNISCI_DEFAULT_DB = "omnisci";
@@ -60,6 +63,8 @@ const std::string OMNISCI_ROOT_USER_ID_STR = "0";
 const std::string OMNISCI_ROOT_PASSWD_DEFAULT = "HyperInteractive";
 
 class Calcite;
+
+extern std::string g_base_path;
 
 namespace Catalog_Namespace {
 
@@ -94,6 +99,12 @@ struct UserMetadata {
   std::atomic<bool> isSuper{false};
   int32_t defaultDbId;
   bool can_login{true};
+  Restriction restriction;
+
+  // Return a string that is safe to log for the username based on --log-user-id.
+  std::string userLoggable() const;
+
+  void setRestriction(Restriction in_restriction) { restriction = in_restriction; }
 };
 
 /*
@@ -178,15 +189,10 @@ class SysCatalog : private CommonFileOperations {
   bool checkPasswordForUser(const std::string& passwd,
                             std::string& name,
                             UserMetadata& user);
-  void getMetadataWithDefaultDB(std::string& dbname,
-                                const std::string& username,
-                                Catalog_Namespace::DBMetadata& db_meta,
-                                UserMetadata& user_meta);
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
-  bool getMetadataForDBById(const int32_t idIn, DBMetadata& db);
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
   Calcite& getCalciteMgr() const { return *calciteMgr_; }
-  const std::string& getBasePath() const { return basePath_; }
+  const std::string& getCatalogBasePath() const { return basePath_; }
   SqliteConnector* getSqliteConnector() { return sqliteConnector_.get(); }
   std::list<DBMetadata> getAllDBMetadata();
   std::list<UserMetadata> getAllUserMetadata();
@@ -284,9 +290,13 @@ class SysCatalog : private CommonFileOperations {
                                  const std::vector<std::string> grantees);
   bool isAggregator() const { return aggregator_; }
   static SysCatalog& instance() {
-    static SysCatalog sys_cat{};
-    return sys_cat;
+    if (!instance_) {
+      instance_.reset(new SysCatalog());
+    }
+    return *instance_;
   }
+
+  static void destroy() { instance_.reset(); }
 
   void populateRoleDbObjects(const std::vector<DBObject>& objects);
   std::string name() const { return OMNISCI_DEFAULT_DB; }
@@ -300,6 +310,16 @@ class SysCatalog : private CommonFileOperations {
   void check_for_session_encryption(const std::string& pki_cert, std::string& session);
   std::vector<std::shared_ptr<Catalog>> getCatalogsForAllDbs();
 
+  std::shared_ptr<Catalog> getDummyCatalog() { return dummyCatalog_; }
+
+  std::shared_ptr<Catalog> getCatalog(const std::string& dbName);
+  std::shared_ptr<Catalog> getCatalog(const int32_t db_id);
+  std::shared_ptr<Catalog> getCatalog(const DBMetadata& curDB, bool is_new_db);
+
+  void removeCatalog(const std::string& dbName);
+
+  virtual ~SysCatalog();
+
  private:
   using GranteeMap = std::map<std::string, Grantee*>;
   using ObjectRoleDescriptorMap = std::multimap<std::string, ObjectRoleDescriptor*>;
@@ -310,8 +330,8 @@ class SysCatalog : private CommonFileOperations {
       , sqliteMutex_()
       , sharedMutex_()
       , thread_holding_sqlite_lock(std::thread::id())
-      , thread_holding_write_lock(std::thread::id()) {}
-  virtual ~SysCatalog();
+      , thread_holding_write_lock(std::thread::id())
+      , dummyCatalog_(std::make_shared<Catalog>()) {}
 
   void initDB();
   void buildRoleMap();
@@ -373,7 +393,11 @@ class SysCatalog : private CommonFileOperations {
                                   Grantee* grantee);
   bool isDashboardSystemRole(const std::string& roleName);
   void updateUserRoleName(const std::string& roleName, const std::string& newName);
-
+  void getMetadataWithDefaultDB(std::string& dbname,
+                                const std::string& username,
+                                Catalog_Namespace::DBMetadata& db_meta,
+                                UserMetadata& user_meta);
+  bool getMetadataForDBById(const int32_t idIn, DBMetadata& db);
   /**
    * For servers configured to use external authentication providers, determine whether
    * users will be allowed to fallback to local login accounts. If no external providers
@@ -397,12 +421,22 @@ class SysCatalog : private CommonFileOperations {
   bool aggregator_;
   auto yieldTransactionStreamer();
 
+  // contains a map of all the catalog within this system
+  // it is lazy loaded
+  // std::map<std::string, std::shared_ptr<Catalog>> cat_map_;
+  using dbid_to_cat_map = tbb::concurrent_hash_map<std::string, std::shared_ptr<Catalog>>;
+  dbid_to_cat_map cat_map_;
+
+  static std::unique_ptr<SysCatalog> instance_;
+
  public:
   mutable std::mutex sqliteMutex_;
   mutable mapd_shared_mutex sharedMutex_;
   mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;
   mutable std::atomic<std::thread::id> thread_holding_write_lock;
   static thread_local bool thread_holds_read_lock;
+  // used by catalog when initially creating a catalog instance
+  std::shared_ptr<Catalog> dummyCatalog_;
 };
 
 }  // namespace Catalog_Namespace

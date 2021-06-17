@@ -23,6 +23,7 @@
 #include "QueryMemoryInitializer.h"
 #include "RelAlgExecutionUnit.h"
 #include "ResultSet.h"
+#include "Shared/likely.h"
 #include "SpeculativeTopN.h"
 #include "StreamingTopN.h"
 
@@ -39,6 +40,7 @@ QueryExecutionContext::QueryExecutionContext(
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool output_columnar,
     const bool sort_on_gpu,
+    const size_t thread_idx,
     RenderInfo* render_info)
     : query_mem_desc_(query_mem_desc)
     , executor_(executor)
@@ -69,6 +71,7 @@ QueryExecutionContext::QueryExecutionContext(
                                                             render_info,
                                                             row_set_mem_owner,
                                                             gpu_allocator_.get(),
+                                                            thread_idx,
                                                             executor);
 }
 
@@ -91,7 +94,9 @@ ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
                                   -1,
                                   deinterleaved_query_mem_desc,
                                   row_set_mem_owner_,
-                                  executor_);
+                                  executor_->getCatalog(),
+                                  executor_->blockSize(),
+                                  executor_->gridSize());
   auto deinterleaved_storage =
       deinterleaved_result_set->allocateStorage(executor_->plan_state_->init_agg_vals_);
   auto deinterleaved_buffer =
@@ -99,9 +104,7 @@ ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
   const auto rows_ptr = result_set->getStorage()->getUnderlyingBuffer();
   size_t deinterleaved_buffer_idx = 0;
   const size_t agg_col_count{query_mem_desc_.getSlotCount()};
-  for (size_t bin_base_off = query_mem_desc_.getColOffInBytes(0), bin_idx = 0;
-       bin_idx < result_set->entryCount();
-       ++bin_idx, bin_base_off += query_mem_desc_.getColOffInBytesInNextBin(0)) {
+  auto do_work = [&](const size_t bin_base_off) {
     std::vector<int64_t> agg_vals(agg_col_count, 0);
     memcpy(&agg_vals[0],
            &executor_->plan_state_->init_agg_vals_[0],
@@ -117,6 +120,23 @@ ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
     for (size_t agg_idx = 0; agg_idx < agg_col_count;
          ++agg_idx, ++deinterleaved_buffer_idx) {
       deinterleaved_buffer[deinterleaved_buffer_idx] = agg_vals[agg_idx];
+    }
+  };
+  if (g_enable_non_kernel_time_query_interrupt) {
+    for (size_t bin_base_off = query_mem_desc_.getColOffInBytes(0), bin_idx = 0;
+         bin_idx < result_set->entryCount();
+         ++bin_idx, bin_base_off += query_mem_desc_.getColOffInBytesInNextBin(0)) {
+      if (UNLIKELY((bin_idx & 0xFFFF) == 0 && check_interrupt())) {
+        throw std::runtime_error(
+            "Query execution has interrupted during result set reduction");
+      }
+      do_work(bin_base_off);
+    }
+  } else {
+    for (size_t bin_base_off = query_mem_desc_.getColOffInBytes(0), bin_idx = 0;
+         bin_idx < result_set->entryCount();
+         ++bin_idx, bin_base_off += query_mem_desc_.getColOffInBytesInNextBin(0)) {
+      do_work(bin_base_off);
     }
   }
   query_buffers_->resetResultSet(i);
@@ -192,6 +212,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const size_t shared_memory_size,
     int32_t* error_code,
     const uint32_t num_tables,
+    const bool allow_runtime_interrupt,
     const std::vector<int64_t>& join_hash_tables,
     RenderAllocatorMap* render_allocator_map) {
   auto timer = DEBUG_TIMER(__func__);
@@ -225,7 +246,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   cuEventCreate(&start2, 0);
   cuEventCreate(&stop2, 0);
 
-  if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
+  if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
     cuEventRecord(start0, 0);
   }
 
@@ -233,7 +254,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     initializeDynamicWatchdog(native_code.second, device_id);
   }
 
-  if (g_enable_runtime_query_interrupt) {
+  if (allow_runtime_interrupt && !render_allocator) {
     initializeRuntimeInterrupter(native_code.second, device_id);
   }
 
@@ -291,7 +312,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       param_ptrs.push_back(&param);
     }
 
-    if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
+    if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
       cuEventRecord(stop0, 0);
       cuEventSynchronize(stop0);
       float milliseconds0 = 0;
@@ -328,7 +349,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                      &param_ptrs[0],
                                      nullptr));
     }
-    if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
+    if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
       executor_->registerActiveModule(native_code.second, device_id);
       cuEventRecord(stop1, 0);
       cuEventSynchronize(stop1);
@@ -462,7 +483,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       param_ptrs.push_back(&param);
     }
 
-    if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
+    if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
       cuEventRecord(stop0, 0);
       cuEventSynchronize(stop0);
       float milliseconds0 = 0;
@@ -499,7 +520,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                      nullptr));
     }
 
-    if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
+    if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
       executor_->registerActiveModule(native_code.second, device_id);
       cuEventRecord(stop1, 0);
       cuEventSynchronize(stop1);
@@ -545,7 +566,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                   device_id);
   }
 
-  if (g_enable_dynamic_watchdog || g_enable_runtime_query_interrupt) {
+  if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
     cuEventRecord(stop2, 0);
     cuEventSynchronize(stop2);
     float milliseconds2 = 0;
@@ -580,7 +601,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
 
   std::vector<const int8_t**> multifrag_col_buffers;
   for (auto& col_buffer : col_buffers) {
-    multifrag_col_buffers.push_back(&col_buffer[0]);
+    multifrag_col_buffers.push_back(col_buffer.empty() ? nullptr : col_buffer.data());
   }
   const int8_t*** multifrag_cols_ptr{
       multifrag_col_buffers.empty() ? nullptr : &multifrag_col_buffers[0]};
@@ -649,12 +670,12 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
       reinterpret_cast<agg_query>(native_code->func())(
           multifrag_cols_ptr,
           &num_fragments,
-          &literal_buff[0],
+          literal_buff.data(),
           num_rows_ptr,
-          &flatened_frag_offsets[0],
+          flatened_frag_offsets.data(),
           &scan_limit,
           &total_matched_init,
-          &cmpt_val_buff[0],
+          cmpt_val_buff.data(),
           query_buffers_->getGroupByBuffersPtr(),
           error_code,
           &num_tables,
@@ -662,13 +683,13 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
     } else {
       reinterpret_cast<agg_query>(native_code->func())(multifrag_cols_ptr,
                                                        &num_fragments,
-                                                       &literal_buff[0],
+                                                       literal_buff.data(),
                                                        num_rows_ptr,
-                                                       &flatened_frag_offsets[0],
+                                                       flatened_frag_offsets.data(),
                                                        &scan_limit,
                                                        &total_matched_init,
-                                                       &init_agg_vals[0],
-                                                       &out_vec[0],
+                                                       init_agg_vals.data(),
+                                                       out_vec.data(),
                                                        error_code,
                                                        &num_tables,
                                                        join_hash_tables_ptr);
@@ -690,10 +711,10 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
           multifrag_cols_ptr,
           &num_fragments,
           num_rows_ptr,
-          &flatened_frag_offsets[0],
+          flatened_frag_offsets.data(),
           &scan_limit,
           &total_matched_init,
-          &cmpt_val_buff[0],
+          cmpt_val_buff.data(),
           query_buffers_->getGroupByBuffersPtr(),
           error_code,
           &num_tables,
@@ -702,11 +723,11 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
       reinterpret_cast<agg_query>(native_code->func())(multifrag_cols_ptr,
                                                        &num_fragments,
                                                        num_rows_ptr,
-                                                       &flatened_frag_offsets[0],
+                                                       flatened_frag_offsets.data(),
                                                        &scan_limit,
                                                        &total_matched_init,
-                                                       &init_agg_vals[0],
-                                                       &out_vec[0],
+                                                       init_agg_vals.data(),
+                                                       out_vec.data(),
                                                        error_code,
                                                        &num_tables,
                                                        join_hash_tables_ptr);
@@ -811,7 +832,7 @@ void QueryExecutionContext::initializeRuntimeInterrupter(void* native_module,
     cuEventElapsedTime(&milliseconds, start, stop);
     VLOG(1) << "Device " << std::to_string(device_id)
             << ": launchGpuCode: runtime query interrupter init: "
-            << std::to_string(milliseconds) << " ms\n";
+            << std::to_string(milliseconds) << " ms";
   }
 }
 

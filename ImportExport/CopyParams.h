@@ -61,6 +61,7 @@ struct CopyParams {
   // s3/parquet related params
   std::string s3_access_key;  // per-query credentials to override the
   std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
+  std::string s3_session_token = "";
   std::string s3_region;
   std::string s3_endpoint;
   // kafka related params
@@ -78,6 +79,7 @@ struct CopyParams {
   std::string geo_layer_name;
   bool geo_assign_render_groups;
   bool geo_explode_collections;
+  int32_t source_srid;
 
   CopyParams()
       : delimiter(',')
@@ -104,7 +106,8 @@ struct CopyParams {
       , geo_coords_srid(4326)
       , sanitize_column_names(true)
       , geo_assign_render_groups(true)
-      , geo_explode_collections(false) {}
+      , geo_explode_collections(false)
+      , source_srid(0) {}
 
   CopyParams(char d, const std::string& n, char l, size_t b, size_t retries, size_t wait)
       : delimiter(d)
@@ -131,6 +134,7 @@ struct CopyParams {
       , geo_coords_srid(4326)
       , sanitize_column_names(true)
       , geo_assign_render_groups(true)
-      , geo_explode_collections(false) {}
+      , geo_explode_collections(false)
+      , source_srid(0) {}
 };
 }  // namespace import_export

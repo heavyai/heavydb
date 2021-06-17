@@ -106,20 +106,31 @@ TEST_F(TableFunctions, BasicProjection) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out_add FROM TABLE(row_adder(1, cursor(SELECT d, d2 FROM tf_test)));",
-          dt);
+          "SELECT out0 FROM TABLE(row_adder(1, cursor(SELECT d, d2 FROM tf_test)));", dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out_add FROM TABLE(row_adder(4, cursor(SELECT d, d2 FROM tf_test)));",
-          dt);
+          "SELECT out0 FROM TABLE(row_adder(4, cursor(SELECT d, d2 FROM tf_test)));", dt);
       ASSERT_EQ(rows->rowCount(), size_t(20));
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out_add, out_sub FROM TABLE(row_addsub(1, cursor(SELECT d, d2 FROM "
+          "SELECT out0, out1 FROM TABLE(row_addsub(1, cursor(SELECT d, d2 FROM "
           "tf_test)));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
+    // Omit sizer (kRowMultiplier)
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_adder(cursor(SELECT d, d2 FROM tf_test)));", dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test))) ORDER BY "
+          "out0;",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
     }
@@ -146,6 +157,14 @@ TEST_F(TableFunctions, BasicProjection) {
                 static_cast<int64_t>(4));  // row offset of max x
       ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]),
                 static_cast<int64_t>(4));  // max value of x
+    }
+    // Table Function specified sizer test
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(column_list_row_sum(cursor(SELECT x, x FROM "
+          "tf_test)));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(2));
     }
   }
 }

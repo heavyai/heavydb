@@ -19,8 +19,8 @@
 #include "ParquetInPlaceEncoder.h"
 
 namespace foreign_storage {
-
-class ParquetDateInSecondsEncoder : public TypedParquetInPlaceEncoder<int64_t, int32_t> {
+class ParquetDateInSecondsEncoder : public TypedParquetInPlaceEncoder<int64_t, int32_t>,
+                                    public ParquetMetadataValidator {
  public:
   ParquetDateInSecondsEncoder(Data_Namespace::AbstractBuffer* buffer,
                               const ColumnDescriptor* column_desciptor,
@@ -37,6 +37,24 @@ class ParquetDateInSecondsEncoder : public TypedParquetInPlaceEncoder<int64_t, i
         reinterpret_cast<const int32_t*>(parquet_data_bytes)[0];
     auto& omnisci_data_value = reinterpret_cast<int64_t*>(omnisci_data_bytes)[0];
     omnisci_data_value = parquet_data_value * kSecsPerDay;
+  }
+
+  void validate(std::shared_ptr<parquet::Statistics> stats,
+                const SQLTypeInfo& column_type) const override {
+    CHECK(column_type.is_date());
+    if (column_type.get_compression() ==
+        kENCODING_NONE) {  // do not validate NONE ENCODED dates as it is impossible for
+                           // bounds to be exceeded (the conversion done for this case is
+                           // from a date in days as a 32-bit integer to a date in seconds
+                           // as a 64-bit integer)
+      return;
+    }
+    auto [unencoded_stats_min, unencoded_stats_max] =
+        TypedParquetInPlaceEncoder<int64_t, int32_t>::getUnencodedStats(stats);
+    DateInSecondsBoundsValidator<int64_t>::validateValue(
+        unencoded_stats_max * kSecsPerDay, column_type);
+    DateInSecondsBoundsValidator<int64_t>::validateValue(
+        unencoded_stats_min * kSecsPerDay, column_type);
   }
 };
 
