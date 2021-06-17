@@ -1122,6 +1122,7 @@ class InsertIntoTableAsSelectStmt : public DDLStmt {
  */
 class CreateTableAsSelectStmt : public InsertIntoTableAsSelectStmt {
  public:
+  CreateTableAsSelectStmt(const rapidjson::Value& payload);
   CreateTableAsSelectStmt(const std::string* table_name,
                           const std::string* select_query,
                           const bool is_temporary,
@@ -1141,8 +1142,8 @@ class CreateTableAsSelectStmt : public InsertIntoTableAsSelectStmt {
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:
-  const bool is_temporary_;
-  const bool if_not_exists_;
+  bool is_temporary_;
+  bool if_not_exists_;
   std::list<std::unique_ptr<NameValueAssign>> storage_options_;
 };
 

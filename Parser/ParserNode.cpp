@@ -3382,6 +3382,45 @@ void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& 
   }
 }
 
+CreateTableAsSelectStmt::CreateTableAsSelectStmt(const rapidjson::Value& payload)
+    : InsertIntoTableAsSelectStmt(payload) {
+  if (payload.HasMember("temporary")) {
+    is_temporary_ = json_bool(payload["temporary"]);
+  } else {
+    is_temporary_ = false;
+  }
+
+  if (payload.HasMember("ifNotExists")) {
+    if_not_exists_ = json_bool(payload["ifNotExists"]);
+  } else {
+    if_not_exists_ = false;
+  }
+
+  CHECK(payload.HasMember("options"));
+  if (payload["options"].IsObject()) {
+    for (const auto& option : payload["options"].GetObject()) {
+      auto option_name = std::make_unique<std::string>(json_str(option.name));
+      std::unique_ptr<Literal> literal_value;
+      if (option.value.IsString()) {
+        auto literal_string = std::make_unique<std::string>(json_str(option.value));
+        literal_value = std::make_unique<StringLiteral>(literal_string.release());
+      } else if (option.value.IsInt() || option.value.IsInt64()) {
+        literal_value = std::make_unique<IntLiteral>(json_i64(option.value));
+      } else if (option.value.IsNull()) {
+        literal_value = std::make_unique<NullLiteral>();
+      } else {
+        throw std::runtime_error("Unable to handle literal for " + *option_name);
+      }
+      CHECK(literal_value);
+
+      storage_options_.emplace_back(std::make_unique<NameValueAssign>(
+          option_name.release(), literal_value.release()));
+    }
+  } else {
+    CHECK(payload["options"].IsNull());
+  }
+}
+
 void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto session_copy = session;
   auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(

@@ -128,8 +128,7 @@ sql_list:
 
 	/* schema definition language */
 sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
-  create_table_as_statement { $<nodeval>$ = $<nodeval>1; }
-	| create_table_statement { $<nodeval>$ = $<nodeval>1; }
+	create_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_dataframe_statement { $<nodeval>$ = $<nodeval>1; }
 	| show_table_schema { $<nodeval>$ = $<nodeval>1; }
 	/* | prvililege_def { $<nodeval>$ = $<nodeval>1; } */
@@ -176,8 +175,7 @@ schema_element_list:
 	;
 
 schema_element:
-    create_table_as_statement {  $$ = $1; }
-	| create_table_statement {	$$ = $1; }
+	create_table_statement {	$$ = $1; }
 	|	create_view_statement {	$$ = $1; }
 	|	privilege_def {	$$ = $1; }
 	;
@@ -253,13 +251,6 @@ opt_temporary:
                 TEMPORARY { $<boolval>$ = true; }
                 | /* empty */ { $<boolval>$ = false; }
                 ;
-
-create_table_as_statement:
-    CREATE opt_temporary TABLE opt_if_not_exists table AS SELECTSTRING opt_with_option_list
-    {
-      $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new CreateTableAsSelectStmt(($<stringval>5)->release(), ($<stringval>7)->release(), $<boolval>2, $<boolval>4, reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>8)->release())));
-    }
-  ;
 
 create_table_statement:
 		CREATE opt_temporary TABLE opt_if_not_exists table '(' base_table_element_commalist ')' opt_with_option_list

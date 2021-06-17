@@ -5914,7 +5914,6 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
 
   if (pw.is_itas) {
     // itas can attempt to execute here
-
     check_read_only("insert_into_table");
 
     std::string query_ra;
@@ -5930,6 +5929,28 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     CHECK(ddl_query["payload"].IsObject());
     auto stmt = Parser::InsertIntoTableAsSelectStmt(ddl_query["payload"].GetObject());
     _return.addExecutionTime(measure<>::execution([&]() { stmt.execute(*session_ptr); }));
+    return;
+
+  } else if (pw.is_ctas) {
+    // ctas can attempt to execute here
+    check_read_only("create_table_as");
+
+    std::string query_ra;
+    _return.addExecutionTime(measure<>::execution([&]() {
+      TPlanResult result;
+      std::tie(result, locks) =
+          parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_);
+      query_ra = result.plan_result;
+    }));
+    if (query_ra.size()) {
+      rapidjson::Document ddl_query;
+      ddl_query.Parse(query_ra);
+      CHECK(ddl_query.HasMember("payload"));
+      CHECK(ddl_query["payload"].IsObject());
+      auto stmt = Parser::CreateTableAsSelectStmt(ddl_query["payload"].GetObject());
+      _return.addExecutionTime(
+          measure<>::execution([&]() { stmt.execute(*session_ptr); }));
+    }
     return;
 
   } else if (pw.isCalcitePathPermissable(read_only_)) {

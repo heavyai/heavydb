@@ -3235,6 +3235,405 @@ TEST_F(ItasStringTest, InsertIntoSelectLowercase_DifferentTables) {
   g_enable_experimental_string_functions = false;
 }
 
+const char* create_table_mini_sort = R"(
+  CREATE TABLE sortab(
+    i int,
+    f float,
+    ia int[2],
+    pt point,
+    sa text[],
+    s2 text encoding dict(16),
+    dt date,
+    d2 date ENCODING FIXED(16),
+    tm timestamp,
+    t4 timestamp ENCODING FIXED(32),
+    va int[])
+  )";
+
+class CtasImportTestMiniSort : public DBHandlerTestFixture,
+                               public testing::WithParamInterface<
+                                   std::vector<std::shared_ptr<TestColumnDescriptor>>> {
+ public:
+  std::vector<std::shared_ptr<TestColumnDescriptor>> columnDescriptors;
+
+  CtasImportTestMiniSort() { columnDescriptors = GetParam(); }
+
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    // Default connection string outside of thrift
+    ASSERT_NO_THROW(sql("drop table if exists sortab;"));
+    ASSERT_NO_THROW(sql("drop table if exists sortctas;"));
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(sql("drop table if exists sortab;"));
+    ASSERT_NO_THROW(sql("drop table if exists sortctas;"));
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void create_minisort_table_on_column(const std::string& column_name) {
+    ASSERT_NO_THROW(
+        sql(std::string(create_table_mini_sort) +
+            (column_name.size() ? " with (sort_column='" + column_name + "');" : ";")));
+    EXPECT_NO_THROW(
+        sql("copy sortab from '../../Tests/Import/datafiles/mini_sort.txt' "
+            "with (header='false');"));
+  }
+
+  void check_minisort_on_expects(const std::string& table_name,
+                                 const std::vector<int>& expects) {
+    std::string select_sql = "SELECT i FROM " + table_name + ";";
+    TQueryResult select_result;
+    sql(select_result, select_sql);
+
+    CHECK_EQ(expects.size(), select_result.row_set.rows.size());
+    size_t i = 0;
+    for (auto exp : expects) {
+      auto crt_row = select_result.row_set.rows[i];
+      CHECK_EQ(size_t(1), crt_row.cols.size());
+      CHECK_EQ(int64_t(exp), select_result.row_set.columns[0].data.int_col[i]);
+      i++;
+    }
+  }
+
+  void test_minisort_on_column(const std::string& column_name,
+                               const std::vector<int> expects) {
+    create_minisort_table_on_column(column_name);
+    check_minisort_on_expects("sortab", expects);
+  }
+
+  void create_minisort_table_on_column_with_ctas(const std::string& column_name) {
+    EXPECT_NO_THROW(
+        sql("create table sortctas as select * from sortab" +
+            (column_name.size() ? " with (sort_column='" + column_name + "');" : ";")););
+  }
+
+  void test_minisort_on_column_with_ctas(const std::string& column_name,
+                                         const std::vector<int> expects) {
+    create_minisort_table_on_column("");
+    create_minisort_table_on_column_with_ctas(column_name);
+    check_minisort_on_expects("sortctas", expects);
+  }
+};
+
+TEST_P(CtasImportTestMiniSort, on_none) {
+  test_minisort_on_column("", {5, 3, 1, 2, 4});
+}
+
+TEST_P(CtasImportTestMiniSort, on_int) {
+  test_minisort_on_column("i", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, on_float) {
+  test_minisort_on_column("f", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, on_int_array) {
+  test_minisort_on_column("ia", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, on_string_array) {
+  test_minisort_on_column("sa", {5, 3, 1, 2, 4});
+}
+
+TEST_P(CtasImportTestMiniSort, on_string_2b) {
+  test_minisort_on_column("s2", {5, 3, 1, 2, 4});
+}
+
+TEST_P(CtasImportTestMiniSort, on_date) {
+  test_minisort_on_column("dt", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, on_date_2b) {
+  test_minisort_on_column("d2", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, on_time) {
+  test_minisort_on_column("tm", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, on_time_4b) {
+  test_minisort_on_column("t4", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, on_varlen_array) {
+  test_minisort_on_column("va", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, on_geo_point) {
+  test_minisort_on_column("pt", {2, 3, 4, 5, 1});
+}
+
+#define SKIP_ALL_ON_AGGREGATOR() \
+  if (isDistributedMode()) {     \
+    GTEST_SKIP();                \
+  }
+
+TEST_P(CtasImportTestMiniSort, ctas_on_none) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("", {5, 3, 1, 2, 4});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_int) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("i", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_float) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("f", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_int_array) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("ia", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_string_array) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("sa", {5, 3, 1, 2, 4});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_string_2b) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("s2", {5, 3, 1, 2, 4});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_date) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("dt", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_date_2b) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("d2", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_time) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("tm", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_time_4b) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("t4", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_varlen_array) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("va", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_geo_point) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("pt", {2, 3, 4, 5, 1});
+}
+
+class CtasTableTest : public DBHandlerTestFixture,
+                      public testing::WithParamInterface<
+                          std::vector<std::shared_ptr<TestColumnDescriptor>>> {
+ public:
+  bool g_use_temporary_tables{false};
+  bool g_aggregator{false};
+  const size_t g_num_rows{10};
+
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    // Default connection string outside of thrift
+    ASSERT_NO_THROW(sql("drop table if exists ctas_test;"));
+    ASSERT_NO_THROW(sql("drop table if exists ctas_test_empty;"));
+    ASSERT_NO_THROW(sql("drop table if exists ctas_test_full;"));
+    createTestTable();
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(sql("drop table if exists ctas_test;"));
+    ASSERT_NO_THROW(sql("drop table if exists ctas_test_empty;"));
+    ASSERT_NO_THROW(sql("drop table if exists ctas_test_full;"));
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void createTestTable() {
+    try {
+      sql("CREATE TABLE test(x int not null, w tinyint, y int, z smallint, t bigint, b "
+          "boolean, f "
+          "float, ff float, fn float, d "
+          "double, dn double, str varchar(10), null_str text, fixed_str text, "
+          "fixed_null_str text, real_str text, "
+          "shared_dict "
+          "text, m timestamp(0), m_3 timestamp(3), m_6 timestamp(6), m_9 timestamp(9), n "
+          "time(0), o date, o1 date, o2 date, "
+          "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not "
+          "null, ss "
+          "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null, "
+          "smallint_nulls smallint, bn boolean not null);");
+    } catch (...) {
+      LOG(ERROR) << "Failed to (re-)create table 'test'";
+      return;
+    }
+
+    CHECK_EQ(g_num_rows % 2, size_t(0));
+
+    for (size_t i = 0; i < g_num_rows; ++i) {
+      const std::string insert_query{
+          "INSERT INTO test VALUES(7, -8, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, "
+          "'foo', null, 'foo', null, "
+          "'real_foo', 'foo',"
+          "'2014-12-13 22:23:15', '2014-12-13 22:23:15.323', '1999-07-11 "
+          "14:02:53.874533', "
+          "'2006-04-26 "
+          "03:49:04.607435125', "
+          "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, "
+          "'fish', "
+          "null, "
+          "2147483647, -2147483648, null, -1, 32767, 't');"};
+      sql(insert_query);
+    }
+    for (size_t i = 0; i < g_num_rows / 2; ++i) {
+      const std::string insert_query{
+          "INSERT INTO test VALUES(8, -7, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, 2.4, "
+          "-2002.4, 'bar', null, 'bar', null, "
+          "'real_bar', NULL, '2014-12-13 22:23:15', '2014-12-13 22:23:15.323', "
+          "'2014-12-13 "
+          "22:23:15.874533', "
+          "'2014-12-13 22:23:15.607435763', '15:13:14', NULL, NULL, NULL, NULL, 222.2, "
+          "222.2, "
+          "null, null, null, "
+          "-2147483647, "
+          "9223372036854775807, -9223372036854775808, null, 'f');"};
+      sql(insert_query);
+    }
+    for (size_t i = 0; i < g_num_rows / 2; ++i) {
+      const std::string insert_query{
+          "INSERT INTO test VALUES(7, -7, 43, 102, 1002, null, 1.3, 1000.3, -1000.3, "
+          "2.6, "
+          "-220.6, 'baz', null, null, null, "
+          "'real_baz', 'baz', '2014-12-14 22:23:15', '2014-12-14 22:23:15.750', "
+          "'2014-12-14 22:23:15.437321', "
+          "'2014-12-14 22:23:15.934567401', '15:13:14', '1999-09-09', '1999-09-09', "
+          "'1999-09-09', 11, "
+          "333.3, 333.3, "
+          "'boat', null, 1, "
+          "-1, 1, -9223372036854775808, 1, 't');"};
+      sql(insert_query);
+    }
+  }
+
+  int create_as_select() {
+    try {
+      const std::string drop_ctas_test{"DROP TABLE IF EXISTS ctas_test;"};
+      sql(drop_ctas_test);
+      // g_sqlite_comparator.query(drop_ctas_test);
+      const std::string create_ctas_test{
+          "CREATE TABLE ctas_test AS SELECT x, f, d, str, fixed_str FROM test WHERE x "
+          "> "
+          "7;"};
+      sql(create_ctas_test);
+      // g_sqlite_comparator.query(create_ctas_test);
+    } catch (...) {
+      LOG(ERROR) << "Failed to (re-)create table 'ctas_test'";
+      return -1;
+    }
+    return 0;
+  }
+
+  int create_as_select_full() {
+    try {
+      const std::string drop_ctas_test{"DROP TABLE IF EXISTS ctas_test_full;"};
+      sql(drop_ctas_test);
+      // g_sqlite_comparator.query(drop_ctas_test);
+      const std::string create_ctas_test{
+          "CREATE TABLE ctas_test_full AS SELECT * FROM test;"};
+      sql(create_ctas_test);
+      // g_sqlite_comparator.query(create_ctas_test);
+    } catch (...) {
+      LOG(ERROR) << "Failed to (re-)create table 'ctas_test_full'";
+      return -1;
+    }
+    return 0;
+  }
+
+  int create_as_select_empty() {
+    try {
+      const std::string drop_ctas_test{"DROP TABLE IF EXISTS empty_ctas_test;"};
+      sql(drop_ctas_test);
+      // g_sqlite_comparator.query(drop_ctas_test);
+      const std::string create_ctas_test{
+          "CREATE TABLE empty_ctas_test AS SELECT x, f, d, str, fixed_str FROM test "
+          "WHERE "
+          "x > 8;"};
+      sql(create_ctas_test);
+      // g_sqlite_comparator.query(create_ctas_test);
+    } catch (...) {
+      LOG(ERROR) << "Failed to (re-)create table 'empty_ctas_test'";
+      return -1;
+    }
+    return 0;
+  }
+};
+
+#define SKIP_WITH_TEMP_TABLES()                                   \
+  if (g_use_temporary_tables) {                                   \
+    LOG(ERROR) << "Tests not valid when using temporary tables."; \
+    return;                                                       \
+  }
+
+#define SKIP_ON_AGGREGATOR(EXP) \
+  if (!g_aggregator) {          \
+    EXP;                        \
+  }
+
+bool skip_tests(const ExecutorDeviceType device_type) {
+#ifdef HAVE_CUDA
+  // return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
+  return device_type == ExecutorDeviceType::GPU;
+#else
+  return device_type == ExecutorDeviceType::GPU;
+#endif
+}
+
+#define SKIP_NO_GPU()                                        \
+  if (skip_tests(dt)) {                                      \
+    CHECK(dt == ExecutorDeviceType::GPU);                    \
+    LOG(WARNING) << "GPU not available, skipping GPU tests"; \
+    continue;                                                \
+  }
+
+TEST_F(CtasTableTest, CreateTableAsSelect) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+
+  createTestTable();
+
+  // XYZZY once for GPU, once for CPU
+  // for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  //    SKIP_NO_GPU(); /// uses "dt"
+
+  int err{0};
+  if (!err && !g_use_temporary_tables) {
+    SKIP_ON_AGGREGATOR(err = create_as_select());
+  }
+  if (!err && !g_use_temporary_tables) {
+    SKIP_ON_AGGREGATOR(err = create_as_select_full());
+  }
+  if (!err && !g_use_temporary_tables) {
+    SKIP_ON_AGGREGATOR(err = create_as_select_empty());
+  }
+
+  sql("SELECT fixed_str, COUNT(*) FROM ctas_test GROUP BY fixed_str;");
+  sql("SELECT x, COUNT(*) FROM ctas_test GROUP BY x;");
+  sql("SELECT f, COUNT(*) FROM ctas_test GROUP BY f;");
+  sql("SELECT d, COUNT(*) FROM ctas_test GROUP BY d;");
+  sql("SELECT COUNT(*) FROM empty_ctas_test;");
+  sql("SELECT x, w, y, z, b, f, ff, d, fx FROM ctas_test_full ORDER BY x, w, y, z, "
+      "b, f, ff, d, fx;");
+  sql("SELECT count(dn), count(fn), count(null_str) FROM ctas_test_full;");
+  sql("SELECT str, count(*) FROM ctas_test_full GROUP BY str ORDER BY 2;");
+  sql("SELECT m, m_3, m_6, m_9, n, o, o1, o2 FROM ctas_test_full ORDER BY m, m_3, m_6, "
+      "m_9, n, o, o1, o2;");
+  // }
+}
+
 int main(int argc, char* argv[]) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

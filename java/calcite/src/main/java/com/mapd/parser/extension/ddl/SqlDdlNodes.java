@@ -38,13 +38,14 @@ public class SqlDdlNodes {
   /** Creates a CREATE TABLE. */
   public static SqlCreateTable createTable(SqlParserPos pos,
           boolean replace,
+          boolean temporary,
           boolean ifNotExists,
           SqlIdentifier name,
           SqlNodeList columnList,
           OmniSciOptionsMap withOptions,
           SqlNode query) {
     return new SqlCreateTable(
-            pos, replace, ifNotExists, name, columnList, withOptions, query);
+            pos, replace, temporary, ifNotExists, name, columnList, withOptions, query);
   }
 
   /** Creates a CREATE VIEW. */
