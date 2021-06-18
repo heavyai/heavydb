@@ -56,12 +56,6 @@ bool is_odbc(const std::string& wrapper_type) {
   return (wrapper_type == "sqlite" || wrapper_type == "postgres");
 }
 
-void skip_odbc(const std::string& wrapper_type, const std::string& skip_msg) {
-  if (is_odbc(wrapper_type)) {
-    GTEST_SKIP() << skip_msg;
-  }
-}
-
 std::string wrapper_ext(const std::string& wrapper_type) {
   return (is_odbc(wrapper_type)) ? ".csv" : "." + wrapper_type;
 }
@@ -136,7 +130,7 @@ class ForeignTableTest : public DBHandlerTestFixture {
   void createLocalODBCServer(const std::string& dsn_name) {
     dropLocalODBCServerIfExists();
     sql("CREATE SERVER temp_odbc FOREIGN DATA WRAPPER omnisci_odbc WITH "
-        "(odbc_dsn = '" +
+        "(DATA_SOURCE_NAME = '" +
         dsn_name + "');");
   }
 
@@ -1139,8 +1133,10 @@ INSTANTIATE_TEST_SUITE_P(DataWrapperParameterizedTests,
 
 TEST_P(DataWrapperSelectQueryTest, Int8EmptyAndNullArrayPermutations) {
   auto wrapper_type = GetParam();
-  skip_odbc(wrapper_type,
-            "Sqlite does not support array types; Postgres arrays currently unsupported");
+  if (is_odbc(wrapper_type)) {
+    GTEST_SKIP()
+        << "Sqlite does not support array types; Postgres arrays currently unsupported";
+  }
   // clang-format off
   sql(createForeignTableQuery(
       {{"index", "INT"},
@@ -1287,8 +1283,10 @@ TEST_P(DataWrapperSelectQueryTest, AggregateAndGroupByNull) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, ArrayWithNullValues) {
-  skip_odbc(GetParam(),
-            "Sqlite does notsupport array types; Postgres arrays currently unsupported");
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP()
+        << "Sqlite does notsupport array types; Postgres arrays currently unsupported";
+  }
   sql(createForeignTableQuery({{"index", "INTEGER"},
                                {"i1", "INTEGER[]"},
                                {"i2", "INTEGER[]"},
@@ -1304,14 +1302,18 @@ TEST_P(DataWrapperSelectQueryTest, ArrayWithNullValues) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, MissingFileOnCreateTable) {
-  skip_odbc(GetParam(), "Not a valid testcase for ODBC wrappers");
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
   auto file_path = getDataFilesPath() + "missing_file" + wrapper_ext(GetParam());
   auto query = createForeignTableQuery({{"i", "INTEGER"}}, file_path, GetParam());
   queryAndAssertFileNotFoundException(file_path, query);
 }
 
 TEST_P(DataWrapperSelectQueryTest, MissingFileOnSelectQuery) {
-  skip_odbc(GetParam(), "Not a valid testcase for ODBC wrappers");
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
   auto file_path = boost::filesystem::absolute("missing_file");
   boost::filesystem::copy_file(getDataFilesPath() + "0." + GetParam(), file_path);
   std::string query{"CREATE FOREIGN TABLE test_foreign_table (i INTEGER) "s +
@@ -1323,7 +1325,9 @@ TEST_P(DataWrapperSelectQueryTest, MissingFileOnSelectQuery) {
 }
 
 TEST_P(DataWrapperSelectQueryTest, EmptyDirectory) {
-  skip_odbc(GetParam(), "Not a valid testcase for ODBC wrappers");
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
   auto dir_path = boost::filesystem::absolute("empty_dir");
   boost::filesystem::create_directory(dir_path);
   std::string query{"CREATE FOREIGN TABLE test_foreign_table (i INTEGER) "s +
@@ -1955,9 +1959,10 @@ TEST_P(RefreshParamTests, SingleTable) {
 }
 
 TEST_P(RefreshParamTests, FragmentSkip) {
-  skip_odbc(wrapper_type,
-            "BUG: This test currently fails on odbc (likely because it "
-            "is not setting metadata correctly)");
+  if (is_odbc(wrapper_type)) {
+    GTEST_SKIP() << "BUG: This test currently fails on odbc (likely because it "
+                    "is not setting metadata correctly)";
+  }
 
   // Create initial files and tables
   createFilesAndTables({"0", "1"});
@@ -2149,8 +2154,9 @@ TEST_P(RefreshParamTests, AddFrags) {
 }
 
 TEST_P(RefreshParamTests, SubFrags) {
-  skip_odbc(wrapper_type,
-            "UNIMPLEMENTED: Refresh functionality currently incomplete for ODBC");
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "UNIMPLEMENTED: Refresh functionality currently incomplete for ODBC";
+  }
   // Create initial files and tables
   createFilesAndTables({"three_row_3_4_5"}, {{"i", "BIGINT"}}, {{"fragment_size", "1"}});
 
@@ -2748,8 +2754,9 @@ TEST_P(DataWrapperAppendRefreshTest, AppendNothing) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
-  skip_odbc(wrapper_type_,
-            "UNIMPLEMTNED: ODBC does not support this append functionality yet");
+  if (is_odbc(wrapper_type_)) {
+    GTEST_SKIP() << "UNIMPLEMTNED: ODBC does not support this append functionality yet";
+  }
   file_name_ = "single_file_delete_rows"s + wrapper_ext(wrapper_type_);
   sqlCreateTestTable();
   sqlAndCompareResult("SELECT * FROM "s + table_name_ + " ORDER BY i;", {{i(1)}, {i(2)}});
@@ -2765,9 +2772,10 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, BulkMissingRows) {
-  skip_odbc(
-      wrapper_type_,
-      "BUG: This test currently fails on odbc because it does't handle deleted rows");
+  if (is_odbc(wrapper_type_)) {
+    GTEST_SKIP()
+        << "BUG: This test currently fails on odbc because it does't handle deleted rows";
+  }
   file_name_ = "single_file_delete_rows"s + wrapper_ext(wrapper_type_);
   sql(createForeignTableQuery(
       {{"i", "BIGINT"}},
@@ -2792,7 +2800,9 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRowsEvict) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
-  skip_odbc(wrapper_type_, "This testcase is not relevant to ODBC");
+  if (is_odbc(wrapper_type_)) {
+    GTEST_SKIP() << "This testcase is not relevant to ODBC";
+  }
   file_name_ = wrapper_type_ + "_dir_missing_file";
   sqlCreateTestTable();
   sqlAndCompareResult("SELECT * FROM "s + table_name_ + " ORDER BY i;", {{i(1)}, {i(2)}});
@@ -2807,7 +2817,9 @@ TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
 // This tests the use case where there are multiple files in a
 // directory but an update is made to only one of the files.
 TEST_P(DataWrapperAppendRefreshTest, MultifileAppendtoFile) {
-  skip_odbc(wrapper_type_, "This testcase is not relevant to ODBC");
+  if (is_odbc(wrapper_type_)) {
+    GTEST_SKIP() << "This testcase is not relevant to ODBC";
+  }
   file_name_ = wrapper_type_ + "_dir_file_multi_bad_append";
   sqlCreateTestTable();
   sqlAndCompareResult("SELECT * FROM "s + table_name_ + " ORDER BY i;", {{i(1)}, {i(2)}});
@@ -2839,8 +2851,10 @@ INSTANTIATE_TEST_SUITE_P(DataTypeFragmentSizeAndDataWrapperOdbcTests,
 
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes) {
   auto [fragment_size, data_wrapper_type, extension] = GetParam();
-  skip_odbc(data_wrapper_type,
-            "UNIMPLEMENTED: ODBC wrapper does not support decimal/timestamp types yet");
+  if (is_odbc(data_wrapper_type)) {
+    GTEST_SKIP()
+        << "UNIMPLEMENTED: ODBC wrapper does not support decimal/timestamp types yet";
+  }
   sql(createForeignTableQuery({{"b", "BOOLEAN"},
                                {"t", "TINYINT"},
                                {"s", "SMALLINT"},
@@ -3267,8 +3281,10 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayUnsignedIntegerTypes) {
 
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ArrayTypes) {
   auto [fragment_size, data_wrapper_type, extension] = GetParam();
-  skip_odbc(data_wrapper_type,
-            "Sqlite does notsupport array types; Postgres arrays currently unsupported");
+  if (is_odbc(data_wrapper_type)) {
+    GTEST_SKIP()
+        << "Sqlite does notsupport array types; Postgres arrays currently unsupported";
+  }
   sql(createForeignTableQuery({{"index", "INT"},
                                {"b", "BOOLEAN[]"},
                                {"t", "TINYINT[]"},
@@ -3313,8 +3329,10 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ArrayTypes) {
 
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, FixedLengthArrayTypes) {
   auto [fragment_size, data_wrapper_type, extension] = GetParam();
-  skip_odbc(data_wrapper_type,
-            "Sqlite does notsupport array types; Postgres arrays currently unsupported");
+  if (is_odbc(data_wrapper_type)) {
+    GTEST_SKIP()
+        << "Sqlite does notsupport array types; Postgres arrays currently unsupported";
+  }
   sql(createForeignTableQuery({{"index", "INT"},
                                {"b", "BOOLEAN[2]"},
                                {"t", "TINYINT[2]"},
@@ -3360,7 +3378,9 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, FixedLengthArrayTypes) {
 
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, GeoTypes) {
   auto [fragment_size, data_wrapper_type, extension] = GetParam();
-  skip_odbc(data_wrapper_type, "UNIMPLEMENTED: no geotype support for odbc yet");
+  if (is_odbc(data_wrapper_type)) {
+    GTEST_SKIP() <<"UNIMPLEMENTED: no geotype support for odbc yet";
+  }
   sql(createForeignTableQuery({{"index", "INT"},
                                {"p", "POINT"},
                                {"l", "LINESTRING"},
@@ -3864,7 +3884,9 @@ TEST_P(DataWrapperRecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemand
 TEST_P(DataWrapperRecoverCacheQueryTest, AppendData) {
   int fragment_size = 2;
   auto wrapper = GetParam();
-  skip_odbc(wrapper, "UNIMPLEMENTED: Append is not yet supported for odbc");
+  if (is_odbc(wrapper)) {
+    GTEST_SKIP() << "UNIMPLEMENTED: Append is not yet supported for odbc";
+  }
   // Create initial files and tables
   bf::remove_all(getDataFilesPath() + "append_tmp");
 
