@@ -127,19 +127,19 @@ void ParquetDataWrapper::initializeChunkBuffers(
       data_chunk_key = {
           db_id_, foreign_table_->tableId, column->columnId, fragment_index, 1};
       CHECK(required_buffers.find(data_chunk_key) != required_buffers.end());
-      auto data_buffer = required_buffers.at(data_chunk_key);
+      auto data_buffer = shared::get_from_map(required_buffers, data_chunk_key);
       chunk.setBuffer(data_buffer);
 
       ChunkKey index_chunk_key{
           db_id_, foreign_table_->tableId, column->columnId, fragment_index, 2};
       CHECK(required_buffers.find(index_chunk_key) != required_buffers.end());
-      auto index_buffer = required_buffers.at(index_chunk_key);
+      auto index_buffer = shared::get_from_map(required_buffers, index_chunk_key);
       chunk.setIndexBuffer(index_buffer);
     } else {
       data_chunk_key = {
           db_id_, foreign_table_->tableId, column->columnId, fragment_index};
       CHECK(required_buffers.find(data_chunk_key) != required_buffers.end());
-      auto data_buffer = required_buffers.at(data_chunk_key);
+      auto data_buffer = shared::get_from_map(required_buffers, data_chunk_key);
       chunk.setBuffer(data_buffer);
     }
     chunk.initEncoder();
@@ -384,7 +384,8 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
       logical_column_id + logical_column->columnType.get_physical_cols()};
   initializeChunkBuffers(fragment_id, column_interval, required_buffers, true);
 
-  const auto& row_group_intervals = fragment_to_row_group_interval_map_.at(fragment_id);
+  const auto& row_group_intervals =
+      shared::get_from_map(fragment_to_row_group_interval_map_, fragment_id);
 
   const bool is_dictionary_encoded_string_column =
       logical_column->columnType.is_dict_encoded_string() ||
@@ -407,15 +408,15 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
     if (column_descriptor->columnType.is_varlen_indeed()) {
       ChunkKey data_chunk_key = {
           db_id_, foreign_table_->tableId, column_id, fragment_id, 1};
-      auto buffer = required_buffers.at(data_chunk_key);
+      auto buffer = shared::get_from_map(required_buffers, data_chunk_key);
       chunk.setBuffer(buffer);
       ChunkKey index_chunk_key = {
           db_id_, foreign_table_->tableId, column_id, fragment_id, 2};
-      auto index_buffer = required_buffers.at(index_chunk_key);
+      auto index_buffer = shared::get_from_map(required_buffers, index_chunk_key);
       chunk.setIndexBuffer(index_buffer);
     } else {
       ChunkKey chunk_key = {db_id_, foreign_table_->tableId, column_id, fragment_id};
-      auto buffer = required_buffers.at(chunk_key);
+      auto buffer = shared::get_from_map(required_buffers, chunk_key);
       chunk.setBuffer(buffer);
     }
     chunks.emplace_back(chunk);
@@ -438,13 +439,16 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
 
     // Allocate new shared_ptr for metadata so we dont modify old one which may be used
     // by executor
-    auto cached_metadata_previous = chunk_metadata_map_.at(data_chunk_key);
-    chunk_metadata_map_.at(data_chunk_key) = std::make_shared<ChunkMetadata>();
-    auto cached_metadata = chunk_metadata_map_.at(data_chunk_key);
+    auto cached_metadata_previous =
+        shared::get_from_map(chunk_metadata_map_, data_chunk_key);
+    shared::get_from_map(chunk_metadata_map_, data_chunk_key) =
+        std::make_shared<ChunkMetadata>();
+    auto cached_metadata = shared::get_from_map(chunk_metadata_map_, data_chunk_key);
     *cached_metadata = *cached_metadata_previous;
 
     CHECK(required_buffers.find(data_chunk_key) != required_buffers.end());
-    cached_metadata->numBytes = required_buffers.at(data_chunk_key)->size();
+    cached_metadata->numBytes =
+        shared::get_from_map(required_buffers, data_chunk_key)->size();
 
     // for certain types, update the metadata statistics
     // should update the fragmenter, cache, and the internal chunk_metadata_map_
@@ -455,7 +459,7 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
       cached_metadata->chunkStats.min = chunk_metadata_ptr->chunkStats.min;
 
       // Update stats on buffer so it is saved in cache
-      required_buffers.at(data_chunk_key)
+      shared::get_from_map(required_buffers, data_chunk_key)
           ->getEncoder()
           ->resetChunkStats(cached_metadata->chunkStats);
     }

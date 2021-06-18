@@ -3195,7 +3195,7 @@ TEST_F(SelectQueryTest, ParquetMalformedGeoPoint) {
   TQueryResult result;
   queryAndAssertException(
       "SELECT * FROM test_foreign_table;",
-      "Exception: Failed to extract valid geometry in row 0 of OmniSci column 'p'. Row "
+      "Exception: Failed to extract valid geometry in OmniSci column 'p'. Row "
       "group: 0, Parquet column: 'point', Parquet file: '" +
           getDataFilesPath() + "geo_point_malformed.parquet'");
 }

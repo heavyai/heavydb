@@ -22,6 +22,7 @@
 #include <deque>
 #include <iterator>
 #include <list>
+#include <map>
 #include <set>
 #include <unordered_set>
 #include <vector>
@@ -43,6 +44,20 @@ constexpr std::array<T, sizeof...(Indices)> powersOfImpl(
 }  // namespace
 
 namespace shared {
+
+template <typename K, typename V>
+V& get_from_map(std::map<K, V>& map, const K& key) {
+  auto find_it = map.find(key);
+  CHECK(find_it != map.end());
+  return find_it->second;
+}
+
+template <typename K, typename V>
+const V& get_from_map(const std::map<K, V>& map, const K& key) {
+  auto find_it = map.find(key);
+  CHECK(find_it != map.end());
+  return find_it->second;
+}
 
 // source is destructively appended to the back of destination.
 // source.empty() is true after call. Return number of elements appended.
