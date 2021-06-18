@@ -118,7 +118,7 @@ class QueryMemoryInitializer {
                                        const unsigned grid_size_x);
 #endif
 
-  void copyGroupByBuffersFromGpu(Data_Namespace::DataMgr* data_mgr,
+  void copyGroupByBuffersFromGpu(DeviceAllocator& device_allocator,
                                  const QueryMemoryDescriptor& query_mem_desc,
                                  const size_t entry_count,
                                  const GpuGroupByBuffers& gpu_group_by_buffers,
@@ -171,7 +171,7 @@ class QueryMemoryInitializer {
 
 #ifdef HAVE_CUDA
   GpuGroupByBuffers prepareTopNHeapsDevBuffer(const QueryMemoryDescriptor& query_mem_desc,
-                                              const CUdeviceptr init_agg_vals_dev_ptr,
+                                              const int8_t* init_agg_vals_dev_ptr,
                                               const size_t n,
                                               const int device_id,
                                               const unsigned block_size_x,
@@ -180,7 +180,7 @@ class QueryMemoryInitializer {
   GpuGroupByBuffers createAndInitializeGroupByBufferGpu(
       const RelAlgExecutionUnit& ra_exe_unit,
       const QueryMemoryDescriptor& query_mem_desc,
-      const CUdeviceptr init_agg_vals_dev_ptr,
+      const int8_t* init_agg_vals_dev_ptr,
       const int device_id,
       const ExecutorDispatchMode dispatch_mode,
       const unsigned block_size_x,

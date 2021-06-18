@@ -288,7 +288,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     auto gpu_group_by_buffers = query_buffers_->createAndInitializeGroupByBufferGpu(
         ra_exe_unit,
         query_mem_desc_,
-        (CUdeviceptr)kernel_params[INIT_AGG_VALS],
+        kernel_params[INIT_AGG_VALS],
         device_id,
         dispatch_mode_,
         block_size_x,
@@ -304,7 +304,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
           kernel_params[MAX_MATCHED], &max_matched, sizeof(max_matched));
     }
 
-    kernel_params[GROUPBY_BUF] = (int8_t*)gpu_group_by_buffers.first;
+    kernel_params[GROUPBY_BUF] = gpu_group_by_buffers.first;
     std::vector<void*> param_ptrs;
     for (auto& param : kernel_params) {
       param_ptrs.push_back(&param);
@@ -410,7 +410,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
               }
             }
             query_buffers_->copyGroupByBuffersFromGpu(
-                data_mgr,
+                *gpu_allocator_,
                 query_mem_desc_,
                 ra_exe_unit.use_bump_allocator ? num_allocated_rows
                                                : query_mem_desc_.getEntryCount(),
@@ -429,7 +429,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
           }
         } else {
           query_buffers_->copyGroupByBuffersFromGpu(
-              data_mgr,
+              *gpu_allocator_,
               query_mem_desc_,
               query_mem_desc_.getEntryCount(),
               gpu_group_by_buffers,
