@@ -82,7 +82,7 @@ class PerfectJoinHashTableBuilder {
     int err{0};
 
     auto allocator = data_mgr.createGpuAllocator(device_id);
-    allocator->copyToDevice(dev_err_buff,&err,sizeof(err));
+    allocator->copyToDevice(dev_err_buff, &err, sizeof(err));
 
     CHECK(hash_table_);
     auto gpu_hash_table_buff = hash_table_->getGpuBuffer();

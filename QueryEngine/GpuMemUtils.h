@@ -47,14 +47,14 @@ class DataMgr;
 class DeviceAllocator;
 
 void copy_to_nvidia_gpu(Data_Namespace::DataMgr* data_mgr,
-                 CUdeviceptr dst,
-                 const void* src,
-                 const size_t num_bytes,
-                 const int device_id);
+                        CUdeviceptr dst,
+                        const void* src,
+                        const size_t num_bytes,
+                        const int device_id);
 
 struct GpuGroupByBuffers {
-  int8_t * first;
-  int8_t * second;
+  int8_t* first;
+  int8_t* second;
   size_t entry_count;
 };
 
@@ -79,15 +79,15 @@ GpuGroupByBuffers create_dev_group_by_buffers(
 void copy_group_by_buffers_from_gpu(DeviceAllocator& device_allocator,
                                     const std::vector<int64_t*>& group_by_buffers,
                                     const size_t groups_buffer_size,
-                                    const int8_t *group_by_dev_buffers_mem,
+                                    const int8_t* group_by_dev_buffers_mem,
                                     const QueryMemoryDescriptor& query_mem_desc,
                                     const unsigned block_size_x,
                                     const unsigned grid_size_x,
                                     const int device_id,
                                     const bool prepend_index_buffer);
 
-size_t get_num_allocated_rows_from_gpu(DeviceAllocator &device_allocator,
-                                       int8_t *projection_size_gpu,
+size_t get_num_allocated_rows_from_gpu(DeviceAllocator& device_allocator,
+                                       int8_t* projection_size_gpu,
                                        const int device_id);
 
 void copy_projection_buffer_from_gpu_columnar(Data_Namespace::DataMgr* data_mgr,
