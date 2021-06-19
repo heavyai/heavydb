@@ -415,7 +415,7 @@ ChunkToBufferMap ForeignStorageMgr::allocateTempBuffersForChunks(
 
 void ForeignStorageMgr::setParallelismHints(
     const std::map<ChunkKey, std::set<ParallelismHint>>& hints_per_table) {
-  std::shared_lock data_wrapper_lock(parallelism_hints_mutex_);
+  std::unique_lock data_wrapper_lock(parallelism_hints_mutex_);
   parallelism_hints_per_table_ = hints_per_table;
 }
 
