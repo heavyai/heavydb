@@ -75,7 +75,7 @@ class QueryExecutionContext : boost::noncopyable {
       int32_t* error_code,
       const uint32_t num_tables,
       const bool allow_runtime_interrupt,
-      const std::vector<int64_t>& join_hash_tables,
+      const std::vector<int8_t*>& join_hash_tables,
       RenderAllocatorMap* render_allocator_map);
 
   std::vector<int64_t*> launchCpuCode(
@@ -89,7 +89,7 @@ class QueryExecutionContext : boost::noncopyable {
       const int32_t scan_limit,
       int32_t* error_code,
       const uint32_t num_tables,
-      const std::vector<int64_t>& join_hash_tables);
+      const std::vector<int8_t*>& join_hash_tables);
 
   int64_t getAggInitValForIndex(const size_t index) const;
 
@@ -115,7 +115,7 @@ class QueryExecutionContext : boost::noncopyable {
 
   void initializeRuntimeInterrupter(void* native_module, const int device_id) const;
 
-  std::vector<int8_t *> prepareKernelParams(
+  std::vector<int8_t*> prepareKernelParams(
       const std::vector<std::vector<const int8_t*>>& col_buffers,
       const std::vector<int8_t>& literal_buff,
       const std::vector<std::vector<int64_t>>& num_rows,
@@ -124,7 +124,7 @@ class QueryExecutionContext : boost::noncopyable {
       const std::vector<int64_t>& init_agg_vals,
       const std::vector<int32_t>& error_codes,
       const uint32_t num_tables,
-      const std::vector<int64_t>& join_hash_tables,
+      const std::vector<int8_t*>& join_hash_tables,
       Data_Namespace::DataMgr* data_mgr,
       const int device_id,
       const bool hoist_literals,

@@ -513,7 +513,7 @@ class BaselineJoinHashTableBuilder {
             reinterpret_cast<int*>(dev_err_buff),
             key_handler_gpu,
             join_columns.front().num_elems);
-        copy_from_gpu(&data_mgr, &err, reinterpret_cast<CUdeviceptr>(dev_err_buff), sizeof(err), device_id);
+        allocator->copyFromDevice(&err, dev_err_buff, sizeof(err));
         break;
       }
       case 8: {
@@ -527,7 +527,7 @@ class BaselineJoinHashTableBuilder {
             reinterpret_cast<int*>(dev_err_buff),
             key_handler_gpu,
             join_columns.front().num_elems);
-        copy_from_gpu(&data_mgr, &err, reinterpret_cast<CUdeviceptr>(dev_err_buff), sizeof(err), device_id);
+        allocator->copyFromDevice(&err, dev_err_buff, sizeof(err));
         break;
       }
       default:

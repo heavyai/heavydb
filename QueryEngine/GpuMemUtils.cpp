@@ -27,7 +27,7 @@ extern size_t g_max_memory_allocation_size;
 extern size_t g_min_memory_allocation_size;
 extern double g_bump_allocator_step_reduction;
 
-void copy_to_gpu(Data_Namespace::DataMgr* data_mgr,
+void copy_to_nvidia_gpu(Data_Namespace::DataMgr* data_mgr,
                  CUdeviceptr dst,
                  const void* src,
                  const size_t num_bytes,
@@ -200,19 +200,6 @@ GpuGroupByBuffers create_dev_group_by_buffers(
   return {group_by_dev_ptr, group_by_dev_buffers_mem, entry_count};
 }
 
-void copy_from_gpu(Data_Namespace::DataMgr* data_mgr,
-                   void* dst,
-                   const CUdeviceptr src,
-                   const size_t num_bytes,
-                   const int device_id) {
-  const auto cuda_mgr = data_mgr->getCudaMgr();
-  CHECK(cuda_mgr);
-  cuda_mgr->copyDeviceToHost(static_cast<int8_t*>(dst),
-                             reinterpret_cast<const int8_t*>(src),
-                             num_bytes,
-                             device_id);
-}
-
 void copy_group_by_buffers_from_gpu(DeviceAllocator& device_allocator,
                                     const std::vector<int64_t*>& group_by_buffers,
                                     const size_t groups_buffer_size,
@@ -239,8 +226,8 @@ void copy_group_by_buffers_from_gpu(DeviceAllocator& device_allocator,
       coalesced_size(query_mem_desc, groups_buffer_size, block_buffer_count) +
       index_buffer_sz);
   device_allocator.copyFromDevice(&buff_from_gpu[0],
-                                   group_by_dev_buffers_mem - index_buffer_sz,
-                                   buff_from_gpu.size());
+                                  group_by_dev_buffers_mem - index_buffer_sz,
+                                  buff_from_gpu.size());
   auto buff_from_gpu_ptr = &buff_from_gpu[0];
   for (size_t i = 0; i < block_buffer_count; ++i) {
     CHECK_LT(i * block_size_x, group_by_buffers.size());
@@ -257,11 +244,11 @@ void copy_group_by_buffers_from_gpu(DeviceAllocator& device_allocator,
  *
  * TODO(Saman): revisit this for bump allocators
  */
-size_t get_num_allocated_rows_from_gpu(Data_Namespace::DataMgr* data_mgr,
-                                       CUdeviceptr projection_size_gpu,
+size_t get_num_allocated_rows_from_gpu(DeviceAllocator& device_allocator,
+                                       int8_t* projection_size_gpu,
                                        const int device_id) {
   int32_t num_rows{0};
-  copy_from_gpu(data_mgr, &num_rows, projection_size_gpu, sizeof(num_rows), device_id);
+  device_allocator.copyFromDevice(&num_rows, projection_size_gpu, sizeof(num_rows));
   CHECK(num_rows >= 0);
   return static_cast<size_t>(num_rows);
 }
