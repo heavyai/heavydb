@@ -70,7 +70,8 @@ void CudaAllocator::copyToDevice(void* device_dst,
                                  const size_t num_bytes) const {
   const auto cuda_mgr = data_mgr_->getCudaMgr();
   CHECK(cuda_mgr);
-  cuda_mgr->copyHostToDevice((int8_t *)device_dst, (int8_t *)host_src, num_bytes, device_id_);
+  cuda_mgr->copyHostToDevice(
+      (int8_t*)device_dst, (int8_t*)host_src, num_bytes, device_id_);
 }
 
 void CudaAllocator::copyFromDevice(void* host_dst,
@@ -78,7 +79,8 @@ void CudaAllocator::copyFromDevice(void* host_dst,
                                    const size_t num_bytes) const {
   const auto cuda_mgr = data_mgr_->getCudaMgr();
   CHECK(cuda_mgr);
-  cuda_mgr->copyDeviceToHost((int8_t *)host_dst, (int8_t *)device_src, num_bytes, device_id_);
+  cuda_mgr->copyDeviceToHost(
+      (int8_t*)host_dst, (int8_t*)device_src, num_bytes, device_id_);
 }
 
 void CudaAllocator::zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes) const {

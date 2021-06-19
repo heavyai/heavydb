@@ -16,6 +16,7 @@
 
 #include "QueryMemoryInitializer.h"
 
+#include "DataMgr/Allocators/DeviceAllocator.h"
 #include "Execute.h"
 #include "GpuInitGroups.h"
 #include "GpuMemUtils.h"
@@ -23,7 +24,6 @@
 #include "OutputBufferInitialization.h"
 #include "ResultSet.h"
 #include "StreamingTopN.h"
-#include "DataMgr/Allocators/DeviceAllocator.h"
 
 #include <Shared/checked_alloc.h>
 
@@ -869,16 +869,17 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
             block_size_x,
             grid_size_x);
       } else {
-        init_group_by_buffer_on_device(reinterpret_cast<int64_t*>(group_by_dev_buffer),
-                                       reinterpret_cast<const int64_t*>(init_agg_vals_dev_ptr),
-                                       dev_group_by_buffers.entry_count,
-                                       query_mem_desc.getGroupbyColCount(),
-                                       query_mem_desc.getEffectiveKeyWidth(),
-                                       query_mem_desc.getRowSize() / sizeof(int64_t),
-                                       query_mem_desc.hasKeylessHash(),
-                                       warp_count,
-                                       block_size_x,
-                                       grid_size_x);
+        init_group_by_buffer_on_device(
+            reinterpret_cast<int64_t*>(group_by_dev_buffer),
+            reinterpret_cast<const int64_t*>(init_agg_vals_dev_ptr),
+            dev_group_by_buffers.entry_count,
+            query_mem_desc.getGroupbyColCount(),
+            query_mem_desc.getEffectiveKeyWidth(),
+            query_mem_desc.getRowSize() / sizeof(int64_t),
+            query_mem_desc.hasKeylessHash(),
+            warp_count,
+            block_size_x,
+            grid_size_x);
       }
       group_by_dev_buffer += groups_buffer_size;
     }
@@ -906,7 +907,7 @@ GpuGroupByBuffers QueryMemoryInitializer::setupTableFunctionGpuBuffers(
   auto dev_buffers_mem = dev_buffers_allocation;
   const size_t step{block_size_x};
   const size_t num_ptrs{block_size_x * grid_size_x};
-  std::vector<int8_t *> dev_buffers(num_columns * num_ptrs);
+  std::vector<int8_t*> dev_buffers(num_columns * num_ptrs);
   auto dev_buffer = dev_buffers_mem;
   for (size_t i = 0; i < num_ptrs; i += step) {
     for (size_t j = 0; j < step; j += 1) {
@@ -920,8 +921,8 @@ GpuGroupByBuffers QueryMemoryInitializer::setupTableFunctionGpuBuffers(
   }
 
   auto dev_ptr = device_allocator_->alloc(num_columns * num_ptrs * sizeof(CUdeviceptr));
-  device_allocator_->copyToDevice(dev_ptr, dev_buffers.data(),
-                                  num_columns * num_ptrs * sizeof(CUdeviceptr));
+  device_allocator_->copyToDevice(
+      dev_ptr, dev_buffers.data(), num_columns * num_ptrs * sizeof(CUdeviceptr));
 
   return {dev_ptr, dev_buffers_mem, (size_t)num_rows_};
 }
@@ -938,7 +939,7 @@ void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
   const size_t column_size = entry_count * sizeof(int64_t);
   const size_t orig_column_size = gpu_group_by_buffers.entry_count * sizeof(int64_t);
   int8_t* dev_buffer = gpu_group_by_buffers.second;
-  int8_t* host_buffer = reinterpret_cast<int8_t *>(group_by_buffers_[0]);
+  int8_t* host_buffer = reinterpret_cast<int8_t*>(group_by_buffers_[0]);
   CHECK_LE(column_size, orig_column_size);
 
   auto allocator = data_mgr->createGpuAllocator(device_id);
@@ -1041,7 +1042,7 @@ void QueryMemoryInitializer::compactProjectionBuffersGpu(
 }
 
 void QueryMemoryInitializer::copyGroupByBuffersFromGpu(
-    DeviceAllocator &device_allocator,
+    DeviceAllocator& device_allocator,
     const QueryMemoryDescriptor& query_mem_desc,
     const size_t entry_count,
     const GpuGroupByBuffers& gpu_group_by_buffers,

@@ -431,7 +431,8 @@ void ResultSet::syncEstimatorBuffer() const {
   CHECK(device_estimator_buffer_);
   auto device_buffer_ptr = device_estimator_buffer_->getMemoryPtr();
   auto allocator = data_mgr_->createGpuAllocator(device_id_);
-  allocator->copyFromDevice(host_estimator_buffer_, device_buffer_ptr, estimator_->getBufferSize());
+  allocator->copyFromDevice(
+      host_estimator_buffer_, device_buffer_ptr, estimator_->getBufferSize());
 }
 
 void ResultSet::setQueueTime(const int64_t queue_time) {

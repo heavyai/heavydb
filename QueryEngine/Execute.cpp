@@ -3326,9 +3326,9 @@ int32_t Executor::executePlanWithGroupBy(
   return 0;
 }
 
-std::vector<int8_t *> Executor::getJoinHashTablePtrs(const ExecutorDeviceType device_type,
+std::vector<int8_t*> Executor::getJoinHashTablePtrs(const ExecutorDeviceType device_type,
                                                     const int device_id) {
-  std::vector<int8_t *> table_ptrs;
+  std::vector<int8_t*> table_ptrs;
   const auto& join_hash_tables = plan_state_->join_info_.join_hash_tables_;
   for (auto hash_table : join_hash_tables) {
     if (!hash_table) {
