@@ -213,7 +213,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     int32_t* error_code,
     const uint32_t num_tables,
     const bool allow_runtime_interrupt,
-    const std::vector<int64_t>& join_hash_tables,
+    const std::vector<int8_t*>& join_hash_tables,
     RenderAllocatorMap* render_allocator_map) {
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(lauchGpuCode);
@@ -285,18 +285,18 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   if (is_group_by) {
     CHECK(!(query_buffers_->getGroupByBuffersSize() == 0) || render_allocator);
     bool can_sort_on_gpu = query_mem_desc_.sortOnGpu();
-    auto gpu_group_by_buffers = query_buffers_->createAndInitializeGroupByBufferGpu(
-        ra_exe_unit,
-        query_mem_desc_,
-        kernel_params[INIT_AGG_VALS],
-        device_id,
-        dispatch_mode_,
-        block_size_x,
-        grid_size_x,
-        executor_->warpSize(),
-        can_sort_on_gpu,
-        output_columnar_,
-        render_allocator);
+    auto gpu_group_by_buffers =
+        query_buffers_->createAndInitializeGroupByBufferGpu(ra_exe_unit,
+                                                            query_mem_desc_,
+                                                            kernel_params[INIT_AGG_VALS],
+                                                            device_id,
+                                                            dispatch_mode_,
+                                                            block_size_x,
+                                                            grid_size_x,
+                                                            executor_->warpSize(),
+                                                            can_sort_on_gpu,
+                                                            output_columnar_,
+                                                            render_allocator);
     if (ra_exe_unit.use_bump_allocator) {
       auto max_matched = static_cast<int32_t>(gpu_group_by_buffers.entry_count);
 
@@ -396,13 +396,13 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                 data_mgr,
                 gpu_group_by_buffers,
                 get_num_allocated_rows_from_gpu(
-                    data_mgr, (CUdeviceptr)kernel_params[TOTAL_MATCHED], device_id),
+                    *gpu_allocator_, kernel_params[TOTAL_MATCHED], device_id),
                 device_id);
           } else {
             size_t num_allocated_rows{0};
             if (ra_exe_unit.use_bump_allocator) {
               num_allocated_rows = get_num_allocated_rows_from_gpu(
-                  data_mgr, (CUdeviceptr)kernel_params[TOTAL_MATCHED], device_id);
+                  *gpu_allocator_, kernel_params[TOTAL_MATCHED], device_id);
               // First, check the error code. If we ran out of slots, don't copy data back
               // into the ResultSet or update ResultSet entry count
               if (*error_code < 0) {
@@ -579,7 +579,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
     const int32_t scan_limit,
     int32_t* error_code,
     const uint32_t num_tables,
-    const std::vector<int64_t>& join_hash_tables) {
+    const std::vector<int8_t*>& join_hash_tables) {
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(lauchCpuCode);
 
@@ -638,8 +638,10 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
   CHECK(native_code);
   const int64_t* join_hash_tables_ptr =
       join_hash_tables.size() == 1
-          ? reinterpret_cast<int64_t*>(join_hash_tables[0])
-          : (join_hash_tables.size() > 1 ? &join_hash_tables[0] : nullptr);
+          ? reinterpret_cast<const int64_t*>(join_hash_tables[0])
+          : (join_hash_tables.size() > 1
+                 ? reinterpret_cast<const int64_t*>(&join_hash_tables[0])
+                 : nullptr);
   if (hoist_literals) {
     using agg_query = void (*)(const int8_t***,  // col_buffers
                                const uint64_t*,  // num_fragments
@@ -832,7 +834,7 @@ std::vector<int8_t*> QueryExecutionContext::prepareKernelParams(
     const std::vector<int64_t>& init_agg_vals,
     const std::vector<int32_t>& error_codes,
     const uint32_t num_tables,
-    const std::vector<int64_t>& join_hash_tables,
+    const std::vector<int8_t*>& join_hash_tables,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id,
     const bool hoist_literals,
@@ -946,7 +948,7 @@ std::vector<int8_t*> QueryExecutionContext::prepareKernelParams(
       break;
     }
     case 1:
-      params[JOIN_HASH_TABLES] = (int8_t*)join_hash_tables[0];
+      params[JOIN_HASH_TABLES] = join_hash_tables[0];
       break;
     default: {
       params[JOIN_HASH_TABLES] =

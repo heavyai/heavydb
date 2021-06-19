@@ -161,7 +161,7 @@ class PerfectJoinHashTableBuilder {
         }
       }
     }
-    copy_from_gpu(&data_mgr, &err, reinterpret_cast<CUdeviceptr>(dev_err_buff), sizeof(err), device_id);
+    allocator->copyFromDevice(&err, dev_err_buff, sizeof(err));
     if (err) {
       if (layout == HashType::OneToOne) {
         throw NeedsOneToManyHash();
