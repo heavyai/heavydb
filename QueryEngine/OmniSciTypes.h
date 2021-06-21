@@ -31,6 +31,8 @@ EXTENSION_NOINLINE int8_t* allocate_varlen_buffer(int64_t element_count,
 
 EXTENSION_NOINLINE void set_output_row_size(int64_t num_rows);
 
+using TextEncodingDict = int32_t;
+
 template <typename T>
 struct Array {
   T* ptr;
@@ -168,7 +170,6 @@ struct Column {
 
   DEVICE bool isNull(int64_t index) const { return is_null(ptr_[index]); }
   DEVICE void setNull(int64_t index) { set_null(ptr_[index]); }
-
   DEVICE Column<T>& operator=(const Column<T>& other) {
 #ifndef __CUDACC__
     if (size() == other.size()) {
@@ -191,7 +192,7 @@ struct Column {
 #ifdef HAVE_TOSTRING
   std::string toString() const {
     return ::typeName(this) + "(ptr=" + ::toString(reinterpret_cast<void*>(ptr_)) +
-           ", size_=" + std::to_string(size_) + ")";
+           ", size=" + std::to_string(size_) + ")";
   }
 #endif
 };

@@ -68,16 +68,16 @@ public class ExtensionFunction {
     GeoPolygon,
     GeoMultiPolygon,
     TextEncodingNone,
-    TextEncodingDict8,
-    TextEncodingDict16,
-    TextEncodingDict32,
+    TextEncodingDict,
     ColumnListInt8,
     ColumnListInt16,
     ColumnListInt32,
     ColumnListInt64,
     ColumnListFloat,
     ColumnListDouble,
-    ColumnListBool
+    ColumnListBool,
+    ColumnTextEncodingDict,
+    ColumnListTextEncodingDict,
   }
   ;
 
@@ -205,19 +205,21 @@ public class ExtensionFunction {
       case ArrayBool:
         return "{i1*, i64, i8}*";
       case ColumnInt8:
-        return "{i8*, i64}";
+        return "column_int8";
       case ColumnInt16:
-        return "{i16*, i64}";
+        return "column_int16";
       case ColumnInt32:
-        return "{i32*, i64}";
+        return "column_int32";
       case ColumnInt64:
-        return "{i64*, i64}";
+        return "column_int64";
       case ColumnFloat:
-        return "{float*, i64}";
+        return "column_float";
       case ColumnDouble:
-        return "{double*, i64}";
+        return "column_double";
       case ColumnBool:
-        return "{i1*, i64}";
+        return "column_bool";
+      case ColumnTextEncodingDict:
+        return "column_text_encoding_dict";
       case GeoPoint:
         return "geo_point";
       case Cursor:
@@ -230,12 +232,8 @@ public class ExtensionFunction {
         return "geo_multi_polygon";
       case TextEncodingNone:
         return "text_encoding_none";
-      case TextEncodingDict8:
-        return "text_encoding_dict8";
-      case TextEncodingDict16:
-        return "text_encoding_dict16";
-      case TextEncodingDict32:
-        return "text_encoding_dict32";
+      case TextEncodingDict:
+        return "text_encoding_dict";
       case ColumnListInt8:
         return "column_list_int8";
       case ColumnListInt16:
@@ -250,6 +248,8 @@ public class ExtensionFunction {
         return "column_list_double";
       case ColumnListBool:
         return "column_list_bool";
+      case ColumnListTextEncodingDict:
+        return "column_list_text_encoding_dict";
     }
     MAPDLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
     assert false;
@@ -293,7 +293,8 @@ public class ExtensionFunction {
     return type == ExtArgumentType.ColumnInt8 || type == ExtArgumentType.ColumnInt16
             || type == ExtArgumentType.ColumnInt32 || type == ExtArgumentType.ColumnInt64
             || type == ExtArgumentType.ColumnFloat || type == ExtArgumentType.ColumnDouble
-            || type == ExtArgumentType.ColumnBool;
+            || type == ExtArgumentType.ColumnBool
+            || type == ExtArgumentType.ColumnTextEncodingDict;
   }
 
   private static boolean isColumnListType(final ExtArgumentType type) {
@@ -303,7 +304,8 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnListInt64
             || type == ExtArgumentType.ColumnListFloat
             || type == ExtArgumentType.ColumnListDouble
-            || type == ExtArgumentType.ColumnListBool;
+            || type == ExtArgumentType.ColumnListBool
+            || type == ExtArgumentType.ColumnListTextEncodingDict;
   }
 
   private static ExtArgumentType getValueType(final ExtArgumentType type) {
@@ -343,6 +345,10 @@ public class ExtensionFunction {
       case ColumnListBool:
       case Bool:
         return ExtArgumentType.Bool;
+      case TextEncodingDict:
+      case ColumnTextEncodingDict:
+      case ColumnListTextEncodingDict:
+        return ExtArgumentType.TextEncodingDict;
     }
     MAPDLOGGER.error("getValueType: no value for type " + type);
     assert false;
@@ -389,10 +395,8 @@ public class ExtensionFunction {
         return SqlTypeName.CURSOR;
       case TextEncodingNone:
         return SqlTypeName.VARCHAR;
-      case TextEncodingDict8:
-      case TextEncodingDict16:
-      case TextEncodingDict32:
-        return SqlTypeName.VARCHAR; // ?
+      case TextEncodingDict:
+        return SqlTypeName.INTEGER;
       case ColumnListInt8:
       case ColumnListInt16:
       case ColumnListInt32:
@@ -400,6 +404,7 @@ public class ExtensionFunction {
       case ColumnListFloat:
       case ColumnListDouble:
       case ColumnListBool:
+      case ColumnListTextEncodingDict:
         return SqlTypeName.COLUMN_LIST;
     }
     Set<SqlTypeName> allSqlTypeNames = EnumSet.allOf(SqlTypeName.class);

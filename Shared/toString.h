@@ -131,6 +131,15 @@ template <class T>
 inline constexpr bool has_str_v = has_str<T>::value;
 #endif
 
+template <typename T, typename = void>
+struct has_printTo : std::false_type {};
+template <typename T>
+struct has_printTo<T,
+                   decltype(std::declval<T>().printTo(std::declval<std::ostream&>()),
+                            void())> : std::true_type {};
+template <class T>
+inline constexpr bool has_printTo_v = has_printTo<T>::value;
+
 }  // namespace
 
 template <typename T>
@@ -223,6 +232,10 @@ std::string toString(const T& v) {
            std::to_string((converted_v.time_since_epoch().count() / 1000) % 1000000);
   } else if constexpr (std::is_pointer_v<T>) {
     return (v == NULL ? "NULL" : "&" + toString(*v));
+  } else if constexpr (has_printTo_v<T>) {
+    std::ostringstream ss;
+    v.printTo(ss);
+    return ss.str();
   } else {
     return typeName(&v);
   }

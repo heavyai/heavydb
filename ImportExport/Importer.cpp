@@ -1161,7 +1161,15 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
                 int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
                 int8_t* p = buf;
                 for (size_t j = 0; j < len; ++j) {
-                  *(bool*)p = static_cast<bool>(col.data.arr_col[i].data.int_col[j]);
+                  // Explicitly checking the item for null because
+                  // casting null value (-128) to bool results
+                  // incorrect value 1.
+                  if (col.data.arr_col[i].nulls[j]) {
+                    *p = static_cast<int8_t>(
+                        inline_fixed_encoding_null_val(cd->columnType.get_elem_type()));
+                  } else {
+                    *(bool*)p = static_cast<bool>(col.data.arr_col[i].data.int_col[j]);
+                  }
                   p += sizeof(bool);
                 }
                 addArray(ArrayDatum(byteSize, buf, false));

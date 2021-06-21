@@ -4130,6 +4130,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   }
 
   std::vector<Analyzer::ColumnVar*> input_col_exprs;
+  std::optional<int32_t> dict_id;
   size_t input_index = 0;
   for (const auto& ti : table_function_type_infos) {
     if (ti.is_column_list()) {
@@ -4152,11 +4153,22 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
     } else {
       input_index++;
     }
+    if (ti.is_subtype_dict_encoded_string()) {
+      if (dict_id.has_value()) {
+        LOG(WARNING) << "dict_id value is already set to " << *dict_id;
+      } else {
+        dict_id = ti.get_comp_param();
+      }
+    }
   }
   CHECK_EQ(input_col_exprs.size(), rel_table_func->getColInputsSize());
   std::vector<Analyzer::Expr*> table_func_outputs;
   for (size_t i = 0; i < table_function_impl.getOutputsSize(); i++) {
-    const auto ti = table_function_impl.getOutputSQLType(i);
+    auto ti = table_function_impl.getOutputSQLType(i);
+    if (ti.is_dict_encoded_string()) {
+      CHECK(dict_id.has_value());
+      ti.set_comp_param(*dict_id);
+    }
     target_exprs_owned_.push_back(std::make_shared<Analyzer::ColumnVar>(ti, 0, i, -1));
     table_func_outputs.push_back(target_exprs_owned_.back().get());
   }

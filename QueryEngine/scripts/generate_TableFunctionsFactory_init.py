@@ -43,9 +43,9 @@ PInt32, PInt64, PFloat, PDouble, PBool, Bool, ArrayInt8, ArrayInt16,
 ArrayInt32, ArrayInt64, ArrayFloat, ArrayDouble, ArrayBool, GeoPoint,
 GeoLineString, Cursor, GeoPolygon, GeoMultiPolygon, ColumnInt8,
 ColumnInt16, ColumnInt32, ColumnInt64, ColumnFloat, ColumnDouble,
-ColumnBool, TextEncodingNone, TextEncodingDict8, TextEncodingDict16,
-TextEncodingDict32, ColumnListInt8, ColumnListInt16, ColumnListInt32, ColumnListInt64,
-ColumnListFloat, ColumnListDouble, ColumnListBool '''.strip().replace(' ', '').split(',')
+ColumnBool, ColumnTextEncodingDict, TextEncodingNone, TextEncodingDict,
+ColumnListInt8, ColumnListInt16, ColumnListInt32, ColumnListInt64,
+ColumnListFloat, ColumnListDouble, ColumnListBool, ColumnListTextEncodingDict'''.strip().replace(' ', '').replace('\n', '').split(',')
 
 OutputBufferSizeTypes = '''
 kConstant, kUserSpecifiedConstantParameter, kUserSpecifiedRowMultiplier, kTableFunctionSpecifiedParameter
@@ -62,7 +62,8 @@ translate_map = dict(
     int = 'Int32',
     long = 'Int64',
 )
-for t in ['Int8', 'Int16', 'Int32', 'Int64', 'Float', 'Double', 'Bool']:
+for t in ['Int8', 'Int16', 'Int32', 'Int64', 'Float', 'Double', 'Bool', 
+          'TextEncodingDict']:
     translate_map[t.lower()] = t
     if t.startswith('Int'):
         translate_map[t.lower() + '_t'] = t

@@ -17,9 +17,12 @@
 #include "../../QueryEngine/OmniSciTypes.h"
 #include "../../Shared/funcannotations.h"
 
+// clang-format off
 /*
   UDTF: row_copier(Column<double>, RowMultiplier) -> Column<double>
+  UDTF: row_copier_text(Column<TextEncodingDict>, RowMultiplier) -> Column<TextEncodingDict>
 */
+// clang-format on
 EXTENSION_NOINLINE int32_t row_copier(const Column<double>& input_col,
                                       int copy_multiplier,
                                       Column<double>& output_col) {
@@ -30,6 +33,37 @@ EXTENSION_NOINLINE int32_t row_copier(const Column<double>& input_col,
   }
   if (output_col.size() != output_row_count) {
     return -1;
+  }
+
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t stop = static_cast<int32_t>(input_col.size());
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  auto start = 0;
+  auto stop = input_col.size();
+  auto step = 1;
+#endif
+
+  for (auto i = start; i < stop; i += step) {
+    for (int c = 0; c < copy_multiplier; c++) {
+      output_col[i + (c * input_col.size())] = input_col[i];
+    }
+  }
+
+  return output_row_count;
+}
+
+EXTENSION_NOINLINE int32_t row_copier_text(const Column<TextEncodingDict>& input_col,
+                                           int copy_multiplier,
+                                           Column<TextEncodingDict>& output_col) {
+  int32_t output_row_count = copy_multiplier * input_col.size();
+  if (output_row_count > 100) {
+    // Test failure propagation.
+    return -1;
+  }
+  if (output_col.size() != output_row_count) {
+    return -2;
   }
 
 #ifdef __CUDACC__

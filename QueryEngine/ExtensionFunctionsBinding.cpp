@@ -49,6 +49,8 @@ ExtArgumentType get_column_arg_elem_type(const ExtArgumentType ext_arg_column_ty
       return ExtArgumentType::Double;
     case ExtArgumentType::ColumnBool:
       return ExtArgumentType::Bool;
+    case ExtArgumentType::ColumnTextEncodingDict:
+      return ExtArgumentType::TextEncodingDict;
     default:
       UNREACHABLE();
   }
@@ -72,6 +74,8 @@ ExtArgumentType get_column_list_arg_elem_type(
       return ExtArgumentType::Double;
     case ExtArgumentType::ColumnListBool:
       return ExtArgumentType::Bool;
+    case ExtArgumentType::ColumnListTextEncodingDict:
+      return ExtArgumentType::TextEncodingDict;
     default:
       UNREACHABLE();
   }
@@ -350,14 +354,10 @@ static int match_arguments(const SQLTypeInfo& arg_type,
             penalty_score += 1000;
             return 1;
           }
-          return -1;
         case kENCODING_DICT:
-          if (stype == ExtArgumentType::TextEncodingDict32) {
-            penalty_score += 1000;
-            return 1;
-          }
-        default:;
-          // todo: dict(8) and dict(16) encodings
+          return -1;
+        default:
+          UNREACHABLE();
       }
       /* Not implemented types:
          kCHAR
@@ -454,8 +454,16 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
   for (auto atype : func_args) {
     if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
       if (dynamic_cast<const Analyzer::ColumnVar*>(atype.get())) {
-        auto ti = generate_column_type(atype->get_type_info().get_type());
-        type_infos_input.push_back(ti);
+        SQLTypeInfo type_info = atype->get_type_info();
+        if (atype->get_type_info().get_type() == kTEXT) {
+          auto ti = generate_column_type(type_info.get_type(),         // subtype
+                                         type_info.get_compression(),  // compression
+                                         type_info.get_comp_param());  // comp_param
+          type_infos_input.push_back(ti);
+        } else {
+          auto ti = generate_column_type(type_info.get_type());
+          type_infos_input.push_back(ti);
+        }
         continue;
       }
     }

@@ -86,6 +86,7 @@ inline bool is_ext_arg_type_column(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ColumnFloat:
     case ExtArgumentType::ColumnDouble:
     case ExtArgumentType::ColumnBool:
+    case ExtArgumentType::ColumnTextEncodingDict:
       return true;
 
     default:
@@ -102,6 +103,7 @@ inline bool is_ext_arg_type_column_list(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ColumnListFloat:
     case ExtArgumentType::ColumnListDouble:
     case ExtArgumentType::ColumnListBool:
+    case ExtArgumentType::ColumnListTextEncodingDict:
       return true;
 
     default:

@@ -116,6 +116,34 @@ inline llvm::Type* get_fp_type(const int width, llvm::LLVMContext& context) {
   return nullptr;
 }
 
+inline llvm::Type* get_fp_ptr_type(const int width, llvm::LLVMContext& context) {
+  switch (width) {
+    case 64:
+      return llvm::Type::getDoublePtrTy(context);
+    case 32:
+      return llvm::Type::getFloatPtrTy(context);
+  }
+  UNREACHABLE();
+  return nullptr;
+}
+
+inline llvm::Type* get_int_ptr_type(const int width, llvm::LLVMContext& context) {
+  switch (width) {
+    case 64:
+      return llvm::Type::getInt64PtrTy(context);
+    case 32:
+      return llvm::Type::getInt32PtrTy(context);
+    case 16:
+      return llvm::Type::getInt16PtrTy(context);
+    case 8:
+      return llvm::Type::getInt8PtrTy(context);
+    case 1:
+      return llvm::Type::getInt1PtrTy(context);
+  }
+  UNREACHABLE();
+  return nullptr;
+}
+
 template <class T>
 inline llvm::ConstantInt* ll_int(const T v, llvm::LLVMContext& context) {
   return static_cast<llvm::ConstantInt*>(
