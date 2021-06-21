@@ -25,6 +25,7 @@
 #include "FsiJsonUtils.h"
 #include "LazyParquetChunkLoader.h"
 #include "ParquetShared.h"
+#include "Shared/misc.h"
 #include "Utils/DdlUtils.h"
 
 namespace foreign_storage {
