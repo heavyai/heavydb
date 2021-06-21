@@ -292,10 +292,11 @@ void drop_columns(const bool rollback, const std::vector<std::string>&& dropped_
       std::back_inserter(drop_column_phrases),
       [](const auto& dropped_column) -> auto {
         using namespace std::string_literals;
-        return "drop "s + (dropped_column[0] % 2 ? "column " : "") + dropped_column;
+        return dropped_column;
       });
-  std::string drop_column_statement =
-      "alter table t " + boost::algorithm::join(drop_column_phrases, ",") + ";";
+  std::string drop_column_statement = "alter table t drop column " +
+                                      boost::algorithm::join(drop_column_phrases, ",") +
+                                      ";";
   if (g_test_drop_column_rollback) {
     EXPECT_THROW(run_ddl_statement(drop_column_statement), std::runtime_error);
     for (const auto& dropped_column : dropped_columns) {

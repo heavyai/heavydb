@@ -150,6 +150,13 @@ ParserWrapper::ParserWrapper(std::string query_string) {
             boost::regex::extended | boost::regex::icase};
         if (boost::regex_match(query_string, ctas_regex)) {
           is_ctas = true;
+          // why is TEMPORARY being processed in legacy still
+          boost::regex temp_regex{R"(\s+TEMPORARY\s+)",
+                                  boost::regex::extended | boost::regex::icase};
+          if (boost::regex_match(query_string, temp_regex)) {
+            is_calcite_ddl_ = false;
+            is_legacy_ddl_ = true;
+          }
         } else {
           boost::regex create_table_regex{R"(CREATE\s+TABLE.*)",
                                           boost::regex::extended | boost::regex::icase};

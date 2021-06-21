@@ -312,7 +312,7 @@ void DBHandler::initialize(const bool is_new_db) {
     cpu_mode_only_ = false;
 #else
     executor_device_type_ = ExecutorDeviceType::CPU;
-    LOG(ERROR) << "This build isn't CUDA enabled, will run on CPU";
+    LOG(WARNING) << "This build isn't CUDA enabled, will run on CPU";
     cpu_mode_only_ = true;
 #endif
   }

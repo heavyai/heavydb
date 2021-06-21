@@ -17,22 +17,24 @@
 
 
 
-SqlNodeList SimpleIdentifierNodeList() :
+SqlNodeList DropColumnNodeList() :
 {
     SqlIdentifier id;
     final List<SqlNode> list = new ArrayList<SqlNode>();
 }
 {
+    [<COLUMN>]
     id = SimpleIdentifier() {list.add(id);}
     (
-        <COMMA> id = SimpleIdentifier() {
+        <COMMA> [<DROP>][<COLUMN>] id = SimpleIdentifier() {
             list.add(id);
         }
     )*
     { return new SqlNodeList(list, SqlParserPos.ZERO); }
 }
 
-SqlNodeList RawTableElementList() :
+// TableElementList without parens
+SqlNodeList NoParenTableElementList() :
 {
     final Span s;
     final List<SqlNode> list = new ArrayList<SqlNode>();
@@ -399,7 +401,6 @@ void TableElement(List<SqlNode> list) :
             (
                 type = OmniSciDataType()
                 nullable = NullableOptDefaultTrue()
-                [ encoding = OmniSciEncodingOpt() ]
                 (
                     [ <GENERATED> <ALWAYS> ] <AS> <LPAREN>
                     e = Expression(ExprContext.ACCEPT_SUB_QUERY) <RPAREN>
@@ -421,6 +422,7 @@ void TableElement(List<SqlNode> list) :
                             : ColumnStrategy.NOT_NULLABLE;
                     }
                 )
+                [ encoding = OmniSciEncodingOpt() ]
                 {
                     list.add(
                         SqlDdlNodes.column(s.add(id).end(this), id,
@@ -631,8 +633,7 @@ SqlDdl SqlAlterTable(Span s) :
         )
     |
         <DROP>
-        <COLUMN>
-        columnList = SimpleIdentifierNodeList()
+        columnList = DropColumnNodeList()
         {
             sqlAlterTableBuilder.dropColumn(columnList);
         }
@@ -642,7 +643,7 @@ SqlDdl SqlAlterTable(Span s) :
         (
             columnList = TableElementList()
             |
-            columnList = RawTableElementList()
+            columnList = NoParenTableElementList()
         )
         {
             sqlAlterTableBuilder.addColumnList(columnList);

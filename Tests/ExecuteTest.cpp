@@ -172,6 +172,10 @@ inline void run_ddl_statement(const std::string& create_table_stmt) {
   QR::get()->runDDLStatement(create_table_stmt);
 }
 
+inline void validate_ddl_statement(const std::string& create_table_stmt) {
+  QR::get()->validateDDLStatement(create_table_stmt);
+}
+
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
   return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
@@ -546,7 +550,7 @@ void validate_storage_options(
         "CREATE TABLE chelsea_storage(id TEXT ENCODING DICT(32), val INT " + add_column;
     query +=
         type_meta.first.empty() ? ");" : ") WITH (" + type_meta.first + "=" + val + ");";
-    ASSERT_EQ(true, validate_statement_syntax(query));
+    ASSERT_NO_THROW(validate_ddl_statement(query));
     if (type_meta.second) {
       ASSERT_THROW(run_ddl_statement(query), std::runtime_error);
     } else {
