@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.7.0dev ba1bac9
+                5.7.0dev 9331ba9
               </div>
             
           
@@ -727,6 +727,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_show_foreign_servers_command.html">Class ShowForeignServersCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_show_table_details_command.html">Class ShowTableDetailsCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_show_tables_command.html">Class ShowTablesCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_show_user_details_command.html">Class ShowUserDetailsCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_simple_allocator.html">Class SimpleAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_sort_field.html">Class SortField</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_speculative_top_n_blacklist.html">Class SpeculativeTopNBlacklist</a></li>
@@ -974,6 +975,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_queries.html">Class com::mapd::parser::extension::ddl::SqlShowQueries</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_table_details.html">Class com::mapd::parser::extension::ddl::SqlShowTableDetails</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_tables.html">Class com::mapd::parser::extension::ddl::SqlShowTables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_details.html">Class com::mapd::parser::extension::ddl::SqlShowUserDetails</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_sessions.html">Class com::mapd::parser::extension::ddl::SqlShowUserSessions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_user_mapping_test.html">Class com::mapd::parser::extension::ddl::UserMappingTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisci_1_1_omni_sci_geo_type_name_spec.html">Class com::mapd::parser::extension::ddl::omnisci::OmniSciGeoTypeNameSpec</a></li>
@@ -1803,6 +1805,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structlogger_1_1_get_depth.html">Struct logger::GetDepth</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structlogger_1_1_log_shutdown.html">Struct logger::LogShutdown</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structmeasure.html">Struct measure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/structnvtx__helpers_1_1_category_info.html">Struct nvtx_helpers::CategoryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structomnisci_1_1_device_identifier.html">Struct omnisci::DeviceIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structomnisci__aws__sdk_1_1_ssl_config.html">Struct omnisci_aws_sdk::SslConfig</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/structquantile_1_1detail_1_1_centroid.html">Struct quantile::detail::Centroid</a></li>
@@ -7698,6 +7701,8 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler10getQueriesENSt10shared_ptrIKN17Catalog_Namespace11SessionInfoEEE">DBHandler::getQueries (C++ function)</a>
 </li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4NK9DBHandler13getServerRoleEv">DBHandler::getServerRole (C++ function)</a>
+</li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4NK9DBHandler17getTargetMetaInfoERKNSt6vectorINSt10shared_ptrIN8Analyzer11TargetEntryEEEEE">DBHandler::getTargetMetaInfo (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4NK9DBHandler14getTargetNamesERKNSt6vectorI14TargetMetaInfoEE">DBHandler::getTargetNames (C++ function)</a>, <a href="api/class/class_d_b_handler.html#_CPPv4NK9DBHandler14getTargetNamesERKNSt6vectorINSt10shared_ptrIN8Analyzer11TargetEntryEEEEE">[1]</a>
@@ -9046,7 +9051,7 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor20executeTableFunctionEK26TableFunctionExecutionUnitRKNSt6vectorI14InputTableInfoEERK18CompilationOptionsRK16ExecutionOptionsRKN17Catalog_Namespace7CatalogE">Executor::executeTableFunction (C++ function)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4N8Executor13executeUpdateERK19RelAlgExecutionUnitRKNSt6vectorI14InputTableInfoEERK18CompilationOptionsRK16ExecutionOptionsRKN17Catalog_Namespace7CatalogENSt10shared_ptrI17RowSetMemoryOwnerEERKN20UpdateLogForFragment8CallbackEKb">Executor::executeUpdate (C++ function)</a>
+      <li><a href="api/class/class_executor.html#_CPPv4N8Executor13executeUpdateERK19RelAlgExecutionUnitRKNSt6vectorI14InputTableInfoEEPK15TableDescriptorRK18CompilationOptionsRK16ExecutionOptionsRKN17Catalog_Namespace7CatalogENSt10shared_ptrI17RowSetMemoryOwnerEERKN20UpdateLogForFragment8CallbackEKb">Executor::executeUpdate (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor15executeWorkUnitER6size_tKbRKNSt6vectorI14InputTableInfoEERK19RelAlgExecutionUnitRK18CompilationOptionsRK16ExecutionOptionsRKN17Catalog_Namespace7CatalogEP10RenderInfoKbR14ColumnCacheMap">Executor::executeWorkUnit (C++ function)</a>
 </li>
@@ -11058,12 +11063,12 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_cache.html#_CPPv4N15foreign_storage19ForeignStorageCacheE">foreign_storage::ForeignStorageCache (C++ class)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_cache.html#_CPPv4N15foreign_storage19ForeignStorageCache10cacheChunkERK8ChunkKeyP14AbstractBuffer">foreign_storage::ForeignStorageCache::cacheChunk (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_cache.html#_CPPv4N15foreign_storage19ForeignStorageCache16cacheMetadataVecERK19ChunkMetadataVector">foreign_storage::ForeignStorageCache::cacheMetadataVec (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_cache.html#_CPPv4N15foreign_storage19ForeignStorageCache39cacheMetadataWithFragIdGreaterOrEqualToERK19ChunkMetadataVectorKi">foreign_storage::ForeignStorageCache::cacheMetadataWithFragIdGreaterOrEqualTo (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_cache.html#_CPPv4N15foreign_storage19ForeignStorageCache17caching_file_mgr_E">foreign_storage::ForeignStorageCache::caching_file_mgr_ (C++ member)</a>
@@ -12094,6 +12099,8 @@
 </li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_abstract_fragmenter.html#_CPPv4N20Fragmenter_Namespace18AbstractFragmenter22insertDataNoCheckpointER10InsertData">Fragmenter_Namespace::AbstractFragmenter::insertDataNoCheckpoint (C++ function)</a>
 </li>
+      <li><a href="api/class/class_fragmenter___namespace_1_1_abstract_fragmenter.html#_CPPv4N20Fragmenter_Namespace18AbstractFragmenter23resetSizesFromFragmentsEv">Fragmenter_Namespace::AbstractFragmenter::resetSizesFromFragments (C++ function)</a>
+</li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_abstract_fragmenter.html#_CPPv4N20Fragmenter_Namespace18AbstractFragmenter10setNumRowsEK6size_t">Fragmenter_Namespace::AbstractFragmenter::setNumRows (C++ function)</a>
 </li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_abstract_fragmenter.html#_CPPv4N20Fragmenter_Namespace18AbstractFragmenter16updateChunkStatsEPK16ColumnDescriptorRNSt13unordered_mapIi10ChunkStatsEENSt8optionalIN14Data_Namespace11MemoryLevelEEE">Fragmenter_Namespace::AbstractFragmenter::updateChunkStats (C++ function)</a>
@@ -12201,6 +12208,8 @@
       <li><a href="api/class/class_fragmenter___namespace_1_1_fragment_info.html#_CPPv4NK20Fragmenter_Namespace12FragmentInfo19getChunkMetadataMapEv">Fragmenter_Namespace::FragmentInfo::getChunkMetadataMap (C++ function)</a>
 </li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_fragment_info.html#_CPPv4NK20Fragmenter_Namespace12FragmentInfo27getChunkMetadataMapPhysicalEv">Fragmenter_Namespace::FragmentInfo::getChunkMetadataMapPhysical (C++ function)</a>
+</li>
+      <li><a href="api/class/class_fragmenter___namespace_1_1_fragment_info.html#_CPPv4NK20Fragmenter_Namespace12FragmentInfo31getChunkMetadataMapPhysicalCopyEv">Fragmenter_Namespace::FragmentInfo::getChunkMetadataMapPhysicalCopy (C++ function)</a>
 </li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_fragment_info.html#_CPPv4NK20Fragmenter_Namespace12FragmentInfo12getNumTuplesEv">Fragmenter_Namespace::FragmentInfo::getNumTuples (C++ function)</a>
 </li>
@@ -12366,7 +12375,11 @@
 </li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter16physicalTableId_E">Fragmenter_Namespace::InsertOrderFragmenter::physicalTableId_ (C++ member)</a>
 </li>
+      <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter23resetSizesFromFragmentsEv">Fragmenter_Namespace::InsertOrderFragmenter::resetSizesFromFragments (C++ function)</a>
+</li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter11rowIdColId_E">Fragmenter_Namespace::InsertOrderFragmenter::rowIdColId_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter32setLastFragmentVarLenColumnSizesEv">Fragmenter_Namespace::InsertOrderFragmenter::setLastFragmentVarLenColumnSizes (C++ function)</a>
 </li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter10setNumRowsEK6size_t">Fragmenter_Namespace::InsertOrderFragmenter::setNumRows (C++ function)</a>
 </li>
@@ -15294,10 +15307,10 @@
 </li>
       <li><a href="api/class/class_nullable_value.html#_CPPv4NK13NullableValuegtEK1T">NullableValue::operator&gt; (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_nullable_value.html#_CPPv4NK13NullableValuegeEK1T">NullableValue::operator&gt;= (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_nullable_value.html#_CPPv4N13NullableValue5StateE">NullableValue::State (C++ enum)</a>
 </li>
       <li><a href="api/class/class_nullable_value.html#_CPPv4N13NullableValue6state_E">NullableValue::state_ (C++ member)</a>
@@ -15367,6 +15380,12 @@
       <li><a href="api/struct/struct_numeric_value_converter.html#_CPPv4IEN21NumericValueConverterI11SOURCE_TYPE11TARGET_TYPEE13ColumnDataPtrE">NumericValueConverter&lt;SOURCE_TYPE, TARGET_TYPE&gt;::ColumnDataPtr (C++ type)</a>
 </li>
       <li><a href="api/struct/struct_numeric_value_converter.html#_CPPv4IEN21NumericValueConverterI11SOURCE_TYPE11TARGET_TYPEE23ElementsBufferColumnPtrE">NumericValueConverter&lt;SOURCE_TYPE, TARGET_TYPE&gt;::ElementsBufferColumnPtr (C++ type)</a>
+</li>
+      <li><a href="api/struct/structnvtx__helpers_1_1_category_info.html#_CPPv4N12nvtx_helpers12CategoryInfoE">nvtx_helpers::CategoryInfo (C++ class)</a>
+</li>
+      <li><a href="api/struct/structnvtx__helpers_1_1_category_info.html#_CPPv4N12nvtx_helpers12CategoryInfo8categoryE">nvtx_helpers::CategoryInfo::category (C++ member)</a>
+</li>
+      <li><a href="api/struct/structnvtx__helpers_1_1_category_info.html#_CPPv4N12nvtx_helpers12CategoryInfo5colorE">nvtx_helpers::CategoryInfo::color (C++ member)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -16542,7 +16561,7 @@
 </li>
       <li><a href="api/class/class_parser_1_1_create_table_as_select_stmt.html#_CPPv4N6Parser23CreateTableAsSelectStmtE">Parser::CreateTableAsSelectStmt (C++ class)</a>
 </li>
-      <li><a href="api/class/class_parser_1_1_create_table_as_select_stmt.html#_CPPv4N6Parser23CreateTableAsSelectStmt23CreateTableAsSelectStmtEPKNSt6stringEPKNSt6stringEKbKbPNSt4listIP15NameValueAssignEE">Parser::CreateTableAsSelectStmt::CreateTableAsSelectStmt (C++ function)</a>
+      <li><a href="api/class/class_parser_1_1_create_table_as_select_stmt.html#_CPPv4N6Parser23CreateTableAsSelectStmt23CreateTableAsSelectStmtEPKNSt6stringEPKNSt6stringEKbKbPNSt4listIP15NameValueAssignEE">Parser::CreateTableAsSelectStmt::CreateTableAsSelectStmt (C++ function)</a>, <a href="api/class/class_parser_1_1_create_table_as_select_stmt.html#_CPPv4N6Parser23CreateTableAsSelectStmt23CreateTableAsSelectStmtERKN9rapidjson5ValueE">[1]</a>
 </li>
       <li><a href="api/class/class_parser_1_1_create_table_as_select_stmt.html#_CPPv4N6Parser23CreateTableAsSelectStmt7executeERKN17Catalog_Namespace11SessionInfoE">Parser::CreateTableAsSelectStmt::execute (C++ function)</a>
 </li>
@@ -20226,6 +20245,8 @@
 </li>
       <li><a href="api/class/class_render_handler.html#_CPPv4N13RenderHandler18start_render_queryER19TPendingRenderQueryRK10TSessionIdK7int64_tK7int16_tRKNSt6stringE">RenderHandler::start_render_query (C++ function)</a>
 </li>
+      <li><a href="api/class/class_render_handler.html#_CPPv4NK13RenderHandler29validate_renderer_status_jsonERKNSt6stringE">RenderHandler::validate_renderer_status_json (C++ function)</a>
+</li>
       <li><a href="api/class/class_render_handler.html#_CPPv4N13RenderHandlerD0Ev">RenderHandler::~RenderHandler (C++ function)</a>
 </li>
       <li><a href="api/class/class_render_info.html#_CPPv410RenderInfo">RenderInfo (C++ class)</a>
@@ -21800,6 +21821,12 @@
 </li>
       <li><a href="api/class/class_show_tables_command.html#_CPPv4N17ShowTablesCommand17ShowTablesCommandERK14DdlCommandDataNSt10shared_ptrIKN17Catalog_Namespace11SessionInfoEEE">ShowTablesCommand::ShowTablesCommand (C++ function)</a>
 </li>
+      <li><a href="api/class/class_show_user_details_command.html#_CPPv422ShowUserDetailsCommand">ShowUserDetailsCommand (C++ class)</a>
+</li>
+      <li><a href="api/class/class_show_user_details_command.html#_CPPv4N22ShowUserDetailsCommand7executeEv">ShowUserDetailsCommand::execute (C++ function)</a>
+</li>
+      <li><a href="api/class/class_show_user_details_command.html#_CPPv4N22ShowUserDetailsCommand22ShowUserDetailsCommandERK14DdlCommandDataNSt10shared_ptrIKN17Catalog_Namespace11SessionInfoEEE">ShowUserDetailsCommand::ShowUserDetailsCommand (C++ function)</a>
+</li>
       <li><a href="api/class/class_simple_allocator.html#_CPPv415SimpleAllocator">SimpleAllocator (C++ class)</a>
 </li>
       <li><a href="api/class/class_simple_allocator.html#_CPPv4N15SimpleAllocator8allocateEK6size_tK6size_t">SimpleAllocator::allocate (C++ function)</a>
@@ -22142,12 +22169,12 @@
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo15is_date_in_daysEv">SQLTypeInfo::is_date_in_days (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo10is_decimalEv">SQLTypeInfo::is_decimal (C++ function)</a>
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo22is_dict_encoded_stringEv">SQLTypeInfo::is_dict_encoded_string (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo20is_dict_encoded_typeEv">SQLTypeInfo::is_dict_encoded_type (C++ function)</a>
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo15is_fixlen_arrayEv">SQLTypeInfo::is_fixlen_array (C++ function)</a>
@@ -23486,6 +23513,8 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_udf_clang_driver.html#_CPPv414UdfClangDriver">UdfClangDriver (C++ class)</a>
 </li>
+      <li><a href="api/class/class_udf_clang_driver.html#_CPPv4N14UdfClangDriver13clang_versionE">UdfClangDriver::clang_version (C++ member)</a>
+</li>
       <li><a href="api/class/class_udf_clang_driver.html#_CPPv4N14UdfClangDriver11diag_clientE">UdfClangDriver::diag_client (C++ member)</a>
 </li>
       <li><a href="api/class/class_udf_clang_driver.html#_CPPv4N14UdfClangDriver17diag_client_ownerE">UdfClangDriver::diag_client_owner (C++ member)</a>
@@ -23497,6 +23526,8 @@
       <li><a href="api/class/class_udf_clang_driver.html#_CPPv4N14UdfClangDriver5diagsE">UdfClangDriver::diags (C++ member)</a>
 </li>
       <li><a href="api/class/class_udf_clang_driver.html#_CPPv4N14UdfClangDriver14getClangDriverEv">UdfClangDriver::getClangDriver (C++ function)</a>
+</li>
+      <li><a href="api/class/class_udf_clang_driver.html#_CPPv4NK14UdfClangDriver15getClangVersionEv">UdfClangDriver::getClangVersion (C++ function)</a>
 </li>
       <li><a href="api/class/class_udf_clang_driver.html#_CPPv4N14UdfClangDriver10the_driverE">UdfClangDriver::the_driver (C++ member)</a>
 </li>
@@ -23554,12 +23585,12 @@
 </li>
       <li><a href="api/class/class_update_log_for_fragment.html#_CPPv4N20UpdateLogForFragment14fragment_info_E">UpdateLogForFragment::fragment_info_ (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_update_log_for_fragment.html#_CPPv4N20UpdateLogForFragment16FragmentInfoTypeE">UpdateLogForFragment::FragmentInfoType (C++ type)</a>
 </li>
       <li><a href="api/class/class_update_log_for_fragment.html#_CPPv4NK20UpdateLogForFragment13getColumnTypeEK6size_t">UpdateLogForFragment::getColumnType (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_update_log_for_fragment.html#_CPPv4NK20UpdateLogForFragment10getEntryAtEK6size_t">UpdateLogForFragment::getEntryAt (C++ function)</a>
 </li>
       <li><a href="api/class/class_update_log_for_fragment.html#_CPPv4NK20UpdateLogForFragment13getEntryCountEv">UpdateLogForFragment::getEntryCount (C++ function)</a>
@@ -23586,17 +23617,27 @@
 </li>
       <li><a href="api/struct/struct_updel_roll.html#_CPPv49UpdelRoll">UpdelRoll (C++ class)</a>
 </li>
+      <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll13addDirtyChunkENSt10shared_ptrIN8Chunk_NS5ChunkEEEi">UpdelRoll::addDirtyChunk (C++ function)</a>
+</li>
       <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll12cancelUpdateEv">UpdelRoll::cancelUpdate (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll7catalogE">UpdelRoll::catalog (C++ member)</a>
 </li>
-      <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll13chunkMetadataE">UpdelRoll::chunkMetadata (C++ member)</a>
+      <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll31chunk_metadata_map_per_fragmentE">UpdelRoll::chunk_metadata_map_per_fragment (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll26chunk_update_tracker_mutexE">UpdelRoll::chunk_update_tracker_mutex (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll12commitUpdateEv">UpdelRoll::commitUpdate (C++ function)</a>
 </li>
-      <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll13dirtyChunkeysE">UpdelRoll::dirtyChunkeys (C++ member)</a>
+      <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll12dirty_chunksE">UpdelRoll::dirty_chunks (C++ member)</a>
 </li>
-      <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll11dirtyChunksE">UpdelRoll::dirtyChunks (C++ member)</a>
+      <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll16getChunkMetadataERK11MetaDataKey7int32_tRN20Fragmenter_Namespace12FragmentInfoE">UpdelRoll::getChunkMetadata (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_updel_roll.html#_CPPv4NK9UpdelRoll19getChunkMetadataMapERK11MetaDataKey">UpdelRoll::getChunkMetadataMap (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_updel_roll.html#_CPPv4NK9UpdelRoll11getNumTupleERK11MetaDataKey">UpdelRoll::getNumTuple (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll23initializeUnsetMetadataEPK15TableDescriptorRN20Fragmenter_Namespace12FragmentInfoE">UpdelRoll::initializeUnsetMetadata (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll16is_varlen_updateE">UpdelRoll::is_varlen_update (C++ member)</a>
 </li>
@@ -23604,9 +23645,9 @@
 </li>
       <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll11memoryLevelE">UpdelRoll::memoryLevel (C++ member)</a>
 </li>
-      <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll5mutexE">UpdelRoll::mutex (C++ member)</a>
+      <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll10num_tuplesE">UpdelRoll::num_tuples (C++ member)</a>
 </li>
-      <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll9numTuplesE">UpdelRoll::numTuples (C++ member)</a>
+      <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll11setNumTupleERK11MetaDataKey6size_t">UpdelRoll::setNumTuple (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll11stageUpdateEv">UpdelRoll::stageUpdate (C++ function)</a>
 </li>

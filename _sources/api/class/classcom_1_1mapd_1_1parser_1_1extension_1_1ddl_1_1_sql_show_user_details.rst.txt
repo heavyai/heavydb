@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::SqlShowUserDetails
+===========================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::SqlShowUserDetails
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

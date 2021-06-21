@@ -1,0 +1,9 @@
+Class ShowUserDetailsCommand
+============================
+
+.. doxygenclass:: ShowUserDetailsCommand
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev ba1bac9
+                5.7.0dev 9331ba9
               </div>
             
           
@@ -728,6 +728,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_show_foreign_servers_command.html">Class ShowForeignServersCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_table_details_command.html">Class ShowTableDetailsCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_tables_command.html">Class ShowTablesCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_show_user_details_command.html">Class ShowUserDetailsCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_simple_allocator.html">Class SimpleAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sort_field.html">Class SortField</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_speculative_top_n_blacklist.html">Class SpeculativeTopNBlacklist</a></li>
@@ -975,6 +976,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_queries.html">Class com::mapd::parser::extension::ddl::SqlShowQueries</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_table_details.html">Class com::mapd::parser::extension::ddl::SqlShowTableDetails</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_tables.html">Class com::mapd::parser::extension::ddl::SqlShowTables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_details.html">Class com::mapd::parser::extension::ddl::SqlShowUserDetails</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_sessions.html">Class com::mapd::parser::extension::ddl::SqlShowUserSessions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_user_mapping_test.html">Class com::mapd::parser::extension::ddl::UserMappingTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisci_1_1_omni_sci_geo_type_name_spec.html">Class com::mapd::parser::extension::ddl::omnisci::OmniSciGeoTypeNameSpec</a></li>
@@ -1804,6 +1806,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structlogger_1_1_get_depth.html">Struct logger::GetDepth</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structlogger_1_1_log_shutdown.html">Struct logger::LogShutdown</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structmeasure.html">Struct measure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structnvtx__helpers_1_1_category_info.html">Struct nvtx_helpers::CategoryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structomnisci_1_1_device_identifier.html">Struct omnisci::DeviceIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structomnisci__aws__sdk_1_1_ssl_config.html">Struct omnisci_aws_sdk::SslConfig</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquantile_1_1detail_1_1_centroid.html">Struct quantile::detail::Centroid</a></li>
@@ -1971,6 +1974,11 @@
 <span id="_CPPv3N14UdfClangDriver14getClangDriverEv"></span><span id="_CPPv2N14UdfClangDriver14getClangDriverEv"></span><span id="UdfClangDriver::getClangDriver"></span><span class="target" id="class_udf_clang_driver_1af5d5da7f35f550a576af7619c08c2fde"></span>clang::driver::Driver *<code class="sig-name descname">getClangDriver</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14UdfClangDriver14getClangDriverEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4NK14UdfClangDriver15getClangVersionEv">
+<span id="_CPPv3NK14UdfClangDriver15getClangVersionEv"></span><span id="_CPPv2NK14UdfClangDriver15getClangVersionEv"></span><span id="UdfClangDriver::getClangVersionC"></span><span class="target" id="class_udf_clang_driver_1a8b595c8d6a42b4f154e386b1cd644d59"></span>std::tuple&lt;int, int, int&gt; <code class="sig-name descname">getClangVersion</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK14UdfClangDriver15getClangVersionEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Members</p>
@@ -2002,6 +2010,11 @@
 <dl class="member">
 <dt id="_CPPv4N14UdfClangDriver10the_driverE">
 <span id="_CPPv3N14UdfClangDriver10the_driverE"></span><span id="_CPPv2N14UdfClangDriver10the_driverE"></span><span id="UdfClangDriver::the_driver__clang::driver::Driver"></span><span class="target" id="class_udf_clang_driver_1a42f4eea6475e477883281129ade6fba7"></span>clang::driver::Driver <code class="sig-name descname">the_driver</code><a class="headerlink" href="#_CPPv4N14UdfClangDriver10the_driverE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N14UdfClangDriver13clang_versionE">
+<span id="_CPPv3N14UdfClangDriver13clang_versionE"></span><span id="_CPPv2N14UdfClangDriver13clang_versionE"></span><span id="UdfClangDriver::clang_version__std::tuple:i.i.i:"></span><span class="target" id="class_udf_clang_driver_1a057728e4c05d50a862b54d2767bd1478"></span>std::tuple&lt;int, int, int&gt; <code class="sig-name descname">clang_version</code><a class="headerlink" href="#_CPPv4N14UdfClangDriver13clang_versionE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

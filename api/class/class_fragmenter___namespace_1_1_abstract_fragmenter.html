@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev ba1bac9
+                5.7.0dev 9331ba9
               </div>
             
           
@@ -728,6 +728,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_show_foreign_servers_command.html">Class ShowForeignServersCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_table_details_command.html">Class ShowTableDetailsCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_tables_command.html">Class ShowTablesCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_show_user_details_command.html">Class ShowUserDetailsCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_simple_allocator.html">Class SimpleAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sort_field.html">Class SortField</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_speculative_top_n_blacklist.html">Class SpeculativeTopNBlacklist</a></li>
@@ -975,6 +976,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_queries.html">Class com::mapd::parser::extension::ddl::SqlShowQueries</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_table_details.html">Class com::mapd::parser::extension::ddl::SqlShowTableDetails</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_tables.html">Class com::mapd::parser::extension::ddl::SqlShowTables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_details.html">Class com::mapd::parser::extension::ddl::SqlShowUserDetails</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_sessions.html">Class com::mapd::parser::extension::ddl::SqlShowUserSessions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_user_mapping_test.html">Class com::mapd::parser::extension::ddl::UserMappingTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1omnisci_1_1_omni_sci_geo_type_name_spec.html">Class com::mapd::parser::extension::ddl::omnisci::OmniSciGeoTypeNameSpec</a></li>
@@ -1804,6 +1806,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structlogger_1_1_get_depth.html">Struct logger::GetDepth</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structlogger_1_1_log_shutdown.html">Struct logger::LogShutdown</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structmeasure.html">Struct measure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structnvtx__helpers_1_1_category_info.html">Struct nvtx_helpers::CategoryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structomnisci_1_1_device_identifier.html">Struct omnisci::DeviceIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structomnisci__aws__sdk_1_1_ssl_config.html">Struct omnisci_aws_sdk::SslConfig</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structquantile_1_1detail_1_1_centroid.html">Struct quantile::detail::Centroid</a></li>
@@ -2086,6 +2089,12 @@
 </dd>
 </dl>
 </p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N20Fragmenter_Namespace18AbstractFragmenter23resetSizesFromFragmentsEv">
+<span id="_CPPv3N20Fragmenter_Namespace18AbstractFragmenter23resetSizesFromFragmentsEv"></span><span id="_CPPv2N20Fragmenter_Namespace18AbstractFragmenter23resetSizesFromFragmentsEv"></span><span id="Fragmenter_Namespace::AbstractFragmenter::resetSizesFromFragments"></span><span class="target" id="class_fragmenter___namespace_1_1_abstract_fragmenter_1a384a35bdc5cafafa2d5f3aca1443a830"></span><em class="property">virtual</em> void <code class="sig-name descname">resetSizesFromFragments</code><span class="sig-paren">(</span><span class="sig-paren">)</span> = 0<a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace18AbstractFragmenter23resetSizesFromFragmentsEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Resets the fragmenter’s size related metadata using the internal fragment info vector. This is typically done after operations, such as vacuuming, which can change fragment sizes. </p>
 </dd></dl>
 
 </div>
