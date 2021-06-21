@@ -2519,21 +2519,6 @@ INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTestsParquetRecover,
                                           testing::Values(true)),
                          FragmentSizesAppendRefreshTest::getTestName);
 
-INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTestsODBC,
-                         FragmentSizesAppendRefreshTest,
-                         testing::Combine(testing::Values(1, 4, 3200000),
-                                          testing::Values("sqlite", "postgres"),
-                                          testing::Values("single_file.csv"),
-                                          testing::Values(false)),
-                         FragmentSizesAppendRefreshTest::getTestName);
-INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTestsODBCRecover,
-                         FragmentSizesAppendRefreshTest,
-                         testing::Combine(testing::Values(1),
-                                          testing::Values("sqlite", "postgres"),
-                                          testing::Values("single_file.csv"),
-                                          testing::Values(true)),
-                         FragmentSizesAppendRefreshTest::getTestName);
-
 TEST_P(FragmentSizesAppendRefreshTest, AppendFrags) {
   sqlCreateTestTable();
   sqlAndCompareResult("SELECT * FROM "s + table_name_ + " ORDER BY i;", {{i(1)}, {i(2)}});
@@ -2627,16 +2612,6 @@ INSTANTIATE_TEST_SUITE_P(StringDictAppendParamaterizedTestsParquet,
                                           testing::Values(true, false)),
                          StringDictAppendTest::getTestName);
 
-INSTANTIATE_TEST_SUITE_P(
-    StringDictAppendParamaterizedTestsOdbc,
-    StringDictAppendTest,
-    testing::Combine(testing::Values(2, 5, 3200000),
-                     testing::Values("sqlite", "postgres"),
-                     testing::Values("csv_string_dir/single_file.csv"),
-                     testing::Values(false),
-                     testing::Values(true, false)),
-    StringDictAppendTest::getTestName);
-
 // Single fragment size parameterization for recovering from disk
 INSTANTIATE_TEST_SUITE_P(StringDictAppendParamaterizedTestsCsvFromDisk,
                          StringDictAppendTest,
@@ -2655,16 +2630,6 @@ INSTANTIATE_TEST_SUITE_P(StringDictAppendParamaterizedTestsParquetFromDisk,
                                           testing::Values(true),
                                           testing::Values(true, false)),
                          StringDictAppendTest::getTestName);
-
-INSTANTIATE_TEST_SUITE_P(
-    StringDictAppendParamaterizedTestsOdbcFromDisk,
-    StringDictAppendTest,
-    testing::Combine(testing::Values(2),
-                     testing::Values("sqlite", "postgres"),
-                     testing::Values("csv_string_dir/single_file.csv"),
-                     testing::Values(true),
-                     testing::Values(true, false)),
-    StringDictAppendTest::getTestName);
 
 TEST_P(StringDictAppendTest, AppendStringDictFilter) {
   sqlCreateTestTable(table_name_);
@@ -2729,17 +2694,16 @@ class DataWrapperAppendRefreshTest
   }
 };
 
-INSTANTIATE_TEST_SUITE_P(
-    AppendParamaterizedTests,
-    DataWrapperAppendRefreshTest,
-    ::testing::Combine(::testing::Values("csv", "parquet", "sqlite", "postgres"),
-                       ::testing::Values(true, false)),
-    [](const auto& info) {
-      std::stringstream ss;
-      ss << "DataWrapper_" << std::get<0>(info.param)
-         << (std::get<1>(info.param) ? "_RecoverCache" : "");
-      return ss.str();
-    });
+INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTests,
+                         DataWrapperAppendRefreshTest,
+                         ::testing::Combine(::testing::Values("csv", "parquet"),
+                                            ::testing::Values(true, false)),
+                         [](const auto& info) {
+                           std::stringstream ss;
+                           ss << "DataWrapper_" << std::get<0>(info.param)
+                              << (std::get<1>(info.param) ? "_RecoverCache" : "");
+                           return ss.str();
+                         });
 
 TEST_P(DataWrapperAppendRefreshTest, AppendNothing) {
   file_name_ = "single_file"s + wrapper_ext(wrapper_type_);
@@ -4702,6 +4666,7 @@ class AlterForeignTableTest : public ScheduledRefreshTest {
   void TearDown() override {
     sql("DROP FOREIGN TABLE IF EXISTS renamed_table;");
     ScheduledRefreshTest::TearDown();
+    sql("DROP SERVER IF EXISTS test_server;");
   }
 
   inline static const Catalog_Namespace::Catalog* cat_;
