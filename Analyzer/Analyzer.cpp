@@ -2592,8 +2592,20 @@ std::string InValues::toString() const {
   std::string str{"(IN "};
   str += arg->toString();
   str += "(";
+  int cnt = 0;
+  bool shorted_value_list_str = false;
   for (auto e : value_list) {
     str += e->toString();
+    cnt++;
+    if (cnt > 4) {
+      shorted_value_list_str = true;
+      break;
+    }
+  }
+  if (shorted_value_list_str) {
+    str += "... | ";
+    str += "Total # values: ";
+    str += std::to_string(value_list.size());
   }
   str += ") ";
   return str;
@@ -2615,8 +2627,20 @@ std::string InIntegerSet::toString() const {
   std::string str{"(IN_INTEGER_SET "};
   str += arg->toString();
   str += "( ";
+  int cnt = 0;
+  bool shorted_value_list_str = false;
   for (const auto e : value_list) {
     str += std::to_string(e) + " ";
+    cnt++;
+    if (cnt > 4) {
+      shorted_value_list_str = true;
+      break;
+    }
+  }
+  if (shorted_value_list_str) {
+    str += "... | ";
+    str += "Total # values: ";
+    str += std::to_string(value_list.size());
   }
   str += ") ";
   return str;
