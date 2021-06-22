@@ -804,6 +804,7 @@ FileBuffer* FileMgr::putBuffer(const ChunkKey& key,
                  << show_chunk(key);
     }
   }
+  CHECK(srcBuffer->isDirty()) << "putBuffer expects a dirty buffer";
   if (srcBuffer->isUpdated()) {
     // chunk size is not changed when fixed rows are updated or are marked as deleted.
     // but when rows are vacuumed or varlen rows are updated (new rows are appended),
@@ -826,7 +827,10 @@ FileBuffer* FileMgr::putBuffer(const ChunkKey& key,
                   srcBuffer->getType(),
                   srcBuffer->getDeviceId());
   } else {
-    UNREACHABLE() << "putBuffer() expects a buffer marked is_updated or is_appended";
+    // If dirty buffer comes in unmarked, it must be empty.
+    // Encoder sync is still required to flush the metadata.
+    CHECK(numBytes == 0)
+        << "Dirty buffer with size > 0 must be marked as isAppended() or isUpdated()";
   }
   // chunk->clearDirtyBits(); // Hack: because write and append will set dirty bits
   //@todo commenting out line above will make sure this metadata is set
