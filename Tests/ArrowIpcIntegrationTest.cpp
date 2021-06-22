@@ -252,7 +252,7 @@ void test_scalar_values(const std::shared_ptr<arrow::RecordBatch>& read_batch) {
       make_pair(FloatType::type_id, FloatType::type_name()),
       make_pair(DoubleType::type_id, DoubleType::type_name())};
 
-  for (int i = 0; i < expected_types.size(); i++) {
+  for (size_t i = 0; i < expected_types.size(); i++) {
     auto [type, type_name] = expected_types[i];
 
     const auto arr = read_batch->column(i);
