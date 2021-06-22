@@ -3017,6 +3017,12 @@ TEST(Select, Case) {
       dt);
     c(R"(SELECT COUNT(*) FROM test WHERE (CASE WHEN x = 7 THEN str ELSE 'b' END) = shared_dict;)",
       dt);
+    c(R"(SELECT COUNT(*) FROM test WHERE (CASE WHEN str = 'foo' THEN 'a' WHEN str = 'bar' THEN 'b' ELSE str END) = 'b';)",
+      dt);
+    c(R"(SELECT str, count(*) FROM test WHERE (CASE WHEN str = 'foo' THEN 'a' WHEN str = 'bar' THEN 'b' ELSE str END) = 'b' GROUP BY str;)",
+      dt);
+    c(R"(SELECT COUNT(*) FROM test WHERE (CASE WHEN fixed_str = 'foo' THEN 'a' WHEN fixed_str is NULL THEN 'b' ELSE str END) = 'z';)",
+      dt);
     {
       const auto watchdog_state = g_enable_watchdog;
       g_enable_watchdog = true;

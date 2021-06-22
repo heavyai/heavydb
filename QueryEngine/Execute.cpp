@@ -33,12 +33,12 @@
 #include "JsonAccessors.h"
 #include "OutputBufferInitialization.h"
 #include "QueryEngine/QueryDispatchQueue.h"
+#include "QueryEngine/Visitors/TransientStringLiteralsVisitor.h"
 #include "QueryRewrite.h"
 #include "QueryTemplateGenerator.h"
 #include "ResultSetReductionJIT.h"
 #include "RuntimeFunctions.h"
 #include "SpeculativeTopN.h"
-
 #include "TableFunctions/TableFunctionCompilationContext.h"
 #include "TableFunctions/TableFunctionExecutionContext.h"
 
@@ -1732,75 +1732,37 @@ ResultSetPtr Executor::executeExplain(const QueryCompilationDescriptor& query_co
   return std::make_shared<ResultSet>(query_comp_desc.getIR());
 }
 
-namespace {
-
-void add_transient_string_literals_for_expression(
-    const Analyzer::Expr* expr,
-    Executor* executor,
-    const std::shared_ptr<RowSetMemoryOwner>& row_set_mem_owner) {
-  if (!expr) {
-    return;
-  }
-
-  const auto array_expr = dynamic_cast<const Analyzer::ArrayExpr*>(expr);
-  if (array_expr) {
-    for (size_t i = 0; i < array_expr->getElementCount(); i++) {
-      add_transient_string_literals_for_expression(
-          array_expr->getElement(i), executor, row_set_mem_owner);
-    }
-    return;
-  }
-
-  const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr);
-  const auto& expr_ti = expr->get_type_info();
-  if (cast_expr && cast_expr->get_optype() == kCAST && expr_ti.is_string()) {
-    CHECK_EQ(kENCODING_DICT, expr_ti.get_compression());
-    auto sdp = executor->getStringDictionaryProxy(
-        expr_ti.get_comp_param(), row_set_mem_owner, true);
-    CHECK(sdp);
-    const auto str_lit_expr =
-        dynamic_cast<const Analyzer::Constant*>(cast_expr->get_operand());
-    if (str_lit_expr && str_lit_expr->get_constval().stringval) {
-      sdp->getOrAddTransient(*str_lit_expr->get_constval().stringval);
-    }
-    return;
-  }
-  const auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
-  if (!case_expr) {
-    return;
-  }
-  Analyzer::DomainSet domain_set;
-  case_expr->get_domain(domain_set);
-  if (domain_set.empty()) {
-    return;
-  }
-  if (expr_ti.is_string()) {
-    CHECK_EQ(kENCODING_DICT, expr_ti.get_compression());
-    auto sdp = executor->getStringDictionaryProxy(
-        expr_ti.get_comp_param(), row_set_mem_owner, true);
-    CHECK(sdp);
-    for (const auto domain_expr : domain_set) {
-      const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(domain_expr);
-      const auto str_lit_expr =
-          cast_expr && cast_expr->get_optype() == kCAST
-              ? dynamic_cast<const Analyzer::Constant*>(cast_expr->get_operand())
-              : dynamic_cast<const Analyzer::Constant*>(domain_expr);
-      if (str_lit_expr && str_lit_expr->get_constval().stringval) {
-        sdp->getOrAddTransient(*str_lit_expr->get_constval().stringval);
-      }
-    }
-  }
-}
-
-}  // namespace
-
 void Executor::addTransientStringLiterals(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::shared_ptr<RowSetMemoryOwner>& row_set_mem_owner) {
+  TransientDictIdVisitor dict_id_visitor;
+
+  auto visit_expr =
+      [this, &dict_id_visitor, &row_set_mem_owner](const Analyzer::Expr* expr) {
+        if (!expr) {
+          return;
+        }
+        const auto dict_id = dict_id_visitor.visit(expr);
+        if (dict_id >= 0) {
+          auto sdp = getStringDictionaryProxy(dict_id, row_set_mem_owner, true);
+          CHECK(sdp);
+          TransientStringLiteralsVisitor visitor(sdp);
+          visitor.visit(expr);
+        }
+      };
+
   for (const auto& group_expr : ra_exe_unit.groupby_exprs) {
-    add_transient_string_literals_for_expression(
-        group_expr.get(), this, row_set_mem_owner);
+    visit_expr(group_expr.get());
   }
+
+  for (const auto& group_expr : ra_exe_unit.quals) {
+    visit_expr(group_expr.get());
+  }
+
+  for (const auto& group_expr : ra_exe_unit.simple_quals) {
+    visit_expr(group_expr.get());
+  }
+
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     const auto& target_type = target_expr->get_type_info();
     if (target_type.is_string() && target_type.get_compression() != kENCODING_DICT) {
@@ -1810,11 +1772,10 @@ void Executor::addTransientStringLiterals(
     if (agg_expr) {
       if (agg_expr->get_aggtype() == kSINGLE_VALUE ||
           agg_expr->get_aggtype() == kSAMPLE) {
-        add_transient_string_literals_for_expression(
-            agg_expr->get_arg(), this, row_set_mem_owner);
+        visit_expr(agg_expr->get_arg());
       }
     } else {
-      add_transient_string_literals_for_expression(target_expr, this, row_set_mem_owner);
+      visit_expr(target_expr);
     }
   }
 }
