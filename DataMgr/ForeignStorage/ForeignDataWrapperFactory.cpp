@@ -66,9 +66,11 @@ const ForeignDataWrapper& ForeignDataWrapperFactory::createForValidation(
         validation_data_wrappers_[data_wrapper_type_key] =
             std::make_unique<CsvDataWrapper>();
       }
+#ifdef ENABLE_IMPORT_PARQUET
     } else if (data_wrapper_type == DataWrapperType::PARQUET) {
       validation_data_wrappers_[data_wrapper_type_key] =
           std::make_unique<ParquetDataWrapper>();
+#endif
     } else {
       UNREACHABLE();
     }

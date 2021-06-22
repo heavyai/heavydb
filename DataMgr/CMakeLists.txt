@@ -36,7 +36,6 @@ set(datamgr_source_files
     BufferMgr/Buffer.cpp
     PersistentStorageMgr/MutableCachePersistentStorageMgr.cpp
     PersistentStorageMgr/PersistentStorageMgr.cpp
-    ForeignStorage/LazyParquetChunkLoader.cpp
     ForeignStorage/ForeignTableRefresh.cpp
     ForeignStorage/AbstractFileStorageDataWrapper.cpp
     ForeignStorage/ForeignDataWrapperFactory.cpp
@@ -54,6 +53,7 @@ endif()
 if(ENABLE_IMPORT_PARQUET)
   list(APPEND datamgr_source_files ForeignStorage/ParquetDataWrapper.cpp)
   list(APPEND datamgr_source_files ForeignStorage/ParquetShared.cpp)
+  list(APPEND datamgr_source_files ForeignStorage/LazyParquetChunkLoader.cpp)
 endif()
 
 # On Linux, Arrow internally links symbols for its dependency libraries (such as the C++ AWS SDK)
