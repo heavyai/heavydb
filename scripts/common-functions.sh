@@ -11,6 +11,11 @@ elif [ "$TSAN" = "false" ]; then
   TBB_TSAN=""
 fi
 
+ARROW_USE_CUDA="-DARROW_CUDA=ON"
+if [ "$NOCUDA" = "true" ]; then
+  ARROW_USE_CUDA="-DARROW_CUDA=OFF"
+fi
+
 function download() {
     wget --continue "$1"
 }
@@ -96,8 +101,8 @@ function install_arrow() {
     -DARROW_PARQUET=ON \
     -DARROW_FILESYSTEM=ON \
     -DARROW_S3=ON \
-    -DARROW_CUDA=ON \
     -DTHRIFT_HOME=${THRIFT_HOME:-$PREFIX} \
+    ${ARROW_USE_CUDA} \
     ${ARROW_TSAN} \
     ..
   makej

@@ -6,6 +6,7 @@ set -x
 # Parse inputs
 TSAN=false
 COMPRESS=false
+NOCUDA=false
 
 while (( $# )); do
   case "$1" in
@@ -14,6 +15,9 @@ while (( $# )); do
       ;;
     --tsan)
       TSAN=true
+      ;;
+    --nocuda)
+      NOCUDA=true
       ;;
     *)
       break
