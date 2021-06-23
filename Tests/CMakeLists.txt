@@ -445,3 +445,5 @@ if(ENABLE_DBE)
   add_dependencies(dbe_all_tests dbe4py-test)
   add_dependencies(all_tests dbe4py-test)
 endif()
+
+add_subdirectory(ExtensionFunctions/h3lib/)
