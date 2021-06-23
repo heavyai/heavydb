@@ -18,71 +18,55 @@
  * @file FileMgrTest.cpp
  * @brief Unit tests for FileMgr class.
  */
-
-#include <fstream>
-
 #include <gtest/gtest.h>
 #include <boost/filesystem.hpp>
 
-#include "DBHandlerTestHelpers.h"
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
+#include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
+#include "DataMgrTestHelpers.h"
 #include "Shared/File.h"
 #include "TestHelpers.h"
 
-#include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
-
-class FileMgrTest : public DBHandlerTestFixture {
+class FileMgrTest : public testing::Test {
  protected:
-  std::string table_name;
-  Data_Namespace::DataMgr* dm;
-  ChunkKey chunk_key;
-  std::pair<int, int> file_mgr_key;
-  File_Namespace::GlobalFileMgr* gfm;
-  Catalog_Namespace::Catalog* cat;
+  inline static const std::string TEST_DATA_DIR{"./test_dir"};
+  inline static const ChunkKey TEST_CHUNK_KEY{1, 1, 1, 0};
 
   void SetUp() override {
-    DBHandlerTestFixture::SetUp();
-    cat = &getCatalog();
-    dm = &cat->getDataMgr();
-    gfm = dm->getGlobalFileMgr();
-
-    table_name = "test_table";
-    sql("DROP TABLE IF EXISTS " + table_name + ";");
-    sql("CREATE TABLE " + table_name + " (col1 INT)");
-    sql("INSERT INTO " + table_name + " VALUES(1)");
-    const TableDescriptor* td = cat->getMetadataForTable(table_name);
-    const auto col_descs =
-        cat->getAllColumnMetadataForTable(td->tableId, false, false, false);
-    const ColumnDescriptor* cd = *(col_descs.begin());
-    int db_id = cat->getCurrentDB().dbId;
-    int tb_id = td->tableId;
-    chunk_key = {db_id, tb_id, cd->columnId, 0};
-    file_mgr_key = std::make_pair(db_id, tb_id);
+    initializeGlobalFileMgr();
+    initializeChunk(1);
   }
 
-  void TearDown() override {
-    sql("DROP TABLE " + table_name);
-    DBHandlerTestFixture::TearDown();
+  void TearDown() override { boost::filesystem::remove_all(TEST_DATA_DIR); }
+
+  void initializeGlobalFileMgr() {
+    boost::filesystem::remove_all(TEST_DATA_DIR);
+    global_file_mgr_ = std::make_unique<File_Namespace::GlobalFileMgr>(
+        0, std::make_shared<ForeignStorageInterface>(), TEST_DATA_DIR, 0);
   }
 
-  ChunkKey setUpCappedRollbackTable(const int32_t max_rollback_epochs) {
-    Catalog_Namespace::Catalog* cat = &getCatalog();
-    const std::string capped_table_name("capped_table");
-    sql("DROP TABLE IF EXISTS " + capped_table_name + ";");
-    std::stringstream capped_ddl;
-    capped_ddl << "CREATE TABLE " << capped_table_name << " "
-               << "(col1 INT) WITH (max_rollback_epochs=" << max_rollback_epochs << ")";
-    sql(capped_ddl.str());
-    sql("INSERT INTO " + capped_table_name + " VALUES(1)");
-    const TableDescriptor* td = cat->getMetadataForTable(capped_table_name);
-    const auto col_descs =
-        cat->getAllColumnMetadataForTable(td->tableId, false, false, false);
-    const ColumnDescriptor* cd = *(col_descs.begin());
-    const int db_id = cat->getCurrentDB().dbId;
-    const int tb_id = td->tableId;
-    const ChunkKey capped_chunk_key = {db_id, tb_id, cd->columnId, 0};
-    return capped_chunk_key;
+  File_Namespace::FileMgr* getFileMgr() {
+    auto file_mgr = global_file_mgr_->getFileMgr(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
+                                                 TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX]);
+    return dynamic_cast<File_Namespace::FileMgr*>(file_mgr);
+  }
+
+  void initializeChunk(int32_t value) {
+    auto file_mgr = getFileMgr();
+    auto buffer = file_mgr->createBuffer(TEST_CHUNK_KEY);
+    buffer->initEncoder(SQLTypeInfo{kINT});
+    std::vector<int32_t> data{value};
+    writeData(buffer, data, 0);
+    file_mgr->checkpoint();
+  }
+
+  void setMaxRollbackEpochs(const int32_t max_rollback_epochs) {
+    File_Namespace::FileMgrParams file_mgr_params;
+    file_mgr_params.max_rollback_epochs = max_rollback_epochs;
+    global_file_mgr_->setFileMgrParams(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
+                                       TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX],
+                                       file_mgr_params);
   }
 
   void compareBuffers(AbstractBuffer* left_buffer,
@@ -92,7 +76,7 @@ class FileMgrTest : public DBHandlerTestFixture {
     std::vector<int8_t> right_array(num_bytes);
     left_buffer->read(left_array.data(), num_bytes);
     right_buffer->read(right_array.data(), num_bytes);
-    ASSERT_EQ(std::memcmp(left_array.data(), right_array.data(), num_bytes), 0);
+    ASSERT_EQ(left_array, right_array);
     ASSERT_EQ(left_buffer->hasEncoder(), right_buffer->hasEncoder());
   }
 
@@ -142,10 +126,7 @@ class FileMgrTest : public DBHandlerTestFixture {
   }
 
   void appendData(AbstractBuffer* data_buffer, std::vector<int32_t>& append_data) {
-    CHECK(data_buffer->hasEncoder());
-    SQLTypeInfo sql_type_info = getMetadataForBuffer(data_buffer)->sqlType;
-    int8_t* append_ptr = getDataPtr(append_data);
-    data_buffer->getEncoder()->appendData(append_ptr, append_data.size(), sql_type_info);
+    writeData(data_buffer, append_data, -1);
   }
 
   void writeData(AbstractBuffer* data_buffer,
@@ -158,66 +139,59 @@ class FileMgrTest : public DBHandlerTestFixture {
     data_buffer->getEncoder()->appendData(
         write_ptr, write_data.size(), sql_type_info, false /*replicating*/, offset);
   }
+
+  std::unique_ptr<File_Namespace::GlobalFileMgr> global_file_mgr_;
 };
 
 TEST_F(FileMgrTest, putBuffer_update) {
-  AbstractBuffer* source_buffer =
-      dm->getChunkBuffer(chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL);
-  source_buffer->setUpdated();
-  auto file_mgr =
-      File_Namespace::FileMgr(0, gfm, file_mgr_key, -1, 0, -1, gfm->getDefaultPageSize());
-  AbstractBuffer* file_buffer = file_mgr.putBuffer(chunk_key, source_buffer, 4);
-  compareBuffersAndMetadata(source_buffer, file_buffer);
-  ASSERT_FALSE(source_buffer->isAppended());
-  ASSERT_FALSE(source_buffer->isUpdated());
-  ASSERT_FALSE(source_buffer->isDirty());
+  TestHelpers::TestBuffer source_buffer{std::vector<int32_t>{1}};
+  source_buffer.setUpdated();
+  auto file_mgr = getFileMgr();
+  AbstractBuffer* file_buffer = file_mgr->putBuffer(TEST_CHUNK_KEY, &source_buffer, 4);
+  compareBuffersAndMetadata(&source_buffer, file_buffer);
+  ASSERT_FALSE(source_buffer.isAppended());
+  ASSERT_FALSE(source_buffer.isUpdated());
+  ASSERT_FALSE(source_buffer.isDirty());
 }
 
 TEST_F(FileMgrTest, putBuffer_subwrite) {
-  AbstractBuffer* source_buffer =
-      dm->getChunkBuffer(chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL);
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
   int8_t temp_array[8] = {1, 2, 3, 4, 5, 6, 7, 8};
-  source_buffer->write(temp_array, 8);
-  auto file_mgr =
-      File_Namespace::FileMgr(0, gfm, file_mgr_key, -1, 0, -1, gfm->getDefaultPageSize());
-  AbstractBuffer* file_buffer = file_mgr.putBuffer(chunk_key, source_buffer, 4);
-  compareBuffers(source_buffer, file_buffer, 4);
+  source_buffer.write(temp_array, 8);
+  auto file_mgr = getFileMgr();
+  AbstractBuffer* file_buffer = file_mgr->putBuffer(TEST_CHUNK_KEY, &source_buffer, 4);
+  compareBuffers(&source_buffer, file_buffer, 4);
 }
 
 TEST_F(FileMgrTest, putBuffer_exists) {
-  AbstractBuffer* source_buffer =
-      dm->getChunkBuffer(chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL);
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
   int8_t temp_array[4] = {1, 2, 3, 4};
-  source_buffer->write(temp_array, 4);
-  auto file_mgr =
-      File_Namespace::FileMgr(0, gfm, file_mgr_key, -1, 0, -1, gfm->getDefaultPageSize());
-  file_mgr.putBuffer(chunk_key, source_buffer, 4);
-  file_mgr.checkpoint();
-  source_buffer->write(temp_array, 4);
-  AbstractBuffer* file_buffer = file_mgr.putBuffer(chunk_key, source_buffer, 4);
-  compareBuffersAndMetadata(source_buffer, file_buffer);
+  source_buffer.write(temp_array, 4);
+  auto file_mgr = getFileMgr();
+  file_mgr->putBuffer(TEST_CHUNK_KEY, &source_buffer, 4);
+  file_mgr->checkpoint();
+  source_buffer.write(temp_array, 4);
+  AbstractBuffer* file_buffer = file_mgr->putBuffer(TEST_CHUNK_KEY, &source_buffer, 4);
+  compareBuffersAndMetadata(&source_buffer, file_buffer);
 }
 
 TEST_F(FileMgrTest, putBuffer_append) {
-  AbstractBuffer* source_buffer =
-      dm->getChunkBuffer(chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL);
+  TestHelpers::TestBuffer source_buffer{std::vector<int32_t>{1}};
   int8_t temp_array[4] = {1, 2, 3, 4};
-  source_buffer->append(temp_array, 4);
-  auto file_mgr =
-      File_Namespace::FileMgr(0, gfm, file_mgr_key, -1, 0, -1, gfm->getDefaultPageSize());
-  AbstractBuffer* file_buffer = file_mgr.putBuffer(chunk_key, source_buffer, 8);
-  compareBuffersAndMetadata(source_buffer, file_buffer);
+  source_buffer.append(temp_array, 4);
+  auto file_mgr = getFileMgr();
+  AbstractBuffer* file_buffer = file_mgr->putBuffer(TEST_CHUNK_KEY, &source_buffer, 8);
+  compareBuffersAndMetadata(&source_buffer, file_buffer);
 }
 
 TEST_F(FileMgrTest, put_checkpoint_get) {
-  AbstractBuffer* source_buffer =
-      dm->getChunkBuffer(chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL);
+  TestHelpers::TestBuffer source_buffer{std::vector<int32_t>{1}};
   std::vector<int32_t> data_v1 = {1, 2, 3, 5, 7};
-  appendData(source_buffer, data_v1);
-  File_Namespace::FileMgr* file_mgr = dynamic_cast<File_Namespace::FileMgr*>(
-      dm->getGlobalFileMgr()->getFileMgr(file_mgr_key.first, file_mgr_key.second));
+  appendData(&source_buffer, data_v1);
+  auto file_mgr = getFileMgr();
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 1);
-  AbstractBuffer* file_buffer_put = file_mgr->putBuffer(chunk_key, source_buffer, 24);
+  AbstractBuffer* file_buffer_put =
+      file_mgr->putBuffer(TEST_CHUNK_KEY, &source_buffer, 24);
   ASSERT_TRUE(file_buffer_put->isDirty());
   ASSERT_FALSE(file_buffer_put->isUpdated());
   ASSERT_TRUE(file_buffer_put->isAppended());
@@ -225,34 +199,32 @@ TEST_F(FileMgrTest, put_checkpoint_get) {
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 1);
   file_mgr->checkpoint();
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 2);
-  AbstractBuffer* file_buffer_get = file_mgr->getBuffer(chunk_key, 24);
+  AbstractBuffer* file_buffer_get = file_mgr->getBuffer(TEST_CHUNK_KEY, 24);
   ASSERT_EQ(file_buffer_put, file_buffer_get);
   CHECK(!(file_buffer_get->isDirty()));
   CHECK(!(file_buffer_get->isUpdated()));
   CHECK(!(file_buffer_get->isAppended()));
   ASSERT_EQ(file_buffer_get->size(), static_cast<size_t>(24));
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 2);
-  compareBuffersAndMetadata(source_buffer, file_buffer_get);
+  compareBuffersAndMetadata(&source_buffer, file_buffer_get);
 }
 
 TEST_F(FileMgrTest, put_checkpoint_get_double_write) {
-  AbstractBuffer* source_buffer =
-      dm->getChunkBuffer(chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL);
+  TestHelpers::TestBuffer source_buffer{std::vector<int32_t>{1}};
   std::vector<int32_t> data_v1 = {1, 2, 3, 5, 7};
   std::vector<int32_t> data_v2 = {11, 13, 17, 19};
-  appendData(source_buffer, data_v1);
-  File_Namespace::FileMgr* file_mgr = dynamic_cast<File_Namespace::FileMgr*>(
-      dm->getGlobalFileMgr()->getFileMgr(file_mgr_key.first, file_mgr_key.second));
+  appendData(&source_buffer, data_v1);
+  auto file_mgr = getFileMgr();
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 1);
-  file_mgr->putBuffer(chunk_key, source_buffer, 24);
+  file_mgr->putBuffer(TEST_CHUNK_KEY, &source_buffer, 24);
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 1);
   file_mgr->checkpoint();
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 2);
-  AbstractBuffer* file_buffer = file_mgr->getBuffer(chunk_key, 24);
+  AbstractBuffer* file_buffer = file_mgr->getBuffer(TEST_CHUNK_KEY, 24);
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 2);
   ASSERT_FALSE(file_buffer->isDirty());
   ASSERT_EQ(file_buffer->size(), static_cast<size_t>(24));
-  compareBuffersAndMetadata(source_buffer, file_buffer);
+  compareBuffersAndMetadata(&source_buffer, file_buffer);
   appendData(file_buffer, data_v2);
   ASSERT_TRUE(file_buffer->isDirty());
   ASSERT_EQ(file_buffer->size(), static_cast<size_t>(40));
@@ -265,65 +237,65 @@ TEST_F(FileMgrTest, put_checkpoint_get_double_write) {
   CHECK(!(file_buffer->isDirty()));
   ASSERT_EQ(file_buffer->size(), static_cast<size_t>(56));
   ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 3);
-  appendData(source_buffer, data_v2);
-  appendData(source_buffer, data_v2);
-  compareBuffersAndMetadata(source_buffer, file_buffer);
+  appendData(&source_buffer, data_v2);
+  appendData(&source_buffer, data_v2);
+  compareBuffersAndMetadata(&source_buffer, file_buffer);
 }
 
 TEST_F(FileMgrTest, buffer_append_and_recovery) {
-  AbstractBuffer* source_buffer =
-      dm->getChunkBuffer(chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL);
-  ASSERT_EQ(getMetadataForBuffer(source_buffer)->numElements, static_cast<size_t>(1));
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> initial_value{1};
+  appendData(&source_buffer, initial_value);
+  ASSERT_EQ(getMetadataForBuffer(&source_buffer)->numElements, static_cast<size_t>(1));
+
   std::vector<int32_t> data_v1 = {1, 2, 3, 5, 7};
   std::vector<int32_t> data_v2 = {11, 13, 17, 19};
-
-  appendData(source_buffer, data_v1);
+  appendData(&source_buffer, data_v1);
   {
-    File_Namespace::FileMgr* file_mgr = dynamic_cast<File_Namespace::FileMgr*>(
-        dm->getGlobalFileMgr()->getFileMgr(file_mgr_key.first, file_mgr_key.second));
+    auto file_mgr = getFileMgr();
     ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 1);
-    AbstractBuffer* file_buffer = file_mgr->putBuffer(chunk_key, source_buffer, 24);
+    AbstractBuffer* file_buffer = file_mgr->putBuffer(TEST_CHUNK_KEY, &source_buffer, 24);
     file_mgr->checkpoint();
     ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 2);
-    ASSERT_EQ(getMetadataForBuffer(source_buffer)->numElements, static_cast<size_t>(6));
+    ASSERT_EQ(getMetadataForBuffer(&source_buffer)->numElements, static_cast<size_t>(6));
     ASSERT_EQ(getMetadataForBuffer(file_buffer)->numElements, static_cast<size_t>(6));
     SCOPED_TRACE("Buffer Append and Recovery - Compare #1");
-    compareBuffersAndMetadata(source_buffer, file_buffer);
+    compareBuffersAndMetadata(&source_buffer, file_buffer);
 
     // Now write data we will not checkpoint
     appendData(file_buffer, data_v1);
     ASSERT_EQ(file_buffer->size(), static_cast<size_t>(44));
     // Now close filemgr to test recovery
-    cat->removeFragmenterForTable(file_mgr_key.second);
-    dm->getGlobalFileMgr()->closeFileMgr(file_mgr_key.first, file_mgr_key.second);
+    global_file_mgr_->closeFileMgr(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
+                                   TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX]);
   }
 
   {
-    File_Namespace::FileMgr* file_mgr = dynamic_cast<File_Namespace::FileMgr*>(
-        dm->getGlobalFileMgr()->getFileMgr(file_mgr_key.first, file_mgr_key.second));
+    auto file_mgr = getFileMgr();
     ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 2);
     ChunkMetadataVector chunkMetadataVector;
-    file_mgr->getChunkMetadataVecForKeyPrefix(chunkMetadataVector, chunk_key);
+    file_mgr->getChunkMetadataVecForKeyPrefix(chunkMetadataVector, TEST_CHUNK_KEY);
     ASSERT_EQ(chunkMetadataVector.size(), static_cast<size_t>(1));
-    ASSERT_EQ(std::memcmp(chunkMetadataVector[0].first.data(), chunk_key.data(), 16), 0);
-    ASSERT_EQ(chunkMetadataVector[0].first, chunk_key);
+    ASSERT_EQ(std::memcmp(chunkMetadataVector[0].first.data(), TEST_CHUNK_KEY.data(), 16),
+              0);
+    ASSERT_EQ(chunkMetadataVector[0].first, TEST_CHUNK_KEY);
     std::shared_ptr<ChunkMetadata> chunk_metadata = chunkMetadataVector[0].second;
     ASSERT_EQ(chunk_metadata->numBytes, static_cast<size_t>(24));
     ASSERT_EQ(chunk_metadata->numElements, static_cast<size_t>(6));
     AbstractBuffer* file_buffer =
-        file_mgr->getBuffer(chunk_key, chunk_metadata->numBytes);
+        file_mgr->getBuffer(TEST_CHUNK_KEY, chunk_metadata->numBytes);
     {
       SCOPED_TRACE("Buffer Append and Recovery - Compare #2");
-      compareBuffersAndMetadata(source_buffer, file_buffer);
+      compareBuffersAndMetadata(&source_buffer, file_buffer);
     }
-    appendData(source_buffer, data_v2);
+    appendData(&source_buffer, data_v2);
     appendData(file_buffer, data_v2);
 
     file_mgr->checkpoint();
     ASSERT_EQ(file_mgr->lastCheckpointedEpoch(), 3);
     {
       SCOPED_TRACE("Buffer Append and Recovery - Compare #3");
-      compareBuffersAndMetadata(source_buffer, file_buffer);
+      compareBuffersAndMetadata(&source_buffer, file_buffer);
     }
   }
 }
@@ -338,21 +310,26 @@ TEST_F(FileMgrTest, buffer_update_and_recovery) {
             // ensure updates and rollbacks show a change in col[0]
   std::vector<int32_t> data_v2 = {13, 17, 19, 23};
   {
-    EXPECT_EQ(dm->getTableEpoch(file_mgr_key.first, file_mgr_key.second), std::size_t(1));
-    AbstractBuffer* cpu_buffer =
-        dm->getChunkBuffer(chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL);
-    AbstractBuffer* file_buffer =
-        dm->getChunkBuffer(chunk_key, Data_Namespace::MemoryLevel::DISK_LEVEL);
-    ASSERT_FALSE(cpu_buffer->isDirty());
-    ASSERT_FALSE(cpu_buffer->isUpdated());
-    ASSERT_FALSE(cpu_buffer->isAppended());
+    EXPECT_EQ(global_file_mgr_->getTableEpoch(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
+                                              TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX]),
+              std::size_t(1));
+    TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+    std::vector<int32_t> initial_value{1};
+    appendData(&source_buffer, initial_value);
+    source_buffer.clearDirtyBits();
+
+    auto file_mgr = getFileMgr();
+    AbstractBuffer* file_buffer = file_mgr->getBuffer(TEST_CHUNK_KEY);
+    ASSERT_FALSE(source_buffer.isDirty());
+    ASSERT_FALSE(source_buffer.isUpdated());
+    ASSERT_FALSE(source_buffer.isAppended());
     ASSERT_FALSE(file_buffer->isDirty());
     ASSERT_FALSE(file_buffer->isUpdated());
     ASSERT_FALSE(file_buffer->isAppended());
     ASSERT_EQ(file_buffer->size(), static_cast<size_t>(4));
     {
       SCOPED_TRACE("Buffer Update and Recovery - Compare #1");
-      compareBuffersAndMetadata(file_buffer, cpu_buffer);
+      compareBuffersAndMetadata(file_buffer, &source_buffer);
     }
     writeData(file_buffer, data_v1, 0);
     ASSERT_TRUE(file_buffer->isDirty());
@@ -376,38 +353,37 @@ TEST_F(FileMgrTest, buffer_update_and_recovery) {
       ASSERT_EQ(file_chunk_metadata->chunkStats.max.intval, 11);
       ASSERT_EQ(file_chunk_metadata->chunkStats.has_nulls, false);
     }
-    dm->checkpoint(file_mgr_key.first, file_mgr_key.second);
-    EXPECT_EQ(dm->getTableEpoch(file_mgr_key.first, file_mgr_key.second), std::size_t(2));
+    file_mgr->checkpoint();
+    EXPECT_EQ(global_file_mgr_->getTableEpoch(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
+                                              TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX]),
+              std::size_t(2));
     ASSERT_FALSE(file_buffer->isDirty());
     ASSERT_FALSE(file_buffer->isUpdated());
     ASSERT_FALSE(file_buffer->isAppended());
-    cpu_buffer->unPin();  // Neccessary as we just have a raw_ptr, so there is no way to
-                          // auto un-pin the pin that getBuffer sets, normally this is
-                          // handled by the Chunk class wrapper
-    dm->clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL);
-    cpu_buffer = dm->getChunkBuffer(
-        chunk_key,
-        Data_Namespace::MemoryLevel::CPU_LEVEL,
-        0,
+
+    source_buffer.reset();
+    file_mgr->fetchBuffer(
+        TEST_CHUNK_KEY,
+        &source_buffer,
         20);  // Dragons here: if we didn't unpin andy flush the data, the first value
               // will be 1, and not 2, as we only fetch the portion of data we don't have
               // from FileMgr (there's no DataMgr versioning currently, so for example,
               // for updates we just flush the in-memory buffers to get a clean start)
-    ASSERT_FALSE(cpu_buffer->isDirty());
-    ASSERT_FALSE(cpu_buffer->isUpdated());
-    ASSERT_FALSE(cpu_buffer->isAppended());
+    ASSERT_FALSE(source_buffer.isDirty());
+    ASSERT_FALSE(source_buffer.isUpdated());
+    ASSERT_FALSE(source_buffer.isAppended());
     ASSERT_EQ(file_buffer->size(), static_cast<size_t>(20));
     {
-      std::vector<int32_t> cpu_buffer_data(cpu_buffer->size() / sizeof(int32_t));
-      cpu_buffer->read(reinterpret_cast<int8_t*>(cpu_buffer_data.data()),
-                       cpu_buffer->size());
-      ASSERT_EQ(cpu_buffer_data[0], 2);
-      ASSERT_EQ(cpu_buffer_data[1], 3);
-      ASSERT_EQ(cpu_buffer_data[2], 5);
-      ASSERT_EQ(cpu_buffer_data[3], 7);
-      ASSERT_EQ(cpu_buffer_data[4], 11);
+      std::vector<int32_t> source_buffer_data(source_buffer.size() / sizeof(int32_t));
+      source_buffer.read(reinterpret_cast<int8_t*>(source_buffer_data.data()),
+                         source_buffer.size());
+      ASSERT_EQ(source_buffer_data[0], 2);
+      ASSERT_EQ(source_buffer_data[1], 3);
+      ASSERT_EQ(source_buffer_data[2], 5);
+      ASSERT_EQ(source_buffer_data[3], 7);
+      ASSERT_EQ(source_buffer_data[4], 11);
       std::shared_ptr<ChunkMetadata> cpu_chunk_metadata =
-          getMetadataForBuffer(cpu_buffer);
+          getMetadataForBuffer(&source_buffer);
       ASSERT_EQ(cpu_chunk_metadata->numElements, static_cast<size_t>(5));
       ASSERT_EQ(cpu_chunk_metadata->numBytes, static_cast<size_t>(20));
       ASSERT_EQ(cpu_chunk_metadata->chunkStats.min.intval, 2);
@@ -416,11 +392,16 @@ TEST_F(FileMgrTest, buffer_update_and_recovery) {
     }
     {
       SCOPED_TRACE("Buffer Update and Recovery - Compare #2");
-      compareBuffersAndMetadata(file_buffer, cpu_buffer);
+      compareBuffersAndMetadata(file_buffer, &source_buffer);
     }
     // Now roll back to epoch 1
-    cat->setTableEpoch(file_mgr_key.first, file_mgr_key.second, 1);
-    file_buffer = dm->getChunkBuffer(chunk_key, Data_Namespace::MemoryLevel::DISK_LEVEL);
+    File_Namespace::FileMgrParams file_mgr_params;
+    file_mgr_params.epoch = 1;
+    global_file_mgr_->setFileMgrParams(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
+                                       TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX],
+                                       file_mgr_params);
+    file_mgr = getFileMgr();
+    file_buffer = file_mgr->getBuffer(TEST_CHUNK_KEY);
     ASSERT_FALSE(file_buffer->isDirty());
     ASSERT_FALSE(file_buffer->isUpdated());
     ASSERT_FALSE(file_buffer->isAppended());
@@ -446,21 +427,23 @@ TEST_F(FileMgrTest, capped_metadata) {
   const int num_data_writes = rollback_ceiling * 2;
   for (int max_rollback_epochs = 0; max_rollback_epochs != rollback_ceiling;
        ++max_rollback_epochs) {
-    const ChunkKey capped_chunk_key = setUpCappedRollbackTable(max_rollback_epochs);
+    initializeGlobalFileMgr();
+    setMaxRollbackEpochs(max_rollback_epochs);
+    initializeChunk(1);
+    const auto& capped_chunk_key = TEST_CHUNK_KEY;
     // Have one element already written to key -- epoch should be 2
-    ASSERT_EQ(dm->getTableEpoch(capped_chunk_key[0], capped_chunk_key[1]),
+    ASSERT_EQ(global_file_mgr_->getTableEpoch(capped_chunk_key[0], capped_chunk_key[1]),
               static_cast<size_t>(1));
     File_Namespace::FileMgr* file_mgr = dynamic_cast<File_Namespace::FileMgr*>(
-        dm->getGlobalFileMgr()->getFileMgr(capped_chunk_key[0], capped_chunk_key[1]));
+        global_file_mgr_->getFileMgr(capped_chunk_key[0], capped_chunk_key[1]));
     // buffer inside loop
     for (int data_write = 1; data_write <= num_data_writes; ++data_write) {
       std::vector<int32_t> data;
       data.emplace_back(data_write);
-      AbstractBuffer* file_buffer =
-          dm->getChunkBuffer(capped_chunk_key, Data_Namespace::MemoryLevel::DISK_LEVEL);
+      AbstractBuffer* file_buffer = global_file_mgr_->getBuffer(capped_chunk_key);
       appendData(file_buffer, data);
-      dm->checkpoint(capped_chunk_key[0], capped_chunk_key[1]);
-      ASSERT_EQ(dm->getTableEpoch(capped_chunk_key[0], capped_chunk_key[1]),
+      global_file_mgr_->checkpoint(capped_chunk_key[0], capped_chunk_key[1]);
+      ASSERT_EQ(global_file_mgr_->getTableEpoch(capped_chunk_key[0], capped_chunk_key[1]),
                 static_cast<size_t>(data_write + 1));
       const size_t num_metadata_pages_expected =
           std::min(data_write + 1, max_rollback_epochs + 1);
@@ -472,41 +455,28 @@ TEST_F(FileMgrTest, capped_metadata) {
 
 class DataCompactionTest : public FileMgrTest {
  protected:
-  void SetUp() override {
-    DBHandlerTestFixture::SetUp();
-    sql("drop table if exists test_table;");
-  }
+  void SetUp() override { initializeGlobalFileMgr(); }
 
   void TearDown() override {
-    sql("drop table test_table;");
     File_Namespace::FileMgr::setNumPagesPerDataFile(
         File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_DATA_FILE);
     File_Namespace::FileMgr::setNumPagesPerMetadataFile(
         File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_METADATA_FILE);
-    DBHandlerTestFixture::TearDown();
+    FileMgrTest::TearDown();
   }
 
-  File_Namespace::FileMgr* getFileMgr() {
-    auto& data_mgr = getCatalog().getDataMgr();
-    auto td = getCatalog().getMetadataForTable("test_table", false);
-    return dynamic_cast<File_Namespace::FileMgr*>(data_mgr.getGlobalFileMgr()->getFileMgr(
-        getCatalog().getDatabaseId(), td->tableId));
-  }
-
-  ChunkKey getChunkKey(const std::string& column_name) {
-    auto td = getCatalog().getMetadataForTable("test_table", false);
-    auto cd = getCatalog().getMetadataForColumn(td->tableId, column_name);
-    return {getCatalog().getDatabaseId(), td->tableId, cd->columnId, 0};
+  ChunkKey getChunkKey(int32_t column_id) {
+    auto chunk_key = TEST_CHUNK_KEY;
+    chunk_key[CHUNK_KEY_COLUMN_IDX] = column_id;
+    return chunk_key;
   }
 
   void assertStorageStats(uint64_t metadata_file_count,
                           std::optional<uint64_t> free_metadata_page_count,
                           uint64_t data_file_count,
                           std::optional<uint64_t> free_data_page_count) {
-    auto& catalog = getCatalog();
-    auto global_file_mgr = catalog.getDataMgr().getGlobalFileMgr();
-    auto td = catalog.getMetadataForTable("test_table", false);
-    auto stats = global_file_mgr->getStorageStats(catalog.getDatabaseId(), td->tableId);
+    auto stats = global_file_mgr_->getStorageStats(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
+                                                   TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX]);
     EXPECT_EQ(metadata_file_count, stats.metadata_file_count);
     ASSERT_EQ(free_metadata_page_count.has_value(),
               stats.total_free_metadata_page_count.has_value());
@@ -532,9 +502,8 @@ class DataCompactionTest : public FileMgrTest {
     EXPECT_EQ(value, metadata->chunkStats.max.intval);
   }
 
-  void assertBufferValueAndMetadata(int32_t expected_value,
-                                    const std::string& column_name) {
-    auto chunk_key = getChunkKey(column_name);
+  void assertBufferValueAndMetadata(int32_t expected_value, int32_t column_id) {
+    auto chunk_key = getChunkKey(column_id);
     auto file_mgr = getFileMgr();
     auto buffer = file_mgr->getBuffer(chunk_key, sizeof(int32_t));
     int32_t value;
@@ -543,12 +512,10 @@ class DataCompactionTest : public FileMgrTest {
     assertChunkMetadata(buffer, expected_value);
   }
 
-  AbstractBuffer* createBuffer(const std::string& column_name) {
-    auto chunk_key = getChunkKey(column_name);
+  AbstractBuffer* createBuffer(int32_t column_id) {
+    auto chunk_key = getChunkKey(column_id);
     auto buffer = getFileMgr()->createBuffer(chunk_key, DEFAULT_PAGE_SIZE, 0);
-    auto cd = getCatalog().getMetadataForColumn(chunk_key[CHUNK_KEY_TABLE_IDX],
-                                                chunk_key[CHUNK_KEY_COLUMN_IDX]);
-    buffer->initEncoder(cd->columnType);
+    buffer->initEncoder(SQLTypeInfo{kINT});
     return buffer;
   }
 
@@ -564,29 +531,18 @@ class DataCompactionTest : public FileMgrTest {
     }
   }
 
-  void setMaxRollbackEpochs(int32_t max_rollback_epochs) {
-    auto td = getCatalog().getMetadataForTable("test_table", false);
-    auto& data_mgr = getCatalog().getDataMgr();
-    File_Namespace::FileMgrParams params;
-    params.max_rollback_epochs = 0;
-    data_mgr.getGlobalFileMgr()->setFileMgrParams(
-        getCatalog().getDatabaseId(), td->tableId, params);
-  }
-
   void compactDataFiles() {
-    auto td = getCatalog().getMetadataForTable("test_table", false);
-    auto global_file_mgr = getCatalog().getDataMgr().getGlobalFileMgr();
-    global_file_mgr->compactDataFiles(getCatalog().getDatabaseId(), td->tableId);
+    global_file_mgr_->compactDataFiles(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
+                                       TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX]);
   }
 
   void deleteFileMgr() {
-    auto td = getCatalog().getMetadataForTable("test_table", false);
-    auto global_file_mgr = getCatalog().getDataMgr().getGlobalFileMgr();
-    global_file_mgr->closeFileMgr(getCatalog().getDatabaseId(), td->tableId);
+    global_file_mgr_->closeFileMgr(TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX],
+                                   TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX]);
   }
 
-  void deleteBuffer(const std::string& column_name) {
-    auto chunk_key = getChunkKey(column_name);
+  void deleteBuffer(int32_t column_id) {
+    auto chunk_key = getChunkKey(column_id);
     auto file_mgr = getFileMgr();
     file_mgr->deleteBuffer(chunk_key);
     file_mgr->checkpoint();
@@ -599,11 +555,10 @@ TEST_F(DataCompactionTest, DataFileCompaction) {
   // write creates a new data file.
   File_Namespace::FileMgr::setNumPagesPerDataFile(1);
 
-  sql("create table test_table (i int);");
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
 
-  auto buffer = createBuffer("i");
+  auto buffer = createBuffer(1);
   writeValue(buffer, 1);
   // One data file and one metadata file. Data file has no free pages,
   // since the only page available has been used. Metadata file has
@@ -619,7 +574,7 @@ TEST_F(DataCompactionTest, DataFileCompaction) {
   assertStorageStats(1, 4093, 3, 0);
 
   // Verify buffer data and metadata are set as expected
-  assertBufferValueAndMetadata(3, "i");
+  assertBufferValueAndMetadata(3, 1);
 
   // Setting max rollback epochs to 0 should free up
   // oldest 2 pages
@@ -627,7 +582,7 @@ TEST_F(DataCompactionTest, DataFileCompaction) {
   assertStorageStats(1, 4095, 3, 2);
 
   // Verify buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(3, "i");
+  assertBufferValueAndMetadata(3, 1);
 
   // Data compaction should result in removal of the
   // 2 files with free pages
@@ -635,7 +590,7 @@ TEST_F(DataCompactionTest, DataFileCompaction) {
   assertStorageStats(1, 4095, 1, 0);
 
   // Verify buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(3, "i");
+  assertBufferValueAndMetadata(3, 1);
 }
 
 TEST_F(DataCompactionTest, MetadataFileCompaction) {
@@ -644,11 +599,10 @@ TEST_F(DataCompactionTest, MetadataFileCompaction) {
   // creates a new metadata file.
   File_Namespace::FileMgr::setNumPagesPerMetadataFile(1);
 
-  sql("create table test_table (i int);");
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
 
-  auto buffer = createBuffer("i");
+  auto buffer = createBuffer(1);
   writeValue(buffer, 1);
   // One data file and one metadata file. Metadata file has no free pages,
   // since the only page available has been used. Data file has
@@ -664,7 +618,7 @@ TEST_F(DataCompactionTest, MetadataFileCompaction) {
   assertStorageStats(3, 0, 1, 253);
 
   // Verify buffer data and metadata are set as expected
-  assertBufferValueAndMetadata(3, "i");
+  assertBufferValueAndMetadata(3, 1);
 
   // Setting max rollback epochs to 0 should free up
   // oldest 2 pages
@@ -672,7 +626,7 @@ TEST_F(DataCompactionTest, MetadataFileCompaction) {
   assertStorageStats(3, 2, 1, 255);
 
   // Verify buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(3, "i");
+  assertBufferValueAndMetadata(3, 1);
 
   // Data compaction should result in removal of the
   // 2 files with free pages
@@ -680,7 +634,7 @@ TEST_F(DataCompactionTest, MetadataFileCompaction) {
   assertStorageStats(1, 0, 1, 255);
 
   // Verify buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(3, "i");
+  assertBufferValueAndMetadata(3, 1);
 }
 
 TEST_F(DataCompactionTest, DataAndMetadataFileCompaction) {
@@ -689,11 +643,10 @@ TEST_F(DataCompactionTest, DataAndMetadataFileCompaction) {
   File_Namespace::FileMgr::setNumPagesPerDataFile(1);
   File_Namespace::FileMgr::setNumPagesPerMetadataFile(1);
 
-  sql("create table test_table (i int);");
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
 
-  auto buffer = createBuffer("i");
+  auto buffer = createBuffer(1);
   writeValue(buffer, 1);
   // One data file and one metadata file. Both files have no free pages,
   // since the only page available has been used.
@@ -708,7 +661,7 @@ TEST_F(DataCompactionTest, DataAndMetadataFileCompaction) {
   assertStorageStats(3, 0, 3, 0);
 
   // Verify buffer data and metadata are set as expected
-  assertBufferValueAndMetadata(3, "i");
+  assertBufferValueAndMetadata(3, 1);
 
   // Setting max rollback epochs to 0 should free up
   // oldest 2 pages for both files
@@ -716,7 +669,7 @@ TEST_F(DataCompactionTest, DataAndMetadataFileCompaction) {
   assertStorageStats(3, 2, 3, 2);
 
   // Verify buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(3, "i");
+  assertBufferValueAndMetadata(3, 1);
 
   // Data compaction should result in removal of the
   // 4 files with free pages
@@ -724,18 +677,17 @@ TEST_F(DataCompactionTest, DataAndMetadataFileCompaction) {
   assertStorageStats(1, 0, 1, 0);
 
   // Verify buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(3, "i");
+  assertBufferValueAndMetadata(3, 1);
 }
 
 TEST_F(DataCompactionTest, MultipleChunksPerFile) {
   File_Namespace::FileMgr::setNumPagesPerDataFile(4);
 
-  sql("create table test_table (i int, i2 int);");
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
 
-  auto buffer_1 = createBuffer("i");
-  auto buffer_2 = createBuffer("i2");
+  auto buffer_1 = createBuffer(1);
+  auto buffer_2 = createBuffer(2);
 
   writeValue(buffer_1, 1);
   // One data file and one metadata file. Data file has 3 free pages.
@@ -756,8 +708,8 @@ TEST_F(DataCompactionTest, MultipleChunksPerFile) {
   assertStorageStats(1, 4091, 2, 3);
 
   // Verify buffer data and metadata are set as expected
-  assertBufferValueAndMetadata(1, "i");
-  assertBufferValueAndMetadata(4, "i2");
+  assertBufferValueAndMetadata(1, 1);
+  assertBufferValueAndMetadata(4, 2);
 
   // Setting max rollback epochs to 0 should free up
   // oldest 3 pages for column "i2"
@@ -766,8 +718,8 @@ TEST_F(DataCompactionTest, MultipleChunksPerFile) {
   assertStorageStats(1, 4094, 2, 6);
 
   // Verify buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(1, "i");
-  assertBufferValueAndMetadata(4, "i2");
+  assertBufferValueAndMetadata(1, 1);
+  assertBufferValueAndMetadata(4, 2);
 
   // Data compaction should result in movement of a page from the
   // last data page file to the first data page file and deletion
@@ -776,19 +728,18 @@ TEST_F(DataCompactionTest, MultipleChunksPerFile) {
   assertStorageStats(1, 4094, 1, 2);
 
   // Verify buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(1, "i");
-  assertBufferValueAndMetadata(4, "i2");
+  assertBufferValueAndMetadata(1, 1);
+  assertBufferValueAndMetadata(4, 2);
 }
 
 TEST_F(DataCompactionTest, SourceFilePagesCopiedOverMultipleDestinationFiles) {
   File_Namespace::FileMgr::setNumPagesPerDataFile(4);
 
-  sql("create table test_table (i int, i2 int);");
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
 
-  auto buffer_1 = createBuffer("i");
-  auto buffer_2 = createBuffer("i2");
+  auto buffer_1 = createBuffer(1);
+  auto buffer_2 = createBuffer(2);
 
   // First file has 2 pages for each buffer
   writeMultipleValues(buffer_1, 1, 2);
@@ -811,15 +762,15 @@ TEST_F(DataCompactionTest, SourceFilePagesCopiedOverMultipleDestinationFiles) {
   assertStorageStats(1, 4080, 4, 0);
 
   // Verify buffer data and metadata are set as expected
-  assertBufferValueAndMetadata(9, "i");
-  assertBufferValueAndMetadata(7, "i2");
+  assertBufferValueAndMetadata(9, 1);
+  assertBufferValueAndMetadata(7, 2);
 
   // Free the 7 pages used by buffer "i2" across the 4 files
-  deleteBuffer("i2");
+  deleteBuffer(2);
   assertStorageStats(1, 4087, 4, 7);
 
   // Verify first buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(9, "i");
+  assertBufferValueAndMetadata(9, 1);
 
   // Files 1, 2, and 3 each have 2 free pages (out of 4 total pages per file).
   // File 4 has 1 free page. Used pages in file 1 should be copied over to
@@ -828,20 +779,19 @@ TEST_F(DataCompactionTest, SourceFilePagesCopiedOverMultipleDestinationFiles) {
   assertStorageStats(1, 4087, 3, 3);
 
   // Verify first buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(9, "i");
+  assertBufferValueAndMetadata(9, 1);
 }
 
 TEST_F(DataCompactionTest, SingleDataAndMetadataPages) {
-  sql("create table test_table (i int);");
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
 
-  auto buffer = createBuffer("i");
+  auto buffer = createBuffer(1);
   writeMultipleValues(buffer, 1, 3);
   assertStorageStats(1, 4093, 1, 253);
 
   // Verify buffer data and metadata are set as expected
-  assertBufferValueAndMetadata(3, "i");
+  assertBufferValueAndMetadata(3, 1);
 
   // Setting max rollback epochs to 0 should free up
   // oldest 2 pages
@@ -849,14 +799,14 @@ TEST_F(DataCompactionTest, SingleDataAndMetadataPages) {
   assertStorageStats(1, 4095, 1, 255);
 
   // Verify buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(3, "i");
+  assertBufferValueAndMetadata(3, 1);
 
   // Data compaction should result in no changes to files
   compactDataFiles();
   assertStorageStats(1, 4095, 1, 255);
 
   // Verify buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(3, "i");
+  assertBufferValueAndMetadata(3, 1);
 }
 
 TEST_F(DataCompactionTest, RecoveryFromCopyPageStatus) {
@@ -865,16 +815,15 @@ TEST_F(DataCompactionTest, RecoveryFromCopyPageStatus) {
   // write creates a new data file.
   File_Namespace::FileMgr::setNumPagesPerDataFile(1);
 
-  sql("create table test_table (i int);");
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
 
-  auto buffer = createBuffer("i");
+  auto buffer = createBuffer(1);
   writeMultipleValues(buffer, 1, 3);
   assertStorageStats(1, 4093, 3, 0);
 
   // Verify buffer data and metadata are set as expected
-  assertBufferValueAndMetadata(3, "i");
+  assertBufferValueAndMetadata(3, 1);
 
   // Setting max rollback epochs to 0 should free up
   // oldest 2 pages
@@ -882,7 +831,7 @@ TEST_F(DataCompactionTest, RecoveryFromCopyPageStatus) {
   assertStorageStats(1, 4095, 3, 2);
 
   // Verify buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(3, "i");
+  assertBufferValueAndMetadata(3, 1);
 
   // Creating a "pending_data_compaction_0" status file and re-initializing
   // file mgr should result in (resumption of) data compaction and remove the
@@ -897,18 +846,17 @@ TEST_F(DataCompactionTest, RecoveryFromCopyPageStatus) {
   assertStorageStats(1, 4095, 1, 0);
 
   // Verify buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(3, "i");
+  assertBufferValueAndMetadata(3, 1);
 }
 
 TEST_F(DataCompactionTest, RecoveryFromUpdatePageVisibiltyStatus) {
   File_Namespace::FileMgr::setNumPagesPerDataFile(4);
 
-  sql("create table test_table (i int, i2 int);");
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
 
-  auto buffer_1 = createBuffer("i");
-  auto buffer_2 = createBuffer("i2");
+  auto buffer_1 = createBuffer(1);
+  auto buffer_2 = createBuffer(2);
 
   writeMultipleValues(buffer_1, 1, 2);
   assertStorageStats(1, 4094, 1, 2);
@@ -917,8 +865,8 @@ TEST_F(DataCompactionTest, RecoveryFromUpdatePageVisibiltyStatus) {
   assertStorageStats(1, 4091, 2, 3);
 
   // Verify buffer data and metadata are set as expected
-  assertBufferValueAndMetadata(2, "i");
-  assertBufferValueAndMetadata(3, "i2");
+  assertBufferValueAndMetadata(2, 1);
+  assertBufferValueAndMetadata(3, 2);
 
   // Setting max rollback epochs to 0 should free up oldest
   // page for chunk "i1" and oldest 2 pages for chunk "i2"
@@ -926,8 +874,8 @@ TEST_F(DataCompactionTest, RecoveryFromUpdatePageVisibiltyStatus) {
   assertStorageStats(1, 4094, 2, 6);
 
   // Verify buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(2, "i");
-  assertBufferValueAndMetadata(3, "i2");
+  assertBufferValueAndMetadata(2, 1);
+  assertBufferValueAndMetadata(3, 2);
 
   // Creating a "pending_data_compaction_1" status file and re-initializing
   // file mgr should result in (resumption of) data compaction,
@@ -964,19 +912,18 @@ TEST_F(DataCompactionTest, RecoveryFromUpdatePageVisibiltyStatus) {
   assertStorageStats(1, 4094, 1, 2);
 
   // Verify buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(2, "i");
-  assertBufferValueAndMetadata(3, "i2");
+  assertBufferValueAndMetadata(2, 1);
+  assertBufferValueAndMetadata(3, 2);
 }
 
 TEST_F(DataCompactionTest, RecoveryFromDeleteEmptyFileStatus) {
   File_Namespace::FileMgr::setNumPagesPerDataFile(4);
 
-  sql("create table test_table (i int, i2 int);");
   // No files and free pages at the beginning
   assertStorageStats(0, {}, 0, {});
 
-  auto buffer_1 = createBuffer("i");
-  auto buffer_2 = createBuffer("i2");
+  auto buffer_1 = createBuffer(1);
+  auto buffer_2 = createBuffer(2);
 
   writeValue(buffer_1, 1);
   // One data file and one metadata file. Data file has 3 free pages.
@@ -991,15 +938,15 @@ TEST_F(DataCompactionTest, RecoveryFromDeleteEmptyFileStatus) {
   assertStorageStats(1, 4091, 2, 3);
 
   // Verify buffer data and metadata are set as expected
-  assertBufferValueAndMetadata(1, "i");
-  assertBufferValueAndMetadata(4, "i2");
+  assertBufferValueAndMetadata(1, 1);
+  assertBufferValueAndMetadata(4, 2);
 
   // Delete chunks for "i2"
-  deleteBuffer("i2");
+  deleteBuffer(2);
   assertStorageStats(1, 4095, 2, 7);
 
   // Verify first buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(1, "i");
+  assertBufferValueAndMetadata(1, 1);
 
   // Creating a "pending_data_compaction_2" status file and re-initializing
   // file mgr should result in (resumption of) data compaction and deletion
@@ -1014,66 +961,38 @@ TEST_F(DataCompactionTest, RecoveryFromDeleteEmptyFileStatus) {
   assertStorageStats(1, 4095, 1, 3);
 
   // Verify first buffer data and metadata are still set as expected
-  assertBufferValueAndMetadata(1, "i");
+  assertBufferValueAndMetadata(1, 1);
 }
 
 class MaxRollbackEpochTest : public FileMgrTest {
  protected:
-  void SetUp() override {
-    DBHandlerTestFixture::SetUp();
-    sql("drop table if exists test_table;");
-    sql("create table test_table (i int);");
-  }
-
-  void TearDown() override {
-    sql("drop table test_table;");
-    DBHandlerTestFixture::TearDown();
-  }
-
-  File_Namespace::FileMgr* getFileMgr() {
-    auto& data_mgr = getCatalog().getDataMgr();
-    auto td = getCatalog().getMetadataForTable("test_table");
-    return dynamic_cast<File_Namespace::FileMgr*>(data_mgr.getGlobalFileMgr()->getFileMgr(
-        getCatalog().getDatabaseId(), td->tableId));
-  }
-
-  ChunkKey getChunkKey() {
-    auto td = getCatalog().getMetadataForTable("test_table");
-    auto cd = getCatalog().getMetadataForColumn(td->tableId, "i");
-    return {getCatalog().getDatabaseId(), td->tableId, cd->columnId, 0};
-  }
+  void SetUp() override { initializeGlobalFileMgr(); }
 
   AbstractBuffer* createBuffer(size_t num_entries_per_page) {
-    auto chunk_key = getChunkKey();
+    const auto& chunk_key = TEST_CHUNK_KEY;
     constexpr size_t reserved_header_size{32};
     auto buffer = getFileMgr()->createBuffer(
         chunk_key, reserved_header_size + (num_entries_per_page * sizeof(int32_t)), 0);
-    auto cd = getCatalog().getMetadataForColumn(chunk_key[CHUNK_KEY_TABLE_IDX],
-                                                chunk_key[CHUNK_KEY_COLUMN_IDX]);
-    buffer->initEncoder(cd->columnType);
+    buffer->initEncoder(SQLTypeInfo{kINT});
     return buffer;
   }
 
   void setMaxRollbackEpochs(int32_t max_rollback_epochs) {
-    auto td = getCatalog().getMetadataForTable("test_table");
-    auto& data_mgr = getCatalog().getDataMgr();
     File_Namespace::FileMgrParams params;
     params.max_rollback_epochs = max_rollback_epochs;
-    data_mgr.getGlobalFileMgr()->setFileMgrParams(
-        getCatalog().getDatabaseId(), td->tableId, params);
+    global_file_mgr_->setFileMgrParams(
+        TEST_CHUNK_KEY[CHUNK_KEY_DB_IDX], TEST_CHUNK_KEY[CHUNK_KEY_TABLE_IDX], params);
   }
 
   void updateData(std::vector<int32_t>& values) {
-    auto& data_mgr = getCatalog().getDataMgr();
-    auto chunk_key = getChunkKey();
+    const auto& chunk_key = TEST_CHUNK_KEY;
     auto buffer_size = values.size() * sizeof(int32_t);
-    AbstractBuffer* buffer =
-        data_mgr.getChunkBuffer(chunk_key, Data_Namespace::MemoryLevel::CPU_LEVEL);
-    buffer->reserve(buffer_size);
-    memcpy(buffer->getMemoryPtr(), reinterpret_cast<int8_t*>(values.data()), buffer_size);
-    buffer->setSize(buffer_size);
-    buffer->setUpdated();
-    getFileMgr()->putBuffer(chunk_key, buffer, buffer_size);
+    TestHelpers::TestBuffer buffer{std::vector<int32_t>{1}};
+    buffer.reserve(buffer_size);
+    memcpy(buffer.getMemoryPtr(), reinterpret_cast<int8_t*>(values.data()), buffer_size);
+    buffer.setSize(buffer_size);
+    buffer.setUpdated();
+    getFileMgr()->putBuffer(chunk_key, &buffer, buffer_size);
   }
 };
 
@@ -1163,8 +1082,6 @@ class FileMgrUnitTest : public testing::Test {
 
 TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedFreedFirstPage) {
   auto fsi = std::make_shared<ForeignStorageInterface>();
-  ::registerArrowForeignStorage(fsi);
-  ::registerArrowCsvForeignStorage(fsi);
   {
     auto temp_gfm = initializeGFM(fsi, 2);
     auto buffer =
@@ -1178,8 +1095,6 @@ TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedFreedFirstPage) {
 
 TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedFreedLastPage) {
   auto fsi = std::make_shared<ForeignStorageInterface>();
-  ::registerArrowForeignStorage(fsi);
-  ::registerArrowCsvForeignStorage(fsi);
   {
     auto temp_gfm = initializeGFM(fsi, 2);
     auto buffer =
@@ -1193,8 +1108,6 @@ TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedFreedLastPage) {
 
 TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedAppendPages) {
   auto fsi = std::make_shared<ForeignStorageInterface>();
-  ::registerArrowForeignStorage(fsi);
-  ::registerArrowCsvForeignStorage(fsi);
   std::vector<int8_t> write_buffer{1, 2, 3, 4};
   {
     auto temp_gfm = initializeGFM(fsi, 1);

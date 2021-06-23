@@ -19,7 +19,7 @@
 
 namespace TestHelpers {
 
-class TestBuffer : public AbstractBuffer {
+class TestBuffer : public Data_Namespace::AbstractBuffer {
  public:
   TestBuffer(const SQLTypeInfo sql_type) : AbstractBuffer(0, sql_type) {}
   TestBuffer(const std::vector<int8_t> bytes) : AbstractBuffer(0, kTINYINT) {
@@ -38,18 +38,21 @@ class TestBuffer : public AbstractBuffer {
   void read(int8_t* const dst,
             const size_t num_bytes,
             const size_t offset = 0,
-            const MemoryLevel dst_buffer_type = CPU_LEVEL,
+            const Data_Namespace::MemoryLevel dst_buffer_type = Data_Namespace::CPU_LEVEL,
             const int dst_device_id = -1) override {
     memcpy(dst, mem_ + offset, num_bytes);
   }
 
-  void write(int8_t* src,
-             const size_t num_bytes,
-             const size_t offset = 0,
-             const MemoryLevel src_buffer_type = CPU_LEVEL,
-             const int src_device_id = -1) override {
+  void write(
+      int8_t* src,
+      const size_t num_bytes,
+      const size_t offset = 0,
+      const Data_Namespace::MemoryLevel src_buffer_type = Data_Namespace::CPU_LEVEL,
+      const int src_device_id = -1) override {
+    CHECK_GE(num_bytes + offset, size_);
     reserve(num_bytes + offset);
     memcpy(mem_ + offset, src, num_bytes);
+    size_ = num_bytes + offset;
     setUpdated();
   }
 
@@ -59,16 +62,18 @@ class TestBuffer : public AbstractBuffer {
     } else {
       mem_ = (int8_t*)realloc(mem_, num_bytes);
     }
-    size_ = num_bytes;
+    reserved_size_ = num_bytes;
   }
 
-  void append(int8_t* src,
-              const size_t num_bytes,
-              const MemoryLevel src_buffer_type = CPU_LEVEL,
-              const int device_id = -1) override {
+  void append(
+      int8_t* src,
+      const size_t num_bytes,
+      const Data_Namespace::MemoryLevel src_buffer_type = Data_Namespace::CPU_LEVEL,
+      const int device_id = -1) override {
     size_t offset = size_;
     reserve(size_ + num_bytes);
     memcpy(mem_ + offset, src, num_bytes);
+    size_ += num_bytes;
     setAppended();
   }
 
@@ -84,9 +89,11 @@ class TestBuffer : public AbstractBuffer {
     return 0;
   }
 
-  size_t reservedSize() const override { return size_; }
+  size_t reservedSize() const override { return reserved_size_; }
 
-  MemoryLevel getType() const override { return Data_Namespace::CPU_LEVEL; }
+  Data_Namespace::MemoryLevel getType() const override {
+    return Data_Namespace::CPU_LEVEL;
+  }
 
   bool compare(AbstractBuffer* buffer, size_t num_bytes) {
     std::vector<int8_t> left_array(num_bytes);
@@ -105,8 +112,15 @@ class TestBuffer : public AbstractBuffer {
     return false;
   }
 
+  void reset() {
+    reserved_size_ = 0;
+    setSize(0);
+    clearDirtyBits();
+  }
+
  protected:
   int8_t* mem_ = nullptr;
+  size_t reserved_size_{0};
 };
 
 }  // namespace TestHelpers
