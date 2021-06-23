@@ -23,6 +23,7 @@
 #include "Rendering/RenderInfo.h"
 #include "ResultSet.h"
 
+#include "CompilationContext.h"
 #include "QueryMemoryInitializer.h"
 
 #include <boost/core/noncopyable.hpp>
@@ -60,7 +61,7 @@ class QueryExecutionContext : boost::noncopyable {
 
   std::vector<int64_t*> launchGpuCode(
       const RelAlgExecutionUnit& ra_exe_unit,
-      const GpuCompilationContext* cu_functions,
+      const CompilationContext* compilation_context,
       const bool hoist_literals,
       const std::vector<int8_t>& literal_buff,
       std::vector<std::vector<const int8_t*>> col_buffers,

@@ -17,6 +17,7 @@
 #include "QueryExecutionContext.h"
 #include "AggregateUtils.h"
 #include "Descriptors/QueryMemoryDescriptor.h"
+#include "DeviceKernel.h"
 #include "Execute.h"
 #include "GpuInitGroups.h"
 #include "InPlaceSort.h"
@@ -198,7 +199,7 @@ int32_t aggregate_error_codes(const std::vector<int32_t>& error_codes) {
 
 std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const RelAlgExecutionUnit& ra_exe_unit,
-    const GpuCompilationContext* cu_functions,
+    const CompilationContext* compilation_context,
     const bool hoist_literals,
     const std::vector<int8_t>& literal_buff,
     std::vector<std::vector<const int8_t*>> col_buffers,
@@ -220,6 +221,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
 #ifdef HAVE_CUDA
   CHECK(gpu_allocator_);
   CHECK(query_buffers_);
+  CHECK(compilation_context);
   const auto& init_agg_vals = query_buffers_->init_agg_vals_;
 
   bool is_group_by{query_mem_desc_.isGroupBy()};
@@ -229,9 +231,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     render_allocator = render_allocator_map->getRenderAllocator(device_id);
   }
 
-  CHECK(cu_functions);
-  const auto native_code = cu_functions->getNativeCode(device_id);
-  auto cu_func = static_cast<CUfunction>(native_code.first);
+  auto kernel = create_device_kernel(compilation_context, device_id);
+
   std::vector<int64_t*> out_vec;
   uint32_t num_fragments = col_buffers.size();
   std::vector<int32_t> error_codes(grid_size_x * block_size_x);
@@ -246,16 +247,22 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   cuEventCreate(&start2, 0);
   cuEventCreate(&stop2, 0);
 
+  auto prepareClock = kernel->make_clock();
+  auto launchClock = kernel->make_clock();
+  auto finishClock = kernel->make_clock();
+
   if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
-    cuEventRecord(start0, 0);
+    prepareClock->start();
   }
 
   if (g_enable_dynamic_watchdog) {
-    initializeDynamicWatchdog(native_code.second, device_id);
+    kernel->initializeDynamicWatchdog(
+        executor_->interrupted_.load(),
+        executor_->deviceCycles(g_dynamic_watchdog_time_limit));
   }
 
-  if (allow_runtime_interrupt && !render_allocator) {
-    initializeRuntimeInterrupter(native_code.second, device_id);
+  if (allow_runtime_interrupt && !render_allocator && !executor_->interrupted_.load()) {
+    kernel->initializeRuntimeInterrupter();
   }
 
   auto kernel_params = prepareKernelParams(col_buffers,
@@ -311,53 +318,39 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     }
 
     if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
-      cuEventRecord(stop0, 0);
-      cuEventSynchronize(stop0);
-      float milliseconds0 = 0;
-      cuEventElapsedTime(&milliseconds0, start0, stop0);
+      auto prepareTime = prepareClock->stop();
       VLOG(1) << "Device " << std::to_string(device_id)
-              << ": launchGpuCode: group-by prepare: " << std::to_string(milliseconds0)
+              << ": launchGpuCode: group-by prepare: " << std::to_string(prepareTime)
               << " ms";
-      cuEventRecord(start1, 0);
+      launchClock->start();
     }
 
     if (hoist_literals) {
-      checkCudaErrors(cuLaunchKernel(cu_func,
-                                     grid_size_x,
-                                     grid_size_y,
-                                     grid_size_z,
-                                     block_size_x,
-                                     block_size_y,
-                                     block_size_z,
-                                     shared_memory_size,
-                                     nullptr,
-                                     &param_ptrs[0],
-                                     nullptr));
+      kernel->launch(grid_size_x,
+                     grid_size_y,
+                     grid_size_z,
+                     block_size_x,
+                     block_size_y,
+                     block_size_z,
+                     shared_memory_size,
+                     &param_ptrs[0]);
     } else {
       param_ptrs.erase(param_ptrs.begin() + LITERALS);  // TODO(alex): remove
-      checkCudaErrors(cuLaunchKernel(cu_func,
-                                     grid_size_x,
-                                     grid_size_y,
-                                     grid_size_z,
-                                     block_size_x,
-                                     block_size_y,
-                                     block_size_z,
-                                     shared_memory_size,
-                                     nullptr,
-                                     &param_ptrs[0],
-                                     nullptr));
+      kernel->launch(grid_size_x,
+                     grid_size_y,
+                     grid_size_z,
+                     block_size_x,
+                     block_size_y,
+                     block_size_z,
+                     shared_memory_size,
+                     &param_ptrs[0]);
     }
     if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
-      executor_->registerActiveModule(native_code.second, device_id);
-      cuEventRecord(stop1, 0);
-      cuEventSynchronize(stop1);
-      executor_->unregisterActiveModule(native_code.second, device_id);
-      float milliseconds1 = 0;
-      cuEventElapsedTime(&milliseconds1, start1, stop1);
+      auto launchTime = launchClock->stop();
       VLOG(1) << "Device " << std::to_string(device_id)
               << ": launchGpuCode: group-by cuLaunchKernel: "
-              << std::to_string(milliseconds1) << " ms";
-      cuEventRecord(start2, 0);
+              << std::to_string(launchTime) << " ms";
+      finishClock->start();
     }
 
     gpu_allocator_->copyFromDevice(reinterpret_cast<int8_t*>(error_codes.data()),
@@ -479,53 +472,40 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     }
 
     if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
-      cuEventRecord(stop0, 0);
-      cuEventSynchronize(stop0);
-      float milliseconds0 = 0;
-      cuEventElapsedTime(&milliseconds0, start0, stop0);
+      auto prepareTime = prepareClock->stop();
+
       VLOG(1) << "Device " << std::to_string(device_id)
-              << ": launchGpuCode: prepare: " << std::to_string(milliseconds0) << " ms";
-      cuEventRecord(start1, 0);
+              << ": launchGpuCode: prepare: " << std::to_string(prepareTime) << " ms";
+      launchClock->start();
     }
 
     if (hoist_literals) {
-      checkCudaErrors(cuLaunchKernel(cu_func,
-                                     grid_size_x,
-                                     grid_size_y,
-                                     grid_size_z,
-                                     block_size_x,
-                                     block_size_y,
-                                     block_size_z,
-                                     shared_memory_size,
-                                     nullptr,
-                                     &param_ptrs[0],
-                                     nullptr));
+      kernel->launch(grid_size_x,
+                     grid_size_y,
+                     grid_size_z,
+                     block_size_x,
+                     block_size_y,
+                     block_size_z,
+                     shared_memory_size,
+                     &param_ptrs[0]);
     } else {
       param_ptrs.erase(param_ptrs.begin() + LITERALS);  // TODO(alex): remove
-      checkCudaErrors(cuLaunchKernel(cu_func,
-                                     grid_size_x,
-                                     grid_size_y,
-                                     grid_size_z,
-                                     block_size_x,
-                                     block_size_y,
-                                     block_size_z,
-                                     shared_memory_size,
-                                     nullptr,
-                                     &param_ptrs[0],
-                                     nullptr));
+      kernel->launch(grid_size_x,
+                     grid_size_y,
+                     grid_size_z,
+                     block_size_x,
+                     block_size_y,
+                     block_size_z,
+                     shared_memory_size,
+                     &param_ptrs[0]);
     }
 
     if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
-      executor_->registerActiveModule(native_code.second, device_id);
-      cuEventRecord(stop1, 0);
-      cuEventSynchronize(stop1);
-      executor_->unregisterActiveModule(native_code.second, device_id);
-      float milliseconds1 = 0;
-      cuEventElapsedTime(&milliseconds1, start1, stop1);
+      auto launchTime = launchClock->stop();
       VLOG(1) << "Device " << std::to_string(device_id)
-              << ": launchGpuCode: cuLaunchKernel: " << std::to_string(milliseconds1)
+              << ": launchGpuCode: cuLaunchKernel: " << std::to_string(launchTime)
               << " ms";
-      cuEventRecord(start2, 0);
+      finishClock->start();
     }
 
     gpu_allocator_->copyFromDevice(
@@ -554,12 +534,9 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   }
 
   if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
-    cuEventRecord(stop2, 0);
-    cuEventSynchronize(stop2);
-    float milliseconds2 = 0;
-    cuEventElapsedTime(&milliseconds2, start2, stop2);
+    auto finishTime = finishClock->stop();
     VLOG(1) << "Device " << std::to_string(device_id)
-            << ": launchGpuCode: finish: " << std::to_string(milliseconds2) << " ms";
+            << ": launchGpuCode: finish: " << std::to_string(finishTime) << " ms";
   }
 
   return out_vec;
@@ -744,86 +721,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
 }
 
 #ifdef HAVE_CUDA
-void QueryExecutionContext::initializeDynamicWatchdog(void* native_module,
-                                                      const int device_id) const {
-  auto cu_module = static_cast<CUmodule>(native_module);
-  CHECK(cu_module);
-  CUevent start, stop;
-  cuEventCreate(&start, 0);
-  cuEventCreate(&stop, 0);
-  cuEventRecord(start, 0);
-
-  CUdeviceptr dw_cycle_budget;
-  size_t dw_cycle_budget_size;
-  // Translate milliseconds to device cycles
-  uint64_t cycle_budget = executor_->deviceCycles(g_dynamic_watchdog_time_limit);
-  if (device_id == 0) {
-    LOG(INFO) << "Dynamic Watchdog budget: GPU: "
-              << std::to_string(g_dynamic_watchdog_time_limit) << "ms, "
-              << std::to_string(cycle_budget) << " cycles";
-  }
-  checkCudaErrors(cuModuleGetGlobal(
-      &dw_cycle_budget, &dw_cycle_budget_size, cu_module, "dw_cycle_budget"));
-  CHECK_EQ(dw_cycle_budget_size, sizeof(uint64_t));
-  checkCudaErrors(cuMemcpyHtoD(
-      dw_cycle_budget, reinterpret_cast<void*>(&cycle_budget), sizeof(uint64_t)));
-
-  CUdeviceptr dw_sm_cycle_start;
-  size_t dw_sm_cycle_start_size;
-  checkCudaErrors(cuModuleGetGlobal(
-      &dw_sm_cycle_start, &dw_sm_cycle_start_size, cu_module, "dw_sm_cycle_start"));
-  CHECK_EQ(dw_sm_cycle_start_size, 128 * sizeof(uint64_t));
-  checkCudaErrors(cuMemsetD32(dw_sm_cycle_start, 0, 128 * 2));
-
-  if (!executor_->interrupted_.load()) {
-    // Executor is not marked as interrupted, make sure dynamic watchdog doesn't block
-    // execution
-    CUdeviceptr dw_abort;
-    size_t dw_abort_size;
-    checkCudaErrors(cuModuleGetGlobal(&dw_abort, &dw_abort_size, cu_module, "dw_abort"));
-    CHECK_EQ(dw_abort_size, sizeof(uint32_t));
-    checkCudaErrors(cuMemsetD32(dw_abort, 0, 1));
-  }
-
-  cuEventRecord(stop, 0);
-  cuEventSynchronize(stop);
-  float milliseconds = 0;
-  cuEventElapsedTime(&milliseconds, start, stop);
-  VLOG(1) << "Device " << std::to_string(device_id)
-          << ": launchGpuCode: dynamic watchdog init: " << std::to_string(milliseconds)
-          << " ms\n";
-}
-
-void QueryExecutionContext::initializeRuntimeInterrupter(void* native_module,
-                                                         const int device_id) const {
-  if (!executor_->interrupted_.load()) {
-    // Executor is not marked as interrupted, make sure interrupt flag doesn't block
-    // execution
-    auto cu_module = static_cast<CUmodule>(native_module);
-    CHECK(cu_module);
-    CUevent start, stop;
-    cuEventCreate(&start, 0);
-    cuEventCreate(&stop, 0);
-    cuEventRecord(start, 0);
-
-    CUdeviceptr runtime_interrupt_flag;
-    size_t runtime_interrupt_flag_size;
-    checkCudaErrors(cuModuleGetGlobal(&runtime_interrupt_flag,
-                                      &runtime_interrupt_flag_size,
-                                      cu_module,
-                                      "runtime_interrupt_flag"));
-    CHECK_EQ(runtime_interrupt_flag_size, sizeof(uint32_t));
-    checkCudaErrors(cuMemsetD32(runtime_interrupt_flag, 0, 1));
-
-    cuEventRecord(stop, 0);
-    cuEventSynchronize(stop);
-    float milliseconds = 0;
-    cuEventElapsedTime(&milliseconds, start, stop);
-    VLOG(1) << "Device " << std::to_string(device_id)
-            << ": launchGpuCode: runtime query interrupter init: "
-            << std::to_string(milliseconds) << " ms";
-  }
-}
 
 std::vector<int8_t*> QueryExecutionContext::prepareKernelParams(
     const std::vector<std::vector<const int8_t*>>& col_buffers,
