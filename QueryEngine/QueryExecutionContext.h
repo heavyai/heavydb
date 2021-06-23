@@ -23,6 +23,7 @@
 #include "Rendering/RenderInfo.h"
 #include "ResultSet.h"
 
+#include "CompilationContext.h"
 #include "QueryMemoryInitializer.h"
 
 #include <boost/core/noncopyable.hpp>
@@ -60,7 +61,7 @@ class QueryExecutionContext : boost::noncopyable {
 
   std::vector<int64_t*> launchGpuCode(
       const RelAlgExecutionUnit& ra_exe_unit,
-      const GpuCompilationContext* cu_functions,
+      const CompilationContext* compilation_context,
       const bool hoist_literals,
       const std::vector<int8_t>& literal_buff,
       std::vector<std::vector<const int8_t*>> col_buffers,
@@ -94,7 +95,6 @@ class QueryExecutionContext : boost::noncopyable {
   int64_t getAggInitValForIndex(const size_t index) const;
 
  private:
-#ifdef HAVE_CUDA
   enum {
     COL_BUFFERS,
     NUM_FRAGMENTS,
@@ -111,10 +111,6 @@ class QueryExecutionContext : boost::noncopyable {
     KERN_PARAM_COUNT,
   };
 
-  void initializeDynamicWatchdog(void* native_module, const int device_id) const;
-
-  void initializeRuntimeInterrupter(void* native_module, const int device_id) const;
-
   std::vector<int8_t*> prepareKernelParams(
       const std::vector<std::vector<const int8_t*>>& col_buffers,
       const std::vector<int8_t>& literal_buff,
@@ -129,7 +125,6 @@ class QueryExecutionContext : boost::noncopyable {
       const int device_id,
       const bool hoist_literals,
       const bool is_group_by) const;
-#endif  // HAVE_CUDA
 
   ResultSetPtr groupBufferToDeinterleavedResults(const size_t i) const;
 
