@@ -2178,9 +2178,6 @@ TEST_P(RefreshParamTests, AddFrags) {
 }
 
 TEST_P(RefreshParamTests, SubFrags) {
-  if (is_odbc(GetParam())) {
-    GTEST_SKIP() << "UNIMPLEMENTED: Refresh functionality currently incomplete for ODBC";
-  }
   // Create initial files and tables
   createFilesAndTables({"three_row_3_4_5"}, {{"i", "BIGINT"}}, {{"fragment_size", "1"}});
 
@@ -2259,6 +2256,17 @@ TEST_P(RefreshParamTests, String) {
   // Compare new results
   ASSERT_TRUE(isChunkAndMetadataCached(orig_key));
   sqlAndCompareResult("SELECT * FROM " + table_names[0] + ";", {{"b"}});
+}
+
+TEST_P(RefreshParamTests, BulkMissingRows) {
+  createFilesAndTables({"three_row_3_4_5"}, {{"i", "BIGINT"}});
+
+  sqlAndCompareResult("SELECT * FROM "s + table_names[0] + " ORDER BY i;",
+                      {{i(3)}, {i(4)}, {i(5)}});
+  updateForeignSource({"two_row_1_2"}, {{"i", "BIGINT"}});
+  sql("REFRESH FOREIGN TABLES " + table_names[0] + ";");
+  sqlAndCompareResult("SELECT * FROM "s + table_names[0] + " ORDER BY i;",
+                      {{i(1)}, {i(2)}});
 }
 
 class RefreshDeviceTests : public RefreshTests,
@@ -2757,25 +2765,6 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
       "Exception: Refresh of foreign table created with \"APPEND\" update type failed as "
       "file reduced in size: " +
           TEMP_DIR + file_name_);
-}
-
-TEST_P(DataWrapperAppendRefreshTest, BulkMissingRows) {
-  if (is_odbc(wrapper_type_)) {
-    GTEST_SKIP()
-        << "BUG: This test currently fails on odbc because it does't handle deleted rows";
-  }
-  file_name_ = "single_file_delete_rows"s + wrapper_ext(wrapper_type_);
-  sql(createForeignTableQuery(
-      {{"i", "BIGINT"}},
-      TEMP_DIR + file_name_,
-      wrapper_type_,
-      {{"FRAGMENT_SIZE", std::to_string(fragment_size_)}, {"REFRESH_UPDATE_TYPE", "ALL"}},
-      table_name_));
-
-  sqlAndCompareResult("SELECT * FROM "s + table_name_ + " ORDER BY i;", {{i(1)}, {i(2)}});
-  overwriteSourceDir(createSchemaString({{"i", "BIGINT"}}));
-  sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
-  sqlAndCompareResult("SELECT * FROM "s + table_name_ + " ORDER BY i;", {{i(1)}});
 }
 
 TEST_P(DataWrapperAppendRefreshTest, MissingRowsEvict) {
