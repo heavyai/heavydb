@@ -985,6 +985,14 @@ std::map<std::string, std::string> get_device_parameters(bool cpu_only) {
   return result;
 }
 
+namespace {
+
+bool is_udf_module_present(bool cpu_only = false) {
+  return (cpu_only || udf_gpu_module != nullptr) && (udf_cpu_module != nullptr);
+}
+
+}  // namespace
+
 std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     llvm::Function* func,
     llvm::Function* wrapper_func,
@@ -1725,13 +1733,11 @@ std::unique_ptr<llvm::Module> g_rt_libdevice_module(
     read_libdevice_module(getGlobalLLVMContext()));
 #endif
 
-bool is_udf_module_present(bool cpu_only) {
-  return (cpu_only || udf_gpu_module != nullptr) && (udf_cpu_module != nullptr);
-}
-
 bool is_rt_udf_module_present(bool cpu_only) {
   return (cpu_only || rt_udf_gpu_module != nullptr) && (rt_udf_cpu_module != nullptr);
 }
+
+namespace {
 
 void read_udf_gpu_module(const std::string& udf_ir_filename) {
   llvm::SMDiagnostic parse_error;
@@ -1760,6 +1766,17 @@ void read_udf_cpu_module(const std::string& udf_ir_filename) {
   udf_cpu_module = llvm::parseIRFile(file_name_arg, parse_error, getGlobalLLVMContext());
   if (!udf_cpu_module) {
     throw_parseIR_error(parse_error, udf_ir_filename);
+  }
+}
+
+}  // namespace
+
+void Executor::addUdfIrToModule(const std::string& udf_ir_filename,
+                                const bool is_cuda_ir) {
+  if (is_cuda_ir) {
+    read_udf_gpu_module(udf_ir_filename);
+  } else {
+    read_udf_cpu_module(udf_ir_filename);
   }
 }
 

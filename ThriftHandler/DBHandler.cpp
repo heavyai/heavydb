@@ -23,7 +23,6 @@
 
 #include "DBHandler.h"
 #include "DistributedLoader.h"
-#include "QueryEngine/UDFCompiler.h"
 #include "TokenCompletionHints.h"
 
 #ifdef HAVE_PROFILER
@@ -71,6 +70,7 @@
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
+#include "UdfCompiler/UdfCompiler.h"
 
 #ifdef HAVE_AWS_S3
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
@@ -365,12 +365,14 @@ void DBHandler::initialize(const bool is_new_db) {
       const CudaMgr_Namespace::NvidiaDeviceArch device_arch =
           cuda_mgr ? cuda_mgr->getDeviceArch()
                    : CudaMgr_Namespace::NvidiaDeviceArch::Kepler;
-      UdfCompiler compiler(udf_filename_, device_arch, clang_path_, clang_options_);
-      int compile_result = compiler.compileUdf();
+      UdfCompiler compiler(device_arch, clang_path_, clang_options_);
 
-      if (compile_result == 0) {
-        udf_ast_filename = compiler.getAstFileName();
+      const auto [cpu_udf_ir_file, cuda_udf_ir_file] = compiler.compileUdf(udf_filename_);
+      Executor::addUdfIrToModule(cpu_udf_ir_file, /*is_cuda_ir=*/false);
+      if (!cuda_udf_ir_file.empty()) {
+        Executor::addUdfIrToModule(cuda_udf_ir_file, /*is_cuda_ir=*/true);
       }
+      udf_ast_filename = compiler.getAstFileName(udf_filename_);
     }
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize UDF compiler: " << e.what();

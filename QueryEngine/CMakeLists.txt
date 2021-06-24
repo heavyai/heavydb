@@ -114,7 +114,6 @@ set(query_engine_source_files
     TableGenerations.cpp
     TableOptimizer.cpp
     TargetExprBuilder.cpp
-    UDFCompiler.cpp
     Utils/DiamondCodegen.cpp
     StringFunctions.cpp
     StringOpsIR.cpp
@@ -275,7 +274,6 @@ set(QUERY_ENGINE_LIBS
   ${Arrow_LIBRARIES}
 )
 
-list(APPEND QUERY_ENGINE_LIBS ${clang_libs})
 list(APPEND QUERY_ENGINE_LIBS ${llvm_libs} ${ZLIB_LIBRARIES})
 
 target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})

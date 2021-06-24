@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#include "UDFCompiler.h"
-#include "CudaMgr/CudaMgr.h"
+#include "UdfCompiler.h"
 
 #include <clang/AST/AST.h>
 #include <clang/AST/ASTConsumer.h>
@@ -39,7 +38,6 @@
 #include <llvm/Support/Host.h>
 #endif
 
-#include "Execute.h"
 #include "Logger/Logger.h"
 
 using namespace clang;
@@ -177,6 +175,11 @@ std::string exec_output(std::string cmd) {
 std::tuple<int, int, int> get_clang_version(const std::string& clang_path) {
   std::string cmd = clang_path + " --version";
   std::string result = exec_output(cmd);
+  if (result.empty()) {
+    throw std::runtime_error(
+        "Invalid clang binary path detected, cannot find clang binary. Is clang "
+        "installed?");
+  }
   int major, minor, patchlevel;
   auto count = sscanf(result.substr(result.find("clang version")).c_str(),
                       "clang version %d.%d.%d",
@@ -190,7 +193,21 @@ std::tuple<int, int, int> get_clang_version(const std::string& clang_path) {
   return {major, minor, patchlevel};
 }
 
-}  // namespace
+class UdfClangDriver {
+ public:
+  UdfClangDriver(const std::string&);
+  clang::driver::Driver* getClangDriver() { return &the_driver; }
+  std::tuple<int, int, int> getClangVersion() const { return clang_version; }
+
+ private:
+  llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_options;
+  clang::DiagnosticConsumer* diag_client;
+  llvm::IntrusiveRefCntPtr<clang::DiagnosticIDs> diag_id;
+  clang::DiagnosticsEngine diags;
+  std::unique_ptr<clang::DiagnosticConsumer> diag_client_owner;
+  clang::driver::Driver the_driver;
+  std::tuple<int, int, int> clang_version;
+};
 
 UdfClangDriver::UdfClangDriver(const std::string& clang_path)
     : diag_options(new DiagnosticOptions())
@@ -226,7 +243,83 @@ UdfClangDriver::UdfClangDriver(const std::string& clang_path)
   }
 }
 
-std::string UdfCompiler::removeFileExtension(const std::string& path) {
+std::string get_clang_path(const std::string& clang_path_override) {
+  if (clang_path_override.empty()) {
+    const auto clang_path = (llvm::sys::findProgramByName("clang++").get());
+    if (clang_path.empty()) {
+      throw std::runtime_error(
+          "Unable to find clang++ to compile user defined functions");
+    }
+    return clang_path;
+  } else {
+    if (!boost::filesystem::exists(clang_path_override)) {
+      throw std::runtime_error("Path provided for udf compiler " + clang_path_override +
+                               " does not exist.");
+    }
+
+    if (boost::filesystem::is_directory(clang_path_override)) {
+      throw std::runtime_error("Path provided for udf compiler " + clang_path_override +
+                               " is not to the clang++ executable.");
+    }
+  }
+  return clang_path_override;
+}
+
+}  // namespace
+
+UdfCompiler::UdfCompiler(CudaMgr_Namespace::NvidiaDeviceArch target_arch,
+                         const std::string& clang_path_override)
+    : clang_path_(get_clang_path(clang_path_override))
+#ifdef HAVE_CUDA
+    , target_arch_(target_arch)
+#endif
+{
+}
+
+UdfCompiler::UdfCompiler(CudaMgr_Namespace::NvidiaDeviceArch target_arch,
+                         const std::string& clang_path_override,
+                         const std::vector<std::string> clang_options)
+    : clang_path_(get_clang_path(clang_path_override))
+    , clang_options_(clang_options)
+#ifdef HAVE_CUDA
+    , target_arch_(target_arch)
+#endif
+{
+}
+
+std::pair<std::string, std::string> UdfCompiler::compileUdf(
+    const std::string& udf_file_name) const {
+  LOG(INFO) << "UDFCompiler filename to compile: " << udf_file_name;
+  if (!boost::filesystem::exists(udf_file_name)) {
+    throw std::runtime_error("User defined function file " + udf_file_name +
+                             " does not exist.");
+  }
+
+  // create the AST file  for the input function
+  generateAST(udf_file_name);
+
+  // Compile udf file to generate cpu and gpu bytecode files
+  std::string cpu_file_name = "";
+  std::string cuda_file_name = "";
+
+  cpu_file_name = compileToLLVMIR(udf_file_name);
+
+#ifdef HAVE_CUDA
+  try {
+    cuda_file_name = compileToCudaIR(udf_file_name);
+  } catch (const std::exception& e) {
+    LOG(WARNING)
+        << "Failed to generate GPU IR for UDF " + udf_file_name +
+               ", attempting to use CPU compiled IR for GPU.\nUDF Compiler exception: " +
+               e.what();
+  }
+#endif
+  return std::make_pair(cpu_file_name, cuda_file_name);
+}
+
+namespace {
+
+std::string remove_file_extension(const std::string& path) {
   if (path == "." || path == "..") {
     return path;
   }
@@ -239,36 +332,33 @@ std::string UdfCompiler::removeFileExtension(const std::string& path) {
   return path;
 }
 
-std::string UdfCompiler::getFileExt(std::string& s) {
+std::string get_file_ext(const std::string& s) {
   size_t i = s.rfind('.', s.length());
   if (1 != std::string::npos) {
     return (s.substr(i + 1, s.length() - i));
   }
 }
 
-void UdfCompiler::replaceExtn(std::string& s, const std::string& new_ext) {
+void replace_extension(std::string& s, const std::string& new_ext) {
   std::string::size_type i = s.rfind('.', s.length());
 
   if (i != std::string::npos) {
-    s.replace(i + 1, getFileExt(s).length(), new_ext);
+    s.replace(i + 1, get_file_ext(s).length(), new_ext);
   }
 }
 
-std::string UdfCompiler::genGpuIrFilename(const char* udf_file_name) {
-  std::string gpu_file_name(removeFileExtension(udf_file_name));
+}  // namespace
 
-  gpu_file_name += "_gpu.bc";
-  return gpu_file_name;
+std::string UdfCompiler::genCUDAIRFilename(const std::string& udf_file_name) {
+  return remove_file_extension(udf_file_name) + "_gpu.bc";
 }
 
-std::string UdfCompiler::genCpuIrFilename(const char* udf_fileName) {
-  std::string cpu_file_name(removeFileExtension(udf_fileName));
-
-  cpu_file_name += "_cpu.bc";
-  return cpu_file_name;
+std::string UdfCompiler::genLLVMIRFilename(const std::string& udf_file_name) {
+  return remove_file_extension(udf_file_name) + "_cpu.bc";
 }
 
-int UdfCompiler::compileFromCommandLine(const std::vector<std::string>& command_line) {
+int UdfCompiler::compileFromCommandLine(
+    const std::vector<std::string>& command_line) const {
   UdfClangDriver compiler_driver(clang_path_);
   auto the_driver(compiler_driver.getClangDriver());
 
@@ -291,7 +381,7 @@ int UdfCompiler::compileFromCommandLine(const std::vector<std::string>& command_
   std::unique_ptr<driver::Compilation> compilation(
       the_driver->BuildCompilation(clang_command_opts));
   if (!compilation) {
-    LOG(FATAL) << "failed to build compilation object!\n";
+    throw std::runtime_error("failed to build compilation object!");
   }
   auto [clang_version_major, clang_version_minor, clang_version_patchlevel] =
       compiler_driver.getClangVersion();
@@ -422,8 +512,9 @@ int UdfCompiler::compileFromCommandLine(const std::vector<std::string>& command_
   return res;
 }
 
-int UdfCompiler::compileToGpuByteCode(const char* udf_file_name, bool cpu_mode) {
-  std::string gpu_out_filename(genGpuIrFilename(udf_file_name));
+#ifdef HAVE_CUDA
+std::string UdfCompiler::compileToCudaIR(const std::string& udf_file_name) const {
+  const auto gpu_out_filename = genCUDAIRFilename(udf_file_name);
 
   std::vector<std::string> command_line{clang_path_,
                                         "-c",
@@ -434,22 +525,15 @@ int UdfCompiler::compileToGpuByteCode(const char* udf_file_name, bool cpu_mode) 
                                         "-std=c++14",
                                         "-DNO_BOOST"};
 
-  // If we are not compiling for cpu mode, then target the gpu
-  // Otherwise assume we can generic ir that will
-  // be translated to gpu code during target code generation
-#ifdef HAVE_CUDA
-  if (!cpu_mode) {
-    command_line.emplace_back("--cuda-gpu-arch=" +
-                              CudaMgr_Namespace::CudaMgr::deviceArchToSM(target_arch_));
-    command_line.emplace_back("--cuda-device-only");
-    command_line.emplace_back("-xcuda");
-    command_line.emplace_back("--no-cuda-version-check");
-    const auto cuda_path = get_cuda_home();
-    if (cuda_path != "") {
-      command_line.emplace_back("--cuda-path=" + cuda_path);
-    }
+  command_line.emplace_back("--cuda-gpu-arch=" +
+                            CudaMgr_Namespace::CudaMgr::deviceArchToSM(target_arch_));
+  command_line.emplace_back("--cuda-device-only");
+  command_line.emplace_back("-xcuda");
+  command_line.emplace_back("--no-cuda-version-check");
+  const auto cuda_path = get_cuda_home();
+  if (cuda_path != "") {
+    command_line.emplace_back("--cuda-path=" + cuda_path);
   }
-#endif
 
   command_line.emplace_back(udf_file_name);
 
@@ -459,13 +543,16 @@ int UdfCompiler::compileToGpuByteCode(const char* udf_file_name, bool cpu_mode) 
   // make sure that compilation actually succeeded by checking the
   // output file:
   if (!status && !boost::filesystem::exists(gpu_out_filename)) {
-    status = 2;
+    throw std::runtime_error(
+        "Failed to generate GPU UDF IR in CUDA mode with error code " +
+        std::to_string(status));
   }
-  return status;
+  return gpu_out_filename;
 }
+#endif
 
-int UdfCompiler::compileToCpuByteCode(const char* udf_file_name) {
-  std::string cpu_out_filename(genCpuIrFilename(udf_file_name));
+std::string UdfCompiler::compileToLLVMIR(const std::string& udf_file_name) const {
+  std::string cpu_out_filename = genLLVMIRFilename(udf_file_name);
 
   std::vector<std::string> command_line{clang_path_,
                                         "-c",
@@ -477,14 +564,18 @@ int UdfCompiler::compileToCpuByteCode(const char* udf_file_name) {
                                         "-DNO_BOOST",
                                         udf_file_name};
   auto res = compileFromCommandLine(command_line);
-  if (!boost::filesystem::exists(cpu_out_filename)) {
-    throw std::runtime_error("udf compile did not produce " + cpu_out_filename);
+  if (res != 0) {
+    throw std::runtime_error("Failed to compile CPU UDF (status code " +
+                             std::to_string(res) + ")");
   }
-
-  return res;
+  if (!boost::filesystem::exists(cpu_out_filename)) {
+    throw std::runtime_error("udf compile did not produce output file " +
+                             cpu_out_filename);
+  }
+  return cpu_out_filename;
 }
 
-int UdfCompiler::parseToAst(const char* file_name) {
+void UdfCompiler::generateAST(const std::string& file_name) const {
   UdfClangDriver the_driver(clang_path_);
   std::string resource_path = the_driver.getClangDriver()->ResourceDir;
   std::string include_option =
@@ -511,147 +602,23 @@ int UdfCompiler::parseToAst(const char* file_name) {
 
   std::string out_name(file_name);
   std::string file_ext("ast");
-  replaceExtn(out_name, file_ext);
+  replace_extension(out_name, file_ext);
 
   std::error_code out_error_info;
   llvm::raw_fd_ostream out_file(
       llvm::StringRef(out_name), out_error_info, llvm::sys::fs::F_None);
 
   auto factory = std::make_unique<ToolFactory>(out_file);
-  return tool.run(factory.get());
-}
-
-const std::string& UdfCompiler::getAstFileName() const {
-  return udf_ast_file_name_;
-}
-
-void UdfCompiler::init(const std::string& clang_path) {
-  replaceExtn(udf_ast_file_name_, "ast");
-
-  if (clang_path.empty()) {
-    clang_path_.assign(llvm::sys::findProgramByName("clang++").get());
-    if (clang_path_.empty()) {
-      throw std::runtime_error(
-          "Unable to find clang++ to compile user defined functions");
-    }
-  } else {
-    clang_path_.assign(clang_path);
-
-    if (!boost::filesystem::exists(clang_path)) {
-      throw std::runtime_error("Path provided for udf compiler " + clang_path +
-                               " does not exist.");
-    }
-
-    if (boost::filesystem::is_directory(clang_path)) {
-      throw std::runtime_error("Path provided for udf compiler " + clang_path +
-                               " is not to the clang++ executable.");
-    }
+  const auto result = tool.run(factory.get());
+  if (result != 0) {
+    throw std::runtime_error(
+        "Unable to create AST file for udf compilation (error code " +
+        std::to_string(result) + ")");
   }
 }
 
-UdfCompiler::UdfCompiler(const std::string& file_name,
-                         CudaMgr_Namespace::NvidiaDeviceArch target_arch,
-                         const std::string& clang_path)
-    : udf_file_name_(file_name)
-    , udf_ast_file_name_(file_name)
-#ifdef HAVE_CUDA
-    , target_arch_(target_arch)
-#endif
-{
-  init(clang_path);
-}
-
-UdfCompiler::UdfCompiler(const std::string& file_name,
-                         CudaMgr_Namespace::NvidiaDeviceArch target_arch,
-                         const std::string& clang_path,
-                         const std::vector<std::string> clang_options)
-    : udf_file_name_(file_name)
-    , udf_ast_file_name_(file_name)
-#ifdef HAVE_CUDA
-    , target_arch_(target_arch)
-#endif
-    , clang_options_(clang_options) {
-  init(clang_path);
-}
-
-void UdfCompiler::readCpuCompiledModule() {
-  std::string cpu_ir_file(genCpuIrFilename(udf_file_name_.c_str()));
-
-  VLOG(1) << "UDFCompiler cpu bc file = " << cpu_ir_file;
-
-  read_udf_cpu_module(cpu_ir_file);
-}
-
-void UdfCompiler::readGpuCompiledModule() {
-  std::string gpu_ir_file(genGpuIrFilename(udf_file_name_.c_str()));
-
-  VLOG(1) << "UDFCompiler gpu bc file = " << gpu_ir_file;
-
-  read_udf_gpu_module(gpu_ir_file);
-}
-
-void UdfCompiler::readCompiledModules() {
-  readCpuCompiledModule();
-  readGpuCompiledModule();
-}
-
-int UdfCompiler::compileForGpu() {
-  int gpu_compile_result = 1;
-
-  gpu_compile_result = compileToGpuByteCode(udf_file_name_.c_str(), false);
-
-  // If gpu compilation fails but cpu compilation has succeeded, try compiling
-  // for the cpu with the assumption the user does not have the CUDA toolkit
-  // installed
-  //
-  // Update: while this approach may work for some cases, it will not
-  // work in general as evidenced by the current UdfTest using arrays:
-  // generation of PTX will fail. Hence, read_udf_gpu_module is now
-  // rejecting LLVM IR with a non-nvptx target triple. However, we
-  // will still try cpu compilation but with the aim of detecting any
-  // code errors.
-  if (gpu_compile_result != 0) {
-    gpu_compile_result = compileToGpuByteCode(udf_file_name_.c_str(), true);
-  }
-
-  return gpu_compile_result;
-}
-
-int UdfCompiler::compileUdf() {
-  LOG(INFO) << "UDFCompiler filename to compile: " << udf_file_name_;
-  if (!boost::filesystem::exists(udf_file_name_)) {
-    LOG(FATAL) << "User defined function file " << udf_file_name_ << " does not exist.";
-    return 1;
-  }
-
-  auto ast_result = parseToAst(udf_file_name_.c_str());
-  if (ast_result == 0) {
-    // Compile udf file to generate cpu and gpu bytecode files
-
-    int cpu_compile_result = compileToCpuByteCode(udf_file_name_.c_str());
-#ifdef HAVE_CUDA
-    int gpu_compile_result = 1;
-#endif
-
-    if (cpu_compile_result == 0) {
-      readCpuCompiledModule();
-#ifdef HAVE_CUDA
-      gpu_compile_result = compileForGpu();
-      if (gpu_compile_result == 0) {
-        readGpuCompiledModule();
-      } else {
-        LOG(FATAL) << "Unable to compile UDF file for gpu";
-        return 1;
-      }
-#endif
-    } else {
-      LOG(FATAL) << "Unable to compile UDF file for cpu";
-      return 1;
-    }
-  } else {
-    LOG(FATAL) << "Unable to create AST file for udf compilation";
-    return 1;
-  }
-
-  return 0;
+std::string UdfCompiler::getAstFileName(const std::string& udf_file_name) {
+  auto ast_file_name = udf_file_name;
+  replace_extension(ast_file_name, "ast");
+  return ast_file_name;
 }

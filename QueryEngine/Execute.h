@@ -148,9 +148,7 @@ class QuerySessionStatus {
 };
 using QuerySessionMap =
     std::map<const QuerySessionId, std::map<std::string, QuerySessionStatus>>;
-extern void read_udf_gpu_module(const std::string& udf_ir_filename);
-extern void read_udf_cpu_module(const std::string& udf_ir_filename);
-extern bool is_udf_module_present(bool cpu_only = false);
+
 extern void read_rt_udf_gpu_module(const std::string& udf_ir);
 extern void read_rt_udf_cpu_module(const std::string& udf_ir);
 extern bool is_rt_udf_module_present(bool cpu_only = false);
@@ -388,6 +386,8 @@ class Executor {
   static void clearMemory(const Data_Namespace::MemoryLevel memory_level);
 
   static size_t getArenaBlockSize();
+
+  static void addUdfIrToModule(const std::string& udf_ir_filename, const bool is_cuda_ir);
 
   /**
    * Returns pointer to the intermediate tables vector currently stored by this executor.

@@ -203,7 +203,7 @@ target_link_libraries(LoadTableTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(JSONTest gtest Logger Shared)
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
-  target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS})
+  target_link_libraries(UdfTest gtest UdfCompiler ${EXECUTE_TEST_LIBS})
 endif()
 
 target_link_libraries(TableUpdateDeleteBenchmark benchmark ${EXECUTE_TEST_LIBS})

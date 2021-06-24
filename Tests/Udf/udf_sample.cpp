@@ -94,58 +94,49 @@ double ST_Y_Point(int8_t* p, int64_t psize, int32_t ic, int32_t isr, int32_t osr
 
 EXTENSION_NOINLINE
 double ST_Perimeter_Polygon(int8_t* poly,
-                            int64_t polysize,
-                            int32_t* poly_ring_sizes,
-                            int64_t poly_num_rings,
+                            int32_t polysize,
+                            int8_t* poly_ring_sizes,
+                            int32_t poly_num_rings,
                             int32_t ic,
                             int32_t isr,
                             int32_t osr);
 
 EXTENSION_NOINLINE
 double ST_Perimeter_Polygon_Geodesic(int8_t* poly,
-                                     int64_t polysize,
-                                     int32_t* poly_ring_sizes,
-                                     int64_t poly_num_rings,
+                                     int32_t polysize,
+                                     int8_t* poly_ring_sizes_in,
+                                     int32_t poly_num_rings,
                                      int32_t ic,
                                      int32_t isr,
                                      int32_t osr);
 
 EXTENSION_NOINLINE
 double ST_Perimeter_MultiPolygon(int8_t* mpoly_coords,
-                                 int64_t mpoly_coords_size,
-                                 int32_t* mpoly_ring_sizes,
-                                 int64_t mpoly_num_rings,
-                                 int32_t* mpoly_poly_sizes,
-                                 int64_t mpoly_num_polys,
+                                 int32_t mpoly_coords_size,
+                                 int8_t* mpoly_ring_sizes,
+                                 int32_t mpoly_num_rings,
+                                 int8_t* mpoly_poly_sizes,
+                                 int32_t mpoly_num_polys,
                                  int32_t ic,
                                  int32_t isr,
                                  int32_t osr);
 
 EXTENSION_NOINLINE
 double ST_Area_Polygon(int8_t* poly_coords,
-                       int64_t poly_coords_size,
-                       int32_t* poly_ring_sizes,
-                       int64_t poly_num_rings,
+                       int32_t poly_coords_size,
+                       int8_t* poly_ring_sizes,
+                       int32_t poly_num_rings,
                        int32_t ic,
                        int32_t isr,
                        int32_t osr);
 
 EXTENSION_NOINLINE
-double ST_Area_Polygon_Geodesic(int8_t* poly_coords,
-                                int64_t poly_coords_size,
-                                int32_t* poly_ring_sizes,
-                                int64_t poly_num_rings,
-                                int32_t ic,
-                                int32_t isr,
-                                int32_t osr);
-
-EXTENSION_NOINLINE
 double ST_Area_MultiPolygon(int8_t* mpoly_coords,
-                            int64_t mpoly_coords_size,
-                            int32_t* mpoly_ring_sizes,
-                            int64_t mpoly_num_rings,
-                            int32_t* mpoly_poly_sizes,
-                            int64_t mpoly_num_polys,
+                            int32_t mpoly_coords_size,
+                            int8_t* mpoly_ring_sizes,
+                            int32_t mpoly_num_rings,
+                            int8_t* mpoly_poly_sizes_in,
+                            int32_t mpoly_num_polys,
                             int32_t ic,
                             int32_t isr,
                             int32_t osr);

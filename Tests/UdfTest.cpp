@@ -30,8 +30,9 @@
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/ResultSet.h"
-#include "QueryEngine/UDFCompiler.h"
 #include "QueryRunner/QueryRunner.h"
+#include "UdfCompiler/UdfCompiler.h"
+
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -124,12 +125,14 @@ class SQLTestEnv : public ::testing::Environment {
     }
 
     std::vector<std::string> udf_compiler_options{std::string("-D UDF_COMPILER_OPTION")};
-    UdfCompiler compiler(
-        udf_file.string(), g_device_arch, std::string(""), udf_compiler_options);
-    auto compile_result = compiler.compileUdf();
-    EXPECT_EQ(compile_result, 0);
+    UdfCompiler compiler(g_device_arch, std::string(""), udf_compiler_options);
+    auto compile_result = compiler.compileUdf(udf_file.string());
+    Executor::addUdfIrToModule(compile_result.first, /*is_cuda_ir=*/false);
+    if (!compile_result.second.empty()) {
+      Executor::addUdfIrToModule(compile_result.second, /*is_cuda_ir=*/true);
+    }
 
-    QR::init(BASE_PATH, compiler.getAstFileName());
+    QR::init(BASE_PATH, compiler.getAstFileName(udf_file.string()));
 
     g_calcite = QR::get()->getCalcite();
   }
@@ -182,19 +185,25 @@ class UDFCompilerTest : public ::testing::Test {
 };
 
 TEST_F(UDFCompilerTest, CompileTest) {
-  UdfCompiler compiler(getUdfFileName(), g_device_arch);
-  auto compile_result = compiler.compileUdf();
+  UdfCompiler compiler(g_device_arch);
+  auto [cpu_ir_file, cuda_ir_file] = compiler.compileUdf(getUdfFileName());
 
-  EXPECT_EQ(compile_result, 0);
-  // TODO cannot test invalid file path because the compileUdf function uses
-  // LOG(FATAL) which stops the process and does not return
+  EXPECT_TRUE(!cpu_ir_file.empty());
+  if (QR::get()->gpusPresent()) {
+    EXPECT_TRUE(!cuda_ir_file.empty());
+  } else {
+    EXPECT_TRUE(cuda_ir_file.empty());
+  }
+}
+
+TEST_F(UDFCompilerTest, InvalidPath) {
+  UdfCompiler compiler(g_device_arch);
+  EXPECT_ANY_THROW(compiler.compileUdf(getUdfFileName() + ".invalid"));
 }
 
 TEST_F(UDFCompilerTest, CompilerOptionTest) {
-  UdfCompiler compiler(getUdfFileName(), g_device_arch);
-  auto compile_result = compiler.compileUdf();
-
-  EXPECT_EQ(compile_result, 0);
+  UdfCompiler compiler(g_device_arch);
+  EXPECT_NO_THROW(compiler.compileUdf(getUdfFileName()));
 
   // This function signature is only visible via the -DUDF_COMPILER_OPTION
   // definition. This definition was passed to the UdfCompiler is Setup.
@@ -206,18 +215,18 @@ TEST_F(UDFCompilerTest, CompilerOptionTest) {
 }
 
 TEST_F(UDFCompilerTest, CompilerPathTest) {
-  UdfCompiler compiler(
-      getUdfFileName(), g_device_arch, llvm::sys::findProgramByName("clang++").get());
-  auto compile_result = compiler.compileUdf();
+  UdfCompiler compiler(g_device_arch, llvm::sys::findProgramByName("clang++").get());
+  EXPECT_NO_THROW(compiler.compileUdf(getUdfFileName()));
+}
 
-  EXPECT_EQ(compile_result, 0);
+TEST_F(UDFCompilerTest, BadClangPath) {
+  UdfCompiler compiler(g_device_arch, /*clang_path_override=*/get_udf_filename());
+  EXPECT_ANY_THROW(compiler.compileUdf(getUdfFileName()));
 }
 
 TEST_F(UDFCompilerTest, CalciteRegistration) {
-  UdfCompiler compiler(getUdfFileName(), g_device_arch);
-  auto compile_result = compiler.compileUdf();
-
-  ASSERT_EQ(compile_result, 0);
+  UdfCompiler compiler(g_device_arch);
+  EXPECT_NO_THROW(compiler.compileUdf(getUdfFileName()));
 
   ASSERT_TRUE(g_calcite != nullptr);
 
@@ -241,10 +250,8 @@ TEST_F(UDFCompilerTest, CalciteRegistration) {
 }
 
 TEST_F(UDFCompilerTest, UdfQuery) {
-  UdfCompiler compiler(getUdfFileName(), g_device_arch);
-  auto compile_result = compiler.compileUdf();
-
-  ASSERT_EQ(compile_result, 0);
+  UdfCompiler compiler(g_device_arch);
+  EXPECT_NO_THROW(compiler.compileUdf(getUdfFileName()));
 
   run_ddl_statement("DROP TABLE IF EXISTS stocks;");
   run_ddl_statement("DROP TABLE IF EXISTS sal_emp;");

@@ -456,11 +456,6 @@ else()
   set(llvm_libs ${LLVM_LIB})
 endif()
 
-# Clang (UDF Compiler)
-find_package(Clang REQUIRED)
-include_directories(${CLANG_INCLUDE_DIRS})
-add_definitions(${CLANG_DEFINITIONS})
-
 
 # Boost
 find_package(Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale iostreams REQUIRED)
@@ -692,6 +687,7 @@ add_subdirectory(TableArchiver)
 add_subdirectory(ThriftHandler)
 add_subdirectory(Geospatial)
 add_subdirectory(Distributed)
+add_subdirectory(UdfCompiler)
 
 if(ENABLE_DBE)
   add_subdirectory(Embedded)

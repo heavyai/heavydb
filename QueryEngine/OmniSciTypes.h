@@ -17,6 +17,7 @@
 #pragma once
 
 #include <limits>
+#include <stdexcept>
 #include <type_traits>
 
 /* `../` is required for UDFCompiler */
@@ -69,9 +70,9 @@ struct Array {
   }
 };
 
-struct GeoLineString {
+struct GeoPoint {
   int8_t* ptr;
-  int64_t sz;
+  int32_t sz;
   int32_t compression;
   int32_t input_srid;
   int32_t output_srid;
@@ -85,14 +86,14 @@ struct GeoLineString {
   DEVICE int32_t getOutputSrid() const { return output_srid; }
 };
 
-struct GeoPoint {
+struct GeoLineString {
   int8_t* ptr;
-  int64_t sz;
+  int32_t sz;
   int32_t compression;
   int32_t input_srid;
   int32_t output_srid;
 
-  DEVICE int64_t getSize() const { return sz; }
+  DEVICE int32_t getSize() const { return sz; }
 
   DEVICE int32_t getCompression() const { return compression; }
 
@@ -103,17 +104,17 @@ struct GeoPoint {
 
 struct GeoPolygon {
   int8_t* ptr_coords;
-  int64_t coords_size;
-  int32_t* ring_sizes;
-  int64_t num_rings;
+  int32_t coords_size;
+  int8_t* ring_sizes;
+  int32_t num_rings;
   int32_t compression;
   int32_t input_srid;
   int32_t output_srid;
 
-  DEVICE int32_t* getRingSizes() { return ring_sizes; }
-  DEVICE int64_t getCoordsSize() const { return coords_size; }
+  DEVICE int8_t* getRingSizes() { return ring_sizes; }
+  DEVICE int32_t getCoordsSize() const { return coords_size; }
 
-  DEVICE int64_t getNumRings() const { return num_rings; }
+  DEVICE int32_t getNumRings() const { return num_rings; }
 
   DEVICE int32_t getCompression() const { return compression; }
 
@@ -124,23 +125,23 @@ struct GeoPolygon {
 
 struct GeoMultiPolygon {
   int8_t* ptr_coords;
-  int64_t coords_size;
-  int32_t* ring_sizes;
-  int64_t num_rings;
-  int32_t* poly_sizes;
-  int64_t num_polys;
+  int32_t coords_size;
+  int8_t* ring_sizes;
+  int32_t num_rings;
+  int8_t* poly_sizes;
+  int32_t num_polys;
   int32_t compression;
   int32_t input_srid;
   int32_t output_srid;
 
-  DEVICE int32_t* getRingSizes() { return ring_sizes; }
-  DEVICE int64_t getCoordsSize() const { return coords_size; }
+  DEVICE int8_t* getRingSizes() { return ring_sizes; }
+  DEVICE int32_t getCoordsSize() const { return coords_size; }
 
-  DEVICE int64_t getNumRings() const { return num_rings; }
+  DEVICE int32_t getNumRings() const { return num_rings; }
 
-  DEVICE int32_t* getPolygonSizes() { return poly_sizes; }
+  DEVICE int8_t* getPolygonSizes() { return poly_sizes; }
 
-  DEVICE int64_t getNumPolygons() const { return num_polys; }
+  DEVICE int32_t getNumPolygons() const { return num_polys; }
 
   DEVICE int32_t getCompression() const { return compression; }
 
@@ -159,7 +160,7 @@ struct Column {
 #ifndef __CUDACC__
       throw std::runtime_error("column buffer index is out of range");
 #else
-      static T null_value;
+      static DEVICE T null_value;
       set_null(null_value);
       return null_value;
 #endif
