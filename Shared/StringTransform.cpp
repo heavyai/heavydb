@@ -57,7 +57,17 @@ std::vector<std::pair<size_t, size_t>> find_string_literals(const std::string& q
   auto prev_it = it;
   std::vector<std::pair<size_t, size_t>> positions;
   while (true) {
-    if (!boost::regex_search(it, query.end(), what, literal_string_regex)) {
+    try {
+      if (!boost::regex_search(it, query.end(), what, literal_string_regex)) {
+        break;
+      }
+    } catch (const std::exception& e) {
+      LOG(WARNING) << "Error processing literals: " << e.what()
+                   << "\nContinuing query parse...";
+      // boost::regex throws an exception about the complexity of matching when
+      // the wrong type of quotes are used or they're mismatched. Let the query
+      // through unmodified, the parser will throw a much more informative error.
+      // This can also throw on very long queries
       break;
     }
     CHECK_GT(what[1].length(), 0);

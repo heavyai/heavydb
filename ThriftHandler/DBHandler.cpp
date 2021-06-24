@@ -6159,7 +6159,10 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
   }
 
   LOG(INFO) << "passing query to legacy processor";
-  const auto result = apply_copy_to_shim(query_str);
+  auto result = query_str;
+  if (pw.is_copy_to) {
+    result = apply_copy_to_shim(query_str);
+  }
   DBHandler::parser_with_error_handler(result, parse_trees);
   auto handle_ddl = [&query_state_proxy, &session_ptr, &_return, &locks, this](
                         Parser::DDLStmt* ddl) -> bool {
