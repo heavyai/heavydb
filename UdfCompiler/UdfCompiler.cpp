@@ -195,9 +195,16 @@ std::tuple<int, int, int> get_clang_version(const std::string& clang_path) {
 
 class UdfClangDriver {
  public:
-  UdfClangDriver(const std::string&);
   clang::driver::Driver* getClangDriver() { return &the_driver; }
   std::tuple<int, int, int> getClangVersion() const { return clang_version; }
+
+  static UdfClangDriver init(const std::string& clang_path);
+
+  UdfClangDriver(const UdfClangDriver&) = delete;  // no copy
+
+ protected:
+  UdfClangDriver(const std::string& clang_path,
+                 llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_options);
 
  private:
   llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_options;
@@ -209,8 +216,21 @@ class UdfClangDriver {
   std::tuple<int, int, int> clang_version;
 };
 
-UdfClangDriver::UdfClangDriver(const std::string& clang_path)
-    : diag_options(new DiagnosticOptions())
+UdfClangDriver UdfClangDriver::init(const std::string& clang_path) {
+  llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_options =
+      new DiagnosticOptions();
+  if (!diag_options) {
+    throw std::runtime_error(
+        "Failed to initialize UDF compiler diagnostic options. Aborting UDF compiler "
+        "initialization. Is clang/clang++ installed?");
+  }
+  return UdfClangDriver(clang_path, diag_options);
+}
+
+UdfClangDriver::UdfClangDriver(
+    const std::string& clang_path,
+    llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_options)
+    : diag_options(diag_options)
     , diag_client(new TextDiagnosticPrinter(llvm::errs(), diag_options.get()))
     , diag_id(new clang::DiagnosticIDs())
     , diags(diag_id, diag_options.get(), diag_client)
@@ -359,7 +379,7 @@ std::string UdfCompiler::genLLVMIRFilename(const std::string& udf_file_name) {
 
 int UdfCompiler::compileFromCommandLine(
     const std::vector<std::string>& command_line) const {
-  UdfClangDriver compiler_driver(clang_path_);
+  UdfClangDriver compiler_driver = UdfClangDriver::init(clang_path_);
   auto the_driver(compiler_driver.getClangDriver());
 
   std::vector<const char*> clang_command_opts;
@@ -576,7 +596,7 @@ std::string UdfCompiler::compileToLLVMIR(const std::string& udf_file_name) const
 }
 
 void UdfCompiler::generateAST(const std::string& file_name) const {
-  UdfClangDriver the_driver(clang_path_);
+  UdfClangDriver the_driver = UdfClangDriver::init(clang_path_);
   std::string resource_path = the_driver.getClangDriver()->ResourceDir;
   std::string include_option =
       std::string("-I") + resource_path + std::string("/include");
