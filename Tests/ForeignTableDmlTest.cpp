@@ -25,6 +25,7 @@
 
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
+#include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "DataMgr/ForeignStorage/ForeignTableRefresh.h"
 #include "DataMgrTestHelpers.h"
 #include "Geospatial/Types.h"
@@ -176,12 +177,34 @@ class ForeignTableTest : public DBHandlerTestFixture {
     return query;
   }
 
-  static std::string createSchemaString(const std::vector<NameTypePair>& column_pairs) {
+  static std::string createSchemaString(const std::vector<NameTypePair>& column_pairs,
+                                        std::string dbms_type = "") {
     std::stringstream schema_stream;
     schema_stream << "(";
     size_t i = 0;
     for (auto [name, type] : column_pairs) {
+      if (!dbms_type.empty()) {
+        if (std::string::npos != type.find("TEXT")) {
+          // remove encoding information
+          type = "TEXT";
+        }
+        if (dbms_type == "postgres") {
+          if (type == "FLOAT") {
+            type = "real";
+          } else if (type == "TIME") {
+            // Postgres times can include fractional elements
+            // Unless specified they will default to time(6).
+            type = "time(0)";
+          } else if (type == "TIMESTAMP") {
+            // Postgres times by default  are time(6).
+            type = "timestamp(0)";
+          }
+        }
+      }
       schema_stream << name << " " << type;
+      if (dbms_type == "postgres" && type == "DOUBLE") {
+        schema_stream << " precision ";
+      }
       schema_stream << ((++i < column_pairs.size()) ? ", " : ") ");
     }
     return schema_stream.str();
@@ -208,12 +231,13 @@ class ForeignTableTest : public DBHandlerTestFixture {
     ss << schema;
 
     if (is_odbc(data_wrapper_type)) {
+      std::string db_specfic_schema = createSchemaString(column_pairs, data_wrapper_type);
       ss << "SERVER temp_odbc WITH (sql_select = 'select ";
       size_t i = 0;
       for (auto [name, type] : column_pairs) {
         ss << name << ((++i < column_pairs.size()) ? ", " : " from " + table_name + "'");
       }
-      createODBCSourceTable(table_name, schema, src_path, data_wrapper_type);
+      createODBCSourceTable(table_name, db_specfic_schema, src_path, data_wrapper_type);
     } else {
       ss << "SERVER omnisci_local_" + data_wrapper_type;
       ss << " WITH (file_path = '";
@@ -2812,6 +2836,45 @@ INSTANTIATE_TEST_SUITE_P(DataTypeFragmentSizeAndDataWrapperOdbcTests,
                                             ::testing::Values("sqlite", "postgres"),
                                             ::testing::Values(".csv")),
                          DataTypeFragmentSizeAndDataWrapperTest::getTestName);
+
+TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes_subset) {
+  auto [fragment_size, data_wrapper_type, extension] = GetParam();
+  if (!is_odbc(data_wrapper_type) || extension != ".csv") {
+    GTEST_SKIP() << "UNIMPLEMENTED: sub test does not supporting" << extension << " type";
+  }
+  if (data_wrapper_type == "sqlite") {
+    GTEST_SKIP() << "UNIMPLEMENTED: sub test does not supporting" << extension << " type";
+  }
+  sql(createForeignTableQuery({{"s", "SMALLINT"},
+                               {"i", "INTEGER"},
+                               {"bi", "BIGINT"},
+                               {"f", "FLOAT"},
+                               {"dc", "DECIMAL(10, 5)"},
+                               {"tm", "TIME"},
+                               {"tp", "TIMESTAMP"},
+                               {"d", "DATE"},
+                               {"txt", "TEXT"},
+                               {"txt_2", "TEXT ENCODING NONE"}},
+                              getDataFilesPath() + "scalar_types_subset" + extension,
+                              data_wrapper_type,
+                              {{"FRAGMENT_SIZE", std::to_string(fragment_size)}}));
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table ORDER BY s;");
+  // clang-format off
+  assertResultSetEqual({
+    {
+      i(30000), i(2000000000), i(9000000000000000000),10.1f,  100.1234, "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "\"quoted text\""
+    },
+    {
+      i(30500), i(2000500000), i(9000000050000000000), 100.12f,  2.1234, "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "\"quoted text 2\""
+    },
+    {
+      i(31000), i(2100000000), i(9100000000000000000), 1000.123f, 100.1, "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "\"quoted text 3\""
+    }},
+    result);
+  // clang-format on
+}
 
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes) {
   auto [fragment_size, data_wrapper_type, extension] = GetParam();
