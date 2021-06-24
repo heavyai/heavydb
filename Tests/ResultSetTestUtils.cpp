@@ -223,10 +223,10 @@ void fill_one_entry_one_col(int8_t* ptr1,
     CHECK(ptr2);
     switch (compact_sz2) {
       case 8:
-        *reinterpret_cast<int64_t*>(ptr2) = (empty_entry ? *ptr1 : 1);
+        *reinterpret_cast<int64_t*>(ptr2) = !(empty_entry || null_val);
         break;
       case 4:
-        *reinterpret_cast<int32_t*>(ptr2) = (empty_entry ? *ptr1 : 1);
+        *reinterpret_cast<int32_t*>(ptr2) = !(empty_entry || null_val);
         break;
       default:
         CHECK(false);
@@ -654,7 +654,7 @@ void fill_one_entry_baseline(int64_t* value_slots,
         CHECK(false);
     }
     if (target_info.agg_kind == kAVG) {
-      value_slots[target_slot + 1] = 1;
+      value_slots[target_slot + 1] = !(empty || null_val);
     }
     target_slot = advance_slot(target_slot, target_info, false);
   }

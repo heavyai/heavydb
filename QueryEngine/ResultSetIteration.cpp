@@ -2176,8 +2176,7 @@ bool ResultSet::isNull(const SQLTypeInfo& ti,
     return val.i1 == null_val_bit_pattern(ti, float_argument_input);
   }
   if (val.isPair()) {
-    return !val.i2 ||
-           pair_to_double({val.i1, val.i2}, ti, float_argument_input) == NULL_DOUBLE;
+    return !val.i2;
   }
   if (val.isStr()) {
     return !val.i1;

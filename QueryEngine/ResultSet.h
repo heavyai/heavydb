@@ -539,12 +539,6 @@ class ResultSet {
     const size_t storage_idx;
   };
 
-  InternalTargetValue getColumnInternal(
-      const int8_t* buff,
-      const size_t entry_idx,
-      const size_t target_logical_idx,
-      const StorageLookupResult& storage_lookup_result) const;
-
   InternalTargetValue getVarlenOrderEntry(const int64_t str_ptr,
                                           const size_t str_len) const;
 

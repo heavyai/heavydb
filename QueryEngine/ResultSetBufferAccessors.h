@@ -196,25 +196,20 @@ inline size_t get_slot_off_quad(const QueryMemoryDescriptor& query_mem_desc) {
 inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair,
                              const SQLTypeInfo& ti,
                              const bool float_argument_input) {
+  if (fp_pair.second == 0) {
+    return NULL_DOUBLE;
+  }
   double dividend{0.0};
-  int64_t null_val{0};
   switch (ti.get_type()) {
-    case kFLOAT: {
+    case kFLOAT:
       if (float_argument_input) {
         dividend = shared::reinterpret_bits<float>(fp_pair.first);
-        null_val = shared::reinterpret_bits<int64_t, float>(inline_fp_null_val(ti));
-      } else {
-        dividend = shared::reinterpret_bits<double>(fp_pair.first);
-        null_val = shared::reinterpret_bits<int64_t, double>(inline_fp_null_val(ti));
+        break;
       }
-      break;
-    }
-    case kDOUBLE: {
+    case kDOUBLE:
       dividend = shared::reinterpret_bits<double>(fp_pair.first);
-      null_val = shared::reinterpret_bits<int64_t>(inline_fp_null_val(ti));
       break;
-    }
-    default: {
+    default:
 #ifndef __CUDACC__
       LOG_IF(FATAL, !(ti.is_integer() || ti.is_decimal()))
           << "Unsupported type for pair to double conversion: " << ti.get_type_name();
@@ -222,17 +217,11 @@ inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair,
       CHECK(ti.is_integer() || ti.is_decimal());
 #endif
       dividend = static_cast<double>(fp_pair.first);
-      null_val = inline_int_null_val(ti);
       break;
-    }
   }
-  if (!ti.get_notnull() && null_val == fp_pair.first) {
-    return inline_fp_null_val(SQLTypeInfo(kDOUBLE, false));
-  }
-
-  return ti.is_integer() || ti.is_decimal()
-             ? (dividend / exp_to_scale(ti.is_decimal() ? ti.get_scale() : 0)) /
-                   static_cast<double>(fp_pair.second)
+  return ti.is_decimal() && ti.get_scale()
+             ? dividend /
+                   (static_cast<double>(fp_pair.second) * exp_to_scale(ti.get_scale()))
              : dividend / static_cast<double>(fp_pair.second);
 }
 
@@ -240,13 +229,10 @@ inline int64_t null_val_bit_pattern(const SQLTypeInfo& ti,
                                     const bool float_argument_input) {
   if (ti.is_fp()) {
     if (float_argument_input && ti.get_type() == kFLOAT) {
-      int64_t float_null_val = 0;
-      *reinterpret_cast<float*>(may_alias_ptr(&float_null_val)) =
-          static_cast<float>(inline_fp_null_val(ti));
-      return float_null_val;
+      return shared::reinterpret_bits<int64_t>(NULL_FLOAT);  // 1<<23
     }
     const auto double_null_val = inline_fp_null_val(ti);
-    return *reinterpret_cast<const int64_t*>(may_alias_ptr(&double_null_val));
+    return shared::reinterpret_bits<int64_t>(double_null_val);  // 0x381<<52 or 1<<52
   }
   if ((ti.is_string() && ti.get_compression() == kENCODING_NONE) || ti.is_array() ||
       ti.is_geometry()) {

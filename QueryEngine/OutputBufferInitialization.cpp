@@ -133,7 +133,6 @@ int64_t get_agg_initial_val(const SQLAgg agg,
   CHECK(ti.get_logical_size() < 0 ||
         byte_width >= static_cast<unsigned>(ti.get_logical_size()));
   switch (agg) {
-    case kAVG:
     case kSUM: {
       if (!ti.get_notnull()) {
         if (ti.is_fp()) {
@@ -170,6 +169,7 @@ int64_t get_agg_initial_val(const SQLAgg agg,
           CHECK(false);
       }
     }
+    case kAVG:
     case kCOUNT:
     case kAPPROX_COUNT_DISTINCT:
       return 0;
