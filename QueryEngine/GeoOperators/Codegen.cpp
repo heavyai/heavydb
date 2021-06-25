@@ -32,9 +32,24 @@ std::unique_ptr<Codegen> Codegen::init(const Analyzer::GeoOperator* geo_operator
     return std::make_unique<StartEndPoint>(geo_operator, catalog);
   } else if (operator_name == "ST_X" || operator_name == "ST_Y") {
     return std::make_unique<PointAccessors>(geo_operator, catalog);
+  } else if (operator_name == "ST_Point") {
+    return std::make_unique<PointConstructor>(geo_operator, catalog);
   }
   UNREACHABLE();
   return nullptr;
+}
+
+std::unique_ptr<CodeGenerator::NullCheckCodegen> Codegen::getNullCheckCodegen(
+    llvm::Value* null_lv,
+    CgenState* cgen_state,
+    Executor* executor) {
+  if (isNullable()) {
+    CHECK(null_lv);
+    return std::make_unique<CodeGenerator::NullCheckCodegen>(
+        cgen_state, executor, null_lv, getNullType(), getName() + "_nullcheck");
+  } else {
+    return nullptr;
+  }
 }
 
 }  // namespace spatial_type

@@ -219,7 +219,7 @@ class QueryMemoryInitializer {
 
   std::vector<int64_t> init_agg_vals_;
 
-  const size_t num_buffers_;
+  size_t num_buffers_;
   std::vector<int64_t*> group_by_buffers_;
 
   CUdeviceptr count_distinct_bitmap_mem_;

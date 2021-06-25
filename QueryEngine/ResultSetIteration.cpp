@@ -1548,7 +1548,18 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
 
   switch (target_info.sql_type.get_type()) {
     case kPOINT: {
-      if (separate_varlen_storage_valid_ && !target_info.is_agg) {
+      if (query_mem_desc_.slotIsVarlenOutput(slot_idx)) {
+        auto geo_data_ptr = read_int_from_buff(
+            geo_target_ptr, query_mem_desc_.getPaddedSlotWidthBytes(slot_idx));
+        return GeoTargetValueBuilder<kPOINT, GeoQueryOutputFetchHandler>::build(
+            target_info.sql_type,
+            geo_return_type_,
+            is_gpu_fetch ? getDataMgr() : nullptr,
+            is_gpu_fetch,
+            device_id_,
+            geo_data_ptr,
+            target_info.sql_type.get_compression() == kENCODING_GEOINT ? 8 : 16);
+      } else if (separate_varlen_storage_valid_ && !target_info.is_agg) {
         const auto& varlen_buffer = getSeparateVarlenStorage();
         CHECK_LT(static_cast<size_t>(getCoordsDataPtr(geo_target_ptr)),
                  varlen_buffer.size());

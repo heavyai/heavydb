@@ -678,6 +678,16 @@ extern "C" __device__ void agg_id_shared(int64_t* agg, const int64_t val) {
   *agg = val;
 }
 
+extern "C" __device__ int8_t* agg_id_varlen_shared(int8_t* varlen_buffer,
+                                                   const int64_t offset,
+                                                   const int8_t* value,
+                                                   const int64_t size_bytes) {
+  for (auto i = 0; i < size_bytes; i++) {
+    varlen_buffer[offset + i] = value[i];
+  }
+  return &varlen_buffer[offset];
+}
+
 extern "C" __device__ int32_t checked_single_agg_id_shared(int64_t* agg,
                                                            const int64_t val,
                                                            const int64_t null_val) {

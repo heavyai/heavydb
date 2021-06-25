@@ -674,6 +674,7 @@ declare void @agg_min_double_skip_val_shared(i64*, double, double);
 declare void @agg_min_float_shared(i32*, float);
 declare void @agg_min_float_skip_val_shared(i32*, float, float);
 declare void @agg_id_shared(i64*, i64);
+declare i8* @agg_id_varlen_shared(i8*, i64, i8*, i64);
 declare void @agg_id_int32_shared(i32*, i32);
 declare void @agg_id_int16_shared(i16*, i16);
 declare void @agg_id_int8_shared(i8*, i8);
@@ -808,6 +809,8 @@ declare i64* @get_bin_from_k_heap_float(i64*, i32, i32, i32, i1, i1, i1, float, 
 declare i64* @get_bin_from_k_heap_double(i64*, i32, i32, i32, i1, i1, i1, double, double);
 declare double @decompress_x_coord_geoint(i32);
 declare double @decompress_y_coord_geoint(i32);
+declare i32 @compress_x_coord_geoint(double);
+declare i32 @compress_y_coord_geoint(double);
 )" + gen_array_any_all_sigs() +
     gen_translate_null_key_sigs();
 
@@ -1479,6 +1482,8 @@ void set_row_func_argnames(llvm::Function* row_func,
   } else {
     arg_it->setName("group_by_buff");
     ++arg_it;
+    arg_it->setName("varlen_output_buff");
+    ++arg_it;
     arg_it->setName("crt_matched");
     ++arg_it;
     arg_it->setName("total_matched");
@@ -1528,6 +1533,8 @@ llvm::Function* create_row_function(const size_t in_col_count,
     }
   } else {
     // group by buffer
+    row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+    // varlen output buffer
     row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
     // current match count
     row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));

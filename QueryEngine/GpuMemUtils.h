@@ -78,6 +78,7 @@ GpuGroupByBuffers create_dev_group_by_buffers(
     const bool prepend_index_buffer,
     const bool always_init_group_by_on_host,
     const bool use_bump_allocator,
+    const bool has_varlen_output,
     Allocator* insitu_allocator);
 
 void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
@@ -88,7 +89,8 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                     const unsigned block_size_x,
                                     const unsigned grid_size_x,
                                     const int device_id,
-                                    const bool prepend_index_buffer);
+                                    const bool prepend_index_buffer,
+                                    const bool has_varlen_output);
 
 size_t get_num_allocated_rows_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                        CUdeviceptr projection_size_gpu,

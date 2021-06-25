@@ -37,6 +37,9 @@ class Codegen {
 
   std::string getName() const { return operator_->getName(); }
 
+  virtual std::unique_ptr<CodeGenerator::NullCheckCodegen>
+  getNullCheckCodegen(llvm::Value* null_lv, CgenState* cgen_state, Executor* executor);
+
   // number of loads/arguments for the operator
   virtual size_t size() const = 0;
 

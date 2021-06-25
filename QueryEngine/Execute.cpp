@@ -1894,7 +1894,7 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
       entry.push_back(0);
       entry.push_back(0);
     } else if (agg_info.agg_kind == kSINGLE_VALUE || agg_info.agg_kind == kSAMPLE) {
-      if (agg_info.sql_type.is_geometry()) {
+      if (agg_info.sql_type.is_geometry() && !agg_info.is_varlen_projection) {
         for (int i = 0; i < agg_info.sql_type.get_physical_coord_cols() * 2; i++) {
           entry.push_back(0);
         }

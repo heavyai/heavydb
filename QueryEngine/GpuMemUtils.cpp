@@ -69,6 +69,7 @@ GpuGroupByBuffers create_dev_group_by_buffers(
     const bool prepend_index_buffer,
     const bool always_init_group_by_on_host,
     const bool use_bump_allocator,
+    const bool has_varlen_output,
     Allocator* insitu_allocator) {
   if (group_by_buffers.empty() && !insitu_allocator) {
     return {0, 0, 0};
@@ -173,7 +174,8 @@ GpuGroupByBuffers create_dev_group_by_buffers(
     std::vector<int8_t> buff_to_gpu(mem_size);
     auto buff_to_gpu_ptr = buff_to_gpu.data();
 
-    for (size_t i = 0; i < group_by_buffers.size(); i += step) {
+    const size_t start = has_varlen_output ? 1 : 0;
+    for (size_t i = start; i < group_by_buffers.size(); i += step) {
       memcpy(buff_to_gpu_ptr, group_by_buffers[i], groups_buffer_size);
       buff_to_gpu_ptr += groups_buffer_size;
     }
@@ -184,17 +186,27 @@ GpuGroupByBuffers create_dev_group_by_buffers(
 
   auto group_by_dev_buffer = group_by_dev_buffers_mem;
 
-  const size_t num_ptrs{block_size_x * grid_size_x};
+  const size_t num_ptrs =
+      (block_size_x * grid_size_x) + (has_varlen_output ? size_t(1) : size_t(0));
 
   std::vector<CUdeviceptr> group_by_dev_buffers(num_ptrs);
 
-  for (size_t i = 0; i < num_ptrs; i += step) {
+  const size_t start_index = has_varlen_output ? 1 : 0;
+  for (size_t i = start_index; i < num_ptrs; i += step) {
     for (size_t j = 0; j < step; ++j) {
       group_by_dev_buffers[i + j] = group_by_dev_buffer;
     }
     if (!query_mem_desc.blocksShareMemory()) {
       group_by_dev_buffer += groups_buffer_size;
     }
+  }
+
+  if (has_varlen_output) {
+    const auto varlen_buffer_elem_size_opt = query_mem_desc.varlenOutputBufferElemSize();
+    CHECK(varlen_buffer_elem_size_opt);  // TODO(adb): relax
+
+    group_by_dev_buffers[0] = reinterpret_cast<CUdeviceptr>(cuda_allocator->alloc(
+        query_mem_desc.getEntryCount() * varlen_buffer_elem_size_opt.value()));
   }
 
   auto group_by_dev_ptr = cuda_allocator->alloc(num_ptrs * sizeof(CUdeviceptr));
@@ -228,16 +240,19 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                     const unsigned block_size_x,
                                     const unsigned grid_size_x,
                                     const int device_id,
-                                    const bool prepend_index_buffer) {
+                                    const bool prepend_index_buffer,
+                                    const bool has_varlen_output) {
   if (group_by_buffers.empty()) {
     return;
   }
+  const size_t first_group_buffer_idx = has_varlen_output ? 1 : 0;
+
   const unsigned block_buffer_count{query_mem_desc.blocksShareMemory() ? 1 : grid_size_x};
   if (block_buffer_count == 1 && !prepend_index_buffer) {
     CHECK_EQ(coalesced_size(query_mem_desc, groups_buffer_size, block_buffer_count),
              groups_buffer_size);
     copy_from_gpu(data_mgr,
-                  group_by_buffers[0],
+                  group_by_buffers[first_group_buffer_idx],
                   group_by_dev_buffers_mem,
                   groups_buffer_size,
                   device_id);
@@ -255,8 +270,9 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                 device_id);
   auto buff_from_gpu_ptr = &buff_from_gpu[0];
   for (size_t i = 0; i < block_buffer_count; ++i) {
-    CHECK_LT(i * block_size_x, group_by_buffers.size());
-    memcpy(group_by_buffers[i * block_size_x],
+    const size_t buffer_idx = (i * block_size_x) + first_group_buffer_idx;
+    CHECK_LT(buffer_idx, group_by_buffers.size());
+    memcpy(group_by_buffers[buffer_idx],
            buff_from_gpu_ptr,
            groups_buffer_size + index_buffer_sz);
     buff_from_gpu_ptr += groups_buffer_size;

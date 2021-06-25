@@ -327,6 +327,16 @@ class QueryMemoryDescriptor {
 
   std::string reductionKey() const;
 
+  bool hasVarlenOutput() const { return col_slot_context_.hasVarlenOutput(); }
+
+  // returns a value if the buffer can be a fixed size; otherwise, we will need to use the
+  // bump allocator
+  std::optional<size_t> varlenOutputBufferElemSize() const;
+
+  bool slotIsVarlenOutput(const size_t slot_idx) const {
+    return col_slot_context_.slotIsVarlen(slot_idx);
+  }
+
  protected:
   void resetGroupColWidths(const std::vector<int8_t>& new_group_col_widths) {
     group_col_widths_ = new_group_col_widths;

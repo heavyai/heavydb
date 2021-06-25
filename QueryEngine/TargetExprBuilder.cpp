@@ -38,14 +38,27 @@
 
 namespace {
 
-std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
+inline bool is_varlen_projection(const Analyzer::Expr* target_expr,
+                                 const SQLTypeInfo& ti) {
+  return dynamic_cast<const Analyzer::GeoExpr*>(target_expr) && ti.get_type() == kPOINT;
+}
+
+std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info,
+                                           const bool is_varlen_projection) {
   const auto& chosen_type = get_compact_type(target_info);
+  if (is_varlen_projection) {
+    // TODO: support other types here
+    CHECK(chosen_type.is_geometry());
+    return {"agg_id_varlen"};
+  }
   if (!target_info.is_agg || target_info.agg_kind == kSAMPLE) {
     if (chosen_type.is_geometry()) {
       return std::vector<std::string>(2 * chosen_type.get_physical_coord_cols(),
                                       "agg_id");
     }
     if (chosen_type.is_varlen()) {
+      // not a varlen projection (not creating new varlen outputs). Just store the pointer
+      // and offset into the input buffer in the output slots.
       return {"agg_id", "agg_id"};
     }
     return {"agg_id"};
@@ -101,6 +114,7 @@ void TargetExprCodegen::codegen(
     const std::vector<llvm::Value*>& agg_out_vec,
     llvm::Value* output_buffer_byte_stream,
     llvm::Value* out_row_idx,
+    llvm::Value* varlen_output_buffer,
     DiamondCodegen& diamond_codegen,
     DiamondCodegen* sample_cfg) const {
   CHECK(group_by_and_agg);
@@ -110,7 +124,8 @@ void TargetExprCodegen::codegen(
   auto agg_out_ptr_w_idx = agg_out_ptr_w_idx_in;
   const auto arg_expr = agg_arg(target_expr);
 
-  const auto agg_fn_names = agg_fn_base_names(target_info);
+  const bool varlen_projection = is_varlen_projection(target_expr, target_info.sql_type);
+  const auto agg_fn_names = agg_fn_base_names(target_info, varlen_projection);
   const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
   WindowProjectNodeContext::resetWindowFunctionContext(executor);
   auto target_lvs =
@@ -137,7 +152,7 @@ void TargetExprCodegen::codegen(
     str_target_lv = target_lvs.front();
     target_lvs.erase(target_lvs.begin());
   }
-  if (target_info.sql_type.is_geometry()) {
+  if (target_info.sql_type.is_geometry() && !varlen_projection) {
     // Geo cols are expanded to the physical coord cols. Each physical coord col is an
     // array. Ensure that the target values generated match the number of agg
     // functions before continuing
@@ -160,7 +175,7 @@ void TargetExprCodegen::codegen(
     }
   } else {
     if (target_has_geo(target_info)) {
-      if (!target_info.is_agg) {
+      if (!target_info.is_agg && !varlen_projection) {
         CHECK_EQ(static_cast<size_t>(2 * target_info.sql_type.get_physical_coord_cols()),
                  target_lvs.size());
         CHECK_EQ(agg_fn_names.size(), target_lvs.size());
@@ -264,6 +279,7 @@ void TargetExprCodegen::codegen(
                    agg_out_vec,
                    output_buffer_byte_stream,
                    out_row_idx,
+                   varlen_output_buffer,
                    slot_index);
 }
 
@@ -277,6 +293,7 @@ void TargetExprCodegen::codegenAggregate(
     const std::vector<llvm::Value*>& agg_out_vec,
     llvm::Value* output_buffer_byte_stream,
     llvm::Value* out_row_idx,
+    llvm::Value* varlen_output_buffer,
     int32_t slot_index) const {
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
   size_t target_lv_idx = 0;
@@ -284,7 +301,8 @@ void TargetExprCodegen::codegenAggregate(
 
   CodeGenerator code_generator(executor);
 
-  const auto agg_fn_names = agg_fn_base_names(target_info);
+  const auto agg_fn_names = agg_fn_base_names(
+      target_info, is_varlen_projection(target_expr, target_info.sql_type));
   auto arg_expr = agg_arg(target_expr);
 
   for (const auto& agg_base_name : agg_fn_names) {
@@ -338,6 +356,51 @@ void TargetExprCodegen::codegenAggregate(
                                                           target_idx);
       CHECK(agg_col_ptr);
       agg_col_ptr->setName("agg_col_ptr");
+    }
+
+    if (is_varlen_projection(target_expr, target_info.sql_type)) {
+      CHECK(!query_mem_desc.didOutputColumnar());
+
+      CHECK_EQ(target_info.sql_type.get_type(), kPOINT);
+      CHECK_LT(target_lv_idx, target_lvs.size());
+      CHECK(varlen_output_buffer);
+      auto target_lv = target_lvs[target_lv_idx];
+
+      std::string agg_fname_suffix = "";
+      if (co.device_type == ExecutorDeviceType::GPU &&
+          query_mem_desc.threadsShareMemory()) {
+        agg_fname_suffix += "_shared";
+      }
+
+      // first write the varlen data into the varlen buffer and get the pointer location
+      // into the varlen buffer
+      auto arr_ptr_lv = executor->cgen_state_->ir_builder_.CreateBitCast(
+          target_lv,
+          llvm::PointerType::get(get_int_type(8, executor->cgen_state_->context_), 0));
+      const int64_t chosen_bytes =
+          target_info.sql_type.get_compression() == kENCODING_GEOINT ? 8 : 16;
+      const auto output_buffer_slot = LL_BUILDER.CreateZExt(
+          LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "old_total_matched")),
+          llvm::Type::getInt64Ty(LL_CONTEXT));
+      const auto output_buffer_slot_bytes = LL_BUILDER.CreateMul(
+          output_buffer_slot, executor->cgen_state_->llInt(chosen_bytes));
+      std::vector<llvm::Value*> varlen_agg_args{
+          executor->castToIntPtrTyIn(varlen_output_buffer, 8),
+          output_buffer_slot_bytes,
+          arr_ptr_lv,
+          executor->cgen_state_->llInt(chosen_bytes)};
+      auto varlen_offset_ptr =
+          group_by_and_agg->emitCall(agg_base_name + agg_fname_suffix, varlen_agg_args);
+
+      // then write that pointer location into the 64 bit slot in the output buffer
+      auto varlen_offset_int = LL_BUILDER.CreatePtrToInt(
+          varlen_offset_ptr, llvm::Type::getInt64Ty(LL_CONTEXT));
+      std::vector<llvm::Value*> agg_args{agg_col_ptr, varlen_offset_int};
+      group_by_and_agg->emitCall("agg_id" + agg_fname_suffix, agg_args);
+
+      ++slot_index;
+      ++target_lv_idx;
+      continue;
     }
 
     const bool float_argument_input = takes_float_argument(target_info);
@@ -557,7 +620,8 @@ void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
                                          is_group_by);
   }
 
-  const auto agg_fn_names = agg_fn_base_names(target_info);
+  const auto agg_fn_names = agg_fn_base_names(
+      target_info, is_varlen_projection(target_expr, target_info.sql_type));
   slot_index_counter += agg_fn_names.size();
 }
 
@@ -588,6 +652,7 @@ void TargetExprCodegenBuilder::codegen(
     const std::vector<llvm::Value*>& agg_out_vec,
     llvm::Value* output_buffer_byte_stream,
     llvm::Value* out_row_idx,
+    llvm::Value* varlen_output_buffer,
     DiamondCodegen& diamond_codegen) const {
   CHECK(group_by_and_agg);
   CHECK(executor);
@@ -603,6 +668,7 @@ void TargetExprCodegenBuilder::codegen(
                                 agg_out_vec,
                                 output_buffer_byte_stream,
                                 out_row_idx,
+                                varlen_output_buffer,
                                 diamond_codegen);
   }
   if (!sample_exprs_to_codegen.empty()) {
@@ -679,6 +745,7 @@ void TargetExprCodegenBuilder::codegenSingleSlotSampleExpression(
                                           agg_out_vec,
                                           output_buffer_byte_stream,
                                           out_row_idx,
+                                          /*varlen_output_buffer=*/nullptr,
                                           diamond_codegen);
 }
 
@@ -738,6 +805,7 @@ void TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions(
                                 agg_out_vec,
                                 output_buffer_byte_stream,
                                 out_row_idx,
+                                /*varlen_output_buffer=*/nullptr,
                                 diamond_codegen,
                                 &sample_cfg);
   }

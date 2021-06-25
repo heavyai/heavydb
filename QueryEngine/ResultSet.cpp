@@ -951,11 +951,12 @@ void ResultSet::radixSortOnGpu(
                                   grid_size_,
                                   device_id,
                                   ExecutorDispatchMode::KernelPerFragment,
-                                  -1,
-                                  true,
-                                  true,
-                                  false,
-                                  nullptr);
+                                  /*num_input_rows=*/-1,
+                                  /*prepend_index_buffer=*/true,
+                                  /*always_init_group_by_on_host=*/true,
+                                  /*use_bump_allocator=*/false,
+                                  /*has_varlen_output=*/false,
+                                  /*insitu_allocator*=*/nullptr);
   inplace_sort_gpu(
       order_entries, query_mem_desc_, dev_group_by_buffers, data_mgr, device_id);
   copy_group_by_buffers_from_gpu(
@@ -967,7 +968,8 @@ void ResultSet::radixSortOnGpu(
       block_size_,
       grid_size_,
       device_id,
-      false);
+      /*use_bump_allocator=*/false,
+      /*has_varlen_output=*/false);
 }
 
 void ResultSet::radixSortOnCpu(

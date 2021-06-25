@@ -1674,6 +1674,10 @@ class Query {
 class GeoExpr : public Expr {
  public:
   GeoExpr(const SQLTypeInfo& ti) : Expr(ti) {}
+
+  // geo expressions might hide child expressions (e.g. constructors). Centralize logic
+  // for pulling out child expressions for simplicity in visitors.
+  virtual std::vector<Analyzer::Expr*> getChildExprs() const { return {}; }
 };
 
 /**
@@ -1748,6 +1752,15 @@ class GeoOperator : public GeoExpr {
 
   const std::string& getName() const { return name_; }
 
+  std::vector<Analyzer::Expr*> getChildExprs() const override {
+    std::vector<Analyzer::Expr*> ret;
+    ret.reserve(args_.size());
+    for (const auto& arg : args_) {
+      ret.push_back(arg.get());
+    }
+    return ret;
+  }
+
  private:
   const std::string name_;
   const std::vector<std::shared_ptr<Analyzer::Expr>> args_;
@@ -1775,6 +1788,15 @@ class GeoFunctionOperator : public GeoExpr {
   Analyzer::Expr* getArg(const size_t index) const;
 
   const std::string& getName() const { return name_; }
+
+  std::vector<Analyzer::Expr*> getChildExprs() const override {
+    std::vector<Analyzer::Expr*> ret;
+    ret.reserve(args_.size());
+    for (const auto& arg : args_) {
+      ret.push_back(arg.get());
+    }
+    return ret;
+  }
 
  private:
   const std::string name_;

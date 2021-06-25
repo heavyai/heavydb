@@ -376,6 +376,16 @@ extern "C" ALWAYS_INLINE void agg_id(int64_t* agg, const int64_t val) {
   *agg = val;
 }
 
+extern "C" ALWAYS_INLINE int8_t* agg_id_varlen(int8_t* varlen_buffer,
+                                               const int64_t offset,
+                                               const int8_t* value,
+                                               const int64_t size_bytes) {
+  for (auto i = 0; i < size_bytes; i++) {
+    varlen_buffer[offset + i] = value[i];
+  }
+  return &varlen_buffer[offset];
+}
+
 extern "C" ALWAYS_INLINE int32_t checked_single_agg_id(int64_t* agg,
                                                        const int64_t val,
                                                        const int64_t null_val) {
@@ -804,6 +814,13 @@ DEF_SHARED_AGG_RET_STUBS(agg_count)
 DEF_SHARED_AGG_STUBS(agg_max)
 DEF_SHARED_AGG_STUBS(agg_min)
 DEF_SHARED_AGG_STUBS(agg_id)
+
+extern "C" GPU_RT_STUB int8_t* agg_id_varlen_shared(int8_t* varlen_buffer,
+                                                    const int64_t offset,
+                                                    const int8_t* value,
+                                                    const int64_t size_bytes) {
+  return nullptr;
+}
 
 extern "C" GPU_RT_STUB int32_t checked_single_agg_id_shared(int64_t* agg,
                                                             const int64_t val,

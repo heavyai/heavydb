@@ -747,6 +747,7 @@ void Executor::redeclareFilterFunction() {
           continue;
         }
 
+        CHECK(v);
         if (auto* instr = llvm::dyn_cast<llvm::Instruction>(v);
             instr && instr->getParent() &&
             instr->getParent()->getParent() == cgen_state_->row_func_) {

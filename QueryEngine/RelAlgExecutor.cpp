@@ -2087,7 +2087,8 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
                                          tuple_type_component.get_type_info(),
                                          SQLTypeInfo(kNULLT, false),
                                          false,
-                                         false});
+                                         false,
+                                         /*is_varlen_projection=*/false});
   }
 
   std::shared_ptr<ResultSet> rs{

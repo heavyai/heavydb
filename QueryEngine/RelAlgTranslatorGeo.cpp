@@ -670,7 +670,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
 
       auto coord1 = translateScalarRex(rex_function->getOperand(0));
       auto coord2 = translateScalarRex(rex_function->getOperand(1));
-      auto d_ti = SQLTypeInfo(kDOUBLE, true);
+      auto d_ti = SQLTypeInfo(kDOUBLE, false);
       auto cast_coord1 = coord1->add_cast(d_ti);
       auto cast_coord2 = coord2->add_cast(d_ti);
       // First try to fold to geo literal
@@ -688,6 +688,17 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         auto args = translateGeoLiteral(&rex_literal, arg_ti, false);
         CHECK(arg_ti.get_type() == kPOINT);
         return args;
+      }
+      const auto is_local_alloca = !is_projection;
+      if (!is_local_alloca) {
+        if (try_to_compress) {
+          arg_ti.set_input_srid(4326);
+          arg_ti.set_output_srid(4326);
+        }
+        return {makeExpr<Analyzer::GeoOperator>(
+            arg_ti,
+            rex_function->getName(),
+            std::vector<std::shared_ptr<Analyzer::Expr>>{cast_coord1, cast_coord2})};
       }
       // Couldn't fold to geo literal, construct [and compress] on the fly
       auto da_ti = SQLTypeInfo(kARRAY, true);
@@ -708,7 +719,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         arg_ti.set_comp_param(32);
       }
       auto cast_coords = {cast_coord1, cast_coord2};
-      auto is_local_alloca = !is_projection;
       auto ae = makeExpr<Analyzer::ArrayExpr>(da_ti, cast_coords, false, is_local_alloca);
       SQLTypeInfo tia_ti = da_ti;
       tia_ti.set_subtype(kTINYINT);
@@ -824,6 +834,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoProjection(
   int32_t lindex = 0;
   auto geoargs =
       translateGeoFunctionArg(rex_function, ti, lindex, false, false, true, true);
+  CHECK(!geoargs.empty());
+  if (std::dynamic_pointer_cast<const Analyzer::GeoExpr>(geoargs.front()) &&
+      !geoargs.front()->get_type_info().is_array()) {
+    // GeoExpression
+    return geoargs.front();
+  }
   if (lindex != 0) {
     throw QueryNotSupported(
         "Indexed LINESTRING geometries not supported in this context");

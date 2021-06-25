@@ -46,6 +46,9 @@ std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targets,
       if (query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx) > 0) {
         agg_init_vals.push_back(0);
       }
+      if (agg_info.is_varlen_projection) {
+        continue;
+      }
       if (agg_ti.is_array() ||
           (agg_ti.is_string() && agg_ti.get_compression() == kENCODING_NONE)) {
         agg_init_vals.push_back(0);

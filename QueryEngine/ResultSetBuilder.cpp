@@ -175,7 +175,8 @@ ResultSet* ResultSetLogicalValuesBuilder::create(
   SQLTypeInfo str_ti(kTEXT, true, kENCODING_NONE);
   for (size_t col = 0; col < numCols; col++) {
     SQLTypeInfo colType = label_infos[col].get_type_info();
-    target_infos.push_back(TargetInfo{false, kSAMPLE, colType, colType, true, false});
+    target_infos.push_back(TargetInfo{
+        false, kSAMPLE, colType, colType, true, false, /*is_varlen_projection=*/false});
     query_mem_desc.addColSlotInfo({std::make_tuple(colType.get_size(), 8)});
   }
 
