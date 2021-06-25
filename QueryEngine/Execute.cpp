@@ -116,7 +116,7 @@ bool g_enable_runtime_query_interrupt{true};
 bool g_enable_non_kernel_time_query_interrupt{true};
 bool g_use_estimator_result_cache{true};
 unsigned g_pending_query_interrupt_freq{1000};
-double g_running_query_interrupt_freq{0.5};
+double g_running_query_interrupt_freq{0.1};
 size_t g_gpu_smem_threshold{
     4096};  // GPU shared memory threshold (in bytes), if larger
             // buffer sizes are required we do not use GPU shared
