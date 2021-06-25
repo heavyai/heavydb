@@ -112,7 +112,7 @@ double g_bump_allocator_step_reduction{0.75};
 bool g_enable_direct_columnarization{true};
 extern bool g_enable_experimental_string_functions;
 bool g_enable_lazy_fetch{true};
-bool g_enable_runtime_query_interrupt{false};
+bool g_enable_runtime_query_interrupt{true};
 bool g_enable_non_kernel_time_query_interrupt{true};
 bool g_use_estimator_result_cache{true};
 unsigned g_pending_query_interrupt_freq{1000};
