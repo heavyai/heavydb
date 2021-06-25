@@ -66,8 +66,10 @@
 #if __has_include(<llvm/Support/raw_os_ostream.h> )
 #include <llvm/IR/Value.h>
 #include <llvm/Support/raw_os_ostream.h>
+#include "clang/Driver/Job.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
+#include "llvm/Option/ArgList.h"
 #else
 #undefine ENABLE_TOSTRING_LLVM
 #endif
@@ -165,6 +167,29 @@ std::string toString(const T& v) {
     return "(" + rso.str() + ")";
   } else if constexpr (std::is_same_v<T, llvm::Triple>) {
     return v.str();
+  } else if constexpr (std::is_same_v<T, llvm::opt::ArgStringList>) {
+    std::string r;
+    for (unsigned i = 0; i < v.size(); i++) {
+      if (i) {
+        r += ", ";
+      }
+      r += v[i];
+    }
+    return "[" + r + "]";
+  } else if constexpr (std::is_same_v<T, llvm::opt::DerivedArgList>) {
+    std::string r;
+    for (unsigned i = 0; i < v.getNumInputArgStrings(); i++) {
+      if (i) {
+        r += ", ";
+      }
+      r += v.getArgString(i);
+    }
+    return "[" + r + "]";
+  } else if constexpr (std::is_same_v<T, clang::driver::JobList>) {
+    std::string type_str;
+    llvm::raw_string_ostream rso(type_str);
+    v.Print(rso, nullptr, true);
+    return rso.str();
 #endif
   } else if constexpr (std::is_same_v<T, bool>) {
     return v ? "True" : "False";

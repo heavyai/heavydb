@@ -470,6 +470,7 @@ class Executor {
 
   TableUpdateMetadata executeUpdate(const RelAlgExecutionUnit& ra_exe_unit,
                                     const std::vector<InputTableInfo>& table_infos,
+                                    const TableDescriptor* updated_table_desc,
                                     const CompilationOptions& co,
                                     const ExecutionOptions& eo,
                                     const Catalog_Namespace::Catalog& cat,

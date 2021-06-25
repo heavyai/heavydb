@@ -36,6 +36,17 @@ size_t size_of_dir(const std::string& dir) {
   }
   return space_used;
 }
+
+ChunkKey evict_chunk_or_fail(LRUEvictionAlgorithm& alg) {
+  ChunkKey ret;
+  try {
+    ret = alg.evictNextChunk();
+  } catch (const NoEntryFoundException& e) {
+    LOG(FATAL) << "Disk cache needs to evict data to make space, but no data found in "
+                  "eviction queue.";
+  }
+  return ret;
+}
 }  // namespace
 
 namespace File_Namespace {
@@ -338,14 +349,15 @@ void CachingFileMgr::writeDirtyBuffers(int32_t db_id, int32_t tb_id) {
   ChunkKey min_table_key{db_id, tb_id};
   ChunkKey max_table_key{db_id, tb_id, std::numeric_limits<int32_t>::max()};
 
-  for (auto chunkIt = chunkIndex_.lower_bound(min_table_key);
-       chunkIt != chunkIndex_.upper_bound(max_table_key);
-       ++chunkIt) {
-    if (chunkIt->second->isDirty()) {
+  for (auto chunk_it = chunkIndex_.lower_bound(min_table_key);
+       chunk_it != chunkIndex_.upper_bound(max_table_key);
+       ++chunk_it) {
+    if (auto [key, buf] = *chunk_it; buf->isDirty()) {
       // Free previous versions first so we only have one metadata version.
-      chunkIt->second->freeMetadataPages();
-      chunkIt->second->writeMetadata(epoch(db_id, tb_id));
-      chunkIt->second->clearDirtyBits();
+      buf->freeMetadataPages();
+      buf->writeMetadata(epoch(db_id, tb_id));
+      buf->clearDirtyBits();
+      touchKey(key);
     }
   }
 }
@@ -431,46 +443,57 @@ std::vector<ChunkKey> CachingFileMgr::getKeysForTable(int32_t db_id,
 
 FileInfo* CachingFileMgr::evictMetadataPages() {
   // Locks should already be in place before calling this method.
-  FileInfo* fileInfo = nullptr;
-  auto [db_id, tb_id] = get_table_prefix(table_evict_alg_.evictNextChunk());
+  FileInfo* file_info{nullptr};
+  auto key_to_evict = evict_chunk_or_fail(table_evict_alg_);
+  auto [db_id, tb_id] = get_table_prefix(key_to_evict);
   const auto keys = getKeysForTable(db_id, tb_id);
   for (const auto& key : keys) {
-    auto chunkIt = chunkIndex_.find(key);
-    CHECK(chunkIt != chunkIndex_.end());
-    auto& buf = chunkIt->second;
-    if (!fileInfo) {
-      // Return the fileinfo for the first file we are freeing a page from.
-      fileInfo =
+    auto chunk_it = chunkIndex_.find(key);
+    CHECK(chunk_it != chunkIndex_.end());
+    auto& buf = chunk_it->second;
+    if (!file_info) {
+      // Return the FileInfo for the first file we are freeing a page from so that the
+      // caller does not have to search for a FileInfo guaranteed to have at least one
+      // free page.
+      CHECK(buf->getMetadataPage().pageVersions.size() > 0);
+      file_info =
           getFileInfoForFileId(buf->getMetadataPage().pageVersions.front().page.fileId);
     }
     // We erase all pages and entries for the chunk, as without metadata all other
     // entries are useless.
-    deleteBufferUnlocked(chunkIt);
+    deleteBufferUnlocked(chunk_it);
   }
-  CHECK(fileInfo) << "fileInfo with freed page not found";
   // Serialized datawrappers require metadata to be in the cache.
   deleteWrapperFile(db_id, tb_id);
-  return fileInfo;
+  CHECK(file_info) << "FileInfo with freed page not found";
+  return file_info;
 }
 
 FileInfo* CachingFileMgr::evictPages() {
-  FileInfo* fileInfo = nullptr;
-  const auto key = chunk_evict_alg_.evictNextChunk();
-  auto chunkIt = chunkIndex_.find(key);
-  CHECK(chunkIt != chunkIndex_.end());
-  auto& buf = chunkIt->second;
-  if (!fileInfo) {
-    CHECK(buf->getMultiPage().size() > 0);
+  FileInfo* file_info{nullptr};
+  FileBuffer* buf{nullptr};
+  while (!file_info) {
+    buf = chunkIndex_.at(evict_chunk_or_fail(chunk_evict_alg_));
+    CHECK(buf);
+    if (!buf->hasDataPages()) {
+      // This buffer contains no chunk data (metadata only, uninitialized, size == 0,
+      // etc...) so we won't recover any space by evicting it.  In this case it gets
+      // removed from the eviction queue (it will get re-added if it gets populated with
+      // data) and we look at the next chunk in queue until we find a buffer with page
+      // data.
+      continue;
+    }
+    // Return the FileInfo for the first file we are freeing a page from so that the
+    // caller does not have to search for a FileInfo guaranteed to have at least one free
+    // page.
     CHECK(buf->getMultiPage().front().pageVersions.size() > 0);
-    // Return the fileinfo for the first file we are freeing a page from.
-    fileInfo = getFileInfoForFileId(
+    file_info = getFileInfoForFileId(
         buf->getMultiPage().front().pageVersions.front().page.fileId);
   }
-
   auto pages_freed = buf->freeChunkPages();
   CHECK(pages_freed > 0) << "failed to evict a page";
-  CHECK(fileInfo) << "fileInfo with freed page not found";
-  return fileInfo;
+  CHECK(file_info) << "FileInfo with freed page not found";
+  return file_info;
 }
 
 void CachingFileMgr::touchKey(const ChunkKey& key) const {

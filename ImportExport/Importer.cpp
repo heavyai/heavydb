@@ -2216,33 +2216,54 @@ static ImportStatus import_thread_shapefile(
 
   // we create this on the fly based on the first feature's SR
   std::unique_ptr<OGRCoordinateTransformation> coordinate_transformation;
+  bool checked_transformation{false};
+
+  // for all the features in this chunk...
   for (size_t iFeature = 0; iFeature < numFeatures; iFeature++) {
+    // ignore null features
     if (!features[iFeature]) {
       continue;
     }
 
     // get this feature's geometry
+    // for geodatabase, we need to consider features with no geometry
+    // as we still want to create a table, even if it has no geo column
     OGRGeometry* pGeometry = features[iFeature]->GetGeometryRef();
     if (pGeometry) {
-      // for geodatabase, we need to consider features with no geometry
-      // as we still want to create a table, even if it has no geo column
-
-      // transform it
-      // avoid GDAL error if not transformable
-      auto geometry_sr = pGeometry->getSpatialReference();
-      if (geometry_sr) {
-        // create an OGRCoordinateTransformation (CT) on the fly
-        // we must assume that all geo in this file will have
-        // the same source SR, so the CT will be valid for all
-        // transforming to a reusable CT is faster than to an SR
-        if (coordinate_transformation == nullptr) {
-          coordinate_transformation.reset(
-              OGRCreateCoordinateTransformation(geometry_sr, poGeographicSR));
+      // check if we need to make a CoordinateTransformation
+      // we assume that all features in this chunk will have
+      // the same source SR, so the CT will be valid for all
+      // transforming to a reusable CT is faster than to an SR
+      if (!checked_transformation) {
+        // get the SR of the incoming geo
+        auto geometry_sr = pGeometry->getSpatialReference();
+        // if the SR is non-null and non-empty and different from what we want
+        // we need to make a reusable CoordinateTransformation
+        if (geometry_sr &&
+#if GDAL_VERSION_MAJOR >= 3
+            !geometry_sr->IsEmpty() &&
+#endif
+            !geometry_sr->IsSame(poGeographicSR)) {
+          // validate the SR before trying to use it
+          if (geometry_sr->Validate() != OGRERR_NONE) {
+            throw std::runtime_error("Incoming geo has invalid Spatial Reference");
+          }
+          // create the OGRCoordinateTransformation that will be used for
+          // all the features in this chunk
           if (coordinate_transformation == nullptr) {
-            throw std::runtime_error(
-                "Failed to create a GDAL CoordinateTransformation for incoming geo");
+            coordinate_transformation.reset(
+                OGRCreateCoordinateTransformation(geometry_sr, poGeographicSR));
+            if (coordinate_transformation == nullptr) {
+              throw std::runtime_error(
+                  "Failed to create a GDAL CoordinateTransformation for incoming geo");
+            }
           }
         }
+        checked_transformation = true;
+      }
+
+      // if we have a transformation, use it
+      if (coordinate_transformation) {
         pGeometry->transform(coordinate_transformation.get());
       }
     }

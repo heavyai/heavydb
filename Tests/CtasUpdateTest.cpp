@@ -18,6 +18,7 @@
 #include <ctime>
 #include <iostream>
 #include "DBHandlerTestHelpers.h"
+#include "QueryEngine/ErrorHandling.h"
 #include "TestHelpers.h"
 
 // uncomment to run full test suite
@@ -1948,6 +1949,72 @@ TEST_F(Itas, OmitDictionaryEncodedArrayColumn) {
   }
 }
 
+TEST_F(Itas, ItasOrderLimitOffset) {
+  // clean up
+  sql("DROP TABLE IF EXISTS ITAS_TARGET;");
+  sql("DROP TABLE IF EXISTS ITAS_SOURCE;");
+
+  // create table src, target
+  sql("CREATE TABLE ITAS_TARGET (t int);");
+  sql("CREATE TABLE ITAS_SOURCE (s1 int, s2 int, s3 int) with (fragment_size = 4);");
+
+  // populate src
+  int max = 100;
+  for (int i = 0; i < max; i++) {
+    std::string insert_sql = "INSERT INTO ITAS_SOURCE VALUES(" + std::to_string(i) +
+                             ", " + std::to_string(max - i) + ", " +
+                             std::to_string(2 * max + i) + "); ";
+    sql(insert_sql);
+    // sql("INSERT INTO ITAS_SOURCE VALUES(i, max-i, 2*max+i); ");
+    // s1: 0 ... max-1
+    // s2: max ... 1
+    // s3: 2*max+0 ... 2*max+max-1
+  }
+
+  // itas with order-by, limit, offset
+
+  EXPECT_NO_THROW(
+      sql("INSERT INTO ITAS_TARGET (SELECT s1 FROM ITAS_SOURCE ORDER BY s2);"));
+  // verify -> 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+  TQueryResult result1;
+  sql(result1, "SELECT * FROM ITAS_TARGET ORDER BY t LIMIT 10;");
+  assertResultSetEqual(
+      {{i(0)}, {i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}, {i(6)}, {i(7)}, {i(8)}, {i(9)}},
+      result1);
+  sql("DELETE FROM ITAS_TARGET;");
+
+  EXPECT_NO_THROW(sql(
+      "INSERT INTO ITAS_TARGET (SELECT s2 FROM ITAS_SOURCE ORDER BY s2 DESC LIMIT 4);"));
+  // verify -> max-3, max-2, max-1, max-0
+  TQueryResult result2;
+  sql(result2, "SELECT * FROM ITAS_TARGET ORDER BY t;");
+  assertResultSetEqual({{i(max - 3)}, {i(max - 2)}, {i(max - 1)}, {i(max - 0)}}, result2);
+  sql("DELETE FROM ITAS_TARGET;");
+
+#if 0  
+  // disabled until an issue resolved with ORDER/LIMIT/OFFSET
+  //   -> LIMIT gets incorrectly set to same value as OFFSET if not explicitly specified
+  EXPECT_NO_THROW(sql(
+    "INSERT INTO ITAS_TARGET (SELECT s3 FROM ITAS_SOURCE ORDER BY s3 OFFSET 4);"));
+  // verify -> 24, 25, 26, 27, 28, 29
+  TQueryResult result3;
+  sql(result3, "SELECT * FROM ITAS_TARGET ORDER BY t LIMIT 6;");
+  int c = 3*max-1;
+  assertResultSetEqual({{i(c-5)}, {i(c-4)}, {i(c-3)}, {i(c-2)}, {i(c-1)}, {i(c)}}, result3);
+  sql("DELETE FROM ITAS_TARGET;");
+#endif
+
+  std::string insert_sql =
+      "INSERT INTO ITAS_TARGET (SELECT s1 FROM ITAS_SOURCE ORDER BY s3 LIMIT 6 OFFSET "
+      "62);";
+  EXPECT_NO_THROW(sql(insert_sql));
+  // verify -> 62, 63, 64, 65, 66, 67
+  TQueryResult result4;
+  sql(result4, "SELECT * FROM ITAS_TARGET ORDER BY t;");
+  assertResultSetEqual({{i(62)}, {i(63)}, {i(64)}, {i(65)}, {i(66)}, {i(67)}}, result4);
+  sql("DELETE FROM ITAS_TARGET;");
+}
+
 class Export : public DBHandlerTestFixture {
  public:
   void SetUp() override {
@@ -2803,14 +2870,49 @@ TEST_F(Errors, CtasItas) {
   EXPECT_ANY_THROW(sql("INSERT INTO test_itas SELECT * FROM test_src_a;"));
 };
 
-// TODO(daniel): Get this ITAS test working again ASAP.
-//      Moved here as itas parsing no longer available in the old parser
-/*
-TEST_F(Non_Kernel_Time_Interrupt, DISABLED_Interrupt_ITAS) {
+class Non_Kernel_Time_Interrupt : public DBHandlerTestFixture {
+ public:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    try {
+      sql("DROP TABLE IF EXISTS t_very_large;");
+      sql("CREATE TABLE t_very_large (x int not null, y int not null, z int not null);");
+      const auto file_path_very_large = boost::filesystem::path(
+          "../../Tests/Import/datafiles/interrupt_table_very_large.csv");
+      if (boost::filesystem::exists(file_path_very_large)) {
+        boost::filesystem::remove(file_path_very_large);
+      }
+      std::ofstream very_large_out(file_path_very_large.string());
+      for (int i = 0; i < 10000000; i++) {
+        if (very_large_out.is_open()) {
+          very_large_out << "1,1,1\n2,2,2\n3,3,3\n4,4,4\n5,5,5\n";
+        }
+      }
+      very_large_out.close();
+
+      std::string import_very_large_table_str{
+          "COPY t_very_large FROM "
+          "'../../Tests/Import/datafiles/interrupt_table_very_large.csv' WITH "
+          "(header='false')"};
+      sql(import_very_large_table_str);
+    } catch (...) {
+      LOG(ERROR) << "Failed to (re-)create table";
+    }
+  }
+
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS t_very_large;");
+    boost::filesystem::remove(
+        "../../Tests/Import/datafiles/interrupt_table_very_large.csv");
+
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+TEST_F(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
   std::atomic<bool> catchInterruption(false);
   try {
-    std::string session1 = generate_random_string(32);
-    QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
 
     // do ITAS
     sql("DROP TABLE IF EXISTS t_ITAS;");
@@ -2864,17 +2966,17 @@ TEST_F(Non_Kernel_Time_Interrupt, DISABLED_Interrupt_ITAS) {
     while (!startITAS && !detect_time_out) {
       {
         mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
-        query_status = executor->getQuerySessionInfo(session1, session_read_lock);
+        query_status = executor->getQuerySessionInfo(session_id, session_read_lock);
       }
       if (query_status.size() == 1) {
-        if (query_status[0].getQuerySession().compare(session1) != 0) {
+        if (query_status[0].getQuerySession().compare(session_id) != 0) {
           CHECK(false);
         }
         auto query_str = query_status[0].getQueryStr();
         if (query_str.find("INSERT_DATA") != std::string::npos) {
           startITAS = true;
           std::this_thread::sleep_for(std::chrono::milliseconds(100));
-          executor->interrupt(session1, session1);
+          executor->interrupt(session_id, session_id);
           break;
         }
       }
@@ -2886,10 +2988,10 @@ TEST_F(Non_Kernel_Time_Interrupt, DISABLED_Interrupt_ITAS) {
         {
           mapd_shared_lock<mapd_shared_mutex> session_read_lock(
               executor->getSessionLock());
-          query_status = executor->getQuerySessionInfo(session1, session_read_lock);
+          query_status = executor->getQuerySessionInfo(session_id, session_read_lock);
         }
         detect_time_out = true;
-        executor->interrupt(session1, session1);
+        executor->interrupt(session_id, session_id);
         break;
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -2897,12 +2999,107 @@ TEST_F(Non_Kernel_Time_Interrupt, DISABLED_Interrupt_ITAS) {
 
     if (catchInterruption.load()) {
       std::cout << "Detect interrupt request while performing ITAS" << std::endl;
-      std::shared_ptr<ResultSet> res =
-          run_query("SELECT COUNT(1) FROM t_ITAS", ExecutorDeviceType::CPU, session1);
-      CHECK_EQ(1, (int64_t)res.get()->rowCount());
-      auto crt_row = res.get()->getNextRow(false, false);
-      auto ret_val = v<int64_t>(crt_row[0]);
-      CHECK_EQ((int64_t)0, ret_val);
+
+      TQueryResult select_itas_result;
+      sql(select_itas_result, "SELECT COUNT(1) FROM t_ITAS");
+      auto columns_itas = select_itas_result.row_set.columns;
+      // num_cols == 1
+      ASSERT_EQ((size_t)1, columns_itas.size());
+      // num_rows == 1
+      ASSERT_EQ((size_t)1, columns_itas[0].nulls.size());
+
+      int64_t val = columns_itas[0].data.int_col[0];
+      CHECK_EQ((int64_t)1, val);
+      return;
+    }
+    if (detect_time_out) {
+      return;
+    }
+
+  } catch (...) {
+    CHECK(false);
+  }
+}
+
+TEST_F(Non_Kernel_Time_Interrupt, Interrupt_CTAS) {
+  std::atomic<bool> catchInterruption(false);
+  try {
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+
+    auto check_interrup_msg = [&catchInterruption](const std::string& msg,
+                                                   bool is_pending_query) {
+      std::cout << msg << std::endl;
+      std::string out_of_slot_msg{"Ran out of slots in the query output buffer"};
+      if (out_of_slot_msg.compare(msg) == 0) {
+        return;
+      }
+      auto check_interrupted_msg = msg.find("interrupted");
+      std::string expected_msg{
+          "Query execution has been interrupted while performing CTAS"};
+      CHECK((check_interrupted_msg != std::string::npos) ||
+            expected_msg.compare(msg) == 0)
+          << msg;
+      catchInterruption.store(true);
+    };
+    // do CTAS
+    sql("DROP TABLE IF EXISTS t_CTAS;");
+    auto ctas_thread = std::async(std::launch::async, [&] {
+      try {
+        sql("CREATE TABLE t_CTAS AS SELECT * FROM t_very_large WHERE x < 3;");
+      } catch (const QueryExecutionError& e) {
+        if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+          catchInterruption.store(true);
+        } else if (e.getErrorCode() < 0) {
+          std::cout << "Detect out of slot issue in the query output buffer while "
+                       "performing CTAS"
+                    << std::endl;
+          return;
+        } else {
+          throw e;
+        }
+      } catch (const std::runtime_error& e) {
+        check_interrup_msg(e.what(), false);
+      } catch (...) {
+        throw;
+      }
+      return;
+    });
+    std::string curRunningSession{""};
+    std::vector<QuerySessionStatus> query_status;
+    auto start_time = std::chrono::system_clock::now();
+    bool startCTAS = false;
+    bool detect_time_out = false;
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+    while (!startCTAS && !detect_time_out) {
+      {
+        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        query_status = executor->getQuerySessionInfo(session_id, session_read_lock);
+      }
+      if (query_status.size() == 1) {
+        if (query_status[0].getQuerySession().compare(session_id) != 0) {
+          CHECK(false);
+        }
+        auto query_str = query_status[0].getQueryStr();
+        if (query_str.find("INSERT_DATA") != std::string::npos) {
+          startCTAS = true;
+          executor->interrupt(session_id, session_id);
+          break;
+        }
+      }
+      auto end_time = std::chrono::system_clock::now();
+      auto cur_sec =
+          std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
+      if (cur_sec.count() > 60) {
+        detect_time_out = true;
+        std::cout << "Detect time_out while performing CTAS" << std::endl;
+        break;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    if (catchInterruption.load()) {
+      std::cout << "Detect interrupt request while performing CTAS" << std::endl;
+      // CTAS is interrupted and so the table is dropped
+      EXPECT_ANY_THROW(sql("SELECT COUNT(1) FROM t_CTAS"));
       return;
     }
     if (detect_time_out) {
@@ -2912,7 +3109,6 @@ TEST_F(Non_Kernel_Time_Interrupt, DISABLED_Interrupt_ITAS) {
     CHECK(false);
   }
 }
-*/
 
 class ItasStringTest : public DBHandlerTestFixture {
  public:
@@ -3037,6 +3233,405 @@ TEST_F(ItasStringTest, InsertIntoSelectLowercase_DifferentTables) {
                        select_result);
 
   g_enable_experimental_string_functions = false;
+}
+
+const char* create_table_mini_sort = R"(
+  CREATE TABLE sortab(
+    i int,
+    f float,
+    ia int[2],
+    pt point,
+    sa text[],
+    s2 text encoding dict(16),
+    dt date,
+    d2 date ENCODING FIXED(16),
+    tm timestamp,
+    t4 timestamp ENCODING FIXED(32),
+    va int[])
+  )";
+
+class CtasImportTestMiniSort : public DBHandlerTestFixture,
+                               public testing::WithParamInterface<
+                                   std::vector<std::shared_ptr<TestColumnDescriptor>>> {
+ public:
+  std::vector<std::shared_ptr<TestColumnDescriptor>> columnDescriptors;
+
+  CtasImportTestMiniSort() { columnDescriptors = GetParam(); }
+
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    // Default connection string outside of thrift
+    ASSERT_NO_THROW(sql("drop table if exists sortab;"));
+    ASSERT_NO_THROW(sql("drop table if exists sortctas;"));
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(sql("drop table if exists sortab;"));
+    ASSERT_NO_THROW(sql("drop table if exists sortctas;"));
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void create_minisort_table_on_column(const std::string& column_name) {
+    ASSERT_NO_THROW(
+        sql(std::string(create_table_mini_sort) +
+            (column_name.size() ? " with (sort_column='" + column_name + "');" : ";")));
+    EXPECT_NO_THROW(
+        sql("copy sortab from '../../Tests/Import/datafiles/mini_sort.txt' "
+            "with (header='false');"));
+  }
+
+  void check_minisort_on_expects(const std::string& table_name,
+                                 const std::vector<int>& expects) {
+    std::string select_sql = "SELECT i FROM " + table_name + ";";
+    TQueryResult select_result;
+    sql(select_result, select_sql);
+
+    CHECK_EQ(expects.size(), select_result.row_set.rows.size());
+    size_t i = 0;
+    for (auto exp : expects) {
+      auto crt_row = select_result.row_set.rows[i];
+      CHECK_EQ(size_t(1), crt_row.cols.size());
+      CHECK_EQ(int64_t(exp), select_result.row_set.columns[0].data.int_col[i]);
+      i++;
+    }
+  }
+
+  void test_minisort_on_column(const std::string& column_name,
+                               const std::vector<int> expects) {
+    create_minisort_table_on_column(column_name);
+    check_minisort_on_expects("sortab", expects);
+  }
+
+  void create_minisort_table_on_column_with_ctas(const std::string& column_name) {
+    EXPECT_NO_THROW(
+        sql("create table sortctas as select * from sortab" +
+            (column_name.size() ? " with (sort_column='" + column_name + "');" : ";")););
+  }
+
+  void test_minisort_on_column_with_ctas(const std::string& column_name,
+                                         const std::vector<int> expects) {
+    create_minisort_table_on_column("");
+    create_minisort_table_on_column_with_ctas(column_name);
+    check_minisort_on_expects("sortctas", expects);
+  }
+};
+
+TEST_P(CtasImportTestMiniSort, on_none) {
+  test_minisort_on_column("", {5, 3, 1, 2, 4});
+}
+
+TEST_P(CtasImportTestMiniSort, on_int) {
+  test_minisort_on_column("i", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, on_float) {
+  test_minisort_on_column("f", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, on_int_array) {
+  test_minisort_on_column("ia", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, on_string_array) {
+  test_minisort_on_column("sa", {5, 3, 1, 2, 4});
+}
+
+TEST_P(CtasImportTestMiniSort, on_string_2b) {
+  test_minisort_on_column("s2", {5, 3, 1, 2, 4});
+}
+
+TEST_P(CtasImportTestMiniSort, on_date) {
+  test_minisort_on_column("dt", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, on_date_2b) {
+  test_minisort_on_column("d2", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, on_time) {
+  test_minisort_on_column("tm", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, on_time_4b) {
+  test_minisort_on_column("t4", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, on_varlen_array) {
+  test_minisort_on_column("va", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, on_geo_point) {
+  test_minisort_on_column("pt", {2, 3, 4, 5, 1});
+}
+
+#define SKIP_ALL_ON_AGGREGATOR() \
+  if (isDistributedMode()) {     \
+    GTEST_SKIP();                \
+  }
+
+TEST_P(CtasImportTestMiniSort, ctas_on_none) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("", {5, 3, 1, 2, 4});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_int) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("i", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_float) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("f", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_int_array) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("ia", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_string_array) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("sa", {5, 3, 1, 2, 4});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_string_2b) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("s2", {5, 3, 1, 2, 4});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_date) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("dt", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_date_2b) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("d2", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_time) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("tm", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_time_4b) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("t4", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_varlen_array) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("va", {1, 2, 3, 4, 5});
+}
+
+TEST_P(CtasImportTestMiniSort, ctas_on_geo_point) {
+  SKIP_ALL_ON_AGGREGATOR();
+  test_minisort_on_column_with_ctas("pt", {2, 3, 4, 5, 1});
+}
+
+class CtasTableTest : public DBHandlerTestFixture,
+                      public testing::WithParamInterface<
+                          std::vector<std::shared_ptr<TestColumnDescriptor>>> {
+ public:
+  bool g_use_temporary_tables{false};
+  bool g_aggregator{false};
+  const size_t g_num_rows{10};
+
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    // Default connection string outside of thrift
+    ASSERT_NO_THROW(sql("drop table if exists ctas_test;"));
+    ASSERT_NO_THROW(sql("drop table if exists ctas_test_empty;"));
+    ASSERT_NO_THROW(sql("drop table if exists ctas_test_full;"));
+    createTestTable();
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(sql("drop table if exists ctas_test;"));
+    ASSERT_NO_THROW(sql("drop table if exists ctas_test_empty;"));
+    ASSERT_NO_THROW(sql("drop table if exists ctas_test_full;"));
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void createTestTable() {
+    try {
+      sql("CREATE TABLE test(x int not null, w tinyint, y int, z smallint, t bigint, b "
+          "boolean, f "
+          "float, ff float, fn float, d "
+          "double, dn double, str varchar(10), null_str text, fixed_str text, "
+          "fixed_null_str text, real_str text, "
+          "shared_dict "
+          "text, m timestamp(0), m_3 timestamp(3), m_6 timestamp(6), m_9 timestamp(9), n "
+          "time(0), o date, o1 date, o2 date, "
+          "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not "
+          "null, ss "
+          "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null, "
+          "smallint_nulls smallint, bn boolean not null);");
+    } catch (...) {
+      LOG(ERROR) << "Failed to (re-)create table 'test'";
+      return;
+    }
+
+    CHECK_EQ(g_num_rows % 2, size_t(0));
+
+    for (size_t i = 0; i < g_num_rows; ++i) {
+      const std::string insert_query{
+          "INSERT INTO test VALUES(7, -8, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, "
+          "'foo', null, 'foo', null, "
+          "'real_foo', 'foo',"
+          "'2014-12-13 22:23:15', '2014-12-13 22:23:15.323', '1999-07-11 "
+          "14:02:53.874533', "
+          "'2006-04-26 "
+          "03:49:04.607435125', "
+          "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, "
+          "'fish', "
+          "null, "
+          "2147483647, -2147483648, null, -1, 32767, 't');"};
+      sql(insert_query);
+    }
+    for (size_t i = 0; i < g_num_rows / 2; ++i) {
+      const std::string insert_query{
+          "INSERT INTO test VALUES(8, -7, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, 2.4, "
+          "-2002.4, 'bar', null, 'bar', null, "
+          "'real_bar', NULL, '2014-12-13 22:23:15', '2014-12-13 22:23:15.323', "
+          "'2014-12-13 "
+          "22:23:15.874533', "
+          "'2014-12-13 22:23:15.607435763', '15:13:14', NULL, NULL, NULL, NULL, 222.2, "
+          "222.2, "
+          "null, null, null, "
+          "-2147483647, "
+          "9223372036854775807, -9223372036854775808, null, 'f');"};
+      sql(insert_query);
+    }
+    for (size_t i = 0; i < g_num_rows / 2; ++i) {
+      const std::string insert_query{
+          "INSERT INTO test VALUES(7, -7, 43, 102, 1002, null, 1.3, 1000.3, -1000.3, "
+          "2.6, "
+          "-220.6, 'baz', null, null, null, "
+          "'real_baz', 'baz', '2014-12-14 22:23:15', '2014-12-14 22:23:15.750', "
+          "'2014-12-14 22:23:15.437321', "
+          "'2014-12-14 22:23:15.934567401', '15:13:14', '1999-09-09', '1999-09-09', "
+          "'1999-09-09', 11, "
+          "333.3, 333.3, "
+          "'boat', null, 1, "
+          "-1, 1, -9223372036854775808, 1, 't');"};
+      sql(insert_query);
+    }
+  }
+
+  int create_as_select() {
+    try {
+      const std::string drop_ctas_test{"DROP TABLE IF EXISTS ctas_test;"};
+      sql(drop_ctas_test);
+      // g_sqlite_comparator.query(drop_ctas_test);
+      const std::string create_ctas_test{
+          "CREATE TABLE ctas_test AS SELECT x, f, d, str, fixed_str FROM test WHERE x "
+          "> "
+          "7;"};
+      sql(create_ctas_test);
+      // g_sqlite_comparator.query(create_ctas_test);
+    } catch (...) {
+      LOG(ERROR) << "Failed to (re-)create table 'ctas_test'";
+      return -1;
+    }
+    return 0;
+  }
+
+  int create_as_select_full() {
+    try {
+      const std::string drop_ctas_test{"DROP TABLE IF EXISTS ctas_test_full;"};
+      sql(drop_ctas_test);
+      // g_sqlite_comparator.query(drop_ctas_test);
+      const std::string create_ctas_test{
+          "CREATE TABLE ctas_test_full AS SELECT * FROM test;"};
+      sql(create_ctas_test);
+      // g_sqlite_comparator.query(create_ctas_test);
+    } catch (...) {
+      LOG(ERROR) << "Failed to (re-)create table 'ctas_test_full'";
+      return -1;
+    }
+    return 0;
+  }
+
+  int create_as_select_empty() {
+    try {
+      const std::string drop_ctas_test{"DROP TABLE IF EXISTS empty_ctas_test;"};
+      sql(drop_ctas_test);
+      // g_sqlite_comparator.query(drop_ctas_test);
+      const std::string create_ctas_test{
+          "CREATE TABLE empty_ctas_test AS SELECT x, f, d, str, fixed_str FROM test "
+          "WHERE "
+          "x > 8;"};
+      sql(create_ctas_test);
+      // g_sqlite_comparator.query(create_ctas_test);
+    } catch (...) {
+      LOG(ERROR) << "Failed to (re-)create table 'empty_ctas_test'";
+      return -1;
+    }
+    return 0;
+  }
+};
+
+#define SKIP_WITH_TEMP_TABLES()                                   \
+  if (g_use_temporary_tables) {                                   \
+    LOG(ERROR) << "Tests not valid when using temporary tables."; \
+    return;                                                       \
+  }
+
+#define SKIP_ON_AGGREGATOR(EXP) \
+  if (!g_aggregator) {          \
+    EXP;                        \
+  }
+
+bool skip_tests(const ExecutorDeviceType device_type) {
+#ifdef HAVE_CUDA
+  // return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
+  return device_type == ExecutorDeviceType::GPU;
+#else
+  return device_type == ExecutorDeviceType::GPU;
+#endif
+}
+
+#define SKIP_NO_GPU()                                        \
+  if (skip_tests(dt)) {                                      \
+    CHECK(dt == ExecutorDeviceType::GPU);                    \
+    LOG(WARNING) << "GPU not available, skipping GPU tests"; \
+    continue;                                                \
+  }
+
+TEST_F(CtasTableTest, CreateTableAsSelect) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+
+  createTestTable();
+
+  // XYZZY once for GPU, once for CPU
+  // for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  //    SKIP_NO_GPU(); /// uses "dt"
+
+  int err{0};
+  if (!err && !g_use_temporary_tables) {
+    SKIP_ON_AGGREGATOR(err = create_as_select());
+  }
+  if (!err && !g_use_temporary_tables) {
+    SKIP_ON_AGGREGATOR(err = create_as_select_full());
+  }
+  if (!err && !g_use_temporary_tables) {
+    SKIP_ON_AGGREGATOR(err = create_as_select_empty());
+  }
+
+  sql("SELECT fixed_str, COUNT(*) FROM ctas_test GROUP BY fixed_str;");
+  sql("SELECT x, COUNT(*) FROM ctas_test GROUP BY x;");
+  sql("SELECT f, COUNT(*) FROM ctas_test GROUP BY f;");
+  sql("SELECT d, COUNT(*) FROM ctas_test GROUP BY d;");
+  sql("SELECT COUNT(*) FROM empty_ctas_test;");
+  sql("SELECT x, w, y, z, b, f, ff, d, fx FROM ctas_test_full ORDER BY x, w, y, z, "
+      "b, f, ff, d, fx;");
+  sql("SELECT count(dn), count(fn), count(null_str) FROM ctas_test_full;");
+  sql("SELECT str, count(*) FROM ctas_test_full GROUP BY str ORDER BY 2;");
+  sql("SELECT m, m_3, m_6, m_9, n, o, o1, o2 FROM ctas_test_full ORDER BY m, m_3, m_6, "
+      "m_9, n, o, o1, o2;");
+  // }
 }
 
 int main(int argc, char* argv[]) {

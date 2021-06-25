@@ -799,6 +799,16 @@ void DBHandler::interrupt(const TSessionId& query_session,
   }
 }
 
+TRole::type DBHandler::getServerRole() const {
+  if (g_cluster) {
+    if (leaf_aggregator_.leafCount() > 0) {
+      return TRole::type::AGGREGATOR;
+    }
+    return TRole::type::LEAF;
+  }
+  return TRole::type::SERVER;
+}
+
 void DBHandler::get_server_status(TServerStatus& _return, const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
@@ -806,10 +816,11 @@ void DBHandler::get_server_status(TServerStatus& _return, const TSessionId& sess
   _return.read_only = read_only_;
   _return.version = MAPD_RELEASE;
   _return.rendering_enabled = rendering_enabled;
-  _return.poly_rendering_enabled = rendering_enabled;
   _return.start_time = start_time_;
   _return.edition = MAPD_EDITION;
   _return.host_name = omnisci::get_hostname();
+  _return.poly_rendering_enabled = rendering_enabled;
+  _return.role = getServerRole();
   _return.renderer_status_json =
       render_handler_ ? render_handler_->get_renderer_status_json() : "";
 }
@@ -817,11 +828,11 @@ void DBHandler::get_server_status(TServerStatus& _return, const TSessionId& sess
 void DBHandler::get_status(std::vector<TServerStatus>& _return,
                            const TSessionId& session) {
   //
-  // get_status() will soon be called locally at startup on the aggregator
+  // get_status() is now called locally at startup on the aggregator
   // in order to validate that all nodes of a cluster are running the
-  // same software version and configured to use the same renderer driver.
+  // same software version and the same renderer status
   //
-  // In that context, it will be called with the InvalidSessionID, and
+  // In that context, it is called with the InvalidSessionID, and
   // with the local super-user flag set.
   //
   // Hence, we allow this session-less mode only in distributed mode, and
@@ -839,21 +850,13 @@ void DBHandler::get_status(std::vector<TServerStatus>& _return,
   ret.read_only = read_only_;
   ret.version = MAPD_RELEASE;
   ret.rendering_enabled = rendering_enabled;
-  ret.poly_rendering_enabled = rendering_enabled;
   ret.start_time = start_time_;
   ret.edition = MAPD_EDITION;
   ret.host_name = omnisci::get_hostname();
+  ret.poly_rendering_enabled = rendering_enabled;
+  ret.role = getServerRole();
   ret.renderer_status_json =
       render_handler_ ? render_handler_->get_renderer_status_json() : "";
-
-  // TSercivePort tcp_port{}
-
-  if (g_cluster) {
-    ret.role =
-        (leaf_aggregator_.leafCount() > 0) ? TRole::type::AGGREGATOR : TRole::type::LEAF;
-  } else {
-    ret.role = TRole::type::SERVER;
-  }
 
   _return.push_back(ret);
   if (leaf_aggregator_.leafCount() > 0) {
@@ -5911,7 +5914,6 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
 
   if (pw.is_itas) {
     // itas can attempt to execute here
-
     check_read_only("insert_into_table");
 
     std::string query_ra;
@@ -5927,6 +5929,28 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     CHECK(ddl_query["payload"].IsObject());
     auto stmt = Parser::InsertIntoTableAsSelectStmt(ddl_query["payload"].GetObject());
     _return.addExecutionTime(measure<>::execution([&]() { stmt.execute(*session_ptr); }));
+    return;
+
+  } else if (pw.is_ctas) {
+    // ctas can attempt to execute here
+    check_read_only("create_table_as");
+
+    std::string query_ra;
+    _return.addExecutionTime(measure<>::execution([&]() {
+      TPlanResult result;
+      std::tie(result, locks) =
+          parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_);
+      query_ra = result.plan_result;
+    }));
+    if (query_ra.size()) {
+      rapidjson::Document ddl_query;
+      ddl_query.Parse(query_ra);
+      CHECK(ddl_query.HasMember("payload"));
+      CHECK(ddl_query["payload"].IsObject());
+      auto stmt = Parser::CreateTableAsSelectStmt(ddl_query["payload"].GetObject());
+      _return.addExecutionTime(
+          measure<>::execution([&]() { stmt.execute(*session_ptr); }));
+    }
     return;
 
   } else if (pw.isCalcitePathPermissable(read_only_)) {
@@ -5986,6 +6010,10 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
          executor_device_type,
          first_n,
          at_most_n](const size_t executor_index) {
+          // if we find proper filters we need to "re-execute" the query
+          // with a modified query plan (i.e., which has pushdowned filter)
+          // otherwise this trial just executes the query and keeps corresponding query
+          // resultset in _return object
           filter_push_down_requests = execute_rel_alg(
               _return,
               query_state_proxy,
@@ -5998,34 +6026,43 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
               g_enable_filter_push_down && !g_cluster,
               explain_info,
               executor_index);
-          if (explain_info.justCalciteExplain() && filter_push_down_requests.empty()) {
-            // we only reach here if filter push down was enabled, but no filter
-            // push down candidate was found
-            _return.updateResultSet(query_ra, ExecutionResult::Explaination);
-          } else if (!filter_push_down_requests.empty()) {
-            CHECK(!locks.empty());
-            execute_rel_alg_with_filter_push_down(_return,
-                                                  query_state_proxy,
-                                                  query_ra,
-                                                  column_format,
-                                                  executor_device_type,
-                                                  first_n,
-                                                  at_most_n,
-                                                  explain_info.justExplain(),
-                                                  explain_info.justCalciteExplain(),
-                                                  filter_push_down_requests);
-
-          } else if (explain_info.justCalciteExplain() &&
-                     filter_push_down_requests.empty()) {
-            // return the ra as the result:
-            // If we reach here, the 'filter_push_down_request' turned out to be
-            // empty, i.e., no filter push down so we continue with the initial
-            // (unchanged) query's calcite explanation.
-            CHECK(!locks.empty());
-            query_ra =
-                parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_)
-                    .first.plan_result;
-            _return.updateResultSet(query_ra, ExecutionResult::Explaination);
+          if (explain_info.justCalciteExplain()) {
+            if (filter_push_down_requests.empty()) {
+              // we only reach here if filter push down was enabled, but no filter
+              // push down candidate was found
+              _return.updateResultSet(query_ra, ExecutionResult::Explaination);
+            } else {
+              CHECK(!locks.empty());
+              std::vector<TFilterPushDownInfo> filter_push_down_info;
+              for (const auto& req : filter_push_down_requests) {
+                TFilterPushDownInfo filter_push_down_info_for_request;
+                filter_push_down_info_for_request.input_prev = req.input_prev;
+                filter_push_down_info_for_request.input_start = req.input_start;
+                filter_push_down_info_for_request.input_next = req.input_next;
+                filter_push_down_info.push_back(filter_push_down_info_for_request);
+              }
+              query_ra = parse_to_ra(query_state_proxy,
+                                     query_str,
+                                     filter_push_down_info,
+                                     false,
+                                     system_parameters_)
+                             .first.plan_result;
+              _return.updateResultSet(query_ra, ExecutionResult::Explaination);
+            }
+          } else {
+            if (!filter_push_down_requests.empty()) {
+              CHECK(!locks.empty());
+              execute_rel_alg_with_filter_push_down(_return,
+                                                    query_state_proxy,
+                                                    query_ra,
+                                                    column_format,
+                                                    executor_device_type,
+                                                    first_n,
+                                                    at_most_n,
+                                                    explain_info.justExplain(),
+                                                    explain_info.justCalciteExplain(),
+                                                    filter_push_down_requests);
+            }
           }
         });
     CHECK(dispatch_queue_);

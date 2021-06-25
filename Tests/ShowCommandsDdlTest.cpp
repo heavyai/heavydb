@@ -384,6 +384,179 @@ TEST_F(ShowUserSessionsTest, PRIVILEGES_NONSUPERUSER) {
   logout(usersession);
 }
 
+class ShowUserDetailsTest : public DBHandlerTestFixture {
+ public:
+  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+
+  static void SetUpTestSuite() {
+    createDBHandler();
+    users_ = {"user1", "user2"};
+    superusers_ = {"super1", "super2"};
+    dbs_ = {"omnisci"};
+    createUsers();
+    createSuperUsers();
+  }
+
+  static void TearDownTestSuite() {
+    dropUsers();
+    dropSuperUsers();
+  }
+
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+
+  static void createUsers() {
+    for (const auto& user : users_) {
+      std::stringstream create;
+      create << "CREATE USER " << user
+             << " (password = 'HyperInteractive', is_super = 'false', "
+                "default_db='omnisci');";
+      sql(create.str());
+      for (const auto& db : dbs_) {
+        std::stringstream grant;
+        grant << "GRANT ALL ON DATABASE  " << db << " to " << user << ";";
+        sql(grant.str());
+      }
+    }
+  }
+
+  static void createSuperUsers() {
+    for (const auto& user : superusers_) {
+      std::stringstream create;
+      create
+          << "CREATE USER " << user
+          << " (password = 'HyperInteractive', is_super = 'true', default_db='omnisci');";
+      sql(create.str());
+      for (const auto& db : dbs_) {
+        std::stringstream grant;
+        grant << "GRANT ALL ON DATABASE  " << db << " to " << user << ";";
+        sql(grant.str());
+      }
+    }
+  }
+
+  static void dropUsers() {
+    for (const auto& user : users_) {
+      std::stringstream drop;
+      drop << "DROP USER " << user << ";";
+      sql(drop.str());
+    }
+  }
+
+  static void dropSuperUsers() {
+    for (const auto& user : superusers_) {
+      std::stringstream drop;
+      drop << "DROP USER " << user << ";";
+      sql(drop.str());
+    }
+  }
+
+  enum ColumnIndex { NAME, ID, IS_SUPER, DEFAULT_DB, CAN_LOGIN };
+
+  void assertExpectedFormat(const TQueryResult& result) {
+    ASSERT_EQ(result.row_set.is_columnar, true);
+    ASSERT_EQ(result.row_set.columns.size(), size_t(5));
+    ASSERT_EQ(result.row_set.row_desc[NAME].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[NAME].col_name, "NAME");
+    ASSERT_EQ(result.row_set.row_desc[ID].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[ID].col_name, "ID");
+    ASSERT_EQ(result.row_set.row_desc[IS_SUPER].col_type.type, TDatumType::BOOL);
+    ASSERT_EQ(result.row_set.row_desc[IS_SUPER].col_name, "IS_SUPER");
+    ASSERT_EQ(result.row_set.row_desc[DEFAULT_DB].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[DEFAULT_DB].col_name, "DEFAULT_DB");
+    ASSERT_EQ(result.row_set.row_desc[CAN_LOGIN].col_type.type, TDatumType::BOOL);
+    ASSERT_EQ(result.row_set.row_desc[CAN_LOGIN].col_name, "CAN_LOGIN");
+  }
+
+  void assertUserResultFound(const TQueryResult& result, const std::string& username) {
+    int num_matches = 0;
+    for (size_t i = 0; i < result.row_set.columns[NAME].data.str_col.size(); ++i) {
+      if (result.row_set.columns[NAME].data.str_col[i] == username) {
+        num_matches++;
+      }
+    }
+    ASSERT_EQ(num_matches, 1);
+  }
+
+  template <typename T>
+  void assertUserResultFound(const TQueryResult& result,
+                             const std::string& username,
+                             ColumnIndex col,
+                             T val) {
+    using CLEANT = std::remove_reference_t<std::remove_cv_t<T>>;
+    static_assert(std::is_integral_v<CLEANT> || std::is_floating_point_v<CLEANT> ||
+                  std::is_same_v<std::string, CLEANT>);
+    int num_matches = 0;
+    for (size_t i = 0; i < result.row_set.columns[NAME].data.str_col.size(); ++i) {
+      if (result.row_set.columns[NAME].data.str_col[i] == username) {
+        num_matches++;
+        // integral
+        if constexpr (std::is_integral_v<CLEANT>) {
+          ASSERT_EQ(result.row_set.columns[col].data.int_col[i], val);
+        }
+        // floating point
+        else if constexpr (std::is_floating_point_v<CLEANT>) {
+          ASSERT_EQ(result.row_set.columns[col].data.real_col[i], val);
+        }
+        // string
+        else if constexpr (std::is_same_v<std::string, CLEANT>) {
+          ASSERT_EQ(result.row_set.columns[col].data.str_col[i], val);
+        }
+      }
+    }
+    ASSERT_EQ(num_matches, 1);
+  }
+
+  void assertNumUsers(const TQueryResult& result, size_t num_users) {
+    ASSERT_EQ(num_users, result.row_set.columns[NAME].data.str_col.size());
+  }
+  std::vector<std::string> get_users() { return users_; }
+  std::vector<std::string> get_superusers() { return superusers_; }
+
+ private:
+  static inline std::vector<std::string> users_;
+  static inline std::vector<std::string> superusers_;
+  static inline std::vector<std::string> dbs_;
+
+  std::string admin_id;
+};
+
+TEST_F(ShowUserDetailsTest, AllUsers) {
+  TQueryResult result;
+  sql(result, "SHOW USER DETAILS;");
+  assertExpectedFormat(result);
+  assertNumUsers(result, 5);
+  assertUserResultFound(result, "admin");
+  assertUserResultFound(result, "user1");
+  assertUserResultFound(result, "user2");
+  assertUserResultFound(result, "super1");
+  assertUserResultFound(result, "super2");
+}
+
+TEST_F(ShowUserDetailsTest, OneUser) {
+  TQueryResult result;
+  sql(result, "SHOW USER DETAILS user1;");
+  assertNumUsers(result, 1);
+  assertUserResultFound(result, "user1");
+}
+
+TEST_F(ShowUserDetailsTest, MultipleUsers) {
+  TQueryResult result;
+  sql(result, "SHOW USER DETAILS user1,super1;");
+  assertNumUsers(result, 2);
+  assertUserResultFound(result, "user1");
+  assertUserResultFound(result, "super1");
+}
+
+TEST_F(ShowUserDetailsTest, Columns) {
+  using namespace std::string_literals;
+  TQueryResult result;
+  sql(result, "SHOW USER DETAILS user1;");
+  assertNumUsers(result, 1);
+  assertUserResultFound(result, "user1", IS_SUPER, false);
+  assertUserResultFound(result, "user1", DEFAULT_DB, "omnisci(1)"s);
+  assertUserResultFound(result, "user1", CAN_LOGIN, true);
+}
+
 class ShowTest : public DBHandlerTestFixture {
  public:
   static void dropUserIfExists(const std::string& user_name) {

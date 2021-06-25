@@ -18,6 +18,7 @@
 #define SHARED_MISC_H
 
 #include <cstdint>
+#include <cstring>
 #include <deque>
 #include <iterator>
 #include <list>
@@ -176,12 +177,10 @@ constexpr std::array<T, N> powersOf(T const a) {
 
 // May be constexpr in C++20.
 template <typename TO, typename FROM>
-TO reinterpretBits(FROM const from) {
-  union {
-    FROM const from;
-    TO const to;
-  } const u{.from = from};
-  return u.to;
+inline TO reinterpret_bits(FROM const from) {
+  TO to{0};
+  memcpy(&to, &from, sizeof(TO) < sizeof(FROM) ? sizeof(TO) : sizeof(FROM));
+  return to;
 }
 
 }  // namespace shared

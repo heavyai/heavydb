@@ -346,6 +346,20 @@ TEST_F(ChunkEvictionTest, MultipleTables) {
   ASSERT_EQ(cfm->getBuffer({1, 1, 1, 2})->pageCount(), 128U);
 }
 
+TEST_F(ChunkEvictionTest, MetadataOnlyChunkInQueue) {
+  auto cfm = initializeCFM();
+  cfm->createBuffer({1, 1, 1, 1});  // No chunk data
+  writePages(*cfm, {1, 1, 1, 2}, 256);
+  ASSERT_EQ(cfm->getBuffer({1, 1, 1, 1})->pageCount(), 0U);
+  ASSERT_EQ(cfm->getBuffer({1, 1, 1, 2})->pageCount(), 256U);
+  // If we don't handle empty chunks correctly, i.e. skip them, then we will crash on this
+  // line as the cache tries to evict a chunk with no data.
+  writePages(*cfm, {1, 1, 1, 3}, 1);
+  ASSERT_EQ(cfm->getBuffer({1, 1, 1, 1})->pageCount(), 0U);
+  ASSERT_EQ(cfm->getBuffer({1, 1, 1, 2})->pageCount(), 0U);
+  ASSERT_EQ(cfm->getBuffer({1, 1, 1, 3})->pageCount(), 1U);
+}
+
 // Test how metadata is evicted - metadata is evicted on the table-level.
 class MetadataEvictionTest : public CachingFileMgrTest {};
 
@@ -470,8 +484,13 @@ TEST_F(SizeTest, DefaultSize) {
   ASSERT_EQ(cfm.getMaxWrapperSize(),
             (cache_size_ * fn::CachingFileMgr::METADATA_SPACE_PERCENTAGE) -
                 (cache_size_ * fn::CachingFileMgr::METADATA_FILE_SPACE_PERCENTAGE));
-  ASSERT_EQ(cfm.getMaxDataFiles(), 36U);
-  ASSERT_EQ(cfm.getMaxMetaFiles(), 12U);
+  auto meta_space = fn::DiskCacheConfig::DEFAULT_MAX_SIZE *
+                    fn::CachingFileMgr::METADATA_SPACE_PERCENTAGE;
+  auto data_file_space = fn::DiskCacheConfig::DEFAULT_MAX_SIZE - meta_space;
+  auto meta_file_space = fn::DiskCacheConfig::DEFAULT_MAX_SIZE *
+                         fn::CachingFileMgr::METADATA_FILE_SPACE_PERCENTAGE;
+  ASSERT_EQ(cfm.getMaxDataFiles(), data_file_space / cfm.getDataFileSize());
+  ASSERT_EQ(cfm.getMaxMetaFiles(), meta_file_space / cfm.getMetadataFileSize());
 }
 
 TEST_F(SizeTest, ChunkSpace) {

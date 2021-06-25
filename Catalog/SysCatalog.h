@@ -190,6 +190,7 @@ class SysCatalog : private CommonFileOperations {
                             std::string& name,
                             UserMetadata& user);
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
+  bool getMetadataForDBById(const int32_t idIn, DBMetadata& db);
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
   Calcite& getCalciteMgr() const { return *calciteMgr_; }
   const std::string& getCatalogBasePath() const { return basePath_; }
@@ -397,7 +398,6 @@ class SysCatalog : private CommonFileOperations {
                                 const std::string& username,
                                 Catalog_Namespace::DBMetadata& db_meta,
                                 UserMetadata& user_meta);
-  bool getMetadataForDBById(const int32_t idIn, DBMetadata& db);
   /**
    * For servers configured to use external authentication providers, determine whether
    * users will be allowed to fallback to local login accounts. If no external providers

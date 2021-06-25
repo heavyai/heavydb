@@ -201,17 +201,17 @@ inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair,
   switch (ti.get_type()) {
     case kFLOAT: {
       if (float_argument_input) {
-        dividend = shared::reinterpretBits<float>(fp_pair.first);
-        null_val = shared::reinterpretBits<int64_t, float>(inline_fp_null_val(ti));
+        dividend = shared::reinterpret_bits<float>(fp_pair.first);
+        null_val = shared::reinterpret_bits<int64_t, float>(inline_fp_null_val(ti));
       } else {
-        dividend = shared::reinterpretBits<double>(fp_pair.first);
-        null_val = shared::reinterpretBits<int64_t, double>(inline_fp_null_val(ti));
+        dividend = shared::reinterpret_bits<double>(fp_pair.first);
+        null_val = shared::reinterpret_bits<int64_t, double>(inline_fp_null_val(ti));
       }
       break;
     }
     case kDOUBLE: {
-      dividend = shared::reinterpretBits<double>(fp_pair.first);
-      null_val = shared::reinterpretBits<int64_t>(inline_fp_null_val(ti));
+      dividend = shared::reinterpret_bits<double>(fp_pair.first);
+      null_val = shared::reinterpret_bits<int64_t>(inline_fp_null_val(ti));
       break;
     }
     default: {

@@ -509,7 +509,7 @@ JoinLoop::HoistedFiltersCallback Executor::buildHoistLeftHandSideFiltersCb(
   }
 
   const auto& current_level_join_conditions = ra_exe_unit.join_quals[level_idx];
-  if (current_level_join_conditions.type == JoinType::LEFT) {
+  if (level_idx == 0 && current_level_join_conditions.type == JoinType::LEFT) {
     const auto& condition = current_level_join_conditions.quals.front();
     const auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(condition.get());
     CHECK(bin_oper) << condition->toString();

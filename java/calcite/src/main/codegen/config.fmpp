@@ -46,6 +46,7 @@ data: {
         "com.mapd.parser.extension.ddl.SqlRefreshForeignTables"
         "com.mapd.parser.extension.ddl.SqlCreateUserMapping"
         "com.mapd.parser.extension.ddl.SqlDropUserMapping"
+        "com.mapd.parser.extension.ddl.SqlShowUserDetails"
         "com.mapd.parser.extension.ddl.SqlShowUserSessions"
         "com.mapd.parser.extension.ddl.SqlShowForeignServers"
         "com.mapd.parser.extension.ddl.SqlShowQueries"
@@ -445,7 +446,7 @@ data: {
 
       # List of methods for parsing custom SQL statements.
       statementParserMethods: [
-        "SqlShowUserSessions(span())"
+        "SqlShowUser(span())"
         "SqlShowTables(span())"
         "SqlShowTableDetails(span())"
         "SqlShowDatabases(span())"

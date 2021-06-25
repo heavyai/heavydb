@@ -1,11 +1,11 @@
 <?xml version="1.0"?>
 <!--
 /******************************************************************************
- * $Id: nitf_spec.xsd 53d6df8552738b8e852ea38462051f9079587baa 2011-08-06 13:47:27Z Even Rouault $
+ * $Id: nitf_spec.xsd 220fb188536106a9992284cd5629363c064f624e 2020-10-13 17:23:11 -0400 matthew-baran $
  *
  * Project:  NITF Library
  * Purpose:  Schema of description of NITF TREs
- * Author:   Even Rouault, <even dot rouault at mines dash paris dot org>
+ * Author:   Even Rouault, <even dot rouault at spatialys.com>
  *
  **********************************************************************
  * Copyright (c) 2011, Even Rouault
@@ -107,7 +107,7 @@
         <xs:attribute name="cond">
             <xs:simpleType>
                 <xs:restriction base="xs:string">
-                    <xs:pattern value=".+[!]?=.*"/>
+                    <xs:pattern value=".+([!]?=|:).*"/>
                 </xs:restriction>
             </xs:simpleType>
         </xs:attribute>
@@ -130,6 +130,9 @@
                     <xs:enumeration value="string"/>
                     <xs:enumeration value="integer"/>
                     <xs:enumeration value="real"/>
+                    <xs:enumeration value="IEEE754_Float32_BigEndian"/>
+                    <xs:enumeration value="UnsignedInt_BigEndian"/>
+                    <xs:enumeration value="bitmask"/>
                 </xs:restriction>
             </xs:simpleType>
         </xs:attribute>

@@ -1017,6 +1017,8 @@ class DBHandler : public OmniSciIf {
       const std::vector<std::string>& column_names,
       const AssignRenderGroupsMode assign_render_groups_mode);
 
+  TRole::type getServerRole() const;
+
   using RenderGroupAssignmentColumnMap =
       std::unordered_map<std::string,
                          std::unique_ptr<import_export::RenderGroupAnalyzer>>;

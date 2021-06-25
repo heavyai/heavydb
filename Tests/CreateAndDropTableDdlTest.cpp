@@ -1235,9 +1235,8 @@ TEST_F(CreateForeignTableTest, WrongTableOptionCharacterSize) {
       "SERVER omnisci_local_csv WITH (delimiter = ',,', file_path = '" +
       getTestFilePath() + "');"};
   queryAndAssertException(query,
-                          "Exception: Value of \"DELIMITER\" foreign table option has "
-                          "the wrong number of characters. "
-                          "Expected 1 character(s).");
+                          "Exception: Invalid value specified for option \"DELIMITER\". "
+                          "Expected a single character, \"\\n\" or  \"\\t\".");
 }
 
 TEST_F(CreateForeignTableTest, InvalidTableOptionBooleanValue) {

@@ -180,23 +180,13 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
       const auto subquery_ra = subquery->getRelAlg();
       CHECK(subquery_ra);
       RaExecutionSequence subquery_seq(subquery_ra);
-      auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo, nullptr, 0);
+      auto result =
+          ra_executor.executeRelAlgSeq(subquery_seq, co, eo_modified, nullptr, 0);
       subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
     }
     return executeRelAlgSeq(seq, co, eo_modified, render_info, queue_time_ms);
   }
   // else
-
-  // Dispatch the subqueries first
-  for (auto subquery : subqueries) {
-    // Execute the subquery and cache the result.
-    RelAlgExecutor ra_executor(executor_, cat_);
-    const auto subquery_ra = subquery->getRelAlg();
-    CHECK(subquery_ra);
-    RaExecutionSequence subquery_seq(subquery_ra);
-    auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo, nullptr, 0);
-    subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
-  }
   return executeRelAlgSeq(seq, co, eo, render_info, queue_time_ms);
 }
 /**

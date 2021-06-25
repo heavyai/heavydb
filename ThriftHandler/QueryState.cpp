@@ -23,6 +23,7 @@
 #include "QueryState.h"
 #include "Catalog/Catalog.h"
 #include "Catalog/SessionInfo.h"
+#include "Shared/nvtx_helpers.h"
 #include "Shared/toString.h"
 
 #include <algorithm>
@@ -126,7 +127,10 @@ Timer QueryStateProxy::createTimer(char const* event_name) {
 }
 
 Timer::Timer(std::shared_ptr<QueryState>&& query_state, Events::iterator event)
-    : query_state_(std::move(query_state)), event_(event) {}
+    : query_state_(std::move(query_state)), event_(event) {
+  nvtx_helpers::omnisci_range_push(
+      nvtx_helpers::Category::kQueryStateTimer, event_->name, nullptr);
+}
 
 QueryStateProxy Timer::createQueryStateProxy() {
   return query_state_->createQueryStateProxy(event_);
@@ -134,6 +138,7 @@ QueryStateProxy Timer::createQueryStateProxy() {
 
 Timer::~Timer() {
   event_->stop();
+  nvtx_helpers::omnisci_range_pop();
 }
 
 std::atomic<int64_t> StdLogData::s_match{0};

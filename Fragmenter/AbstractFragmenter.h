@@ -241,6 +241,13 @@ class AbstractFragmenter {
       const ColumnDescriptor* cd,
       const int fragment_id,
       const std::shared_ptr<ChunkMetadata> metadata) = 0;
+
+  /**
+   * Resets the fragmenter's size related metadata using the internal fragment info
+   * vector. This is typically done after operations, such as vacuuming, which can
+   * change fragment sizes.
+   */
+  virtual void resetSizesFromFragments() = 0;
 };
 
 }  // namespace Fragmenter_Namespace

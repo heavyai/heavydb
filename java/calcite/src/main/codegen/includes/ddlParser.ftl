@@ -485,25 +485,57 @@ OmniSciOptionsMap WithOptionsOpt() :
   { return optionMap; }
 }
 
+/*
+ * Parse the TEMPORARY keyphrase.
+ *
+ * [ TEMPORARY ]
+ */
+boolean TemporaryOpt() :
+{
+}
+{
+    <TEMPORARY> { return true; }
+|
+    { return false; }
+}
+
+/*
+ * Create a table using the following syntax:
+ *
+ * CREATE TABLE [ IF NOT EXISTS ] <table_name> AS <select>
+ */
 SqlCreate SqlCreateTable(Span s, boolean replace) :
 {
-    final boolean ifNotExists;
+    boolean temporary = false;
+    boolean ifNotExists = false;
     final SqlIdentifier id;
     SqlNodeList tableElementList = null;
     OmniSciOptionsMap withOptions = null;
     SqlNode query = null;
 }
 {
+    [<TEMPORARY> {temporary = true; }]
     <TABLE> ifNotExists = IfNotExistsOpt() id = CompoundIdentifier()
-    [ tableElementList = TableElementList() ]
-    [ <AS> query = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY) ]
+    (    
+        <AS> 
+        (
+            LOOKAHEAD(1)
+            query = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
+        |
+            LOOKAHEAD(2)
+            <LPAREN>
+            query = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
+            <RPAREN>
+        )
+    |
+        [ tableElementList = TableElementList() ]
+    )
     [ withOptions = WithOptionsOpt() ]
     {
-        return SqlDdlNodes.createTable(s.end(this), replace, ifNotExists, id,
+        return SqlDdlNodes.createTable(s.end(this), replace, temporary, ifNotExists, id,
             tableElementList, withOptions, query);
     }
 }
-
 
 /*
  * Drop a table using the following syntax:
@@ -635,6 +667,19 @@ SqlDdl SqlAlterTable(Span s) :
     }
 }
 
+SqlNode WrappedOrderedQueryOrExpr(ExprContext exprContext) :
+{
+    final SqlNode query;
+}
+{
+        <LPAREN>
+        query = OrderedQueryOrExpr(exprContext)
+        <RPAREN>
+        { return query; }
+    |
+        query = OrderedQueryOrExpr(exprContext)
+        { return query; }
+}
 
 /* 
  * Insert into table(s) using the following syntax:
@@ -652,23 +697,13 @@ SqlInsertIntoTable SqlInsertIntoTable(Span s) :
     <INTO>
     table = CompoundIdentifier()
     (
-        LOOKAHEAD(SqlSelect())
-        query = SqlSelect()
+        LOOKAHEAD(3)
+        columnList = ParenthesizedSimpleIdentifierList() 
+        query = WrappedOrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
     |
-        LOOKAHEAD(2)
-        <LPAREN>
-        query = SqlSelect()
-        <RPAREN>
-    |
-        columnList = ParenthesizedSimpleIdentifierList()
-        (
-            query = SqlSelect()
-        |
-            <LPAREN>
-            query = SqlSelect()
-            <RPAREN>            
-        )
+        query = WrappedOrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
     )
+
     {
         return new SqlInsertIntoTable(s.end(this), table, query, columnList);
     }
@@ -677,7 +712,7 @@ SqlInsertIntoTable SqlInsertIntoTable(Span s) :
 /*
  * Create a view using the following syntax:
  *
- * CREATE VIEW [ IF NOT EXISTS ] <view_name> [(columns)] [AS <query>]
+ * CREATE VIEW [ IF NOT EXISTS ] <view_name> [(columns)] AS <query>
  */
 SqlCreate SqlCreateView(Span s, boolean replace) :
 {

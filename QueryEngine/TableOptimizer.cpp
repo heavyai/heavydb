@@ -423,6 +423,8 @@ void TableOptimizer::vacuumDeletedRows() const {
   auto timer = DEBUG_TIMER(__func__);
   const auto table_id = td_->tableId;
   const auto db_id = cat_.getDatabaseId();
+  const auto table_lock =
+      lockmgr::TableDataLockMgr::getWriteLockForTable({db_id, table_id});
   const auto table_epochs = cat_.getTableEpochs(db_id, table_id);
   const auto shards = cat_.getPhysicalTablesDescriptors(td_);
   try {
@@ -481,6 +483,7 @@ void TableOptimizer::vacuumFragments(const TableDescriptor* td,
       updel_roll.stageUpdate();
     }
   }
+  td->fragmenter->resetSizesFromFragments();
 }
 
 void TableOptimizer::vacuumFragmentsAboveMinSelectivity(
@@ -489,62 +492,61 @@ void TableOptimizer::vacuumFragmentsAboveMinSelectivity(
     return;
   }
   auto timer = DEBUG_TIMER(__func__);
-  const auto db_id = cat_.getDatabaseId();
-  const auto table_epochs = cat_.getTableEpochs(db_id, td_->tableId);
-  std::set<const TableDescriptor*> vacuumed_tables;
-  try {
-    for (const auto& [table_id, fragment_ids] :
-         table_update_metadata.fragments_with_deleted_rows) {
-      auto td = cat_.getMetadataForTable(table_id);
-      // Skip automatic vacuuming for tables with uncapped epoch
-      if (td->maxRollbackEpochs == -1) {
-        continue;
-      }
+  std::map<const TableDescriptor*, std::set<int32_t>> fragments_to_vacuum;
+  for (const auto& [table_id, fragment_ids] :
+       table_update_metadata.fragments_with_deleted_rows) {
+    auto td = cat_.getMetadataForTable(table_id);
+    // Skip automatic vacuuming for tables with uncapped epoch
+    if (td->maxRollbackEpochs == -1) {
+      continue;
+    }
 
-      DeletedColumnStats deleted_column_stats;
-      {
-        mapd_unique_lock<mapd_shared_mutex> executor_lock(executor_->execute_mutex_);
-        ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
-        executor_->row_set_mem_owner_ =
-            std::make_shared<RowSetMemoryOwner>(ROW_SET_SIZE, /*num_threads=*/1);
-        deleted_column_stats =
-            getDeletedColumnStats(td, getFragmentIndexes(td, fragment_ids));
-        executor_->clearMetaInfoCache();
-      }
+    DeletedColumnStats deleted_column_stats;
+    {
+      mapd_unique_lock<mapd_shared_mutex> executor_lock(executor_->execute_mutex_);
+      ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
+      executor_->row_set_mem_owner_ =
+          std::make_shared<RowSetMemoryOwner>(ROW_SET_SIZE, /*num_threads=*/1);
+      deleted_column_stats =
+          getDeletedColumnStats(td, getFragmentIndexes(td, fragment_ids));
+      executor_->clearMetaInfoCache();
+    }
 
-      std::set<int32_t> filtered_fragment_ids;
-      for (const auto [fragment_id, visible_row_count] :
-           deleted_column_stats.visible_row_count_per_fragment) {
-        auto total_row_count =
-            td->fragmenter->getFragmentInfo(fragment_id)->getPhysicalNumTuples();
-        float deleted_row_count = total_row_count - visible_row_count;
-        if ((deleted_row_count / total_row_count) >= g_vacuum_min_selectivity) {
-          filtered_fragment_ids.emplace(fragment_id);
-        }
-      }
-
-      if (!filtered_fragment_ids.empty()) {
-        vacuumFragments(td, filtered_fragment_ids);
-        vacuumed_tables.emplace(td);
-        VLOG(1) << "Auto-vacuumed fragments: "
-                << shared::printContainer(filtered_fragment_ids)
-                << ", table id: " << td->tableId;
+    std::set<int32_t> filtered_fragment_ids;
+    for (const auto [fragment_id, visible_row_count] :
+         deleted_column_stats.visible_row_count_per_fragment) {
+      auto total_row_count =
+          td->fragmenter->getFragmentInfo(fragment_id)->getPhysicalNumTuples();
+      float deleted_row_count = total_row_count - visible_row_count;
+      if ((deleted_row_count / total_row_count) >= g_vacuum_min_selectivity) {
+        filtered_fragment_ids.emplace(fragment_id);
       }
     }
 
-    // Always checkpoint in order to ensure that epochs are uniformly incremented in
-    // distributed mode.
-    cat_.checkpoint(td_->tableId);
-  } catch (...) {
-    cat_.setTableEpochsLogExceptions(db_id, table_epochs);
-    throw;
+    if (!filtered_fragment_ids.empty()) {
+      fragments_to_vacuum[td] = filtered_fragment_ids;
+    }
   }
 
-  // Reset fragmenters for vacuumed tables in order to ensure that their metadata is in
-  // sync
-  for (auto table : vacuumed_tables) {
-    cat_.removeFragmenterForTable(table->tableId);
-    cat_.getMetadataForTable(table->tableId);
-    CHECK(table->fragmenter);
+  if (!fragments_to_vacuum.empty()) {
+    const auto db_id = cat_.getDatabaseId();
+    const auto table_lock =
+        lockmgr::TableDataLockMgr::getWriteLockForTable({db_id, td_->tableId});
+    const auto table_epochs = cat_.getTableEpochs(db_id, td_->tableId);
+    try {
+      for (const auto& [td, fragment_ids] : fragments_to_vacuum) {
+        vacuumFragments(td, fragment_ids);
+        VLOG(1) << "Auto-vacuumed fragments: " << shared::printContainer(fragment_ids)
+                << ", table id: " << td->tableId;
+      }
+      cat_.checkpoint(td_->tableId);
+    } catch (...) {
+      cat_.setTableEpochsLogExceptions(db_id, table_epochs);
+      throw;
+    }
+  } else {
+    // Checkpoint, even when no data update occurs, in order to ensure that epochs are
+    // uniformly incremented in distributed mode.
+    cat_.checkpointWithAutoRollback(td_->tableId);
   }
 }

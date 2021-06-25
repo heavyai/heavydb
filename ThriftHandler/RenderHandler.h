@@ -90,6 +90,7 @@ class RenderHandler {
   void clear_cpu_memory();
 
   std::string get_renderer_status_json() const;
+  bool validate_renderer_status_json(const std::string& other_renderer_status_json) const;
 
   void shutdown();
 

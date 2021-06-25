@@ -275,6 +275,15 @@ const ChunkMetadataMap& Fragmenter_Namespace::FragmentInfo::getChunkMetadataMap(
   return chunkMetadataMap;
 }
 
+ChunkMetadataMap Fragmenter_Namespace::FragmentInfo::getChunkMetadataMapPhysicalCopy()
+    const {
+  ChunkMetadataMap metadata_map;
+  for (const auto& [column_id, chunk_metadata] : chunkMetadataMap) {
+    metadata_map[column_id] = std::make_shared<ChunkMetadata>(*chunk_metadata);
+  }
+  return metadata_map;
+}
+
 size_t Fragmenter_Namespace::FragmentInfo::getNumTuples() const {
   std::unique_ptr<std::lock_guard<std::mutex>> lock;
   if (resultSetMutex) {

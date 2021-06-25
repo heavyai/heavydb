@@ -145,8 +145,9 @@ ParserWrapper::ParserWrapper(std::string query_string) {
         }
       }
       if (ddl == "CREATE") {
-        boost::regex ctas_regex{R"(CREATE\s+TABLE.*(\"|\s)AS(\(|\s)+(SELECT|WITH).*)",
-                                boost::regex::extended | boost::regex::icase};
+        boost::regex ctas_regex{
+            R"(CREATE\s+(TEMPORARY\s+|\s*)+TABLE.*(\"|\s)AS(\(|\s)+(SELECT|WITH).*)",
+            boost::regex::extended | boost::regex::icase};
         if (boost::regex_match(query_string, ctas_regex)) {
           is_ctas = true;
         } else {
@@ -216,7 +217,10 @@ ParserWrapper::ParserWrapper(std::string query_string) {
           return;
         }
       }
-      is_legacy_ddl_ = !is_calcite_ddl_;
+      // ctas may look like ddl, but is neither legacy_dll nor calcite_ddl
+      if (!is_ctas) {
+        is_legacy_ddl_ = !is_calcite_ddl_;
+      }
       return;
     }
   }

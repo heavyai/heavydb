@@ -395,6 +395,8 @@ ExecutionResult DdlCommandExecutor::execute() {
     LOG(ERROR) << "SHOW QUERIES DDL is not ready yet!\n";
   } else if (ddl_command_ == "SHOW_DISK_CACHE_USAGE") {
     result = ShowDiskCacheUsageCommand{*ddl_data_, session_ptr_}.execute();
+  } else if (ddl_command_ == "SHOW_USER_DETAILS") {
+    result = ShowUserDetailsCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "KILL_QUERY") {
     auto& ddl_payload = extractPayload(*ddl_data_);
     CHECK(ddl_payload.HasMember("querySession"));
@@ -1514,6 +1516,86 @@ ExecutionResult ShowDiskCacheUsageCommand::execute() {
     logical_values.back().emplace_back(genLiteralBigInt(table_cache_size));
   }
 
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
+}
+
+ShowUserDetailsCommand::ShowUserDetailsCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data);
+  if (ddl_payload.HasMember("userNames")) {
+    CHECK(ddl_payload["userNames"].IsArray());
+    for (const auto& user_name : ddl_payload["userNames"].GetArray()) {
+      CHECK(user_name.IsString());
+    }
+  }
+}
+
+ExecutionResult ShowUserDetailsCommand::execute() {
+  auto& ddl_payload = extractPayload(ddl_data_);
+  auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
+
+  // label_infos -> column labels
+  std::vector<std::string> labels{"NAME", "ID", "IS_SUPER", "DEFAULT_DB", "CAN_LOGIN"};
+  std::vector<TargetMetaInfo> label_infos;
+  label_infos.emplace_back(labels[0], SQLTypeInfo(kTEXT, true));
+  label_infos.emplace_back(labels[1], SQLTypeInfo(kBIGINT, true));
+  label_infos.emplace_back(labels[2], SQLTypeInfo(kBOOLEAN, true));
+  label_infos.emplace_back(labels[3], SQLTypeInfo(kTEXT, true));
+  label_infos.emplace_back(labels[4], SQLTypeInfo(kBOOLEAN, true));
+  std::vector<RelLogicalValues::RowValues> logical_values;
+
+  Catalog_Namespace::UserMetadata self = session_ptr_->get_currentUser();
+  Catalog_Namespace::DBSummaryList dbsums = sys_cat.getDatabaseListForUser(self);
+  std::unordered_set<std::string> visible_databases;
+  if (!self.isSuper) {
+    for (const auto& dbsum : dbsums) {
+      visible_databases.insert(dbsum.dbName);
+    }
+  }
+
+  std::list<Catalog_Namespace::UserMetadata> user_list;
+  if (ddl_payload.HasMember("userNames")) {
+    for (const auto& user_name_json : ddl_payload["userNames"].GetArray()) {
+      std::string user_name = user_name_json.GetString();
+      Catalog_Namespace::UserMetadata user;
+      if (!sys_cat.getMetadataForUser(user_name, user)) {
+        throw std::runtime_error("User with username \"" + user_name +
+                                 "\" does not exist. ");
+      }
+      user_list.emplace_back(std::move(user));
+    }
+  } else {
+    user_list = sys_cat.getAllUserMetadata();
+  }
+
+  for (const auto& user : user_list) {
+    // database
+    std::string dbname;
+    Catalog_Namespace::DBMetadata db;
+    if (sys_cat.getMetadataForDBById(user.defaultDbId, db)) {
+      if (self.isSuper.load() || visible_databases.count(db.dbName)) {
+        dbname = db.dbName;
+      }
+    }
+    if (self.isSuper.load()) {
+      dbname += "(" + std::to_string(user.defaultDbId) + ")";
+    }
+
+    // logical_values -> table data
+    logical_values.emplace_back(RelLogicalValues::RowValues{});
+    logical_values.back().emplace_back(genLiteralStr(user.userName));
+    logical_values.back().emplace_back(genLiteralBigInt(user.userId));
+    logical_values.back().emplace_back(genLiteralBoolean(user.isSuper.load()));
+    logical_values.back().emplace_back(genLiteralStr(dbname));
+    logical_values.back().emplace_back(genLiteralBoolean(user.can_login));
+  }
+
+  // Create ResultSet
   std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
       ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
 

@@ -8898,6 +8898,11 @@ TEST(Select, Joins_FilterPushDown) {
         "R.y AND R.x < 20 AND S.y > 2 AND S.str <> 'foo' AND T.y < 18 AND T.x > 1 GROUP "
         "BY R.y ORDER BY R.y;",
         dt);
+      // BE-6050, filter pushdown for a query having subquery
+      c("SELECT COUNT(1) FROM coalesce_cols_test_1 WHERE y IN (SELECT MAX(R.y) FROM "
+        "coalesce_cols_test_1 R, (SELECT x, y FROM coalesce_cols_test_1) S WHERE R.y = "
+        "S.y AND s.x < -999);",
+        dt);
     }
   }
   // reloading default values
@@ -9390,6 +9395,22 @@ TEST(Select, Joins_LeftJoinFiltered) {
             R"(SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test.x = test_inner.x LEFT JOIN test_inner_x ON test.x = test_inner_x.x WHERE test.y > 42;)";
         c(query, dt);
         check_explain_result(query, dt, enable_filter_hoisting);
+      }
+
+      {
+        const std::string query =
+            R"(SELECT a.x FROM test a INNER JOIN test_inner b ON (a.x = b.x AND a.y = b.y) LEFT JOIN test_inner_x c ON (a.x = c.x) WHERE a.x > 5 GROUP BY 1;)";
+        c(query, dt);
+        // filter hoisting disabled if LEFT JOIN is the not the first join condition
+        check_explain_result(query, dt, /*enable_filter_hoisting=*/false);
+      }
+
+      {
+        const std::string query =
+            R"(SELECT a.x FROM test a LEFT JOIN test_inner_x c ON (a.x = c.x) INNER JOIN test_inner b ON (a.x = b.x AND a.y = b.y) WHERE a.y + 1 > 5 GROUP BY 1;)";
+        c(query, dt);
+        // filter hoisting disabled if LEFT JOIN is the not the first join condition
+        check_explain_result(query, dt, /*enable_filter_hoisting=*/false);
       }
     }
   }
@@ -10861,28 +10882,6 @@ TEST(Select, ViewHavingSelfJoin) {
   };
   run_test(true);
   run_test(false);
-}
-
-TEST(Select, CreateTableAsSelect) {
-  SKIP_ALL_ON_AGGREGATOR();
-  SKIP_WITH_TEMP_TABLES();
-
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    c("SELECT fixed_str, COUNT(*) FROM ctas_test GROUP BY fixed_str;", dt);
-    c("SELECT x, COUNT(*) FROM ctas_test GROUP BY x;", dt);
-    c("SELECT f, COUNT(*) FROM ctas_test GROUP BY f;", dt);
-    c("SELECT d, COUNT(*) FROM ctas_test GROUP BY d;", dt);
-    c("SELECT COUNT(*) FROM empty_ctas_test;", dt);
-    c("SELECT x, w, y, z, b, f, ff, d, fx FROM ctas_test_full ORDER BY x, w, y, z, "
-      "b, f, ff, d, fx;",
-      dt);
-    c("SELECT count(dn), count(fn), count(null_str) FROM ctas_test_full;", dt);
-    c("SELECT str, count(*) FROM ctas_test_full GROUP BY str ORDER BY 2;", dt);
-    c("SELECT m, m_3, m_6, m_9, n, o, o1, o2 FROM ctas_test_full ORDER BY m, m_3, m_6, "
-      "m_9, n, o, o1, o2;",
-      dt);
-  }
 }
 
 TEST(Select, PgShim) {
@@ -15444,6 +15443,16 @@ TEST(Update, SimpleFilter) {
     c("UPDATE simple_filter SET z = 2*z WHERE x < 6;", dt);
     c("SELECT * FROM simple_filter ORDER BY x, y, z;", dt);
     c("SELECT sum(x) FROM simple_filter WHERE x < 6;", dt);  // check metadata
+
+    // BE-6050
+    {
+      auto default_flag = g_enable_filter_push_down;
+      g_enable_filter_push_down = true;
+      c("UPDATE simple_filter SET x = 50 WHERE x IN (SELECT R.x FROM simple_filter R, "
+        "(SELECT x, y FROM simple_filter) S WHERE R.x = S.x AND S.y > 2021);",
+        dt);
+      g_enable_filter_push_down = default_flag;
+    }
   }
 }
 
@@ -21084,57 +21093,6 @@ int create_views() {
   return 0;
 }
 
-int create_as_select() {
-  try {
-    const std::string drop_ctas_test{"DROP TABLE IF EXISTS ctas_test;"};
-    run_ddl_statement(drop_ctas_test);
-    g_sqlite_comparator.query(drop_ctas_test);
-    const std::string create_ctas_test{
-        "CREATE TABLE ctas_test AS SELECT x, f, d, str, fixed_str FROM test WHERE x > "
-        "7;"};
-    run_ddl_statement(create_ctas_test);
-    g_sqlite_comparator.query(create_ctas_test);
-  } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create table 'ctas_test'";
-    return -EEXIST;
-  }
-  return 0;
-}
-
-int create_as_select_full() {
-  try {
-    const std::string drop_ctas_test{"DROP TABLE IF EXISTS ctas_test_full;"};
-    run_ddl_statement(drop_ctas_test);
-    g_sqlite_comparator.query(drop_ctas_test);
-    const std::string create_ctas_test{
-        "CREATE TABLE ctas_test_full AS SELECT * FROM test;"};
-    run_ddl_statement(create_ctas_test);
-    g_sqlite_comparator.query(create_ctas_test);
-  } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create table 'ctas_test_full'";
-    return -EEXIST;
-  }
-  return 0;
-}
-
-int create_as_select_empty() {
-  try {
-    const std::string drop_ctas_test{"DROP TABLE IF EXISTS empty_ctas_test;"};
-    run_ddl_statement(drop_ctas_test);
-    g_sqlite_comparator.query(drop_ctas_test);
-    const std::string create_ctas_test{
-        "CREATE TABLE empty_ctas_test AS SELECT x, f, d, str, fixed_str FROM test "
-        "WHERE "
-        "x > 8;"};
-    run_ddl_statement(create_ctas_test);
-    g_sqlite_comparator.query(create_ctas_test);
-  } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create table 'empty_ctas_test'";
-    return -EEXIST;
-  }
-  return 0;
-}
-
 void drop_tables() {
   const std::string drop_vacuum_test_alt("DROP TABLE vacuum_test_alt;");
   g_sqlite_comparator.query(drop_vacuum_test_alt);
@@ -21248,16 +21206,6 @@ void drop_tables() {
   const std::string drop_test_lots_cols{"DROP TABLE test_lots_cols;"};
   g_sqlite_comparator.query(drop_test_lots_cols);
   run_ddl_statement(drop_test_lots_cols);
-
-  if (!g_aggregator && !g_use_temporary_tables) {
-    const std::string drop_ctas_test{"DROP TABLE ctas_test;"};
-    g_sqlite_comparator.query(drop_ctas_test);
-    run_ddl_statement(drop_ctas_test);
-
-    const std::string drop_empty_ctas_test{"DROP TABLE empty_ctas_test;"};
-    g_sqlite_comparator.query(drop_empty_ctas_test);
-    run_ddl_statement(drop_empty_ctas_test);
-  }
 
   const std::string drop_test_table_rounding{"DROP TABLE test_rounding;"};
   run_ddl_statement(drop_test_table_rounding);
@@ -21417,15 +21365,6 @@ int main(int argc, char** argv) {
     err = create_and_populate_tables(g_use_temporary_tables);
     if (!err && !g_use_temporary_tables) {
       err = create_views();
-    }
-    if (!err && !g_use_temporary_tables) {
-      SKIP_ON_AGGREGATOR(err = create_as_select());
-    }
-    if (!err && !g_use_temporary_tables) {
-      SKIP_ON_AGGREGATOR(err = create_as_select_full());
-    }
-    if (!err && !g_use_temporary_tables) {
-      SKIP_ON_AGGREGATOR(err = create_as_select_empty());
     }
   }
   if (err) {

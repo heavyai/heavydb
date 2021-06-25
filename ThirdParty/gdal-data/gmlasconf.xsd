@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
 /******************************************************************************
- * $Id: gmlasconf.xsd fbfe44539df86a72c15d93da97a579789d3fbccc 2017-12-07 17:03:50Z Even Rouault $
+ * $Id: gmlasconf.xsd 6ef13199b493973da285decbfcd5e2a763954b97 2018-06-07 05:46:42 -0400 luzpaz $
  *
  * Project:  GDAL/OGR
  * Purpose:  XML Schema for gmlasconf.xml
@@ -489,7 +489,7 @@
               <xs:element name="ProxyAuth" minOccurs="0" type="xs:string">
                 <xs:annotation>
                   <xs:documentation>
-                    Proxy authentification method: one of Basic, NTLM, Digest
+                    Proxy authentication method: one of Basic, NTLM, Digest
                     or Any.
                     Default: none or value of GDAL_PROXY_AUTH
                     configuration option.
@@ -867,7 +867,7 @@
                 <xs:annotation>
                   <xs:documentation>
                     Number of spaces used to indent each level of nesting in
-                    XML ouput.
+                    XML output.
                     Default is 2.
                   </xs:documentation>
                 </xs:annotation>

@@ -8,9 +8,14 @@ set(shared_source_files
     misc.cpp
     thread_count.cpp
     MathUtils.cpp)
+
 include_directories(${CMAKE_SOURCE_DIR})
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND shared_source_files ee/Encryption.cpp)
+endif()
+
+if(ENABLE_NVTX)
+  list(APPEND shared_source_files nvtx_helpers.cpp)
 endif()
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/funcannotations.h DESTINATION ${CMAKE_BINARY_DIR}/Shared/)

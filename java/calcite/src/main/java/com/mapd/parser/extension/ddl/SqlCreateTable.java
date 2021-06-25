@@ -28,7 +28,10 @@ import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlSpecialOperator;
 import org.apache.calcite.sql.SqlWriter;
+import org.apache.calcite.sql.SqlWriterConfig;
+import org.apache.calcite.sql.dialect.CalciteSqlDialect;
 import org.apache.calcite.sql.parser.SqlParserPos;
+import org.apache.calcite.sql.pretty.SqlPrettyWriter;
 import org.apache.calcite.util.EscapedStringJsonBuilder;
 import org.apache.calcite.util.ImmutableNullableList;
 import org.apache.calcite.util.JsonBuilder;
@@ -41,9 +44,10 @@ import java.util.Objects;
  * Parse tree for {@code CREATE TABLE} statement.
  */
 public class SqlCreateTable extends SqlCreate {
+  public final boolean temporary;
   public final SqlIdentifier name;
   public final SqlNodeList columnList;
-  public final SqlNode query;
+  public SqlNode query = null;
   private final OmniSciOptionsMap options;
 
   private static final SqlOperator OPERATOR =
@@ -52,12 +56,14 @@ public class SqlCreateTable extends SqlCreate {
   /** Creates a SqlCreateTable. */
   protected SqlCreateTable(SqlParserPos pos,
           boolean replace,
+          boolean temporary,
           boolean ifNotExists,
           SqlIdentifier name,
           SqlNodeList columnList,
           OmniSciOptionsMap withOptions,
           SqlNode query) {
     super(OPERATOR, pos, replace, ifNotExists);
+    this.temporary = temporary;
     this.name = Objects.requireNonNull(name);
     this.options = withOptions;
     this.columnList = columnList; // may be null
@@ -71,6 +77,9 @@ public class SqlCreateTable extends SqlCreate {
   @Override
   public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
     writer.keyword("CREATE");
+    if (temporary) {
+      writer.keyword("TEMPORARY");
+    }
     writer.keyword("TABLE");
     if (ifNotExists) {
       writer.keyword("IF NOT EXISTS");
@@ -96,27 +105,50 @@ public class SqlCreateTable extends SqlCreate {
     JsonBuilder jsonBuilder = new EscapedStringJsonBuilder();
     Map<String, Object> map = jsonBuilder.map();
 
+    jsonBuilder.put(map, "command", "CREATE_TABLE");
     jsonBuilder.put(map, "name", this.name.toString());
-    jsonBuilder.put(
-            map, "query", this.query == null ? this.query : this.query.toString());
+
+    if (query != null) {
+      // By default ... toString() seems to single-quote too much stuff
+      //    for the SELECT stmt to be executed later
+      //    ->
+      //    use PrettyWriter to output a cleaner SQL statement
+      //
+      SqlWriterConfig c = SqlPrettyWriter.config()
+                                  .withDialect(CalciteSqlDialect.DEFAULT)
+                                  .withQuoteAllIdentifiers(false)
+                                  .withSelectListItemsOnSeparateLines(false)
+                                  .withWhereListItemsOnSeparateLines(false)
+                                  .withValuesListNewline(false);
+      SqlPrettyWriter writer = new SqlPrettyWriter(c);
+      this.query.unparse(writer, 0, 0);
+      jsonBuilder.put(map, "query", writer.toString());
+    }
 
     List<Object> elements_list = jsonBuilder.list();
-    for (SqlNode elementNode : this.columnList) {
-      if (!(elementNode instanceof SqlCall)) {
-        throw new CalciteException("Column definition for table " + this.name.toString()
-                        + " is invalid: " + elementNode.toString(),
-                null);
+    if (columnList != null) {
+      for (SqlNode elementNode : this.columnList) {
+        if (!(elementNode instanceof SqlCall)) {
+          throw new CalciteException("Column definition for table " + this.name.toString()
+                          + " is invalid: " + elementNode.toString(),
+                  null);
+        }
+        elements_list.add(elementNode);
       }
-      elements_list.add(elementNode);
     }
     jsonBuilder.put(map, "elements", elements_list);
 
+    jsonBuilder.put(map, "temporary", this.temporary);
     jsonBuilder.put(map, "ifNotExists", this.ifNotExists);
 
-    map.put("command", "CREATE_TABLE");
     map.put("options", this.options);
+
     Map<String, Object> payload = jsonBuilder.map();
     payload.put("payload", map);
+
+    // To Debug:
+    // System.out.println(jsonBuilder.toJsonString(payload))
+
     return jsonBuilder.toJsonString(payload);
   }
 }

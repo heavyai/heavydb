@@ -1288,24 +1288,25 @@ bool SysCatalog::checkPasswordForUserImpl(const std::string& passwd,
 }
 
 static bool parseUserMetadataFromSQLite(const std::unique_ptr<SqliteConnector>& conn,
-                                        UserMetadata& user) {
+                                        UserMetadata& user,
+                                        int row) {
   int numRows = conn->getNumRows();
   if (numRows == 0) {
     return false;
   }
-  user.userId = conn->getData<int>(0, 0);
-  user.userName = conn->getData<string>(0, 1);
-  user.passwd_hash = conn->getData<string>(0, 2);
-  user.isSuper = conn->getData<bool>(0, 3);
-  user.defaultDbId = conn->isNull(0, 4) ? -1 : conn->getData<int>(0, 4);
-  if (conn->isNull(0, 5)) {
+  user.userId = conn->getData<int>(row, 0);
+  user.userName = conn->getData<string>(row, 1);
+  user.passwd_hash = conn->getData<string>(row, 2);
+  user.isSuper = conn->getData<bool>(row, 3);
+  user.defaultDbId = conn->isNull(row, 4) ? -1 : conn->getData<int>(row, 4);
+  if (conn->isNull(row, 5)) {
     LOG(WARNING)
         << "User property 'can_login' not set for user " << user.userLoggable()
         << ". Disabling login ability. Set the users login ability with \"ALTER USER "
         << (g_log_user_id ? std::string("[username]") : user.userName)
         << " (can_login='true');\".";
   }
-  user.can_login = conn->isNull(0, 5) ? false : conn->getData<bool>(0, 5);
+  user.can_login = conn->isNull(row, 5) ? false : conn->getData<bool>(row, 5);
   return true;
 }
 
@@ -1316,7 +1317,7 @@ bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
       "SELECT userid, name, passwd_hash, issuper, default_db, can_login FROM mapd_users "
       "WHERE name = ?",
       name);
-  return parseUserMetadataFromSQLite(sqliteConnector_, user);
+  return parseUserMetadataFromSQLite(sqliteConnector_, user, 0);
 }
 
 bool SysCatalog::getMetadataForUserById(const int32_t idIn, UserMetadata& user) {
@@ -1325,7 +1326,7 @@ bool SysCatalog::getMetadataForUserById(const int32_t idIn, UserMetadata& user) 
       "SELECT userid, name, passwd_hash, issuper, default_db, can_login FROM mapd_users "
       "WHERE userid = ?",
       std::to_string(idIn));
-  return parseUserMetadataFromSQLite(sqliteConnector_, user);
+  return parseUserMetadataFromSQLite(sqliteConnector_, user, 0);
 }
 
 list<DBMetadata> SysCatalog::getAllDBMetadata() {
@@ -1347,7 +1348,8 @@ namespace {
 
 auto get_users(std::unique_ptr<SqliteConnector>& sqliteConnector,
                const int32_t dbId = -1) {
-  sqliteConnector->query("SELECT userid, name, issuper, can_login FROM mapd_users");
+  sqliteConnector->query(
+      "SELECT userid, name, passwd_hash, issuper, default_db, can_login FROM mapd_users");
   int numRows = sqliteConnector->getNumRows();
   list<UserMetadata> user_list;
   const bool return_all_users = dbId == -1;
@@ -1358,19 +1360,12 @@ auto get_users(std::unique_ptr<SqliteConnector>& sqliteConnector,
     }
     return true;
   };
-  auto add_user = [&user_list, &has_any_privilege](const int32_t id,
-                                                   const std::string& name,
-                                                   const bool super,
-                                                   const bool can_login) {
-    if (has_any_privilege(name)) {
-      user_list.emplace_back(id, name, "", super, -1, can_login);
-    };
-  };
   for (int r = 0; r < numRows; ++r) {
-    add_user(sqliteConnector->getData<int>(r, 0),
-             sqliteConnector->getData<string>(r, 1),
-             sqliteConnector->getData<bool>(r, 2),
-             sqliteConnector->getData<bool>(r, 3));
+    Catalog_Namespace::UserMetadata user;
+    parseUserMetadataFromSQLite(sqliteConnector, user, r);
+    if (has_any_privilege(user.userName)) {
+      user_list.emplace_back(std::move(user));
+    }
   }
   return user_list;
 }
