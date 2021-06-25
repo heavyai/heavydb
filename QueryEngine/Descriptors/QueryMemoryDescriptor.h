@@ -333,6 +333,10 @@ class QueryMemoryDescriptor {
   // bump allocator
   std::optional<size_t> varlenOutputBufferElemSize() const;
 
+  // returns the number of bytes needed for all slots preceeding slot_idx. Used to compute
+  // the offset into the varlen buffer for each projected target in a given row.
+  size_t varlenOutputRowSizeToSlot(const size_t slot_idx) const;
+
   bool slotIsVarlenOutput(const size_t slot_idx) const {
     return col_slot_context_.slotIsVarlen(slot_idx);
   }

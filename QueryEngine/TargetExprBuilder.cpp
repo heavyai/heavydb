@@ -382,8 +382,15 @@ void TargetExprCodegen::codegenAggregate(
       const auto output_buffer_slot = LL_BUILDER.CreateZExt(
           LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "old_total_matched")),
           llvm::Type::getInt64Ty(LL_CONTEXT));
-      const auto output_buffer_slot_bytes = LL_BUILDER.CreateMul(
-          output_buffer_slot, executor->cgen_state_->llInt(chosen_bytes));
+      const auto varlen_buffer_row_sz = query_mem_desc.varlenOutputBufferElemSize();
+      CHECK(varlen_buffer_row_sz);
+      const auto output_buffer_slot_bytes = LL_BUILDER.CreateAdd(
+          LL_BUILDER.CreateMul(
+              output_buffer_slot,
+              executor->cgen_state_->llInt(static_cast<int64_t>(*varlen_buffer_row_sz))),
+          executor->cgen_state_->llInt(static_cast<int64_t>(
+              query_mem_desc.varlenOutputRowSizeToSlot(slot_index))));
+      ;
       std::vector<llvm::Value*> varlen_agg_args{
           executor->castToIntPtrTyIn(varlen_output_buffer, 8),
           output_buffer_slot_bytes,

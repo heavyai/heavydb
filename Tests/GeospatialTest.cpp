@@ -603,27 +603,6 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
                                    "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
                                    dt,
                                    false))));
-    ASSERT_EQ(
-        "POINT (2 2)",
-        boost::get<std::string>(v<NullableString>(run_simple_agg(
-            "SELECT ST_GeomFromText('POINT(2 2)') FROM geospatial_test WHERE id = 2;",
-            dt,
-            false))));
-    ASSERT_EQ(
-        "POINT (2 2)",
-        boost::get<std::string>(v<NullableString>(run_simple_agg(
-            "SELECT ST_Point(2,2) FROM geospatial_test WHERE id = 2;", dt, false))));
-    // requires punt to CPU
-    SKIP_ON_AGGREGATOR(ASSERT_EQ(
-        "POINT (2 2)",
-        boost::get<std::string>(v<NullableString>(run_simple_agg(
-            "SELECT ST_Point(id,id) FROM geospatial_test WHERE id = 2;", dt, false)))));
-    SKIP_ON_AGGREGATOR(ASSERT_EQ(
-        "POINT (2 2)",
-        boost::get<std::string>(v<NullableString>(run_simple_agg(
-            "SELECT ST_SetSRID(ST_Point(id,id),4326) FROM geospatial_test WHERE id = 2;",
-            dt,
-            false)))));
 
     // more distance
     ASSERT_NEAR(
@@ -993,6 +972,56 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     EXPECT_ANY_THROW(run_multiple_agg("SELECT p FROM geospatial_test ORDER BY p;", dt));
     EXPECT_ANY_THROW(run_multiple_agg(
         "SELECT poly, l, id FROM geospatial_test ORDER BY id, poly;", dt));
+  }
+}
+
+TEST_P(GeoSpatialTestTablesFixture, Constructors) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    {
+      auto rows = run_multiple_agg(
+          R"(SELECT ST_Point(id, id), id, ST_Point(id + 1, id + 2) FROM geospatial_test WHERE id < 2 ORDER BY 2;)",
+          dt);
+      rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+      EXPECT_EQ(rows->rowCount(), size_t(2));
+
+      auto process_row = [&](const int64_t id_for_row) {
+        auto row = rows->getNextRow(false, false);
+        EXPECT_EQ(row.size(), size_t(3));
+        const auto id = v<int64_t>(row[1]);
+        EXPECT_EQ(id, id_for_row);
+        const auto first_geo_tv = boost::get<GeoTargetValue>(row[0]);
+        CHECK(first_geo_tv);
+        const auto first_pt = boost::get<GeoPointTargetValue>(*first_geo_tv);
+        CHECK(first_pt.coords->data());
+        const double* first_pt_array = first_pt.coords->data();
+        EXPECT_EQ(first_pt_array[0], static_cast<double>(id));
+        EXPECT_EQ(first_pt_array[1], static_cast<double>(id));
+
+        const auto second_geo_tv = boost::get<GeoTargetValue>(row[2]);
+        CHECK(second_geo_tv);
+        const auto second_pt = boost::get<GeoPointTargetValue>(*second_geo_tv);
+        CHECK(second_pt.coords->data());
+        const double* second_pt_array = second_pt.coords->data();
+        EXPECT_EQ(second_pt_array[0], static_cast<double>(id + 1));
+        EXPECT_EQ(second_pt_array[1], static_cast<double>(id + 2));
+      };
+
+      process_row(0);
+      process_row(1);
+    }
+
+    ASSERT_EQ(
+        "POINT (2 2)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            "SELECT ST_Point(id,id) FROM geospatial_test WHERE id = 2;", dt, false))));
+    ASSERT_EQ(
+        "POINT (2 2)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            "SELECT ST_SetSRID(ST_Point(id,id),4326) FROM geospatial_test WHERE id = 2;",
+            dt,
+            false))));
   }
 }
 
@@ -1790,6 +1819,19 @@ TEST(GeoSpatial, Math) {
             R"(SELECT ST_Distance('POINT(0 89)', ST_CENTROID('LINESTRING(0 89, 0 89, 0 89, 0 89)'));)",
             dt)),
         static_cast<double>(0.0001));
+  }
+}
+
+TEST(GeoSpatial, Projections) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    ASSERT_EQ("POINT (2 2)",
+              boost::get<std::string>(v<NullableString>(
+                  run_simple_agg("SELECT ST_GeomFromText('POINT(2 2)');", dt, false))));
+    ASSERT_EQ("POINT (2 2)",
+              boost::get<std::string>(
+                  v<NullableString>(run_simple_agg("SELECT ST_Point(2,2);", dt, false))));
   }
 }
 

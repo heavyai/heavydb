@@ -1271,3 +1271,20 @@ std::optional<size_t> QueryMemoryDescriptor::varlenOutputBufferElemSize() const 
   }
   return buffer_element_size;
 }
+
+size_t QueryMemoryDescriptor::varlenOutputRowSizeToSlot(const size_t slot_idx) const {
+  int64_t buffer_element_size{0};
+  CHECK_LT(slot_idx, col_slot_context_.getSlotCount());
+  for (size_t i = 0; i < slot_idx; i++) {
+    try {
+      const auto slot_element_size = col_slot_context_.varlenOutputElementSize(i);
+      if (slot_element_size < 0) {
+        continue;
+      }
+      buffer_element_size += slot_element_size;
+    } catch (...) {
+      continue;
+    }
+  }
+  return buffer_element_size;
+}
