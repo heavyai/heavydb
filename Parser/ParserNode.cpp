@@ -938,14 +938,21 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
   SQLTypeInfo ti;
   bool has_agg = false;
   std::set<int> dictionary_ids;
+  bool has_none_encoded_str_projection = false;
 
   for (auto& p : expr_pair_list) {
     auto e1 = p.first;
     CHECK(e1->get_type_info().is_boolean());
     auto e2 = p.second;
-    if (e2->get_type_info().is_dict_encoded_string()) {
-      dictionary_ids.insert(e2->get_type_info().get_comp_param());
+    if (e2->get_type_info().is_string()) {
+      if (e2->get_type_info().is_dict_encoded_string()) {
+        dictionary_ids.insert(e2->get_type_info().get_comp_param());
+        // allow literals to potentially fall down the transient path
+      } else if (std::dynamic_pointer_cast<const Analyzer::ColumnVar>(e2)) {
+        has_none_encoded_str_projection = true;
+      }
     }
+
     if (ti.get_type() == kNULLT) {
       ti = e2->get_type_info();
     } else if (e2->get_type_info().get_type() == kNULLT) {
@@ -976,8 +983,13 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
       ti.set_notnull(false);
       else_e->set_type_info(ti);
     } else if (ti != else_e->get_type_info()) {
-      if (else_e->get_type_info().is_dict_encoded_string()) {
-        dictionary_ids.insert(else_e->get_type_info().get_comp_param());
+      if (else_e->get_type_info().is_string()) {
+        if (else_e->get_type_info().is_dict_encoded_string()) {
+          dictionary_ids.insert(else_e->get_type_info().get_comp_param());
+          // allow literals to potentially fall down the transient path
+        } else if (std::dynamic_pointer_cast<const Analyzer::ColumnVar>(else_e)) {
+          has_none_encoded_str_projection = true;
+        }
       }
       ti.set_notnull(false);
       if (ti.is_string() && else_e->get_type_info().is_string()) {
@@ -1017,7 +1029,7 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
 
   auto case_expr = makeExpr<Analyzer::CaseExpr>(ti, has_agg, cast_expr_pair_list, else_e);
   if (ti.get_compression() != kENCODING_DICT && dictionary_ids.size() == 1 &&
-      *(dictionary_ids.begin()) > 0) {
+      *(dictionary_ids.begin()) > 0 && !has_none_encoded_str_projection) {
     // the above logic makes two assumptions when strings are present. 1) that all types
     // in the case statement are either null or strings, and 2) that none-encoded strings
     // will always win out over dict encoding. If we only have one dictionary, and that
