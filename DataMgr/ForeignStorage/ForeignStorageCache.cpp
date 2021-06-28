@@ -60,20 +60,11 @@ void ForeignStorageCache::deleteBufferIfExists(const ChunkKey& chunk_key) {
   caching_file_mgr_->deleteBufferIfExists(chunk_key);
 }
 
-void ForeignStorageCache::cacheChunk(const ChunkKey& chunk_key, AbstractBuffer* buffer) {
-  // We should only be caching buffers that are in sync with storage.
-  CHECK(!buffer->isDirty());
-  if (buffer->size() == 0) {
-    // If we are writing an empty buffer, just delete it from the cache entirely.
-    deleteBufferIfExists(chunk_key);
-  } else {
-    // Replace the existing chunk with a new version.
-    buffer->setAppended();
-    caching_file_mgr_->putBuffer(chunk_key, buffer);
-    CHECK(!buffer->isDirty());
-  }
-  caching_file_mgr_->checkpoint(chunk_key[CHUNK_KEY_DB_IDX],
-                                chunk_key[CHUNK_KEY_TABLE_IDX]);
+void ForeignStorageCache::putBuffer(const ChunkKey& key,
+                                    AbstractBuffer* buf,
+                                    const size_t num_bytes) {
+  caching_file_mgr_->putBuffer(key, buf, num_bytes);
+  CHECK(!buf->isDirty());
 }
 
 void ForeignStorageCache::checkpoint(const int32_t db_id, const int32_t tb_id) {

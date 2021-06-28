@@ -108,6 +108,7 @@ class CachingFileMgrTest : public testing::Test {
     auto [db, tb] = get_table_prefix(key);
     TestHelpers::TestBuffer test_buf{
         std::vector<int8_t>(page_data_size_ * num_pages, value)};
+    test_buf.clearDirtyBits();
     cfm.putBuffer(key, &test_buf);
     cfm.checkpoint(db, tb);
   }
@@ -119,6 +120,7 @@ class CachingFileMgrTest : public testing::Test {
     for (int32_t i = 0; i < num_pages; ++i) {
       ChunkKey key{db, tb, 1, i};
       TestHelpers::TestBuffer test_buf{small_buffer_};
+      test_buf.clearDirtyBits();
       cfm.putBuffer(key, &test_buf);
     }
     cfm.checkpoint(db, tb);

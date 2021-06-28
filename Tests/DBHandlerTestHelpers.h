@@ -186,12 +186,12 @@ class DBHandlerTestFixture : public testing::Test {
     desc.add_options()("cluster",
                        po::value<std::string>(&cluster_config_file_path_),
                        "Path to data leaves list JSON file.");
-    desc.add_options()("use-disk-cache",
-                       po::value<bool>(&use_disk_cache_),
-                       "Enable disk cache for all tables.");
+    desc.add_options()("use-disk-cache", "Enable disk cache for all tables.");
     po::variables_map vm;
     po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
     po::notify(vm);
+
+    use_disk_cache_ = (vm.count("use-disk-cache"));
   }
 
   static void initTestArgs(const std::vector<LeafHostInfo>& string_servers,

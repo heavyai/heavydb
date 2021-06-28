@@ -280,7 +280,12 @@ FileBuffer* CachingFileMgr::createBufferFromHeaders(
 FileBuffer* CachingFileMgr::putBuffer(const ChunkKey& key,
                                       AbstractBuffer* src_buffer,
                                       const size_t num_bytes) {
+  CHECK(!src_buffer->isDirty()) << "Cannot cache dirty buffers.";
   deleteBufferIfExists(key);
+  // Since the buffer is not dirty we mark it as dirty if we are only writing metadata and
+  // appended if we are writing chunk data.  We delete + append rather than write to make
+  // sure we don't write multiple page versions.
+  (src_buffer->size() == 0) ? src_buffer->setDirty() : src_buffer->setAppended();
   return FileMgr::putBuffer(key, src_buffer, num_bytes);
 }
 

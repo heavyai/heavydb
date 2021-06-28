@@ -44,7 +44,7 @@ class ForeignStorageCache {
   ForeignStorageCache(const File_Namespace::DiskCacheConfig& config);
 
   void checkpoint(const int32_t db_id, const int32_t tb_id);
-  void cacheChunk(const ChunkKey&, AbstractBuffer*);
+  void putBuffer(const ChunkKey&, AbstractBuffer*, const size_t numBytes = 0);
   File_Namespace::FileBuffer* getCachedChunkIfExists(const ChunkKey&);
   bool isMetadataCached(const ChunkKey&) const;
   void cacheMetadataVec(const ChunkMetadataVector&);

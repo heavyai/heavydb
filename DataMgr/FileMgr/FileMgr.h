@@ -357,6 +357,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
    **/
   inline virtual bool failOnReadError() const { return true; }
 
+  // Used to describe the manager in logging and error messages.
+  virtual std::string describeSelf() const;
+
   static constexpr size_t DEFAULT_NUM_PAGES_PER_DATA_FILE{256};
   static constexpr size_t DEFAULT_NUM_PAGES_PER_METADATA_FILE{4096};
 
@@ -470,9 +473,6 @@ class FileMgr : public AbstractBufferMgr {  // implements
 
   // For testing purposes only
   FileMgr(const int epoch);
-
-  // Used to describe the manager in logging and error messages.
-  virtual std::string describeSelf() const;
 
   void closePhysicalUnlocked();
   void syncFilesToDisk();

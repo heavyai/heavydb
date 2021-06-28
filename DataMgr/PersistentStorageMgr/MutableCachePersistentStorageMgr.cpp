@@ -66,22 +66,28 @@ AbstractBuffer* MutableCachePersistentStorageMgr::putBuffer(const ChunkKey& chun
                                                             AbstractBuffer* source_buffer,
                                                             const size_t num_bytes) {
   auto buf = PersistentStorageMgr::putBuffer(chunk_key, source_buffer, num_bytes);
-  disk_cache_->cacheChunk(chunk_key, source_buffer);
+  disk_cache_->putBuffer(chunk_key, source_buffer, num_bytes);
   return buf;
 }
 
 void MutableCachePersistentStorageMgr::checkpoint() {
+  std::set<File_Namespace::TablePair> tables_to_checkpoint;
   for (auto& key : cached_chunk_keys_) {
     if (global_file_mgr_->getBuffer(key)->isDirty()) {
+      tables_to_checkpoint.emplace(get_table_prefix(key));
       foreign_storage::ForeignStorageBuffer temp_buf;
       global_file_mgr_->fetchBuffer(key, &temp_buf, 0);
-      disk_cache_->cacheChunk(key, &temp_buf);
+      disk_cache_->putBuffer(key, &temp_buf);
     }
+  }
+  for (auto [db, tb] : tables_to_checkpoint) {
+    disk_cache_->checkpoint(db, tb);
   }
   PersistentStorageMgr::global_file_mgr_->checkpoint();
 }
 
 void MutableCachePersistentStorageMgr::checkpoint(const int db_id, const int tb_id) {
+  bool need_checkpoint{false};
   ChunkKey chunk_prefix{db_id, tb_id};
   ChunkKey upper_prefix(chunk_prefix);
   upper_prefix.push_back(std::numeric_limits<int>::max());
@@ -90,10 +96,14 @@ void MutableCachePersistentStorageMgr::checkpoint(const int db_id, const int tb_
        chunk_key_it != end_it;
        ++chunk_key_it) {
     if (global_file_mgr_->getBuffer(*chunk_key_it)->isDirty()) {
+      need_checkpoint = true;
       foreign_storage::ForeignStorageBuffer temp_buf;
       global_file_mgr_->fetchBuffer(*chunk_key_it, &temp_buf, 0);
-      disk_cache_->cacheChunk(*chunk_key_it, &temp_buf);
+      disk_cache_->putBuffer(*chunk_key_it, &temp_buf);
     }
+  }
+  if (need_checkpoint) {
+    disk_cache_->checkpoint(db_id, tb_id);
   }
   PersistentStorageMgr::global_file_mgr_->checkpoint(db_id, tb_id);
 }
