@@ -779,7 +779,14 @@ ExpressionRange getExpressionRange(
     CHECK(sdp);
     const auto const_operand =
         dynamic_cast<const Analyzer::Constant*>(u_expr->get_operand());
-    CHECK(const_operand);
+    if (!const_operand) {
+      // casted subquery result. return invalid for now, but we could attempt to pull the
+      // range from the subquery result in the future
+      CHECK(u_expr->get_operand());
+      VLOG(1) << "Unable to determine expression range for dictionary encoded expression "
+              << u_expr->get_operand()->toString() << ", proceeding with invalid range.";
+      return ExpressionRange::makeInvalidRange();
+    }
 
     if (const_operand->get_is_null()) {
       return ExpressionRange::makeNullRange();
