@@ -33,6 +33,9 @@ class MutableCachePersistentStorageMgr : public PersistentStorageMgr {
   void deleteBuffer(const ChunkKey& chunk_key, const bool purge) override;
   void deleteBuffersWithPrefix(const ChunkKey& chunk_key_prefix,
                                const bool purge) override;
+  void fetchBuffer(const ChunkKey& chunk_key,
+                   AbstractBuffer* destination_buffer,
+                   const size_t num_bytes) override;
   AbstractBuffer* putBuffer(const ChunkKey& chunk_key,
                             AbstractBuffer* source_buffer,
                             const size_t num_bytes) override;

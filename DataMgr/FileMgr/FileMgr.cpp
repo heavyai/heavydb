@@ -784,7 +784,6 @@ void FileMgr::fetchBuffer(const ChunkKey& key,
                << chunk->size() << ") than number of bytes requested (" << numBytes
                << ")";
   }
-
   chunk->copyTo(destBuffer, numBytes);
 }
 
