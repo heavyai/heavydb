@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <chrono>
+// #include <chrono>
 #include "../../Logger/Logger.h"
 #include "../../QueryEngine/OmniSciTypes.h"
 #include "../../Shared/funcannotations.h"
@@ -85,9 +85,9 @@ EXTENSION_NOINLINE int32_t row_adder(const int copy_multiplier,
       if (input_col1.isNull(i) || input_col2.isNull(i)) {
         output_col.setNull(i + (c * stride));
       } else {
-      output_col[i + (c * stride)] = input_col1[i] + input_col2[i];
+        output_col[i + (c * stride)] = input_col1[i] + input_col2[i];
+      }
     }
-  }
   }
 
   return output_row_count;
@@ -217,90 +217,62 @@ EXTENSION_NOINLINE int32_t column_list_row_sum__cpu_(const ColumnList<int32_t>& 
   return output_num_rows;
 }
 
-EXTENSION_NOINLINE int32_t k_means(const Column<float>& input_col0,
-                                   const Column<float>& input_col1,
-                                   const Column<float>& input_col2,
-                                   const Column<float>& input_col3,
-                                   const Column<float>& input_col4,
-                                   const Column<float>& input_col5,
-                                   const Column<float>& input_col6,
-                                   const Column<float>& input_col7,
-                                   const Column<float>& input_col8,
-                                   const Column<float>& input_col9,
-                                   const Column<float>& input_col10,
-                                   const Column<float>& input_col11,
-                                   const Column<float>& input_col12,
-                                   const Column<float>& input_col13,
-                                   const Column<float>& input_col14,
-                                   const Column<float>& input_col15,
-                                   const Column<float>& input_col16,
-                                   const Column<float>& input_col17,
-                                   const Column<float>& input_col18,
-                                   const Column<float>& input_col19,
+// clang-format off
+/*
+  UDTF: k_means(Cursor<Column<int>, ColumnList<float>>, int, int, RowMultiplier) -> Column<int>, Column<int>
+ */
+// clang-format on
+
+EXTENSION_NOINLINE int32_t k_means(const Column<int>& input_ids,
+                                   const ColumnList<float>& input,
                                    const int num_clusters,
                                    const int num_iterations,
                                    const int output_multiplier,
-                                   const Column<float>& output_col0,
-                                   const Column<float>& output_col1,
-                                   const Column<float>& output_col2,
-                                   const Column<float>& output_col3,
-                                   const Column<float>& output_col4,
-                                   const Column<float>& output_col5,
-                                   const Column<float>& output_col6,
-                                   const Column<float>& output_col7,
-                                   const Column<float>& output_col8,
-                                   const Column<float>& output_col9,
-                                   const Column<float>& output_col10,
-                                   const Column<float>& output_col11,
-                                   const Column<float>& output_col12,
-                                   const Column<float>& output_col13,
-                                   const Column<float>& output_col14,
-                                   const Column<float>& output_col15,
-                                   const Column<float>& output_col16,
-                                   const Column<float>& output_col17,
-                                   const Column<float>& output_col18,
-                                   const Column<float>& output_col19,
-                                   const Column<int>& output_cluster) {
+                                   Column<int>& output_ids,
+                                   Column<int>& output_cluster) {
   using namespace daal::algorithms;
   using namespace daal::data_management;
 
-  using Clock = std::chrono::steady_clock;
+  // using Clock = std::chrono::steady_clock;
 
-  const auto t0 = Clock::now();
+  // const auto t0 = Clock::now();
+
+  // Float data type
+  using float_type = decl_type(input)::value_type;
 
   // Data dimensions
-  const size_t num_rows = input_col0.getSize();
-  constexpr size_t num_columns = 20;
+  const size_t num_rows = input_ids.size();
+  const size_t num_columns = input.numCols();
 
-  // Arrays to handle parameters in the easy way
-  const Column<float>* const inputs[num_columns] = {
-      &input_col0,  &input_col1,  &input_col2,  &input_col3,  &input_col4,
-      &input_col5,  &input_col6,  &input_col7,  &input_col8,  &input_col9,
-      &input_col10, &input_col11, &input_col12, &input_col13, &input_col14,
-      &input_col15, &input_col16, &input_col17, &input_col18, &input_col19};
-  const Column<float>* const outputs[num_columns] = {
-      &output_col0,  &output_col1,  &output_col2,  &output_col3,  &output_col4,
-      &output_col5,  &output_col6,  &output_col7,  &output_col8,  &output_col9,
-      &output_col10, &output_col11, &output_col12, &output_col13, &output_col14,
-      &output_col15, &output_col16, &output_col17, &output_col18, &output_col19};
+  // // Arrays to handle parameters in the easy way
+  // const Column<float>* const inputs[num_columns] = {
+  //     &input_col0,  &input_col1,  &input_col2,  &input_col3,  &input_col4,
+  //     &input_col5,  &input_col6,  &input_col7,  &input_col8,  &input_col9,
+  //     &input_col10, &input_col11, &input_col12, &input_col13, &input_col14,
+  //     &input_col15, &input_col16, &input_col17, &input_col18, &input_col19};
+  // const Column<float>* const outputs[num_columns] = {
+  //     &output_col0,  &output_col1,  &output_col2,  &output_col3,  &output_col4,
+  //     &output_col5,  &output_col6,  &output_col7,  &output_col8,  &output_col9,
+  //     &output_col10, &output_col11, &output_col12, &output_col13, &output_col14,
+  //     &output_col15, &output_col16, &output_col17, &output_col18, &output_col19};
 
   // Prepare input data as structure of arrays (SOA) as columnar format (zero-copy)
   const auto dataTable = SOANumericTable::create(num_columns, num_rows);
   for (size_t i = 0; i < num_columns; ++i) {
-    dataTable->setArray<float>(inputs[i]->ptr, i);
+    dataTable->setArray<float_type>(input[i]->ptr_, i);
   }
 
-  const auto t1 = Clock::now();
+  // const auto t1 = Clock::now();
 
   // Initialization phase of K-Means
-  kmeans::init::Batch<float, kmeans::init::randomDense> init(num_clusters);
+  kmeans::init::Batch<float_type, kmeans::init::randomDense> init(num_clusters);
   init.input.set(kmeans::init::data, dataTable);
   init.compute();
   const NumericTablePtr centroids = init.getResult()->get(kmeans::init::centroids);
 
   // Prepare output data as homogeneous numeric table to allow zero-copy for assignments
   const auto assignmentsTable =
-      HomogenNumericTable<int>::create(output_cluster.ptr, 1, num_rows);
+      HomogenNumericTable<int>::create(output_cluster.ptr_, 1, num_rows);
   const kmeans::ResultPtr result(new kmeans::Result);
   result->set(kmeans::assignments, assignmentsTable);
   result->set(kmeans::objectiveFunction,
@@ -316,29 +288,32 @@ EXTENSION_NOINLINE int32_t k_means(const Column<float>& input_col0,
   algorithm.setResult(result);
   algorithm.compute();
 
-  const auto t2 = Clock::now();
+  // const auto t2 = Clock::now();
 
-  // Assign output columns
-  for (size_t i = 0; i < num_rows; ++i) {
-    for (size_t j = 0; j < num_columns; ++j) {
-      (*(outputs[j]))[i] = (*(inputs[j]))[i];
-    }
-  }
+  // // Assign output columns
+  // for (size_t i = 0; i < num_rows; ++i) {
+  //   for (size_t j = 0; j < num_columns; ++j) {
+  //     (*(outputs[j]))[i] = (*(inputs[j]))[i];
+  //   }
+  // }
 
-  const auto t3 = Clock::now();
+  // Copying from input_ids to output_ids
+  output_ids = input_ids;
 
-  LOG(INFO) << "k_means UDTF finished in "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t0).count()
-            << " ms";
-  LOG(INFO) << "   k_means inputs preparation took "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()
-            << " ms";
-  LOG(INFO) << "   k_means algorithm took "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()
-            << " ms";
-  LOG(INFO) << "   k_means output columns assignment took "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2).count()
-            << " ms";
+  // const auto t3 = Clock::now();
+
+  // LOG(INFO) << "k_means UDTF finished in "
+  //           << std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t0).count()
+  //           << " ms";
+  // LOG(INFO) << "   k_means inputs preparation took "
+  //           << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()
+  //           << " ms";
+  // LOG(INFO) << "   k_means algorithm took "
+  //           << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()
+  //           << " ms";
+  // LOG(INFO) << "   k_means output columns assignment took "
+  //           << std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2).count()
+  //           << " ms";
 
   return num_rows;
 }

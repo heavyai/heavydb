@@ -201,6 +201,8 @@ struct Column {
 */
 template <typename T>
 struct ColumnList {
+  using value_type = T;
+
   int8_t** ptrs_;     // ptrs to columns data
   int64_t num_cols_;  // the length of columns list
   int64_t size_;      // the size of columns
