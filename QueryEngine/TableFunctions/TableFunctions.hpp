@@ -261,7 +261,7 @@ EXTENSION_NOINLINE int32_t k_means(const Column<int>& input_ids,
   // Prepare input data as structure of arrays (SOA) as columnar format (zero-copy)
   const auto dataTable = SOANumericTable::create(num_columns, num_rows);
   for (size_t i = 0; i < num_columns; ++i) {
-    dataTable->setArray<float_type>(input[i]->ptr_, i);
+    dataTable->setArray<float_type>(input[i].ptr_, i);
   }
 
   // const auto t1 = Clock::now();
