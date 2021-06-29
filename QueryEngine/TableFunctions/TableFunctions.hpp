@@ -15,6 +15,7 @@
  */
 
 // #include <chrono>
+#include <type_traits>
 #include "../../Logger/Logger.h"
 #include "../../QueryEngine/OmniSciTypes.h"
 #include "../../Shared/funcannotations.h"
@@ -238,7 +239,8 @@ EXTENSION_NOINLINE int32_t k_means(const Column<int>& input_ids,
   // const auto t0 = Clock::now();
 
   // Float data type
-  using float_type = decltype(input)::value_type;
+  using float_type =
+      std::remove_cv_t<std::remove_reference_t<decltype(input)>>::value_type;
 
   // Data dimensions
   const size_t num_rows = input_ids.size();
