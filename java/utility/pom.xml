@@ -51,14 +51,22 @@
     </dependency>
     <!-- PostGIS Needed to help import geo types -->
     <dependency>
-      <groupId>postgresql</groupId>
+      <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
-      <version>9.1-901.jdbc4</version>
+      <version>42.2.20</version>
+      <scope>provided</scope>
     </dependency>
     <dependency>
-      <groupId>org.postgis</groupId>
+      <groupId>net.postgis</groupId>
       <artifactId>postgis-jdbc</artifactId>
-      <version>1.3.3</version>
+      <version>2.5.0</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.postgis</groupId>
+      <artifactId>postgis-geometry</artifactId>
+      <version>2.5.0</version>
+      <scope>provided</scope>
     </dependency>
 
     <dependency>
