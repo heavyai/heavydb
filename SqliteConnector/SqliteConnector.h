@@ -50,7 +50,7 @@ class SqliteConnector {
   virtual void query_with_text_params(const std::string& queryString,
                                       const std::vector<std::string>& text_param);
 
-  enum class BindType { TEXT = 1, BLOB };
+  enum class BindType { TEXT = 1, BLOB, NULL_TYPE };
   virtual void query_with_text_params(const std::string& queryString,
                                       const std::vector<std::string>& text_params,
                                       const std::vector<BindType>& bind_types);

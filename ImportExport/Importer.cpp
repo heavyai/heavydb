@@ -5244,12 +5244,11 @@ std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
                   cd->columnId) == insert_data.columnIds.end()) {
       StringDictionary* dict = nullptr;
       if (cd->columnType.get_type() == kARRAY &&
-          IS_STRING(cd->columnType.get_subtype())) {
+          IS_STRING(cd->columnType.get_subtype()) && !cd->default_value.has_value()) {
         throw std::runtime_error("Cannot omit column \"" + cd->columnName +
                                  "\": omitting TEXT arrays is not supported yet");
       }
-      if (cd->columnType.is_string() &&
-          cd->columnType.get_compression() == kENCODING_DICT) {
+      if (cd->columnType.get_compression() == kENCODING_DICT) {
         dict = cat->getMetadataForDict(cd->columnType.get_comp_param())->stringDict.get();
       }
       defaults_buffers.emplace_back(std::make_unique<TypedImportBuffer>(cd, dict));
@@ -5263,14 +5262,16 @@ std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
             });
   for (size_t i = 0; i < defaults_buffers.size(); ++i) {
     auto cd = defaults_buffers[i]->getColumnDesc();
-    defaults_buffers[i]->add_value(cd, "NULL", true, import_export::CopyParams());
+    std::string default_value = cd->default_value.value_or("NULL");
+    defaults_buffers[i]->add_value(
+        cd, default_value, !cd->default_value.has_value(), import_export::CopyParams());
     if (cd->columnType.is_geometry()) {
       std::vector<double> coords, bounds;
       std::vector<int> ring_sizes, poly_rings;
       int render_group = 0;
       SQLTypeInfo tinfo{cd->columnType};
       CHECK(Geospatial::GeoTypesFactory::getGeoColumns(
-          "NULL", tinfo, coords, bounds, ring_sizes, poly_rings, false));
+          default_value, tinfo, coords, bounds, ring_sizes, poly_rings, false));
       // set physical columns starting with the following ID
       auto next_col = i + 1;
       import_export::Importer::set_geo_physical_import_buffer(*cat,

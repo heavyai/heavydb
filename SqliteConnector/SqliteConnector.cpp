@@ -92,6 +92,8 @@ void SqliteConnector::query_with_text_params(const std::string& queryString,
     if (!bind_types.empty() && bind_types[num_params - 1] == BindType::BLOB) {
       returnCode = sqlite3_bind_blob(
           stmt, num_params++, text_param.c_str(), text_param.size(), SQLITE_TRANSIENT);
+    } else if (!bind_types.empty() && bind_types[num_params - 1] == BindType::NULL_TYPE) {
+      returnCode = sqlite3_bind_null(stmt, num_params++);
     } else {
       returnCode = sqlite3_bind_text(
           stmt, num_params++, text_param.c_str(), text_param.size(), SQLITE_TRANSIENT);

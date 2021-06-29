@@ -558,6 +558,7 @@ class Catalog final {
   void updateDictionarySchema();
   void updatePageSize();
   void updateDeletedColumnIndicator();
+  void updateDefaultColumnValues();
   void updateFrontendViewsToDashboards();
   void updateCustomExpressionsSchema();
   void updateFsiSchemas();

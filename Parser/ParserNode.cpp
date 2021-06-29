@@ -1942,10 +1942,13 @@ void validate_shard_column_type(const ColumnDescriptor& cd) {
   if (col_ti.is_integer() ||
       (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT) ||
       col_ti.is_time()) {
-    return;
+    if (cd.default_value.has_value()) {
+      throw std::runtime_error("Default values for shard keys are not supported yet.");
+    }
+  } else {
+    throw std::runtime_error("Cannot shard on type " + col_ti.get_type_name() +
+                             ", encoding " + col_ti.get_compression_name());
   }
-  throw std::runtime_error("Cannot shard on type " + col_ti.get_type_name() +
-                           ", encoding " + col_ti.get_compression_name());
 }
 
 size_t shard_column_index(const std::string& name,
@@ -2244,6 +2247,83 @@ void get_dataframe_definitions(DataframeTableDescriptor& df_td,
   return it->second(df_td, p.get(), columns);
 }
 
+std::unique_ptr<ColumnDef> column_from_json(const rapidjson::Value& element) {
+  CHECK(element.HasMember("name"));
+  auto col_name = std::make_unique<std::string>(json_str(element["name"]));
+  CHECK(element.HasMember("sqltype"));
+  const auto sql_types = to_sql_type(json_str(element["sqltype"]));
+
+  // decimal / numeric precision / scale
+  int precision = -1;
+  int scale = -1;
+  if (element.HasMember("precision")) {
+    precision = json_i64(element["precision"]);
+  }
+  if (element.HasMember("scale")) {
+    scale = json_i64(element["scale"]);
+  }
+
+  std::optional<int64_t> array_size;
+  if (element.HasMember("arraySize")) {
+    // We do not yet support geo arrays
+    array_size = json_i64(element["arraySize"]);
+  }
+  std::unique_ptr<SQLType> sql_type;
+  if (element.HasMember("subtype")) {
+    CHECK(element.HasMember("coordinateSystem"));
+    const auto subtype_sql_types = to_sql_type(json_str(element["subtype"]));
+    sql_type =
+        std::make_unique<SQLType>(subtype_sql_types,
+                                  static_cast<int>(sql_types),
+                                  static_cast<int>(json_i64(element["coordinateSystem"])),
+                                  false);
+  } else if (precision > 0 && scale > 0) {
+    sql_type = std::make_unique<SQLType>(sql_types,
+                                         precision,
+                                         scale,
+                                         /*is_array=*/array_size.has_value(),
+                                         array_size ? *array_size : -1);
+  } else if (precision > 0) {
+    sql_type = std::make_unique<SQLType>(sql_types,
+                                         precision,
+                                         0,
+                                         /*is_array=*/array_size.has_value(),
+                                         array_size ? *array_size : -1);
+  } else {
+    sql_type = std::make_unique<SQLType>(sql_types,
+                                         /*is_array=*/array_size.has_value(),
+                                         array_size ? *array_size : -1);
+  }
+  CHECK(sql_type);
+
+  CHECK(element.HasMember("nullable"));
+  const auto nullable = json_bool(element["nullable"]);
+  std::unique_ptr<ColumnConstraintDef> constraint_def;
+  StringLiteral* str_literal = nullptr;
+  if (element.HasMember("default") && !element["default"].IsNull()) {
+    std::string* defaultval = new std::string(json_str(element["default"]));
+    boost::algorithm::trim_if(*defaultval, boost::is_any_of(" \"'`"));
+    str_literal = new StringLiteral(defaultval);
+  }
+
+  constraint_def = std::make_unique<ColumnConstraintDef>(/*notnull=*/!nullable,
+                                                         /*unique=*/false,
+                                                         /*primarykey=*/false,
+                                                         /*defaultval=*/str_literal);
+  std::unique_ptr<CompressDef> compress_def;
+  if (element.HasMember("encodingType") && !element["encodingType"].IsNull()) {
+    std::string encoding_type = json_str(element["encodingType"]);
+    CHECK(element.HasMember("encodingSize"));
+    auto encoding_name = std::make_unique<std::string>(json_str(element["encodingType"]));
+    compress_def = std::make_unique<CompressDef>(encoding_name.release(),
+                                                 json_i64(element["encodingSize"]));
+  }
+  return std::make_unique<ColumnDef>(col_name.release(),
+                                     sql_type.release(),
+                                     compress_def ? compress_def.release() : nullptr,
+                                     constraint_def ? constraint_def.release() : nullptr);
+}
+
 }  // namespace
 
 CreateTableStmt::CreateTableStmt(const rapidjson::Value& payload) {
@@ -2265,77 +2345,7 @@ CreateTableStmt::CreateTableStmt(const rapidjson::Value& payload) {
     CHECK(element.IsObject());
     CHECK(element.HasMember("type"));
     if (json_str(element["type"]) == "SQL_COLUMN_DECLARATION") {
-      CHECK(element.HasMember("name"));
-      auto col_name = std::make_unique<std::string>(json_str(element["name"]));
-      CHECK(element.HasMember("sqltype"));
-      const auto sql_types = to_sql_type(json_str(element["sqltype"]));
-
-      // decimal / numeric precision / scale
-      int precision = -1;
-      int scale = -1;
-      if (element.HasMember("precision")) {
-        precision = json_i64(element["precision"]);
-      }
-      if (element.HasMember("scale")) {
-        scale = json_i64(element["scale"]);
-      }
-
-      std::optional<int64_t> array_size;
-      if (element.HasMember("arraySize")) {
-        // We do not yet support geo arrays
-        array_size = json_i64(element["arraySize"]);
-      }
-      std::unique_ptr<SQLType> sql_type;
-      if (element.HasMember("subtype")) {
-        CHECK(element.HasMember("coordinateSystem"));
-        const auto subtype_sql_types = to_sql_type(json_str(element["subtype"]));
-        sql_type = std::make_unique<SQLType>(
-            subtype_sql_types,
-            static_cast<int>(sql_types),
-            static_cast<int>(json_i64(element["coordinateSystem"])),
-            false);
-      } else if (precision > 0 && scale > 0) {
-        sql_type = std::make_unique<SQLType>(sql_types,
-                                             precision,
-                                             scale,
-                                             /*is_array=*/array_size.has_value(),
-                                             array_size ? *array_size : -1);
-      } else if (precision > 0) {
-        sql_type = std::make_unique<SQLType>(sql_types,
-                                             precision,
-                                             0,
-                                             /*is_array=*/array_size.has_value(),
-                                             array_size ? *array_size : -1);
-      } else {
-        sql_type = std::make_unique<SQLType>(sql_types,
-                                             /*is_array=*/array_size.has_value(),
-                                             array_size ? *array_size : -1);
-      }
-      CHECK(sql_type);
-
-      CHECK(element.HasMember("nullable"));
-      const auto nullable = json_bool(element["nullable"]);
-      std::unique_ptr<ColumnConstraintDef> constraint_def;
-      if (!nullable) {
-        constraint_def = std::make_unique<ColumnConstraintDef>(/*notnull=*/true,
-                                                               /*unique=*/false,
-                                                               /*primarykey=*/false,
-                                                               /*defaultval=*/nullptr);
-      }
-      std::unique_ptr<CompressDef> compress_def;
-      if (element.HasMember("encodingType") && !element["encodingType"].IsNull()) {
-        std::string encoding_type = json_str(element["encodingType"]);
-        CHECK(element.HasMember("encodingSize"));
-        auto encoding_name =
-            std::make_unique<std::string>(json_str(element["encodingType"]));
-        compress_def = std::make_unique<CompressDef>(encoding_name.release(),
-                                                     json_i64(element["encodingSize"]));
-      }
-      auto col_def = std::make_unique<ColumnDef>(
-          col_name.release(),
-          sql_type.release(),
-          compress_def ? compress_def.release() : nullptr,
-          constraint_def ? constraint_def.release() : nullptr);
+      auto col_def = column_from_json(element);
       table_element_list_.emplace_back(std::move(col_def));
     } else if (json_str(element["type"]) == "SQL_COLUMN_CONSTRAINT") {
       CHECK(element.HasMember("name"));
@@ -2536,7 +2546,6 @@ void CreateDataframeStmt::execute(const Catalog_Namespace::SessionInfo& session)
     if (!it_ok.second) {
       throw std::runtime_error("Column '" + cd.columnName + "' defined more than once");
     }
-
     setColumnDescriptor(cd, coldef);
     columns.push_back(cd);
   }
@@ -3702,9 +3711,6 @@ void AlterTableStmt::delegateExecute(const rapidjson::Value& payload,
     CHECK(payload.HasMember("columnData"));
     CHECK(payload["columnData"].IsArray());
 
-    // TODO : Shares alot of code below with CREATE_TABLE -> try to merge these two ?
-    //  unique_ptr vs regular
-
     // New Columns go into this list
     std::list<ColumnDef*>* table_element_list_ = new std::list<ColumnDef*>;
 
@@ -3713,86 +3719,8 @@ void AlterTableStmt::delegateExecute(const rapidjson::Value& payload,
       CHECK(element.IsObject());
       CHECK(element.HasMember("type"));
       if (json_str(element["type"]) == "SQL_COLUMN_DECLARATION") {
-        CHECK(element.HasMember("name"));
-        auto col_name = std::make_unique<std::string>(json_str(element["name"]));
-        CHECK(element.HasMember("sqltype"));
-        const auto sql_types = to_sql_type(json_str(element["sqltype"]));
-
-        // decimal / numeric precision / scale
-        int precision = -1;
-        int scale = -1;
-        if (element.HasMember("precision")) {
-          precision = json_i64(element["precision"]);
-        }
-        if (element.HasMember("scale")) {
-          scale = json_i64(element["scale"]);
-        }
-
-        std::optional<int64_t> array_size;
-        if (element.HasMember("arraySize")) {
-          // We do not yet support geo arrays
-          array_size = json_i64(element["arraySize"]);
-        }
-        std::unique_ptr<SQLType> sql_type;
-        if (element.HasMember("subtype")) {
-          CHECK(element.HasMember("coordinateSystem"));
-          const auto subtype_sql_types = to_sql_type(json_str(element["subtype"]));
-          sql_type = std::make_unique<SQLType>(
-              subtype_sql_types,
-              static_cast<int>(sql_types),
-              static_cast<int>(json_i64(element["coordinateSystem"])),
-              false);
-        } else if (precision > 0 && scale > 0) {
-          sql_type = std::make_unique<SQLType>(sql_types,
-                                               precision,
-                                               scale,
-                                               /*is_array=*/array_size.has_value(),
-                                               array_size ? *array_size : -1);
-        } else if (precision > 0) {
-          sql_type = std::make_unique<SQLType>(sql_types,
-                                               precision,
-                                               0,
-                                               /*is_array=*/array_size.has_value(),
-                                               array_size ? *array_size : -1);
-        } else {
-          sql_type = std::make_unique<SQLType>(sql_types,
-                                               /*is_array=*/array_size.has_value(),
-                                               array_size ? *array_size : -1);
-        }
-        CHECK(sql_type);
-
-        CHECK(element.HasMember("nullable"));
-        const auto nullable = json_bool(element["nullable"]);
-        std::unique_ptr<ColumnConstraintDef> constraint_def;
-        if (!nullable) {
-          StringLiteral* str_literal = nullptr;
-          if (element.HasMember("expression") && !element["expression"].IsNull()) {
-            std::string* defaultval = new std::string(json_str(element["expression"]));
-            boost::algorithm::trim_if(*defaultval, boost::is_any_of(" \"'`"));
-            str_literal = new StringLiteral(defaultval);
-          }
-
-          constraint_def =
-              std::make_unique<ColumnConstraintDef>(/*notnull=*/true,
-                                                    /*unique=*/false,
-                                                    /*primarykey=*/false,
-                                                    /*defaultval=*/str_literal);
-        }
-        std::unique_ptr<CompressDef> compress_def;
-        if (element.HasMember("encodingType") && !element["encodingType"].IsNull()) {
-          std::string encoding_type = json_str(element["encodingType"]);
-          CHECK(element.HasMember("encodingSize"));
-          auto encoding_name =
-              std::make_unique<std::string>(json_str(element["encodingType"]));
-          compress_def = std::make_unique<CompressDef>(encoding_name.release(),
-                                                       json_i64(element["encodingSize"]));
-        }
-        auto col_def = new ColumnDef(col_name.release(),
-                                     sql_type.release(),
-                                     compress_def ? compress_def.release() : nullptr,
-                                     constraint_def ? constraint_def.release() : nullptr);
-        table_element_list_->emplace_back(col_def);
-
+        auto col_def = column_from_json(element);
+        table_element_list_->emplace_back(col_def.release());
       } else {
         LOG(FATAL) << "Unsupported element type for ALTER TABLE: "
                    << element["type"].GetString();
@@ -4116,11 +4044,33 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
   } else {
     not_null = cc->get_notnull();
   }
+  std::string default_value;
+  const std::string* default_value_ptr = nullptr;
+  if (cc) {
+    if (auto def_val_literal = cc->get_defaultval()) {
+      auto defaultsp = dynamic_cast<const StringLiteral*>(def_val_literal);
+      default_value =
+          defaultsp ? *defaultsp->get_stringval() : def_val_literal->to_string();
+      // The preprocessing below is needed because:
+      // a) TypedImportBuffer expects arrays in the {...} format
+      // b) TypedImportBuffer expects string literals inside arrays w/o any quotes
+      if (coldef->get_column_type()->get_is_array()) {
+        std::regex array_re(R"(^ARRAY\s*\[(.*)\]$)", std::regex_constants::icase);
+        default_value = std::regex_replace(default_value, array_re, "{$1}");
+        boost::erase_all(default_value, "\'");
+      }
+      // NULL for default value means no default value
+      if (!boost::iequals(default_value, "NULL")) {
+        default_value_ptr = &default_value;
+      }
+    }
+  }
   ddl_utils::set_column_descriptor(*coldef->get_column_name(),
                                    cd,
                                    coldef->get_column_type(),
                                    not_null,
-                                   coldef->get_compression());
+                                   coldef->get_compression(),
+                                   default_value_ptr);
 }
 
 void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& session,
@@ -4232,24 +4182,11 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       for (const auto cit : cid_coldefs) {
         const auto cd = catalog.getMetadataForColumn(td->tableId, cit.first);
         const auto coldef = cit.second;
-        const auto column_constraint = coldef ? coldef->get_column_constraint() : nullptr;
-        std::string defaultval = "";
-        if (column_constraint) {
-          auto defaultlp = column_constraint->get_defaultval();
-          auto defaultsp = dynamic_cast<const StringLiteral*>(defaultlp);
-          defaultval = defaultsp ? *defaultsp->get_stringval()
-                                 : defaultlp ? defaultlp->to_string() : "";
-        }
-        bool isnull = column_constraint ? (0 == defaultval.size()) : true;
-        if (boost::to_upper_copy<std::string>(defaultval) == "NULL") {
-          isnull = true;
-        }
+        const bool is_null = !cd->default_value.has_value();
 
-        if (isnull) {
-          if (column_constraint && column_constraint->get_notnull()) {
-            throw std::runtime_error("Default value required for column " +
-                                     cd->columnName + " (NULL value not supported)");
-          }
+        if (cd->columnType.get_notnull() && is_null) {
+          throw std::runtime_error("Default value required for column " + cd->columnName +
+                                   " because of NOT NULL constraint");
         }
 
         for (auto it = import_buffers.begin(); it < import_buffers.end(); ++it) {
@@ -4257,21 +4194,25 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           if (cd->columnId == import_buffer->getColumnDesc()->columnId) {
             if (coldef != nullptr ||
                 skip_physical_cols-- <= 0) {  // skip non-null phy col
-              import_buffer->add_value(
-                  cd, defaultval, isnull, import_export::CopyParams());
+              import_buffer->add_value(cd,
+                                       cd->default_value.value_or("NULL"),
+                                       is_null,
+                                       import_export::CopyParams());
               if (cd->columnType.is_geometry()) {
                 std::vector<double> coords, bounds;
                 std::vector<int> ring_sizes, poly_rings;
                 int render_group = 0;
                 SQLTypeInfo tinfo{cd->columnType};
-                if (!Geospatial::GeoTypesFactory::getGeoColumns(defaultval,
-                                                                tinfo,
-                                                                coords,
-                                                                bounds,
-                                                                ring_sizes,
-                                                                poly_rings,
-                                                                false)) {
-                  throw std::runtime_error("Bad geometry data: '" + defaultval + "'");
+                if (!Geospatial::GeoTypesFactory::getGeoColumns(
+                        cd->default_value.value_or("NULL"),
+                        tinfo,
+                        coords,
+                        bounds,
+                        ring_sizes,
+                        poly_rings,
+                        false)) {
+                  throw std::runtime_error("Bad geometry data: '" +
+                                           cd->default_value.value_or("NULL") + "'");
                 }
                 size_t col_idx = 1 + std::distance(import_buffers.begin(), it);
                 import_export::Importer::set_geo_physical_import_buffer(catalog,

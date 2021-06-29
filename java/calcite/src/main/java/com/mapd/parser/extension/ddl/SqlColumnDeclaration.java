@@ -21,11 +21,9 @@ import com.mapd.parser.extension.ddl.omnisci.OmniSciGeoTypeNameSpec;
 import com.mapd.parser.extension.ddl.omnisci.OmniSciSqlDataTypeSpec;
 import com.mapd.parser.extension.ddl.omnisci.OmniSciTypeNameSpec;
 
-import org.apache.calcite.avatica.SqlType;
 import org.apache.calcite.schema.ColumnStrategy;
 import org.apache.calcite.sql.SqlBasicTypeNameSpec;
 import org.apache.calcite.sql.SqlCall;
-import org.apache.calcite.sql.SqlDataTypeSpec;
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
@@ -34,7 +32,6 @@ import org.apache.calcite.sql.SqlSpecialOperator;
 import org.apache.calcite.sql.SqlTypeNameSpec;
 import org.apache.calcite.sql.SqlWriter;
 import org.apache.calcite.sql.parser.SqlParserPos;
-import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.EscapedStringJsonBuilder;
 
 import java.util.List;
@@ -52,19 +49,19 @@ public class SqlColumnDeclaration extends SqlCall {
 
   public final SqlIdentifier name;
   public final OmniSciSqlDataTypeSpec dataType;
-  public final SqlNode expression;
+  public final SqlNode defaultValue;
   public final ColumnStrategy strategy;
 
   /** Creates a SqlColumnDeclaration; use {@link SqlDdlNodes#column}. */
   SqlColumnDeclaration(SqlParserPos pos,
           SqlIdentifier name,
           OmniSciSqlDataTypeSpec dataType,
-          SqlNode expression,
+          SqlNode defaultValue,
           ColumnStrategy strategy) {
     super(pos);
     this.name = name;
     this.dataType = dataType;
-    this.expression = expression;
+    this.defaultValue = defaultValue;
     this.strategy = strategy;
   }
 
@@ -85,14 +82,8 @@ public class SqlColumnDeclaration extends SqlCall {
     if (dataType.getNullable() != null && !dataType.getNullable()) {
       writer.keyword("NOT NULL");
     }
-    if (expression != null) {
+    if (defaultValue != null) {
       switch (strategy) {
-        case VIRTUAL:
-        case STORED:
-          writer.keyword("AS");
-          exp(writer);
-          writer.keyword(strategy.name());
-          break;
         case DEFAULT:
           writer.keyword("DEFAULT");
           exp(writer);
@@ -105,10 +96,10 @@ public class SqlColumnDeclaration extends SqlCall {
 
   private void exp(SqlWriter writer) {
     if (writer.isAlwaysUseParentheses()) {
-      expression.unparse(writer, 0, 0);
+      defaultValue.unparse(writer, 0, 0);
     } else {
       writer.sep("(");
-      expression.unparse(writer, 0, 0);
+      defaultValue.unparse(writer, 0, 0);
       writer.sep(")");
     }
   }
@@ -120,16 +111,15 @@ public class SqlColumnDeclaration extends SqlCall {
 
     jsonBuilder.put(map, "type", "SQL_COLUMN_DECLARATION");
 
-    jsonBuilder.put(map, "name", this.name == null ? null : this.name.toString());
+    jsonBuilder.put(map, "name", name == null ? null : name.toString());
 
-    jsonBuilder.put(map,
-            "expression",
-            this.expression == null ? null : this.expression.toString());
-    jsonBuilder.put(map, "nullable", this.strategy == ColumnStrategy.NULLABLE);
-    jsonBuilder.put(map, "encodingType", this.dataType.getEncodingString());
-    jsonBuilder.put(map, "encodingSize", this.dataType.getEncodingSize());
+    jsonBuilder.put(
+            map, "default", defaultValue == null ? null : defaultValue.toString());
+    jsonBuilder.put(map, "nullable", !Boolean.FALSE.equals(dataType.getNullable()));
+    jsonBuilder.put(map, "encodingType", dataType.getEncodingString());
+    jsonBuilder.put(map, "encodingSize", dataType.getEncodingSize());
 
-    SqlTypeNameSpec dataTypeSpec = this.dataType.getTypeNameSpec();
+    SqlTypeNameSpec dataTypeSpec = dataType.getTypeNameSpec();
     if (dataTypeSpec instanceof OmniSciGeoTypeNameSpec) {
       map = ((OmniSciGeoTypeNameSpec) dataTypeSpec).toJsonMap(map);
     } else {
@@ -149,7 +139,7 @@ public class SqlColumnDeclaration extends SqlCall {
       } else {
         jsonBuilder.put(map,
                 "sqltype",
-                this.dataType == null ? null : dataTypeSpec.getTypeName().toString());
+                dataType == null ? null : dataTypeSpec.getTypeName().toString());
       }
     }
     return jsonBuilder.toJsonString(map);

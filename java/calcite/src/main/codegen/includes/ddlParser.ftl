@@ -382,7 +382,7 @@ void TableElement(List<SqlNode> list) :
     final OmniSciSqlDataTypeSpec type;
     final boolean nullable;
     Pair<OmniSciEncoding, Integer> encoding = null;
-    final SqlNode e;
+    final SqlNode defval;
     final SqlNode constraint;
     SqlIdentifier name = null;
     final SqlNodeList columnList;
@@ -402,22 +402,12 @@ void TableElement(List<SqlNode> list) :
                 type = OmniSciDataType()
                 nullable = NullableOptDefaultTrue()
                 (
-                    [ <GENERATED> <ALWAYS> ] <AS> <LPAREN>
-                    e = Expression(ExprContext.ACCEPT_SUB_QUERY) <RPAREN>
-                    (
-                        <VIRTUAL> { strategy = ColumnStrategy.VIRTUAL; }
-                    |
-                        <STORED> { strategy = ColumnStrategy.STORED; }
-                    |
-                        { strategy = ColumnStrategy.VIRTUAL; }
-                    )
-                |
-                    <DEFAULT_> e = Expression(ExprContext.ACCEPT_SUB_QUERY) {
+                    <DEFAULT_> defval = Expression(ExprContext.ACCEPT_SUB_QUERY) {
                         strategy = ColumnStrategy.DEFAULT;
                     }
                 |
                     {
-                        e = null;
+                        defval = null;
                         strategy = nullable ? ColumnStrategy.NULLABLE
                             : ColumnStrategy.NOT_NULLABLE;
                     }
@@ -426,7 +416,8 @@ void TableElement(List<SqlNode> list) :
                 {
                     list.add(
                         SqlDdlNodes.column(s.add(id).end(this), id,
-                            type.withEncoding(encoding).withNullable(nullable), e, strategy));
+                            type.withEncoding(encoding).withNullable(nullable),
+                            defval, strategy));
                 }
             |
                 { list.add(id); }

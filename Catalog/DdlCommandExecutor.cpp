@@ -981,8 +981,12 @@ void CreateForeignTableCommand::setColumnDetails(std::list<ColumnDescriptor>& co
     ColumnDescriptor cd;
     ddl_utils::validate_non_duplicate_column(column_name, column_names);
     ddl_utils::validate_non_reserved_keyword(column_name);
-    ddl_utils::set_column_descriptor(
-        column_name, cd, &sql_type, data_type["notNull"].GetBool(), encoding.get());
+    ddl_utils::set_column_descriptor(column_name,
+                                     cd,
+                                     &sql_type,
+                                     data_type["notNull"].GetBool(),
+                                     encoding.get(),
+                                     nullptr);
     columns.emplace_back(cd);
   }
 }
