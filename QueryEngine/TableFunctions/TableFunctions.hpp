@@ -238,7 +238,7 @@ EXTENSION_NOINLINE int32_t k_means(const Column<int>& input_ids,
   // const auto t0 = Clock::now();
 
   // Float data type
-  using float_type = decl_type(input)::value_type;
+  using float_type = decltype(input)::value_type;
 
   // Data dimensions
   const size_t num_rows = input_ids.size();
