@@ -745,7 +745,6 @@ std::vector<bool> QueryMemoryInitializer::allocateTDigests(
   return tdigest_deferred;
 }
 
-#ifdef HAVE_CUDA
 GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
     const QueryMemoryDescriptor& query_mem_desc,
     const int8_t* init_agg_vals_dev_ptr,
@@ -753,6 +752,7 @@ GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
     const int device_id,
     const unsigned block_size_x,
     const unsigned grid_size_x) {
+#ifdef HAVE_CUDA
   CHECK(device_allocator_);
   const auto thread_count = block_size_x * grid_size_x;
   const auto total_buff_size =
@@ -779,7 +779,7 @@ GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
       (unsigned char)-1,
       thread_count * n * sizeof(int64_t));
 
-  init_group_by_buffer_on_device(
+  init_group_by_buffer _on_device(
       reinterpret_cast<int64_t*>(
           dev_buffer + streaming_top_n::get_rows_offset_of_heaps(n, thread_count)),
       reinterpret_cast<const int64_t*>(init_agg_vals_dev_ptr),
@@ -793,6 +793,10 @@ GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
       grid_size_x);
 
   return {dev_ptr, dev_buffer};
+#else
+  UNREACHABLE();
+  return {};
+#endif
 }
 
 GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
@@ -807,6 +811,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     const bool can_sort_on_gpu,
     const bool output_columnar,
     RenderAllocator* render_allocator) {
+#ifdef HAVE_CUDA
   if (query_mem_desc.useStreamingTopN()) {
     if (render_allocator) {
       throw StreamingTopNNotSupportedInRenderQuery();
@@ -885,6 +890,10 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     }
   }
   return dev_group_by_buffers;
+#else
+  UNREACHABLE();
+  return {};
+#endif
 }
 
 GpuGroupByBuffers QueryMemoryInitializer::setupTableFunctionGpuBuffers(
@@ -953,8 +962,6 @@ void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
     }
   }
 }
-
-#endif
 
 size_t QueryMemoryInitializer::computeNumberOfBuffers(
     const QueryMemoryDescriptor& query_mem_desc,

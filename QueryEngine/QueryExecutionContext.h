@@ -95,7 +95,6 @@ class QueryExecutionContext : boost::noncopyable {
   int64_t getAggInitValForIndex(const size_t index) const;
 
  private:
-#ifdef HAVE_CUDA
   enum {
     COL_BUFFERS,
     NUM_FRAGMENTS,
@@ -130,7 +129,6 @@ class QueryExecutionContext : boost::noncopyable {
       const int device_id,
       const bool hoist_literals,
       const bool is_group_by) const;
-#endif  // HAVE_CUDA
 
   ResultSetPtr groupBufferToDeinterleavedResults(const size_t i) const;
 

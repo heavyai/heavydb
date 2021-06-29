@@ -177,16 +177,16 @@ class L0Manager {
  public:
   L0Manager();
 
-  void copyHostToDevice(int8_t* device_ptr,
-                        const int8_t* host_ptr,
+  void copyHostToDevice(void* device_ptr,
+                        const void* host_ptr,
                         const size_t num_bytes,
                         const int device_num);
-  void copyDeviceToHost(int8_t* host_ptr,
-                        const int8_t* device_ptr,
+  void copyDeviceToHost(void* host_ptr,
+                        const void* device_ptr,
                         const size_t num_bytes,
                         const int device_num);
-  void copyDeviceToDevice(int8_t* dest_ptr,
-                          int8_t* src_ptr,
+  void copyDeviceToDevice(void* dest_ptr,
+                          void* src_ptr,
                           const size_t num_bytes,
                           const int dest_device_num,
                           const int src_device_num);

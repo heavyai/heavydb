@@ -63,20 +63,20 @@ void* allocate_device_mem(const size_t num_bytes, L0Device& device) {
 
 L0Manager::L0Manager() {}
 
-void L0Manager::copyHostToDevice(int8_t* device_ptr,
-                                 const int8_t* host_ptr,
+void L0Manager::copyHostToDevice(void* device_ptr,
+                                 const void* host_ptr,
                                  const size_t num_bytes,
                                  const int device_num) {
   CHECK(false);
 }
-void L0Manager::copyDeviceToHost(int8_t* host_ptr,
-                                 const int8_t* device_ptr,
+void L0Manager::copyDeviceToHost(void* host_ptr,
+                                 const void* device_ptr,
                                  const size_t num_bytes,
                                  const int device_num) {
   CHECK(false);
 }
-void L0Manager::copyDeviceToDevice(int8_t* dest_ptr,
-                                   int8_t* src_ptr,
+void L0Manager::copyDeviceToDevice(void* dest_ptr,
+                                   void* src_ptr,
                                    const size_t num_bytes,
                                    const int dest_device_num,
                                    const int src_device_num) {

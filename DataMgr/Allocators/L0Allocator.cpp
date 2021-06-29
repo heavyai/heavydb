@@ -60,16 +60,16 @@ void L0Allocator::free(Data_Namespace::AbstractBuffer* ab) const {
   data_mgr_->free(ab);
 }
 
-void L0Allocator::copyToDevice(int8_t* device_dst,
-                               const int8_t* host_src,
+void L0Allocator::copyToDevice(void* device_dst,
+                               const void* host_src,
                                const size_t num_bytes) const {
   const auto l0_mgr = data_mgr_->getL0Mgr();
   CHECK(l0_mgr);
   l0_mgr->copyHostToDevice(device_dst, host_src, num_bytes, device_id_);
 }
 
-void L0Allocator::copyFromDevice(int8_t* host_dst,
-                                 const int8_t* device_src,
+void L0Allocator::copyFromDevice(void* host_dst,
+                                 const void* device_src,
                                  const size_t num_bytes) const {
   const auto l0_mgr = data_mgr_->getL0Mgr();
   CHECK(l0_mgr);
