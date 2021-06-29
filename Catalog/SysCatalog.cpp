@@ -42,12 +42,12 @@
 #include <boost/range/adaptor/map.hpp>
 #include <boost/version.hpp>
 
-#include "../Parser/ParserNode.h"
-#include "../Shared/File.h"
-#include "../Shared/StringTransform.h"
-#include "../Shared/measure.h"
 #include "MapDRelease.h"
+#include "Parser/ParserNode.h"
 #include "RWLocks.h"
+#include "Shared/File.h"
+#include "Shared/StringTransform.h"
+#include "Shared/measure.h"
 #include "include/bcrypt.h"
 
 using std::list;
@@ -190,19 +190,19 @@ void SysCatalog::init(const std::string& basePath,
   }
 }
 
+SysCatalog::SysCatalog()
+    : CommonFileOperations{basePath_}
+    , aggregator_{false}
+    , sqliteMutex_{}
+    , sharedMutex_{}
+    , thread_holding_sqlite_lock{std::thread::id()}
+    , thread_holding_write_lock{std::thread::id()}
+    , dummyCatalog_{std::make_shared<Catalog>()} {}
+
 SysCatalog::~SysCatalog() {
   sys_write_lock write_lock(this);
-  for (auto grantee = granteeMap_.begin(); grantee != granteeMap_.end(); ++grantee) {
-    delete grantee->second;
-  }
   granteeMap_.clear();
-  for (ObjectRoleDescriptorMap::iterator objectIt = objectDescriptorMap_.begin();
-       objectIt != objectDescriptorMap_.end();) {
-    ObjectRoleDescriptorMap::iterator eraseIt = objectIt++;
-    delete eraseIt->second;
-  }
   objectDescriptorMap_.clear();
-
   cat_map_.clear();
 }
 
@@ -390,7 +390,7 @@ void deleteObjectPrivileges(std::unique_ptr<SqliteConnector>& sqliteConnector,
 void insertOrUpdateObjectPrivileges(std::unique_ptr<SqliteConnector>& sqliteConnector,
                                     std::string roleName,
                                     bool userRole,
-                                    DBObject& object) {
+                                    const DBObject& object) {
   CHECK(object.valid());
   DBObjectKey key = object.getObjectKey();
 
@@ -725,7 +725,7 @@ void SysCatalog::migrateDBAccessPrivileges() {
     // and view sql editor privileges
     DBMetadata dbmeta;
     for (auto db_ : databases) {
-      CHECK(SysCatalog::instance().getMetadataForDB(db_.second, dbmeta));
+      CHECK(getMetadataForDB(db_.second, dbmeta));
       for (auto user : users) {
         if (user.first != OMNISCI_ROOT_USER_ID) {
           {
@@ -862,7 +862,7 @@ void SysCatalog::createUser(const string& name,
     std::vector<std::string> vals;
     if (!dbname.empty()) {
       DBMetadata db;
-      if (!SysCatalog::instance().getMetadataForDB(dbname, db)) {
+      if (!getMetadataForDB(dbname, db)) {
         throw runtime_error("DEFAULT_DB " + dbname + " not found.");
       }
       vals = {name,
@@ -961,7 +961,7 @@ void SysCatalog::alterUser(const int32_t userid,
       if (!dbname->empty()) {
         append_with_commas(sql, "default_db = ?");
         DBMetadata db;
-        if (!SysCatalog::instance().getMetadataForDB(*dbname, db)) {
+        if (!getMetadataForDB(*dbname, db)) {
           throw runtime_error(string("DEFAULT_DB ") + *dbname + " not found.");
         }
         values.push_back(std::to_string(db.dbId));
@@ -1245,7 +1245,8 @@ void SysCatalog::dropDatabase(const DBMetadata& db) {
     /* revoke object privileges to the database being dropped */
     for (const auto& grantee : granteeMap_) {
       if (grantee.second->hasAnyPrivilegesOnDb(db.dbId, true)) {
-        revokeAllOnDatabase_unsafe(grantee.second->getName(), db.dbId, grantee.second);
+        revokeAllOnDatabase_unsafe(
+            grantee.second->getName(), db.dbId, grantee.second.get());
       }
     }
     sqliteConnector_->query_with_text_param("DELETE FROM mapd_databases WHERE dbid = ?",
@@ -1690,7 +1691,6 @@ void SysCatalog::revokeAllOnDatabase_unsafe(const std::string& roleName,
   grantee->revokeAllOnDatabase(dbId);
   for (auto d = objectDescriptorMap_.begin(); d != objectDescriptorMap_.end();) {
     if (d->second->roleName == roleName && d->second->dbId == dbId) {
-      delete d->second;
       d = objectDescriptorMap_.erase(d);
     } else {
       d++;
@@ -1806,12 +1806,14 @@ void SysCatalog::createRole_unsafe(const std::string& roleName,
     throw std::runtime_error("CREATE ROLE " + roleName +
                              " failed because grantee with this name already exists.");
   }
+  std::unique_ptr<Grantee> g;
   if (userPrivateRole) {
-    grantee = new User(roleName);
+    g.reset(new User(roleName));
   } else {
-    grantee = new Role(roleName);
+    g.reset(new Role(roleName));
   }
-  granteeMap_[to_upper(roleName)] = grantee;
+  grantee = g.get();
+  granteeMap_[to_upper(roleName)] = std::move(g);
 
   // NOTE (max): Why create an empty privileges record for a role?
   /* grant none privileges to this role and add it to sqlite DB */
@@ -1831,10 +1833,6 @@ void SysCatalog::dropRole_unsafe(const std::string& roleName) {
   sys_write_lock write_lock(this);
 
   // it may very well be a user "role", so keep it generic
-  auto* rl = getGrantee(roleName);
-  if (rl) {  // admin super user may not exist in roles
-    delete rl;
-  }
   granteeMap_.erase(to_upper(roleName));
 
   sys_sqlite_lock sqlite_lock(this);
@@ -1926,7 +1924,7 @@ void SysCatalog::updateObjectDescriptorMap(const std::string& roleName,
     }
   }
   if (!present) {
-    ObjectRoleDescriptor* od = new ObjectRoleDescriptor();
+    auto od = std::make_unique<ObjectRoleDescriptor>();
     od->roleName = roleName;
     od->roleType = roleType;
     od->objectType = object.getObjectKey().permissionType;
@@ -1938,7 +1936,7 @@ void SysCatalog::updateObjectDescriptorMap(const std::string& roleName,
     objectDescriptorMap_.insert(ObjectRoleDescriptorMap::value_type(
         std::to_string(od->dbId) + ":" + std::to_string(od->objectType) + ":" +
             std::to_string(od->objectId),
-        od));
+        std::move(od)));
   }
 }
 
@@ -1977,7 +1975,6 @@ void SysCatalog::deleteObjectDescriptorMap(const std::string& roleName) {
 
   for (auto d = objectDescriptorMap_.begin(); d != objectDescriptorMap_.end();) {
     if (d->second->roleName == roleName) {
-      delete d->second;
       d = objectDescriptorMap_.erase(d);
     } else {
       d++;
@@ -1997,7 +1994,6 @@ void SysCatalog::deleteObjectDescriptorMap(const std::string& roleName,
   for (auto d = range.first; d != range.second;) {
     // remove the entry
     if (d->second->roleName == roleName) {
-      delete d->second;
       d = objectDescriptorMap_.erase(d);
     } else {
       d++;
@@ -2063,7 +2059,7 @@ Grantee* SysCatalog::getGrantee(const std::string& name) const {
   if (grantee == granteeMap_.end()) {  // check to make sure role exists
     return nullptr;
   }
-  return grantee->second;  // returns pointer to role
+  return grantee->second.get();  // returns pointer to role
 }
 
 Role* SysCatalog::getRoleGrantee(const std::string& name) const {
@@ -2083,7 +2079,7 @@ SysCatalog::getMetadataForObject(int32_t dbId, int32_t dbType, int32_t objectId)
                                                 std::to_string(dbType) + ":" +
                                                 std::to_string(objectId));
   for (auto d = range.first; d != range.second; ++d) {
-    objectsList.push_back(d->second);
+    objectsList.push_back(d->second.get());
   }
   return objectsList;  // return pointers to objects
 }
@@ -2159,10 +2155,10 @@ void SysCatalog::revokeDashboardSystemRole(const std::string roleName,
                                            const std::vector<std::string> grantees) {
   auto* rl = getRoleGrantee(roleName);
   for (auto granteeName : grantees) {
-    const auto* grantee = SysCatalog::instance().getGrantee(granteeName);
+    const auto* grantee = getGrantee(granteeName);
     if (rl && grantee->hasRole(rl, true)) {
       // Grantees existence have been already validated
-      SysCatalog::instance().revokeRole(roleName, granteeName);
+      revokeRole(roleName, granteeName);
     }
   }
 }
@@ -2203,12 +2199,14 @@ void SysCatalog::buildRoleMap() {
 
     auto* rl = getGrantee(roleName);
     if (!rl) {
+      std::unique_ptr<Grantee> g;
       if (userPrivateRole) {
-        rl = new User(roleName);
+        g.reset(new User(roleName));
       } else {
-        rl = new Role(roleName);
+        g.reset(new Role(roleName));
       }
-      granteeMap_[to_upper(roleName)] = rl;
+      rl = g.get();
+      granteeMap_[to_upper(roleName)] = std::move(g);
     }
     rl->grantPrivileges(dbObject);
   }
@@ -2240,7 +2238,7 @@ void SysCatalog::populateRoleDbObjects(const std::vector<DBObject>& objects) {
 void SysCatalog::buildUserRoleMap() {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
-  std::vector<std::pair<std::string, std::string>> granteeRooles;
+  std::vector<std::pair<std::string, std::string>> granteeRoles;
   string userRoleQuery("SELECT roleName, userName from mapd_roles");
   sqliteConnector_->query(userRoleQuery);
   size_t numRows = sqliteConnector_->getNumRows();
@@ -2262,12 +2260,10 @@ void SysCatalog::buildUserRoleMap() {
                           " from db not found in the map.");
     }
     std::pair<std::string, std::string> roleVecElem(roleName, userName);
-    granteeRooles.push_back(roleVecElem);
+    granteeRoles.push_back(roleVecElem);
   }
 
-  for (size_t i = 0; i < granteeRooles.size(); i++) {
-    std::string roleName = granteeRooles[i].first;
-    std::string granteeName = granteeRooles[i].second;
+  for (const auto& [roleName, granteeName] : granteeRoles) {
     auto* grantee = getGrantee(granteeName);
     if (!grantee) {
       throw runtime_error("Data inconsistency when building role map. Grantee " +
@@ -2295,7 +2291,7 @@ void SysCatalog::buildObjectDescriptorMap() {
   sqliteConnector_->query(objectQuery);
   size_t numRows = sqliteConnector_->getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
-    ObjectRoleDescriptor* od = new ObjectRoleDescriptor();
+    auto od = std::make_unique<ObjectRoleDescriptor>();
     od->roleName = sqliteConnector_->getData<string>(r, 0);
     od->roleType = sqliteConnector_->getData<bool>(r, 1);
     od->objectType = sqliteConnector_->getData<int>(r, 2);
@@ -2307,7 +2303,7 @@ void SysCatalog::buildObjectDescriptorMap() {
     objectDescriptorMap_.insert(ObjectRoleDescriptorMap::value_type(
         std::to_string(od->dbId) + ":" + std::to_string(od->objectType) + ":" +
             std::to_string(od->objectId),
-        od));
+        std::move(od)));
   }
 }
 

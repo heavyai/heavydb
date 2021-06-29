@@ -51,7 +51,6 @@
 #include "Shared/StringTransform.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/mapd_shared_mutex.h"
-#include "Shared/mapd_shared_ptr.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
 #include "StringDictionary/StringDictionaryClient.h"
@@ -108,11 +107,11 @@ using query_state::QueryStateProxy;
 
 class TrackingProcessor : public OmniSciProcessor {
  public:
-  TrackingProcessor(mapd::shared_ptr<OmniSciIf> handler, const bool check_origin)
+  TrackingProcessor(std::shared_ptr<OmniSciIf> handler, const bool check_origin)
       : OmniSciProcessor(handler), check_origin_(check_origin) {}
 
-  bool process(mapd::shared_ptr<::apache::thrift::protocol::TProtocol> in,
-               mapd::shared_ptr<::apache::thrift::protocol::TProtocol> out,
+  bool process(std::shared_ptr<::apache::thrift::protocol::TProtocol> in,
+               std::shared_ptr<::apache::thrift::protocol::TProtocol> out,
                void* connectionContext) {
     using namespace ::apache::thrift;
 
@@ -947,7 +946,7 @@ class DBHandler : public OmniSciIf {
   mutable std::mutex handle_to_dev_ptr_mutex_;
   mutable std::unordered_map<std::string, std::string> ipc_handle_to_dev_ptr_;
 
-  friend void run_warmup_queries(mapd::shared_ptr<DBHandler> handler,
+  friend void run_warmup_queries(std::shared_ptr<DBHandler> handler,
                                  std::string base_path,
                                  std::string query_file_path);
 

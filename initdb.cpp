@@ -269,5 +269,7 @@ int main(int argc, char* argv[]) {
   } catch (std::exception& e) {
     std::cerr << "Exception: " << e.what() << "\n";
   }
+
+  Catalog_Namespace::SysCatalog::destroy();
   return 0;
 }

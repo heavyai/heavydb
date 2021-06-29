@@ -38,20 +38,6 @@ using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 
-#ifdef HAVE_THRIFT_STD_SHAREDPTR
-#include <memory>
-namespace mapd {
-using std::make_shared;
-using std::shared_ptr;
-}  // namespace mapd
-#else
-#include <boost/make_shared.hpp>
-namespace mapd {
-using boost::make_shared;
-using boost::shared_ptr;
-}  // namespace mapd
-#endif  // HAVE_THRIFT_STD_SHAREDPTR
-
 namespace {
 // anonymous namespace for private functions
 const size_t INSERT_BATCH_SIZE = 10000;
@@ -122,9 +108,9 @@ int main(int argc, char** argv) {
     }
   }
 
-  mapd::shared_ptr<TTransport> socket(new TSocket(server_host, port));
-  mapd::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
-  mapd::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+  std::shared_ptr<TTransport> socket(new TSocket(server_host, port));
+  std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+  std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
   OmniSciClient client(protocol);
   TSessionId session;
   try {

@@ -37,7 +37,6 @@
 #include "Shared/SystemParameters.h"
 #include "Shared/file_delete.h"
 #include "Shared/mapd_shared_mutex.h"
-#include "Shared/mapd_shared_ptr.h"
 #include "Shared/scope.h"
 
 #include <boost/algorithm/string.hpp>
@@ -60,7 +59,6 @@
 #include "Shared/Compressor.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/file_delete.h"
-#include "Shared/mapd_shared_ptr.h"
 #include "Shared/scope.h"
 #include "ThriftHandler/ForeignTableRefreshScheduler.h"
 
@@ -72,24 +70,21 @@ using namespace ::apache::thrift::transport;
 
 extern bool g_enable_thrift_logs;
 
+// Set g_running to false to trigger normal server shutdown.
 std::atomic<bool> g_running{true};
+
+namespace {  // anonymous
+
 std::atomic<int> g_saw_signal{-1};
 
-mapd_shared_mutex g_thrift_mutex;
-TThreadedServer* g_thrift_http_server{nullptr};
-TThreadedServer* g_thrift_buf_server{nullptr};
+std::shared_ptr<TThreadedServer> g_thrift_http_server;
+std::shared_ptr<TThreadedServer> g_thrift_tcp_server;
 
-mapd::shared_ptr<DBHandler> g_warmup_handler =
-    0;  // global "g_warmup_handler" needed to avoid circular dependency
+std::shared_ptr<DBHandler> g_warmup_handler;
+// global "g_warmup_handler" needed to avoid circular dependency
 // between "DBHandler" & function "run_warmup_queries"
-mapd::shared_ptr<DBHandler> g_mapd_handler = 0;
-std::once_flag g_shutdown_once_flag;
 
-void shutdown_handler() {
-  if (g_mapd_handler) {
-    std::call_once(g_shutdown_once_flag, []() { g_mapd_handler->shutdown(); });
-  }
-}
+std::shared_ptr<DBHandler> g_mapd_handler;
 
 void register_signal_handler(int signum, void (*handler)(int)) {
 #ifdef _WIN32
@@ -176,9 +171,11 @@ void register_signal_handlers() {
 #endif
 }
 
-void start_server(TThreadedServer& server, const int port) {
+}  // anonymous namespace
+
+void start_server(std::shared_ptr<TThreadedServer> server, const int port) {
   try {
-    server.serve();
+    server->serve();
     if (errno != 0) {
       throw std::runtime_error(std::string("Thrift server exited: ") +
                                std::strerror(errno));
@@ -200,7 +197,7 @@ void releaseWarmupSession(TSessionId& sessionId, std::ifstream& query_file) noex
   }
 }
 
-void run_warmup_queries(mapd::shared_ptr<DBHandler> handler,
+void run_warmup_queries(std::shared_ptr<DBHandler> handler,
                         std::string base_path,
                         std::string query_file_path) {
   // run warmup queries to load cache if requested
@@ -283,6 +280,18 @@ void run_warmup_queries(mapd::shared_ptr<DBHandler> handler,
   }
 }
 
+void thrift_stop() {
+  if (auto thrift_http_server = g_thrift_http_server; thrift_http_server) {
+    thrift_http_server->stop();
+  }
+  g_thrift_http_server.reset();
+
+  if (auto thrift_tcp_server = g_thrift_tcp_server; thrift_tcp_server) {
+    thrift_tcp_server->stop();
+  }
+  g_thrift_tcp_server.reset();
+}
+
 void heartbeat() {
 #ifndef _WIN32
   // Block all signals for this heartbeat thread, only.
@@ -308,58 +317,86 @@ void heartbeat() {
     LOG(INFO) << "Interrupt signal (" << signum << ") received.";
   }
 
-  // if dumping core, try to do some quick stuff
+  // If dumping core, try to do some quick stuff.
   if (signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE
 #ifndef _WIN32
       || signum == SIGQUIT
 #endif
   ) {
-    if (g_mapd_handler) {
-      std::call_once(g_shutdown_once_flag,
-                     []() { g_mapd_handler->emergency_shutdown(); });
+    // Need to shut down calcite.
+    if (auto mapd_handler = g_mapd_handler; mapd_handler) {
+      mapd_handler->emergency_shutdown();
     }
+    // Need to flush the logs for debugging.
     logger::shutdown();
     return;
-    // core dump should begin soon after this, see omnisci_signal_handler()
+    // Core dump should begin soon after this. See omnisci_signal_handler().
+    // We leave the rest of the server process as is for the core dump image.
   }
 
-  // trigger an orderly shutdown by telling Thrift to stop serving
-  {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(g_thrift_mutex);
-    auto httpserv = g_thrift_http_server;
-    if (httpserv) {
-      httpserv->stop();
-    }
-    auto bufserv = g_thrift_buf_server;
-    if (bufserv) {
-      bufserv->stop();
-    }
-    // main() should return soon after this
-  }
+  // Stopping the Thrift thread(s) will allow main() to return.
+  thrift_stop();
 }
 
 int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server = true) {
-  // try to enforce an orderly shutdown even after a signal
+  // Prepare to launch the Thrift server.
+  LOG(INFO) << "OmniSciDB starting up";
   register_signal_handlers();
-
-  // register shutdown procedures for when a normal shutdown happens
-  // be aware that atexit() functions run in reverse order
-  atexit(&logger::shutdown);
-  atexit(&shutdown_handler);
-
 #ifdef HAVE_AWS_S3
   omnisci_aws_sdk::init_sdk();
-  ScopeGuard aws_sdk_guard = [] { omnisci_aws_sdk::shutdown_sdk(); };
-#endif
+#endif  // HAVE_AWS_S3
+  std::set<std::unique_ptr<std::thread>> server_threads;
+  auto wait_for_server_threads = [&] {
+    for (auto& th : server_threads) {
+      try {
+        th->join();
+      } catch (const std::system_error& e) {
+        if (e.code() != std::errc::invalid_argument) {
+          LOG(WARNING) << "std::thread join failed: " << e.what();
+        }
+      } catch (const std::exception& e) {
+        LOG(WARNING) << "std::thread join failed: " << e.what();
+      } catch (...) {
+        LOG(WARNING) << "std::thread join failed";
+      }
+    }
+  };
+  ScopeGuard server_shutdown_guard = [&] {
+    // This function will never be called by exit(), but we shouldn't ever be calling
+    // exit(), we should be setting g_running to false instead.
+    LOG(INFO) << "OmniSciDB shutting down";
+
+    g_running = false;
+
+    thrift_stop();
+
+    g_mapd_handler.reset();
+
+    wait_for_server_threads();
+
+    if (g_enable_fsi) {
+      foreign_storage::ForeignTableRefreshScheduler::stop();
+    }
+
+    Catalog_Namespace::SysCatalog::destroy();
+
+#ifdef HAVE_AWS_S3
+    omnisci_aws_sdk::shutdown_sdk();
+#endif  // HAVE_AWS_S3
+
+    // Flush the logs last to capture maximum debugging information.
+    logger::shutdown();
+  };
 
   // start background thread to clean up _DELETE_ME files
   const unsigned int wait_interval =
       3;  // wait time in secs after looking for deleted file before looking again
-  std::thread file_delete_thread(file_delete,
-                                 std::ref(g_running),
-                                 wait_interval,
-                                 prog_config_opts.base_path + "/mapd_data");
-  std::thread heartbeat_thread(heartbeat);
+  server_threads.insert(
+      std::make_unique<std::thread>(file_delete,
+                                    std::ref(g_running),
+                                    wait_interval,
+                                    prog_config_opts.base_path + "/mapd_data"));
+  server_threads.insert(std::make_unique<std::thread>(heartbeat));
 
   if (!g_enable_thrift_logs) {
     apache::thrift::GlobalOutput.setOutputFunction([](const char* msg) {});
@@ -372,40 +409,42 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
     std::locale::global(generator.generate(""));
   }
 
+  // Thrift event handler for database server setup.
   try {
     if (prog_config_opts.system_parameters.master_address.empty()) {
+      // Handler for a single database server. (DBHandler)
       g_mapd_handler =
-          mapd::make_shared<DBHandler>(prog_config_opts.db_leaves,
-                                       prog_config_opts.string_leaves,
-                                       prog_config_opts.base_path,
-                                       prog_config_opts.allow_multifrag,
-                                       prog_config_opts.jit_debug,
-                                       prog_config_opts.intel_jit_profile,
-                                       prog_config_opts.read_only,
-                                       prog_config_opts.allow_loop_joins,
-                                       prog_config_opts.enable_rendering,
-                                       prog_config_opts.renderer_use_vulkan_driver,
-                                       prog_config_opts.enable_auto_clear_render_mem,
-                                       prog_config_opts.render_oom_retry_threshold,
-                                       prog_config_opts.render_mem_bytes,
-                                       prog_config_opts.max_concurrent_render_sessions,
-                                       prog_config_opts.reserved_gpu_mem,
-                                       prog_config_opts.render_compositor_use_last_gpu,
-                                       prog_config_opts.num_reader_threads,
-                                       prog_config_opts.authMetadata,
-                                       prog_config_opts.system_parameters,
-                                       prog_config_opts.enable_legacy_syntax,
-                                       prog_config_opts.idle_session_duration,
-                                       prog_config_opts.max_session_duration,
-                                       prog_config_opts.enable_runtime_udf,
-                                       prog_config_opts.udf_file_name,
-                                       prog_config_opts.udf_compiler_path,
-                                       prog_config_opts.udf_compiler_options,
+          std::make_shared<DBHandler>(prog_config_opts.db_leaves,
+                                      prog_config_opts.string_leaves,
+                                      prog_config_opts.base_path,
+                                      prog_config_opts.allow_multifrag,
+                                      prog_config_opts.jit_debug,
+                                      prog_config_opts.intel_jit_profile,
+                                      prog_config_opts.read_only,
+                                      prog_config_opts.allow_loop_joins,
+                                      prog_config_opts.enable_rendering,
+                                      prog_config_opts.renderer_use_vulkan_driver,
+                                      prog_config_opts.enable_auto_clear_render_mem,
+                                      prog_config_opts.render_oom_retry_threshold,
+                                      prog_config_opts.render_mem_bytes,
+                                      prog_config_opts.max_concurrent_render_sessions,
+                                      prog_config_opts.reserved_gpu_mem,
+                                      prog_config_opts.render_compositor_use_last_gpu,
+                                      prog_config_opts.num_reader_threads,
+                                      prog_config_opts.authMetadata,
+                                      prog_config_opts.system_parameters,
+                                      prog_config_opts.enable_legacy_syntax,
+                                      prog_config_opts.idle_session_duration,
+                                      prog_config_opts.max_session_duration,
+                                      prog_config_opts.enable_runtime_udf,
+                                      prog_config_opts.udf_file_name,
+                                      prog_config_opts.udf_compiler_path,
+                                      prog_config_opts.udf_compiler_options,
 #ifdef ENABLE_GEOS
-                                       prog_config_opts.libgeos_so_filename,
+                                      prog_config_opts.libgeos_so_filename,
 #endif
-                                       prog_config_opts.disk_cache_config,
-                                       false);
+                                      prog_config_opts.disk_cache_config,
+                                      false);
     } else {  // running ha server
       LOG(FATAL)
           << "No High Availability module available, please contact OmniSci support";
@@ -418,13 +457,14 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
     foreign_storage::ForeignTableRefreshScheduler::start(g_running);
   }
 
-  mapd::shared_ptr<TServerSocket> serverSocket;
-  mapd::shared_ptr<TServerSocket> httpServerSocket;
+  // TCP port setup. We use Thrift both for a TCP socket and for an optional HTTP socket.
+  std::shared_ptr<TServerSocket> tcp_socket;
+  std::shared_ptr<TServerSocket> http_socket;
+
   if (!prog_config_opts.system_parameters.ssl_cert_file.empty() &&
       !prog_config_opts.system_parameters.ssl_key_file.empty()) {
-    mapd::shared_ptr<TSSLSocketFactory> sslSocketFactory;
-    sslSocketFactory =
-        mapd::shared_ptr<TSSLSocketFactory>(new TSSLSocketFactory(SSLProtocol::SSLTLS));
+    // SSL port setup.
+    auto sslSocketFactory = std::make_shared<TSSLSocketFactory>(SSLProtocol::SSLTLS);
     sslSocketFactory->loadCertificate(
         prog_config_opts.system_parameters.ssl_cert_file.c_str());
     sslSocketFactory->loadPrivateKey(
@@ -435,85 +475,63 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
       sslSocketFactory->authenticate(false);
     }
     sslSocketFactory->ciphers("ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
-    serverSocket = mapd::shared_ptr<TServerSocket>(new TSSLServerSocket(
-        prog_config_opts.system_parameters.omnisci_server_port, sslSocketFactory));
-    httpServerSocket = mapd::shared_ptr<TServerSocket>(
-        new TSSLServerSocket(prog_config_opts.http_port, sslSocketFactory));
+    tcp_socket = std::make_shared<TSSLServerSocket>(
+        prog_config_opts.system_parameters.omnisci_server_port, sslSocketFactory);
+    if (start_http_server) {
+      http_socket = std::make_shared<TSSLServerSocket>(prog_config_opts.http_port,
+                                                       sslSocketFactory);
+    }
     LOG(INFO) << " OmniSci server using encrypted connection. Cert file ["
               << prog_config_opts.system_parameters.ssl_cert_file << "], key file ["
               << prog_config_opts.system_parameters.ssl_key_file << "]";
+
   } else {
+    // Non-SSL port setup.
     LOG(INFO) << " OmniSci server using unencrypted connection";
-    serverSocket = mapd::shared_ptr<TServerSocket>(
-        new TServerSocket(prog_config_opts.system_parameters.omnisci_server_port));
-    httpServerSocket =
-        mapd::shared_ptr<TServerSocket>(new TServerSocket(prog_config_opts.http_port));
-  }
-
-  ScopeGuard pointer_to_thrift_guard = [] {
-    mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
-    g_thrift_buf_server = g_thrift_http_server = nullptr;
-  };
-
-  mapd::shared_ptr<TProcessor> processor(
-      new TrackingProcessor(g_mapd_handler, prog_config_opts.log_user_origin));
-  mapd::shared_ptr<TTransportFactory> bufTransportFactory(
-      new TBufferedTransportFactory());
-  mapd::shared_ptr<TProtocolFactory> bufProtocolFactory(new TBinaryProtocolFactory());
-
-  mapd::shared_ptr<TServerTransport> bufServerTransport(serverSocket);
-  TThreadedServer bufServer(
-      processor, bufServerTransport, bufTransportFactory, bufProtocolFactory);
-  {
-    mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
-    g_thrift_buf_server = &bufServer;
-  }
-
-  std::thread bufThread(start_server,
-                        std::ref(bufServer),
-                        prog_config_opts.system_parameters.omnisci_server_port);
-
-  // TEMPORARY
-  auto warmup_queries = [&prog_config_opts]() {
-    // run warm up queries if any exists
-    run_warmup_queries(
-        g_mapd_handler, prog_config_opts.base_path, prog_config_opts.db_query_file);
-    if (prog_config_opts.exit_after_warmup) {
-      g_running = false;
+    tcp_socket = std::make_shared<TServerSocket>(
+        prog_config_opts.system_parameters.omnisci_server_port);
+    if (start_http_server) {
+      http_socket = std::make_shared<TServerSocket>(prog_config_opts.http_port);
     }
-  };
+  }
 
-  mapd::shared_ptr<TServerTransport> httpServerTransport(httpServerSocket);
-  mapd::shared_ptr<TTransportFactory> httpTransportFactory(
-      new THttpServerTransportFactory());
-  mapd::shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
-  TThreadedServer httpServer(
-      processor, httpServerTransport, httpTransportFactory, httpProtocolFactory);
+  // Thrift uses the same processor for both the TCP port and the HTTP port.
+  std::shared_ptr<TProcessor> processor{std::make_shared<TrackingProcessor>(
+      g_mapd_handler, prog_config_opts.log_user_origin)};
+
+  // Thrift TCP server launch.
+  std::shared_ptr<TServerTransport> tcp_st = tcp_socket;
+  std::shared_ptr<TTransportFactory> tcp_tf{
+      std::make_shared<TBufferedTransportFactory>()};
+  std::shared_ptr<TProtocolFactory> tcp_pf{std::make_shared<TBinaryProtocolFactory>()};
+  g_thrift_tcp_server.reset(new TThreadedServer(processor, tcp_st, tcp_tf, tcp_pf));
+  server_threads.insert(std::make_unique<std::thread>(
+      start_server,
+      g_thrift_tcp_server,
+      prog_config_opts.system_parameters.omnisci_server_port));
+
+  // Thrift HTTP server launch.
   if (start_http_server) {
-    {
-      mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
-      g_thrift_http_server = &httpServer;
-    }
-    std::thread httpThread(
-        start_server, std::ref(httpServer), prog_config_opts.http_port);
-
-    warmup_queries();
-
-    bufThread.join();
-    httpThread.join();
-  } else {
-    warmup_queries();
-    bufThread.join();
+    std::shared_ptr<TServerTransport> http_st = http_socket;
+    std::shared_ptr<TTransportFactory> http_tf{
+        std::make_shared<TBufferedTransportFactory>()};
+    std::shared_ptr<TProtocolFactory> http_pf{std::make_shared<TBinaryProtocolFactory>()};
+    g_thrift_http_server.reset(new TThreadedServer(processor, http_st, http_tf, http_pf));
+    server_threads.insert(std::make_unique<std::thread>(
+        start_server, g_thrift_http_server, prog_config_opts.http_port));
   }
 
-  g_running = false;
-  file_delete_thread.join();
-  heartbeat_thread.join();
-
-  if (g_enable_fsi) {
-    foreign_storage::ForeignTableRefreshScheduler::stop();
+  // Run warm up queries if any exist.
+  run_warmup_queries(
+      g_mapd_handler, prog_config_opts.base_path, prog_config_opts.db_query_file);
+  if (prog_config_opts.exit_after_warmup) {
+    g_running = false;
   }
 
+  // Main thread blocks for as long as the servers are running.
+  wait_for_server_threads();
+
+  // Clean shutdown.
   int signum = g_saw_signal;
   if (signum <= 0 || signum == SIGTERM) {
     return 0;
@@ -539,7 +557,7 @@ int main(int argc, char** argv) {
       return (startMapdServer(prog_config_opts));
     }
   } catch (std::runtime_error& e) {
-    std::cerr << "Can't start: " << e.what() << std::endl;
+    std::cerr << "Server Error: " << e.what() << std::endl;
     return 1;
   } catch (boost::program_options::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;

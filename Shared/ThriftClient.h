@@ -23,7 +23,6 @@
 #include <thrift/transport/TSSLSocket.h>
 #include <thrift/transport/TSocket.h>
 #include <string>
-#include "Shared/mapd_shared_ptr.h"
 
 using namespace ::apache::thrift::transport;
 using namespace ::apache::thrift::protocol;
@@ -50,11 +49,11 @@ class ThriftClientConnection {
                          const int port,
                          const ThriftConnectionType conn_type,
                          bool skip_host_verify,
-                         mapd::shared_ptr<TSSLSocketFactory> factory);
+                         std::shared_ptr<TSSLSocketFactory> factory);
 
   ThriftClientConnection(){};
 
-  mapd::shared_ptr<TTransport> open_buffered_client_transport(
+  std::shared_ptr<TTransport> open_buffered_client_transport(
       const std::string& server_host,
       const int port,
       const std::string& ca_cert_name,
@@ -64,14 +63,14 @@ class ThriftClientConnection {
       const unsigned recv_timeount = 0,
       const unsigned send_timeout = 0);
 
-  mapd::shared_ptr<TTransport> open_http_client_transport(
+  std::shared_ptr<TTransport> open_http_client_transport(
       const std::string& server_host,
       const int port,
       const std::string& trust_cert_file_,
       bool use_https,
       bool skip_verify);
 
-  mapd::shared_ptr<TProtocol> get_protocol();
+  std::shared_ptr<TProtocol> get_protocol();
   virtual ~ThriftClientConnection();
 
  private:
@@ -82,7 +81,7 @@ class ThriftClientConnection {
   std::string ca_cert_name_;
   std::string trust_cert_file_;
   bool using_X509_store_ = false;
-  mapd::shared_ptr<TSSLSocketFactory> factory_;
+  std::shared_ptr<TSSLSocketFactory> factory_;
 };
 
 #endif  // THRIFTCLIENT_H

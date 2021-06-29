@@ -475,7 +475,9 @@ void DBHandler::initialize(const bool is_new_db) {
 #endif
 }
 
-DBHandler::~DBHandler() {}
+DBHandler::~DBHandler() {
+  shutdown();
+}
 
 void DBHandler::parser_with_error_handler(
     const std::string& query_str,

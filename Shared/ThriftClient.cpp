@@ -76,7 +76,7 @@ class InsecureAccessManager : public AccessManager {
 class ProxyTHttpClient : public THttpClient {
  public:
   // mimic and call the super constructors.
-  ProxyTHttpClient(mapd::shared_ptr<TTransport> transport,
+  ProxyTHttpClient(std::shared_ptr<TTransport> transport,
                    std::string host,
                    std::string path)
       : THttpClient(transport, host, path) {}
@@ -142,12 +142,11 @@ class ProxyTHttpClient : public THttpClient {
   std::vector<std::string> cookies_;
 };
 ThriftClientConnection::~ThriftClientConnection() {}
-ThriftClientConnection::ThriftClientConnection(
-    const std::string& server_host,
-    const int port,
-    const ThriftConnectionType conn_type,
-    bool skip_host_verify,
-    mapd::shared_ptr<TSSLSocketFactory> factory)
+ThriftClientConnection::ThriftClientConnection(const std::string& server_host,
+                                               const int port,
+                                               const ThriftConnectionType conn_type,
+                                               bool skip_host_verify,
+                                               std::shared_ptr<TSSLSocketFactory> factory)
     : server_host_(server_host)
     , port_(port)
     , conn_type_(conn_type)
@@ -160,13 +159,13 @@ ThriftClientConnection::ThriftClientConnection(
     factory_->ciphers("ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
     if (skip_host_verify_) {
       factory_->access(
-          mapd::shared_ptr<InsecureAccessManager>(new InsecureAccessManager()));
+          std::shared_ptr<InsecureAccessManager>(new InsecureAccessManager()));
     }
   }
 }
 
-mapd::shared_ptr<TProtocol> ThriftClientConnection::get_protocol() {
-  mapd::shared_ptr<apache::thrift::transport::TTransport> mytransport;
+std::shared_ptr<TProtocol> ThriftClientConnection::get_protocol() {
+  std::shared_ptr<apache::thrift::transport::TTransport> mytransport;
   if (conn_type_ == ThriftConnectionType::HTTP ||
       conn_type_ == ThriftConnectionType::HTTPS) {
     mytransport = open_http_client_transport(server_host_,
@@ -187,13 +186,13 @@ mapd::shared_ptr<TProtocol> ThriftClientConnection::get_protocol() {
   }
   if (conn_type_ == ThriftConnectionType::HTTP ||
       conn_type_ == ThriftConnectionType::HTTPS) {
-    return mapd::shared_ptr<TProtocol>(new TJSONProtocol(mytransport));
+    return std::shared_ptr<TProtocol>(new TJSONProtocol(mytransport));
   } else {
-    return mapd::shared_ptr<TProtocol>(new TBinaryProtocol(mytransport));
+    return std::shared_ptr<TProtocol>(new TBinaryProtocol(mytransport));
   }
 }
 
-mapd::shared_ptr<TTransport> ThriftClientConnection::open_buffered_client_transport(
+std::shared_ptr<TTransport> ThriftClientConnection::open_buffered_client_transport(
     const std::string& server_host,
     const int port,
     const std::string& ca_cert_name,
@@ -202,42 +201,41 @@ mapd::shared_ptr<TTransport> ThriftClientConnection::open_buffered_client_transp
     unsigned connect_timeout,
     unsigned recv_timeout,
     unsigned send_timeout) {
-  mapd::shared_ptr<TTransport> transport;
+  std::shared_ptr<TTransport> transport;
 
   if (!factory_ && !ca_cert_name.empty()) {
     // need to build a factory once for ssl conection
     factory_ =
-        mapd::shared_ptr<TSSLSocketFactory>(new TSSLSocketFactory(SSLProtocol::SSLTLS));
+        std::shared_ptr<TSSLSocketFactory>(new TSSLSocketFactory(SSLProtocol::SSLTLS));
     factory_->ciphers("ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
     factory_->loadTrustedCertificates(ca_cert_name.c_str());
     factory_->authenticate(false);
-    factory_->access(
-        mapd::shared_ptr<InsecureAccessManager>(new InsecureAccessManager()));
+    factory_->access(std::shared_ptr<InsecureAccessManager>(new InsecureAccessManager()));
   }
   if (!using_X509_store_ && ca_cert_name.empty()) {
-    const auto socket = mapd::make_shared<TSocket>(server_host, port);
+    const auto socket = std::make_shared<TSocket>(server_host, port);
     if (with_timeout) {
       socket->setKeepAlive(with_keepalive);
       socket->setConnTimeout(connect_timeout);
       socket->setRecvTimeout(recv_timeout);
       socket->setSendTimeout(send_timeout);
     }
-    transport = mapd::make_shared<TBufferedTransport>(socket);
+    transport = std::make_shared<TBufferedTransport>(socket);
   } else {
-    mapd::shared_ptr<TSocket> secure_socket = factory_->createSocket(server_host, port);
+    std::shared_ptr<TSocket> secure_socket = factory_->createSocket(server_host, port);
     if (with_timeout) {
       secure_socket->setKeepAlive(with_keepalive);
       secure_socket->setConnTimeout(connect_timeout);
       secure_socket->setRecvTimeout(recv_timeout);
       secure_socket->setSendTimeout(send_timeout);
     }
-    transport = mapd::shared_ptr<TTransport>(new TBufferedTransport(secure_socket));
+    transport = std::shared_ptr<TTransport>(new TBufferedTransport(secure_socket));
   }
 
   return transport;
 }
 
-mapd::shared_ptr<TTransport> ThriftClientConnection::open_http_client_transport(
+std::shared_ptr<TTransport> ThriftClientConnection::open_http_client_transport(
     const std::string& server_host,
     const int port,
     const std::string& trust_cert_fileX,
@@ -248,28 +246,27 @@ mapd::shared_ptr<TTransport> ThriftClientConnection::open_http_client_transport(
 
   if (!factory_) {
     factory_ =
-        mapd::shared_ptr<TSSLSocketFactory>(new TSSLSocketFactory(SSLProtocol::SSLTLS));
+        std::shared_ptr<TSSLSocketFactory>(new TSSLSocketFactory(SSLProtocol::SSLTLS));
   }
-  mapd::shared_ptr<TTransport> transport;
-  mapd::shared_ptr<TTransport> socket;
+  std::shared_ptr<TTransport> transport;
+  std::shared_ptr<TTransport> socket;
   if (use_https) {
     if (skip_verify) {
       factory_->authenticate(false);
       factory_->access(
-          mapd::shared_ptr<InsecureAccessManager>(new InsecureAccessManager()));
+          std::shared_ptr<InsecureAccessManager>(new InsecureAccessManager()));
     }
     if (!using_X509_store_) {
       factory_->loadTrustedCertificates(trust_cert_file_.c_str());
     }
     socket = factory_->createSocket(server_host, port);
-    // transport = mapd::shared_ptr<TTransport>(new THttpClient(socket,
+    // transport = std::shared_ptr<TTransport>(new THttpClient(socket,
     // server_host,
     // "/"));
     transport =
-        mapd::shared_ptr<TTransport>(new ProxyTHttpClient(socket, server_host, "/"));
+        std::shared_ptr<TTransport>(new ProxyTHttpClient(socket, server_host, "/"));
   } else {
-    transport =
-        mapd::shared_ptr<TTransport>(new ProxyTHttpClient(server_host, port, "/"));
+    transport = std::shared_ptr<TTransport>(new ProxyTHttpClient(server_host, port, "/"));
   }
   return transport;
 }

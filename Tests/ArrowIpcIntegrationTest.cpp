@@ -593,7 +593,7 @@ int main(int argc, char* argv[]) {
       return 0;
     }
 
-    mapd::shared_ptr<ThriftClientConnection> conn_mgr;
+    std::shared_ptr<ThriftClientConnection> conn_mgr;
     conn_mgr = std::make_shared<ThriftClientConnection>();
 
     auto transport = conn_mgr->open_buffered_client_transport(host, port, cert);
