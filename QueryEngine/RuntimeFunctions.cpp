@@ -380,7 +380,6 @@ extern "C" ALWAYS_INLINE int8_t* agg_id_varlen(int8_t* varlen_buffer,
                                                const int64_t offset,
                                                const int8_t* value,
                                                const int64_t size_bytes) {
-  printf("Offset: %ld\n", offset);
   for (auto i = 0; i < size_bytes; i++) {
     varlen_buffer[offset + i] = value[i];
   }
