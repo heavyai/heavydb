@@ -417,7 +417,7 @@ int UdfCompiler::compileFromCommandLine(
     /* Fix incompatibilities when driver and clang versions differ.
      */
     auto& jobs = compilation->getJobs();
-    CHECK_EQ(jobs.size(), 1);
+    CHECK_EQ(jobs.size(), size_t(1));
     auto& job = *jobs.begin();
 
     std::string cmd = job.getExecutable();
