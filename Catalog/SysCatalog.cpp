@@ -62,7 +62,6 @@ using namespace std::string_literals;
 std::string g_base_path;
 
 extern bool g_enable_fsi;
-extern bool g_enable_s3_fsi;
 extern bool g_read_only;
 
 namespace {

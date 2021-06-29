@@ -6,6 +6,8 @@
 #include "Shared/misc.h"
 #include "Utils/DdlUtils.h"
 
+extern bool g_enable_s3_fsi;
+
 namespace foreign_storage {
 AbstractFileStorageDataWrapper::AbstractFileStorageDataWrapper() {}
 
