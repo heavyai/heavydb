@@ -231,13 +231,14 @@ class ForeignTableTest : public DBHandlerTestFixture {
     ss << schema;
 
     if (is_odbc(data_wrapper_type)) {
-      std::string db_specfic_schema = createSchemaString(column_pairs, data_wrapper_type);
+      std::string db_specific_schema =
+          createSchemaString(column_pairs, data_wrapper_type);
       ss << "SERVER temp_odbc WITH (sql_select = 'select ";
       size_t i = 0;
       for (auto [name, type] : column_pairs) {
         ss << name << ((++i < column_pairs.size()) ? ", " : " from " + table_name + "'");
       }
-      createODBCSourceTable(table_name, db_specfic_schema, src_path, data_wrapper_type);
+      createODBCSourceTable(table_name, db_specific_schema, src_path, data_wrapper_type);
     } else {
       ss << "SERVER omnisci_local_" + data_wrapper_type;
       ss << " WITH (file_path = '";
@@ -1360,6 +1361,38 @@ TEST_P(DataWrapperSelectQueryTest, EmptyDirectory) {
   sql(query);
   sqlAndCompareResult("SELECT * FROM test_foreign_table;", {});
   boost::filesystem::remove_all(dir_path);
+}
+
+TEST_P(DataWrapperSelectQueryTest, OutOfRange) {
+  sql(createForeignTableQuery(
+      {{"i", "INTEGER"}, {"i2", "INTEGER"}},
+      getDataFilesPath() + "out_of_range_int" + wrapper_ext(GetParam()),
+      GetParam()));
+
+  if (GetParam() == "csv") {
+    queryAndAssertException(
+        "SELECT * FROM "s + default_table_name,
+        "Exception: Parsing failure \"Integer -2147483648 exceeds minimum value for "
+        "nullable INTEGER(32)\" in row \"0,-2147483648\" in file \"" +
+            getDataFilesPath() + "out_of_range_int.csv\"");
+  } else if (GetParam() == "parquet") {
+    queryAndAssertException(
+        "SELECT * FROM "s + default_table_name,
+        "Exception: Parquet column contains values that are outside the range of the "
+        "OmniSci column type. Consider using a wider column type. Min allowed value: "
+        "-2147483647. Max allowed value: 2147483647. Encountered value: -2147483648. "
+        "Error validating statistics of Parquet column 'numeric' in row group 0 of "
+        "Parquet file '" +
+            getDataFilesPath() + "out_of_range_int.parquet'.");
+  } else {
+    // Assuming ODBC for now
+    queryAndAssertException(
+        "SELECT * FROM "s + default_table_name,
+        "Exception: ODBC column contains values that are outside the range of the "
+        "OmniSci "
+        "column type INTEGER. Min allowed value: -2147483647. Max allowed value: "
+        "2147483647. Encountered value: -2147483648.");
+  }
 }
 
 class CSVFileTypeTests
@@ -2829,37 +2862,43 @@ INSTANTIATE_TEST_SUITE_P(DataTypeFragmentSizeAndDataWrapperOdbcTests,
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes_subset) {
   auto [fragment_size, data_wrapper_type, extension] = GetParam();
   if (!is_odbc(data_wrapper_type) || extension != ".csv") {
-    GTEST_SKIP() << "UNIMPLEMENTED: sub test does not supporting" << extension << " type";
+    GTEST_SKIP() << "UNIMPLEMENTED: sub test does not support " << extension << " type";
   }
-  if (data_wrapper_type == "sqlite") {
-    GTEST_SKIP() << "UNIMPLEMENTED: sub test does not supporting" << extension << " type";
-  }
-  sql(createForeignTableQuery({{"s", "SMALLINT"},
-                               {"i", "INTEGER"},
-                               {"bi", "BIGINT"},
-                               {"f", "FLOAT"},
-                               {"dc", "DECIMAL(10, 5)"},
-                               {"tm", "TIME"},
-                               {"tp", "TIMESTAMP"},
-                               {"d", "DATE"},
-                               {"txt", "TEXT"},
-                               {"txt_2", "TEXT ENCODING NONE"}},
-                              getDataFilesPath() + "scalar_types_subset" + extension,
-                              data_wrapper_type,
-                              {{"FRAGMENT_SIZE", std::to_string(fragment_size)}}));
+  // Data type changes to handle unimplemented types in ODBC
+  sql(createForeignTableQuery(
+      {{"t", data_wrapper_type == "postgres" ? "SMALLINT" : "TINYINT"},
+       {"s", "SMALLINT"},
+       {"i", "INTEGER"},
+       {"bi", "BIGINT"},
+       {"f", data_wrapper_type == "sqlite" ? "DOUBLE" : "FLOAT"},
+       {"dc", data_wrapper_type == "sqlite" ? "DOUBLE" : "DECIMAL(10, 5)"},
+       {"tm", "TIME"},
+       {"tp", "TIMESTAMP"},
+       {"d", "DATE"},
+       {"txt", "TEXT"},
+       {"txt_2", "TEXT ENCODING NONE"}},
+      getDataFilesPath() + "scalar_types_subset" + extension,
+      data_wrapper_type,
+      {{"FRAGMENT_SIZE", std::to_string(fragment_size)}}));
 
   TQueryResult result;
   sql(result, "SELECT * FROM test_foreign_table ORDER BY s;");
   // clang-format off
   assertResultSetEqual({
     {
-      i(30000), i(2000000000), i(9000000000000000000),10.1f,  100.1234, "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "\"quoted text\""
+      i(100), i(30000), i(2000000000), i(9000000000000000000),10.1f,  100.1234, "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "\"quoted text\""
     },
     {
-      i(30500), i(2000500000), i(9000000050000000000), 100.12f,  2.1234, "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "\"quoted text 2\""
+      i(110), i(30500), i(2000500000), i(9000000050000000000), 100.12f,  2.1234, "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "\"quoted text 2\""
     },
     {
-      i(31000), i(2100000000), i(9100000000000000000), 1000.123f, 100.1, "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "\"quoted text 3\""
+      i(120), i(31000), i(2100000000), i(9100000000000000000), 1000.123f, 100.1, "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "\"quoted text 3\""
+    },
+    { 
+      data_wrapper_type == "postgres" ? i(NULL_SMALLINT) : i(NULL_TINYINT), // TINYINT
+      i(NULL_SMALLINT), i(NULL_INT), i(NULL_BIGINT), 
+      data_wrapper_type == "sqlite" ? NULL_DOUBLE : NULL_FLOAT, // FLOAT
+      NULL_DOUBLE, Null, Null, Null, Null, Null
     }},
     result);
   // clang-format on

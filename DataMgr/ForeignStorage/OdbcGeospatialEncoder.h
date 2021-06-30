@@ -26,14 +26,14 @@ class OdbcGeospatialEncoder : public GeospatialEncoder {
                         std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata)
       : GeospatialEncoder(chunks, chunk_metadata) {}
 
-  void appendData(const std::vector<std::optional<std::string>>& geo_strings) {
+  void appendData(const std::vector<std::string>& geo_strings) {
     clearDatumBuffers();
     int64_t num_rows = geo_strings.size();
     for (int64_t i = 0; i < num_rows; ++i) {
       clearParseBuffers();
       auto const& geo_string = geo_strings[i];
-      if (geo_string) {
-        processGeoElement(*geo_string);
+      if (geo_string.size()) {
+        processGeoElement(geo_string);
       } else {
         processNullGeoElement();
       }

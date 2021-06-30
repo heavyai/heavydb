@@ -17,6 +17,7 @@
 #pragma once
 
 #include "ParquetEncoder.h"
+#include "SharedMetadataValidator.h"
 
 namespace foreign_storage {
 class ParquetMetadataValidator {
@@ -26,28 +27,6 @@ class ParquetMetadataValidator {
   virtual void validate(std::shared_ptr<parquet::Statistics> stats,
                         const SQLTypeInfo& column_type) const = 0;
 };
-
-template <typename V, std::enable_if_t<std::is_integral<V>::value, int> = 0>
-inline V get_null_value() {
-  return inline_int_null_value<V>();
-}
-
-template <typename V, std::enable_if_t<std::is_floating_point<V>::value, int> = 0>
-inline V get_null_value() {
-  return inline_fp_null_value<V>();
-}
-
-template <typename D, std::enable_if_t<std::is_integral<D>::value, int> = 0>
-inline std::pair<D, D> get_min_max_bounds() {
-  static_assert(std::is_signed<D>::value,
-                "'get_min_max_bounds' is only valid for signed types");
-  return {get_null_value<D>() + 1, std::numeric_limits<D>::max()};
-}
-
-template <typename D, std::enable_if_t<std::is_floating_point<D>::value, int> = 0>
-inline std::pair<D, D> get_min_max_bounds() {
-  return {std::numeric_limits<D>::lowest(), std::numeric_limits<D>::max()};
-}
 
 template <typename D, typename T>
 inline bool check_bounds(const T& value) {
