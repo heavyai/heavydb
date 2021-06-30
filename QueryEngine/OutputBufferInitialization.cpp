@@ -176,7 +176,7 @@ int64_t get_agg_initial_val(const SQLAgg agg,
     case kCOUNT:
     case kAPPROX_COUNT_DISTINCT:
       return 0;
-    case kAPPROX_MEDIAN:
+    case kAPPROX_QUANTILE:
       return {};  // Init value is a quantile::TDigest* set elsewhere.
     case kMIN: {
       switch (byte_width) {
@@ -280,7 +280,7 @@ std::vector<int64_t> init_agg_val_vec(
           target.is_agg &&
           (target.agg_kind == kMIN || target.agg_kind == kMAX ||
            target.agg_kind == kSUM || target.agg_kind == kAVG ||
-           target.agg_kind == kAPPROX_MEDIAN)) {
+           target.agg_kind == kAPPROX_QUANTILE)) {
         set_notnull(target, false);
       } else if (constrained_not_null(arg_expr, quals)) {
         set_notnull(target, true);

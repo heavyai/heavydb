@@ -248,11 +248,11 @@ StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
   return lit_str_dict_proxy_.get();
 }
 
-quantile::TDigest* RowSetMemoryOwner::nullTDigest() {
+quantile::TDigest* RowSetMemoryOwner::nullTDigest(double const q) {
   std::lock_guard<std::mutex> lock(state_mutex_);
   return t_digests_
       .emplace_back(std::make_unique<quantile::TDigest>(
-          this, g_approx_quantile_buffer, g_approx_quantile_centroids))
+          q, this, g_approx_quantile_buffer, g_approx_quantile_centroids))
       .get();
 }
 
@@ -3038,10 +3038,10 @@ int32_t Executor::executePlanWithoutGroupBy(
       for (int i = 0; i < num_iterations; i++) {
         int64_t val1;
         const bool float_argument_input = takes_float_argument(agg_info);
-        if (is_distinct_target(agg_info) || agg_info.agg_kind == kAPPROX_MEDIAN) {
+        if (is_distinct_target(agg_info) || agg_info.agg_kind == kAPPROX_QUANTILE) {
           CHECK(agg_info.agg_kind == kCOUNT ||
                 agg_info.agg_kind == kAPPROX_COUNT_DISTINCT ||
-                agg_info.agg_kind == kAPPROX_MEDIAN);
+                agg_info.agg_kind == kAPPROX_QUANTILE);
           val1 = out_vec[out_vec_idx][0];
           error_code = 0;
         } else {

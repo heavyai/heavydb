@@ -229,25 +229,36 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
   const bool is_distinct = rex->isDistinct();
   const bool takes_arg{rex->size() > 0};
   std::shared_ptr<Analyzer::Expr> arg_expr;
-  std::shared_ptr<Analyzer::Constant> err_rate;
+  std::shared_ptr<Analyzer::Constant> arg1;  // 2nd aggregate parameter
   if (takes_arg) {
     const auto operand = rex->getOperand(0);
     CHECK_LT(operand, scalar_sources.size());
     CHECK_LE(rex->size(), 2u);
     arg_expr = scalar_sources[operand];
     if (agg_kind == kAPPROX_COUNT_DISTINCT && rex->size() == 2) {
-      err_rate = std::dynamic_pointer_cast<Analyzer::Constant>(
+      arg1 = std::dynamic_pointer_cast<Analyzer::Constant>(
           scalar_sources[rex->getOperand(1)]);
-      if (!err_rate || err_rate->get_type_info().get_type() != kINT ||
-          err_rate->get_constval().intval < 1 || err_rate->get_constval().intval > 100) {
+      if (!arg1 || arg1->get_type_info().get_type() != kINT ||
+          arg1->get_constval().intval < 1 || arg1->get_constval().intval > 100) {
         throw std::runtime_error(
             "APPROX_COUNT_DISTINCT's second parameter should be SMALLINT literal between "
             "1 and 100");
       }
-    }
-    if (g_cluster && agg_kind == kAPPROX_MEDIAN) {
-      throw std::runtime_error(
-          "APPROX_MEDIAN is not supported in distributed mode at this time.");
+    } else if (agg_kind == kAPPROX_QUANTILE) {
+      if (g_cluster) {
+        throw std::runtime_error(
+            "APPROX_QUANTILE/MEDIAN is not supported in distributed mode at this time.");
+      }
+      // If second parameter is not given then APPROX_MEDIAN is assumed.
+      if (rex->size() == 2) {
+        arg1 = std::dynamic_pointer_cast<Analyzer::Constant>(
+            std::dynamic_pointer_cast<Analyzer::Constant>(
+                scalar_sources[rex->getOperand(1)])
+                ->add_cast(SQLTypeInfo(kDOUBLE)));
+      } else {
+        constexpr Datum median{.doubleval = 0.5};
+        arg1 = std::make_shared<Analyzer::Constant>(kDOUBLE, false, median);
+      }
     }
     const auto& arg_ti = arg_expr->get_type_info();
     if (!is_agg_supported_for_type(agg_kind, arg_ti)) {
@@ -256,7 +267,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
     }
   }
   const auto agg_ti = get_agg_type(agg_kind, arg_expr.get());
-  return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct, err_rate);
+  return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct, arg1);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(

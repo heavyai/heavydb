@@ -76,8 +76,8 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info,
       return {"agg_sum"};
     case kAPPROX_COUNT_DISTINCT:
       return {"agg_approximate_count_distinct"};
-    case kAPPROX_MEDIAN:
-      return {"agg_approx_median"};
+    case kAPPROX_QUANTILE:
+      return {"agg_approx_quantile"};
     case kSINGLE_VALUE:
       return {"checked_single_agg_id"};
     case kSAMPLE:
@@ -480,9 +480,9 @@ void TargetExprCodegen::codegenAggregate(
       CHECK(!chosen_type.is_fp());
       group_by_and_agg->codegenCountDistinct(
           target_idx, target_expr, agg_args, query_mem_desc, co.device_type);
-    } else if (target_info.agg_kind == kAPPROX_MEDIAN) {
+    } else if (target_info.agg_kind == kAPPROX_QUANTILE) {
       CHECK_EQ(agg_chosen_bytes, sizeof(int64_t));
-      group_by_and_agg->codegenApproxMedian(
+      group_by_and_agg->codegenApproxQuantile(
           target_idx, target_expr, agg_args, query_mem_desc, co.device_type);
     } else {
       const auto& arg_ti = target_info.agg_arg_type;
@@ -597,7 +597,7 @@ void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
   auto arg_expr = agg_arg(target_expr);
   if (arg_expr) {
     if (target_info.agg_kind == kSINGLE_VALUE || target_info.agg_kind == kSAMPLE ||
-        target_info.agg_kind == kAPPROX_MEDIAN) {
+        target_info.agg_kind == kAPPROX_QUANTILE) {
       target_info.skip_null_val = false;
     } else if (query_mem_desc.getQueryDescriptionType() ==
                    QueryDescriptionType::NonGroupedAggregate &&

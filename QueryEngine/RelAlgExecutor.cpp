@@ -2817,8 +2817,7 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     const auto sub_bitmap_count =
         get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit, device_type);
     int64_t approx_bitmap_sz_bits{0};
-    const auto error_rate =
-        static_cast<Analyzer::AggExpr*>(target_expr)->get_error_rate();
+    const auto error_rate = static_cast<Analyzer::AggExpr*>(target_expr)->get_arg1();
     if (error_rate) {
       CHECK(error_rate->get_type_info().get_type() == kINT);
       CHECK_GE(error_rate->get_constval().intval, 1);

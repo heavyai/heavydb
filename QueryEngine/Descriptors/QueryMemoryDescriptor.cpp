@@ -500,7 +500,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
         output_columnar_ = output_columnar_hint &&
                            QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
                                count_distinct_descriptors_) &&
-                           !anyOf(ra_exe_unit.target_exprs, kAPPROX_MEDIAN);
+                           !anyOf(ra_exe_unit.target_exprs, kAPPROX_QUANTILE);
         break;
       case QueryDescriptionType::GroupByBaselineHash:
         output_columnar_ = output_columnar_hint;
@@ -509,7 +509,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
         output_columnar_ = output_columnar_hint &&
                            QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
                                count_distinct_descriptors_) &&
-                           !anyOf(ra_exe_unit.target_exprs, kAPPROX_MEDIAN);
+                           !anyOf(ra_exe_unit.target_exprs, kAPPROX_QUANTILE);
         break;
       default:
         output_columnar_ = false;

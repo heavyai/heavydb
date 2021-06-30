@@ -231,6 +231,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new OffsetInFragment());
     opTab.addOperator(new ApproxCountDistinct());
     opTab.addOperator(new ApproxMedian());
+    opTab.addOperator(new ApproxQuantile());
     opTab.addOperator(new MapDAvg());
     opTab.addOperator(new Sample());
     opTab.addOperator(new LastSample());
@@ -1732,6 +1733,27 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               null,
               null,
               OperandTypes.family(SqlTypeFamily.NUMERIC),
+              SqlFunctionCategory.SYSTEM,
+              false,
+              false,
+              Optionality.FORBIDDEN);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+    }
+  }
+
+  static class ApproxQuantile extends SqlAggFunction {
+    ApproxQuantile() {
+      super("APPROX_QUANTILE",
+              null,
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.NUMERIC, SqlTypeFamily.NUMERIC),
               SqlFunctionCategory.SYSTEM,
               false,
               false,

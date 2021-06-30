@@ -1702,8 +1702,8 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
       case kAPPROX_COUNT_DISTINCT:
         result.emplace_back("agg_approximate_count_distinct");
         break;
-      case kAPPROX_MEDIAN:
-        result.emplace_back("agg_approx_median");
+      case kAPPROX_QUANTILE:
+        result.emplace_back("agg_approx_quantile");
         break;
       default:
         CHECK(false);

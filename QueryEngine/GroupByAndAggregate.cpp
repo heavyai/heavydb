@@ -595,7 +595,7 @@ CountDistinctDescriptors init_count_distinct_descriptors(
       CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
       int64_t bitmap_sz_bits{0};
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
-        const auto error_rate = agg_expr->get_error_rate();
+        const auto error_rate = agg_expr->get_arg1();
         if (error_rate) {
           CHECK(error_rate->get_type_info().get_type() == kINT);
           CHECK_GE(error_rate->get_constval().intval, 1);
@@ -1623,7 +1623,7 @@ extern "C" RUNTIME_EXPORT void agg_count_distinct_skip_val(int64_t* agg,
   }
 }
 
-extern "C" RUNTIME_EXPORT void agg_approx_median(int64_t* agg, const double val) {
+extern "C" RUNTIME_EXPORT void agg_approx_quantile(int64_t* agg, const double val) {
   auto* t_digest = reinterpret_cast<quantile::TDigest*>(*agg);
   t_digest->allocate();
   t_digest->add(val);
@@ -1698,11 +1698,12 @@ void GroupByAndAggregate::codegenCountDistinct(
   }
 }
 
-void GroupByAndAggregate::codegenApproxMedian(const size_t target_idx,
-                                              const Analyzer::Expr* target_expr,
-                                              std::vector<llvm::Value*>& agg_args,
-                                              const QueryMemoryDescriptor& query_mem_desc,
-                                              const ExecutorDeviceType device_type) {
+void GroupByAndAggregate::codegenApproxQuantile(
+    const size_t target_idx,
+    const Analyzer::Expr* target_expr,
+    std::vector<llvm::Value*>& agg_args,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const ExecutorDeviceType device_type) {
   if (device_type == ExecutorDeviceType::GPU) {
     throw QueryMustRunOnCpu();
   }
@@ -1719,8 +1720,8 @@ void GroupByAndAggregate::codegenApproxMedian(const size_t target_idx,
     auto* const skip_cond = arg_ti.is_fp()
                                 ? irb.CreateFCmpOEQ(agg_args.back(), null_value)
                                 : irb.CreateICmpEQ(agg_args.back(), null_value);
-    calc = llvm::BasicBlock::Create(cs->context_, "calc_approx_median");
-    skip = llvm::BasicBlock::Create(cs->context_, "skip_approx_median");
+    calc = llvm::BasicBlock::Create(cs->context_, "calc_approx_quantile");
+    skip = llvm::BasicBlock::Create(cs->context_, "skip_approx_quantile");
     irb.CreateCondBr(skip_cond, skip, calc);
     cs->current_func_->getBasicBlockList().push_back(calc);
     irb.SetInsertPoint(calc);
@@ -1730,7 +1731,7 @@ void GroupByAndAggregate::codegenApproxMedian(const size_t target_idx,
     agg_args.back() = executor_->castToFP(agg_args.back(), arg_ti, agg_info.sql_type);
   }
   cs->emitExternalCall(
-      "agg_approx_median", llvm::Type::getVoidTy(cs->context_), agg_args);
+      "agg_approx_quantile", llvm::Type::getVoidTy(cs->context_), agg_args);
   if (nullable) {
     irb.CreateBr(skip);
     cs->current_func_->getBasicBlockList().push_back(skip);

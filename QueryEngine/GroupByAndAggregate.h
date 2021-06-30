@@ -178,11 +178,11 @@ class GroupByAndAggregate {
                             const QueryMemoryDescriptor&,
                             const ExecutorDeviceType);
 
-  void codegenApproxMedian(const size_t target_idx,
-                           const Analyzer::Expr* target_expr,
-                           std::vector<llvm::Value*>& agg_args,
-                           const QueryMemoryDescriptor& query_mem_desc,
-                           const ExecutorDeviceType device_type);
+  void codegenApproxQuantile(const size_t target_idx,
+                             const Analyzer::Expr* target_expr,
+                             std::vector<llvm::Value*>& agg_args,
+                             const QueryMemoryDescriptor& query_mem_desc,
+                             const ExecutorDeviceType device_type);
 
   llvm::Value* getAdditionalLiteral(const int32_t off);
 

@@ -148,11 +148,12 @@ class QueryMemoryInitializer {
                           const std::vector<int64_t>& init_vals,
                           const Executor* executor);
 
+  using QuantileParam = std::optional<double>;
   void initColumnsPerRow(const QueryMemoryDescriptor& query_mem_desc,
                          int8_t* row_ptr,
                          const std::vector<int64_t>& init_vals,
                          const std::vector<int64_t>& bitmap_sizes,
-                         const std::vector<bool>& tdigest_deferred);
+                         const std::vector<QuantileParam>& quantile_params);
 
   void allocateCountDistinctGpuMem(const QueryMemoryDescriptor& query_mem_desc);
 
@@ -165,9 +166,9 @@ class QueryMemoryInitializer {
 
   int64_t allocateCountDistinctSet();
 
-  std::vector<bool> allocateTDigests(const QueryMemoryDescriptor& query_mem_desc,
-                                     const bool deferred,
-                                     const Executor* executor);
+  std::vector<QuantileParam> allocateTDigests(const QueryMemoryDescriptor& query_mem_desc,
+                                              const bool deferred,
+                                              const Executor* executor);
 
 #ifdef HAVE_CUDA
   GpuGroupByBuffers prepareTopNHeapsDevBuffer(const QueryMemoryDescriptor& query_mem_desc,

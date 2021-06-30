@@ -59,7 +59,21 @@ TEST(Quantile, Basic) {
   size_t const M = 300;             // Max number of centroids per digest
   size_t const buf_size = 10000;    // Input buffer size
   size_t const mixer = 2654435761;  // closest prime to 2^32 / phi
-  Real const q = 0.5;
+  constexpr int nintervals = 10;    // Number of quantiles calculated is nintervals+1
+  struct HighPrecisionQuantile {
+    Real const q;
+    Real const err;
+  };
+  std::vector<HighPrecisionQuantile> const high_precision_quantiles{{1e-6, 0.1},
+                                                                    {1e-5, 0.1},
+                                                                    {1e-4, 0.1},
+                                                                    {1e-3, 0.01},
+                                                                    {1e-2, 0.001},
+                                                                    {1 - 1e-6, 1e-3},
+                                                                    {1 - 1e-5, 1e-3},
+                                                                    {1 - 1e-4, 1e-3},
+                                                                    {1 - 1e-3, 1e-3},
+                                                                    {1 - 1e-2, 1e-3}};
 
   // Number of partitions = number of independent digests
   size_t const ndigests = std::thread::hardware_concurrency();
@@ -80,10 +94,19 @@ TEST(Quantile, Basic) {
   });
   std::cout << msSince(start) << "ms" << std::endl;
 
-  // Actual quantile
-  Real const exact = exact_quantile(data, q);
-  std::cout.setf(std::ios::fixed);
-  std::cout << "exact_quantile(data, " << q << ") = " << exact << std::endl;
+  std::cout << "\nCalculating exact quantiles on ordered data... " << std::flush;
+  start = std::chrono::steady_clock::now();
+  std::vector<Real> exact(nintervals + 1);
+  for (int i = 0; i <= nintervals; ++i) {
+    Real const q = Real(i) / nintervals;
+    exact[i] = exact_quantile(data, q);
+  }
+  std::vector<Real> exact_high_precision(high_precision_quantiles.size());
+  for (size_t i = 0; i < high_precision_quantiles.size(); ++i) {
+    Real const q = high_precision_quantiles[i].q;
+    exact_high_precision[i] = exact_quantile(data, q);
+  }
+  std::cout << msSince(start) << "ms" << std::endl;
 
   std::cout << "\nSetting shuffled data... " << std::flush;
   start = std::chrono::steady_clock::now();
@@ -152,15 +175,27 @@ TEST(Quantile, Basic) {
       }
     });
   }
+  auto& digest = digests.front();  // The aggregated digest
   std::cout << msSince(start) << "ms" << std::endl;
 
-  std::cout << "\nCalculating quantile estimate... " << std::flush;
-  start = std::chrono::steady_clock::now();
-  Real const estimated = digests.front().quantile(buffer.counts().data(), q);
-  std::cout << msSince(start) << "ms" << std::endl;
-  std::cout.setf(std::ios::fixed);
-  std::cout << "digests.front().quantile(" << q << ") = " << estimated << std::endl;
-  EXPECT_NEAR(exact, estimated, 0.001 * exact);
+  // Min/max should be exact
+  EXPECT_EQ(exact[0], digest.quantile(buffer.counts().data(), 0));
+  EXPECT_EQ(exact[nintervals], digest.quantile(buffer.counts().data(), 1));
+
+  for (int i = 1; i < nintervals; ++i) {
+    Real const q = Real(i) / nintervals;
+    Real const approx = digest.quantile(buffer.counts().data(), q);
+    EXPECT_NEAR(exact[i], approx, 1e-3 * exact[i]);
+  }
+
+  // High-precision quantiles
+  for (size_t i = 0; i < high_precision_quantiles.size(); ++i) {
+    Real const q = high_precision_quantiles[i].q;
+    Real const err = high_precision_quantiles[i].err;
+    Real const exact = exact_high_precision[i];
+    EXPECT_NEAR(exact, digest.quantile(buffer.counts().data(), q), err * exact)
+        << i << ' ' << q << ' ' << digest.centroids();
+  }
 }
 
 TEST(Quantile, TwoValues) {
@@ -335,7 +370,8 @@ TEST(Quantile, Pairs) {
 }
 
 TEST(Quantile, SmallDataSetsAndMemory) {
-  for (unsigned mem = 1; mem <= 6; ++mem) {
+  // Minimum delta=mem value is 2 for k=1 scaling function.
+  for (unsigned mem = 2; mem <= 6; ++mem) {
     for (unsigned N = 1; N <= 3; ++N) {
       TDigest::Memory memory0(mem), buffer(mem);
       TDigest t_digest0(memory0);

@@ -679,16 +679,16 @@ void ResultSet::ResultSetComparator<
 }
 
 template <typename BUFFER_ITERATOR_TYPE>
-ResultSet::ApproxMedianBuffers ResultSet::ResultSetComparator<
-    BUFFER_ITERATOR_TYPE>::materializeApproxMedianColumns() const {
-  ResultSet::ApproxMedianBuffers approx_median_materialized_buffers;
+ResultSet::ApproxQuantileBuffers ResultSet::ResultSetComparator<
+    BUFFER_ITERATOR_TYPE>::materializeApproxQuantileColumns() const {
+  ResultSet::ApproxQuantileBuffers approx_quantile_materialized_buffers;
   for (const auto& order_entry : order_entries_) {
-    if (result_set_->targets_[order_entry.tle_no - 1].agg_kind == kAPPROX_MEDIAN) {
-      approx_median_materialized_buffers.emplace_back(
-          materializeApproxMedianColumn(order_entry));
+    if (result_set_->targets_[order_entry.tle_no - 1].agg_kind == kAPPROX_QUANTILE) {
+      approx_quantile_materialized_buffers.emplace_back(
+          materializeApproxQuantileColumn(order_entry));
     }
   }
-  return approx_median_materialized_buffers;
+  return approx_quantile_materialized_buffers;
 }
 
 template <typename BUFFER_ITERATOR_TYPE>
@@ -726,19 +726,19 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeCountDistinctCo
   return count_distinct_materialized_buffer;
 }
 
-double ResultSet::calculateQuantile(quantile::TDigest* const t_digest, double const q) {
+double ResultSet::calculateQuantile(quantile::TDigest* const t_digest) {
   static_assert(sizeof(int64_t) == sizeof(quantile::TDigest*));
-  CHECK(t_digest) << "t_digest=" << (void*)t_digest << ", q=" << q;
+  CHECK(t_digest);
   t_digest->mergeBuffer();
-  double const median = t_digest->quantile(q);
-  return boost::math::isnan(median) ? NULL_DOUBLE : median;
+  double const quantile = t_digest->quantile();
+  return boost::math::isnan(quantile) ? NULL_DOUBLE : quantile;
 }
 
 template <typename BUFFER_ITERATOR_TYPE>
-ResultSet::ApproxMedianBuffers::value_type
-ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeApproxMedianColumn(
+ResultSet::ApproxQuantileBuffers::value_type
+ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeApproxQuantileColumn(
     const Analyzer::OrderEntry& order_entry) const {
-  ResultSet::ApproxMedianBuffers::value_type materialized_buffer(
+  ResultSet::ApproxQuantileBuffers::value_type materialized_buffer(
       result_set_->query_mem_desc_.getEntryCount());
   const size_t size = permutation_.size();
   const auto work = [&](const size_t start, const size_t end) {
@@ -750,9 +750,8 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeApproxMedianCol
       const auto value = buffer_itr_.getColumnInternal(
           storage->buff_, off, order_entry.tle_no - 1, storage_lookup_result);
       materialized_buffer[permuted_idx] =
-          value.i1
-              ? calculateQuantile(reinterpret_cast<quantile::TDigest*>(value.i1), 0.5)
-              : NULL_DOUBLE;
+          value.i1 ? calculateQuantile(reinterpret_cast<quantile::TDigest*>(value.i1))
+                   : NULL_DOUBLE;
     }
   };
   if (single_threaded_) {
@@ -780,7 +779,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
   const auto fixedup_lhs = lhs_storage_lookup_result.fixedup_entry_idx;
   const auto fixedup_rhs = rhs_storage_lookup_result.fixedup_entry_idx;
   size_t materialized_count_distinct_buffer_idx{0};
-  size_t materialized_approx_median_buffer_idx{0};
+  size_t materialized_approx_quantile_buffer_idx{0};
 
   for (const auto& order_entry : order_entries_) {
     CHECK_GE(order_entry.tle_no, 1);
@@ -816,14 +815,14 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
         continue;
       }
       return (lhs_sz < rhs_sz) != order_entry.is_desc;
-    } else if (UNLIKELY(agg_info.agg_kind == kAPPROX_MEDIAN)) {
-      CHECK_LT(materialized_approx_median_buffer_idx,
-               approx_median_materialized_buffers_.size());
-      const auto& approx_median_materialized_buffer =
-          approx_median_materialized_buffers_[materialized_approx_median_buffer_idx];
-      const auto lhs_value = approx_median_materialized_buffer[lhs];
-      const auto rhs_value = approx_median_materialized_buffer[rhs];
-      ++materialized_approx_median_buffer_idx;
+    } else if (UNLIKELY(agg_info.agg_kind == kAPPROX_QUANTILE)) {
+      CHECK_LT(materialized_approx_quantile_buffer_idx,
+               approx_quantile_materialized_buffers_.size());
+      const auto& approx_quantile_materialized_buffer =
+          approx_quantile_materialized_buffers_[materialized_approx_quantile_buffer_idx];
+      const auto lhs_value = approx_quantile_materialized_buffer[lhs];
+      const auto rhs_value = approx_quantile_materialized_buffer[rhs];
+      ++materialized_approx_quantile_buffer_idx;
       if (lhs_value == rhs_value) {
         continue;
       } else if (!entry_ti.get_notnull()) {
@@ -1094,7 +1093,7 @@ std::tuple<std::vector<bool>, size_t> ResultSet::getSupportedSingleSlotTargetBit
   for (size_t target_idx = 0; target_idx < single_slot_targets.size(); target_idx++) {
     const auto& target = targets_[target_idx];
     if (single_slot_targets[target_idx] &&
-        (is_distinct_target(target) || target.agg_kind == kAPPROX_MEDIAN ||
+        (is_distinct_target(target) || target.agg_kind == kAPPROX_QUANTILE ||
          (target.is_agg && target.agg_kind == kSAMPLE && target.sql_type == kFLOAT))) {
       single_slot_targets[target_idx] = false;
       num_single_slot_targets--;

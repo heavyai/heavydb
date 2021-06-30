@@ -1028,7 +1028,8 @@ std::unique_ptr<const RexAgg> parse_aggregate_expr(const rapidjson::Value& expr)
   const auto distinct = json_bool(field(expr, "distinct"));
   const auto agg_ti = parse_type(field(expr, "type"));
   const auto operands = indices_from_json_array(field(expr, "operands"));
-  if (operands.size() > 1 && (operands.size() != 2 || agg != kAPPROX_COUNT_DISTINCT)) {
+  if (operands.size() > 1 && (operands.size() != 2 || (agg != kAPPROX_COUNT_DISTINCT &&
+                                                       agg != kAPPROX_QUANTILE))) {
     throw QueryNotSupported("Multiple arguments for aggregates aren't supported");
   }
   return std::unique_ptr<const RexAgg>(new RexAgg(agg, distinct, agg_ti, operands));

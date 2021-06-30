@@ -158,11 +158,8 @@ std::shared_ptr<Analyzer::Expr> LikelihoodExpr::deep_copy() const {
   return makeExpr<LikelihoodExpr>(arg->deep_copy(), likelihood);
 }
 std::shared_ptr<Analyzer::Expr> AggExpr::deep_copy() const {
-  return makeExpr<AggExpr>(type_info,
-                           aggtype,
-                           arg == nullptr ? nullptr : arg->deep_copy(),
-                           is_distinct,
-                           error_rate);
+  return makeExpr<AggExpr>(
+      type_info, aggtype, arg ? arg->deep_copy() : nullptr, is_distinct, arg1);
 }
 
 std::shared_ptr<Analyzer::Expr> CaseExpr::deep_copy() const {
@@ -1934,7 +1931,7 @@ std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_with_child_targetlist(
                            aggtype,
                            arg ? arg->rewrite_with_child_targetlist(tlist) : nullptr,
                            is_distinct,
-                           error_rate);
+                           arg1);
 }
 
 std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_agg_to_var(
@@ -2732,8 +2729,8 @@ std::string AggExpr::toString() const {
     case kAPPROX_COUNT_DISTINCT:
       agg = "APPROX_COUNT_DISTINCT";
       break;
-    case kAPPROX_MEDIAN:
-      agg = "APPROX_MEDIAN";
+    case kAPPROX_QUANTILE:
+      agg = "APPROX_QUANTILE";
       break;
     case kSINGLE_VALUE:
       agg = "SINGLE_VALUE";
