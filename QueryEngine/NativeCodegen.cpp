@@ -3054,15 +3054,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       return {};
   }
   return std::make_tuple(
-      CompilationResult{
-          co.device_type == ExecutorDeviceType::CPU
-              ? optimizeAndCodegenCPU(query_func, multifrag_query_func, live_funcs, co)
-              : optimizeAndCodegenGPU(query_func,
-                                      multifrag_query_func,
-                                      live_funcs,
-                                      is_group_by || ra_exe_unit.estimator,
-                                      cuda_mgr,
-                                      co),
+      CompilationResult{compilation_context,
           cgen_state_->getLiterals(),
           output_columnar,
           llvm_ir,

@@ -6,8 +6,6 @@
 
 #include <iostream>
 
-#include <level_zero/ze_api.h>
-
 L0BinResult spv_to_bin(const std::string& spv,
                        const std::string& name,
                        const unsigned block_size,
