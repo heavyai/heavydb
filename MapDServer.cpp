@@ -514,8 +514,8 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
   if (start_http_server) {
     std::shared_ptr<TServerTransport> http_st = http_socket;
     std::shared_ptr<TTransportFactory> http_tf{
-        std::make_shared<TBufferedTransportFactory>()};
-    std::shared_ptr<TProtocolFactory> http_pf{std::make_shared<TBinaryProtocolFactory>()};
+        std::make_shared<THttpServerTransportFactory>()};
+    std::shared_ptr<TProtocolFactory> http_pf{std::make_shared<TJSONProtocolFactory>()};
     g_thrift_http_server.reset(new TThreadedServer(processor, http_st, http_tf, http_pf));
     server_threads.insert(std::make_unique<std::thread>(
         start_server, g_thrift_http_server, prog_config_opts.http_port));
