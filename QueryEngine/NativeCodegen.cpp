@@ -3053,21 +3053,12 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       LOG(FATAL) << "Invalid device type";
       return {};
   }
-  return std::make_tuple(
-      CompilationResult{
-          co.device_type == ExecutorDeviceType::CPU
-              ? optimizeAndCodegenCPU(query_func, multifrag_query_func, live_funcs, co)
-              : optimizeAndCodegenGPU(query_func,
-                                      multifrag_query_func,
-                                      live_funcs,
-                                      is_group_by || ra_exe_unit.estimator,
-                                      cuda_mgr,
-                                      co),
-          cgen_state_->getLiterals(),
-          output_columnar,
-          llvm_ir,
-          std::move(gpu_smem_context)},
-      std::move(query_mem_desc));
+  return std::make_tuple(CompilationResult{compilation_context,
+                                           cgen_state_->getLiterals(),
+                                           output_columnar,
+                                           llvm_ir,
+                                           std::move(gpu_smem_context)},
+                         std::move(query_mem_desc));
 }
 
 void Executor::insertErrorCodeChecker(llvm::Function* query_func,
