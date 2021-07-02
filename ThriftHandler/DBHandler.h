@@ -618,6 +618,9 @@ class DBHandler : public OmniSciIf {
                             const Catalog_Namespace::SessionInfo& session_info,
                             const bool with_table_locks = true);
 
+  // Visible for use in tests.
+  void resizeDispatchQueue(size_t queue_size);
+
  protected:
   // Returns empty std::shared_ptr if !check_license && session.empty().
   std::shared_ptr<Catalog_Namespace::SessionInfo> get_session_ptr(

@@ -7208,3 +7208,7 @@ void DBHandler::executeDdl(
   }
   _return.setResultType(ExecutionResult::CalciteDdl);
 }
+
+void DBHandler::resizeDispatchQueue(size_t queue_size) {
+  dispatch_queue_ = std::make_unique<QueryDispatchQueue>(queue_size);
+}
