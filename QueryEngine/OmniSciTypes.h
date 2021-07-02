@@ -32,7 +32,10 @@ EXTENSION_NOINLINE int8_t* allocate_varlen_buffer(int64_t element_count,
 
 EXTENSION_NOINLINE void set_output_row_size(int64_t num_rows);
 
-using TextEncodingDict = int32_t;
+// https://www.fluentcpp.com/2018/04/06/strong-types-by-struct/
+struct TextEncodingDict {
+  int32_t value;
+};
 
 template <typename T>
 struct Array {
@@ -161,7 +164,11 @@ struct Column {
       throw std::runtime_error("column buffer index is out of range");
 #else
       static DEVICE T null_value;
-      set_null(null_value);
+      if constexpr (std::is_same_v<T, TextEncodingDict>) {
+        set_null(null_value.value);
+      } else {
+        set_null(null_value);
+      }
       return null_value;
 #endif
     }
@@ -170,7 +177,13 @@ struct Column {
   DEVICE int64_t size() const { return size_; }
 
   DEVICE bool isNull(int64_t index) const { return is_null(ptr_[index]); }
-  DEVICE void setNull(int64_t index) { set_null(ptr_[index]); }
+  DEVICE void setNull(int64_t index) {
+    if constexpr (std::is_same<T, TextEncodingDict>::value) {
+      set_null(ptr_[index].value);
+    } else {
+      set_null(ptr_[index]);
+    }
+  }
   DEVICE Column<T>& operator=(const Column<T>& other) {
 #ifndef __CUDACC__
     if (size() == other.size()) {

@@ -19,7 +19,6 @@
 #include "ExtensionFunctions.hpp"
 #include "ExtensionFunctionsBinding.h"
 #include "ExtensionFunctionsWhitelist.h"
-#include "TableFunctions/TableFunctions.hpp"
 
 #include <tuple>
 

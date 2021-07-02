@@ -20,7 +20,7 @@
 // clang-format off
 /*
   UDTF: row_copier(Column<double>, RowMultiplier) -> Column<double>
-  UDTF: row_copier_text(Column<TextEncodingDict>, RowMultiplier) -> Column<TextEncodingDict>
+  UDTF: row_copier_text(Column<TextEncodingDict>, RowMultiplier) -> Column<TextEncodingDict> | input_id=args<0>
 */
 // clang-format on
 EXTENSION_NOINLINE int32_t row_copier(const Column<double>& input_col,

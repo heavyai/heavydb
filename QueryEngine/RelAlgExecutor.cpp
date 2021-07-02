@@ -4242,8 +4242,15 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
         auto& input_expr = input_exprs[input_index];
         auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr);
         CHECK(col_var);
-        input_expr->set_type_info(
-            ti);  // ti is shared in between all columns in the same column_list
+
+        // avoid setting type info to ti here since ti doesn't have all the
+        // properties correctly set
+        auto type_info = input_expr->get_type_info();
+        type_info.set_subtype(type_info.get_type());  // set type to be subtype
+        type_info.set_type(ti.get_type());            // set type to column list
+        type_info.set_dimension(ti.get_dimension());
+        input_expr->set_type_info(type_info);
+
         input_col_exprs.push_back(col_var);
         input_index++;
       }
@@ -4251,18 +4258,18 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       auto& input_expr = input_exprs[input_index];
       auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr);
       CHECK(col_var);
-      input_expr->set_type_info(ti);
+
+      // same here! avoid setting type info to ti since it doesn't have all the
+      // properties correctly set
+      auto type_info = input_expr->get_type_info();
+      type_info.set_subtype(type_info.get_type());  // set type to be subtype
+      type_info.set_type(ti.get_type());            // set type to column list
+      input_expr->set_type_info(type_info);
+
       input_col_exprs.push_back(col_var);
       input_index++;
     } else {
       input_index++;
-    }
-    if (ti.is_subtype_dict_encoded_string()) {
-      if (dict_id.has_value()) {
-        LOG(WARNING) << "dict_id value is already set to " << *dict_id;
-      } else {
-        dict_id = ti.get_comp_param();
-      }
     }
   }
   CHECK_EQ(input_col_exprs.size(), rel_table_func->getColInputsSize());
@@ -4270,8 +4277,21 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   for (size_t i = 0; i < table_function_impl.getOutputsSize(); i++) {
     auto ti = table_function_impl.getOutputSQLType(i);
     if (ti.is_dict_encoded_string()) {
-      CHECK(dict_id.has_value());
-      ti.set_comp_param(*dict_id);
+      auto p = table_function_impl.getInputID(i);
+
+      int32_t input_pos = p.first;
+      // Iterate over the list of arguments to compute the offset. Use this offset to
+      // get the corresponding input
+      int32_t offset = 0;
+      for (int j = 0; j < input_pos; j++) {
+        const auto ti = table_function_type_infos[j];
+        offset += ti.is_column_list() ? ti.get_dimension() : 1;
+      }
+      input_pos = offset + p.second;
+
+      CHECK_LT(input_pos, input_exprs.size());
+      int32_t comp_param = input_exprs_owned[input_pos]->get_type_info().get_comp_param();
+      ti.set_comp_param(comp_param);
     }
     target_exprs_owned_.push_back(std::make_shared<Analyzer::ColumnVar>(ti, 0, i, -1));
     table_func_outputs.push_back(target_exprs_owned_.back().get());

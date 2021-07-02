@@ -6913,6 +6913,7 @@ void DBHandler::register_runtime_extension_functions(
         ThriftSerializers::from_thrift(it->inputArgTypes),
         ThriftSerializers::from_thrift(it->outputArgTypes),
         ThriftSerializers::from_thrift(it->sqlArgTypes),
+        it->annotations,
         /*is_runtime =*/true);
   }
 
