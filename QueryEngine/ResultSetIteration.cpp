@@ -976,7 +976,13 @@ struct GeoQueryOutputFetchHandler {
 
       std::array<VarlenDatumPtr, num_vals / 2> ad_arr;
       size_t ctr = 0;
-      for (size_t i = 0; i < vals_vector.size(); i += 2) {
+      for (size_t i = 0; i < vals_vector.size(); i += 2, ctr++) {
+        if (vals_vector[i] == 0) {
+          // projected null
+          CHECK(!geo_ti.get_notnull());
+          ad_arr[ctr] = std::make_unique<ArrayDatum>(0, nullptr, true);
+          continue;
+        }
         ad_arr[ctr] = datum_fetcher(vals_vector[i], vals_vector[i + 1]);
         // All fetched datums come in with is_null set to false
         if (!geo_ti.get_notnull()) {
@@ -994,7 +1000,6 @@ struct GeoQueryOutputFetchHandler {
           }
           ad_arr[ctr]->is_null = is_null;
         }
-        ctr++;
       }
       return ad_arr;
     };

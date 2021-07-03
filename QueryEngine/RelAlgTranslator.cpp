@@ -1610,6 +1610,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "ST_GeomFromText"sv,
                    "ST_GeogFromText"sv,
                    "ST_Point"sv,
+                   "ST_PointN"sv,  // TODO: where should this live?
                    "ST_Centroid"sv,
                    "ST_SetSRID"sv)) {
     SQLTypeInfo ti;

@@ -294,6 +294,7 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
     const auto arg_lvs = codegen(arg, true, co);
     auto geo_uoper_arg = dynamic_cast<const Analyzer::GeoUOper*>(arg);
     auto geo_binoper_arg = dynamic_cast<const Analyzer::GeoBinOper*>(arg);
+    auto geo_expr_arg = dynamic_cast<const Analyzer::GeoExpr*>(arg);
     // TODO(adb / d): Assuming no const array cols for geo (for now)
     if ((geo_uoper_arg || geo_binoper_arg) && arg_ti.is_geometry()) {
       // Extract arr sizes and put them in the map, forward arr pointers
@@ -303,6 +304,12 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
         auto size = arg_lvs[i];
         orig_arg_lvs.push_back(arr);
         const_arr_size[arr] = size;
+      }
+    } else if (geo_expr_arg) {
+      CHECK(geo_expr_arg->get_type_info().get_type() == kPOINT);
+      CHECK_EQ(arg_lvs.size(), size_t(2));
+      for (size_t j = 0; j < arg_lvs.size(); j++) {
+        orig_arg_lvs.push_back(arg_lvs[j]);
       }
     } else if (arg_ti.is_geometry()) {
       CHECK_EQ(static_cast<size_t>(arg_ti.get_physical_coord_cols()), arg_lvs.size());
@@ -585,6 +592,19 @@ llvm::Value* CodeGenerator::codegenFunctionOperNullArg(
     const auto& arg_ti = arg->get_type_info();
     physical_coord_cols = arg_ti.get_physical_coord_cols();
     if (arg_ti.get_notnull()) {
+      continue;
+    }
+    if (dynamic_cast<const Analyzer::GeoExpr*>(arg)) {
+      CHECK(arg_ti.is_geometry() && arg_ti.get_type() == kPOINT);
+      auto is_null_lv = cgen_state_->ir_builder_.CreateICmp(
+          llvm::CmpInst::ICMP_EQ,
+          orig_arg_lvs[j],
+          llvm::ConstantPointerNull::get(  // TODO: centralize logic; in geo expr?
+              arg_ti.get_compression() == kENCODING_GEOINT
+                  ? llvm::Type::getInt32PtrTy(cgen_state_->context_)
+                  : llvm::Type::getDoublePtrTy(cgen_state_->context_)));
+      one_arg_null = cgen_state_->ir_builder_.CreateOr(one_arg_null, is_null_lv);
+      physical_coord_cols = 2;  // number of lvs to advance
       continue;
     }
 #ifdef ENABLE_GEOS
@@ -1175,6 +1195,17 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
       }
 
     } else if (arg_ti.is_geometry()) {
+      if (dynamic_cast<const Analyzer::GeoExpr*>(arg)) {
+        auto ptr_lv = cgen_state_->ir_builder_.CreateBitCast(
+            orig_arg_lvs[k], llvm::Type::getInt8PtrTy(cgen_state_->context_));
+        args.push_back(ptr_lv);
+        // TODO: remove when we normalize extension functions geo sizes to int32
+        auto size_lv = cgen_state_->ir_builder_.CreateSExt(
+            orig_arg_lvs[k + 1], llvm::Type::getInt64Ty(cgen_state_->context_));
+        args.push_back(size_lv);
+        j++;
+        continue;
+      }
       // Coords
       bool const_arr = (const_arr_size.count(orig_arg_lvs[k]) > 0);
       // NOTE(adb): We're generating code to handle the TINYINT array only -- the actual
