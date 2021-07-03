@@ -233,6 +233,7 @@ struct CgenState {
       const bool has_struct_return = false) {
     std::vector<llvm::Type*> arg_types;
     for (const auto arg : args) {
+      CHECK(arg);
       arg_types.push_back(arg->getType());
     }
     auto func_ty = llvm::FunctionType::get(ret_type, arg_types, false);

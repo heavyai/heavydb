@@ -33,16 +33,15 @@ class StartEndPoint : public Codegen {
 
   SQLTypeInfo getNullType() const final { return SQLTypeInfo(kNULLT); }
 
-  const Analyzer::Expr* getPositionOperand() const final { return nullptr; }
+  const Analyzer::Expr* getPositionOperand() const final {
+    return operator_->getOperand(0);
+  }
 
   const Analyzer::Expr* getOperand(const size_t index) final {
     CHECK_EQ(operator_->size(), size_t(1));
     CHECK_EQ(index, size_t(0));
 
-    const auto geo_arg = operator_->getOperand(0);
-    const auto geo_arg_expr = dynamic_cast<const Analyzer::GeoExpr*>(geo_arg);
-    CHECK(geo_arg_expr) << geo_arg->toString();
-    return geo_arg;
+    return operator_->getOperand(0);
   }
 
   // returns arguments lvs and null lv
@@ -50,6 +49,35 @@ class StartEndPoint : public Codegen {
       const std::vector<llvm::Value*>& arg_lvs,
       llvm::Value* pos_lv,
       CgenState* cgen_state) final {
+    // TODO: add null handling
+    if (arg_lvs.size() == size_t(1)) {
+      // col byte stream from column on disk
+      auto operand = getOperand(0);
+      CHECK(operand);
+      const auto& geo_ti = operand->get_type_info();
+      CHECK(geo_ti.get_type() == kLINESTRING);
+
+      std::vector<llvm::Value*> array_operand_lvs;
+      array_operand_lvs.push_back(
+          cgen_state->emitExternalCall("array_buff",
+                                       llvm::Type::getInt8PtrTy(cgen_state->context_),
+                                       {arg_lvs.front(), pos_lv}));
+      const bool is_nullable = !geo_ti.get_notnull();
+      std::string size_fn_name = "array_size";
+      if (is_nullable) {
+        size_fn_name += "_nullable";
+      }
+      uint32_t elem_sz = 1;  // TINYINT coords array
+      std::vector<llvm::Value*> array_sz_args{
+          arg_lvs.front(), pos_lv, cgen_state->llInt(log2_bytes(elem_sz))};
+      if (is_nullable) {
+        array_sz_args.push_back(
+            cgen_state->llInt(static_cast<int32_t>(inline_int_null_value<int32_t>())));
+      }
+      array_operand_lvs.push_back(cgen_state->emitExternalCall(
+          size_fn_name, get_int_type(32, cgen_state->context_), array_sz_args));
+      return std::make_tuple(array_operand_lvs, nullptr);
+    }
     CHECK_EQ(arg_lvs.size(), size_t(2));  // ptr, size
     return std::make_tuple(arg_lvs, nullptr);
   }
@@ -74,13 +102,14 @@ class StartEndPoint : public Codegen {
       elem_size_bytes = 8;  // doubles
     }
     CHECK_GT(elem_size_bytes, 0);
-
+    const bool is_end_point = getName() == "ST_EndPoint";
     const auto num_elements_lv =
         builder.CreateSDiv(args.back(), cgen_state->llInt(elem_size_bytes));
-    const auto end_index_lv =
-        builder.CreateSub(num_elements_lv, cgen_state->llInt(int32_t(2)));
-    auto array_offset_lv = builder.CreateGEP(
-        array_buff_cast, end_index_lv, operator_->getName() + "_Offset");
+    const auto index_lv =
+        is_end_point ? builder.CreateSub(num_elements_lv, cgen_state->llInt(int32_t(2)))
+                     : cgen_state->llInt(int32_t(0));
+    auto array_offset_lv =
+        builder.CreateGEP(array_buff_cast, index_lv, operator_->getName() + "_Offset");
     return {array_offset_lv, args.back()};
   }
 };

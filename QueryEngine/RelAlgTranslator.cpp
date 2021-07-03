@@ -1609,10 +1609,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   if (func_resolve(rex_function->getName(),
                    "ST_GeomFromText"sv,
                    "ST_GeogFromText"sv,
-                   "ST_Point"sv,
-                   "ST_PointN"sv,  // TODO: where should this live?
                    "ST_Centroid"sv,
-                   "ST_SetSRID"sv)) {
+                   "ST_SetSRID"sv,
+                   "ST_Point"sv,  // TODO: where should this and below live?
+                   "ST_PointN"sv,
+                   "ST_StartPoint"sv,
+                   "ST_EndPoint"sv)) {
     SQLTypeInfo ti;
     return translateGeoProjection(rex_function, ti, false);
   }

@@ -180,7 +180,6 @@ class RelAlgTranslator {
   std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoFunctionArg(
       const RexScalar* rex_scalar,
       SQLTypeInfo& arg_ti,
-      int32_t& lindex,
       const bool with_bounds,
       const bool with_render_group,
       const bool expand_geo_col,
