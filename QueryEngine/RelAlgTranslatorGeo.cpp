@@ -968,12 +968,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
                                                /*with_bounds=*/false,
                                                /*with_render_group=*/false,
                                                /*expand_geo_col=*/true,
-                                               /*is_projection=*/false,
+                                               /*is_projection=*/true,
                                                /*use_geo_expressions=*/true);
-    if (arg_ti.get_type() != kPOINT) {
+    CHECK_EQ(new_geoargs.size(), size_t(1));
+    CHECK(new_geoargs.front());
+    const auto& arg_expr_ti = new_geoargs.front()->get_type_info();
+    if (arg_expr_ti.get_type() != kPOINT) {
       throw QueryNotSupported(rex_function->getName() + " expects a POINT");
     }
-    CHECK_EQ(new_geoargs.size(), size_t(1));
     auto function_ti = rex_function->getType();
     if (std::dynamic_pointer_cast<Analyzer::GeoOperator>(new_geoargs.front())) {
       function_ti.set_notnull(false);

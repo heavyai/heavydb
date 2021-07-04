@@ -1012,16 +1012,28 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
       process_row(1);
     }
 
-    ASSERT_EQ(
+    EXPECT_EQ(
         "POINT (2 2)",
         boost::get<std::string>(v<NullableString>(run_simple_agg(
             "SELECT ST_Point(id,id) FROM geospatial_test WHERE id = 2;", dt, false))));
-    ASSERT_EQ(
+    EXPECT_EQ(
         "POINT (2 2)",
         boost::get<std::string>(v<NullableString>(run_simple_agg(
             "SELECT ST_SetSRID(ST_Point(id,id),4326) FROM geospatial_test WHERE id = 2;",
             dt,
             false))));
+    EXPECT_EQ(
+        double(2),
+        v<double>(run_simple_agg(
+            "SELECT ST_X(ST_Point(id, id)) FROM geospatial_test WHERE id = 2;", dt)));
+    EXPECT_EQ(
+        double(3),
+        v<double>(run_simple_agg(
+            "SELECT ST_Y(ST_Point(id, id + 1)) FROM geospatial_test WHERE id = 2;", dt)));
+    EXPECT_EQ(
+        inline_fp_null_value<double>(),
+        v<double>(run_simple_agg(
+            "SELECT ST_Y(ST_Point(id, null)) FROM geospatial_test WHERE id = 2;", dt)));
   }
 }
 

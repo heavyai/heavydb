@@ -55,6 +55,16 @@ class PointAccessors : public Codegen {
     llvm::Value* array_buff_ptr{nullptr};
     llvm::Value* is_null{nullptr};
     if (arg_lvs.size() == 1) {
+      if (dynamic_cast<const Analyzer::GeoExpr*>(operand)) {
+        const auto ptr_type =
+            llvm::dyn_cast<llvm::PointerType>(arg_lvs.front()->getType());
+        CHECK(ptr_type);
+        const auto is_null_lv =
+            builder.CreateICmp(llvm::CmpInst::ICMP_EQ,
+                               arg_lvs.front(),
+                               llvm::ConstantPointerNull::get(ptr_type));
+        return std::make_tuple(arg_lvs, is_null_lv);
+      }
       // col byte stream, get the array buffer ptr and is null attributes and cache
       auto arr_load_lvs = CodeGenerator::codegenGeoArrayLoadAndNullcheck(
           arg_lvs.front(), pos_lv, geo_ti, cgen_state);
