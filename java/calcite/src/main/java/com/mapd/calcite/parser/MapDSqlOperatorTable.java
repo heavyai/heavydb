@@ -2056,74 +2056,74 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
   }
 
-  public static class KMeans extends SqlFunction {
-    public KMeans() {
-      super("K_MEANS",
-              SqlKind.OTHER_FUNCTION,
-              null,
-              null,
-              OperandTypes.family(signature()),
-              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
-    }
-    @Override
-    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      java.util.List<RelDataType> typeList = new java.util.ArrayList<RelDataType>();
-      java.util.List<java.lang.String> fieldNameList =
-              new java.util.ArrayList<java.lang.String>();
-      fieldNameList.add("out0");
-      fieldNameList.add("out1");
-      fieldNameList.add("out2");
-      fieldNameList.add("out3");
-      fieldNameList.add("out4");
-      fieldNameList.add("out5");
-      fieldNameList.add("out6");
-      fieldNameList.add("out7");
-      fieldNameList.add("out8");
-      fieldNameList.add("out9");
-      fieldNameList.add("out10");
-      fieldNameList.add("out11");
-      fieldNameList.add("out12");
-      fieldNameList.add("out13");
-      fieldNameList.add("out14");
-      fieldNameList.add("out15");
-      fieldNameList.add("out16");
-      fieldNameList.add("out17");
-      fieldNameList.add("out18");
-      fieldNameList.add("out19");
-      fieldNameList.add("out20");
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 0
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 1
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 2
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 3
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 4
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 5
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 6
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 7
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 8
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 9
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 10
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 11
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 12
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 13
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 14
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 15
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 16
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 17
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 18
-      typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 19
-      typeList.add(typeFactory.createSqlType(SqlTypeName.INTEGER));
-      return typeFactory.createStructType(typeList, fieldNameList);
-    }
-    private static java.util.List<SqlTypeFamily> signature() {
-      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
-      sig_family.add(SqlTypeFamily.CURSOR);
-      sig_family.add(SqlTypeFamily.INTEGER);
-      sig_family.add(SqlTypeFamily.INTEGER);
-      sig_family.add(SqlTypeFamily.INTEGER);
-      return sig_family;
-    }
-  }
+  // public static class KMeans extends SqlFunction {
+  //   public KMeans() {
+  //     super("K_MEANS",
+  //             SqlKind.OTHER_FUNCTION,
+  //             null,
+  //             null,
+  //             OperandTypes.family(signature()),
+  //             SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
+  //   }
+  //   @Override
+  //   public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+  //     final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+  //     java.util.List<RelDataType> typeList = new java.util.ArrayList<RelDataType>();
+  //     java.util.List<java.lang.String> fieldNameList =
+  //             new java.util.ArrayList<java.lang.String>();
+  //     fieldNameList.add("out0");
+  //     fieldNameList.add("out1");
+  //     fieldNameList.add("out2");
+  //     fieldNameList.add("out3");
+  //     fieldNameList.add("out4");
+  //     fieldNameList.add("out5");
+  //     fieldNameList.add("out6");
+  //     fieldNameList.add("out7");
+  //     fieldNameList.add("out8");
+  //     fieldNameList.add("out9");
+  //     fieldNameList.add("out10");
+  //     fieldNameList.add("out11");
+  //     fieldNameList.add("out12");
+  //     fieldNameList.add("out13");
+  //     fieldNameList.add("out14");
+  //     fieldNameList.add("out15");
+  //     fieldNameList.add("out16");
+  //     fieldNameList.add("out17");
+  //     fieldNameList.add("out18");
+  //     fieldNameList.add("out19");
+  //     fieldNameList.add("out20");
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 0
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 1
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 2
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 3
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 4
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 5
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 6
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 7
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 8
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 9
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 10
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 11
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 12
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 13
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 14
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 15
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 16
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 17
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 18
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.FLOAT)); // 19
+  //     typeList.add(typeFactory.createSqlType(SqlTypeName.INTEGER));
+  //     return typeFactory.createStructType(typeList, fieldNameList);
+  //   }
+  //   private static java.util.List<SqlTypeFamily> signature() {
+  //     java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
+  //     sig_family.add(SqlTypeFamily.CURSOR);
+  //     sig_family.add(SqlTypeFamily.INTEGER);
+  //     sig_family.add(SqlTypeFamily.INTEGER);
+  //     sig_family.add(SqlTypeFamily.INTEGER);
+  //     return sig_family;
+  //   }
+  // }
 
   // public static class DbScan extends SqlFunction {
   //   public DbScan() {
