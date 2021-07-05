@@ -1398,7 +1398,7 @@ int64_t DBHandler::process_geo_copy_from(const TSessionId& session_id) {
 void DBHandler::sql_execute_df(TDataFrame& _return,
                                const TSessionId& session,
                                const std::string& query_str,
-                               const TDeviceType::type device_type,
+                               const TDeviceType::type results_device_type,
                                const int32_t device_id,
                                const int32_t first_n,
                                const TArrowTransport::type transport_method) {
@@ -1406,8 +1406,9 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
   auto query_state = create_query_state(session_ptr, query_str);
   auto stdlog = STDLOG(session_ptr, query_state);
 
-  if (device_type == TDeviceType::GPU) {
-    const auto executor_device_type = session_ptr->get_executor_device_type();
+  const auto executor_device_type = session_ptr->get_executor_device_type();
+
+  if (results_device_type == TDeviceType::GPU) {
     if (executor_device_type != ExecutorDeviceType::GPU) {
       THROW_MAPD_EXCEPTION(std::string("GPU mode is not allowed in this session"));
     }
@@ -1453,8 +1454,10 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
                          query_ra,
                          query_state_proxy,
                          *session_ptr,
-                         device_type == TDeviceType::CPU ? ExecutorDeviceType::CPU
-                                                         : ExecutorDeviceType::GPU,
+                         executor_device_type,
+                         results_device_type == TDeviceType::CPU
+                             ? ExecutorDeviceType::CPU
+                             : ExecutorDeviceType::GPU,
                          static_cast<size_t>(device_id),
                          first_n,
                          transport_method);
@@ -5622,13 +5625,12 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                                    const std::string& query_ra,
                                    QueryStateProxy query_state_proxy,
                                    const Catalog_Namespace::SessionInfo& session_info,
-                                   const ExecutorDeviceType device_type,
+                                   const ExecutorDeviceType executor_device_type,
+                                   const ExecutorDeviceType results_device_type,
                                    const size_t device_id,
                                    const int32_t first_n,
                                    const TArrowTransport::type transport_method) const {
   const auto& cat = session_info.getCatalog();
-  CHECK(device_type == ExecutorDeviceType::CPU ||
-        session_info.get_executor_device_type() == ExecutorDeviceType::GPU);
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
@@ -5639,14 +5641,15 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                              query_state_proxy.getQueryState().shared_from_this());
   const auto& query_hints = ra_executor.getParsedQueryHints();
   const bool cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
-  CompilationOptions co = {cpu_mode_enabled ? ExecutorDeviceType::CPU : device_type,
-                           /*hoist_literals=*/true,
-                           ExecutorOptLevel::Default,
-                           g_enable_dynamic_watchdog,
-                           /*allow_lazy_fetch=*/true,
-                           /*filter_on_deleted_column=*/true,
-                           ExecutorExplainType::Default,
-                           intel_jit_profile_};
+  CompilationOptions co = {
+      cpu_mode_enabled ? ExecutorDeviceType::CPU : executor_device_type,
+      /*hoist_literals=*/true,
+      ExecutorOptLevel::Default,
+      g_enable_dynamic_watchdog,
+      /*allow_lazy_fetch=*/true,
+      /*filter_on_deleted_column=*/true,
+      ExecutorExplainType::Default,
+      intel_jit_profile_};
   ExecutionOptions eo = {
       g_enable_columnar_output,
       allow_multifrag_,
@@ -5681,7 +5684,7 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
   const auto converter =
       std::make_unique<ArrowResultSetConverter>(rs,
                                                 data_mgr_,
-                                                device_type,
+                                                results_device_type,
                                                 device_id,
                                                 getTargetNames(result.getTargetsMeta()),
                                                 first_n,
@@ -5696,7 +5699,7 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
       std::string(arrow_result.df_handle.begin(), arrow_result.df_handle.end());
   _return.df_buffer =
       std::string(arrow_result.df_buffer.begin(), arrow_result.df_buffer.end());
-  if (device_type == ExecutorDeviceType::GPU) {
+  if (results_device_type == ExecutorDeviceType::GPU) {
     std::lock_guard<std::mutex> map_lock(handle_to_dev_ptr_mutex_);
     CHECK(!ipc_handle_to_dev_ptr_.count(_return.df_handle));
     ipc_handle_to_dev_ptr_.insert(

@@ -763,7 +763,8 @@ class DBHandler : public OmniSciIf {
                           const std::string& query_ra,
                           QueryStateProxy query_state_proxy,
                           const Catalog_Namespace::SessionInfo& session_info,
-                          const ExecutorDeviceType device_type,
+                          const ExecutorDeviceType executor_device_type,
+                          const ExecutorDeviceType results_device_type,
                           const size_t device_id,
                           const int32_t first_n,
                           const TArrowTransport::type transport_method) const;
