@@ -48,6 +48,7 @@ using namespace std::literals;
 #include "QueryEngine/CompilationOptions.h"
 #include "Shared/ArrowUtil.h"
 #include "Shared/ThriftClient.h"
+#include "Shared/scope.h"
 
 #include "gen-cpp/OmniSci.h"
 
@@ -379,10 +380,9 @@ TEST_F(ArrowIpcBasic, IpcWire) {
   }
 }
 
-TEST_F(ArrowIpcBasic, IpcCpu) {
-  auto data_frame =
-      execute_arrow_ipc("SELECT * FROM arrow_ipc_test;", ExecutorDeviceType::CPU);
+namespace {
 
+void check_cpu_dataframe(TDataFrame& data_frame) {
   ASSERT_TRUE(data_frame.df_size > 0);
 
   auto df =
@@ -439,6 +439,29 @@ TEST_F(ArrowIpcBasic, IpcCpu) {
       ASSERT_EQ(str, truth_strings.GetString(i));
     }
   }
+}
+
+}  // namespace
+
+TEST_F(ArrowIpcBasic, IpcCpu) {
+  auto data_frame =
+      execute_arrow_ipc("SELECT * FROM arrow_ipc_test;", ExecutorDeviceType::CPU);
+
+  check_cpu_dataframe(data_frame);
+
+  deallocate_df(data_frame, ExecutorDeviceType::CPU);
+}
+
+TEST_F(ArrowIpcBasic, IpcCpuWithCpuExecution) {
+  g_client->set_execution_mode(g_session_id, TExecuteMode::CPU);
+  ScopeGuard reset_execution_mode = [&] {
+    g_client->set_execution_mode(g_session_id, TExecuteMode::GPU);
+  };
+
+  auto data_frame =
+      execute_arrow_ipc("SELECT * FROM arrow_ipc_test;", ExecutorDeviceType::CPU);
+
+  check_cpu_dataframe(data_frame);
 
   deallocate_df(data_frame, ExecutorDeviceType::CPU);
 }
@@ -548,6 +571,22 @@ TEST_F(ArrowIpcBasic, IpcGpu) {
   ASSERT_TRUE(false) << "Test should be skipped in CPU-only mode!";
 #endif
   deallocate_df(data_frame, ExecutorDeviceType::GPU);
+}
+
+TEST_F(ArrowIpcBasic, IpcGpuWithCpuQuery) {
+  const size_t device_id = 0;
+  if (g_cpu_only) {
+    LOG(ERROR) << "Test not valid in CPU mode.";
+    return;
+  }
+
+  g_client->set_execution_mode(g_session_id, TExecuteMode::CPU);
+  ScopeGuard reset_execution_mode = [&] {
+    g_client->set_execution_mode(g_session_id, TExecuteMode::GPU);
+  };
+
+  EXPECT_ANY_THROW(execute_arrow_ipc(
+      "SELECT * FROM arrow_ipc_test;", ExecutorDeviceType::GPU, device_id));
 }
 
 TEST_F(ArrowIpcBasic, EmptyResultSet) {
