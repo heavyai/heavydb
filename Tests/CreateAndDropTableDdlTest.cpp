@@ -1195,6 +1195,36 @@ class CreateForeignTableTest : public CreateAndDropTableDdlTest {
     dropTestUser();
     CreateAndDropTableDdlTest::TearDown();
   }
+
+  void assertOptionEquals(const foreign_storage::ForeignTable* table,
+                          const std::string& key,
+                          const std::string& value) {
+    if (const auto& opt_it = table->options.find(key); opt_it != table->options.end()) {
+      ASSERT_EQ(opt_it->second, value);
+    } else {
+      FAIL() << "Expected value for option " << key;
+    }
+  }
+
+  const foreign_storage::ForeignTable* getForeignTable(
+      const std::string& filename) const {
+    auto table = getCatalog().getMetadataForTable(filename, false);
+    CHECK(table);
+    auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(table);
+    return foreign_table;
+  }
+
+  std::unique_ptr<const foreign_storage::ForeignTable> getForeignTableFromStorage(
+      const std::string& filename) const {
+    return getCatalog().getForeignTableFromStorage(getForeignTable(filename)->tableId);
+  }
+
+  // Asserts option is as expected for in-memory table then again in catalog storage.
+  void assertOptionEquals(const std::string& key, const std::string& value) {
+    assertOptionEquals(getForeignTable("test_foreign_table"), key, value);
+    assertOptionEquals(
+        getForeignTableFromStorage("test_foreign_table").get(), key, value);
+  }
 };
 
 TEST_F(CreateForeignTableTest, NonExistentServer) {

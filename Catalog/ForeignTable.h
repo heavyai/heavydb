@@ -43,6 +43,7 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
   static constexpr const char* REFRESH_START_DATE_TIME_KEY = "REFRESH_START_DATE_TIME";
   static constexpr const char* REFRESH_INTERVAL_KEY = "REFRESH_INTERVAL";
   static constexpr const char* REFRESH_UPDATE_TYPE_KEY = "REFRESH_UPDATE_TYPE";
+  static constexpr const char* BUFFER_SIZE_KEY = "BUFFER_SIZE";
   // Option values
   static constexpr const char* ALL_REFRESH_UPDATE_TYPE = "ALL";
   static constexpr const char* APPEND_REFRESH_UPDATE_TYPE = "APPEND";
@@ -69,7 +70,8 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
   inline static const std::set<const char*> alterable_options{REFRESH_TIMING_TYPE_KEY,
                                                               REFRESH_START_DATE_TIME_KEY,
                                                               REFRESH_INTERVAL_KEY,
-                                                              REFRESH_UPDATE_TYPE_KEY};
+                                                              REFRESH_UPDATE_TYPE_KEY,
+                                                              BUFFER_SIZE_KEY};
 
   /**
     @brief Verifies the values for mapped options are valid.

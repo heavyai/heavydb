@@ -4690,6 +4690,10 @@ class AlterForeignTableTest : public ScheduledRefreshTest {
     }
     query += ");";
     sql(query);
+    populateForeignTable();
+  }
+
+  void populateForeignTable() {
     cat_ = &getCatalog();
     auto table = getCatalog().getMetadataForTable("test_foreign_table", false);
     CHECK(table);
@@ -4871,6 +4875,15 @@ TEST_F(AlterForeignTableTest, RefreshStartDateTimeScheduledInPastError) {
           start_time + "');",
       "Exception: REFRESH_START_DATE_TIME cannot be a past date time.");
   assertOptionNotEquals("REFRESH_START_DATE_TIME", start_time);
+}
+
+TEST_F(AlterForeignTableTest, CsvBufferSizeOption) {
+  sql("CREATE FOREIGN TABLE test_foreign_table (i INTEGER) SERVER omnisci_local_csv WITH "
+      "(file_path='" +
+      getDataFilesPath() + "/1.csv');");
+  populateForeignTable();
+  sql("ALTER FOREIGN TABLE test_foreign_table SET (BUFFER_SIZE = '4');");
+  assertOptionEquals("BUFFER_SIZE", "4");
 }
 
 // TODO(Misiu): Implement these skeleton tests for full alter foreign table support.
