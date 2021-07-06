@@ -623,8 +623,7 @@ InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
   auto outer_ti = lhs_ti;
   auto inner_ti = rhs_ti;
   const Analyzer::Expr* outer_expr{lhs};
-  if ((!lhs_col || (rhs_col && lhs_col->get_rte_idx() < rhs_col->get_rte_idx())) &&
-      (!rhs_col || (!lhs_col || lhs_col->get_rte_idx() < rhs_col->get_rte_idx()))) {
+  if (!lhs_col || (rhs_col && lhs_col->get_rte_idx() < rhs_col->get_rte_idx())) {
     inner_col = rhs_col;
     outer_col = lhs_col;
   } else {
