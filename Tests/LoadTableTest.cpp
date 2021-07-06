@@ -597,6 +597,240 @@ TEST_F(LoadTableTest, ArrowNoColumns) {
       "No columns to insert");
 }
 
+class ImportGeoTableTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("DROP TABLE IF EXISTS import_geo_table_test");
+  }
+
+  const std::string getGeoFileName() const {
+    auto geo_file_name =
+        boost::filesystem::absolute(
+            boost::filesystem::path(
+                "../../Tests/ImportGeoTableTest/datafiles/geospatial_poly.geojson"))
+            .string();
+    return geo_file_name;
+  }
+
+  const TCopyParams getCopyParams() const {
+    TCopyParams copy_params;
+    return copy_params;
+  }
+
+  const TCreateParams getCreateParams() const {
+    TCreateParams create_params;
+    create_params.is_replicated = false;
+    return create_params;
+  }
+
+  TColumnType getScalarColumnType(const std::string& name,
+                                  const TDatumType::type type) const {
+    TColumnType ct;
+    ct.col_name = name;
+    ct.col_type.type = type;
+    ct.col_type.encoding = TEncodingType::type::NONE;
+    ct.col_type.nullable = true;
+    ct.col_type.is_array = false;
+    ct.col_type.precision = 0;
+    ct.col_type.scale = 0;
+    ct.col_type.comp_param = 0;
+    ct.col_type.size = 0;
+    ct.is_reserved_keyword = false;
+    ct.src_name = name;
+    ct.is_system = false;
+    ct.is_physical = false;
+    ct.col_id = 0;
+    return ct;
+  };
+
+  TColumnType getPolyColumnType(const std::string& name) const {
+    TColumnType ct;
+    ct.col_name = name;
+    ct.col_type.type = TDatumType::type::POLYGON;
+    ct.col_type.encoding = TEncodingType::type::GEOINT;
+    ct.col_type.nullable = true;
+    ct.col_type.is_array = false;
+    ct.col_type.precision = 23;  // aka subtype = SQLTypes::kGEOMETRY (not the same as
+                                 // TDatumType::type::GEOMETRY)
+    ct.col_type.scale = 4326;    // aka output_srid = WGS84
+    ct.col_type.comp_param = 32;
+    ct.col_type.size = 0;
+    ct.is_reserved_keyword = false;
+    ct.src_name = name;
+    ct.is_system = false;
+    ct.is_physical = false;
+    ct.col_id = 0;
+    return ct;
+  };
+
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS import_geo_table_test");
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+TEST_F(ImportGeoTableTest, ImportGeoTableAuto) {
+  // geo import with empty row descriptor
+  // will automatically create table
+  // equivalent to COPY FROM WITH (geo='true')
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  TRowDescriptor row_descriptor;
+  EXPECT_NO_THROW(handler->import_geo_table(session,
+                                            "import_geo_table_test",
+                                            getGeoFileName(),
+                                            getCopyParams(),
+                                            row_descriptor,
+                                            getCreateParams()));
+  sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(10)}});
+  sqlAndCompareResult("SELECT trip FROM import_geo_table_test WHERE rowid=0", {{0.0f}});
+}
+
+TEST_F(ImportGeoTableTest, ImportGeoTableExplicit) {
+  // geo import with explicit row descriptor (e.g. Immerse import)
+  // must create table first
+  // correct types
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT),
+                                getPolyColumnType("omnisci_geo")};
+  EXPECT_NO_THROW(handler->create_table(session,
+                                        "import_geo_table_test",
+                                        row_descriptor,
+                                        TFileType::type::POLYGON,
+                                        getCreateParams()));
+  EXPECT_NO_THROW(handler->import_geo_table(session,
+                                            "import_geo_table_test",
+                                            getGeoFileName(),
+                                            getCopyParams(),
+                                            row_descriptor,
+                                            getCreateParams()));
+  sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(10)}});
+  sqlAndCompareResult("SELECT trip FROM import_geo_table_test WHERE rowid=0", {{0.0f}});
+}
+
+TEST_F(ImportGeoTableTest, ImportGeoTableOverride) {
+  // geo import with explicit row descriptor (e.g. Immerse import)
+  // must create table first
+  // type of column 'trip' overridden from FLOAT to INT (valid)
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::INT),
+                                getPolyColumnType("omnisci_geo")};
+  EXPECT_NO_THROW(handler->create_table(session,
+                                        "import_geo_table_test",
+                                        row_descriptor,
+                                        TFileType::type::POLYGON,
+                                        getCreateParams()));
+  EXPECT_NO_THROW(handler->import_geo_table(session,
+                                            "import_geo_table_test",
+                                            getGeoFileName(),
+                                            getCopyParams(),
+                                            row_descriptor,
+                                            getCreateParams()));
+  sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(10)}});
+  sqlAndCompareResult("SELECT trip FROM import_geo_table_test WHERE rowid=0", {{i(0)}});
+}
+
+TEST_F(ImportGeoTableTest, ImportGeoTableTypeMismatch1) {
+  // geo import with explicit row descriptor (e.g. Immerse import)
+  // must create table first
+  // types of columns swapped (possible in Immerse for now)
+  // import will not fail, but should reject all rows
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  TRowDescriptor row_descriptor{
+      getPolyColumnType("trip"),
+      getScalarColumnType("omnisci_geo", TDatumType::type::FLOAT)};
+  EXPECT_NO_THROW(handler->create_table(session,
+                                        "import_geo_table_test",
+                                        row_descriptor,
+                                        TFileType::type::POLYGON,
+                                        getCreateParams()));
+  EXPECT_THROW(handler->import_geo_table(session,
+                                         "import_geo_table_test",
+                                         getGeoFileName(),
+                                         getCopyParams(),
+                                         row_descriptor,
+                                         getCreateParams()),
+               TOmniSciException);
+  sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
+}
+
+TEST_F(ImportGeoTableTest, ImportGeoTableFailTypeMismatch2) {
+  // geo import with explicit row descriptor (e.g. Immerse import)
+  // must create table first
+  // column types valid but columns swapped (possible in Immerse for now)
+  // import will not fail, but should reject all rows
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  TRowDescriptor row_descriptor{
+      getScalarColumnType("omnisci_geo", TDatumType::type::FLOAT),
+      getPolyColumnType("trip")};
+  EXPECT_NO_THROW(handler->create_table(session,
+                                        "import_geo_table_test",
+                                        row_descriptor,
+                                        TFileType::type::POLYGON,
+                                        getCreateParams()));
+  EXPECT_THROW(handler->import_geo_table(session,
+                                         "import_geo_table_test",
+                                         getGeoFileName(),
+                                         getCopyParams(),
+                                         row_descriptor,
+                                         getCreateParams()),
+               TOmniSciException);
+  sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
+}
+
+TEST_F(ImportGeoTableTest, ImportGeoTableFailNoGeoColumns) {
+  // geo import with explicit row descriptor (e.g. Immerse import)
+  // must create table first
+  // no geo columns in row descriptor
+  // import should fail
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT)};
+  EXPECT_NO_THROW(handler->create_table(session,
+                                        "import_geo_table_test",
+                                        row_descriptor,
+                                        TFileType::type::POLYGON,
+                                        getCreateParams()));
+  EXPECT_THROW(handler->import_geo_table(session,
+                                         "import_geo_table_test",
+                                         getGeoFileName(),
+                                         getCopyParams(),
+                                         row_descriptor,
+                                         getCreateParams()),
+               TOmniSciException);
+  sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
+}
+
+TEST_F(ImportGeoTableTest, ImportGeoTableFailTooManyGeoColumns) {
+  // geo import with explicit row descriptor (e.g. Immerse import)
+  // must create table first
+  // more than one geo column in row descriptor
+  // import should fail
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT),
+                                getPolyColumnType("omnisci_geo1"),
+                                getPolyColumnType("omnisci_geo2")};
+  EXPECT_NO_THROW(handler->create_table(session,
+                                        "import_geo_table_test",
+                                        row_descriptor,
+                                        TFileType::type::POLYGON,
+                                        getCreateParams()));
+  EXPECT_THROW(handler->import_geo_table(session,
+                                         "import_geo_table_test",
+                                         getGeoFileName(),
+                                         getCopyParams(),
+                                         row_descriptor,
+                                         getCreateParams()),
+               TOmniSciException);
+  sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
+}
+
 #ifdef HAVE_AWS_S3
 class ThriftDetectServerPrivilegeTest : public DBHandlerTestFixture {
  protected:

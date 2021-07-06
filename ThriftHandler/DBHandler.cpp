@@ -5142,30 +5142,25 @@ void DBHandler::import_geo_table(const TSessionId& session,
     }
 
     if (is_geo_layer) {
-      // Final check to ensure that we actually have a geo column
-      // of the expected name and type before doing the actual import,
-      // in case the user naively overrode the name or type in Immerse
-      // Preview (which as of 6/8/18 it still allows you to do).
-      // This avoids a fatal assert later when it fails to find the
-      // column. We should make Immerse more robust and disallow this.
-      bool have_geo_column_with_correct_name = false;
-      for (const auto& r : rd) {
-        if (TTypeInfo_IsGeo(r.col_type.type)) {
-          // TODO(team): allow user to override the geo column name
-          if (r.col_name == OMNISCI_GEO_PREFIX) {
-            have_geo_column_with_correct_name = true;
-          } else if (r.col_name == LEGACY_GEO_PREFIX) {
-            CHECK(colname_to_src.find(r.col_name) != colname_to_src.end());
-            // Normalize column names for geo append with legacy column naming scheme
-            colname_to_src[r.col_name] = r.col_name;
-            have_geo_column_with_correct_name = true;
-          }
+      // Final check to ensure that we have exactly one geo column
+      // before doing the actual import, in case the user naively
+      // overrode the types in Immerse Preview (which as of 6/17/21
+      // it still allows you to do). We should make Immerse more
+      // robust and disallow re-typing of columns to/from geo types
+      // completely. Currently, if multiple columns are re-typed
+      // such that there is still exactly one geo column (but it's
+      // the wrong one) then this test will pass, but the import
+      // will then reject some (or more likely all) of the rows.
+      int num_geo_columns{0};
+      for (auto const& col : rd) {
+        if (TTypeInfo_IsGeo(col.col_type.type)) {
+          num_geo_columns++;
         }
       }
-      if (!have_geo_column_with_correct_name) {
-        std::string exception_message = "Table " + this_table_name +
-                                        " does not have a geo column with name '" +
-                                        OMNISCI_GEO_PREFIX + "'. Import aborted!";
+      if (num_geo_columns != 1) {
+        std::string exception_message =
+            "Table '" + this_table_name +
+            "' must have exactly one geo column. Import aborted!";
         caught_exception_messages.emplace_back(exception_message);
         continue;
       }

@@ -2214,6 +2214,12 @@ static ImportStatus import_thread_delimited(
   return thread_import_status;
 }
 
+class ColumnNotGeoError : public std::runtime_error {
+ public:
+  ColumnNotGeoError(const std::string& column_name)
+      : std::runtime_error("Column '" + column_name + "' is not a geo column") {}
+};
+
 static ImportStatus import_thread_shapefile(
     int thread_id,
     Importer* importer,
@@ -2477,7 +2483,10 @@ static ImportStatus import_thread_shapefile(
             auto const& field_name = cit->second;
 
             auto const fit = fieldNameToIndexMap.find(field_name);
-            CHECK(fit != fieldNameToIndexMap.end());
+            if (fit == fieldNameToIndexMap.end()) {
+              throw ColumnNotGeoError(cd->columnName);
+            }
+
             auto const& field_index = fit->second;
             CHECK(field_index < fieldNameToIndexMap.size());
 
@@ -2556,6 +2565,9 @@ static ImportStatus import_thread_shapefile(
         if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
           throw e;
         }
+      } catch (ColumnNotGeoError& e) {
+        LOG(ERROR) << "Input exception thrown: " << e.what() << ". Aborting import.";
+        throw std::runtime_error(e.what());
       } catch (const std::exception& e) {
         for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
           import_buffers[col_idx_to_pop]->pop_value();
