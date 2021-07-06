@@ -1,0 +1,9 @@
+Struct Geofence
+===============
+
+.. doxygenstruct:: Geofence
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

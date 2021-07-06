@@ -1,0 +1,9 @@
+Class foreign_storage::GeospatialEncoder
+========================================
+
+.. doxygenclass:: foreign_storage::GeospatialEncoder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

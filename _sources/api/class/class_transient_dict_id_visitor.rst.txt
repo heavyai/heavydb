@@ -1,0 +1,9 @@
+Class TransientDictIdVisitor
+============================
+
+.. doxygenclass:: TransientDictIdVisitor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

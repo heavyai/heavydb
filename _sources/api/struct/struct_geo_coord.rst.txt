@@ -1,0 +1,9 @@
+Struct GeoCoord
+===============
+
+.. doxygenstruct:: GeoCoord
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

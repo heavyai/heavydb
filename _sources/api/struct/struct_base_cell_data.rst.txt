@@ -1,0 +1,9 @@
+Struct BaseCellData
+===================
+
+.. doxygenstruct:: BaseCellData
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

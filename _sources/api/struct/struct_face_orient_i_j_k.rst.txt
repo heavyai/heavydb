@@ -1,0 +1,9 @@
+Struct FaceOrientIJK
+====================
+
+.. doxygenstruct:: FaceOrientIJK
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

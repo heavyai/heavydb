@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 9331ba9
+                5.7.0dev f4f962e
               </div>
             
           
@@ -766,6 +766,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_too_many_hash_entries.html">Class TooManyHashEntries</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_too_many_literals.html">Class TooManyLiterals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_tracking_processor.html">Class TrackingProcessor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_transient_dict_id_visitor.html">Class TransientDictIdVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_transient_string_literals_visitor.html">Class TransientStringLiteralsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_udf_clang_driver.html">Class UdfClangDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_udf_compiler.html">Class UdfCompiler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_update_log_for_fragment.html">Class UpdateLogForFragment</a></li>
@@ -839,6 +841,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_any.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::Any</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_approx_count_distinct.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ApproxCountDistinct</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_approx_median.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ApproxMedian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_approx_quantile.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ApproxQuantile</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_array_length.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ArrayLength</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_cast_to_geography.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::CastToGeography</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_char_length.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::CharLength</a></li>
@@ -1083,11 +1086,13 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_storage_mgr.html">Class foreign_storage::ForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_table_refresh_scheduler.html">Class foreign_storage::ForeignTableRefreshScheduler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_table_schema.html">Class foreign_storage::ForeignTableSchema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_geospatial_encoder.html">Class foreign_storage::GeospatialEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_integral_fixed_length_bounds_validator.html">Class foreign_storage::IntegralFixedLengthBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_mock_foreign_data_wrapper.html">Class foreign_storage::MockForeignDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_multi_file_reader.html">Class foreign_storage::MultiFileReader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_odbc_geospatial_encoder.html">Class foreign_storage::OdbcGeospatialEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_array_encoder.html">Class foreign_storage::ParquetArrayEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_data_wrapper.html">Class foreign_storage::ParquetDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_from_timestamp_encoder.html">Class foreign_storage::ParquetDateFromTimestampEncoder</a></li>
@@ -1455,6 +1460,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_n_points.html">Class spatial_type::NPoints</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_n_rings.html">Class spatial_type::NRings</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_point_accessors.html">Class spatial_type::PointAccessors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_point_constructor.html">Class spatial_type::PointConstructor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_point_n.html">Class spatial_type::PointN</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_start_end_point.html">Class spatial_type::StartEndPoint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classstring__view__unordered__map.html">Class string_view_unordered_map</a></li>
@@ -1492,6 +1498,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_arrow_result_set_converter_1_1_serialized_arrow_output.html">Struct ArrowResultSetConverter::SerializedArrowOutput</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_auth_metadata.html">Struct AuthMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_automatic_i_r_metadata_guard_1_1_instruction_info.html">Struct AutomaticIRMetadataGuard::InstructionInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_base_cell_data.html">Struct BaseCellData</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_base_cell_rotation.html">Struct BaseCellRotation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_bounds.html">Struct Bounds</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_buffer___namespace_1_1_buffer_seg.html">Struct Buffer_Namespace::BufferSeg</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_buffer_range.html">Struct BufferRange</a></li>
@@ -1522,6 +1530,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_composite_key_info.html">Struct CompositeKeyInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_connection_info.html">Struct ConnectionInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_converter_create_parameter.html">Struct ConverterCreateParameter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_coord_i_j.html">Struct CoordIJ</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_coord_i_j_k.html">Struct CoordIJK</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_count_distinct_descriptor.html">Struct CountDistinctDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_cubin_result.html">Struct CubinResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_cuda_mgr___namespace_1_1_device_properties.html">Struct CudaMgr_Namespace::DeviceProperties</a></li>
@@ -1556,6 +1566,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_explain_info.html">Struct ExplainInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_external_query_output_spec.html">Struct ExternalQueryOutputSpec</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_external_query_table.html">Struct ExternalQueryTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_face_i_j_k.html">Struct FaceIJK</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_face_orient_i_j_k.html">Struct FaceOrientIJK</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fetch_result.html">Struct FetchResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_disk_cache_config.html">Struct File_Namespace::DiskCacheConfig</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_file___namespace_1_1_epoched_page.html">Struct File_Namespace::EpochedPage</a></li>
@@ -1589,7 +1601,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_free_deleter.html">Struct FreeDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_function_1_1_named_arg.html">Struct Function::NamedArg</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_generic_key_handler.html">Struct GenericKeyHandler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_boundary.html">Struct GeoBoundary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_converter_factory.html">Struct GeoConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_coord.html">Struct GeoCoord</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_line_string.html">Struct GeoLineString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_line_string_target_value.html">Struct GeoLineStringTargetValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_line_string_target_value_ptr.html">Struct GeoLineStringTargetValuePtr</a></li>
@@ -1625,6 +1639,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_wkt_serializer_3_01k_m_u_l_t_i_p_o_l_y_g_o_n_01_4.html">Struct GeoWktSerializer&lt; kMULTIPOLYGON &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_wkt_serializer_3_01k_p_o_i_n_t_01_4.html">Struct GeoWktSerializer&lt; kPOINT &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_wkt_serializer_3_01k_p_o_l_y_g_o_n_01_4.html">Struct GeoWktSerializer&lt; kPOLYGON &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_geofence.html">Struct Geofence</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geospatial_1_1anonymous__namespace_02_types_8cpp_03_1_1_hex_digit_to_decimal_table.html">Struct Geospatial::anonymous_namespace{Types.cpp}::HexDigitToDecimalTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_gpu_group_by_buffers.html">Struct GpuGroupByBuffers</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_group_by_buffer_layout_info.html">Struct GroupByBufferLayoutInfo</a></li>
@@ -1659,6 +1674,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_key_reseter.html">Struct KeyReseter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_keyless_info.html">Struct KeylessInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_link_descriptor.html">Struct LinkDescriptor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_linked_geo_coord.html">Struct LinkedGeoCoord</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_linked_geo_loop.html">Struct LinkedGeoLoop</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_linked_geo_polygon.html">Struct LinkedGeoPolygon</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_numeric_converter_factory.html">Struct NumericConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_numeric_value_converter.html">Struct NumericValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_object_role_descriptor.html">Struct ObjectRoleDescriptor</a></li>
@@ -1739,6 +1757,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_varlen_datum.html">Struct VarlenDatum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_vec2d.html">Struct Vec2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_vec3_d.html">Struct Vec3D</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_view_privileges.html">Struct ViewPrivileges</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_window_function_context_1_1_aggregate_state.html">Struct WindowFunctionContext::AggregateState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_arrow_importer_8h_03_1_1_arrow_value.html">Struct anonymous_namespace{ArrowImporter.h}::ArrowValue</a></li>
@@ -1776,6 +1796,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_types_8cpp_03_1_1_bounding_box.html">Struct anonymous_namespace{Types.cpp}::BoundingBox</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_types_8cpp_03_1_1_coords.html">Struct anonymous_namespace{Types.cpp}::Coords</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1get__has__to_string.html">Struct anonymous_namespace{toString.h}::get_has_toString</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1has__print_to.html">Struct anonymous_namespace{toString.h}::has_printTo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1has__print_to_3_01_t_00_01decltype_07std_1_1declb85ded802e46a3d4cf7677008c393cdb.html">Struct anonymous_namespace{toString.h}::has_printTo&lt; T, decltype(std::declval&lt; T &gt;().printTo(std::declval&lt; std::ostream &amp; &gt;()), void())&gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1has__to_string.html">Struct anonymous_namespace{toString.h}::has_toString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02to_string_8h_03_1_1has__to_string_3_01_t_00_01decltype_07std_1_1dec934f37e70248688d220a4ef1ce6df4f0.html">Struct anonymous_namespace{toString.h}::has_toString&lt; T, decltype(std::declval&lt; T &gt;().toString(), void())&gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdict__ref__t.html">Struct dict_ref_t</a></li>
@@ -1961,7 +1983,7 @@
 <h1>Class foreign_storage::ParquetGeospatialEncoder<a class="headerlink" href="#class-foreign-storage-parquetgeospatialencoder" title="Permalink to this headline">¶</a></h1>
 <dl class="class">
 <dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoderE">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoderE"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoderE"></span><span id="foreign_storage::ParquetGeospatialEncoder"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder"></span><em class="property">class </em><code class="sig-name descname">ParquetGeospatialEncoder</code> : <em class="property">public</em> foreign_storage::<a class="reference internal" href="classforeign__storage_1_1_parquet_encoder.html#_CPPv4N15foreign_storage14ParquetEncoderE" title="foreign_storage::ParquetEncoder">ParquetEncoder</a><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoderE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoderE"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoderE"></span><span id="foreign_storage::ParquetGeospatialEncoder"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder"></span><em class="property">class </em><code class="sig-name descname">ParquetGeospatialEncoder</code> : <em class="property">public</em> foreign_storage::<a class="reference internal" href="classforeign__storage_1_1_parquet_encoder.html#_CPPv4N15foreign_storage14ParquetEncoderE" title="foreign_storage::ParquetEncoder">ParquetEncoder</a>, <em class="property">public</em> foreign_storage::<a class="reference internal" href="classforeign__storage_1_1_geospatial_encoder.html#_CPPv4N15foreign_storage17GeospatialEncoderE" title="foreign_storage::GeospatialEncoder">GeospatialEncoder</a><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoderE" title="Permalink to this definition">¶</a><br /></dt>
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
@@ -1977,267 +1999,6 @@
 <dl class="function">
 <dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder10appendDataEPK7int16_tPK7int16_tK7int64_tK7int64_tKbP6int8_t">
 <span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder10appendDataEPK7int16_tPK7int16_tK7int64_tK7int64_tKbP6int8_t"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder10appendDataEPK7int16_tPK7int16_tK7int64_tK7int64_tKbP6int8_t"></span><span id="foreign_storage::ParquetGeospatialEncoder::appendData__int16_tCP.int16_tCP.int64_tC.int64_tC.bC.int8_tP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a13680e88ee79ac99302ec441005e34f1"></span>void <code class="sig-name descname">appendData</code><span class="sig-paren">(</span><em class="property">const</em> int16_t *<em>def_levels</em>, <em class="property">const</em> int16_t *<em>rep_levels</em>, <em class="property">const</em> int64_t <em>values_read</em>, <em class="property">const</em> int64_t <em>levels_read</em>, <em class="property">const</em> bool <em>is_last_batch</em>, int8_t *<em>values</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder10appendDataEPK7int16_tPK7int16_tK7int64_tK7int64_tKbP6int8_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Types</p>
-<dl class="enum">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder13GeoColumnTypeE">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder13GeoColumnTypeE"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder13GeoColumnTypeE"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a216c3c97017b044fd5c3bc89fcdb0c52"></span><em class="property">enum </em><code class="sig-name descname">GeoColumnType</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder13GeoColumnTypeE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p><em>Values:</em></p>
-<dl class="enumerator">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder6COORDSE">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder6COORDSE"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder6COORDSE"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a216c3c97017b044fd5c3bc89fcdb0c52adb28815034e0944fc5661c55d488f8fc"></span><code class="sig-name descname">COORDS</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder6COORDSE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="enumerator">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder6BOUNDSE">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder6BOUNDSE"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder6BOUNDSE"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a216c3c97017b044fd5c3bc89fcdb0c52a025aacffa0172af4ba398a5755ad6cb1"></span><code class="sig-name descname">BOUNDS</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder6BOUNDSE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="enumerator">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder10RING_SIZESE">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder10RING_SIZESE"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder10RING_SIZESE"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a216c3c97017b044fd5c3bc89fcdb0c52a051cbf90fba35edc639fce762fd2f5e2"></span><code class="sig-name descname">RING_SIZES</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder10RING_SIZESE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="enumerator">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder10POLY_RINGSE">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder10POLY_RINGSE"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder10POLY_RINGSE"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a216c3c97017b044fd5c3bc89fcdb0c52a2ee6ba461a7b787b4ecdb2ef817b009c"></span><code class="sig-name descname">POLY_RINGS</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder10POLY_RINGSE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="enumerator">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder12RENDER_GROUPE">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder12RENDER_GROUPE"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder12RENDER_GROUPE"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a216c3c97017b044fd5c3bc89fcdb0c52ab6734823ada55619e243063f82f7b90e"></span><code class="sig-name descname">RENDER_GROUP</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder12RENDER_GROUPE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-</dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Functions</p>
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder45appendBaseAndRenderGroupDataAndUpdateMetadataEK7int64_t">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder45appendBaseAndRenderGroupDataAndUpdateMetadataEK7int64_t"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder45appendBaseAndRenderGroupDataAndUpdateMetadataEK7int64_t"></span><span id="foreign_storage::ParquetGeospatialEncoder::appendBaseAndRenderGroupDataAndUpdateMetadata__int64_tC"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a3042c9f6a29c8da63ed0859d0cc2d466"></span>void <code class="sig-name descname">appendBaseAndRenderGroupDataAndUpdateMetadata</code><span class="sig-paren">(</span><em class="property">const</em> int64_t <em>levels_read</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder45appendBaseAndRenderGroupDataAndUpdateMetadataEK7int64_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK15foreign_storage24ParquetGeospatialEncoder31validateChunksAndMetadataSizingERNSt4listIN8Chunk_NS5ChunkEEERNSt4listINSt10unique_ptrI13ChunkMetadataEEEE">
-<span id="_CPPv3NK15foreign_storage24ParquetGeospatialEncoder31validateChunksAndMetadataSizingERNSt4listIN8Chunk_NS5ChunkEEERNSt4listINSt10unique_ptrI13ChunkMetadataEEEE"></span><span id="_CPPv2NK15foreign_storage24ParquetGeospatialEncoder31validateChunksAndMetadataSizingERNSt4listIN8Chunk_NS5ChunkEEERNSt4listINSt10unique_ptrI13ChunkMetadataEEEE"></span><span id="foreign_storage::ParquetGeospatialEncoder::validateChunksAndMetadataSizing__std::list:Chunk_NS::Chunk:R.std::list:std::unique_ptr:ChunkMetadata::RC"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a95ce79b33e5dc325ec3e8404ec9556ec"></span>void <code class="sig-name descname">validateChunksAndMetadataSizing</code><span class="sig-paren">(</span>std::list&lt;Chunk_NS::<a class="reference internal" href="class_chunk___n_s_1_1_chunk.html#_CPPv4N8Chunk_NS5ChunkE" title="Chunk_NS::Chunk">Chunk</a>&gt; &amp;<em>chunks</em>, std::list&lt;std::unique_ptr&lt;<a class="reference internal" href="../struct/struct_chunk_metadata.html#_CPPv413ChunkMetadata" title="ChunkMetadata">ChunkMetadata</a>&gt;&gt; &amp;<em>chunk_metadata</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage24ParquetGeospatialEncoder31validateChunksAndMetadataSizingERNSt4listIN8Chunk_NS5ChunkEEERNSt4listINSt10unique_ptrI13ChunkMetadataEEEE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder42appendArrayDatumsToBufferAndUpdateMetadataEv">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder42appendArrayDatumsToBufferAndUpdateMetadataEv"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder42appendArrayDatumsToBufferAndUpdateMetadataEv"></span><span id="foreign_storage::ParquetGeospatialEncoder::appendArrayDatumsToBufferAndUpdateMetadata"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a2ed56ee8f0bb1868e94cd87799f576b9"></span>void <code class="sig-name descname">appendArrayDatumsToBufferAndUpdateMetadata</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder42appendArrayDatumsToBufferAndUpdateMetadataEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK15foreign_storage24ParquetGeospatialEncoder37appendToArrayEncoderAndUpdateMetadataERKNSt6vectorI10ArrayDatumEEP7EncoderP13ChunkMetadata">
-<span id="_CPPv3NK15foreign_storage24ParquetGeospatialEncoder37appendToArrayEncoderAndUpdateMetadataERKNSt6vectorI10ArrayDatumEEP7EncoderP13ChunkMetadata"></span><span id="_CPPv2NK15foreign_storage24ParquetGeospatialEncoder37appendToArrayEncoderAndUpdateMetadataERKNSt6vectorI10ArrayDatumEEP7EncoderP13ChunkMetadata"></span><span id="foreign_storage::ParquetGeospatialEncoder::appendToArrayEncoderAndUpdateMetadata__std::vector:ArrayDatum:CR.EncoderP.ChunkMetadataPC"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a84fc18a0c80faaa7728183d9d4405ada"></span>void <code class="sig-name descname">appendToArrayEncoderAndUpdateMetadata</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;ArrayDatum&gt; &amp;<em>datum_parse_buffer</em>, <a class="reference internal" href="class_encoder.html#_CPPv47Encoder" title="Encoder">Encoder</a> *<em>encoder</em>, <a class="reference internal" href="../struct/struct_chunk_metadata.html#_CPPv413ChunkMetadata" title="ChunkMetadata">ChunkMetadata</a> *<em>chunk_metadata</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage24ParquetGeospatialEncoder37appendToArrayEncoderAndUpdateMetadataERKNSt6vectorI10ArrayDatumEEP7EncoderP13ChunkMetadata" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder17processGeoElementENSt11string_viewE">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder17processGeoElementENSt11string_viewE"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder17processGeoElementENSt11string_viewE"></span><span id="foreign_storage::ParquetGeospatialEncoder::processGeoElement__std::string_view"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1affd092e257ecf8834e0ee591d3b6fa7d"></span>void <code class="sig-name descname">processGeoElement</code><span class="sig-paren">(</span>std::string_view <em>geo_string_view</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder17processGeoElementENSt11string_viewE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder21processNullGeoElementEv">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder21processNullGeoElementEv"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder21processNullGeoElementEv"></span><span id="foreign_storage::ParquetGeospatialEncoder::processNullGeoElement"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a13e90fdf9ace0a910bdda6efa112a6e6"></span>void <code class="sig-name descname">processNullGeoElement</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder21processNullGeoElementEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder17clearParseBuffersEv">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder17clearParseBuffersEv"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder17clearParseBuffersEv"></span><span id="foreign_storage::ParquetGeospatialEncoder::clearParseBuffers"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a49ed658d5f11565c457905036dcbf467"></span>void <code class="sig-name descname">clearParseBuffers</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder17clearParseBuffersEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder17clearDatumBuffersEv">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder17clearDatumBuffersEv"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder17clearDatumBuffersEv"></span><span id="foreign_storage::ParquetGeospatialEncoder::clearDatumBuffers"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1acabf9c04161eabca6b42486a116733a4"></span>void <code class="sig-name descname">clearDatumBuffers</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder17clearDatumBuffersEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4I0EN15foreign_storage24ParquetGeospatialEncoder27getIteratorForGeoColumnTypeENSt4listI1TE8iteratorERNSt4listI1TEEK8SQLTypesK13GeoColumnType">
-<span id="_CPPv3I0EN15foreign_storage24ParquetGeospatialEncoder27getIteratorForGeoColumnTypeERNSt4listI1TEEK8SQLTypesK13GeoColumnType"></span><span id="_CPPv2I0EN15foreign_storage24ParquetGeospatialEncoder27getIteratorForGeoColumnTypeERNSt4listI1TEEK8SQLTypesK13GeoColumnType"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1acd85bad0e3d01ba3cfcbb8c57b5f41ff"></span>template&lt;typename <code class="sig-name descname">T</code>&gt;<br />std::list&lt;<a class="reference internal" href="#_CPPv4I0EN15foreign_storage24ParquetGeospatialEncoder27getIteratorForGeoColumnTypeENSt4listI1TE8iteratorERNSt4listI1TEEK8SQLTypesK13GeoColumnType" title="foreign_storage::ParquetGeospatialEncoder::getIteratorForGeoColumnType::T">T</a>&gt;::iterator <code class="sig-name descname">getIteratorForGeoColumnType</code><span class="sig-paren">(</span>std::list&lt;<a class="reference internal" href="#_CPPv4I0EN15foreign_storage24ParquetGeospatialEncoder27getIteratorForGeoColumnTypeENSt4listI1TE8iteratorERNSt4listI1TEEK8SQLTypesK13GeoColumnType" title="foreign_storage::ParquetGeospatialEncoder::getIteratorForGeoColumnType::T">T</a>&gt; &amp;<em>list</em>, <em class="property">const</em> SQLTypes <em>column_type</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder13GeoColumnTypeE" title="foreign_storage::ParquetGeospatialEncoder::GeoColumnType">GeoColumnType</a> <em>geo_column</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN15foreign_storage24ParquetGeospatialEncoder27getIteratorForGeoColumnTypeENSt4listI1TE8iteratorERNSt4listI1TEEK8SQLTypesK13GeoColumnType" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder35initEncoderAndGetEncoderAndMetadataERNSt4listIN8Chunk_NS5ChunkEEERNSt4listINSt10unique_ptrI13ChunkMetadataEEEEK8SQLTypes13GeoColumnType">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder35initEncoderAndGetEncoderAndMetadataERNSt4listIN8Chunk_NS5ChunkEEERNSt4listINSt10unique_ptrI13ChunkMetadataEEEEK8SQLTypes13GeoColumnType"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder35initEncoderAndGetEncoderAndMetadataERNSt4listIN8Chunk_NS5ChunkEEERNSt4listINSt10unique_ptrI13ChunkMetadataEEEEK8SQLTypes13GeoColumnType"></span><span id="foreign_storage::ParquetGeospatialEncoder::initEncoderAndGetEncoderAndMetadata__std::list:Chunk_NS::Chunk:R.std::list:std::unique_ptr:ChunkMetadata::R.SQLTypesC.GeoColumnType"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a8fad2014df5cac37d8f4fcdb1b224e43"></span>std::tuple&lt;<a class="reference internal" href="class_encoder.html#_CPPv47Encoder" title="Encoder">Encoder</a> *, <a class="reference internal" href="../struct/struct_chunk_metadata.html#_CPPv413ChunkMetadata" title="ChunkMetadata">ChunkMetadata</a> *, <em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *&gt; <code class="sig-name descname">initEncoderAndGetEncoderAndMetadata</code><span class="sig-paren">(</span>std::list&lt;Chunk_NS::<a class="reference internal" href="class_chunk___n_s_1_1_chunk.html#_CPPv4N8Chunk_NS5ChunkE" title="Chunk_NS::Chunk">Chunk</a>&gt; &amp;<em>chunks</em>, std::list&lt;std::unique_ptr&lt;<a class="reference internal" href="../struct/struct_chunk_metadata.html#_CPPv413ChunkMetadata" title="ChunkMetadata">ChunkMetadata</a>&gt;&gt; &amp;<em>chunk_metadata</em>, <em class="property">const</em> SQLTypes <em>sql_type</em>, <a class="reference internal" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder13GeoColumnTypeE" title="foreign_storage::ParquetGeospatialEncoder::GeoColumnType">GeoColumnType</a> <em>geo_column_type</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder35initEncoderAndGetEncoderAndMetadataERNSt4listIN8Chunk_NS5ChunkEEERNSt4listINSt10unique_ptrI13ChunkMetadataEEEEK8SQLTypes13GeoColumnType" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Members</p>
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder22geo_column_descriptor_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder22geo_column_descriptor_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder22geo_column_descriptor_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::geo_column_descriptor___ColumnDescriptorCP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a55d6d730554ba822092017b135d6ad49"></span><em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *<code class="sig-name descname">geo_column_descriptor_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder22geo_column_descriptor_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder20base_column_encoder_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder20base_column_encoder_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder20base_column_encoder_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::base_column_encoder___StringNoneEncoderP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a36eb76d1a5639f51a57a8baa8bff5a28"></span><a class="reference internal" href="class_string_none_encoder.html#_CPPv417StringNoneEncoder" title="StringNoneEncoder">StringNoneEncoder</a> *<code class="sig-name descname">base_column_encoder_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder20base_column_encoder_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder22coords_column_encoder_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder22coords_column_encoder_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder22coords_column_encoder_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::coords_column_encoder___EncoderP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a59b33ee4c1db5e36f2674fad1c1affd6"></span><a class="reference internal" href="class_encoder.html#_CPPv47Encoder" title="Encoder">Encoder</a> *<code class="sig-name descname">coords_column_encoder_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder22coords_column_encoder_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder22bounds_column_encoder_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder22bounds_column_encoder_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder22bounds_column_encoder_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::bounds_column_encoder___EncoderP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a076a9fb61232d865f4b8100b86b95ef8"></span><a class="reference internal" href="class_encoder.html#_CPPv47Encoder" title="Encoder">Encoder</a> *<code class="sig-name descname">bounds_column_encoder_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder22bounds_column_encoder_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder26ring_sizes_column_encoder_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder26ring_sizes_column_encoder_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder26ring_sizes_column_encoder_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::ring_sizes_column_encoder___EncoderP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1af5618e4dc8a30624b68eb225335c48c8"></span><a class="reference internal" href="class_encoder.html#_CPPv47Encoder" title="Encoder">Encoder</a> *<code class="sig-name descname">ring_sizes_column_encoder_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder26ring_sizes_column_encoder_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder26poly_rings_column_encoder_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder26poly_rings_column_encoder_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder26poly_rings_column_encoder_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::poly_rings_column_encoder___EncoderP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a61e2be989e5bfa5d9647b5dfb58002a4"></span><a class="reference internal" href="class_encoder.html#_CPPv47Encoder" title="Encoder">Encoder</a> *<code class="sig-name descname">poly_rings_column_encoder_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder26poly_rings_column_encoder_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder28render_group_column_encoder_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder28render_group_column_encoder_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder28render_group_column_encoder_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::render_group_column_encoder___EncoderP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a45d809b6d5e8d21f1d536a1130b3691f"></span><a class="reference internal" href="class_encoder.html#_CPPv47Encoder" title="Encoder">Encoder</a> *<code class="sig-name descname">render_group_column_encoder_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder28render_group_column_encoder_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder21base_column_metadata_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder21base_column_metadata_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder21base_column_metadata_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::base_column_metadata___ChunkMetadataP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1afbf9c089fead0d4cc9479c5ca3f93073"></span><a class="reference internal" href="../struct/struct_chunk_metadata.html#_CPPv413ChunkMetadata" title="ChunkMetadata">ChunkMetadata</a> *<code class="sig-name descname">base_column_metadata_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder21base_column_metadata_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder23coords_column_metadata_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder23coords_column_metadata_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder23coords_column_metadata_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::coords_column_metadata___ChunkMetadataP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1ac669568a72a9f51613c020991c03ea00"></span><a class="reference internal" href="../struct/struct_chunk_metadata.html#_CPPv413ChunkMetadata" title="ChunkMetadata">ChunkMetadata</a> *<code class="sig-name descname">coords_column_metadata_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder23coords_column_metadata_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder23bounds_column_metadata_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder23bounds_column_metadata_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder23bounds_column_metadata_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::bounds_column_metadata___ChunkMetadataP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a15595858993bfff1951b004fdcc43940"></span><a class="reference internal" href="../struct/struct_chunk_metadata.html#_CPPv413ChunkMetadata" title="ChunkMetadata">ChunkMetadata</a> *<code class="sig-name descname">bounds_column_metadata_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder23bounds_column_metadata_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder27ring_sizes_column_metadata_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder27ring_sizes_column_metadata_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder27ring_sizes_column_metadata_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::ring_sizes_column_metadata___ChunkMetadataP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1ad1434faa14ebee24852c9a70b182b471"></span><a class="reference internal" href="../struct/struct_chunk_metadata.html#_CPPv413ChunkMetadata" title="ChunkMetadata">ChunkMetadata</a> *<code class="sig-name descname">ring_sizes_column_metadata_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder27ring_sizes_column_metadata_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder27poly_rings_column_metadata_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder27poly_rings_column_metadata_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder27poly_rings_column_metadata_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::poly_rings_column_metadata___ChunkMetadataP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1aefcfacaba660b510aa3d8e488908c522"></span><a class="reference internal" href="../struct/struct_chunk_metadata.html#_CPPv413ChunkMetadata" title="ChunkMetadata">ChunkMetadata</a> *<code class="sig-name descname">poly_rings_column_metadata_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder27poly_rings_column_metadata_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder29render_group_column_metadata_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder29render_group_column_metadata_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder29render_group_column_metadata_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::render_group_column_metadata___ChunkMetadataP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a985769b74fdf297194931bc8388dda70"></span><a class="reference internal" href="../struct/struct_chunk_metadata.html#_CPPv413ChunkMetadata" title="ChunkMetadata">ChunkMetadata</a> *<code class="sig-name descname">render_group_column_metadata_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder29render_group_column_metadata_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder25coords_column_descriptor_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder25coords_column_descriptor_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder25coords_column_descriptor_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::coords_column_descriptor___ColumnDescriptorCP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1abec5d8841635d327b45d17aba9eeddfa"></span><em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *<code class="sig-name descname">coords_column_descriptor_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder25coords_column_descriptor_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder25bounds_column_descriptor_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder25bounds_column_descriptor_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder25bounds_column_descriptor_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::bounds_column_descriptor___ColumnDescriptorCP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1aabf3827628f5bb57f24f7511f3a240b6"></span><em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *<code class="sig-name descname">bounds_column_descriptor_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder25bounds_column_descriptor_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder29ring_sizes_column_descriptor_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder29ring_sizes_column_descriptor_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder29ring_sizes_column_descriptor_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::ring_sizes_column_descriptor___ColumnDescriptorCP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a897f6a0e26223f3828a8dfc272ad5374"></span><em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *<code class="sig-name descname">ring_sizes_column_descriptor_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder29ring_sizes_column_descriptor_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder29poly_rings_column_descriptor_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder29poly_rings_column_descriptor_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder29poly_rings_column_descriptor_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::poly_rings_column_descriptor___ColumnDescriptorCP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a5bee69f21521d0cb14347dadbed94955"></span><em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *<code class="sig-name descname">poly_rings_column_descriptor_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder29poly_rings_column_descriptor_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder31render_group_column_descriptor_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder31render_group_column_descriptor_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder31render_group_column_descriptor_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::render_group_column_descriptor___ColumnDescriptorCP"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1aeccb4e880194be38464e6bfd380578fd"></span><em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *<code class="sig-name descname">render_group_column_descriptor_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder31render_group_column_descriptor_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder20render_group_values_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder20render_group_values_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder20render_group_values_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::render_group_values___std::vector:int32_t:"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1aa53adc91ae6b37619607d3c514c00dc8"></span>std::vector&lt;int32_t&gt; <code class="sig-name descname">render_group_values_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder20render_group_values_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder12base_values_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder12base_values_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder12base_values_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::base_values___std::vector:ss:"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a6b7e813bf160def0fc24e23f0e9e4d19"></span>std::vector&lt;std::string&gt; <code class="sig-name descname">base_values_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder12base_values_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder10row_count_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder10row_count_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder10row_count_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::row_count___s"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1ad43bbb10523ed74320c3912c4ae9711e"></span>size_t <code class="sig-name descname">row_count_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder10row_count_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder20parquet_column_name_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder20parquet_column_name_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder20parquet_column_name_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::parquet_column_name___ss"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1ab48dff17e965d5dfc337b7cd6f85d4e0"></span>std::string <code class="sig-name descname">parquet_column_name_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder20parquet_column_name_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder20coords_parse_buffer_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder20coords_parse_buffer_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder20coords_parse_buffer_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::coords_parse_buffer___std::vector:double:"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1ab1c91fda787d08b2a01721974cc2123d"></span>std::vector&lt;double&gt; <code class="sig-name descname">coords_parse_buffer_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder20coords_parse_buffer_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder20bounds_parse_buffer_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder20bounds_parse_buffer_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder20bounds_parse_buffer_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::bounds_parse_buffer___std::vector:double:"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a3f558fc0720d8a894c4f170565c15391"></span>std::vector&lt;double&gt; <code class="sig-name descname">bounds_parse_buffer_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder20bounds_parse_buffer_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder24ring_sizes_parse_buffer_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder24ring_sizes_parse_buffer_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder24ring_sizes_parse_buffer_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::ring_sizes_parse_buffer___std::vector:i:"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a041f277e6b406d6bea47742f77cd7a36"></span>std::vector&lt;int&gt; <code class="sig-name descname">ring_sizes_parse_buffer_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder24ring_sizes_parse_buffer_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder24poly_rings_parse_buffer_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder24poly_rings_parse_buffer_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder24poly_rings_parse_buffer_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::poly_rings_parse_buffer___std::vector:i:"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a417d7183f95cce6f8acf5754642bdabc"></span>std::vector&lt;int&gt; <code class="sig-name descname">poly_rings_parse_buffer_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder24poly_rings_parse_buffer_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder20coords_datum_buffer_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder20coords_datum_buffer_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder20coords_datum_buffer_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::coords_datum_buffer___std::vector:ArrayDatum:"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1abfcbd2a76d654f7e0657ea3e09690ebf"></span>std::vector&lt;ArrayDatum&gt; <code class="sig-name descname">coords_datum_buffer_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder20coords_datum_buffer_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder20bounds_datum_buffer_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder20bounds_datum_buffer_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder20bounds_datum_buffer_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::bounds_datum_buffer___std::vector:ArrayDatum:"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a6e552ac167c1443b87913d87d2338b5f"></span>std::vector&lt;ArrayDatum&gt; <code class="sig-name descname">bounds_datum_buffer_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder20bounds_datum_buffer_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder24ring_sizes_datum_buffer_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder24ring_sizes_datum_buffer_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder24ring_sizes_datum_buffer_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::ring_sizes_datum_buffer___std::vector:ArrayDatum:"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a8aaf0edd42b09bb7a0959c21744ff98b"></span>std::vector&lt;ArrayDatum&gt; <code class="sig-name descname">ring_sizes_datum_buffer_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder24ring_sizes_datum_buffer_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder24poly_rings_datum_buffer_E">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder24poly_rings_datum_buffer_E"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder24poly_rings_datum_buffer_E"></span><span id="foreign_storage::ParquetGeospatialEncoder::poly_rings_datum_buffer___std::vector:ArrayDatum:"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1ad82d21d73fcad2e01ba3df17b41ac0e8"></span>std::vector&lt;ArrayDatum&gt; <code class="sig-name descname">poly_rings_datum_buffer_</code><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder24poly_rings_datum_buffer_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Static Functions</p>
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder24throwMalformedGeoElementEK6size_tRKNSt6stringE">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder24throwMalformedGeoElementEK6size_tRKNSt6stringE"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder24throwMalformedGeoElementEK6size_tRKNSt6stringE"></span><span id="foreign_storage::ParquetGeospatialEncoder::throwMalformedGeoElement__sC.ssCR"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a066b859cff29ed816572e2c9f50f2cd6"></span><em class="property">static</em> void <code class="sig-name descname">throwMalformedGeoElement</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>row_count</em>, <em class="property">const</em> std::string &amp;<em>omnisci_column_name</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder24throwMalformedGeoElementEK6size_tRKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder25throwMismatchedGeoElementERKNSt6stringE">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder25throwMismatchedGeoElementERKNSt6stringE"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder25throwMismatchedGeoElementERKNSt6stringE"></span><span id="foreign_storage::ParquetGeospatialEncoder::throwMismatchedGeoElement__ssCR"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a20a1a97f798eab4bf6d9a104c3cf0de6"></span><em class="property">static</em> void <code class="sig-name descname">throwMismatchedGeoElement</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>omnisci_column_name</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder25throwMismatchedGeoElementERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Static Attributes</p>
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage24ParquetGeospatialEncoder31PROMOTE_POLYGON_TO_MULTIPOLYGONE">
-<span id="_CPPv3N15foreign_storage24ParquetGeospatialEncoder31PROMOTE_POLYGON_TO_MULTIPOLYGONE"></span><span id="_CPPv2N15foreign_storage24ParquetGeospatialEncoder31PROMOTE_POLYGON_TO_MULTIPOLYGONE"></span><span id="foreign_storage::ParquetGeospatialEncoder::PROMOTE_POLYGON_TO_MULTIPOLYGON__b"></span><span class="target" id="classforeign__storage_1_1_parquet_geospatial_encoder_1a728ad4fea475af13467ddb4c8bb3733f"></span><em class="property">constexpr</em> bool <code class="sig-name descname">PROMOTE_POLYGON_TO_MULTIPOLYGON</code> = true<a class="headerlink" href="#_CPPv4N15foreign_storage24ParquetGeospatialEncoder31PROMOTE_POLYGON_TO_MULTIPOLYGONE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

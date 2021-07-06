@@ -1,0 +1,9 @@
+Struct BaseCellRotation
+=======================
+
+.. doxygenstruct:: BaseCellRotation
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

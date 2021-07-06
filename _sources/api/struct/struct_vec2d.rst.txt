@@ -1,0 +1,9 @@
+Struct Vec2d
+============
+
+.. doxygenstruct:: Vec2d
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

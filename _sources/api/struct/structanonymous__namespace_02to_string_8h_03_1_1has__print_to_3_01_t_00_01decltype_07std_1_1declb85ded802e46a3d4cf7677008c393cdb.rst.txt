@@ -1,0 +1,9 @@
+Struct anonymous_namespace{toString.h}::has_printTo< T, decltype(std::declval< T >().printTo(std::declval< std::ostream & >()), void())>
+========================================================================================================================================
+
+.. doxygenstruct:: anonymous_namespace{toString.h}::has_printTo< T, decltype(std::declval< T >().printTo(std::declval< std::ostream & >()), void())>
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
