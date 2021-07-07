@@ -149,6 +149,8 @@ struct GeoMultiPolygon {
 
 template <typename T>
 struct Column {
+  using value_type = T;
+
   T* ptr_;        // row data
   int64_t size_;  // row count
 

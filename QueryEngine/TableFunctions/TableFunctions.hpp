@@ -242,6 +242,10 @@ EXTENSION_NOINLINE int32_t k_means(const Column<int>& input_ids,
   using float_type =
       std::remove_cv_t<std::remove_reference_t<decltype(input)>>::value_type;
 
+  // Assignments data type
+  using assignments_type =
+      std::remove_cv_t<std::remove_reference_t<decltype(output_cluster)>>::value_type;
+
   // Data dimensions
   const size_t num_rows = input_ids.size();
   const size_t num_columns = input.numCols();
@@ -274,7 +278,7 @@ EXTENSION_NOINLINE int32_t k_means(const Column<int>& input_ids,
 
   // Prepare output data as homogeneous numeric table to allow zero-copy for assignments
   const auto assignmentsTable =
-      HomogenNumericTable<int>::create(output_cluster.ptr_, 1, num_rows);
+      HomogenNumericTable<assignments_type>::create(output_cluster.ptr_, 1, num_rows);
   const kmeans::ResultPtr result(new kmeans::Result);
   result->set(kmeans::assignments, assignmentsTable);
   result->set(kmeans::objectiveFunction,
