@@ -213,22 +213,6 @@ double udf_truerange(const double high_price,
 }
 
 EXTENSION_NOINLINE
-double ST_X_LineString(int8_t* l,
-                       int64_t lsize,
-                       int32_t lindex,
-                       int32_t ic,
-                       int32_t isr,
-                       int32_t osr);
-
-EXTENSION_NOINLINE
-double ST_Y_LineString(int8_t* l,
-                       int64_t lsize,
-                       int32_t lindex,
-                       int32_t ic,
-                       int32_t isr,
-                       int32_t osr);
-
-EXTENSION_NOINLINE
 double ST_Length_LineString(int8_t* coords,
                             int64_t coords_sz,
                             int32_t ic,
@@ -238,23 +222,21 @@ double ST_Length_LineString(int8_t* coords,
 // LineString udf
 
 EXTENSION_NOINLINE
-double linestring_x(GeoLineString l, int32_t lindex) {
-  return ST_X_LineString(l.ptr,
-                         l.getSize(),
-                         lindex,
-                         l.getCompression(),
-                         l.getInputSrid(),
-                         l.getOutputSrid());
+double linestring_x_mod(GeoLineString l, int32_t index) {
+  if (l.getCompression() != 0) {
+    return -1;
+  }
+  const auto ptr = reinterpret_cast<double*>(l.ptr);
+  return static_cast<int64_t>(ptr[2 * (index - 1)]) % 2;
 }
 
 EXTENSION_NOINLINE
-double linestring_y(GeoLineString l, int32_t lindex) {
-  return ST_Y_LineString(l.ptr,
-                         l.getSize(),
-                         lindex,
-                         l.getCompression(),
-                         l.getInputSrid(),
-                         l.getOutputSrid());
+double linestring_y_mod(GeoLineString l, int32_t lindex) {
+  if (l.getCompression() != 0) {
+    return -1;
+  }
+  const auto ptr = reinterpret_cast<double*>(l.ptr);
+  return static_cast<int64_t>(ptr[(2 * (lindex - 1)) + 1]) % 2;
 }
 
 EXTENSION_NOINLINE

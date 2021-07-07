@@ -421,31 +421,26 @@ TEST_F(UDFCompilerTest, UdfQuery) {
             dt)));
 
     ASSERT_DOUBLE_EQ(
-        1.0,
+        0,
         v<double>(run_simple_agg(
-            "select linestring_x(l, 1) from geospatial_linestring WHERE id = 0;", dt)));
+            "select linestring_x_mod(l, 2) from geospatial_linestring WHERE id = 0;",
+            dt)));
     ASSERT_DOUBLE_EQ(
-        2.0,
+        1,
         v<double>(run_simple_agg(
-            "select linestring_x(l, 2) from geospatial_linestring WHERE id = 0;", dt)));
+            "select linestring_x_mod(l, 3) from geospatial_linestring WHERE id = 0;",
+            dt)));
 
     ASSERT_DOUBLE_EQ(
-        3.0,
+        1,
         v<double>(run_simple_agg(
-            "select linestring_x(l, 3) from geospatial_linestring WHERE id = 0;", dt)));
+            "select linestring_y_mod(l, 2) from geospatial_linestring WHERE id = 0;",
+            dt)));
     ASSERT_DOUBLE_EQ(
-        0.0,
+        0,
         v<double>(run_simple_agg(
-            "select linestring_y(l, 1) from geospatial_linestring WHERE id = 0;", dt)));
-    ASSERT_DOUBLE_EQ(
-        3.0,
-        v<double>(run_simple_agg(
-            "select linestring_y(l, 2) from geospatial_linestring WHERE id = 0;", dt)));
-
-    ASSERT_DOUBLE_EQ(
-        4.0,
-        v<double>(run_simple_agg(
-            "select linestring_y(l, 3) from geospatial_linestring WHERE id = 0;", dt)));
+            "select linestring_y_mod(l, 3) from geospatial_linestring WHERE id = 0;",
+            dt)));
 
     ASSERT_DOUBLE_EQ(
         5.656854249492381,
