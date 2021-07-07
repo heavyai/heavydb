@@ -305,7 +305,7 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
         orig_arg_lvs.push_back(arr);
         const_arr_size[arr] = size;
       }
-    } else if (geo_expr_arg) {
+    } else if (geo_expr_arg && geo_expr_arg->get_type_info().is_geometry()) {
       CHECK(geo_expr_arg->get_type_info().get_type() == kPOINT);
       CHECK_EQ(arg_lvs.size(), size_t(2));
       for (size_t j = 0; j < arg_lvs.size(); j++) {
@@ -594,8 +594,8 @@ llvm::Value* CodeGenerator::codegenFunctionOperNullArg(
     if (arg_ti.get_notnull()) {
       continue;
     }
-    if (dynamic_cast<const Analyzer::GeoExpr*>(arg)) {
-      CHECK(arg_ti.is_geometry() && arg_ti.get_type() == kPOINT);
+    if (dynamic_cast<const Analyzer::GeoExpr*>(arg) && arg_ti.is_geometry()) {
+      CHECK(arg_ti.get_type() == kPOINT);
       auto is_null_lv = cgen_state_->ir_builder_.CreateICmp(
           llvm::CmpInst::ICMP_EQ,
           orig_arg_lvs[j],

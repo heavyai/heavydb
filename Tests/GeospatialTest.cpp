@@ -868,6 +868,11 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
         v<int64_t>(run_simple_agg(
             R"(SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(ST_Transform(ST_GeomFromText('POINT(0 0)', 4326), 900913), ST_Transform(gp4326, 900913)) < 500000.0;)",
             dt)));
+    ASSERT_DOUBLE_EQ(
+        static_cast<double>(111319.4841946785),
+        v<double>(run_simple_agg(
+            R"(SELECT conv_4326_900913_x(ST_X(gp4326)) FROM geospatial_test WHERE id = 1;)",
+            dt)));
 
     // ST_NRings
     ASSERT_EQ(static_cast<int64_t>(1),
