@@ -289,6 +289,11 @@ if(ENABLE_FOLLY)
   endif()
 endif()
 
+option(ENABLE_ARROW_4 "Enable changes required to support Arrow 4.0" OFF)
+if(ENABLE_ARROW_4)
+  add_definitions("-DENABLE_ARROW_4")
+endif()
+
 option(ENABLE_MLPACK "Use mlpack" OFF)
 if(ENABLE_MLPACK)
   find_package(OpenMP REQUIRED)
