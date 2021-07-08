@@ -31,6 +31,9 @@ namespace import_export {
 // not too big (need much memory) but not too small (many thread forks)
 constexpr static size_t kImportFileBufferSize = (1 << 23);
 
+// import buffers may grow to this size if necessary
+constexpr static size_t max_import_buffer_resize_byte_size = 1024 * 1024 * 1024;
+
 enum class FileType {
   DELIMITED,
   POLYGON
