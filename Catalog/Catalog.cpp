@@ -2460,6 +2460,12 @@ void Catalog::createTable(
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
+
+  if (td.storageType != StorageType::FOREIGN_TABLE) {
+    sqlite_lock.unlock();
+    getMetadataForTable(td.tableName,
+                        true);  // cause instantiateFragmenter() to be called
+  }
 }
 
 void Catalog::serializeTableJsonUnlocked(const TableDescriptor* td,
