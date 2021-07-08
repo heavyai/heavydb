@@ -2865,8 +2865,12 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes_subset) {
     GTEST_SKIP() << "UNIMPLEMENTED: sub test does not support " << extension << " type";
   }
   // Data type changes to handle unimplemented types in ODBC
+  // Note: This requires the following option to be added to the postgres entry of
+  // .odbc.ini:
+  //    BoolsAsChar=false
   sql(createForeignTableQuery(
-      {{"t", data_wrapper_type == "postgres" ? "SMALLINT" : "TINYINT"},
+      {{"b", "BOOLEAN"},
+       {"t", data_wrapper_type == "postgres" ? "SMALLINT" : "TINYINT"},
        {"s", "SMALLINT"},
        {"i", "INTEGER"},
        {"bi", "BIGINT"},
@@ -2886,15 +2890,15 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes_subset) {
   // clang-format off
   assertResultSetEqual({
     {
-      i(100), i(30000), i(2000000000), i(9000000000000000000),10.1f,  100.1234, "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "\"quoted text\""
+      True,i(100), i(30000), i(2000000000), i(9000000000000000000),10.1f,  100.1234, "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "\"quoted text\""
     },
     {
-      i(110), i(30500), i(2000500000), i(9000000050000000000), 100.12f,  2.1234, "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "\"quoted text 2\""
+      False,i(110), i(30500), i(2000500000), i(9000000050000000000), 100.12f,  2.1234, "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "\"quoted text 2\""
     },
     {
-      i(120), i(31000), i(2100000000), i(9100000000000000000), 1000.123f, 100.1, "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "\"quoted text 3\""
+      True,i(120), i(31000), i(2100000000), i(9100000000000000000), 1000.123f, 100.1, "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "\"quoted text 3\""
     },
-    { 
+    { data_wrapper_type == "sqlite" ?  False : NULL_BOOLEAN, // sqlite ODBC driver does not return null Booleans correctly
       data_wrapper_type == "postgres" ? i(NULL_SMALLINT) : i(NULL_TINYINT), // TINYINT
       i(NULL_SMALLINT), i(NULL_INT), i(NULL_BIGINT), 
       data_wrapper_type == "sqlite" ? NULL_DOUBLE : NULL_FLOAT, // FLOAT
