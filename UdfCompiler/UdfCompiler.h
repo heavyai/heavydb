@@ -53,14 +53,14 @@ class UdfCompiler {
   void generateAST(const std::string& file_name) const;
 
   static std::string genLLVMIRFilename(const std::string& udf_file_name);
-  static std::string genCUDAIRFilename(const std::string& udf_file_name);
+  static std::string genNVVMIRFilename(const std::string& udf_file_name);
 
   /**
    * Formulate Clang command line command and call clang binary to generate LLVM IR for
    * the C/C++ file.
    */
 #ifdef HAVE_CUDA
-  std::string compileToCudaIR(const std::string& udf_file_name) const;
+  std::string compileToNVVMIR(const std::string& udf_file_name) const;
 #endif
   std::string compileToLLVMIR(const std::string& udf_file_name) const;
 

@@ -326,7 +326,7 @@ std::pair<std::string, std::string> UdfCompiler::compileUdf(
 
 #ifdef HAVE_CUDA
   try {
-    cuda_file_name = compileToCudaIR(udf_file_name);
+    cuda_file_name = compileToNVVMIR(udf_file_name);
   } catch (const std::exception& e) {
     LOG(WARNING)
         << "Failed to generate GPU IR for UDF " + udf_file_name +
@@ -369,7 +369,7 @@ void replace_extension(std::string& s, const std::string& new_ext) {
 
 }  // namespace
 
-std::string UdfCompiler::genCUDAIRFilename(const std::string& udf_file_name) {
+std::string UdfCompiler::genNVVMIRFilename(const std::string& udf_file_name) {
   return remove_file_extension(udf_file_name) + "_gpu.bc";
 }
 
@@ -533,8 +533,8 @@ int UdfCompiler::compileFromCommandLine(
 }
 
 #ifdef HAVE_CUDA
-std::string UdfCompiler::compileToCudaIR(const std::string& udf_file_name) const {
-  const auto gpu_out_filename = genCUDAIRFilename(udf_file_name);
+std::string UdfCompiler::compileToNVVMIR(const std::string& udf_file_name) const {
+  const auto gpu_out_filename = genNVVMIRFilename(udf_file_name);
 
   std::vector<std::string> command_line{clang_path_,
                                         "-c",
