@@ -14,12 +14,16 @@
  * limitations under the License.
  */
 
-// #include <chrono>
-#include <type_traits>
-#include "../../Logger/Logger.h"
 #include "../../QueryEngine/OmniSciTypes.h"
 #include "../../Shared/funcannotations.h"
+
+// TODO: define in cmake files
+#define HAVE_ONEDAL
+
+#ifdef HAVE_ONEDAL
+#include <type_traits>
 #include "daal.h"
+#endif
 
 /*
   UDTF: row_copier(Column<double>, RowMultiplier) -> Column<double>
@@ -218,6 +222,8 @@ EXTENSION_NOINLINE int32_t column_list_row_sum__cpu_(const ColumnList<int32_t>& 
   return output_num_rows;
 }
 
+#ifdef HAVE_ONEDAL
+
 // clang-format off
 /*
   UDTF: k_means(Cursor<Column<int>, ColumnList<float>>, int, int, RowMultiplier) -> Column<int>, Column<int>
@@ -234,10 +240,6 @@ EXTENSION_NOINLINE int32_t k_means(const Column<int>& input_ids,
   using namespace daal::algorithms;
   using namespace daal::data_management;
 
-  // using Clock = std::chrono::steady_clock;
-
-  // const auto t0 = Clock::now();
-
   // Float data type
   using float_type =
       std::remove_cv_t<std::remove_reference_t<decltype(input)>>::value_type;
@@ -250,25 +252,11 @@ EXTENSION_NOINLINE int32_t k_means(const Column<int>& input_ids,
   const size_t num_rows = input_ids.size();
   const size_t num_columns = input.numCols();
 
-  // // Arrays to handle parameters in the easy way
-  // const Column<float>* const inputs[num_columns] = {
-  //     &input_col0,  &input_col1,  &input_col2,  &input_col3,  &input_col4,
-  //     &input_col5,  &input_col6,  &input_col7,  &input_col8,  &input_col9,
-  //     &input_col10, &input_col11, &input_col12, &input_col13, &input_col14,
-  //     &input_col15, &input_col16, &input_col17, &input_col18, &input_col19};
-  // const Column<float>* const outputs[num_columns] = {
-  //     &output_col0,  &output_col1,  &output_col2,  &output_col3,  &output_col4,
-  //     &output_col5,  &output_col6,  &output_col7,  &output_col8,  &output_col9,
-  //     &output_col10, &output_col11, &output_col12, &output_col13, &output_col14,
-  //     &output_col15, &output_col16, &output_col17, &output_col18, &output_col19};
-
   // Prepare input data as structure of arrays (SOA) as columnar format (zero-copy)
   const auto dataTable = SOANumericTable::create(num_columns, num_rows);
   for (size_t i = 0; i < num_columns; ++i) {
     dataTable->setArray<float_type>(input[i].ptr_, i);
   }
-
-  // const auto t1 = Clock::now();
 
   // Initialization phase of K-Means
   kmeans::init::Batch<float_type, kmeans::init::randomDense> init(num_clusters);
@@ -294,57 +282,12 @@ EXTENSION_NOINLINE int32_t k_means(const Column<int>& input_ids,
   algorithm.setResult(result);
   algorithm.compute();
 
-  // const auto t2 = Clock::now();
-
-  // // Assign output columns
-  // for (size_t i = 0; i < num_rows; ++i) {
-  //   for (size_t j = 0; j < num_columns; ++j) {
-  //     (*(outputs[j]))[i] = (*(inputs[j]))[i];
-  //   }
-  // }
-
   // Copying from input_ids to output_ids
   output_ids = input_ids;
-
-  // const auto t3 = Clock::now();
-
-  // LOG(INFO) << "k_means UDTF finished in "
-  //           << std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t0).count()
-  //           << " ms";
-  // LOG(INFO) << "   k_means inputs preparation took "
-  //           << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()
-  //           << " ms";
-  // LOG(INFO) << "   k_means algorithm took "
-  //           << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()
-  //           << " ms";
-  // LOG(INFO) << "   k_means output columns assignment took "
-  //           << std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2).count()
-  //           << " ms";
 
   return num_rows;
 }
 
-// EXTENSION_NOINLINE int32_t db_scan(const Column<double>& input_col0,
-//                                   const Column<double>& input_col1,
-//                                   const float epsilon,
-//                                   const int output_multiplier,
-//                                   const Column<double>& output_col0,
-//                                   const Column<double>& output_col1,
-//                                   const Column<int>& output_cluster) {
-//   size_t num_rows = input_col0.getSize();
-//   arma::Mat<double> input_data (num_rows, 2);
-//   memcpy(input_data.colptr(0), input_col0.ptr, sizeof(double) * num_rows);
-//   memcpy(input_data.colptr(1), input_col1.ptr, sizeof(double) * num_rows);
-//   arma::Mat<double> input_data_transposed = input_data.t();
-//   mlpack::dbscan::DBSCAN<> dbscan(epsilon, 2);
-//   arma::Row<size_t> assignments;
-//   const size_t clusters = dbscan.Cluster(input_data_transposed, assignments);
-//   for (size_t i = 0; i != num_rows; ++i) {
-//     output_col0[i] = input_col0[i];
-//     output_col1[i] = input_col1[i];
-//     output_cluster[i] = assignments[i] == SIZE_MAX ? -1 : assignments[i];
-//   }
-//   return num_rows;
-// }
+#endif
 
 #include "MLFunctions.hpp"
