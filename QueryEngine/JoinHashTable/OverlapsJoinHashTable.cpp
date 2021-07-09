@@ -1227,8 +1227,11 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnCpu(
           hash_table->getLayout() == HashType::OneToMany) {
         // use the cached hash table
         layout_override_ = HashType::ManyToMany;
+        return hash_table;
       }
-      return hash_table;
+      if (layout == hash_table->getLayout()) {
+        return hash_table;
+      }
     }
   }
   CHECK(layoutRequiresAdditionalBuffers(layout));
@@ -1406,6 +1409,16 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
           << "Only TINYINT coordinates columns are supported in geo overlaps hash join.";
       arr_ptr = code_generator.castArrayPointer(array_ptr,
                                                 coords_cd->columnType.get_elem_type());
+    } else if (const auto outer_geo_function_operator =
+                   dynamic_cast<const Analyzer::GeoFunctionOperator*>(outer_geo)) {
+      // Process points dynamically constructed by geo function operators
+      const auto outer_geo_function_operator_lvs =
+          code_generator.codegen(outer_geo_function_operator, true, co);
+      CHECK_EQ(outer_geo_function_operator_lvs.size(), size_t(2));
+      arr_ptr = outer_geo_function_operator_lvs.front();
+    } else if (const auto outer_geo_expr =
+                   dynamic_cast<const Analyzer::GeoExpr*>(outer_geo)) {
+      UNREACHABLE() << outer_geo_expr->toString();
     }
   } else if (outer_geo_ti.is_fixlen_array()) {
     // Process dynamically constructed points

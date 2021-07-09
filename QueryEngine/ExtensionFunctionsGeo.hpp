@@ -1325,7 +1325,7 @@ double ST_Area_MultiPolygon(int8_t* mpoly_coords,
 //
 
 // Point centroid
-// - calculate average coordinates for all points
+// - Single point - drop, otherwise calculate average coordinates for all points
 // LineString centroid
 // - take midpoint of each line segment
 // - calculate average coordinates of all midpoints weighted by segment length
@@ -1341,11 +1341,10 @@ double ST_Centroid_Point(int8_t* p,
                          int32_t ic,
                          int32_t isr,
                          int32_t osr,
-                         bool ycoord) {
-  if (ycoord) {
-    return coord_y(p, 1, ic, isr, osr);
-  }
-  return coord_x(p, 0, ic, isr, osr);
+                         double* point_centroid) {
+  point_centroid[0] = coord_y(p, 0, ic, isr, osr);
+  point_centroid[1] = coord_x(p, 1, ic, isr, osr);
+  return 0.0;
 }
 
 DEVICE ALWAYS_INLINE bool centroid_add_segment(double x1,
@@ -1405,7 +1404,7 @@ double ST_Centroid_LineString(int8_t* coords,
                               int32_t ic,
                               int32_t isr,
                               int32_t osr,
-                              bool ycoord) {
+                              double* linestring_centroid) {
   double length = 0.0;
   double linestring_centroid_sum[2] = {0.0, 0.0};
   int64_t num_points = 0;
@@ -1420,7 +1419,6 @@ double ST_Centroid_LineString(int8_t* coords,
                           &linestring_centroid_sum[0],
                           &num_points,
                           &point_centroid_sum[0]);
-  double linestring_centroid[2] = {0.0, 0.0};
   if (length > 0) {
     linestring_centroid[0] = linestring_centroid_sum[0] / length;
     linestring_centroid[1] = linestring_centroid_sum[1] / length;
@@ -1428,10 +1426,7 @@ double ST_Centroid_LineString(int8_t* coords,
     linestring_centroid[0] = point_centroid_sum[0] / num_points;
     linestring_centroid[1] = point_centroid_sum[1] / num_points;
   }
-  if (ycoord) {
-    return linestring_centroid[1];
-  }
-  return linestring_centroid[0];
+  return 0.0;
 }
 
 DEVICE ALWAYS_INLINE bool centroid_add_triangle(double x1,
@@ -1544,7 +1539,7 @@ double ST_Centroid_Polygon(int8_t* poly_coords,
                            int32_t ic,
                            int32_t isr,
                            int32_t osr,
-                           bool ycoord) {
+                           double* poly_centroid) {
   if (poly_num_rings <= 0) {
     return 0.0;
   }
@@ -1568,9 +1563,6 @@ double ST_Centroid_Polygon(int8_t* poly_coords,
                        &num_points,
                        &point_centroid_sum[0]);
 
-  double x1 = coord_x(poly_coords, 0, ic, isr, osr);
-  double y1 = coord_y(poly_coords, 1, ic, isr, osr);
-  double poly_centroid[2] = {x1, y1};
   if (total_area2 != 0.0) {
     poly_centroid[0] = cg3[0] / 3 / total_area2;
     poly_centroid[1] = cg3[1] / 3 / total_area2;
@@ -1582,12 +1574,11 @@ double ST_Centroid_Polygon(int8_t* poly_coords,
     // zero-area zero-length polygon, fall further back to point centroid
     poly_centroid[0] = point_centroid_sum[0] / num_points;
     poly_centroid[1] = point_centroid_sum[1] / num_points;
+  } else {
+    poly_centroid[0] = coord_x(poly_coords, 0, ic, isr, osr);
+    poly_centroid[1] = coord_y(poly_coords, 1, ic, isr, osr);
   }
-
-  if (ycoord) {
-    return poly_centroid[1];
-  }
-  return poly_centroid[0];
+  return 0.0;
 }
 
 EXTENSION_NOINLINE
@@ -1600,7 +1591,7 @@ double ST_Centroid_MultiPolygon(int8_t* mpoly_coords,
                                 int32_t ic,
                                 int32_t isr,
                                 int32_t osr,
-                                bool ycoord) {
+                                double* mpoly_centroid) {
   if (mpoly_num_rings <= 0 || mpoly_num_polys <= 0) {
     return 0.0;
   }
@@ -1643,9 +1634,6 @@ double ST_Centroid_MultiPolygon(int8_t* mpoly_coords,
                          &point_centroid_sum[0]);
   }
 
-  double x1 = coord_x(mpoly_coords, 0, ic, isr, osr);
-  double y1 = coord_y(mpoly_coords, 1, ic, isr, osr);
-  double mpoly_centroid[2] = {x1, y1};
   if (total_area2 != 0.0) {
     mpoly_centroid[0] = cg3[0] / 3 / total_area2;
     mpoly_centroid[1] = cg3[1] / 3 / total_area2;
@@ -1657,12 +1645,11 @@ double ST_Centroid_MultiPolygon(int8_t* mpoly_coords,
     // zero-area zero-length multipolygon, fall further back to point centroid
     mpoly_centroid[0] = point_centroid_sum[0] / num_points;
     mpoly_centroid[1] = point_centroid_sum[1] / num_points;
+  } else {
+    mpoly_centroid[0] = coord_x(mpoly_coords, 0, ic, isr, osr);
+    mpoly_centroid[1] = coord_y(mpoly_coords, 1, ic, isr, osr);
   }
-
-  if (ycoord) {
-    return mpoly_centroid[1];
-  }
-  return mpoly_centroid[0];
+  return 0.0;
 }
 
 //

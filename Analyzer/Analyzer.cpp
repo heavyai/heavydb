@@ -3105,6 +3105,20 @@ void ArrayExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
   }
 }
 
+void FunctionOper::collect_rte_idx(std::set<int>& rte_idx_set) const {
+  for (unsigned i = 0; i < getArity(); i++) {
+    const auto expr = getArg(i);
+    expr->collect_rte_idx(rte_idx_set);
+  }
+}
+
+void GeoFunctionOperator::collect_rte_idx(std::set<int>& rte_idx_set) const {
+  for (unsigned i = 0; i < size(); i++) {
+    const auto expr = getArg(i);
+    expr->collect_rte_idx(rte_idx_set);
+  }
+}
+
 void CaseExpr::collect_column_var(
     std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
     bool include_agg) const {
@@ -3148,6 +3162,24 @@ void ArrayExpr::collect_column_var(
     bool include_agg) const {
   for (unsigned i = 0; i < getElementCount(); i++) {
     const auto expr = getElement(i);
+    expr->collect_column_var(colvar_set, include_agg);
+  }
+}
+
+void FunctionOper::collect_column_var(
+    std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+    bool include_agg) const {
+  for (unsigned i = 0; i < getArity(); i++) {
+    const auto expr = getArg(i);
+    expr->collect_column_var(colvar_set, include_agg);
+  }
+}
+
+void GeoFunctionOperator::collect_column_var(
+    std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+    bool include_agg) const {
+  for (unsigned i = 0; i < size(); i++) {
+    const auto expr = getArg(i);
     expr->collect_column_var(colvar_set, include_agg);
   }
 }

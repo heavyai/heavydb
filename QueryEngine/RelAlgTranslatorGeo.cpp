@@ -648,45 +648,25 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       arg_ti.set_compression(kENCODING_NONE);
 
       SQLTypeInfo geo_ti;
-      bool with_bounds = false;
-      auto geoargs = translateGeoFunctionArg(
-          rex_function->getOperand(0), geo_ti, with_bounds, false, false);
-
-      auto specialized_geofunc = rex_function->getName() + suffix(geo_ti.get_type());
-      Datum input_compression;
-      input_compression.intval = Geospatial::get_compression_scheme(geo_ti);
-      geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
-      Datum input_srid;
-      input_srid.intval = geo_ti.get_input_srid();
-      geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid));
-      Datum output_srid;
-      output_srid.intval = geo_ti.get_output_srid();
-      geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, output_srid));
-
-      // TODO: find a better way to get 2 coords from the centroid functions
-      Datum coord_selector;
-      coord_selector.boolval = false;
-      geoargs.push_back(makeExpr<Analyzer::Constant>(kBOOLEAN, false, coord_selector));
-      std::shared_ptr<Analyzer::Expr> coord1 = makeExpr<Analyzer::FunctionOper>(
-          rex_function->getType(), specialized_geofunc, geoargs);
-      geoargs.pop_back();
-      coord_selector.boolval = true;
-      geoargs.push_back(makeExpr<Analyzer::Constant>(kBOOLEAN, false, coord_selector));
-      std::shared_ptr<Analyzer::Expr> coord2 = makeExpr<Analyzer::FunctionOper>(
-          rex_function->getType(), specialized_geofunc, geoargs);
-
-      auto da_ti = SQLTypeInfo(kARRAY, true);
-      da_ti.set_subtype(kDOUBLE);
-      da_ti.set_size(16);
-      auto centroid_coords = {coord1, coord2};
-      auto is_local_alloca = !is_projection;
-      auto ae =
-          makeExpr<Analyzer::ArrayExpr>(da_ti, centroid_coords, false, is_local_alloca);
-      // cast it to  tinyint[16]
-      SQLTypeInfo tia_ti = SQLTypeInfo(kARRAY, true);
-      tia_ti.set_subtype(kTINYINT);
-      tia_ti.set_size(16);
-      return {makeExpr<Analyzer::UOper>(tia_ti, false, kCAST, ae)};
+      auto geoargs = translateGeoFunctionArg(rex_function->getOperand(0),
+                                             geo_ti,
+                                             /*with_bounds=*/false,
+                                             /*with_render_group=*/false,
+                                             /*expand_geo_col=*/true,
+                                             /*is_projection=*/false,
+                                             /*use_geo_expressions=*/true);
+      CHECK_EQ(geoargs.size(), size_t(1));
+      if (try_to_compress) {
+        // Request point compression
+        arg_ti.set_input_srid(4326);
+        arg_ti.set_output_srid(4326);
+        arg_ti.set_compression(kENCODING_GEOINT);
+        arg_ti.set_comp_param(32);
+      }
+      return {makeExpr<Analyzer::GeoFunctionOperator>(
+          arg_ti,
+          rex_function->getName(),
+          std::vector<std::shared_ptr<Analyzer::Expr>>{geoargs.front()})};
     } else if (func_resolve(rex_function->getName(),
                             "ST_Intersection"sv,
                             "ST_Difference"sv,

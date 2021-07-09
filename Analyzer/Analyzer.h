@@ -1371,6 +1371,11 @@ class FunctionOper : public Expr {
   }
 
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+  void collect_rte_idx(std::set<int>& rte_idx_set) const override;
+  void collect_column_var(
+      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>&
+          colvar_set,
+      bool include_agg) const override;
 
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
@@ -1779,6 +1784,11 @@ class GeoFunctionOperator : public GeoExpr {
                       const std::vector<std::shared_ptr<Analyzer::Expr>>& args);
 
   std::shared_ptr<Analyzer::Expr> deep_copy() const final;
+  void collect_rte_idx(std::set<int>& rte_idx_set) const final;
+  void collect_column_var(
+      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>&
+          colvar_set,
+      bool include_agg) const final;
 
   std::string toString() const final;
 
