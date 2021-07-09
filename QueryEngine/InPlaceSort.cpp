@@ -112,12 +112,12 @@ void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>& order_entries,
                       const int device_id) {
   ThrustAllocator alloc(data_mgr, device_id);
   CHECK_EQ(size_t(1), order_entries.size());
-  const auto idx_buff = group_by_buffers.second -
+  const auto idx_buff = group_by_buffers.data -
                         align_to_int64(query_mem_desc.getEntryCount() * sizeof(int32_t));
   for (const auto& order_entry : order_entries) {
     const auto target_idx = order_entry.tle_no - 1;
     const auto val_buff =
-        group_by_buffers.second + query_mem_desc.getColOffInBytes(target_idx);
+        group_by_buffers.data + query_mem_desc.getColOffInBytes(target_idx);
     const auto chosen_bytes = query_mem_desc.getPaddedSlotWidthBytes(target_idx);
     sort_groups_gpu(reinterpret_cast<int64_t*>(val_buff),
                     reinterpret_cast<int32_t*>(idx_buff),
@@ -126,7 +126,7 @@ void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>& order_entries,
                     chosen_bytes,
                     alloc);
     if (!query_mem_desc.hasKeylessHash()) {
-      apply_permutation_gpu(reinterpret_cast<int64_t*>(group_by_buffers.second),
+      apply_permutation_gpu(reinterpret_cast<int64_t*>(group_by_buffers.data),
                             reinterpret_cast<int32_t*>(idx_buff),
                             query_mem_desc.getEntryCount(),
                             sizeof(int64_t),
@@ -139,7 +139,7 @@ void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>& order_entries,
       }
       const auto chosen_bytes = query_mem_desc.getPaddedSlotWidthBytes(target_idx);
       const auto val_buff =
-          group_by_buffers.second + query_mem_desc.getColOffInBytes(target_idx);
+          group_by_buffers.data + query_mem_desc.getColOffInBytes(target_idx);
       apply_permutation_gpu(reinterpret_cast<int64_t*>(val_buff),
                             reinterpret_cast<int32_t*>(idx_buff),
                             query_mem_desc.getEntryCount(),

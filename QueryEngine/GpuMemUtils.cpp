@@ -314,7 +314,7 @@ void copy_projection_buffer_from_gpu_columnar(
   // copy all the row indices back to the host
   copy_from_gpu(data_mgr,
                 reinterpret_cast<int64_t*>(projection_buffer),
-                gpu_group_by_buffers.second,
+                gpu_group_by_buffers.data,
                 projection_count * row_index_width,
                 device_id);
   size_t buffer_offset_cpu{projection_count * row_index_width};
@@ -325,7 +325,7 @@ void copy_projection_buffer_from_gpu_columnar(
           projection_count * query_mem_desc.getPaddedSlotWidthBytes(i);
       copy_from_gpu(data_mgr,
                     projection_buffer + buffer_offset_cpu,
-                    gpu_group_by_buffers.second + query_mem_desc.getColOffInBytes(i),
+                    gpu_group_by_buffers.data + query_mem_desc.getColOffInBytes(i),
                     column_proj_size,
                     device_id);
       buffer_offset_cpu += align_to_int64(column_proj_size);

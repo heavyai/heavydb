@@ -855,7 +855,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     const size_t step{query_mem_desc.threadsShareMemory() ? block_size_x : 1};
     size_t groups_buffer_size{query_mem_desc.getBufferSizeBytes(
         ExecutorDeviceType::GPU, dev_group_by_buffers.entry_count)};
-    auto group_by_dev_buffer = dev_group_by_buffers.second;
+    auto group_by_dev_buffer = dev_group_by_buffers.data;
     const size_t col_count = query_mem_desc.getSlotCount();
     int8_t* col_widths_dev_ptr{nullptr};
     if (output_columnar) {
@@ -955,7 +955,7 @@ void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
   const size_t num_columns = query_mem_desc.getBufferColSlotCount();
   const size_t column_size = entry_count * sizeof(int64_t);
   const size_t orig_column_size = gpu_group_by_buffers.entry_count * sizeof(int64_t);
-  int8_t* dev_buffer = reinterpret_cast<int8_t*>(gpu_group_by_buffers.second);
+  int8_t* dev_buffer = reinterpret_cast<int8_t*>(gpu_group_by_buffers.data);
   int8_t* host_buffer = reinterpret_cast<int8_t*>(group_by_buffers_[0]);
   CHECK_LE(column_size, orig_column_size);
   if (orig_column_size == column_size) {
@@ -1090,7 +1090,7 @@ void QueryMemoryInitializer::copyGroupByBuffersFromGpu(
   copy_group_by_buffers_from_gpu(data_mgr,
                                  group_by_buffers_,
                                  total_buff_size,
-                                 gpu_group_by_buffers.second,
+                                 gpu_group_by_buffers.data,
                                  query_mem_desc,
                                  block_size_x,
                                  grid_size_x,
@@ -1128,7 +1128,7 @@ void QueryMemoryInitializer::applyStreamingTopNOffsetGpu(
 
   const auto rows_copy = pick_top_n_rows_from_dev_heaps(
       data_mgr,
-      reinterpret_cast<int64_t*>(gpu_group_by_buffers.second),
+      reinterpret_cast<int64_t*>(gpu_group_by_buffers.data),
       ra_exe_unit,
       query_mem_desc,
       total_thread_count,

@@ -307,7 +307,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                 sizeof(max_matched),
                 device_id);
 
-    kernel_params[GROUPBY_BUF] = gpu_group_by_buffers.first;
+    kernel_params[GROUPBY_BUF] = gpu_group_by_buffers.ptrs;
     std::vector<void*> param_ptrs;
     for (auto& param : kernel_params) {
       param_ptrs.push_back(&param);

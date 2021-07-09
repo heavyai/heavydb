@@ -962,7 +962,7 @@ void ResultSet::radixSortOnGpu(
       data_mgr,
       group_by_buffers,
       query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU),
-      dev_group_by_buffers.second,
+      dev_group_by_buffers.data,
       query_mem_desc_,
       block_size_,
       grid_size_,

@@ -389,7 +389,7 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   auto gpu_output_buffers = query_buffers->setupTableFunctionGpuBuffers(
       query_mem_desc, device_id, block_size_x, grid_size_x);
 
-  kernel_params[OUTPUT_BUFFERS] = reinterpret_cast<CUdeviceptr>(gpu_output_buffers.first);
+  kernel_params[OUTPUT_BUFFERS] = reinterpret_cast<CUdeviceptr>(gpu_output_buffers.ptrs);
 
   // execute
   CHECK_EQ(static_cast<size_t>(KERNEL_PARAM_COUNT), kernel_params.size());
