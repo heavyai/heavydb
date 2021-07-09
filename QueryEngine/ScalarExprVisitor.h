@@ -173,7 +173,12 @@ class ScalarExprVisitor {
   }
 
   virtual T visitGeoExpr(const Analyzer::GeoExpr* geo_expr) const {
-    return defaultResult();
+    T result = defaultResult();
+    const auto geo_expr_children = geo_expr->getChildExprs();
+    for (const auto expr : geo_expr_children) {
+      result = aggregateResult(result, visit(expr));
+    }
+    return result;
   }
 
   virtual T visitInValues(const Analyzer::InValues* in_values) const {

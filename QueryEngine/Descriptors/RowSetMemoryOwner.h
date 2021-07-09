@@ -193,7 +193,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return string_dictionary_generations_;
   }
 
-  quantile::TDigest* nullTDigest();
+  quantile::TDigest* nullTDigest(double const q);
 
  private:
   struct CountDistinctBitmapBuffer {

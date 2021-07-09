@@ -35,9 +35,11 @@
 #include <ostream>
 #endif
 
+#include <cmath>
 #include <limits>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <type_traits>
 
 namespace quantile {
@@ -185,6 +187,8 @@ class TDigest {
   bool forward_{true};  // alternate direction on each call to mergeCentroids().
 
   // simple_allocator_, buf_allocate_, centroids_allocate_ are used only by allocate().
+  std::optional<RealType> const q_{std::nullopt};  // Optional preset quantile parameter.
+  bool const use_linear_scaling_function_{false};
   SimpleAllocator* const simple_allocator_{nullptr};
   IndexType const buf_allocate_{0};
   IndexType const centroids_allocate_{0};
@@ -192,7 +196,9 @@ class TDigest {
   DEVICE RealType max() const { return centroids_.max_; }
   DEVICE RealType min() const { return centroids_.min_; }
 
-  DEVICE IndexType maxCardinality(IndexType const sum, IndexType const total_weight);
+  DEVICE IndexType maxCardinality(IndexType const sum,
+                                  IndexType const total_weight,
+                                  RealType const c);
 
   // Require: centroids are sorted by (mean, -count)
   DEVICE void mergeCentroids(Centroids<RealType, IndexType>&);
@@ -216,10 +222,13 @@ class TDigest {
     centroids_.clear();
   }
 
-  DEVICE TDigest(SimpleAllocator* simple_allocator,
+  DEVICE TDigest(RealType q,
+                 SimpleAllocator* simple_allocator,
                  IndexType buf_allocate,
                  IndexType centroids_allocate)
-      : simple_allocator_(simple_allocator)
+      : q_(q)
+      , use_linear_scaling_function_(q_ && 0.1 <= *q_ && *q_ <= 0.9)
+      , simple_allocator_(simple_allocator)
       , buf_allocate_(buf_allocate)
       , centroids_allocate_(centroids_allocate) {}
 
@@ -242,14 +251,16 @@ class TDigest {
     mergeCentroids(t_digest.centroids_);
   }
 
+  // Uses buf as scratch space.
+  DEVICE RealType quantile(IndexType* buf, RealType const q);
+
   // Uses buf_ as scratch space.
   DEVICE RealType quantile(RealType const q) {
     assert(centroids_.size() <= buf_.capacity());
     return quantile(buf_.counts_.data(), q);
   }
 
-  // Uses buf as scratch space.
-  DEVICE RealType quantile(IndexType* buf, RealType const q);
+  DEVICE RealType quantile() { return q_ ? quantile(*q_) : centroids_.nan; }
 
   // Assumes mem is externally managed.
   DEVICE void setBuffer(Memory& mem) {
@@ -591,12 +602,26 @@ DEVICE void TDigest<RealType, IndexType>::allocate() {
   }
 }
 
+// Return total_weight * (f_inv(f(q_{i-1})+1) - q_{i-1})
 template <typename RealType, typename IndexType>
 DEVICE IndexType
 TDigest<RealType, IndexType>::maxCardinality(IndexType const sum,
-                                             IndexType const total_weight) {
-  IndexType const max_bins = centroids_.capacity();
-  return max_bins < total_weight ? 2 * total_weight / max_bins : 0;
+                                             IndexType const total_weight,
+                                             RealType const c) {
+  IndexType const max_bins = centroids_.capacity();  // "compression parameter" delta
+  if (total_weight <= max_bins) {
+    return 0;
+  } else if (use_linear_scaling_function_) {
+    // Whitepaper scaling function k=0.
+    return 2 * total_weight / max_bins;
+  } else {
+    // Whitepaper scaling function k=1.
+    RealType const x = 2.0 * sum / total_weight - 1;  // = 2 q_{i-1} - 1
+    RealType const f_inv = 0.5 + 0.5 * std::sin(c + std::asin(x));
+    constexpr RealType eps = 1e-5;  // round-off epsilon for floor().
+    IndexType const dsum = static_cast<IndexType>(total_weight * f_inv + eps);
+    return dsum < sum ? 0 : dsum - sum;
+  }
 }
 
 // Assumes buf_ consists only of singletons.
@@ -636,6 +661,9 @@ DEVICE void TDigest<RealType, IndexType>::mergeSorted(RealType* sums,
 template <typename RealType, typename IndexType>
 DEVICE void TDigest<RealType, IndexType>::mergeCentroids(
     Centroids<RealType, IndexType>& buf) {
+  constexpr RealType two_pi = 6.283185307179586476925286766559005768e+00;
+  // Hoisted constant used in maxCardinality().
+  RealType const c = two_pi / centroids_.capacity();
   // Loop over sorted sequence of buf and centroids_.
   // Some latter centroids may be merged into the current centroid, so the number
   // of iterations is only at most equal to the number of initial centroids.
@@ -643,7 +671,7 @@ DEVICE void TDigest<RealType, IndexType>::mergeCentroids(
   for (CM cm(&buf, &centroids_, forward_); cm.hasNext(); cm.next()) {
     // cm.prefixSum() == 0 on first iteration.
     // Max cardinality for current centroid to be fully merged based on scaling function.
-    IndexType const max_cardinality = maxCardinality(cm.prefixSum(), cm.totalWeight());
+    IndexType const max_cardinality = maxCardinality(cm.prefixSum(), cm.totalWeight(), c);
     cm.merge(max_cardinality);
   }
   // Combine sorted centroids buf[0..curr_idx_] + centroids_[0..curr_idx_] if forward

@@ -136,18 +136,9 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoOperator(
   auto [arg_lvs, null_lv] = op_codegen->codegenLoads(
       load_lvs, pos_arg_operand ? posArg(pos_arg_operand) : nullptr, cgen_state_);
 
-  std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
-  if (op_codegen->isNullable()) {
-    nullcheck_codegen =
-        std::make_unique<NullCheckCodegen>(cgen_state_,
-                                           executor(),
-                                           null_lv,
-                                           op_codegen->getNullType(),
-                                           op_codegen->getName() + "_nullcheck");
-  }
-
-  return op_codegen->codegen(
-      arg_lvs, nullcheck_codegen ? nullcheck_codegen.get() : nullptr, cgen_state_);
+  std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen =
+      op_codegen->getNullCheckCodegen(null_lv, cgen_state_, executor());
+  return op_codegen->codegen(arg_lvs, nullcheck_codegen.get(), cgen_state_);
 }
 
 namespace {

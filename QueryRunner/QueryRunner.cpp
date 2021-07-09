@@ -18,6 +18,7 @@
 
 #include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
+#include "Catalog/DdlCommandExecutor.h"
 #include "DistributedLoader.h"
 #include "Geospatial/Transforms.h"
 #include "ImportExport/CopyParams.h"
@@ -312,6 +313,30 @@ RegisteredQueryHint QueryRunner::getParsedQueryHint(const std::string& query_str
   return query_hints;
 }
 
+// used to validate calcite ddl statements
+void QueryRunner::validateDDLStatement(const std::string& stmt_str_in) {
+  CHECK(session_info_);
+
+  std::string stmt_str = stmt_str_in;
+  // First remove special chars
+  boost::algorithm::trim_left_if(stmt_str, boost::algorithm::is_any_of("\n"));
+  // Then remove spaces
+  boost::algorithm::trim_left(stmt_str);
+
+  auto query_state = create_query_state(session_info_, stmt_str);
+  auto stdlog = STDLOG(query_state);
+
+  const auto& cat = session_info_->getCatalog();
+  auto calcite_mgr = cat.getCalciteMgr();
+  calcite_mgr->process(query_state->createQueryStateProxy(),
+                       pg_shim(stmt_str),
+                       {},
+                       true,
+                       false,
+                       false,
+                       true);
+}
+
 void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
@@ -329,6 +354,23 @@ void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
 
   auto query_state = create_query_state(session_info_, stmt_str);
   auto stdlog = STDLOG(query_state);
+
+  if (pw.isCalciteDdl()) {
+    const auto& cat = session_info_->getCatalog();
+    auto calcite_mgr = cat.getCalciteMgr();
+    const auto query_ra = calcite_mgr
+                              ->process(query_state->createQueryStateProxy(),
+                                        pg_shim(stmt_str),
+                                        {},
+                                        true,
+                                        false,
+                                        false,
+                                        true)
+                              .plan_result;
+    DdlCommandExecutor executor = DdlCommandExecutor(query_ra, session_info_);
+    executor.execute();
+    return;
+  }
 
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
@@ -516,22 +558,29 @@ std::vector<std::shared_ptr<ResultSet>> QueryRunner::runMultipleStatements(
     if (text == ";") {
       continue;
     }
-    // TODO: Maybe remove this redundant parsing after enhancing Parser::Stmt?
-    SQLParser parser;
-    std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
-    std::string last_parsed;
-    CHECK_EQ(parser.parse(text, parse_trees, last_parsed), 0);
-    CHECK_EQ(parse_trees.size(), size_t(1));
-    auto stmt = parse_trees.front().get();
-    Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
-    Parser::DMLStmt* dml = dynamic_cast<Parser::DMLStmt*>(stmt);
-    if (ddl != nullptr && dml == nullptr) {
+
+    ParserWrapper pw{text};
+    if (pw.isCalciteDdl()) {
       runDDLStatement(text);
       results.push_back(nullptr);
-    } else if (ddl == nullptr && dml != nullptr) {
-      results.push_back(runSQL(text, dt, true, true));
     } else {
-      throw std::runtime_error("Unexpected SQL statement type: " + text);
+      // TODO: Maybe remove this redundant parsing after enhancing Parser::Stmt?
+      SQLParser parser;
+      std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
+      std::string last_parsed;
+      CHECK_EQ(parser.parse(text, parse_trees, last_parsed), 0);
+      CHECK_EQ(parse_trees.size(), size_t(1));
+      auto stmt = parse_trees.front().get();
+      Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
+      Parser::DMLStmt* dml = dynamic_cast<Parser::DMLStmt*>(stmt);
+      if (ddl != nullptr && dml == nullptr) {
+        runDDLStatement(text);
+        results.push_back(nullptr);
+      } else if (ddl == nullptr && dml != nullptr) {
+        results.push_back(runSQL(text, dt, true, true));
+      } else {
+        throw std::runtime_error("Unexpected SQL statement type: " + text);
+      }
     }
   }
   return results;

@@ -419,6 +419,22 @@ ArrayDatum ImporterUtils::composeNullArray(const SQLTypeInfo& ti) {
   return NullArray(ti);
 }
 
+ArrayDatum ImporterUtils::composeNullPointCoords(const SQLTypeInfo& coords_ti,
+                                                 const SQLTypeInfo& geo_ti) {
+  if (geo_ti.get_compression() == kENCODING_GEOINT) {
+    CHECK(geo_ti.get_comp_param() == 32);
+    std::vector<double> null_point_coords = {NULL_ARRAY_DOUBLE, NULL_DOUBLE};
+    auto compressed_null_coords = Geospatial::compress_coords(null_point_coords, geo_ti);
+    const size_t len = compressed_null_coords.size();
+    int8_t* buf = (int8_t*)checked_malloc(len);
+    memcpy(buf, compressed_null_coords.data(), len);
+    return ArrayDatum(len, buf, false);
+  }
+  auto modified_ti = coords_ti;
+  modified_ti.set_subtype(kDOUBLE);
+  return import_export::ImporterUtils::composeNullArray(modified_ti);
+}
+
 void addBinaryStringArray(const TDatum& datum, std::vector<std::string>& string_vec) {
   const auto& arr = datum.val.arr_val;
   for (const auto& elem_datum : arr) {
@@ -1145,7 +1161,15 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
                 int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
                 int8_t* p = buf;
                 for (size_t j = 0; j < len; ++j) {
-                  *(bool*)p = static_cast<bool>(col.data.arr_col[i].data.int_col[j]);
+                  // Explicitly checking the item for null because
+                  // casting null value (-128) to bool results
+                  // incorrect value 1.
+                  if (col.data.arr_col[i].nulls[j]) {
+                    *p = static_cast<int8_t>(
+                        inline_fixed_encoding_null_val(cd->columnType.get_elem_type()));
+                  } else {
+                    *(bool*)p = static_cast<bool>(col.data.arr_col[i].data.int_col[j]);
+                  }
                   p += sizeof(bool);
                 }
                 addArray(ArrayDatum(byteSize, buf, false));
@@ -5220,12 +5244,11 @@ std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
                   cd->columnId) == insert_data.columnIds.end()) {
       StringDictionary* dict = nullptr;
       if (cd->columnType.get_type() == kARRAY &&
-          IS_STRING(cd->columnType.get_subtype())) {
+          IS_STRING(cd->columnType.get_subtype()) && !cd->default_value.has_value()) {
         throw std::runtime_error("Cannot omit column \"" + cd->columnName +
                                  "\": omitting TEXT arrays is not supported yet");
       }
-      if (cd->columnType.is_string() &&
-          cd->columnType.get_compression() == kENCODING_DICT) {
+      if (cd->columnType.get_compression() == kENCODING_DICT) {
         dict = cat->getMetadataForDict(cd->columnType.get_comp_param())->stringDict.get();
       }
       defaults_buffers.emplace_back(std::make_unique<TypedImportBuffer>(cd, dict));
@@ -5239,14 +5262,16 @@ std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
             });
   for (size_t i = 0; i < defaults_buffers.size(); ++i) {
     auto cd = defaults_buffers[i]->getColumnDesc();
-    defaults_buffers[i]->add_value(cd, "NULL", true, import_export::CopyParams());
+    std::string default_value = cd->default_value.value_or("NULL");
+    defaults_buffers[i]->add_value(
+        cd, default_value, !cd->default_value.has_value(), import_export::CopyParams());
     if (cd->columnType.is_geometry()) {
       std::vector<double> coords, bounds;
       std::vector<int> ring_sizes, poly_rings;
       int render_group = 0;
       SQLTypeInfo tinfo{cd->columnType};
       CHECK(Geospatial::GeoTypesFactory::getGeoColumns(
-          "NULL", tinfo, coords, bounds, ring_sizes, poly_rings, false));
+          default_value, tinfo, coords, bounds, ring_sizes, poly_rings, false));
       // set physical columns starting with the following ID
       auto next_col = i + 1;
       import_export::Importer::set_geo_physical_import_buffer(*cat,

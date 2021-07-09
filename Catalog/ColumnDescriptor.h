@@ -18,6 +18,7 @@
 #define COLUMN_DESCRIPTOR_H
 
 #include <cassert>
+#include <optional>
 #include <string>
 #include "../Shared/sqltypes.h"
 #include "../Shared/toString.h"
@@ -40,6 +41,7 @@ struct ColumnDescriptor {
   std::string virtualExpr;
   bool isDeletedCol;
   bool isGeoPhyCol{false};
+  std::optional<std::string> default_value;
 
   ColumnDescriptor() : isSystemCol(false), isVirtualCol(false), isDeletedCol(false) {}
   ColumnDescriptor(const int tableId,

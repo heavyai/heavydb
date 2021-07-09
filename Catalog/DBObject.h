@@ -229,7 +229,7 @@ class DBObject {
   void loadKey();
   void loadKey(const Catalog_Namespace::Catalog& catalog);
 
-  bool valid() {
+  bool valid() const {
     return (objectType_ != AbstractDBObjectType && objectKey_.permissionType != -1 &&
             objectKey_.dbId != -1);
   }

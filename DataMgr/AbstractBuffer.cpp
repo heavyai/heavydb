@@ -42,6 +42,7 @@ void AbstractBuffer::syncEncoder(const AbstractBuffer* src_buffer) {
 }
 
 void AbstractBuffer::copyTo(AbstractBuffer* destination_buffer, const size_t num_bytes) {
+  CHECK_GE(size(), num_bytes) << "Attempting to copy more bytes than a buffer contains";
   size_t chunk_size = (num_bytes == 0) ? size() : num_bytes;
   destination_buffer->reserve(chunk_size);
   if (isUpdated()) {

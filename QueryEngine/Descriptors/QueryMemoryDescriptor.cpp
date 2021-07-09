@@ -185,11 +185,25 @@ template <class T>
 inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
   std::vector<int8_t> col_widths;
   size_t col_expr_idx = 0;
-  for (const auto col_expr : col_expr_list) {
+  for (const auto& col_expr : col_expr_list) {
     if (!col_expr) {
       // row index
       col_widths.push_back(sizeof(int64_t));
     } else {
+      bool is_varlen_projection{false};
+      if constexpr (std::is_same<T, std::list<std::shared_ptr<Analyzer::Expr>>>::value) {
+        is_varlen_projection =
+            !(std::dynamic_pointer_cast<const Analyzer::GeoExpr>(col_expr) == nullptr);
+      } else {
+        is_varlen_projection =
+            !(dynamic_cast<const Analyzer::GeoExpr*>(col_expr) == nullptr);
+      }
+
+      if (is_varlen_projection) {
+        col_widths.push_back(sizeof(int64_t));
+        ++col_expr_idx;
+        continue;
+      }
       const auto agg_info = get_target_info(col_expr, g_bigint_count);
       const auto chosen_type = get_compact_type(agg_info);
       if ((chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE) ||
@@ -486,7 +500,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
         output_columnar_ = output_columnar_hint &&
                            QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
                                count_distinct_descriptors_) &&
-                           !anyOf(ra_exe_unit.target_exprs, kAPPROX_MEDIAN);
+                           !anyOf(ra_exe_unit.target_exprs, kAPPROX_QUANTILE);
         break;
       case QueryDescriptionType::GroupByBaselineHash:
         output_columnar_ = output_columnar_hint;
@@ -495,7 +509,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
         output_columnar_ = output_columnar_hint &&
                            QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
                                count_distinct_descriptors_) &&
-                           !anyOf(ra_exe_unit.target_exprs, kAPPROX_MEDIAN);
+                           !anyOf(ra_exe_unit.target_exprs, kAPPROX_QUANTILE);
         break;
       default:
         output_columnar_ = false;
@@ -1240,4 +1254,37 @@ std::vector<TargetInfo> target_exprs_to_infos(
     target_infos.push_back(target);
   }
   return target_infos;
+}
+
+std::optional<size_t> QueryMemoryDescriptor::varlenOutputBufferElemSize() const {
+  int64_t buffer_element_size{0};
+  for (size_t i = 0; i < col_slot_context_.getSlotCount(); i++) {
+    try {
+      const auto slot_element_size = col_slot_context_.varlenOutputElementSize(i);
+      if (slot_element_size < 0) {
+        return std::nullopt;
+      }
+      buffer_element_size += slot_element_size;
+    } catch (...) {
+      continue;
+    }
+  }
+  return buffer_element_size;
+}
+
+size_t QueryMemoryDescriptor::varlenOutputRowSizeToSlot(const size_t slot_idx) const {
+  int64_t buffer_element_size{0};
+  CHECK_LT(slot_idx, col_slot_context_.getSlotCount());
+  for (size_t i = 0; i < slot_idx; i++) {
+    try {
+      const auto slot_element_size = col_slot_context_.varlenOutputElementSize(i);
+      if (slot_element_size < 0) {
+        continue;
+      }
+      buffer_element_size += slot_element_size;
+    } catch (...) {
+      continue;
+    }
+  }
+  return buffer_element_size;
 }

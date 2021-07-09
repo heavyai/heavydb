@@ -172,6 +172,10 @@ inline void run_ddl_statement(const std::string& create_table_stmt) {
   QR::get()->runDDLStatement(create_table_stmt);
 }
 
+inline void validate_ddl_statement(const std::string& create_table_stmt) {
+  QR::get()->validateDDLStatement(create_table_stmt);
+}
+
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
   return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
@@ -180,11 +184,7 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 #endif
 }
 
-bool approx_eq(const double v, const double target, const double eps = 0.01) {
-  const auto v_u64 = *reinterpret_cast<const uint64_t*>(may_alias_ptr(&v));
-  const auto target_u64 = *reinterpret_cast<const uint64_t*>(may_alias_ptr(&target));
-  return v_u64 == target_u64 || (target - eps < v && v < target + eps);
-}
+constexpr double EPS = 1.25e-5;
 
 // Moved from TimeGM::parse_fractional_seconds().
 int parse_fractional_seconds(unsigned sfrac, const int ntotal, const SQLTypeInfo& ti) {
@@ -320,7 +320,7 @@ class SQLiteComparator {
                   << errmsg;
             } else {
               const auto ref_val = connector_.getData<double>(row_idx, col_idx);
-              ASSERT_TRUE(approx_eq(ref_val, omnisci_val)) << errmsg;
+              ASSERT_NEAR(ref_val, omnisci_val, EPS * std::fabs(ref_val)) << errmsg;
             }
             break;
           }
@@ -333,7 +333,7 @@ class SQLiteComparator {
                   << errmsg;
             } else {
               const auto ref_val = connector_.getData<float>(row_idx, col_idx);
-              ASSERT_TRUE(approx_eq(ref_val, omnisci_val)) << errmsg;
+              ASSERT_NEAR(ref_val, omnisci_val, EPS * std::fabs(ref_val)) << errmsg;
             }
             break;
           }
@@ -546,7 +546,7 @@ void validate_storage_options(
         "CREATE TABLE chelsea_storage(id TEXT ENCODING DICT(32), val INT " + add_column;
     query +=
         type_meta.first.empty() ? ");" : ") WITH (" + type_meta.first + "=" + val + ");";
-    ASSERT_EQ(true, validate_statement_syntax(query));
+    ASSERT_NO_THROW(validate_ddl_statement(query));
     if (type_meta.second) {
       ASSERT_THROW(run_ddl_statement(query), std::runtime_error);
     } else {
@@ -2495,10 +2495,10 @@ TEST(Select, ApproxMedianSanity) {
       approx_median("w");
       EXPECT_TRUE(false) << "Exception expected for approx_median query.";
     } catch (std::runtime_error const& e) {
-      EXPECT_EQ(std::string(e.what()),
-                "TException - service has thrown: TOmniSciException(error_msg=Exception: "
-                "APPROX_MEDIAN is not supported in distributed mode at this time."
-                ")");
+      EXPECT_EQ(
+          std::string(e.what()),
+          "TException - service has thrown: TOmniSciException(error_msg=Exception: "
+          "APPROX_QUANTILE/MEDIAN is not supported in distributed mode at this time.)");
     } catch (...) {
       EXPECT_TRUE(false) << "std::runtime_error expected for approx_median query.";
     }
@@ -2618,7 +2618,47 @@ TEST(Select, ApproxMedianSort) {
   }
 }
 
-TEST(Select, ApproxMedianSubqueries) {
+// APPROX_QUANTILE is exact when the number of rows is low.
+TEST(Select, ApproxQuantileExactValues) {
+  if (g_aggregator) {
+    LOG(WARNING) << "Skipping ApproxQuantileExactValues tests in distributed mode.";
+  } else {
+    auto const dt = ExecutorDeviceType::CPU;
+    // clang-format off
+    double tests[][2]{{0.0, 2.2}, {0.25, 2.2}, {0.45, 2.2}, {0.5, 2.3}, {0.55, 2.4},
+                      {0.7, 2.4}, {0.75, 2.5}, {0.8, 2.6}, {1.0, 2.6}};
+    // clang-format on
+    for (auto test : tests) {
+      std::stringstream query;
+      query << "SELECT APPROX_QUANTILE(d," << test[0] << ") FROM test;";
+      EXPECT_EQ(test[1], v<double>(run_simple_agg(query.str(), dt)));
+    }
+  }
+}
+
+TEST(Select, ApproxQuantileMinMax) {
+  if (g_aggregator) {
+    LOG(WARNING) << "Skipping ApproxQuantileMinMax tests in distributed mode.";
+  } else {
+    auto const dt = ExecutorDeviceType::CPU;
+    // clang-format off
+    char const* cols[]{"w", "x", "y", "z", "t", "f", "ff", "fn", "d", "dn", "dd",
+                       "dd_notnull", "u", "ofd", "ufd", "ofq", "ufq", "smallint_nulls"};
+    // clang-format on
+    for (std::string col : cols) {
+      c("SELECT APPROX_QUANTILE(" + col + ",0) FROM test;",
+        // MIN(ofq) = -1 but MIN(CAST(ofq AS DOUBLE)) = -2^63 due to null sentinel logic
+        //"SELECT CAST(MIN(" + col + ") AS DOUBLE) FROM test;",
+        "SELECT MIN(CAST(" + col + " AS DOUBLE)) FROM test;",
+        dt);
+      c("SELECT APPROX_QUANTILE(" + col + ",1) FROM test;",
+        "SELECT CAST(MAX(" + col + ") AS DOUBLE) FROM test;",
+        dt);
+    }
+  }
+}
+
+TEST(Select, ApproxQuantileSubqueries) {
   if (g_aggregator) {
     LOG(WARNING) << "Skipping ApproxMedianSubqueries tests in distributed mode.";
   } else {
@@ -2627,23 +2667,38 @@ TEST(Select, ApproxMedianSubqueries) {
         "SELECT MIN(am) FROM (SELECT x, APPROX_MEDIAN(w) AS am FROM test GROUP BY x);";
     EXPECT_EQ(-8.0, v<double>(run_simple_agg(query, dt)));
     query =
+        "SELECT MIN(am) FROM (SELECT x, APPROX_QUANTILE(w,0.5) AS am FROM test GROUP BY "
+        "x);";
+    EXPECT_EQ(-8.0, v<double>(run_simple_agg(query, dt)));
+    query =
         "SELECT MAX(am) FROM (SELECT x, APPROX_MEDIAN(w) AS am FROM test GROUP BY x);";
+    EXPECT_EQ(-7.0, v<double>(run_simple_agg(query, dt)));
+    query =
+        "SELECT MAX(am) FROM (SELECT x, APPROX_QUANTILE(w,0.5) AS am FROM test GROUP BY "
+        "x);";
     EXPECT_EQ(-7.0, v<double>(run_simple_agg(query, dt)));
   }
 }
 
 // Immerse invokes sql_validate which requires testing.
-TEST(Select, ApproxMedianValidate) {
+TEST(Select, ApproxQuantileValidate) {
   if (g_aggregator) {
     LOG(WARNING) << "Skipping ApproxMedianValidate tests in distributed mode.";
   } else {
     auto const dt = ExecutorDeviceType::CPU;
     auto eo = QR::defaultExecutionOptionsForRunSQL();
     eo.just_validate = true;
-    char const* const query = "SELECT APPROX_MEDIAN(x) FROM test;";
+    // APPROX_MEDIAN
+    char const* query = "SELECT APPROX_MEDIAN(x) FROM test;";
     std::shared_ptr<ResultSet> rows =
         QR::get()->runSQL(query, CompilationOptions::defaults(dt), std::move(eo));
     auto crt_row = rows->getNextRow(true, true);
+    CHECK_EQ(1u, crt_row.size()) << query;
+    EXPECT_EQ(NULL_DOUBLE, v<double>(crt_row[0]));
+    // APPROX_QUANTILE
+    query = "SELECT APPROX_QUANTILE(x,0.1) FROM test;";
+    rows = QR::get()->runSQL(query, CompilationOptions::defaults(dt), std::move(eo));
+    crt_row = rows->getNextRow(true, true);
     CHECK_EQ(1u, crt_row.size()) << query;
     EXPECT_EQ(NULL_DOUBLE, v<double>(crt_row[0]));
   }
@@ -3013,6 +3068,12 @@ TEST(Select, Case) {
       dt);
     c(R"(SELECT COUNT(*) FROM test WHERE (CASE WHEN x = 7 THEN str ELSE 'b' END) = shared_dict;)",
       dt);
+    c(R"(SELECT COUNT(*) FROM test WHERE (CASE WHEN str = 'foo' THEN 'a' WHEN str = 'bar' THEN 'b' ELSE str END) = 'b';)",
+      dt);
+    c(R"(SELECT str, count(*) FROM test WHERE (CASE WHEN str = 'foo' THEN 'a' WHEN str = 'bar' THEN 'b' ELSE str END) = 'b' GROUP BY str;)",
+      dt);
+    c(R"(SELECT COUNT(*) FROM test WHERE (CASE WHEN fixed_str = 'foo' THEN 'a' WHEN fixed_str is NULL THEN 'b' ELSE str END) = 'z';)",
+      dt);
     {
       const auto watchdog_state = g_enable_watchdog;
       g_enable_watchdog = true;
@@ -3023,6 +3084,17 @@ TEST(Select, Case) {
           R"(SELECT CASE WHEN x = 7 THEN 'a' WHEN x = 8 then str ELSE fixed_str END FROM test;)",
           dt));  // Exception: Cast from dictionary-encoded string to none-encoded would
                  // be slow
+      g_enable_watchdog = false;
+      // casts not yet supported in distributed mode
+      SKIP_ON_AGGREGATOR(c(
+          R"(SELECT CASE WHEN x = 7 THEN 'a' WHEN x = 8 then str ELSE fixed_str END FROM test ORDER BY 1;)",
+          dt));
+      SKIP_ON_AGGREGATOR(c(
+          R"(SELECT CASE WHEN str = 'foo' THEN real_str WHEN str = 'bar' THEN 'b' ELSE null_str END FROM test ORDER BY 1)",
+          dt));
+      EXPECT_ANY_THROW(run_multiple_agg(
+          R"(SELECT CASE WHEN str = 'foo' THEN real_str WHEN str = 'bar' THEN 'b' ELSE null_str END case_col, sum(x) FROM test GROUP BY case_col;)",
+          dt));  // cannot group by none encoded string columns
     }
     c("SELECT y AS key0, SUM(CASE WHEN x > 7 THEN x / (x - 7) ELSE 99 END) FROM test "
       "GROUP BY key0 ORDER BY key0;",
@@ -6182,126 +6254,126 @@ TEST(Select, CastDecimalToDecimal) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    ASSERT_TRUE(
-        approx_eq(456.78956,
-                  v<double>(run_simple_agg(
-                      "SELECT val FROM decimal_to_decimal_test WHERE id = 1;", dt))));
-    ASSERT_TRUE(
-        approx_eq(-456.78956,
-                  v<double>(run_simple_agg(
-                      "SELECT val FROM decimal_to_decimal_test WHERE id = -1;", dt))));
-    ASSERT_TRUE(
-        approx_eq(456.12345,
-                  v<double>(run_simple_agg(
-                      "SELECT val FROM decimal_to_decimal_test WHERE id = 2;", dt))));
-    ASSERT_TRUE(
-        approx_eq(-456.12345,
-                  v<double>(run_simple_agg(
-                      "SELECT val FROM decimal_to_decimal_test WHERE id = -2;", dt))));
+    ASSERT_NEAR(456.78956,
+                v<double>(run_simple_agg(
+                    "SELECT val FROM decimal_to_decimal_test WHERE id = 1;", dt)),
+                456.78956 * EPS);
+    ASSERT_NEAR(-456.78956,
+                v<double>(run_simple_agg(
+                    "SELECT val FROM decimal_to_decimal_test WHERE id = -1;", dt)),
+                456.78956 * EPS);
+    ASSERT_NEAR(456.12345,
+                v<double>(run_simple_agg(
+                    "SELECT val FROM decimal_to_decimal_test WHERE id = 2;", dt)),
+                EPS);
+    ASSERT_NEAR(-456.12345,
+                v<double>(run_simple_agg(
+                    "SELECT val FROM decimal_to_decimal_test WHERE id = -2;", dt)),
+                456.12345 * EPS);
 
-    ASSERT_TRUE(
-        approx_eq(456.7896,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,4)) FROM "
-                                           "decimal_to_decimal_test WHERE id = 1;",
-                                           dt))));
-    ASSERT_TRUE(
-        approx_eq(-456.7896,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,4)) FROM "
-                                           "decimal_to_decimal_test WHERE id = -1;",
-                                           dt))));
-    ASSERT_TRUE(
-        approx_eq(456.123,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,4)) FROM "
-                                           "decimal_to_decimal_test WHERE id = 2;",
-                                           dt))));
-    ASSERT_TRUE(
-        approx_eq(-456.123,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,4)) FROM "
-                                           "decimal_to_decimal_test WHERE id = -2;",
-                                           dt))));
+    ASSERT_NEAR(456.7896,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,4)) FROM "
+                                         "decimal_to_decimal_test WHERE id = 1;",
+                                         dt)),
+                456.7896 * EPS);
+    ASSERT_NEAR(-456.7896,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,4)) FROM "
+                                         "decimal_to_decimal_test WHERE id = -1;",
+                                         dt)),
+                456.7896 * EPS);
+    ASSERT_NEAR(456.123,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,4)) FROM "
+                                         "decimal_to_decimal_test WHERE id = 2;",
+                                         dt)),
+                456.123 * EPS);
+    ASSERT_NEAR(-456.123,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,4)) FROM "
+                                         "decimal_to_decimal_test WHERE id = -2;",
+                                         dt)),
+                456.123 * EPS);
 
-    ASSERT_TRUE(
-        approx_eq(456.790,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,3)) FROM "
-                                           "decimal_to_decimal_test WHERE id = 1;",
-                                           dt))));
-    ASSERT_TRUE(
-        approx_eq(-456.790,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,3)) FROM "
-                                           "decimal_to_decimal_test WHERE id = -1;",
-                                           dt))));
-    ASSERT_TRUE(
-        approx_eq(456.1234,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,3)) FROM "
-                                           "decimal_to_decimal_test WHERE id = 2;",
-                                           dt))));
-    ASSERT_TRUE(
-        approx_eq(-456.1234,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,3)) FROM "
-                                           "decimal_to_decimal_test WHERE id = -2;",
-                                           dt))));
+    ASSERT_NEAR(456.790,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,3)) FROM "
+                                         "decimal_to_decimal_test WHERE id = 1;",
+                                         dt)),
+                456.790 * EPS);
+    ASSERT_NEAR(-456.790,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,3)) FROM "
+                                         "decimal_to_decimal_test WHERE id = -1;",
+                                         dt)),
+                456.790 * EPS);
+    ASSERT_NEAR(456.1234,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,3)) FROM "
+                                         "decimal_to_decimal_test WHERE id = 2;",
+                                         dt)),
+                456.1234 * EPS);
+    ASSERT_NEAR(-456.1234,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,3)) FROM "
+                                         "decimal_to_decimal_test WHERE id = -2;",
+                                         dt)),
+                456.1234 * EPS);
 
-    ASSERT_TRUE(
-        approx_eq(456.79,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,2)) FROM "
-                                           "decimal_to_decimal_test WHERE id = 1;",
-                                           dt))));
-    ASSERT_TRUE(
-        approx_eq(-456.79,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,2)) FROM "
-                                           "decimal_to_decimal_test WHERE id = -1;",
-                                           dt))));
-    ASSERT_TRUE(
-        approx_eq(456.12,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,2)) FROM "
-                                           "decimal_to_decimal_test WHERE id = 2;",
-                                           dt))));
-    ASSERT_TRUE(
-        approx_eq(-456.12,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,2)) FROM "
-                                           "decimal_to_decimal_test WHERE id = -2;",
-                                           dt))));
+    ASSERT_NEAR(456.79,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,2)) FROM "
+                                         "decimal_to_decimal_test WHERE id = 1;",
+                                         dt)),
+                456.79 * EPS);
+    ASSERT_NEAR(-456.79,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,2)) FROM "
+                                         "decimal_to_decimal_test WHERE id = -1;",
+                                         dt)),
+                456.79 * EPS);
+    ASSERT_NEAR(456.12,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,2)) FROM "
+                                         "decimal_to_decimal_test WHERE id = 2;",
+                                         dt)),
+                456.12 * EPS);
+    ASSERT_NEAR(-456.12,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,2)) FROM "
+                                         "decimal_to_decimal_test WHERE id = -2;",
+                                         dt)),
+                456.12 * EPS);
 
-    ASSERT_TRUE(
-        approx_eq(456.8,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,1)) FROM "
-                                           "decimal_to_decimal_test WHERE id = 1;",
-                                           dt))));
-    ASSERT_TRUE(
-        approx_eq(-456.8,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,1)) FROM "
-                                           "decimal_to_decimal_test WHERE id = -1;",
-                                           dt))));
-    ASSERT_TRUE(
-        approx_eq(456.1,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,1)) FROM "
-                                           "decimal_to_decimal_test WHERE id = 2;",
-                                           dt))));
-    ASSERT_TRUE(
-        approx_eq(-456.1,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,1)) FROM "
-                                           "decimal_to_decimal_test WHERE id = -2;",
-                                           dt))));
-    ASSERT_TRUE(
-        approx_eq(457,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,0)) FROM "
-                                           "decimal_to_decimal_test WHERE id = 1;",
-                                           dt))));
-    ASSERT_TRUE(
-        approx_eq(-457,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,0)) FROM "
-                                           "decimal_to_decimal_test WHERE id = -1;",
-                                           dt))));
-    ASSERT_TRUE(
-        approx_eq(456,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,0)) FROM "
-                                           "decimal_to_decimal_test WHERE id = 2;",
-                                           dt))));
-    ASSERT_TRUE(
-        approx_eq(-456,
-                  v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,0)) FROM "
-                                           "decimal_to_decimal_test WHERE id = -2;",
-                                           dt))));
+    ASSERT_NEAR(456.8,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,1)) FROM "
+                                         "decimal_to_decimal_test WHERE id = 1;",
+                                         dt)),
+                456.8 * EPS);
+    ASSERT_NEAR(-456.8,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,1)) FROM "
+                                         "decimal_to_decimal_test WHERE id = -1;",
+                                         dt)),
+                456.8 * EPS);
+    ASSERT_NEAR(456.1,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,1)) FROM "
+                                         "decimal_to_decimal_test WHERE id = 2;",
+                                         dt)),
+                456.1 * EPS);
+    ASSERT_NEAR(-456.1,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,1)) FROM "
+                                         "decimal_to_decimal_test WHERE id = -2;",
+                                         dt)),
+                456.1 * EPS);
+    ASSERT_NEAR(457,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,0)) FROM "
+                                         "decimal_to_decimal_test WHERE id = 1;",
+                                         dt)),
+                457 * EPS);
+    ASSERT_NEAR(-457,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,0)) FROM "
+                                         "decimal_to_decimal_test WHERE id = -1;",
+                                         dt)),
+                457 * EPS);
+    ASSERT_NEAR(456,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,0)) FROM "
+                                         "decimal_to_decimal_test WHERE id = 2;",
+                                         dt)),
+                456 * EPS);
+    ASSERT_NEAR(-456,
+                v<double>(run_simple_agg("SELECT CAST(val AS DECIMAL(10,0)) FROM "
+                                         "decimal_to_decimal_test WHERE id = -2;",
+                                         dt)),
+                456 * EPS);
 
     ASSERT_EQ(457,
               v<int64_t>(run_simple_agg(

@@ -63,7 +63,6 @@ int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     if (!agg_expr || agg_expr->get_aggtype() == kSAMPLE) {
       const auto& ti = target_expr->get_type_info();
-      // TODO(pavan): or if is_geometry()
       if (ti.is_buffer()) {
         agg_count += 2;
       } else if (ti.is_geometry()) {
@@ -596,7 +595,7 @@ CountDistinctDescriptors init_count_distinct_descriptors(
       CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
       int64_t bitmap_sz_bits{0};
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
-        const auto error_rate = agg_expr->get_error_rate();
+        const auto error_rate = agg_expr->get_arg1();
         if (error_rate) {
           CHECK(error_rate->get_type_info().get_type() == kINT);
           CHECK_GE(error_rate->get_constval().intval, 1);
@@ -873,6 +872,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
       }
 
       auto agg_out_ptr_w_idx = codegenGroupBy(query_mem_desc, co, filter_cfg);
+      auto varlen_output_buffer = codegenVarlenOutputBuffer(query_mem_desc);
       if (query_mem_desc.usesGetGroupValueFast() ||
           query_mem_desc.getQueryDescriptionType() ==
               QueryDescriptionType::GroupByPerfectHash) {
@@ -881,8 +881,13 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
         }
         // Don't generate null checks if the group slot is guaranteed to be non-null,
         // as it's the case for get_group_value_fast* family.
-        can_return_error = codegenAggCalls(
-            agg_out_ptr_w_idx, {}, query_mem_desc, co, gpu_smem_context, filter_cfg);
+        can_return_error = codegenAggCalls(agg_out_ptr_w_idx,
+                                           varlen_output_buffer,
+                                           {},
+                                           query_mem_desc,
+                                           co,
+                                           gpu_smem_context,
+                                           filter_cfg);
       } else {
         {
           llvm::Value* nullcheck_cond{nullptr};
@@ -897,8 +902,13 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
           }
           DiamondCodegen nullcheck_cfg(
               nullcheck_cond, executor_, false, "groupby_nullcheck", &filter_cfg, false);
-          codegenAggCalls(
-              agg_out_ptr_w_idx, {}, query_mem_desc, co, gpu_smem_context, filter_cfg);
+          codegenAggCalls(agg_out_ptr_w_idx,
+                          varlen_output_buffer,
+                          {},
+                          query_mem_desc,
+                          co,
+                          gpu_smem_context,
+                          filter_cfg);
         }
         can_return_error = true;
         if (query_mem_desc.getQueryDescriptionType() ==
@@ -925,6 +935,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
           agg_out_vec.push_back(&*arg_it++);
         }
         can_return_error = codegenAggCalls(std::make_tuple(nullptr, nullptr),
+                                           /*varlen_output_buffer=*/nullptr,
                                            agg_out_vec,
                                            query_mem_desc,
                                            co,
@@ -1155,6 +1166,20 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
   }
   CHECK(false);
   return std::make_tuple(nullptr, nullptr);
+}
+
+llvm::Value* GroupByAndAggregate::codegenVarlenOutputBuffer(
+    const QueryMemoryDescriptor& query_mem_desc) {
+  if (!query_mem_desc.hasVarlenOutput()) {
+    return nullptr;
+  }
+
+  AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
+  auto arg_it = ROW_FUNC->arg_begin();
+  arg_it++; /* groups_buffer */
+  auto varlen_output_buffer = arg_it++;
+  CHECK(varlen_output_buffer->getType() == llvm::Type::getInt64PtrTy(LL_CONTEXT));
+  return varlen_output_buffer;
 }
 
 std::tuple<llvm::Value*, llvm::Value*>
@@ -1426,6 +1451,7 @@ llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
 
 bool GroupByAndAggregate::codegenAggCalls(
     const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx_in,
+    llvm::Value* varlen_output_buffer,
     const std::vector<llvm::Value*>& agg_out_vec,
     const QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
@@ -1477,6 +1503,7 @@ bool GroupByAndAggregate::codegenAggCalls(
                          agg_out_vec,
                          output_buffer_byte_stream,
                          out_row_idx,
+                         varlen_output_buffer,
                          diamond_codegen);
 
   for (auto target_expr : ra_exe_unit_.target_exprs) {
@@ -1596,7 +1623,7 @@ extern "C" RUNTIME_EXPORT void agg_count_distinct_skip_val(int64_t* agg,
   }
 }
 
-extern "C" RUNTIME_EXPORT void agg_approx_median(int64_t* agg, const double val) {
+extern "C" RUNTIME_EXPORT void agg_approx_quantile(int64_t* agg, const double val) {
   auto* t_digest = reinterpret_cast<quantile::TDigest*>(*agg);
   t_digest->allocate();
   t_digest->add(val);
@@ -1671,11 +1698,12 @@ void GroupByAndAggregate::codegenCountDistinct(
   }
 }
 
-void GroupByAndAggregate::codegenApproxMedian(const size_t target_idx,
-                                              const Analyzer::Expr* target_expr,
-                                              std::vector<llvm::Value*>& agg_args,
-                                              const QueryMemoryDescriptor& query_mem_desc,
-                                              const ExecutorDeviceType device_type) {
+void GroupByAndAggregate::codegenApproxQuantile(
+    const size_t target_idx,
+    const Analyzer::Expr* target_expr,
+    std::vector<llvm::Value*>& agg_args,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const ExecutorDeviceType device_type) {
   if (device_type == ExecutorDeviceType::GPU) {
     throw QueryMustRunOnCpu();
   }
@@ -1692,8 +1720,8 @@ void GroupByAndAggregate::codegenApproxMedian(const size_t target_idx,
     auto* const skip_cond = arg_ti.is_fp()
                                 ? irb.CreateFCmpOEQ(agg_args.back(), null_value)
                                 : irb.CreateICmpEQ(agg_args.back(), null_value);
-    calc = llvm::BasicBlock::Create(cs->context_, "calc_approx_median");
-    skip = llvm::BasicBlock::Create(cs->context_, "skip_approx_median");
+    calc = llvm::BasicBlock::Create(cs->context_, "calc_approx_quantile");
+    skip = llvm::BasicBlock::Create(cs->context_, "skip_approx_quantile");
     irb.CreateCondBr(skip_cond, skip, calc);
     cs->current_func_->getBasicBlockList().push_back(calc);
     irb.SetInsertPoint(calc);
@@ -1703,7 +1731,7 @@ void GroupByAndAggregate::codegenApproxMedian(const size_t target_idx,
     agg_args.back() = executor_->castToFP(agg_args.back(), arg_ti, agg_info.sql_type);
   }
   cs->emitExternalCall(
-      "agg_approx_median", llvm::Type::getVoidTy(cs->context_), agg_args);
+      "agg_approx_quantile", llvm::Type::getVoidTy(cs->context_), agg_args);
   if (nullable) {
     irb.CreateBr(skip);
     cs->current_func_->getBasicBlockList().push_back(skip);
@@ -1825,6 +1853,11 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
               bool const fetch_columns) -> std::vector<llvm::Value*> {
         const auto target_lvs =
             code_generator.codegen(selected_target_expr, fetch_columns, co);
+        if (dynamic_cast<const Analyzer::GeoOperator*>(target_expr) &&
+            target_expr->get_type_info().is_geometry()) {
+          // return a pointer to the temporary alloca
+          return target_lvs;
+        }
         const auto geo_uoper = dynamic_cast<const Analyzer::GeoUOper*>(target_expr);
         const auto geo_binoper = dynamic_cast<const Analyzer::GeoBinOper*>(target_expr);
         if (geo_uoper || geo_binoper) {

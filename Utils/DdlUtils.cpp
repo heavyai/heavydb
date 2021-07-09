@@ -510,7 +510,8 @@ void set_column_descriptor(const std::string& column_name,
                            ColumnDescriptor& cd,
                            SqlType* column_type,
                            const bool not_null,
-                           const Encoding* encoding) {
+                           const Encoding* encoding,
+                           const std::string* default_value) {
   cd.columnName = column_name;
   validate_and_set_type(cd, column_type);
   cd.columnType.set_notnull(not_null);
@@ -518,6 +519,7 @@ void set_column_descriptor(const std::string& column_name,
   validate_and_set_array_size(cd, column_type);
   cd.isSystemCol = false;
   cd.isVirtualCol = false;
+  cd.default_value = default_value ? std::make_optional(*default_value) : std::nullopt;
 }
 
 void set_default_table_attributes(const std::string& table_name,

@@ -132,6 +132,7 @@ class QueryRunner {
   virtual void clearCpuMemory() const;
 
   virtual void runDDLStatement(const std::string&);
+  virtual void validateDDLStatement(const std::string&);
 
   virtual std::shared_ptr<ResultSet> runSQL(const std::string& query_str,
                                             CompilationOptions co,

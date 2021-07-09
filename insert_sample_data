@@ -6,8 +6,6 @@ MAPD_TCP_PORT=${MAPD_TCP_PORT:=6274}
 
 DATA_URL=${DATA_URL:="https://data.mapd.com"}
 
-MAPD_DATA=${MAPD_DATA:="$PWD/data"}
-
 ALLOW_DOWNLOADS=${ALLOW_DOWNLOADS:=true}
 
 if hash wget 2>/dev/null; then
@@ -49,6 +47,11 @@ while (( $# )); do
   esac
   shift
 done
+
+if [ -z "${MAPD_DATA}" ]; then
+  MAPD_DATA=${MAPD_DATA:="$PWD/data"}
+  echo "Using default data directory: \"$MAPD_DATA\" if file path is not whitelisted use '--data /path_to_server_data_directory'"
+fi
 
 SAMPLE_PATH=${SAMPLE_PATH:="$MAPD_DATA/mapd_import/sample_datasets"}
 

@@ -281,6 +281,15 @@ class SQLTypeInfo {
       , compression(kENCODING_NONE)
       , comp_param(0)
       , size(get_storage_size()) {}
+  SQLTypeInfo(SQLTypes t, EncodingType c, int p, SQLTypes st)
+      : type(t)
+      , subtype(st)
+      , dimension(0)
+      , scale(0)
+      , notnull(false)
+      , compression(c)
+      , comp_param(p)
+      , size(get_storage_size()) {}
   SQLTypeInfo(SQLTypes t, int d, int s) : SQLTypeInfo(t, d, s, false) {}
   SQLTypeInfo(SQLTypes t, bool n)
       : type(t)
@@ -525,6 +534,10 @@ class SQLTypeInfo {
 
   inline bool is_dict_encoded_string() const {
     return is_string() && compression == kENCODING_DICT;
+  }
+
+  inline bool is_subtype_dict_encoded_string() const {
+    return IS_STRING(subtype) && compression == kENCODING_DICT;
   }
 
   inline bool is_dict_encoded_type() const {
@@ -982,6 +995,14 @@ inline auto generate_array_type(const SQLTypes subtype) {
 inline auto generate_column_type(const SQLTypes subtype) {
   auto ti = SQLTypeInfo(kCOLUMN, false);
   ti.set_subtype(subtype);
+  return ti;
+}
+
+inline auto generate_column_type(const SQLTypes subtype, EncodingType c, int p) {
+  auto ti = SQLTypeInfo(kCOLUMN, false);
+  ti.set_subtype(subtype);
+  ti.set_compression(c);
+  ti.set_comp_param(p);
   return ti;
 }
 

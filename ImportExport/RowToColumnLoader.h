@@ -37,7 +37,6 @@
 #include <string>
 
 #include "Shared/ThriftClient.h"
-#include "Shared/mapd_shared_ptr.h"
 #include "Shared/sqltypes.h"
 
 #include <chrono>
@@ -87,7 +86,7 @@ class RowToColumnLoader {
 
   TRowDescriptor row_desc_;
 
-  mapd::shared_ptr<OmniSciClient> client_;
+  std::shared_ptr<OmniSciClient> client_;
   TSessionId session_;
 
   void createConnection(const ThriftClientConnection& con);

@@ -678,6 +678,16 @@ extern "C" __device__ void agg_id_shared(int64_t* agg, const int64_t val) {
   *agg = val;
 }
 
+extern "C" __device__ int8_t* agg_id_varlen_shared(int8_t* varlen_buffer,
+                                                   const int64_t offset,
+                                                   const int8_t* value,
+                                                   const int64_t size_bytes) {
+  for (auto i = 0; i < size_bytes; i++) {
+    varlen_buffer[offset + i] = value[i];
+  }
+  return &varlen_buffer[offset];
+}
+
 extern "C" __device__ int32_t checked_single_agg_id_shared(int64_t* agg,
                                                            const int64_t val,
                                                            const int64_t null_val) {
@@ -1206,7 +1216,7 @@ extern "C" __device__ void linear_probabilistic_count(uint8_t* bitmap,
                                                       const uint32_t bitmap_bytes,
                                                       const uint8_t* key_bytes,
                                                       const uint32_t key_len) {
-  const uint32_t bit_pos = MurmurHash1(key_bytes, key_len, 0) % (bitmap_bytes * 8);
+  const uint32_t bit_pos = MurmurHash3(key_bytes, key_len, 0) % (bitmap_bytes * 8);
   const uint32_t word_idx = bit_pos / 32;
   const uint32_t bit_idx = bit_pos % 32;
   atomicOr(((uint32_t*)bitmap) + word_idx, 1 << bit_idx);

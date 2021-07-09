@@ -257,7 +257,7 @@ create_table_statement:
 		{
 		  $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new CreateTableStmt(($<stringval>5)->release(), nullptr, reinterpret_cast<std::list<TableElement*>*>(($<listval>7)->release()), $<boolval>2,  $<boolval>4, reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>9)->release())));
 		}
-		| CREATE NAME TABLE opt_if_not_exists table '(' base_table_element_commalist ')' opt_with_option_list
+		| CREATE CREATE NAME TABLE opt_if_not_exists table '(' base_table_element_commalist ')' opt_with_option_list
 		{
 		  $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new CreateTableStmt(($<stringval>5)->release(), ($<stringval>2)->release(), reinterpret_cast<std::list<TableElement*>*>(($<listval>7)->release()), false,  $<boolval>4, reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>9)->release())));
 		}

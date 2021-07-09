@@ -503,6 +503,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.ColumnDouble;
       case ColumnBool:
         return ExtensionFunction.ExtArgumentType.ColumnBool;
+      case ColumnTextEncodingDict:
+        return ExtensionFunction.ExtArgumentType.ColumnTextEncodingDict;
       case GeoPoint:
         return ExtensionFunction.ExtArgumentType.GeoPoint;
       case GeoLineString:
@@ -515,12 +517,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.GeoMultiPolygon;
       case TextEncodingNone:
         return ExtensionFunction.ExtArgumentType.TextEncodingNone;
-      case TextEncodingDict8:
-        return ExtensionFunction.ExtArgumentType.TextEncodingDict8;
-      case TextEncodingDict16:
-        return ExtensionFunction.ExtArgumentType.TextEncodingDict16;
-      case TextEncodingDict32:
-        return ExtensionFunction.ExtArgumentType.TextEncodingDict32;
+      case TextEncodingDict:
+        return ExtensionFunction.ExtArgumentType.TextEncodingDict;
       case ColumnListInt8:
         return ExtensionFunction.ExtArgumentType.ColumnListInt8;
       case ColumnListInt16:
@@ -535,6 +533,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.ColumnListDouble;
       case ColumnListBool:
         return ExtensionFunction.ExtArgumentType.ColumnListBool;
+      case ColumnListTextEncodingDict:
+        return ExtensionFunction.ExtArgumentType.ColumnListTextEncodingDict;
       default:
         MAPDLOGGER.error("toExtArgumentType: unknown type " + type);
         return null;

@@ -259,8 +259,6 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
     chunk_iter_holder.push_back(chunk->begin_iterator(chunk_meta_it->second));
     auto& chunk_iter = chunk_iter_holder.back();
     if (memory_level == Data_Namespace::CPU_LEVEL) {
-      ChunkKey chunk_key{
-          cat.getCurrentDB().dbId, fragment.physicalTableId, col_id, fragment.fragmentId};
       return reinterpret_cast<int8_t*>(&chunk_iter);
     } else {
       auto ab = chunk->getBuffer();

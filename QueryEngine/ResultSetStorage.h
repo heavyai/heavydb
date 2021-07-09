@@ -123,10 +123,10 @@ class ResultSetStorage {
     query_mem_desc_.setEntryCount(new_entry_count);
   }
 
-  void reduceOneApproxMedianSlot(int8_t* this_ptr1,
-                                 const int8_t* that_ptr1,
-                                 const size_t target_logical_idx,
-                                 const ResultSetStorage& that) const;
+  void reduceOneApproxQuantileSlot(int8_t* this_ptr1,
+                                   const int8_t* that_ptr1,
+                                   const size_t target_logical_idx,
+                                   const ResultSetStorage& that) const;
 
   // Reduces results for a single row when using interleaved bin layouts
   static bool reduceSingleRow(const int8_t* row_ptr,

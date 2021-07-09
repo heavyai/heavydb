@@ -141,7 +141,14 @@ void CsvDataWrapper::updateMetadata(
           data_chunk_key.emplace_back(1);
         }
         CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
-        auto cached_metadata = chunk_metadata_map_[data_chunk_key];
+        // Allocate new shared_ptr for metadata so we dont modify old one which may be
+        // used by executor
+        auto cached_metadata_previous =
+            shared::get_from_map(chunk_metadata_map_, data_chunk_key);
+        shared::get_from_map(chunk_metadata_map_, data_chunk_key) =
+            std::make_shared<ChunkMetadata>();
+        auto cached_metadata = shared::get_from_map(chunk_metadata_map_, data_chunk_key);
+        *cached_metadata = *cached_metadata_previous;
         auto chunk_metadata =
             entry.second.getBuffer()->getEncoder()->getMetadata(column->columnType);
         cached_metadata->chunkStats.max = chunk_metadata->chunkStats.max;

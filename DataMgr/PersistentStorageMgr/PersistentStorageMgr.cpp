@@ -89,7 +89,7 @@ void PersistentStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
       if (!isForeignStorage(chunk_key)) {
         // Foreign storage will read into cache buffers directly if enabled, so we do
         // not want to cache foreign table chunks here as they will already be cached.
-        disk_cache_->cacheChunk(chunk_key, destination_buffer);
+        disk_cache_->putBuffer(chunk_key, destination_buffer, num_bytes);
       }
       return;
     }

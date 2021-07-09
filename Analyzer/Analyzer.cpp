@@ -158,11 +158,8 @@ std::shared_ptr<Analyzer::Expr> LikelihoodExpr::deep_copy() const {
   return makeExpr<LikelihoodExpr>(arg->deep_copy(), likelihood);
 }
 std::shared_ptr<Analyzer::Expr> AggExpr::deep_copy() const {
-  return makeExpr<AggExpr>(type_info,
-                           aggtype,
-                           arg == nullptr ? nullptr : arg->deep_copy(),
-                           is_distinct,
-                           error_rate);
+  return makeExpr<AggExpr>(
+      type_info, aggtype, arg ? arg->deep_copy() : nullptr, is_distinct, arg1);
 }
 
 std::shared_ptr<Analyzer::Expr> CaseExpr::deep_copy() const {
@@ -1934,7 +1931,7 @@ std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_with_child_targetlist(
                            aggtype,
                            arg ? arg->rewrite_with_child_targetlist(tlist) : nullptr,
                            is_distinct,
-                           error_rate);
+                           arg1);
 }
 
 std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_agg_to_var(
@@ -2592,8 +2589,20 @@ std::string InValues::toString() const {
   std::string str{"(IN "};
   str += arg->toString();
   str += "(";
+  int cnt = 0;
+  bool shorted_value_list_str = false;
   for (auto e : value_list) {
     str += e->toString();
+    cnt++;
+    if (cnt > 4) {
+      shorted_value_list_str = true;
+      break;
+    }
+  }
+  if (shorted_value_list_str) {
+    str += "... | ";
+    str += "Total # values: ";
+    str += std::to_string(value_list.size());
   }
   str += ") ";
   return str;
@@ -2615,8 +2624,20 @@ std::string InIntegerSet::toString() const {
   std::string str{"(IN_INTEGER_SET "};
   str += arg->toString();
   str += "( ";
+  int cnt = 0;
+  bool shorted_value_list_str = false;
   for (const auto e : value_list) {
     str += std::to_string(e) + " ";
+    cnt++;
+    if (cnt > 4) {
+      shorted_value_list_str = true;
+      break;
+    }
+  }
+  if (shorted_value_list_str) {
+    str += "... | ";
+    str += "Total # values: ";
+    str += std::to_string(value_list.size());
   }
   str += ") ";
   return str;
@@ -2708,8 +2729,8 @@ std::string AggExpr::toString() const {
     case kAPPROX_COUNT_DISTINCT:
       agg = "APPROX_COUNT_DISTINCT";
       break;
-    case kAPPROX_MEDIAN:
-      agg = "APPROX_MEDIAN";
+    case kAPPROX_QUANTILE:
+      agg = "APPROX_QUANTILE";
       break;
     case kSINGLE_VALUE:
       agg = "SINGLE_VALUE";

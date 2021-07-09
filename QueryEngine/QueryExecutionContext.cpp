@@ -156,11 +156,14 @@ ResultSetPtr QueryExecutionContext::getRowSet(
   CHECK(query_buffers_);
   const auto group_by_buffers_size = query_buffers_->getNumBuffers();
   if (device_type_ == ExecutorDeviceType::CPU) {
-    CHECK_EQ(size_t(1), group_by_buffers_size);
+    const size_t expected_num_buffers = query_mem_desc.hasVarlenOutput() ? 2 : 1;
+    CHECK_EQ(expected_num_buffers, group_by_buffers_size);
     return groupBufferToResults(0);
   }
-  size_t step{query_mem_desc_.threadsShareMemory() ? executor_->blockSize() : 1};
-  for (size_t i = 0; i < group_by_buffers_size; i += step) {
+  const size_t step{query_mem_desc_.threadsShareMemory() ? executor_->blockSize() : 1};
+  const size_t group_by_output_buffers_size =
+      group_by_buffers_size - (query_mem_desc.hasVarlenOutput() ? 1 : 0);
+  for (size_t i = 0; i < group_by_output_buffers_size; i += step) {
     results_per_sm.emplace_back(groupBufferToResults(i), std::vector<size_t>{});
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);

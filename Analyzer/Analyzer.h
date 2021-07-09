@@ -1080,7 +1080,7 @@ class AggExpr : public Expr {
           std::shared_ptr<Analyzer::Expr> g,
           bool d,
           std::shared_ptr<Analyzer::Constant> e)
-      : Expr(ti, true), aggtype(a), arg(g), is_distinct(d), error_rate(e) {}
+      : Expr(ti, true), aggtype(a), arg(g), is_distinct(d), arg1(e) {}
   AggExpr(SQLTypes t,
           SQLAgg a,
           Expr* g,
@@ -1091,12 +1091,12 @@ class AggExpr : public Expr {
       , aggtype(a)
       , arg(g)
       , is_distinct(d)
-      , error_rate(e) {}
+      , arg1(e) {}
   SQLAgg get_aggtype() const { return aggtype; }
   Expr* get_arg() const { return arg.get(); }
   std::shared_ptr<Analyzer::Expr> get_own_arg() const { return arg; }
   bool get_is_distinct() const { return is_distinct; }
-  std::shared_ptr<Analyzer::Constant> get_error_rate() const { return error_rate; }
+  std::shared_ptr<Analyzer::Constant> get_arg1() const { return arg1; }
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
   void group_predicates(std::list<const Expr*>& scan_predicates,
                         std::list<const Expr*>& join_predicates,
@@ -1129,7 +1129,8 @@ class AggExpr : public Expr {
   SQLAgg aggtype;                       // aggregate type: kAVG, kMIN, kMAX, kSUM, kCOUNT
   std::shared_ptr<Analyzer::Expr> arg;  // argument to aggregate
   bool is_distinct;                     // true only if it is for COUNT(DISTINCT x)
-  std::shared_ptr<Analyzer::Constant> error_rate;  // error rate of kAPPROX_COUNT_DISTINCT
+  // APPROX_COUNT_DISTINCT error_rate, APPROX_QUANTILE quantile
+  std::shared_ptr<Analyzer::Constant> arg1;
 };
 
 /*
@@ -1674,6 +1675,10 @@ class Query {
 class GeoExpr : public Expr {
  public:
   GeoExpr(const SQLTypeInfo& ti) : Expr(ti) {}
+
+  // geo expressions might hide child expressions (e.g. constructors). Centralize logic
+  // for pulling out child expressions for simplicity in visitors.
+  virtual std::vector<Analyzer::Expr*> getChildExprs() const { return {}; }
 };
 
 /**
@@ -1748,6 +1753,15 @@ class GeoOperator : public GeoExpr {
 
   const std::string& getName() const { return name_; }
 
+  std::vector<Analyzer::Expr*> getChildExprs() const override {
+    std::vector<Analyzer::Expr*> ret;
+    ret.reserve(args_.size());
+    for (const auto& arg : args_) {
+      ret.push_back(arg.get());
+    }
+    return ret;
+  }
+
  private:
   const std::string name_;
   const std::vector<std::shared_ptr<Analyzer::Expr>> args_;
@@ -1775,6 +1789,15 @@ class GeoFunctionOperator : public GeoExpr {
   Analyzer::Expr* getArg(const size_t index) const;
 
   const std::string& getName() const { return name_; }
+
+  std::vector<Analyzer::Expr*> getChildExprs() const override {
+    std::vector<Analyzer::Expr*> ret;
+    ret.reserve(args_.size());
+    for (const auto& arg : args_) {
+      ret.push_back(arg.get());
+    }
+    return ret;
+  }
 
  private:
   const std::string name_;

@@ -261,11 +261,6 @@ else()
   find_package(Thrift REQUIRED)
 endif()
 include_directories(${Thrift_INCLUDE_DIRS})
-if("${Thrift_VERSION}" VERSION_LESS "0.11.0")
-  add_definitions("-DHAVE_THRIFT_BOOST_SHAREDPTR")
-else()
-  add_definitions("-DHAVE_THRIFT_STD_SHAREDPTR")
-endif()
 if("${Thrift_VERSION}" VERSION_LESS "0.13.0")
   add_definitions("-DHAVE_THRIFT_PLATFORMTHREADFACTORY")
 else()
@@ -822,9 +817,11 @@ add_custom_target(rerun_cmake ALL
   )
 add_dependencies(omnisci_server rerun_cmake)
 
-target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${DAAL_LIBS} ${LOCALE_LINK_FLAG})
+target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
 
-target_link_libraries(initdb mapd_thrift DataMgr ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${ZLIB_LIBRARIES} ${DAAL_LIBS})
+target_link_libraries(initdb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
+    ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
+    ${LOCALE_LINK_FLAG})
 
 macro(set_dpkg_arch arch_in arch_out)
   if("${arch_in}" STREQUAL "x86_64")

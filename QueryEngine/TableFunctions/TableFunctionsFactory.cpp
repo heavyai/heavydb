@@ -116,6 +116,10 @@ SQLTypeInfo ext_arg_type_to_type_info_output(const ExtArgumentType ext_arg_type)
     case ExtArgumentType::ColumnListBool:
     case ExtArgumentType::Bool:
       return SQLTypeInfo(kBOOLEAN, false);
+    case ExtArgumentType::ColumnTextEncodingDict:
+    case ExtArgumentType::ColumnListTextEncodingDict:
+    case ExtArgumentType::TextEncodingDict:
+      return SQLTypeInfo(kTEXT, false, kENCODING_DICT);
     default:
       LOG(WARNING) << "ext_arg_pointer_type_to_type_info: ExtArgumentType `"
                    << ExtensionFunctionsWhitelist::toString(ext_arg_type)

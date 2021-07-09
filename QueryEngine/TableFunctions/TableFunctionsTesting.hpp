@@ -373,3 +373,18 @@ EXTENSION_NOINLINE int32_t ct_udtf_default_sizer4b__cpu_2(const int32_t multipli
   out[0] = 1000 + 99 + 9 * multiplier + x;
   return 1;
 }
+
+// clang-format off
+/*
+  UDTF: ct_binding_dict_encoded1__cpu_1(Cursor<TextEncodingDict>, RowMultiplier) -> Column<TextEncodingDict>
+*/
+// clang-format on
+EXTENSION_NOINLINE int32_t
+ct_binding_dict_encoded1__cpu_1(const Column<TextEncodingDict>& input,
+                                const int32_t multiplier,
+                                Column<TextEncodingDict>& out) {
+  for (int64_t i = 0; i < input.size(); i++) {
+    out[i] = input[i];  // assign string id
+  }
+  return multiplier * input.size();
+}

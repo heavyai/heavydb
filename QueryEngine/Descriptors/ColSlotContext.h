@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 struct SlotSize {
@@ -105,6 +106,14 @@ class ColSlotContext {
 
   void alignPaddedSlots(const bool sort_on_gpu);
 
+  int64_t varlenOutputElementSize(const size_t slot_idx) const;
+
+  bool hasVarlenOutput() const { return !varlen_output_slot_map_.empty(); }
+
+  bool slotIsVarlen(const size_t slot_idx) const {
+    return varlen_output_slot_map_.count(slot_idx) > 0;
+  }
+
   std::string toString() const {
     std::string str{"Col Slot Context State\n"};
     if (slot_sizes_.empty()) {
@@ -129,4 +138,8 @@ class ColSlotContext {
 
   std::vector<SlotSize> slot_sizes_;
   std::vector<std::vector<size_t>> col_to_slot_map_;
+
+  using ArraySize = int64_t;
+  using SlotIndex = size_t;
+  std::unordered_map<SlotIndex, ArraySize> varlen_output_slot_map_;
 };

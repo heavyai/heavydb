@@ -976,7 +976,13 @@ struct GeoQueryOutputFetchHandler {
 
       std::array<VarlenDatumPtr, num_vals / 2> ad_arr;
       size_t ctr = 0;
-      for (size_t i = 0; i < vals_vector.size(); i += 2) {
+      for (size_t i = 0; i < vals_vector.size(); i += 2, ctr++) {
+        if (vals_vector[i] == 0) {
+          // projected null
+          CHECK(!geo_ti.get_notnull());
+          ad_arr[ctr] = std::make_unique<ArrayDatum>(0, nullptr, true);
+          continue;
+        }
         ad_arr[ctr] = datum_fetcher(vals_vector[i], vals_vector[i + 1]);
         // All fetched datums come in with is_null set to false
         if (!geo_ti.get_notnull()) {
@@ -994,7 +1000,6 @@ struct GeoQueryOutputFetchHandler {
           }
           ad_arr[ctr]->is_null = is_null;
         }
-        ctr++;
       }
       return ad_arr;
     };
@@ -1548,7 +1553,18 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
 
   switch (target_info.sql_type.get_type()) {
     case kPOINT: {
-      if (separate_varlen_storage_valid_ && !target_info.is_agg) {
+      if (query_mem_desc_.slotIsVarlenOutput(slot_idx)) {
+        auto geo_data_ptr = read_int_from_buff(
+            geo_target_ptr, query_mem_desc_.getPaddedSlotWidthBytes(slot_idx));
+        return GeoTargetValueBuilder<kPOINT, GeoQueryOutputFetchHandler>::build(
+            target_info.sql_type,
+            geo_return_type_,
+            is_gpu_fetch ? getDataMgr() : nullptr,
+            is_gpu_fetch,
+            device_id_,
+            geo_data_ptr,
+            target_info.sql_type.get_compression() == kENCODING_GEOINT ? 8 : 16);
+      } else if (separate_varlen_storage_valid_ && !target_info.is_agg) {
         const auto& varlen_buffer = getSeparateVarlenStorage();
         CHECK_LT(static_cast<size_t>(getCoordsDataPtr(geo_target_ptr)),
                  varlen_buffer.size());
@@ -1777,11 +1793,10 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
     }
   }
   if (chosen_type.is_fp()) {
-    if (target_info.agg_kind == kAPPROX_MEDIAN) {
+    if (target_info.agg_kind == kAPPROX_QUANTILE) {
       return *reinterpret_cast<double const*>(ptr) == NULL_DOUBLE
                  ? NULL_DOUBLE  // sql_validate / just_validate
-                 : calculateQuantile(*reinterpret_cast<quantile::TDigest* const*>(ptr),
-                                     0.5);
+                 : calculateQuantile(*reinterpret_cast<quantile::TDigest* const*>(ptr));
     }
     switch (actual_compact_sz) {
       case 8: {
@@ -2176,8 +2191,7 @@ bool ResultSet::isNull(const SQLTypeInfo& ti,
     return val.i1 == null_val_bit_pattern(ti, float_argument_input);
   }
   if (val.isPair()) {
-    return !val.i2 ||
-           pair_to_double({val.i1, val.i2}, ti, float_argument_input) == NULL_DOUBLE;
+    return !val.i2;
   }
   if (val.isStr()) {
     return !val.i1;

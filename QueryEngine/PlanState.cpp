@@ -17,7 +17,7 @@
 #include "PlanState.h"
 #include "Execute.h"
 
-bool PlanState::isLazyFetchColumn(const Analyzer::Expr* target_expr) {
+bool PlanState::isLazyFetchColumn(const Analyzer::Expr* target_expr) const {
   if (!allow_lazy_fetch_) {
     return false;
   }

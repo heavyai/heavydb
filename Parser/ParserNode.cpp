@@ -938,14 +938,21 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
   SQLTypeInfo ti;
   bool has_agg = false;
   std::set<int> dictionary_ids;
+  bool has_none_encoded_str_projection = false;
 
   for (auto& p : expr_pair_list) {
     auto e1 = p.first;
     CHECK(e1->get_type_info().is_boolean());
     auto e2 = p.second;
-    if (e2->get_type_info().is_dict_encoded_string()) {
-      dictionary_ids.insert(e2->get_type_info().get_comp_param());
+    if (e2->get_type_info().is_string()) {
+      if (e2->get_type_info().is_dict_encoded_string()) {
+        dictionary_ids.insert(e2->get_type_info().get_comp_param());
+        // allow literals to potentially fall down the transient path
+      } else if (std::dynamic_pointer_cast<const Analyzer::ColumnVar>(e2)) {
+        has_none_encoded_str_projection = true;
+      }
     }
+
     if (ti.get_type() == kNULLT) {
       ti = e2->get_type_info();
     } else if (e2->get_type_info().get_type() == kNULLT) {
@@ -976,8 +983,13 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
       ti.set_notnull(false);
       else_e->set_type_info(ti);
     } else if (ti != else_e->get_type_info()) {
-      if (else_e->get_type_info().is_dict_encoded_string()) {
-        dictionary_ids.insert(else_e->get_type_info().get_comp_param());
+      if (else_e->get_type_info().is_string()) {
+        if (else_e->get_type_info().is_dict_encoded_string()) {
+          dictionary_ids.insert(else_e->get_type_info().get_comp_param());
+          // allow literals to potentially fall down the transient path
+        } else if (std::dynamic_pointer_cast<const Analyzer::ColumnVar>(else_e)) {
+          has_none_encoded_str_projection = true;
+        }
       }
       ti.set_notnull(false);
       if (ti.is_string() && else_e->get_type_info().is_string()) {
@@ -1017,7 +1029,7 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
 
   auto case_expr = makeExpr<Analyzer::CaseExpr>(ti, has_agg, cast_expr_pair_list, else_e);
   if (ti.get_compression() != kENCODING_DICT && dictionary_ids.size() == 1 &&
-      *(dictionary_ids.begin()) > 0) {
+      *(dictionary_ids.begin()) > 0 && !has_none_encoded_str_projection) {
     // the above logic makes two assumptions when strings are present. 1) that all types
     // in the case statement are either null or strings, and 2) that none-encoded strings
     // will always win out over dict encoding. If we only have one dictionary, and that
@@ -1942,10 +1954,13 @@ void validate_shard_column_type(const ColumnDescriptor& cd) {
   if (col_ti.is_integer() ||
       (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT) ||
       col_ti.is_time()) {
-    return;
+    if (cd.default_value.has_value()) {
+      throw std::runtime_error("Default values for shard keys are not supported yet.");
+    }
+  } else {
+    throw std::runtime_error("Cannot shard on type " + col_ti.get_type_name() +
+                             ", encoding " + col_ti.get_compression_name());
   }
-  throw std::runtime_error("Cannot shard on type " + col_ti.get_type_name() +
-                           ", encoding " + col_ti.get_compression_name());
 }
 
 size_t shard_column_index(const std::string& name,
@@ -2244,6 +2259,83 @@ void get_dataframe_definitions(DataframeTableDescriptor& df_td,
   return it->second(df_td, p.get(), columns);
 }
 
+std::unique_ptr<ColumnDef> column_from_json(const rapidjson::Value& element) {
+  CHECK(element.HasMember("name"));
+  auto col_name = std::make_unique<std::string>(json_str(element["name"]));
+  CHECK(element.HasMember("sqltype"));
+  const auto sql_types = to_sql_type(json_str(element["sqltype"]));
+
+  // decimal / numeric precision / scale
+  int precision = -1;
+  int scale = -1;
+  if (element.HasMember("precision")) {
+    precision = json_i64(element["precision"]);
+  }
+  if (element.HasMember("scale")) {
+    scale = json_i64(element["scale"]);
+  }
+
+  std::optional<int64_t> array_size;
+  if (element.HasMember("arraySize")) {
+    // We do not yet support geo arrays
+    array_size = json_i64(element["arraySize"]);
+  }
+  std::unique_ptr<SQLType> sql_type;
+  if (element.HasMember("subtype")) {
+    CHECK(element.HasMember("coordinateSystem"));
+    const auto subtype_sql_types = to_sql_type(json_str(element["subtype"]));
+    sql_type =
+        std::make_unique<SQLType>(subtype_sql_types,
+                                  static_cast<int>(sql_types),
+                                  static_cast<int>(json_i64(element["coordinateSystem"])),
+                                  false);
+  } else if (precision > 0 && scale > 0) {
+    sql_type = std::make_unique<SQLType>(sql_types,
+                                         precision,
+                                         scale,
+                                         /*is_array=*/array_size.has_value(),
+                                         array_size ? *array_size : -1);
+  } else if (precision > 0) {
+    sql_type = std::make_unique<SQLType>(sql_types,
+                                         precision,
+                                         0,
+                                         /*is_array=*/array_size.has_value(),
+                                         array_size ? *array_size : -1);
+  } else {
+    sql_type = std::make_unique<SQLType>(sql_types,
+                                         /*is_array=*/array_size.has_value(),
+                                         array_size ? *array_size : -1);
+  }
+  CHECK(sql_type);
+
+  CHECK(element.HasMember("nullable"));
+  const auto nullable = json_bool(element["nullable"]);
+  std::unique_ptr<ColumnConstraintDef> constraint_def;
+  StringLiteral* str_literal = nullptr;
+  if (element.HasMember("default") && !element["default"].IsNull()) {
+    std::string* defaultval = new std::string(json_str(element["default"]));
+    boost::algorithm::trim_if(*defaultval, boost::is_any_of(" \"'`"));
+    str_literal = new StringLiteral(defaultval);
+  }
+
+  constraint_def = std::make_unique<ColumnConstraintDef>(/*notnull=*/!nullable,
+                                                         /*unique=*/false,
+                                                         /*primarykey=*/false,
+                                                         /*defaultval=*/str_literal);
+  std::unique_ptr<CompressDef> compress_def;
+  if (element.HasMember("encodingType") && !element["encodingType"].IsNull()) {
+    std::string encoding_type = json_str(element["encodingType"]);
+    CHECK(element.HasMember("encodingSize"));
+    auto encoding_name = std::make_unique<std::string>(json_str(element["encodingType"]));
+    compress_def = std::make_unique<CompressDef>(encoding_name.release(),
+                                                 json_i64(element["encodingSize"]));
+  }
+  return std::make_unique<ColumnDef>(col_name.release(),
+                                     sql_type.release(),
+                                     compress_def ? compress_def.release() : nullptr,
+                                     constraint_def ? constraint_def.release() : nullptr);
+}
+
 }  // namespace
 
 CreateTableStmt::CreateTableStmt(const rapidjson::Value& payload) {
@@ -2265,77 +2357,7 @@ CreateTableStmt::CreateTableStmt(const rapidjson::Value& payload) {
     CHECK(element.IsObject());
     CHECK(element.HasMember("type"));
     if (json_str(element["type"]) == "SQL_COLUMN_DECLARATION") {
-      CHECK(element.HasMember("name"));
-      auto col_name = std::make_unique<std::string>(json_str(element["name"]));
-      CHECK(element.HasMember("sqltype"));
-      const auto sql_types = to_sql_type(json_str(element["sqltype"]));
-
-      // decimal / numeric precision / scale
-      int precision = -1;
-      int scale = -1;
-      if (element.HasMember("precision")) {
-        precision = json_i64(element["precision"]);
-      }
-      if (element.HasMember("scale")) {
-        scale = json_i64(element["scale"]);
-      }
-
-      std::optional<int64_t> array_size;
-      if (element.HasMember("arraySize")) {
-        // We do not yet support geo arrays
-        array_size = json_i64(element["arraySize"]);
-      }
-      std::unique_ptr<SQLType> sql_type;
-      if (element.HasMember("subtype")) {
-        CHECK(element.HasMember("coordinateSystem"));
-        const auto subtype_sql_types = to_sql_type(json_str(element["subtype"]));
-        sql_type = std::make_unique<SQLType>(
-            subtype_sql_types,
-            static_cast<int>(sql_types),
-            static_cast<int>(json_i64(element["coordinateSystem"])),
-            false);
-      } else if (precision > 0 && scale > 0) {
-        sql_type = std::make_unique<SQLType>(sql_types,
-                                             precision,
-                                             scale,
-                                             /*is_array=*/array_size.has_value(),
-                                             array_size ? *array_size : -1);
-      } else if (precision > 0) {
-        sql_type = std::make_unique<SQLType>(sql_types,
-                                             precision,
-                                             0,
-                                             /*is_array=*/array_size.has_value(),
-                                             array_size ? *array_size : -1);
-      } else {
-        sql_type = std::make_unique<SQLType>(sql_types,
-                                             /*is_array=*/array_size.has_value(),
-                                             array_size ? *array_size : -1);
-      }
-      CHECK(sql_type);
-
-      CHECK(element.HasMember("nullable"));
-      const auto nullable = json_bool(element["nullable"]);
-      std::unique_ptr<ColumnConstraintDef> constraint_def;
-      if (!nullable) {
-        constraint_def = std::make_unique<ColumnConstraintDef>(/*notnull=*/true,
-                                                               /*unique=*/false,
-                                                               /*primarykey=*/false,
-                                                               /*defaultval=*/nullptr);
-      }
-      std::unique_ptr<CompressDef> compress_def;
-      if (element.HasMember("encodingType") && !element["encodingType"].IsNull()) {
-        std::string encoding_type = json_str(element["encodingType"]);
-        CHECK(element.HasMember("encodingSize"));
-        auto encoding_name =
-            std::make_unique<std::string>(json_str(element["encodingType"]));
-        compress_def = std::make_unique<CompressDef>(encoding_name.release(),
-                                                     json_i64(element["encodingSize"]));
-      }
-      auto col_def = std::make_unique<ColumnDef>(
-          col_name.release(),
-          sql_type.release(),
-          compress_def ? compress_def.release() : nullptr,
-          constraint_def ? constraint_def.release() : nullptr);
+      auto col_def = column_from_json(element);
       table_element_list_.emplace_back(std::move(col_def));
     } else if (json_str(element["type"]) == "SQL_COLUMN_CONSTRAINT") {
       CHECK(element.HasMember("name"));
@@ -2536,7 +2558,6 @@ void CreateDataframeStmt::execute(const Catalog_Namespace::SessionInfo& session)
     if (!it_ok.second) {
       throw std::runtime_error("Column '" + cd.columnName + "' defined more than once");
     }
-
     setColumnDescriptor(cd, coldef);
     columns.push_back(cd);
   }
@@ -3027,7 +3048,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           throw std::runtime_error(
               "Query execution has been interrupted while performing " + work_type_str);
         }
-        auto result_rows = res.rs;
+        auto& result_rows = res.rs;
         result_rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
         const auto num_rows = result_rows->rowCount();
 
@@ -3039,14 +3060,9 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
         size_t leaf_count = leafs_connector_->leafCount();
 
-        size_t max_number_of_rows_per_package =
-            std::min(num_rows / leaf_count, size_t(64 * 1024));
-
-        size_t start_row = 0;
-        size_t num_rows_to_process = std::min(num_rows, max_number_of_rows_per_package);
-
-        // ensure that at least one row is being processed
-        num_rows_to_process = std::max(num_rows_to_process, size_t(1));
+        // ensure that at least 1 row is processed per block up to a maximum of 65536 rows
+        const size_t rows_per_block =
+            std::max(std::min(num_rows / leaf_count, size_t(64 * 1024)), size_t(1));
 
         std::vector<std::unique_ptr<TargetValueConverter>> value_converters;
 
@@ -3056,20 +3072,20 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
         std::vector<size_t> thread_start_idx(num_worker_threads),
             thread_end_idx(num_worker_threads);
-        bool can_go_parallel = !result_rows->isTruncated() && num_rows_to_process > 20000;
+        bool can_go_parallel = !result_rows->isTruncated() && rows_per_block > 20000;
 
-        std::atomic<size_t> row_idx{0};
+        std::atomic<size_t> crt_row_idx{0};
 
-        auto do_work = [&result_rows, &num_rows_to_process, &value_converters, &row_idx](
+        auto do_work = [&result_rows, &value_converters, &crt_row_idx](
                            const size_t idx,
-                           const size_t end,
+                           const size_t block_end,
                            const size_t num_cols,
                            const size_t thread_id,
                            bool& stop_convert) {
           const auto result_row = result_rows->getRowAtNoTranslations(idx);
           if (!result_row.empty()) {
-            size_t target_row = row_idx.fetch_add(1);
-            if (target_row >= num_rows_to_process) {
+            size_t target_row = crt_row_idx.fetch_add(1);
+            if (target_row >= block_end) {
               stop_convert = true;
               return;
             }
@@ -3086,7 +3102,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
                                  &executor,
                                  &query_session,
                                  &work_type_str,
-                                 &do_work](const int thread_id) {
+                                 &do_work](const int thread_id, const size_t block_end) {
           const int num_cols = value_converters.size();
           const size_t start = thread_start_idx[thread_id];
           const size_t end = thread_end_idx[thread_id];
@@ -3101,14 +3117,14 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
                     "Query execution has been interrupted while performing " +
                     work_type_str);
               }
-              do_work(idx, end, num_cols, thread_id, stop_convert);
+              do_work(idx, block_end, num_cols, thread_id, stop_convert);
               if (stop_convert) {
                 break;
               }
             }
           } else {
             for (idx = start; idx < end; ++idx) {
-              do_work(idx, end, num_cols, thread_id, stop_convert);
+              do_work(idx, block_end, num_cols, thread_id, stop_convert);
               if (stop_convert) {
                 break;
               }
@@ -3118,13 +3134,12 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
         };
 
         auto single_threaded_value_converter =
-            [&row_idx, &num_rows_to_process, &value_converters, &result_rows](
-                const size_t idx,
-                const size_t end,
-                const size_t num_cols,
-                bool& stop_convert) {
-              size_t target_row = row_idx.fetch_add(1);
-              if (target_row >= num_rows_to_process) {
+            [&crt_row_idx, &value_converters, &result_rows](const size_t idx,
+                                                            const size_t block_end,
+                                                            const size_t num_cols,
+                                                            bool& stop_convert) {
+              size_t target_row = crt_row_idx.fetch_add(1);
+              if (target_row >= block_end) {
                 stop_convert = true;
                 return;
               }
@@ -3136,52 +3151,54 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
               }
             };
 
-        auto single_threaded_convert_function =
-            [&value_converters,
-             &thread_start_idx,
-             &thread_end_idx,
-             &executor,
-             &query_session,
-             &work_type_str,
-             &single_threaded_value_converter](const int thread_id) {
-              const int num_cols = value_converters.size();
-              const size_t start = thread_start_idx[thread_id];
-              const size_t end = thread_end_idx[thread_id];
-              size_t idx = 0;
-              bool stop_convert = false;
-              if (g_enable_non_kernel_time_query_interrupt) {
-                size_t local_idx = 0;
-                for (idx = start; idx < end; ++idx, ++local_idx) {
-                  if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
-                               checkInterrupt(query_session, executor))) {
-                    throw std::runtime_error(
-                        "Query execution has been interrupted while performing " +
-                        work_type_str);
-                  }
-                  single_threaded_value_converter(idx, end, num_cols, stop_convert);
-                  if (stop_convert) {
-                    break;
-                  }
-                }
-              } else {
-                for (idx = start; idx < end; ++idx) {
-                  single_threaded_value_converter(idx, end, num_cols, stop_convert);
-                  if (stop_convert) {
-                    break;
-                  }
-                }
+        auto single_threaded_convert_function = [&value_converters,
+                                                 &thread_start_idx,
+                                                 &thread_end_idx,
+                                                 &executor,
+                                                 &query_session,
+                                                 &work_type_str,
+                                                 &single_threaded_value_converter](
+                                                    const int thread_id,
+                                                    const size_t block_end) {
+          const int num_cols = value_converters.size();
+          const size_t start = thread_start_idx[thread_id];
+          const size_t end = thread_end_idx[thread_id];
+          size_t idx = 0;
+          bool stop_convert = false;
+          if (g_enable_non_kernel_time_query_interrupt) {
+            size_t local_idx = 0;
+            for (idx = start; idx < end; ++idx, ++local_idx) {
+              if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
+                           checkInterrupt(query_session, executor))) {
+                throw std::runtime_error(
+                    "Query execution has been interrupted while performing " +
+                    work_type_str);
               }
-              thread_start_idx[thread_id] = idx;
-            };
+              single_threaded_value_converter(idx, block_end, num_cols, stop_convert);
+              if (stop_convert) {
+                break;
+              }
+            }
+          } else {
+            for (idx = start; idx < end; ++idx) {
+              single_threaded_value_converter(idx, end, num_cols, stop_convert);
+              if (stop_convert) {
+                break;
+              }
+            }
+          }
+          thread_start_idx[thread_id] = idx;
+        };
 
         if (can_go_parallel) {
-          const size_t entryCount = result_rows->entryCount();
-          for (size_t i = 0,
-                      start_entry = 0,
-                      stride = (entryCount + num_worker_threads - 1) / num_worker_threads;
-               i < num_worker_threads && start_entry < entryCount;
+          const size_t entry_count = result_rows->entryCount();
+          for (size_t
+                   i = 0,
+                   start_entry = 0,
+                   stride = (entry_count + num_worker_threads - 1) / num_worker_threads;
+               i < num_worker_threads && start_entry < entry_count;
                ++i, start_entry += stride) {
-            const auto end_entry = std::min(start_entry + stride, entryCount);
+            const auto end_entry = std::min(start_entry + stride, entry_count);
             thread_start_idx[i] = start_entry;
             thread_end_idx[i] = end_entry;
           }
@@ -3190,15 +3207,19 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           thread_end_idx[0] = result_rows->entryCount();
         }
 
-        while (start_row < num_rows) {
+        for (size_t block_start = 0; block_start < num_rows;
+             block_start += rows_per_block) {
+          const auto num_rows_this_itr = block_start + rows_per_block < num_rows
+                                             ? rows_per_block
+                                             : num_rows - block_start;
+          crt_row_idx = 0;  // reset block tracker
           value_converters.clear();
-          row_idx = 0;
           int colNum = 0;
           for (const auto targetDescriptor : target_column_descriptors) {
             auto sourceDataMetaInfo = res.targets_meta[colNum++];
 
             ConverterCreateParameter param{
-                num_rows_to_process,
+                num_rows_this_itr,
                 catalog,
                 sourceDataMetaInfo,
                 targetDescriptor,
@@ -3220,7 +3241,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
             std::vector<std::future<void>> worker_threads;
             for (int i = 0; i < num_worker_threads; ++i) {
               worker_threads.push_back(
-                  std::async(std::launch::async, convert_function, i));
+                  std::async(std::launch::async, convert_function, i, num_rows_this_itr));
             }
 
             for (auto& child : worker_threads) {
@@ -3231,7 +3252,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
             }
 
           } else {
-            single_threaded_convert_function(0);
+            single_threaded_convert_function(0, num_rows_this_itr);
           }
 
           // finalize the insert data
@@ -3257,7 +3278,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           insert_data.databaseId = catalog.getCurrentDB().dbId;
           CHECK(td);
           insert_data.tableId = td->tableId;
-          insert_data.numRows = num_rows_to_process;
+          insert_data.numRows = num_rows_this_itr;
 
           for (int col_idx = 0; col_idx < target_column_descriptors.size(); col_idx++) {
             if (UNLIKELY(g_enable_non_kernel_time_query_interrupt &&
@@ -3275,10 +3296,6 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
               import_export::fill_missing_columns(&catalog, insert_data);
           insertDataLoader.insertData(*session, insert_data);
           total_data_load_time_ms += timer_stop(data_load_clock_begin);
-
-          start_row += num_rows_to_process;
-          num_rows_to_process =
-              std::min(num_rows - start_row, max_number_of_rows_per_package);
         }
       }
     }
@@ -3706,9 +3723,6 @@ void AlterTableStmt::delegateExecute(const rapidjson::Value& payload,
     CHECK(payload.HasMember("columnData"));
     CHECK(payload["columnData"].IsArray());
 
-    // TODO : Shares alot of code below with CREATE_TABLE -> try to merge these two ?
-    //  unique_ptr vs regular
-
     // New Columns go into this list
     std::list<ColumnDef*>* table_element_list_ = new std::list<ColumnDef*>;
 
@@ -3717,86 +3731,8 @@ void AlterTableStmt::delegateExecute(const rapidjson::Value& payload,
       CHECK(element.IsObject());
       CHECK(element.HasMember("type"));
       if (json_str(element["type"]) == "SQL_COLUMN_DECLARATION") {
-        CHECK(element.HasMember("name"));
-        auto col_name = std::make_unique<std::string>(json_str(element["name"]));
-        CHECK(element.HasMember("sqltype"));
-        const auto sql_types = to_sql_type(json_str(element["sqltype"]));
-
-        // decimal / numeric precision / scale
-        int precision = -1;
-        int scale = -1;
-        if (element.HasMember("precision")) {
-          precision = json_i64(element["precision"]);
-        }
-        if (element.HasMember("scale")) {
-          scale = json_i64(element["scale"]);
-        }
-
-        std::optional<int64_t> array_size;
-        if (element.HasMember("arraySize")) {
-          // We do not yet support geo arrays
-          array_size = json_i64(element["arraySize"]);
-        }
-        std::unique_ptr<SQLType> sql_type;
-        if (element.HasMember("subtype")) {
-          CHECK(element.HasMember("coordinateSystem"));
-          const auto subtype_sql_types = to_sql_type(json_str(element["subtype"]));
-          sql_type = std::make_unique<SQLType>(
-              subtype_sql_types,
-              static_cast<int>(sql_types),
-              static_cast<int>(json_i64(element["coordinateSystem"])),
-              false);
-        } else if (precision > 0 && scale > 0) {
-          sql_type = std::make_unique<SQLType>(sql_types,
-                                               precision,
-                                               scale,
-                                               /*is_array=*/array_size.has_value(),
-                                               array_size ? *array_size : -1);
-        } else if (precision > 0) {
-          sql_type = std::make_unique<SQLType>(sql_types,
-                                               precision,
-                                               0,
-                                               /*is_array=*/array_size.has_value(),
-                                               array_size ? *array_size : -1);
-        } else {
-          sql_type = std::make_unique<SQLType>(sql_types,
-                                               /*is_array=*/array_size.has_value(),
-                                               array_size ? *array_size : -1);
-        }
-        CHECK(sql_type);
-
-        CHECK(element.HasMember("nullable"));
-        const auto nullable = json_bool(element["nullable"]);
-        std::unique_ptr<ColumnConstraintDef> constraint_def;
-        if (!nullable) {
-          StringLiteral* str_literal = nullptr;
-          if (element.HasMember("expression") && !element["expression"].IsNull()) {
-            std::string* defaultval = new std::string(json_str(element["expression"]));
-            boost::algorithm::trim_if(*defaultval, boost::is_any_of(" \"'`"));
-            str_literal = new StringLiteral(defaultval);
-          }
-
-          constraint_def =
-              std::make_unique<ColumnConstraintDef>(/*notnull=*/true,
-                                                    /*unique=*/false,
-                                                    /*primarykey=*/false,
-                                                    /*defaultval=*/str_literal);
-        }
-        std::unique_ptr<CompressDef> compress_def;
-        if (element.HasMember("encodingType") && !element["encodingType"].IsNull()) {
-          std::string encoding_type = json_str(element["encodingType"]);
-          CHECK(element.HasMember("encodingSize"));
-          auto encoding_name =
-              std::make_unique<std::string>(json_str(element["encodingType"]));
-          compress_def = std::make_unique<CompressDef>(encoding_name.release(),
-                                                       json_i64(element["encodingSize"]));
-        }
-        auto col_def = new ColumnDef(col_name.release(),
-                                     sql_type.release(),
-                                     compress_def ? compress_def.release() : nullptr,
-                                     constraint_def ? constraint_def.release() : nullptr);
-        table_element_list_->emplace_back(col_def);
-
+        auto col_def = column_from_json(element);
+        table_element_list_->emplace_back(col_def.release());
       } else {
         LOG(FATAL) << "Unsupported element type for ALTER TABLE: "
                    << element["type"].GetString();
@@ -4120,11 +4056,33 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
   } else {
     not_null = cc->get_notnull();
   }
+  std::string default_value;
+  const std::string* default_value_ptr = nullptr;
+  if (cc) {
+    if (auto def_val_literal = cc->get_defaultval()) {
+      auto defaultsp = dynamic_cast<const StringLiteral*>(def_val_literal);
+      default_value =
+          defaultsp ? *defaultsp->get_stringval() : def_val_literal->to_string();
+      // The preprocessing below is needed because:
+      // a) TypedImportBuffer expects arrays in the {...} format
+      // b) TypedImportBuffer expects string literals inside arrays w/o any quotes
+      if (coldef->get_column_type()->get_is_array()) {
+        std::regex array_re(R"(^ARRAY\s*\[(.*)\]$)", std::regex_constants::icase);
+        default_value = std::regex_replace(default_value, array_re, "{$1}");
+        boost::erase_all(default_value, "\'");
+      }
+      // NULL for default value means no default value
+      if (!boost::iequals(default_value, "NULL")) {
+        default_value_ptr = &default_value;
+      }
+    }
+  }
   ddl_utils::set_column_descriptor(*coldef->get_column_name(),
                                    cd,
                                    coldef->get_column_type(),
                                    not_null,
-                                   coldef->get_compression());
+                                   coldef->get_compression(),
+                                   default_value_ptr);
 }
 
 void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& session,
@@ -4236,24 +4194,11 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       for (const auto cit : cid_coldefs) {
         const auto cd = catalog.getMetadataForColumn(td->tableId, cit.first);
         const auto coldef = cit.second;
-        const auto column_constraint = coldef ? coldef->get_column_constraint() : nullptr;
-        std::string defaultval = "";
-        if (column_constraint) {
-          auto defaultlp = column_constraint->get_defaultval();
-          auto defaultsp = dynamic_cast<const StringLiteral*>(defaultlp);
-          defaultval = defaultsp ? *defaultsp->get_stringval()
-                                 : defaultlp ? defaultlp->to_string() : "";
-        }
-        bool isnull = column_constraint ? (0 == defaultval.size()) : true;
-        if (boost::to_upper_copy<std::string>(defaultval) == "NULL") {
-          isnull = true;
-        }
+        const bool is_null = !cd->default_value.has_value();
 
-        if (isnull) {
-          if (column_constraint && column_constraint->get_notnull()) {
-            throw std::runtime_error("Default value required for column " +
-                                     cd->columnName + " (NULL value not supported)");
-          }
+        if (cd->columnType.get_notnull() && is_null) {
+          throw std::runtime_error("Default value required for column " + cd->columnName +
+                                   " because of NOT NULL constraint");
         }
 
         for (auto it = import_buffers.begin(); it < import_buffers.end(); ++it) {
@@ -4261,21 +4206,25 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           if (cd->columnId == import_buffer->getColumnDesc()->columnId) {
             if (coldef != nullptr ||
                 skip_physical_cols-- <= 0) {  // skip non-null phy col
-              import_buffer->add_value(
-                  cd, defaultval, isnull, import_export::CopyParams());
+              import_buffer->add_value(cd,
+                                       cd->default_value.value_or("NULL"),
+                                       is_null,
+                                       import_export::CopyParams());
               if (cd->columnType.is_geometry()) {
                 std::vector<double> coords, bounds;
                 std::vector<int> ring_sizes, poly_rings;
                 int render_group = 0;
                 SQLTypeInfo tinfo{cd->columnType};
-                if (!Geospatial::GeoTypesFactory::getGeoColumns(defaultval,
-                                                                tinfo,
-                                                                coords,
-                                                                bounds,
-                                                                ring_sizes,
-                                                                poly_rings,
-                                                                false)) {
-                  throw std::runtime_error("Bad geometry data: '" + defaultval + "'");
+                if (!Geospatial::GeoTypesFactory::getGeoColumns(
+                        cd->default_value.value_or("NULL"),
+                        tinfo,
+                        coords,
+                        bounds,
+                        ring_sizes,
+                        poly_rings,
+                        false)) {
+                  throw std::runtime_error("Bad geometry data: '" +
+                                           cd->default_value.value_or("NULL") + "'");
                 }
                 size_t col_idx = 1 + std::distance(import_buffers.begin(), it);
                 import_export::Importer::set_geo_physical_import_buffer(catalog,

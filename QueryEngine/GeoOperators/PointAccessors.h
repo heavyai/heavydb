@@ -68,7 +68,7 @@ class PointAccessors : public Codegen {
         is_null = builder.CreateICmp(
             llvm::CmpInst::ICMP_EQ,
             arg_lvs.front(),
-            llvm::ConstantPointerNull::get(
+            llvm::ConstantPointerNull::get(  // TODO: check ptr address space
                 geo_ti.get_compression() == kENCODING_GEOINT
                     ? llvm::Type::getInt32PtrTy(cgen_state->context_)
                     : llvm::Type::getDoublePtrTy(cgen_state->context_)));

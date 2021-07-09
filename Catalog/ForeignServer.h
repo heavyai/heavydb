@@ -22,8 +22,6 @@
 #include "Catalog/OptionsContainer.h"
 #include "DataMgr/ForeignStorage/ForeignDataWrapperFactory.h"
 
-extern bool g_enable_s3_fsi;
-
 namespace foreign_storage {
 struct ForeignServer : public OptionsContainer {
   int32_t id;

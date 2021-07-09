@@ -48,6 +48,7 @@ extern size_t g_approx_quantile_buffer;
 extern size_t g_approx_quantile_centroids;
 extern size_t g_parallel_top_min;
 extern size_t g_parallel_top_max;
+extern size_t g_estimator_failure_max_groupby_size;
 
 namespace Catalog_Namespace {
 extern bool g_log_user_id;
@@ -751,6 +752,12 @@ void CommandLineOptions::fillAdvancedOptions() {
                                    ->default_value(g_enable_automatic_ir_metadata)
                                    ->implicit_value(true),
                                "Enable automatic IR metadata (debug builds only).");
+  developer_desc.add_options()(
+      "estimator-failure-max-groupby-size",
+      po::value<size_t>(&g_estimator_failure_max_groupby_size)
+          ->default_value(g_estimator_failure_max_groupby_size),
+      "Maximum size of the groupby buffer if the estimator fails. By default we use the "
+      "number of tuples in the table up to this value.");
 }
 
 namespace {

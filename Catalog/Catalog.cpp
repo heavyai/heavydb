@@ -509,6 +509,27 @@ void Catalog::updateDeletedColumnIndicator() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
+void Catalog::updateDefaultColumnValues() {
+  cat_sqlite_lock sqlite_lock(getObjForLock());
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query("PRAGMA TABLE_INFO(mapd_columns)");
+    std::vector<std::string> cols;
+    for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
+      cols.push_back(sqliteConnector_.getData<std::string>(i, 1));
+    }
+    if (std::find(cols.begin(), cols.end(), std::string("default_value")) == cols.end()) {
+      LOG(INFO) << "Adding support for default values to mapd_columns";
+      sqliteConnector_.query("ALTER TABLE mapd_columns ADD default_value TEXT");
+    }
+  } catch (std::exception& e) {
+    LOG(ERROR) << "Failed to make metadata update for default values` support";
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
 // introduce DB version into the dictionary tables
 // if the DB does not have a version rename all dictionary tables
 
@@ -900,6 +921,7 @@ void Catalog::CheckAndExecuteMigrations() {
     updateFsiSchemas();
   }
   updateCustomExpressionsSchema();
+  updateDefaultColumnValues();
 }
 
 void Catalog::CheckAndExecuteMigrationsPostBuildMaps() {
@@ -1005,7 +1027,8 @@ void Catalog::buildMaps() {
   string columnQuery(
       "SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, "
       "is_notnull, compression, comp_param, "
-      "size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol from "
+      "size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol, "
+      "default_value from "
       "mapd_columns ORDER BY tableid, "
       "columnid");
   sqliteConnector_.query(columnQuery);
@@ -1029,6 +1052,11 @@ void Catalog::buildMaps() {
     cd->isVirtualCol = sqliteConnector_.getData<bool>(r, 13);
     cd->virtualExpr = sqliteConnector_.getData<string>(r, 14);
     cd->isDeletedCol = sqliteConnector_.getData<bool>(r, 15);
+    if (sqliteConnector_.isNull(r, 16)) {
+      cd->default_value = std::nullopt;
+    } else {
+      cd->default_value = std::make_optional(sqliteConnector_.getData<string>(r, 16));
+    }
     cd->isGeoPhyCol = skip_physical_cols > 0;
     ColumnKey columnKey(cd->tableId, to_upper(cd->columnName));
     columnDescriptorMap_[columnKey] = cd;
@@ -1920,16 +1948,21 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
     addDictionary(cd);
   }
 
+  using BindType = SqliteConnector::BindType;
+  std::vector<BindType> types(17, BindType::TEXT);
+  if (!cd.default_value.has_value()) {
+    types[16] = BindType::NULL_TYPE;
+  }
   sqliteConnector_.query_with_text_params(
       "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, "
       "colscale, is_notnull, "
       "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr, "
-      "is_deletedcol) "
+      "is_deletedcol, default_value) "
       "VALUES (?, "
       "(SELECT max(columnid) + 1 FROM mapd_columns WHERE tableid = ?), "
       "?, ?, ?, "
       "?, "
-      "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       std::vector<std::string>{std::to_string(td.tableId),
                                std::to_string(td.tableId),
                                cd.columnName,
@@ -1945,7 +1978,9 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
                                std::to_string(cd.isSystemCol),
                                std::to_string(cd.isVirtualCol),
                                cd.virtualExpr,
-                               std::to_string(cd.isDeletedCol)});
+                               std::to_string(cd.isDeletedCol),
+                               cd.default_value.value_or("NULL")},
+      types);
 
   sqliteConnector_.query_with_text_params(
       "UPDATE mapd_tables SET ncolumns = ncolumns + 1 WHERE tableid = ?",
@@ -2302,14 +2337,19 @@ void Catalog::createTable(
           }
         }
 
+        using BindType = SqliteConnector::BindType;
+        std::vector<BindType> types(17, BindType::TEXT);
+        if (!cd.default_value.has_value()) {
+          types[16] = BindType::NULL_TYPE;
+        }
         sqliteConnector_.query_with_text_params(
             "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, "
             "coldim, colscale, is_notnull, "
             "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, "
-            "virtual_expr, is_deletedcol) "
+            "virtual_expr, is_deletedcol, default_value) "
             "VALUES (?, ?, ?, ?, ?, "
             "?, "
-            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             std::vector<std::string>{std::to_string(td.tableId),
                                      std::to_string(colId),
                                      cd.columnName,
@@ -2325,7 +2365,9 @@ void Catalog::createTable(
                                      std::to_string(cd.isSystemCol),
                                      std::to_string(cd.isVirtualCol),
                                      cd.virtualExpr,
-                                     std::to_string(cd.isDeletedCol)});
+                                     std::to_string(cd.isDeletedCol),
+                                     cd.default_value.value_or("NULL")},
+            types);
         cd.tableId = td.tableId;
         cd.columnId = colId++;
         cds.push_back(cd);

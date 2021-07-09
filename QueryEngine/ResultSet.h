@@ -427,7 +427,7 @@ class ResultSet {
                         const size_t target_idx,
                         const size_t slot_idx) const;
 
-  static double calculateQuantile(quantile::TDigest* const t_digest, double const q);
+  static double calculateQuantile(quantile::TDigest* const t_digest);
 
  private:
   void advanceCursorToNextEntry(ResultSetRowIterator& iter) const;
@@ -539,12 +539,6 @@ class ResultSet {
     const size_t storage_idx;
   };
 
-  InternalTargetValue getColumnInternal(
-      const int8_t* buff,
-      const size_t entry_idx,
-      const size_t target_logical_idx,
-      const StorageLookupResult& storage_lookup_result) const;
-
   InternalTargetValue getVarlenOrderEntry(const int64_t str_ptr,
                                           const size_t str_len) const;
 
@@ -621,7 +615,7 @@ class ResultSet {
     const ResultSet* result_set_;
   };
 
-  using ApproxMedianBuffers = std::vector<std::vector<double>>;
+  using ApproxQuantileBuffers = std::vector<std::vector<double>>;
 
   template <typename BUFFER_ITERATOR_TYPE>
   struct ResultSetComparator {
@@ -638,16 +632,16 @@ class ResultSet {
         , buffer_itr_(result_set)
         , executor_(executor)
         , single_threaded_(single_threaded)
-        , approx_median_materialized_buffers_(materializeApproxMedianColumns()) {
+        , approx_quantile_materialized_buffers_(materializeApproxQuantileColumns()) {
       materializeCountDistinctColumns();
     }
 
     void materializeCountDistinctColumns();
-    ApproxMedianBuffers materializeApproxMedianColumns() const;
+    ApproxQuantileBuffers materializeApproxQuantileColumns() const;
 
     std::vector<int64_t> materializeCountDistinctColumn(
         const Analyzer::OrderEntry& order_entry) const;
-    ApproxMedianBuffers::value_type materializeApproxMedianColumn(
+    ApproxQuantileBuffers::value_type materializeApproxQuantileColumn(
         const Analyzer::OrderEntry& order_entry) const;
 
     bool operator()(const PermutationIdx lhs, const PermutationIdx rhs) const;
@@ -659,7 +653,7 @@ class ResultSet {
     const Executor* executor_;
     const bool single_threaded_;
     std::vector<std::vector<int64_t>> count_distinct_materialized_buffers_;
-    const ApproxMedianBuffers approx_median_materialized_buffers_;
+    const ApproxQuantileBuffers approx_quantile_materialized_buffers_;
   };
 
   Comparator createComparator(const std::list<Analyzer::OrderEntry>& order_entries,

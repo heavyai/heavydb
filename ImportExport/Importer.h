@@ -737,6 +737,8 @@ class Detector : public DataStreamSink {
 class ImporterUtils {
  public:
   static ArrayDatum composeNullArray(const SQLTypeInfo& ti);
+  static ArrayDatum composeNullPointCoords(const SQLTypeInfo& coords_ti,
+                                           const SQLTypeInfo& geo_ti);
 };
 
 class Importer : public DataStreamSink {

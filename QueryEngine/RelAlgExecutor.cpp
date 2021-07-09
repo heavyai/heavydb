@@ -50,6 +50,7 @@
 bool g_skip_intermediate_count{true};
 bool g_enable_interop{false};
 bool g_enable_union{false};
+size_t g_estimator_failure_max_groupby_size{256000000};
 
 extern bool g_enable_bump_allocator;
 extern size_t g_default_max_groups_buffer_entry_guess;
@@ -2086,7 +2087,8 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
                                          tuple_type_component.get_type_info(),
                                          SQLTypeInfo(kNULLT, false),
                                          false,
-                                         false});
+                                         false,
+                                         /*is_varlen_projection=*/false});
   }
 
   std::shared_ptr<ResultSet> rs{
@@ -2815,8 +2817,7 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     const auto sub_bitmap_count =
         get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit, device_type);
     int64_t approx_bitmap_sz_bits{0};
-    const auto error_rate =
-        static_cast<Analyzer::AggExpr*>(target_expr)->get_error_rate();
+    const auto error_rate = static_cast<Analyzer::AggExpr*>(target_expr)->get_arg1();
     if (error_rate) {
       CHECK(error_rate->get_type_info().get_type() == kINT);
       CHECK_GE(error_rate->get_constval().intval, 1);
@@ -3021,7 +3022,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
           getNDVEstimation(work_unit, e.range(), is_agg, co, eo);
       const auto estimated_groups_buffer_entry_guess =
           ndv_groups_estimation > 0 ? 2 * ndv_groups_estimation
-                                    : 2 * groups_approx_upper_bound(table_infos);
+                                    : std::min(groups_approx_upper_bound(table_infos),
+                                               g_estimator_failure_max_groupby_size);
       CHECK_GT(estimated_groups_buffer_entry_guess, size_t(0));
       result = execute_and_handle_errors(
           estimated_groups_buffer_entry_guess, true, /*has_ndv_estimation=*/true);
@@ -4130,6 +4132,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   }
 
   std::vector<Analyzer::ColumnVar*> input_col_exprs;
+  std::optional<int32_t> dict_id;
   size_t input_index = 0;
   for (const auto& ti : table_function_type_infos) {
     if (ti.is_column_list()) {
@@ -4152,11 +4155,22 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
     } else {
       input_index++;
     }
+    if (ti.is_subtype_dict_encoded_string()) {
+      if (dict_id.has_value()) {
+        LOG(WARNING) << "dict_id value is already set to " << *dict_id;
+      } else {
+        dict_id = ti.get_comp_param();
+      }
+    }
   }
   CHECK_EQ(input_col_exprs.size(), rel_table_func->getColInputsSize());
   std::vector<Analyzer::Expr*> table_func_outputs;
   for (size_t i = 0; i < table_function_impl.getOutputsSize(); i++) {
-    const auto ti = table_function_impl.getOutputSQLType(i);
+    auto ti = table_function_impl.getOutputSQLType(i);
+    if (ti.is_dict_encoded_string()) {
+      CHECK(dict_id.has_value());
+      ti.set_comp_param(*dict_id);
+    }
     target_exprs_owned_.push_back(std::make_shared<Analyzer::ColumnVar>(ti, 0, i, -1));
     table_func_outputs.push_back(target_exprs_owned_.back().get());
   }

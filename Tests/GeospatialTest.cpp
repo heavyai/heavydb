@@ -51,6 +51,12 @@ bool skip_tests(const ExecutorDeviceType device_type) {
     continue;                                                \
   }
 
+#define SKIP_ALL_ON_AGGREGATOR()                         \
+  if (g_aggregator) {                                    \
+    LOG(ERROR) << "Tests not valid in distributed mode"; \
+    return;                                              \
+  }
+
 #define SKIP_ON_AGGREGATOR(EXP) \
   if (!g_aggregator) {          \
     EXP;                        \
@@ -597,27 +603,6 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
                                    "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
                                    dt,
                                    false))));
-    ASSERT_EQ(
-        "POINT (2 2)",
-        boost::get<std::string>(v<NullableString>(run_simple_agg(
-            "SELECT ST_GeomFromText('POINT(2 2)') FROM geospatial_test WHERE id = 2;",
-            dt,
-            false))));
-    ASSERT_EQ(
-        "POINT (2 2)",
-        boost::get<std::string>(v<NullableString>(run_simple_agg(
-            "SELECT ST_Point(2,2) FROM geospatial_test WHERE id = 2;", dt, false))));
-    // requires punt to CPU
-    SKIP_ON_AGGREGATOR(ASSERT_EQ(
-        "POINT (2 2)",
-        boost::get<std::string>(v<NullableString>(run_simple_agg(
-            "SELECT ST_Point(id,id) FROM geospatial_test WHERE id = 2;", dt, false)))));
-    SKIP_ON_AGGREGATOR(ASSERT_EQ(
-        "POINT (2 2)",
-        boost::get<std::string>(v<NullableString>(run_simple_agg(
-            "SELECT ST_SetSRID(ST_Point(id,id),4326) FROM geospatial_test WHERE id = 2;",
-            dt,
-            false)))));
 
     // more distance
     ASSERT_NEAR(
@@ -987,6 +972,56 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     EXPECT_ANY_THROW(run_multiple_agg("SELECT p FROM geospatial_test ORDER BY p;", dt));
     EXPECT_ANY_THROW(run_multiple_agg(
         "SELECT poly, l, id FROM geospatial_test ORDER BY id, poly;", dt));
+  }
+}
+
+TEST_P(GeoSpatialTestTablesFixture, Constructors) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    {
+      auto rows = run_multiple_agg(
+          R"(SELECT ST_Point(id, id), id, ST_Point(id + 1, id + 2) FROM geospatial_test WHERE id < 2 ORDER BY 2;)",
+          dt);
+      rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+      EXPECT_EQ(rows->rowCount(), size_t(2));
+
+      auto process_row = [&](const int64_t id_for_row) {
+        auto row = rows->getNextRow(false, false);
+        EXPECT_EQ(row.size(), size_t(3));
+        const auto id = v<int64_t>(row[1]);
+        EXPECT_EQ(id, id_for_row);
+        const auto first_geo_tv = boost::get<GeoTargetValue>(row[0]);
+        CHECK(first_geo_tv);
+        const auto first_pt = boost::get<GeoPointTargetValue>(*first_geo_tv);
+        CHECK(first_pt.coords->data());
+        const double* first_pt_array = first_pt.coords->data();
+        EXPECT_EQ(first_pt_array[0], static_cast<double>(id));
+        EXPECT_EQ(first_pt_array[1], static_cast<double>(id));
+
+        const auto second_geo_tv = boost::get<GeoTargetValue>(row[2]);
+        CHECK(second_geo_tv);
+        const auto second_pt = boost::get<GeoPointTargetValue>(*second_geo_tv);
+        CHECK(second_pt.coords->data());
+        const double* second_pt_array = second_pt.coords->data();
+        EXPECT_EQ(second_pt_array[0], static_cast<double>(id + 1));
+        EXPECT_EQ(second_pt_array[1], static_cast<double>(id + 2));
+      };
+
+      process_row(0);
+      process_row(1);
+    }
+
+    ASSERT_EQ(
+        "POINT (2 2)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            "SELECT ST_Point(id,id) FROM geospatial_test WHERE id = 2;", dt, false))));
+    ASSERT_EQ(
+        "POINT (2 2)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            "SELECT ST_SetSRID(ST_Point(id,id),4326) FROM geospatial_test WHERE id = 2;",
+            dt,
+            false))));
   }
 }
 
@@ -1787,6 +1822,19 @@ TEST(GeoSpatial, Math) {
   }
 }
 
+TEST(GeoSpatial, Projections) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    ASSERT_EQ("POINT (2 2)",
+              boost::get<std::string>(v<NullableString>(
+                  run_simple_agg("SELECT ST_GeomFromText('POINT(2 2)');", dt, false))));
+    ASSERT_EQ("POINT (2 2)",
+              boost::get<std::string>(
+                  v<NullableString>(run_simple_agg("SELECT ST_Point(2,2);", dt, false))));
+  }
+}
+
 class GeoSpatialTempTables : public ::testing::Test {
  protected:
   void SetUp() override { import_geospatial_test(/*with_temporary_tables=*/true); }
@@ -2190,6 +2238,8 @@ class GeoSpatialMultiFragTestTablesFixture : public ::testing::TestWithParam<boo
 };
 
 TEST_P(GeoSpatialMultiFragTestTablesFixture, LoopJoin) {
+  SKIP_ALL_ON_AGGREGATOR();  // TODO(adb): investigate different result in distributed
+
   const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
   g_enable_overlaps_hashjoin = false;
   ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state] {

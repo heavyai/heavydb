@@ -71,7 +71,7 @@ struct PlanState {
 
   int getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fetch_column);
 
-  bool isLazyFetchColumn(const Analyzer::Expr* target_expr);
+  bool isLazyFetchColumn(const Analyzer::Expr* target_expr) const;
 
   bool isLazyFetchColumn(const InputColDescriptor& col_desc) {
     Analyzer::ColumnVar column(SQLTypeInfo(),

@@ -141,6 +141,7 @@ llvm::Function* row_process(llvm::Module* mod,
     }
   } else {                           // group by query
     func_args.push_back(pi64_type);  // groups buffer
+    func_args.push_back(pi64_type);  // varlen output buffer
     func_args.push_back(pi32_type);  // 1 iff current row matched, else 0
     func_args.push_back(pi32_type);  // total rows matched from the caller
     func_args.push_back(pi32_type);  // total rows matched before atomic increment
@@ -717,15 +718,46 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
   Attributes pos_step_pal;
   pos_step->setAttributes(pos_step_pal);
 
-  CallInst* group_buff_idx = CallInst::Create(func_group_buff_idx, "", bb_entry);
-  group_buff_idx->setCallingConv(CallingConv::C);
-  group_buff_idx->setTailCall(true);
+  CallInst* group_buff_idx_call = CallInst::Create(func_group_buff_idx, "", bb_entry);
+  group_buff_idx_call->setCallingConv(CallingConv::C);
+  group_buff_idx_call->setTailCall(true);
   Attributes group_buff_idx_pal;
-  group_buff_idx->setAttributes(group_buff_idx_pal);
+  group_buff_idx_call->setAttributes(group_buff_idx_pal);
+  Value* group_buff_idx = group_buff_idx_call;
 
-  CastInst* pos_start_i64 = new SExtInst(pos_start, i64_type, "", bb_entry);
   const PointerType* Ty = dyn_cast<PointerType>(group_by_buffers->getType());
   CHECK(Ty);
+
+  Value* varlen_output_buffer{nullptr};
+  if (query_mem_desc.hasVarlenOutput()) {
+    // make the varlen buffer the _first_ 8 byte value in the group by buffers double ptr,
+    // and offset the group by buffers index by 8 bytes
+    auto varlen_output_buffer_gep = GetElementPtrInst::Create(
+        Ty->getElementType(),
+        group_by_buffers,
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(mod->getContext()), 0),
+        "",
+        bb_entry);
+    varlen_output_buffer =
+        new LoadInst(get_pointer_element_type(varlen_output_buffer_gep),
+                     varlen_output_buffer_gep,
+                     "varlen_output_buffer",
+                     false,
+                     bb_entry);
+
+    group_buff_idx = BinaryOperator::Create(
+        Instruction::Add,
+        group_buff_idx,
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(mod->getContext()), 1),
+        "group_buff_idx_varlen_offset",
+        bb_entry);
+  } else {
+    varlen_output_buffer =
+        ConstantPointerNull::get(Type::getInt64PtrTy(mod->getContext()));
+  }
+  CHECK(varlen_output_buffer);
+
+  CastInst* pos_start_i64 = new SExtInst(pos_start, i64_type, "", bb_entry);
   GetElementPtrInst* group_by_buffers_gep = GetElementPtrInst::Create(
       Ty->getElementType(), group_by_buffers, group_buff_idx, "", bb_entry);
   LoadInst* col_buffer = new LoadInst(get_pointer_element_type(group_by_buffers_gep),
@@ -738,12 +770,12 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
 
   llvm::ConstantInt* shared_mem_bytes_lv =
       ConstantInt::get(i32_type, gpu_smem_context.getSharedMemorySize());
+  // TODO(Saman): change this further, normal path should not go through this
   llvm::CallInst* result_buffer =
       CallInst::Create(func_init_shared_mem,
                        std::vector<llvm::Value*>{col_buffer, shared_mem_bytes_lv},
                        "result_buffer",
                        bb_entry);
-  // TODO(Saman): change this further, normal path should not go through this
 
   ICmpInst* enter_or_not =
       new ICmpInst(*bb_entry, ICmpInst::ICMP_SLT, pos_start_i64, row_count, "");
@@ -759,6 +791,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
 
   std::vector<Value*> row_process_params;
   row_process_params.push_back(result_buffer);
+  row_process_params.push_back(varlen_output_buffer);
   row_process_params.push_back(crt_matched_ptr);
   row_process_params.push_back(total_matched);
   row_process_params.push_back(old_total_matched_ptr);

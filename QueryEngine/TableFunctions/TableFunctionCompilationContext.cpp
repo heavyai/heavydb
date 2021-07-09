@@ -59,26 +59,13 @@ llvm::Function* generate_entry_point(const CgenState* cgen_state) {
 inline llvm::Type* get_llvm_type_from_sql_column_type(const SQLTypeInfo elem_ti,
                                                       llvm::LLVMContext& ctx) {
   if (elem_ti.is_fp()) {
-    switch (elem_ti.get_size()) {
-      case 4:
-        return llvm::Type::getFloatPtrTy(ctx);
-      case 8:
-        return llvm::Type::getDoublePtrTy(ctx);
-    }
-  }
-  if (elem_ti.is_boolean()) {
-    return llvm::Type::getInt8PtrTy(ctx);
-  }
-  CHECK(elem_ti.is_integer());
-  switch (elem_ti.get_size()) {
-    case 1:
-      return llvm::Type::getInt8PtrTy(ctx);
-    case 2:
-      return llvm::Type::getInt16PtrTy(ctx);
-    case 4:
-      return llvm::Type::getInt32PtrTy(ctx);
-    case 8:
-      return llvm::Type::getInt64PtrTy(ctx);
+    return get_fp_ptr_type(elem_ti.get_size() * 8, ctx);
+  } else if (elem_ti.is_boolean()) {
+    return get_int_ptr_type(8, ctx);
+  } else if (elem_ti.is_integer()) {
+    return get_int_ptr_type(elem_ti.get_size() * 8, ctx);
+  } else if (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT) {
+    return get_int_ptr_type(elem_ti.get_size() * 8, ctx);
   }
   LOG(FATAL) << "get_llvm_type_from_sql_column_type: not implemented for "
              << ::toString(elem_ti);
@@ -357,11 +344,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
           llvm::Type::getVoidTy(ctx),
           {llvm::ConstantInt::get(get_int_type(32, ctx), i, true), col_ptr});
     }
-    if (pass_column_by_value) {
-      output_col_args.push_back(col);
-    } else {
-      func_args.push_back(col_ptr);
-    }
+    output_col_args.push_back((pass_column_by_value ? col : col_ptr));
   }
 
   // output column members must be set before loading column when
@@ -372,10 +355,10 @@ void TableFunctionCompilationContext::generateEntryPoint(
         llvm::Type::getVoidTy(ctx),
         {cgen_state_->ir_builder_.CreateLoad(output_row_count_ptr)});
   }
-  if (pass_column_by_value) {
-    for (auto& col : output_col_args) {
-      func_args.push_back(cgen_state_->ir_builder_.CreateLoad(col));
-    }
+
+  for (auto& col : output_col_args) {
+    func_args.push_back(
+        (pass_column_by_value ? cgen_state_->ir_builder_.CreateLoad(col) : col));
   }
 
   auto func_name = exe_unit.table_func.getName();

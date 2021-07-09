@@ -255,6 +255,15 @@ QueryMemoryInitializer::QueryMemoryInitializer(
       group_buffer_size + index_buffer_qw * sizeof(int64_t);
   CHECK_GE(actual_group_buffer_size, group_buffer_size);
 
+  if (query_mem_desc.hasVarlenOutput()) {
+    const auto varlen_buffer_elem_size_opt = query_mem_desc.varlenOutputBufferElemSize();
+    CHECK(varlen_buffer_elem_size_opt);  // TODO(adb): relax
+    auto varlen_output_buffer = reinterpret_cast<int64_t*>(row_set_mem_owner_->allocate(
+        query_mem_desc.getEntryCount() * varlen_buffer_elem_size_opt.value()));
+    num_buffers_ += 1;
+    group_by_buffers_.push_back(varlen_output_buffer);
+  }
+
   for (size_t i = 0; i < group_buffers_count; i += step) {
     auto group_by_buffer = alloc_group_by_buffer(actual_group_buffer_size,
                                                  render_allocator_map,
@@ -318,7 +327,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     : num_rows_(num_rows)
     , row_set_mem_owner_(row_set_mem_owner)
     , init_agg_vals_(init_agg_val_vec(exe_unit.target_exprs, {}, query_mem_desc))
-    , num_buffers_(/*computeNumberOfBuffers(query_mem_desc, device_type, executor)*/ 1)
+    , num_buffers_(1)
     , count_distinct_bitmap_mem_(0)
     , count_distinct_bitmap_mem_bytes_(0)
     , count_distinct_bitmap_crt_ptr_(nullptr)
@@ -422,16 +431,17 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
   const size_t col_base_off{query_mem_desc.getColOffInBytes(0)};
 
   auto agg_bitmap_size = allocateCountDistinctBuffers(query_mem_desc, true, executor);
-  auto tdigest_deferred = allocateTDigests(query_mem_desc, true, executor);
+  auto quantile_params = allocateTDigests(query_mem_desc, true, executor);
   auto buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);
 
   const auto query_mem_desc_fixedup =
       ResultSet::fixupQueryMemoryDescriptor(query_mem_desc);
 
-  // not COUNT DISTINCT / APPROX_COUNT_DISTINCT / APPROX_MEDIAN
+  auto const is_true = [](auto const& x) { return static_cast<bool>(x); };
+  // not COUNT DISTINCT / APPROX_COUNT_DISTINCT / APPROX_QUANTILE
   // we fallback to default implementation in that cases
-  if (!std::accumulate(agg_bitmap_size.begin(), agg_bitmap_size.end(), 0) &&
-      !std::accumulate(tdigest_deferred.begin(), tdigest_deferred.end(), 0) &&
+  if (!std::any_of(agg_bitmap_size.begin(), agg_bitmap_size.end(), is_true) &&
+      !std::any_of(quantile_params.begin(), quantile_params.end(), is_true) &&
       g_optimize_row_initialization) {
     std::vector<int8_t> sample_row(row_size - col_base_off);
 
@@ -439,7 +449,7 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
                       sample_row.data(),
                       init_vals,
                       agg_bitmap_size,
-                      tdigest_deferred);
+                      quantile_params);
 
     if (query_mem_desc.hasKeylessHash()) {
       CHECK(warp_size >= 1);
@@ -470,7 +480,7 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
                             &buffer_ptr[col_base_off],
                             init_vals,
                             agg_bitmap_size,
-                            tdigest_deferred);
+                            quantile_params);
         }
       }
       return;
@@ -484,7 +494,7 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
                         &buffer_ptr[col_base_off],
                         init_vals,
                         agg_bitmap_size,
-                        tdigest_deferred);
+                        quantile_params);
     }
   }
 }
@@ -571,7 +581,7 @@ void QueryMemoryInitializer::initColumnsPerRow(
     int8_t* row_ptr,
     const std::vector<int64_t>& init_vals,
     const std::vector<int64_t>& bitmap_sizes,
-    const std::vector<bool>& tdigest_deferred) {
+    const std::vector<QuantileParam>& quantile_params) {
   int8_t* col_ptr = row_ptr;
   size_t init_vec_idx = 0;
   for (size_t col_idx = 0; col_idx < query_mem_desc.getSlotCount();
@@ -585,9 +595,10 @@ void QueryMemoryInitializer::initColumnsPerRow(
       init_val =
           bm_sz > 0 ? allocateCountDistinctBitmap(bm_sz) : allocateCountDistinctSet();
       ++init_vec_idx;
-    } else if (query_mem_desc.isGroupBy() && tdigest_deferred[col_idx]) {
-      // allocate for APPROX_MEDIAN only when slot is used
-      init_val = reinterpret_cast<int64_t>(row_set_mem_owner_->nullTDigest());
+    } else if (query_mem_desc.isGroupBy() && quantile_params[col_idx]) {
+      auto const q = *quantile_params[col_idx];
+      // allocate for APPROX_QUANTILE only when slot is used
+      init_val = reinterpret_cast<int64_t>(row_set_mem_owner_->nullTDigest(q));
       ++init_vec_idx;
     } else {
       if (query_mem_desc.getPaddedSlotWidthBytes(col_idx) > 0) {
@@ -713,35 +724,36 @@ int64_t QueryMemoryInitializer::allocateCountDistinctSet() {
   return reinterpret_cast<int64_t>(count_distinct_set);
 }
 
-std::vector<bool> QueryMemoryInitializer::allocateTDigests(
-    const QueryMemoryDescriptor& query_mem_desc,
-    const bool deferred,
-    const Executor* executor) {
+std::vector<QueryMemoryInitializer::QuantileParam>
+QueryMemoryInitializer::allocateTDigests(const QueryMemoryDescriptor& query_mem_desc,
+                                         const bool deferred,
+                                         const Executor* executor) {
   size_t const slot_count = query_mem_desc.getSlotCount();
   size_t const ntargets = executor->plan_state_->target_exprs_.size();
   CHECK_GE(slot_count, ntargets);
-  std::vector<bool> tdigest_deferred(deferred ? slot_count : 0);
+  std::vector<QuantileParam> quantile_params(deferred ? slot_count : 0);
 
   for (size_t target_idx = 0; target_idx < ntargets; ++target_idx) {
     auto const target_expr = executor->plan_state_->target_exprs_[target_idx];
     if (auto const agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
-      if (agg_expr->get_aggtype() == kAPPROX_MEDIAN) {
+      if (agg_expr->get_aggtype() == kAPPROX_QUANTILE) {
         size_t const agg_col_idx =
             query_mem_desc.getSlotIndexForSingleSlotCol(target_idx);
         CHECK_LT(agg_col_idx, slot_count);
         CHECK_EQ(query_mem_desc.getLogicalSlotWidthBytes(agg_col_idx),
                  static_cast<int8_t>(sizeof(int64_t)));
+        auto const q = agg_expr->get_arg1()->get_constval().doubleval;
         if (deferred) {
-          tdigest_deferred[agg_col_idx] = true;
+          quantile_params[agg_col_idx] = q;
         } else {
-          // allocate for APPROX_MEDIAN only when slot is used
+          // allocate for APPROX_QUANTILE only when slot is used
           init_agg_vals_[agg_col_idx] =
-              reinterpret_cast<int64_t>(row_set_mem_owner_->nullTDigest());
+              reinterpret_cast<int64_t>(row_set_mem_owner_->nullTDigest(q));
         }
       }
     }
   }
-  return tdigest_deferred;
+  return quantile_params;
 }
 
 #ifdef HAVE_CUDA
@@ -819,18 +831,20 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
         query_mem_desc, init_agg_vals_dev_ptr, n, device_id, block_size_x, grid_size_x);
   }
 
-  auto dev_group_by_buffers = create_dev_group_by_buffers(device_allocator_,
-                                                          group_by_buffers_,
-                                                          query_mem_desc,
-                                                          block_size_x,
-                                                          grid_size_x,
-                                                          device_id,
-                                                          dispatch_mode,
-                                                          num_rows_,
-                                                          can_sort_on_gpu,
-                                                          false,
-                                                          ra_exe_unit.use_bump_allocator,
-                                                          render_allocator);
+  auto dev_group_by_buffers =
+      create_dev_group_by_buffers(device_allocator_,
+                                  group_by_buffers_,
+                                  query_mem_desc,
+                                  block_size_x,
+                                  grid_size_x,
+                                  device_id,
+                                  dispatch_mode,
+                                  num_rows_,
+                                  can_sort_on_gpu,
+                                  false,
+                                  ra_exe_unit.use_bump_allocator,
+                                  query_mem_desc.hasVarlenOutput(),
+                                  render_allocator);
 
   if (render_allocator) {
     CHECK_EQ(size_t(0), render_allocator->getAllocatedSize() % 8);
@@ -855,7 +869,9 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     }
     const int8_t warp_count =
         query_mem_desc.interleavedBins(ExecutorDeviceType::GPU) ? warp_size : 1;
-    for (size_t i = 0; i < getGroupByBuffersSize(); i += step) {
+    const auto num_group_by_buffers =
+        getGroupByBuffersSize() - (query_mem_desc.hasVarlenOutput() ? 1 : 0);
+    for (size_t i = 0; i < num_group_by_buffers; i += step) {
       if (output_columnar) {
         init_columnar_group_by_buffer_on_device(
             reinterpret_cast<int64_t*>(group_by_dev_buffer),
@@ -1012,11 +1028,12 @@ void QueryMemoryInitializer::compactProjectionBuffersCpu(
     const size_t projection_count) {
   const auto num_allocated_rows =
       std::min(projection_count, query_mem_desc.getEntryCount());
+  const size_t buffer_start_idx = query_mem_desc.hasVarlenOutput() ? 1 : 0;
 
   // copy the results from the main buffer into projection_buffer
   compact_projection_buffer_for_cpu_columnar(
       query_mem_desc,
-      reinterpret_cast<int8_t*>(group_by_buffers_[0]),
+      reinterpret_cast<int8_t*>(group_by_buffers_[buffer_start_idx]),
       num_allocated_rows);
 
   // update the entry count for the result set, and its underlying storage
@@ -1035,11 +1052,12 @@ void QueryMemoryInitializer::compactProjectionBuffersGpu(
       std::min(projection_count, query_mem_desc.getEntryCount());
 
   // copy the results from the main buffer into projection_buffer
+  const size_t buffer_start_idx = query_mem_desc.hasVarlenOutput() ? 1 : 0;
   copy_projection_buffer_from_gpu_columnar(
       data_mgr,
       gpu_group_by_buffers,
       query_mem_desc,
-      reinterpret_cast<int8_t*>(group_by_buffers_[0]),
+      reinterpret_cast<int8_t*>(group_by_buffers_[buffer_start_idx]),
       num_allocated_rows,
       device_id);
 
@@ -1077,22 +1095,24 @@ void QueryMemoryInitializer::copyGroupByBuffersFromGpu(
                                  block_size_x,
                                  grid_size_x,
                                  device_id,
-                                 prepend_index_buffer);
+                                 prepend_index_buffer,
+                                 query_mem_desc.hasVarlenOutput());
 }
 
 void QueryMemoryInitializer::applyStreamingTopNOffsetCpu(
     const QueryMemoryDescriptor& query_mem_desc,
     const RelAlgExecutionUnit& ra_exe_unit) {
-  CHECK_EQ(group_by_buffers_.size(), size_t(1));
+  const size_t buffer_start_idx = query_mem_desc.hasVarlenOutput() ? 1 : 0;
+  CHECK_EQ(group_by_buffers_.size(), buffer_start_idx + 1);
 
   const auto rows_copy = streaming_top_n::get_rows_copy_from_heaps(
-      group_by_buffers_[0],
+      group_by_buffers_[buffer_start_idx],
       query_mem_desc.getBufferSizeBytes(ra_exe_unit, 1, ExecutorDeviceType::CPU),
       ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit,
       1);
   CHECK_EQ(rows_copy.size(),
            query_mem_desc.getEntryCount() * query_mem_desc.getRowSize());
-  memcpy(group_by_buffers_[0], &rows_copy[0], rows_copy.size());
+  memcpy(group_by_buffers_[buffer_start_idx], &rows_copy[0], rows_copy.size());
 }
 
 void QueryMemoryInitializer::applyStreamingTopNOffsetGpu(
@@ -1104,6 +1124,7 @@ void QueryMemoryInitializer::applyStreamingTopNOffsetGpu(
     const int device_id) {
 #ifdef HAVE_CUDA
   CHECK_EQ(group_by_buffers_.size(), num_buffers_);
+  const size_t buffer_start_idx = query_mem_desc.hasVarlenOutput() ? 1 : 0;
 
   const auto rows_copy = pick_top_n_rows_from_dev_heaps(
       data_mgr,
@@ -1115,7 +1136,7 @@ void QueryMemoryInitializer::applyStreamingTopNOffsetGpu(
   CHECK_EQ(
       rows_copy.size(),
       static_cast<size_t>(query_mem_desc.getEntryCount() * query_mem_desc.getRowSize()));
-  memcpy(group_by_buffers_[0], &rows_copy[0], rows_copy.size());
+  memcpy(group_by_buffers_[buffer_start_idx], &rows_copy[0], rows_copy.size());
 #else
   UNREACHABLE();
 #endif

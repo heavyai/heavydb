@@ -46,6 +46,9 @@ std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targets,
       if (query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx) > 0) {
         agg_init_vals.push_back(0);
       }
+      if (agg_info.is_varlen_projection) {
+        continue;
+      }
       if (agg_ti.is_array() ||
           (agg_ti.is_string() && agg_ti.get_compression() == kENCODING_NONE)) {
         agg_init_vals.push_back(0);
@@ -133,7 +136,6 @@ int64_t get_agg_initial_val(const SQLAgg agg,
   CHECK(ti.get_logical_size() < 0 ||
         byte_width >= static_cast<unsigned>(ti.get_logical_size()));
   switch (agg) {
-    case kAVG:
     case kSUM: {
       if (!ti.get_notnull()) {
         if (ti.is_fp()) {
@@ -170,10 +172,11 @@ int64_t get_agg_initial_val(const SQLAgg agg,
           CHECK(false);
       }
     }
+    case kAVG:
     case kCOUNT:
     case kAPPROX_COUNT_DISTINCT:
       return 0;
-    case kAPPROX_MEDIAN:
+    case kAPPROX_QUANTILE:
       return {};  // Init value is a quantile::TDigest* set elsewhere.
     case kMIN: {
       switch (byte_width) {
@@ -277,7 +280,7 @@ std::vector<int64_t> init_agg_val_vec(
           target.is_agg &&
           (target.agg_kind == kMIN || target.agg_kind == kMAX ||
            target.agg_kind == kSUM || target.agg_kind == kAVG ||
-           target.agg_kind == kAPPROX_MEDIAN)) {
+           target.agg_kind == kAPPROX_QUANTILE)) {
         set_notnull(target, false);
       } else if (constrained_not_null(arg_expr, quals)) {
         set_notnull(target, true);

@@ -134,7 +134,8 @@ void set_column_descriptor(const std::string& column_name,
                            ColumnDescriptor& cd,
                            SqlType* column_type,
                            const bool not_null,
-                           const Encoding* encoding);
+                           const Encoding* encoding,
+                           const std::string* default_value);
 
 void set_default_table_attributes(const std::string& table_name,
                                   TableDescriptor& td,

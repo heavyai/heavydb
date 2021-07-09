@@ -23,7 +23,6 @@
 
 #pragma once
 
-#include "Shared/mapd_shared_ptr.h"
 #include "gen-cpp/extension_functions_types.h"
 
 #include <thrift/transport/TTransport.h>
@@ -118,12 +117,12 @@ class Calcite final {
                           const std::string& calcite_session_id);
   std::vector<std::string> get_db_objects(const std::string ra);
   void inner_close_calcite_server(bool log);
-  std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
-  getClient(int port);
+  std::pair<std::shared_ptr<CalciteServerClient>, std::shared_ptr<TTransport>> getClient(
+      int port);
 
   int ping(int retry_num = 0, int max_retry = 50);
 
-  mapd::shared_ptr<ThriftClientConnection> connMgr_;
+  std::shared_ptr<ThriftClientConnection> connMgr_;
   bool server_available_;
   size_t service_timeout_;
   bool service_keepalive_ = true;

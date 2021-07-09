@@ -1195,6 +1195,36 @@ class CreateForeignTableTest : public CreateAndDropTableDdlTest {
     dropTestUser();
     CreateAndDropTableDdlTest::TearDown();
   }
+
+  void assertOptionEquals(const foreign_storage::ForeignTable* table,
+                          const std::string& key,
+                          const std::string& value) {
+    if (const auto& opt_it = table->options.find(key); opt_it != table->options.end()) {
+      ASSERT_EQ(opt_it->second, value);
+    } else {
+      FAIL() << "Expected value for option " << key;
+    }
+  }
+
+  const foreign_storage::ForeignTable* getForeignTable(
+      const std::string& filename) const {
+    auto table = getCatalog().getMetadataForTable(filename, false);
+    CHECK(table);
+    auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(table);
+    return foreign_table;
+  }
+
+  std::unique_ptr<const foreign_storage::ForeignTable> getForeignTableFromStorage(
+      const std::string& filename) const {
+    return getCatalog().getForeignTableFromStorage(getForeignTable(filename)->tableId);
+  }
+
+  // Asserts option is as expected for in-memory table then again in catalog storage.
+  void assertOptionEquals(const std::string& key, const std::string& value) {
+    assertOptionEquals(getForeignTable("test_foreign_table"), key, value);
+    assertOptionEquals(
+        getForeignTableFromStorage("test_foreign_table").get(), key, value);
+  }
 };
 
 TEST_F(CreateForeignTableTest, NonExistentServer) {
@@ -1855,6 +1885,143 @@ TEST_F(MaxRollbackEpochsTest, CreateTableDefaultValue) {
 
   sql("INSERT INTO test_table VALUES (10);");
   assertEpochCeilingAndFloor(DEFAULT_MAX_ROLLBACK_EPOCHS + 1, 1);
+}
+
+class DefaultValuesTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override { sql("DROP TABLE IF EXISTS defval_tbl"); }
+  void TearDown() override { sql("DROP TABLE IF EXISTS defval_tbl"); }
+
+  void insertDefaultValues() {
+    EXPECT_NO_THROW(sql("INSERT INTO defval_tbl(idx) values(1)"));
+  }
+
+  void insertNotDefaultValues() {
+    EXPECT_NO_THROW(
+        sql("INSERT INTO defval_tbl(idx, i, big_i, null_i, int_a, text_a,"
+            "t, dt, ls, p, d) values(2, 15, 314958735, NULL, "
+            "ARRAY[4, 5, 6], ARRAY['b', 'c'],"
+            "'World', '!!!', 'LINESTRING (2 2,3 3, 4 4)',"
+            "'POINT (2 3)', '2012-11-24')"));
+  }
+
+  void verifyData() {
+    sqlAndCompareResult("SELECT * FROM defval_tbl WHERE idx = 1", default_values);
+    sqlAndCompareResult("SELECT * FROM defval_tbl WHERE idx = 2", not_default_values);
+  }
+
+  const std::vector<std::vector<NullableTargetValue>> default_values = {
+      {i(1),
+       i(14),
+       i(314958734),
+       Null,
+       array({i(1), i(2), i(3)}),
+       array({"a", "b"}),
+       "Hello",
+       "World",
+       "LINESTRING (1 1,2 2,3 3)",
+       "POINT (1 2)",
+       "2011-10-23"}};
+
+  const std::vector<std::vector<NullableTargetValue>> not_default_values = {
+      {i(2),
+       i(15),
+       i(314958735),
+       Null,
+       array({i(4), i(5), i(6)}),
+       array({"b", "c"}),
+       "World",
+       "!!!",
+       "LINESTRING (2 2,3 3,4 4)",
+       "POINT (2 3)",
+       "2012-11-24"}};
+
+  std::string col_defs =
+      "i integer default 14,"
+      "big_i bigint default 314958734,"
+      "null_i integer,"
+      "int_a integer[] default ARRAY[1, 2, 3],"
+      "text_a text[] default ARRAY['a', 'b'],"
+      "t text default 'Hello' encoding none ,"
+      "dt text default 'World' encoding dict,"
+      "ls LINESTRING default 'LINESTRING (1 1,2 2,3 3)',"
+      "p POINT default 'POINT (1 2)',"
+      "d date default '2011-10-23'";
+};
+
+TEST_F(DefaultValuesTest, CreateTableTest) {
+  std::string create_table_query =
+      "CREATE TABLE defval_tbl (idx integer, " + col_defs + ")";
+  sql(create_table_query);
+  insertNotDefaultValues();
+  insertDefaultValues();
+  verifyData();
+}
+
+TEST_F(DefaultValuesTest, AlterAfterInsert) {
+  std::string create_table_query = "CREATE TABLE defval_tbl (idx integer)";
+  sql(create_table_query);
+  insertDefaultValues();
+  std::string alter_table_query = "ALTER TABLE defval_tbl ADD " + col_defs;
+  sql(alter_table_query);
+  insertNotDefaultValues();
+  verifyData();
+}
+
+TEST_F(DefaultValuesTest, InsertAfterAlter) {
+  std::string create_table_query = "CREATE TABLE defval_tbl (idx integer)";
+  sql(create_table_query);
+  std::string alter_table_query = "ALTER TABLE defval_tbl ADD " + col_defs;
+  sql(alter_table_query);
+  insertDefaultValues();
+  insertNotDefaultValues();
+  verifyData();
+}
+
+TEST_F(DefaultValuesTest, ProhibitDefaultOnShardedKey) {
+  queryAndAssertException(
+      "CREATE TABLE defval_tbl (i INTEGER default -1, key text "
+      "default 'default', shard key(i)) with (shard_count = 2)",
+      "Exception: Default values for shard "
+      "keys are not supported yet.");
+}
+
+TEST_F(DefaultValuesTest, DefaultAllowsNulls) {
+  std::vector<std::string> create_sqls = {
+      "CREATE TABLE defval_tbl (idx INTEGER, a INTEGER DEFAULT 12)",
+      "CREATE TABLE defval_tbl (idx INTEGER, a INTEGER NULL DEFAULT 12)"};
+  for (auto& create_sql : create_sqls) {
+    sql("DROP TABLE IF EXISTS defval_tbl");
+    sql(create_sql);
+    sql("INSERT INTO defval_tbl(idx, a) VALUES (1, NULL)");
+    sqlAndCompareResult("SELECT idx, a FROM defval_tbl", {{i(1), Null}});
+  }
+}
+
+TEST_F(DefaultValuesTest, DefaultNotNull) {
+  std::string create_table_query =
+      "CREATE TABLE defval_tbl (idx INTEGER, a INTEGER NOT NULL DEFAULT 12)";
+  sql(create_table_query);
+  queryAndAssertException("INSERT INTO defval_tbl(idx, a) VALUES (1, NULL)",
+                          "Exception: Cannot insert NULL into column a");
+  sql("INSERT INTO defval_tbl(idx) VALUES (1)");
+  sqlAndCompareResult("SELECT idx, a FROM defval_tbl", {{i(1), i(12)}});
+}
+
+TEST_F(DefaultValuesTest, NullDefault) {
+  std::string create_table_query =
+      "CREATE TABLE defval_tbl (idx INTEGER, a INTEGER DEFAULT NULL)";
+  sql(create_table_query);
+  sql("INSERT INTO defval_tbl(idx) VALUES (1)");
+  sqlAndCompareResult("SELECT * FROM defval_tbl", {{i(1), Null}});
+}
+
+TEST_F(DefaultValuesTest, NotNullWithNullDefault) {
+  std::string create_table_query =
+      "CREATE TABLE defval_tbl (idx INTEGER, a INTEGER NOT NULL DEFAULT NULL)";
+  sql(create_table_query);
+  queryAndAssertException("INSERT INTO defval_tbl(idx) VALUES (1)",
+                          "Exception: NULL for column a");
 }
 
 int main(int argc, char** argv) {

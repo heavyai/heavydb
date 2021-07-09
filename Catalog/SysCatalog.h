@@ -322,17 +322,11 @@ class SysCatalog : private CommonFileOperations {
   virtual ~SysCatalog();
 
  private:
-  using GranteeMap = std::map<std::string, Grantee*>;
-  using ObjectRoleDescriptorMap = std::multimap<std::string, ObjectRoleDescriptor*>;
+  using GranteeMap = std::map<std::string, std::unique_ptr<Grantee>>;
+  using ObjectRoleDescriptorMap =
+      std::multimap<std::string, std::unique_ptr<ObjectRoleDescriptor>>;
 
-  SysCatalog()
-      : CommonFileOperations(basePath_)
-      , aggregator_(false)
-      , sqliteMutex_()
-      , sharedMutex_()
-      , thread_holding_sqlite_lock(std::thread::id())
-      , thread_holding_write_lock(std::thread::id())
-      , dummyCatalog_(std::make_shared<Catalog>()) {}
+  SysCatalog();
 
   void initDB();
   void buildRoleMap();

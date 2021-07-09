@@ -459,11 +459,11 @@ extern "C" RUNTIME_EXPORT void count_distinct_set_union_jit_rt(
       new_set_handle, old_set_handle, new_count_distinct_desc, old_count_distinct_desc);
 }
 
-extern "C" RUNTIME_EXPORT void approx_median_jit_rt(const int64_t new_set_handle,
-                                                    const int64_t old_set_handle,
-                                                    const void* that_qmd_handle,
-                                                    const void* this_qmd_handle,
-                                                    const int64_t target_logical_idx) {
+extern "C" RUNTIME_EXPORT void approx_quantile_jit_rt(const int64_t new_set_handle,
+                                                      const int64_t old_set_handle,
+                                                      const void* that_qmd_handle,
+                                                      const void* this_qmd_handle,
+                                                      const int64_t target_logical_idx) {
   auto* incoming = reinterpret_cast<quantile::TDigest*>(new_set_handle);
   if (incoming->centroids().capacity()) {
     auto* accumulator = reinterpret_cast<quantile::TDigest*>(old_set_handle);
@@ -1157,9 +1157,9 @@ void ResultSetReductionJIT::reduceOneAggregateSlot(Value* this_ptr1,
       emit_aggregate_one_count(this_ptr1, that_ptr1, chosen_bytes, ir_reduce_one_entry);
       break;
     }
-    case kAPPROX_MEDIAN:
+    case kAPPROX_QUANTILE:
       CHECK_EQ(chosen_bytes, static_cast<int8_t>(sizeof(int64_t)));
-      reduceOneApproxMedianSlot(
+      reduceOneApproxQuantileSlot(
           this_ptr1, that_ptr1, target_logical_idx, ir_reduce_one_entry);
       break;
     case kAVG: {
@@ -1227,7 +1227,7 @@ void ResultSetReductionJIT::reduceOneCountDistinctSlot(
       "");
 }
 
-void ResultSetReductionJIT::reduceOneApproxMedianSlot(
+void ResultSetReductionJIT::reduceOneApproxQuantileSlot(
     Value* this_ptr1,
     Value* that_ptr1,
     const size_t target_logical_idx,
@@ -1238,7 +1238,7 @@ void ResultSetReductionJIT::reduceOneApproxMedianSlot(
   const auto this_qmd_arg = ir_reduce_one_entry->arg(2);
   const auto that_qmd_arg = ir_reduce_one_entry->arg(3);
   ir_reduce_one_entry->add<ExternalCall>(
-      "approx_median_jit_rt",
+      "approx_quantile_jit_rt",
       Type::Void,
       std::vector<const Value*>{
           new_set_handle,

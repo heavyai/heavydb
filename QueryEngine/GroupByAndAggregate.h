@@ -110,6 +110,8 @@ class GroupByAndAggregate {
       const CompilationOptions& co,
       DiamondCodegen& codegen);
 
+  llvm::Value* codegenVarlenOutputBuffer(const QueryMemoryDescriptor& query_mem_desc);
+
   std::tuple<llvm::Value*, llvm::Value*> codegenSingleColumnPerfectHash(
       const QueryMemoryDescriptor& query_mem_desc,
       const CompilationOptions& co,
@@ -144,6 +146,7 @@ class GroupByAndAggregate {
                                 llvm::Value* target);
 
   bool codegenAggCalls(const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
+                       llvm::Value* varlen_output_buffer,
                        const std::vector<llvm::Value*>& agg_out_vec,
                        const QueryMemoryDescriptor& query_mem_desc,
                        const CompilationOptions& co,
@@ -175,11 +178,11 @@ class GroupByAndAggregate {
                             const QueryMemoryDescriptor&,
                             const ExecutorDeviceType);
 
-  void codegenApproxMedian(const size_t target_idx,
-                           const Analyzer::Expr* target_expr,
-                           std::vector<llvm::Value*>& agg_args,
-                           const QueryMemoryDescriptor& query_mem_desc,
-                           const ExecutorDeviceType device_type);
+  void codegenApproxQuantile(const size_t target_idx,
+                             const Analyzer::Expr* target_expr,
+                             std::vector<llvm::Value*>& agg_args,
+                             const QueryMemoryDescriptor& query_mem_desc,
+                             const ExecutorDeviceType device_type);
 
   llvm::Value* getAdditionalLiteral(const int32_t off);
 

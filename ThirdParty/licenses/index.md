@@ -28,6 +28,7 @@ rapidjson | [MIT](<https://github.com/miloyip/rapidjson/blob/master/license.txt>
 SQLite | [Public Domain](<https://www.sqlite.org/copyright.html>) | Catalog management |
 TBB | [Apache-2.0](https://raw.githubusercontent.com/oneapi-src/oneTBB/tbb_2020/LICENSE) | Threadpool support |
 TimeGM | [BSD](<https://cdn.netbsd.org/pub/pkgsrc/current/pkgsrc/pkgtools/libnbcompat/files/timegm.c>) | Date/time support |
+Uber H3 | [Apache-2.0](https://github.com/uber/h3/blob/master/LICENSE) | H3 index encoding/decoding |
 Xorg | [MIT](<https://www.x.org/releases/X11R7.7/doc/xorg-docs/License.html>) | OpenGL rendering |
 zlib | [zlib](<http://zlib.net/zlib_license.html>) | PNG support |
 --- | --- | --- |

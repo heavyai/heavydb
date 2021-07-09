@@ -346,30 +346,18 @@ void ResultSetEmulator::rse_fill_storage_buffer_perfect_hash_colwise(
       if (rs_groups[i]) {
         // const auto v = generator.getNextValue();
         rs_values[i] = v;
-        if (rs_flow == 2) {               // null_val test-cases
-          if (i >= rs_entry_count - 4) {  // only the last four rows of RS #1 and RS #2
-                                          // exersized for null_val test
-            rs_values[i] = -1;
-            fill_one_entry_one_col(
-                col_entry_ptr,
-                col_bytes,
-                ptr2,
-                rs_query_mem_desc.getPaddedSlotWidthBytes(slot_idx + 1),
-                v,
-                target_info,
-                false,
-                true);
-          } else {
-            fill_one_entry_one_col(
-                col_entry_ptr,
-                col_bytes,
-                ptr2,
-                rs_query_mem_desc.getPaddedSlotWidthBytes(slot_idx + 1),
-                v,
-                target_info,
-                false,
-                false);
-          }
+        if (rs_flow == 2 &&             // null_val test-cases
+            i >= rs_entry_count - 4) {  // only the last four rows of RS #1 and RS #2
+                                        // exersized for null_val test
+          rs_values[i] = -1;
+          fill_one_entry_one_col(col_entry_ptr,
+                                 col_bytes,
+                                 ptr2,
+                                 rs_query_mem_desc.getPaddedSlotWidthBytes(slot_idx + 1),
+                                 v,
+                                 target_info,
+                                 false,
+                                 true);
         } else {
           fill_one_entry_one_col(col_entry_ptr,
                                  col_bytes,
@@ -781,15 +769,14 @@ int64_t ResultSetEmulator::rseAggregateKMAX(size_t i) {
 }
 
 int64_t ResultSetEmulator::rseAggregateKAVG(size_t i) {
-  int64_t result = 0;
+  double result = 0;
   int n1 = 1,
       n2 = 1;  // for test purposes count of elements in each group is 1 (see proc
                // "fill_one_entry_no_collisions")
 
   if (rs1_groups[i] && rs2_groups[i]) {
     if ((rs1_values[i] == -1) && (rs2_values[i] == -1)) {
-      // return rse_get_null_val();
-      return result;
+      return shared::reinterpret_bits<int64_t>(NULL_DOUBLE);
     }
     int n = 0;
     if (rs1_values[i] != -1) {
@@ -804,7 +791,7 @@ int64_t ResultSetEmulator::rseAggregateKAVG(size_t i) {
       result /= n;
     }
   } else {
-    // result = rse_get_null_val();
+    result = NULL_DOUBLE;
     if (rs1_groups[i]) {
       if (rs1_values[i] != -1) {
         result = rs1_values[i] / n1;
@@ -818,7 +805,7 @@ int64_t ResultSetEmulator::rseAggregateKAVG(size_t i) {
     }
   }
 
-  return result;
+  return shared::reinterpret_bits<int64_t>(result);
 }
 
 int64_t ResultSetEmulator::rseAggregateKSUM(size_t i) {
@@ -882,7 +869,9 @@ int64_t ResultSetEmulator::rseAggregateKCOUNT(size_t i) {
   return result;
 }
 
-bool approx_eq(const double v, const double target, const double eps = 0.01) {
+constexpr double EPS = 0.01;
+
+bool approx_eq(const double v, const double target, const double eps = EPS) {
   return target - eps < v && v < target + eps;
 }
 
@@ -931,7 +920,7 @@ void test_iterate(const std::vector<TargetInfo>& target_infos,
         }
         case kDOUBLE: {
           const auto dval = v<double>(row[i]);
-          ASSERT_TRUE(approx_eq(static_cast<double>(ref_val), dval));
+          ASSERT_NEAR(ref_val, dval, EPS);
           break;
         }
         case kTEXT: {
@@ -1338,7 +1327,7 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
             case kMIN: {
               if (!silent) {
                 p_tag += "KMIN_D";
-                printf("\nKMIN_D row_idx = %i, ref_val = %f, dval = %f",
+                printf("\nKMIN_D row_idx = %i, ref_val = %e, dval = %e",
                        static_cast<int>(row_idx),
                        static_cast<double>(ref_val),
                        dval);
@@ -1348,14 +1337,14 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                   printf("%5s%s%s", "", p_tag.c_str(), " TEST PASSED!\n");
                 }
               } else {
-                ASSERT_TRUE(approx_eq(static_cast<double>(ref_val), dval));
+                ASSERT_NEAR(ref_val, dval, EPS) << p_tag << ' ' << row_idx;
               }
               break;
             }
             case kMAX: {
               if (!silent) {
                 p_tag += "KMAX_D";
-                printf("\n%s row_idx = %i, ref_val = %f, dval = %f",
+                printf("\n%s row_idx = %i, ref_val = %e, dval = %e",
                        p_tag.c_str(),
                        static_cast<int>(row_idx),
                        static_cast<double>(ref_val),
@@ -1366,25 +1355,30 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                   printf("%5s%s%s", "", p_tag.c_str(), " TEST PASSED!\n");
                 }
               } else {
-                ASSERT_TRUE(approx_eq(static_cast<double>(ref_val), dval));
+                ASSERT_NEAR(ref_val, dval, EPS) << p_tag << ' ' << row_idx;
               }
               break;
             }
             case kAVG: {
               if (!silent) {
                 p_tag += "KAVG_D";
-                printf("\n%s row_idx = %i, ref_val = %f, dval = %f",
+                printf("\n%s row_idx = %i, ref_val = %e, dval = %e",
                        p_tag.c_str(),
                        static_cast<int>(row_idx),
-                       static_cast<double>(ref_val),
+                       shared::reinterpret_bits<double>(ref_val),
                        dval);
-                if (!approx_eq(static_cast<double>(ref_val), dval)) {
+                if (!approx_eq(shared::reinterpret_bits<double>(ref_val), dval)) {
                   printf("%5s%s%s", "", p_tag.c_str(), " TEST FAILED!\n");
                 } else {
                   printf("%5s%s%s", "", p_tag.c_str(), " TEST PASSED!\n");
                 }
               } else {
-                ASSERT_TRUE(approx_eq(static_cast<double>(ref_val), dval));
+                ASSERT_NEAR(shared::reinterpret_bits<double>(ref_val), dval, EPS)
+                    << p_tag << ' ' << row_idx;
+                if (dval == NULL_DOUBLE) {
+                  ASSERT_EQ(shared::reinterpret_bits<double>(ref_val), dval)
+                      << p_tag << ' ' << row_idx;
+                }
               }
               break;
             }
@@ -1392,7 +1386,7 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
             case kCOUNT: {
               if (!silent) {
                 p_tag += "KSUM_D";
-                printf("\n%s row_idx = %i, ref_val = %f, dval = %f",
+                printf("\n%s row_idx = %i, ref_val = %e, dval = %e",
                        p_tag.c_str(),
                        (int)row_idx,
                        (double)ref_val,
@@ -1403,7 +1397,7 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                   printf("%5s%s%s", "", p_tag.c_str(), " TEST PASSED!\n");
                 }
               } else {
-                ASSERT_TRUE(approx_eq(static_cast<double>(ref_val), dval));
+                ASSERT_NEAR(ref_val, dval, EPS) << p_tag << ' ' << row_idx;
               }
               break;
             }
@@ -3180,15 +3174,25 @@ TEST(Util, PairToDouble) {
   const int64_t null_double = shared::reinterpret_bits<int64_t, double>(NULL_DOUBLE);
   EXPECT_EQ(int64_t(1) << 23, null_float);
   EXPECT_EQ(int64_t(1) << 52, null_double);
+  // Test all 8 combinations of (kFloat,kDouble)x(bool)x(bool).
+  // If the denominator is 0, then the return value should always be NULL_DOUBLE.
+  EXPECT_EQ(NULL_DOUBLE, pair_to_double({-4, 0}, SQLTypeInfo(kFLOAT, false), false));
+  EXPECT_EQ(NULL_DOUBLE, pair_to_double({-3, 0}, SQLTypeInfo(kFLOAT, false), true));
+  EXPECT_EQ(NULL_DOUBLE, pair_to_double({-2, 0}, SQLTypeInfo(kFLOAT, true), false));
+  EXPECT_EQ(NULL_DOUBLE, pair_to_double({-1, 0}, SQLTypeInfo(kFLOAT, true), true));
+  EXPECT_EQ(NULL_DOUBLE, pair_to_double({0, 0}, SQLTypeInfo(kDOUBLE, false), false));
+  EXPECT_EQ(NULL_DOUBLE, pair_to_double({1, 0}, SQLTypeInfo(kDOUBLE, false), true));
+  EXPECT_EQ(NULL_DOUBLE, pair_to_double({2, 0}, SQLTypeInfo(kDOUBLE, true), false));
+  EXPECT_EQ(NULL_DOUBLE, pair_to_double({3, 0}, SQLTypeInfo(kDOUBLE, true), true));
   // Test all 16 combinations of (null_float,null_double)x(kFloat,kDouble)x(bool)x(bool).
-  // Only 3 return the NULL sentinel NULL_DOUBLE, the rest are interpreted as non-null.
+  // All should be non-null.
   EXPECT_EQ(shared::reinterpret_bits<double>(null_float) / 2,
             pair_to_double({null_float, 2}, SQLTypeInfo(kFLOAT, false), false));
-  EXPECT_EQ(NULL_DOUBLE,
+  EXPECT_EQ(shared::reinterpret_bits<float>(null_float) / 2,
             pair_to_double({null_float, 2}, SQLTypeInfo(kFLOAT, false), true));
   EXPECT_EQ(shared::reinterpret_bits<double>(null_float) / 2,
             pair_to_double({null_float, 2}, SQLTypeInfo(kFLOAT, true), false));
-  EXPECT_EQ(NULL_FLOAT / 2,
+  EXPECT_EQ(shared::reinterpret_bits<float>(null_float) / 2,
             pair_to_double({null_float, 2}, SQLTypeInfo(kFLOAT, true), true));
   EXPECT_EQ(shared::reinterpret_bits<double>(null_float) / 2,
             pair_to_double({null_float, 2}, SQLTypeInfo(kDOUBLE, false), false));
@@ -3198,21 +3202,21 @@ TEST(Util, PairToDouble) {
             pair_to_double({null_float, 2}, SQLTypeInfo(kDOUBLE, true), false));
   EXPECT_EQ(shared::reinterpret_bits<double>(null_float) / 2,
             pair_to_double({null_float, 2}, SQLTypeInfo(kDOUBLE, true), true));
-  EXPECT_EQ(shared::reinterpret_bits<double>(null_double) / 2,
+  EXPECT_EQ(NULL_DOUBLE / 2,
             pair_to_double({null_double, 2}, SQLTypeInfo(kFLOAT, false), false));
   EXPECT_EQ(0.0 / 2, pair_to_double({null_double, 2}, SQLTypeInfo(kFLOAT, false), true));
-  EXPECT_EQ(shared::reinterpret_bits<double>(null_double) / 2,
+  EXPECT_EQ(NULL_DOUBLE / 2,
             pair_to_double({null_double, 2}, SQLTypeInfo(kFLOAT, true), false));
   EXPECT_EQ(0.0 / 2, pair_to_double({null_double, 2}, SQLTypeInfo(kFLOAT, true), true));
-  EXPECT_EQ(NULL_DOUBLE,
+  EXPECT_EQ(NULL_DOUBLE / 2,
             pair_to_double({null_double, 2}, SQLTypeInfo(kDOUBLE, false), false));
-  EXPECT_EQ(NULL_DOUBLE,
+  EXPECT_EQ(NULL_DOUBLE / 2,
             pair_to_double({null_double, 2}, SQLTypeInfo(kDOUBLE, false), true));
-  EXPECT_EQ(shared::reinterpret_bits<double>(null_double) / 2,
+  EXPECT_EQ(NULL_DOUBLE / 2,
             pair_to_double({null_double, 2}, SQLTypeInfo(kDOUBLE, true), false));
-  EXPECT_EQ(shared::reinterpret_bits<double>(null_double) / 2,
+  EXPECT_EQ(NULL_DOUBLE / 2,
             pair_to_double({null_double, 2}, SQLTypeInfo(kDOUBLE, true), true));
-  // Test a few non-null values.
+  // Misc
   EXPECT_EQ(0.5,
             pair_to_double({shared::reinterpret_bits<int64_t, float>(1.0), 2},
                            SQLTypeInfo(kFLOAT, false),

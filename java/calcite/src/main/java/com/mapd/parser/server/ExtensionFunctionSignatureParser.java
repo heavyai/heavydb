@@ -241,6 +241,9 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("Column<double>")) {
       return ExtensionFunction.ExtArgumentType.ColumnDouble;
     }
+    if (type_name.equals("Column<TextEncodingDict>")) {
+      return ExtensionFunction.ExtArgumentType.ColumnTextEncodingDict;
+    }
     if (type_name.equals("Cursor")) {
       return ExtensionFunction.ExtArgumentType.Cursor;
     }
@@ -275,6 +278,9 @@ class ExtensionFunctionSignatureParser {
     }
     if (type_name.equals("ColumnList<double>")) {
       return ExtensionFunction.ExtArgumentType.ColumnListDouble;
+    }
+    if (type_name.equals("ColumnList<TextEncodingDict>")) {
+      return ExtensionFunction.ExtArgumentType.ColumnListTextEncodingDict;
     }
     MAPDLOGGER.info(
             "ExtensionfunctionSignatureParser::deserializeType: unknown type_name=`"

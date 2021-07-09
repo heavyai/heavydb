@@ -51,6 +51,7 @@ struct TargetExprCodegen {
                const std::vector<llvm::Value*>& agg_out_vec,
                llvm::Value* output_buffer_byte_stream,
                llvm::Value* out_row_idx,
+               llvm::Value* varlen_output_buffer,
                DiamondCodegen& diamond_codegen,
                DiamondCodegen* sample_cfg = nullptr) const;
 
@@ -63,6 +64,7 @@ struct TargetExprCodegen {
                         const std::vector<llvm::Value*>& agg_out_vec,
                         llvm::Value* output_buffer_byte_stream,
                         llvm::Value* out_row_idx,
+                        llvm::Value* varlen_output_buffer,
                         int32_t slot_index) const;
 
   const Analyzer::Expr* target_expr;
@@ -94,6 +96,7 @@ struct TargetExprCodegenBuilder {
                const std::vector<llvm::Value*>& agg_out_vec,
                llvm::Value* output_buffer_byte_stream,
                llvm::Value* out_row_idx,
+               llvm::Value* varlen_output_buffer,
                DiamondCodegen& diamond_codegen) const;
 
   void codegenSampleExpressions(

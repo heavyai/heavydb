@@ -426,52 +426,24 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
                                                                           : kGEOMETRY);
       return arg0;
     } else if (rex_function->getName() == "ST_PointN"sv) {
-      if (use_geo_expressions) {
-        std::vector<std::shared_ptr<Analyzer::Expr>> args;
-        for (size_t i = 0; i < rex_function->size(); i++) {
-          // TODO: remove
-          auto constant = dynamic_cast<const RexLiteral*>(rex_function->getOperand(i));
-          if (constant && IS_GEO(constant->getType())) {
-            const auto arg_exprs = translateGeoFunctionArg(constant,
-                                                           arg_ti,
-                                                           lindex,
-                                                           with_bounds,
-                                                           with_render_group,
-                                                           expand_geo_col,
-                                                           is_projection,
-                                                           use_geo_expressions);
-            CHECK_EQ(arg_exprs.size(), size_t(1));
-            args.push_back(arg_exprs.front());
-          } else if (auto function = dynamic_cast<const RexFunctionOperator*>(
-                         rex_function->getOperand(i))) {
-            const auto arg_exprs = translateGeoFunctionArg(function,
-                                                           arg_ti,
-                                                           lindex,
-                                                           with_bounds,
-                                                           with_render_group,
-                                                           expand_geo_col,
-                                                           is_projection,
-                                                           use_geo_expressions);
-            CHECK_EQ(arg_exprs.size(), size_t(1));
-            args.push_back(arg_exprs.front());
-          } else {
-            args.push_back(translateScalarRex(rex_function->getOperand(i)));
-          }
-        }
-        arg_ti.set_type(kPOINT);
-        arg_ti.set_notnull(false);  // can return null if out of bounds
-        return {makeExpr<Analyzer::GeoOperator>(arg_ti, rex_function->getName(), args)};
-      }
-      CHECK_EQ(size_t(2), rex_function->size());
+      // uses geo expressions
       const auto rex_scalar0 =
           dynamic_cast<const RexScalar*>(rex_function->getOperand(0));
       if (!rex_scalar0) {
         throw QueryNotSupported(rex_function->getName() +
                                 ": expects scalar as first argument");
       }
-      auto arg0 = translateGeoFunctionArg(
-          rex_scalar0, arg_ti, lindex, with_bounds, with_render_group, expand_geo_col);
-      if (arg_ti.get_type() != kLINESTRING) {
+      auto arg0 = translateGeoFunctionArg(rex_scalar0,
+                                          arg_ti,
+                                          lindex,
+                                          with_bounds,
+                                          with_render_group,
+                                          expand_geo_col,
+                                          /*is_projection=*/false,
+                                          /*use_geo_expressions=*/true);
+      CHECK_EQ(arg0.size(), size_t(1));
+      CHECK(arg0.front());
+      if (arg0.front()->get_type_info().get_type() != kLINESTRING) {
         throw QueryNotSupported(rex_function->getName() +
                                 " expects LINESTRING as first argument");
       }
@@ -497,15 +469,15 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       } else {
         throw QueryNotSupported(rex_function->getName() + " expecting integer index");
       }
-      if (lindex != 0) {
-        throw QueryNotSupported(rex_function->getName() +
-                                ": LINESTRING is already indexed");
-      }
       if (index == 0) {
+        // maybe we will just return NULL here?
         throw QueryNotSupported(rex_function->getName() + ": invalid index");
       }
-      lindex = index;
-      return arg0;
+      arg0.push_back(e);
+      arg_ti.set_type(kPOINT);
+      arg_ti.set_notnull(false);  // can return null if out of bounds
+      return {makeExpr<Analyzer::GeoOperator>(arg_ti, rex_function->getName(), arg0)};
+
     } else if (rex_function->getName() == "ST_StartPoint"sv) {
       CHECK_EQ(size_t(1), rex_function->size());
       const auto rex_scalar0 =
@@ -670,7 +642,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
 
       auto coord1 = translateScalarRex(rex_function->getOperand(0));
       auto coord2 = translateScalarRex(rex_function->getOperand(1));
-      auto d_ti = SQLTypeInfo(kDOUBLE, true);
+      auto d_ti = SQLTypeInfo(kDOUBLE, false);
       auto cast_coord1 = coord1->add_cast(d_ti);
       auto cast_coord2 = coord2->add_cast(d_ti);
       // First try to fold to geo literal
@@ -688,6 +660,17 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         auto args = translateGeoLiteral(&rex_literal, arg_ti, false);
         CHECK(arg_ti.get_type() == kPOINT);
         return args;
+      }
+      const auto is_local_alloca = !is_projection;
+      if (!is_local_alloca) {
+        if (try_to_compress) {
+          arg_ti.set_input_srid(4326);
+          arg_ti.set_output_srid(4326);
+        }
+        return {makeExpr<Analyzer::GeoOperator>(
+            arg_ti,
+            rex_function->getName(),
+            std::vector<std::shared_ptr<Analyzer::Expr>>{cast_coord1, cast_coord2})};
       }
       // Couldn't fold to geo literal, construct [and compress] on the fly
       auto da_ti = SQLTypeInfo(kARRAY, true);
@@ -708,7 +691,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         arg_ti.set_comp_param(32);
       }
       auto cast_coords = {cast_coord1, cast_coord2};
-      auto is_local_alloca = !is_projection;
       auto ae = makeExpr<Analyzer::ArrayExpr>(da_ti, cast_coords, false, is_local_alloca);
       SQLTypeInfo tia_ti = da_ti;
       tia_ti.set_subtype(kTINYINT);
@@ -824,9 +806,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoProjection(
   int32_t lindex = 0;
   auto geoargs =
       translateGeoFunctionArg(rex_function, ti, lindex, false, false, true, true);
-  if (lindex != 0) {
-    throw QueryNotSupported(
-        "Indexed LINESTRING geometries not supported in this context");
+  CHECK(!geoargs.empty());
+  if (std::dynamic_pointer_cast<const Analyzer::GeoExpr>(geoargs.front()) &&
+      !geoargs.front()->get_type_info().is_array()) {
+    // GeoExpression
+    return geoargs.front();
   }
   return makeExpr<Analyzer::GeoUOper>(
       Geospatial::GeoBase::GeoOp::kPROJECTION, ti, ti, geoargs);

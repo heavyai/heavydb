@@ -28,7 +28,6 @@
 #include "Shared/SystemParameters.h"
 #include "Shared/ThriftClient.h"
 #include "Shared/fixautotools.h"
-#include "Shared/mapd_shared_ptr.h"
 #include "Shared/measure.h"
 #include "ThriftHandler/QueryState.h"
 
@@ -247,7 +246,7 @@ static void start_calcite_server_as_daemon(const int db_port,
 #endif
 }
 
-std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
+std::pair<std::shared_ptr<CalciteServerClient>, std::shared_ptr<TTransport>>
 Calcite::getClient(int port) {
   const auto transport = connMgr_->open_buffered_client_transport("localhost",
                                                                   port,
@@ -265,10 +264,10 @@ Calcite::getClient(int port) {
   } catch (std::exception& ex) {
     throw ex;
   }
-  mapd::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  mapd::shared_ptr<CalciteServerClient> client;
+  std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+  std::shared_ptr<CalciteServerClient> client;
   client.reset(new CalciteServerClient(protocol));
-  std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> ret;
+  std::pair<std::shared_ptr<CalciteServerClient>, std::shared_ptr<TTransport>> ret;
   return std::make_pair(client, transport);
 }
 
