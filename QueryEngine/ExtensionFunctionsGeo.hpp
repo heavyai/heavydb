@@ -2020,21 +2020,20 @@ double ST_Distance_LineString_Polygon(int8_t* l,
                                       int32_t osr,
                                       double threshold) {
   auto lnum_coords = lsize / compression_unit_size(ic1);
-  auto lnum_points = lnum_coords / 2;
-  auto p = l + lnum_points * compression_unit_size(ic1);
   auto psize = 2 * compression_unit_size(ic1);
-  auto min_distance = ST_Distance_Point_Polygon(p,
-                                                psize,
-                                                poly_coords,
-                                                poly_coords_size,
-                                                poly_ring_sizes,
-                                                poly_num_rings,
-                                                ic1,
-                                                isr1,
-                                                ic2,
-                                                isr2,
-                                                osr,
-                                                threshold);
+  auto min_distance =
+      ST_Distance_Point_Polygon(l,  // pointer to start of linestring for first point
+                                psize,
+                                poly_coords,
+                                poly_coords_size,
+                                poly_ring_sizes,
+                                poly_num_rings,
+                                ic1,
+                                isr1,
+                                ic2,
+                                isr2,
+                                osr,
+                                threshold);
   if (tol_zero(min_distance)) {
     // Linestring's first point is inside the poly
     return 0.0;
