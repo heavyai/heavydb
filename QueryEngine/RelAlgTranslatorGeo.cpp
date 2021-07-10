@@ -305,13 +305,27 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
                                 std::to_string(srid));
       }
       arg_ti.set_output_srid(srid);  // Forward output srid down to argument translation
-      auto arg0 = translateGeoFunctionArg(rex_scalar0,
-                                          arg_ti,
-                                          with_bounds,
-                                          with_render_group,
-                                          expand_geo_col,
-                                          is_projection,
-                                          use_geo_expressions);
+      auto arg0 = translateGeoFunctionArg(
+          rex_scalar0,
+          arg_ti,
+          with_bounds,
+          with_render_group,
+          expand_geo_col,
+          is_projection,
+          is_projection ? /*use_geo_expressions=*/true : use_geo_expressions);
+
+      if (use_geo_expressions || is_projection) {
+        CHECK_EQ(arg0.size(), size_t(1));
+        auto arg0_ti = arg0.front()->get_type_info();  // make a copy so we can override
+        // the srid and compressions
+        if (arg0_ti.get_type() == kPOINT) {
+          arg0_ti.set_output_srid(srid);
+          arg0_ti.set_compression(kENCODING_NONE);
+          arg0_ti.set_comp_param(0);
+          return {makeExpr<Analyzer::GeoTransformOperator>(
+              arg0_ti, rex_function->getName(), arg0, arg0_ti.get_input_srid(), srid)};
+        }
+      }
 
       if (arg_ti.get_input_srid() > 0) {
         if (arg_ti.get_input_srid() != 4326) {
@@ -359,7 +373,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         }
         arg_ti.set_input_srid(srid);  // Input SRID
         // leave the output srid unset in case a transform was above us
-        // arg_ti.set_output_srid(srid);  // Output SRID is the same - no transform
 
         if (rex_function->getName() == "ST_GeogFromText"sv) {
           arg_ti.set_subtype(kGEOGRAPHY);
@@ -372,12 +385,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
                                                  expand_geo_col,
                                                  is_projection,
                                                  use_geo_expressions);
-        // TODO: maybe this can be removed?
         CHECK_GE(func_args.size(), size_t(1));
-        if (auto geo_const =
-                dynamic_cast<const Analyzer::GeoConstant*>(func_args.front().get())) {
-          arg_ti = geo_const->get_type_info();
-        }
         return func_args;
       }
 
@@ -470,9 +478,14 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         throw QueryNotSupported(rex_function->getName() + ": invalid index");
       }
       arg0.push_back(e);
-      arg_ti.set_type(kPOINT);
-      arg_ti.set_notnull(false);  // can return null if out of bounds
-      return {makeExpr<Analyzer::GeoOperator>(arg_ti, rex_function->getName(), arg0)};
+      auto oper_ti =
+          arg0.front()->get_type_info();  // make a copy so we can reset nullness and type
+      oper_ti.set_type(kPOINT);
+      oper_ti.set_notnull(false);
+
+      arg_ti = oper_ti;  // TODO: remove
+
+      return {makeExpr<Analyzer::GeoOperator>(oper_ti, rex_function->getName(), arg0)};
 
     } else if (rex_function->getName() == "ST_StartPoint"sv ||
                rex_function->getName() == "ST_EndPoint"sv) {
@@ -494,9 +507,13 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
                                 arg_expr_ti.toString());
       }
       args.push_back(arg_exprs.front());
-      arg_ti.set_type(kPOINT);
-      arg_ti.set_subtype(arg_expr_ti.get_subtype());
-      return {makeExpr<Analyzer::GeoOperator>(arg_ti, rex_function->getName(), args)};
+
+      auto oper_ti = args.back()->get_type_info();  // make a copy so we can override type
+      oper_ti.set_type(kPOINT);
+
+      arg_ti = oper_ti;  // TODO: remove
+
+      return {makeExpr<Analyzer::GeoOperator>(oper_ti, rex_function->getName(), args)};
     } else if (rex_function->getName() == "ST_SRID"sv) {
       CHECK_EQ(size_t(1), rex_function->size());
       const auto rex_scalar0 =
@@ -541,6 +558,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         throw QueryNotSupported(rex_function->getName() +
                                 ": expects scalar as first argument");
       }
+
       // Only convey the request to compress if dealing with 4326 geo
       auto arg0 = translateGeoFunctionArg(rex_scalar0,
                                           arg_ti,
@@ -548,14 +566,22 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
                                           with_render_group,
                                           expand_geo_col,
                                           is_projection,
-                                          false,
+                                          use_geo_expressions,
                                           (try_to_compress && (srid == 4326)));
       if (!IS_GEO(arg_ti.get_type())) {
         throw QueryNotSupported(rex_function->getName() + " expects geometry argument");
       }
-
       arg_ti.set_input_srid(srid);   // Input SRID
       arg_ti.set_output_srid(srid);  // Output SRID is the same - no transform
+      CHECK(!arg0.empty() && arg0.front());
+      if (auto geo_oper =
+              std::dynamic_pointer_cast<Analyzer::GeoOperator>(arg0.front())) {
+        CHECK_EQ(arg0.size(), size_t(1));
+        auto ti = geo_oper->get_type_info();
+        ti.set_input_srid(srid);
+        ti.set_output_srid(srid);
+        return {geo_oper->cloneWithUpdatedTypeInfo(ti)};
+      }
       return arg0;
     } else if (rex_function->getName() == "CastToGeography"sv) {
       CHECK_EQ(size_t(1), rex_function->size());
@@ -707,7 +733,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       ti.set_input_srid(arg_ti.get_input_srid());
       ti.set_output_srid(arg_ti.get_output_srid() == 0 ? arg_ti.get_input_srid()
                                                        : arg_ti.get_output_srid());
-      if (ti.get_output_srid() == 4326) {
+      // TODO: remove dependence on arg_ti
+      if (ti.get_output_srid() == 4326 || arg_ti.get_compression() == kENCODING_GEOINT) {
         ti.set_compression(kENCODING_GEOINT);
         ti.set_comp_param(32);
       }

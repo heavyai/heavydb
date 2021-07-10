@@ -1746,11 +1746,11 @@ class GeoOperator : public GeoExpr {
               const std::string& name,
               const std::vector<std::shared_ptr<Analyzer::Expr>>& args);
 
-  std::shared_ptr<Analyzer::Expr> deep_copy() const final;
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
 
-  std::string toString() const final;
+  std::string toString() const override;
 
-  bool operator==(const Expr&) const final;
+  bool operator==(const Expr&) const override;
 
   size_t size() const;
 
@@ -1767,9 +1767,35 @@ class GeoOperator : public GeoExpr {
     return ret;
   }
 
- private:
+  std::shared_ptr<Analyzer::Expr> cloneWithUpdatedTypeInfo(const SQLTypeInfo& ti);
+
+ protected:
   const std::string name_;
   const std::vector<std::shared_ptr<Analyzer::Expr>> args_;
+};
+
+class GeoTransformOperator : public GeoOperator {
+ public:
+  GeoTransformOperator(const SQLTypeInfo& ti,
+                       const std::string& name,
+                       const std::vector<std::shared_ptr<Analyzer::Expr>>& args,
+                       const int32_t input_srid,
+                       const int32_t output_srid)
+      : GeoOperator(ti, name, args), input_srid_(input_srid), output_srid_(output_srid) {}
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  std::string toString() const override;
+
+  bool operator==(const Expr&) const override;
+
+  int32_t getInputSRID() const { return input_srid_; }
+
+  int32_t getOutputSRID() const { return output_srid_; }
+
+ private:
+  const int32_t input_srid_;
+  const int32_t output_srid_;
 };
 
 /**

@@ -1039,6 +1039,24 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
         inline_fp_null_value<double>(),
         v<double>(run_simple_agg(
             "SELECT ST_Y(ST_Point(id, null)) FROM geospatial_test WHERE id = 2;", dt)));
+    EXPECT_EQ(
+        "POINT (222638.981556 222684.208469473)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            R"(SELECT ST_Transform(ST_SetSRID(ST_Point(id,id),4326), 900913) FROM geospatial_test WHERE id = 2;)",
+            dt,
+            false))));
+    EXPECT_EQ(
+        "POINT (222638.977720049 222684.204631182)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            R"(SELECT ST_Transform(gp4326, 900913) FROM geospatial_test WHERE id = 2;)",
+            dt,
+            false))));
+    EXPECT_DOUBLE_EQ(
+        double(222638.977720049),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_X(ST_Transform(gp4326, 900913)) FROM geospatial_test WHERE id = 2;)",
+            dt,
+            false)));
   }
 }
 
@@ -1680,9 +1698,9 @@ TEST(GeoSpatial, Math) {
             R"(SELECT ST_X(ST_EndPoint(ST_GeomFromText('LINESTRING(-118.243683 34.052235, -119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, -122.446747 37.733795)', 4326)));)",
             dt)),
         static_cast<double>(0.01));
-    ASSERT_NEAR(
+    ASSERT_NEAR(  // TODO: postgis has this at 557422.59741475
         static_cast<double>(
-            557637.370),  // geodesic distance between first and end points: LA - SF trip
+            557637.3711),  // geodesic distance between first and end points: LA - SF trip
         v<double>(run_simple_agg(
             R"(SELECT ST_Distance(ST_PointN(ST_GeogFromText('LINESTRING(-118.243683 34.052235, -119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, -122.446747 37.733795)', 4326), 1), ST_EndPoint(ST_GeogFromText('LINESTRING(-118.243683 34.052235, -119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, -122.446747 37.733795)', 4326)));)",
             dt)),

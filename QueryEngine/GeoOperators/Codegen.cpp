@@ -34,6 +34,8 @@ std::unique_ptr<Codegen> Codegen::init(const Analyzer::GeoOperator* geo_operator
     return std::make_unique<PointAccessors>(geo_operator, catalog);
   } else if (operator_name == "ST_Point") {
     return std::make_unique<PointConstructor>(geo_operator, catalog);
+  } else if (operator_name == "ST_Transform") {
+    return std::make_unique<Transform>(geo_operator, catalog);
   }
   UNREACHABLE();
   return nullptr;

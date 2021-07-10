@@ -1614,7 +1614,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "ST_Point"sv,  // TODO: where should this and below live?
                    "ST_PointN"sv,
                    "ST_StartPoint"sv,
-                   "ST_EndPoint"sv)) {
+                   "ST_EndPoint"sv,
+                   "ST_Transform"sv)) {
     SQLTypeInfo ti;
     return translateGeoProjection(rex_function, ti, false);
   }

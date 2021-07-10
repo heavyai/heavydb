@@ -202,7 +202,11 @@ class PointConstructor : public Codegen {
       CHECK(nullcheck_codegen);
       ret = nullcheck_codegen->finalize(ret, ret);
     }
-    return {ret};
+    return {
+        builder.CreateBitCast(ret,
+                              geo_ti.get_compression() == kENCODING_GEOINT
+                                  ? llvm::Type::getInt32PtrTy(cgen_state->context_)
+                                  : llvm::Type::getDoublePtrTy(cgen_state->context_))};
   }
 
  private:

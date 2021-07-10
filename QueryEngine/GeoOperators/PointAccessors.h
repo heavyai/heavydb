@@ -130,28 +130,6 @@ class PointAccessors : public Codegen {
       coord_lv = builder.CreateLoad(coord_lv_ptr, expr_name + "_coord");
     }
 
-    // TODO: do this with transformation nodes explicitly
-    if (geo_ti.get_input_srid() != geo_ti.get_output_srid()) {
-      if (geo_ti.get_input_srid() == 4326) {
-        if (geo_ti.get_output_srid() == 900913) {
-          // convert WGS 84 -> Web mercator
-          coord_lv =
-              cgen_state->emitExternalCall("conv_4326_900913_" + expr_name,
-                                           llvm::Type::getDoubleTy(cgen_state->context_),
-                                           {coord_lv});
-          coord_lv->setName(expr_name + "_coord_transformed");
-        } else {
-          throw std::runtime_error("Unsupported geo transformation: " +
-                                   std::to_string(geo_ti.get_input_srid()) + " to " +
-                                   std::to_string(geo_ti.get_output_srid()));
-        }
-      } else {
-        throw std::runtime_error(
-            "Unsupported geo transformation: " + std::to_string(geo_ti.get_input_srid()) +
-            " to " + std::to_string(geo_ti.get_output_srid()));
-      }
-    }
-
     auto ret = coord_lv;
     if (is_nullable_) {
       CHECK(nullcheck_codegen);

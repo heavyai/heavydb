@@ -22,6 +22,7 @@
  **/
 
 #include "../Geospatial/Compression.h"
+#include "../Geospatial/Transforms.h"
 #include "../Shared/funcannotations.h"
 #include "TypePunning.h"
 
@@ -42,5 +43,20 @@ extern "C" DEVICE RUNTIME_EXPORT int32_t compress_x_coord_geoint(const double co
 extern "C" DEVICE RUNTIME_EXPORT int32_t compress_y_coord_geoint(const double coord) {
   return static_cast<int32_t>(Geospatial::compress_lattitude_coord_geoint32(coord));
 }
+
+#if 0
+// perform an in-place transformation on the input point coordinate
+extern "C" DEVICE RUNTIME_EXPORT int32_t transform_point(double* arr,
+                                                         const int32_t in_srid,
+                                                         const int32_t out_srid) {
+  if (in_srid == 4326 && out_srid == 900913) {
+    const auto new_coord = geotransform_4326_to_900913(arr[0], arr[1]);
+    arr[0] = new_coord.first;
+    arr[1] = new_coord.second;
+    return 0;
+  }
+  return 1;
+}
+#endif
 
 #endif  // EXECUTE_INCLUDE
