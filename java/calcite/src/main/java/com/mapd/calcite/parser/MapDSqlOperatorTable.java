@@ -2076,5 +2076,6 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       return typeFactory.createSqlType(SqlTypeName.TIMESTAMP, 9);
     }
   }
+}
 
 // End MapDSqlOperatorTable.java
