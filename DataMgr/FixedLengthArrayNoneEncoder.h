@@ -218,7 +218,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
 
   bool resetChunkStats(const ChunkStats& stats) override {
     auto elem_type = buffer_->getSqlType().get_elem_type();
-    if (DatumEqual(elem_min, stats.min, elem_type) &&
+    if (initialized && DatumEqual(elem_min, stats.min, elem_type) &&
         DatumEqual(elem_max, stats.max, elem_type) && has_nulls == stats.has_nulls) {
       return false;
     }
