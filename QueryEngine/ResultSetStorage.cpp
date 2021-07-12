@@ -42,6 +42,18 @@
 #include <future>
 #include <numeric>
 
+int8_t* VarlenOutputInfo::computeCpuOffset(const int64_t gpu_offset_address) const {
+  const auto gpu_start_address_ptr = reinterpret_cast<int8_t*>(gpu_start_address);
+  const auto gpu_offset_address_ptr = reinterpret_cast<int8_t*>(gpu_offset_address);
+  if (gpu_offset_address_ptr == 0) {
+    return 0;
+  }
+  const auto offset_bytes =
+      static_cast<int64_t>(gpu_offset_address_ptr - gpu_start_address_ptr);
+  CHECK_GE(offset_bytes, int64_t(0));
+  return cpu_buffer_ptr + offset_bytes;
+}
+
 ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
                                    const QueryMemoryDescriptor& query_mem_desc,
                                    int8_t* buff,

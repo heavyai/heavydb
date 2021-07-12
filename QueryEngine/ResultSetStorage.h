@@ -88,6 +88,13 @@ struct OneIntegerColumnRow {
   const bool valid;
 };
 
+struct VarlenOutputInfo {
+  int64_t gpu_start_address;
+  int8_t* cpu_buffer_ptr;
+
+  int8_t* computeCpuOffset(const int64_t gpu_offset_address) const;
+};
+
 class ResultSetStorage {
  private:
   ResultSetStorage(const std::vector<TargetInfo>& targets,
@@ -213,6 +220,10 @@ class ResultSetStorage {
 
   void initializeColWise() const;
 
+  const VarlenOutputInfo* getVarlenOutputInfo() const {
+    return varlen_output_info_.get();
+  }
+
   // TODO(alex): remove the following two methods, see comment about
   // count_distinct_sets_mapping_.
   void addCountDistinctSetPointerMapping(const int64_t remote_ptr, const int64_t ptr);
@@ -232,6 +243,9 @@ class ResultSetStorage {
   // re-route the pointers in the result set received over the wire to this
   // machine address-space. Not efficient at all, just a placeholder!
   std::unordered_map<int64_t, int64_t> count_distinct_sets_mapping_;
+
+  // ptr to host varlen buffer and gpu address computation info
+  std::shared_ptr<VarlenOutputInfo> varlen_output_info_;
 
   friend class ResultSet;
   friend class ResultSetManager;

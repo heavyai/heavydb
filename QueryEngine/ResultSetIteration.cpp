@@ -1105,6 +1105,12 @@ const std::vector<const int8_t*>& ResultSet::getColumnFrag(const size_t storage_
   }
 }
 
+const VarlenOutputInfo* ResultSet::getVarlenOutputInfo(const size_t entry_idx) const {
+  auto storage_lookup_result = findStorage(entry_idx);
+  CHECK(storage_lookup_result.storage_ptr);
+  return storage_lookup_result.storage_ptr->getVarlenOutputInfo();
+}
+
 /**
  * For each specified column, this function goes through all available storages and copy
  * its content into a contiguous output_buffer
@@ -1550,15 +1556,19 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
   switch (target_info.sql_type.get_type()) {
     case kPOINT: {
       if (query_mem_desc_.slotIsVarlenOutput(slot_idx)) {
+        auto varlen_output_info = getVarlenOutputInfo(entry_buff_idx);
+        CHECK(varlen_output_info);
         auto geo_data_ptr = read_int_from_buff(
             geo_target_ptr, query_mem_desc_.getPaddedSlotWidthBytes(slot_idx));
+        auto cpu_data_ptr =
+            reinterpret_cast<int64_t>(varlen_output_info->computeCpuOffset(geo_data_ptr));
         return GeoTargetValueBuilder<kPOINT, GeoQueryOutputFetchHandler>::build(
             target_info.sql_type,
             geo_return_type_,
-            is_gpu_fetch ? getDataMgr() : nullptr,
-            is_gpu_fetch,
+            /*data_mgr=*/nullptr,
+            /*is_gpu_fetch=*/false,
             device_id_,
-            geo_data_ptr,
+            cpu_data_ptr,
             target_info.sql_type.get_compression() == kENCODING_GEOINT ? 8 : 16);
       } else if (separate_varlen_storage_valid_ && !target_info.is_agg) {
         const auto& varlen_buffer = getSeparateVarlenStorage();

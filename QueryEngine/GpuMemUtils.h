@@ -60,6 +60,7 @@ struct GpuGroupByBuffers {
   CUdeviceptr ptrs;  // ptrs for individual outputs
   CUdeviceptr data;  // ptr to data allocation
   size_t entry_count;
+  CUdeviceptr varlen_output_buffer;
 };
 
 class QueryMemoryDescriptor;

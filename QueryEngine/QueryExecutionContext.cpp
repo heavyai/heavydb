@@ -567,6 +567,20 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                   device_id);
   }
 
+  const auto varlen_output_gpu_buf = query_buffers_->getVarlenOutputPtr();
+  if (varlen_output_gpu_buf) {
+    CHECK(query_mem_desc_.varlenOutputBufferElemSize());
+    const size_t varlen_output_buf_bytes =
+        query_mem_desc_.getEntryCount() *
+        query_mem_desc_.varlenOutputBufferElemSize().value();
+    CHECK(query_buffers_->getVarlenOutputHostPtr());
+    copy_from_gpu(data_mgr,
+                  query_buffers_->getVarlenOutputHostPtr(),
+                  varlen_output_gpu_buf,
+                  varlen_output_buf_bytes,
+                  device_id);
+  }
+
   if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
     cuEventRecord(stop2, 0);
     cuEventSynchronize(stop2);

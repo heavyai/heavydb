@@ -222,7 +222,10 @@ class ResultSet {
 
   const ResultSetStorage* allocateStorage() const;
 
-  const ResultSetStorage* allocateStorage(int8_t*, const std::vector<int64_t>&) const;
+  const ResultSetStorage* allocateStorage(
+      int8_t*,
+      const std::vector<int64_t>&,
+      std::shared_ptr<VarlenOutputInfo> = nullptr) const;
 
   const ResultSetStorage* allocateStorage(const std::vector<int64_t>&) const;
 
@@ -554,6 +557,8 @@ class ResultSet {
   const std::vector<const int8_t*>& getColumnFrag(const size_t storge_idx,
                                                   const size_t col_logical_idx,
                                                   int64_t& global_idx) const;
+
+  const VarlenOutputInfo* getVarlenOutputInfo(const size_t entry_idx) const;
 
   StorageLookupResult findStorage(const size_t entry_idx) const;
 

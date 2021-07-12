@@ -173,6 +173,8 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     , row_set_mem_owner_(row_set_mem_owner)
     , init_agg_vals_(executor->plan_state_->init_agg_vals_)
     , num_buffers_(computeNumberOfBuffers(query_mem_desc, device_type, executor))
+    , varlen_output_buffer_(0)
+    , varlen_output_buffer_host_ptr_(nullptr)
     , count_distinct_bitmap_mem_(0)
     , count_distinct_bitmap_mem_bytes_(0)
     , count_distinct_bitmap_crt_ptr_(nullptr)
@@ -305,7 +307,8 @@ QueryMemoryInitializer::QueryMemoryInitializer(
                       executor->blockSize(),
                       executor->gridSize()));
     result_sets_.back()->allocateStorage(reinterpret_cast<int8_t*>(group_by_buffer),
-                                         executor->plan_state_->init_agg_vals_);
+                                         executor->plan_state_->init_agg_vals_,
+                                         getVarlenOutputInfo());
     for (size_t j = 1; j < step; ++j) {
       result_sets_.emplace_back(nullptr);
     }
@@ -328,6 +331,8 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     , row_set_mem_owner_(row_set_mem_owner)
     , init_agg_vals_(init_agg_val_vec(exe_unit.target_exprs, {}, query_mem_desc))
     , num_buffers_(1)
+    , varlen_output_buffer_(0)
+    , varlen_output_buffer_host_ptr_(nullptr)
     , count_distinct_bitmap_mem_(0)
     , count_distinct_bitmap_mem_bytes_(0)
     , count_distinct_bitmap_crt_ptr_(nullptr)
@@ -369,7 +374,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
       get_consistent_frags_sizes(exe_unit.target_exprs, consistent_frag_sizes);
   result_sets_.emplace_back(
       new ResultSet(target_exprs_to_infos(exe_unit.target_exprs, query_mem_desc),
-                    {},
+                    /*col_lazy_fetch_info=*/{},
                     col_buffers,
                     column_frag_offsets,
                     column_frag_sizes,
@@ -845,7 +850,19 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
                                   ra_exe_unit.use_bump_allocator,
                                   query_mem_desc.hasVarlenOutput(),
                                   render_allocator);
-
+  if (query_mem_desc.hasVarlenOutput()) {
+    CHECK(dev_group_by_buffers.varlen_output_buffer);
+    varlen_output_buffer_ = dev_group_by_buffers.varlen_output_buffer;
+    CHECK(query_mem_desc.varlenOutputBufferElemSize());
+    const size_t varlen_output_buf_bytes =
+        query_mem_desc.getEntryCount() *
+        query_mem_desc.varlenOutputBufferElemSize().value();
+    varlen_output_buffer_host_ptr_ =
+        row_set_mem_owner_->allocate(varlen_output_buf_bytes, thread_idx_);
+    CHECK(varlen_output_info_);
+    varlen_output_info_->gpu_start_address = static_cast<int64_t>(varlen_output_buffer_);
+    varlen_output_info_->cpu_buffer_ptr = varlen_output_buffer_host_ptr_;
+  }
   if (render_allocator) {
     CHECK_EQ(size_t(0), render_allocator->getAllocatedSize() % 8);
   }
@@ -1140,4 +1157,16 @@ void QueryMemoryInitializer::applyStreamingTopNOffsetGpu(
 #else
   UNREACHABLE();
 #endif
+}
+
+std::shared_ptr<VarlenOutputInfo> QueryMemoryInitializer::getVarlenOutputInfo() {
+  if (varlen_output_info_) {
+    return varlen_output_info_;
+  }
+
+  // shared_ptr so that both the ResultSet and QMI can hold on to the varlen info object
+  // and update it as needed
+  varlen_output_info_ = std::make_shared<VarlenOutputInfo>(VarlenOutputInfo{
+      static_cast<int64_t>(varlen_output_buffer_), varlen_output_buffer_host_ptr_});
+  return varlen_output_info_;
 }

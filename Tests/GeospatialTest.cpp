@@ -1016,6 +1016,28 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
       process_row(1);
     }
 
+    {
+      // multi-frag iteration check
+      auto rows = run_multiple_agg(
+          R"(SELECT id, ST_Point(id, id) FROM geospatial_test WHERE id > 2 ORDER BY 1;)",
+          dt);
+      rows->setGeoReturnType(ResultSet::GeoReturnType::WktString);
+      EXPECT_EQ(rows->rowCount(), size_t(7));
+
+      auto process_row = [&](const int64_t id_for_row) {
+        auto row = rows->getNextRow(false, false);
+        EXPECT_EQ(row.size(), size_t(2));
+        const auto id = v<int64_t>(row[0]);
+        EXPECT_EQ(id, id_for_row + 3);  // offset by 3 from filter
+        const auto wkt_str = boost::get<std::string>(v<NullableString>(row[1]));
+        EXPECT_EQ(wkt_str,
+                  "POINT (" + std::to_string(id) + " " + std::to_string(id) + ")");
+      };
+      for (size_t i = 0; i < 7; i++) {
+        process_row(i);
+      }
+    }
+
     EXPECT_EQ(
         "POINT (2 2)",
         boost::get<std::string>(v<NullableString>(run_simple_agg(

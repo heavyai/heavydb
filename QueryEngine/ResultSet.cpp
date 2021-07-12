@@ -208,11 +208,16 @@ const ResultSetStorage* ResultSet::allocateStorage() const {
 
 const ResultSetStorage* ResultSet::allocateStorage(
     int8_t* buff,
-    const std::vector<int64_t>& target_init_vals) const {
+    const std::vector<int64_t>& target_init_vals,
+    std::shared_ptr<VarlenOutputInfo> varlen_output_info) const {
   CHECK(buff);
   CHECK(!storage_);
   storage_.reset(new ResultSetStorage(targets_, query_mem_desc_, buff, true));
+  // TODO: add both to the constructor
   storage_->target_init_vals_ = target_init_vals;
+  if (varlen_output_info) {
+    storage_->varlen_output_info_ = varlen_output_info;
+  }
   return storage_.get();
 }
 
