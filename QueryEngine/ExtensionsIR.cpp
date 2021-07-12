@@ -1356,7 +1356,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
                             : codegenArrayBuff(orig_arg_lvs[k + 1],
                                                posArg(arg),
                                                SQLTypes::kINT,
-                                               /*cast_and_extend=*/false);
+                                               /*cast_and_extend=*/true);
             args.push_back(ring_size_buff);
             args.push_back(ring_size);
             j += 2;
@@ -1400,11 +1400,12 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
             {
               auto const_arr = const_arr_size.count(orig_arg_lvs[k + 1]) > 0;
               auto [ring_size_buff, ring_size] =
-                  (const_arr)
-                      ? std::make_pair(orig_arg_lvs[k + 1],
-                                       const_arr_size.at(orig_arg_lvs[k + 1]))
-                      : codegenArrayBuff(
-                            orig_arg_lvs[k + 1], posArg(arg), SQLTypes::kINT, true);
+                  (const_arr) ? std::make_pair(orig_arg_lvs[k + 1],
+                                               const_arr_size.at(orig_arg_lvs[k + 1]))
+                              : codegenArrayBuff(orig_arg_lvs[k + 1],
+                                                 posArg(arg),
+                                                 SQLTypes::kINT,
+                                                 /*cast_and_extend=*/true);
 
               args.push_back(ring_size_buff);
               args.push_back(ring_size);
