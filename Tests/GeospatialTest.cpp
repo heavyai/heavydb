@@ -1220,6 +1220,31 @@ TEST_P(GeoSpatialNullTablesFixture, GeoWithNulls) {
   }
 }
 
+TEST_P(GeoSpatialNullTablesFixture, Constructors) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    auto nullcheck_result = [](auto p) {
+      auto p_v = boost::get<void*>(&p);
+      auto p_s = boost::get<std::string>(&p);
+      EXPECT_TRUE(p_v && *p_v == nullptr && !p_s);
+    };
+
+    nullcheck_result(v<NullableString>(run_simple_agg(
+        R"(SELECT ST_Transform(gp4326, 900913) FROM geospatial_null_test WHERE id = 4;)",
+        dt,
+        false)));
+    nullcheck_result(v<NullableString>(run_simple_agg(
+        R"(SELECT ST_Transform(gp4326none, 900913) FROM geospatial_null_test WHERE id = 5;)",
+        dt,
+        false)));
+    nullcheck_result(v<NullableString>(run_simple_agg(
+        R"(SELECT ST_Transform(gp900913, 4326) FROM geospatial_null_test WHERE id = 6;)",
+        dt,
+        false)));
+  }
+}
+
 INSTANTIATE_TEST_SUITE_P(GeospatialNullTests,
                          GeoSpatialNullTablesFixture,
                          ::testing::Values(true, false));

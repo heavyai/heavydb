@@ -28,23 +28,17 @@ class Transform : public Codegen {
       , transform_operator_(
             dynamic_cast<const Analyzer::GeoTransformOperator*>(geo_operator)) {
     CHECK(transform_operator_);
-    /* TODO: re-enable
-const auto& ti = geo_operator->get_type_info();
-if (ti.get_notnull()) {
-  is_nullable_ = false;
-} else {
-  is_nullable_ = true;
-}
-*/
-    is_nullable_ = false;
+    const auto& ti = geo_operator->get_type_info();
+    if (ti.get_notnull()) {
+      is_nullable_ = false;
+    } else {
+      is_nullable_ = true;
+    }
   }
 
   size_t size() const override { return 1; }
 
-  SQLTypeInfo getNullType() const override {
-    // TODO
-    return SQLTypeInfo(kBOOLEAN);
-  }
+  SQLTypeInfo getNullType() const override { return SQLTypeInfo(kBOOLEAN); }
 
   const Analyzer::Expr* getPositionOperand() const override {
     return operator_->getOperand(0);
@@ -74,6 +68,7 @@ if (ti.get_notnull()) {
 
       // nulls not supported, and likely compressed, so require a new buffer for the
       // transformation
+      CHECK(!is_nullable_);
       return std::make_tuple(std::vector<llvm::Value*>{arg_lvs.front()}, nullptr);
     } else {
       CHECK(arg_lvs.size() == size_t(1) ||
@@ -206,7 +201,20 @@ if (ti.get_notnull()) {
                                {builder.CreateLoad(y_coord_ptr_lv, "y_coord")}),
           y_coord_ptr_lv);
     }
-    return {arr_buff_ptr};
+    auto ret = arr_buff_ptr;
+    if (is_nullable_) {
+      const auto& geo_ti = transform_operator_->get_type_info();
+      CHECK(nullcheck_codegen);
+      ret = nullcheck_codegen->finalize(
+          llvm::ConstantPointerNull::get(
+              geo_ti.get_compression() == kENCODING_GEOINT
+                  ? llvm::PointerType::get(llvm::Type::getInt32Ty(cgen_state->context_),
+                                           0)
+                  : llvm::PointerType::get(llvm::Type::getDoubleTy(cgen_state->context_),
+                                           0)),
+          ret);
+    }
+    return {ret};
   }
 
  private:
