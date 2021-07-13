@@ -130,6 +130,17 @@ class RelAlgExecutor : private StorageIOFacility {
     CHECK(query_dag_);
     return query_dag_->getRootNode();
   }
+
+  std::shared_ptr<const RelAlgNode> getRootRelAlgNodeShPtr() const {
+    CHECK(query_dag_);
+    return query_dag_->getRootNodeShPtr();
+  }
+
+  std::pair<std::vector<unsigned>, std::unordered_map<unsigned, JoinQualsPerNestingLevel>>
+  getJoinInfo(const RelAlgNode* root_node);
+
+  std::shared_ptr<RelAlgTranslator> getRelAlgTranslator(const RelAlgNode* root_node);
+
   const std::vector<std::shared_ptr<RexSubQuery>>& getSubqueries() const noexcept {
     CHECK(query_dag_);
     return query_dag_->getSubqueries();
@@ -343,6 +354,10 @@ class RelAlgExecutor : private StorageIOFacility {
 
   void handleNop(RaExecutionDesc& ed);
 
+  std::unordered_map<unsigned, JoinQualsPerNestingLevel>& getLeftDeepJoinTreesInfo() {
+    return left_deep_join_info_;
+  }
+
   JoinQualsPerNestingLevel translateLeftDeepJoinFilter(
       const RelLeftDeepInnerJoin* join,
       const std::vector<InputDescriptor>& input_descs,
@@ -363,6 +378,7 @@ class RelAlgExecutor : private StorageIOFacility {
   std::shared_ptr<const query_state::QueryState> query_state_;
   TemporaryTables temporary_tables_;
   time_t now_;
+  std::unordered_map<unsigned, JoinQualsPerNestingLevel> left_deep_join_info_;
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
   std::unordered_map<unsigned, AggregatedResult> leaf_results_;
   int64_t queue_time_ms_;

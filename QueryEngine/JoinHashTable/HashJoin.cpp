@@ -545,40 +545,11 @@ void HashJoin::checkHashJoinReplicationConstraint(const int table_id,
   }
 }
 
-namespace {
-
-InnerOuter get_cols(const Analyzer::BinOper* qual_bin_oper,
-                    const Catalog_Namespace::Catalog& cat,
-                    const TemporaryTables* temporary_tables) {
-  const auto lhs = qual_bin_oper->get_left_operand();
-  const auto rhs = qual_bin_oper->get_right_operand();
-  return normalize_column_pair(lhs, rhs, cat, temporary_tables);
-}
-
-}  // namespace
-
-size_t get_shard_count(const Analyzer::BinOper* join_condition,
-                       const Executor* executor) {
-  const Analyzer::ColumnVar* inner_col{nullptr};
-  const Analyzer::Expr* outer_col{nullptr};
-  std::shared_ptr<Analyzer::BinOper> redirected_bin_oper;
-  try {
-    std::tie(inner_col, outer_col) =
-        get_cols(join_condition, *executor->getCatalog(), executor->getTemporaryTables());
-  } catch (...) {
-    return 0;
-  }
-  if (!inner_col || !outer_col) {
-    return 0;
-  }
-  return get_shard_count({inner_col, outer_col}, executor);
-}
-
-InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
-                                 const Analyzer::Expr* rhs,
-                                 const Catalog_Namespace::Catalog& cat,
-                                 const TemporaryTables* temporary_tables,
-                                 const bool is_overlaps_join) {
+InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
+                                         const Analyzer::Expr* rhs,
+                                         const Catalog_Namespace::Catalog& cat,
+                                         const TemporaryTables* temporary_tables,
+                                         const bool is_overlaps_join) {
   const auto& lhs_ti = lhs->get_type_info();
   const auto& rhs_ti = rhs->get_type_info();
   if (!is_overlaps_join) {
@@ -708,9 +679,10 @@ InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
   return {normalized_inner_col, normalized_outer_col};
 }
 
-std::vector<InnerOuter> normalize_column_pairs(const Analyzer::BinOper* condition,
-                                               const Catalog_Namespace::Catalog& cat,
-                                               const TemporaryTables* temporary_tables) {
+std::vector<InnerOuter> HashJoin::normalizeColumnPairs(
+    const Analyzer::BinOper* condition,
+    const Catalog_Namespace::Catalog& cat,
+    const TemporaryTables* temporary_tables) {
   std::vector<InnerOuter> result;
   const auto lhs_tuple_expr =
       dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_left_operand());
@@ -723,20 +695,49 @@ std::vector<InnerOuter> normalize_column_pairs(const Analyzer::BinOper* conditio
     const auto& rhs_tuple = rhs_tuple_expr->getTuple();
     CHECK_EQ(lhs_tuple.size(), rhs_tuple.size());
     for (size_t i = 0; i < lhs_tuple.size(); ++i) {
-      result.push_back(normalize_column_pair(lhs_tuple[i].get(),
-                                             rhs_tuple[i].get(),
-                                             cat,
-                                             temporary_tables,
-                                             condition->is_overlaps_oper()));
-    }
-  } else {
-    CHECK(!lhs_tuple_expr && !rhs_tuple_expr);
-    result.push_back(normalize_column_pair(condition->get_left_operand(),
-                                           condition->get_right_operand(),
+      result.push_back(normalizeColumnPair(lhs_tuple[i].get(),
+                                           rhs_tuple[i].get(),
                                            cat,
                                            temporary_tables,
                                            condition->is_overlaps_oper()));
+    }
+  } else {
+    CHECK(!lhs_tuple_expr && !rhs_tuple_expr);
+    result.push_back(normalizeColumnPair(condition->get_left_operand(),
+                                         condition->get_right_operand(),
+                                         cat,
+                                         temporary_tables,
+                                         condition->is_overlaps_oper()));
   }
 
   return result;
+}
+
+namespace {
+
+InnerOuter get_cols(const Analyzer::BinOper* qual_bin_oper,
+                    const Catalog_Namespace::Catalog& cat,
+                    const TemporaryTables* temporary_tables) {
+  const auto lhs = qual_bin_oper->get_left_operand();
+  const auto rhs = qual_bin_oper->get_right_operand();
+  return HashJoin::normalizeColumnPair(lhs, rhs, cat, temporary_tables);
+}
+
+}  // namespace
+
+size_t get_shard_count(const Analyzer::BinOper* join_condition,
+                       const Executor* executor) {
+  const Analyzer::ColumnVar* inner_col{nullptr};
+  const Analyzer::Expr* outer_col{nullptr};
+  std::shared_ptr<Analyzer::BinOper> redirected_bin_oper;
+  try {
+    std::tie(inner_col, outer_col) =
+        get_cols(join_condition, *executor->getCatalog(), executor->getTemporaryTables());
+  } catch (...) {
+    return 0;
+  }
+  if (!inner_col || !outer_col) {
+    return 0;
+  }
+  return get_shard_count({inner_col, outer_col}, executor);
 }

@@ -51,7 +51,7 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
             << " for qual: " << condition->toString();
     ts1 = std::chrono::steady_clock::now();
   }
-  auto inner_outer_pairs = normalize_column_pairs(
+  auto inner_outer_pairs = HashJoin::normalizeColumnPairs(
       condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
 
   auto join_hash_table =

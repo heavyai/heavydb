@@ -50,7 +50,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     Executor* executor,
     const RegisteredQueryHint& query_hint) {
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
-  auto inner_outer_pairs = normalize_column_pairs(
+  auto inner_outer_pairs = HashJoin::normalizeColumnPairs(
       condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
 
   const auto getHashTableType =

@@ -43,7 +43,7 @@ InnerOuter get_cols(const Analyzer::BinOper* qual_bin_oper,
                     const TemporaryTables* temporary_tables) {
   const auto lhs = qual_bin_oper->get_left_operand();
   const auto rhs = qual_bin_oper->get_right_operand();
-  return normalize_column_pair(lhs, rhs, cat, temporary_tables);
+  return HashJoin::normalizeColumnPair(lhs, rhs, cat, temporary_tables);
 }
 
 HashEntryInfo get_bucketized_hash_entry_info(SQLTypeInfo const& context_ti,

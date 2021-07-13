@@ -53,6 +53,7 @@
 #include "QueryEngine/LoopControlFlow/JoinLoop.h"
 #include "QueryEngine/NvidiaKernel.h"
 #include "QueryEngine/PlanState.h"
+#include "QueryEngine/QueryPlanDagCache.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"
 #include "QueryEngine/RelAlgTranslator.h"
 #include "QueryEngine/StringDictionaryGenerations.h"
@@ -996,6 +997,12 @@ class Executor {
   void addToCardinalityCache(const std::string& cache_key, const size_t cache_value);
   CachedCardinality getCachedCardinality(const std::string& cache_key);
 
+  mapd_shared_mutex& getDataRecyclerLock();
+  QueryPlanDagCache& getQueryPlanDagCache();
+  JoinColumnsInfo getJoinColumnsInfo(const Analyzer::Expr* join_expr,
+                                     JoinColumnSide target_side,
+                                     bool extract_only_col_id);
+
  private:
   std::shared_ptr<CompilationContext> getCodeFromCache(const CodeCacheKey&,
                                                        const CodeCache&);
@@ -1105,8 +1112,8 @@ class Executor {
 
   static mapd_shared_mutex executors_cache_mutex_;
 
-  // for now we use recycler_mutex only for cardinality_cache_
-  // and will expand its coverage for more interesting caches for query execution
+  static QueryPlanDagCache query_plan_dag_cache_;
+  const QueryPlanHash INVALID_QUERY_PLAN_HASH{std::hash<std::string>{}(EMPTY_QUERY_PLAN)};
   static mapd_shared_mutex recycler_mutex_;
   static std::unordered_map<std::string, size_t> cardinality_cache_;
 

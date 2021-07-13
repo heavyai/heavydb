@@ -101,14 +101,25 @@ const RexScalar* RelLeftDeepInnerJoin::getOuterCondition(
 }
 
 std::string RelLeftDeepInnerJoin::toString() const {
-  std::string result =
-      "(RelLeftDeepInnerJoin<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
-  result += condition_->toString();
+  std::string ret = ::typeName(this) + "(";
+  ret += ::toString(condition_);
   for (const auto& input : inputs_) {
-    result += " " + input->toString();
+    ret += " " + ::toString(input);
   }
-  result += ")";
-  return result;
+  ret += ")";
+  return ret;
+}
+
+size_t RelLeftDeepInnerJoin::toHash() const {
+  if (!hash_) {
+    hash_ = typeid(RelLeftDeepInnerJoin).hash_code();
+    boost::hash_combine(*hash_,
+                        condition_ ? condition_->toHash() : boost::hash_value("n"));
+    for (auto& node : inputs_) {
+      boost::hash_combine(*hash_, node->toHash());
+    }
+  }
+  return *hash_;
 }
 
 size_t RelLeftDeepInnerJoin::size() const {
@@ -134,6 +145,17 @@ bool RelLeftDeepInnerJoin::coversOriginalNode(const RelAlgNode* node) const {
     }
   }
   return false;
+}
+
+const RelFilter* RelLeftDeepInnerJoin::getOriginalFilter() const {
+  return original_filter_.get();
+}
+
+std::vector<std::shared_ptr<const RelJoin>> RelLeftDeepInnerJoin::getOriginalJoins()
+    const {
+  std::vector<std::shared_ptr<const RelJoin>> original_joins;
+  original_joins.assign(original_joins_.begin(), original_joins_.end());
+  return original_joins;
 }
 
 namespace {

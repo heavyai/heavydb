@@ -1201,23 +1201,6 @@ std::vector<std::string> expr_container_to_string(
   return expr_strs;
 }
 
-std::string join_type_to_string(const JoinType type) {
-  switch (type) {
-    case JoinType::INNER:
-      return "INNER";
-    case JoinType::LEFT:
-      return "LEFT";
-    case JoinType::SEMI:
-      return "SEMI";
-    case JoinType::ANTI:
-      return "ANTI";
-    case JoinType::INVALID:
-      return "INVALID";
-  }
-  UNREACHABLE();
-  return "";
-}
-
 std::string sort_algorithm_to_string(const SortAlgorithm algorithm) {
   switch (algorithm) {
     case SortAlgorithm::Default:
@@ -1259,7 +1242,7 @@ std::string ra_exec_unit_desc_for_caching(const RelAlgExecutionUnit& ra_exe_unit
   if (!ra_exe_unit.join_quals.empty()) {
     for (size_t i = 0; i < ra_exe_unit.join_quals.size(); i++) {
       const auto& join_condition = ra_exe_unit.join_quals[i];
-      os << std::to_string(i) << join_type_to_string(join_condition.type);
+      os << std::to_string(i) << ::toString(join_condition.type);
       for (const auto& qual : join_condition.quals) {
         if (qual) {
           os << qual->toString() << ",";
@@ -1285,6 +1268,9 @@ std::string ra_exec_unit_desc_for_caching(const RelAlgExecutionUnit& ra_exe_unit
 }
 
 std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_unit) {
+  auto query_plan_dag =
+      ra_exe_unit.query_plan_dag == EMPTY_QUERY_PLAN ? "N/A" : ra_exe_unit.query_plan_dag;
+  os << "\n\tExtracted Query Plan Dag: " << query_plan_dag;
   os << "\n\tTable/Col/Levels: ";
   for (const auto& input_col_desc : ra_exe_unit.input_col_descs) {
     const auto& scan_desc = input_col_desc->getScanDesc();
@@ -1304,8 +1290,7 @@ std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_uni
     os << "\n\tJoin Quals: ";
     for (size_t i = 0; i < ra_exe_unit.join_quals.size(); i++) {
       const auto& join_condition = ra_exe_unit.join_quals[i];
-      os << "\t\t" << std::to_string(i) << " "
-         << join_type_to_string(join_condition.type);
+      os << "\t\t" << std::to_string(i) << " " << ::toString(join_condition.type);
       os << boost::algorithm::join(expr_container_to_string(join_condition.quals), ", ");
     }
   }
@@ -1347,6 +1332,8 @@ RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in
           ra_exe_unit_in.sort_info,
           new_scan_limit,
           ra_exe_unit_in.query_hint,
+          ra_exe_unit_in.query_plan_dag,
+          ra_exe_unit_in.hash_table_build_plan_dag,
           ra_exe_unit_in.use_bump_allocator,
           ra_exe_unit_in.union_all,
           ra_exe_unit_in.query_state};
@@ -2352,8 +2339,8 @@ bool Executor::skipFragmentPair(
   size_t shard_count{0};
   if (dynamic_cast<const Analyzer::ExpressionTuple*>(
           join_condition->get_left_operand())) {
-    auto inner_outer_pairs =
-        normalize_column_pairs(join_condition, *getCatalog(), getTemporaryTables());
+    auto inner_outer_pairs = HashJoin::normalizeColumnPairs(
+        join_condition, *getCatalog(), getTemporaryTables());
     shard_count = BaselineJoinHashTable::getShardCountForCondition(
         join_condition, this, inner_outer_pairs);
   } else {
@@ -3874,6 +3861,21 @@ void Executor::setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs
   table_generations_ = computeTableGenerations(phys_table_ids);
 }
 
+mapd_shared_mutex& Executor::getDataRecyclerLock() {
+  return recycler_mutex_;
+}
+
+QueryPlanDagCache& Executor::getQueryPlanDagCache() {
+  return query_plan_dag_cache_;
+}
+
+JoinColumnsInfo Executor::getJoinColumnsInfo(const Analyzer::Expr* join_expr,
+                                             JoinColumnSide target_side,
+                                             bool extract_only_col_id) {
+  return query_plan_dag_cache_.getJoinColumnsInfoString(
+      join_expr, target_side, extract_only_col_id);
+}
+
 mapd_shared_mutex& Executor::getSessionLock() {
   return executor_session_mutex_;
 }
@@ -4288,5 +4290,6 @@ std::atomic<bool> Executor::interrupted_{false};
 std::mutex Executor::compilation_mutex_;
 std::mutex Executor::kernel_mutex_;
 
+QueryPlanDagCache Executor::query_plan_dag_cache_;
 mapd_shared_mutex Executor::recycler_mutex_;
 std::unordered_map<std::string, size_t> Executor::cardinality_cache_;

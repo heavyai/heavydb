@@ -29,6 +29,7 @@ add_executable(ShardedTableEpochConsistencyTest ShardedTableEpochConsistencyTest
 add_executable(DiskCacheQueryTest DiskCacheQueryTest.cpp)
 add_executable(CachingFileMgrTest CachingFileMgrTest.cpp)
 add_executable(JSONTest JSONTest.cpp)
+add_executable(DataRecyclerTest DataRecyclerTest.cpp)
 
 if(ENABLE_CUDA)
   message(DEBUG "Tests CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
@@ -200,6 +201,7 @@ target_link_libraries(ShardedTableEpochConsistencyTest ${THRIFT_HANDLER_TEST_LIB
 target_link_libraries(DiskCacheQueryTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CachingFileMgrTest gtest DataMgr ${Boost_LIBRARIES})
 target_link_libraries(LoadTableTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(DataRecyclerTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(JSONTest gtest Logger Shared)
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
@@ -284,6 +286,7 @@ add_test(PersistentStorageTest PersistentStorageTest ${TEST_ARGS})
 add_test(ShardedTableEpochConsistencyTest ShardedTableEpochConsistencyTest ${TEST_ARGS})
 add_test(DiskCacheQueryTest DiskCacheQueryTest ${TEST_ARGS})
 add_test(CachingFileMgrTest CachingFileMgrTest ${TEST_ARGS})
+add_test(DataRecyclerTest DataRecyclerTest ${TEST_ARGS})
 add_test(LoadTableTest LoadTableTest ${TEST_ARGS})
 add_test(JSONTest JSONTest ${TEST_ARGS})
 
@@ -376,6 +379,7 @@ set(TEST_PROGRAMS
   ForeignStorageCacheTest
   PersistentStorageTest
   ShardedTableEpochConsistencyTest
+  DataRecyclerTest
   DiskCacheQueryTest
   CachingFileMgrTest
   LoadTableTest

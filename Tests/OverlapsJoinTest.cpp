@@ -677,16 +677,17 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
                             Executor* executor,
                             const int device_count,
                             const std::vector<ExpectedValues>& expected_values)
-      : OverlapsJoinHashTable(condition,
-                              JoinType::INVALID,  // b/c this is mock
-                              query_infos,
-                              memory_level,
-                              column_cache,
-                              executor,
-                              normalize_column_pairs(condition.get(),
-                                                     *executor->getCatalog(),
-                                                     executor->getTemporaryTables()),
-                              device_count)
+      : OverlapsJoinHashTable(
+            condition,
+            JoinType::INVALID,  // b/c this is mock
+            query_infos,
+            memory_level,
+            column_cache,
+            executor,
+            HashJoin::normalizeColumnPairs(condition.get(),
+                                           *executor->getCatalog(),
+                                           executor->getTemporaryTables()),
+            device_count)
       , expected_values_per_step_(expected_values) {}
 
  protected:
