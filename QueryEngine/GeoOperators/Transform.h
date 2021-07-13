@@ -160,32 +160,17 @@ if (ti.get_notnull()) {
 
       auto x_coord_ptr_lv =
           builder.CreateGEP(arr_buff_ptr, cgen_state->llInt(0), "x_coord_ptr");
-#if 0
-      builder.CreateStore(
-          cgen_state->emitExternalCall("transform_4326_900913_x",
-                                       llvm::Type::getDoubleTy(cgen_state->context_),
-                                       {builder.CreateLoad(x_coord_ptr_lv, "x_coord")}),
-          x_coord_ptr_lv);
-#else
       builder.CreateStore(
           cgen_state->emitCall("transform_4326_900913_x",
                                {builder.CreateLoad(x_coord_ptr_lv, "x_coord")}),
           x_coord_ptr_lv);
-#endif
+
       auto y_coord_ptr_lv =
           builder.CreateGEP(arr_buff_ptr, cgen_state->llInt(1), "y_coord_ptr");
-#if 0
-      builder.CreateStore(
-          cgen_state->emitExternalCall("transform_4326_900913_y",
-                                       llvm::Type::getDoubleTy(cgen_state->context_),
-                                       {builder.CreateLoad(y_coord_ptr_lv, "y_coord")}),
-          y_coord_ptr_lv);
-#else
       builder.CreateStore(
           cgen_state->emitCall("transform_4326_900913_y",
                                {builder.CreateLoad(y_coord_ptr_lv, "y_coord")}),
           y_coord_ptr_lv);
-#endif
 
     } else if (transform_operator_->getOutputSRID() == 4326) {
       if (transform_operator_->getInputSRID() != 900913) {
@@ -194,7 +179,20 @@ if (ti.get_notnull()) {
                                  " for output SRID " +
                                  std::to_string(transform_operator_->getOutputSRID()));
       }
-      UNREACHABLE() << "TODO";
+
+      auto x_coord_ptr_lv =
+          builder.CreateGEP(arr_buff_ptr, cgen_state->llInt(0), "x_coord_ptr");
+      builder.CreateStore(
+          cgen_state->emitCall("transform_900913_4326_x",
+                               {builder.CreateLoad(x_coord_ptr_lv, "x_coord")}),
+          x_coord_ptr_lv);
+
+      auto y_coord_ptr_lv =
+          builder.CreateGEP(arr_buff_ptr, cgen_state->llInt(1), "y_coord_ptr");
+      builder.CreateStore(
+          cgen_state->emitCall("transform_900913_4326_y",
+                               {builder.CreateLoad(y_coord_ptr_lv, "y_coord")}),
+          y_coord_ptr_lv);
     } else {
       throw std::runtime_error("Unsupported SRID for ST_Transform: " +
                                std::to_string(transform_operator_->getOutputSRID()));

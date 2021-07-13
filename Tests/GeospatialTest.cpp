@@ -170,10 +170,7 @@ void import_geospatial_test(const bool use_temporary_tables) {
   const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_test;");
   run_ddl_statement(geospatial_test);
   const auto create_ddl = build_create_table_statement(
-      "id INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gp "
-      "GEOMETRY(POINT), gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), gp4326none "
-      "GEOMETRY(POINT,4326) ENCODING NONE, gp900913 GEOMETRY(POINT,900913), gl4326none "
-      "GEOMETRY(LINESTRING,4326) ENCODING NONE, gpoly4326 GEOMETRY(POLYGON,4326)",
+      R"(id INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gp GEOMETRY(POINT), gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), gp4326none GEOMETRY(POINT,4326) ENCODING NONE, gp900913 GEOMETRY(POINT,900913), gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, gpoly4326 GEOMETRY(POLYGON,4326), gpoly900913 GEOMETRY(POLYGON,4326))",
       "geospatial_test",
       {"", 0},
       {},
@@ -206,6 +203,7 @@ void import_geospatial_test(const bool use_temporary_tables) {
                          point,
                          point,
                          linestring,
+                         poly,
                          poly),
                      ExecutorDeviceType::CPU);
   }
@@ -419,7 +417,7 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
       const auto rows =
           run_multiple_agg("SELECT * FROM geospatial_test WHERE id = 1", dt);
       const auto row = rows->getNextRow(false, false);
-      ASSERT_EQ(row.size(), size_t(11));
+      ASSERT_EQ(row.size(), size_t(12));
     }
 
     // Projection (return GeoTargetValue)
@@ -1057,6 +1055,27 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
             R"(SELECT ST_X(ST_Transform(gp4326, 900913)) FROM geospatial_test WHERE id = 2;)",
             dt,
             false)));
+    EXPECT_DOUBLE_EQ(
+        double(1.796630568489136e-05),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_X(ST_Transform(gp900913, 4326)) FROM geospatial_test WHERE id = 2;)",
+            dt,
+            false)));
+    EXPECT_DOUBLE_EQ(
+        double(1.796630569117497e-05),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Y(ST_Transform(gp900913, 4326)) FROM geospatial_test WHERE id = 2;)",
+            dt,
+            false)));
+    EXPECT_EQ(
+        "POINT (0.000017966305685 0.000017966305691)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            R"(SELECT ST_Transform(gp900913, 4326) FROM geospatial_test WHERE id = 2;)",
+            dt,
+            false))));
+    EXPECT_ANY_THROW(run_simple_agg(
+        R"(SELECT ST_Transform(gpoly900913, 4326) FROM geospatial_test WHERE id = 2;)",
+        dt));
   }
 }
 

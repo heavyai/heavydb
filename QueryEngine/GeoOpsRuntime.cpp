@@ -14,10 +14,27 @@
  * limitations under the License.
  */
 
+#include <cmath>
+
 extern "C" ALWAYS_INLINE double transform_4326_900913_x(const double x) {
   return x * 111319.490778;
 }
 
 extern "C" ALWAYS_INLINE double transform_4326_900913_y(const double y) {
   return 6378136.99911 * log(tan(.00872664626 * y + .785398163397));
+}
+
+extern "C" ALWAYS_INLINE double transform_900913_4326_x(const double x) {
+  constexpr double e_circ = 40075016.68;  // Earth's circumference, meters
+  constexpr double e_circ_360 = e_circ / 360.;
+  constexpr double e_cir_360_inverse = 1. / e_circ_360;
+  return x * e_cir_360_inverse;
+}
+
+extern "C" ALWAYS_INLINE double transform_900913_4326_y(const double y) {
+  constexpr double e_circ = 40075016.68;        // Earth's circumference, meters
+  constexpr double e_circ_360 = e_circ / 360.;  // 111319.491
+  const double e = exp(1.0);
+  const double pi = acos(-1);
+  return atan(pow(e, (y / e_circ_360) * pi / 180.)) * 360. / pi - 90.;
 }

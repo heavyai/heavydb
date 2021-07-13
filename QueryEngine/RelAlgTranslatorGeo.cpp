@@ -300,7 +300,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       } else {
         throw QueryNotSupported(rex_function->getName() + ": expecting integer SRID");
       }
-      if (srid != 900913) {
+      if (srid != 900913 && ((use_geo_expressions || is_projection) && srid != 4326)) {
         throw QueryNotSupported(rex_function->getName() + ": unsupported output SRID " +
                                 std::to_string(srid));
       }
@@ -932,6 +932,37 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
         rex_function->getType(), specialized_geofunc, geoargs);
   }
 
+  // start to move geo expressions above the generic translation call, as geo expression
+  // error handling can differ
+  if (func_resolve(rex_function->getName(), "ST_X"sv, "ST_Y"sv)) {
+    SQLTypeInfo arg_ti;
+    auto new_geoargs = translateGeoFunctionArg(rex_function->getOperand(0),
+                                               arg_ti,
+                                               /*with_bounds=*/false,
+                                               /*with_render_group=*/false,
+                                               /*expand_geo_col=*/true,
+                                               /*is_projection=*/true,
+                                               /*use_geo_expressions=*/true);
+    CHECK_EQ(new_geoargs.size(), size_t(1));
+    CHECK(new_geoargs.front());
+    const auto& arg_expr_ti = new_geoargs.front()->get_type_info();
+    if (arg_expr_ti.get_type() != kPOINT) {
+      throw QueryNotSupported(rex_function->getName() + " expects a POINT");
+    }
+    auto function_ti = rex_function->getType();
+    if (std::dynamic_pointer_cast<Analyzer::GeoOperator>(new_geoargs.front())) {
+      function_ti.set_notnull(false);
+    }
+    if (std::dynamic_pointer_cast<Analyzer::GeoConstant>(new_geoargs.front())) {
+      // TODO(adb): fixup null handling
+      function_ti.set_notnull(true);
+    }
+    return makeExpr<Analyzer::GeoOperator>(
+        function_ti,
+        rex_function->getName(),
+        std::vector<std::shared_ptr<Analyzer::Expr>>{new_geoargs.front()});
+  }
+
   // All functions below use geo col as reference and expand it as necessary
   SQLTypeInfo arg_ti;
   bool with_bounds = true;
@@ -969,33 +1000,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
   // ring_sizes are dropped. Specialize for other/new functions if needed.
   geoargs.erase(geoargs.begin() + 1, geoargs.end());
 
-  if (func_resolve(rex_function->getName(), "ST_X"sv, "ST_Y"sv)) {
-    auto new_geoargs = translateGeoFunctionArg(rex_function->getOperand(0),
-                                               arg_ti,
-                                               /*with_bounds=*/false,
-                                               /*with_render_group=*/false,
-                                               /*expand_geo_col=*/true,
-                                               /*is_projection=*/true,
-                                               /*use_geo_expressions=*/true);
-    CHECK_EQ(new_geoargs.size(), size_t(1));
-    CHECK(new_geoargs.front());
-    const auto& arg_expr_ti = new_geoargs.front()->get_type_info();
-    if (arg_expr_ti.get_type() != kPOINT) {
-      throw QueryNotSupported(rex_function->getName() + " expects a POINT");
-    }
-    auto function_ti = rex_function->getType();
-    if (std::dynamic_pointer_cast<Analyzer::GeoOperator>(new_geoargs.front())) {
-      function_ti.set_notnull(false);
-    }
-    if (std::dynamic_pointer_cast<Analyzer::GeoConstant>(new_geoargs.front())) {
-      // TODO(adb): fixup null handling
-      function_ti.set_notnull(true);
-    }
-    return makeExpr<Analyzer::GeoOperator>(
-        function_ti,
-        rex_function->getName(),
-        std::vector<std::shared_ptr<Analyzer::Expr>>{new_geoargs.front()});
-  } else if (rex_function->getName() == "ST_Length"sv) {
+  if (rex_function->getName() == "ST_Length"sv) {
     if (arg_ti.get_type() != kLINESTRING) {
       throw QueryNotSupported(rex_function->getName() + " expects LINESTRING");
     }
