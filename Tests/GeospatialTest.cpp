@@ -16,6 +16,7 @@
 
 #include "TestHelpers.h"
 
+#include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/scope.h"
 
@@ -1049,6 +1050,24 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
             R"(SELECT ST_Transform(gp4326, 900913) FROM geospatial_test WHERE id = 2;)",
             dt,
             false))));
+    SKIP_ON_AGGREGATOR({
+      // ensure transforms run on GPU. transforms use math functions which need to be
+      // specialized for GPU
+      if (dt == ExecutorDeviceType::GPU) {
+        const auto query_explain_result = QR::get()->runSelectQuery(
+            R"(SELECT ST_Transform(gp4326, 900913) FROM geospatial_test WHERE id = 2;)",
+            dt,
+            /*hoist_literals=*/true,
+            /*allow_loop_joins=*/false,
+            /*just_explain=*/true);
+        const auto explain_result = query_explain_result->getRows();
+        EXPECT_EQ(size_t(1), explain_result->rowCount());
+        const auto crt_row = explain_result->getNextRow(true, true);
+        EXPECT_EQ(size_t(1), crt_row.size());
+        const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
+        EXPECT_FALSE(explain_str.find("IR for the GPU:") == std::string::npos);
+      }
+    });
     EXPECT_DOUBLE_EQ(
         double(222638.977720049),
         v<double>(run_simple_agg(
@@ -1073,6 +1092,24 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
             R"(SELECT ST_Transform(gp900913, 4326) FROM geospatial_test WHERE id = 2;)",
             dt,
             false))));
+    SKIP_ON_AGGREGATOR({
+      // ensure transforms run on GPU. transforms use math functions which need to be
+      // specialized for GPU
+      if (dt == ExecutorDeviceType::GPU) {
+        const auto query_explain_result = QR::get()->runSelectQuery(
+            R"(SELECT ST_Transform(gp900913, 4326) FROM geospatial_test WHERE id = 2;)",
+            dt,
+            /*hoist_literals=*/true,
+            /*allow_loop_joins=*/false,
+            /*just_explain=*/true);
+        const auto explain_result = query_explain_result->getRows();
+        EXPECT_EQ(size_t(1), explain_result->rowCount());
+        const auto crt_row = explain_result->getNextRow(true, true);
+        EXPECT_EQ(size_t(1), crt_row.size());
+        const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
+        EXPECT_FALSE(explain_str.find("IR for the GPU:") == std::string::npos);
+      }
+    });
     EXPECT_ANY_THROW(run_simple_agg(
         R"(SELECT ST_Transform(gpoly900913, 4326) FROM geospatial_test WHERE id = 2;)",
         dt));

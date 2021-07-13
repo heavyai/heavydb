@@ -16,6 +16,8 @@
 
 #include <cmath>
 
+#include "../Shared/funcannotations.h"
+
 extern "C" ALWAYS_INLINE double transform_4326_900913_x(const double x) {
   return x * 111319.490778;
 }

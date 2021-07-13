@@ -18,6 +18,7 @@
 #include "OutputBufferInitialization.h"
 
 #include <llvm/IR/InstIterator.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
 extern std::unique_ptr<llvm::Module> g_rt_module;
@@ -193,4 +194,135 @@ void CgenState::emitErrorCheck(llvm::Value* condition,
   ir_builder_.SetInsertPoint(check_fail);
   ir_builder_.CreateRet(errorCode);
   ir_builder_.SetInsertPoint(check_ok);
+}
+
+namespace {
+
+struct GpuFunctionDefinition {
+  GpuFunctionDefinition(const std::string& name) : name(name) {}
+  std::string name;
+
+  virtual llvm::FunctionCallee getFunction(llvm::Module* module,
+                                           llvm::LLVMContext& context) const = 0;
+};
+
+struct GpuPowerFunction : public GpuFunctionDefinition {
+  GpuPowerFunction() : GpuFunctionDefinition("power") {}
+
+  llvm::FunctionCallee getFunction(llvm::Module* module,
+                                   llvm::LLVMContext& context) const final {
+    return module->getOrInsertFunction(name,
+                                       /*ret_type=*/llvm::Type::getDoubleTy(context),
+                                       /*args=*/llvm::Type::getDoubleTy(context),
+                                       llvm::Type::getDoubleTy(context));
+  }
+};
+
+struct GpuAtanFunction : public GpuFunctionDefinition {
+  GpuAtanFunction() : GpuFunctionDefinition("Atan") {}
+
+  llvm::FunctionCallee getFunction(llvm::Module* module,
+                                   llvm::LLVMContext& context) const final {
+    return module->getOrInsertFunction(name,
+                                       /*ret_type=*/llvm::Type::getDoubleTy(context),
+                                       /*args=*/llvm::Type::getDoubleTy(context));
+  }
+};
+
+struct GpuLogFunction : public GpuFunctionDefinition {
+  GpuLogFunction() : GpuFunctionDefinition("ln") {}
+
+  llvm::FunctionCallee getFunction(llvm::Module* module,
+                                   llvm::LLVMContext& context) const final {
+    return module->getOrInsertFunction(name,
+                                       /*ret_type=*/llvm::Type::getDoubleTy(context),
+                                       /*args=*/llvm::Type::getDoubleTy(context));
+  }
+};
+
+struct GpuTanFunction : public GpuFunctionDefinition {
+  GpuTanFunction() : GpuFunctionDefinition("Tan") {}
+
+  llvm::FunctionCallee getFunction(llvm::Module* module,
+                                   llvm::LLVMContext& context) const final {
+    return module->getOrInsertFunction(name,
+                                       /*ret_type=*/llvm::Type::getDoubleTy(context),
+                                       /*args=*/llvm::Type::getDoubleTy(context));
+  }
+};
+
+static const std::unordered_map<std::string, std::shared_ptr<GpuFunctionDefinition>>
+    gpu_replacement_functions{{"pow", std::make_shared<GpuPowerFunction>()},
+                              {"atan", std::make_shared<GpuAtanFunction>()},
+                              {"log", std::make_shared<GpuLogFunction>()},
+                              {"tan", std::make_shared<GpuTanFunction>()}};
+
+}  // namespace
+
+std::vector<std::string> CgenState::gpuFunctionsToReplace(llvm::Function* fn) {
+  std::vector<std::string> ret;
+
+  CHECK(fn);
+  CHECK(!fn->isDeclaration());
+
+  for (auto& basic_block : *fn) {
+    auto& inst_list = basic_block.getInstList();
+    for (auto inst_itr = inst_list.begin(); inst_itr != inst_list.end(); ++inst_itr) {
+      if (auto call_inst = llvm::dyn_cast<llvm::CallInst>(inst_itr)) {
+        auto called_fcn = call_inst->getCalledFunction();
+        CHECK(called_fcn);
+
+        if (gpu_replacement_functions.find(called_fcn->getName().str()) !=
+            gpu_replacement_functions.end()) {
+          ret.emplace_back(called_fcn->getName());
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+void CgenState::replaceFunctionForGpu(const std::string& fcn_to_replace,
+                                      llvm::Function* fn) {
+  CHECK(fn);
+  CHECK(!fn->isDeclaration());
+
+  auto map_it = gpu_replacement_functions.find(fcn_to_replace);
+  if (map_it == gpu_replacement_functions.end()) {
+    throw QueryMustRunOnCpu("Codegen failed: Could not find replacement functon for " +
+                            fcn_to_replace +
+                            " to run on gpu. Query must run in cpu mode.");
+  }
+  const auto& gpu_fcn_obj = map_it->second;
+  CHECK(gpu_fcn_obj);
+  const auto& gpu_fcn_name = gpu_fcn_obj->name;
+  VLOG(1) << "Replacing " << fcn_to_replace << " with " << gpu_fcn_name
+          << " for parent function " << fn->getName().str();
+
+  for (auto& basic_block : *fn) {
+    auto& inst_list = basic_block.getInstList();
+    for (auto inst_itr = inst_list.begin(); inst_itr != inst_list.end(); ++inst_itr) {
+      if (auto call_inst = llvm::dyn_cast<llvm::CallInst>(inst_itr)) {
+        auto called_fcn = call_inst->getCalledFunction();
+        CHECK(called_fcn);
+
+        if (called_fcn->getName() == fcn_to_replace) {
+          std::vector<llvm::Value*> args;
+          std::vector<llvm::Type*> arg_types;
+          for (auto& arg : call_inst->args()) {
+            arg_types.push_back(arg.get()->getType());
+            args.push_back(arg.get());
+          }
+          auto gpu_func = gpu_fcn_obj->getFunction(module_, context_);
+          CHECK(gpu_func);
+          auto gpu_func_type = gpu_func.getFunctionType();
+          CHECK(gpu_func_type);
+          CHECK_EQ(gpu_func_type->getReturnType(), called_fcn->getReturnType());
+          llvm::ReplaceInstWithInst(call_inst,
+                                    llvm::CallInst::Create(gpu_func, args, ""));
+          return;
+        }
+      }
+    }
+  }
 }

@@ -138,7 +138,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoOperator(
 
   std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen =
       op_codegen->getNullCheckCodegen(null_lv, cgen_state_, executor());
-  return op_codegen->codegen(arg_lvs, nullcheck_codegen.get(), cgen_state_);
+  return op_codegen->codegen(arg_lvs, nullcheck_codegen.get(), cgen_state_, co);
 }
 
 namespace {

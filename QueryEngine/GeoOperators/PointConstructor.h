@@ -158,7 +158,8 @@ class PointConstructor : public Codegen {
 
   std::vector<llvm::Value*> codegen(const std::vector<llvm::Value*>& args,
                                     CodeGenerator::NullCheckCodegen* nullcheck_codegen,
-                                    CgenState* cgen_state) final {
+                                    CgenState* cgen_state,
+                                    const CompilationOptions& co) final {
     CHECK_EQ(args.size(), size_t(2));
 
     const auto& geo_ti = operator_->get_type_info();

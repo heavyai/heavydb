@@ -17,7 +17,6 @@
 #pragma once
 
 #include "QueryEngine/GeoOperators/Codegen.h"
-
 namespace spatial_type {
 
 // ST_Transform
@@ -98,7 +97,8 @@ if (ti.get_notnull()) {
 
   std::vector<llvm::Value*> codegen(const std::vector<llvm::Value*>& args,
                                     CodeGenerator::NullCheckCodegen* nullcheck_codegen,
-                                    CgenState* cgen_state) override {
+                                    CgenState* cgen_state,
+                                    const CompilationOptions& co) override {
     CHECK_EQ(args.size(), size_t(1));
 
     const auto geo_operand = getOperand(0);
@@ -135,11 +135,15 @@ if (ti.get_notnull()) {
           builder.CreateAlloca(llvm::Type::getDoubleTy(cgen_state->context_),
                                cgen_state->llInt(int32_t(2)),
                                getName() + "_Array");
-      builder.CreateMemCpy(new_arr_ptr,
-                           LLVM_MAYBE_ALIGN(0),
-                           arr_buff_ptr,
-                           LLVM_MAYBE_ALIGN(0),
-                           uint64_t(16));
+      const auto arr_buff_ptr_cast = builder.CreateBitCast(
+          arr_buff_ptr, llvm::Type::getDoublePtrTy(cgen_state->context_));
+
+      builder.CreateStore(
+          builder.CreateLoad(builder.CreateGEP(arr_buff_ptr_cast, cgen_state->llInt(0))),
+          builder.CreateGEP(new_arr_ptr, cgen_state->llInt(0)));
+      builder.CreateStore(
+          builder.CreateLoad(builder.CreateGEP(arr_buff_ptr_cast, cgen_state->llInt(1))),
+          builder.CreateGEP(new_arr_ptr, cgen_state->llInt(1)));
       arr_buff_ptr = new_arr_ptr;
     }
     CHECK(arr_buff_ptr->getType() == llvm::Type::getDoublePtrTy(cgen_state->context_));
@@ -150,6 +154,7 @@ if (ti.get_notnull()) {
     }
 
     // transform in place
+    std::string transform_function_prefix{""};
     if (transform_operator_->getOutputSRID() == 900913) {
       if (transform_operator_->getInputSRID() != 4326) {
         throw std::runtime_error("Unsupported input SRID " +
@@ -157,21 +162,7 @@ if (ti.get_notnull()) {
                                  " for output SRID " +
                                  std::to_string(transform_operator_->getOutputSRID()));
       }
-
-      auto x_coord_ptr_lv =
-          builder.CreateGEP(arr_buff_ptr, cgen_state->llInt(0), "x_coord_ptr");
-      builder.CreateStore(
-          cgen_state->emitCall("transform_4326_900913_x",
-                               {builder.CreateLoad(x_coord_ptr_lv, "x_coord")}),
-          x_coord_ptr_lv);
-
-      auto y_coord_ptr_lv =
-          builder.CreateGEP(arr_buff_ptr, cgen_state->llInt(1), "y_coord_ptr");
-      builder.CreateStore(
-          cgen_state->emitCall("transform_4326_900913_y",
-                               {builder.CreateLoad(y_coord_ptr_lv, "y_coord")}),
-          y_coord_ptr_lv);
-
+      transform_function_prefix = "transform_4326_900913_";
     } else if (transform_operator_->getOutputSRID() == 4326) {
       if (transform_operator_->getInputSRID() != 900913) {
         throw std::runtime_error("Unsupported input SRID " +
@@ -179,23 +170,41 @@ if (ti.get_notnull()) {
                                  " for output SRID " +
                                  std::to_string(transform_operator_->getOutputSRID()));
       }
-
-      auto x_coord_ptr_lv =
-          builder.CreateGEP(arr_buff_ptr, cgen_state->llInt(0), "x_coord_ptr");
-      builder.CreateStore(
-          cgen_state->emitCall("transform_900913_4326_x",
-                               {builder.CreateLoad(x_coord_ptr_lv, "x_coord")}),
-          x_coord_ptr_lv);
-
-      auto y_coord_ptr_lv =
-          builder.CreateGEP(arr_buff_ptr, cgen_state->llInt(1), "y_coord_ptr");
-      builder.CreateStore(
-          cgen_state->emitCall("transform_900913_4326_y",
-                               {builder.CreateLoad(y_coord_ptr_lv, "y_coord")}),
-          y_coord_ptr_lv);
+      transform_function_prefix = "transform_900913_4326_";
     } else {
       throw std::runtime_error("Unsupported SRID for ST_Transform: " +
                                std::to_string(transform_operator_->getOutputSRID()));
+    }
+    CHECK(!transform_function_prefix.empty());
+
+    auto x_coord_ptr_lv =
+        builder.CreateGEP(arr_buff_ptr, cgen_state->llInt(0), "x_coord_ptr");
+    builder.CreateStore(
+        cgen_state->emitCall(transform_function_prefix + "x",
+                             {builder.CreateLoad(x_coord_ptr_lv, "x_coord")}),
+        x_coord_ptr_lv);
+
+    auto y_coord_ptr_lv =
+        builder.CreateGEP(arr_buff_ptr, cgen_state->llInt(1), "y_coord_ptr");
+    if (co.device_type == ExecutorDeviceType::GPU) {
+      auto fn = cgen_state->module_->getFunction(transform_function_prefix + "y");
+      CHECK(fn);
+      cgen_state->maybeCloneFunctionRecursive(fn);
+      CHECK(!fn->isDeclaration());
+
+      auto gpu_functions_to_replace = cgen_state->gpuFunctionsToReplace(fn);
+      for (const auto& fcn_name : gpu_functions_to_replace) {
+        cgen_state->replaceFunctionForGpu(fcn_name, fn);
+      }
+      verify_function_ir(fn);
+      auto transform_call =
+          builder.CreateCall(fn, {builder.CreateLoad(y_coord_ptr_lv, "y_coord")});
+      builder.CreateStore(transform_call, y_coord_ptr_lv);
+    } else {
+      builder.CreateStore(
+          cgen_state->emitCall(transform_function_prefix + "y",
+                               {builder.CreateLoad(y_coord_ptr_lv, "y_coord")}),
+          y_coord_ptr_lv);
     }
     return {arr_buff_ptr};
   }

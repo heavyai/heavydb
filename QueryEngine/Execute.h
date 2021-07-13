@@ -286,6 +286,8 @@ class CompilationRetryNoCompaction : public std::runtime_error {
 class QueryMustRunOnCpu : public std::runtime_error {
  public:
   QueryMustRunOnCpu() : std::runtime_error("Query must run in cpu mode.") {}
+
+  QueryMustRunOnCpu(const std::string& err) : std::runtime_error(err) {}
 };
 
 class ParseIRError : public std::runtime_error {

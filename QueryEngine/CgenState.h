@@ -322,6 +322,10 @@ struct CgenState {
 
   void emitErrorCheck(llvm::Value* condition, llvm::Value* errorCode, std::string label);
 
+  std::vector<std::string> gpuFunctionsToReplace(llvm::Function* fn);
+
+  void replaceFunctionForGpu(const std::string& fcn_to_replace, llvm::Function* fn);
+
   llvm::Module* module_;
   llvm::Function* row_func_;
   llvm::Function* filter_func_;
@@ -403,6 +407,8 @@ struct CgenState {
     return off + alignment;
   }
 
+  void maybeCloneFunctionRecursive(llvm::Function* fn);
+
  private:
   template <class T>
   size_t getOrAddLiteral(const T& val, const int device_id) {
@@ -421,8 +427,6 @@ struct CgenState {
     literal_bytes_[device_id] = addAligned(literal_bytes_[device_id], lit_bytes);
     return literal_bytes_[device_id] - lit_bytes;
   }
-
-  void maybeCloneFunctionRecursive(llvm::Function* fn);
 
   std::unordered_map<int, LiteralValues> literals_;
   std::unordered_map<int, size_t> literal_bytes_;
