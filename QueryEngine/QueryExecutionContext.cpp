@@ -300,14 +300,12 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                                             can_sort_on_gpu,
                                                             output_columnar_,
                                                             render_allocator);
-    if (ra_exe_unit.use_bump_allocator) {
-      const auto max_matched = static_cast<int32_t>(gpu_group_by_buffers.entry_count);
-      copy_to_gpu(data_mgr,
-                  kernel_params[MAX_MATCHED],
-                  &max_matched,
-                  sizeof(max_matched),
-                  device_id);
-    }
+    const auto max_matched = static_cast<int32_t>(gpu_group_by_buffers.entry_count);
+    copy_to_gpu(data_mgr,
+                kernel_params[MAX_MATCHED],
+                &max_matched,
+                sizeof(max_matched),
+                device_id);
 
     kernel_params[GROUPBY_BUF] = gpu_group_by_buffers.first;
     std::vector<void*> param_ptrs;

@@ -3189,21 +3189,26 @@ int32_t Executor::executePlanWithGroupBy(
   }
 
   if (device_type == ExecutorDeviceType::CPU) {
+    const int32_t scan_limit_for_query =
+        ra_exe_unit_copy.union_all ? ra_exe_unit_copy.scan_limit : scan_limit;
+    const int32_t max_matched = scan_limit_for_query == 0
+                                    ? query_exe_context->query_mem_desc_.getEntryCount()
+                                    : scan_limit_for_query;
+
     auto cpu_generated_code = std::dynamic_pointer_cast<CpuCompilationContext>(
         compilation_result.generated_code);
     CHECK(cpu_generated_code);
-    query_exe_context->launchCpuCode(
-        ra_exe_unit_copy,
-        cpu_generated_code.get(),
-        hoist_literals,
-        hoist_buf,
-        col_buffers,
-        num_rows,
-        frag_offsets,
-        ra_exe_unit_copy.union_all ? ra_exe_unit_copy.scan_limit : scan_limit,
-        &error_code,
-        num_tables,
-        join_hash_table_ptrs);
+    query_exe_context->launchCpuCode(ra_exe_unit_copy,
+                                     cpu_generated_code.get(),
+                                     hoist_literals,
+                                     hoist_buf,
+                                     col_buffers,
+                                     num_rows,
+                                     frag_offsets,
+                                     max_matched,
+                                     &error_code,
+                                     num_tables,
+                                     join_hash_table_ptrs);
   } else {
     try {
       auto gpu_generated_code = std::dynamic_pointer_cast<GpuCompilationContext>(
