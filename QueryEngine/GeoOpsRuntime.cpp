@@ -36,7 +36,10 @@ extern "C" ALWAYS_INLINE double transform_900913_4326_x(const double x) {
 extern "C" ALWAYS_INLINE double transform_900913_4326_y(const double y) {
   constexpr double e_circ = 40075016.68;        // Earth's circumference, meters
   constexpr double e_circ_360 = e_circ / 360.;  // 111319.491
+  constexpr double e_cir_360_inverse = 1. / e_circ_360;
   const double e = exp(1.0);
   const double pi = acos(-1);
-  return atan(pow(e, (y / e_circ_360) * pi / 180.)) * 360. / pi - 90.;
+  const double radians_in_one_degree = pi / 180.;
+  const double m = 360. / pi;
+  return atan(pow(e, (y * e_cir_360_inverse) * radians_in_one_degree)) * m - 90.;
 }
