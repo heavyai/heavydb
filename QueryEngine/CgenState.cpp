@@ -251,11 +251,23 @@ struct GpuTanFunction : public GpuFunctionDefinition {
   }
 };
 
+struct GpuExpFunction : public GpuFunctionDefinition {
+  GpuExpFunction() : GpuFunctionDefinition("Exp") {}
+
+  llvm::FunctionCallee getFunction(llvm::Module* module,
+                                   llvm::LLVMContext& context) const final {
+    return module->getOrInsertFunction(name,
+                                       /*ret_type=*/llvm::Type::getDoubleTy(context),
+                                       /*args=*/llvm::Type::getDoubleTy(context));
+  }
+};
+
 static const std::unordered_map<std::string, std::shared_ptr<GpuFunctionDefinition>>
     gpu_replacement_functions{{"pow", std::make_shared<GpuPowerFunction>()},
                               {"atan", std::make_shared<GpuAtanFunction>()},
                               {"log", std::make_shared<GpuLogFunction>()},
-                              {"tan", std::make_shared<GpuTanFunction>()}};
+                              {"tan", std::make_shared<GpuTanFunction>()},
+                              {"exp", std::make_shared<GpuExpFunction>()}};
 
 }  // namespace
 
