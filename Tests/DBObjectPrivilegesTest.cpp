@@ -355,7 +355,7 @@ TEST_F(InvalidGrantSyntax, InvalidGrantSyntax) {
 
 TEST(UserRoles, InvalidGrantsRevokesTest) {
   run_ddl_statement("CREATE USER Antazin(password = 'password', is_super = 'false');");
-  run_ddl_statement("CREATE USER Max(password = 'password', is_super = 'false');");
+  run_ddl_statement("CREATE USER \"Max\"(password = 'password', is_super = 'false');");
 
   EXPECT_THROW(run_ddl_statement("GRANT Antazin to Antazin;"), std::runtime_error);
   EXPECT_THROW(run_ddl_statement("REVOKE Antazin from Antazin;"), std::runtime_error);
@@ -365,7 +365,7 @@ TEST(UserRoles, InvalidGrantsRevokesTest) {
   EXPECT_THROW(run_ddl_statement("REVOKE Max from Antazin;"), std::runtime_error);
 
   run_ddl_statement("DROP USER Antazin;");
-  run_ddl_statement("DROP USER Max;");
+  run_ddl_statement("DROP USER \"Max\";");
 }
 
 TEST(UserRoles, ValidNames) {
@@ -373,23 +373,24 @@ TEST(UserRoles, ValidNames) {
       run_ddl_statement("CREATE USER \"dumm.user\" (password = 'password');"));
   EXPECT_NO_THROW(run_ddl_statement("DROP USER \"dumm.user\";"));
   EXPECT_NO_THROW(run_ddl_statement("CREATE USER vasya (password = 'password');"));
-  EXPECT_NO_THROW(
-      run_ddl_statement("CREATE USER vasya.vasya@vasya.com (password = 'password');"));
   EXPECT_NO_THROW(run_ddl_statement(
-      "CREATE USER \"vasya ivanov\"@vasya.ivanov.com (password = 'password');"));
-  EXPECT_NO_THROW(run_ddl_statement("CREATE USER vasya-vasya (password = 'password');"));
+      "CREATE USER \"vasya.vasya@vasya.com\" (password = 'password');"));
+  EXPECT_NO_THROW(run_ddl_statement(
+      "CREATE USER \"vasya ivanov@vasya.ivanov.com\" (password = 'password');"));
+  EXPECT_NO_THROW(
+      run_ddl_statement("CREATE USER \"vasya-vasya\" (password = 'password');"));
   EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE developer;"));
   EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE developer-backend;"));
   EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE developer-backend-rendering;"));
   EXPECT_NO_THROW(run_ddl_statement("GRANT developer-backend-rendering TO vasya;"));
   EXPECT_NO_THROW(
-      run_ddl_statement("GRANT developer-backend TO \"vasya ivanov\"@vasya.ivanov.com;"));
+      run_ddl_statement("GRANT developer-backend TO \"vasya ivanov@vasya.ivanov.com\";"));
   EXPECT_NO_THROW(run_ddl_statement("GRANT developer TO vasya.vasya@vasya.com;"));
   EXPECT_NO_THROW(run_ddl_statement("GRANT developer-backend-rendering TO vasya-vasya;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP USER vasya;"));
-  EXPECT_NO_THROW(run_ddl_statement("DROP USER vasya.vasya@vasya.com;"));
-  EXPECT_NO_THROW(run_ddl_statement("DROP USER \"vasya ivanov\"@vasya.ivanov.com;"));
-  EXPECT_NO_THROW(run_ddl_statement("DROP USER vasya-vasya;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP USER \"vasya.vasya@vasya.com\";"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP USER \"vasya ivanov@vasya.ivanov.com\";"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP USER \"vasya-vasya\";"));
   EXPECT_NO_THROW(run_ddl_statement("DROP ROLE developer;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP ROLE developer-backend;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP ROLE developer-backend-rendering;"));

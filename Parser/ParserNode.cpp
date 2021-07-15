@@ -112,7 +112,7 @@ std::shared_ptr<Analyzer::Expr> StringLiteral::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  return analyzeValue(*stringval);
+  return analyzeValue(*stringval_);
 }
 
 std::shared_ptr<Analyzer::Expr> StringLiteral::analyzeValue(
@@ -127,7 +127,7 @@ std::shared_ptr<Analyzer::Expr> IntLiteral::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  return analyzeValue(intval);
+  return analyzeValue(intval_);
 }
 
 std::shared_ptr<Analyzer::Expr> IntLiteral::analyzeValue(const int64_t intval) {
@@ -151,7 +151,7 @@ std::shared_ptr<Analyzer::Expr> FixedPtLiteral::analyze(
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
   SQLTypeInfo ti(kNUMERIC, 0, 0, false);
-  Datum d = StringToDatum(*fixedptval, ti);
+  Datum d = StringToDatum(*fixedptval_, ti);
   return makeExpr<Analyzer::Constant>(ti, false, d);
 }
 
@@ -171,7 +171,7 @@ std::shared_ptr<Analyzer::Expr> FloatLiteral::analyze(
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
   Datum d;
-  d.floatval = floatval;
+  d.floatval = floatval_;
   return makeExpr<Analyzer::Constant>(kFLOAT, false, d);
 }
 
@@ -180,7 +180,7 @@ std::shared_ptr<Analyzer::Expr> DoubleLiteral::analyze(
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
   Datum d;
-  d.doubleval = doubleval;
+  d.doubleval = doubleval_;
   return makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
 }
 
@@ -218,7 +218,7 @@ std::shared_ptr<Analyzer::Expr> ArrayLiteral::analyze(
   SQLTypeInfo ti = SQLTypeInfo(kARRAY, true);
   bool set_subtype = true;
   std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-  for (auto& p : value_list) {
+  for (auto& p : value_list_) {
     auto e = p->analyze(catalog, query, allow_tlist_ref);
     CHECK(e);
     auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
@@ -243,7 +243,7 @@ std::shared_ptr<Analyzer::Expr> ArrayLiteral::analyze(
 std::string ArrayLiteral::to_string() const {
   std::string str = "{";
   bool notfirst = false;
-  for (auto& p : value_list) {
+  for (auto& p : value_list_) {
     if (notfirst) {
       str += ", ";
     } else {
@@ -259,26 +259,26 @@ std::shared_ptr<Analyzer::Expr> OperExpr::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  auto left_expr = left->analyze(catalog, query, allow_tlist_ref);
+  auto left_expr = left_->analyze(catalog, query, allow_tlist_ref);
   const auto& left_type = left_expr->get_type_info();
-  if (right == nullptr) {
+  if (right_ == nullptr) {
     return makeExpr<Analyzer::UOper>(
-        left_type, left_expr->get_contains_agg(), optype, left_expr->decompress());
+        left_type, left_expr->get_contains_agg(), optype_, left_expr->decompress());
   }
-  if (optype == kARRAY_AT) {
+  if (optype_ == kARRAY_AT) {
     if (left_type.get_type() != kARRAY) {
-      throw std::runtime_error(left->to_string() + " is not of array type.");
+      throw std::runtime_error(left_->to_string() + " is not of array type.");
     }
-    auto right_expr = right->analyze(catalog, query, allow_tlist_ref);
+    auto right_expr = right_->analyze(catalog, query, allow_tlist_ref);
     const auto& right_type = right_expr->get_type_info();
     if (!right_type.is_integer()) {
-      throw std::runtime_error(right->to_string() + " is not of integer type.");
+      throw std::runtime_error(right_->to_string() + " is not of integer type.");
     }
     return makeExpr<Analyzer::BinOper>(
         left_type.get_elem_type(), false, kARRAY_AT, kONE, left_expr, right_expr);
   }
-  auto right_expr = right->analyze(catalog, query, allow_tlist_ref);
-  return normalize(optype, opqualifier, left_expr, right_expr);
+  auto right_expr = right_->analyze(catalog, query, allow_tlist_ref);
+  return normalize(optype_, opqualifier_, left_expr, right_expr);
 }
 
 std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
@@ -374,9 +374,9 @@ std::shared_ptr<Analyzer::Expr> IsNullExpr::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+  auto arg_expr = arg_->analyze(catalog, query, allow_tlist_ref);
   auto result = makeExpr<Analyzer::UOper>(kBOOLEAN, kISNULL, arg_expr);
-  if (is_not) {
+  if (is_not_) {
     result = makeExpr<Analyzer::UOper>(kBOOLEAN, kNOT, result);
   }
   return result;
@@ -394,11 +394,11 @@ std::shared_ptr<Analyzer::Expr> InValues::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+  auto arg_expr = arg_->analyze(catalog, query, allow_tlist_ref);
   SQLTypeInfo ti = arg_expr->get_type_info();
   bool dict_comp = ti.get_compression() == kENCODING_DICT;
   std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-  for (auto& p : value_list) {
+  for (auto& p : value_list_) {
     auto e = p->analyze(catalog, query, allow_tlist_ref);
     if (ti != e->get_type_info()) {
       if (ti.is_string() && e->get_type_info().is_string()) {
@@ -426,7 +426,7 @@ std::shared_ptr<Analyzer::Expr> InValues::analyze(
   }
   std::shared_ptr<Analyzer::Expr> result =
       makeExpr<Analyzer::InValues>(arg_expr, value_exprs);
-  if (is_not) {
+  if (is_not_) {
     result = makeExpr<Analyzer::UOper>(kBOOLEAN, kNOT, result);
   }
   return result;
@@ -436,9 +436,9 @@ std::shared_ptr<Analyzer::Expr> BetweenExpr::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-  auto lower_expr = lower->analyze(catalog, query, allow_tlist_ref);
-  auto upper_expr = upper->analyze(catalog, query, allow_tlist_ref);
+  auto arg_expr = arg_->analyze(catalog, query, allow_tlist_ref);
+  auto lower_expr = lower_->analyze(catalog, query, allow_tlist_ref);
+  auto upper_expr = upper_->analyze(catalog, query, allow_tlist_ref);
   SQLTypeInfo new_left_type, new_right_type;
   (void)Analyzer::BinOper::analyze_type_info(kGE,
                                              arg_expr->get_type_info(),
@@ -464,7 +464,7 @@ std::shared_ptr<Analyzer::Expr> BetweenExpr::analyze(
       upper_expr->add_cast(new_right_type)->decompress());
   std::shared_ptr<Analyzer::Expr> result =
       makeExpr<Analyzer::BinOper>(kBOOLEAN, kAND, kONE, lower_pred, upper_pred);
-  if (is_not) {
+  if (is_not_) {
     result = makeExpr<Analyzer::UOper>(kBOOLEAN, kNOT, result);
   }
   return result;
@@ -474,13 +474,13 @@ std::shared_ptr<Analyzer::Expr> CharLengthExpr::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+  auto arg_expr = arg_->analyze(catalog, query, allow_tlist_ref);
   if (!arg_expr->get_type_info().is_string()) {
     throw std::runtime_error(
         "expression in char_length clause must be of a string type.");
   }
   std::shared_ptr<Analyzer::Expr> result =
-      makeExpr<Analyzer::CharLengthExpr>(arg_expr->decompress(), calc_encoded_length);
+      makeExpr<Analyzer::CharLengthExpr>(arg_expr->decompress(), calc_encoded_length_);
   return result;
 }
 
@@ -488,7 +488,7 @@ std::shared_ptr<Analyzer::Expr> CardinalityExpr::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+  auto arg_expr = arg_->analyze(catalog, query, allow_tlist_ref);
   if (!arg_expr->get_type_info().is_array()) {
     throw std::runtime_error(
         "expression in cardinality clause must be of an array type.");
@@ -548,12 +548,12 @@ std::shared_ptr<Analyzer::Expr> LikeExpr::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-  auto like_expr = like_string->analyze(catalog, query, allow_tlist_ref);
-  auto escape_expr = escape_string == nullptr
+  auto arg_expr = arg_->analyze(catalog, query, allow_tlist_ref);
+  auto like_expr = like_string_->analyze(catalog, query, allow_tlist_ref);
+  auto escape_expr = escape_string_ == nullptr
                          ? nullptr
-                         : escape_string->analyze(catalog, query, allow_tlist_ref);
-  return LikeExpr::get(arg_expr, like_expr, escape_expr, is_ilike, is_not);
+                         : escape_string_->analyze(catalog, query, allow_tlist_ref);
+  return LikeExpr::get(arg_expr, like_expr, escape_expr, is_ilike_, is_not_);
 }
 
 std::shared_ptr<Analyzer::Expr> LikeExpr::get(std::shared_ptr<Analyzer::Expr> arg_expr,
@@ -643,12 +643,12 @@ std::shared_ptr<Analyzer::Expr> RegexpExpr::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-  auto pattern_expr = pattern_string->analyze(catalog, query, allow_tlist_ref);
-  auto escape_expr = escape_string == nullptr
+  auto arg_expr = arg_->analyze(catalog, query, allow_tlist_ref);
+  auto pattern_expr = pattern_string_->analyze(catalog, query, allow_tlist_ref);
+  auto escape_expr = escape_string_ == nullptr
                          ? nullptr
-                         : escape_string->analyze(catalog, query, allow_tlist_ref);
-  return RegexpExpr::get(arg_expr, pattern_expr, escape_expr, is_not);
+                         : escape_string_->analyze(catalog, query, allow_tlist_ref);
+  return RegexpExpr::get(arg_expr, pattern_expr, escape_expr, is_not_);
 }
 
 std::shared_ptr<Analyzer::Expr> RegexpExpr::get(
@@ -698,8 +698,8 @@ std::shared_ptr<Analyzer::Expr> LikelihoodExpr::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-  return LikelihoodExpr::get(arg_expr, likelihood, is_not);
+  auto arg_expr = arg_->analyze(catalog, query, allow_tlist_ref);
+  return LikelihoodExpr::get(arg_expr, likelihood_, is_not_);
 }
 
 std::shared_ptr<Analyzer::Expr> LikelihoodExpr::get(
@@ -729,32 +729,32 @@ std::shared_ptr<Analyzer::Expr> ColumnRef::analyze(
   int table_id{0};
   int rte_idx{0};
   const ColumnDescriptor* cd{nullptr};
-  if (column == nullptr) {
+  if (column_ == nullptr) {
     throw std::runtime_error("invalid column name *.");
   }
-  if (table != nullptr) {
-    rte_idx = query.get_rte_idx(*table);
+  if (table_ != nullptr) {
+    rte_idx = query.get_rte_idx(*table_);
     if (rte_idx < 0) {
-      throw std::runtime_error("range variable or table name " + *table +
+      throw std::runtime_error("range variable or table name " + *table_ +
                                " does not exist.");
     }
     Analyzer::RangeTableEntry* rte = query.get_rte(rte_idx);
-    cd = rte->get_column_desc(catalog, *column);
+    cd = rte->get_column_desc(catalog, *column_);
     if (cd == nullptr) {
-      throw std::runtime_error("Column name " + *column + " does not exist.");
+      throw std::runtime_error("Column name " + *column_ + " does not exist.");
     }
     table_id = rte->get_table_id();
   } else {
     bool found = false;
     int i = 0;
     for (auto rte : query.get_rangetable()) {
-      cd = rte->get_column_desc(catalog, *column);
+      cd = rte->get_column_desc(catalog, *column_);
       if (cd != nullptr && !found) {
         found = true;
         rte_idx = i;
         table_id = rte->get_table_id();
       } else if (cd != nullptr && found) {
-        throw std::runtime_error("Column name " + *column + " is ambiguous.");
+        throw std::runtime_error("Column name " + *column_ + " is ambiguous.");
       }
       i++;
     }
@@ -765,12 +765,12 @@ std::shared_ptr<Analyzer::Expr> ColumnRef::analyze(
       int i = 1;
       std::shared_ptr<Analyzer::TargetEntry> tle;
       for (auto p : query.get_targetlist()) {
-        if (*column == p->get_resname() && !found) {
+        if (*column_ == p->get_resname() && !found) {
           found = true;
           varno = i;
           tle = p;
-        } else if (*column == p->get_resname() && found) {
-          throw std::runtime_error("Output alias " + *column + " is ambiguous.");
+        } else if (*column_ == p->get_resname() && found) {
+          throw std::runtime_error("Output alias " + *column_ + " is ambiguous.");
         }
         i++;
       }
@@ -790,7 +790,7 @@ std::shared_ptr<Analyzer::Expr> ColumnRef::analyze(
       }
     }
     if (cd == nullptr) {
-      throw std::runtime_error("Column name " + *column + " does not exist.");
+      throw std::runtime_error("Column name " + *column_ + " does not exist.");
     }
   }
   return makeExpr<Analyzer::ColumnVar>(cd->columnType, table_id, cd->columnId, rte_idx);
@@ -804,61 +804,61 @@ std::shared_ptr<Analyzer::Expr> FunctionRef::analyze(
   SQLAgg agg_type;
   std::shared_ptr<Analyzer::Expr> arg_expr;
   bool is_distinct = false;
-  if (boost::iequals(*name, "count")) {
+  if (boost::iequals(*name_, "count")) {
     result_type = SQLTypeInfo(kBIGINT, false);
     agg_type = kCOUNT;
-    if (arg) {
-      arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+    if (arg_) {
+      arg_expr = arg_->analyze(catalog, query, allow_tlist_ref);
       const SQLTypeInfo& ti = arg_expr->get_type_info();
-      if (ti.is_string() && (ti.get_compression() != kENCODING_DICT || !distinct)) {
+      if (ti.is_string() && (ti.get_compression() != kENCODING_DICT || !distinct_)) {
         throw std::runtime_error(
             "Strings must be dictionary-encoded in COUNT(DISTINCT).");
       }
-      if (ti.get_type() == kARRAY && !distinct) {
+      if (ti.get_type() == kARRAY && !distinct_) {
         throw std::runtime_error("Only COUNT(DISTINCT) is supported on arrays.");
       }
     }
-    is_distinct = distinct;
+    is_distinct = distinct_;
   } else {
-    if (!arg) {
-      throw std::runtime_error("Cannot compute " + *name + " with argument '*'.");
+    if (!arg_) {
+      throw std::runtime_error("Cannot compute " + *name_ + " with argument '*'.");
     }
-    if (boost::iequals(*name, "min")) {
+    if (boost::iequals(*name_, "min")) {
       agg_type = kMIN;
-      arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+      arg_expr = arg_->analyze(catalog, query, allow_tlist_ref);
       arg_expr = arg_expr->decompress();
       result_type = arg_expr->get_type_info();
-    } else if (boost::iequals(*name, "max")) {
+    } else if (boost::iequals(*name_, "max")) {
       agg_type = kMAX;
-      arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+      arg_expr = arg_->analyze(catalog, query, allow_tlist_ref);
       arg_expr = arg_expr->decompress();
       result_type = arg_expr->get_type_info();
-    } else if (boost::iequals(*name, "avg")) {
+    } else if (boost::iequals(*name_, "avg")) {
       agg_type = kAVG;
-      arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+      arg_expr = arg_->analyze(catalog, query, allow_tlist_ref);
       if (!arg_expr->get_type_info().is_number()) {
         throw std::runtime_error("Cannot compute AVG on non-number-type arguments.");
       }
       arg_expr = arg_expr->decompress();
       result_type = SQLTypeInfo(kDOUBLE, false);
-    } else if (boost::iequals(*name, "sum")) {
+    } else if (boost::iequals(*name_, "sum")) {
       agg_type = kSUM;
-      arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+      arg_expr = arg_->analyze(catalog, query, allow_tlist_ref);
       if (!arg_expr->get_type_info().is_number()) {
         throw std::runtime_error("Cannot compute SUM on non-number-type arguments.");
       }
       arg_expr = arg_expr->decompress();
       result_type = arg_expr->get_type_info().is_integer() ? SQLTypeInfo(kBIGINT, false)
                                                            : arg_expr->get_type_info();
-    } else if (boost::iequals(*name, "unnest")) {
-      arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+    } else if (boost::iequals(*name_, "unnest")) {
+      arg_expr = arg_->analyze(catalog, query, allow_tlist_ref);
       const SQLTypeInfo& arg_ti = arg_expr->get_type_info();
       if (arg_ti.get_type() != kARRAY) {
-        throw std::runtime_error(arg->to_string() + " is not of array type.");
+        throw std::runtime_error(arg_->to_string() + " is not of array type.");
       }
       return makeExpr<Analyzer::UOper>(arg_ti.get_elem_type(), false, kUNNEST, arg_expr);
     } else {
-      throw std::runtime_error("invalid function name: " + *name);
+      throw std::runtime_error("invalid function name: " + *name_);
     }
     if (arg_expr->get_type_info().is_string() ||
         arg_expr->get_type_info().get_type() == kARRAY) {
@@ -876,13 +876,13 @@ std::shared_ptr<Analyzer::Expr> CastExpr::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  target_type->check_type();
-  auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-  SQLTypeInfo ti(target_type->get_type(),
-                 target_type->get_param1(),
-                 target_type->get_param2(),
+  target_type_->check_type();
+  auto arg_expr = arg_->analyze(catalog, query, allow_tlist_ref);
+  SQLTypeInfo ti(target_type_->get_type(),
+                 target_type_->get_param1(),
+                 target_type_->get_param2(),
                  arg_expr->get_type_info().get_notnull());
-  if (arg_expr->get_type_info().get_type() != target_type->get_type() &&
+  if (arg_expr->get_type_info().get_type() != target_type_->get_type() &&
       arg_expr->get_type_info().get_compression() != kENCODING_NONE) {
     arg_expr->decompress();
   }
@@ -896,7 +896,7 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::analyze(
   SQLTypeInfo ti;
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
       expr_pair_list;
-  for (auto& p : when_then_list) {
+  for (auto& p : when_then_list_) {
     auto e1 = p->get_expr1()->analyze(catalog, query, allow_tlist_ref);
     if (e1->get_type_info().get_type() != kBOOLEAN) {
       throw std::runtime_error("Only boolean expressions can be used after WHEN.");
@@ -904,7 +904,8 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::analyze(
     auto e2 = p->get_expr2()->analyze(catalog, query, allow_tlist_ref);
     expr_pair_list.emplace_back(e1, e2);
   }
-  auto else_e = else_expr ? else_expr->analyze(catalog, query, allow_tlist_ref) : nullptr;
+  auto else_e =
+      else_expr_ ? else_expr_->analyze(catalog, query, allow_tlist_ref) : nullptr;
   return normalize(expr_pair_list, else_e);
 }
 
@@ -1044,12 +1045,12 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
 
 std::string CaseExpr::to_string() const {
   std::string str("CASE ");
-  for (auto& p : when_then_list) {
+  for (auto& p : when_then_list_) {
     str += "WHEN " + p->get_expr1()->to_string() + " THEN " +
            p->get_expr2()->to_string() + " ";
   }
-  if (else_expr != nullptr) {
-    str += "ELSE " + else_expr->to_string();
+  if (else_expr_ != nullptr) {
+    str += "ELSE " + else_expr_->to_string();
   }
   str += " END";
   return str;
@@ -1057,18 +1058,18 @@ std::string CaseExpr::to_string() const {
 
 void UnionQuery::analyze(const Catalog_Namespace::Catalog& catalog,
                          Analyzer::Query& query) const {
-  left->analyze(catalog, query);
+  left_->analyze(catalog, query);
   Analyzer::Query* right_query = new Analyzer::Query();
-  right->analyze(catalog, *right_query);
+  right_->analyze(catalog, *right_query);
   query.set_next_query(right_query);
-  query.set_is_unionall(is_unionall);
+  query.set_is_unionall(is_unionall_);
 }
 
 void QuerySpec::analyze_having_clause(const Catalog_Namespace::Catalog& catalog,
                                       Analyzer::Query& query) const {
   std::shared_ptr<Analyzer::Expr> p;
-  if (having_clause != nullptr) {
-    p = having_clause->analyze(catalog, query, Expr::TlistRefType::TLIST_COPY);
+  if (having_clause_ != nullptr) {
+    p = having_clause_->analyze(catalog, query, Expr::TlistRefType::TLIST_COPY);
     if (p->get_type_info().get_type() != kBOOLEAN) {
       throw std::runtime_error("Only boolean expressions can be in HAVING clause.");
     }
@@ -1080,12 +1081,12 @@ void QuerySpec::analyze_having_clause(const Catalog_Namespace::Catalog& catalog,
 void QuerySpec::analyze_group_by(const Catalog_Namespace::Catalog& catalog,
                                  Analyzer::Query& query) const {
   std::list<std::shared_ptr<Analyzer::Expr>> groupby;
-  if (!groupby_clause.empty()) {
+  if (!groupby_clause_.empty()) {
     int gexpr_no = 1;
     std::shared_ptr<Analyzer::Expr> gexpr;
     const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist =
         query.get_targetlist();
-    for (auto& c : groupby_clause) {
+    for (auto& c : groupby_clause_) {
       // special-case ordinal numbers in GROUP BY
       if (dynamic_cast<Literal*>(c.get())) {
         IntLiteral* i = dynamic_cast<IntLiteral*>(c.get());
@@ -1153,11 +1154,11 @@ void QuerySpec::analyze_group_by(const Catalog_Namespace::Catalog& catalog,
 
 void QuerySpec::analyze_where_clause(const Catalog_Namespace::Catalog& catalog,
                                      Analyzer::Query& query) const {
-  if (where_clause == nullptr) {
+  if (where_clause_ == nullptr) {
     query.set_where_predicate(nullptr);
     return;
   }
-  auto p = where_clause->analyze(catalog, query, Expr::TlistRefType::TLIST_COPY);
+  auto p = where_clause_->analyze(catalog, query, Expr::TlistRefType::TLIST_COPY);
   if (p->get_type_info().get_type() != kBOOLEAN) {
     throw std::runtime_error("Only boolean expressions can be in WHERE clause.");
   }
@@ -1168,14 +1169,14 @@ void QuerySpec::analyze_select_clause(const Catalog_Namespace::Catalog& catalog,
                                       Analyzer::Query& query) const {
   std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist =
       query.get_targetlist_nonconst();
-  if (select_clause.empty()) {
+  if (select_clause_.empty()) {
     // this means SELECT *
     int rte_idx = 0;
     for (auto rte : query.get_rangetable()) {
       rte->expand_star_in_targetlist(catalog, tlist, rte_idx++);
     }
   } else {
-    for (auto& p : select_clause) {
+    for (auto& p : select_clause_) {
       const Parser::Expr* select_expr = p->get_select_expr();
       // look for the case of range_var.*
       if (typeid(*select_expr) == typeid(ColumnRef) &&
@@ -1217,7 +1218,7 @@ void QuerySpec::analyze_select_clause(const Catalog_Namespace::Catalog& catalog,
 void QuerySpec::analyze_from_clause(const Catalog_Namespace::Catalog& catalog,
                                     Analyzer::Query& query) const {
   Analyzer::RangeTableEntry* rte;
-  for (auto& p : from_clause) {
+  for (auto& p : from_clause_) {
     const TableDescriptor* table_desc;
     table_desc = catalog.getMetadataForTable(*p->get_table_name());
     if (table_desc == nullptr) {
@@ -1236,7 +1237,7 @@ void QuerySpec::analyze_from_clause(const Catalog_Namespace::Catalog& catalog,
 
 void QuerySpec::analyze(const Catalog_Namespace::Catalog& catalog,
                         Analyzer::Query& query) const {
-  query.set_is_distinct(is_distinct);
+  query.set_is_distinct(is_distinct_);
   analyze_from_clause(catalog, query);
   analyze_select_clause(catalog, query);
   analyze_where_clause(catalog, query);
@@ -1247,21 +1248,21 @@ void QuerySpec::analyze(const Catalog_Namespace::Catalog& catalog,
 void SelectStmt::analyze(const Catalog_Namespace::Catalog& catalog,
                          Analyzer::Query& query) const {
   query.set_stmt_type(kSELECT);
-  query.set_limit(limit);
-  if (offset < 0) {
+  query.set_limit(limit_);
+  if (offset_ < 0) {
     throw std::runtime_error("OFFSET cannot be negative.");
   }
-  query.set_offset(offset);
-  query_expr->analyze(catalog, query);
-  if (orderby_clause.empty() && !query.get_is_distinct()) {
+  query.set_offset(offset_);
+  query_expr_->analyze(catalog, query);
+  if (orderby_clause_.empty() && !query.get_is_distinct()) {
     query.set_order_by(nullptr);
     return;
   }
   const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist =
       query.get_targetlist();
   std::list<Analyzer::OrderEntry>* order_by = new std::list<Analyzer::OrderEntry>();
-  if (!orderby_clause.empty()) {
-    for (auto& p : orderby_clause) {
+  if (!orderby_clause_.empty()) {
+    for (auto& p : orderby_clause_) {
       int tle_no = p->get_colno();
       if (tle_no == 0) {
         // use column name
@@ -1302,29 +1303,29 @@ void SelectStmt::analyze(const Catalog_Namespace::Catalog& catalog,
 }
 
 std::string SelectEntry::to_string() const {
-  std::string str = select_expr->to_string();
-  if (alias != nullptr) {
-    str += " AS " + *alias;
+  std::string str = select_expr_->to_string();
+  if (alias_ != nullptr) {
+    str += " AS " + *alias_;
   }
   return str;
 }
 
 std::string TableRef::to_string() const {
-  std::string str = *table_name;
-  if (range_var != nullptr) {
-    str += " " + *range_var;
+  std::string str = *table_name_;
+  if (range_var_ != nullptr) {
+    str += " " + *range_var_;
   }
   return str;
 }
 
 std::string ColumnRef::to_string() const {
   std::string str;
-  if (table == nullptr) {
-    str = *column;
-  } else if (column == nullptr) {
-    str = *table + ".*";
+  if (table_ == nullptr) {
+    str = *column_;
+  } else if (column_ == nullptr) {
+    str = *table_ + ".*";
   } else {
-    str = *table + "." + *column;
+    str = *table_ + "." + *column_;
   }
   return str;
 }
@@ -1333,25 +1334,25 @@ std::string OperExpr::to_string() const {
   std::string op_str[] = {
       "=", "===", "<>", "<", ">", "<=", ">=", " AND ", " OR ", "NOT", "-", "+", "*", "/"};
   std::string str;
-  if (optype == kUMINUS) {
-    str = "-(" + left->to_string() + ")";
-  } else if (optype == kNOT) {
-    str = "NOT (" + left->to_string() + ")";
-  } else if (optype == kARRAY_AT) {
-    str = left->to_string() + "[" + right->to_string() + "]";
-  } else if (optype == kUNNEST) {
-    str = "UNNEST(" + left->to_string() + ")";
-  } else if (optype == kIN) {
-    str = "(" + left->to_string() + " IN " + right->to_string() + ")";
+  if (optype_ == kUMINUS) {
+    str = "-(" + left_->to_string() + ")";
+  } else if (optype_ == kNOT) {
+    str = "NOT (" + left_->to_string() + ")";
+  } else if (optype_ == kARRAY_AT) {
+    str = left_->to_string() + "[" + right_->to_string() + "]";
+  } else if (optype_ == kUNNEST) {
+    str = "UNNEST(" + left_->to_string() + ")";
+  } else if (optype_ == kIN) {
+    str = "(" + left_->to_string() + " IN " + right_->to_string() + ")";
   } else {
-    str = "(" + left->to_string() + op_str[optype] + right->to_string() + ")";
+    str = "(" + left_->to_string() + op_str[optype_] + right_->to_string() + ")";
   }
   return str;
 }
 
 std::string InExpr::to_string() const {
-  std::string str = arg->to_string();
-  if (is_not) {
+  std::string str = arg_->to_string();
+  if (is_not_) {
     str += " NOT IN ";
   } else {
     str += " IN ";
@@ -1360,20 +1361,20 @@ std::string InExpr::to_string() const {
 }
 
 std::string ExistsExpr::to_string() const {
-  return "EXISTS (" + query->to_string() + ")";
+  return "EXISTS (" + query_->to_string() + ")";
 }
 
 std::string SubqueryExpr::to_string() const {
   std::string str;
   str = "(";
-  str += query->to_string();
+  str += query_->to_string();
   str += ")";
   return str;
 }
 
 std::string IsNullExpr::to_string() const {
-  std::string str = arg->to_string();
-  if (is_not) {
+  std::string str = arg_->to_string();
+  if (is_not_) {
     str += " IS NOT NULL";
   } else {
     str += " IS NULL";
@@ -1383,14 +1384,14 @@ std::string IsNullExpr::to_string() const {
 
 std::string InSubquery::to_string() const {
   std::string str = InExpr::to_string();
-  str += subquery->to_string();
+  str += subquery_->to_string();
   return str;
 }
 
 std::string InValues::to_string() const {
   std::string str = InExpr::to_string() + "(";
   bool notfirst = false;
-  for (auto& p : value_list) {
+  for (auto& p : value_list_) {
     if (notfirst) {
       str += ", ";
     } else {
@@ -1403,90 +1404,90 @@ std::string InValues::to_string() const {
 }
 
 std::string BetweenExpr::to_string() const {
-  std::string str = arg->to_string();
-  if (is_not) {
+  std::string str = arg_->to_string();
+  if (is_not_) {
     str += " NOT BETWEEN ";
   } else {
     str += " BETWEEN ";
   }
-  str += lower->to_string() + " AND " + upper->to_string();
+  str += lower_->to_string() + " AND " + upper_->to_string();
   return str;
 }
 
 std::string CharLengthExpr::to_string() const {
   std::string str;
-  if (calc_encoded_length) {
-    str = "CHAR_LENGTH (" + arg->to_string() + ")";
+  if (calc_encoded_length_) {
+    str = "CHAR_LENGTH (" + arg_->to_string() + ")";
   } else {
-    str = "LENGTH (" + arg->to_string() + ")";
+    str = "LENGTH (" + arg_->to_string() + ")";
   }
   return str;
 }
 
 std::string CardinalityExpr::to_string() const {
-  std::string str = "CARDINALITY(" + arg->to_string() + ")";
+  std::string str = "CARDINALITY(" + arg_->to_string() + ")";
   return str;
 }
 
 std::string LikeExpr::to_string() const {
-  std::string str = arg->to_string();
-  if (is_not) {
+  std::string str = arg_->to_string();
+  if (is_not_) {
     str += " NOT LIKE ";
   } else {
     str += " LIKE ";
   }
-  str += like_string->to_string();
-  if (escape_string != nullptr) {
-    str += " ESCAPE " + escape_string->to_string();
+  str += like_string_->to_string();
+  if (escape_string_ != nullptr) {
+    str += " ESCAPE " + escape_string_->to_string();
   }
   return str;
 }
 
 std::string RegexpExpr::to_string() const {
-  std::string str = arg->to_string();
-  if (is_not) {
+  std::string str = arg_->to_string();
+  if (is_not_) {
     str += " NOT REGEXP ";
   } else {
     str += " REGEXP ";
   }
-  str += pattern_string->to_string();
-  if (escape_string != nullptr) {
-    str += " ESCAPE " + escape_string->to_string();
+  str += pattern_string_->to_string();
+  if (escape_string_ != nullptr) {
+    str += " ESCAPE " + escape_string_->to_string();
   }
   return str;
 }
 
 std::string LikelihoodExpr::to_string() const {
   std::string str = " LIKELIHOOD ";
-  str += arg->to_string();
+  str += arg_->to_string();
   str += " ";
-  str += boost::lexical_cast<std::string>(is_not ? 1.0 - likelihood : likelihood);
+  str += boost::lexical_cast<std::string>(is_not_ ? 1.0 - likelihood_ : likelihood_);
   return str;
 }
 
 std::string FunctionRef::to_string() const {
-  std::string str = *name + "(";
-  if (distinct) {
+  std::string str = *name_ + "(";
+  if (distinct_) {
     str += "DISTINCT ";
   }
-  if (arg == nullptr) {
+  if (arg_ == nullptr) {
     str += "*)";
   } else {
-    str += arg->to_string() + ")";
+    str += arg_->to_string() + ")";
   }
   return str;
 }
 
 std::string QuerySpec::to_string() const {
   std::string query_str = "SELECT ";
-  if (is_distinct) {
+  if (is_distinct_) {
     query_str += "DISTINCT ";
   }
-  if (select_clause.empty()) {
+  if (select_clause_.empty()) {
     query_str += "* ";
   } else {
     bool notfirst = false;
-    for (auto& p : select_clause) {
+    for (auto& p : select_clause_) {
       if (notfirst) {
         query_str += ", ";
       } else {
@@ -1497,7 +1498,7 @@ std::string QuerySpec::to_string() const {
   }
   query_str += " FROM ";
   bool notfirst = false;
-  for (auto& p : from_clause) {
+  for (auto& p : from_clause_) {
     if (notfirst) {
       query_str += ", ";
     } else {
@@ -1505,13 +1506,13 @@ std::string QuerySpec::to_string() const {
     }
     query_str += p->to_string();
   }
-  if (where_clause) {
-    query_str += " WHERE " + where_clause->to_string();
+  if (where_clause_) {
+    query_str += " WHERE " + where_clause_->to_string();
   }
-  if (!groupby_clause.empty()) {
+  if (!groupby_clause_.empty()) {
     query_str += " GROUP BY ";
     bool notfirst = false;
-    for (auto& p : groupby_clause) {
+    for (auto& p : groupby_clause_) {
       if (notfirst) {
         query_str += ", ";
       } else {
@@ -1520,8 +1521,8 @@ std::string QuerySpec::to_string() const {
       query_str += p->to_string();
     }
   }
-  if (having_clause) {
-    query_str += " HAVING " + having_clause->to_string();
+  if (having_clause_) {
+    query_str += " HAVING " + having_clause_->to_string();
   }
   query_str += ";";
   return query_str;
@@ -1530,9 +1531,9 @@ std::string QuerySpec::to_string() const {
 void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog,
                          Analyzer::Query& query) const {
   query.set_stmt_type(kINSERT);
-  const TableDescriptor* td = catalog.getMetadataForTable(*table);
+  const TableDescriptor* td = catalog.getMetadataForTable(*table_);
   if (td == nullptr) {
-    throw std::runtime_error("Table " + *table + " does not exist.");
+    throw std::runtime_error("Table " + *table_ + " does not exist.");
   }
   if (td->isView) {
     throw std::runtime_error("Insert to views is not supported yet.");
@@ -1540,14 +1541,14 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog,
   foreign_storage::validate_non_foreign_table_write(td);
   query.set_result_table_id(td->tableId);
   std::list<int> result_col_list;
-  if (column_list.empty()) {
+  if (column_list_.empty()) {
     const std::list<const ColumnDescriptor*> all_cols =
         catalog.getAllColumnMetadataForTable(td->tableId, false, false, true);
     for (auto cd : all_cols) {
       result_col_list.push_back(cd->columnId);
     }
   } else {
-    for (auto& c : column_list) {
+    for (auto& c : column_list_) {
       const ColumnDescriptor* cd = catalog.getMetadataForColumn(td->tableId, *c);
       if (cd == nullptr) {
         throw std::runtime_error("Column " + *c + " does not exist.");
@@ -1572,9 +1573,9 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog,
 
 size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& catalog,
                                             size_t num_leafs) {
-  const TableDescriptor* td = catalog.getMetadataForTable(*table);
+  const TableDescriptor* td = catalog.getMetadataForTable(*table_);
   if (td == nullptr) {
-    throw std::runtime_error("Table " + *table + " does not exist.");
+    throw std::runtime_error("Table " + *table_ + " does not exist.");
   }
   if (td->isView) {
     throw std::runtime_error("Insert to views is not supported yet.");
@@ -1598,32 +1599,32 @@ size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& ca
   auto shard_count = td->nShards * num_leafs;
   int64_t shardId = 0;
 
-  if (column_list.empty()) {
+  if (column_list_.empty()) {
     auto all_cols =
         catalog.getAllColumnMetadataForTable(td->tableId, false, false, false);
     auto iter = std::find(all_cols.begin(), all_cols.end(), shardColumn);
     CHECK(iter != all_cols.end());
     indexOfShardColumn = std::distance(all_cols.begin(), iter);
   } else {
-    for (auto& c : column_list) {
+    for (auto& c : column_list_) {
       if (*c == shardColumn->columnName) {
         break;
       }
       indexOfShardColumn++;
     }
 
-    if (indexOfShardColumn == column_list.size()) {
+    if (indexOfShardColumn == column_list_.size()) {
       shardId = SHARD_FOR_KEY(inline_fixed_encoding_null_val(shardColumn->columnType),
                               shard_count);
       return shardId / td->nShards;
     }
   }
 
-  if (indexOfShardColumn >= value_list.size()) {
+  if (indexOfShardColumn >= value_list_.size()) {
     throw std::runtime_error("No value defined for shard column.");
   }
 
-  auto& shardColumnValueExpr = *(std::next(value_list.begin(), indexOfShardColumn));
+  auto& shardColumnValueExpr = *(std::next(value_list_.begin(), indexOfShardColumn));
 
   Analyzer::Query query;
   auto e = shardColumnValueExpr->analyze(catalog, query);
@@ -1687,8 +1688,8 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
   std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist =
       query.get_targetlist_nonconst();
   const auto tableId = query.get_result_table_id();
-  if (!column_list.empty()) {
-    if (value_list.size() != column_list.size()) {
+  if (!column_list_.empty()) {
+    if (value_list_.size() != column_list_.size()) {
       throw std::runtime_error(
           "Numbers of columns and values don't match for the "
           "insert.");
@@ -1696,14 +1697,14 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
   } else {
     const std::list<const ColumnDescriptor*> non_phys_cols =
         catalog.getAllColumnMetadataForTable(tableId, false, false, false);
-    if (non_phys_cols.size() != value_list.size()) {
+    if (non_phys_cols.size() != value_list_.size()) {
       throw std::runtime_error(
           "Number of columns in table does not match the list of values given in the "
           "insert.");
     }
   }
   std::list<int>::const_iterator it = query.get_result_col_list().begin();
-  for (auto& v : value_list) {
+  for (auto& v : value_list_) {
     auto e = v->analyze(catalog, query);
     const ColumnDescriptor* cd =
         catalog.getMetadataForColumn(query.get_result_table_id(), *it);
@@ -1902,9 +1903,10 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
 void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
-  if (!session.checkDBAccessPrivileges(
-          DBObjectType::TableDBObjectType, AccessPrivileges::INSERT_INTO_TABLE, *table)) {
-    throw std::runtime_error("User has no insert privileges on " + *table + ".");
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
+                                       AccessPrivileges::INSERT_INTO_TABLE,
+                                       *table_)) {
+    throw std::runtime_error("User has no insert privileges on " + *table_ + ".");
   }
 
   auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
@@ -3640,11 +3642,11 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
 DropTableStmt::DropTableStmt(const rapidjson::Value& payload) {
   CHECK(payload.HasMember("tableName"));
-  table = std::make_unique<std::string>(json_str(payload["tableName"]));
+  table_ = std::make_unique<std::string>(json_str(payload["tableName"]));
 
-  if_exists = false;
+  if_exists_ = false;
   if (payload.HasMember("ifExists")) {
-    if_exists = json_bool(payload["ifExists"]);
+    if_exists_ = json_bool(payload["ifExists"]);
   }
 }
 
@@ -3663,10 +3665,10 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     td_with_lock =
         std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
             lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-                catalog, *table, false));
+                catalog, *table_, false));
     td = (*td_with_lock)();
   } catch (const std::runtime_error& e) {
-    if (if_exists) {
+    if (if_exists_) {
       return;
     } else {
       throw e;
@@ -3678,15 +3680,15 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   // check access privileges
   if (!session.checkDBAccessPrivileges(
-          DBObjectType::TableDBObjectType, AccessPrivileges::DROP_TABLE, *table)) {
-    throw std::runtime_error("Table " + *table +
+          DBObjectType::TableDBObjectType, AccessPrivileges::DROP_TABLE, *table_)) {
+    throw std::runtime_error("Table " + *table_ +
                              " will not be dropped. User has no proper privileges.");
   }
 
   ddl_utils::validate_table_type(td, ddl_utils::TableType::TABLE, "DROP");
 
   auto table_data_write_lock =
-      lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table);
+      lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table_);
   catalog.dropTable(td);
 
   // invalidate cached hashtable
@@ -3808,30 +3810,30 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-          catalog, *table, true);
+          catalog, *table_, true);
   const auto td = td_with_lock();
   if (!td) {
-    throw std::runtime_error("Table " + *table + " does not exist.");
+    throw std::runtime_error("Table " + *table_ + " does not exist.");
   }
 
   // check access privileges
   std::vector<DBObject> privObjects;
-  DBObject dbObject(*table, TableDBObjectType);
+  DBObject dbObject(*table_, TableDBObjectType);
   dbObject.loadKey(catalog);
   dbObject.setPrivileges(AccessPrivileges::TRUNCATE_TABLE);
   privObjects.push_back(dbObject);
   if (!SysCatalog::instance().checkPrivileges(session.get_currentUser(), privObjects)) {
-    throw std::runtime_error("Table " + *table + " will not be truncated. User " +
+    throw std::runtime_error("Table " + *table_ + " will not be truncated. User " +
                              session.get_currentUser().userLoggable() +
                              " has no proper privileges.");
   }
 
   if (td->isView) {
-    throw std::runtime_error(*table + " is a view.  Cannot Truncate.");
+    throw std::runtime_error(*table_ + " is a view.  Cannot Truncate.");
   }
   foreign_storage::validate_non_foreign_table_write(td);
   auto table_data_write_lock =
-      lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table);
+      lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table_);
   catalog.truncateTable(td);
 
   // invalidate cached hashtable
@@ -3855,6 +3857,13 @@ void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
   }
 }
 
+RenameUserStmt::RenameUserStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("name"));
+  username_ = std::make_unique<std::string>(json_str(payload["name"]));
+  CHECK(payload.HasMember("newName"));
+  new_username_ = std::make_unique<std::string>(json_str(payload["newName"]));
+}
+
 void RenameUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error("Only a super user can rename users.");
@@ -3868,7 +3877,14 @@ void RenameUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   SysCatalog::instance().renameUser(*username_, *new_username_);
 }
 
-void RenameDatabaseStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+RenameDBStmt::RenameDBStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("name"));
+  database_name_ = std::make_unique<std::string>(json_str(payload["name"]));
+  CHECK(payload.HasMember("newName"));
+  new_database_name_ = std::make_unique<std::string>(json_str(payload["newName"]));
+}
+
+void RenameDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   Catalog_Namespace::DBMetadata db;
 
   // TODO: use database lock instead
@@ -3889,28 +3905,26 @@ void RenameDatabaseStmt::execute(const Catalog_Namespace::SessionInfo& session) 
 }
 
 RenameTableStmt::RenameTableStmt(const rapidjson::Value& payload) {
-  CHECK(payload.HasMember("command"));
-
   CHECK(payload.HasMember("tableNames"));
   CHECK(payload["tableNames"].IsArray());
   const auto elements = payload["tableNames"].GetArray();
   for (const auto& element : elements) {
     CHECK(element.HasMember("name"));
     CHECK(element.HasMember("newName"));
-    tablesToRename.emplace_back(new std::string(json_str(element["name"])),
-                                new std::string(json_str(element["newName"])));
+    tablesToRename_.emplace_back(new std::string(json_str(element["name"])),
+                                 new std::string(json_str(element["newName"])));
   }
 }
 
 RenameTableStmt::RenameTableStmt(std::string* tab_name, std::string* new_tab_name) {
-  tablesToRename.emplace_back(tab_name, new_tab_name);
+  tablesToRename_.emplace_back(tab_name, new_tab_name);
 }
 
 RenameTableStmt::RenameTableStmt(
     std::list<std::pair<std::string, std::string>> tableNames) {
   for (auto item : tableNames) {
-    tablesToRename.emplace_back(new std::string(item.first),
-                                new std::string(item.second));
+    tablesToRename_.emplace_back(new std::string(item.first),
+                                 new std::string(item.second));
   }
 }
 
@@ -3983,7 +3997,7 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   SubstituteMap tableSubtituteMap;
 
-  for (auto& item : tablesToRename) {
+  for (auto& item : tablesToRename_) {
     std::string curTableName = *(item.first);
     std::string newTableName = *(item.second);
 
@@ -4043,8 +4057,8 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   catalog.renameTable(names);
 
   // just to be explicit, clean out the list, the unique_ptr will delete
-  while (!tablesToRename.empty()) {
-    tablesToRename.pop_front();
+  while (!tablesToRename_.empty()) {
+    tablesToRename_.pop_front();
   }
 }  // namespace Parser
 
@@ -4089,7 +4103,7 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
                                      const TableDescriptor* td) {
   auto& catalog = session.getCatalog();
   if (!td) {
-    throw std::runtime_error("Table " + *table + " does not exist.");
+    throw std::runtime_error("Table " + *table_ + " does not exist.");
   } else {
     if (td->isView) {
       throw std::runtime_error("Adding columns to a view is not supported.");
@@ -4103,11 +4117,11 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
 
   check_alter_table_privilege(session, td);
 
-  if (0 == coldefs.size()) {
-    coldefs.push_back(std::move(coldef));
+  if (0 == coldefs_.size()) {
+    coldefs_.push_back(std::move(coldef_));
   }
 
-  for (const auto& coldef : coldefs) {
+  for (const auto& coldef : coldefs_) {
     auto& new_column_name = *coldef->get_column_name();
     if (catalog.getMetadataForColumn(td->tableId, new_column_name) != nullptr) {
       throw std::runtime_error("Column " + new_column_name + " already exists.");
@@ -4125,7 +4139,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-          catalog, *table, true);
+          catalog, *table_, true);
   const auto td = td_with_lock();
 
   check_executable(session, td);
@@ -4146,7 +4160,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   try {
     std::map<const std::string, const ColumnDescriptor> cds;
     std::map<const int, const ColumnDef*> cid_coldefs;
-    for (const auto& coldef : coldefs) {
+    for (const auto& coldef : coldefs_) {
       ColumnDescriptor cd;
       setColumnDescriptor(cd, coldef.get());
       catalog.addColumn(*td, cd);
@@ -4269,10 +4283,10 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-          catalog, *table, true);
+          catalog, *table_, true);
   const auto td = td_with_lock();
   if (!td) {
-    throw std::runtime_error("Table " + *table + " does not exist.");
+    throw std::runtime_error("Table " + *table_ + " does not exist.");
   }
   validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
   if (td->isView) {
@@ -4285,20 +4299,20 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   check_alter_table_privilege(session, td);
 
-  for (const auto& column : columns) {
+  for (const auto& column : columns_) {
     if (nullptr == catalog.getMetadataForColumn(td->tableId, *column)) {
       throw std::runtime_error("Column " + *column + " does not exist.");
     }
   }
 
   if (td->nColumns <= (td->hasDeletedCol ? 3 : 2)) {
-    throw std::runtime_error("Table " + *table + " has only one column.");
+    throw std::runtime_error("Table " + *table_ + " has only one column.");
   }
 
   catalog.getSqliteConnector().query("BEGIN TRANSACTION");
   try {
     std::vector<int> columnIds;
-    for (const auto& column : columns) {
+    for (const auto& column : columns_) {
       ColumnDescriptor cd = *catalog.getMetadataForColumn(td->tableId, *column);
       if (td->nShards > 0 && td->shardedColumnId == cd.columnId) {
         throw std::runtime_error("Dropping sharding column " + cd.columnName +
@@ -4342,20 +4356,20 @@ void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-          catalog, *table, false);
+          catalog, *table_, false);
   const auto td = td_with_lock();
   CHECK(td);
   validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
 
   check_alter_table_privilege(session, td);
-  const ColumnDescriptor* cd = catalog.getMetadataForColumn(td->tableId, *column);
+  const ColumnDescriptor* cd = catalog.getMetadataForColumn(td->tableId, *column_);
   if (cd == nullptr) {
-    throw std::runtime_error("Column " + *column + " does not exist.");
+    throw std::runtime_error("Column " + *column_ + " does not exist.");
   }
-  if (catalog.getMetadataForColumn(td->tableId, *new_column_name) != nullptr) {
-    throw std::runtime_error("Column " + *new_column_name + " already exists.");
+  if (catalog.getMetadataForColumn(td->tableId, *new_column_name_) != nullptr) {
+    throw std::runtime_error("Column " + *new_column_name_ + " already exists.");
   }
-  catalog.renameColumn(td, cd, *new_column_name);
+  catalog.renameColumn(td, cd, *new_column_name_);
 }
 
 void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -4372,10 +4386,10 @@ void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session)
   auto& catalog = session.getCatalog();
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-          catalog, *table, false);
+          catalog, *table_, false);
   const auto td = td_with_lock();
   if (!td) {
-    throw std::runtime_error("Table " + *table + " does not exist.");
+    throw std::runtime_error("Table " + *table_ + " does not exist.");
   }
   if (td->isView) {
     throw std::runtime_error("Setting parameters for a view is not supported.");
@@ -4386,9 +4400,10 @@ void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session)
   }
   check_alter_table_privilege(session, td);
 
-  std::string param_name(*param->get_name());
+  std::string param_name(*param_->get_name());
   boost::algorithm::to_lower(param_name);
-  const IntLiteral* val_int_literal = dynamic_cast<const IntLiteral*>(param->get_value());
+  const IntLiteral* val_int_literal =
+      dynamic_cast<const IntLiteral*>(param_->get_value());
   if (val_int_literal == nullptr) {
     throw std::runtime_error("Table parameters should be integers.");
   }
@@ -4436,9 +4451,9 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
                                 const import_export::CopyParams&)>& importer_factory) {
   boost::regex non_local_file_regex{R"(^\s*(s3|http|https)://.+)",
                                     boost::regex::extended | boost::regex::icase};
-  if (!boost::regex_match(*file_pattern, non_local_file_regex)) {
+  if (!boost::regex_match(*file_pattern_, non_local_file_regex)) {
     ddl_utils::validate_allowed_file_path(
-        *file_pattern, ddl_utils::DataTransferType::IMPORT, true);
+        *file_pattern_, ddl_utils::DataTransferType::IMPORT, true);
   }
 
   size_t total_time = 0;
@@ -4457,10 +4472,10 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   try {
     td_with_lock = std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
         lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
-            catalog, *table));
+            catalog, *table_));
     td = (*td_with_lock)();
     insert_data_lock = std::make_unique<lockmgr::WriteLock>(
-        lockmgr::InsertDataLockMgr::getWriteLockForTable(catalog, *table));
+        lockmgr::InsertDataLockMgr::getWriteLockForTable(catalog, *table_));
   } catch (const std::runtime_error& e) {
     // noop
     // TODO(adb): We're really only interested in whether the table exists or not.
@@ -4470,14 +4485,14 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   // if the table already exists, it's locked, so check access privileges
   if (td) {
     std::vector<DBObject> privObjects;
-    DBObject dbObject(*table, TableDBObjectType);
+    DBObject dbObject(*table_, TableDBObjectType);
     dbObject.loadKey(catalog);
     dbObject.setPrivileges(AccessPrivileges::INSERT_INTO_TABLE);
     privObjects.push_back(dbObject);
     if (!SysCatalog::instance().checkPrivileges(session.get_currentUser(), privObjects)) {
       throw std::runtime_error("Violation of access privileges: user " +
                                session.get_currentUser().userLoggable() +
-                               " has no insert privileges for table " + *table + ".");
+                               " has no insert privileges for table " + *table_ + ".");
     }
   }
 
@@ -4485,10 +4500,10 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   // we do not expand wildcard or check file existence here.
   // from here on, file_path contains something which may be a url
   // or a wildcard of file names;
-  std::string file_path = *file_pattern;
+  std::string file_path = *file_pattern_;
   import_export::CopyParams copy_params;
-  if (!options.empty()) {
-    for (auto& p : options) {
+  if (!options_.empty()) {
+    for (auto& p : options_) {
       if (boost::iequals(*p->get_name(), "max_reject")) {
         const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
         if (int_literal == nullptr) {
@@ -4730,7 +4745,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
           if (partitions_uc != "REPLICATED") {
             throw std::runtime_error("PARTITIONS must be REPLICATED for geo COPY");
           }
-          _geo_copy_from_partitions = partitions_uc;
+          geo_copy_from_partitions_ = partitions_uc;
         } else {
           throw std::runtime_error("PARTITIONS option not supported for non-geo COPY: " +
                                    *p->get_name());
@@ -4772,17 +4787,17 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
     // geo import
     // we do nothing here, except stash the parameters so we can
     // do the import when we unwind to the top of the handler
-    _geo_copy_from_file_name = file_path;
-    _geo_copy_from_copy_params = copy_params;
-    _was_geo_copy_from = true;
+    geo_copy_from_file_name_ = file_path;
+    geo_copy_from_copy_params_ = copy_params;
+    was_geo_copy_from_ = true;
 
     // the result string
     // @TODO simon.eves put something more useful in here
     // except we really can't because we haven't done the import yet!
     if (td) {
-      tr = std::string("Appending geo to table '") + *table + std::string("'...");
+      tr = std::string("Appending geo to table '") + *table_ + std::string("'...");
     } else {
-      tr = std::string("Creating table '") + *table +
+      tr = std::string("Creating table '") + *table_ +
            std::string("' and importing geo...");
     }
   } else {
@@ -4825,7 +4840,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         import_result.load_msg =
             "COPY exited early due to reject records count during multi file "
             "processing ";
-        success = false;
+        success_ = false;
       }
       if (!import_result.load_failed) {
         tr = std::string(
@@ -4837,7 +4852,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
                          std::to_string((double)total_time / 1000.0) + " secs");
       }
     } else {
-      throw std::runtime_error("Table '" + *table + "' must exist before COPY FROM");
+      throw std::runtime_error("Table '" + *table_ + "' must exist before COPY FROM");
     }
   }
 
@@ -5061,7 +5076,7 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
       throw std::runtime_error("GRANT failed. SERVER object unrecognized.");
     }
   }
-  SysCatalog::instance().grantDBObjectPrivilegesBatch(grantees, objects, catalog);
+  SysCatalog::instance().grantDBObjectPrivilegesBatch(grantees_, objects, catalog);
 }
 
 // REVOKE SELECT/INSERT/CREATE ON TABLE payroll_table FROM payroll_dept_role;
@@ -5095,7 +5110,7 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
       throw std::runtime_error("REVOKE failed. SERVER object unrecognized.");
     }
   }
-  SysCatalog::instance().revokeDBObjectPrivilegesBatch(grantees, objects, catalog);
+  SysCatalog::instance().revokeDBObjectPrivilegesBatch(grantees_, objects, catalog);
 }
 
 // NOTE: not used currently, will we ever use it?
@@ -5218,8 +5233,7 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       get_grantees().end()) {
     throw std::runtime_error(
         "Request to revoke role failed because privileges can not be revoked from "
-        "mapd "
-        "root user.");
+        "mapd root user.");
   }
   SysCatalog::instance().revokeRoleBatch(get_roles(), get_grantees());
 }
@@ -5246,8 +5260,8 @@ void ShowCreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session)
   }
   if (td->isView && !session.get_currentUser().isSuper) {
     // TODO: we need to run a validate query to ensure the user has access to the
-    // underlying table, but we do not have any of the machinery in here. Disable for
-    // now, unless the current user is a super user.
+    // underlying table, but we do not have any of the machinery in here. Disable
+    // for now, unless the current user is a super user.
     throw std::runtime_error("SHOW CREATE TABLE not yet supported for views");
   }
 
@@ -5258,7 +5272,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto session_copy = session;
   auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
       &session_copy, boost::null_deleter());
-  auto query_state = query_state::QueryState::create(session_ptr, *select_stmt);
+  auto query_state = query_state::QueryState::create(session_ptr, *select_stmt_);
   auto stdlog = STDLOG(query_state);
   auto query_state_proxy = query_state->createQueryStateProxy();
 
@@ -5280,38 +5294,38 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   parseOptions(copy_params, file_type, layer_name, file_compression, array_null_handling);
 
-  if (file_path->empty()) {
+  if (file_path_->empty()) {
     throw std::runtime_error("Invalid file path for COPY TO");
-  } else if (!boost::filesystem::path(*file_path).is_absolute()) {
-    std::string file_name = boost::filesystem::path(*file_path).filename().string();
+  } else if (!boost::filesystem::path(*file_path_).is_absolute()) {
+    std::string file_name = boost::filesystem::path(*file_path_).filename().string();
     std::string file_dir = g_base_path + "/mapd_export/" + session.get_session_id() + "/";
     if (!boost::filesystem::exists(file_dir)) {
       if (!boost::filesystem::create_directories(file_dir)) {
         throw std::runtime_error("Directory " + file_dir + " cannot be created.");
       }
     }
-    *file_path = file_dir + file_name;
+    *file_path_ = file_dir + file_name;
   } else {
-    // Above branch will create a new file in the mapd_export directory. If that path
-    // is not exercised, go through applicable file path validations.
-    ddl_utils::validate_allowed_file_path(*file_path,
+    // Above branch will create a new file in the mapd_export directory. If that
+    // path is not exercised, go through applicable file path validations.
+    ddl_utils::validate_allowed_file_path(*file_path_,
                                           ddl_utils::DataTransferType::EXPORT);
   }
 
   // get column info
   auto column_info_result =
-      local_connector.query(query_state_proxy, *select_stmt, {}, true, false);
+      local_connector.query(query_state_proxy, *select_stmt_, {}, true, false);
 
   // create exporter for requested file type
   auto query_exporter = import_export::QueryExporter::create(file_type);
 
   // default layer name to file path stem if it wasn't specified
   if (layer_name.size() == 0) {
-    layer_name = boost::filesystem::path(*file_path).stem().string();
+    layer_name = boost::filesystem::path(*file_path_).stem().string();
   }
 
   // begin export
-  query_exporter->beginExport(*file_path,
+  query_exporter->beginExport(*file_path_,
                               layer_name,
                               copy_params,
                               column_info_result.targets_meta,
@@ -5320,7 +5334,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   // how many fragments?
   size_t outer_frag_count =
-      leafs_connector_->getOuterFragmentCount(query_state_proxy, *select_stmt);
+      leafs_connector_->getOuterFragmentCount(query_state_proxy, *select_stmt_);
   size_t outer_frag_end = outer_frag_count == 0 ? 1 : outer_frag_count;
 
   // loop fragments
@@ -5333,7 +5347,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
     // run the query
     std::vector<AggregatedResult> query_results = leafs_connector_->query(
-        query_state_proxy, *select_stmt, allowed_outer_fragment_indices, false);
+        query_state_proxy, *select_stmt_, allowed_outer_fragment_indices, false);
 
     // export the results
     query_exporter->exportResults(query_results);
@@ -5354,8 +5368,8 @@ void ExportQueryStmt::parseOptions(
   layer_name.clear();
   file_compression = import_export::QueryExporter::FileCompression::kNone;
 
-  if (!options.empty()) {
-    for (auto& p : options) {
+  if (!options_.empty()) {
+    for (auto& p : options_) {
       if (boost::iequals(*p->get_name(), "delimiter")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -5433,7 +5447,8 @@ void ExportQueryStmt::parseOptions(
           file_type = import_export::QueryExporter::FileType::kShapefile;
         } else {
           throw std::runtime_error(
-              "File Type option must be 'CSV', 'GeoJSON', 'GeoJSONL' or 'Shapefile'");
+              "File Type option must be 'CSV', 'GeoJSON', 'GeoJSONL' or "
+              "'Shapefile'");
         }
       } else if (boost::iequals(*p->get_name(), "layer_name")) {
         const StringLiteral* str_literal =
@@ -5552,27 +5567,27 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   td.viewSQL = query_after_shim;
   td.fragmenter = nullptr;
   td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
-  td.maxFragRows =
-      DEFAULT_FRAGMENT_ROWS;  // @todo this stuff should not be InsertOrderFragmenter
-  td.maxChunkSize =
-      DEFAULT_MAX_CHUNK_SIZE;  // @todo this stuff should not be InsertOrderFragmenter
+  td.maxFragRows = DEFAULT_FRAGMENT_ROWS;    // @todo this stuff should not be
+                                             // InsertOrderFragmenter
+  td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;  // @todo this stuff should not be
+                                             // InsertOrderFragmenter
   td.fragPageSize = DEFAULT_PAGE_SIZE;
   td.maxRows = DEFAULT_MAX_ROWS;
   catalog.createTable(td, {}, {}, true);
 
-  // TODO (max): It's transactionally unsafe, should be fixed: we may create object
-  // w/o privileges
+  // TODO (max): It's transactionally unsafe, should be fixed: we may create
+  // object w/o privileges
   SysCatalog::instance().createDBObject(
       session.get_currentUser(), view_name_, ViewDBObjectType, catalog);
 }
 
 DropViewStmt::DropViewStmt(const rapidjson::Value& payload) {
   CHECK(payload.HasMember("viewName"));
-  view_name = std::make_unique<std::string>(json_str(payload["viewName"]));
+  view_name_ = std::make_unique<std::string>(json_str(payload["viewName"]));
 
-  if_exists = false;
+  if_exists_ = false;
   if (payload.HasMember("ifExists")) {
-    if_exists = json_bool(payload["ifExists"]);
+    if_exists_ = json_bool(payload["ifExists"]);
   }
 }
 
@@ -5586,10 +5601,10 @@ void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     td_with_lock =
         std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
             lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-                catalog, *view_name, false));
+                catalog, *view_name_, false));
     td = (*td_with_lock)();
   } catch (const std::runtime_error& e) {
-    if (if_exists) {
+    if (if_exists_) {
       return;
     } else {
       throw e;
@@ -5600,8 +5615,8 @@ void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   CHECK(td_with_lock);
 
   if (!session.checkDBAccessPrivileges(
-          DBObjectType::ViewDBObjectType, AccessPrivileges::DROP_VIEW, *view_name)) {
-    throw std::runtime_error("View " + *view_name +
+          DBObjectType::ViewDBObjectType, AccessPrivileges::DROP_VIEW, *view_name_)) {
+    throw std::runtime_error("View " + *view_name_ +
                              " will not be dropped. User has no drop view privileges.");
   }
 
@@ -5617,6 +5632,37 @@ static void checkStringLiteral(const std::string& option_name,
   }
 }
 
+CreateDBStmt::CreateDBStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("name"));
+  db_name_ = std::make_unique<std::string>(json_str(payload["name"]));
+
+  if_not_exists_ = false;
+  if (payload.HasMember("ifNotExists")) {
+    if_not_exists_ = json_bool(payload["ifNotExists"]);
+  }
+
+  if (payload.HasMember("options")) {
+    for (const auto& option : payload["options"].GetObject()) {
+      auto option_name = std::make_unique<std::string>(json_str(option.name));
+      std::unique_ptr<Literal> literal_value;
+      if (option.value.IsString()) {
+        auto literal_string = std::make_unique<std::string>(json_str(option.value));
+        literal_value = std::make_unique<StringLiteral>(literal_string.release());
+      } else if (option.value.IsInt() || option.value.IsInt64()) {
+        literal_value = std::make_unique<IntLiteral>(json_i64(option.value));
+      } else if (option.value.IsNull()) {
+        literal_value = std::make_unique<NullLiteral>();
+      } else {
+        throw std::runtime_error("Unable to handle literal for " + *option_name);
+      }
+      CHECK(literal_value);
+
+      name_value_list_.emplace_back(std::make_unique<NameValueAssign>(
+          option_name.release(), literal_value.release()));
+    }
+  }
+}
+
 void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error(
@@ -5628,12 +5674,12 @@ void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           legacylockmgr::ExecutorOuterLock, true));
 
   Catalog_Namespace::DBMetadata db_meta;
-  if (SysCatalog::instance().getMetadataForDB(*db_name, db_meta) && if_not_exists_) {
+  if (SysCatalog::instance().getMetadataForDB(*db_name_, db_meta) && if_not_exists_) {
     return;
   }
   int ownerId = session.get_currentUser().userId;
-  if (!name_value_list.empty()) {
-    for (auto& p : name_value_list) {
+  if (!name_value_list_.empty()) {
+    for (auto& p : name_value_list_) {
       if (boost::iequals(*p->get_name(), "owner")) {
         checkStringLiteral("Owner name", p);
         const std::string* str =
@@ -5649,7 +5695,17 @@ void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       }
     }
   }
-  SysCatalog::instance().createDatabase(*db_name, ownerId);
+  SysCatalog::instance().createDatabase(*db_name_, ownerId);
+}
+
+DropDBStmt::DropDBStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("name"));
+  db_name_ = std::make_unique<std::string>(json_str(payload["name"]));
+
+  if_exists_ = false;
+  if (payload.HasMember("ifExists")) {
+    if_exists_ = json_bool(payload["ifExists"]);
+  }
 }
 
 void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -5658,17 +5714,18 @@ void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           legacylockmgr::ExecutorOuterLock, true));
 
   Catalog_Namespace::DBMetadata db;
-  if (!SysCatalog::instance().getMetadataForDB(*db_name, db)) {
+  if (!SysCatalog::instance().getMetadataForDB(*db_name_, db)) {
     if (if_exists_) {
       return;
     }
-    throw std::runtime_error("Database " + *db_name + " does not exist.");
+    throw std::runtime_error("Database " + *db_name_ + " does not exist.");
   }
 
   if (!session.get_currentUser().isSuper &&
       session.get_currentUser().userId != db.dbOwner) {
     throw std::runtime_error(
-        "DROP DATABASE command can only be executed by the owner or by a super user.");
+        "DROP DATABASE command can only be executed by the owner or by a super "
+        "user.");
   }
 
   SysCatalog::instance().dropDatabase(db);
@@ -5688,12 +5745,38 @@ static bool readBooleanLiteral(const std::string& option_name,
   }
 }
 
+CreateUserStmt::CreateUserStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("name"));
+  user_name_ = std::make_unique<std::string>(json_str(payload["name"]));
+
+  if (payload.HasMember("options")) {
+    for (const auto& option : payload["options"].GetObject()) {
+      auto option_name = std::make_unique<std::string>(json_str(option.name));
+      std::unique_ptr<Literal> literal_value;
+      if (option.value.IsString()) {
+        auto literal_string = std::make_unique<std::string>(json_str(option.value));
+        literal_value = std::make_unique<StringLiteral>(literal_string.release());
+      } else if (option.value.IsInt() || option.value.IsInt64()) {
+        literal_value = std::make_unique<IntLiteral>(json_i64(option.value));
+      } else if (option.value.IsNull()) {
+        literal_value = std::make_unique<NullLiteral>();
+      } else {
+        throw std::runtime_error("Unable to handle literal for " + *option_name);
+      }
+      CHECK(literal_value);
+
+      name_value_list_.emplace_back(std::make_unique<NameValueAssign>(
+          option_name.release(), literal_value.release()));
+    }
+  }
+}
+
 void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   std::string passwd;
   bool is_super = false;
   std::string default_db;
   bool can_login = true;
-  for (auto& p : name_value_list) {
+  for (auto& p : name_value_list_) {
     if (boost::iequals(*p->get_name(), "password")) {
       checkStringLiteral("Password", p);
       passwd = *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
@@ -5715,7 +5798,37 @@ void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error("Only super user can create new users.");
   }
-  SysCatalog::instance().createUser(*user_name, passwd, is_super, default_db, can_login);
+  SysCatalog::instance().createUser(*user_name_, passwd, is_super, default_db, can_login);
+}
+
+AlterUserStmt::AlterUserStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("name"));
+  user_name_ = std::make_unique<std::string>(json_str(payload["name"]));
+
+  if (payload.HasMember("options")) {
+    for (const auto& option : payload["options"].GetObject()) {
+      auto option_name = std::make_unique<std::string>(json_str(option.name));
+      std::unique_ptr<Literal> literal_value;
+      if (option.value.IsString()) {
+        if (option.value == "") {
+          literal_value = std::make_unique<NullLiteral>();
+        } else {
+          auto literal_string = std::make_unique<std::string>(json_str(option.value));
+          literal_value = std::make_unique<StringLiteral>(literal_string.release());
+        }
+      } else if (option.value.IsInt() || option.value.IsInt64()) {
+        literal_value = std::make_unique<IntLiteral>(json_i64(option.value));
+      } else if (option.value.IsNull()) {
+        literal_value = std::make_unique<NullLiteral>();
+      } else {
+        throw std::runtime_error("Unable to handle literal for " + *option_name);
+      }
+      CHECK(literal_value);
+
+      name_value_list_.emplace_back(std::make_unique<NameValueAssign>(
+          option_name.release(), literal_value.release()));
+    }
+  }
 }
 
 void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -5726,7 +5839,7 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   const std::string* default_db = nullptr;
   bool can_login = true;
   bool* can_loginp = nullptr;
-  for (auto& p : name_value_list) {
+  for (auto& p : name_value_list_) {
     if (boost::iequals(*p->get_name(), "password")) {
       checkStringLiteral("Password", p);
       passwd = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
@@ -5742,7 +5855,8 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         default_db = &blank;
       } else {
         throw std::runtime_error(
-            "DEFAULT_DB option must be either a string literal or a NULL literal.");
+            "DEFAULT_DB option must be either a string literal or a NULL "
+            "literal.");
       }
     } else if (boost::iequals(*p->get_name(), "can_login")) {
       checkStringLiteral("CAN_LOGIN", p);
@@ -5757,8 +5871,8 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   // Check if the user is authorized to execute ALTER USER statement
   Catalog_Namespace::UserMetadata user;
-  if (!SysCatalog::instance().getMetadataForUser(*user_name, user)) {
-    throw std::runtime_error("User " + *user_name + " does not exist.");
+  if (!SysCatalog::instance().getMetadataForUser(*user_name_, user)) {
+    throw std::runtime_error("User " + *user_name_ + " does not exist.");
   }
   if (!session.get_currentUser().isSuper) {
     if (session.get_currentUser().userId != user.userId) {
@@ -5775,48 +5889,54 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
 }
 
+DropUserStmt::DropUserStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("name"));
+  user_name_ = std::make_unique<std::string>(json_str(payload["name"]));
+}
+
 void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error("Only super user can drop users.");
   }
-  SysCatalog::instance().dropUser(*user_name);
+  SysCatalog::instance().dropUser(*user_name_);
 }
 
 void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   // check access privileges
-  if (!session.checkDBAccessPrivileges(
-          DBObjectType::TableDBObjectType, AccessPrivileges::SELECT_FROM_TABLE, *table)) {
-    throw std::runtime_error("Table " + *table +
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
+                                       AccessPrivileges::SELECT_FROM_TABLE,
+                                       *table_)) {
+    throw std::runtime_error("Table " + *table_ +
                              " will not be dumped. User has no select privileges.");
   }
   if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
                                        AccessPrivileges::CREATE_TABLE)) {
-    throw std::runtime_error("Table " + *table +
+    throw std::runtime_error("Table " + *table_ +
                              " will not be dumped. User has no create privileges.");
   }
   auto& catalog = session.getCatalog();
-  const TableDescriptor* td = catalog.getMetadataForTable(*table);
+  const TableDescriptor* td = catalog.getMetadataForTable(*table_);
   TableArchiver table_archiver(&catalog);
-  table_archiver.dumpTable(td, *path, compression);
+  table_archiver.dumpTable(td, *path_, compression_);
 }
 
 void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
-  const TableDescriptor* td = catalog.getMetadataForTable(*table, false);
+  const TableDescriptor* td = catalog.getMetadataForTable(*table_, false);
   if (td) {
     // TODO: v1.0 simply throws to avoid accidentally overwrite target table.
     // Will add a REPLACE TABLE to explictly replace target table.
-    // catalog.restoreTable(session, td, *path, compression);
-    throw std::runtime_error("Table " + *table + " exists.");
+    // catalog.restoreTable(session, td, *path, compression_);
+    throw std::runtime_error("Table " + *table_ + " exists.");
   } else {
     // check access privileges
     if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
                                          AccessPrivileges::CREATE_TABLE)) {
-      throw std::runtime_error("Table " + *table +
+      throw std::runtime_error("Table " + *table_ +
                                " will not be restored. User has no create privileges.");
     }
     TableArchiver table_archiver(&catalog);
-    table_archiver.restoreTable(session, *table, *path, compression);
+    table_archiver.restoreTable(session, *table_, *path_, compression_);
   }
 }
 
@@ -5852,6 +5972,27 @@ void execute_calcite_ddl(
     rename_table_stmt.execute(*session_ptr);
   } else if (ddl_command == "ALTER_TABLE") {
     Parser::AlterTableStmt::delegateExecute(payload, *session_ptr);
+  } else if (ddl_command == "CREATE_DB") {
+    auto create_db_stmt = Parser::CreateDBStmt(payload);
+    create_db_stmt.execute(*session_ptr);
+  } else if (ddl_command == "DROP_DB") {
+    auto drop_db_stmt = Parser::DropDBStmt(payload);
+    drop_db_stmt.execute(*session_ptr);
+  } else if (ddl_command == "RENAME_DB") {
+    auto rename_db_stmt = Parser::RenameDBStmt(payload);
+    rename_db_stmt.execute(*session_ptr);
+  } else if (ddl_command == "CREATE_USER") {
+    auto create_user_stmt = Parser::CreateUserStmt(payload);
+    create_user_stmt.execute(*session_ptr);
+  } else if (ddl_command == "DROP_USER") {
+    auto drop_user_stmt = Parser::DropUserStmt(payload);
+    drop_user_stmt.execute(*session_ptr);
+  } else if (ddl_command == "ALTER_USER") {
+    auto alter_user_stmt = Parser::AlterUserStmt(payload);
+    alter_user_stmt.execute(*session_ptr);
+  } else if (ddl_command == "RENAME_USER") {
+    auto rename_user_stmt = Parser::RenameUserStmt(payload);
+    rename_user_stmt.execute(*session_ptr);
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }

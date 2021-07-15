@@ -5873,7 +5873,7 @@ void DBHandler::check_and_invalidate_sessions(Parser::DDLStmt* ddl) {
     invalidate_sessions(*drop_db_stmt->getDatabaseName(), drop_db_stmt);
     return;
   }
-  const auto rename_db_stmt = dynamic_cast<Parser::RenameDatabaseStmt*>(ddl);
+  const auto rename_db_stmt = dynamic_cast<Parser::RenameDBStmt*>(ddl);
   if (rename_db_stmt) {
     invalidate_sessions(*rename_db_stmt->getPreviousDatabaseName(), rename_db_stmt);
     return;
