@@ -202,6 +202,8 @@ struct GpuFunctionDefinition {
   GpuFunctionDefinition(const std::string& name) : name(name) {}
   std::string name;
 
+  virtual ~GpuFunctionDefinition() {}
+
   virtual llvm::FunctionCallee getFunction(llvm::Module* module,
                                            llvm::LLVMContext& context) const = 0;
 };
