@@ -17,9 +17,6 @@
 #include "../../QueryEngine/OmniSciTypes.h"
 #include "../../Shared/funcannotations.h"
 
-// TODO: define in cmake files
-#define HAVE_ONEDAL
-
 #ifdef HAVE_ONEDAL
 #include <type_traits>
 #include "daal.h"

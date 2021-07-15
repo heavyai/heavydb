@@ -1,10 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
 
-# DAAL
-list(APPEND DAAL_LIBS "/home/ubuntu/onedal_lib/libdaal_core.so")
-list(APPEND DAAL_LIBS "/home/ubuntu/onedal_lib/libdaal_thread.so")
-include_directories("/home/ubuntu/onedal/include")
-
 # Required for LLVM / JIT, alternative to setting CMP0065 to OLD
 set(CMAKE_ENABLE_EXPORTS True)
 
@@ -302,6 +297,15 @@ if(ENABLE_MLPACK)
   find_package(MLPACK REQUIRED)
   include_directories(${MLPACK_INCLUDE_DIRS})
   add_definitions("-DHAVE_MLPACK")
+endif()
+
+option(ENABLE_ONEDAL "Use Intel oneDAL" ON)
+if(ENABLE_ONEDAL)
+  find_package(DAL REQUIRED)
+  list(APPEND ONEDAL_LIBRARIES "libonedal_core.so")
+  list(APPEND ONEDAL_LIBRARIES "libonedal_thread.so")
+  include_directories("/opt/intel/oneapi/dal/latest/include/")
+  add_definitions("-DHAVE_ONEDAL")
 endif()
 
 if(MSVC)
@@ -733,7 +737,11 @@ if(ENABLE_LICENSING_AWS)
 endif()
 
 list(APPEND MAPD_LIBRARIES ${TBB_LIBS})
-list(APPEND MAPD_LIBRARIES ${DAAL_LIBS})
+
+if(ENABLE_ONEDAL)
+  list(APPEND MAPD_LIBRARIES ${ONEDAL_LIBRARIES})
+endif()
+
 
 if(ENABLE_CANONICAL_RAFT)
   list(APPEND MAPD_LIBRARIES raft_canonical)

@@ -104,6 +104,10 @@ if [ "$ID" == "ubuntu" ] ; then
       python-yaml \
       libxerces-c-dev \
       swig
+  sudo wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB -O - | sudo apt-key add -
+  sudo add-apt-repository "deb https://apt.repos.intel.com/oneapi all main"
+  sudo $PACKAGER update
+  sudo $PACKAGER install intel-oneapi-dal-devel
 
 # Set up gcc-8 as default gcc
 sudo update-alternatives \
