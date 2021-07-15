@@ -301,7 +301,7 @@ endif()
 
 option(ENABLE_ONEDAL "Use Intel oneDAL" ON)
 if(ENABLE_ONEDAL)
-  find_package(DAL REQUIRED)
+  find_package(oneDAL REQUIRED)
   list(APPEND ONEDAL_LIBRARIES "libonedal_core.so")
   list(APPEND ONEDAL_LIBRARIES "libonedal_thread.so")
   include_directories("/opt/intel/oneapi/dal/latest/include/")
