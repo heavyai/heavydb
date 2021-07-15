@@ -1419,7 +1419,7 @@ class RelTranslatedJoin : public RelAlgNode {
                     std::shared_ptr<const RelAlgNode> input) override {
     CHECK(false);
   }
-  std::shared_ptr<RelAlgNode> deepCopy() const {
+  std::shared_ptr<RelAlgNode> deepCopy() const override {
     CHECK(false);
     return nullptr;
   }
