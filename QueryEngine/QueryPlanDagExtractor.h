@@ -62,8 +62,7 @@ class QueryPlanDagExtractor {
       , catalog_(catalog)
       , contain_not_supported_rel_node_(false)
       , left_deep_tree_infos_(left_deep_tree_infos)
-      , temporary_tables_(temporary_tables)
-      , executor_(executor) {
+      , temporary_tables_(temporary_tables) {
     translated_join_info_ = std::make_shared<TranslatedJoinInfo>();
   }
 
@@ -130,6 +129,5 @@ class QueryPlanDagExtractor {
   const TemporaryTables& temporary_tables_;
   std::shared_ptr<TranslatedJoinInfo> translated_join_info_;
   HashTableBuildDagMap hash_table_query_plan_dag_;
-  Executor* executor_;
   std::vector<size_t> extracted_dag_;
 };
