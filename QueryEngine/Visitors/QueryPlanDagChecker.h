@@ -43,7 +43,7 @@ class QueryPlanDagChecker final : public RelRexDagVisitor {
 
   static bool isNotSupportedDag(const RelAlgNode* rel_alg_node,
                                 const RelAlgTranslator& rel_alg_translator);
-  void visit(const RelAlgNode*);
+  void check(const RelAlgNode*);
   void detectNotSupportedNode();
   void reset();
   bool getCheckResult() const;

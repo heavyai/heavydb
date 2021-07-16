@@ -27,11 +27,11 @@ void QueryPlanDagChecker::detectNotSupportedNode() {
 bool QueryPlanDagChecker::isNotSupportedDag(const RelAlgNode* rel_alg_node,
                                             const RelAlgTranslator& rel_alg_translator) {
   QueryPlanDagChecker checker(rel_alg_translator);
-  checker.visit(rel_alg_node);
+  checker.check(rel_alg_node);
   return checker.getCheckResult();
 }
 
-void QueryPlanDagChecker::visit(const RelAlgNode* rel_alg_node) {
+void QueryPlanDagChecker::check(const RelAlgNode* rel_alg_node) {
   RelRexDagVisitor::visit(rel_alg_node);
 }
 
