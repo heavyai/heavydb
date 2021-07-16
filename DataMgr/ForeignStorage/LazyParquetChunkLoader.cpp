@@ -1465,8 +1465,10 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
                               rep_levels.data(),
                               values_read,
                               levels_read,
-                              !col_reader->HasNext(),
                               values.data());
+        }
+        if (auto array_encoder = dynamic_cast<ParquetArrayEncoder*>(encoder.get())) {
+          array_encoder->finalizeRowGroup();
         }
       } catch (const std::exception& error) {
         throw ForeignStorageException(

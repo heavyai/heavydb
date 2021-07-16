@@ -35,12 +35,11 @@ class ParquetVariableLengthArrayEncoder : public ParquetArrayEncoder {
                   const int16_t* rep_levels,
                   const int64_t values_read,
                   const int64_t levels_read,
-                  const bool is_last_batch,
                   int8_t* values) override {
     CHECK(levels_read > 0);
     setFirstOffsetForBuffer(def_levels[0]);
     ParquetArrayEncoder::appendData(
-        def_levels, rep_levels, values_read, levels_read, is_last_batch, values);
+        def_levels, rep_levels, values_read, levels_read, values);
   }
 
  protected:

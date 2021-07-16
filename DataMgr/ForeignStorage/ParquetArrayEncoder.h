@@ -38,7 +38,6 @@ class ParquetArrayEncoder : public ParquetEncoder {
                   const int16_t* rep_levels,
                   const int64_t values_read,
                   const int64_t levels_read,
-                  const bool is_last_batch,
                   int8_t* values) override {
     CHECK(levels_read > 0);
 
@@ -54,10 +53,13 @@ class ParquetArrayEncoder : public ParquetEncoder {
       }
       processArrayItem(def_levels[i], j);
     }
+  }
 
-    if (is_last_batch) {
-      finalizeRowGroup();
-    }
+  void finalizeRowGroup() {
+    processLastArray();
+    resetLastArrayMetadata();
+    appendArraysToBuffer();
+    has_assembly_started_ = false;
   }
 
   std::shared_ptr<ChunkMetadata> getRowGroupMetadata(
@@ -102,13 +104,6 @@ class ParquetArrayEncoder : public ParquetEncoder {
   const static int16_t list_null_def_level = 0;
 
  private:
-  void finalizeRowGroup() {
-    processLastArray();
-    resetLastArrayMetadata();
-    appendArraysToBuffer();
-    has_assembly_started_ = false;
-  }
-
   void resetLastArrayMetadata() {
     is_empty_array_ = false;
     is_null_array_ = false;
