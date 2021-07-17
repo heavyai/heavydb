@@ -390,13 +390,19 @@ void DataMgr::clearMemory(const MemoryLevel memLevel) {
       int numGpus = cudaMgr_->getDeviceCount();
       for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
         LOG(INFO) << "clear slabs on gpu " << gpuNum;
-        bufferMgrs_[memLevel][gpuNum]->clearSlabs();
+        auto buffer_mgr_for_gpu =
+            dynamic_cast<Buffer_Namespace::BufferMgr*>(bufferMgrs_[memLevel][gpuNum]);
+        CHECK(buffer_mgr_for_gpu);
+        buffer_mgr_for_gpu->clearSlabs();
       }
     } else {
       LOG(WARNING) << "Unable to clear GPU memory: No GPUs detected";
     }
   } else {
-    bufferMgrs_[memLevel][0]->clearSlabs();
+    auto buffer_mgr_for_cpu =
+        dynamic_cast<Buffer_Namespace::BufferMgr*>(bufferMgrs_[memLevel][0]);
+    CHECK(buffer_mgr_for_cpu);
+    buffer_mgr_for_cpu->clearSlabs();
   }
 }
 

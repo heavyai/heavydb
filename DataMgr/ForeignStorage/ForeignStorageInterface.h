@@ -169,8 +169,6 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
     return "";
   }
 
-  void clearSlabs() override { CHECK(false); }
-
   size_t getMaxSize() override {
     CHECK(false);
     return 0;
