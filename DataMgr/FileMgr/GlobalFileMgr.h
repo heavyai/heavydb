@@ -118,8 +118,6 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   inline MgrType getMgrType() override { return GLOBAL_FILE_MGR; };
   inline std::string getStringMgrType() override { return ToString(GLOBAL_FILE_MGR); }
   inline std::string printSlabs() override { return "Not Implemented"; }
-  inline void clearSlabs() override { /* noop */
-  }
   inline size_t getMaxSize() override { return 0; }
   inline size_t getInUseSize() override { return 0; }
   inline size_t getAllocated() override { return 0; }

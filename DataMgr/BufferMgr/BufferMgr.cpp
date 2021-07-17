@@ -95,6 +95,7 @@ void BufferMgr::clear() {
   std::lock_guard<std::mutex> sized_segs_lock(sized_segs_mutex_);
   std::lock_guard<std::mutex> chunk_index_lock(chunk_index_mutex_);
   std::lock_guard<std::mutex> unsized_segs_lock(unsized_segs_mutex_);
+
   for (auto& buf : chunk_index_) {
     delete buf.second->buffer;
   }
@@ -628,6 +629,12 @@ void BufferMgr::deleteBuffersWithPrefix(const ChunkKey& key_prefix, const bool) 
                      key_prefix.end()) != buffer_it->first.begin() + key_prefix.size()) {
     auto seg_it = buffer_it->second;
     if (seg_it->buffer) {
+      if (seg_it->buffer->getPinCount() != 0) {
+        // leave the buffer and buffer segment in place, they are in use elsewhere. once
+        // unpinned, the buffer will be inaccessible and evicted
+        buffer_it++;
+        continue;
+      }
       delete seg_it->buffer;  // Delete Buffer for segment
       seg_it->buffer = nullptr;
     }

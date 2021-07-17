@@ -210,7 +210,6 @@ class FileMgr : public AbstractBufferMgr {  // implements
   inline MgrType getMgrType() override { return FILE_MGR; };
   inline std::string getStringMgrType() override { return ToString(FILE_MGR); }
   inline std::string printSlabs() override { return "Not Implemented"; }
-  inline void clearSlabs() override {}  // Noop
   inline size_t getMaxSize() override { return 0; }
   inline size_t getInUseSize() override { return 0; }
   inline size_t getAllocated() override { return 0; }

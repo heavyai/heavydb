@@ -108,11 +108,10 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   ~BufferMgr() override;
   void reinit();
 
-  void clear();
-
   std::string printSlab(size_t slab_num);
   std::string printSlabs() override;
-  void clearSlabs() override;
+
+  void clearSlabs();
   std::string printMap();
   void printSegs();
   std::string printSeg(BufferList::iterator& seg_it);
@@ -193,6 +192,8 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   virtual void allocateBuffer(BufferList::iterator seg_it,
                               const size_t page_size,
                               const size_t num_bytes) = 0;
+  void clear();
+
   std::mutex chunk_index_mutex_;
   std::mutex sized_segs_mutex_;
   std::mutex unsized_segs_mutex_;

@@ -137,10 +137,6 @@ std::string PersistentStorageMgr::printSlabs() {
   return global_file_mgr_->printSlabs();
 }
 
-void PersistentStorageMgr::clearSlabs() {
-  global_file_mgr_->clearSlabs();
-}
-
 size_t PersistentStorageMgr::getMaxSize() {
   return global_file_mgr_->getMaxSize();
 }

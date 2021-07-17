@@ -73,7 +73,6 @@ class ForeignStorageMgr : public AbstractBufferMgr {
                                        const ChunkKey& chunk_key_prefix) override;
   bool isBufferOnDevice(const ChunkKey& chunk_key) override;
   std::string printSlabs() override;
-  void clearSlabs() override;
   size_t getMaxSize() override;
   size_t getInUseSize() override;
   size_t getAllocated() override;

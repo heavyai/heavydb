@@ -42,15 +42,34 @@ inline bool query_has_inner_join(const RelAlgExecutionUnit& ra_exe_unit) {
 
 // column is part of the target expressions, result set iteration needs it alive.
 bool need_to_hold_chunk(const Chunk_NS::Chunk* chunk,
-                        const RelAlgExecutionUnit& ra_exe_unit) {
+                        const RelAlgExecutionUnit& ra_exe_unit,
+                        const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
+                        const ExecutorDeviceType device_type) {
   CHECK(chunk->getColumnDesc());
-  const auto chunk_ti = chunk->getColumnDesc()->columnType;
-  if (chunk_ti.is_array() ||
-      (chunk_ti.is_string() && chunk_ti.get_compression() == kENCODING_NONE)) {
+  const auto& chunk_ti = chunk->getColumnDesc()->columnType;
+  if (device_type == ExecutorDeviceType::CPU &&
+      (chunk_ti.is_array() ||
+       (chunk_ti.is_string() && chunk_ti.get_compression() == kENCODING_NONE))) {
     for (const auto target_expr : ra_exe_unit.target_exprs) {
       const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
       if (col_var && col_var->get_column_id() == chunk->getColumnDesc()->columnId &&
           col_var->get_table_id() == chunk->getColumnDesc()->tableId) {
+        return true;
+      }
+    }
+  }
+  if (lazy_fetch_info.empty()) {
+    return false;
+  }
+  CHECK_EQ(lazy_fetch_info.size(), ra_exe_unit.target_exprs.size());
+  for (size_t i = 0; i < ra_exe_unit.target_exprs.size(); i++) {
+    const auto target_expr = ra_exe_unit.target_exprs[i];
+    const auto& col_lazy_fetch = lazy_fetch_info[i];
+    const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
+    if (col_var && col_var->get_column_id() == chunk->getColumnDesc()->columnId &&
+        col_var->get_table_id() == chunk->getColumnDesc()->tableId) {
+      if (col_lazy_fetch.is_lazily_fetched) {
+        // hold lazy fetched inputs for later iteration
         return true;
       }
     }
@@ -335,7 +354,10 @@ void ExecutionKernel::runImpl(Executor* executor,
   if (device_results_) {
     std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks_to_hold;
     for (const auto& chunk : chunks) {
-      if (need_to_hold_chunk(chunk.get(), ra_exe_unit_)) {
+      if (need_to_hold_chunk(chunk.get(),
+                             ra_exe_unit_,
+                             device_results_->getLazyFetchInfo(),
+                             chosen_device_type)) {
         chunks_to_hold.push_back(chunk);
       }
     }

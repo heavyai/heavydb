@@ -19829,6 +19829,70 @@ TEST_F(SubqueryTestEnv, SubqueryTest) {
   }
 }
 
+// NOTE: these tests pollute the test table, so run them last
+TEST(Select, UpdatePinnedBuffers) {
+  run_ddl_statement("DROP TABLE IF EXISTS pinned_buffers_test;");
+  run_ddl_statement(
+      "CREATE TABLE pinned_buffers_test(x INT, y INT) WITH (FRAGMENT_SIZE=2);");
+  for (size_t i = 0; i < 10; i++) {
+    run_multiple_agg("INSERT INTO pinned_buffers_test VALUES (5,5);",
+                     ExecutorDeviceType::CPU);
+  }
+  for (size_t i = 0; i < 10; i++) {
+    run_multiple_agg("INSERT INTO pinned_buffers_test VALUES (15,15);",
+                     ExecutorDeviceType::CPU);
+  }
+
+  if (skip_tests(ExecutorDeviceType::GPU)) {
+    return;  // GPU only
+  }
+  SKIP_ALL_ON_AGGREGATOR();  // rowid
+
+  // run a lazy fetch query to pin buffers, retain ownership of the resultset
+  const auto rows = run_multiple_agg(
+      "SELECT rowid, x, y FROM pinned_buffers_test WHERE x < 10 ORDER BY 1;",
+      ExecutorDeviceType::GPU);
+
+  // run an update
+  run_multiple_agg("UPDATE pinned_buffers_test SET y = 10 WHERE rowid = 1;",
+                   ExecutorDeviceType::GPU);
+
+  // re-run select
+  const auto rows_updated = run_multiple_agg(
+      "SELECT rowid, x, y FROM pinned_buffers_test WHERE x < 10 ORDER BY 1;",
+      ExecutorDeviceType::GPU);
+
+  ASSERT_EQ(rows->rowCount(), rows_updated->rowCount());
+  for (size_t i = 0; i < rows->rowCount(); i++) {
+    const auto original_row = rows->getNextRow(false, false);
+    const auto updated_row = rows_updated->getNextRow(false, false);
+    EXPECT_TRUE(original_row.size() == updated_row.size() && original_row.size() == 3);
+    EXPECT_EQ(v<int64_t>(original_row[0]), v<int64_t>(updated_row[0]));
+    EXPECT_EQ(v<int64_t>(original_row[1]), v<int64_t>(updated_row[1]));
+    if (v<int64_t>(original_row[0]) == 1) {
+      EXPECT_EQ(v<int64_t>(updated_row[2]), 10);
+      // EXPECT_EQ(v<int64_t>(original_row[2]), 5);// TODO: this ends up being 10 b/c the
+      // buffer was updated
+    } else {
+      EXPECT_EQ(v<int64_t>(original_row[2]), v<int64_t>(updated_row[2]));
+    }
+  }
+
+  run_multiple_agg("INSERT INTO pinned_buffers_test VALUES (6,6);",
+                   ExecutorDeviceType::CPU);
+
+  // re-run select
+  rows->setCachedRowCount(-1);  // re-do row count
+  const auto rows_inserted = run_multiple_agg(
+      "SELECT rowid, x, y FROM pinned_buffers_test WHERE x < 10 ORDER BY 1;",
+      ExecutorDeviceType::GPU);
+  ASSERT_EQ(rows->rowCount() + 1, rows_inserted->rowCount());
+
+  if (!g_keep_test_data) {
+    run_ddl_statement("DROP TABLE IF EXISTS pinned_buffers_test;");
+  }
+}
+
 namespace {
 int create_sharded_join_table(const std::string& table_name,
                               size_t fragment_size,

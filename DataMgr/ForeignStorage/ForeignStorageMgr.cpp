@@ -296,10 +296,6 @@ std::string ForeignStorageMgr::printSlabs() {
   return {};  // Added to avoid "no return statement" compiler warning
 }
 
-void ForeignStorageMgr::clearSlabs() {
-  UNREACHABLE();
-}
-
 size_t ForeignStorageMgr::getMaxSize() {
   UNREACHABLE();
   return 0;  // Added to avoid "no return statement" compiler warning
