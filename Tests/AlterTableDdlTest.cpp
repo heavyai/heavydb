@@ -503,7 +503,7 @@ TEST_F(AlterTableSetMaxRowsTest, NegativeMaxRows) {
   sqlAndCompareResult("select * from test_table;",
                       {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
   queryAndAssertException("alter table test_table set max_rows = -1;",
-                          "Exception: Max rows cannot be a negative number.");
+                          "Max rows cannot be a negative number.");
   assertMaxRows(DEFAULT_MAX_ROWS);
   sqlAndCompareResult("select * from test_table;",
                       {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});

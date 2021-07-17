@@ -271,7 +271,8 @@ public class LogRunner {
           try {
             client.sql_execute(session, sl[1], true, null, -1, -1);
           } catch (TOmniSciException ex1) {
-            logger.error("Failed to execute " + sl[1] + " exception " + ex1.toString());
+            logger.error(
+                    "Failed to execute " + sl[1] + " exception " + ex1.getError_msg());
           } catch (TException ex) {
             logger.error("Failed to execute " + sl[1] + " exception " + ex.toString());
           }
@@ -308,7 +309,7 @@ public class LogRunner {
                     null);
           } catch (TOmniSciException ex1) {
             logger.error("Failed to execute get_result_row_for_pixel exception "
-                    + ex1.toString());
+                    + ex1.getError_msg());
           } catch (TException ex) {
             logger.error("Failed to execute get_result_row_for_pixel exception "
                     + ex.toString());

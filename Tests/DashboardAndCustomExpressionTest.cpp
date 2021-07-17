@@ -573,7 +573,7 @@ TEST_P(ShareAndUnshareDashboardsTest, NonExistentGroupOrUser) {
       [&, this] {
         shareOrUnshareDashboards(permissions, {"non_existent_user"}, do_share);
       },
-      "Exception: User/Role 'non_existent_user' does not exist");
+      "User/Role 'non_existent_user' does not exist");
 }
 
 TEST_P(ShareAndUnshareDashboardsTest, NonExistentDashboards) {
@@ -807,7 +807,7 @@ TEST_F(DashboardBulkDeleteTest, SomeInvalidIDs) {
     FAIL() << "An exception should have been thrown for this test case.";
   } catch (const TOmniSciException& e) {
     assertExceptionMessage(e,
-                           "Exception: Delete dashboard(s) failed with "
+                           "Delete dashboard(s) failed with "
                            "error(s):\nDashboard id: 0 - Dashboard id does not exist");
   }
   ASSERT_EQ(getNumDashboards(), size_t(1));
@@ -830,7 +830,7 @@ TEST_F(DashboardBulkDeleteTest, NoDeleteDashboardPrivilege) {
   } catch (const TOmniSciException& e) {
     assertExceptionMessage(
         e,
-        "Exception: Delete dashboard(s) failed with error(s):\nDashboard id: " +
+        "Delete dashboard(s) failed with error(s):\nDashboard id: " +
             std::to_string(db_id_2) +
             " - User should be either owner of dashboard or super user to delete it");
   }
@@ -867,7 +867,7 @@ TEST_F(DashboardBulkDeleteTest, InvalidNoPrivilegeMix) {
   } catch (const TOmniSciException& e) {
     assertExceptionMessage(
         e,
-        std::string("Exception: Delete dashboard(s) failed with error(s):\n") +
+        std::string("Delete dashboard(s) failed with error(s):\n") +
             "Dashboard id: 0 - Dashboard id does not exist\n" +
             "Dashboard id: " + std::to_string(db_id) +
             " - User should be either owner of dashboard or super user to delete it");

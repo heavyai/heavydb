@@ -150,7 +150,7 @@ TEST_F(LoadTableTest, OmitNotNullableColumn) {
   row.cols = {getSV(MULTIPOLYGON), getSV(LINESTRING)};
   executeLambdaAndAssertException(
       [&]() { handler->load_table(session, "geo_load_test", {row}, column_names); },
-      "Exception: TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TOmniSciException(error_msg="
       "Column 'nns' cannot be omitted due to NOT NULL constraint)");
 }
 
@@ -173,7 +173,7 @@ TEST_F(LoadTableTest, DuplicateColumns) {
   row.cols = {getSV(MULTIPOLYGON), getSV(LINESTRING), getSV(MULTIPOLYGON), getSV("nns")};
   executeLambdaAndAssertException(
       [&]() { handler->load_table(session, "geo_load_test", {row}, column_names); },
-      "Exception: TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TOmniSciException(error_msg="
       "Column mp is mentioned multiple times)");
 }
 
@@ -185,7 +185,7 @@ TEST_F(LoadTableTest, UnexistingColumn) {
   row.cols = {getSV(MULTIPOLYGON), getSV(LINESTRING), getSV(MULTIPOLYGON), getSV("nns")};
   executeLambdaAndAssertException(
       [&]() { handler->load_table(session, "geo_load_test", {row}, column_names); },
-      "Exception: TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TOmniSciException(error_msg="
       "Column mp2 does not exist)");
 }
 
@@ -197,7 +197,7 @@ TEST_F(LoadTableTest, ColumnNumberMismatch) {
   row.cols = {getSV(MULTIPOLYGON), getSV(LINESTRING), getSV("nns")};
   executeLambdaAndAssertException(
       [&]() { handler->load_table(session, "geo_load_test", {row}, column_names); },
-      "Exception: TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TOmniSciException(error_msg="
       "Number of columns specified does not match the number of columns given (3 vs 4))");
 }
 
@@ -206,7 +206,7 @@ TEST_F(LoadTableTest, NoColumns) {
   auto& session = getDbHandlerAndSessionId().second;
   executeLambdaAndAssertException(
       [&]() { handler->load_table(session, "geo_load_test", {}, {}); },
-      "Exception: TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TOmniSciException(error_msg="
       "No rows to insert)");
 }
 
@@ -281,7 +281,7 @@ TEST_F(LoadTableTest, BinaryOmitNotNullableColumnNoGeo) {
   row.cols = {i1_datum, s_datum};
   executeLambdaAndAssertException(
       [&]() { handler->load_table_binary(session, "load_test", {row}, column_names); },
-      "Exception: TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TOmniSciException(error_msg="
       "Column 'nns' cannot be omitted due to NOT NULL constraint)");
 }
 
@@ -293,7 +293,7 @@ TEST_F(LoadTableTest, BinaryDuplicateColumnsNoGeo) {
   row.cols = {nns_datum, i1_datum, i1_datum};
   executeLambdaAndAssertException(
       [&]() { handler->load_table_binary(session, "load_test", {row}, column_names); },
-      "Exception: TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TOmniSciException(error_msg="
       "Column i1 is mentioned multiple times)");
 }
 
@@ -305,7 +305,7 @@ TEST_F(LoadTableTest, BinaryUnexistingColumnNoGeo) {
   row.cols = {nns_datum, i1_datum, i1_datum};
   executeLambdaAndAssertException(
       [&]() { handler->load_table_binary(session, "load_test", {row}, column_names); },
-      "Exception: TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TOmniSciException(error_msg="
       "Column i2 does not exist)");
 }
 
@@ -317,7 +317,7 @@ TEST_F(LoadTableTest, BinaryColumnNumberMismatchNoGeo) {
   row.cols = {nns_datum, i1_datum};
   executeLambdaAndAssertException(
       [&]() { handler->load_table_binary(session, "load_test", {row}, column_names); },
-      "Exception: TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TOmniSciException(error_msg="
       "Number of columns specified does not match the number of columns given "
       "(2 vs 3))");
 }
@@ -327,7 +327,7 @@ TEST_F(LoadTableTest, BinaryNoColumns) {
   auto& session = getDbHandlerAndSessionId().second;
   executeLambdaAndAssertException(
       [&]() { handler->load_table_binary(session, "load_test", {}, {}); },
-      "Exception: TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TOmniSciException(error_msg="
       "No rows to insert)");
 }
 

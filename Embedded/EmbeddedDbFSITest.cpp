@@ -139,7 +139,7 @@ dropoff_puma BIGINT) WITH (storage_type='CSV:") + csv_path + std::string("', fra
       }
     }
   } catch (std::exception& e) {
-    std::cerr << "Exception: " << e.what() << "\n";
+    std::cerr << e.what() << "\n";
   }
   return 0;
 }

@@ -2343,9 +2343,9 @@ TEST(Select, CountDistinct) {
     c("SELECT COUNT(distinct x) FROM test;", dt);
     c("SELECT COUNT(distinct b) FROM test;", dt);
     THROW_ON_AGGREGATOR(c("SELECT COUNT(distinct f) FROM test;",
-                          dt));  // Exception: Cannot use a fast path for COUNT distinct
+                          dt));  // Cannot use a fast path for COUNT distinct
     THROW_ON_AGGREGATOR(c("SELECT COUNT(distinct d) FROM test;",
-                          dt));  // Exception: Cannot use a fast path for COUNT distinct
+                          dt));  // Cannot use a fast path for COUNT distinct
     c("SELECT COUNT(distinct str) FROM test;", dt);
     c("SELECT COUNT(distinct ss) FROM test;", dt);
     c("SELECT COUNT(distinct x + 1) FROM test;", dt);
@@ -2362,10 +2362,10 @@ TEST(Select, CountDistinct) {
     c("SELECT AVG(z), COUNT(distinct x) AS dx FROM test GROUP BY y HAVING dx > 1;", dt);
     THROW_ON_AGGREGATOR(
         c("SELECT z, str, COUNT(distinct f) FROM test GROUP BY z, str ORDER BY str DESC;",
-          dt));  // Exception: Cannot use a fast path for COUNT distinct
+          dt));  // Cannot use a fast path for COUNT distinct
     c("SELECT COUNT(distinct x * (50000 - 1)) FROM test;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(distinct real_str) FROM test;", dt),
-                 std::runtime_error);  // Exception: Strings must be dictionary-encoded
+                 std::runtime_error);  // Strings must be dictionary-encoded
                                        // for COUNT(DISTINCT).
   }
 }
@@ -2497,7 +2497,7 @@ TEST(Select, ApproxMedianSanity) {
     } catch (std::runtime_error const& e) {
       EXPECT_EQ(
           std::string(e.what()),
-          "TException - service has thrown: TOmniSciException(error_msg=Exception: "
+          "TException - service has thrown: TOmniSciException(error_msg="
           "APPROX_QUANTILE/MEDIAN is not supported in distributed mode at this time.)");
     } catch (...) {
       EXPECT_TRUE(false) << "std::runtime_error expected for approx_median query.";
@@ -3082,7 +3082,7 @@ TEST(Select, Case) {
       };
       EXPECT_ANY_THROW(run_multiple_agg(
           R"(SELECT CASE WHEN x = 7 THEN 'a' WHEN x = 8 then str ELSE fixed_str END FROM test;)",
-          dt));  // Exception: Cast from dictionary-encoded string to none-encoded would
+          dt));  // Cast from dictionary-encoded string to none-encoded would
                  // be slow
       g_enable_watchdog = false;
       // casts not yet supported in distributed mode
@@ -8566,7 +8566,7 @@ TEST(Select, Export_Via_Query_Having_Scalar_Subquery) {
   // EXPORT stmt needs "validation_query" to gather some info from the query
   // before doing the actual data export
   // Here, if we do export via custom query having scalar subquery,
-  // we throw "Exception: Scalar sub-query returned no results"
+  // we throw "Scalar sub-query returned no results"
   // since RexSubquery Analyzer does not know about the validation query
   // so we have to let subquery analyzer know about that we do process validation query
   // and keep doing processing instead of throwing the exception
@@ -19747,10 +19747,9 @@ TEST(Select, ParseIntegerExceptions) {
         EXPECT_TRUE(false) << "Exception expected for query: " << test.query;
       } catch (std::runtime_error const& e) {
         if (g_aggregator) {
-          EXPECT_EQ(
-              e.what(),
-              "TException - service has thrown: TOmniSciException(error_msg=Exception: " +
-                  test.exception + ')');
+          EXPECT_EQ(e.what(),
+                    "TException - service has thrown: TOmniSciException(error_msg=" +
+                        test.exception + ')');
         } else {
           EXPECT_EQ(e.what(), test.exception);
         }

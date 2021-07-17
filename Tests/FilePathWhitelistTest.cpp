@@ -214,7 +214,7 @@ TEST_P(FilePathWhitelistTest, NonWhitelistedPath) {
           .string();
   queryAndAssertException(
       getQuery(file_path),
-      "Exception: File or directory path \"" + file_path + "\" is not whitelisted.");
+      "File or directory path \"" + file_path + "\" is not whitelisted.");
 }
 
 TEST_P(FilePathWhitelistTest, WhitelistedSymlinkToUnlistedPath) {
@@ -228,7 +228,7 @@ TEST_P(FilePathWhitelistTest, WhitelistedSymlinkToUnlistedPath) {
   boost::filesystem::create_symlink(file_path, symlink_path);
 
   queryAndAssertException(getQuery(symlink_path),
-                          "Exception: File or directory path \"" + symlink_path +
+                          "File or directory path \"" + symlink_path +
                               "\" (resolved to \"" + file_path +
                               "\") is not whitelisted.");
 }
@@ -254,7 +254,7 @@ TEST_P(FilePathWhitelistTest, UnlistedSymlinkToUnlistedPath) {
   boost::filesystem::create_symlink(file_path, symlink_path);
 
   queryAndAssertException(getQuery(symlink_path),
-                          "Exception: File or directory path \"" + symlink_path +
+                          "File or directory path \"" + symlink_path +
                               "\" (resolved to \"" + file_path +
                               "\") is not whitelisted.");
 }
@@ -285,7 +285,7 @@ TEST_P(FilePathWhitelistTest, NonExistentFilePath) {
   setServerConfig("test_config.conf");
   queryAndAssertException(
       getQuery("/tmp/non_existent/example.csv"),
-      "Exception: File or directory \"/tmp/non_existent/example.csv\" does not exist.");
+      "File or directory \"/tmp/non_existent/example.csv\" does not exist.");
 }
 
 TEST_P(FilePathWhitelistTest, NonExistentWhitelistedRootPath) {
@@ -298,9 +298,9 @@ TEST_P(FilePathWhitelistTest, BlacklistedPath) {
   setServerConfig("test_config.conf");
   const auto& file_path = getTestFilePath();
   ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
-  queryAndAssertException(getQuery(file_path),
-                          "Exception: Access to file or directory path \"" + file_path +
-                              "\" is not allowed.");
+  queryAndAssertException(
+      getQuery(file_path),
+      "Access to file or directory path \"" + file_path + "\" is not allowed.");
 }
 
 TEST_P(FilePathWhitelistTest, UnlistedSymlinkToBlacklistedPath) {
@@ -310,9 +310,8 @@ TEST_P(FilePathWhitelistTest, UnlistedSymlinkToBlacklistedPath) {
   ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
   boost::filesystem::create_symlink(file_path, symlink_path);
   queryAndAssertException(getQuery(symlink_path),
-                          "Exception: Access to file or directory path \"" +
-                              symlink_path + "\" (resolved to \"" + file_path +
-                              "\") is not allowed.");
+                          "Access to file or directory path \"" + symlink_path +
+                              "\" (resolved to \"" + file_path + "\") is not allowed.");
 }
 
 TEST_P(FilePathWhitelistTest, RootPathWhitelisted) {
@@ -324,9 +323,9 @@ TEST_P(FilePathWhitelistTest, RootPathWhitelisted) {
   // Validation should fail if path is in the blacklist,
   // even when the root path is set for the whitelist.
   ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
-  queryAndAssertException(getQuery(file_path),
-                          "Exception: Access to file or directory path \"" + file_path +
-                              "\" is not allowed.");
+  queryAndAssertException(
+      getQuery(file_path),
+      "Access to file or directory path \"" + file_path + "\" is not allowed.");
 }
 
 TEST_P(FilePathWhitelistTest, DefaultImportAndExportPaths) {
@@ -369,8 +368,7 @@ TEST_F(FilePathWhitelistTest, ImportTableBlacklist) {
       [&] {
         db_handler->import_table(session_id, "test_table", file_path, TCopyParams{});
       },
-      "Exception: Access to file or directory path \"" + file_path +
-          "\" is not allowed.");
+      "Access to file or directory path \"" + file_path + "\" is not allowed.");
 }
 
 TEST_F(FilePathWhitelistTest, ImportGeoTableBlacklist) {
@@ -437,17 +435,17 @@ TEST_F(FilePathWhitelistTest, GetLayersInGeoFileBlacklist) {
 TEST_F(FilePathWhitelistTest, DumpTableBlacklist) {
   const auto& file_path = temp_file_path_;
   ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
-  queryAndAssertException("DUMP TABLE test_table TO '" + file_path + "';",
-                          "Exception: Access to file or directory path \"" + file_path +
-                              "\" is not allowed.");
+  queryAndAssertException(
+      "DUMP TABLE test_table TO '" + file_path + "';",
+      "Access to file or directory path \"" + file_path + "\" is not allowed.");
 }
 
 TEST_F(FilePathWhitelistTest, RestoreTableBlacklist) {
   const auto& file_path = temp_file_path_;
   ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
-  queryAndAssertException("RESTORE TABLE test1 FROM '" + file_path + "';",
-                          "Exception: Access to file or directory path \"" + file_path +
-                              "\" is not allowed.");
+  queryAndAssertException(
+      "RESTORE TABLE test1 FROM '" + file_path + "';",
+      "Access to file or directory path \"" + file_path + "\" is not allowed.");
 }
 
 namespace {

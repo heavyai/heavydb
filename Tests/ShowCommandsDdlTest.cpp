@@ -376,7 +376,7 @@ TEST_F(ShowUserSessionsTest, PRIVILEGES_NONSUPERUSER) {
     FAIL() << "An exception should have been thrown for this test case.";
   } catch (const TOmniSciException& e) {
     ASSERT_EQ(
-        "Exception: SHOW USER SESSIONS failed, because it can only be executed by super "
+        "SHOW USER SESSIONS failed, because it can only be executed by super "
         "user.",
         e.error_msg);
   }
@@ -1304,7 +1304,7 @@ TEST_F(ShowDiskCacheUsageTest, NoTables) {
 
 TEST_F(ShowDiskCacheUsageTest, NoTablesFiltered) {
   queryAndAssertException("SHOW DISK CACHE USAGE foreign_table;",
-                          "Exception: Can not show disk cache usage for table: "
+                          "Can not show disk cache usage for table: "
                           "foreign_table. Table does not exist.");
 }
 
@@ -1911,7 +1911,7 @@ TEST_F(ShowTableDetailsTest, InaccessibleTable) {
 
   loginTestUser();
   queryAndAssertException("show table details test_table_1;",
-                          "Exception: Unable to show table details for table: "
+                          "Unable to show table details for table: "
                           "test_table_1. Table does not exist.");
 }
 
@@ -1922,7 +1922,7 @@ TEST_F(ShowTableDetailsTest, NonExistentTable) {
   sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
 
   queryAndAssertException("show table details test_table_4;",
-                          "Exception: Unable to show table details for table: "
+                          "Unable to show table details for table: "
                           "test_table_4. Table does not exist.");
 }
 
@@ -1976,7 +1976,7 @@ TEST_F(ShowTableDetailsTest, FsiTableSpecified) {
       boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
 
   queryAndAssertException("show table details test_foreign_table;",
-                          "Exception: SHOW TABLE DETAILS is not supported for foreign "
+                          "SHOW TABLE DETAILS is not supported for foreign "
                           "tables. Table name: test_foreign_table.");
 }
 
@@ -1984,7 +1984,7 @@ TEST_F(ShowTableDetailsTest, TemporaryTableSpecified) {
   sql("create temporary table test_temp_table (c1 int, c2 text);");
 
   queryAndAssertException("show table details test_temp_table;",
-                          "Exception: SHOW TABLE DETAILS is not supported for temporary "
+                          "SHOW TABLE DETAILS is not supported for temporary "
                           "tables. Table name: test_temp_table.");
 }
 
@@ -1993,7 +1993,7 @@ TEST_F(ShowTableDetailsTest, ArrowFsiTableSpecified) {
       boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "';");
 
   queryAndAssertException("show table details test_arrow_table;",
-                          "Exception: SHOW TABLE DETAILS is not supported for temporary "
+                          "SHOW TABLE DETAILS is not supported for temporary "
                           "tables. Table name: test_arrow_table.");
 }
 
@@ -2002,7 +2002,7 @@ TEST_F(ShowTableDetailsTest, ViewSpecified) {
   sql("create view test_view as select * from test_table_1;");
 
   queryAndAssertException("show table details test_view;",
-                          "Exception: Unable to show table details for table: "
+                          "Unable to show table details for table: "
                           "test_view. Table does not exist.");
 }
 

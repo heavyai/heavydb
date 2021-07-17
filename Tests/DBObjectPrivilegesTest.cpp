@@ -347,7 +347,7 @@ class InvalidGrantSyntax : public DBHandlerTestFixture {};
 
 TEST_F(InvalidGrantSyntax, InvalidGrantSyntax) {
   std::string error_message;
-  error_message = "Exception: Syntax error at: ON";
+  error_message = "Syntax error at: ON";
 
   queryAndAssertException("GRANT SELECT, INSERT, ON TABLE tbl TO Arsenal, Juventus;",
                           error_message);
@@ -3151,7 +3151,7 @@ TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeDropPrivilege) {
   std::string privilege{"DROP"};
   std::string query{"DROP FOREIGN TABLE test_table;"};
   std::string no_privilege_exception{
-      "Exception: Foreign table \"test_table\" will not be dropped. User has no DROP "
+      "Foreign table \"test_table\" will not be dropped. User has no DROP "
       "TABLE privileges."};
   createTestForeignTable();
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
@@ -3164,7 +3164,7 @@ TEST_F(TablePermissionsTest, TableGrantRevokeDropPrivilege) {
   std::string privilege{"DROP"};
   std::string query{"DROP TABLE test_table;"};
   std::string no_privilege_exception{
-      "Exception: Table test_table will not be dropped. User has no proper privileges."};
+      "Table test_table will not be dropped. User has no proper privileges."};
   createTestTable();
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
   grantThenRevokePrivilegeToTestUser(privilege);
@@ -3195,11 +3195,11 @@ TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeDeletePrivilege) {
   std::string privilege{"DELETE"};
   std::string query{"DELETE FROM test_table WHERE i = 1;"};
   std::string no_privilege_exception{
-      "Exception: Violation of access privileges: user test_user has no proper "
+      "Violation of access privileges: user test_user has no proper "
       "privileges for "
       "object test_table"};
   std::string query_exception{
-      "Exception: DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
+      "DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
       "supported for foreign tables."};
   createTestForeignTable();
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
@@ -3212,7 +3212,7 @@ TEST_F(TablePermissionsTest, TableGrantRevokeDeletePrivilege) {
   std::string privilege{"DELETE"};
   std::string query{"DELETE FROM test_table WHERE i = 1;"};
   std::string no_privilege_exception{
-      "Exception: Violation of access privileges: user test_user has no proper "
+      "Violation of access privileges: user test_user has no proper "
       "privileges for "
       "object test_table"};
   createTestTable();
@@ -3225,10 +3225,9 @@ TEST_F(TablePermissionsTest, TableGrantRevokeDeletePrivilege) {
 TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeInsertPrivilege) {
   std::string privilege{"INSERT"};
   std::string query{"INSERT INTO test_table VALUES (2);"};
-  std::string no_privilege_exception{
-      "Exception: User has no insert privileges on test_table."};
+  std::string no_privilege_exception{"User has no insert privileges on test_table."};
   std::string query_exception{
-      "Exception: DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
+      "DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
       "supported for foreign tables."};
   createTestForeignTable();
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
@@ -3240,8 +3239,7 @@ TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeInsertPrivilege) {
 TEST_F(TablePermissionsTest, TableGrantRevokeInsertPrivilege) {
   std::string privilege{"INSERT"};
   std::string query{"INSERT INTO test_table VALUES (2);"};
-  std::string no_privilege_exception{
-      "Exception: User has no insert privileges on test_table."};
+  std::string no_privilege_exception{"User has no insert privileges on test_table."};
   createTestTable();
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
   grantThenRevokePrivilegeToTestUser(privilege);
@@ -3253,10 +3251,10 @@ TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeTruncatePrivilege) {
   std::string privilege{"TRUNCATE"};
   std::string query{"TRUNCATE TABLE test_table;"};
   std::string no_privilege_exception{
-      "Exception: Table test_table will not be truncated. User test_user has no proper "
+      "Table test_table will not be truncated. User test_user has no proper "
       "privileges."};
   std::string query_exception{
-      "Exception: DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
+      "DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
       "supported for foreign tables."};
   createTestForeignTable();
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
@@ -3269,7 +3267,7 @@ TEST_F(TablePermissionsTest, TableGrantRevokeTruncatePrivilege) {
   std::string privilege{"TRUNCATE"};
   std::string query{"TRUNCATE TABLE test_table;"};
   std::string no_privilege_exception{
-      "Exception: Table test_table will not be truncated. User test_user has no proper "
+      "Table test_table will not be truncated. User test_user has no proper "
       "privileges."};
   createTestTable();
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
@@ -3282,11 +3280,11 @@ TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeUpdatePrivilege) {
   std::string privilege{"UPDATE"};
   std::string query{"UPDATE test_table SET i = 2 WHERE i = 1;"};
   std::string no_privilege_exception{
-      "Exception: Violation of access privileges: user test_user has no proper "
+      "Violation of access privileges: user test_user has no proper "
       "privileges for "
       "object test_table"};
   std::string query_exception{
-      "Exception: DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
+      "DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
       "supported for foreign tables."};
   createTestForeignTable();
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
@@ -3299,7 +3297,7 @@ TEST_F(TablePermissionsTest, TableGrantRevokeUpdatePrivilege) {
   std::string privilege{"UPDATE"};
   std::string query{"UPDATE test_table SET i = 2 WHERE i = 1;"};
   std::string no_privilege_exception{
-      "Exception: Violation of access privileges: user test_user has no proper "
+      "Violation of access privileges: user test_user has no proper "
       "privileges for "
       "object test_table"};
   createTestTable();
@@ -3316,7 +3314,7 @@ TEST_P(ForeignTableAndTablePermissionsTest, GrantRevokeShowCreateTablePrivilege)
   }
   std::string privilege{"DROP"};
   std::string query{"SHOW CREATE TABLE test_table;"};
-  std::string no_privilege_exception{"Exception: Table/View test_table does not exist."};
+  std::string no_privilege_exception{"Table/View test_table does not exist."};
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
   grantThenRevokePrivilegeToTestUser(privilege);
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
@@ -3327,7 +3325,7 @@ TEST_F(TablePermissionsTest, TableGrantRevokeAlterTablePrivilege) {
   std::string privilege{"ALTER"};
   std::string query{"ALTER TABLE test_table RENAME COLUMN i TO j;"};
   std::string no_privilege_exception{
-      "Exception: Current user does not have the privilege to alter table: test_table"};
+      "Current user does not have the privilege to alter table: test_table"};
   createTestTable();
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
   grantThenRevokePrivilegeToTestUser(privilege);
@@ -3340,7 +3338,7 @@ TEST_F(ForeignTablePermissionsTest, TableGrantRevokeAlterForeignTablePrivilege) 
   std::string query{
       "ALTER FOREIGN TABLE test_table SET (refresh_update_type = 'append');"};
   std::string no_privilege_exception{
-      "Exception: Current user does not have the privilege to alter foreign table: "
+      "Current user does not have the privilege to alter foreign table: "
       "test_table"};
   createTestForeignTable();
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
@@ -3353,7 +3351,7 @@ TEST_F(TablePermissionsTest, TableRenameTablePrivilege) {
   std::string privilege{"ALTER"};
   std::string query{"RENAME TABLE test_table TO renamed_test_table;"};
   std::string no_privilege_exception{
-      "Exception: Current user does not have the privilege to alter table: test_table"};
+      "Current user does not have the privilege to alter table: test_table"};
   createTestTable();
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
   queryAsTestUserWithPrivilege(query, privilege);
@@ -3391,7 +3389,7 @@ TEST_F(TablePermissionsTest, TableAllPrivileges) {
 TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeCreateTablePrivilege) {
   login("test_user", "test_pass");
   executeLambdaAndAssertException([this] { createTestForeignTable(); },
-                                  "Exception: Foreign table \"test_table\" will not be "
+                                  "Foreign table \"test_table\" will not be "
                                   "created. User has no CREATE TABLE privileges.");
 
   switchToAdmin();
@@ -3399,7 +3397,7 @@ TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeCreateTablePrivilege)
   sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
   login("test_user", "test_pass");
   executeLambdaAndAssertException([this] { createTestForeignTable(); },
-                                  "Exception: Foreign table \"test_table\" will not be "
+                                  "Foreign table \"test_table\" will not be "
                                   "created. User has no CREATE TABLE privileges.");
 
   switchToAdmin();
@@ -3438,7 +3436,7 @@ TEST_F(ForeignTablePermissionsTest, ForeignTableRefreshNonOwner) {
   login("test_user", "test_pass");
   runQueryAndAssertException(
       "REFRESH FOREIGN TABLES test_table;",
-      "Exception: REFRESH FOREIGN TABLES failed on table \"test_table\". It can only be "
+      "REFRESH FOREIGN TABLES failed on table \"test_table\". It can only be "
       "executed by super user or owner of the object.");
 }
 

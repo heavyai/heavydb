@@ -295,7 +295,7 @@ class EpochRollbackTest : public EpochConsistencyTest,
 
   void queryAndAssertCheckpointError(const std::string& query) {
     initializeCheckpointFailureMock();
-    queryAndAssertException(query, "Exception: Mock checkpoint exception");
+    queryAndAssertException(query, "Mock checkpoint exception");
     resetCheckpointFailureMock();
   }
 
@@ -938,7 +938,7 @@ TEST_F(EpochValidationTest, DISABLED_NegativeAndInconsistentEpochs) {
 
 TEST_F(EpochValidationTest, WrongValidationType) {
   queryAndAssertException(getWrongValidateStatement(),
-                          "Exception: Unexpected validation type specified. Only the \"" +
+                          "Unexpected validation type specified. Only the \"" +
                               getValidateStatement() +
                               "\" command is currently supported.");
 }

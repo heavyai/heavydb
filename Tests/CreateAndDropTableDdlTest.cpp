@@ -951,8 +951,7 @@ TEST_P(CreateTableTest, FixedEncodingForNonNumberOrTimeType) {
     EXPECT_ANY_THROW(sql(query));
   } else {
     queryAndAssertException(
-        query,
-        "Exception: col1: Fixed encoding is only supported for integer or time columns.");
+        query, "col1: Fixed encoding is only supported for integer or time columns.");
   }
 }
 
@@ -960,7 +959,7 @@ TEST_P(CreateTableTest, DictEncodingNonTextType) {
   std::string query =
       getCreateTableQuery(GetParam(), "test_table", "(col1 INTEGER ENCODING DICT)");
   queryAndAssertException(query,
-                          "Exception: col1: Dictionary encoding is only supported on "
+                          "col1: Dictionary encoding is only supported on "
                           "string or string array columns.");
 }
 
@@ -968,29 +967,28 @@ TEST_P(CreateTableTest, CompressedEncodingNonWGS84GeoType) {
   std::string query = getCreateTableQuery(
       GetParam(), "test_table", "(col1 GEOMETRY(POINT, 900913) ENCODING COMPRESSED(32))");
   queryAndAssertException(
-      query,
-      "Exception: col1: COMPRESSED encoding is only supported on WGS84 geo columns.");
+      query, "col1: COMPRESSED encoding is only supported on WGS84 geo columns.");
 }
 
 TEST_P(CreateTableTest, CompressedEncodingNon32Bit) {
   std::string query = getCreateTableQuery(
       GetParam(), "test_table", "(col1 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(16))");
-  queryAndAssertException(
-      query, "Exception: col1: only 32-bit COMPRESSED geo encoding is supported");
+  queryAndAssertException(query,
+                          "col1: only 32-bit COMPRESSED geo encoding is supported");
 }
 
 TEST_P(CreateTableTest, DaysEncodingNonDateType) {  // Param for DECIMAL and NUMERIC
   std::string query =
       getCreateTableQuery(GetParam(), "test_table", "(col1 TIME ENCODING DAYS(16))");
-  queryAndAssertException(
-      query, "Exception: col1: Days encoding is only supported for DATE columns.");
+  queryAndAssertException(query,
+                          "col1: Days encoding is only supported for DATE columns.");
 }
 
 TEST_P(CreateTableTest, NonEncodedDictArray) {
   std::string query =
       getCreateTableQuery(GetParam(), "test_table", "(col1 TEXT[] ENCODING NONE)");
   queryAndAssertException(query,
-                          "Exception: col1: Array of strings must be dictionary encoded. "
+                          "col1: Array of strings must be dictionary encoded. "
                           "Specify ENCODING DICT");
 }
 
@@ -1000,20 +998,20 @@ TEST_P(CreateTableTest, FixedLengthArrayOfVarLengthType) {
   if (g_enable_calcite_ddl_parser) {
     EXPECT_ANY_THROW(sql(query));
   } else {
-    queryAndAssertException(query, "Exception: col1: Unexpected fixed length array size");
+    queryAndAssertException(query, "col1: Unexpected fixed length array size");
   }
 }
 
 TEST_P(CreateTableTest, UnsupportedTimestampPrecision) {
   std::string query =
       getCreateTableQuery(GetParam(), "test_table", "(col1 TIMESTAMP(10))");
-  queryAndAssertException(
-      query, "Exception: Only TIMESTAMP(n) where n = (0,3,6,9) are supported now.");
+  queryAndAssertException(query,
+                          "Only TIMESTAMP(n) where n = (0,3,6,9) are supported now.");
 }
 
 TEST_P(CreateTableTest, UnsupportedTimePrecision) {
   std::string query = getCreateTableQuery(GetParam(), "test_table", "(col1 TIME(1))");
-  queryAndAssertException(query, "Exception: Only TIME(0) is supported now.");
+  queryAndAssertException(query, "Only TIME(0) is supported now.");
 }
 
 TEST_P(CreateTableTest, NotNullColumnConstraint) {
@@ -1029,7 +1027,7 @@ TEST_P(CreateTableTest, NotNullColumnConstraint) {
 TEST_P(CreateTableTest, DuplicateColumnNames) {
   std::string query =
       getCreateTableQuery(GetParam(), "test_table", "(col1 INTEGER, col1 INTEGER)");
-  queryAndAssertException(query, "Exception: Column 'col1' defined more than once");
+  queryAndAssertException(query, "Column 'col1' defined more than once");
 }
 
 TEST_P(CreateTableTest, ExistingTableWithIfNotExists) {
@@ -1051,8 +1049,8 @@ TEST_P(CreateTableTest, ExistingTableWithIfNotExists) {
 TEST_P(CreateTableTest, ExistingTableWithoutIfNotExists) {
   std::string query = getCreateTableQuery(GetParam(), "test_table", "(col1 INTEGER)");
   sql(query);
-  queryAndAssertException(
-      query, "Exception: Table or View with name \"test_table\" already exists.");
+  queryAndAssertException(query,
+                          "Table or View with name \"test_table\" already exists.");
 }
 
 TEST_P(CreateTableTest, UnauthorizedUser) {
@@ -1062,11 +1060,11 @@ TEST_P(CreateTableTest, UnauthorizedUser) {
 
   if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
     queryAndAssertException(query,
-                            "Exception: Foreign table \"test_table\" will not be "
+                            "Foreign table \"test_table\" will not be "
                             "created. User has no CREATE TABLE privileges.");
   } else {
     queryAndAssertException(query,
-                            "Exception: Table test_table will not be created. User has "
+                            "Table test_table will not be created. User has "
                             "no create privileges.");
   }
 }
@@ -1126,10 +1124,10 @@ TEST_P(NegativePrecisionOrDimensionTest, NegativePrecisionOrDimension) {
     FAIL() << "An exception should have been thrown for this test case.";
   } catch (const TOmniSciException& e) {
     if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
-      ASSERT_TRUE(e.error_msg.find("Exception: SQL Error") != std::string::npos);
+      ASSERT_TRUE(e.error_msg.find("SQL Error") != std::string::npos);
     } else {
       if (!g_enable_calcite_ddl_parser) {
-        ASSERT_EQ("Exception: No negative number in type definition.", e.error_msg);
+        ASSERT_EQ("No negative number in type definition.", e.error_msg);
       }
     }
   }
@@ -1155,16 +1153,16 @@ TEST_P(PrecisionAndScaleTest, MaxPrecisionExceeded) {
   const auto& [table_type, data_type] = GetParam();
   std::string query =
       getCreateTableQuery(table_type, "test_table", "(col1 " + data_type + "(20))");
-  queryAndAssertException(
-      query, "Exception: DECIMAL and NUMERIC precision cannot be larger than 19.");
+  queryAndAssertException(query,
+                          "DECIMAL and NUMERIC precision cannot be larger than 19.");
 }
 
 TEST_P(PrecisionAndScaleTest, ScaleNotLessThanPrecision) {
   const auto& [table_type, data_type] = GetParam();
   std::string query =
       getCreateTableQuery(table_type, "test_table", "(col1 " + data_type + "(10, 10))");
-  queryAndAssertException(
-      query, "Exception: DECIMAL and NUMERIC must have precision larger than scale.");
+  queryAndAssertException(query,
+                          "DECIMAL and NUMERIC must have precision larger than scale.");
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -1233,7 +1231,7 @@ TEST_F(CreateForeignTableTest, NonExistentServer) {
       "non_existent_server;"};
   queryAndAssertException(
       query,
-      "Exception: Foreign Table with name \"test_foreign_table\" can not be created. "
+      "Foreign Table with name \"test_foreign_table\" can not be created. "
       "Associated foreign server with name \"non_existent_server\" does not exist.");
 }
 
@@ -1255,8 +1253,7 @@ TEST_F(CreateForeignTableTest, InvalidTableOption) {
   std::string query{
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
       "SERVER omnisci_local_csv WITH (invalid_option = 'value');"};
-  queryAndAssertException(query,
-                          "Exception: Invalid foreign table option \"INVALID_OPTION\".");
+  queryAndAssertException(query, "Invalid foreign table option \"INVALID_OPTION\".");
 }
 
 TEST_F(CreateForeignTableTest, WrongTableOptionCharacterSize) {
@@ -1265,7 +1262,7 @@ TEST_F(CreateForeignTableTest, WrongTableOptionCharacterSize) {
       "SERVER omnisci_local_csv WITH (delimiter = ',,', file_path = '" +
       getTestFilePath() + "');"};
   queryAndAssertException(query,
-                          "Exception: Invalid value specified for option \"DELIMITER\". "
+                          "Invalid value specified for option \"DELIMITER\". "
                           "Expected a single character, \"\\n\" or  \"\\t\".");
 }
 
@@ -1276,7 +1273,7 @@ TEST_F(CreateForeignTableTest, InvalidTableOptionBooleanValue) {
       getTestFilePath() + "');"};
   queryAndAssertException(
       query,
-      "Exception: Invalid boolean value specified for \"HEADER\" foreign table option. "
+      "Invalid boolean value specified for \"HEADER\" foreign table option. "
       "Value must be either 'true' or 'false'.");
 }
 
@@ -1292,7 +1289,7 @@ TEST_F(CreateForeignTableTest, DefaultServerWrapperPathMissingCsv) {
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
       "SERVER omnisci_local_csv;",
-      "Exception: No file_path found for Foreign Table \"test_foreign_table\". "
+      "No file_path found for Foreign Table \"test_foreign_table\". "
       "Table must have either set a \"FILE_PATH\" "
       "option, or its parent server must have set a \"BASE_PATH\" option.");
 }
@@ -1301,7 +1298,7 @@ TEST_F(CreateForeignTableTest, DefaultServerWrapperPathMissingParquet) {
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
       "SERVER omnisci_local_parquet;",
-      "Exception: No file_path found for Foreign Table \"test_foreign_table\". "
+      "No file_path found for Foreign Table \"test_foreign_table\". "
       "Table must have either set a \"FILE_PATH\" "
       "option, or its parent server must have set a \"BASE_PATH\" option.");
 }
@@ -1330,7 +1327,7 @@ TEST_F(CreateForeignTableTest, ServerPathMissingWrapperPathMissing) {
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
       "SERVER test_server;",
-      "Exception: No file_path found for Foreign Table \"test_foreign_table\". "
+      "No file_path found for Foreign Table \"test_foreign_table\". "
       "Table must have either set a \"FILE_PATH\" "
       "option, or its parent server must have set a \"BASE_PATH\" option.");
 }
@@ -1340,7 +1337,7 @@ TEST_F(CreateForeignTableTest, UnsupportedOption) {
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
       "SERVER omnisci_local_csv WITH (file_path = '" +
           getTestFilePath() + "', shard_count = 4);",
-      "Exception: Invalid foreign table option \"SHARD_COUNT\".");
+      "Invalid foreign table option \"SHARD_COUNT\".");
 }
 
 TEST_F(CreateForeignTableTest, ServerPathMissingWrapperPathRelative) {
@@ -1355,7 +1352,7 @@ TEST_F(CreateForeignTableTest, S3SelectWrongServer) {
                       "file_path = '../../Tests/FsiDataFiles/0.csv');";
   queryAndAssertException(
       query,
-      "Exception: The \"S3_ACCESS_TYPE\" option is only valid for foreign tables using "
+      "The \"S3_ACCESS_TYPE\" option is only valid for foreign tables using "
       "servers with \"STORAGE_TYPE\" option value of \"AWS_S3\".");
 }
 
@@ -1368,7 +1365,7 @@ TEST_F(CreateForeignTableTest, UnauthorizedServerUsage) {
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
       "SERVER test_server WITH (file_path = '../../Tests/FsiDataFiles/0.csv');",
-      "Exception: Current user does not have USAGE privilege on foreign server: "
+      "Current user does not have USAGE privilege on foreign server: "
       "test_server");
 }
 
@@ -1422,7 +1419,7 @@ TEST_F(CreateForeignTableTest, RevokedServerUsage) {
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
       "SERVER test_server WITH (file_path = '../../Tests/FsiDataFiles/0.csv');",
-      "Exception: Current user does not have USAGE privilege on foreign server: "
+      "Current user does not have USAGE privilege on foreign server: "
       "test_server");
 }
 
@@ -1437,7 +1434,7 @@ TEST_F(CreateForeignTableTest, RevokedDatabaseServerUsage) {
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
       "SERVER test_server WITH (file_path = '../../Tests/FsiDataFiles/0.csv');",
-      "Exception: Current user does not have USAGE privilege on foreign server: "
+      "Current user does not have USAGE privilege on foreign server: "
       "test_server");
 }
 
@@ -1479,8 +1476,8 @@ TEST_P(DropTableTest, NonExistingTableWithIfExists) {
 TEST_P(DropTableTest, NonExistentTableWithoutIfExists) {
   std::string query = getDropTableQuery(GetParam(), "test_table_2");
   queryAndAssertException(query,
-                          "Exception: Table/View test_table_2 for catalog omnisci does "
-                          "not exist, could not generate chunk key");
+                          "Table/View test_table_2 for catalog omnisci does "
+                          "not exist");
 }
 
 TEST_P(DropTableTest, UnauthorizedUser) {
@@ -1490,11 +1487,11 @@ TEST_P(DropTableTest, UnauthorizedUser) {
 
   if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
     queryAndAssertException(query,
-                            "Exception: Foreign table \"test_table\" will not be "
+                            "Foreign table \"test_table\" will not be "
                             "dropped. User has no DROP TABLE privileges.");
   } else {
     queryAndAssertException(query,
-                            "Exception: Table test_table will not be dropped. User has "
+                            "Table test_table will not be dropped. User has "
                             "no proper privileges.");
   }
 
@@ -1520,10 +1517,10 @@ TEST_P(CreateTableTest, InvalidSyntax) {
     FAIL() << "An exception should have been thrown for this test case.";
   } catch (const TOmniSciException& e) {
     if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
-      ASSERT_TRUE(e.error_msg.find("Exception: SQL Error") != std::string::npos);
+      ASSERT_TRUE(e.error_msg.find("SQL Error") != std::string::npos);
     } else {
       if (!g_enable_calcite_ddl_parser) {
-        ASSERT_EQ("Exception: Syntax error at: INTEGER", e.error_msg);
+        ASSERT_EQ("Syntax error at: INTEGER", e.error_msg);
       }
     }
   }
@@ -1537,10 +1534,8 @@ TEST_P(CreateTableTest, InvalidColumnDefinition) {
     FAIL() << "An exception should have been thrown for this test case.";
   } catch (const TOmniSciException& e) {
     if (GetParam() == ddl_utils::TableType::TABLE) {
-      ASSERT_TRUE(
-          e.error_msg.find(
-              "Exception: Exception occurred: Column definition for table test_table") !=
-          std::string::npos);
+      ASSERT_TRUE(e.error_msg.find("Column definition for table test_table") !=
+                  std::string::npos);
     }
   }
 }
@@ -1581,9 +1576,9 @@ TEST_F(DropTableTypeMismatchTest, Table_DropCommandForOtherTableTypes) {
   sql(getCreateTableQuery(ddl_utils::TableType::TABLE, "test_table", "(col1 INTEGER)"));
 
   queryAndAssertException("DROP VIEW test_table;",
-                          "Exception: test_table is a table. Use DROP TABLE.");
+                          "test_table is a table. Use DROP TABLE.");
   queryAndAssertException("DROP FOREIGN TABLE test_table;",
-                          "Exception: test_table is a table. Use DROP TABLE.");
+                          "test_table is a table. Use DROP TABLE.");
 
   sql("DROP table test_table;");
   ASSERT_EQ(nullptr, getCatalog().getMetadataForTable("test_table", false));
@@ -1593,10 +1588,9 @@ TEST_F(DropTableTypeMismatchTest, View_DropCommandForOtherTableTypes) {
   sql(getCreateTableQuery(ddl_utils::TableType::TABLE, "test_table", "(col1 INTEGER)"));
   sql("CREATE VIEW test_view AS SELECT * FROM test_table;");
 
-  queryAndAssertException("DROP table test_view;",
-                          "Exception: test_view is a view. Use DROP VIEW.");
+  queryAndAssertException("DROP table test_view;", "test_view is a view. Use DROP VIEW.");
   queryAndAssertException("DROP FOREIGN TABLE test_view;",
-                          "Exception: test_view is a view. Use DROP VIEW.");
+                          "test_view is a view. Use DROP VIEW.");
 
   sql("DROP VIEW test_view;");
   ASSERT_EQ(nullptr, getCatalog().getMetadataForTable("test_view", false));
@@ -1609,10 +1603,10 @@ TEST_F(DropTableTypeMismatchTest, ForeignTable_DropCommandForOtherTableTypes) {
 
   queryAndAssertException(
       "DROP table test_foreign_table;",
-      "Exception: test_foreign_table is a foreign table. Use DROP FOREIGN TABLE.");
+      "test_foreign_table is a foreign table. Use DROP FOREIGN TABLE.");
   queryAndAssertException(
       "DROP VIEW test_foreign_table;",
-      "Exception: test_foreign_table is a foreign table. Use DROP FOREIGN TABLE.");
+      "test_foreign_table is a foreign table. Use DROP FOREIGN TABLE.");
 
   sql("DROP FOREIGN TABLE test_foreign_table;");
   ASSERT_EQ(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
@@ -1639,7 +1633,7 @@ TEST_F(DropForeignTableTest, FsiDisabled) {
   g_enable_fsi = false;
   queryAndAssertException(
       "DROP table test_foreign_table;",
-      "Exception: test_foreign_table is a foreign table. Use DROP FOREIGN TABLE.");
+      "test_foreign_table is a foreign table. Use DROP FOREIGN TABLE.");
 }
 
 class CreateViewUnsupportedTest : public CreateAndDropTableDdlTest {
@@ -1663,7 +1657,7 @@ TEST_F(CreateViewUnsupportedTest, Basics) {
       ddl_utils::TableType::TABLE, "test_table", "(col1 INTEGER, col2 FLOAT)"));
   queryAndAssertException(
       "CREATE VIEW showcreateviewtest (c1, c2) AS SELECT * FROM showcreatetabletest;",
-      "Exception: SQL Error: Column list aliases in views are not yet supported.");
+      "SQL Error: Column list aliases in views are not yet supported.");
 }
 
 class CreateNonReservedKeywordsTest : public CreateAndDropTableDdlTest {
@@ -1786,7 +1780,7 @@ TEST_F(RenameTableTest, ErrorChecks) {
 
   executeLambdaAndAssertException(
       [] { sql("RENAME TABLE A to B"); },
-      "Exception: Error: Attempted to overwrite and lose data in table: 'B'");
+      "Error: Attempted to overwrite and lose data in table: 'B'");
 
   // verify no change
   sqlAndCompareResult("SELECT count(*) FROM A WHERE Name = 'A';", {{i(1)}});
@@ -1795,7 +1789,7 @@ TEST_F(RenameTableTest, ErrorChecks) {
   // ERROR, expect no change, as would trigger an overwrite
   executeLambdaAndAssertException(
       [] { sql("RENAME TABLE A to C, B TO C"); },
-      "Exception: Error: Attempted to overwrite and lose data in table: 'C'");
+      "Error: Attempted to overwrite and lose data in table: 'C'");
 
   // verify no name change
   sqlAndCompareResult("SELECT count(*) FROM A WHERE Name = 'A';", {{i(1)}});
@@ -1803,7 +1797,7 @@ TEST_F(RenameTableTest, ErrorChecks) {
 
   // ERROR, expect no change, table Z is non-existant
   executeLambdaAndAssertException([] { sql("RENAME TABLE Z TO A"); },
-                                  "Exception: Source table 'Z' does not exist.");
+                                  "Source table 'Z' does not exist.");
 
   // verify
   sqlAndCompareResult("SELECT count(*) FROM A WHERE Name = 'A';", {{i(1)}});
@@ -1982,7 +1976,7 @@ TEST_F(DefaultValuesTest, ProhibitDefaultOnShardedKey) {
   queryAndAssertException(
       "CREATE TABLE defval_tbl (i INTEGER default -1, key text "
       "default 'default', shard key(i)) with (shard_count = 2)",
-      "Exception: Default values for shard "
+      "Default values for shard "
       "keys are not supported yet.");
 }
 
@@ -2003,7 +1997,7 @@ TEST_F(DefaultValuesTest, DefaultNotNull) {
       "CREATE TABLE defval_tbl (idx INTEGER, a INTEGER NOT NULL DEFAULT 12)";
   sql(create_table_query);
   queryAndAssertException("INSERT INTO defval_tbl(idx, a) VALUES (1, NULL)",
-                          "Exception: Cannot insert NULL into column a");
+                          "Cannot insert NULL into column a");
   sql("INSERT INTO defval_tbl(idx) VALUES (1)");
   sqlAndCompareResult("SELECT idx, a FROM defval_tbl", {{i(1), i(12)}});
 }
@@ -2020,8 +2014,7 @@ TEST_F(DefaultValuesTest, NotNullWithNullDefault) {
   std::string create_table_query =
       "CREATE TABLE defval_tbl (idx INTEGER, a INTEGER NOT NULL DEFAULT NULL)";
   sql(create_table_query);
-  queryAndAssertException("INSERT INTO defval_tbl(idx) VALUES (1)",
-                          "Exception: NULL for column a");
+  queryAndAssertException("INSERT INTO defval_tbl(idx) VALUES (1)", "NULL for column a");
 }
 
 int main(int argc, char** argv) {

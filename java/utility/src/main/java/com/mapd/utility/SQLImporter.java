@@ -464,7 +464,7 @@ public class SQLImporter {
       LOGGER.error("SQLException - " + se.toString());
       se.printStackTrace();
     } catch (TOmniSciException ex) {
-      LOGGER.error("TOmniSciException - " + ex.toString());
+      LOGGER.error("TOmniSciException - " + ex.getError_msg());
       ex.printStackTrace();
     } catch (TException ex) {
       LOGGER.error("TException failed - " + ex.toString());
@@ -490,7 +490,7 @@ public class SQLImporter {
           client.disconnect(session);
         }
       } catch (TOmniSciException ex) {
-        LOGGER.error("TOmniSciException - in finalization " + ex.toString());
+        LOGGER.error("TOmniSciException - in finalization " + ex.getError_msg());
         ex.printStackTrace();
       } catch (TException ex) {
         LOGGER.error("TException - in finalization" + ex.toString());
@@ -752,7 +752,7 @@ public class SQLImporter {
       LOGGER.error("Connection failed - " + ex.toString());
       exit(1);
     } catch (TOmniSciException ex) {
-      LOGGER.error("Connection failed - " + ex.toString());
+      LOGGER.error("Connection failed - " + ex.getError_msg());
       exit(2);
     } catch (TException ex) {
       LOGGER.error("Connection failed - " + ex.toString());
@@ -770,7 +770,7 @@ public class SQLImporter {
       TTableDetails table_details = client.get_table_details(session, tName);
       row_descriptor = table_details.row_desc;
     } catch (TOmniSciException ex) {
-      LOGGER.error("column check failed - " + ex.toString());
+      LOGGER.error("column check failed - " + ex.getError_msg());
       exit(3);
     } catch (TException ex) {
       LOGGER.error("column check failed - " + ex.toString());
@@ -789,7 +789,7 @@ public class SQLImporter {
         }
       }
     } catch (TOmniSciException ex) {
-      LOGGER.error("Table check failed - " + ex.toString());
+      LOGGER.error("Table check failed - " + ex.getError_msg());
       exit(3);
     } catch (TException ex) {
       LOGGER.error("Table check failed - " + ex.toString());
@@ -804,7 +804,7 @@ public class SQLImporter {
     try {
       TQueryResult sqlResult = client.sql_execute(session, sql + ";", true, null, -1, -1);
     } catch (TOmniSciException ex) {
-      LOGGER.error("SQL Execute failed - " + ex.toString());
+      LOGGER.error("SQL Execute failed - " + ex.getError_msg());
       exit(1);
     } catch (TException ex) {
       LOGGER.error("SQL Execute failed - " + ex.toString());

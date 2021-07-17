@@ -61,8 +61,6 @@ def _translate_exception(e):
         return e
     if 'SQL Error' in e.error_msg:
         err = ProgrammingError
-    elif 'Exception occurred' in e.error_msg:
-        err = DatabaseError
     else:
         err = Error
     return err(e.error_msg)

@@ -1294,14 +1294,13 @@ void DBHandler::sql_execute(TQueryResult& _return,
     VLOG(1) << "Table Data Locks:\n" << lockmgr::TableDataLockMgr::instance();
   } catch (const std::exception& e) {
     if (strstr(e.what(), "java.lang.NullPointerException")) {
-      THROW_MAPD_EXCEPTION(std::string("Exception: ") +
-                           "query failed from broken view or other schema related issue");
+      THROW_MAPD_EXCEPTION("query failed from broken view or other schema related issue");
     } else if (strstr(e.what(), "SQL Error: Encountered \";\"")) {
       THROW_MAPD_EXCEPTION("multiple SQL statements not allowed");
     } else if (strstr(e.what(), "SQL Error: Encountered \"<EOF>\" at line 0, column 0")) {
       THROW_MAPD_EXCEPTION("empty SQL statment not allowed");
     } else {
-      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+      THROW_MAPD_EXCEPTION(e.what());
     }
   }
 }
@@ -1352,14 +1351,13 @@ void DBHandler::sql_execute(ExecutionResult& _return,
     VLOG(1) << "Table Data Locks:\n" << lockmgr::TableDataLockMgr::instance();
   } catch (const std::exception& e) {
     if (strstr(e.what(), "java.lang.NullPointerException")) {
-      THROW_MAPD_EXCEPTION(std::string("Exception: ") +
-                           "query failed from broken view or other schema related issue");
+      THROW_MAPD_EXCEPTION("query failed from broken view or other schema related issue");
     } else if (strstr(e.what(), "SQL Error: Encountered \";\"")) {
       THROW_MAPD_EXCEPTION("multiple SQL statements not allowed");
     } else if (strstr(e.what(), "SQL Error: Encountered \"<EOF>\" at line 0, column 0")) {
       THROW_MAPD_EXCEPTION("empty SQL statment not allowed");
     } else {
-      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+      THROW_MAPD_EXCEPTION(e.what());
     }
   }
 }
@@ -1410,15 +1408,14 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
   if (device_type == TDeviceType::GPU) {
     const auto executor_device_type = session_ptr->get_executor_device_type();
     if (executor_device_type != ExecutorDeviceType::GPU) {
-      THROW_MAPD_EXCEPTION(
-          std::string("Exception: GPU mode is not allowed in this session"));
+      THROW_MAPD_EXCEPTION(std::string("GPU mode is not allowed in this session"));
     }
     if (!data_mgr_->gpusPresent()) {
-      THROW_MAPD_EXCEPTION(std::string("Exception: no GPU is available in this server"));
+      THROW_MAPD_EXCEPTION(std::string("No GPU is available in this server"));
     }
     if (device_id < 0 || device_id >= data_mgr_->getCudaMgr()->getDeviceCount()) {
       THROW_MAPD_EXCEPTION(
-          std::string("Exception: invalid device_id or unavailable GPU with this ID"));
+          std::string("Invalid device_id or unavailable GPU with this ID"));
     }
   }
   _return.execution_time_ms = 0;
@@ -1463,10 +1460,9 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
       return;
     }
   } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    THROW_MAPD_EXCEPTION(e.what());
   }
-  THROW_MAPD_EXCEPTION(
-      "Exception: DDL or update DML are not unsupported by current thrift API");
+  THROW_MAPD_EXCEPTION("DDL or update DML are not unsupported by current thrift API");
 }
 
 void DBHandler::sql_execute_gdf(TDataFrame& _return,
@@ -1496,7 +1492,7 @@ void DBHandler::deallocate_df(const TSessionId& session,
     if (ipc_handle_to_dev_ptr_.count(df.df_handle) != size_t(1)) {
       TOmniSciException ex;
       ex.error_msg = std::string(
-          "Exception: current data frame handle is not bookkept or been inserted "
+          "Current data frame handle is not bookkept or been inserted "
           "twice");
       LOG(ERROR) << ex.error_msg;
       throw ex;
@@ -1563,7 +1559,7 @@ void DBHandler::sql_validate(TRowDescriptor& _return,
     _return = fixup_row_descriptor(result.row_set.row_desc,
                                    query_state->getConstSessionInfo()->getCatalog());
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
+    THROW_MAPD_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -1648,7 +1644,7 @@ void DBHandler::get_completion_hints_unsorted(std::vector<TCompletionHint>& hint
         calcite_->getCompletionHints(session_info, visible_tables, sql, cursor));
   } catch (const std::exception& e) {
     TOmniSciException ex;
-    ex.error_msg = "Exception: " + std::string(e.what());
+    ex.error_msg = std::string(e.what());
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
@@ -2230,7 +2226,7 @@ void DBHandler::get_result_row_for_pixel(
                                               pixel_radius,
                                               nonce);
   } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    THROW_MAPD_EXCEPTION(e.what());
   }
 }
 
@@ -2404,7 +2400,7 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
                    : (td->partitions == "SHARDED" ? TPartitionDetail::SHARDED
                                                   : TPartitionDetail::OTHER));
   } catch (const std::runtime_error& e) {
-    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
+    THROW_MAPD_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -2912,7 +2908,7 @@ void DBHandler::load_table_binary(const TSessionId& session,
       THROW_MAPD_EXCEPTION(loader->getErrorMessage());
     }
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
+    THROW_MAPD_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -3307,7 +3303,7 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session,
                << ". Issue at column : " << (col_idx + 1) << ". Import aborted";
     // TODO(tmostak): Go row-wise on binary columnar import to be consistent with our
     // other import paths
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    THROW_MAPD_EXCEPTION(e.what());
   }
   auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
       session_ptr->getCatalog(), table_name);
@@ -3408,7 +3404,7 @@ void DBHandler::load_table(const TSessionId& session,
         LOG(ERROR) << "Input exception thrown: " << e.what()
                    << ". Row discarded, issue at column : " << (col_idx + 1)
                    << " data :" << row;
-        THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+        THROW_MAPD_EXCEPTION(e.what());
       }
     }
     auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
@@ -3418,7 +3414,7 @@ void DBHandler::load_table(const TSessionId& session,
     }
 
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
+    THROW_MAPD_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -3983,7 +3979,7 @@ void DBHandler::render_vega(TRenderResult& _return,
                                    compression_level,
                                    nonce);
     } catch (std::exception& e) {
-      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+      THROW_MAPD_EXCEPTION(e.what());
     }
   });
 }
@@ -4243,7 +4239,7 @@ int32_t DBHandler::create_dashboard(const TSessionId& session,
         session_ptr->get_currentUser(), dashboard_name, DashboardDBObjectType, cat, id);
     return id;
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    THROW_MAPD_EXCEPTION(e.what());
   }
 }
 
@@ -4283,7 +4279,7 @@ void DBHandler::replace_dashboard(const TSessionId& session,
   try {
     cat.replaceDashboard(dd);
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    THROW_MAPD_EXCEPTION(e.what());
   }
 }
 
@@ -4302,7 +4298,7 @@ void DBHandler::delete_dashboards(const TSessionId& session,
   try {
     cat.deleteMetadataForDashboards(dashboard_ids, session_ptr->get_currentUser());
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    THROW_MAPD_EXCEPTION(e.what());
   }
 }
 
@@ -4313,7 +4309,7 @@ std::vector<std::string> DBHandler::get_valid_groups(const TSessionId& session,
   auto& cat = session_info.getCatalog();
   auto dash = cat.getMetadataForDashboard(dashboard_id);
   if (!dash) {
-    THROW_MAPD_EXCEPTION("Exception: Dashboard id " + std::to_string(dashboard_id) +
+    THROW_MAPD_EXCEPTION("Dashboard id " + std::to_string(dashboard_id) +
                          " does not exist");
   } else if (session_info.get_currentUser().userId != dash->userId &&
              !session_info.get_currentUser().isSuper) {
@@ -4325,7 +4321,7 @@ std::vector<std::string> DBHandler::get_valid_groups(const TSessionId& session,
   for (auto& group : groups) {
     user_meta.isSuper = false;  // initialize default flag
     if (!SysCatalog::instance().getGrantee(group)) {
-      THROW_MAPD_EXCEPTION("Exception: User/Role " + group + " does not exist");
+      THROW_MAPD_EXCEPTION("User/Role " + group + " does not exist");
     } else if (!user_meta.isSuper) {
       valid_groups.push_back(group);
     }
@@ -4336,7 +4332,7 @@ std::vector<std::string> DBHandler::get_valid_groups(const TSessionId& session,
 void DBHandler::validateGroups(const std::vector<std::string>& groups) {
   for (auto const& group : groups) {
     if (!SysCatalog::instance().getGrantee(group)) {
-      THROW_MAPD_EXCEPTION("Exception: User/Role '" + group + "' does not exist");
+      THROW_MAPD_EXCEPTION("User/Role '" + group + "' does not exist");
     }
   }
 }
@@ -4453,7 +4449,7 @@ void DBHandler::get_dashboard_grantees(
   Catalog_Namespace::UserMetadata user_meta;
   auto dash = cat.getMetadataForDashboard(dashboard_id);
   if (!dash) {
-    THROW_MAPD_EXCEPTION("Exception: Dashboard id " + std::to_string(dashboard_id) +
+    THROW_MAPD_EXCEPTION("Dashboard id " + std::to_string(dashboard_id) +
                          " does not exist");
   } else if (session_ptr->get_currentUser().userId != dash->userId &&
              !session_ptr->get_currentUser().isSuper) {
@@ -4504,7 +4500,7 @@ void DBHandler::create_link(std::string& _return,
   try {
     _return = cat.createLink(ld, 6);
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    THROW_MAPD_EXCEPTION(e.what());
   }
 }
 
@@ -4697,7 +4693,7 @@ void DBHandler::import_table(const TSessionId& session,
     auto ms = measure<>::execution([&]() { importer->import(session_ptr.get()); });
     std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
+    THROW_MAPD_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -6426,7 +6422,7 @@ int64_t DBHandler::query_get_outer_fragment_count(const TSessionId& session,
   try {
     return leaf_handler_->query_get_outer_fragment_count(session, select_query);
   } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    THROW_MAPD_EXCEPTION(e.what());
   }
 }
 
@@ -6440,7 +6436,7 @@ void DBHandler::check_table_consistency(TTableMeta& _return,
   try {
     leaf_handler_->check_table_consistency(_return, session, table_id);
   } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    THROW_MAPD_EXCEPTION(e.what());
   }
 }
 
@@ -6467,7 +6463,7 @@ void DBHandler::start_query(TPendingQuery& _return,
                                  just_explain,
                                  outer_fragment_indices);
     } catch (std::exception& e) {
-      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+      THROW_MAPD_EXCEPTION(e.what());
     }
   });
   LOG(INFO) << "start_query-COMPLETED " << time_ms << "ms "
@@ -6487,7 +6483,7 @@ void DBHandler::execute_query_step(TStepResult& _return,
       leaf_handler_->execute_query_step(
           _return, pending_query, subquery_id, start_time_str);
     } catch (std::exception& e) {
-      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+      THROW_MAPD_EXCEPTION(e.what());
     }
   });
   LOG(INFO) << "execute_query_step-COMPLETED " << time_ms << "ms";
@@ -6507,7 +6503,7 @@ void DBHandler::broadcast_serialized_rows(const TSerializedRows& serialized_rows
       leaf_handler_->broadcast_serialized_rows(
           serialized_rows, row_desc, query_id, subquery_id, is_final_subquery_result);
     } catch (std::exception& e) {
-      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+      THROW_MAPD_EXCEPTION(e.what());
     }
   });
   LOG(INFO) << "BROADCAST-SERIALIZED-ROWS COMPLETED " << time_ms << "ms";
@@ -6617,7 +6613,7 @@ void DBHandler::insert_data(const TSessionId& session,
     auto data_memory_holder = import_export::fill_missing_columns(&cat, insert_data);
     td->fragmenter->insertDataNoCheckpoint(insert_data);
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
+    THROW_MAPD_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -6638,7 +6634,7 @@ void DBHandler::start_render_query(TPendingRenderQuery& _return,
       render_handler_->start_render_query(
           _return, session, widget_id, node_idx, vega_json);
     } catch (std::exception& e) {
-      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+      THROW_MAPD_EXCEPTION(e.what());
     }
   });
   LOG(INFO) << "start_render_query-COMPLETED " << time_ms << "ms "
@@ -6657,7 +6653,7 @@ void DBHandler::execute_next_render_step(TRenderStepResult& _return,
     try {
       render_handler_->execute_next_render_step(_return, pending_render, merged_data);
     } catch (std::exception& e) {
-      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+      THROW_MAPD_EXCEPTION(e.what());
     }
   });
   LOG(INFO) << "execute_next_render_step-COMPLETED id: " << pending_render.id
@@ -6690,7 +6686,7 @@ void DBHandler::set_table_epoch(const TSessionId& session,
   try {
     cat.setTableEpoch(db_id, table_id, new_epoch);
   } catch (const std::runtime_error& e) {
-    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
+    THROW_MAPD_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -6716,7 +6712,7 @@ void DBHandler::set_table_epoch_by_name(const TSessionId& session,
   try {
     cat.setTableEpoch(db_id, td->tableId, new_epoch);
   } catch (const std::runtime_error& e) {
-    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
+    THROW_MAPD_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -6734,7 +6730,7 @@ int32_t DBHandler::get_table_epoch(const TSessionId& session,
   try {
     return cat.getTableEpoch(db_id, table_id);
   } catch (const std::runtime_error& e) {
-    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
+    THROW_MAPD_EXCEPTION(std::string(e.what()));
   }
 }
 
@@ -6754,7 +6750,7 @@ int32_t DBHandler::get_table_epoch_by_name(const TSessionId& session,
   try {
     return cat.getTableEpoch(db_id, td->tableId);
   } catch (const std::runtime_error& e) {
-    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
+    THROW_MAPD_EXCEPTION(std::string(e.what()));
   }
 }
 
