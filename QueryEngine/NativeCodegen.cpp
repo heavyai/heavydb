@@ -1358,10 +1358,7 @@ void Executor::initializeNVPTXBackend() const {
   if (nvptx_target_machine_) {
     return;
   }
-  const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
-  LOG_IF(FATAL, cuda_mgr == nullptr) << "No CudaMgr instantiated, unable to check device "
-                                        "architecture or generate code for nvidia GPUs.";
-  const auto arch = cuda_mgr->getDeviceArch();
+  const auto arch = cudaMgr()->getDeviceArch();
   nvptx_target_machine_ = CodeGenerator::initializeNVPTXBackend(arch);
 }
 
@@ -2542,7 +2539,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   auto timer = DEBUG_TIMER(__func__);
 
   if (co.device_type == ExecutorDeviceType::GPU) {
-    const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
+    const auto cuda_mgr = data_mgr_->getCudaMgr();
     if (!cuda_mgr) {
       throw QueryMustRunOnCpu();
     }

@@ -25,7 +25,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "Catalog/Catalog.h"
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/Allocators/ArenaAllocator.h"
 #include "DataMgr/DataMgr.h"
@@ -33,6 +32,10 @@
 #include "QueryEngine/StringDictionaryGenerations.h"
 #include "Shared/quantile.h"
 #include "StringDictionary/StringDictionaryProxy.h"
+
+namespace Catalog_Namespace {
+class Catalog;
+}
 
 class ResultSet;
 

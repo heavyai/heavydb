@@ -222,8 +222,7 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
 
 class BaselineJoinHashTableBuilder {
  public:
-  BaselineJoinHashTableBuilder(const Catalog_Namespace::Catalog* catalog)
-      : catalog_(catalog) {}
+  BaselineJoinHashTableBuilder() {}
 
   template <class KEY_HANDLER>
   int initHashTableOnCpu(KEY_HANDLER* key_handler,
@@ -264,7 +263,7 @@ class BaselineJoinHashTableBuilder {
     VLOG(1) << "Total hash table size: " << hash_table_size << " Bytes";
 
     hash_table_ = std::make_unique<BaselineHashTable>(
-        catalog_, layout, keyspace_entry_count, keys_for_all_rows, hash_table_size);
+        layout, keyspace_entry_count, keys_for_all_rows, hash_table_size);
     auto cpu_hash_table_ptr = hash_table_->getCpuBuffer();
     int thread_count = cpu_threads();
     std::vector<std::future<void>> init_cpu_buff_threads;
@@ -411,7 +410,8 @@ class BaselineJoinHashTableBuilder {
                             const size_t key_component_count,
                             const size_t keyspace_entry_count,
                             const size_t emitted_keys_count,
-                            const int device_id) {
+                            const int device_id,
+                            const Executor* executor) {
 #ifdef HAVE_CUDA
     const auto entry_size =
         (key_component_count + (layout == HashType::OneToOne ? 1 : 0)) *
@@ -435,7 +435,7 @@ class BaselineJoinHashTableBuilder {
             << " entries in the one to many buffer";
     VLOG(1) << "Total hash table size: " << hash_table_size << " Bytes";
 
-    hash_table_ = std::make_unique<BaselineHashTable>(catalog_,
+    hash_table_ = std::make_unique<BaselineHashTable>(executor->getDataMgr(),
                                                       layout,
                                                       keyspace_entry_count,
                                                       emitted_keys_count,
@@ -455,7 +455,8 @@ class BaselineJoinHashTableBuilder {
                          const size_t key_component_count,
                          const size_t keyspace_entry_count,
                          const size_t emitted_keys_count,
-                         const int device_id) {
+                         const int device_id,
+                         const Executor* executor) {
     auto timer = DEBUG_TIMER(__func__);
     int err = 0;
 #ifdef HAVE_CUDA
@@ -464,16 +465,17 @@ class BaselineJoinHashTableBuilder {
                          key_component_count,
                          keyspace_entry_count,
                          emitted_keys_count,
-                         device_id);
+                         device_id,
+                         executor);
     if (!keyspace_entry_count) {
       // need to "allocate" the empty hash table first
       CHECK(!emitted_keys_count);
       return 0;
     }
-    auto& data_mgr = catalog_->getDataMgr();
-    CudaAllocator allocator(&data_mgr, device_id);
+    auto data_mgr = executor->getDataMgr();
+    CudaAllocator allocator(data_mgr, device_id);
     auto dev_err_buff = reinterpret_cast<CUdeviceptr>(allocator.alloc(sizeof(int)));
-    copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
+    copy_to_gpu(data_mgr, dev_err_buff, &err, sizeof(err), device_id);
     auto gpu_hash_table_buff = hash_table_->getGpuBuffer();
     CHECK(gpu_hash_table_buff);
     const bool for_semi_join =
@@ -511,7 +513,7 @@ class BaselineJoinHashTableBuilder {
             reinterpret_cast<int*>(dev_err_buff),
             key_handler_gpu,
             join_columns.front().num_elems);
-        copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
+        copy_from_gpu(data_mgr, &err, dev_err_buff, sizeof(err), device_id);
         break;
       }
       case 8: {
@@ -525,7 +527,7 @@ class BaselineJoinHashTableBuilder {
             reinterpret_cast<int*>(dev_err_buff),
             key_handler_gpu,
             join_columns.front().num_elems);
-        copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
+        copy_from_gpu(data_mgr, &err, dev_err_buff, sizeof(err), device_id);
         break;
       }
       default:
@@ -579,7 +581,5 @@ class BaselineJoinHashTableBuilder {
   std::unique_ptr<BaselineHashTable> getHashTable() { return std::move(hash_table_); }
 
  private:
-  const Catalog_Namespace::Catalog* catalog_;
-
   std::unique_ptr<BaselineHashTable> hash_table_;
 };

@@ -348,9 +348,7 @@ int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_i
                                                  const size_t shard_count) const {
   size_t device_count{0};
   if (device_type_ == ExecutorDeviceType::GPU) {
-    auto cuda_mgr = executor_->getCatalog()->getDataMgr().getCudaMgr();
-    CHECK(cuda_mgr);
-    device_count = executor_->getCatalog()->getDataMgr().getCudaMgr()->getDeviceCount();
+    device_count = executor_->cudaMgr()->getDeviceCount();
     CHECK_GT(device_count, 0u);
   }
 

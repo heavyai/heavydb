@@ -92,7 +92,7 @@ bool shard_count_less_or_equal_device_count(const int inner_table_id,
                                             const Executor* executor) {
   const auto inner_table_info = executor->getTableInfo(inner_table_id);
   std::unordered_set<int> device_holding_fragments;
-  auto cuda_mgr = executor->getCatalog()->getDataMgr().getCudaMgr();
+  auto cuda_mgr = executor->getDataMgr()->getCudaMgr();
   const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 1;
   for (const auto& fragment : inner_table_info.fragments) {
     if (fragment.shard != -1) {
@@ -303,9 +303,9 @@ std::vector<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
 void PerfectJoinHashTable::reify() {
   auto timer = DEBUG_TIMER(__func__);
   CHECK_LT(0, device_count_);
-  catalog_ = const_cast<Catalog_Namespace::Catalog*>(executor_->getCatalog());
+  auto catalog = const_cast<Catalog_Namespace::Catalog*>(executor_->getCatalog());
   const auto cols =
-      get_cols(qual_bin_oper_.get(), *catalog_, executor_->temporary_tables_);
+      get_cols(qual_bin_oper_.get(), *catalog, executor_->temporary_tables_);
   const auto inner_col = cols.first;
   HashJoin::checkHashJoinReplicationConstraint(
       inner_col->get_table_id(),
@@ -328,11 +328,11 @@ void PerfectJoinHashTable::reify() {
   std::vector<ColumnsForDevice> columns_per_device;
   std::vector<std::unique_ptr<CudaAllocator>> dev_buff_owners;
   try {
-    auto& data_mgr = catalog_->getDataMgr();
+    auto data_mgr = executor_->getDataMgr();
     if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
       for (int device_id = 0; device_id < device_count_; ++device_id) {
         dev_buff_owners.emplace_back(
-            std::make_unique<CudaAllocator>(&data_mgr, device_id));
+            std::make_unique<CudaAllocator>(data_mgr, device_id));
       }
     }
     for (int device_id = 0; device_id < device_count_; ++device_id) {
@@ -345,7 +345,8 @@ void PerfectJoinHashTable::reify() {
                                 device_id,
                                 memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
                                     ? dev_buff_owners[device_id].get()
-                                    : nullptr);
+                                    : nullptr,
+                                *catalog);
       columns_per_device.push_back(columns_for_device);
       const auto hash_table_key = genHashTableKey(
           fragments, inner_outer_pairs_.front().second, inner_outer_pairs_.front().first);
@@ -412,7 +413,8 @@ Data_Namespace::MemoryLevel PerfectJoinHashTable::getEffectiveMemoryLevel(
 ColumnsForDevice PerfectJoinHashTable::fetchColumnsForDevice(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
-    DeviceAllocator* dev_buff_owner) {
+    DeviceAllocator* dev_buff_owner,
+    const Catalog_Namespace::Catalog& catalog) {
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
 
   std::vector<JoinColumn> join_columns;
@@ -423,7 +425,7 @@ ColumnsForDevice PerfectJoinHashTable::fetchColumnsForDevice(
   for (const auto& inner_outer_pair : inner_outer_pairs_) {
     const auto inner_col = inner_outer_pair.first;
     const auto inner_cd = get_column_descriptor_maybe(
-        inner_col->get_column_id(), inner_col->get_table_id(), *catalog_);
+        inner_col->get_column_id(), inner_col->get_table_id(), catalog);
     if (inner_cd && inner_cd->isVirtualCol) {
       throw FailedToJoinOnVirtualColumn();
     }
@@ -512,7 +514,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
     {
       std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
       if (!hash_table) {
-        PerfectJoinHashTableBuilder builder(executor_->catalog_);
+        PerfectJoinHashTableBuilder builder;
         if (layout == HashType::OneToOne) {
           builder.initOneToOneHashTableOnCpu(join_column,
                                              col_range_,
@@ -553,18 +555,17 @@ int PerfectJoinHashTable::initHashTableForDevice(
 #ifdef HAVE_CUDA
       const auto& ti = inner_col->get_type_info();
       CHECK(ti.is_string());
-      auto catalog = executor_->getCatalog();
-      CHECK(catalog);
-      auto& data_mgr = catalog->getDataMgr();
+      auto data_mgr = executor_->getDataMgr();
       std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
 
-      PerfectJoinHashTableBuilder gpu_builder(executor_->catalog_);
+      PerfectJoinHashTableBuilder gpu_builder;
       gpu_builder.allocateDeviceMemory(join_column,
                                        hash_table->getLayout(),
                                        hash_entry_info,
                                        shardCount(),
                                        device_id,
-                                       device_count_);
+                                       device_count_,
+                                       executor_);
       std::shared_ptr<PerfectHashTable> gpu_hash_table = gpu_builder.getHashTable();
       CHECK(gpu_hash_table);
       auto gpu_buffer_ptr = gpu_hash_table->getGpuBuffer();
@@ -574,7 +575,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
       // GPU size returns reserved size
       CHECK_LE(hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
                gpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::GPU));
-      copy_to_gpu(&data_mgr,
+      copy_to_gpu(data_mgr,
                   reinterpret_cast<CUdeviceptr>(gpu_buffer_ptr),
                   hash_table->getCpuBuffer(),
                   hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
@@ -591,10 +592,15 @@ int PerfectJoinHashTable::initHashTableForDevice(
     }
   } else {
 #ifdef HAVE_CUDA
-    PerfectJoinHashTableBuilder builder(executor_->catalog_);
+    PerfectJoinHashTableBuilder builder;
     CHECK_EQ(Data_Namespace::GPU_LEVEL, effective_memory_level);
-    builder.allocateDeviceMemory(
-        join_column, layout, hash_entry_info, shardCount(), device_id, device_count_);
+    builder.allocateDeviceMemory(join_column,
+                                 layout,
+                                 hash_entry_info,
+                                 shardCount(),
+                                 device_id,
+                                 device_count_,
+                                 executor_);
     builder.initHashTableOnGpu(chunk_key,
                                join_column,
                                col_range_,
@@ -832,7 +838,7 @@ std::string PerfectJoinHashTable::toString(const ExecutorDeviceType device_type,
   if (device_type == ExecutorDeviceType::GPU) {
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
 
-    copy_from_gpu(&executor_->getCatalog()->getDataMgr(),
+    copy_from_gpu(executor_->getDataMgr(),
                   buffer_copy.get(),
                   reinterpret_cast<CUdeviceptr>(reinterpret_cast<int8_t*>(buffer)),
                   buffer_size,
@@ -869,7 +875,7 @@ std::set<DecodedJoinHashBufferEntry> PerfectJoinHashTable::toSet(
   if (device_type == ExecutorDeviceType::GPU) {
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
 
-    copy_from_gpu(&executor_->getCatalog()->getDataMgr(),
+    copy_from_gpu(executor_->getDataMgr(),
                   buffer_copy.get(),
                   reinterpret_cast<CUdeviceptr>(reinterpret_cast<int8_t*>(buffer)),
                   buffer_size,

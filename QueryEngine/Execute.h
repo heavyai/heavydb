@@ -367,6 +367,7 @@ class Executor {
   static const ExecutorId UNITARY_EXECUTOR_ID = 0;
 
   Executor(const ExecutorId id,
+           Data_Namespace::DataMgr* data_mgr,
            const size_t block_size_x,
            const size_t grid_size_x,
            const size_t max_gpu_slab_size,
@@ -426,6 +427,11 @@ class Executor {
 
   const Catalog_Namespace::Catalog* getCatalog() const;
   void setCatalog(const Catalog_Namespace::Catalog* catalog);
+
+  Data_Namespace::DataMgr* getDataMgr() const {
+    CHECK(data_mgr_);
+    return data_mgr_;
+  }
 
   const std::shared_ptr<RowSetMemoryOwner> getRowSetMemoryOwner() const;
 
@@ -521,12 +527,16 @@ class Executor {
 
   llvm::Value* aggregateWindowStatePtr();
 
+  CudaMgr_Namespace::CudaMgr* cudaMgr() const {
+    CHECK(data_mgr_);
+    auto cuda_mgr = data_mgr_->getCudaMgr();
+    CHECK(cuda_mgr);
+    return cuda_mgr;
+  }
+
   bool isArchPascalOrLater(const ExecutorDeviceType dt) const {
     if (dt == ExecutorDeviceType::GPU) {
-      const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
-      LOG_IF(FATAL, cuda_mgr == nullptr)
-          << "No CudaMgr instantiated, unable to check device architecture";
-      return cuda_mgr->isArchPascalOrLater();
+      return cudaMgr()->isArchPascalOrLater();
     }
     return false;
   }
@@ -1066,6 +1076,7 @@ class Executor {
 
   const ExecutorId executor_id_;
   const Catalog_Namespace::Catalog* catalog_;
+  Data_Namespace::DataMgr* data_mgr_;
   const TemporaryTables* temporary_tables_;
 
   int64_t kernel_queue_time_ms_ = 0;

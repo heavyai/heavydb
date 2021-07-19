@@ -89,7 +89,8 @@ void Executor::interrupt(const std::string& query_session,
   // The below code is basically for runtime query interrupt for GPU.
   // It is also possible that user forces to use CPU-mode even if the user has GPU(s).
   // In this case, we should not execute the code in below to avoid runtime failure
-  auto cuda_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr().getCudaMgr();
+  CHECK(data_mgr_);
+  auto cuda_mgr = data_mgr_->getCudaMgr();
   if (cuda_mgr && (g_enable_dynamic_watchdog || allow_interrupt)) {
     // we additionally allow sending interrupt signal for
     // `g_enable_non_kernel_time_query_interrupt` especially for CTAS/ITAS queries: data

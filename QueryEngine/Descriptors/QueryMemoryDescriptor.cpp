@@ -527,7 +527,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
 
 #ifdef HAVE_CUDA
   // Check Streaming Top N heap usage, bail if > max slab size, CUDA ONLY
-  if (use_streaming_top_n_ && executor->catalog_->getDataMgr().gpusPresent()) {
+  if (use_streaming_top_n_ && executor->getDataMgr()->gpusPresent()) {
     const auto thread_count = executor->blockSize() * executor->gridSize();
     const auto total_buff_size =
         streaming_top_n::get_heap_size(getRowSize(), getEntryCount(), thread_count);
@@ -1109,13 +1109,10 @@ bool QueryMemoryDescriptor::interleavedBins(const ExecutorDeviceType device_type
 // TODO(Saman): an implementation detail, so move this out of QMD
 bool QueryMemoryDescriptor::isWarpSyncRequired(
     const ExecutorDeviceType device_type) const {
-  if (device_type != ExecutorDeviceType::GPU) {
-    return false;
-  } else {
-    auto cuda_mgr = executor_->getCatalog()->getDataMgr().getCudaMgr();
-    CHECK(cuda_mgr);
-    return cuda_mgr->isArchVoltaOrGreaterForAll();
+  if (device_type == ExecutorDeviceType::GPU) {
+    return executor_->cudaMgr()->isArchVoltaOrGreaterForAll();
   }
+  return false;
 }
 
 size_t QueryMemoryDescriptor::getColCount() const {

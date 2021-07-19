@@ -215,7 +215,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
 
   decltype(temporary_tables_)().swap(temporary_tables_);
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
-  executor_->catalog_ = &cat_;
+  executor_->setCatalog(&cat_);
   executor_->temporary_tables_ = &temporary_tables_;
 
   WindowProjectNodeContext::reset(executor_);
@@ -638,7 +638,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
   }
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   decltype(left_deep_join_info_)().swap(left_deep_join_info_);
-  executor_->catalog_ = &cat_;
+  executor_->setCatalog(&cat_);
   executor_->temporary_tables_ = &temporary_tables_;
 
   time(&now_);
@@ -704,7 +704,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
     RenderInfo* render_info,
     const int64_t queue_time_ms) {
   INJECT_TIMER(executeRelAlgSubSeq);
-  executor_->catalog_ = &cat_;
+  executor_->setCatalog(&cat_);
   executor_->temporary_tables_ = &temporary_tables_;
   decltype(left_deep_join_info_)().swap(left_deep_join_info_);
   time(&now_);

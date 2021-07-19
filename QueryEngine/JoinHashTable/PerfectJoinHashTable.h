@@ -23,7 +23,6 @@
 #pragma once
 
 #include "Analyzer/Analyzer.h"
-#include "Catalog/Catalog.h"
 #include "DataMgr/Allocators/ThrustAllocator.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "QueryEngine/ColumnarResults.h"
@@ -112,7 +111,8 @@ class PerfectJoinHashTable : public HashJoin {
   ColumnsForDevice fetchColumnsForDevice(
       const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id,
-      DeviceAllocator* dev_buff_owner);
+      DeviceAllocator* dev_buff_owner,
+      const Catalog_Namespace::Catalog& catalog);
 
   void reifyForDevice(const ChunkKey& hash_table_key,
                       const ColumnsForDevice& columns_for_device,
@@ -131,7 +131,6 @@ class PerfectJoinHashTable : public HashJoin {
       const std::vector<InnerOuter>& inner_outer_pairs) const;
 
   std::vector<InnerOuter> inner_outer_pairs_;
-  Catalog_Namespace::Catalog* catalog_;
 
   PerfectJoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
                        const Analyzer::ColumnVar* col_var,

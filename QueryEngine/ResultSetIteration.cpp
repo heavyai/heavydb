@@ -631,12 +631,9 @@ InternalTargetValue ResultSet::getVarlenOrderEntry(const int64_t str_ptr,
     cpu_buffer.resize(str_len);
     const auto executor = query_mem_desc_.getExecutor();
     CHECK(executor);
-    auto& data_mgr = executor->catalog_->getDataMgr();
-    copy_from_gpu(&data_mgr,
-                  &cpu_buffer[0],
-                  static_cast<CUdeviceptr>(str_ptr),
-                  str_len,
-                  device_id_);
+    auto data_mgr = executor->getDataMgr();
+    copy_from_gpu(
+        data_mgr, &cpu_buffer[0], static_cast<CUdeviceptr>(str_ptr), str_len, device_id_);
     host_str_ptr = reinterpret_cast<char*>(&cpu_buffer[0]);
   } else {
     CHECK(device_type_ == ExecutorDeviceType::CPU);
@@ -1406,8 +1403,8 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
     cpu_buffer.resize(length);
     const auto executor = query_mem_desc_.getExecutor();
     CHECK(executor);
-    auto& data_mgr = executor->catalog_->getDataMgr();
-    copy_from_gpu(&data_mgr,
+    auto data_mgr = executor->getDataMgr();
+    copy_from_gpu(data_mgr,
                   &cpu_buffer[0],
                   static_cast<CUdeviceptr>(varlen_ptr),
                   length,
@@ -1529,8 +1526,7 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
   auto getDataMgr = [&]() {
     auto executor = query_mem_desc_.getExecutor();
     CHECK(executor);
-    auto& data_mgr = executor->catalog_->getDataMgr();
-    return &data_mgr;
+    return executor->getDataMgr();
   };
 
   auto getSeparateVarlenStorage = [&]() -> decltype(auto) {

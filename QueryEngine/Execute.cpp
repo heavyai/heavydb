@@ -14,48 +14,7 @@
  * limitations under the License.
  */
 
-#include "Execute.h"
-
-#include "AggregateUtils.h"
-#include "CodeGenerator.h"
-#include "ColumnFetcher.h"
-#include "Descriptors/QueryCompilationDescriptor.h"
-#include "Descriptors/QueryFragmentDescriptor.h"
-#include "DynamicWatchdog.h"
-#include "EquiJoinCondition.h"
-#include "ErrorHandling.h"
-#include "ExpressionRewrite.h"
-#include "ExternalCacheInvalidators.h"
-#include "GpuMemUtils.h"
-#include "InPlaceSort.h"
-#include "JoinHashTable/BaselineJoinHashTable.h"
-#include "JoinHashTable/OverlapsJoinHashTable.h"
-#include "JsonAccessors.h"
-#include "OutputBufferInitialization.h"
-#include "QueryEngine/QueryDispatchQueue.h"
-#include "QueryEngine/Visitors/TransientStringLiteralsVisitor.h"
-#include "QueryRewrite.h"
-#include "QueryTemplateGenerator.h"
-#include "ResultSetReductionJIT.h"
-#include "RuntimeFunctions.h"
-#include "SpeculativeTopN.h"
-#include "TableFunctions/TableFunctionCompilationContext.h"
-#include "TableFunctions/TableFunctionExecutionContext.h"
-
-#include "CudaMgr/CudaMgr.h"
-#include "DataMgr/BufferMgr/BufferMgr.h"
-#include "Parser/ParserNode.h"
-#include "Shared/SystemParameters.h"
-#include "Shared/TypedDataAccessors.h"
-#include "Shared/checked_alloc.h"
-#include "Shared/measure.h"
-#include "Shared/misc.h"
-#include "Shared/scope.h"
-#include "Shared/shard_key.h"
-#include "Shared/threadpool.h"
-
-#include "AggregatedColRange.h"
-#include "StringDictionaryGenerations.h"
+#include "QueryEngine/Execute.h"
 
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <boost/filesystem/operations.hpp>
@@ -72,6 +31,46 @@
 #include <numeric>
 #include <set>
 #include <thread>
+
+#include "Catalog/Catalog.h"
+#include "CudaMgr/CudaMgr.h"
+#include "DataMgr/BufferMgr/BufferMgr.h"
+#include "Parser/ParserNode.h"
+#include "QueryEngine/AggregateUtils.h"
+#include "QueryEngine/AggregatedColRange.h"
+#include "QueryEngine/CodeGenerator.h"
+#include "QueryEngine/ColumnFetcher.h"
+#include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
+#include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
+#include "QueryEngine/DynamicWatchdog.h"
+#include "QueryEngine/EquiJoinCondition.h"
+#include "QueryEngine/ErrorHandling.h"
+#include "QueryEngine/ExpressionRewrite.h"
+#include "QueryEngine/ExternalCacheInvalidators.h"
+#include "QueryEngine/GpuMemUtils.h"
+#include "QueryEngine/InPlaceSort.h"
+#include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
+#include "QueryEngine/JsonAccessors.h"
+#include "QueryEngine/OutputBufferInitialization.h"
+#include "QueryEngine/QueryDispatchQueue.h"
+#include "QueryEngine/QueryRewrite.h"
+#include "QueryEngine/QueryTemplateGenerator.h"
+#include "QueryEngine/ResultSetReductionJIT.h"
+#include "QueryEngine/RuntimeFunctions.h"
+#include "QueryEngine/SpeculativeTopN.h"
+#include "QueryEngine/StringDictionaryGenerations.h"
+#include "QueryEngine/TableFunctions/TableFunctionCompilationContext.h"
+#include "QueryEngine/TableFunctions/TableFunctionExecutionContext.h"
+#include "QueryEngine/Visitors/TransientStringLiteralsVisitor.h"
+#include "Shared/SystemParameters.h"
+#include "Shared/TypedDataAccessors.h"
+#include "Shared/checked_alloc.h"
+#include "Shared/measure.h"
+#include "Shared/misc.h"
+#include "Shared/scope.h"
+#include "Shared/shard_key.h"
+#include "Shared/threadpool.h"
 
 bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
@@ -145,6 +144,7 @@ int const Executor::max_gpu_count;
 const int32_t Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES;
 
 Executor::Executor(const ExecutorId executor_id,
+                   Data_Namespace::DataMgr* data_mgr,
                    const size_t block_size_x,
                    const size_t grid_size_x,
                    const size_t max_gpu_slab_size,
@@ -160,6 +160,7 @@ Executor::Executor(const ExecutorId executor_id,
     , debug_file_(debug_file)
     , executor_id_(executor_id)
     , catalog_(nullptr)
+    , data_mgr_(data_mgr)
     , temporary_tables_(nullptr)
     , input_table_info_cache_(this) {}
 
@@ -175,7 +176,10 @@ std::shared_ptr<Executor> Executor::getExecutor(
   if (it != executors_.end()) {
     return it->second;
   }
+
+  auto& data_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr();
   auto executor = std::make_shared<Executor>(executor_id,
+                                             &data_mgr,
                                              system_parameters.cuda_block_size,
                                              system_parameters.cuda_grid_size,
                                              system_parameters.max_gpu_slab_size,
@@ -257,8 +261,8 @@ quantile::TDigest* RowSetMemoryOwner::nullTDigest(double const q) {
 }
 
 bool Executor::isCPUOnly() const {
-  CHECK(catalog_);
-  return !catalog_->getDataMgr().getCudaMgr();
+  CHECK(data_mgr_);
+  return !data_mgr_->getCudaMgr();
 }
 
 const ColumnDescriptor* Executor::getColumnDescriptor(
@@ -647,9 +651,7 @@ std::vector<int8_t> Executor::serializeLiterals(
 
 int Executor::deviceCount(const ExecutorDeviceType device_type) const {
   if (device_type == ExecutorDeviceType::GPU) {
-    const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
-    CHECK(cuda_mgr);
-    return cuda_mgr->getDeviceCount();
+    return cudaMgr()->getDeviceCount();
   } else {
     return 1;
   }
@@ -1034,10 +1036,12 @@ ResultSetPtr Executor::reduceSpeculativeTopN(
   return m.asRows(ra_exe_unit, row_set_mem_owner, query_mem_desc, this, top_n, desc);
 }
 
-std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat) {
+std::unordered_set<int> get_available_gpus(const Data_Namespace::DataMgr* data_mgr) {
+  CHECK(data_mgr);
   std::unordered_set<int> available_gpus;
-  if (cat.getDataMgr().gpusPresent()) {
-    int gpu_count = cat.getDataMgr().getCudaMgr()->getDeviceCount();
+  if (data_mgr->gpusPresent()) {
+    CHECK(data_mgr->getCudaMgr());
+    const int gpu_count = data_mgr->getCudaMgr()->getDeviceCount();
     CHECK_GT(gpu_count, 0);
     for (int gpu_id = 0; gpu_id < gpu_count; ++gpu_id) {
       available_gpus.insert(gpu_id);
@@ -1494,7 +1498,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
 
     if (!eo.just_validate) {
       int available_cpus = cpu_threads();
-      auto available_gpus = get_available_gpus(cat);
+      auto available_gpus = get_available_gpus(data_mgr_);
 
       const auto context_count =
           get_context_count(device_type, available_cpus, available_gpus.size());
@@ -2111,7 +2115,7 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
       ra_exe_unit,
       table_infos,
       query_comp_desc.getDeviceType() == ExecutorDeviceType::GPU
-          ? catalog_->getDataMgr().getMemoryInfo(Data_Namespace::MemoryLevel::GPU_LEVEL)
+          ? data_mgr_->getMemoryInfo(Data_Namespace::MemoryLevel::GPU_LEVEL)
           : std::vector<Data_Namespace::MemoryInfo>{},
       eo.gpu_input_mem_limit_percent,
       eo.outer_fragment_indices);
@@ -3365,17 +3369,16 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
 }
 
 int8_t Executor::warpSize() const {
-  CHECK(catalog_);
-  const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
-  CHECK(cuda_mgr);
-  const auto& dev_props = cuda_mgr->getAllDeviceProperties();
+  const auto& dev_props = cudaMgr()->getAllDeviceProperties();
   CHECK(!dev_props.empty());
   return dev_props.front().warpSize;
 }
 
+// TODO(adb): should these three functions have consistent symantics if cuda mgr does not
+// exist?
 unsigned Executor::gridSize() const {
-  CHECK(catalog_);
-  const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
+  CHECK(data_mgr_);
+  const auto cuda_mgr = data_mgr_->getCudaMgr();
   if (!cuda_mgr) {
     return 0;
   }
@@ -3383,16 +3386,13 @@ unsigned Executor::gridSize() const {
 }
 
 unsigned Executor::numBlocksPerMP() const {
-  CHECK(catalog_);
-  const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
-  CHECK(cuda_mgr);
-  return grid_size_x_ ? std::ceil(grid_size_x_ / cuda_mgr->getMinNumMPsForAllDevices())
+  return grid_size_x_ ? std::ceil(grid_size_x_ / cudaMgr()->getMinNumMPsForAllDevices())
                       : 2;
 }
 
 unsigned Executor::blockSize() const {
-  CHECK(catalog_);
-  const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
+  CHECK(data_mgr_);
+  const auto cuda_mgr = data_mgr_->getCudaMgr();
   if (!cuda_mgr) {
     return 0;
   }
@@ -3405,10 +3405,7 @@ size_t Executor::maxGpuSlabSize() const {
 }
 
 int64_t Executor::deviceCycles(int milliseconds) const {
-  CHECK(catalog_);
-  const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
-  CHECK(cuda_mgr);
-  const auto& dev_props = cuda_mgr->getAllDeviceProperties();
+  const auto& dev_props = cudaMgr()->getAllDeviceProperties();
   return static_cast<int64_t>(dev_props.front().clockKhz) * milliseconds;
 }
 

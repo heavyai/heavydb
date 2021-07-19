@@ -91,8 +91,8 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   const int device_id = 0;  // TODO(adb): support multi-gpu table functions
   std::unique_ptr<CudaAllocator> device_allocator;
   if (device_type == ExecutorDeviceType::GPU) {
-    auto& data_mgr = executor->catalog_->getDataMgr();
-    device_allocator.reset(new CudaAllocator(&data_mgr, device_id));
+    auto data_mgr = executor->getDataMgr();
+    device_allocator.reset(new CudaAllocator(data_mgr, device_id));
   }
   std::vector<const int8_t*> col_buf_ptrs;
   std::vector<int64_t> col_sizes;
@@ -327,8 +327,8 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   }
 
   auto num_out_columns = exe_unit.target_exprs.size();
-  auto& data_mgr = executor->catalog_->getDataMgr();
-  auto gpu_allocator = std::make_unique<CudaAllocator>(&data_mgr, device_id);
+  auto data_mgr = executor->getDataMgr();
+  auto gpu_allocator = std::make_unique<CudaAllocator>(data_mgr, device_id);
   CHECK(gpu_allocator);
   std::vector<CUdeviceptr> kernel_params(KERNEL_PARAM_COUNT, 0);
   // setup the inputs
@@ -439,7 +439,7 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   query_buffers->getResultSet(0)->updateStorageEntryCount(output_row_count);
 
   // Copy back to CPU storage
-  query_buffers->copyFromTableFunctionGpuBuffers(&data_mgr,
+  query_buffers->copyFromTableFunctionGpuBuffers(data_mgr,
                                                  query_mem_desc,
                                                  output_row_count,
                                                  gpu_output_buffers,
