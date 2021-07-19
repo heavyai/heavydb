@@ -6227,9 +6227,9 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
       // a limited set of commands are available in read-only mode
       auto select_stmt = dynamic_cast<Parser::SelectStmt*>(stmt.get());
       auto show_create_stmt = dynamic_cast<Parser::ShowCreateTableStmt*>(stmt.get());
-      if (!select_stmt && !show_create_stmt) {
-        THROW_MAPD_EXCEPTION(
-            "Only read-only SQL commands are supported in read only mode.");
+      auto copy_to_stmt = dynamic_cast<Parser::ExportQueryStmt*>(stmt.get());
+      if (!select_stmt && !show_create_stmt && !copy_to_stmt) {
+        THROW_MAPD_EXCEPTION("This SQL command is not supported in read-only mode.");
       }
     }
 
