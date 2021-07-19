@@ -152,7 +152,8 @@ VK_LAYER_PATH=\$PREFIX/etc/vulkan/explicit_layer.d
 CMAKE_PREFIX_PATH=\$PREFIX:\$CMAKE_PREFIX_PATH
 
 export LD_LIBRARY_PATH PATH VULKAN_SDK VK_LAYER_PATH CMAKE_PREFIX_PATH
-source /opt/intel/oneapi/dal/latest/env/vars.sh
+
+source /opt/intel/oneapi/setvars.sh
 EOF
 
   PROFPATH=/etc/profile.d/xx-mapd-deps.sh
