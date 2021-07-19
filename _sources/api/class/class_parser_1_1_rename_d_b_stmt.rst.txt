@@ -1,0 +1,9 @@
+Class Parser::RenameDBStmt
+==========================
+
+.. doxygenclass:: Parser::RenameDBStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

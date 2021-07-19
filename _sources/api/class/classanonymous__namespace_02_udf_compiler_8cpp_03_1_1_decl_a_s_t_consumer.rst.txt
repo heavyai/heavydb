@@ -1,0 +1,9 @@
+Class anonymous_namespace{UdfCompiler.cpp}::DeclASTConsumer
+===========================================================
+
+.. doxygenclass:: anonymous_namespace{UdfCompiler.cpp}::DeclASTConsumer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

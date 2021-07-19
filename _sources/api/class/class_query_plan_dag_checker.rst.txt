@@ -1,0 +1,9 @@
+Class QueryPlanDagChecker
+=========================
+
+.. doxygenclass:: QueryPlanDagChecker
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

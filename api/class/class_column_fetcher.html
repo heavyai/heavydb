@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Class ColumnarConversionNotSupported" href="class_columnar_conversion_not_supported.html" />
+    <link rel="next" title="Class ColumnVarsVisitor" href="class_column_vars_visitor.html" />
     <link rel="prev" title="Class ColumnBitmap" href="class_column_bitmap.html" /> 
 </head>
 
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev f4f962e
+                5.7.0dev 099c97f
               </div>
             
           
@@ -311,6 +311,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_expr.html">Class Analyzer::GeoExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_function_operator.html">Class Analyzer::GeoFunctionOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_operator.html">Class Analyzer::GeoOperator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_transform_operator.html">Class Analyzer::GeoTransformOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_u_oper.html">Class Analyzer::GeoUOper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_integer_set.html">Class Analyzer::InIntegerSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_in_values.html">Class Analyzer::InValues</a></li>
@@ -374,6 +375,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_col_slot_context.html">Class ColSlotContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_column_bitmap.html">Class ColumnBitmap</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class ColumnFetcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_column_vars_visitor.html">Class ColumnVarsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_columnar_conversion_not_supported.html">Class ColumnarConversionNotSupported</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_columnar_results.html">Class ColumnarResults</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_command_line_options.html">Class CommandLineOptions</a></li>
@@ -600,7 +602,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_query_spec.html">Class Parser::QuerySpec</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_regexp_expr.html">Class Parser::RegexpExpr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_rename_column_stmt.html">Class Parser::RenameColumnStmt</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_rename_database_stmt.html">Class Parser::RenameDatabaseStmt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_rename_d_b_stmt.html">Class Parser::RenameDBStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_rename_table_stmt.html">Class Parser::RenameTableStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_rename_user_stmt.html">Class Parser::RenameUserStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_restore_table_stmt.html">Class Parser::RestoreTableStmt</a></li>
@@ -647,6 +649,9 @@
 <li class="toctree-l2"><a class="reference internal" href="class_query_memory_initializer.html">Class QueryMemoryInitializer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_must_run_on_cpu.html">Class QueryMustRunOnCpu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_not_supported.html">Class QueryNotSupported</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_query_plan_dag_cache.html">Class QueryPlanDagCache</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_query_plan_dag_checker.html">Class QueryPlanDagChecker</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_query_plan_dag_extractor.html">Class QueryPlanDagExtractor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_rewriter.html">Class QueryRewriter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_runner_1_1_import_driver.html">Class QueryRunner::ImportDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_runner_1_1_query_runner.html">Class QueryRunner::QueryRunner</a></li>
@@ -676,6 +681,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_rel_scan.html">Class RelScan</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_sort.html">Class RelSort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_table_function.html">Class RelTableFunction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_rel_translated_join.html">Class RelTranslatedJoin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_render_allocator.html">Class RenderAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_render_allocator_map.html">Class RenderAllocatorMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_render_handler.html">Class RenderHandler</a></li>
@@ -768,7 +774,6 @@
 <li class="toctree-l2"><a class="reference internal" href="class_tracking_processor.html">Class TrackingProcessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_transient_dict_id_visitor.html">Class TransientDictIdVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_transient_string_literals_visitor.html">Class TransientStringLiteralsVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_udf_clang_driver.html">Class UdfClangDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_udf_compiler.html">Class UdfCompiler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_update_log_for_fragment.html">Class UpdateLogForFragment</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_used_columns_visitor.html">Class UsedColumnsVisitor</a></li>
@@ -809,6 +814,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_window_function_detection_visitor.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::WindowFunctionDetectionVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1anonymous__namespace_02_rel_alg_dag_37bbb45ac7c2d8584821b5ef04b2b27a.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::anonymous_namespace{RelAlgDagBuilder.cpp}::RexInputReplacementVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1anonymous__namespace_02_rel_alg_dag_8ddffa3a48943f55448d6093bbe501fd.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::anonymous_namespace{RelAlgDagBuilder.cpp}::CoalesceSecondaryProjectVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_rel_left_deep_tree_ids_collector.html">Class anonymous_namespace{RelAlgExecutor.cpp}::RelLeftDeepTreeIdsCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_rex_used_inputs_visitor.html">Class anonymous_namespace{RelAlgExecutor.cpp}::RexUsedInputsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_availability_checker.html">Class anonymous_namespace{RelAlgOptimizer.cpp}::AvailabilityChecker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_rex_input_collector.html">Class anonymous_namespace{RelAlgOptimizer.cpp}::RexInputCollector</a></li>
@@ -821,10 +827,11 @@
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_left_deep_inner_join_8cpp_03_1_1_rebind_rex_inputs_from_left_deep_join.html">Class anonymous_namespace{RelLeftDeepInnerJoin.cpp}::RebindRexInputsFromLeftDeepJoin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_scalar_code_generator_8cpp_03_1_1_used_column_expressions.html">Class anonymous_namespace{ScalarCodeGenerator.cpp}::UsedColumnExpressions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_typed_data_accessors_8h_03_1_1_null_sentinel_supplier.html">Class anonymous_namespace{TypedDataAccessors.h}::NullSentinelSupplier</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_u_d_f_compiler_8cpp_03_1_1_decl_a_s_t_consumer.html">Class anonymous_namespace{UDFCompiler.cpp}::DeclASTConsumer</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_u_d_f_compiler_8cpp_03_1_1_function_decl_visitor.html">Class anonymous_namespace{UDFCompiler.cpp}::FunctionDeclVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_u_d_f_compiler_8cpp_03_1_1_handle_decl_action.html">Class anonymous_namespace{UDFCompiler.cpp}::HandleDeclAction</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_u_d_f_compiler_8cpp_03_1_1_tool_factory.html">Class anonymous_namespace{UDFCompiler.cpp}::ToolFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_udf_compiler_8cpp_03_1_1_decl_a_s_t_consumer.html">Class anonymous_namespace{UdfCompiler.cpp}::DeclASTConsumer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_udf_compiler_8cpp_03_1_1_function_decl_visitor.html">Class anonymous_namespace{UdfCompiler.cpp}::FunctionDeclVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_udf_compiler_8cpp_03_1_1_handle_decl_action.html">Class anonymous_namespace{UdfCompiler.cpp}::HandleDeclAction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_udf_compiler_8cpp_03_1_1_tool_factory.html">Class anonymous_namespace{UdfCompiler.cpp}::ToolFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_udf_compiler_8cpp_03_1_1_udf_clang_driver.html">Class anonymous_namespace{UdfCompiler.cpp}::UdfClangDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classbench__batch__streaming__ingest_1_1_omni_con.html">Class bench_batch_streaming_ingest::OmniCon</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classbench__update_1_1_omni_sci_con.html">Class bench_update::OmniSciCon</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classboost__variant__accessor.html">Class boost_variant_accessor</a></li>
@@ -948,20 +955,25 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterServer::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_table.html">Class com::mapd::parser::extension::ddl::SqlAlterTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_table_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlAlterTable::Builder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_alter_user.html">Class com::mapd::parser::extension::ddl::SqlAlterUser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_attribute_definition.html">Class com::mapd::parser::extension::ddl::SqlAttributeDefinition</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_check_constraint.html">Class com::mapd::parser::extension::ddl::SqlCheckConstraint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_column_declaration.html">Class com::mapd::parser::extension::ddl::SqlColumnDeclaration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_d_b.html">Class com::mapd::parser::extension::ddl::SqlCreateDB</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlCreateForeignTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_server.html">Class com::mapd::parser::extension::ddl::SqlCreateServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_server_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlCreateServer::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_table.html">Class com::mapd::parser::extension::ddl::SqlCreateTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_user.html">Class com::mapd::parser::extension::ddl::SqlCreateUser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_user_mapping.html">Class com::mapd::parser::extension::ddl::SqlCreateUserMapping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_user_mapping_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlCreateUserMapping::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_create_view.html">Class com::mapd::parser::extension::ddl::SqlCreateView</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_ddl_nodes.html">Class com::mapd::parser::extension::ddl::SqlDdlNodes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_d_b.html">Class com::mapd::parser::extension::ddl::SqlDropDB</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_foreign_table.html">Class com::mapd::parser::extension::ddl::SqlDropForeignTable</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_server.html">Class com::mapd::parser::extension::ddl::SqlDropServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_table.html">Class com::mapd::parser::extension::ddl::SqlDropTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_user.html">Class com::mapd::parser::extension::ddl::SqlDropUser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_user_mapping.html">Class com::mapd::parser::extension::ddl::SqlDropUserMapping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_drop_view.html">Class com::mapd::parser::extension::ddl::SqlDropView</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_filter.html">Class com::mapd::parser::extension::ddl::SqlFilter</a></li>
@@ -970,7 +982,9 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_kill_query.html">Class com::mapd::parser::extension::ddl::SqlKillQuery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_options_builder.html">Class com::mapd::parser::extension::ddl::SqlOptionsBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_refresh_foreign_tables.html">Class com::mapd::parser::extension::ddl::SqlRefreshForeignTables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_rename_d_b.html">Class com::mapd::parser::extension::ddl::SqlRenameDB</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_rename_table.html">Class com::mapd::parser::extension::ddl::SqlRenameTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_rename_user.html">Class com::mapd::parser::extension::ddl::SqlRenameUser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_command.html">Class com::mapd::parser::extension::ddl::SqlShowCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html">Class com::mapd::parser::extension::ddl::SqlShowDatabases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_disk_cache_usage.html">Class com::mapd::parser::extension::ddl::SqlShowDiskCacheUsage</a></li>
@@ -1114,6 +1128,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_file_reader.html">Class foreign_storage::SingleFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_timestamp_bounds_validator.html">Class foreign_storage::TimestampBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_column_not_geo_error.html">Class import_export::ColumnNotGeoError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_data_stream_sink.html">Class import_export::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_detector.html">Class import_export::Detector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_importer.html">Class import_export::Importer</a></li>
@@ -1463,6 +1478,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_point_constructor.html">Class spatial_type::PointConstructor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_point_n.html">Class spatial_type::PointN</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_start_end_point.html">Class spatial_type::StartEndPoint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_transform.html">Class spatial_type::Transform</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classstring__view__unordered__map.html">Class string_view_unordered_map</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classsystem__validator_1_1_distributed_validate.html">Class system_validator::DistributedValidate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classsystem__validator_1_1_single_node_validator.html">Class system_validator::SingleNodeValidator</a></li>
@@ -1566,6 +1582,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_explain_info.html">Struct ExplainInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_external_query_output_spec.html">Struct ExternalQueryOutputSpec</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_external_query_table.html">Struct ExternalQueryTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_extracted_plan_dag.html">Struct ExtractedPlanDag</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_face_i_j_k.html">Struct FaceIJK</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_face_orient_i_j_k.html">Struct FaceOrientIJK</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_fetch_result.html">Struct FetchResult</a></li>
@@ -1649,6 +1666,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hit_test_types.html">Struct HitTestTypes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_host_array_datum.html">Struct HostArrayDatum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_inject_timer.html">Struct InjectTimer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_inner_outer_or_loop_qual.html">Struct InnerOuterOrLoopQual</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_input_table_info.html">Struct InputTableInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_insertion_ordered_map.html">Struct InsertionOrderedMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_insertion_ordered_map_1_1_iterator.html">Struct InsertionOrderedMap::Iterator</a></li>
@@ -1693,7 +1711,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_positive_or_zero_validate.html">Struct Parser::PositiveOrZeroValidate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_d_b.html">Struct Parser::ShouldInvalidateSessionsByDB</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_d_b_3_01_drop_d_b_stmt_01_4.html">Struct Parser::ShouldInvalidateSessionsByDB&lt; DropDBStmt &gt;</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_d_b_3_01_rename_database_stmt_01_4.html">Struct Parser::ShouldInvalidateSessionsByDB&lt; RenameDatabaseStmt &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_d_b_3_01_rename_d_b_stmt_01_4.html">Struct Parser::ShouldInvalidateSessionsByDB&lt; RenameDBStmt &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_user.html">Struct Parser::ShouldInvalidateSessionsByUser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_user_3_01_drop_user_stmt_01_4.html">Struct Parser::ShouldInvalidateSessionsByUser&lt; DropUserStmt &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_parser_1_1_should_invalidate_sessions_by_user_3_01_rename_user_stmt_01_4.html">Struct Parser::ShouldInvalidateSessionsByUser&lt; RenameUserStmt &gt;</a></li>
@@ -1706,6 +1724,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_execution_properties.html">Struct QueryExecutionProperties</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_info.html">Struct QueryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_output_buffer_memory_manager.html">Struct QueryOutputBufferMemoryManager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_runner_1_1_query_plan_dag_info.html">Struct QueryRunner::QueryPlanDagInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_query_step_execution_result.html">Struct QueryStepExecutionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_reduction_code.html">Struct ReductionCode</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_registered_query_hint.html">Struct RegisteredQueryHint</a></li>
@@ -1774,6 +1793,12 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_arrow_importer_8h_03_1_1_data_buffer_base.html">Struct anonymous_namespace{ArrowImporter.h}::DataBufferBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_arrow_result_set_converter_8cpp_03_1_1null__type_3_01_t_y_p_e_00_03e081f4894a05798480fd6fd3743aaa7.html">Struct anonymous_namespace{ArrowResultSetConverter.cpp}::null_type&lt; TYPE, std::enable_if_t&lt; std::is_integral&lt; TYPE &gt;::value &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_arrow_result_set_converter_8cpp_03_1_1null__type_3_01_t_y_p_e_00_0a388c5fabab5a36579101002cd81f94d.html">Struct anonymous_namespace{ArrowResultSetConverter.cpp}::null_type&lt; TYPE, std::enable_if_t&lt; std::is_floating_point&lt; TYPE &gt;::value &gt; &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_cgen_state_8cpp_03_1_1_gpu_atan_function.html">Struct anonymous_namespace{CgenState.cpp}::GpuAtanFunction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_cgen_state_8cpp_03_1_1_gpu_exp_function.html">Struct anonymous_namespace{CgenState.cpp}::GpuExpFunction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_cgen_state_8cpp_03_1_1_gpu_function_definition.html">Struct anonymous_namespace{CgenState.cpp}::GpuFunctionDefinition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_cgen_state_8cpp_03_1_1_gpu_log_function.html">Struct anonymous_namespace{CgenState.cpp}::GpuLogFunction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_cgen_state_8cpp_03_1_1_gpu_power_function.html">Struct anonymous_namespace{CgenState.cpp}::GpuPowerFunction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_cgen_state_8cpp_03_1_1_gpu_tan_function.html">Struct anonymous_namespace{CgenState.cpp}::GpuTanFunction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_force_disconnect.html">Struct anonymous_namespace{DBHandler.cpp}::ForceDisconnect</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_projection_tokens_for_completion.html">Struct anonymous_namespace{DBHandler.cpp}::ProjectionTokensForCompletion</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_date_truncate_8cpp_03_1_1_era_time.html">Struct anonymous_namespace{DateTruncate.cpp}::EraTime</a></li>
@@ -1787,6 +1812,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_importer_8cpp_03_1_1_o_g_r_spatial_reference_deleter.html">Struct anonymous_namespace{Importer.cpp}::OGRSpatialReferenceDeleter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_hash_table_props.html">Struct anonymous_namespace{OverlapsJoinHashTable.cpp}::HashTableProps</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_tuning_state.html">Struct anonymous_namespace{OverlapsJoinHashTable.cpp}::TuningState</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_query_plan_dag_extractor_8cpp_03_1_1_is_equiv_bin_op.html">Struct anonymous_namespace{QueryPlanDagExtractor.cpp}::IsEquivBinOp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_query_plan_dag_extractor_8cpp_03_1_1_op_info.html">Struct anonymous_namespace{QueryPlanDagExtractor.cpp}::OpInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_error_info.html">Struct anonymous_namespace{RelAlgExecutor.cpp}::ErrorInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_lazy_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoLazyFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_query_output_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoQueryOutputFetchHandler</a></li>
@@ -2181,7 +2208,7 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="class_columnar_conversion_not_supported.html" class="btn btn-neutral float-right" title="Class ColumnarConversionNotSupported" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="class_column_vars_visitor.html" class="btn btn-neutral float-right" title="Class ColumnVarsVisitor" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="class_column_bitmap.html" class="btn btn-neutral float-left" title="Class ColumnBitmap" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

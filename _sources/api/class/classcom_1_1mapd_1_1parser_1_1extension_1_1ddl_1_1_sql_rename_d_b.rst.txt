@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::SqlRenameDB
+====================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::SqlRenameDB
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

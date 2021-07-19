@@ -1,0 +1,9 @@
+Class QueryPlanDagExtractor
+===========================
+
+.. doxygenclass:: QueryPlanDagExtractor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class anonymous_namespace{UdfCompiler.cpp}::HandleDeclAction
+============================================================
+
+.. doxygenclass:: anonymous_namespace{UdfCompiler.cpp}::HandleDeclAction
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

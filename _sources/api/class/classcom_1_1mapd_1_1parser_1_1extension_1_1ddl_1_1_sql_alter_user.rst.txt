@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::SqlAlterUser
+=====================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::SqlAlterUser
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

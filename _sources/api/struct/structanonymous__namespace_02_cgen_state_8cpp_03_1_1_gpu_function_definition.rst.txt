@@ -1,0 +1,9 @@
+Struct anonymous_namespace{CgenState.cpp}::GpuFunctionDefinition
+================================================================
+
+.. doxygenstruct:: anonymous_namespace{CgenState.cpp}::GpuFunctionDefinition
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

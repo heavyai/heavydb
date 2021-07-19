@@ -1,0 +1,9 @@
+Class anonymous_namespace{UdfCompiler.cpp}::FunctionDeclVisitor
+===============================================================
+
+.. doxygenclass:: anonymous_namespace{UdfCompiler.cpp}::FunctionDeclVisitor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

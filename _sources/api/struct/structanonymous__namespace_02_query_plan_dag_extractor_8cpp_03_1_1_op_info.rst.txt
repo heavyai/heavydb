@@ -1,0 +1,9 @@
+Struct anonymous_namespace{QueryPlanDagExtractor.cpp}::OpInfo
+=============================================================
+
+.. doxygenstruct:: anonymous_namespace{QueryPlanDagExtractor.cpp}::OpInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

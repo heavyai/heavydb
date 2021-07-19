@@ -1,0 +1,9 @@
+Class anonymous_namespace{RelAlgExecutor.cpp}::RelLeftDeepTreeIdsCollector
+==========================================================================
+
+.. doxygenclass:: anonymous_namespace{RelAlgExecutor.cpp}::RelLeftDeepTreeIdsCollector
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
