@@ -153,7 +153,7 @@ CMAKE_PREFIX_PATH=\$PREFIX:\$CMAKE_PREFIX_PATH
 
 export LD_LIBRARY_PATH PATH VULKAN_SDK VK_LAYER_PATH CMAKE_PREFIX_PATH
 
-source /opt/intel/oneapi/setvars.sh
+source /opt/intel/oneapi/setvars.sh > /dev/null
 EOF
 
   PROFPATH=/etc/profile.d/xx-mapd-deps.sh
