@@ -304,7 +304,7 @@ if(ENABLE_ONEDAL)
   find_package(oneDAL REQUIRED)
   list(APPEND ONEDAL_LIBRARIES "libonedal_core.so")
   list(APPEND ONEDAL_LIBRARIES "libonedal_thread.so")
-  include_directories("/opt/intel/oneapi/dal/latest/include/")
+  include_directories(${oneDAL_INCLUDE_DIRS})
   add_definitions("-DHAVE_ONEDAL")
 endif()
 
