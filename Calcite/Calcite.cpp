@@ -253,7 +253,7 @@ Calcite::getClient(int port) {
                                                                   ssl_ca_file_,
                                                                   true,
                                                                   service_keepalive_,
-                                                                  2000,
+                                                                  service_timeout_,
                                                                   service_timeout_,
                                                                   service_timeout_);
   try {
