@@ -344,16 +344,25 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
   auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<arrow::RecordBatch> record_batch = convertToArrow();
 
+  struct BuildResultParams {
+    int64_t schemaSize() const {
+      return serialized_schema ? serialized_schema->size() : 0;
+    };
+    int64_t dictSize() const { return serialized_dict ? serialized_dict->size() : 0; };
+    int64_t totalSize() const { return schemaSize() + records_size + dictSize(); }
+    bool hasRecordBatch() const { return records_size > 0; }
+    bool hasDict() const { return dictSize() > 0; }
+
+    int64_t records_size{0};
+    std::shared_ptr<arrow::Buffer> serialized_schema{nullptr};
+    std::shared_ptr<arrow::Buffer> serialized_dict{nullptr};
+  } result_params;
+
   if (device_type_ == ExecutorDeviceType::CPU ||
       transport_method_ == ArrowTransport::WIRE) {
-    const auto getWireResult =
-        [&](const int64_t schema_size,
-            const int64_t dict_size,
-            const int64_t records_size,
-            const std::shared_ptr<arrow::Buffer>& serialized_schema,
-            const std::shared_ptr<arrow::Buffer>& serialized_dict) -> ArrowResult {
+    const auto getWireResult = [&]() -> ArrowResult {
       auto timer = DEBUG_TIMER("serialize batch to wire");
-      const int64_t total_size = schema_size + records_size + dict_size;
+      const auto total_size = result_params.totalSize();
       std::vector<char> record_handle_data(total_size);
       auto serialized_records =
           arrow::MutableBuffer::Wrap(record_handle_data.data(), total_size);
@@ -361,16 +370,22 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
       ARROW_ASSIGN_OR_THROW(auto writer, arrow::Buffer::GetWriter(serialized_records));
 
       ARROW_THROW_NOT_OK(writer->Write(
-          reinterpret_cast<const uint8_t*>(serialized_schema->data()), schema_size));
+          reinterpret_cast<const uint8_t*>(result_params.serialized_schema->data()),
+          result_params.schemaSize()));
 
-      ARROW_THROW_NOT_OK(writer->Write(
-          reinterpret_cast<const uint8_t*>(serialized_dict->data()), dict_size));
+      if (result_params.hasDict()) {
+        ARROW_THROW_NOT_OK(writer->Write(
+            reinterpret_cast<const uint8_t*>(result_params.serialized_dict->data()),
+            result_params.dictSize()));
+      }
 
-      arrow::io::FixedSizeBufferWriter stream(
-          SliceMutableBuffer(serialized_records, schema_size + dict_size));
+      arrow::io::FixedSizeBufferWriter stream(SliceMutableBuffer(
+          serialized_records, result_params.schemaSize() + result_params.dictSize()));
 
-      ARROW_THROW_NOT_OK(arrow::ipc::SerializeRecordBatch(
-          *record_batch, arrow::ipc::IpcWriteOptions::Defaults(), &stream));
+      if (result_params.hasRecordBatch()) {
+        ARROW_THROW_NOT_OK(arrow::ipc::SerializeRecordBatch(
+            *record_batch, arrow::ipc::IpcWriteOptions::Defaults(), &stream));
+      }
 
       return {std::vector<char>(0),
               0,
@@ -380,32 +395,34 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
               std::move(record_handle_data)};
     };
 
-    const auto getShmResult =
-        [&](const int64_t schema_size,
-            const int64_t dict_size,
-            const int64_t records_size,
-            const std::shared_ptr<arrow::Buffer>& serialized_schema,
-            const std::shared_ptr<arrow::Buffer>& serialized_dict) -> ArrowResult {
+    const auto getShmResult = [&]() -> ArrowResult {
       auto timer = DEBUG_TIMER("serialize batch to shared memory");
       std::shared_ptr<arrow::Buffer> serialized_records;
       std::vector<char> schema_handle_buffer;
       std::vector<char> record_handle_buffer(sizeof(key_t), 0);
       key_t records_shm_key = IPC_PRIVATE;
-      const int64_t total_size = schema_size + records_size + dict_size;
+      const int64_t total_size = result_params.totalSize();
 
       std::tie(records_shm_key, serialized_records) = get_shm_buffer(total_size);
 
       memcpy(serialized_records->mutable_data(),
-             serialized_schema->data(),
-             (size_t)schema_size);
-      memcpy(serialized_records->mutable_data() + schema_size,
-             serialized_dict->data(),
-             (size_t)dict_size);
+             result_params.serialized_schema->data(),
+             (size_t)result_params.schemaSize());
 
-      arrow::io::FixedSizeBufferWriter stream(
-          SliceMutableBuffer(serialized_records, schema_size + dict_size));
-      ARROW_THROW_NOT_OK(arrow::ipc::SerializeRecordBatch(
-          *record_batch, arrow::ipc::IpcWriteOptions::Defaults(), &stream));
+      if (result_params.hasDict()) {
+        memcpy(serialized_records->mutable_data() + result_params.schemaSize(),
+               result_params.serialized_dict->data(),
+               (size_t)result_params.dictSize());
+      }
+
+      arrow::io::FixedSizeBufferWriter stream(SliceMutableBuffer(
+          serialized_records, result_params.schemaSize() + result_params.dictSize()));
+
+      if (result_params.hasRecordBatch()) {
+        ARROW_THROW_NOT_OK(arrow::ipc::SerializeRecordBatch(
+            *record_batch, arrow::ipc::IpcWriteOptions::Defaults(), &stream));
+      }
+
       memcpy(&record_handle_buffer[0],
              reinterpret_cast<const unsigned char*>(&records_shm_key),
              sizeof(key_t));
@@ -417,12 +434,26 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
               std::string{""}};
     };
 
-    std::shared_ptr<arrow::Buffer> serialized_schema;
-    int64_t records_size = 0;
-    int64_t schema_size = 0;
     arrow::ipc::DictionaryFieldMapper mapper(*record_batch->schema());
     auto options = arrow::ipc::IpcWriteOptions::Defaults();
     auto dict_stream = arrow::io::BufferOutputStream::Create(1024).ValueOrDie();
+
+    // If our record batch is going to be empty, we omit it entirely,
+    // only serializing the schema.
+    if (!record_batch->num_rows()) {
+      ARROW_ASSIGN_OR_THROW(result_params.serialized_schema,
+                            arrow::ipc::SerializeSchema(*record_batch->schema(),
+                                                        arrow::default_memory_pool()));
+
+      switch (transport_method_) {
+        case ArrowTransport::WIRE:
+          return getWireResult();
+        case ArrowTransport::SHARED_MEMORY:
+          return getShmResult();
+        default:
+          UNREACHABLE();
+      }
+    }
 
     ARROW_ASSIGN_OR_THROW(auto dictionaries, CollectDictionaries(*record_batch, mapper));
 
@@ -439,23 +470,20 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
       ARROW_THROW_NOT_OK(
           WriteIpcPayload(payload, options, dict_stream.get(), &metadata_length));
     }
-    auto serialized_dict = dict_stream->Finish().ValueOrDie();
-    auto dict_size = serialized_dict->size();
+    result_params.serialized_dict = dict_stream->Finish().ValueOrDie();
 
-    ARROW_ASSIGN_OR_THROW(serialized_schema,
+    ARROW_ASSIGN_OR_THROW(result_params.serialized_schema,
                           arrow::ipc::SerializeSchema(*record_batch->schema(),
                                                       arrow::default_memory_pool()));
-    schema_size = serialized_schema->size();
 
-    ARROW_THROW_NOT_OK(arrow::ipc::GetRecordBatchSize(*record_batch, &records_size));
+    ARROW_THROW_NOT_OK(
+        arrow::ipc::GetRecordBatchSize(*record_batch, &result_params.records_size));
 
     switch (transport_method_) {
       case ArrowTransport::WIRE:
-        return getWireResult(
-            schema_size, dict_size, records_size, serialized_schema, serialized_dict);
+        return getWireResult();
       case ArrowTransport::SHARED_MEMORY:
-        return getShmResult(
-            schema_size, dict_size, records_size, serialized_schema, serialized_dict);
+        return getShmResult();
       default:
         UNREACHABLE();
     }
@@ -603,12 +631,17 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
     const std::shared_ptr<arrow::Schema>& schema) const {
   std::vector<std::shared_ptr<arrow::Array>> result_columns;
 
+  // First, check if the result set is empty.
+  // If so, we return an arrow result set that only
+  // contains the schema (no record batch will be serialized).
+  if (results_->isEmpty()) {
+    return ARROW_RECORDBATCH_MAKE(schema, 0, result_columns);
+  }
+
   const size_t entry_count = top_n_ < 0
                                  ? results_->entryCount()
                                  : std::min(size_t(top_n_), results_->entryCount());
-  if (!entry_count) {
-    return ARROW_RECORDBATCH_MAKE(schema, 0, result_columns);
-  }
+
   const auto col_count = results_->colCount();
   size_t row_count = 0;
 

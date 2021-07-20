@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
+#include <fmt/core.h>
+#include <fmt/format.h>
 #include "TestHelpers.h"
-#include "fmt/core.h"
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <arrow/api.h>
@@ -40,6 +42,7 @@
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
+using namespace std::literals;
 
 #include "Logger/Logger.h"
 #include "QueryEngine/CompilationOptions.h"
@@ -51,7 +54,11 @@ using namespace ::apache::thrift::transport;
 TSessionId g_session_id;
 std::shared_ptr<OmniSciClient> g_client;
 
+#ifdef HAVE_CUDA
 bool g_cpu_only{false};
+#else
+bool g_cpu_only{true};
+#endif
 
 #define SKIP_NO_GPU()                                        \
   if (g_cpu_only) {                                          \
@@ -79,8 +86,14 @@ class ArrowOutput {
       ARROW_ASSIGN_OR_THROW(batch_reader,
                             arrow::ipc::RecordBatchStreamReader::Open(&reader));
 
-      ARROW_THROW_NOT_OK(batch_reader->ReadNext(&record_batch));
-      schema = record_batch->schema();
+      auto read_result = batch_reader->ReadNext(&record_batch);
+      if (read_result.code() != arrow::StatusCode::OK || !record_batch) {
+        LOG(WARNING) << "Unable to read record batch";
+        schema = batch_reader->schema();
+      } else {
+        schema = record_batch->schema();
+      }
+
     } else {
       if (device_type == ExecutorDeviceType::CPU) {
         key_t shmem_key = -1;
@@ -99,8 +112,11 @@ class ArrowOutput {
                                        tdf.df_size);
         ARROW_ASSIGN_OR_THROW(batch_reader,
                               arrow::ipc::RecordBatchStreamReader::Open(&reader));
-        ARROW_THROW_NOT_OK(batch_reader->ReadNext(&record_batch));
-        schema = record_batch->schema();
+        auto read_result = batch_reader->ReadNext(&record_batch);
+        if (!read_result.ok()) {
+          LOG(WARNING) << "Unable to read record batch from shared memory buffer";
+        }
+        schema = batch_reader->schema();
       }
       if (device_type == ExecutorDeviceType::GPU) {
         // Read schema from IPC memory
@@ -532,6 +548,92 @@ TEST_F(ArrowIpcBasic, IpcGpu) {
   ASSERT_TRUE(false) << "Test should be skipped in CPU-only mode!";
 #endif
   deallocate_df(data_frame, ExecutorDeviceType::GPU);
+}
+
+TEST_F(ArrowIpcBasic, EmptyResultSet) {
+  char const* drop_flights = "DROP TABLE IF EXISTS flights;";
+  run_ddl_statement(drop_flights);
+  std::string create_flights =
+      "CREATE TABLE flights (id INT, plane_model TEXT ENCODING DICT(32), dest_city TEXT "
+      "ENCODING DICT(32)) WITH (fragment_size = 2);";
+  run_ddl_statement(create_flights);
+  std::vector<std::pair<int, std::string>> plane_models;
+  for (int i = 1; i < 10; i++) {
+    plane_models.emplace_back(i, "B-" + std::to_string(i));
+  }
+
+  for (const auto& [id, plane_model] : plane_models) {
+    for (auto dest_city : {"Austin", "Dallas", "Chicago"}) {
+      std::string const insert = fmt::format(
+          "INSERT INTO flights VALUES ({}, '{}', '{}');", id, plane_model, dest_city);
+      run_multiple_agg(insert);
+    }
+  }
+
+  // group by
+  {
+    char const* select =
+        "SELECT plane_model, COUNT(*) FROM flights WHERE id < -1 GROUP BY plane_model;";
+
+    std::array expected_fields{"plane_model"s, "EXPR$1"s};
+
+    {  // wire transport
+      auto data_frame = execute_arrow_ipc(
+          select, ExecutorDeviceType::CPU, 0, -1, TArrowTransport::WIRE);
+
+      auto df = ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::WIRE);
+
+      ASSERT_EQ(df.schema->num_fields(), 2);
+
+      EXPECT_THAT(df.schema->field_names(),
+                  ::testing::UnorderedElementsAreArray(expected_fields));
+    }
+
+    {  // shared memory transport
+      auto data_frame = execute_arrow_ipc(
+          select, ExecutorDeviceType::CPU, 0, -1, TArrowTransport::SHARED_MEMORY);
+
+      auto df = ArrowOutput(
+          data_frame, ExecutorDeviceType::CPU, TArrowTransport::SHARED_MEMORY);
+
+      ASSERT_EQ(df.schema->num_fields(), 2);
+
+      EXPECT_THAT(df.schema->field_names(),
+                  ::testing::UnorderedElementsAreArray(expected_fields));
+    }
+  }
+
+  // projection
+  {
+    char const* select = "SELECT * FROM flights WHERE id < -1";
+
+    std::array expected_fields{"plane_model"s, "id"s, "dest_city"s};
+
+    {  // wire transport
+      auto data_frame = execute_arrow_ipc(
+          select, ExecutorDeviceType::CPU, 0, -1, TArrowTransport::WIRE);
+
+      auto df = ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::WIRE);
+
+      ASSERT_EQ(df.schema->num_fields(), 3);
+
+      EXPECT_THAT(df.schema->field_names(),
+                  ::testing::UnorderedElementsAreArray(expected_fields));
+    }
+
+    {  // shared memory transport
+      auto data_frame = execute_arrow_ipc(
+          select, ExecutorDeviceType::CPU, 0, -1, TArrowTransport::SHARED_MEMORY);
+
+      auto df = ArrowOutput(
+          data_frame, ExecutorDeviceType::CPU, TArrowTransport::SHARED_MEMORY);
+
+      ASSERT_EQ(df.schema->num_fields(), 3);
+
+      EXPECT_THAT(df.schema->field_names(),
+                  ::testing::UnorderedElementsAreArray(expected_fields));
+    }
+  }
 }
 
 int main(int argc, char* argv[]) {

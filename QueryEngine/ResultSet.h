@@ -279,6 +279,16 @@ class ResultSet {
 
   void setCachedRowCount(const size_t row_count) const;
 
+  bool isEmpty() const;
+
+  /// Returns the count of entries we allocated for
+  /// the result set to hold.
+  /// Note that this is not representative of the number
+  /// of rows in the result set.
+  ///
+  /// More concretely:
+  /// entryCount() > 0 does not imply the result set is *not* empty.
+  /// For an empty check, use `isEmpty`
   size_t entryCount() const;
 
   size_t getBufferSizeBytes(const ExecutorDeviceType device_type) const;

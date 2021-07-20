@@ -399,6 +399,26 @@ size_t ResultSet::parallelRowCount() const {
   return get_truncated_row_count(row_count, getLimit(), drop_first_);
 }
 
+bool ResultSet::isEmpty() const {
+  if (entryCount() == 0) {
+    return true;
+  }
+  if (!storage_) {
+    return true;
+  }
+
+  std::lock_guard<std::mutex> lock(row_iteration_mutex_);
+  moveToBegin();
+  while (true) {
+    auto crt_row = getNextRowUnlocked(false, false);
+    if (!crt_row.empty()) {
+      return false;
+    }
+  }
+  moveToBegin();
+  return true;
+}
+
 bool ResultSet::definitelyHasNoRows() const {
   return !storage_ && !estimator_ && !just_explain_;
 }
