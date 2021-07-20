@@ -37,7 +37,7 @@ bool g_enable_thrift_logs{false};
 extern bool g_use_table_device_offset;
 extern float g_fraction_code_cache_to_evict;
 extern bool g_cache_string_hash;
-
+extern bool g_enable_idp_temporary_users;
 extern bool g_enable_left_join_filter_hoisting;
 extern int64_t g_large_ndv_threshold;
 extern size_t g_large_ndv_multiplier;
@@ -710,6 +710,13 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_enable_filter_function)
           ->implicit_value(true),
       "Enable the filter function protection feature for the SQL JIT compiler. "
+      "Normally should be on but techs might want to disable for troubleshooting.");
+  developer_desc.add_options()(
+      "enable-idp-temporary-users",
+      po::value<bool>(&g_enable_idp_temporary_users)
+          ->default_value(g_enable_idp_temporary_users)
+          ->implicit_value(true),
+      "Enable temporary users for SAML and LDAP logins on read-only servers. "
       "Normally should be on but techs might want to disable for troubleshooting.");
   developer_desc.add_options()(
       "enable-calcite-ddl",

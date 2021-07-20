@@ -520,7 +520,8 @@ std::string const DBHandler::createInMemoryCalciteSession(
                                             calcite_->getInternalSessionProxyPassword(),
                                             true,
                                             -1,
-                                            true);
+                                            true,
+                                            false);
   const auto emplace_ret =
       sessions_.emplace(session_id,
                         std::make_shared<Catalog_Namespace::SessionInfo>(

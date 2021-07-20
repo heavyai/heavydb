@@ -223,7 +223,7 @@ QueryRunner::QueryRunner(const char* db_path,
 
   if (create_user) {
     if (!sys_cat.getMetadataForUser(user_name, user)) {
-      sys_cat.createUser(user_name, passwd, false, "", true);
+      sys_cat.createUser(user_name, passwd, false, "", true, g_read_only);
     }
   }
   CHECK(sys_cat.getMetadataForUser(user_name, user));

@@ -53,19 +53,19 @@ inline auto sql(std::string_view sql_stmts) {
 struct Users {
   void setup_users() {
     if (!sys_cat.getMetadataForUser("Chelsea", g_user)) {
-      sys_cat.createUser("Chelsea", "password", true, "", true);
+      sys_cat.createUser("Chelsea", "password", true, "", true, false);
       CHECK(sys_cat.getMetadataForUser("Chelsea", g_user));
     }
     if (!sys_cat.getMetadataForUser("Arsenal", g_user)) {
-      sys_cat.createUser("Arsenal", "password", false, "", true);
+      sys_cat.createUser("Arsenal", "password", false, "", true, false);
       CHECK(sys_cat.getMetadataForUser("Arsenal", g_user));
     }
     if (!sys_cat.getMetadataForUser("Juventus", g_user)) {
-      sys_cat.createUser("Juventus", "password", false, "", true);
+      sys_cat.createUser("Juventus", "password", false, "", true, false);
       CHECK(sys_cat.getMetadataForUser("Juventus", g_user));
     }
     if (!sys_cat.getMetadataForUser("Bayern", g_user)) {
-      sys_cat.createUser("Bayern", "password", false, "", true);
+      sys_cat.createUser("Bayern", "password", false, "", true, false);
       CHECK(sys_cat.getMetadataForUser("Bayern", g_user));
     }
   }
@@ -3714,6 +3714,48 @@ TEST_F(ServerPrivApiTest, UsageOnServerObjectPrivsSuper) {
                       {0, 0, 0, 1},
                       "test_user",
                       TDBObjectType::ServerDBObjectType);
+}
+
+TEST(Temporary, Users) {
+  auto user_cleanup = [] {
+    if (sys_cat.getMetadataForUser("username1", g_user)) {
+      sys_cat.dropUser("username1");
+    }
+    CHECK(!sys_cat.getMetadataForUser("username1", g_user));
+
+    if (sys_cat.getMetadataForUser("username2", g_user)) {
+      sys_cat.dropUser("username2");
+    }
+    CHECK(!sys_cat.getMetadataForUser("username2", g_user));
+  };
+  user_cleanup();
+
+  auto read_only = g_read_only;
+  g_read_only = true;
+  ScopeGuard scope_guard = [&] {
+    g_read_only = read_only;
+    user_cleanup();
+  };
+
+  sys_cat.createUser("username1",
+                     "password1",
+                     /*is_super=*/true,
+                     /*dbname=*/"",
+                     /*can_login=*/true,
+                     /*is_temporary=*/true);
+  CHECK(sys_cat.getMetadataForUser("username1", g_user));
+
+  EXPECT_TRUE(g_user.is_temporary);
+  EXPECT_EQ(g_user.can_login, true);
+
+  bool can_login{false};
+  EXPECT_NO_THROW(sys_cat.alterUser("username1", nullptr, nullptr, nullptr, &can_login));
+  CHECK(sys_cat.getMetadataForUser("username1", g_user));
+  EXPECT_EQ(g_user.can_login, false);
+
+  EXPECT_NO_THROW(sys_cat.renameUser("username1", "username2"));
+  CHECK(sys_cat.getMetadataForUser("username2", g_user));
+  EXPECT_EQ(g_user.userName, "username2");
 }
 
 int main(int argc, char* argv[]) {

@@ -4867,7 +4867,8 @@ void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("CREATE ROLE " + get_role() +
                              " failed. It can only be executed by super user.");
   }
-  SysCatalog::instance().createRole(get_role());
+  SysCatalog::instance().createRole(
+      get_role(), /*user_private_role=*/false, /*is_temporary=*/false);
 }
 
 // DROP ROLE payroll_dept_role;
@@ -4882,7 +4883,7 @@ void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("DROP ROLE " + get_role() +
                              " failed because role with this name does not exist.");
   }
-  SysCatalog::instance().dropRole(get_role());
+  SysCatalog::instance().dropRole(get_role(), /*is_temporary=*/false);
 }
 
 std::vector<std::string> splitObjectHierName(const std::string& hierName) {
@@ -5798,7 +5799,8 @@ void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error("Only super user can create new users.");
   }
-  SysCatalog::instance().createUser(*user_name_, passwd, is_super, default_db, can_login);
+  SysCatalog::instance().createUser(
+      *user_name_, passwd, is_super, default_db, can_login, false);
 }
 
 AlterUserStmt::AlterUserStmt(const rapidjson::Value& payload) {
@@ -5885,7 +5887,7 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   if (passwd || is_superp || default_db || can_loginp) {
     SysCatalog::instance().alterUser(
-        user.userId, passwd, is_superp, default_db, can_loginp);
+        *user_name_, passwd, is_superp, default_db, can_loginp);
   }
 }
 

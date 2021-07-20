@@ -1379,7 +1379,8 @@ void Catalog::createOrUpdateDashboardSystemRole(const std::string& view_meta,
     // Dashboard role does not exist
     // create role and grant privileges
     // NOTE(wamsi): Transactionally unsafe
-    SysCatalog::instance().createRole(dash_role_name, false);
+    SysCatalog::instance().createRole(
+        dash_role_name, /*user_private_role=*/false, /*is_temporary=*/false);
     SysCatalog::instance().grantDBObjectPrivilegesBatch({dash_role_name}, objects, *this);
   } else {
     // Dashboard system role already exists
