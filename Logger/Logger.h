@@ -312,6 +312,33 @@ class DebugTimer {
   std::string stopAndGetJson();
 };
 
+using QueryId = uint64_t;
+QueryId query_id();
+
+// ~QidScopeGuard resets the thread_local g_query_id to 0 if the current value = id_.
+// In other words, only the QidScopeGuard instance which resulted from changing
+// g_query_id from zero to non-zero is responsible for resetting it back to zero when it
+// goes out of scope. All other instances have no effect.
+class QidScopeGuard {
+  QueryId id_;
+
+ public:
+  QidScopeGuard(QueryId const id) : id_{id} {}
+  QidScopeGuard(QidScopeGuard const&) = delete;
+  QidScopeGuard& operator=(QidScopeGuard const&) = delete;
+  QidScopeGuard(QidScopeGuard&& that) : id_(that.id_) { that.id_ = 0; }
+  QidScopeGuard& operator=(QidScopeGuard&& that) {
+    id_ = that.id_;
+    that.id_ = 0;
+    return *this;
+  }
+  ~QidScopeGuard();
+  QueryId id() const { return id_; }
+};
+
+// Set logger::g_query_id based on given parameter.
+QidScopeGuard set_thread_local_query_id(QueryId const);
+
 using ThreadId = uint64_t;
 
 void debug_timer_new_thread(ThreadId parent_thread_id);

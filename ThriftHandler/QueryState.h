@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,6 +71,11 @@
  *  - QueryState and Timer can create QueryStateProxies.
  *  - Timers and Events are one-to-one.
  *  - When StdLog destructs, it logs all of the associated QueryState's Events.
+ *
+ * Q: Why are logger::QueryId and related items defined in logger instead of query_state?
+ * A: Logger needs to log the query_id in each log line.
+ *    Rather than #include "QueryState.h", which would create a circular dependency,
+ *    defining QueryId in Logger minimizes the coupling between Logger and QueryState.
  */
 
 namespace Catalog_Namespace {
@@ -80,7 +85,6 @@ class SessionInfo;
 namespace query_state {
 
 using Clock = std::chrono::steady_clock;
-using Id = uint64_t;
 
 struct Event;
 using Events = std::list<Event>;
@@ -122,8 +126,8 @@ struct SessionData {
 class Timer;
 
 class QueryState : public std::enable_shared_from_this<QueryState> {
-  static std::atomic<Id> s_next_id;
-  Id const id_;
+  static std::atomic<logger::QueryId> s_next_id;
+  logger::QueryId const id_;
   boost::optional<SessionData> session_data_;
   std::string const query_str_;
   Events events_;
@@ -149,13 +153,15 @@ class QueryState : public std::enable_shared_from_this<QueryState> {
   QueryStateProxy createQueryStateProxy(Events::iterator parent);
   Timer createTimer(char const* event_name, Events::iterator parent);
   inline bool emptyLog() const { return events_.empty() && query_str_.empty(); }
-  inline Id getId() const { return id_; }
+  inline logger::QueryId getId() const { return id_; }
   inline std::string const& getQueryStr() const { return query_str_; }
   // Will throw exception if session_data_.session_info.expired().
   std::shared_ptr<Catalog_Namespace::SessionInfo const> getConstSessionInfo() const;
   boost::optional<SessionData> const& getSessionData() const { return session_data_; }
   inline bool isLogged() const { return logged_.load(); }
   void logCallStack(std::stringstream&);
+  // Set logger::g_query_id based on id_ member variable.
+  logger::QidScopeGuard setThreadLocalQueryId() const;
   void setQuerySubmittedTime(const std::string& t);
   const std::string getQuerySubmittedTime() const;
   inline void setLogged(bool logged) { logged_.store(logged); }

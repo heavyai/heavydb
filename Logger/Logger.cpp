@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -426,8 +426,31 @@ Logger::operator bool() const {
   return static_cast<bool>(stream_);
 }
 
+thread_local std::atomic<QueryId> g_query_id{0};
+
+QueryId query_id() {
+  return g_query_id.load();
+}
+
+QidScopeGuard::~QidScopeGuard() {
+  if (id_) {
+    // Ideally this CHECK would be enabled, but it's too heavy for a destructor.
+    // Would be ok for DEBUG mode.
+    // CHECK(g_query_id.compare_exchange_strong(id_, 0));
+    g_query_id = 0;
+  }
+}
+
+// Only set g_query_id if its currently 0.
+QidScopeGuard set_thread_local_query_id(QueryId const query_id) {
+  QueryId expected = 0;
+  return g_query_id.compare_exchange_strong(expected, query_id) ? QidScopeGuard(query_id)
+                                                                : QidScopeGuard(0);
+}
+
 boost::log::record_ostream& Logger::stream(char const* file, int line) {
-  return *stream_ << thread_id() << ' ' << filename(file) << ':' << line << ' ';
+  return *stream_ << query_id() << ' ' << thread_id() << ' ' << filename(file) << ':'
+                  << line << ' ';
 }
 
 // DebugTimer-related classes and functions.
@@ -531,7 +554,7 @@ using DurationTreeMap = std::unordered_map<ThreadId, std::unique_ptr<DurationTre
 std::mutex g_duration_tree_map_mutex;
 DurationTreeMap g_duration_tree_map;
 std::atomic<ThreadId> g_next_thread_id{0};
-ThreadId thread_local const g_thread_id = g_next_thread_id++;
+thread_local ThreadId const g_thread_id = g_next_thread_id++;
 
 template <typename... Ts>
 Duration* newDuration(Severity severity, Ts&&... args) {

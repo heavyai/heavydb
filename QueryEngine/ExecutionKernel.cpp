@@ -92,6 +92,10 @@ void ExecutionKernel::run(Executor* executor,
                           SharedKernelContext& shared_context) {
   DEBUG_TIMER("ExecutionKernel::run");
   INJECT_TIMER(kernel_run);
+  std::optional<logger::QidScopeGuard> qid_scope_guard;
+  if (ra_exe_unit_.query_state) {
+    qid_scope_guard.emplace(ra_exe_unit_.query_state->setThreadLocalQueryId());
+  }
   try {
     runImpl(executor, thread_idx, shared_context);
   } catch (const OutOfHostMemory& e) {

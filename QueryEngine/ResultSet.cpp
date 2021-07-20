@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,6 @@
  * @file    ResultSet.cpp
  * @author  Alex Suhan <alex@mapd.com>
  * @brief   Basic constructors and methods of the row set interface.
- *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  */
 
 #include "ResultSet.h"
@@ -38,6 +36,7 @@
 #include "Shared/threadpool.h"
 
 #include <algorithm>
+#include <atomic>
 #include <bitset>
 #include <future>
 #include <numeric>
@@ -374,7 +373,8 @@ size_t ResultSet::parallelRowCount() const {
          ++i, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, entryCount());
       counter_threads.spawn(
-          [this](const size_t start, const size_t end) {
+          [this, query_id = logger::query_id()](const size_t start, const size_t end) {
+            auto qid_scope_guard = logger::set_thread_local_query_id(query_id);
             size_t row_count{0};
             for (size_t i = start; i < end; ++i) {
               if (!isRowAtEmpty(i)) {
@@ -627,12 +627,14 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   // Split permutation_ into nthreads subranges and top-sort in-place.
   permutation_.resize(query_mem_desc_.getEntryCount());
   std::vector<PermutationView> permutation_views(nthreads);
-  const auto top_sort_interval = [&, top_n, executor](const auto interval) {
-    PermutationView pv(permutation_.data() + interval.begin, 0, interval.size());
-    pv = initPermutationBuffer(pv, interval.begin, interval.end);
-    const auto compare = createComparator(order_entries, pv, executor, true);
-    permutation_views[interval.index] = topPermutation(pv, top_n, compare);
-  };
+  const auto top_sort_interval =
+      [&, top_n, executor, query_id = logger::query_id()](const auto interval) {
+        auto qid_scope_guard = logger::set_thread_local_query_id(query_id);
+        PermutationView pv(permutation_.data() + interval.begin, 0, interval.size());
+        pv = initPermutationBuffer(pv, interval.begin, interval.end);
+        const auto compare = createComparator(order_entries, pv, executor, true);
+        permutation_views[interval.index] = topPermutation(pv, top_n, compare);
+      };
   threadpool::FuturesThreadPool<void> top_sort_threads;
   for (auto interval : makeIntervals<PermutationIdx>(0, permutation_.size(), nthreads)) {
     top_sort_threads.spawn(top_sort_interval, interval);
@@ -725,7 +727,9 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeCountDistinctCo
   const CountDistinctDescriptor count_distinct_descriptor =
       result_set_->query_mem_desc_.getCountDistinctDescriptor(order_entry.tle_no - 1);
   const size_t num_non_empty_entries = permutation_.size();
-  const auto work = [&](const size_t start, const size_t end) {
+  const auto work = [&, query_id = logger::query_id()](const size_t start,
+                                                       const size_t end) {
+    auto qid_scope_guard = logger::set_thread_local_query_id(query_id);
     for (size_t i = start; i < end; ++i) {
       const PermutationIdx permuted_idx = permutation_[i];
       const auto storage_lookup_result = result_set_->findStorage(permuted_idx);
@@ -766,7 +770,9 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeApproxQuantileC
   ResultSet::ApproxQuantileBuffers::value_type materialized_buffer(
       result_set_->query_mem_desc_.getEntryCount());
   const size_t size = permutation_.size();
-  const auto work = [&](const size_t start, const size_t end) {
+  const auto work = [&, query_id = logger::query_id()](const size_t start,
+                                                       const size_t end) {
+    auto qid_scope_guard = logger::set_thread_local_query_id(query_id);
     for (size_t i = start; i < end; ++i) {
       const PermutationIdx permuted_idx = permutation_[i];
       const auto storage_lookup_result = result_set_->findStorage(permuted_idx);

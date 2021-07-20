@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1761,6 +1761,7 @@ TQueryResult DBHandler::validate_rel_alg(const std::string& query_ra,
   ExecutionResult result;
   auto execute_rel_alg_task = std::make_shared<QueryDispatchQueue::Task>(
       [this, &result, &query_state_proxy, &query_ra](const size_t executor_index) {
+        auto qid_scope_guard = query_state_proxy.getQueryState().setThreadLocalQueryId();
         execute_rel_alg(result,
                         query_state_proxy,
                         query_ra,
