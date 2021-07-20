@@ -198,10 +198,11 @@ import_export::CopyParams validate_and_get_copy_params(
   return copy_params;
 }
 
-Chunk_NS::Chunk make_chunk_for_column(
+void init_chunk_for_column(
     const ChunkKey& chunk_key,
     const std::map<ChunkKey, std::shared_ptr<ChunkMetadata>>& chunk_metadata_map,
-    const std::map<ChunkKey, AbstractBuffer*>& buffers) {
+    const std::map<ChunkKey, AbstractBuffer*>& buffers,
+    Chunk_NS::Chunk& chunk) {
   auto catalog =
       Catalog_Namespace::SysCatalog::instance().getCatalog(chunk_key[CHUNK_KEY_DB_IDX]);
   CHECK(catalog);
@@ -244,11 +245,10 @@ Chunk_NS::Chunk make_chunk_for_column(
   CHECK(chunk_metadata_map.find(data_chunk_key) != chunk_metadata_map.end());
   data_buffer->reserve(chunk_metadata_map.at(data_chunk_key)->numBytes);
 
-  auto retval = Chunk_NS::Chunk{column};
-  retval.setBuffer(data_buffer);
-  retval.setIndexBuffer(index_buffer);
-  retval.initEncoder();
-  return retval;
+  chunk.setColumnDesc(column);
+  chunk.setBuffer(data_buffer);
+  chunk.setIndexBuffer(index_buffer);
+  chunk.initEncoder();
 }
 
 std::shared_ptr<ChunkMetadata> get_placeholder_metadata(const ColumnDescriptor* column,
