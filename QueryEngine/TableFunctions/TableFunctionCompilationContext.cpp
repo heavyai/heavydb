@@ -232,6 +232,21 @@ void TableFunctionCompilationContext::compile(const TableFunctionExecutionUnit& 
   finalize(co, executor);
 }
 
+bool TableFunctionCompilationContext::passColumnsByValue(
+    const TableFunctionExecutionUnit& exe_unit,
+    bool is_gpu) {
+  llvm::Module* mod = (is_gpu ? rt_udf_gpu_module.get() : rt_udf_cpu_module.get());
+  if (mod != nullptr) {
+    auto* flag = mod->getModuleFlag("pass_column_arguments_by_value");
+    if (auto* cnt = llvm::mdconst::extract_or_null<llvm::ConstantInt>(flag)) {
+      return cnt->getZExtValue();
+    }
+  }
+
+  // fallback to original behavior
+  return exe_unit.table_func.isRuntime();
+}
+
 void TableFunctionCompilationContext::generateEntryPoint(
     const TableFunctionExecutionUnit& exe_unit,
     bool is_gpu) {
@@ -264,7 +279,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
 
   // The column arguments of C++ UDTFs processed by clang must be
   // passed by reference, see rbc issues 200 and 289.
-  auto pass_column_by_value = exe_unit.table_func.isRuntime();
+  auto pass_column_by_value = passColumnsByValue(exe_unit, is_gpu);
   std::vector<llvm::Value*> func_args;
   size_t func_arg_index = 0;
   int col_index = -1;
