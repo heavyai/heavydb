@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 099c97f
+                5.7.0dev 21ac014
               </div>
             
           
@@ -1128,6 +1128,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_single_file_reader.html">Class foreign_storage::SingleFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_timestamp_bounds_validator.html">Class foreign_storage::TimestampBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classgenerate___table_functions_factory__init_1_1_bracket.html">Class generate_TableFunctionsFactory_init::Bracket</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classimport__export_1_1_column_not_geo_error.html">Class import_export::ColumnNotGeoError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classimport__export_1_1_data_stream_sink.html">Class import_export::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classimport__export_1_1_detector.html">Class import_export::Detector</a></li>
@@ -1771,11 +1772,13 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_target_value_converter.html">Struct TargetValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_target_value_converter_factory.html">Struct TargetValueConverterFactory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_text_converter_factory.html">Struct TextConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_text_encoding_dict.html">Struct TextEncodingDict</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_thread_controller___n_s_1_1_future_getter.html">Struct ThreadController_NS::FutureGetter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_thread_controller___n_s_1_1_future_getter_3_01void_01_4.html">Struct ThreadController_NS::FutureGetter&lt; void &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_varlen_datum.html">Struct VarlenDatum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_varlen_output_info.html">Struct VarlenOutputInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_vec2d.html">Struct Vec2d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_vec3_d.html">Struct Vec3D</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_view_privileges.html">Struct ViewPrivileges</a></li>
@@ -2014,18 +2017,23 @@
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Members</p>
 <dl class="member">
-<dt id="_CPPv4N17GpuGroupByBuffers5firstE">
-<span id="_CPPv3N17GpuGroupByBuffers5firstE"></span><span id="_CPPv2N17GpuGroupByBuffers5firstE"></span><span id="GpuGroupByBuffers::first__CUdeviceptr"></span><span class="target" id="struct_gpu_group_by_buffers_1a682d46be5c36745cd085773cef1fb615"></span>CUdeviceptr <code class="sig-name descname">first</code><a class="headerlink" href="#_CPPv4N17GpuGroupByBuffers5firstE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17GpuGroupByBuffers4ptrsE">
+<span id="_CPPv3N17GpuGroupByBuffers4ptrsE"></span><span id="_CPPv2N17GpuGroupByBuffers4ptrsE"></span><span id="GpuGroupByBuffers::ptrs__CUdeviceptr"></span><span class="target" id="struct_gpu_group_by_buffers_1ae27f6ae2f6339ae4d2f283492960e14e"></span>CUdeviceptr <code class="sig-name descname">ptrs</code><a class="headerlink" href="#_CPPv4N17GpuGroupByBuffers4ptrsE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N17GpuGroupByBuffers6secondE">
-<span id="_CPPv3N17GpuGroupByBuffers6secondE"></span><span id="_CPPv2N17GpuGroupByBuffers6secondE"></span><span id="GpuGroupByBuffers::second__CUdeviceptr"></span><span class="target" id="struct_gpu_group_by_buffers_1a2320556b13872ef64a28c0bcdde298ed"></span>CUdeviceptr <code class="sig-name descname">second</code><a class="headerlink" href="#_CPPv4N17GpuGroupByBuffers6secondE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17GpuGroupByBuffers4dataE">
+<span id="_CPPv3N17GpuGroupByBuffers4dataE"></span><span id="_CPPv2N17GpuGroupByBuffers4dataE"></span><span id="GpuGroupByBuffers::data__CUdeviceptr"></span><span class="target" id="struct_gpu_group_by_buffers_1a59b1f89ee38177a0560a64f42ce63006"></span>CUdeviceptr <code class="sig-name descname">data</code><a class="headerlink" href="#_CPPv4N17GpuGroupByBuffers4dataE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
 <dt id="_CPPv4N17GpuGroupByBuffers11entry_countE">
 <span id="_CPPv3N17GpuGroupByBuffers11entry_countE"></span><span id="_CPPv2N17GpuGroupByBuffers11entry_countE"></span><span id="GpuGroupByBuffers::entry_count__s"></span><span class="target" id="struct_gpu_group_by_buffers_1aa3ba5b6165ed450e04b8796d371d36b6"></span>size_t <code class="sig-name descname">entry_count</code><a class="headerlink" href="#_CPPv4N17GpuGroupByBuffers11entry_countE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N17GpuGroupByBuffers20varlen_output_bufferE">
+<span id="_CPPv3N17GpuGroupByBuffers20varlen_output_bufferE"></span><span id="_CPPv2N17GpuGroupByBuffers20varlen_output_bufferE"></span><span id="GpuGroupByBuffers::varlen_output_buffer__CUdeviceptr"></span><span class="target" id="struct_gpu_group_by_buffers_1a134366c2f2a9682d95b46e40f336d506"></span>CUdeviceptr <code class="sig-name descname">varlen_output_buffer</code><a class="headerlink" href="#_CPPv4N17GpuGroupByBuffers20varlen_output_bufferE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

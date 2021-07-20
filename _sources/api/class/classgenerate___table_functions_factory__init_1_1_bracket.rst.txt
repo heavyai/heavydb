@@ -1,0 +1,9 @@
+Class generate_TableFunctionsFactory_init::Bracket
+==================================================
+
+.. doxygenclass:: generate_TableFunctionsFactory_init::Bracket
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
