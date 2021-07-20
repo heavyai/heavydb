@@ -89,8 +89,10 @@ void CsvDataWrapper::populateChunkMapForColumns(
   for (const auto column : columns) {
     ChunkKey data_chunk_key = {
         db_id_, foreign_table_->tableId, column->columnId, fragment_id};
-    column_id_to_chunk_map[column->columnId] =
-        Csv::make_chunk_for_column(data_chunk_key, chunk_metadata_map_, buffers);
+    Csv::init_chunk_for_column(data_chunk_key,
+                               chunk_metadata_map_,
+                               buffers,
+                               column_id_to_chunk_map[column->columnId]);
   }
 }
 

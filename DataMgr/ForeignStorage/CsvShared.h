@@ -87,10 +87,11 @@ import_export::CopyParams validate_and_get_copy_params(const ForeignTable* forei
 // Return true if this used s3 select to access underlying CSV
 bool validate_and_get_is_s3_select(const ForeignTable* foreign_table);
 
-Chunk_NS::Chunk make_chunk_for_column(
+void init_chunk_for_column(
     const ChunkKey& chunk_key,
     const std::map<ChunkKey, std::shared_ptr<ChunkMetadata>>& chunk_metadata_map,
-    const std::map<ChunkKey, AbstractBuffer*>& buffers);
+    const std::map<ChunkKey, AbstractBuffer*>& buffers,
+    Chunk_NS::Chunk& chunk);
 
 // Construct default metadata for given column descriptor with num_elements
 std::shared_ptr<ChunkMetadata> get_placeholder_metadata(const ColumnDescriptor* column,

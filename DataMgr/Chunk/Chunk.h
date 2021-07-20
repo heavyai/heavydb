@@ -53,6 +53,8 @@ class Chunk {
 
   const ColumnDescriptor* getColumnDesc() const { return column_desc_; }
 
+  void setColumnDesc(const ColumnDescriptor* cd) { column_desc_ = cd; }
+
   static void translateColumnDescriptorsToChunkVec(
       const std::list<const ColumnDescriptor*>& colDescs,
       std::vector<Chunk>& chunkVec) {
