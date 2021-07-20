@@ -74,10 +74,10 @@ class CommandLineOptions {
 
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
-  bool enable_runtime_query_interrupt = false;
+  bool enable_runtime_query_interrupt = true;
   bool enable_non_kernel_time_query_interrupt = true;
   bool use_estimator_result_cache = true;
-  double running_query_interrupt_freq = 0.5;     // 0.0 ~ 1.0
+  double running_query_interrupt_freq = 0.1;     // 0.0 ~ 1.0
   unsigned pending_query_interrupt_freq = 1000;  // in milliseconds
   unsigned dynamic_watchdog_time_limit = 10000;
   std::string disk_cache_level = "";
