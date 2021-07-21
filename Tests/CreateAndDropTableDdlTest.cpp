@@ -1446,6 +1446,51 @@ TEST_F(CreateForeignTableTest, TableDirectoryIsNotCreated) {
   ASSERT_FALSE(boost::filesystem::exists(getTableDirPath()));
 }
 
+class CreateTableInThrift : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("DROP TABLE IF EXISTS test_table");
+  }
+
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS test_table");
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+TEST_F(CreateTableInThrift, ThriftCreateTableWithDefaults) {
+  auto [handler, session] = getDbHandlerAndSessionId();
+  TColumnType c1, c2, c3;
+  c1.col_id = 1;
+  c1.col_name = "idx";
+  c1.col_type.type = TDatumType::INT;
+  c2.col_id = 2;
+  c2.col_name = "s";
+  c2.col_type.type = TDatumType::STR;
+  c2.__set_default_value("'default str'");
+  c3.col_id = 3;
+  c3.col_name = "sa";
+  c3.col_type.is_array = true;
+  c3.col_type.type = TDatumType::STR;
+  c3.col_type.encoding = TEncodingType::DICT;
+  c3.__set_default_value("ARRAY['a', 'b', 'c']");
+  TRowDescriptor row_desc = {c1, c2, c3};
+  TCreateParams cp;
+  cp.is_replicated = false;
+  handler->create_table(session, "test_table", row_desc, TFileType::DELIMITED, cp);
+  TTableDetails details;
+  handler->get_table_details(details, session, "test_table");
+  auto created_row_desc = details.row_desc;
+  EXPECT_EQ(created_row_desc.size(), row_desc.size());
+  for (size_t i = 0; i < row_desc.size(); ++i) {
+    EXPECT_EQ(created_row_desc[i].col_name, row_desc[i].col_name);
+    EXPECT_EQ(created_row_desc[i].default_value, row_desc[i].default_value);
+    EXPECT_EQ(created_row_desc[i].col_type.is_array, row_desc[i].col_type.is_array);
+    EXPECT_EQ(created_row_desc[i].col_type.type, row_desc[i].col_type.type);
+  }
+}
+
 class DropTableTest : public CreateAndDropTableDdlTest,
                       public testing::WithParamInterface<ddl_utils::TableType> {
  protected:

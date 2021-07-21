@@ -1183,6 +1183,29 @@ TEST_F(ShowCreateTableTest, TableWithMaxRollbackEpochs) {
                         "(MAX_ROLLBACK_EPOCHS=10);"}});
 }
 
+TEST_F(ShowCreateTableTest, DefaultColumnValues) {
+  sql("CREATE TABLE showcreatetabletest (idx INTEGER NOT NULL, i INTEGER DEFAULT 14,"
+      "big_i BIGINT DEFAULT 314958734, null_i INTEGER, int_a INTEGER[] "
+      "DEFAULT ARRAY[1, 2, 3], text_a TEXT[] DEFAULT ARRAY['a', 'b'] ENCODING DICT(32),"
+      "dt TEXT DEFAULT 'World' ENCODING DICT(32), ls GEOMETRY(LINESTRING) "
+      "DEFAULT 'LINESTRING (1 1,2 2,3 3)' ENCODING NONE, p GEOMETRY(POINT) DEFAULT "
+      "'POINT (1 2)' ENCODING NONE,  d DATE DEFAULT '2011-10-23' ENCODING DAYS(32), "
+      "ta TIMESTAMP[] DEFAULT ARRAY['2011-10-23 07:15:01', '2012-09-17 11:59:11'], "
+      "f FLOAT DEFAULT 1.15, n DECIMAL(3,2) DEFAULT 1.25 ENCODING FIXED(16));");
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE showcreatetabletest;",
+      {{"CREATE TABLE showcreatetabletest (\n  idx INTEGER NOT NULL,\n  i INTEGER "
+        "DEFAULT 14,\n  big_i "
+        "BIGINT DEFAULT 314958734,\n  null_i INTEGER,\n  int_a INTEGER[] DEFAULT "
+        "ARRAY[1, 2, 3],\n  text_a TEXT[] DEFAULT ARRAY['a', 'b'] ENCODING DICT(32),\n  "
+        "dt TEXT DEFAULT 'World' ENCODING DICT(32),\n  ls GEOMETRY(LINESTRING) DEFAULT "
+        "'LINESTRING (1 1,2 2,3 3)' ENCODING NONE,\n  p GEOMETRY(POINT) DEFAULT 'POINT "
+        "(1 2)' ENCODING NONE,\n  d DATE DEFAULT '2011-10-23' ENCODING DAYS(32),\n  ta "
+        "TIMESTAMP(0)[] DEFAULT ARRAY['2011-10-23 07:15:01', '2012-09-17 11:59:11'],\n  "
+        "f "
+        "FLOAT DEFAULT 1.15,\n  n DECIMAL(3,2) DEFAULT 1.25 ENCODING FIXED(16));"}});
+}
+
 namespace {
 const int64_t PAGES_PER_DATA_FILE =
     File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_DATA_FILE;

@@ -419,6 +419,33 @@ TEST_F(DumpAndRestoreTest, TableWithMaxRollbackEpochs) {
   ASSERT_EQ(10, td->maxRollbackEpochs);
 }
 
+TEST_F(DumpAndRestoreTest, TableWithDefaultColumnValues) {
+  run_ddl_statement(
+      "CREATE TABLE test_table (idx INTEGER NOT NULL, i INTEGER DEFAULT 14,"
+      "big_i BIGINT DEFAULT 314958734, null_i INTEGER, int_a INTEGER[] "
+      "DEFAULT ARRAY[1, 2, 3], text_a TEXT[] DEFAULT ARRAY['a', 'b'] ENCODING DICT(32),"
+      "dt TEXT DEFAULT 'World' ENCODING DICT(32), ls GEOMETRY(LINESTRING) "
+      "DEFAULT 'LINESTRING (1 1,2 2,3 3)' ENCODING NONE, p GEOMETRY(POINT) DEFAULT "
+      "'POINT (1 2)' ENCODING NONE,  d DATE DEFAULT '2011-10-23' ENCODING DAYS(32), "
+      "ta TIMESTAMP[] DEFAULT ARRAY['2011-10-23 07:15:01', '2012-09-17 11:59:11'], "
+      "f FLOAT DEFAULT 1.15, n DECIMAL(3,2) DEFAULT 1.25 ENCODING FIXED(16));");
+  run_ddl_statement("DUMP TABLE test_table TO '" + tar_ball_path + "';");
+  run_ddl_statement("RESTORE TABLE test_table_2 FROM '" + tar_ball_path + "';");
+  auto td = QR::get()->getCatalog()->getMetadataForTable("test_table_2", false);
+  std::string schema = QR::get()->getCatalog()->dumpCreateTable(td, false);
+  std::string expected_schema =
+      "CREATE TABLE test_table_2 (idx INTEGER NOT NULL, i INTEGER "
+      "DEFAULT 14, big_i "
+      "BIGINT DEFAULT 314958734, null_i INTEGER, int_a INTEGER[] DEFAULT "
+      "ARRAY[1, 2, 3], text_a TEXT[] DEFAULT ARRAY['a', 'b'] ENCODING DICT(32), "
+      "dt TEXT DEFAULT 'World' ENCODING DICT(32), ls GEOMETRY(LINESTRING) DEFAULT "
+      "'LINESTRING (1 1,2 2,3 3)' ENCODING NONE, p GEOMETRY(POINT) DEFAULT 'POINT "
+      "(1 2)' ENCODING NONE, d DATE DEFAULT '2011-10-23' ENCODING DAYS(32), ta "
+      "TIMESTAMP(0)[] DEFAULT ARRAY['2011-10-23 07:15:01', '2012-09-17 11:59:11'], f "
+      "FLOAT DEFAULT 1.15, n DECIMAL(3,2) DEFAULT 1.25 ENCODING FIXED(16));";
+  ASSERT_EQ(schema, expected_schema);
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
 
