@@ -69,6 +69,7 @@ struct TColumnType {
   5: bool is_system;
   6: bool is_physical;
   7: i64 col_id;
+  8: optional string default_value;
 }
 
 struct TRow {

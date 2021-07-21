@@ -2273,6 +2273,9 @@ TColumnType DBHandler::populateThriftColumnType(const Catalog* cat,
             : cd->columnType.get_comp_param();
   }
   col_type.is_reserved_keyword = ImportHelpers::is_reserved_name(col_type.col_name);
+  if (cd->default_value.has_value()) {
+    col_type.__set_default_value(cd->getDefaultValueLiteral());
+  }
   return col_type;
 }
 
@@ -4583,6 +4586,9 @@ void DBHandler::create_table(const TSessionId& session,
 
     std::string col_stmt;
     col_stmt.append(col.col_name + " " + thrift_to_name(col.col_type));
+    if (col.__isset.default_value) {
+      col_stmt.append(" DEFAULT " + col.default_value);
+    }
 
     // As of 2016-06-27 the Immerse v1 frontend does not explicitly set the
     // `nullable` argument, leading this to default to false. Uncomment for v2.

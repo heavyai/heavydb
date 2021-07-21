@@ -4489,6 +4489,9 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
         os << " " << ti.get_type_name();
       }
       os << (ti.get_notnull() ? " NOT NULL" : "");
+      if (cd->default_value.has_value()) {
+        os << " DEFAULT " << cd->getDefaultValueLiteral();
+      }
       if (ti.is_string() || (ti.is_array() && ti.get_subtype() == kTEXT)) {
         auto size = ti.is_array() ? ti.get_logical_size() : ti.get_size();
         if (ti.get_compression() == kENCODING_DICT) {
@@ -4644,6 +4647,9 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
         os << " " << ti.get_type_name();
       }
       os << (ti.get_notnull() ? " NOT NULL" : "");
+      if (cd->default_value.has_value()) {
+        os << " DEFAULT " << cd->getDefaultValueLiteral();
+      }
       if (shared_dict_column_names.find(cd->columnName) ==
           shared_dict_column_names.end()) {
         // avoids "Column ... shouldn't specify an encoding, it borrows it

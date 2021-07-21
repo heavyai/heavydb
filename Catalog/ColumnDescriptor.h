@@ -64,7 +64,36 @@ struct ColumnDescriptor {
     return ::typeName(this) + "(tableId=" + ::toString(tableId) +
            ", columnId=" + ::toString(columnId) +
            ", columnName=" + ::toString(columnName) +
-           ", columnType=" + ::toString(columnType) + ")";
+           ", columnType=" + ::toString(columnType) +
+           ", defaultValue=" + ::toString(default_value) + ")";
+  }
+
+  std::string getDefaultValueLiteral() const {
+    // some preprocessing of strings, arrays and especially arrays of strings
+    CHECK(default_value.has_value());
+    if (columnType.is_string() || columnType.is_geometry() || columnType.is_time()) {
+      return "\'" + default_value.value() + "\'";
+    } else if (columnType.is_array()) {
+      auto value = default_value.value();
+      CHECK(value.front() == '{' && value.back() == '}');
+      value = value.substr(1, value.length() - 2);
+      if (columnType.is_string_array() || is_datetime(columnType.get_subtype())) {
+        auto elements = split(value, ", ");
+        value = "ARRAY[";
+        for (size_t i = 0; i < elements.size(); ++i) {
+          value += "'" + elements[i] + "'";
+          if (i != elements.size() - 1) {
+            value += ", ";
+          }
+        }
+        value += "]";
+      } else {
+        value = "ARRAY[" + value + "]";
+      }
+      return value;
+    } else {
+      return default_value.value();
+    }
   }
 };
 
