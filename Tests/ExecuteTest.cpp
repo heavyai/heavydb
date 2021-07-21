@@ -19,8 +19,10 @@
 #include "../ImportExport/Importer.h"
 #include "../Parser/parser.h"
 #include "../QueryEngine/ArrowResultSet.h"
+#include "../QueryEngine/CgenState.h"
 #include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "../QueryEngine/Execute.h"
+#include "../QueryEngine/ExpressionRange.h"
 #include "../QueryEngine/ResultSetReductionJIT.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/DateConverters.h"
@@ -6057,6 +6059,36 @@ TEST(Select, OverflowAndUnderFlow) {
                                   "TIMESTAMP)) AS BIGINT) - 1) FROM test;",
                                   dt)));
   }
+}
+
+TEST(Select, DetectOverflowedLiteralBuf) {
+  // constructing literal buf to trigger overflow takes too much time
+  // so we mimic the literal buffer collection during codegen
+  std::vector<CgenState::LiteralValue> literals;
+  size_t literal_bytes{0};
+  auto getOrAddLiteral = [&literals, &literal_bytes](const std::string& val) {
+    const CgenState::LiteralValue var_val(val);
+    literals.emplace_back(val);
+    const auto lit_bytes = CgenState::literalBytes(var_val);
+    literal_bytes = CgenState::addAligned(literal_bytes, lit_bytes);
+    return literal_bytes - lit_bytes;
+  };
+
+  // add unique string literals until we detect the overflow
+  // note that we only consider unique literals so we don't need to
+  // lookup the existing literal buffer offset when adding the literal
+  auto perform_test = [getOrAddLiteral]() {
+    checked_int16_t checked_lit_off{-1};
+    int added_literals = 0;
+    try {
+      for (; added_literals < 100000; ++added_literals) {
+        checked_lit_off = getOrAddLiteral(std::to_string(added_literals));
+      }
+    } catch (const std::range_error& e) {
+      throw TooManyLiterals();
+    }
+  };
+  EXPECT_THROW(perform_test(), TooManyLiterals);
 }
 
 TEST(Select, BooleanColumn) {

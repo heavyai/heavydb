@@ -28,6 +28,16 @@ using checked_int64_t = boost::multiprecision::number<
                                            boost::multiprecision::checked,
                                            void>>;
 
+// set the min / max bit to 15 instead of 16 (minus sign bit, 15 = 16 - 1)
+// to check a valid positive int16_t range: 0 ~ 32,767, not 0 ~ 65,535
+// (similar to check negative int16_t value range: -32,768 ~ 0, not -65,535 ~ 0)
+using checked_int16_t = boost::multiprecision::number<
+    boost::multiprecision::cpp_int_backend<15,
+                                           15,
+                                           boost::multiprecision::signed_magnitude,
+                                           boost::multiprecision::checked,
+                                           void>>;
+
 enum class ExpressionRangeType { Invalid, Integer, Float, Double, Null };
 
 class ExpressionRange;

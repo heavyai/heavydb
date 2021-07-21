@@ -289,21 +289,27 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstants(
   AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(!constants.empty());
   const auto& type_info = constants.front()->get_type_info();
+  checked_int16_t checked_lit_off{0};
   int16_t lit_off{-1};
-  for (size_t device_id = 0; device_id < constants.size(); ++device_id) {
-    const auto constant = constants[device_id];
-    const auto& crt_type_info = constant->get_type_info();
-    CHECK(type_info == crt_type_info);
-    const int16_t dev_lit_off =
-        cgen_state_->getOrAddLiteral(constant, enc_type, dict_id, device_id);
-    if (device_id) {
-      CHECK_EQ(lit_off, dev_lit_off);
-    } else {
-      lit_off = dev_lit_off;
+  try {
+    for (size_t device_id = 0; device_id < constants.size(); ++device_id) {
+      const auto constant = constants[device_id];
+      const auto& crt_type_info = constant->get_type_info();
+      CHECK(type_info == crt_type_info);
+      checked_lit_off =
+          cgen_state_->getOrAddLiteral(constant, enc_type, dict_id, device_id);
+      if (device_id) {
+        CHECK_EQ(lit_off, checked_lit_off);
+      } else {
+        lit_off = (int16_t)checked_lit_off;
+      }
     }
+  } catch (const std::range_error& e) {
+    // detect literal buffer overflow when trying to
+    // assign literal buf offset which is not in a valid range
+    // to checked_type variable
+    throw TooManyLiterals();
   }
-  CHECK_GE(lit_off, int16_t(0));
-
   std::vector<llvm::Value*> hoisted_literal_loads;
   auto entry = cgen_state_->query_func_literal_loads_.find(lit_off);
 
