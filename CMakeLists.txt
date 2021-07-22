@@ -307,8 +307,8 @@ if(ENABLE_ONEDAL)
   find_package(oneDAL REQUIRED)
   list(APPEND ONEDAL_LIBRARIES "libonedal_core.a")
   list(APPEND ONEDAL_LIBRARIES "libonedal_thread.a")
-  list(APPEND ONEDAL_LIBRARIES "libtbb.so.12")
-  list(APPEND ONEDAL_LIBRARIES "libtbbmalloc.so.12")
+  list(APPEND LATEST_TBB_LIBRARIES "libtbb.so.12")
+  list(APPEND LATEST_TBB_LIBRARIES "libtbbmalloc.so.12")
   include_directories(${oneDAL_INCLUDE_DIRS})
   add_definitions("-DHAVE_ONEDAL")
 endif()
@@ -834,7 +834,7 @@ target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES
 
 target_link_libraries(initdb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
     ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
-    ${LOCALE_LINK_FLAG})
+    ${LOCALE_LINK_FLAG} ${LATEST_TBB_LIBRARIES})
 
 macro(set_dpkg_arch arch_in arch_out)
   if("${arch_in}" STREQUAL "x86_64")
