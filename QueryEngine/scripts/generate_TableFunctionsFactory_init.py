@@ -389,7 +389,8 @@ def is_template_function(sig):
     return '_template' in sig.name
 
 
-def build_template_function_call(name, input_types, output_types):
+def build_template_function_call(caller, callee, input_types, output_types):
+    # caller calls callee
 
     def format_cpp_type(cpp_type, idx, is_input=True):
         # Perhaps integrate this to Bracket?
@@ -420,15 +421,13 @@ def build_template_function_call(name, input_types, output_types):
         output_cpp_args.append(cpp_arg)
         arg_names.append(arg_name)
 
-    callee = name
-    called = name.split('__')[0]
     args = ', '.join(input_cpp_args + output_cpp_args)
     arg_names = ', '.join(arg_names)
 
     template = ("EXTENSION_NOINLINE int32_t\n"
                 "%s(%s) {\n"
                 "    return %s(%s);\n"
-                "}\n") % (callee, args, called, arg_names)
+                "}\n") % (caller, args, callee, arg_names)
     return template
 
 
@@ -440,6 +439,8 @@ def format_annotations(annotations_):
 
 
 def parse_annotations(input_files):
+
+    counter = 0
 
     add_stmts = []
     template_functions = []
@@ -470,6 +471,12 @@ def parse_annotations(input_files):
                         sql_types_.append(Bracket('Cursor', args=()))
                     else:
                         sql_types_.append(t)
+
+            if sizer is None:
+                name = 'kTableFunctionSpecifiedParameter'
+                idx = -1  # this sizer is not actually materialized in the UDTF
+                sizer = 'TableFunctionOutputRowSizer{OutputBufferSizeType::%s, %s}'  % (name, idx)
+
             assert sizer is not None
 
             ns_output_types = tuple([a.apply_namespace(ns='ExtArgumentType') for a in sig.outputs])
@@ -481,12 +488,17 @@ def parse_annotations(input_files):
             sql_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(str, ns_sql_types)))
             annotations = format_annotations(sig.input_annotations + sig.output_annotations)
 
-            add = 'TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s);' % (sig.name, sizer, input_types, output_types, sql_types, annotations)
-            add_stmts.append(add)
 
             if is_template_function(sig):
-                t = build_template_function_call(sig.name, input_types_, sig.outputs)
+                name = sig.name + '_' + str(counter)
+                counter += 1
+                t = build_template_function_call(name, sig.name, input_types_, sig.outputs)
                 template_functions.append(t)
+                add = 'TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s);' % (name, sizer, input_types, output_types, sql_types, annotations)
+                add_stmts.append(add)
+            else:
+                add = 'TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s);' % (sig.name, sizer, input_types, output_types, sql_types, annotations)
+                add_stmts.append(add)
 
     return add_stmts, template_functions
 
@@ -542,3 +554,4 @@ if dirname and not os.path.exists(dirname):
 f = open(output_filename, 'w')
 f.write(content)
 f.close()
+
