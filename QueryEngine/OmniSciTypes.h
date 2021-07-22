@@ -35,6 +35,11 @@ EXTENSION_NOINLINE void set_output_row_size(int64_t num_rows);
 // https://www.fluentcpp.com/2018/04/06/strong-types-by-struct/
 struct TextEncodingDict {
   int32_t value;
+  operator int32_t() const { return value; }
+  TextEncodingDict operator=(const int32_t other) {
+    value = other;
+    return *this;
+  }
 };
 
 template <typename T>
@@ -176,14 +181,8 @@ struct Column {
   }
   DEVICE int64_t size() const { return size_; }
 
-  DEVICE bool isNull(int64_t index) const { return is_null(ptr_[index]); }
-  DEVICE void setNull(int64_t index) {
-    if constexpr (std::is_same<T, TextEncodingDict>::value) {
-      set_null(ptr_[index].value);
-    } else {
-      set_null(ptr_[index]);
-    }
-  }
+  DEVICE inline bool isNull(int64_t index) const { return is_null(ptr_[index]); }
+  DEVICE inline void setNull(int64_t index) { set_null(ptr_[index]); }
   DEVICE Column<T>& operator=(const Column<T>& other) {
 #ifndef __CUDACC__
     if (size() == other.size()) {
@@ -210,6 +209,16 @@ struct Column {
   }
 #endif
 };
+
+template <>
+DEVICE inline bool Column<TextEncodingDict>::isNull(int64_t index) const {
+  return is_null(ptr_[index].value);
+}
+
+template <>
+DEVICE inline void Column<TextEncodingDict>::setNull(int64_t index) {
+  set_null(ptr_[index].value);
+}
 
 /*
   ColumnList is an ordered list of Columns.

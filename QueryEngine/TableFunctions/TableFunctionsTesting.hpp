@@ -457,13 +457,13 @@ ct_binding_dict_encoded6__cpu_1(const ColumnList<TextEncodingDict>& input,
 
 // clang-format off
 /*
-  UDTF: ct_binding_template__template_1(Cursor<TextEncodingDict>) -> Column<TextEncodingDict> | input_id=args<0>
-  UDTF: ct_binding_template__template_2(Cursor<int>) -> Column<int>
-  UDTF: ct_binding_template__template_3(Cursor<float>) -> Column<float>
+  UDTF: ct_binding_template__template(Cursor<TextEncodingDict>) -> Column<TextEncodingDict> | input_id=args<0>
+  UDTF: ct_binding_template__template(Cursor<int>) -> Column<int>
+  UDTF: ct_binding_template__template(Cursor<float>) -> Column<float>
 */
 // clang-format on
 template <typename T>
-int32_t ct_binding_template(const Column<T>& input, Column<T>& out) {
+int32_t ct_binding_template__template(const Column<T>& input, Column<T>& out) {
   set_output_row_size(input.size());
   for (int64_t i = 0; i < input.size(); i++) {
     out[i] = input[i];
@@ -473,16 +473,16 @@ int32_t ct_binding_template(const Column<T>& input, Column<T>& out) {
 
 // clang-format off
 /*
-  UDTF: ct_binding_columnlist__template_1(Cursor<int32_t, ColumnList<int32_t>>) -> Column<int32_t>
-  UDTF: ct_binding_columnlist__template_2(Cursor<float, ColumnList<float>>) -> Column<int32_t>
-  UDTF: ct_binding_columnlist__template_3(Cursor<TextEncodingDict, ColumnList<TextEncodingDict>>) -> Column<int32_t>
-  UDTF: ct_binding_columnlist__template_4(Cursor<int16_t, ColumnList<int16_t>>) -> Column<int32_t>
+  UDTF: ct_binding_columnlist__cpu_template(Cursor<int32_t, ColumnList<int32_t>>) -> Column<int32_t>
+  UDTF: ct_binding_columnlist__cpu_template(Cursor<float, ColumnList<float>>) -> Column<int32_t>
+  UDTF: ct_binding_columnlist__cpu_template(Cursor<TextEncodingDict, ColumnList<TextEncodingDict>>) -> Column<int32_t>
+  UDTF: ct_binding_columnlist__cpu_template(Cursor<int16_t, ColumnList<int16_t>>) -> Column<int32_t>
 */
 // clang-format on
 template <typename T>
-int32_t ct_binding_columnlist(const Column<T>& input1,
-                              const ColumnList<T>& input2,
-                              Column<int32_t>& out) {
+int32_t ct_binding_columnlist__cpu_template(const Column<T>& input1,
+                                            const ColumnList<T>& input2,
+                                            Column<int32_t>& out) {
   set_output_row_size(1);
   if constexpr (std::is_same<T, int32_t>::value) {
     out[0] = 1;
@@ -492,6 +492,23 @@ int32_t ct_binding_columnlist(const Column<T>& input1,
     out[0] = 3;
   } else {
     out[0] = 4;
+  }
+  return 1;
+}
+
+// clang-format off
+/*
+  UDTF: ct_binding_column__cpu_template(Column<int32_t>) -> Column<int32_t>
+  UDTF: ct_binding_column__cpu_template(Column<float>) -> Column<int32_t>
+*/
+// clang-format on
+template <typename T>
+int32_t ct_binding_column__cpu_template(const Column<T>& input, Column<int32_t>& out) {
+  set_output_row_size(1);
+  if constexpr (std::is_same<T, int32_t>::value) {
+    out[0] = 10;
+  } else {
+    out[0] = 20;
   }
   return 1;
 }
