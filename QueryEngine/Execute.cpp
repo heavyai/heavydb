@@ -1519,16 +1519,16 @@ ResultSetPtr Executor::executeWorkUnitImpl(
         if (g_use_tbb_pool) {
 #ifdef HAVE_TBB
           VLOG(1) << "Using TBB thread pool for kernel dispatch.";
-          launchKernels<threadpool::TbbThreadPool<void>>(shared_context,
-                                                         std::move(kernels));
+          launchKernels<threadpool::TbbThreadPool<void>>(
+              shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
 #else
           throw std::runtime_error(
               "This build is not TBB enabled. Restart the server with "
               "\"enable-modern-thread-pool\" disabled.");
 #endif
         } else {
-          launchKernels<threadpool::FuturesThreadPool<void>>(shared_context,
-                                                             std::move(kernels));
+          launchKernels<threadpool::FuturesThreadPool<void>>(
+              shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
         }
       } catch (QueryExecutionError& e) {
         if (eo.with_dynamic_watchdog && interrupted_.load() &&
@@ -2231,13 +2231,15 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
 
 template <typename THREAD_POOL>
 void Executor::launchKernels(SharedKernelContext& shared_context,
-                             std::vector<std::unique_ptr<ExecutionKernel>>&& kernels) {
+                             std::vector<std::unique_ptr<ExecutionKernel>>&& kernels,
+                             const ExecutorDeviceType device_type) {
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);
   kernel_queue_time_ms_ += timer_stop(clock_begin);
 
   THREAD_POOL thread_pool;
-  VLOG(1) << "Launching " << kernels.size() << " kernels for query.";
+  VLOG(1) << "Launching " << kernels.size() << " kernels for query on "
+          << (device_type == ExecutorDeviceType::CPU ? "CPU"s : "GPU"s) << ".";
   size_t kernel_idx = 1;
   for (auto& kernel : kernels) {
     thread_pool.spawn(
