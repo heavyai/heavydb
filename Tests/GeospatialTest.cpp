@@ -567,6 +567,12 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
                     R"(SELECT Max(ST_MaxDistance(p, l)) FROM geospatial_test;)", dt)),
                 static_cast<double>(0.01));
 
+    // point equals
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
+                                        "WHERE ST_Equals('POINT(2.000000002 2)', p);",
+                                        dt)));
+
     // intersects
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
@@ -1550,6 +1556,14 @@ TEST(GeoSpatial, Math) {
             R"(SELECT ST_Area('MULTIPOLYGON(((1 0, 0 1, -1 0, 0 -1, 1 0), (0.1 0, 0 0.1, -0.1 0, 0 -0.1, 0.1 0)), ((2 0, 0 2, -2 0, 0 -2, 2 0), (0.2 0, 0 0.2, -0.2 0, 0 -0.2, 0.2 0)))');)",
             dt)),
         static_cast<double>(0.0001));
+
+    // ST_Equals
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg(
+                  R"(SELECT ST_Equals('POINT(1 1)', 'POINT(1.000000001 1)');)", dt)));
+    ASSERT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg(
+                  R"(SELECT ST_Equals('POINT(1 1)', 'POINT(1.000001 1)');)", dt)));
 
     // ST_Intersects
     ASSERT_EQ(

@@ -1674,11 +1674,21 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "ST_Union"sv,
                    "ST_Buffer"sv)) {
     SQLTypeInfo ti;
-    return translateGeoBinaryConstructor(rex_function, ti, false);
+    return translateBinaryGeoConstructor(rex_function, ti, false);
   }
   if (func_resolve(rex_function->getName(), "ST_IsEmpty"sv, "ST_IsValid"sv)) {
+    CHECK_EQ(rex_function->size(), size_t(1));
     SQLTypeInfo ti;
-    return translateGeoPredicate(rex_function, ti, false);
+    return translateUnaryGeoPredicate(rex_function, ti, false);
+  }
+  if (func_resolve(rex_function->getName(), "ST_Equals"sv)) {
+    CHECK_EQ(rex_function->size(), size_t(2));
+    // Attempt to generate a distance based check for points
+    if (auto distance_check = translateBinaryGeoFunction(rex_function)) {
+      return distance_check;
+    }
+    SQLTypeInfo ti;
+    return translateBinaryGeoPredicate(rex_function, ti, false);
   }
 
   auto arg_expr_list = translateFunctionArgs(rex_function);

@@ -194,6 +194,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new ST_IsEmpty());
     opTab.addOperator(new ST_IsValid());
     opTab.addOperator(new ST_Contains());
+    opTab.addOperator(new ST_Equals());
     opTab.addOperator(new ST_Intersects());
     opTab.addOperator(new ST_Overlaps());
     opTab.addOperator(new ST_Approx_Overlaps());
@@ -908,6 +909,32 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       st_contains_sig.add(SqlTypeFamily.ANY);
       st_contains_sig.add(SqlTypeFamily.ANY);
       return st_contains_sig;
+    }
+  }
+
+  static class ST_Equals extends SqlFunction {
+    ST_Equals() {
+      super("ST_Equals",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 2;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> st_equals_sig =
+              new java.util.ArrayList<SqlTypeFamily>();
+      st_equals_sig.add(SqlTypeFamily.ANY);
+      st_equals_sig.add(SqlTypeFamily.ANY);
+      return st_equals_sig;
     }
   }
 

@@ -727,10 +727,13 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
                             "ST_Buffer"sv)) {
       CHECK_EQ(size_t(2), rex_function->size());
       // What geo type will the constructor return? Could be anything.
-      return {translateGeoBinaryConstructor(rex_function, arg_ti, with_bounds)};
+      return {translateBinaryGeoConstructor(rex_function, arg_ti, with_bounds)};
     } else if (func_resolve(rex_function->getName(), "ST_IsEmpty"sv, "ST_IsValid"sv)) {
       CHECK_EQ(size_t(1), rex_function->size());
-      return {translateGeoPredicate(rex_function, arg_ti, with_bounds)};
+      return {translateUnaryGeoPredicate(rex_function, arg_ti, with_bounds)};
+    } else if (func_resolve(rex_function->getName(), "ST_Equals"sv)) {
+      CHECK_EQ(size_t(2), rex_function->size());
+      return {translateBinaryGeoPredicate(rex_function, arg_ti, with_bounds)};
     } else {
       throw QueryNotSupported("Unsupported argument: " + rex_function->getName());
     }
@@ -788,7 +791,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoProjection(
       Geospatial::GeoBase::GeoOp::kPROJECTION, ti, ti, geoargs);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoBinaryConstructor(
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoConstructor(
     const RexFunctionOperator* rex_function,
     SQLTypeInfo& ti,
     const bool with_bounds) const {
@@ -846,7 +849,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoBinaryConstructor(
   return makeExpr<Analyzer::GeoBinOper>(op, ti, arg0_ti, arg1_ti, geoargs0, geoargs1);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoPredicate(
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoPredicate(
     const RexFunctionOperator* rex_function,
     SQLTypeInfo& ti,
     const bool with_bounds) const {
@@ -862,6 +865,23 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoPredicate(
                 ? Geospatial::GeoBase::GeoOp::kISEMPTY
                 : Geospatial::GeoBase::GeoOp::kISVALID;
   return makeExpr<Analyzer::GeoUOper>(op, ti, arg_ti, geoargs);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoPredicate(
+    const RexFunctionOperator* rex_function,
+    SQLTypeInfo& ti,
+    const bool with_bounds) const {
+  if (rex_function->getName() == "ST_Equals"sv) {
+    throw QueryNotSupported(rex_function->getName() +
+                            " geo predicate with unsupported arguments");
+  } else {
+    throw QueryNotSupported(rex_function->getName() + " geo predicate is not supported");
+  }
+#ifndef ENABLE_GEOS
+  throw QueryNotSupported(rex_function->getName() +
+                          " geo predicate requires enabled GEOS support");
+#endif
+  return nullptr;
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
@@ -1111,12 +1131,22 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   bool with_bounds = false;
   bool negate_result = false;
   Analyzer::ExpressionPtr threshold_expr = nullptr;
+  Analyzer::ExpressionPtr compare_expr = nullptr;
   if (function_name == "ST_DWithin"sv) {
     CHECK_EQ(size_t(3), rex_function->size());
     function_name = "ST_Distance";
     return_type = SQLTypeInfo(kDOUBLE, false);
     // Inject ST_DWithin's short-circuiting threshold into ST_MaxDistance
     threshold_expr = translateScalarRex(rex_function->getOperand(2));
+  } else if (function_name == "ST_Equals"sv) {
+    // Translate ST_Equals(g1,g2) to ST_Distance(g1,g2,thereshold=tol)<=tol
+    CHECK_EQ(size_t(2), rex_function->size());
+    function_name = "ST_Distance";
+    return_type = SQLTypeInfo(kDOUBLE, false);
+    Datum tolerance;
+    tolerance.doubleval = 0.0000001;
+    threshold_expr = makeExpr<Analyzer::Constant>(kDOUBLE, false, tolerance);
+    compare_expr = threshold_expr;
   } else if (function_name == "ST_DFullyWithin"sv) {
     CHECK_EQ(size_t(3), rex_function->size());
     function_name = "ST_MaxDistance";
@@ -1177,6 +1207,15 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   if ((arg0_ti.get_output_srid() > 0 || arg1_ti.get_output_srid() > 0) &&
       arg0_ti.get_output_srid() != arg1_ti.get_output_srid()) {
     throw QueryNotSupported(rex_function->getName() + " cannot accept different SRIDs");
+  }
+  if (compare_expr) {
+    // TODO: ST_Equals could return false for different geo types being compared, e.g.
+    // POLYGON vs POINT. Though tiny POLYGON could be "spatially" equal to a POINT..
+    if (arg0_ti.get_type() != kPOINT || arg1_ti.get_type() != kPOINT) {
+      // ST_Equals is translated to a simple distance check for POINTs,
+      // otherwise geometries are passed to GEOS's Equals
+      return nullptr;
+    }
   }
 
   if (function_name == "ST_Contains"sv) {
@@ -1271,6 +1310,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
       makeExpr<Analyzer::FunctionOper>(return_type, specialized_geofunc, geoargs);
   if (negate_result) {
     return makeExpr<Analyzer::UOper>(kBOOLEAN, kNOT, result);
+  }
+  if (compare_expr) {
+    return makeExpr<Analyzer::BinOper>(kBOOLEAN, kLE, kONE, result, compare_expr);
   }
   return result;
 }
