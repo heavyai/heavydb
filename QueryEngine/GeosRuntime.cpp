@@ -377,6 +377,80 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb(
 #endif
 }
 
+extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb_Predicate(
+    int op,
+    int arg1_type,
+    int8_t* arg1_coords,
+    int64_t arg1_coords_size,
+    int32_t* arg1_meta1,
+    int64_t arg1_meta1_size,
+    int32_t* arg1_meta2,
+    int64_t arg1_meta2_size,
+    // TODO: add meta3 args to support generic geometries
+    int32_t arg1_ic,
+    int32_t arg1_srid,
+    int arg2_type,
+    int8_t* arg2_coords,
+    int64_t arg2_coords_size,
+    int32_t* arg2_meta1,
+    int64_t arg2_meta1_size,
+    int32_t* arg2_meta2,
+    int64_t arg2_meta2_size,
+    // TODO: add meta3 args to support generic geometries
+    int32_t arg2_ic,
+    int32_t arg2_srid,
+    bool* result) {
+#ifndef __CUDACC__
+  WKB wkb1{};
+  if (!toWkb(wkb1,
+             arg1_type,
+             arg1_coords,
+             arg1_coords_size,
+             arg1_meta1,
+             arg1_meta1_size,
+             arg1_meta2,
+             arg1_meta2_size,
+             arg1_ic,
+             nullptr)) {
+    return false;
+  }
+  WKB wkb2{};
+  if (!toWkb(wkb2,
+             arg2_type,
+             arg2_coords,
+             arg2_coords_size,
+             arg2_meta1,
+             arg2_meta1_size,
+             arg2_meta2,
+             arg2_meta2_size,
+             arg2_ic,
+             nullptr)) {
+    return false;
+  }
+  auto status = false;
+  auto context = create_context();
+  if (!context) {
+    return status;
+  }
+  auto* g1 = GEOSGeomFromWKB_buf_r(context, wkb1.data(), wkb1.size());
+  if (g1) {
+    auto* g2 = GEOSGeomFromWKB_buf_r(context, wkb2.data(), wkb2.size());
+    if (g2) {
+      if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kEQUALS) {
+        *result = GEOSEquals_r(context, g1, g2);
+        status = true;
+      }
+      GEOSGeom_destroy_r(context, g2);
+    }
+    GEOSGeom_destroy_r(context, g1);
+  }
+  destroy_context(context);
+  return status;
+#else
+  return false;
+#endif
+}
+
 extern "C" RUNTIME_EXPORT bool Geos_Wkb_double(
     int op,
     int arg1_type,

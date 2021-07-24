@@ -262,8 +262,12 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
 
   if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kDIFFERENCE ||
       geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kINTERSECTION ||
-      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kUNION) {
+      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kUNION ||
+      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kEQUALS) {
     func += "_Wkb"s;
+    if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kEQUALS) {
+      func += "_Predicate"s;
+    }
     // Prepend arg1 geo SQLType
     arg1_list.insert(
         arg1_list.begin(),
@@ -290,6 +294,11 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
 
   // Append arg1 to the list
   argument_list.insert(argument_list.end(), arg1_list.begin(), arg1_list.end());
+
+  // Deal with unary geo predicates
+  if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kEQUALS) {
+    return codegenGeosPredicateCall(func, argument_list, co);
+  }
 
   return codegenGeosConstructorCall(func, argument_list, co);
 }

@@ -2148,6 +2148,37 @@ TEST_F(GeoSpatialTempTables, Geos) {
         v<int64_t>(run_simple_agg(
             R"(SELECT ST_IsValid('MULTIPOLYGON(((1 1,3 1,3 3,1 3)),((2 2,2 4,4 4,4 2)))') from geospatial_test limit 1;)",
             dt))));
+    // geos-backed ST_Equals for non-point geometries
+    EXPECT_GPU_THROW(ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT ST_Equals('POLYGON((0 0, 1 1, 1 0))', 'POLYGON((0 0, 1 0, 1 1))');",
+            dt))));
+    // Different, spatially unequal geometries
+    EXPECT_GPU_THROW(
+        ASSERT_EQ(static_cast<int64_t>(0),
+                  v<int64_t>(run_simple_agg(
+                      "SELECT ST_Equals('LINESTRING(0 0, 1 1)', 'POINT(0 0)');", dt))));
+    EXPECT_GPU_THROW(ASSERT_EQ(
+        static_cast<int64_t>(0),
+        v<int64_t>(run_simple_agg(
+            "SELECT ST_Equals('POLYGON((0 0, 1 1, 1 0))', 'POLYGON((0 0, 1 1, 0 1))');",
+            dt))));
+    // Different but spatially equal geometries
+    EXPECT_GPU_THROW(ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT ST_Equals('LINESTRING(0 0, 1 1)', 'LINESTRING(1 1, 0 0)');", dt))));
+    EXPECT_GPU_THROW(ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg("SELECT ST_Equals('POLYGON((0 0, 2 0, 2 2, 0 2))', "
+                                  "'MULTIPOLYGON(((0 1, 0 2, 2 2, 2 0, 0 0)))');",
+                                  dt))));
+    EXPECT_GPU_THROW(
+        ASSERT_EQ(static_cast<int64_t>(1),
+                  v<int64_t>(run_simple_agg("SELECT count(*) FROM geospatial_test "
+                                            "WHERE ST_Equals(l, 'LINESTRING(2 0, 4 4)');",
+                                            dt))));
     // geos-backed ST_Union(MULTIPOLYGON,MULTIPOLYGON)
     EXPECT_GPU_THROW(ASSERT_NEAR(
         static_cast<double>(14.0),

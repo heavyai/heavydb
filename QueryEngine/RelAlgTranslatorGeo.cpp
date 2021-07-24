@@ -871,17 +871,22 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoPredicate(
     const RexFunctionOperator* rex_function,
     SQLTypeInfo& ti,
     const bool with_bounds) const {
-  if (rex_function->getName() == "ST_Equals"sv) {
-    throw QueryNotSupported(rex_function->getName() +
-                            " geo predicate with unsupported arguments");
-  } else {
+  if (rex_function->getName() != "ST_Equals"sv) {
     throw QueryNotSupported(rex_function->getName() + " geo predicate is not supported");
   }
 #ifndef ENABLE_GEOS
   throw QueryNotSupported(rex_function->getName() +
                           " geo predicate requires enabled GEOS support");
 #endif
-  return nullptr;
+  SQLTypeInfo arg0_ti;
+  auto geoargs0 = translateGeoFunctionArg(
+      rex_function->getOperand(0), arg0_ti, false, false, true, true);
+  SQLTypeInfo arg1_ti;
+  auto geoargs1 = translateGeoFunctionArg(
+      rex_function->getOperand(1), arg1_ti, false, false, true, true);
+  ti = SQLTypeInfo(kBOOLEAN, false);
+  auto op = Geospatial::GeoBase::GeoOp::kEQUALS;
+  return makeExpr<Analyzer::GeoBinOper>(op, ti, arg0_ti, arg1_ti, geoargs0, geoargs1);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
@@ -1144,6 +1149,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
     function_name = "ST_Distance";
     return_type = SQLTypeInfo(kDOUBLE, false);
     Datum tolerance;
+    // Could pick up compression-specific tolerance from runtime
     tolerance.doubleval = 0.0000001;
     threshold_expr = makeExpr<Analyzer::Constant>(kDOUBLE, false, tolerance);
     compare_expr = threshold_expr;
