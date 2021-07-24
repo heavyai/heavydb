@@ -878,46 +878,23 @@ void populateTablesForVarlenLinearizationTest() {
     QR::get()->runDDLStatement(
         "DROP TABLE IF EXISTS sfgeo_n;");  // contains null-valued geo col val
     QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfgeo3;");  // non-null geo col val
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfgeo4;");  // non-null geo col val
     QR::get()->runDDLStatement(
         "DROP TABLE IF EXISTS mfgeo3_n;");  // contains null-valued geo col val
-    QR::get()->runDDLStatement(
-        "DROP TABLE IF EXISTS mfgeo4_n;");  // contains null-valued geo col val
 
     auto table_ddl =
         " (id INTEGER,\n"
-        "  pt POINT,\n"
         "  gpt GEOMETRY(POINT),\n"
-        "  gptn GEOMETRY(POINT) ENCODING NONE,\n"
-        "  gpt4 GEOMETRY(POINT, 4326),\n"
         "  gpt4e GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32),\n"
         "  gpt4n GEOMETRY(POINT, 4326) ENCODING NONE,\n"
-        "  gpt9 GEOMETRY(POINT, 900913),\n"
-        "  gpt9n GEOMETRY(POINT, 900913) ENCODING NONE,\n"
-        "  l LINESTRING,\n"
         "  gl GEOMETRY(LINESTRING),\n"
-        "  gln GEOMETRY(LINESTRING) ENCODING NONE,\n"
-        "  gl4 GEOMETRY(LINESTRING, 4326),\n"
         "  gl4e GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32),\n"
         "  gl4n GEOMETRY(LINESTRING, 4326) ENCODING NONE,\n"
-        "  gl9 GEOMETRY(LINESTRING, 900913),\n"
-        "  gl9n GEOMETRY(LINESTRING, 900913) ENCODING NONE,\n"
-        "  p POLYGON,\n"
         "  gp GEOMETRY(POLYGON),\n"
-        "  gpn GEOMETRY(POLYGON) ENCODING NONE,\n"
-        "  gp4 GEOMETRY(POLYGON, 4326),\n"
         "  gp4e GEOMETRY(POLYGON, 4326) ENCODING COMPRESSED(32),\n"
         "  gp4n GEOMETRY(POLYGON, 4326) ENCODING NONE,\n"
-        "  gp9 GEOMETRY(POLYGON, 900913),\n"
-        "  gp9n GEOMETRY(POLYGON, 900913) ENCODING NONE,\n"
-        "  mp MULTIPOLYGON,\n"
         "  gmp GEOMETRY(MULTIPOLYGON),\n"
-        "  gmpn GEOMETRY(MULTIPOLYGON) ENCODING NONE,\n"
-        "  gmp4 GEOMETRY(MULTIPOLYGON, 4326),\n"
         "  gmp4e GEOMETRY(MULTIPOLYGON, 4326) ENCODING COMPRESSED(32),\n"
-        "  gmp4n GEOMETRY(MULTIPOLYGON, 4326) ENCODING NONE,\n"
-        "  gmp9 GEOMETRY(MULTIPOLYGON, 900913),\n"
-        "  gmp9n GEOMETRY(MULTIPOLYGON, 900913) ENCODING NONE)";
+        "  gmp4n GEOMETRY(MULTIPOLYGON, 4326) ENCODING NONE)";
 
     auto create_table_ddl_gen = [&table_ddl](const std::string& tbl_name,
                                              const bool multi_frag,
@@ -938,9 +915,6 @@ void populateTablesForVarlenLinearizationTest() {
 
     QR::get()->runDDLStatement(create_table_ddl_gen("mfgeo3", true, 3));
     QR::get()->runDDLStatement(create_table_ddl_gen("mfgeo3_n", true, 3));
-
-    QR::get()->runDDLStatement(create_table_ddl_gen("mfgeo4", true, 4));
-    QR::get()->runDDLStatement(create_table_ddl_gen("mfgeo4_n", true, 4));
 
     std::vector<std::vector<std::string>> input_val_non_nullable;
     input_val_non_nullable.push_back({"0",
@@ -1070,7 +1044,7 @@ void populateTablesForVarlenLinearizationTest() {
             case 2:    // LINESTRING
             case 3:    // POLYGON
             case 4: {  // MULTIPOLYGON
-              num_rows = 8;
+              num_rows = 3;
               break;
             }
             default:
@@ -1093,10 +1067,7 @@ void populateTablesForVarlenLinearizationTest() {
     insert_stmt_gen(input_val_nullable, "sfgeo_n");
 
     insert_stmt_gen(input_val_non_nullable, "mfgeo3");
-    insert_stmt_gen(input_val_non_nullable, "mfgeo4");
-
     insert_stmt_gen(input_val_nullable, "mfgeo3_n");
-    insert_stmt_gen(input_val_nullable, "mfgeo4_n");
 
     QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfgeo_n_v2;");
     QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfgeo_n_v2;");
@@ -1327,11 +1298,8 @@ void dropTablesForVarlenLinearizationTest() {
     QR::get()->runDDLStatement(
         "DROP TABLE IF EXISTS sfgeo_n;");  // contains null-valued geo col val
     QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfgeo3;");  // non-null geo col val
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfgeo4;");  // non-null geo col val
     QR::get()->runDDLStatement(
         "DROP TABLE IF EXISTS mfgeo3_n;");  // contains null-valued geo col val
-    QR::get()->runDDLStatement(
-        "DROP TABLE IF EXISTS mfgeo4_n;");  // contains null-valued geo col val
     QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfgeo_n_v2;");
     QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfgeo_n_v2;");
   }
@@ -1359,296 +1327,186 @@ class MultiFragGeoOverlapsJoinTest : public ::testing::Test {
 TEST_F(MultiFragGeoOverlapsJoinTest, Point) {
   // point - point by stwithin
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
-    std::vector<std::string> pt_col_none_encoded{"pt", "gpt", "gptn"};
-    std::vector<std::string> pt_col_4326{"gpt4", "gpt4e", "gpt4n"};
-    std::vector<std::string> pt_col_900913{"gpt9"};
+    std::vector<std::string> cols{"gpt", "gpt4e", "gpt4n"};
+    int64_t single_frag_res = 10;
     auto execute_tests = [&](std::vector<std::string>& col_names) {
       for (auto& c : col_names) {
-        std::ostringstream sq, mq1, mq2, mq3;
-        sq << "SELECT COUNT(1) FROM sfgeo s, sfgeo r WHERE ST_INTERSECTS(r." << c
-           << ", s." << c << ");";
+        std::ostringstream mq1, mq2;
         mq1 << "SELECT COUNT(1) FROM mfgeo s, mfgeo r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
         mq2 << "SELECT COUNT(1) FROM mfgeo3 s, mfgeo3 r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
-        mq3 << "SELECT COUNT(1) FROM mfgeo4 s, mfgeo4 r WHERE ST_INTERSECTS(r." << c
-            << ", s." << c << ");";
-        auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
         auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
         auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
-        auto multi_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), dt));
         ASSERT_EQ(single_frag_res, multi_frag_res1) << mq1.str();
         ASSERT_EQ(single_frag_res, multi_frag_res2) << mq2.str();
-        ASSERT_EQ(single_frag_res, multi_frag_res3) << mq3.str();
       }
     };
-    execute_tests(pt_col_none_encoded);
-    execute_tests(pt_col_4326);
-    execute_tests(pt_col_900913);
+    execute_tests(cols);
   });
 }
 
 TEST_F(MultiFragGeoOverlapsJoinTest, Linestring) {
   // linestring - polygon by st_intersect
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
-    std::vector<std::string> l_col_none_encoded{"l", "gl", "gln"};
-    std::vector<std::string> p_col_none_encoded{"p", "gp", "gpn"};
-    std::vector<std::string> l_col_4326{"gl4", "gl4e", "gl4n"};
-    std::vector<std::string> p_col_4326{"gp4", "gp4e", "gp4n"};
-    std::vector<std::string> l_col_900913{"gl9", "gl9n"};
-    std::vector<std::string> p_col_900913{"gp9", "gp9n"};
+    std::vector<std::string> cols{"gl", "gl4e", "gl4n"};
+    int64_t single_frag_res = 22;
     auto execute_tests = [&](std::vector<std::string>& col_names) {
       for (auto& c : col_names) {
-        std::ostringstream sq, mq1, mq2, mq3;
-        sq << "SELECT COUNT(1) FROM sfgeo s, sfgeo r WHERE ST_INTERSECTS(s." << c
-           << ", r." << c << ");";
+        std::ostringstream mq1, mq2;
         mq1 << "SELECT COUNT(1) FROM mfgeo s, mfgeo r WHERE ST_INTERSECTS(s." << c
             << ", r." << c << ");";
         mq2 << "SELECT COUNT(1) FROM mfgeo3 s, mfgeo3 r WHERE ST_INTERSECTS(s." << c
             << ", r." << c << ");";
-        mq3 << "SELECT COUNT(1) FROM mfgeo4 s, mfgeo4 r WHERE ST_INTERSECTS(s." << c
-            << ", r." << c << ");";
-        auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
         auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
         auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
-        auto multi_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), dt));
         ASSERT_EQ(single_frag_res, multi_frag_res1) << mq1.str();
         ASSERT_EQ(single_frag_res, multi_frag_res2) << mq2.str();
-        ASSERT_EQ(single_frag_res, multi_frag_res3) << mq3.str();
       }
     };
-    execute_tests(p_col_none_encoded);
-    execute_tests(p_col_4326);
-    execute_tests(p_col_900913);
+    execute_tests(cols);
   });
 }
 
 TEST_F(MultiFragGeoOverlapsJoinTest, Polygon) {
   // polygon - point by st_intersects
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
-    std::vector<std::string> pt_col_none_encoded{
-        "pt",
-        "gpt",
-        "gptn",
-    };
-    std::vector<std::string> p_col_none_encoded{"p", "gp", "gpn"};
-    std::vector<std::string> pt_col_4326{"gpt4", "gpt4e", "gpt4n"};
-    std::vector<std::string> p_col_4326{"gp4", "gp4e", "gp4n"};
-    std::vector<std::string> pt_col_900913{"gpt9"};
-    std::vector<std::string> p_col_900913{"gp9", "gp9n"};
+    std::vector<std::string> cols{"gp", "gp4e", "gp4n"};
+    int64_t single_frag_res = 100;
     auto execute_tests = [&](std::vector<std::string>& col_names) {
       for (auto& c : col_names) {
-        std::ostringstream sq, mq1, mq2, mq3;
-        sq << "SELECT COUNT(1) FROM sfgeo s, sfgeo r WHERE ST_INTERSECTS(r." << c
-           << ", s." << c << ");";
+        std::ostringstream mq1, mq2;
         mq1 << "SELECT COUNT(1) FROM mfgeo s, mfgeo r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
         mq2 << "SELECT COUNT(1) FROM mfgeo3 s, mfgeo3 r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
-        mq3 << "SELECT COUNT(1) FROM mfgeo4 s, mfgeo4 r WHERE ST_INTERSECTS(r." << c
-            << ", s." << c << ");";
-        auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
         auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
         auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
-        auto multi_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), dt));
         ASSERT_EQ(single_frag_res, multi_frag_res1) << mq1.str();
         ASSERT_EQ(single_frag_res, multi_frag_res2) << mq2.str();
-        ASSERT_EQ(single_frag_res, multi_frag_res3) << mq3.str();
       }
     };
-    execute_tests(p_col_none_encoded);
-    execute_tests(p_col_4326);
-    execute_tests(p_col_900913);
+    execute_tests(cols);
   });
 }
 
 TEST_F(MultiFragGeoOverlapsJoinTest, MultiPolygon) {
   // multipolygon - polygon by st_intersects
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
-    std::vector<std::string> mp_col_none_encoded{"mp", "gmp", "gmpn"};
-    std::vector<std::string> p_col_none_encoded{"p", "gp", "gpn"};
-    std::vector<std::string> mp_col_4326{"gmp4", "gmp4e", "gmp4n"};
-    std::vector<std::string> p_col_4326{"gp4", "gp4e", "gp4n"};
-    std::vector<std::string> mp_col_900913{"gmp9", "gmp9n"};
-    std::vector<std::string> p_col_900913{"gp9", "gl9n"};
+    std::vector<std::string> cols{"gmp", "gmp4e", "gmp4n"};
+    int64_t single_frag_res = 100;
     auto execute_tests = [&](std::vector<std::string>& col_names) {
       for (auto& c : col_names) {
-        std::ostringstream sq, mq1, mq2, mq3;
-        sq << "SELECT COUNT(1) FROM sfgeo s, sfgeo r WHERE ST_INTERSECTS(r." << c
-           << ", s." << c << ");";
+        std::ostringstream mq1, mq2;
         mq1 << "SELECT COUNT(1) FROM mfgeo s, mfgeo r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
         mq2 << "SELECT COUNT(1) FROM mfgeo3 s, mfgeo3 r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
-        mq3 << "SELECT COUNT(1) FROM mfgeo4 s, mfgeo4 r WHERE ST_INTERSECTS(r." << c
-            << ", s." << c << ");";
-        auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
         auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
         auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
-        auto multi_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), dt));
         ASSERT_EQ(single_frag_res, multi_frag_res1) << mq1.str();
         ASSERT_EQ(single_frag_res, multi_frag_res2) << mq2.str();
-        ASSERT_EQ(single_frag_res, multi_frag_res3) << mq3.str();
       }
     };
-    execute_tests(mp_col_none_encoded);
-    execute_tests(mp_col_4326);
-    execute_tests(mp_col_900913);
+    execute_tests(cols);
   });
 }
 
 TEST_F(MultiFragGeoOverlapsJoinTest, Point_Nullable) {
   // point - point by stwithin
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
-    std::vector<std::string> pt_col_none_encoded{"pt", "gpt", "gptn"};
-    std::vector<std::string> pt_col_4326{"gpt4", "gpt4e", "gpt4n"};
-    std::vector<std::string> pt_col_900913{"gpt9"};
+    std::vector<std::string> cols{"gpt", "gpt4e", "gpt4n"};
+    int64_t single_frag_res = 8;
     auto execute_tests = [&](std::vector<std::string>& col_names) {
       for (auto& c : col_names) {
-        std::ostringstream sq, mq1, mq2, mq3;
-        sq << "SELECT COUNT(1) FROM sfgeo_n s, sfgeo_n r WHERE ST_INTERSECTS(r." << c
-           << ", s." << c << ");";
+        std::ostringstream mq1, mq2;
         mq1 << "SELECT COUNT(1) FROM mfgeo_n s, mfgeo_n r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
         mq2 << "SELECT COUNT(1) FROM mfgeo3_n s, mfgeo3_n r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
-        mq3 << "SELECT COUNT(1) FROM mfgeo4_n s, mfgeo4_n r WHERE ST_INTERSECTS(r." << c
-            << ", s." << c << ");";
-        auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
         auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
         auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
-        auto multi_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), dt));
         ASSERT_EQ(single_frag_res, multi_frag_res1) << mq1.str();
         ASSERT_EQ(single_frag_res, multi_frag_res2) << mq2.str();
-        ASSERT_EQ(single_frag_res, multi_frag_res3) << mq3.str();
       }
     };
-    execute_tests(pt_col_none_encoded);
-    execute_tests(pt_col_4326);
-    execute_tests(pt_col_900913);
+    execute_tests(cols);
   });
 }
 
 TEST_F(MultiFragGeoOverlapsJoinTest, Linestring_Nullable) {
   // linestring - polygon by st_intersect
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
-    std::vector<std::string> l_col_none_encoded{"l", "gl", "gln"};
-    std::vector<std::string> p_col_none_encoded{"p", "gp", "gpn"};
-    std::vector<std::string> l_col_4326{"gl4", "gl4e", "gl4n"};
-    std::vector<std::string> p_col_4326{"gp4", "gp4e", "gp4n"};
-    std::vector<std::string> l_col_900913{"gl9", "gl9n"};
-    std::vector<std::string> p_col_900913{"gp9", "gp9n"};
+    std::vector<std::string> cols{"gl", "gl4e", "gl4n"};
+    int64_t single_frag_res = 14;
     auto execute_tests = [&](std::vector<std::string>& col_names) {
       for (auto& c : col_names) {
-        std::ostringstream sq, mq1, mq2, mq3;
-        sq << "SELECT COUNT(1) FROM sfgeo_n s, sfgeo_n r WHERE ST_INTERSECTS(s." << c
-           << ", r." << c << ");";
+        std::ostringstream mq1, mq2;
         mq1 << "SELECT COUNT(1) FROM mfgeo_n s, mfgeo_n r WHERE ST_INTERSECTS(s." << c
             << ", r." << c << ");";
         mq2 << "SELECT COUNT(1) FROM mfgeo3_n s, mfgeo3_n r WHERE ST_INTERSECTS(s." << c
             << ", r." << c << ");";
-        mq3 << "SELECT COUNT(1) FROM mfgeo4_n s, mfgeo4_n r WHERE ST_INTERSECTS(s." << c
-            << ", r." << c << ");";
-        auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
         auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
         auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
-        auto multi_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), dt));
         ASSERT_EQ(single_frag_res, multi_frag_res1) << mq1.str();
         ASSERT_EQ(single_frag_res, multi_frag_res2) << mq2.str();
-        ASSERT_EQ(single_frag_res, multi_frag_res3) << mq3.str();
       }
     };
-    execute_tests(p_col_none_encoded);
-    execute_tests(p_col_4326);
-    execute_tests(p_col_900913);
+    execute_tests(cols);
   });
 }
 
 TEST_F(MultiFragGeoOverlapsJoinTest, Polygon_Nullable) {
   // polygon - point by st_intersects
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
-    std::vector<std::string> pt_col_none_encoded{
-        "pt",
-        "gpt",
-        "gptn",
-    };
-    std::vector<std::string> p_col_none_encoded{"p", "gp", "gpn"};
-    std::vector<std::string> pt_col_4326{"gpt4", "gpt4e", "gpt4n"};
-    std::vector<std::string> p_col_4326{"gp4", "gp4e", "gp4n"};
-    std::vector<std::string> pt_col_900913{"gpt9"};
-    std::vector<std::string> p_col_900913{"gp9", "gp9n"};
+    std::vector<std::string> cols{"gp", "gp4e", "gp4n"};
+    int64_t single_frag_res = 64;
     auto execute_tests = [&](std::vector<std::string>& col_names) {
       for (auto& c : col_names) {
-        std::ostringstream sq, mq1, mq2, mq3;
-        sq << "SELECT COUNT(1) FROM sfgeo_n s, sfgeo_n r WHERE ST_INTERSECTS(r." << c
-           << ", s." << c << ");";
+        std::ostringstream mq1, mq2;
         mq1 << "SELECT COUNT(1) FROM mfgeo_n s, mfgeo_n r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
         mq2 << "SELECT COUNT(1) FROM mfgeo3_n s, mfgeo3_n r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
-        mq3 << "SELECT COUNT(1) FROM mfgeo4_n s, mfgeo4_n r WHERE ST_INTERSECTS(r." << c
-            << ", s." << c << ");";
-        auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
         auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
         auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
-        auto multi_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), dt));
         ASSERT_EQ(single_frag_res, multi_frag_res1) << mq1.str();
         ASSERT_EQ(single_frag_res, multi_frag_res2) << mq2.str();
-        ASSERT_EQ(single_frag_res, multi_frag_res3) << mq3.str();
       }
     };
-    execute_tests(p_col_none_encoded);
-    execute_tests(p_col_4326);
-    execute_tests(p_col_900913);
+    execute_tests(cols);
   });
 }
 
 TEST_F(MultiFragGeoOverlapsJoinTest, MultiPolygon_Nullable) {
   // multipolygon - polygon by st_intersects
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
-    std::vector<std::string> mp_col_none_encoded{"mp", "gmp", "gmpn"};
-    std::vector<std::string> p_col_none_encoded{"p", "gp", "gpn"};
-    std::vector<std::string> mp_col_4326{"gmp4", "gmp4e", "gmp4n"};
-    std::vector<std::string> p_col_4326{"gp4", "gp4e", "gp4n"};
-    std::vector<std::string> mp_col_900913{"gmp9", "gmp9n"};
-    std::vector<std::string> p_col_900913{"gp9", "gp9n"};
+    std::vector<std::string> cols{"gmp", "gmp4e", "gmp4n"};
+    int64_t single_frag_res = 64;
     auto execute_tests = [&](std::vector<std::string>& col_names) {
       for (auto& c : col_names) {
-        std::ostringstream sq, mq1, mq2, mq3, mq4, mq5, mq6;
-        sq << "SELECT COUNT(1) FROM sfgeo_n s, sfgeo_n r WHERE ST_INTERSECTS(r." << c
-           << ", s." << c << ");";
+        std::ostringstream mq1, mq2;
         mq1 << "SELECT COUNT(1) FROM mfgeo_n s, mfgeo_n r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
         mq2 << "SELECT COUNT(1) FROM mfgeo3_n s, mfgeo3_n r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
-        mq3 << "SELECT COUNT(1) FROM mfgeo4_n s, mfgeo4_n r WHERE ST_INTERSECTS(r." << c
-            << ", s." << c << ");";
-        auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
         auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
         auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
-        auto multi_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), dt));
         ASSERT_EQ(single_frag_res, multi_frag_res1) << mq1.str();
         ASSERT_EQ(single_frag_res, multi_frag_res2) << mq2.str();
-        ASSERT_EQ(single_frag_res, multi_frag_res3) << mq3.str();
       }
     };
-    execute_tests(mp_col_none_encoded);
-    execute_tests(mp_col_4326);
-    execute_tests(mp_col_900913);
+    execute_tests(cols);
   });
 }
 
 TEST_F(MultiFragGeoOverlapsJoinTest, Nullable_Geo_Exhaustive) {
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
-    std::ostringstream sq1, sq2, sq3, sq4, mq1, mq2, mq3, mq4;
-    sq1 << "SELECT COUNT(1) FROM sfgeo_n_v2 r, sfgeo_n_v2 s WHERE ST_INTERSECTS(r.pt, "
-           "s.pt);";
-    sq2 << "SELECT COUNT(1) FROM sfgeo_n_v2 r, sfgeo_n_v2 s WHERE ST_INTERSECTS(s.p, "
-           "r.l);";
-    sq3 << "SELECT COUNT(1) FROM sfgeo_n_v2 r, sfgeo_n_v2 s WHERE ST_INTERSECTS(r.p, "
-           "s.pt);";
-    sq4 << "SELECT COUNT(1) FROM sfgeo_n_v2 r, sfgeo_n_v2 s WHERE ST_INTERSECTS(r.mp, "
-           "s.pt);";
+    int64_t single_frag_res1 = 114;
+    int64_t single_frag_res2 = 5163;
+    int64_t single_frag_res3 = 2178;
+    int64_t single_frag_res4 = 2178;
+    std::ostringstream mq1, mq2, mq3, mq4;
     mq1 << "SELECT COUNT(1) FROM mfgeo_n_v2 r, mfgeo_n_v2 s WHERE ST_INTERSECTS(r.pt, "
            "s.pt);";
     mq2 << "SELECT COUNT(1) FROM mfgeo_n_v2 r, mfgeo_n_v2 s WHERE ST_INTERSECTS(s.p, "
@@ -1657,13 +1515,9 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Nullable_Geo_Exhaustive) {
            "s.pt);";
     mq4 << "SELECT COUNT(1) FROM mfgeo_n_v2 r, mfgeo_n_v2 s WHERE ST_INTERSECTS(r.mp, "
            "s.pt);";
-    auto single_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(sq1.str(), dt));
     auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
-    auto single_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(sq2.str(), dt));
     auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
-    auto single_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(sq3.str(), dt));
     auto multi_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), dt));
-    auto single_frag_res4 = v<int64_t>(execSQLWithAllowLoopJoin(sq4.str(), dt));
     auto multi_frag_res4 = v<int64_t>(execSQLWithAllowLoopJoin(mq4.str(), dt));
     ASSERT_EQ(single_frag_res1, multi_frag_res1) << mq1.str();
     ASSERT_EQ(single_frag_res2, multi_frag_res2) << mq2.str();
@@ -1680,22 +1534,18 @@ class ParallelLinearization : public ::testing::Test {
 
 TEST_F(ParallelLinearization, GeoJoin) {
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
-    std::ostringstream sq1, sq2, sq3, sq4, mq1, mq2, mq3, mq4;
-    sq1 << "SELECT COUNT(1) FROM sfgeo_p r, sfgeo_p s WHERE ST_INTERSECTS(r.pt, s.pt);";
+    int64_t single_frag_res1 = 1020;
+    int64_t single_frag_res2 = 80940;
+    int64_t single_frag_res3 = 38378;
+    int64_t single_frag_res4 = 38378;
+    std::ostringstream mq1, mq2, mq3, mq4;
     mq1 << "SELECT COUNT(1) FROM mfgeo_p r, mfgeo_p s WHERE ST_INTERSECTS(r.pt, s.pt);";
-    sq2 << "SELECT COUNT(1) FROM sfgeo_p r, sfgeo_p s WHERE ST_INTERSECTS(s.p, r.l);";
     mq2 << "SELECT COUNT(1) FROM mfgeo_p r, mfgeo_p s WHERE ST_INTERSECTS(s.p, r.l);";
-    sq3 << "SELECT COUNT(1) FROM sfgeo_p r, sfgeo_p s WHERE ST_INTERSECTS(r.p, s.pt);";
     mq3 << "SELECT COUNT(1) FROM mfgeo_p r, mfgeo_p s WHERE ST_INTERSECTS(r.p, s.pt);";
-    sq4 << "SELECT COUNT(1) FROM sfgeo_p r, sfgeo_p s WHERE ST_INTERSECTS(r.mp, s.pt);";
     mq4 << "SELECT COUNT(1) FROM mfgeo_p r, mfgeo_p s WHERE ST_INTERSECTS(r.mp, s.pt);";
-    auto single_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(sq1.str(), dt));
     auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
-    auto single_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(sq2.str(), dt));
     auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
-    auto single_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(sq3.str(), dt));
     auto multi_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), dt));
-    auto single_frag_res4 = v<int64_t>(execSQLWithAllowLoopJoin(sq4.str(), dt));
     auto multi_frag_res4 = v<int64_t>(execSQLWithAllowLoopJoin(mq4.str(), dt));
     ASSERT_EQ(single_frag_res1, multi_frag_res1) << mq1.str();
     ASSERT_EQ(single_frag_res2, multi_frag_res2) << mq2.str();
@@ -1704,28 +1554,21 @@ TEST_F(ParallelLinearization, GeoJoin) {
   });
 
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
-    std::ostringstream sq1, sq2, sq3, sq4, mq1, mq2, mq3, mq4;
-    sq1 << "SELECT COUNT(1) FROM sfgeo_n_p r, sfgeo_n_p s WHERE ST_INTERSECTS(r.pt, "
-           "s.pt);";
+    int64_t single_frag_res1 = 895;
+    int64_t single_frag_res2 = 70115;
+    int64_t single_frag_res3 = 33096;
+    int64_t single_frag_res4 = 33096;
+    std::ostringstream mq1, mq2, mq3, mq4;
     mq1 << "SELECT COUNT(1) FROM mfgeo_n_p r, mfgeo_n_p s WHERE ST_INTERSECTS(r.pt, "
            "s.pt);";
-    sq2 << "SELECT COUNT(1) FROM sfgeo_n_p r, sfgeo_n_p s WHERE ST_INTERSECTS(s.p, r.l);";
     mq2 << "SELECT COUNT(1) FROM mfgeo_n_p r, mfgeo_n_p s WHERE ST_INTERSECTS(s.p, r.l);";
-    sq3 << "SELECT COUNT(1) FROM sfgeo_n_p r, sfgeo_n_p s WHERE ST_INTERSECTS(r.p, "
-           "s.pt);";
     mq3 << "SELECT COUNT(1) FROM mfgeo_n_p r, mfgeo_n_p s WHERE ST_INTERSECTS(r.p, "
-           "s.pt);";
-    sq4 << "SELECT COUNT(1) FROM sfgeo_n_p r, sfgeo_n_p s WHERE ST_INTERSECTS(r.mp, "
            "s.pt);";
     mq4 << "SELECT COUNT(1) FROM mfgeo_n_p r, mfgeo_n_p s WHERE ST_INTERSECTS(r.mp, "
            "s.pt);";
-    auto single_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(sq1.str(), dt));
     auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
-    auto single_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(sq2.str(), dt));
     auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
-    auto single_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(sq3.str(), dt));
     auto multi_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), dt));
-    auto single_frag_res4 = v<int64_t>(execSQLWithAllowLoopJoin(sq4.str(), dt));
     auto multi_frag_res4 = v<int64_t>(execSQLWithAllowLoopJoin(mq4.str(), dt));
     ASSERT_EQ(single_frag_res1, multi_frag_res1) << mq1.str();
     ASSERT_EQ(single_frag_res2, multi_frag_res2) << mq2.str();
@@ -1734,30 +1577,22 @@ TEST_F(ParallelLinearization, GeoJoin) {
   });
 
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
-    std::ostringstream sq1, sq2, sq3, sq4, mq1, mq2, mq3, mq4;
-    sq1 << "SELECT COUNT(1) FROM sfgeo_n2_p r, sfgeo_n2_p s WHERE ST_INTERSECTS(r.pt, "
-           "s.pt);";
+    int64_t single_frag_res1 = 914;
+    int64_t single_frag_res2 = 71556;
+    int64_t single_frag_res3 = 33905;
+    int64_t single_frag_res4 = 33905;
+    std::ostringstream mq1, mq2, mq3, mq4;
     mq1 << "SELECT COUNT(1) FROM mfgeo_n2_p r, mfgeo_n2_p s WHERE ST_INTERSECTS(r.pt, "
            "s.pt);";
-    sq2 << "SELECT COUNT(1) FROM sfgeo_n2_p r, sfgeo_n2_p s WHERE ST_INTERSECTS(s.p, "
-           "r.l);";
     mq2 << "SELECT COUNT(1) FROM mfgeo_n2_p r, mfgeo_n2_p s WHERE ST_INTERSECTS(s.p, "
            "r.l);";
-    sq3 << "SELECT COUNT(1) FROM sfgeo_n2_p r, sfgeo_n2_p s WHERE ST_INTERSECTS(r.p, "
-           "s.pt);";
     mq3 << "SELECT COUNT(1) FROM mfgeo_n2_p r, mfgeo_n2_p s WHERE ST_INTERSECTS(r.p, "
-           "s.pt);";
-    sq4 << "SELECT COUNT(1) FROM sfgeo_n2_p r, sfgeo_n2_p s WHERE ST_INTERSECTS(r.mp, "
            "s.pt);";
     mq4 << "SELECT COUNT(1) FROM mfgeo_n2_p r, mfgeo_n2_p s WHERE ST_INTERSECTS(r.mp, "
            "s.pt);";
-    auto single_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(sq1.str(), dt));
     auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
-    auto single_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(sq2.str(), dt));
     auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
-    auto single_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(sq3.str(), dt));
     auto multi_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), dt));
-    auto single_frag_res4 = v<int64_t>(execSQLWithAllowLoopJoin(sq4.str(), dt));
     auto multi_frag_res4 = v<int64_t>(execSQLWithAllowLoopJoin(mq4.str(), dt));
     ASSERT_EQ(single_frag_res1, multi_frag_res1) << mq1.str();
     ASSERT_EQ(single_frag_res2, multi_frag_res2) << mq2.str();
