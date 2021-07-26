@@ -1737,8 +1737,8 @@ class GeoConstant : public GeoExpr {
 };
 
 /**
- * GeoOperator: A geo expression that transforms or accesses an input. Only accesses one
- * primary geo column
+ * GeoOperator: A geo expression that transforms or accesses an input. Typically a
+ * geospatial function prefixed with ST_
  */
 class GeoOperator : public GeoExpr {
  public:
@@ -1747,6 +1747,13 @@ class GeoOperator : public GeoExpr {
               const std::vector<std::shared_ptr<Analyzer::Expr>>& args);
 
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  void collect_rte_idx(std::set<int>& rte_idx_set) const final;
+
+  void collect_column_var(
+      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>&
+          colvar_set,
+      bool include_agg) const final;
 
   std::string toString() const override;
 
@@ -1796,48 +1803,6 @@ class GeoTransformOperator : public GeoOperator {
  private:
   const int32_t input_srid_;
   const int32_t output_srid_;
-};
-
-/**
- * GeoFunctionOperator: A geospatial function that takes one or more geo inputs and
- * outputs a scalar or geo output. Similar to an operator, but requires one or more
- * external function calls.
- */
-class GeoFunctionOperator : public GeoExpr {
- public:
-  GeoFunctionOperator(const SQLTypeInfo& ti,
-                      const std::string& name,
-                      const std::vector<std::shared_ptr<Analyzer::Expr>>& args);
-
-  std::shared_ptr<Analyzer::Expr> deep_copy() const final;
-  void collect_rte_idx(std::set<int>& rte_idx_set) const final;
-  void collect_column_var(
-      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>&
-          colvar_set,
-      bool include_agg) const final;
-
-  std::string toString() const final;
-
-  bool operator==(const Expr&) const final;
-
-  size_t size() const;
-
-  Analyzer::Expr* getArg(const size_t index) const;
-
-  const std::string& getName() const { return name_; }
-
-  std::vector<Analyzer::Expr*> getChildExprs() const override {
-    std::vector<Analyzer::Expr*> ret;
-    ret.reserve(args_.size());
-    for (const auto& arg : args_) {
-      ret.push_back(arg.get());
-    }
-    return ret;
-  }
-
- private:
-  const std::string name_;
-  const std::vector<std::shared_ptr<Analyzer::Expr>> args_;
 };
 
 }  // namespace Analyzer

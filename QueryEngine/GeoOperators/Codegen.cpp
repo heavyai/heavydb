@@ -36,6 +36,10 @@ std::unique_ptr<Codegen> Codegen::init(const Analyzer::GeoOperator* geo_operator
     return std::make_unique<PointConstructor>(geo_operator, catalog);
   } else if (operator_name == "ST_Transform") {
     return std::make_unique<Transform>(geo_operator, catalog);
+  } else if (operator_name == "ST_Perimeter" || operator_name == "ST_Area") {
+    return std::make_unique<AreaPerimeter>(geo_operator, catalog);
+  } else if (operator_name == "ST_Centroid") {
+    return std::make_unique<Centroid>(geo_operator, catalog);
   }
   UNREACHABLE();
   return nullptr;
@@ -52,6 +56,27 @@ std::unique_ptr<CodeGenerator::NullCheckCodegen> Codegen::getNullCheckCodegen(
   } else {
     return nullptr;
   }
+}
+
+const Analyzer::Expr* Codegen::getOperand(const size_t index) {
+  CHECK_LT(index, operator_->size());
+  return operator_->getOperand(index);
+}
+
+std::string suffix(SQLTypes type) {
+  if (type == kPOINT) {
+    return std::string("_Point");
+  }
+  if (type == kLINESTRING) {
+    return std::string("_LineString");
+  }
+  if (type == kPOLYGON) {
+    return std::string("_Polygon");
+  }
+  if (type == kMULTIPOLYGON) {
+    return std::string("_MultiPolygon");
+  }
+  throw std::runtime_error("Unsupported argument type");
 }
 
 }  // namespace spatial_type

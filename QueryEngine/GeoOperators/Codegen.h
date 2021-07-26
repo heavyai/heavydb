@@ -17,6 +17,7 @@
 #include "Analyzer/Analyzer.h"
 #include "Catalog/Catalog.h"
 #include "QueryEngine/CodeGenerator.h"
+#include "Shared/sqltypes.h"
 
 #pragma once
 
@@ -47,7 +48,10 @@ class Codegen {
 
   virtual const Analyzer::Expr* getPositionOperand() const = 0;
 
-  virtual const Analyzer::Expr* getOperand(const size_t index) = 0;
+  // by default index into the operator, but allow overloading for special cases. In those
+  // special cases, we typically create a synthethic operator and manipulate state, so
+  // this method cannot be const
+  virtual const Analyzer::Expr* getOperand(const size_t index);
 
   // returns arguments lvs and null lv
   virtual std::tuple<std::vector<llvm::Value*>, llvm::Value*> codegenLoads(
@@ -69,5 +73,7 @@ class Codegen {
   const Catalog_Namespace::Catalog* cat_;
   bool is_nullable_{true};
 };
+
+std::string suffix(SQLTypes type);
 
 }  // namespace spatial_type

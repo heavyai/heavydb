@@ -28,6 +28,7 @@ class PointConstructor : public Codegen {
   PointConstructor(const Analyzer::GeoOperator* geo_operator,
                    const Catalog_Namespace::Catalog* catalog)
       : Codegen(geo_operator, catalog) {
+    CHECK_EQ(operator_->size(), size_t(2));
     const auto& ti = geo_operator->get_type_info();
     if (ti.get_notnull()) {
       is_nullable_ = false;
@@ -82,11 +83,6 @@ class PointConstructor : public Codegen {
 
   const Analyzer::Expr* getPositionOperand() const final {
     return operator_->getOperand(0);
-  }
-
-  const Analyzer::Expr* getOperand(const size_t index) final {
-    CHECK_EQ(operator_->size(), size_t(2));
-    return operator_->getOperand(index);
   }
 
   // returns arguments lvs and null lv

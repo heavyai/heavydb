@@ -294,10 +294,8 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
     auto geo_uoper_arg = dynamic_cast<const Analyzer::GeoUOper*>(arg);
     auto geo_binoper_arg = dynamic_cast<const Analyzer::GeoBinOper*>(arg);
     auto geo_expr_arg = dynamic_cast<const Analyzer::GeoExpr*>(arg);
-    auto geo_functionoper_arg = dynamic_cast<const Analyzer::GeoFunctionOperator*>(arg);
     // TODO(adb / d): Assuming no const array cols for geo (for now)
-    if ((geo_uoper_arg || geo_binoper_arg || geo_functionoper_arg) &&
-        arg_ti.is_geometry()) {
+    if ((geo_uoper_arg || geo_binoper_arg) && arg_ti.is_geometry()) {
       // Extract arr sizes and put them in the map, forward arr pointers
       CHECK_EQ(2 * static_cast<size_t>(arg_ti.get_physical_coord_cols()), arg_lvs.size());
       for (size_t i = 0; i < arg_lvs.size(); i++) {
@@ -596,9 +594,7 @@ llvm::Value* CodeGenerator::codegenFunctionOperNullArg(
       continue;
     }
     auto geo_expr_arg = dynamic_cast<const Analyzer::GeoExpr*>(arg);
-    auto geo_functionoper_arg = dynamic_cast<const Analyzer::GeoFunctionOperator*>(arg);
-    if (geo_expr_arg && !geo_functionoper_arg && arg_ti.is_geometry()) {
-      // TODO: this generated invalid code for function operators, e.g. centroid
+    if (geo_expr_arg && arg_ti.is_geometry()) {
       CHECK(arg_ti.get_type() == kPOINT);
       auto is_null_lv = cgen_state_->ir_builder_.CreateICmp(
           llvm::CmpInst::ICMP_EQ,
@@ -1222,8 +1218,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
 
     } else if (arg_ti.is_geometry()) {
       auto geo_expr_arg = dynamic_cast<const Analyzer::GeoExpr*>(arg);
-      auto geo_functionoper_arg = dynamic_cast<const Analyzer::GeoFunctionOperator*>(arg);
-      if (geo_expr_arg && !geo_functionoper_arg) {
+      if (geo_expr_arg) {
         auto ptr_lv = cgen_state_->ir_builder_.CreateBitCast(
             orig_arg_lvs[k], llvm::Type::getInt8PtrTy(cgen_state_->context_));
         args.push_back(ptr_lv);

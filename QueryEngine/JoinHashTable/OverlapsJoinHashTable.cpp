@@ -1404,7 +1404,7 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
       arr_ptr = code_generator.castArrayPointer(array_ptr,
                                                 coords_cd->columnType.get_elem_type());
     } else if (const auto outer_geo_function_operator =
-                   dynamic_cast<const Analyzer::GeoFunctionOperator*>(outer_geo)) {
+                   dynamic_cast<const Analyzer::GeoOperator*>(outer_geo)) {
       // Process points dynamically constructed by geo function operators
       const auto outer_geo_function_operator_lvs =
           code_generator.codegen(outer_geo_function_operator, true, co);
