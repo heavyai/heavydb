@@ -34,14 +34,11 @@ class Centroid : public Codegen {
 
   SQLTypeInfo getNullType() const final { return SQLTypeInfo(kINT); }
 
-  const Analyzer::Expr* getPositionOperand() const final {
-    return operator_->getOperand(0);
-  }
-
   std::tuple<std::vector<llvm::Value*>, llvm::Value*> codegenLoads(
       const std::vector<llvm::Value*>& arg_lvs,
-      llvm::Value* pos_lv,
+      const std::vector<llvm::Value*>& pos_lvs,
       CgenState* cgen_state) final {
+    CHECK_EQ(pos_lvs.size(), size());
     const auto operand = getOperand(0);
     CHECK(operand);
     const auto& operand_ti = operand->get_type_info();
@@ -60,8 +57,10 @@ class Centroid : public Codegen {
     if (dynamic_cast<const Analyzer::ColumnVar*>(operand)) {
       for (size_t i = 0; i < arg_lvs.size(); i++) {
         auto lv = arg_lvs[i];
-        auto array_buff_lv = cgen_state->emitExternalCall(
-            "array_buff", llvm::Type::getInt8PtrTy(cgen_state->context_), {lv, pos_lv});
+        auto array_buff_lv =
+            cgen_state->emitExternalCall("array_buff",
+                                         llvm::Type::getInt8PtrTy(cgen_state->context_),
+                                         {lv, pos_lvs.front()});
         if (i > 0) {
           array_buff_lv = builder.CreateBitCast(
               array_buff_lv, llvm::Type::getInt32PtrTy(cgen_state->context_));
@@ -72,7 +71,9 @@ class Centroid : public Codegen {
         const auto elem_type = ptr_type->getElementType();
         CHECK(elem_type);
         std::vector<llvm::Value*> array_sz_args{
-            lv, pos_lv, cgen_state->llInt(log2_bytes(i == 0 ? coords_elem_sz_bytes : 4))};
+            lv,
+            pos_lvs.front(),
+            cgen_state->llInt(log2_bytes(i == 0 ? coords_elem_sz_bytes : 4))};
         if (is_nullable_) {  // TODO: should we do this for all arguments, or just points?
           array_sz_args.push_back(
               cgen_state->llInt(static_cast<int32_t>(inline_int_null_value<int32_t>())));
@@ -105,7 +106,6 @@ class Centroid : public Codegen {
         CHECK(null_check_operand_lv->getType() ==
               llvm::Type::getInt64Ty(cgen_state->context_));
         // Geos functions come out 64-bit, cast down to 32 for now
-        auto& builder = cgen_state->ir_builder_;
 
         null_check_operand_lv = builder.CreateTrunc(
             null_check_operand_lv, llvm::Type::getInt32Ty(cgen_state->context_));

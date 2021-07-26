@@ -41,14 +41,11 @@ class Transform : public Codegen {
 
   SQLTypeInfo getNullType() const override { return SQLTypeInfo(kBOOLEAN); }
 
-  const Analyzer::Expr* getPositionOperand() const override {
-    return operator_->getOperand(0);
-  }
-
   std::tuple<std::vector<llvm::Value*>, llvm::Value*> codegenLoads(
       const std::vector<llvm::Value*>& arg_lvs,
-      llvm::Value* pos_lv,
+      const std::vector<llvm::Value*>& pos_lvs,
       CgenState* cgen_state) override {
+    CHECK_EQ(pos_lvs.size(), size());
     const auto geo_operand = getOperand(0);
     const auto& operand_ti = geo_operand->get_type_info();
     CHECK(operand_ti.is_geometry() && operand_ti.get_type() == kPOINT);
@@ -56,7 +53,7 @@ class Transform : public Codegen {
     if (dynamic_cast<const Analyzer::ColumnVar*>(geo_operand)) {
       CHECK_EQ(arg_lvs.size(), size_t(1));  // col_byte_stream
       auto arr_load_lvs = CodeGenerator::codegenGeoArrayLoadAndNullcheck(
-          arg_lvs.front(), pos_lv, operand_ti, cgen_state);
+          arg_lvs.front(), pos_lvs.front(), operand_ti, cgen_state);
       return std::make_tuple(std::vector<llvm::Value*>{arr_load_lvs.buffer},
                              arr_load_lvs.is_null);
     } else if (dynamic_cast<const Analyzer::GeoConstant*>(geo_operand)) {
@@ -198,8 +195,9 @@ class Transform : public Codegen {
           y_coord_ptr_lv);
     }
     auto ret = arr_buff_ptr;
+    const auto& geo_ti = transform_operator_->get_type_info();
+
     if (is_nullable_) {
-      const auto& geo_ti = transform_operator_->get_type_info();
       CHECK(nullcheck_codegen);
       ret = nullcheck_codegen->finalize(
           llvm::ConstantPointerNull::get(
@@ -210,7 +208,9 @@ class Transform : public Codegen {
                                            0)),
           ret);
     }
-    return {ret};
+    return {ret,
+            cgen_state->llInt(static_cast<int32_t>(
+                geo_ti.get_compression() == kENCODING_GEOINT ? 8 : 16))};
   }
 
  private:

@@ -18,6 +18,7 @@
 
 #include "QueryEngine/GeoOperators/AreaPerimeter.h"
 #include "QueryEngine/GeoOperators/Centroid.h"
+#include "QueryEngine/GeoOperators/Distance.h"
 #include "QueryEngine/GeoOperators/NPoints.h"
 #include "QueryEngine/GeoOperators/NRings.h"
 #include "QueryEngine/GeoOperators/PointAccessors.h"

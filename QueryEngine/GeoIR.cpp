@@ -93,12 +93,20 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoExpr(const Analyzer::GeoExpr*
 std::vector<llvm::Value*> CodeGenerator::codegenGeoConstant(
     const Analyzer::GeoConstant* geo_constant,
     const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+
   std::vector<llvm::Value*> ret;
   for (size_t i = 0; i < geo_constant->physicalCols(); i++) {
     auto physical_constant = geo_constant->makePhysicalConstant(i);
     auto operand_lvs = codegen(physical_constant.get(), /*fetch_columns=*/true, co);
     CHECK_EQ(operand_lvs.size(), size_t(2));
-    ret.insert(ret.end(), operand_lvs.begin(), operand_lvs.end());
+    auto array_buff_lv = operand_lvs[0];
+    if (i > 0) {
+      array_buff_lv = cgen_state_->ir_builder_.CreateBitCast(
+          operand_lvs[0], llvm::Type::getInt8PtrTy(cgen_state_->context_));
+    }
+    ret.push_back(array_buff_lv);
+    ret.push_back(operand_lvs[1]);
   }
   return ret;
 }
@@ -123,14 +131,15 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoOperator(
   CHECK(op_codegen);
 
   std::vector<llvm::Value*> load_lvs;
+  std::vector<llvm::Value*> pos_lvs;
   for (size_t i = 0; i < op_codegen->size(); i++) {
     auto intermediate_lvs =
         codegen(op_codegen->getOperand(i), /*fetch_columns=*/true, co);
     load_lvs.insert(load_lvs.end(), intermediate_lvs.begin(), intermediate_lvs.end());
+    pos_lvs.push_back(posArg(op_codegen->getOperand(i)));
   }
-  const auto pos_arg_operand = op_codegen->getPositionOperand();
-  auto [arg_lvs, null_lv] = op_codegen->codegenLoads(
-      load_lvs, pos_arg_operand ? posArg(pos_arg_operand) : nullptr, cgen_state_);
+
+  auto [arg_lvs, null_lv] = op_codegen->codegenLoads(load_lvs, pos_lvs, cgen_state_);
 
   std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen =
       op_codegen->getNullCheckCodegen(null_lv, cgen_state_, executor());

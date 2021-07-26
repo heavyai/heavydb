@@ -34,15 +34,12 @@ class StartEndPoint : public Codegen {
 
   SQLTypeInfo getNullType() const final { return SQLTypeInfo(kNULLT); }
 
-  const Analyzer::Expr* getPositionOperand() const final {
-    return operator_->getOperand(0);
-  }
-
   // returns arguments lvs and null lv
   std::tuple<std::vector<llvm::Value*>, llvm::Value*> codegenLoads(
       const std::vector<llvm::Value*>& arg_lvs,
-      llvm::Value* pos_lv,
+      const std::vector<llvm::Value*>& pos_lvs,
       CgenState* cgen_state) final {
+    CHECK_EQ(pos_lvs.size(), size());
     // TODO: add null handling
     if (arg_lvs.size() == size_t(1)) {
       // col byte stream from column on disk
@@ -55,7 +52,7 @@ class StartEndPoint : public Codegen {
       array_operand_lvs.push_back(
           cgen_state->emitExternalCall("array_buff",
                                        llvm::Type::getInt8PtrTy(cgen_state->context_),
-                                       {arg_lvs.front(), pos_lv}));
+                                       {arg_lvs.front(), pos_lvs.front()}));
       const bool is_nullable = !geo_ti.get_notnull();
       std::string size_fn_name = "array_size";
       if (is_nullable) {
@@ -63,7 +60,7 @@ class StartEndPoint : public Codegen {
       }
       uint32_t elem_sz = 1;  // TINYINT coords array
       std::vector<llvm::Value*> array_sz_args{
-          arg_lvs.front(), pos_lv, cgen_state->llInt(log2_bytes(elem_sz))};
+          arg_lvs.front(), pos_lvs.front(), cgen_state->llInt(log2_bytes(elem_sz))};
       if (is_nullable) {
         array_sz_args.push_back(
             cgen_state->llInt(static_cast<int32_t>(inline_int_null_value<int32_t>())));

@@ -40,6 +40,8 @@ std::unique_ptr<Codegen> Codegen::init(const Analyzer::GeoOperator* geo_operator
     return std::make_unique<AreaPerimeter>(geo_operator, catalog);
   } else if (operator_name == "ST_Centroid") {
     return std::make_unique<Centroid>(geo_operator, catalog);
+  } else if (operator_name == "ST_Distance") {
+    return std::make_unique<Distance>(geo_operator, catalog);
   }
   UNREACHABLE();
   return nullptr;
@@ -76,7 +78,8 @@ std::string suffix(SQLTypes type) {
   if (type == kMULTIPOLYGON) {
     return std::string("_MultiPolygon");
   }
-  throw std::runtime_error("Unsupported argument type");
+  UNREACHABLE() << "Unsupported argument to suffix: " << toString(type);
+  return "";
 }
 
 }  // namespace spatial_type

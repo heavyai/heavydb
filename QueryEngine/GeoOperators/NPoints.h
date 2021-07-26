@@ -30,12 +30,6 @@ class NPoints : public Codegen {
 
   SQLTypeInfo getNullType() const final { return SQLTypeInfo(kINT); }
 
-  const Analyzer::Expr* getPositionOperand() const final {
-    // we expect this to only be called after codegening the loads
-    CHECK(operand_owned_);
-    return operand_owned_.get();
-  }
-
   const Analyzer::Expr* getOperand(const size_t index) final {
     CHECK_EQ(index, size_t(0));
     if (operand_owned_) {
@@ -65,7 +59,7 @@ class NPoints : public Codegen {
 
   std::tuple<std::vector<llvm::Value*>, llvm::Value*> codegenLoads(
       const std::vector<llvm::Value*>& arg_lvs,
-      llvm::Value* pos_lv,
+      const std::vector<llvm::Value*>& pos_lvs,
       CgenState* cgen_state) final {
     CHECK_EQ(arg_lvs.size(), size_t(1));
     auto& argument_lv = arg_lvs.front();
@@ -73,7 +67,9 @@ class NPoints : public Codegen {
 
     const auto& elem_ti = getOperand(0)->get_type_info().get_elem_type();
     std::vector<llvm::Value*> array_size_args{
-        argument_lv, pos_lv, cgen_state->llInt(log2_bytes(elem_ti.get_logical_size()))};
+        argument_lv,
+        pos_lvs.front(),
+        cgen_state->llInt(log2_bytes(elem_ti.get_logical_size()))};
 
     const bool is_nullable = isNullable();
 

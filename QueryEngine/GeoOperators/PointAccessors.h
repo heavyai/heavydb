@@ -33,15 +33,12 @@ class PointAccessors : public Codegen {
 
   SQLTypeInfo getNullType() const final { return SQLTypeInfo(kBOOLEAN); }
 
-  const Analyzer::Expr* getPositionOperand() const final {
-    return operator_->getOperand(0);
-  }
-
   // returns arguments lvs and null lv
   std::tuple<std::vector<llvm::Value*>, llvm::Value*> codegenLoads(
       const std::vector<llvm::Value*>& arg_lvs,
-      llvm::Value* pos_lv,
+      const std::vector<llvm::Value*>& pos_lvs,
       CgenState* cgen_state) final {
+    CHECK_EQ(pos_lvs.size(), size());
     auto operand = getOperand(0);
     CHECK(operand);
     const auto& geo_ti = operand->get_type_info();
@@ -63,7 +60,7 @@ class PointAccessors : public Codegen {
       }
       // col byte stream, get the array buffer ptr and is null attributes and cache
       auto arr_load_lvs = CodeGenerator::codegenGeoArrayLoadAndNullcheck(
-          arg_lvs.front(), pos_lv, geo_ti, cgen_state);
+          arg_lvs.front(), pos_lvs.front(), geo_ti, cgen_state);
       array_buff_ptr = arr_load_lvs.buffer;
       is_null = arr_load_lvs.is_null;
     } else {

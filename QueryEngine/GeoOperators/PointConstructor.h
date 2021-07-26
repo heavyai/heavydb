@@ -81,15 +81,15 @@ class PointConstructor : public Codegen {
 
   SQLTypeInfo getNullType() const final { return SQLTypeInfo(kBOOLEAN); }
 
-  const Analyzer::Expr* getPositionOperand() const final {
-    return operator_->getOperand(0);
-  }
-
   // returns arguments lvs and null lv
   std::tuple<std::vector<llvm::Value*>, llvm::Value*> codegenLoads(
       const std::vector<llvm::Value*>& arg_lvs,
-      llvm::Value* pos_lv,
+      const std::vector<llvm::Value*>& pos_lvs,
       CgenState* cgen_state) final {
+    CHECK_EQ(pos_lvs.size(),
+             size());  // note both pos arguments should be the same, as both inputs are
+                       // expected to be from the same table, though this is moot in this
+                       // function as position argumnts are not used here
     CHECK_EQ(arg_lvs.size(), size_t(2));
 
     auto& builder = cgen_state->ir_builder_;
@@ -199,11 +199,12 @@ class PointConstructor : public Codegen {
       CHECK(nullcheck_codegen);
       ret = nullcheck_codegen->finalize(ret, ret);
     }
-    return {
-        builder.CreateBitCast(ret,
-                              geo_ti.get_compression() == kENCODING_GEOINT
-                                  ? llvm::Type::getInt32PtrTy(cgen_state->context_)
-                                  : llvm::Type::getDoublePtrTy(cgen_state->context_))};
+    return {builder.CreateBitCast(ret,
+                                  geo_ti.get_compression() == kENCODING_GEOINT
+                                      ? llvm::Type::getInt32PtrTy(cgen_state->context_)
+                                      : llvm::Type::getDoublePtrTy(cgen_state->context_)),
+            cgen_state->llInt(static_cast<int32_t>(
+                geo_ti.get_compression() == kENCODING_GEOINT ? 8 : 16))};
   }
 
  private:

@@ -3418,11 +3418,6 @@ std::shared_ptr<Analyzer::Constant> GeoConstant::makePhysicalConstant(
   Geospatial::GeoTypesFactory::getGeoColumns(
       geo_->getWktString(), ti, coords, bounds, ring_sizes, poly_rings);
 
-  if (ti.get_output_srid() == 4326) {
-    // expect geo literals compressed by default
-    CHECK(ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32);
-  }
-
   switch (index) {
     case 0:  // coords
       return Geospatial::convert_coords(coords, ti);
@@ -3436,6 +3431,22 @@ std::shared_ptr<Analyzer::Constant> GeoConstant::makePhysicalConstant(
 
   UNREACHABLE();
   return nullptr;
+}
+
+std::shared_ptr<Analyzer::Expr> GeoConstant::add_cast(const SQLTypeInfo& new_type_info) {
+  // TODO: we should eliminate the notion of input and output SRIDs on a type. A type can
+  // only have 1 SRID. A cast or transforms changes the SRID of the type.
+  // NOTE: SRID 0 indicates set srid, skip cast
+  if (!(get_type_info().get_input_srid() == 0) &&
+      (get_type_info().get_input_srid() != new_type_info.get_output_srid())) {
+    // run cast
+    CHECK(geo_);
+    if (!geo_->transform(get_type_info().get_input_srid(),
+                         new_type_info.get_output_srid())) {
+      throw std::runtime_error("Failed to transform constant geometry: " + toString());
+    }
+  }
+  return makeExpr<GeoConstant>(std::move(geo_), new_type_info);
 }
 
 GeoOperator::GeoOperator(const SQLTypeInfo& ti,
@@ -3504,13 +3515,18 @@ Analyzer::Expr* GeoOperator::getOperand(const size_t index) const {
   return args_[index].get();
 }
 
-std::shared_ptr<Analyzer::Expr> GeoOperator::cloneWithUpdatedTypeInfo(
-    const SQLTypeInfo& ti) {
-  std::vector<std::shared_ptr<Analyzer::Expr>> args;
-  for (size_t i = 0; i < args_.size(); i++) {
-    args.push_back(args_[i]->deep_copy());
+std::shared_ptr<Analyzer::Expr> GeoOperator::add_cast(const SQLTypeInfo& new_type_info) {
+  if (get_type_info().is_geometry()) {
+    std::vector<std::shared_ptr<Analyzer::Expr>> args;
+    for (size_t i = 0; i < args_.size(); i++) {
+      args.push_back(args_[i]->deep_copy());
+    }
+    CHECK(new_type_info.is_geometry());
+    return makeExpr<GeoOperator>(new_type_info, name_, args);
+  } else {
+    auto new_expr = deep_copy();
+    return makeExpr<UOper>(new_type_info, /*contains_agg=*/false, kCAST, new_expr);
   }
-  return makeExpr<GeoOperator>(ti, name_, args);
 }
 
 std::shared_ptr<Analyzer::Expr> GeoTransformOperator::deep_copy() const {

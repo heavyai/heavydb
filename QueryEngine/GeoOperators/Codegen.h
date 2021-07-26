@@ -46,8 +46,6 @@ class Codegen {
 
   virtual SQLTypeInfo getNullType() const = 0;
 
-  virtual const Analyzer::Expr* getPositionOperand() const = 0;
-
   // by default index into the operator, but allow overloading for special cases. In those
   // special cases, we typically create a synthethic operator and manipulate state, so
   // this method cannot be const
@@ -56,7 +54,7 @@ class Codegen {
   // returns arguments lvs and null lv
   virtual std::tuple<std::vector<llvm::Value*>, llvm::Value*> codegenLoads(
       const std::vector<llvm::Value*>& arg_lvs,
-      llvm::Value* pos_lv,
+      const std::vector<llvm::Value*>& pos_lvs,
       CgenState* cgen_state) = 0;
 
   // codegen function operation post loads

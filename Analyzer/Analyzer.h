@@ -1732,6 +1732,8 @@ class GeoConstant : public GeoExpr {
 
   std::shared_ptr<Analyzer::Constant> makePhysicalConstant(const size_t index) const;
 
+  std::shared_ptr<Analyzer::Expr> add_cast(const SQLTypeInfo& new_type_info) final;
+
  private:
   std::unique_ptr<Geospatial::GeoBase> geo_;
 };
@@ -1774,7 +1776,7 @@ class GeoOperator : public GeoExpr {
     return ret;
   }
 
-  std::shared_ptr<Analyzer::Expr> cloneWithUpdatedTypeInfo(const SQLTypeInfo& ti);
+  std::shared_ptr<Analyzer::Expr> add_cast(const SQLTypeInfo& new_type_info) final;
 
  protected:
   const std::string name_;

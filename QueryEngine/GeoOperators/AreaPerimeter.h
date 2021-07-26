@@ -36,14 +36,11 @@ class AreaPerimeter : public Codegen {
 
   SQLTypeInfo getNullType() const final { return SQLTypeInfo(kINT); }
 
-  const Analyzer::Expr* getPositionOperand() const final {
-    return operator_->getOperand(0);
-  }
-
   std::tuple<std::vector<llvm::Value*>, llvm::Value*> codegenLoads(
       const std::vector<llvm::Value*>& arg_lvs,
-      llvm::Value* pos_lv,
+      const std::vector<llvm::Value*>& pos_lvs,
       CgenState* cgen_state) final {
+    CHECK_EQ(pos_lvs.size(), size());
     const auto operand = getOperand(0);
     CHECK(operand);
     const auto& operand_ti = operand->get_type_info();
@@ -61,14 +58,18 @@ class AreaPerimeter : public Codegen {
     if (dynamic_cast<const Analyzer::ColumnVar*>(operand)) {
       for (size_t i = 0; i < arg_lvs.size(); i++) {
         auto lv = arg_lvs[i];
-        operand_lvs.push_back(cgen_state->emitExternalCall(
-            "array_buff", llvm::Type::getInt8PtrTy(cgen_state->context_), {lv, pos_lv}));
+        operand_lvs.push_back(
+            cgen_state->emitExternalCall("array_buff",
+                                         llvm::Type::getInt8PtrTy(cgen_state->context_),
+                                         {lv, pos_lvs.front()}));
         const auto ptr_type = llvm::dyn_cast_or_null<llvm::PointerType>(lv->getType());
         CHECK(ptr_type);
         const auto elem_type = ptr_type->getElementType();
         CHECK(elem_type);
         std::vector<llvm::Value*> array_sz_args{
-            lv, pos_lv, cgen_state->llInt(log2_bytes(i == 0 ? coords_elem_sz_bytes : 4))};
+            lv,
+            pos_lvs.front(),
+            cgen_state->llInt(log2_bytes(i == 0 ? coords_elem_sz_bytes : 4))};
         if (is_nullable_) {  // TODO: should we do this for all arguments, or just points?
           array_sz_args.push_back(
               cgen_state->llInt(static_cast<int32_t>(inline_int_null_value<int32_t>())));
