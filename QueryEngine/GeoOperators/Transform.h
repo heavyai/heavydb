@@ -27,6 +27,7 @@ class Transform : public Codegen {
       : Codegen(geo_operator, catalog)
       , transform_operator_(
             dynamic_cast<const Analyzer::GeoTransformOperator*>(geo_operator)) {
+    CHECK_EQ(operator_->size(), size_t(1));  // geo input expr
     CHECK(transform_operator_);
     const auto& ti = geo_operator->get_type_info();
     if (ti.get_notnull()) {
@@ -42,11 +43,6 @@ class Transform : public Codegen {
 
   const Analyzer::Expr* getPositionOperand() const override {
     return operator_->getOperand(0);
-  }
-
-  const Analyzer::Expr* getOperand(const size_t index) override {
-    CHECK_EQ(operator_->size(), size_t(1));  // geo input expr
-    return operator_->getOperand(index);
   }
 
   std::tuple<std::vector<llvm::Value*>, llvm::Value*> codegenLoads(

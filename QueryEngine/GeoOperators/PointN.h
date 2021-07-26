@@ -25,6 +25,7 @@ class PointN : public Codegen {
   PointN(const Analyzer::GeoOperator* geo_operator,
          const Catalog_Namespace::Catalog* catalog)
       : Codegen(geo_operator, catalog) {
+    CHECK_EQ(operator_->size(), size_t(2));
     // set is nullable to true, because an index outside of the linestring will return
     // null
     // note we could probably just set this based on the operator type, as the operator
@@ -54,12 +55,6 @@ class PointN : public Codegen {
 
   const Analyzer::Expr* getPositionOperand() const final {
     return operator_->getOperand(0);
-  }
-
-  const Analyzer::Expr* getOperand(const size_t index) final {
-    CHECK_EQ(operator_->size(), size_t(2));
-    CHECK_LT(index, operator_->size());
-    return operator_->getOperand(index);
   }
 
   // returns arguments lvs and null lv

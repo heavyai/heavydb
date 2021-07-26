@@ -222,10 +222,6 @@ class CodeGenerator {
   std::vector<llvm::Value*> codegenGeoOperator(const Analyzer::GeoOperator*,
                                                const CompilationOptions&);
 
-  std::vector<llvm::Value*> codegenGeoFunctionOperator(
-      const Analyzer::GeoFunctionOperator*,
-      const CompilationOptions&);
-
   std::vector<llvm::Value*> codegenGeoUOper(const Analyzer::GeoUOper*,
                                             const CompilationOptions&);
 

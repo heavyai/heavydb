@@ -25,6 +25,7 @@ class StartEndPoint : public Codegen {
   StartEndPoint(const Analyzer::GeoOperator* geo_operator,
                 const Catalog_Namespace::Catalog* catalog)
       : Codegen(geo_operator, catalog) {
+    CHECK_EQ(operator_->size(), size_t(1));
     // nulls not supported yet
     this->is_nullable_ = false;
   }
@@ -34,13 +35,6 @@ class StartEndPoint : public Codegen {
   SQLTypeInfo getNullType() const final { return SQLTypeInfo(kNULLT); }
 
   const Analyzer::Expr* getPositionOperand() const final {
-    return operator_->getOperand(0);
-  }
-
-  const Analyzer::Expr* getOperand(const size_t index) final {
-    CHECK_EQ(operator_->size(), size_t(1));
-    CHECK_EQ(index, size_t(0));
-
     return operator_->getOperand(0);
   }
 

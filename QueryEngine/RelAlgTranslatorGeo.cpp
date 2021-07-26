@@ -689,7 +689,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         arg_ti.set_compression(kENCODING_GEOINT);
         arg_ti.set_comp_param(32);
       }
-      return {makeExpr<Analyzer::GeoFunctionOperator>(
+      return {makeExpr<Analyzer::GeoOperator>(
           arg_ti,
           rex_function->getName(),
           std::vector<std::shared_ptr<Analyzer::Expr>>{geoargs.front()})};
@@ -889,7 +889,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
                               " expects a POLYGON or MULTIPOLYGON");
     }
 
-    return makeExpr<Analyzer::GeoFunctionOperator>(
+    return makeExpr<Analyzer::GeoOperator>(
         rex_function->getType(),
         rex_function->getName(),
         std::vector<std::shared_ptr<Analyzer::Expr>>{geoargs.front()});
