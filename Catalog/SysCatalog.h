@@ -359,7 +359,8 @@ class SysCatalog : private CommonFileOperations {
   void buildObjectDescriptorMap();
   void checkAndExecuteMigrations();
   void importDataFromOldMapdDB();
-  void createUserRoles();
+  void createRoles();
+  void fixRolesMigration();
   void addAdminUserRole();
   void migratePrivileges();
   void migratePrivileged_old();

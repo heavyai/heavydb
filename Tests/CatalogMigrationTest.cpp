@@ -35,31 +35,36 @@
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
 
-class FsiSchemaTest : public testing::Test {
+namespace BF = boost::filesystem;
+using SC = Catalog_Namespace::SysCatalog;
+
+namespace {
+bool table_exists(SqliteConnector& conn, const std::string& table_name) {
+  conn.query("SELECT name FROM sqlite_master WHERE type='table' AND name='" + table_name +
+             "'");
+  return conn.getNumRows() > 0;
+}
+
+bool has_result(SqliteConnector& conn, const std::string& query) {
+  conn.query(query);
+  return conn.getNumRows() > 0;
+}
+}  // namespace
+
+class CatalogTest : public testing::Test {
  protected:
-  FsiSchemaTest()
-      : sqlite_connector_(
-            "omnisci",
-            boost::filesystem::absolute("mapd_catalogs", BASE_PATH).string()) {}
+  CatalogTest()
+      : cat_conn_("omnisci", BF::absolute("mapd_catalogs", BASE_PATH).string()) {}
 
   static void SetUpTestSuite() {
-    g_enable_s3_fsi = true;
-    Catalog_Namespace::SysCatalog::instance().init(
-        BASE_PATH, nullptr, {}, nullptr, false, false, {});
+    SC::instance().init(BASE_PATH, nullptr, {}, nullptr, false, false, {});
   }
 
-  void SetUp() override {
-    g_enable_fsi = false;
-    dropFsiTables();
-  }
-
-  void TearDown() override { dropFsiTables(); }
-
-  std::vector<std::string> getTables() {
-    sqlite_connector_.query("SELECT name FROM sqlite_master WHERE type='table';");
+  std::vector<std::string> getTables(SqliteConnector& conn) {
+    conn.query("SELECT name FROM sqlite_master WHERE type='table';");
     std::vector<std::string> tables;
-    for (size_t i = 0; i < sqlite_connector_.getNumRows(); i++) {
-      tables.emplace_back(sqlite_connector_.getData<std::string>(i, 0));
+    for (size_t i = 0; i < conn.getNumRows(); i++) {
+      tables.emplace_back(conn.getData<std::string>(i, 0));
     }
     return tables;
   }
@@ -71,6 +76,116 @@ class FsiSchemaTest : public testing::Test {
     return std::make_unique<Catalog_Namespace::Catalog>(
         BASE_PATH, db_metadata, nullptr, leaves, nullptr, false);
   }
+
+  SqliteConnector cat_conn_;
+};
+
+class SysCatalogTest : public CatalogTest {
+ protected:
+  SysCatalogTest()
+      : syscat_conn_("omnisci_system_catalog",
+                     BF::absolute("mapd_catalogs", BASE_PATH).string()) {}
+
+  void TearDown() override {
+    if (tableExists("mapd_users")) {
+      syscat_conn_.query("DELETE FROM mapd_users WHERE name='test_user'");
+    }
+    if (tableExists("mapd_object_permissions")) {
+      syscat_conn_.query(
+          "DELETE FROM mapd_object_permissions WHERE roleName='test_user'");
+    }
+  }
+
+  bool hasResult(const std::string& query) { return has_result(syscat_conn_, query); }
+
+  bool tableExists(const std::string& table_name) {
+    return table_exists(syscat_conn_, table_name);
+  }
+
+  void createLegacyTestUser() {
+    // This creates a test user in mapd_users syscat table, but does not properly add it
+    // to mapd_object_permissions so it is incomplete by current standards.
+    ASSERT_TRUE(table_exists(syscat_conn_, "mapd_users"));
+    syscat_conn_.query("DELETE FROM mapd_users WHERE name='test_user'");
+    syscat_conn_.query_with_text_params(
+        "INSERT INTO mapd_users (name, passwd_hash, issuper, can_login) VALUES (?, ?, ?, "
+        "?)",
+        {"test_user", "passwd", "true", "true"});
+  }
+
+  static void reinitializeSystemCatalog() {
+    SC::destroy();
+    SC::instance().init(BASE_PATH, nullptr, {}, nullptr, false, false, {});
+  }
+
+  SqliteConnector syscat_conn_;
+};
+
+// Check that we migrate correctly from pre 4.0 catalog.
+TEST_F(SysCatalogTest, MigrateRoles) {
+  // Make sure the post 4.0 tables do not exist to simulate migration.
+  syscat_conn_.query("DROP TABLE IF EXISTS mapd_roles");
+  syscat_conn_.query("DROP TABLE IF EXISTS mapd_object_permissions");
+  createLegacyTestUser();
+
+  // Create the pre 4.0 mapd_privileges table.
+  syscat_conn_.query(
+      "CREATE TABLE IF NOT EXISTS mapd_privileges (userid integer references mapd_users, "
+      "dbid integer references mapd_databases, select_priv boolean, insert_priv boolean, "
+      "UNIQUE(userid, dbid))");
+
+  // Copy users who are not the admin (userid 0) into the pre 4.0 mapd_privileges table.
+  syscat_conn_.query(
+      "INSERT INTO mapd_privileges (userid, dbid) SELECT userid, default_db FROM "
+      "mapd_users WHERE userid <> 0");
+
+  // Re-initialization should perform migrations.
+  reinitializeSystemCatalog();
+
+  // Users should be inserted into mapd_object_permissions but not mapd_roles on
+  // migration.
+  ASSERT_TRUE(tableExists("mapd_roles"));
+  ASSERT_FALSE(hasResult("SELECT roleName FROM mapd_roles WHERE roleName='test_user'"));
+
+  ASSERT_TRUE(tableExists("mapd_object_permissions"));
+  ASSERT_TRUE(hasResult(
+      "SELECT roleName FROM mapd_object_permissions WHERE roleName='test_user'"));
+}
+
+TEST_F(SysCatalogTest, FixIncorrectRolesMigration) {
+  ASSERT_TRUE(tableExists("mapd_roles"));
+  createLegacyTestUser();
+
+  // Setup an incorrect migration situation where we have usernames inserted into
+  // mapd_roles.  This could occur between versions 4.0 and 5.7 and should now be fixed.
+  ASSERT_TRUE(tableExists("mapd_users"));
+  syscat_conn_.query("DELETE FROM mapd_roles WHERE roleName='test_user'");
+  syscat_conn_.query_with_text_params("INSERT INTO mapd_roles VALUES (?, ?)",
+                                      {"test_user", "test_user"});
+
+  ASSERT_TRUE(hasResult("SELECT name FROM mapd_users WHERE name='test_user'"));
+  ASSERT_TRUE(hasResult("SELECT roleName FROM mapd_roles WHERE roleName='test_user'"));
+
+  // When we re-initialize the SysCatalog we should fix incorrect past migrations.
+  reinitializeSystemCatalog();
+
+  ASSERT_TRUE(hasResult("SELECT name FROM mapd_users WHERE name='test_user'"));
+  ASSERT_FALSE(hasResult("SELECT roleName FROM mapd_roles WHERE roleName='test_user'"));
+}
+
+class FsiSchemaTest : public CatalogTest {
+ protected:
+  static void SetUpTestSuite() {
+    g_enable_s3_fsi = true;
+    CatalogTest::SetUpTestSuite();
+  }
+
+  void SetUp() override {
+    g_enable_fsi = false;
+    dropFsiTables();
+  }
+
+  void TearDown() override { dropFsiTables(); }
 
   void assertExpectedDefaultServer(Catalog_Namespace::Catalog* catalog,
                                    const std::string& server_name,
@@ -118,7 +233,7 @@ class FsiSchemaTest : public testing::Test {
   }
 
   void assertFsiTablesExist() {
-    auto tables = getTables();
+    auto tables = getTables(cat_conn_);
     ASSERT_FALSE(std::find(tables.begin(), tables.end(), "omnisci_foreign_servers") ==
                  tables.end());
     ASSERT_FALSE(std::find(tables.begin(), tables.end(), "omnisci_foreign_tables") ==
@@ -126,7 +241,7 @@ class FsiSchemaTest : public testing::Test {
   }
 
   void assertFsiTablesDoNotExist() {
-    auto tables = getTables();
+    auto tables = getTables(cat_conn_);
     ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_servers") ==
                 tables.end());
     ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_tables") ==
@@ -134,11 +249,9 @@ class FsiSchemaTest : public testing::Test {
   }
 
  private:
-  SqliteConnector sqlite_connector_;
-
   void dropFsiTables() {
-    sqlite_connector_.query("DROP TABLE IF EXISTS omnisci_foreign_servers;");
-    sqlite_connector_.query("DROP TABLE IF EXISTS omnisci_foreign_tables;");
+    cat_conn_.query("DROP TABLE IF EXISTS omnisci_foreign_servers;");
+    cat_conn_.query("DROP TABLE IF EXISTS omnisci_foreign_tables;");
   }
 };
 
@@ -202,8 +315,7 @@ class ForeignTablesTest : public DBHandlerTestFixture {
 };
 
 TEST_F(ForeignTablesTest, ForeignTablesAreNotDroppedWhenFsiIsDisabled) {
-  const auto file_path =
-      boost::filesystem::canonical("../../Tests/FsiDataFiles/example_1.csv").string();
+  const auto file_path = BF::canonical("../../Tests/FsiDataFiles/example_1.csv").string();
   sql("CREATE FOREIGN TABLE test_foreign_table (c1 int) SERVER omnisci_local_csv "
       "WITH (file_path = '" +
       file_path + "');");
