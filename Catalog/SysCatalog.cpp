@@ -248,7 +248,8 @@ void SysCatalog::initDB() {
 
 void SysCatalog::checkAndExecuteMigrations() {
   migratePrivileged_old();
-  createUserRoles();
+  createRoles();
+  fixRolesMigration();
   migratePrivileges();
   migrateDBAccessPrivileges();
   updateUserSchema();  // must come before updatePasswordsToHashes()
@@ -331,7 +332,7 @@ void SysCatalog::importDataFromOldMapdDB() {
   }
 }
 
-void SysCatalog::createUserRoles() {
+void SysCatalog::createRoles() {
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
@@ -345,20 +346,32 @@ void SysCatalog::createUserRoles() {
     sqliteConnector_->query(
         "CREATE TABLE mapd_roles(roleName text, userName text, UNIQUE(roleName, "
         "userName))");
-    // need to account for old conversions where we are building and moving
-    // from pre version 4.0 and 'mapd' was default superuser
-    sqliteConnector_->query("SELECT name FROM mapd_users WHERE name NOT IN ( \'" +
-                            OMNISCI_ROOT_USER + "\', 'mapd')");
-    size_t numRows = sqliteConnector_->getNumRows();
-    vector<string> user_names;
-    for (size_t i = 0; i < numRows; ++i) {
-      user_names.push_back(sqliteConnector_->getData<string>(i, 0));
+  } catch (const std::exception&) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+}
+
+/*
+  There was an error in how we migrated users from pre-4.0 versions where we would copy
+  all user names into the mapd_roles table.  This table should never have usernames in it
+  (the correct migration was to copy users into the mapd_object_permissions table instead)
+  so this migration function prunes such cases out.
+ */
+void SysCatalog::fixRolesMigration() {
+  sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_->query("SELECT name FROM mapd_users");
+    auto num_rows = sqliteConnector_->getNumRows();
+    std::vector<std::string> user_names;
+    for (size_t i = 0; i < num_rows; ++i) {
+      user_names.push_back(sqliteConnector_->getData<std::string>(i, 0));
     }
     for (const auto& user_name : user_names) {
-      // for each user, create a fake role with the same name
-      sqliteConnector_->query_with_text_params(
-          "INSERT INTO mapd_roles(roleName, userName) VALUES (?, ?)",
-          vector<string>{user_name, user_name});
+      sqliteConnector_->query_with_text_param("DELETE FROM mapd_roles WHERE roleName = ?",
+                                              user_name);
     }
   } catch (const std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
@@ -481,34 +494,33 @@ void SysCatalog::migratePrivileges() {
       auto dbName = dbs_by_id[grantee.second];
       {
         // table level permissions
-        DBObjectKey key;
-        key.permissionType = DBObjectType::TableDBObjectType;
-        key.dbId = grantee.second;
-        DBObject object(key, AccessPrivileges::ALL_TABLE_MIGRATE, OMNISCI_ROOT_USER_ID);
-        object.setName(dbName);
+        auto type = DBObjectType::TableDBObjectType;
+        DBObjectKey key{type, grantee.second};
+        DBObject object(
+            dbName, type, key, AccessPrivileges::ALL_TABLE_MIGRATE, OMNISCI_ROOT_USER_ID);
         insertOrUpdateObjectPrivileges(
             sqliteConnector_, users_by_id[grantee.first], true, object);
       }
 
       {
         // dashboard level permissions
-        DBObjectKey key;
-        key.permissionType = DBObjectType::DashboardDBObjectType;
-        key.dbId = grantee.second;
-        DBObject object(
-            key, AccessPrivileges::ALL_DASHBOARD_MIGRATE, OMNISCI_ROOT_USER_ID);
-        object.setName(dbName);
+        auto type = DBObjectType::DashboardDBObjectType;
+        DBObjectKey key{type, grantee.second};
+        DBObject object(dbName,
+                        type,
+                        key,
+                        AccessPrivileges::ALL_DASHBOARD_MIGRATE,
+                        OMNISCI_ROOT_USER_ID);
         insertOrUpdateObjectPrivileges(
             sqliteConnector_, users_by_id[grantee.first], true, object);
       }
 
       {
         // view level permissions
-        DBObjectKey key;
-        key.permissionType = DBObjectType::ViewDBObjectType;
-        key.dbId = grantee.second;
-        DBObject object(key, AccessPrivileges::ALL_VIEW_MIGRATE, OMNISCI_ROOT_USER_ID);
-        object.setName(dbName);
+        auto type = DBObjectType::ViewDBObjectType;
+        DBObjectKey key{type, grantee.second};
+        DBObject object(
+            dbName, type, key, AccessPrivileges::ALL_VIEW_MIGRATE, OMNISCI_ROOT_USER_ID);
         insertOrUpdateObjectPrivileges(
             sqliteConnector_, users_by_id[grantee.first], true, object);
       }
@@ -517,11 +529,10 @@ void SysCatalog::migratePrivileges() {
       auto dbName = dbs_by_id[0];
       if (user.second == false && user.first != OMNISCI_ROOT_USER_ID) {
         {
-          DBObjectKey key;
-          key.permissionType = DBObjectType::DatabaseDBObjectType;
-          key.dbId = 0;
-          DBObject object(key, AccessPrivileges::NONE, OMNISCI_ROOT_USER_ID);
-          object.setName(dbName);
+          auto type = DBObjectType::DatabaseDBObjectType;
+          DBObjectKey key{type, 0};
+          DBObject object(
+              dbName, type, key, AccessPrivileges::NONE, OMNISCI_ROOT_USER_ID);
           insertOrUpdateObjectPrivileges(
               sqliteConnector_, users_by_id[user.first], true, object);
         }
