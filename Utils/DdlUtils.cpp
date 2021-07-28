@@ -28,6 +28,7 @@
 #include "OSDependent/omnisci_glob.h"
 #include "Parser/ReservedKeywords.h"
 #include "Shared/misc.h"
+#include "Shared/sqltypes.h"
 
 bool g_use_date_in_days_default_encoding{true};
 
@@ -506,6 +507,99 @@ void validate_and_set_array_size(ColumnDescriptor& cd, const SqlType* column_typ
   }
 }
 
+void validate_and_set_default_value(ColumnDescriptor& cd,
+                                    const std::string* default_value,
+                                    bool not_null) {
+  bool is_null_literal = default_value && (to_upper(*default_value) == "NULL");
+  if (not_null && is_null_literal) {
+    throw std::runtime_error(cd.columnName +
+                             ": cannot set default value to NULL for "
+                             "NOT NULL column");
+  }
+  if (!default_value || is_null_literal) {
+    cd.default_value = std::nullopt;
+    return;
+  }
+
+  auto column_type = cd.columnType;
+  auto val = *default_value;
+  switch (column_type.get_type()) {
+    case kBOOLEAN:
+    case kTINYINT:
+    case kSMALLINT:
+    case kINT:
+    case kBIGINT:
+    case kFLOAT:
+    case kDOUBLE:
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE: {
+      StringToDatum(val, column_type);
+      break;
+    }
+    case kDECIMAL:
+    case kNUMERIC: {
+      SQLTypeInfo ti(kNUMERIC, 0, 0, false);
+      StringToDatum(val, ti);
+      int const dscale = column_type.get_scale() - ti.get_scale();
+      constexpr int max_scale = std::numeric_limits<uint64_t>::digits10;
+      if (dscale > max_scale) {
+        // TODO: that's what TypedImportBuffers check, but decimal/numeric
+        // likely require stricter checks
+        throw std::runtime_error("Overflow in DECIMAL-to-DECIMAL conversion.");
+      }
+      break;
+    }
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      if (val.length() > StringDictionary::MAX_STRLEN) {
+        throw std::runtime_error("String too long for column " + cd.columnName + " was " +
+                                 std::to_string(val.length()) + " max is " +
+                                 std::to_string(StringDictionary::MAX_STRLEN));
+      }
+      break;
+    case kARRAY: {
+      if (val.front() != '{' || val.back() != '}') {
+        throw std::runtime_error(cd.columnName +
+                                 ": arrays should start and end with curly braces");
+      }
+      std::vector<std::string> elements = split(val.substr(1, val.length() - 2), ", ");
+      if (column_type.get_size() > 0) {
+        auto sti = column_type.get_elem_type();
+        size_t expected_size = column_type.get_size() / sti.get_size();
+        size_t actual_size = elements.size();
+        if (actual_size != expected_size) {
+          throw std::runtime_error("Fixed length array column " + cd.columnName +
+                                   " expects " + std::to_string(expected_size) +
+                                   " values, received " + std::to_string(actual_size));
+        }
+      }
+      // TODO: needs separate checks for geo here as well
+      if (!IS_STRING(column_type.get_subtype()) && !IS_GEO(column_type.get_subtype())) {
+        SQLTypeInfo elem_ti = column_type.get_elem_type();
+        for (const auto& element : elements) {
+          if (to_upper(element) != "NULL") {
+            StringToDatum(element, elem_ti);
+          }
+        }
+      }
+      break;
+    }
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON:
+      // TODO: needs some checks to make sure it's a valid wkt string
+      break;
+    default:
+      CHECK(false) << "validate_and_set_default_value() does not support type "
+                   << column_type.get_type();
+  }
+
+  cd.default_value = std::make_optional(*default_value);
+}
+
 void set_column_descriptor(const std::string& column_name,
                            ColumnDescriptor& cd,
                            SqlType* column_type,
@@ -519,7 +613,7 @@ void set_column_descriptor(const std::string& column_name,
   validate_and_set_array_size(cd, column_type);
   cd.isSystemCol = false;
   cd.isVirtualCol = false;
-  cd.default_value = default_value ? std::make_optional(*default_value) : std::nullopt;
+  validate_and_set_default_value(cd, default_value, not_null);
 }
 
 void set_default_table_attributes(const std::string& table_name,

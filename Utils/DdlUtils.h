@@ -130,6 +130,10 @@ void validate_and_set_type(ColumnDescriptor& cd, SqlType* column_type);
 
 void validate_and_set_array_size(ColumnDescriptor& cd, const SqlType* column_type);
 
+void validate_and_set_default_value(ColumnDescriptor& cd,
+                                    const std::string* default_value,
+                                    bool not_null);
+
 void set_column_descriptor(const std::string& column_name,
                            ColumnDescriptor& cd,
                            SqlType* column_type,

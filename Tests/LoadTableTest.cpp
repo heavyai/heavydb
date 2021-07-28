@@ -39,9 +39,11 @@ class LoadTableTest : public DBHandlerTestFixture {
     DBHandlerTestFixture::SetUp();
     sql("DROP TABLE IF EXISTS load_test");
     sql("DROP TABLE IF EXISTS geo_load_test");
-    sql("CREATE TABLE geo_load_test(i1 INTEGER, ls LINESTRING, s TEXT, mp MULTIPOLYGON, "
+    sql("CREATE TABLE geo_load_test(i1 INTEGER, ls LINESTRING DEFAULT 'LINESTRING(0 0, 1 "
+        "1)', s TEXT, mp MULTIPOLYGON, "
         "nns TEXT not null)");
-    sql("CREATE TABLE load_test(i1 INTEGER, s TEXT ENCODING DICT(8), nns TEXT not null)");
+    sql("CREATE TABLE load_test(i1 INTEGER, s TEXT DEFAULT 'default str' ENCODING "
+        "DICT(8), nns TEXT not null)");
     initData();
   }
 
@@ -66,6 +68,7 @@ class LoadTableTest : public DBHandlerTestFixture {
   }
 
   const std::string LINESTRING = "LINESTRING (0 0,1 1,1 2)";
+  const std::string DEFAULT_LINESTRING = "LINESTRING (0 0,1 1)";
   const std::string MULTIPOLYGON =
       "MULTIPOLYGON (((0 0,4 0,4 4,0 4,0 0),"
       "(1 1,1 2,2 2,2 1,1 1)),((-1 -1,-2 -1,-2 -2,-1 -2,-1 -1)))";
@@ -157,12 +160,12 @@ TEST_F(LoadTableTest, OmitNotNullableColumn) {
 TEST_F(LoadTableTest, OmitGeoColumn) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"i1", "s", "nns", "mp"};
+  std::vector<std::string> column_names{"i1", "s", "nns", "ls"};
   TStringRow row;
-  row.cols = {getSV("1"), getSV("s"), getSV("nns"), getSV(MULTIPOLYGON)};
+  row.cols = {getSV("1"), getSV("s"), getSV("nns"), getSV(LINESTRING)};
   handler->load_table(session, "geo_load_test", {row}, column_names);
   sqlAndCompareResult("SELECT i1, s, nns, mp, ls FROM geo_load_test",
-                      {{i(1), "s", "nns", MULTIPOLYGON, (void*)0}});
+                      {{i(1), "s", "nns", (void*)0, LINESTRING}});
 }
 
 TEST_F(LoadTableTest, DuplicateColumns) {
@@ -208,6 +211,27 @@ TEST_F(LoadTableTest, NoColumns) {
       [&]() { handler->load_table(session, "geo_load_test", {}, {}); },
       "TException - service has thrown: TOmniSciException(error_msg="
       "No rows to insert)");
+}
+
+TEST_F(LoadTableTest, DefaultString) {
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  std::vector<std::string> column_names{"i1", "nns"};
+  TStringRow row;
+  row.cols = {getSV("1"), getSV("nns")};
+  handler->load_table(session, "load_test", {row}, column_names);
+  sqlAndCompareResult("SELECT i1, s, nns FROM load_test", {{i(1), "default str", "nns"}});
+}
+
+TEST_F(LoadTableTest, DefaultGeo) {
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  std::vector<std::string> column_names{"i1", "s", "nns", "mp"};
+  TStringRow row;
+  row.cols = {getSV("1"), getSV("s"), getSV("nns"), getSV(MULTIPOLYGON)};
+  handler->load_table(session, "geo_load_test", {row}, column_names);
+  sqlAndCompareResult("SELECT i1, s, nns, mp, ls FROM geo_load_test",
+                      {{i(1), "s", "nns", MULTIPOLYGON, DEFAULT_LINESTRING}});
 }
 
 TEST_F(LoadTableTest, BinaryAllColumnsNoGeo) {
@@ -266,11 +290,11 @@ TEST_F(LoadTableTest, BinaryAllColumnsReorderedNoGeo) {
 TEST_F(LoadTableTest, BinarySomeColumnsReorderedNoGeo) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"nns", "i1"};
+  std::vector<std::string> column_names{"nns", "s"};
   TRow row;
-  row.cols = {nns_datum, i1_datum};
+  row.cols = {nns_datum, s_datum};
   handler->load_table_binary(session, "load_test", {row}, column_names);
-  sqlAndCompareResult("SELECT i1, s, nns FROM load_test", {{i(1), nullptr, "nns"}});
+  sqlAndCompareResult("SELECT i1, s, nns FROM load_test", {{nullptr, "s", "nns"}});
 }
 
 TEST_F(LoadTableTest, BinaryOmitNotNullableColumnNoGeo) {
@@ -331,6 +355,16 @@ TEST_F(LoadTableTest, BinaryNoColumns) {
       "No rows to insert)");
 }
 
+TEST_F(LoadTableTest, BinaryDefaultString) {
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  std::vector<std::string> column_names{"i1", "nns"};
+  TRow row;
+  row.cols = {i1_datum, nns_datum};
+  handler->load_table_binary(session, "load_test", {row}, column_names);
+  sqlAndCompareResult("SELECT * FROM load_test", {{i(1), "default str", "nns"}});
+}
+
 TEST_F(LoadTableTest, ColumnarAllColumnsNoGeo) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
@@ -389,13 +423,13 @@ TEST_F(LoadTableTest, ColumnarOmitNotNullableColumn) {
 TEST_F(LoadTableTest, ColumnarOmitGeoColumn) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"i1", "s", "nns", "mp"};
+  std::vector<std::string> column_names{"i1", "s", "nns", "ls"};
   handler->load_table_binary_columnar(session,
                                       "geo_load_test",
-                                      {i1_column, s_column, nns_column, mp_column},
+                                      {i1_column, s_column, nns_column, ls_column},
                                       column_names);
   sqlAndCompareResult("SELECT i1, s, nns, mp, ls FROM geo_load_test",
-                      {{i(1), "s", "nns", MULTIPOLYGON, (void*)0}});
+                      {{i(1), "s", "nns", (void*)0, LINESTRING}});
 }
 
 TEST_F(LoadTableTest, ColumnarDuplicateColumns) {
@@ -440,6 +474,27 @@ TEST_F(LoadTableTest, ColumnarNoColumns) {
   executeLambdaAndAssertException(
       [&]() { handler->load_table_binary_columnar(session, "geo_load_test", {}, {}); },
       "No columns to insert");
+}
+
+TEST_F(LoadTableTest, ColumnarDefaultStr) {
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  std::vector<std::string> column_names{"i1", "nns"};
+  handler->load_table_binary_columnar(
+      session, "load_test", {i1_column, nns_column}, column_names);
+  sqlAndCompareResult("SELECT * FROM load_test", {{i(1), "default str", "nns"}});
+}
+
+TEST_F(LoadTableTest, ColumnarDefaultGeo) {
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  std::vector<std::string> column_names{"i1", "s", "mp", "nns"};
+  handler->load_table_binary_columnar(session,
+                                      "geo_load_test",
+                                      {i1_column, s_column, mp_column, nns_column},
+                                      column_names);
+  sqlAndCompareResult("SELECT * FROM geo_load_test",
+                      {{i(1), DEFAULT_LINESTRING, "s", MULTIPOLYGON, "nns"}});
 }
 
 // A small helper to build Arrow stream for load_table_binary_arrow
@@ -532,12 +587,12 @@ TEST_F(LoadTableTest, ArrowAllColumnsReorderedNoGeo) {
 TEST_F(LoadTableTest, ArrowSomeColumnsReorderedNoGeo) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
-  auto schema = arrow::schema({nns_field, i1_field});
+  auto schema = arrow::schema({nns_field, s_field});
   ArrowStreamBuilder builder(schema);
   builder.appendString({"nns"});
-  builder.appendInt32({1});
+  builder.appendString({"s"});
   handler->load_table_binary_arrow(session, "load_test", builder.finish(), true);
-  sqlAndCompareResult("SELECT i1, s, nns FROM load_test", {{i(1), nullptr, "nns"}});
+  sqlAndCompareResult("SELECT i1, s, nns FROM load_test", {{nullptr, "s", "nns"}});
 }
 
 TEST_F(LoadTableTest, ArrowOmitNotNullableColumnNoGeo) {
@@ -595,6 +650,17 @@ TEST_F(LoadTableTest, ArrowNoColumns) {
         handler->load_table_binary_arrow(session, "load_test", builder.finish(), false);
       },
       "No columns to insert");
+}
+
+TEST_F(LoadTableTest, ArrowDefaultStr) {
+  auto* handler = getDbHandlerAndSessionId().first;
+  auto& session = getDbHandlerAndSessionId().second;
+  auto schema = arrow::schema({i1_field, nns_field});
+  ArrowStreamBuilder builder(schema);
+  builder.appendInt32({1});
+  builder.appendString({"nns"});
+  handler->load_table_binary_arrow(session, "load_test", builder.finish(), true);
+  sqlAndCompareResult("SELECT * FROM load_test", {{i(1), "default str", "nns"}});
 }
 
 class ImportGeoTableTest : public DBHandlerTestFixture {

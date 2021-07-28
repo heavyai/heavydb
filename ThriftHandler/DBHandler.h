@@ -885,6 +885,26 @@ class DBHandler : public OmniSciIf {
       const std::vector<std::string>& column_names,
       std::string load_type);
 
+  void fillGeoColumns(
+      const TSessionId& session,
+      const Catalog_Namespace::Catalog& catalog,
+      std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
+      const ColumnDescriptor* cd,
+      size_t& col_idx,
+      size_t num_rows,
+      const std::string& table_name,
+      bool assign_render_groups);
+
+  void fillMissingBuffers(
+      const TSessionId& session,
+      const Catalog_Namespace::Catalog& catalog,
+      std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
+      const std::list<const ColumnDescriptor*>& cds,
+      const std::vector<int>& desc_id_to_column_id,
+      size_t num_rows,
+      const std::string& table_name,
+      bool assign_render_groups);
+
   query_state::QueryStates query_states_;
   SessionMap sessions_;
 

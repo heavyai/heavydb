@@ -1461,6 +1461,165 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
   }
 }
 
+void TypedImportBuffer::addDefaultValues(const ColumnDescriptor* cd, size_t num_rows) {
+  bool is_null = !cd->default_value.has_value();
+  CHECK(!(is_null && cd->columnType.get_notnull()));
+  const auto type = cd->columnType.get_type();
+  auto ti = cd->columnType;
+  auto val = cd->default_value.value_or("NULL");
+  CopyParams cp;
+  switch (type) {
+    case kBOOLEAN: {
+      if (!is_null) {
+        bool_buffer_->resize(num_rows, StringToDatum(val, ti).boolval);
+      } else {
+        bool_buffer_->resize(num_rows, inline_fixed_encoding_null_val(cd->columnType));
+      }
+      break;
+    }
+    case kTINYINT: {
+      if (!is_null) {
+        tinyint_buffer_->resize(num_rows, StringToDatum(val, ti).tinyintval);
+      } else {
+        tinyint_buffer_->resize(num_rows, inline_fixed_encoding_null_val(cd->columnType));
+      }
+      break;
+    }
+    case kSMALLINT: {
+      if (!is_null) {
+        smallint_buffer_->resize(num_rows, StringToDatum(val, ti).smallintval);
+      } else {
+        smallint_buffer_->resize(num_rows,
+                                 inline_fixed_encoding_null_val(cd->columnType));
+      }
+      break;
+    }
+    case kINT: {
+      if (!is_null) {
+        int_buffer_->resize(num_rows, StringToDatum(val, ti).intval);
+      } else {
+        int_buffer_->resize(num_rows, inline_fixed_encoding_null_val(cd->columnType));
+      }
+      break;
+    }
+    case kBIGINT: {
+      if (!is_null) {
+        bigint_buffer_->resize(num_rows, StringToDatum(val, ti).bigintval);
+      } else {
+        bigint_buffer_->resize(num_rows, inline_fixed_encoding_null_val(cd->columnType));
+      }
+      break;
+    }
+    case kDECIMAL:
+    case kNUMERIC: {
+      if (!is_null) {
+        const auto converted_decimal_value = convert_decimal_value_to_scale(
+            StringToDatum(val, ti).bigintval, ti, cd->columnType);
+        bigint_buffer_->resize(num_rows, converted_decimal_value);
+      } else {
+        bigint_buffer_->resize(num_rows, inline_fixed_encoding_null_val(cd->columnType));
+      }
+      break;
+    }
+    case kFLOAT:
+      if (!is_null) {
+        float_buffer_->resize(num_rows,
+                              static_cast<float>(std::atof(std::string(val).c_str())));
+      } else {
+        float_buffer_->resize(num_rows, NULL_FLOAT);
+      }
+      break;
+    case kDOUBLE:
+      if (!is_null) {
+        double_buffer_->resize(num_rows, std::atof(std::string(val).c_str()));
+      } else {
+        double_buffer_->resize(num_rows, NULL_DOUBLE);
+      }
+      break;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR: {
+      if (is_null) {
+        string_buffer_->resize(num_rows, "");
+      } else {
+        if (val.length() > StringDictionary::MAX_STRLEN) {
+          throw std::runtime_error("String too long for column " + cd->columnName +
+                                   " was " + std::to_string(val.length()) + " max is " +
+                                   std::to_string(StringDictionary::MAX_STRLEN));
+        }
+        string_buffer_->resize(num_rows, val);
+      }
+      break;
+    }
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      if (!is_null) {
+        bigint_buffer_->resize(num_rows, StringToDatum(val, ti).bigintval);
+      } else {
+        bigint_buffer_->resize(num_rows, inline_fixed_encoding_null_val(cd->columnType));
+      }
+      break;
+    case kARRAY: {
+      if (IS_STRING(ti.get_subtype())) {
+        std::vector<std::string> string_vec;
+        // Just parse string array, don't push it to buffer yet as we might throw
+        import_export::delimited_parser::parse_string_array(
+            std::string(val), cp, string_vec);
+        if (!is_null) {
+          // TODO: add support for NULL string arrays
+          if (ti.get_size() > 0) {
+            auto sti = ti.get_elem_type();
+            size_t expected_size = ti.get_size() / sti.get_size();
+            size_t actual_size = string_vec.size();
+            if (actual_size != expected_size) {
+              throw std::runtime_error("Fixed length array column " + cd->columnName +
+                                       " expects " + std::to_string(expected_size) +
+                                       " values, received " +
+                                       std::to_string(actual_size));
+            }
+          }
+          string_array_buffer_->resize(num_rows, string_vec);
+        } else {
+          if (ti.get_size() > 0) {
+            // TODO: remove once NULL fixlen arrays are allowed
+            throw std::runtime_error("Fixed length array column " + cd->columnName +
+                                     " currently cannot accept NULL arrays");
+          }
+          // TODO: add support for NULL string arrays, replace with addStringArray(),
+          //       for now add whatever parseStringArray() outputs for NULLs ("NULL")
+          string_array_buffer_->resize(num_rows, string_vec);
+        }
+      } else {
+        if (!is_null) {
+          ArrayDatum d = StringToArray(std::string(val), ti, cp);
+          if (d.is_null) {  // val could be "NULL"
+            array_buffer_->resize(num_rows, NullArray(ti));
+          } else {
+            if (ti.get_size() > 0 && static_cast<size_t>(ti.get_size()) != d.length) {
+              throw std::runtime_error("Fixed length array for column " + cd->columnName +
+                                       " has incorrect length: " + std::string(val));
+            }
+            array_buffer_->resize(num_rows, d);
+          }
+        } else {
+          array_buffer_->resize(num_rows, NullArray(ti));
+        }
+      }
+      break;
+    }
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON:
+      geo_string_buffer_->resize(num_rows, val);
+      break;
+    default:
+      CHECK(false) << "TypedImportBuffer::addDefaultValues() does not support type "
+                   << type;
+  }
+}
+
 bool importGeoFromLonLat(double lon,
                          double lat,
                          std::vector<double>& coords,

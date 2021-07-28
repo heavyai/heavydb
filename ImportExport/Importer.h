@@ -464,6 +464,8 @@ class TypedImportBuffer : boost::noncopyable {
 
   void add_value(const ColumnDescriptor* cd, const TDatum& val, const bool is_null);
 
+  void addDefaultValues(const ColumnDescriptor* cd, size_t num_rows);
+
   void pop_value();
 
   template <typename DATA_TYPE>

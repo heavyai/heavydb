@@ -2858,6 +2858,140 @@ std::vector<int> column_ids_by_names(const std::list<const ColumnDescriptor*>& d
 
 }  // namespace
 
+void DBHandler::fillGeoColumns(
+    const TSessionId& session,
+    const Catalog& catalog,
+    std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
+    const ColumnDescriptor* cd,
+    size_t& col_idx,
+    size_t num_rows,
+    const std::string& table_name,
+    bool assign_render_groups) {
+  auto geo_col_idx = col_idx - 1;
+  const auto wkt_or_wkb_hex_column = import_buffers[geo_col_idx]->getGeoStringBuffer();
+  std::vector<std::vector<double>> coords_column, bounds_column;
+  std::vector<std::vector<int>> ring_sizes_column, poly_rings_column;
+  std::vector<int> render_groups_column;
+  SQLTypeInfo ti = cd->columnType;
+  if (num_rows != wkt_or_wkb_hex_column->size() ||
+      !Geospatial::GeoTypesFactory::getGeoColumns(wkt_or_wkb_hex_column,
+                                                  ti,
+                                                  coords_column,
+                                                  bounds_column,
+                                                  ring_sizes_column,
+                                                  poly_rings_column,
+                                                  false)) {
+    std::ostringstream oss;
+    oss << "Invalid geometry in column " << cd->columnName;
+    THROW_MAPD_EXCEPTION(oss.str());
+  }
+
+  // start or continue assigning render groups for poly columns?
+  if (IS_GEO_POLY(cd->columnType.get_type()) && assign_render_groups) {
+    // get RGA to use
+    import_export::RenderGroupAnalyzer* render_group_analyzer{};
+    {
+      // mutex the map access
+      std::lock_guard<std::mutex> lock(render_group_assignment_mutex_);
+
+      // emplace new RGA or fetch existing RGA from map
+      auto [itr_table, emplaced_table] = render_group_assignment_map_.try_emplace(
+          session, RenderGroupAssignmentTableMap());
+      LOG_IF(INFO, emplaced_table)
+          << "load_table_binary_columnar_polys: Creating Render Group Assignment "
+             "Persistent Data for Session '"
+          << session << "'";
+      auto [itr_column, emplaced_column] =
+          itr_table->second.try_emplace(table_name, RenderGroupAssignmentColumnMap());
+      LOG_IF(INFO, emplaced_column)
+          << "load_table_binary_columnar_polys: Creating Render Group Assignment "
+             "Persistent Data for Table '"
+          << table_name << "'";
+      auto [itr_analyzer, emplaced_analyzer] = itr_column->second.try_emplace(
+          cd->columnName, std::make_unique<import_export::RenderGroupAnalyzer>());
+      LOG_IF(INFO, emplaced_analyzer)
+          << "load_table_binary_columnar_polys: Creating Render Group Assignment "
+             "Persistent Data for Column '"
+          << cd->columnName << "'";
+      render_group_analyzer = itr_analyzer->second.get();
+      CHECK(render_group_analyzer);
+
+      // seed new RGA from existing table/column, to handle appends
+      if (emplaced_analyzer) {
+        LOG(INFO) << "load_table_binary_columnar_polys: Seeding Render Groups from "
+                     "existing table...";
+        render_group_analyzer->seedFromExistingTableContents(
+            catalog, table_name, cd->columnName);
+        LOG(INFO) << "load_table_binary_columnar_polys: Done";
+      }
+    }
+
+    // assign render groups for this set of bounds
+    LOG(INFO) << "load_table_binary_columnar_polys: Assigning Render Groups...";
+    render_groups_column.reserve(bounds_column.size());
+    for (auto const& bounds : bounds_column) {
+      CHECK_EQ(bounds.size(), 4u);
+      int rg = render_group_analyzer->insertBoundsAndReturnRenderGroup(bounds);
+      render_groups_column.push_back(rg);
+    }
+    LOG(INFO) << "load_table_binary_columnar_polys: Done";
+  } else {
+    // render groups all zero
+    render_groups_column.resize(bounds_column.size(), 0);
+  }
+
+  // Populate physical columns, advance col_idx
+  import_export::Importer::set_geo_physical_import_buffer_columnar(catalog,
+                                                                   cd,
+                                                                   import_buffers,
+                                                                   col_idx,
+                                                                   coords_column,
+                                                                   bounds_column,
+                                                                   ring_sizes_column,
+                                                                   poly_rings_column,
+                                                                   render_groups_column);
+}
+
+void DBHandler::fillMissingBuffers(
+    const TSessionId& session,
+    const Catalog& catalog,
+    std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
+    const std::list<const ColumnDescriptor*>& cds,
+    const std::vector<int>& desc_id_to_column_id,
+    size_t num_rows,
+    const std::string& table_name,
+    bool assign_render_groups) {
+  size_t skip_physical_cols = 0;
+  size_t col_idx = 0, import_idx = 0;
+  for (const auto& cd : cds) {
+    if (skip_physical_cols > 0) {
+      CHECK(cd->isGeoPhyCol);
+      skip_physical_cols--;
+      continue;
+    } else if (cd->columnType.is_geometry()) {
+      skip_physical_cols = cd->columnType.get_physical_cols();
+    }
+    if (desc_id_to_column_id[import_idx] == -1) {
+      import_buffers[col_idx]->addDefaultValues(cd, num_rows);
+      col_idx++;
+      if (cd->columnType.is_geometry()) {
+        fillGeoColumns(session,
+                       catalog,
+                       import_buffers,
+                       cd,
+                       col_idx,
+                       num_rows,
+                       table_name,
+                       assign_render_groups);
+      }
+    } else {
+      col_idx++;
+      col_idx += skip_physical_cols;
+    }
+    import_idx++;
+  }
+}
+
 void DBHandler::load_table_binary(const TSessionId& session,
                                   const std::string& table_name,
                                   const std::vector<TRow>& rows,
@@ -2884,19 +3018,15 @@ void DBHandler::load_table_binary(const TSessionId& session,
     auto col_descs = loader->get_column_descs();
     auto desc_id_to_column_id = column_ids_by_names(col_descs, column_names);
 
-    TDatum empty_value;
-    empty_value.is_null = true;
     size_t rows_completed = 0;
     for (auto const& row : rows) {
       size_t col_idx = 0;
       try {
         for (auto cd : col_descs) {
-          int mapped_idx = desc_id_to_column_id[col_idx];
+          auto mapped_idx = desc_id_to_column_id[col_idx];
           if (mapped_idx != -1) {
             import_buffers[col_idx]->add_value(
                 cd, row.cols[mapped_idx], row.cols[mapped_idx].is_null);
-          } else {
-            import_buffers[col_idx]->add_value(cd, empty_value, true);
           }
           col_idx++;
         }
@@ -2910,6 +3040,14 @@ void DBHandler::load_table_binary(const TSessionId& session,
                    << " data :" << row;
       }
     }
+    fillMissingBuffers(session,
+                       session_ptr->getCatalog(),
+                       import_buffers,
+                       col_descs,
+                       desc_id_to_column_id,
+                       rows_completed,
+                       table_name,
+                       false);
     auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
         session_ptr->getCatalog(), table_name);
     if (!loader->load(import_buffers, rows.size(), session_ptr.get())) {
@@ -3067,125 +3205,44 @@ void DBHandler::load_table_binary_columnar_internal(
   size_t num_rows = get_column_size(cols.front());
   size_t import_idx = 0;  // index into the TColumn vector being loaded
   size_t col_idx = 0;     // index into column description vector
-  TColumn empty_column;
-  empty_column.nulls.resize(num_rows, true);
-  empty_column.data.arr_col.resize(num_rows);
-  empty_column.data.int_col.resize(num_rows);
-  empty_column.data.str_col.resize(num_rows);
-  empty_column.data.real_col.resize(num_rows);
   try {
     size_t skip_physical_cols = 0;
     for (auto cd : loader->get_column_descs()) {
       if (skip_physical_cols > 0) {
-        if (!cd->isGeoPhyCol) {
-          throw std::runtime_error("Unexpected physical column");
-        }
+        CHECK(cd->isGeoPhyCol);
         skip_physical_cols--;
         continue;
       }
-      int mapped_idx = desc_id_to_column_id[import_idx];
-      const TColumn& value = mapped_idx == -1 ? empty_column : cols[mapped_idx];
-      size_t col_rows = import_buffers[col_idx]->add_values(cd, value);
-      if (col_rows != num_rows) {
-        std::ostringstream oss;
-        oss << "load_table_binary_columnar: Inconsistent number of rows in column "
-            << cd->columnName << " ,  expecting " << num_rows << " rows, column "
-            << col_idx << " has " << col_rows << " rows";
-        THROW_MAPD_EXCEPTION(oss.str());
-      }
-      // Advance to the next column in the table
-      col_idx++;
-
-      // For geometry columns: process WKT strings and fill physical columns
-      if (cd->columnType.is_geometry()) {
-        auto geo_col_idx = col_idx - 1;
-        const auto wkt_or_wkb_hex_column =
-            import_buffers[geo_col_idx]->getGeoStringBuffer();
-        std::vector<std::vector<double>> coords_column, bounds_column;
-        std::vector<std::vector<int>> ring_sizes_column, poly_rings_column;
-        std::vector<int> render_groups_column;
-        SQLTypeInfo ti = cd->columnType;
-        if (num_rows != wkt_or_wkb_hex_column->size() ||
-            !Geospatial::GeoTypesFactory::getGeoColumns(wkt_or_wkb_hex_column,
-                                                        ti,
-                                                        coords_column,
-                                                        bounds_column,
-                                                        ring_sizes_column,
-                                                        poly_rings_column,
-                                                        false)) {
+      auto mapped_idx = desc_id_to_column_id[import_idx];
+      if (mapped_idx != -1) {
+        size_t col_rows = import_buffers[col_idx]->add_values(cd, cols[mapped_idx]);
+        if (col_rows != num_rows) {
           std::ostringstream oss;
-          oss << "load_table_binary_columnar: Invalid geometry in column "
-              << cd->columnName;
+          oss << "load_table_binary_columnar: Inconsistent number of rows in column "
+              << cd->columnName << " ,  expecting " << num_rows << " rows, column "
+              << col_idx << " has " << col_rows << " rows";
           THROW_MAPD_EXCEPTION(oss.str());
         }
-
-        // start or continue assigning render groups for poly columns?
-        if (IS_GEO_POLY(cd->columnType.get_type()) &&
-            assign_render_groups_mode == AssignRenderGroupsMode::kAssign) {
-          // get RGA to use
-          import_export::RenderGroupAnalyzer* render_group_analyzer{};
-          {
-            // mutex the map access
-            std::lock_guard<std::mutex> lock(render_group_assignment_mutex_);
-
-            // emplace new RGA or fetch existing RGA from map
-            auto [itr_table, emplaced_table] = render_group_assignment_map_.try_emplace(
-                session, RenderGroupAssignmentTableMap());
-            LOG_IF(INFO, emplaced_table)
-                << "load_table_binary_columnar_polys: Creating Render Group Assignment "
-                   "Persistent Data for Session '"
-                << session << "'";
-            auto [itr_column, emplaced_column] = itr_table->second.try_emplace(
-                table_name, RenderGroupAssignmentColumnMap());
-            LOG_IF(INFO, emplaced_column)
-                << "load_table_binary_columnar_polys: Creating Render Group Assignment "
-                   "Persistent Data for Table '"
-                << table_name << "'";
-            auto [itr_analyzer, emplaced_analyzer] = itr_column->second.try_emplace(
-                cd->columnName, std::make_unique<import_export::RenderGroupAnalyzer>());
-            LOG_IF(INFO, emplaced_analyzer)
-                << "load_table_binary_columnar_polys: Creating Render Group Assignment "
-                   "Persistent Data for Column '"
-                << cd->columnName << "'";
-            render_group_analyzer = itr_analyzer->second.get();
-            CHECK(render_group_analyzer);
-
-            // seed new RGA from existing table/column, to handle appends
-            if (emplaced_analyzer) {
-              LOG(INFO) << "load_table_binary_columnar_polys: Seeding Render Groups from "
-                           "existing table...";
-              render_group_analyzer->seedFromExistingTableContents(
-                  session_ptr->getCatalog(), table_name, cd->columnName);
-              LOG(INFO) << "load_table_binary_columnar_polys: Done";
-            }
-          }
-
-          // assign render groups for this set of bounds
-          LOG(INFO) << "load_table_binary_columnar_polys: Assigning Render Groups...";
-          render_groups_column.reserve(bounds_column.size());
-          for (auto const& bounds : bounds_column) {
-            CHECK_EQ(bounds.size(), 4u);
-            int rg = render_group_analyzer->insertBoundsAndReturnRenderGroup(bounds);
-            render_groups_column.push_back(rg);
-          }
-          LOG(INFO) << "load_table_binary_columnar_polys: Done";
-        } else {
-          // render groups all zero
-          render_groups_column.resize(bounds_column.size(), 0);
+        // Advance to the next column in the table
+        col_idx++;
+        // For geometry columns: process WKT strings and fill physical columns
+        if (cd->columnType.is_geometry()) {
+          fillGeoColumns(session,
+                         session_ptr->getCatalog(),
+                         import_buffers,
+                         cd,
+                         col_idx,
+                         num_rows,
+                         table_name,
+                         assign_render_groups_mode == AssignRenderGroupsMode::kAssign);
+          skip_physical_cols = cd->columnType.get_physical_cols();
         }
-
-        // Populate physical columns, advance col_idx
-        import_export::Importer::set_geo_physical_import_buffer_columnar(
-            session_ptr->getCatalog(),
-            cd,
-            import_buffers,
-            col_idx,
-            coords_column,
-            bounds_column,
-            ring_sizes_column,
-            poly_rings_column,
-            render_groups_column);
-        skip_physical_cols = cd->columnType.get_physical_cols();
+      } else {
+        col_idx++;
+        if (cd->columnType.is_geometry()) {
+          skip_physical_cols = cd->columnType.get_physical_cols();
+          col_idx += skip_physical_cols;
+        }
       }
       // Advance to the next column of values being loaded
       import_idx++;
@@ -3196,6 +3253,14 @@ void DBHandler::load_table_binary_columnar_internal(
         << ". Issue at column : " << (col_idx + 1) << ". Import aborted";
     THROW_MAPD_EXCEPTION(oss.str());
   }
+  fillMissingBuffers(session,
+                     session_ptr->getCatalog(),
+                     import_buffers,
+                     loader->get_column_descs(),
+                     desc_id_to_column_id,
+                     num_rows,
+                     table_name,
+                     assign_render_groups_mode == AssignRenderGroupsMode::kAssign);
   auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
       session_ptr->getCatalog(), table_name);
   if (!loader->load(import_buffers, num_rows, session_ptr.get())) {
@@ -3280,29 +3345,14 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session,
       column_ids_by_names(loader->get_column_descs(), column_names);
   size_t num_rows = 0;
   size_t col_idx = 0;
-  std::shared_ptr<arrow::Array> empty_array;
-  {
-    arrow::BooleanBuilder builder;
-    ARROW_THROW_NOT_OK(builder.Resize(batch->num_rows()));
-    ARROW_THROW_NOT_OK(builder.AppendNulls(batch->num_rows()));
-    auto status = builder.Finish(&empty_array);
-    if (!status.ok()) {
-      THROW_MAPD_EXCEPTION("Failed to load data: " + status.message());
-    }
-  }
-
   try {
     for (auto cd : loader->get_column_descs()) {
-      int mapped_idx = desc_id_to_column_id[col_idx];
+      auto mapped_idx = desc_id_to_column_id[col_idx];
       if (mapped_idx != -1) {
         auto& array = *batch->column(mapped_idx);
         import_export::ArraySliceRange row_slice(0, array.length());
         num_rows = import_buffers[col_idx]->add_arrow_values(
             cd, array, true, row_slice, nullptr);
-      } else {
-        import_export::ArraySliceRange row_slice(0, empty_array->length());
-        num_rows = import_buffers[col_idx]->add_arrow_values(
-            cd, *empty_array, false, row_slice, nullptr);
       }
       col_idx++;
     }
@@ -3313,6 +3363,14 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session,
     // other import paths
     THROW_MAPD_EXCEPTION(e.what());
   }
+  fillMissingBuffers(session,
+                     session_ptr->getCatalog(),
+                     import_buffers,
+                     loader->get_column_descs(),
+                     desc_id_to_column_id,
+                     num_rows,
+                     table_name,
+                     false);
   auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
       session_ptr->getCatalog(), table_name);
   if (!loader->load(import_buffers, num_rows, session_ptr.get())) {
@@ -3355,66 +3413,80 @@ void DBHandler::load_table(const TSessionId& session,
         size_t skip_physical_cols = 0;
         for (auto cd : col_descs) {
           if (skip_physical_cols > 0) {
-            if (!cd->isGeoPhyCol) {
-              throw std::runtime_error("Unexpected physical column");
-            }
+            CHECK(cd->isGeoPhyCol);
             skip_physical_cols--;
             continue;
           }
-          const std::string empty_val = "";
-          int mapped_idx = desc_id_to_column_id[import_idx];
-          const std::string& value =
-              mapped_idx == -1 ? empty_val : row.cols[mapped_idx].str_val;
-          bool is_null = mapped_idx == -1 || row.cols[mapped_idx].is_null;
-          import_buffers[col_idx]->add_value(cd, value, is_null, copy_params);
-          // Advance to the next column within the table
+          auto mapped_idx = desc_id_to_column_id[import_idx];
+          if (mapped_idx != -1) {
+            import_buffers[col_idx]->add_value(cd,
+                                               row.cols[mapped_idx].str_val,
+                                               row.cols[mapped_idx].is_null,
+                                               copy_params);
+          }
           col_idx++;
-
           if (cd->columnType.is_geometry()) {
-            // Populate physical columns
-            std::vector<double> coords, bounds;
-            std::vector<int> ring_sizes, poly_rings;
-            int render_group = 0;
-            SQLTypeInfo ti{cd->columnType};
-            if (!Geospatial::GeoTypesFactory::getGeoColumns(
-                    !is_null ? value : std::string(),
-                    ti,
-                    coords,
-                    bounds,
-                    ring_sizes,
-                    poly_rings,
-                    false)) {
-              throw std::runtime_error("Invalid geometry");
-            }
-            if (cd->columnType.get_type() != ti.get_type()) {
-              throw std::runtime_error("Geometry type mismatch");
-            }
-            import_export::Importer::set_geo_physical_import_buffer(
-                session_ptr->getCatalog(),
-                cd,
-                import_buffers,
-                col_idx,
-                coords,
-                bounds,
-                ring_sizes,
-                poly_rings,
-                render_group);
+            // physical geo columns will be filled separately lately
             skip_physical_cols = cd->columnType.get_physical_cols();
+            col_idx += skip_physical_cols;
           }
           // Advance to the next field within the row
           import_idx++;
         }
         rows_completed++;
       } catch (const std::exception& e) {
-        for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
-          import_buffers[col_idx_to_pop]->pop_value();
+        LOG(ERROR) << "Input exception thrown: " << e.what()
+                   << ". Row discarded, issue at column : " << (col_idx + 1)
+                   << " data :" << row;
+        THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+      }
+    }
+    // do batch filling of geo columns separately
+    if (rows.size() != 0) {
+      const auto& row = rows[0];
+      size_t col_idx = 0;  // index into column description vector
+      try {
+        size_t import_idx = 0;
+        size_t skip_physical_cols = 0;
+        for (auto cd : col_descs) {
+          if (skip_physical_cols > 0) {
+            skip_physical_cols--;
+            continue;
+          }
+          auto mapped_idx = desc_id_to_column_id[import_idx];
+          col_idx++;
+          if (cd->columnType.is_geometry()) {
+            skip_physical_cols = cd->columnType.get_physical_cols();
+            if (mapped_idx != -1) {
+              fillGeoColumns(session,
+                             session_ptr->getCatalog(),
+                             import_buffers,
+                             cd,
+                             col_idx,
+                             rows_completed,
+                             table_name,
+                             false);
+            } else {
+              col_idx += skip_physical_cols;
+            }
+          }
+          import_idx++;
         }
+      } catch (const std::exception& e) {
         LOG(ERROR) << "Input exception thrown: " << e.what()
                    << ". Row discarded, issue at column : " << (col_idx + 1)
                    << " data :" << row;
         THROW_MAPD_EXCEPTION(e.what());
       }
     }
+    fillMissingBuffers(session,
+                       session_ptr->getCatalog(),
+                       import_buffers,
+                       col_descs,
+                       desc_id_to_column_id,
+                       rows_completed,
+                       table_name,
+                       false);
     auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
         session_ptr->getCatalog(), table_name);
     if (!loader->load(import_buffers, rows_completed, session_ptr.get())) {
