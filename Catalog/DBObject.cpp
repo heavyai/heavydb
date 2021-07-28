@@ -80,7 +80,7 @@ const AccessPrivileges AccessPrivileges::ALTER_SERVER =
 const AccessPrivileges AccessPrivileges::SERVER_USAGE =
     AccessPrivileges(ServerPrivileges::SERVER_USAGE);
 
-std::string ObjectPermissionTypeToString(DBObjectType type) {
+std::string DBObjectTypeToString(DBObjectType type) {
   switch (type) {
     case DatabaseDBObjectType:
       return "DATABASE";
