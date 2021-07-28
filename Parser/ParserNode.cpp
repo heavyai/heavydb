@@ -5046,6 +5046,30 @@ static DBObject createObject(const std::string& objectName, DBObjectType objectT
   }
 }
 
+// Pre-execution PRIVILEGE failure conditions that cannot be detected elsewhere
+//    For types: Table, View, Database, Server, Dashboard
+static void verifyObject(Catalog_Namespace::Catalog& sessionCatalog,
+                         const std::string& objectName,
+                         DBObjectType objectType,
+                         const std::string& command) {
+  if (objectType == TableDBObjectType) {
+    auto td = sessionCatalog.getMetadataForTable(objectName, false);
+    if (!td || td->isView) {
+      // expected TABLE, found VIEW
+      throw std::runtime_error(command + " failed. Object '" + objectName + "' of type " +
+                               DBObjectTypeToString(objectType) + " not found.");
+    }
+
+  } else if (objectType == ViewDBObjectType) {
+    auto td = sessionCatalog.getMetadataForTable(objectName, false);
+    if (!td || !td->isView) {
+      // expected VIEW, found TABLE
+      throw std::runtime_error(command + " failed. Object '" + objectName + "' of type " +
+                               DBObjectTypeToString(objectType) + " not found.");
+    }
+  }
+}
+
 // GRANT SELECT/INSERT/CREATE ON TABLE payroll_table TO payroll_dept_role;
 void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
@@ -5057,6 +5081,9 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
   if (objectType == ServerDBObjectType && !g_enable_fsi) {
     throw std::runtime_error("GRANT failed. SERVER object unrecognized.");
   }
+  /* verify object exists and is of proper type *before* trying to execute */
+  verifyObject(catalog, objectName, objectType, "GRANT");
+
   DBObject dbObject = createObject(objectName, objectType);
   /* verify object ownership if not suser */
   if (!currentUser.isSuper) {
@@ -5091,6 +5118,9 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
   if (objectType == ServerDBObjectType && !g_enable_fsi) {
     throw std::runtime_error("REVOKE failed. SERVER object unrecognized.");
   }
+  /* verify object exists and is of proper type *before* trying to execute */
+  verifyObject(catalog, objectName, objectType, "REVOKE");
+
   DBObject dbObject = createObject(objectName, objectType);
   /* verify object ownership if not suser */
   if (!currentUser.isSuper) {
@@ -5123,6 +5153,9 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
   const auto objectName =
       extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
   auto objectType = DBObjectTypeFromString(parserObjectType);
+  /* verify object exists and is of proper type *before* trying to execute */
+  verifyObject(catalog, objectName, objectType, "SHOW");
+
   DBObject dbObject = createObject(objectName, objectType);
   /* verify object ownership if not suser */
   if (!currentUser.isSuper) {

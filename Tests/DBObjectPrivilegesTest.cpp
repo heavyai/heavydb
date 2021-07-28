@@ -128,8 +128,14 @@ struct GrantSyntax : testing::Test {
   Users user_;
   Roles role_;
 
-  void setup_tables() { run_ddl_statement("CREATE TABLE IF NOT EXISTS tbl(i INTEGER)"); }
-  void drop_tables() { run_ddl_statement("DROP TABLE IF EXISTS tbl"); }
+  void setup_tables() {
+    run_ddl_statement("CREATE TABLE IF NOT EXISTS tbl(i INTEGER)");
+    run_ddl_statement("CREATE VIEW grantView AS SELECT i FROM tbl;");
+  }
+  void drop_tables() {
+    run_ddl_statement("DROP TABLE IF EXISTS tbl");
+    run_ddl_statement("DROP VIEW IF EXISTS grantView");
+  }
   explicit GrantSyntax() {
     drop_tables();
     setup_tables();
@@ -351,6 +357,23 @@ TEST_F(InvalidGrantSyntax, InvalidGrantSyntax) {
 
   queryAndAssertException("GRANT SELECT, INSERT, ON TABLE tbl TO Arsenal, Juventus;",
                           error_message);
+}
+
+TEST_F(InvalidGrantSyntax, InvalidGrantType) {
+  std::string error_message;
+
+  error_message = "GRANT failed. Object 'grantView' of type TABLE not found.";
+  queryAndAssertException("GRANT SELECT ON TABLE grantView TO Arsenal;", error_message);
+
+  error_message = "REVOKE failed. Object 'grantView' of type TABLE not found.";
+  queryAndAssertException("REVOKE SELECT ON TABLE grantView FROM Arsenal;",
+                          error_message);
+
+  error_message = "GRANT failed. Object 'tbl' of type VIEW not found.";
+  queryAndAssertException("GRANT SELECT ON VIEW tbl TO Arsenal;", error_message);
+
+  error_message = "REVOKE failed. Object 'tbl' of type VIEW not found.";
+  queryAndAssertException("REVOKE SELECT ON VIEW tbl FROM Arsenal;", error_message);
 }
 
 TEST(UserRoles, InvalidGrantsRevokesTest) {
