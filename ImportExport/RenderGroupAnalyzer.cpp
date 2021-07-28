@@ -45,7 +45,7 @@ namespace import_export {
 #define DEBUG_RENDER_GROUP_ANALYZER 0
 
 void RenderGroupAnalyzer::seedFromExistingTableContents(
-    Catalog_Namespace::Catalog& cat,
+    const Catalog_Namespace::Catalog& cat,
     const std::string& tableName,
     const std::string& geoColumnBaseName) {
   // start timer

@@ -1928,8 +1928,14 @@ TEST_F(MaxRollbackEpochsTest, CreateTableDefaultValue) {
 
 class DefaultValuesTest : public DBHandlerTestFixture {
  protected:
-  void SetUp() override { sql("DROP TABLE IF EXISTS defval_tbl"); }
-  void TearDown() override { sql("DROP TABLE IF EXISTS defval_tbl"); }
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("DROP TABLE IF EXISTS defval_tbl");
+  }
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS defval_tbl");
+    DBHandlerTestFixture::TearDown();
+  }
 
   void insertDefaultValues() {
     EXPECT_NO_THROW(sql("INSERT INTO defval_tbl(idx) values(1)"));
@@ -2061,6 +2067,140 @@ TEST_F(DefaultValuesTest, NotNullWithNullDefault) {
   sql(create_table_query);
   queryAndAssertException("INSERT INTO defval_tbl(idx) VALUES (1)", "NULL for column a");
 }
+
+struct DefaultValueParams {
+  DefaultValueParams(const SQLTypeInfo& t,
+                     const std::string& v,
+                     const std::string& e,
+                     bool n,
+                     const std::string& d)
+      : type(t), value(v), error_message(e), is_null(n), description(d) {}
+
+  SQLTypeInfo type;
+  std::string value;
+  std::string error_message;
+  bool is_null;
+  std::string description;
+
+  friend std::ostream& operator<<(std::ostream& os, const DefaultValueParams& p) {
+    return os << "Type: " << p.type.to_string() << ", Value: " << p.value
+              << ", is_null: " << p.is_null;
+  }
+};
+
+SQLTypeInfo decimal = SQLTypeInfo(SQLTypes::kDECIMAL, 3, 1, false);
+SQLTypeInfo integer = SQLTypeInfo(SQLTypes::kINT, false);
+SQLTypeInfo integer_notnull = SQLTypeInfo(SQLTypes::kINT, 0, 0, true);
+SQLTypeInfo smallint = SQLTypeInfo(SQLTypes::kSMALLINT, false);
+SQLTypeInfo integer_array =
+    SQLTypeInfo(SQLTypes::kARRAY, 0, 0, false, kENCODING_NONE, 0, SQLTypes::kINT);
+SQLTypeInfo fixed_integer_array =
+    SQLTypeInfo(SQLTypes::kARRAY, 0, 0, false, kENCODING_NONE, 0, SQLTypes::kINT);
+SQLTypeInfo timestamp = SQLTypeInfo(SQLTypes::kTIMESTAMP, false);
+SQLTypeInfo text_array =
+    SQLTypeInfo(SQLTypes::kARRAY, 0, 0, false, kENCODING_DICT, 32, SQLTypes::kTEXT);
+SQLTypeInfo fixed_text_array =
+    SQLTypeInfo(SQLTypes::kARRAY, 0, 0, false, kENCODING_DICT, 32, SQLTypes::kTEXT);
+
+class ValidateDefaultValuesTest : public testing::Test,
+                                  public testing::WithParamInterface<DefaultValueParams> {
+};
+
+TEST_P(ValidateDefaultValuesTest, InvalidLiteralTest) {
+  ColumnDescriptor cd(0, 1, "c", GetParam().type);
+  try {
+    const std::string* value = GetParam().is_null ? nullptr : &GetParam().value;
+    ddl_utils::validate_and_set_default_value(cd, value, GetParam().type.get_notnull());
+    ASSERT_TRUE(false) << "Expected an error: " << GetParam().error_message;
+  } catch (const std::exception& e) {
+    ASSERT_EQ(e.what(), GetParam().error_message);
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    ValidateDefaultValuesTest,
+    ValidateDefaultValuesTest,
+    testing::Values(
+        DefaultValueParams(decimal,
+                           "{1, 2, 3}",
+                           "Invalid conversion from string to NUMERIC(0,0)",
+                           false,
+                           "ArrayAsDecimalValue"),
+        DefaultValueParams(decimal,
+                           "Hello",
+                           "Invalid conversion from string to NUMERIC(0,0)",
+                           false,
+                           "TextAsDecimalValue"),
+        DefaultValueParams(integer,
+                           "Hello",
+                           "Unable to parse Hello to INTEGER",
+                           false,
+                           "TextAsIntegerValue"),
+        DefaultValueParams(integer_notnull,
+                           "Null",
+                           "c: cannot set default value to NULL for NOT NULL column",
+                           false,
+                           "NullValueForNotNullInteger"),
+        DefaultValueParams(smallint,
+                           "999999999",
+                           "Integer 999999999 is out of range for SMALLINT",
+                           false,
+                           "SmallintOverflow"),
+        DefaultValueParams(smallint,
+                           "-999999999",
+                           "Integer -999999999 is out of range for SMALLINT",
+                           false,
+                           "SmallintUnderflow"),
+        DefaultValueParams(integer_array,
+                           "{1, 2, 3",
+                           "c: arrays should start and end with curly braces",
+                           false,
+                           "ArrayWithoutClosingBrace"),
+        DefaultValueParams(integer_array,
+                           "1, 2, 3",
+                           "c: arrays should start and end with curly braces",
+                           false,
+                           "ArrayWithoutBraces"),
+        DefaultValueParams(integer_array,
+                           "ARRAY[1, 2]",
+                           "c: arrays should start and end with curly braces",
+                           false,
+                           "UnsupportedArrayFormat"),
+        DefaultValueParams(integer_array,
+                           "12309834",
+                           "c: arrays should start and end with curly braces",
+                           false,
+                           "LiteralInsteadOfIntArray"),
+        DefaultValueParams(integer_array,
+                           "{1, 2, Three}",
+                           "Unable to parse Three to INTEGER",
+                           false,
+                           "TextInIntegerArray"),
+        DefaultValueParams((fixed_integer_array.set_size(
+                                fixed_integer_array.get_elem_type().get_size() * 4),
+                            fixed_integer_array),
+                           "{1, 2, 3}",
+                           "Fixed length array column c expects 4 values, received 3",
+                           false,
+                           "NotEnoughElementsInFixedIntArray"),
+        DefaultValueParams(timestamp,
+                           "Hello",
+                           "Invalid TIMESTAMP string (Hello)",
+                           false,
+                           "TextInsteadOfTimestamp"),
+        DefaultValueParams(text_array,
+                           "Hello",
+                           "c: arrays should start and end with curly braces",
+                           false,
+                           "LiteralInsteadOfTextArray"),
+        DefaultValueParams(
+            (fixed_text_array.set_size(fixed_text_array.get_elem_type().get_size() * 4),
+             fixed_text_array),
+            "{a, b, c, d, e}",
+            "Fixed length array column c expects 4 values, received 5",
+            false,
+            "TooManyElementsInFixedTextArray")),
+    [](const auto& param_info) { return param_info.param.description; });
 
 int main(int argc, char** argv) {
   g_enable_fsi = true;
