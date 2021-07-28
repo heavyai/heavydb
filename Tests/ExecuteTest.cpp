@@ -1757,6 +1757,28 @@ TEST(Select, FilterAndMultipleAggregation) {
 }
 
 TEST(Select, GroupBy) {
+  {  // generate dataset to test count distinct rewrite
+    run_ddl_statement("DROP TABLE IF EXISTS count_distinct_rewrite;");
+    run_ddl_statement("CREATE TABLE count_distinct_rewrite (v1 int);");
+    const auto data_path = boost::filesystem::path(
+        "../../Tests/Import/datafiles/count_distinct_rewrite.csv");
+    if (boost::filesystem::exists(data_path)) {
+      boost::filesystem::remove(data_path);
+    }
+    std::ofstream out1(data_path.string());
+    // num_sets (-1) because data started out with 1 set of (10) items
+    for (int i = 0; i < 1000000; i++) {
+      if (out1.is_open()) {
+        out1 << i << "\n";
+      }
+    }
+    out1.close();
+    auto copy_data_str = "COPY count_distinct_rewrite FROM \'" + data_path.string() +
+                         "\' WITH (HEADER=\'f\');";
+    run_ddl_statement(copy_data_str);
+    boost::filesystem::remove(data_path);
+  }
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -1784,7 +1806,29 @@ TEST(Select, GroupBy) {
     c("SELECT f, ff, APPROX_COUNT_DISTINCT(str) from test group by f, ff ORDER BY f, ff;",
       "SELECT f, ff, COUNT(distinct str) FROM test GROUP BY f, ff ORDER BY f, ff;",
       dt);
+    ASSERT_NO_THROW(run_multiple_agg(
+        "SELECT v1, COUNT(DISTINCT v1) FROM count_distinct_rewrite GROUP BY v1 limit "
+        "1;",
+        dt));
+    ASSERT_NO_THROW(run_multiple_agg(
+        "SELECT v1, COUNT(DISTINCT v1), CASE WHEN v1 IS NOT NULL THEN 1 ELSE 0 END "
+        "FROM count_distinct_rewrite GROUP BY v1 limit 1;",
+        dt));
+    ASSERT_NO_THROW(
+        run_multiple_agg("SELECT v1, COUNT(DISTINCT v1), APPROX_COUNT_DISTINCT(DISTINCT "
+                         "v1) FROM count_distinct_rewrite GROUP BY v1 limit "
+                         "1;",
+                         dt));
+    ASSERT_NO_THROW(run_multiple_agg(
+        "SELECT v1, APPROX_COUNT_DISTINCT(v1) FROM count_distinct_rewrite GROUP BY v1 "
+        "limit 1;",
+        dt));
+    ASSERT_NO_THROW(run_multiple_agg(
+        "SELECT v1, APPROX_COUNT_DISTINCT(v1), CASE WHEN v1 IS NOT NULL THEN 1 ELSE 0 "
+        "END, COUNT(DISTINCT v1) FROM count_distinct_rewrite GROUP BY v1 limit 1;",
+        dt));
   }
+  run_ddl_statement("DROP TABLE IF EXISTS count_distinct_rewrite;");
 }
 
 TEST(Select, ExecutePlanWithoutGroupBy) {

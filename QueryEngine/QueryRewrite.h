@@ -32,6 +32,9 @@ class QueryRewriter {
       const RelAlgExecutionUnit& ra_exe_unit_in,
       std::shared_ptr<Analyzer::ColumnVar> delete_column) const;
 
+  RelAlgExecutionUnit rewriteCountDistinctOnGroupByColumn(
+      const RelAlgExecutionUnit& ra_exe_unit_in) const;
+
  private:
   RelAlgExecutionUnit rewriteOverlapsJoin(
       const RelAlgExecutionUnit& ra_exe_unit_in) const;
@@ -46,6 +49,9 @@ class QueryRewriter {
 
   static std::shared_ptr<Analyzer::CaseExpr> generateCaseForDomainValues(
       const Analyzer::InValues*);
+
+  std::shared_ptr<Analyzer::CaseExpr> generateCaseExprForCountDistinctOnGroupByCol(
+      std::shared_ptr<Analyzer::Expr> expr) const;
 
   const std::vector<InputTableInfo>& query_infos_;
   Executor* executor_;

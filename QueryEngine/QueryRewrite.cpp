@@ -28,7 +28,9 @@
 RelAlgExecutionUnit QueryRewriter::rewrite(
     const RelAlgExecutionUnit& ra_exe_unit_in) const {
   auto rewritten_exe_unit = rewriteConstrainedByIn(ra_exe_unit_in);
-  return rewriteOverlapsJoin(rewritten_exe_unit);
+  auto rewritten_count_distinct_op_exe_unit =
+      rewriteCountDistinctOnGroupByColumn(rewritten_exe_unit);
+  return rewriteOverlapsJoin(rewritten_count_distinct_op_exe_unit);
 }
 
 RelAlgExecutionUnit QueryRewriter::rewriteOverlapsJoin(
@@ -198,6 +200,25 @@ std::shared_ptr<Analyzer::CaseExpr> QueryRewriter::generateCaseForDomainValues(
   auto else_expr = case_expr_list.front().second;
   return makeExpr<Analyzer::CaseExpr>(
       case_expr_list.front().second->get_type_info(), false, case_expr_list, else_expr);
+}
+
+std::shared_ptr<Analyzer::CaseExpr>
+QueryRewriter::generateCaseExprForCountDistinctOnGroupByCol(
+    std::shared_ptr<Analyzer::Expr> expr) const {
+  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
+      case_expr_list;
+  auto is_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kISNULL, expr);
+  auto is_not_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kNOT, is_null);
+  Datum then_d;
+  then_d.bigintval = 1;
+  const auto then_constant = makeExpr<Analyzer::Constant>(kBIGINT, false, then_d);
+  case_expr_list.emplace_back(is_not_null, then_constant);
+  Datum else_d;
+  else_d.bigintval = 0;
+  const auto else_constant = makeExpr<Analyzer::Constant>(kBIGINT, false, else_d);
+  auto case_expr = makeExpr<Analyzer::CaseExpr>(
+      then_constant->get_type_info(), false, case_expr_list, else_constant);
+  return case_expr;
 }
 
 namespace {
@@ -477,6 +498,56 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarDelete(
                                          ra_exe_unit_in.join_quals,
                                          ra_exe_unit_in.groupby_exprs,
                                          target_exprs,
+                                         ra_exe_unit_in.estimator,
+                                         ra_exe_unit_in.sort_info,
+                                         ra_exe_unit_in.scan_limit,
+                                         ra_exe_unit_in.query_hint,
+                                         ra_exe_unit_in.query_plan_dag,
+                                         ra_exe_unit_in.hash_table_build_plan_dag,
+                                         ra_exe_unit_in.use_bump_allocator,
+                                         ra_exe_unit_in.union_all,
+                                         ra_exe_unit_in.query_state};
+  return rewritten_exe_unit;
+}
+
+RelAlgExecutionUnit QueryRewriter::rewriteCountDistinctOnGroupByColumn(
+    const RelAlgExecutionUnit& ra_exe_unit_in) const {
+  auto is_expr_on_gby_col = [&ra_exe_unit_in](const Analyzer::AggExpr* agg_expr) {
+    auto gby_cols = ra_exe_unit_in.groupby_exprs;
+    for (auto gby_col : gby_cols) {
+      if (gby_col == agg_expr->get_own_arg()) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  auto is_count_distinct_agg = [](const Analyzer::AggExpr* agg_expr) {
+    return (agg_expr->get_aggtype() == SQLAgg::kCOUNT && agg_expr->get_is_distinct()) ||
+           agg_expr->get_aggtype() == SQLAgg::kAPPROX_COUNT_DISTINCT;
+  };
+
+  std::vector<Analyzer::Expr*> new_target_exprs;
+  for (auto expr : ra_exe_unit_in.target_exprs) {
+    if (auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(expr)) {
+      if (is_count_distinct_agg(agg_expr) && is_expr_on_gby_col(agg_expr)) {
+        auto case_expr =
+            generateCaseExprForCountDistinctOnGroupByCol(agg_expr->get_own_arg());
+        new_target_exprs.push_back(case_expr.get());
+        target_exprs_owned_.emplace_back(case_expr);
+        continue;
+      }
+    }
+    new_target_exprs.push_back(expr);
+  }
+
+  RelAlgExecutionUnit rewritten_exe_unit{ra_exe_unit_in.input_descs,
+                                         ra_exe_unit_in.input_col_descs,
+                                         ra_exe_unit_in.simple_quals,
+                                         ra_exe_unit_in.quals,
+                                         ra_exe_unit_in.join_quals,
+                                         ra_exe_unit_in.groupby_exprs,
+                                         new_target_exprs,
                                          ra_exe_unit_in.estimator,
                                          ra_exe_unit_in.sort_info,
                                          ra_exe_unit_in.scan_limit,
