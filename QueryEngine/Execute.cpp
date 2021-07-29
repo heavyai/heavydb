@@ -2565,18 +2565,15 @@ FetchResult Executor::fetchChunks(
           // i.e., a column that is classified as varlen type, i.e., array
           // for now, we only support fixed-length array that contains
           // geo point coordianates but we can support more types in this way
-          if (needLinearizeAllFragments(cd,
-                                        *col_id,
-                                        ra_exe_unit,
-                                        selected_fragments,
-                                        memory_level_for_column)) {
+          if (needLinearizeAllFragments(
+                  cd, *col_id, ra_exe_unit, selected_fragments, memory_level)) {
             frag_col_buffers[it->second] =
                 column_fetcher.linearizeColumnFragments(table_id,
                                                         col_id->getColId(),
                                                         all_tables_fragments,
                                                         chunks,
                                                         chunk_iterators,
-                                                        memory_level_for_column,
+                                                        memory_level,
                                                         device_id,
                                                         device_allocator,
                                                         thread_idx);
