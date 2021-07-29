@@ -2470,6 +2470,12 @@ TEST_P(GeoSpatialMultiFragTestTablesFixture, LoopJoin) {
         v<int64_t>(run_simple_agg(
             R"(SELECT count(*) FROM geospatial_multi_frag_test t1, geospatial_multi_frag_test t2 WHERE ST_DISTANCE(t1.pt_comp, t2.pt_comp) is null;)",
             dt)));
+    ASSERT_NEAR(
+        static_cast<double>(14.14213561714551),
+        v<double>(run_simple_agg(
+            R"(SELECT MAX(ST_DISTANCE(t1.pt, t2.pt)) FROM geospatial_multi_frag_test t1, geospatial_multi_frag_test t2;)",
+            dt)),
+        static_cast<double>(0.01));
   }
 }
 
