@@ -53,14 +53,20 @@ class Centroid : public Codegen {
 
     const uint32_t coords_elem_sz_bytes =
         operand_ti.get_compression() == kENCODING_GEOINT ? 1 : 8;
+    auto& builder = cgen_state->ir_builder_;
 
     std::vector<llvm::Value*> operand_lvs;
     // iterate over column inputs
     if (dynamic_cast<const Analyzer::ColumnVar*>(operand)) {
       for (size_t i = 0; i < arg_lvs.size(); i++) {
         auto lv = arg_lvs[i];
-        operand_lvs.push_back(cgen_state->emitExternalCall(
-            "array_buff", llvm::Type::getInt8PtrTy(cgen_state->context_), {lv, pos_lv}));
+        auto array_buff_lv = cgen_state->emitExternalCall(
+            "array_buff", llvm::Type::getInt8PtrTy(cgen_state->context_), {lv, pos_lv});
+        if (i > 0) {
+          array_buff_lv = builder.CreateBitCast(
+              array_buff_lv, llvm::Type::getInt32PtrTy(cgen_state->context_));
+        }
+        operand_lvs.push_back(array_buff_lv);
         const auto ptr_type = llvm::dyn_cast_or_null<llvm::PointerType>(lv->getType());
         CHECK(ptr_type);
         const auto elem_type = ptr_type->getElementType();
@@ -71,11 +77,20 @@ class Centroid : public Codegen {
           array_sz_args.push_back(
               cgen_state->llInt(static_cast<int32_t>(inline_int_null_value<int32_t>())));
         }
-        operand_lvs.push_back(cgen_state->emitExternalCall(
-            size_fn_name, get_int_type(32, cgen_state->context_), array_sz_args));
+        operand_lvs.push_back(builder.CreateSExt(
+            cgen_state->emitExternalCall(
+                size_fn_name, get_int_type(32, cgen_state->context_), array_sz_args),
+            llvm::Type::getInt64Ty(cgen_state->context_)));
       }
     } else {
-      operand_lvs = arg_lvs;
+      for (size_t i = 0; i < arg_lvs.size(); i++) {
+        auto arg_lv = arg_lvs[i];
+        if (i > 0 && arg_lv->getType()->isPointerTy()) {
+          arg_lv = builder.CreateBitCast(arg_lv,
+                                         llvm::Type::getInt32PtrTy(cgen_state->context_));
+        }
+        operand_lvs.push_back(arg_lv);
+      }
     }
     CHECK_EQ(operand_lvs.size(),
              size_t(2 * operand_ti.get_physical_coord_cols()));  // array ptr and size
@@ -141,11 +156,9 @@ class Centroid : public Codegen {
         pt_local_storage_lv, {idx_lv, idx_lv}, "", builder.GetInsertBlock());
     // Pass local storage to centroid function
     operand_lvs.push_back(pt_local_storage_gep);
-    cgen_state->emitExternalCall(func_name,
-                                 ret_ti.get_type() == kDOUBLE
-                                     ? llvm::Type::getDoubleTy(cgen_state->context_)
-                                     : llvm::Type::getFloatTy(cgen_state->context_),
-                                 operand_lvs);
+    CHECK(ret_ti.get_type() == kPOINT);
+    cgen_state->emitExternalCall(
+        func_name, llvm::Type::getVoidTy(cgen_state->context_), operand_lvs);
 
     llvm::Value* ret_coords = pt_local_storage_lv;
     if (ret_ti.get_compression() == kENCODING_GEOINT) {

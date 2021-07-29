@@ -406,6 +406,10 @@ public class ExtensionFunction {
       case ColumnListBool:
       case ColumnListTextEncodingDict:
         return SqlTypeName.COLUMN_LIST;
+      case Void:
+        // some extension functions return void. these functions should be defined in
+        // MapDSqlOperatorTable and never have their definition set from the AST file
+        return null;
     }
     Set<SqlTypeName> allSqlTypeNames = EnumSet.allOf(SqlTypeName.class);
     MAPDLOGGER.error("toSqlTypeName: unknown type " + type + " to be mapped to {"
