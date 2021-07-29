@@ -153,6 +153,61 @@ int32_t TableFunction::countScalarArgs() const {
   return scalar_args;
 }
 
+const std::map<std::string, std::string>& TableFunction::getAnnotation(
+    const size_t idx) const {
+  CHECK_LT(idx, annotations_.size());
+  if (annotations_.size() == 0) {
+    static const std::map<std::string, std::string> empty = {};
+    return empty;
+  }
+  return annotations_[idx];
+}
+
+const std::map<std::string, std::string>& TableFunction::getInputAnnotation(
+    const size_t input_arg_idx) const {
+  CHECK_LT(input_arg_idx, input_args_.size());
+  return getAnnotation(input_arg_idx);
+}
+
+const std::map<std::string, std::string>& TableFunction::getOutputAnnotation(
+    const size_t output_arg_idx) const {
+  CHECK_LT(output_arg_idx, output_args_.size());
+  return getAnnotation(output_arg_idx + sql_args_.size());
+}
+
+std::pair<int32_t, int32_t> TableFunction::getInputID(const size_t idx) const {
+  // if the annotation is of the form args<INT,INT>, it is refering to a column list
+#define PREFIX_LENGTH 5
+  const auto& annotation = getOutputAnnotation(idx);
+  auto annot = annotation.find("input_id");
+  if (annot == annotation.end()) {
+    size_t lo = 0;
+    for (const auto& ext_arg : input_args_) {
+      switch (ext_arg) {
+        case ExtArgumentType::TextEncodingDict:
+        case ExtArgumentType::ColumnTextEncodingDict:
+        case ExtArgumentType::ColumnListTextEncodingDict:
+          return std::make_pair(lo, 0);
+        default:
+          lo++;
+      }
+    }
+    UNREACHABLE();
+  }
+
+  const std::string& input_id = annot->second;
+
+  size_t comma = input_id.find(",");
+  int32_t gt = input_id.size() - 1;
+  int32_t lo = std::stoi(input_id.substr(PREFIX_LENGTH, comma - 1));
+
+  if (comma == std::string::npos) {
+    return std::make_pair(lo, 0);
+  }
+  int32_t hi = std::stoi(input_id.substr(comma + 1, gt - comma - 1));
+  return std::make_pair(lo, hi);
+}
+
 size_t TableFunction::getSqlOutputRowSizeParameter() const {
   /*
     This function differs from getOutputRowSizeParameter() since it returns the correct
@@ -197,13 +252,16 @@ size_t TableFunction::getSqlOutputRowSizeParameter() const {
   return getOutputRowSizeParameter();
 }
 
-void TableFunctionsFactory::add(const std::string& name,
-                                const TableFunctionOutputRowSizer sizer,
-                                const std::vector<ExtArgumentType>& input_args,
-                                const std::vector<ExtArgumentType>& output_args,
-                                const std::vector<ExtArgumentType>& sql_args,
-                                bool is_runtime) {
-  auto tf = TableFunction(name, sizer, input_args, output_args, sql_args, is_runtime);
+void TableFunctionsFactory::add(
+    const std::string& name,
+    const TableFunctionOutputRowSizer sizer,
+    const std::vector<ExtArgumentType>& input_args,
+    const std::vector<ExtArgumentType>& output_args,
+    const std::vector<ExtArgumentType>& sql_args,
+    const std::vector<std::map<std::string, std::string>>& annotations,
+    bool is_runtime) {
+  auto tf = TableFunction(
+      name, sizer, input_args, output_args, sql_args, annotations, is_runtime);
   auto sig = tf.getSignature();
   for (auto it = functions_.begin(); it != functions_.end();) {
     if (it->second.getName() == name) {
@@ -242,6 +300,7 @@ void TableFunctionsFactory::add(const std::string& name,
                              input_args2,
                              output_args,
                              sql_args2,
+                             annotations,
                              is_runtime);
     auto sig = tf2.getSignature();
     for (auto it = functions_.begin(); it != functions_.end();) {

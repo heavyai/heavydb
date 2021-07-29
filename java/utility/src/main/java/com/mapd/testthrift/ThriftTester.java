@@ -174,7 +174,7 @@ public class ThriftTester {
       logger.info("Trying to disconnect session " + session);
       client.disconnect(session);
     } catch (TOmniSciException ex) {
-      logger.error(ex.toString());
+      logger.error(ex.getError_msg());
       ex.printStackTrace();
     } catch (TException ex) {
       logger.error(ex.toString());

@@ -22,15 +22,15 @@
 
 class PerfectJoinHashTableBuilder {
  public:
-  PerfectJoinHashTableBuilder(const Catalog_Namespace::Catalog* catalog)
-      : catalog_(catalog) {}
+  PerfectJoinHashTableBuilder() {}
 
   void allocateDeviceMemory(const JoinColumn& join_column,
                             const HashType layout,
                             HashEntryInfo& hash_entry_info,
                             const size_t shard_count,
                             const int device_id,
-                            const int device_count) {
+                            const int device_count,
+                            const Executor* executor) {
 #ifdef HAVE_CUDA
     if (shard_count) {
       const auto shards_per_device = (shard_count + device_count - 1) / device_count;
@@ -45,7 +45,7 @@ class PerfectJoinHashTableBuilder {
             : 2 * hash_entry_info.getNormalizedHashEntryCount() + join_column.num_elems;
     CHECK(!hash_table_);
     hash_table_ =
-        std::make_unique<PerfectHashTable>(catalog_,
+        std::make_unique<PerfectHashTable>(executor->getDataMgr(),
                                            layout,
                                            ExecutorDeviceType::GPU,
                                            hash_entry_info.getNormalizedHashEntryCount(),
@@ -70,18 +70,17 @@ class PerfectJoinHashTableBuilder {
                           const int device_id,
                           const int device_count,
                           const Executor* executor) {
-    auto catalog = executor->getCatalog();
-    auto& data_mgr = catalog->getDataMgr();
+    auto data_mgr = executor->getDataMgr();
     Data_Namespace::AbstractBuffer* gpu_hash_table_err_buff =
-        CudaAllocator::allocGpuAbstractBuffer(&data_mgr, sizeof(int), device_id);
+        CudaAllocator::allocGpuAbstractBuffer(data_mgr, sizeof(int), device_id);
     ScopeGuard cleanup_error_buff = [&data_mgr, gpu_hash_table_err_buff]() {
-      data_mgr.free(gpu_hash_table_err_buff);
+      data_mgr->free(gpu_hash_table_err_buff);
     };
     CHECK(gpu_hash_table_err_buff);
     auto dev_err_buff =
         reinterpret_cast<CUdeviceptr>(gpu_hash_table_err_buff->getMemoryPtr());
     int err{0};
-    copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
+    copy_to_gpu(data_mgr, dev_err_buff, &err, sizeof(err), device_id);
 
     CHECK(hash_table_);
     auto gpu_hash_table_buff = hash_table_->getGpuBuffer();
@@ -160,7 +159,7 @@ class PerfectJoinHashTableBuilder {
         }
       }
     }
-    copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
+    copy_from_gpu(data_mgr, &err, dev_err_buff, sizeof(err), device_id);
     if (err) {
       if (layout == HashType::OneToOne) {
         throw NeedsOneToManyHash();
@@ -188,7 +187,7 @@ class PerfectJoinHashTableBuilder {
 
     CHECK(!hash_table_);
     hash_table_ =
-        std::make_unique<PerfectHashTable>(catalog_,
+        std::make_unique<PerfectHashTable>(executor->getDataMgr(),
                                            hash_type,
                                            ExecutorDeviceType::CPU,
                                            hash_entry_info.getNormalizedHashEntryCount(),
@@ -290,7 +289,7 @@ class PerfectJoinHashTableBuilder {
 
     CHECK(!hash_table_);
     hash_table_ =
-        std::make_unique<PerfectHashTable>(catalog_,
+        std::make_unique<PerfectHashTable>(executor->getDataMgr(),
                                            HashType::OneToMany,
                                            ExecutorDeviceType::CPU,
                                            hash_entry_info.getNormalizedHashEntryCount(),
@@ -374,7 +373,5 @@ class PerfectJoinHashTableBuilder {
   }
 
  private:
-  const Catalog_Namespace::Catalog* catalog_;
-
   std::unique_ptr<PerfectHashTable> hash_table_;
 };

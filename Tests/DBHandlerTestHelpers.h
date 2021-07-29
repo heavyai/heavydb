@@ -474,6 +474,12 @@ class DBHandlerTestFixture : public testing::Test {
     return true;
   }
 
+  void resizeDispatchQueue(size_t queue_size) {
+    db_handler_->resizeDispatchQueue(queue_size);
+  }
+
+  size_t getRowCount(const TQueryResult& result) { return getRowCount(result.row_set); }
+
  private:
   size_t getRowCount(const TRowSet& row_set) {
     size_t row_count;

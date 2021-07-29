@@ -348,9 +348,7 @@ int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_i
                                                  const size_t shard_count) const {
   size_t device_count{0};
   if (device_type_ == ExecutorDeviceType::GPU) {
-    auto cuda_mgr = executor_->getCatalog()->getDataMgr().getCudaMgr();
-    CHECK(cuda_mgr);
-    device_count = executor_->getCatalog()->getDataMgr().getCudaMgr()->getDeviceCount();
+    device_count = executor_->cudaMgr()->getDeviceCount();
     CHECK_GT(device_count, 0u);
   }
 
@@ -1024,21 +1022,14 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
          null_key_lv,
          order_entry_lv});
   } else {
-    llvm::Value* output_buffer_entry_count_lv{nullptr};
-    if (ra_exe_unit_.use_bump_allocator) {
-      output_buffer_entry_count_lv =
-          LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "max_matched"));
-      CHECK(output_buffer_entry_count_lv);
-    }
+    const auto output_buffer_entry_count_lv =
+        LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "max_matched"));
     const auto group_expr_lv =
         LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "old_total_matched"));
-    std::vector<llvm::Value*> args{
-        groups_buffer,
-        output_buffer_entry_count_lv
-            ? output_buffer_entry_count_lv
-            : LL_INT(static_cast<int32_t>(query_mem_desc.getEntryCount())),
-        group_expr_lv,
-        code_generator.posArg(nullptr)};
+    std::vector<llvm::Value*> args{groups_buffer,
+                                   output_buffer_entry_count_lv,
+                                   group_expr_lv,
+                                   code_generator.posArg(nullptr)};
     if (query_mem_desc.didOutputColumnar()) {
       const auto columnar_output_offset =
           emitCall("get_columnar_scan_output_offset", args);

@@ -58,19 +58,45 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 
 class TableFunctions : public ::testing::Test {
   void SetUp() override {
-    run_ddl_statement("DROP TABLE IF EXISTS tf_test;");
-    run_ddl_statement(
-        "CREATE TABLE tf_test (x INT, d DOUBLE, d2 DOUBLE) WITH (FRAGMENT_SIZE=2);");
+    {
+      run_ddl_statement("DROP TABLE IF EXISTS tf_test;");
+      run_ddl_statement(
+          "CREATE TABLE tf_test (x INT, d DOUBLE, d2 DOUBLE) WITH (FRAGMENT_SIZE=2);");
 
-    TestHelpers::ValuesGenerator gen("tf_test");
+      TestHelpers::ValuesGenerator gen("tf_test");
 
-    for (int i = 0; i < 5; i++) {
-      const auto insert_query = gen(i, i * 1.1, 1.0 - i * 2.2);
-      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      for (int i = 0; i < 5; i++) {
+        const auto insert_query = gen(i, i * 1.1, 1.0 - i * 2.2);
+        run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      }
+    }
+    {
+      run_ddl_statement("DROP TABLE IF EXISTS sd_test;");
+      run_ddl_statement(
+          "CREATE TABLE sd_test ("
+          "   base TEXT ENCODING DICT(32),"
+          "   derived TEXT,"
+          "   SHARED DICTIONARY (derived) REFERENCES sd_test(base)"
+          ");");
+
+      TestHelpers::ValuesGenerator gen("sd_test");
+      std::vector<std::pair<std::string, std::string>> v = {{"'hello'", "'world'"},
+                                                            {"'foo'", "'bar'"},
+                                                            {"'bar'", "'baz'"},
+                                                            {"'world'", "'foo'"},
+                                                            {"'baz'", "'hello'"}};
+
+      for (const auto p : v) {
+        const auto insert_query = gen(p.first, p.second);
+        run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      }
     }
   }
 
-  void TearDown() override { run_ddl_statement("DROP TABLE IF EXISTS tf_test;"); }
+  void TearDown() override {
+    run_ddl_statement("DROP TABLE IF EXISTS tf_test;");
+    run_ddl_statement("DROP TABLE IF EXISTS sd_test;");
+  }
 };
 
 TEST_F(TableFunctions, BasicProjection) {
@@ -166,6 +192,43 @@ TEST_F(TableFunctions, BasicProjection) {
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(2));
     }
+    // TextEncodingDict specific tests
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier_text(cursor(SELECT base FROM sd_test),"
+          "1));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+      std::vector<std::string> expected_result_set{"hello", "foo", "bar", "world", "baz"};
+      for (size_t i = 0; i < 5; i++) {
+        auto row = rows->getNextRow(true, false);
+        auto s = boost::get<std::string>(TestHelpers::v<NullableString>(row[0]));
+        ASSERT_EQ(s, expected_result_set[i]);
+      }
+    }
+    {
+      const auto rows = run_multiple_agg("SELECT base FROM sd_test;", dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+      std::vector<std::string> expected_result_set{"hello", "foo", "bar", "world", "baz"};
+      for (size_t i = 0; i < 5; i++) {
+        auto row = rows->getNextRow(true, false);
+        auto s = boost::get<std::string>(TestHelpers::v<NullableString>(row[0]));
+        ASSERT_EQ(s, expected_result_set[i]);
+      }
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier_text(cursor(SELECT derived FROM sd_test),"
+          "1));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+      std::vector<std::string> expected_result_set{"world", "bar", "baz", "foo", "hello"};
+      for (size_t i = 0; i < 5; i++) {
+        auto row = rows->getNextRow(true, false);
+        auto s = boost::get<std::string>(TestHelpers::v<NullableString>(row[0]));
+        ASSERT_EQ(s, expected_result_set[i]);
+      }
+    }
   }
 }
 
@@ -249,6 +312,35 @@ TEST_F(TableFunctions, GroupByInAndOut) {
           "GROUP BY out0 ORDER BY out0;",
           dt);
       check_result(rows, 4);
+    }
+    // TextEncodingDict specific tests
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier_text(cursor(SELECT base FROM sd_test),"
+          "1)) "
+          "ORDER BY out0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+      std::vector<std::string> expected_result_set{"bar", "baz", "foo", "hello", "world"};
+      for (size_t i = 0; i < 5; i++) {
+        auto row = rows->getNextRow(true, false);
+        auto s = boost::get<std::string>(TestHelpers::v<NullableString>(row[0]));
+        ASSERT_EQ(s, expected_result_set[i]);
+      }
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier_text(cursor(SELECT derived FROM sd_test),"
+          "1)) "
+          "ORDER BY out0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+      std::vector<std::string> expected_result_set{"bar", "baz", "foo", "hello", "world"};
+      for (size_t i = 0; i < 5; i++) {
+        auto row = rows->getNextRow(true, false);
+        auto s = boost::get<std::string>(TestHelpers::v<NullableString>(row[0]));
+        ASSERT_EQ(s, expected_result_set[i]);
+      }
     }
   }
 }

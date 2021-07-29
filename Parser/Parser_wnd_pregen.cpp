@@ -2623,8 +2623,8 @@ YY_Parser_PARSE_PARAM_DEF
     {
       yyval.nodeval =
           TrackedPtr<Node>::make(lexer.parsed_node_tokens_,
-                                 new RenameDatabaseStmt((yyvsp[-3].stringval)->release(),
-                                                        (yyvsp[0].stringval)->release()));
+                                 new RenameDBStmt((yyvsp[-3].stringval)->release(),
+                                                  (yyvsp[0].stringval)->release()));
       ;
       break;
     }

@@ -985,6 +985,14 @@ std::map<std::string, std::string> get_device_parameters(bool cpu_only) {
   return result;
 }
 
+namespace {
+
+bool is_udf_module_present(bool cpu_only = false) {
+  return (cpu_only || udf_gpu_module != nullptr) && (udf_cpu_module != nullptr);
+}
+
+}  // namespace
+
 std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     llvm::Function* func,
     llvm::Function* wrapper_func,
@@ -1350,10 +1358,7 @@ void Executor::initializeNVPTXBackend() const {
   if (nvptx_target_machine_) {
     return;
   }
-  const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
-  LOG_IF(FATAL, cuda_mgr == nullptr) << "No CudaMgr instantiated, unable to check device "
-                                        "architecture or generate code for nvidia GPUs.";
-  const auto arch = cuda_mgr->getDeviceArch();
+  const auto arch = cudaMgr()->getDeviceArch();
   nvptx_target_machine_ = CodeGenerator::initializeNVPTXBackend(arch);
 }
 
@@ -1725,13 +1730,11 @@ std::unique_ptr<llvm::Module> g_rt_libdevice_module(
     read_libdevice_module(getGlobalLLVMContext()));
 #endif
 
-bool is_udf_module_present(bool cpu_only) {
-  return (cpu_only || udf_gpu_module != nullptr) && (udf_cpu_module != nullptr);
-}
-
 bool is_rt_udf_module_present(bool cpu_only) {
   return (cpu_only || rt_udf_gpu_module != nullptr) && (rt_udf_cpu_module != nullptr);
 }
+
+namespace {
 
 void read_udf_gpu_module(const std::string& udf_ir_filename) {
   llvm::SMDiagnostic parse_error;
@@ -1760,6 +1763,17 @@ void read_udf_cpu_module(const std::string& udf_ir_filename) {
   udf_cpu_module = llvm::parseIRFile(file_name_arg, parse_error, getGlobalLLVMContext());
   if (!udf_cpu_module) {
     throw_parseIR_error(parse_error, udf_ir_filename);
+  }
+}
+
+}  // namespace
+
+void Executor::addUdfIrToModule(const std::string& udf_ir_filename,
+                                const bool is_cuda_ir) {
+  if (is_cuda_ir) {
+    read_udf_gpu_module(udf_ir_filename);
+  } else {
+    read_udf_cpu_module(udf_ir_filename);
   }
 }
 
@@ -2525,7 +2539,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   auto timer = DEBUG_TIMER(__func__);
 
   if (co.device_type == ExecutorDeviceType::GPU) {
-    const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
+    const auto cuda_mgr = data_mgr_->getCudaMgr();
     if (!cuda_mgr) {
       throw QueryMustRunOnCpu();
     }

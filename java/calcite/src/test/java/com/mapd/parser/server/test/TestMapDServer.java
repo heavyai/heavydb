@@ -131,7 +131,7 @@ public class TestMapDServer {
                 + " != " + res.row_set.columns.get(0).nulls.size());
       }
     } catch (TOmniSciException x) {
-      fail("Exception on EXECUTE " + x.toString());
+      fail("Exception on EXECUTE " + x.getError_msg());
     } catch (TException x) {
       fail("Exception on EXECUTE " + x.toString());
     }

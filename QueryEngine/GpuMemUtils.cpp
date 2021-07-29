@@ -72,7 +72,7 @@ GpuGroupByBuffers create_dev_group_by_buffers(
     const bool has_varlen_output,
     Allocator* insitu_allocator) {
   if (group_by_buffers.empty() && !insitu_allocator) {
-    return {0, 0, 0};
+    return {0, 0, 0, 0};
   }
   CHECK(cuda_allocator);
 
@@ -201,12 +201,14 @@ GpuGroupByBuffers create_dev_group_by_buffers(
     }
   }
 
+  CUdeviceptr varlen_output_buffer{0};
   if (has_varlen_output) {
     const auto varlen_buffer_elem_size_opt = query_mem_desc.varlenOutputBufferElemSize();
     CHECK(varlen_buffer_elem_size_opt);  // TODO(adb): relax
 
     group_by_dev_buffers[0] = reinterpret_cast<CUdeviceptr>(cuda_allocator->alloc(
         query_mem_desc.getEntryCount() * varlen_buffer_elem_size_opt.value()));
+    varlen_output_buffer = group_by_dev_buffers[0];
   }
 
   auto group_by_dev_ptr = cuda_allocator->alloc(num_ptrs * sizeof(CUdeviceptr));
@@ -216,7 +218,8 @@ GpuGroupByBuffers create_dev_group_by_buffers(
 
   return {reinterpret_cast<CUdeviceptr>(group_by_dev_ptr),
           group_by_dev_buffers_mem,
-          entry_count};
+          entry_count,
+          varlen_output_buffer};
 }
 
 void copy_from_gpu(Data_Namespace::DataMgr* data_mgr,
@@ -314,7 +317,7 @@ void copy_projection_buffer_from_gpu_columnar(
   // copy all the row indices back to the host
   copy_from_gpu(data_mgr,
                 reinterpret_cast<int64_t*>(projection_buffer),
-                gpu_group_by_buffers.second,
+                gpu_group_by_buffers.data,
                 projection_count * row_index_width,
                 device_id);
   size_t buffer_offset_cpu{projection_count * row_index_width};
@@ -325,7 +328,7 @@ void copy_projection_buffer_from_gpu_columnar(
           projection_count * query_mem_desc.getPaddedSlotWidthBytes(i);
       copy_from_gpu(data_mgr,
                     projection_buffer + buffer_offset_cpu,
-                    gpu_group_by_buffers.second + query_mem_desc.getColOffInBytes(i),
+                    gpu_group_by_buffers.data + query_mem_desc.getColOffInBytes(i),
                     column_proj_size,
                     device_id);
       buffer_offset_cpu += align_to_int64(column_proj_size);

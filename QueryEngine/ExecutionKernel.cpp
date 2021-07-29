@@ -139,6 +139,8 @@ void ExecutionKernel::runImpl(Executor* executor,
   auto catalog = executor->getCatalog();
   CHECK(catalog);
 
+  auto data_mgr = executor->getDataMgr();
+
   // need to own them while query executes
   auto chunk_iterators_ptr = std::make_shared<std::list<ChunkIter>>();
   std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks;
@@ -147,8 +149,7 @@ void ExecutionKernel::runImpl(Executor* executor,
   if (chosen_device_type == ExecutorDeviceType::GPU) {
     gpu_lock.reset(
         new std::lock_guard<std::mutex>(executor->gpu_exec_mutex_[chosen_device_id]));
-    device_allocator =
-        std::make_unique<CudaAllocator>(&catalog->getDataMgr(), chosen_device_id);
+    device_allocator = std::make_unique<CudaAllocator>(data_mgr, chosen_device_id);
   }
   FetchResult fetch_result;
   try {
@@ -297,7 +298,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                               query_exe_context,
                                               fetch_result.num_rows,
                                               fetch_result.frag_offsets,
-                                              &catalog->getDataMgr(),
+                                              data_mgr,
                                               chosen_device_id,
                                               start_rowid,
                                               ra_exe_unit_.input_descs.size(),
@@ -318,7 +319,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                            query_exe_context,
                                            fetch_result.num_rows,
                                            fetch_result.frag_offsets,
-                                           &catalog->getDataMgr(),
+                                           data_mgr,
                                            chosen_device_id,
                                            outer_table_id,
                                            ra_exe_unit_.scan_limit,

@@ -47,7 +47,6 @@ class ParquetInPlaceEncoder : public ParquetScalarEncoder {
    * @param rep_levels - an array containing the Dremel encoding repetition levels
    * @param values_read - the number of non-null values read
    * @param levels_read - the total number of values (non-null & null) that are read
-   * @param is_last_batch - flag indicating if this is the last read for the row group
    * @param values - values that are read
    *
    * Note that the Parquet format encodes nulls using Dremel encoding.
@@ -56,7 +55,6 @@ class ParquetInPlaceEncoder : public ParquetScalarEncoder {
                   const int16_t* rep_levels,
                   const int64_t values_read,
                   const int64_t levels_read,
-                  const bool is_last_batch,
                   int8_t* values) override {
     if (omnisci_data_type_byte_size_ < parquet_data_type_byte_size_) {
       for (int64_t i = 0; i < values_read; ++i) {
@@ -138,7 +136,6 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
                   const int16_t* rep_levels,
                   const int64_t values_read,
                   const int64_t levels_read,
-                  const bool is_last_batch,
                   int8_t* values) override {
     if (std::is_same<V, T>::value && values_read == levels_read) {
       if (!encodingIsIdentityForSameTypes()) {
@@ -150,7 +147,7 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
       buffer_->append(values, levels_read * omnisci_data_type_byte_size_);
     } else {
       ParquetInPlaceEncoder::appendData(
-          def_levels, rep_levels, values_read, levels_read, is_last_batch, values);
+          def_levels, rep_levels, values_read, levels_read, values);
     }
   }
 

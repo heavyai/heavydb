@@ -118,24 +118,22 @@ TEST_F(CreateForeignServerTest, ExistingServerWithoutIfNotExists) {
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   sql(query);
-  queryAndAssertException(
-      query, "Exception: A foreign server with name \"test_server\" already exists.");
+  queryAndAssertException(query,
+                          "A foreign server with name \"test_server\" already exists.");
 }
 
 TEST_F(CreateForeignServerTest, OmniSciPrefix) {
   std::string query{
       "CREATE SERVER omnisci_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
-  queryAndAssertException(query,
-                          "Exception: Server names cannot start with \"omnisci\".");
+  queryAndAssertException(query, "Server names cannot start with \"omnisci\".");
 }
 
 TEST_F(CreateForeignServerTest, MissingStorageType) {
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(base_path = '/test_path/');"};
-  queryAndAssertException(
-      query, "Exception: Foreign server options must contain \"STORAGE_TYPE\".");
+  queryAndAssertException(query, "Foreign server options must contain \"STORAGE_TYPE\".");
 }
 
 TEST_F(CreateForeignServerTest, MissingBasePath) {
@@ -150,7 +148,7 @@ TEST_F(CreateForeignServerTest, InvalidOption) {
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(invalid_key = 'value', storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   std::string error_message{
-      "Exception: Invalid foreign server option \"INVALID_KEY\". "
+      "Invalid foreign server option \"INVALID_KEY\". "
       "Option must be one of the following: " +
       get_file_server_options()};
   queryAndAssertException(query, error_message);
@@ -161,7 +159,7 @@ TEST_F(CreateForeignServerTest, InvalidStorageType) {
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(storage_type = 'INVALID_TYPE', base_path = '/test_path/');"};
   std::string error_message{
-      "Exception: Invalid \"STORAGE_TYPE\" option value. Value must be one of the "
+      "Invalid \"STORAGE_TYPE\" option value. Value must be one of the "
       "following: " +
       get_file_storage_types()};
   queryAndAssertException(query, error_message);
@@ -172,7 +170,7 @@ TEST_F(CreateForeignServerTest, FsiDisabled) {
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   g_enable_fsi = false;
-  queryAndAssertException(query, "Exception: Syntax error at: SERVER");
+  queryAndAssertException(query, "Syntax error at: SERVER");
 }
 
 TEST_F(CreateForeignServerTest, InvalidDataWrapper) {
@@ -180,7 +178,7 @@ TEST_F(CreateForeignServerTest, InvalidDataWrapper) {
       "CREATE SERVER test_server FOREIGN DATA WRAPPER invalid_wrapper WITH "
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   std::string error_message{
-      "Exception: Invalid data wrapper type \"INVALID_WRAPPER\". "
+      "Invalid data wrapper type \"INVALID_WRAPPER\". "
       "Data wrapper type must be one of the following: " +
       get_data_wrapper_types()};
   queryAndAssertException(query, error_message);
@@ -188,8 +186,7 @@ TEST_F(CreateForeignServerTest, InvalidDataWrapper) {
 
 TEST_F(CreateForeignServerTest, MissingWithClause) {
   std::string query{"CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_parquet;"};
-  queryAndAssertException(
-      query, "Exception: Foreign server options must contain \"STORAGE_TYPE\".");
+  queryAndAssertException(query, "Foreign server options must contain \"STORAGE_TYPE\".");
 }
 
 class DropForeignServerTest : public DBHandlerTestFixture {
@@ -240,15 +237,15 @@ TEST_F(DropForeignServerTest, NonExistingServerWithIfExists) {
 
 TEST_F(DropForeignServerTest, NonExistingServerWithoutIfExists) {
   queryAndAssertException("DROP SERVER test_server_2;",
-                          "Exception: Foreign server with name \"test_server_2\" can not "
+                          "Foreign server with name \"test_server_2\" can not "
                           "be dropped. Server does not exist.");
 }
 
 TEST_F(DropForeignServerTest, DefaultServers) {
   queryAndAssertException("DROP SERVER omnisci_local_csv;",
-                          "Exception: OmniSci default servers cannot be dropped.");
+                          "OmniSci default servers cannot be dropped.");
   queryAndAssertException("DROP SERVER omnisci_local_parquet;",
-                          "Exception: OmniSci default servers cannot be dropped.");
+                          "OmniSci default servers cannot be dropped.");
 }
 
 TEST_F(DropForeignServerTest, ForeignTableReferencingServer) {
@@ -256,15 +253,14 @@ TEST_F(DropForeignServerTest, ForeignTableReferencingServer) {
   sql("CREATE FOREIGN TABLE test_table (c1 int) SERVER test_server_1 "
       "WITH (file_path = 'example_1.csv');");
   std::string error_message{
-      "Exception: Foreign server \"test_server_1\" is referenced by existing "
+      "Foreign server \"test_server_1\" is referenced by existing "
       "foreign tables and cannot be dropped."};
   queryAndAssertException("DROP SERVER test_server_1;", error_message);
 }
 
 TEST_F(DropForeignServerTest, FsiDisabled) {
   g_enable_fsi = false;
-  queryAndAssertException("DROP SERVER test_server;",
-                          "Exception: Syntax error at: SERVER");
+  queryAndAssertException("DROP SERVER test_server;", "Syntax error at: SERVER");
 }
 
 class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
@@ -305,7 +301,8 @@ class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
     try {
       sql("DROP USER test_user;");
     } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS"
+      // option.
       LOG(WARNING) << e.what();
     }
   }
@@ -338,7 +335,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, CreateServerWithoutPrivilege) {
   queryAndAssertException(
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');",
-      "Exception: Server test_server will not be created. "
+      "Server test_server will not be created. "
       "User has no create privileges.");
 }
 
@@ -363,7 +360,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, DropServerWithoutPrivilege) {
   createTestServer();
   login("test_user", "test_pass");
   queryAndAssertException("DROP SERVER test_server;",
-                          "Exception: Server test_server will not be dropped. "
+                          "Server test_server will not be dropped. "
                           "User has no DROP SERVER privileges.");
 }
 
@@ -388,7 +385,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, AlterServerWithoutPrivilege) {
   login("test_user", "test_pass");
   queryAndAssertException(
       "ALTER SERVER test_server SET FOREIGN DATA WRAPPER OMNISCI_PARQUET;",
-      "Exception: Server test_server can not be altered. User has no ALTER SERVER "
+      "Server test_server can not be altered. User has no ALTER SERVER "
       "privileges.");
 }
 
@@ -417,7 +414,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantRevokeAlterServerWithPrivilege) {
   login("test_user", "test_pass");
   queryAndAssertException(
       "ALTER SERVER test_server SET FOREIGN DATA WRAPPER OMNISCI_PARQUET;",
-      "Exception: Server test_server can not be altered. User has no ALTER SERVER "
+      "Server test_server can not be altered. User has no ALTER SERVER "
       "privileges.");
 }
 
@@ -428,7 +425,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantRevokeAlterServerWithSpecificPrivile
   login("test_user", "test_pass");
   queryAndAssertException(
       "ALTER SERVER test_server SET FOREIGN DATA WRAPPER OMNISCI_PARQUET;",
-      "Exception: Server test_server can not be altered. User has no ALTER SERVER "
+      "Server test_server can not be altered. User has no ALTER SERVER "
       "privileges.");
 }
 
@@ -443,7 +440,7 @@ TEST_F(ForeignServerPrivilegesDdlTest,
   createTestServer();
   login("test_user", "test_pass");
   queryAndAssertException("DROP SERVER test_server;",
-                          "Exception: Server test_server will not be dropped. "
+                          "Server test_server will not be dropped. "
                           "User has no DROP SERVER privileges.");
 }
 
@@ -454,7 +451,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, CreateServerWithGrantThenRevokePrivilege)
   queryAndAssertException(
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');",
-      "Exception: Server test_server will not be created. "
+      "Server test_server will not be created. "
       "User has no create privileges.");
 }
 
@@ -464,7 +461,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, DropServerWithGrantThenRevokePrivilege) {
   sql("REVOKE DROP SERVER ON DATABASE omnisci FROM test_user;");
   login("test_user", "test_pass");
   queryAndAssertException("DROP SERVER test_server;",
-                          "Exception: Server test_server will not be dropped. "
+                          "Server test_server will not be dropped. "
                           "User has no DROP SERVER privileges.");
 }
 
@@ -474,53 +471,53 @@ TEST_F(ForeignServerPrivilegesDdlTest, DropServerWithGrantThenRevokeSpecificPriv
   sql("REVOKE DROP ON SERVER test_server FROM test_user;");
   login("test_user", "test_pass");
   queryAndAssertException("DROP SERVER test_server;",
-                          "Exception: Server test_server will not be dropped. "
+                          "Server test_server will not be dropped. "
                           "User has no DROP SERVER privileges.");
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, RevokeNonExistentPrivilege) {
   createTestServer();
   queryAndAssertException("REVOKE DROP SERVER ON DATABASE omnisci FROM test_user;",
-                          "Exception: Can not revoke privileges because"
+                          "Can not revoke privileges because"
                           " test_user has no privileges to omnisci");
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, RevokeNonExistentSpecificPrivilege) {
   createTestServer();
   queryAndAssertException("REVOKE DROP ON SERVER test_server FROM test_user;",
-                          "Exception: Can not revoke privileges because test_user"
+                          "Can not revoke privileges because test_user"
                           " has no privileges to test_server");
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, RevokeSpecificPrivilegeOnNonExistentServer) {
   queryAndAssertException("REVOKE DROP ON SERVER test_server FROM test_user;",
-                          "Exception: Failure generating DB object key. "
+                          "Failure generating DB object key. "
                           "Server test_server does not exist.");
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, GrantPrivilegeOnNonExistentDatabase) {
   queryAndAssertException("GRANT CREATE SERVER ON DATABASE nonexistent_db TO test_user;",
-                          "Exception: Failure generating DB object key."
+                          "Failure generating DB object key."
                           " Database nonexistent_db does not exist.");
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, GrantPrivilegeFsiDisabled) {
   g_enable_fsi = false;
   queryAndAssertException("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;",
-                          "Exception: GRANT failed. SERVER object unrecognized.");
+                          "GRANT failed. SERVER object unrecognized.");
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, RevokePrivilegeFsiDisabled) {
   g_enable_fsi = false;
   queryAndAssertException("REVOKE CREATE SERVER ON DATABASE omnisci FROM test_user;",
-                          "Exception: REVOKE failed. SERVER object unrecognized.");
+                          "REVOKE failed. SERVER object unrecognized.");
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, GrantSpecificPrivilegeFsiDisabled) {
   createTestServer();
   g_enable_fsi = false;
   queryAndAssertException("GRANT DROP ON SERVER test_server TO test_user;",
-                          "Exception: GRANT failed. SERVER object unrecognized.");
+                          "GRANT failed. SERVER object unrecognized.");
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, GrantAllCreateServerDropServer) {
@@ -547,7 +544,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantAllRevokeCreateServerCreateServer) {
   queryAndAssertException(
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');",
-      "Exception: Server test_server will not be created. "
+      "Server test_server will not be created. "
       "User has no create privileges.");
 }
 
@@ -560,7 +557,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantCreateServerRevokeAllCreateServer) {
   queryAndAssertException(
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');",
-      "Exception: Server test_server will not be created. "
+      "Server test_server will not be created. "
       "User has no create privileges.");
 }
 
@@ -572,7 +569,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantDropServerRevokeAllDropServer) {
   sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
   login("test_user", "test_pass");
   queryAndAssertException("DROP SERVER test_server;",
-                          "Exception: Server test_server will not be dropped. "
+                          "Server test_server will not be dropped. "
                           "User has no DROP SERVER privileges.");
 }
 
@@ -739,7 +736,7 @@ TEST_F(ShowForeignServerTest, SHOW_WHERE_EQ_EMPTY) {
 TEST_F(ShowForeignServerTest, SHOW_TIMESTAMP_LIKE) {
   // check that like operator with timestamp will error out
   queryAndAssertException("SHOW SERVERS WHERE created_at LIKE 'test';",
-                          "Exception: LIKE operator is incompatible with TIMESTAMP data");
+                          "LIKE operator is incompatible with TIMESTAMP data");
 }
 
 TEST_F(ShowForeignServerTest, SHOW_TIMESTAMP_EQ) {
@@ -873,28 +870,26 @@ TEST_F(ShowForeignServerTest, SHOW_PRIVILEGE) {
 
 TEST_F(ShowForeignServerTest, BadTimestamp) {
   std::string query{"SHOW SERVERS WHERE created_at = 'test';"};
-  queryAndAssertException(query, "Exception: Invalid TIMESTAMP string (test)");
+  queryAndAssertException(query, "Invalid TIMESTAMP string (test)");
 }
 
 TEST_F(ShowForeignServerTest, BadQuery) {
   std::string query{"SHOW SERVERS WHERE server_name 'x' ;"};
-  queryAndAssertException(
-      query,
-      "Exception: SQL Error: Encountered \"\\'x\\'\" at line 1, column 32.\nWas "
-      "expecting one of:\n"
-      "    \"LIKE\" ...\n    \"=\" ...\n    \".\" ...\n    ");
+  queryAndAssertException(query,
+                          "SQL Error: Encountered \"\\'x\\'\" at line 1, column 32.\nWas "
+                          "expecting one of:\n"
+                          "    \"LIKE\" ...\n    \"=\" ...\n    \".\" ...\n    ");
 }
 
 TEST_F(ShowForeignServerTest, BadAttribute) {
   std::string query{"SHOW SERVERS WHERE invalid_param = 'x';"};
-  queryAndAssertException(
-      query, "Exception: Attribute with name \"invalid_param\" does not exist.");
+  queryAndAssertException(query, "Attribute with name \"invalid_param\" does not exist.");
 }
 
 TEST_F(ShowForeignServerTest, FsiDisabled) {
   g_enable_fsi = false;
   std::string query{"SHOW SERVERS;"};
-  queryAndAssertException(query, "Exception: Unsupported command: SHOW FOREIGN SERVERS");
+  queryAndAssertException(query, "Unsupported command: SHOW FOREIGN SERVERS");
   g_enable_fsi = true;
 }
 
@@ -934,7 +929,8 @@ class AlterForeignServerTest : public DBHandlerTestFixture {
     try {
       sql("DROP USER test_user;");
     } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS"
+      // option.
       LOG(WARNING) << e.what();
     }
   }
@@ -1060,11 +1056,10 @@ TEST_F(AlterForeignServerTest, UserCreateServerRenameServerDropServer) {
 TEST_F(AlterForeignServerTest, UserCreateServerAttemptChangeOwner) {
   login("test_user", "test_pass");
   createTestServer();
-  queryAndAssertException(
-      "ALTER SERVER test_server OWNER TO " + OMNISCI_ROOT_USER + ";",
-      "Exception: Only a super user can change a foreign server's owner."
-      " Current user is not a super-user. Foreign server with name"
-      " \"test_server\" will not have owner changed.");
+  queryAndAssertException("ALTER SERVER test_server OWNER TO " + OMNISCI_ROOT_USER + ";",
+                          "Only a super user can change a foreign server's owner."
+                          " Current user is not a super-user. Foreign server with name"
+                          " \"test_server\" will not have owner changed.");
 }
 
 TEST_F(AlterForeignServerTest, ChangeOwnerSwicthUserDropServer) {
@@ -1082,7 +1077,7 @@ TEST_F(AlterForeignServerTest, UserCreateServerChangeOwnerDropServer) {
   sql("ALTER SERVER test_server OWNER TO " + OMNISCI_ROOT_USER + ";");
   login("test_user", "test_pass");
   queryAndAssertException("DROP SERVER test_server;",
-                          "Exception: Server test_server will not be dropped. User has"
+                          "Server test_server will not be dropped. User has"
                           " no DROP SERVER privileges.");
 }
 
@@ -1101,14 +1096,14 @@ TEST_F(AlterForeignServerTest, UserCreateServerDropUserChangeOwner) {
 TEST_F(AlterForeignServerTest, AlterNonExistentForeignServer) {
   queryAndAssertException(
       "ALTER SERVER test_server SET FOREIGN DATA WRAPPER omnisci_parquet;",
-      "Exception: Foreign server with name \"test_server\" does not exist "
+      "Foreign server with name \"test_server\" does not exist "
       "and can not be altered.");
 }
 
 TEST_F(AlterForeignServerTest, ChangeOwnerToNonExistentUser) {
   createTestServer();
   queryAndAssertException("ALTER SERVER test_server OWNER TO non_existent_user;",
-                          "Exception: User with username \"non_existent_user\" does not"
+                          "User with username \"non_existent_user\" does not"
                           " exist. Foreign server with name \"test_server\" can not "
                           "have owner changed.");
   assertExpectedForeignServer(
@@ -1121,7 +1116,7 @@ TEST_F(AlterForeignServerTest, RenameToExistingServer) {
       "WITH (storage_type = 'LOCAL_FILE', base_path = "
       "'/another_test_path/');");
   queryAndAssertException("ALTER SERVER test_server RENAME TO renamed_server;",
-                          "Exception: Foreign server with name \"test_server"
+                          "Foreign server with name \"test_server"
                           "\" can not be renamed to \"renamed_server\"."
                           "Foreign server with name \"renamed_server\" exists.");
   assertExpectedForeignServer(
@@ -1132,18 +1127,18 @@ TEST_F(AlterForeignServerTest, FsiDisabled) {
   createTestServer();
   g_enable_fsi = false;
   queryAndAssertException("ALTER SERVER test_server OWNER TO test_user;",
-                          "Exception: Syntax error at: SERVER");
+                          "Syntax error at: SERVER");
 }
 
 TEST_F(AlterForeignServerTest, OmniSciPrefix) {
   queryAndAssertException("ALTER SERVER omnisci_local_csv RENAME TO renamed_server;",
-                          "Exception: OmniSci default servers cannot be altered.");
+                          "OmniSci default servers cannot be altered.");
 }
 
 TEST_F(AlterForeignServerTest, RenameServerToOmniSciPrefix) {
   createTestServer();
   queryAndAssertException("ALTER SERVER test_server RENAME TO omnisci_local_csv;",
-                          "Exception: OmniSci prefix can not be used for new"
+                          "OmniSci prefix can not be used for new"
                           " name of server.");
   assertExpectedForeignServer(
       createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
@@ -1153,7 +1148,7 @@ TEST_F(AlterForeignServerTest, InvalidOption) {
   createTestServer();
   std::string query{"ALTER SERVER test_server SET (invalid_key = 'value');"};
   std::string error_message{
-      "Exception: Invalid foreign server option \"INVALID_KEY\". "
+      "Invalid foreign server option \"INVALID_KEY\". "
       "Option must be one of the following: " +
       get_file_server_options()};
   queryAndAssertException(query, error_message);
@@ -1167,7 +1162,7 @@ TEST_F(AlterForeignServerTest, InvalidStorageType) {
       "ALTER SERVER test_server SET "
       "(storage_type = 'INVALID_TYPE', base_path = '/test_path/');"};
   std::string error_message{
-      "Exception: Invalid \"STORAGE_TYPE\" option value. Value must be one of the "
+      "Invalid \"STORAGE_TYPE\" option value. Value must be one of the "
       "following: " +
       get_file_storage_types()};
 
@@ -1180,7 +1175,7 @@ TEST_F(AlterForeignServerTest, InvalidDataWrapper) {
   createTestServer();
   std::string query{"ALTER SERVER test_server SET FOREIGN DATA WRAPPER invalid_wrapper;"};
   std::string error_message{
-      "Exception: Invalid data wrapper type \"INVALID_WRAPPER\". "
+      "Invalid data wrapper type \"INVALID_WRAPPER\". "
       "Data wrapper type must be one of the following: " +
       get_data_wrapper_types()};
   queryAndAssertException(query, error_message);

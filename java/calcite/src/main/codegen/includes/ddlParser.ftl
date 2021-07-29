@@ -433,40 +433,46 @@ void TableElement(List<SqlNode> list) :
  */
 Pair<String, SqlNode> KVOption() :
 {
-    final SqlIdentifier withOption;
-    final String withOptionString;
-    final SqlNode withValue;
+    final SqlIdentifier option;
+    final String optionString;
+    final SqlNode value;
+    final Span s;
 }
 {
     (
       // Special rule required to handle "escape" option, since ESCAPE is a keyword
       <ESCAPE>
       {
-        withOptionString = "escape";
+        optionString = "escape";
       }
     |
-      withOption = CompoundIdentifier()
+      option = CompoundIdentifier()
       {
-        withOptionString = withOption.toString();
+        optionString = option.toString();
       }
     )
     <EQ>
-    withValue = Literal()
-    { return new Pair<String, SqlNode>(withOptionString, withValue); }
+    { s = span(); }
+    (
+        <NULL> {  value = SqlLiteral.createCharString("", s.end(this)); }
+    |
+        value = Literal()
+    )
+    { return new Pair<String, SqlNode>(optionString, value); }
 }
 
 /*
- * Parse one or more WITH clause key-value pair options
+ * Parse one or more key-value pair options
  *
- * WITH ( <option> = <value> [, ... ] )
+ * ( <option> = <value> [, ... ] )
  */
-OmniSciOptionsMap WithOptionsOpt() :
+OmniSciOptionsMap OptionsOpt() :
 {
     OmniSciOptionsMap optionMap = new OmniSciOptionsMap();
     Pair<String, SqlNode> optionPair = null;
 }
 {
-  <WITH> <LPAREN>
+  <LPAREN>
   optionPair = KVOption()
   { OmniSciOptionsMap.add(optionMap, optionPair.getKey(), optionPair.getValue()); }
   (
@@ -508,25 +514,55 @@ SqlCreate SqlCreateTable(Span s, boolean replace) :
 }
 {
     [<TEMPORARY> {temporary = true; }]
-    <TABLE> ifNotExists = IfNotExistsOpt() id = CompoundIdentifier()
-    (    
-        <AS> 
-        (
-            LOOKAHEAD(1)
-            query = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
-        |
-            LOOKAHEAD(2)
-            <LPAREN>
-            query = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
-            <RPAREN>
-        )
+    <TABLE> 
+    ifNotExists = IfNotExistsOpt() 
+    id = CompoundIdentifier()
+    ( 
+        tableElementList = TableElementList()
     |
-        [ tableElementList = TableElementList() ]
+        <AS> query = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
     )
-    [ withOptions = WithOptionsOpt() ]
+    [ <WITH> withOptions = OptionsOpt() ]
     {
         return SqlDdlNodes.createTable(s.end(this), replace, temporary, ifNotExists, id,
             tableElementList, withOptions, query);
+    }
+}
+
+/**
+ * Parses a DROP statement.
+ *
+ *  This broke away from the default Calcite implementation because it was
+ *  necessary to use LOOKAHEAD(2) for the USER commands in order for them 
+ *  to parse correctly.
+ *
+ *   "replace" was never used, but appeared in SqlDrop's original signature
+ *
+ */
+SqlDdl SqlCustomDrop(Span s) :
+{
+    boolean replace = false;  
+    final SqlDdl drop;
+}
+{
+    <DROP>
+    (
+        LOOKAHEAD(1) drop = SqlDropDB(s)
+        |
+        LOOKAHEAD(1) drop = SqlDropTable(s)
+        |
+        LOOKAHEAD(1) drop = SqlDropView(s)
+        |
+        LOOKAHEAD(1) drop = SqlDropServer(s, replace)
+        |
+        LOOKAHEAD(1) drop = SqlDropForeignTable(s, replace)
+        |
+        LOOKAHEAD(2) drop = SqlDropUserMapping(s, replace)
+        |
+        LOOKAHEAD(2) drop = SqlDropUser(s)
+    )
+    {
+        return drop;
     }
 }
 
@@ -535,7 +571,7 @@ SqlCreate SqlCreateTable(Span s, boolean replace) :
  *
  * DROP TABLE [ IF EXISTS ] <table_name>
  */
-SqlDrop SqlDropTable(Span s, boolean replace) :
+SqlDdl SqlDropTable(Span s) :
 {
     final boolean ifExists;
     final SqlIdentifier tableName;
@@ -730,7 +766,7 @@ SqlCreate SqlCreateView(Span s, boolean replace) :
  *
  * DROP VIEW [ IF EXISTS ] <view_name>
  */
-SqlDrop SqlDropView(Span s, boolean replace) :
+SqlDdl SqlDropView(Span s) :
 {
     final boolean ifExists;
     final SqlIdentifier viewName;
@@ -741,6 +777,144 @@ SqlDrop SqlDropView(Span s, boolean replace) :
     viewName = CompoundIdentifier()
     {
         return new SqlDropView(s.end(this), ifExists, viewName.toString());
+    }
+}
+
+/*
+ * Create a database using the following syntax:
+ *
+ * CREATE DATABASE ...
+ *
+ *  "replace" option required by SqlCreate, but unused
+ */
+SqlCreate SqlCreateDB(Span s, boolean replace) :
+{
+    final boolean ifNotExists;
+    final SqlIdentifier dbName;
+    OmniSciOptionsMap dbOptions = null;
+}
+{
+    <DATABASE> ifNotExists = IfNotExistsOpt() dbName = CompoundIdentifier()
+    [ dbOptions = OptionsOpt() ]
+    {
+        return new SqlCreateDB(s.end(this), ifNotExists, dbName.toString(), dbOptions);
+    }
+}
+
+/* 
+ * Drop a database using the following syntax:
+ *
+ * DROP DATABASE [ IF EXISTS ] <db_name>
+ *
+ */
+SqlDdl SqlDropDB(Span s) :
+{
+    final boolean ifExists;
+    final SqlIdentifier dbName;
+}
+{
+    <DATABASE>
+    ifExists = IfExistsOpt()
+    dbName = CompoundIdentifier()
+    {
+        return new SqlDropDB(s.end(this), ifExists, dbName.toString());
+    }
+}
+
+
+/*
+ * Rename database using the following syntax:
+ *
+ * ALTER DATABASE <db_name> RENAME TO <new_db_name>
+ */
+SqlRenameDB SqlRenameDB(Span s) :
+{   
+    SqlIdentifier dbName;
+    SqlIdentifier newDBName;
+}
+{
+    <ALTER>
+    <DATABASE>
+    dbName = CompoundIdentifier()
+    <RENAME>
+    <TO>
+    newDBName = CompoundIdentifier()
+    {
+        return new SqlRenameDB(s.end(this), dbName.toString(), newDBName.toString());
+    }
+}
+
+/*
+ * Create a user using the following syntax:
+ *
+ * CREATE USER ["]<name>["] (<property> = value,...);
+ *
+ *  "replace" option required by SqlCreate, but unused
+ */
+SqlCreate SqlCreateUser(Span s, boolean replace) :
+{
+    final SqlIdentifier userName;
+    OmniSciOptionsMap userOptions = null;
+}
+{
+    <USER> 
+    userName = CompoundIdentifier()
+    [ userOptions = OptionsOpt() ]
+    {
+        return new SqlCreateUser(s.end(this), userName.toString(), userOptions);
+    }
+}
+
+
+/* 
+ * Drop a user using the following syntax:
+ *
+ * DROP USER <user_name>
+ *
+ */
+SqlDdl SqlDropUser(Span s) :
+{
+    final SqlIdentifier userName;
+}
+{
+    <USER>
+    userName = CompoundIdentifier()
+    {
+        return new SqlDropUser(s.end(this), userName.toString());
+    }
+}
+
+
+/*
+ * Alter user using the following syntax:
+ *
+ * ALTER USER <user_name> RENAME TO <new_user_name>
+ * ALTER USER <user_name> dbOptions
+ *
+ */
+SqlDdl SqlAlterUser(Span s) :
+{   
+    SqlIdentifier userName;
+    SqlIdentifier newUserName = null;
+    OmniSciOptionsMap userOptions = null;
+}
+{
+    <ALTER>
+    <USER>
+    userName = CompoundIdentifier()
+    (
+        <RENAME>
+        <TO>
+        newUserName = CompoundIdentifier()
+    |
+        userOptions = OptionsOpt()
+    )
+    {
+        if(userOptions != null){
+            return new SqlAlterUser(s.end(this), userName.toString(), userOptions);           
+        } else {
+            return new SqlRenameUser(s.end(this), userName.toString(), newUserName.toString()); 
+        }
     }
 }
 

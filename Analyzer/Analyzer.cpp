@@ -3105,6 +3105,20 @@ void ArrayExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
   }
 }
 
+void FunctionOper::collect_rte_idx(std::set<int>& rte_idx_set) const {
+  for (unsigned i = 0; i < getArity(); i++) {
+    const auto expr = getArg(i);
+    expr->collect_rte_idx(rte_idx_set);
+  }
+}
+
+void GeoFunctionOperator::collect_rte_idx(std::set<int>& rte_idx_set) const {
+  for (unsigned i = 0; i < size(); i++) {
+    const auto expr = getArg(i);
+    expr->collect_rte_idx(rte_idx_set);
+  }
+}
+
 void CaseExpr::collect_column_var(
     std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
     bool include_agg) const {
@@ -3148,6 +3162,24 @@ void ArrayExpr::collect_column_var(
     bool include_agg) const {
   for (unsigned i = 0; i < getElementCount(); i++) {
     const auto expr = getElement(i);
+    expr->collect_column_var(colvar_set, include_agg);
+  }
+}
+
+void FunctionOper::collect_column_var(
+    std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+    bool include_agg) const {
+  for (unsigned i = 0; i < getArity(); i++) {
+    const auto expr = getArg(i);
+    expr->collect_column_var(colvar_set, include_agg);
+  }
+}
+
+void GeoFunctionOperator::collect_column_var(
+    std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+    bool include_agg) const {
+  for (unsigned i = 0; i < size(); i++) {
+    const auto expr = getArg(i);
     expr->collect_column_var(colvar_set, include_agg);
   }
 }
@@ -3357,7 +3389,7 @@ std::shared_ptr<Analyzer::Expr> GeoConstant::deep_copy() const {
 }
 
 std::string GeoConstant::toString() const {
-  std::string str{"(GeoConst "};
+  std::string str{"(GeoConstant "};
   CHECK(geo_);
   str += geo_->getWktString();
   str += ") ";
@@ -3470,6 +3502,60 @@ size_t GeoOperator::size() const {
 Analyzer::Expr* GeoOperator::getOperand(const size_t index) const {
   CHECK_LT(index, args_.size());
   return args_[index].get();
+}
+
+std::shared_ptr<Analyzer::Expr> GeoOperator::cloneWithUpdatedTypeInfo(
+    const SQLTypeInfo& ti) {
+  std::vector<std::shared_ptr<Analyzer::Expr>> args;
+  for (size_t i = 0; i < args_.size(); i++) {
+    args.push_back(args_[i]->deep_copy());
+  }
+  return makeExpr<GeoOperator>(ti, name_, args);
+}
+
+std::shared_ptr<Analyzer::Expr> GeoTransformOperator::deep_copy() const {
+  std::vector<std::shared_ptr<Analyzer::Expr>> args;
+  for (size_t i = 0; i < args_.size(); i++) {
+    args.push_back(args_[i]->deep_copy());
+  }
+  return makeExpr<GeoTransformOperator>(
+      type_info, name_, args, input_srid_, output_srid_);
+}
+
+std::string GeoTransformOperator::toString() const {
+  std::string str{"(" + name_ + " "};
+  for (const auto& arg : args_) {
+    str += arg->toString();
+  }
+  str +=
+      " : " + std::to_string(input_srid_) + " -> " + std::to_string(output_srid_) + " ";
+  str += ")";
+  return str;
+}
+
+bool GeoTransformOperator::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(GeoTransformOperator)) {
+    return false;
+  }
+  const GeoTransformOperator& rhs_gto = dynamic_cast<const GeoTransformOperator&>(rhs);
+  if (getName() != rhs_gto.getName()) {
+    return false;
+  }
+  if (rhs_gto.size() != size()) {
+    return false;
+  }
+  for (size_t i = 0; i < size(); i++) {
+    if (args_[i].get() != rhs_gto.getOperand(i)) {
+      return false;
+    }
+  }
+  if (input_srid_ != rhs_gto.input_srid_) {
+    return false;
+  }
+  if (output_srid_ != rhs_gto.output_srid_) {
+    return false;
+  }
+  return true;
 }
 
 GeoFunctionOperator::GeoFunctionOperator(

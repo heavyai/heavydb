@@ -64,7 +64,7 @@ std::pair<cost_t, cost_t> get_join_qual_cost(const Analyzer::Expr* qual,
   }
   if (executor) {
     try {
-      normalize_column_pairs(
+      HashJoin::normalizeColumnPairs(
           bin_oper, *executor->getCatalog(), executor->getTemporaryTables());
     } catch (...) {
       return {200, 200};

@@ -443,6 +443,24 @@ TEST_F(OverlapsTest, JoinPolyPointContains) {
   });
 }
 
+TEST_F(OverlapsTest, JoinPolyCentroidContains) {
+  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+    auto sql =
+        "SELECT "
+        "count(*) from "
+        "does_intersect_b as b JOIN does_intersect_a as a ON "
+        "ST_Contains(a.poly, ST_SetSRID(ST_Centroid(b.poly), 4326));";
+    ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(execSQL(sql, dt)));
+
+    sql =
+        "SELECT "
+        "count(*) from "
+        "does_intersect_b as b JOIN does_intersect_a as a ON "
+        "ST_Contains(a.poly, ST_SetSRID(ST_Centroid(b.mpoly), 4326));";
+    ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(execSQL(sql, dt)));
+  });
+}
+
 TEST_F(OverlapsTest, PolyPolyDoesNotIntersect) {
   executeAllScenarios([](ExecutorDeviceType dt) -> void {
     ASSERT_EQ(static_cast<int64_t>(0),
@@ -659,16 +677,17 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
                             Executor* executor,
                             const int device_count,
                             const std::vector<ExpectedValues>& expected_values)
-      : OverlapsJoinHashTable(condition,
-                              JoinType::INVALID,  // b/c this is mock
-                              query_infos,
-                              memory_level,
-                              column_cache,
-                              executor,
-                              normalize_column_pairs(condition.get(),
-                                                     *executor->getCatalog(),
-                                                     executor->getTemporaryTables()),
-                              device_count)
+      : OverlapsJoinHashTable(
+            condition,
+            JoinType::INVALID,  // b/c this is mock
+            query_infos,
+            memory_level,
+            column_cache,
+            executor,
+            HashJoin::normalizeColumnPairs(condition.get(),
+                                           *executor->getCatalog(),
+                                           executor->getTemporaryTables()),
+            device_count)
       , expected_values_per_step_(expected_values) {}
 
  protected:

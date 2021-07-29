@@ -1203,6 +1203,7 @@ extern "C" ALWAYS_INLINE void set_matching_group_value_perfect_hash_columnar(
   }
 }
 
+#include "GeoOpsRuntime.cpp"
 #include "GroupByRuntime.cpp"
 #include "JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp"
 

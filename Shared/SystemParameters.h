@@ -68,8 +68,7 @@ struct SystemParameters {
   bool aggregator = false;
   bool enable_calcite_view_optimize =
       true;  // allow calcite to optimize the relalgebra for a view query
-  size_t calcite_timeout =
-      5000;  // calcite send/receive timeout (connect timeout hard coded to 2s)
+  size_t calcite_timeout = 5000;     // calcite connect/send/receive timeout
   size_t calcite_keepalive = false;  // calcite keepalive connection
   int num_executors = 1;
   int num_sessions = -1;  // maximum number of user sessions

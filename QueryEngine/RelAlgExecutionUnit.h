@@ -34,10 +34,52 @@
 #include "TableFunctions/TableFunctionsFactory.h"
 #include "ThriftHandler/QueryState.h"
 
+#include <boost/graph/adjacency_list.hpp>
+
 #include <list>
 #include <memory>
 #include <optional>
 #include <vector>
+
+using AdjacentList = boost::adjacency_list<boost::setS, boost::vecS, boost::directedS>;
+// node ID used when extracting query plan DAG
+// note this ID is different from RelNode's id since query plan DAG extractor assigns an
+// unique node ID only to a rel node which is included in extracted DAG (if we cannot
+// extract a DAG from the query plan DAG extractor skips to assign unique IDs to rel nodes
+// in that query plan
+using RelNodeId = size_t;
+// toString content of each extracted rel node
+using RelNodeExplained = std::string;
+// hash value of explained rel node
+using RelNodeExplainedHash = size_t;
+// a string representation of a query plan that is collected by visiting query plan DAG
+// starting from root to leaf and concatenate each rel node's id
+// where two adjacent rel nodes in a QueryPlan are connected via '|' delimiter
+// i.e., 1|2|3|4|
+using QueryPlan = std::string;
+// join column's column id info
+using JoinColumnsInfo = std::string;
+// hashed value of QueryPlanNodeIds
+using QueryPlanHash = size_t;
+// a map btw. a join column and its access path, i.e., a query plan DAG to project B.b
+// here this join column is used to build a hashtable
+using HashTableBuildDag = std::pair<JoinColumnsInfo, QueryPlan>;
+// A map btw. join qual's column info and its corresponding hashtable access path as query
+// plan DAG i.e., A.a = B.b and build hashtable on B.b? <(A.a = B.b) --> query plan DAG of
+// projecting B.b> here, this two-level mapping (join qual -> inner join col -> hashtable
+// access plan DAG) is required since we have to extract query plan before deciding which
+// join col becomes inner since rel alg related metadata is required to extract query
+// plan, and the actual decision happens at the time of building hashtable
+using HashTableBuildDagMap = std::unordered_map<JoinColumnsInfo, HashTableBuildDag>;
+
+enum JoinColumnSide {
+  kInner,
+  kOuter,
+  kQual,   // INNER + OUTER
+  kDirect  // set target directly (i.e., put Analyzer::Expr* instead of
+           // Analyzer::BinOper*)
+};
+constexpr char const* EMPTY_QUERY_PLAN = "";
 
 enum class SortAlgorithm { Default, SpeculativeTopN, StreamingTopN };
 
@@ -75,6 +117,8 @@ struct RelAlgExecutionUnit {
   const SortInfo sort_info;
   size_t scan_limit;
   RegisteredQueryHint query_hint;
+  QueryPlan query_plan_dag{EMPTY_QUERY_PLAN};
+  HashTableBuildDagMap hash_table_build_plan_dag{};
   bool use_bump_allocator{false};
   // empty if not a UNION, true if UNION ALL, false if regular UNION
   const std::optional<bool> union_all;

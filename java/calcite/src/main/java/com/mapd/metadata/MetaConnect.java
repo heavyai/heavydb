@@ -260,8 +260,8 @@ public class MetaConnect {
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
     } catch (TOmniSciException ex) {
-      MAPDLOGGER.error(ex.toString());
-      throw new RuntimeException(ex.toString());
+      MAPDLOGGER.error(ex.getError_msg());
+      throw new RuntimeException(ex.getError_msg());
     } catch (TException ex) {
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
@@ -359,8 +359,8 @@ public class MetaConnect {
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
     } catch (TOmniSciException ex) {
-      MAPDLOGGER.error(ex.toString());
-      throw new RuntimeException(ex.toString());
+      MAPDLOGGER.error(ex.getError_msg());
+      throw new RuntimeException(ex.getError_msg());
     } catch (TException ex) {
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
@@ -688,8 +688,8 @@ public class MetaConnect {
         MAPDLOGGER.error(ex.toString());
         throw new RuntimeException(ex.toString());
       } catch (TOmniSciException ex) {
-        MAPDLOGGER.error(ex.toString());
-        throw new RuntimeException(ex.toString());
+        MAPDLOGGER.error(ex.getError_msg());
+        throw new RuntimeException(ex.getError_msg());
       } catch (TException ex) {
         MAPDLOGGER.error(ex.toString());
         throw new RuntimeException(ex.toString());
@@ -824,8 +824,8 @@ public class MetaConnect {
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
     } catch (TOmniSciException ex) {
-      MAPDLOGGER.error(ex.toString());
-      throw new RuntimeException(ex.toString());
+      MAPDLOGGER.error(ex.getError_msg());
+      throw new RuntimeException(ex.getError_msg());
     } catch (TException ex) {
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());

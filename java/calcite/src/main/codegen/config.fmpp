@@ -32,11 +32,20 @@ data: {
         "org.apache.calcite.schema.ColumnStrategy"
         "com.mapd.parser.extension.ddl.omnisci.*"
         "com.mapd.parser.extension.ddl.SqlDdlNodes"
+        "com.mapd.parser.extension.ddl.SqlCreateDB"
+        "com.mapd.parser.extension.ddl.SqlDropDB"
+        "com.mapd.parser.extension.ddl.SqlRenameDB"
         "com.mapd.parser.extension.ddl.SqlCreateTable"
         "com.mapd.parser.extension.ddl.SqlDropTable"
         "com.mapd.parser.extension.ddl.SqlRenameTable"
         "com.mapd.parser.extension.ddl.SqlInsertIntoTable"
         "com.mapd.parser.extension.ddl.SqlCreateView"
+        "com.mapd.parser.extension.ddl.SqlCreateUserMapping"
+        "com.mapd.parser.extension.ddl.SqlCreateUser"
+        "com.mapd.parser.extension.ddl.SqlDropUserMapping"
+        "com.mapd.parser.extension.ddl.SqlDropUser"
+        "com.mapd.parser.extension.ddl.SqlAlterUser"
+        "com.mapd.parser.extension.ddl.SqlRenameUser"
         "com.mapd.parser.extension.ddl.SqlShowTableDetails"
         "com.mapd.parser.extension.ddl.SqlAlterTable"
         "com.mapd.parser.extension.ddl.SqlAlterServer"
@@ -44,8 +53,6 @@ data: {
         "com.mapd.parser.extension.ddl.SqlCreateForeignTable"
         "com.mapd.parser.extension.ddl.SqlDropForeignTable"
         "com.mapd.parser.extension.ddl.SqlRefreshForeignTables"
-        "com.mapd.parser.extension.ddl.SqlCreateUserMapping"
-        "com.mapd.parser.extension.ddl.SqlDropUserMapping"
         "com.mapd.parser.extension.ddl.SqlShowUserDetails"
         "com.mapd.parser.extension.ddl.SqlShowUserSessions"
         "com.mapd.parser.extension.ddl.SqlShowForeignServers"
@@ -454,12 +461,15 @@ data: {
         "SqlAlterTable(span())"
         "SqlAlterServer(span())"
         "SqlAlterForeignTable(span())"
+        "SqlAlterUser(span())"
         "SqlRefreshForeignTables(span())"
+        "SqlRenameDB(span())"
         "SqlRenameTable(span())"
         "SqlInsertIntoTable(span())"
         "SqlShowQueries(span())"
         "SqlShowDiskCacheUsage(span())"
         "SqlKillQuery(span())"
+        "SqlCustomDrop(span())"
       ]
 
       # List of methods for parsing custom literals.
@@ -487,23 +497,29 @@ data: {
       # List of methods for parsing extensions to "CREATE [OR REPLACE]" calls.
       # Each must accept arguments "(SqlParserPos pos, boolean replace)".
       createStatementParserMethods: [
+        "SqlCreateDB"
         "SqlCreateServer"
         "SqlCreateForeignTable"
         "SqlCreateUserMapping"
         "SqlCreateTable"
+        "SqlCreateUser"
         "SqlCreateView"
       ]
 
       # List of methods for parsing extensions to "DROP" calls.
       # Each must accept arguments "(SqlParserPos pos)".
+      # ----------------------------------------------------
+      # No longer used ...
+      #  This broke away from the default Calcite implementation because it was
+      #     necessary to use LOOKAHEAD(2) for some commands to parse correctly. 
+      #     That could not be done without modifing the parser.jj template file
+      #        -> which could make future calcite upgrades difficult
+      #        -> better to use a targeted/limited solution instead
+      #
+      #  See: SqlCustomDrop()
+      # ---------------------------------------------------
       dropStatementParserMethods: [
-        "SqlDropTable"
-        "SqlDropView"
-        "SqlDropServer"
-        "SqlDropForeignTable"
-        "SqlDropUserMapping"
       ]
-
 
       # Binary operators tokens
       binaryOperatorsTokens: [

@@ -289,6 +289,11 @@ if(ENABLE_FOLLY)
   endif()
 endif()
 
+option(ENABLE_ARROW_4 "Enable changes required to support Arrow 4.0" OFF)
+if(ENABLE_ARROW_4)
+  add_definitions("-DENABLE_ARROW_4")
+endif()
+
 option(ENABLE_MLPACK "Use mlpack" OFF)
 if(ENABLE_MLPACK)
   find_package(OpenMP REQUIRED)
@@ -464,11 +469,6 @@ else()
   set(clang_libs ${CLANG_LIB})
   set(llvm_libs ${LLVM_LIB})
 endif()
-
-# Clang (UDF Compiler)
-find_package(Clang REQUIRED)
-include_directories(${CLANG_INCLUDE_DIRS})
-add_definitions(${CLANG_DEFINITIONS})
 
 
 # Boost
@@ -701,6 +701,7 @@ add_subdirectory(TableArchiver)
 add_subdirectory(ThriftHandler)
 add_subdirectory(Geospatial)
 add_subdirectory(Distributed)
+add_subdirectory(UdfCompiler)
 
 if(ENABLE_DBE)
   add_subdirectory(Embedded)

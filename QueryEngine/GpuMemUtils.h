@@ -57,9 +57,10 @@ void copy_from_gpu(Data_Namespace::DataMgr* data_mgr,
                    const int device_id);
 
 struct GpuGroupByBuffers {
-  CUdeviceptr first;
-  CUdeviceptr second;
+  CUdeviceptr ptrs;  // ptrs for individual outputs
+  CUdeviceptr data;  // ptr to data allocation
   size_t entry_count;
+  CUdeviceptr varlen_output_buffer;
 };
 
 class QueryMemoryDescriptor;

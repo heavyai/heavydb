@@ -34,7 +34,6 @@ class ParquetEncoder {
                           const int16_t* rep_levels,
                           const int64_t values_read,
                           const int64_t levels_read,
-                          const bool is_last_batch,
                           int8_t* values) = 0;
 
   virtual std::shared_ptr<ChunkMetadata> getRowGroupMetadata(

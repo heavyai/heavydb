@@ -112,6 +112,19 @@ enum class JoinType { INNER, LEFT, SEMI, ANTI, INVALID };
 #include <string>
 #include "Logger/Logger.h"
 
+inline std::string toString(const SQLQualifier& qualifier) {
+  switch (qualifier) {
+    case kONE:
+      return "ONE";
+    case kANY:
+      return "ANY";
+    case kALL:
+      return "ALL";
+  }
+  LOG(FATAL) << "Invalid SQLQualifier: " << qualifier;
+  return "";
+}
+
 inline std::string toString(const SQLAgg& kind) {
   switch (kind) {
     case kAVG:

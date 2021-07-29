@@ -158,7 +158,8 @@ class PointConstructor : public Codegen {
 
   std::vector<llvm::Value*> codegen(const std::vector<llvm::Value*>& args,
                                     CodeGenerator::NullCheckCodegen* nullcheck_codegen,
-                                    CgenState* cgen_state) final {
+                                    CgenState* cgen_state,
+                                    const CompilationOptions& co) final {
     CHECK_EQ(args.size(), size_t(2));
 
     const auto& geo_ti = operator_->get_type_info();
@@ -202,7 +203,11 @@ class PointConstructor : public Codegen {
       CHECK(nullcheck_codegen);
       ret = nullcheck_codegen->finalize(ret, ret);
     }
-    return {ret};
+    return {
+        builder.CreateBitCast(ret,
+                              geo_ti.get_compression() == kENCODING_GEOINT
+                                  ? llvm::Type::getInt32PtrTy(cgen_state->context_)
+                                  : llvm::Type::getDoublePtrTy(cgen_state->context_))};
   }
 
  private:

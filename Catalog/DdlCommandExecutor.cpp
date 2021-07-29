@@ -359,6 +359,34 @@ ExecutionResult DdlCommandExecutor::execute() {
   } else if (ddl_command_ == "ALTER_TABLE") {
     Parser::AlterTableStmt::delegateExecute(extractPayload(*ddl_data_), *session_ptr_);
     return result;
+  } else if (ddl_command_ == "CREATE_DB") {
+    auto create_db_stmt = Parser::CreateDBStmt(extractPayload(*ddl_data_));
+    create_db_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "DROP_DB") {
+    auto drop_db_stmt = Parser::DropDBStmt(extractPayload(*ddl_data_));
+    drop_db_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "RENAME_DB") {
+    auto rename_db_stmt = Parser::RenameDBStmt(extractPayload(*ddl_data_));
+    rename_db_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "CREATE_USER") {
+    auto create_user_stmt = Parser::CreateUserStmt(extractPayload(*ddl_data_));
+    create_user_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "DROP_USER") {
+    auto drop_user_stmt = Parser::DropUserStmt(extractPayload(*ddl_data_));
+    drop_user_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "ALTER_USER") {
+    auto alter_user_stmt = Parser::AlterUserStmt(extractPayload(*ddl_data_));
+    alter_user_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "RENAME_USER") {
+    auto rename_user_stmt = Parser::RenameUserStmt(extractPayload(*ddl_data_));
+    rename_user_stmt.execute(*session_ptr_);
+    return result;
   }
 
   // the following commands require a global unique lock until proper table locking has
@@ -426,9 +454,13 @@ bool DdlCommandExecutor::isKillQuery() {
 
 DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails() {
   DistributedExecutionDetails execution_details;
-  if (ddl_command_ == "CREATE_TABLE" || ddl_command_ == "DROP_TABLE" ||
-      ddl_command_ == "CREATE_VIEW" || ddl_command_ == "DROP_VIEW" ||
-      ddl_command_ == "RENAME_TABLE" || ddl_command_ == "ALTER_TABLE") {
+  if (ddl_command_ == "CREATE_VIEW" || ddl_command_ == "DROP_VIEW" ||
+      ddl_command_ == "CREATE_TABLE" || ddl_command_ == "DROP_TABLE" ||
+      ddl_command_ == "RENAME_TABLE" || ddl_command_ == "ALTER_TABLE" ||
+      ddl_command_ == "CREATE_DB" || ddl_command_ == "DROP_DB" ||
+      ddl_command_ == "RENAME_DB" || ddl_command_ == "CREATE_USER" ||
+      ddl_command_ == "DROP_USER" || ddl_command_ == "ALTER_USER" ||
+      ddl_command_ == "RENAME_USER") {
     execution_details.execution_location = ExecutionLocation::ALL_NODES;
     execution_details.aggregation_type = AggregationType::NONE;
   } else if (ddl_command_ == "SHOW_TABLE_DETAILS") {

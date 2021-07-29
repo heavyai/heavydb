@@ -261,7 +261,7 @@ public class TestServer {
         throw s;
       }
     } catch (TException x) {
-      fail("Exception occurred " + x.toString());
+      fail(x.toString());
     }
   }
 }

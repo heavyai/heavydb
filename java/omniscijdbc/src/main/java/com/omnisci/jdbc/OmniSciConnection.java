@@ -529,7 +529,7 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
       }
       closeConnection();
     } catch (TOmniSciException ex) {
-      throw new SQLException("disconnect failed." + ex.toString());
+      throw new SQLException("disconnect failed." + ex.getError_msg());
     } catch (TException ex) {
       throw new SQLException("disconnect failed." + ex.toString());
     }
@@ -572,7 +572,7 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
       }
     } catch (TOmniSciException ex) {
       throw new SQLException(
-              "get_server_status failed during isReadOnly check." + ex.toString());
+              "get_server_status failed during isReadOnly check." + ex.getError_msg());
     } catch (TException ex) {
       throw new SQLException(
               "get_server_status failed during isReadOnly check." + ex.toString());
@@ -805,7 +805,7 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
     } catch (TTransportException ex) {
       throw new SQLException("Connection failed - " + ex.toString());
     } catch (TOmniSciException ex) {
-      throw new SQLException("Connection failed - " + ex.toString());
+      throw new SQLException("Connection failed - " + ex.getError_msg());
     } catch (TException ex) {
       throw new SQLException("Connection failed - " + ex.toString());
     }

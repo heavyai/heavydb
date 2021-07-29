@@ -229,7 +229,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
     int const table_id = table_desc.getTableId();
     TableFragments const* fragments = selected_tables_fragments_.at(table_id);
 
-    auto& data_mgr = catalog->getDataMgr();
+    auto data_mgr = executor->getDataMgr();
     ChunkMetadataVector deleted_chunk_metadata_vec;
 
     bool is_temporary_table = false;
@@ -247,8 +247,8 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
         if (deleted_cd) {
           ChunkKey chunk_key_prefix = {
               catalog->getCurrentDB().dbId, table_id, deleted_cd->columnId};
-          data_mgr.getChunkMetadataVecForKeyPrefix(deleted_chunk_metadata_vec,
-                                                   chunk_key_prefix);
+          data_mgr->getChunkMetadataVecForKeyPrefix(deleted_chunk_metadata_vec,
+                                                    chunk_key_prefix);
         }
       }
     }

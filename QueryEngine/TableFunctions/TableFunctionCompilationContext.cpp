@@ -467,11 +467,9 @@ void TableFunctionCompilationContext::finalize(const CompilationOptions& co,
 
     CHECK(executor);
     executor->initializeNVPTXBackend();
-    const auto cuda_mgr = executor->catalog_->getDataMgr().getCudaMgr();
-    CHECK(cuda_mgr);
 
     CodeGenerator::GPUTarget gpu_target{executor->nvptx_target_machine_.get(),
-                                        cuda_mgr,
+                                        executor->cudaMgr(),
                                         executor->blockSize(),
                                         cgen_state_.get(),
                                         false};

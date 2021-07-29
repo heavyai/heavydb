@@ -964,7 +964,12 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
     CHECK(df_td_owned);
     df_td = df_td_owned.get();
   }
-  auto memory_pool = arrow::default_memory_pool();
+
+#ifdef ENABLE_ARROW_4
+  auto io_context = arrow::io::default_io_context();
+#else
+  auto io_context = arrow::default_memory_pool();
+#endif
   auto arrow_parse_options = arrow::csv::ParseOptions::Defaults();
   arrow_parse_options.quoting = false;
   arrow_parse_options.escaping = false;
@@ -998,7 +1003,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   inp = file_result.ValueOrDie();
 
   auto table_reader_result = arrow::csv::TableReader::Make(
-      memory_pool, inp, arrow_read_options, arrow_parse_options, arrow_convert_options);
+      io_context, inp, arrow_read_options, arrow_parse_options, arrow_convert_options);
   ARROW_THROW_NOT_OK(table_reader_result.status());
   auto table_reader = table_reader_result.ValueOrDie();
 

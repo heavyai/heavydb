@@ -1052,7 +1052,7 @@ TEST_F(MaxRollbackEpochTest, WriteEmptyBufferAndMultipleEpochVersions) {
   ASSERT_EQ(static_cast<uint64_t>(2), used_page_count);
 }
 
-constexpr char file_mgr_path[] = "./FileMgrTest";
+constexpr char file_mgr_path[] = "./FileMgrTestDir";
 namespace bf = boost::filesystem;
 
 class FileMgrUnitTest : public testing::Test {

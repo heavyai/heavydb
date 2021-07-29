@@ -53,6 +53,7 @@
 #include "QueryEngine/LoopControlFlow/JoinLoop.h"
 #include "QueryEngine/NvidiaKernel.h"
 #include "QueryEngine/PlanState.h"
+#include "QueryEngine/QueryPlanDagCache.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"
 #include "QueryEngine/RelAlgTranslator.h"
 #include "QueryEngine/StringDictionaryGenerations.h"
@@ -148,9 +149,7 @@ class QuerySessionStatus {
 };
 using QuerySessionMap =
     std::map<const QuerySessionId, std::map<std::string, QuerySessionStatus>>;
-extern void read_udf_gpu_module(const std::string& udf_ir_filename);
-extern void read_udf_cpu_module(const std::string& udf_ir_filename);
-extern bool is_udf_module_present(bool cpu_only = false);
+
 extern void read_rt_udf_gpu_module(const std::string& udf_ir);
 extern void read_rt_udf_cpu_module(const std::string& udf_ir);
 extern bool is_rt_udf_module_present(bool cpu_only = false);
@@ -287,6 +286,8 @@ class CompilationRetryNoCompaction : public std::runtime_error {
 class QueryMustRunOnCpu : public std::runtime_error {
  public:
   QueryMustRunOnCpu() : std::runtime_error("Query must run in cpu mode.") {}
+
+  QueryMustRunOnCpu(const std::string& err) : std::runtime_error(err) {}
 };
 
 class ParseIRError : public std::runtime_error {
@@ -366,6 +367,7 @@ class Executor {
   static const ExecutorId UNITARY_EXECUTOR_ID = 0;
 
   Executor(const ExecutorId id,
+           Data_Namespace::DataMgr* data_mgr,
            const size_t block_size_x,
            const size_t grid_size_x,
            const size_t max_gpu_slab_size,
@@ -388,6 +390,8 @@ class Executor {
   static void clearMemory(const Data_Namespace::MemoryLevel memory_level);
 
   static size_t getArenaBlockSize();
+
+  static void addUdfIrToModule(const std::string& udf_ir_filename, const bool is_cuda_ir);
 
   /**
    * Returns pointer to the intermediate tables vector currently stored by this executor.
@@ -423,6 +427,11 @@ class Executor {
 
   const Catalog_Namespace::Catalog* getCatalog() const;
   void setCatalog(const Catalog_Namespace::Catalog* catalog);
+
+  Data_Namespace::DataMgr* getDataMgr() const {
+    CHECK(data_mgr_);
+    return data_mgr_;
+  }
 
   const std::shared_ptr<RowSetMemoryOwner> getRowSetMemoryOwner() const;
 
@@ -518,12 +527,16 @@ class Executor {
 
   llvm::Value* aggregateWindowStatePtr();
 
+  CudaMgr_Namespace::CudaMgr* cudaMgr() const {
+    CHECK(data_mgr_);
+    auto cuda_mgr = data_mgr_->getCudaMgr();
+    CHECK(cuda_mgr);
+    return cuda_mgr;
+  }
+
   bool isArchPascalOrLater(const ExecutorDeviceType dt) const {
     if (dt == ExecutorDeviceType::GPU) {
-      const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
-      LOG_IF(FATAL, cuda_mgr == nullptr)
-          << "No CudaMgr instantiated, unable to check device architecture";
-      return cuda_mgr->isArchPascalOrLater();
+      return cudaMgr()->isArchPascalOrLater();
     }
     return false;
   }
@@ -996,6 +1009,12 @@ class Executor {
   void addToCardinalityCache(const std::string& cache_key, const size_t cache_value);
   CachedCardinality getCachedCardinality(const std::string& cache_key);
 
+  mapd_shared_mutex& getDataRecyclerLock();
+  QueryPlanDagCache& getQueryPlanDagCache();
+  JoinColumnsInfo getJoinColumnsInfo(const Analyzer::Expr* join_expr,
+                                     JoinColumnSide target_side,
+                                     bool extract_only_col_id);
+
  private:
   std::shared_ptr<CompilationContext> getCodeFromCache(const CodeCacheKey&,
                                                        const CodeCache&);
@@ -1057,6 +1076,7 @@ class Executor {
 
   const ExecutorId executor_id_;
   const Catalog_Namespace::Catalog* catalog_;
+  Data_Namespace::DataMgr* data_mgr_;
   const TemporaryTables* temporary_tables_;
 
   int64_t kernel_queue_time_ms_ = 0;
@@ -1105,8 +1125,8 @@ class Executor {
 
   static mapd_shared_mutex executors_cache_mutex_;
 
-  // for now we use recycler_mutex only for cardinality_cache_
-  // and will expand its coverage for more interesting caches for query execution
+  static QueryPlanDagCache query_plan_dag_cache_;
+  const QueryPlanHash INVALID_QUERY_PLAN_HASH{std::hash<std::string>{}(EMPTY_QUERY_PLAN)};
   static mapd_shared_mutex recycler_mutex_;
   static std::unordered_map<std::string, size_t> cardinality_cache_;
 

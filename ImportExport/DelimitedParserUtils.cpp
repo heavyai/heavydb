@@ -24,6 +24,7 @@
 
 #include <string_view>
 
+#include "ImportExport/CopyParams.h"
 #include "Logger/Logger.h"
 #include "StringDictionary/StringDictionary.h"
 
@@ -134,7 +135,7 @@ size_t find_end(const char* buffer,
   return last_line_delim_pos + 1;
 }
 
-static size_t max_buffer_resize = 1024 * 1024 * 1024;
+static size_t max_buffer_resize = max_import_buffer_resize_byte_size;
 
 size_t get_max_buffer_resize() {
   return max_buffer_resize;

@@ -32,6 +32,9 @@
 #include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
 #include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/QueryHint.h"
+#include "QueryEngine/RelAlgDagBuilder.h"
+#include "QueryEngine/RelAlgExecutionUnit.h"
+#include "QueryEngine/RelAlgTranslator.h"
 #include "ThriftHandler/QueryState.h"
 
 namespace Catalog_Namespace {
@@ -55,6 +58,13 @@ class Loader;
 class Calcite;
 
 namespace QueryRunner {
+
+struct QueryPlanDagInfo {
+  std::shared_ptr<const RelAlgNode> root_node;
+  std::vector<unsigned> left_deep_trees_id;
+  std::unordered_map<unsigned, JoinQualsPerNestingLevel> left_deep_trees_info;
+  std::shared_ptr<RelAlgTranslator> rel_alg_translator;
+};
 
 class QueryRunner {
  public:
@@ -184,6 +194,12 @@ class QueryRunner {
   size_t getNumberOfCachedOverlapsHashTables();
 
   void resizeDispatchQueue(const size_t num_executors);
+
+  QueryPlanDagInfo getQueryInfoForDataRecyclerTest(const std::string&);
+
+  std::shared_ptr<RelAlgTranslator> getRelAlgTranslator(const std::string&, Executor*);
+
+  void printQueryPlanDagCache() const;
 
   QueryRunner(std::unique_ptr<Catalog_Namespace::SessionInfo> session);
 

@@ -16,6 +16,7 @@
 
 #include "TestHelpers.h"
 
+#include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/scope.h"
 
@@ -170,10 +171,7 @@ void import_geospatial_test(const bool use_temporary_tables) {
   const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_test;");
   run_ddl_statement(geospatial_test);
   const auto create_ddl = build_create_table_statement(
-      "id INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gp "
-      "GEOMETRY(POINT), gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), gp4326none "
-      "GEOMETRY(POINT,4326) ENCODING NONE, gp900913 GEOMETRY(POINT,900913), gl4326none "
-      "GEOMETRY(LINESTRING,4326) ENCODING NONE, gpoly4326 GEOMETRY(POLYGON,4326)",
+      R"(id INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON, gp GEOMETRY(POINT), gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), gp4326none GEOMETRY(POINT,4326) ENCODING NONE, gp900913 GEOMETRY(POINT,900913), gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE, gpoly4326 GEOMETRY(POLYGON,4326), gpoly900913 GEOMETRY(POLYGON,900913))",
       "geospatial_test",
       {"", 0},
       {},
@@ -206,6 +204,7 @@ void import_geospatial_test(const bool use_temporary_tables) {
                          point,
                          point,
                          linestring,
+                         poly,
                          poly),
                      ExecutorDeviceType::CPU);
   }
@@ -419,7 +418,7 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
       const auto rows =
           run_multiple_agg("SELECT * FROM geospatial_test WHERE id = 1", dt);
       const auto row = rows->getNextRow(false, false);
-      ASSERT_EQ(row.size(), size_t(11));
+      ASSERT_EQ(row.size(), size_t(12));
     }
 
     // Projection (return GeoTargetValue)
@@ -868,6 +867,11 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
         v<int64_t>(run_simple_agg(
             R"(SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(ST_Transform(ST_GeomFromText('POINT(0 0)', 4326), 900913), ST_Transform(gp4326, 900913)) < 500000.0;)",
             dt)));
+    ASSERT_DOUBLE_EQ(
+        static_cast<double>(111319.4841946785),
+        v<double>(run_simple_agg(
+            R"(SELECT conv_4326_900913_x(ST_X(gp4326)) FROM geospatial_test WHERE id = 1;)",
+            dt)));
 
     // ST_NRings
     ASSERT_EQ(static_cast<int64_t>(1),
@@ -1012,16 +1016,125 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
       process_row(1);
     }
 
-    ASSERT_EQ(
+    {
+      // multi-frag iteration check
+      auto rows = run_multiple_agg(
+          R"(SELECT id, ST_Point(id, id) FROM geospatial_test WHERE id > 2 ORDER BY 1;)",
+          dt);
+      rows->setGeoReturnType(ResultSet::GeoReturnType::WktString);
+      EXPECT_EQ(rows->rowCount(), size_t(7));
+
+      auto process_row = [&](const int64_t id_for_row) {
+        auto row = rows->getNextRow(false, false);
+        EXPECT_EQ(row.size(), size_t(2));
+        const auto id = v<int64_t>(row[0]);
+        EXPECT_EQ(id, id_for_row + 3);  // offset by 3 from filter
+        const auto wkt_str = boost::get<std::string>(v<NullableString>(row[1]));
+        EXPECT_EQ(wkt_str,
+                  "POINT (" + std::to_string(id) + " " + std::to_string(id) + ")");
+      };
+      for (size_t i = 0; i < 7; i++) {
+        process_row(i);
+      }
+    }
+
+    EXPECT_EQ(
         "POINT (2 2)",
         boost::get<std::string>(v<NullableString>(run_simple_agg(
             "SELECT ST_Point(id,id) FROM geospatial_test WHERE id = 2;", dt, false))));
-    ASSERT_EQ(
+    EXPECT_EQ(
         "POINT (2 2)",
         boost::get<std::string>(v<NullableString>(run_simple_agg(
             "SELECT ST_SetSRID(ST_Point(id,id),4326) FROM geospatial_test WHERE id = 2;",
             dt,
             false))));
+    EXPECT_EQ(
+        double(2),
+        v<double>(run_simple_agg(
+            "SELECT ST_X(ST_Point(id, id)) FROM geospatial_test WHERE id = 2;", dt)));
+    EXPECT_EQ(
+        double(3),
+        v<double>(run_simple_agg(
+            "SELECT ST_Y(ST_Point(id, id + 1)) FROM geospatial_test WHERE id = 2;", dt)));
+    EXPECT_EQ(
+        inline_fp_null_value<double>(),
+        v<double>(run_simple_agg(
+            "SELECT ST_Y(ST_Point(id, null)) FROM geospatial_test WHERE id = 2;", dt)));
+    EXPECT_EQ(
+        "POINT (222638.981556 222684.208469473)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            R"(SELECT ST_Transform(ST_SetSRID(ST_Point(id,id),4326), 900913) FROM geospatial_test WHERE id = 2;)",
+            dt,
+            false))));
+    EXPECT_EQ(
+        "POINT (222638.977720049 222684.204631182)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            R"(SELECT ST_Transform(gp4326, 900913) FROM geospatial_test WHERE id = 2;)",
+            dt,
+            false))));
+    SKIP_ON_AGGREGATOR({
+      // ensure transforms run on GPU. transforms use math functions which need to be
+      // specialized for GPU
+      if (dt == ExecutorDeviceType::GPU) {
+        const auto query_explain_result = QR::get()->runSelectQuery(
+            R"(SELECT ST_Transform(gp4326, 900913) FROM geospatial_test WHERE id = 2;)",
+            dt,
+            /*hoist_literals=*/true,
+            /*allow_loop_joins=*/false,
+            /*just_explain=*/true);
+        const auto explain_result = query_explain_result->getRows();
+        EXPECT_EQ(size_t(1), explain_result->rowCount());
+        const auto crt_row = explain_result->getNextRow(true, true);
+        EXPECT_EQ(size_t(1), crt_row.size());
+        const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
+        EXPECT_FALSE(explain_str.find("IR for the GPU:") == std::string::npos);
+      }
+    });
+    EXPECT_DOUBLE_EQ(
+        double(222638.977720049),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_X(ST_Transform(gp4326, 900913)) FROM geospatial_test WHERE id = 2;)",
+            dt,
+            false)));
+    EXPECT_DOUBLE_EQ(
+        double(1.796630568489136e-05),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_X(ST_Transform(gp900913, 4326)) FROM geospatial_test WHERE id = 2;)",
+            dt,
+            false)));
+    EXPECT_DOUBLE_EQ(
+        double(1.796630569117497e-05),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Y(ST_Transform(gp900913, 4326)) FROM geospatial_test WHERE id = 2;)",
+            dt,
+            false)));
+    EXPECT_EQ(
+        "POINT (0.000017966305685 0.000017966305691)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            R"(SELECT ST_Transform(gp900913, 4326) FROM geospatial_test WHERE id = 2;)",
+            dt,
+            false))));
+    SKIP_ON_AGGREGATOR({
+      // ensure transforms run on GPU. transforms use math functions which need to be
+      // specialized for GPU
+      if (dt == ExecutorDeviceType::GPU) {
+        const auto query_explain_result = QR::get()->runSelectQuery(
+            R"(SELECT ST_Transform(gp900913, 4326) FROM geospatial_test WHERE id = 2;)",
+            dt,
+            /*hoist_literals=*/true,
+            /*allow_loop_joins=*/false,
+            /*just_explain=*/true);
+        const auto explain_result = query_explain_result->getRows();
+        EXPECT_EQ(size_t(1), explain_result->rowCount());
+        const auto crt_row = explain_result->getNextRow(true, true);
+        EXPECT_EQ(size_t(1), crt_row.size());
+        const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
+        EXPECT_FALSE(explain_str.find("IR for the GPU:") == std::string::npos);
+      }
+    });
+    EXPECT_ANY_THROW(run_simple_agg(
+        R"(SELECT ST_Transform(gpoly900913, 4326) FROM geospatial_test WHERE id = 2;)",
+        dt));
   }
 }
 
@@ -1126,6 +1239,31 @@ TEST_P(GeoSpatialNullTablesFixture, GeoWithNulls) {
             "SELECT ST_Contains(poly,p) IS NULL FROM geospatial_null_test WHERE id=2;",
             dt,
             false)));
+  }
+}
+
+TEST_P(GeoSpatialNullTablesFixture, Constructors) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    auto nullcheck_result = [](auto p) {
+      auto p_v = boost::get<void*>(&p);
+      auto p_s = boost::get<std::string>(&p);
+      EXPECT_TRUE(p_v && *p_v == nullptr && !p_s);
+    };
+
+    nullcheck_result(v<NullableString>(run_simple_agg(
+        R"(SELECT ST_Transform(gp4326, 900913) FROM geospatial_null_test WHERE id = 4;)",
+        dt,
+        false)));
+    nullcheck_result(v<NullableString>(run_simple_agg(
+        R"(SELECT ST_Transform(gp4326none, 900913) FROM geospatial_null_test WHERE id = 5;)",
+        dt,
+        false)));
+    nullcheck_result(v<NullableString>(run_simple_agg(
+        R"(SELECT ST_Transform(gp900913, 4326) FROM geospatial_null_test WHERE id = 6;)",
+        dt,
+        false)));
   }
 }
 
@@ -1438,6 +1576,11 @@ TEST(GeoSpatial, Math) {
         v<int64_t>(run_simple_agg(
             R"(SELECT ST_Intersects(ST_GeomFromText('POLYGON((-165.27254008488316 60.286744877866084,-164.279755308478 60.286744877866084, -164.279755308478 60.818880025426154,-165.27254008488316 60.818880025426154))', 4326),ST_GeomFromText('MULTIPOLYGON (((-165.273152946156 60.5488599839382,-165.244307548387 60.4963022239955,-165.23881195357 60.4964759808483,-165.234271979534 60.4961199595109,-165.23165799921 60.496354988076,-165.229399998313 60.4973489979735,-165.225239975948 60.4977589987674,-165.217958113746 60.4974514248303,-165.21276192051 60.4972319866052)))',4326));)",
             dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_Intersects(ST_GeomFromText('POLYGON((-9.838404039411898 50.55533029518068, -2.310857889588476 50.55533029518068, -2.310857889588476 53.61604635210904, -9.838404039411898 53.61604635210904, -9.838404039411898 50.55533029518068))', 4326), ST_GeomFromText('LINESTRING (-9.54855228287566 51.7461543817754,-9.54461588968738 51.7447587529871,-9.54434548949094 51.7369761558887)', 4326));)",
+            dt)));
 
     // ST_Disjoint
     ASSERT_EQ(
@@ -1663,9 +1806,9 @@ TEST(GeoSpatial, Math) {
             R"(SELECT ST_X(ST_EndPoint(ST_GeomFromText('LINESTRING(-118.243683 34.052235, -119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, -122.446747 37.733795)', 4326)));)",
             dt)),
         static_cast<double>(0.01));
-    ASSERT_NEAR(
+    ASSERT_NEAR(  // TODO: postgis has this at 557422.59741475
         static_cast<double>(
-            557637.370),  // geodesic distance between first and end points: LA - SF trip
+            557637.3711),  // geodesic distance between first and end points: LA - SF trip
         v<double>(run_simple_agg(
             R"(SELECT ST_Distance(ST_PointN(ST_GeogFromText('LINESTRING(-118.243683 34.052235, -119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, -122.446747 37.733795)', 4326), 1), ST_EndPoint(ST_GeogFromText('LINESTRING(-118.243683 34.052235, -119.229034 34.274647, -119.698189 34.420830, -121.898460 36.603954, -122.446747 37.733795)', 4326)));)",
             dt)),

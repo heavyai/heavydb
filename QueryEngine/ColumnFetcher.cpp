@@ -337,7 +337,7 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
   }
   return ColumnFetcher::transferColumnIfNeeded(table_column,
                                                0,
-                                               &executor_->getCatalog()->getDataMgr(),
+                                               executor_->getDataMgr(),
                                                memory_level,
                                                device_id,
                                                device_allocator);
@@ -1039,10 +1039,6 @@ const int8_t* ColumnFetcher::getResultSetColumn(
     result = columnarized_table_cache_[table_id][frag_id].get();
   }
   CHECK_GE(col_id, 0);
-  return transferColumnIfNeeded(result,
-                                col_id,
-                                &executor_->getCatalog()->getDataMgr(),
-                                memory_level,
-                                device_id,
-                                device_allocator);
+  return transferColumnIfNeeded(
+      result, col_id, executor_->getDataMgr(), memory_level, device_id, device_allocator);
 }

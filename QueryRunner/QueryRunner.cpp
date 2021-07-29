@@ -337,6 +337,62 @@ void QueryRunner::validateDDLStatement(const std::string& stmt_str_in) {
                        true);
 }
 
+std::shared_ptr<RelAlgTranslator> QueryRunner::getRelAlgTranslator(
+    const std::string& query_str,
+    Executor* executor) {
+  CHECK(session_info_);
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
+  auto query_state = create_query_state(session_info_, query_str);
+  const auto& cat = session_info_->getCatalog();
+  auto calcite_mgr = cat.getCalciteMgr();
+  const auto query_ra = calcite_mgr
+                            ->process(query_state->createQueryStateProxy(),
+                                      pg_shim(query_str),
+                                      {},
+                                      true,
+                                      false,
+                                      false,
+                                      true)
+                            .plan_result;
+  executor->setCatalog(&cat);
+  auto ra_executor = RelAlgExecutor(executor, cat, query_ra);
+  auto root_node_shared_ptr = ra_executor.getRootRelAlgNodeShPtr();
+  return ra_executor.getRelAlgTranslator(root_node_shared_ptr.get());
+}
+
+QueryPlanDagInfo QueryRunner::getQueryInfoForDataRecyclerTest(
+    const std::string& query_str) {
+  CHECK(session_info_);
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
+  auto query_state = create_query_state(session_info_, query_str);
+  const auto& cat = session_info_->getCatalog();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto calcite_mgr = cat.getCalciteMgr();
+  const auto query_ra = calcite_mgr
+                            ->process(query_state->createQueryStateProxy(),
+                                      pg_shim(query_str),
+                                      {},
+                                      true,
+                                      false,
+                                      false,
+                                      true)
+                            .plan_result;
+  executor->setCatalog(&cat);
+  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
+  // note that we assume the test for data recycler that needs to have join_info
+  // does not contain any ORDER BY clause; this is necessary to create work_unit
+  // without actually performing the query
+  auto root_node_shared_ptr = ra_executor.getRootRelAlgNodeShPtr();
+  auto join_info = ra_executor.getJoinInfo(root_node_shared_ptr.get());
+  auto relAlgTranslator = ra_executor.getRelAlgTranslator(root_node_shared_ptr.get());
+  return {root_node_shared_ptr, join_info.first, join_info.second, relAlgTranslator};
+}
+
+void QueryRunner::printQueryPlanDagCache() const {
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  executor->getQueryPlanDagCache().printDag();
+}
+
 void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());

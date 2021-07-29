@@ -59,7 +59,8 @@ class Codegen {
   virtual std::vector<llvm::Value*> codegen(
       const std::vector<llvm::Value*>& args,
       CodeGenerator::NullCheckCodegen* nullcheck_codegen,
-      CgenState* cgen_state) = 0;
+      CgenState* cgen_state,
+      const CompilationOptions& co) = 0;
 
   virtual ~Codegen() {}
 

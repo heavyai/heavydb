@@ -376,7 +376,12 @@ EXTENSION_NOINLINE int32_t ct_udtf_default_sizer4b__cpu_2(const int32_t multipli
 
 // clang-format off
 /*
-  UDTF: ct_binding_dict_encoded1__cpu_1(Cursor<TextEncodingDict>, RowMultiplier) -> Column<TextEncodingDict>
+  UDTF: ct_binding_dict_encoded1__cpu_1(Cursor<TextEncodingDict>, RowMultiplier) -> Column<TextEncodingDict> | input_id=args<0>
+  UDTF: ct_binding_dict_encoded2__cpu_1(Cursor<TextEncodingDict, TextEncodingDict>) -> Column<TextEncodingDict> | input_id=args<0, 0>, Column<TextEncodingDict> | input_id=args<0, 1>
+  UDTF: ct_binding_dict_encoded3__cpu_1(Cursor<TextEncodingDict, TextEncodingDict>) -> Column<TextEncodingDict> | input_id=args<0, 1>, Column<TextEncodingDict> | input_id=args<0, 0>
+  UDTF: ct_binding_dict_encoded4__cpu_1(Cursor<ColumnList<TextEncodingDict>>) -> Column<TextEncodingDict> | input_id=args<0,0>
+  UDTF: ct_binding_dict_encoded5__cpu_1(Cursor<ColumnList<TextEncodingDict>>) -> Column<TextEncodingDict> | input_id=args<0,1>
+  UDTF: ct_binding_dict_encoded6__cpu_1(Cursor<ColumnList<TextEncodingDict>>) -> Column<TextEncodingDict> | input_id=args<0,0>, Column<TextEncodingDict> | input_id=args<0,1>
 */
 // clang-format on
 EXTENSION_NOINLINE int32_t
@@ -387,4 +392,106 @@ ct_binding_dict_encoded1__cpu_1(const Column<TextEncodingDict>& input,
     out[i] = input[i];  // assign string id
   }
   return multiplier * input.size();
+}
+
+EXTENSION_NOINLINE int32_t
+ct_binding_dict_encoded2__cpu_1(const Column<TextEncodingDict>& input1,
+                                const Column<TextEncodingDict>& input2,
+                                Column<TextEncodingDict>& out1,
+                                Column<TextEncodingDict>& out2) {
+  set_output_row_size(input1.size());
+  for (int64_t i = 0; i < input1.size(); i++) {
+    out1[i] = input1[i];
+    out2[i] = input2[i];
+  }
+  return input1.size();
+}
+
+EXTENSION_NOINLINE int32_t
+ct_binding_dict_encoded3__cpu_1(const Column<TextEncodingDict>& input1,
+                                const Column<TextEncodingDict>& input2,
+                                Column<TextEncodingDict>& out1,
+                                Column<TextEncodingDict>& out2) {
+  set_output_row_size(input1.size());
+  for (int64_t i = 0; i < input1.size(); i++) {
+    out1[i] = input2[i];
+    out2[i] = input1[i];
+  }
+  return input1.size();
+}
+
+EXTENSION_NOINLINE int32_t
+ct_binding_dict_encoded4__cpu_1(const ColumnList<TextEncodingDict>& input,
+                                Column<TextEncodingDict>& out) {
+  int64_t sz = input[0].size();
+  set_output_row_size(sz);
+  for (int64_t i = 0; i < sz; i++) {
+    out[i] = input[0][i];
+  }
+  return sz;
+}
+
+EXTENSION_NOINLINE int32_t
+ct_binding_dict_encoded5__cpu_1(const ColumnList<TextEncodingDict>& input,
+                                Column<TextEncodingDict>& out) {
+  int64_t sz = input[1].size();
+  set_output_row_size(sz);
+  for (int64_t i = 0; i < sz; i++) {
+    out[i] = input[1][i];
+  }
+  return sz;
+}
+
+EXTENSION_NOINLINE int32_t
+ct_binding_dict_encoded6__cpu_1(const ColumnList<TextEncodingDict>& input,
+                                Column<TextEncodingDict>& out0,
+                                Column<TextEncodingDict>& out1) {
+  int64_t sz = input[0].size();
+  set_output_row_size(sz);
+  for (int64_t i = 0; i < sz; i++) {
+    out0[i] = input[0][i];
+    out1[i] = input[1][i];
+  }
+  return sz;
+}
+
+// clang-format off
+/*
+  UDTF: ct_binding_template__template_1(Cursor<TextEncodingDict>) -> Column<TextEncodingDict> | input_id=args<0>
+  UDTF: ct_binding_template__template_2(Cursor<int>) -> Column<int>
+  UDTF: ct_binding_template__template_3(Cursor<float>) -> Column<float>
+*/
+// clang-format on
+template <typename T>
+int32_t ct_binding_template(const Column<T>& input, Column<T>& out) {
+  set_output_row_size(input.size());
+  for (int64_t i = 0; i < input.size(); i++) {
+    out[i] = input[i];
+  }
+  return input.size();
+}
+
+// clang-format off
+/*
+  UDTF: ct_binding_columnlist__template_1(Cursor<int32_t, ColumnList<int32_t>>) -> Column<int32_t>
+  UDTF: ct_binding_columnlist__template_2(Cursor<float, ColumnList<float>>) -> Column<int32_t>
+  UDTF: ct_binding_columnlist__template_3(Cursor<TextEncodingDict, ColumnList<TextEncodingDict>>) -> Column<int32_t>
+  UDTF: ct_binding_columnlist__template_4(Cursor<int16_t, ColumnList<int16_t>>) -> Column<int32_t>
+*/
+// clang-format on
+template <typename T>
+int32_t ct_binding_columnlist(const Column<T>& input1,
+                              const ColumnList<T>& input2,
+                              Column<int32_t>& out) {
+  set_output_row_size(1);
+  if constexpr (std::is_same<T, int32_t>::value) {
+    out[0] = 1;
+  } else if constexpr (std::is_same<T, float>::value) {
+    out[0] = 2;
+  } else if constexpr (std::is_same<T, TextEncodingDict>::value) {
+    out[0] = 3;
+  } else {
+    out[0] = 4;
+  }
+  return 1;
 }

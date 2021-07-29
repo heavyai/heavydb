@@ -23,8 +23,7 @@ llvm::Value* Executor::spillDoubleElement(llvm::Value* elem_val, llvm::Type* ele
 }
 
 bool Executor::isArchMaxwell(const ExecutorDeviceType dt) const {
-  return dt == ExecutorDeviceType::GPU &&
-         catalog_->getDataMgr().getCudaMgr()->isArchMaxwell();
+  return dt == ExecutorDeviceType::GPU && cudaMgr()->isArchMaxwell();
 }
 
 bool GroupByAndAggregate::needsUnnestDoublePatch(llvm::Value const* val_ptr,

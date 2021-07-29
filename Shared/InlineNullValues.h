@@ -23,6 +23,7 @@
 #include <cassert>
 #include <cfloat>
 #include <cstdint>
+#include <cstdlib>
 #include <limits>
 
 #define NULL_BOOLEAN INT8_MIN
@@ -100,12 +101,12 @@ DEVICE T inline_fp_null_array_value() {
 }
 
 template <>
-constexpr inline float inline_fp_null_array_value<float>() {
+DEVICE inline float inline_fp_null_array_value<float>() {
   return NULL_ARRAY_FLOAT;
 }
 
 template <>
-constexpr inline double inline_fp_null_array_value<double>() {
+DEVICE inline double inline_fp_null_array_value<double>() {
   return NULL_ARRAY_DOUBLE;
 }
 

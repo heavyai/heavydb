@@ -42,15 +42,10 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
                   const int16_t* rep_levels,
                   const int64_t values_read,
                   const int64_t levels_read,
-                  const bool is_last_batch,
                   int8_t* values) override {
     encodeAndCopyContiguous(values, encode_buffer_.data(), values_read);
-    TypedParquetInPlaceEncoder<V, V>::appendData(def_levels,
-                                                 rep_levels,
-                                                 values_read,
-                                                 levels_read,
-                                                 is_last_batch,
-                                                 encode_buffer_.data());
+    TypedParquetInPlaceEncoder<V, V>::appendData(
+        def_levels, rep_levels, values_read, levels_read, encode_buffer_.data());
   }
 
   void encodeAndCopyContiguous(const int8_t* parquet_data_bytes,

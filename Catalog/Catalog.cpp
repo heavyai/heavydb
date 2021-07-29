@@ -2460,6 +2460,12 @@ void Catalog::createTable(
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
+
+  if (td.storageType != StorageType::FOREIGN_TABLE) {
+    sqlite_lock.unlock();
+    getMetadataForTable(td.tableName,
+                        true);  // cause instantiateFragmenter() to be called
+  }
 }
 
 void Catalog::serializeTableJsonUnlocked(const TableDescriptor* td,
@@ -4639,8 +4645,8 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
       os << (ti.get_notnull() ? " NOT NULL" : "");
       if (shared_dict_column_names.find(cd->columnName) ==
           shared_dict_column_names.end()) {
-        // avoids "Exception: Column ... shouldn't specify an encoding, it borrows it
-        // from the referenced column"
+        // avoids "Column ... shouldn't specify an encoding, it borrows it
+        //    from the referenced column"
         if (ti.is_string() || (ti.is_array() && ti.get_subtype() == kTEXT)) {
           auto size = ti.is_array() ? ti.get_logical_size() : ti.get_size();
           if (ti.get_compression() == kENCODING_DICT) {

@@ -127,12 +127,14 @@ class TableFunction {
                 const std::vector<ExtArgumentType>& input_args,
                 const std::vector<ExtArgumentType>& output_args,
                 const std::vector<ExtArgumentType>& sql_args,
+                const std::vector<std::map<std::string, std::string>>& annotations,
                 bool is_runtime)
       : name_(name)
       , output_sizer_(output_sizer)
       , input_args_(input_args)
       , output_args_(output_args)
       , sql_args_(sql_args)
+      , annotations_(annotations)
       , is_runtime_(is_runtime) {}
 
   std::vector<ExtArgumentType> getArgs(const bool ensure_column = false) const {
@@ -151,6 +153,9 @@ class TableFunction {
   const std::vector<ExtArgumentType>& getInputArgs() const { return input_args_; }
   const std::vector<ExtArgumentType>& getOutputArgs() const { return output_args_; }
   const std::vector<ExtArgumentType>& getSqlArgs() const { return sql_args_; }
+  const std::vector<std::map<std::string, std::string>>& getAnnotations() const {
+    return annotations_;
+  }
   const ExtArgumentType getRet() const { return ExtArgumentType::Int32; }
 
   SQLTypeInfo getInputSQLType(const size_t idx) const;
@@ -188,6 +193,14 @@ class TableFunction {
   OutputBufferSizeType getOutputRowSizeType() const { return output_sizer_.type; }
 
   size_t getOutputRowSizeParameter() const { return output_sizer_.val; }
+
+  const std::map<std::string, std::string>& getAnnotation(const size_t idx) const;
+  const std::map<std::string, std::string>& getInputAnnotation(
+      const size_t input_arg_idx) const;
+  const std::map<std::string, std::string>& getOutputAnnotation(
+      const size_t output_arg_idx) const;
+
+  std::pair<int32_t, int32_t> getInputID(const size_t idx) const;
 
   size_t getSqlOutputRowSizeParameter() const;
 
@@ -236,7 +249,19 @@ class TableFunction {
     result += ExtensionFunctionsWhitelist::toString(sql_args_);
     result += "], is_runtime=" + std::string((is_runtime_ ? "true" : "false"));
     result += ", sizer=" + ::toString(output_sizer_);
-    result += ")";
+    result += ", annotations=[";
+    for (auto annotation : annotations_) {
+      if (annotation.empty()) {
+        result += "{}, ";
+      } else {
+        result += "{";
+        for (auto it : annotation) {
+          result += ::toString(it.first) + ": " + ::toString(it.second);
+        }
+        result += "}, ";
+      }
+    }
+    result += "])";
     return result;
   }
 
@@ -255,6 +280,7 @@ class TableFunction {
   const std::vector<ExtArgumentType> input_args_;
   const std::vector<ExtArgumentType> output_args_;
   const std::vector<ExtArgumentType> sql_args_;
+  const std::vector<std::map<std::string, std::string>> annotations_;
   const bool is_runtime_;
 };
 
@@ -265,6 +291,7 @@ class TableFunctionsFactory {
                   const std::vector<ExtArgumentType>& input_args,
                   const std::vector<ExtArgumentType>& output_args,
                   const std::vector<ExtArgumentType>& sql_args,
+                  const std::vector<std::map<std::string, std::string>>& annotations,
                   bool is_runtime = false);
 
   static std::vector<TableFunction> get_table_funcs(const std::string& name,

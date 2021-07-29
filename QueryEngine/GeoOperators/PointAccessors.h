@@ -55,6 +55,16 @@ class PointAccessors : public Codegen {
     llvm::Value* array_buff_ptr{nullptr};
     llvm::Value* is_null{nullptr};
     if (arg_lvs.size() == 1) {
+      if (dynamic_cast<const Analyzer::GeoExpr*>(operand)) {
+        const auto ptr_type =
+            llvm::dyn_cast<llvm::PointerType>(arg_lvs.front()->getType());
+        CHECK(ptr_type);
+        const auto is_null_lv =
+            builder.CreateICmp(llvm::CmpInst::ICMP_EQ,
+                               arg_lvs.front(),
+                               llvm::ConstantPointerNull::get(ptr_type));
+        return std::make_tuple(arg_lvs, is_null_lv);
+      }
       // col byte stream, get the array buffer ptr and is null attributes and cache
       auto arr_load_lvs = CodeGenerator::codegenGeoArrayLoadAndNullcheck(
           arg_lvs.front(), pos_lv, geo_ti, cgen_state);
@@ -86,7 +96,8 @@ class PointAccessors : public Codegen {
 
   std::vector<llvm::Value*> codegen(const std::vector<llvm::Value*>& args,
                                     CodeGenerator::NullCheckCodegen* nullcheck_codegen,
-                                    CgenState* cgen_state) final {
+                                    CgenState* cgen_state,
+                                    const CompilationOptions& co) final {
     CHECK_EQ(args.size(), size_t(1));
     const auto array_buff_ptr = args.front();
 
@@ -118,28 +129,6 @@ class PointAccessors : public Codegen {
       auto coord_lv_ptr =
           builder.CreateGEP(coord_arr_ptr, coord_index, expr_name + "_coord_ptr");
       coord_lv = builder.CreateLoad(coord_lv_ptr, expr_name + "_coord");
-    }
-
-    // TODO: do this with transformation nodes explicitly
-    if (geo_ti.get_input_srid() != geo_ti.get_output_srid()) {
-      if (geo_ti.get_input_srid() == 4326) {
-        if (geo_ti.get_output_srid() == 900913) {
-          // convert WGS 84 -> Web mercator
-          coord_lv =
-              cgen_state->emitExternalCall("conv_4326_900913_" + expr_name,
-                                           llvm::Type::getDoubleTy(cgen_state->context_),
-                                           {coord_lv});
-          coord_lv->setName(expr_name + "_coord_transformed");
-        } else {
-          throw std::runtime_error("Unsupported geo transformation: " +
-                                   std::to_string(geo_ti.get_input_srid()) + " to " +
-                                   std::to_string(geo_ti.get_output_srid()));
-        }
-      } else {
-        throw std::runtime_error(
-            "Unsupported geo transformation: " + std::to_string(geo_ti.get_input_srid()) +
-            " to " + std::to_string(geo_ti.get_output_srid()));
-      }
     }
 
     auto ret = coord_lv;

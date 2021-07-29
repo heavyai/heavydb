@@ -141,12 +141,6 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| drop_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| alter_table_param_statement { $<nodeval>$ = $<nodeval>1; }
 	| copy_table_statement { $<nodeval>$ = $<nodeval>1; }
-	| create_database_statement { $<nodeval>$ = $<nodeval>1; }
-	| drop_database_statement { $<nodeval>$ = $<nodeval>1; }
-	| rename_database_statement { $<nodeval>$ = $<nodeval>1; }
-	| create_user_statement { $<nodeval>$ = $<nodeval>1; }
-	| drop_user_statement { $<nodeval>$ = $<nodeval>1; }
-	| alter_user_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_role_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_role_statement { $<nodeval>$ = $<nodeval>1; }
 	| grant_privileges_statement { $<nodeval>$ = $<nodeval>1; }
@@ -180,53 +174,6 @@ schema_element:
 	|	privilege_def {	$$ = $1; }
 	;
 NOT SUPPORTED */
-
-create_database_statement:
-		CREATE DATABASE opt_if_not_exists NAME
-		{
-			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new CreateDBStmt(($<stringval>4)->release(), nullptr, $<boolval>3));
-		}
-		| CREATE DATABASE opt_if_not_exists NAME '(' name_eq_value_list ')'
-		{
-			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new CreateDBStmt(($<stringval>4)->release(), reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>6)->release()), $<boolval>3));
-		}
-		;
-drop_database_statement:
-		DROP DATABASE opt_if_exists NAME
-		{
-			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new DropDBStmt(($<stringval>4)->release(), $<boolval>3));
-		}
-		;
-rename_database_statement:
-		ALTER DATABASE NAME RENAME TO NAME
-		{
-		   $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new RenameDatabaseStmt(($<stringval>3)->release(), ($<stringval>6)->release()));
-		}
-		;
-
-create_user_statement:
-		CREATE USER username '(' name_eq_value_list ')'
-		{
-			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new CreateUserStmt(($<stringval>3)->release(), reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>5)->release())));
-		}
-		;
-drop_user_statement:
-		DROP USER username
-		{
-			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new DropUserStmt(($<stringval>3)->release()));
-		}
-		;
-alter_user_statement:
-		ALTER USER username '(' name_eq_value_list ')'
-		{
-			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new AlterUserStmt(($<stringval>3)->release(), reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>5)->release())));
-		}
-		|
-		ALTER USER username RENAME TO username
-		{
-		   $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new RenameUserStmt(($<stringval>3)->release(), ($<stringval>6)->release()));
-		}
-		;
 
 name_eq_value_list:
 		name_eq_value

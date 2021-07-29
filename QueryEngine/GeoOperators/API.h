@@ -22,3 +22,4 @@
 #include "QueryEngine/GeoOperators/PointConstructor.h"
 #include "QueryEngine/GeoOperators/PointN.h"
 #include "QueryEngine/GeoOperators/StartEndPoint.h"
+#include "QueryEngine/GeoOperators/Transform.h"

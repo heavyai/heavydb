@@ -22,6 +22,7 @@
  **/
 
 #include "../Geospatial/Compression.h"
+#include "../Geospatial/Transforms.h"
 #include "../Shared/funcannotations.h"
 #include "TypePunning.h"
 
@@ -43,4 +44,4 @@ extern "C" DEVICE RUNTIME_EXPORT int32_t compress_y_coord_geoint(const double co
   return static_cast<int32_t>(Geospatial::compress_lattitude_coord_geoint32(coord));
 }
 
-#endif  // EXECUTE_INCLUDE
+#endif

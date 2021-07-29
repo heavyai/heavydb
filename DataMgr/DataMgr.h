@@ -200,7 +200,7 @@ class DataMgr {
   void checkpoint(const int db_id, const int table_id, const MemoryLevel memory_level);
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                        const ChunkKey& keyPrefix);
-  inline bool gpusPresent() { return hasGpus_; }
+  inline bool gpusPresent() const { return hasGpus_; }
   void removeTableRelatedDS(const int db_id, const int tb_id);
   void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);
   size_t getTableEpoch(const int db_id, const int tb_id);

@@ -1,0 +1,23 @@
+From 68a6ef128fd1fccfdb512a57c6e304364cb510c7 Mon Sep 17 00:00:00 2001
+From: Alex Baden <alex.baden@gmail.com>
+Date: Thu, 8 Jul 2021 12:22:01 -0600
+Subject: [PATCH] [ARROW-13290] Add missing include
+
+---
+ cpp/src/arrow/util/tdigest.cc | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/cpp/src/arrow/util/tdigest.cc b/cpp/src/arrow/util/tdigest.cc
+index b23bca397..1021f6e86 100644
+--- a/cpp/src/arrow/util/tdigest.cc
++++ b/cpp/src/arrow/util/tdigest.cc
+@@ -23,6 +23,7 @@
+ #include <queue>
+ #include <tuple>
+ #include <vector>
++#include <limits>
+ 
+ #include "arrow/status.h"
+ 
+-- 
+2.32.0

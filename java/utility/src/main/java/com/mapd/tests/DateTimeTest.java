@@ -693,7 +693,7 @@ public class DateTimeTest {
 
       return r;
     } catch (TOmniSciException e) {
-      System.out.println("Query failed: " + sql + " -- " + e.error_msg);
+      System.out.println("Query failed: " + sql + " -- " + e.getError_msg());
       return LocalDateTime.MIN;
 
     } catch (Exception e) {
@@ -714,7 +714,7 @@ public class DateTimeTest {
       }
       return r;
     } catch (TOmniSciException e) {
-      System.out.println("Query failed: " + sql + " -- " + e.error_msg);
+      System.out.println("Query failed: " + sql + " -- " + e.getError_msg());
       return Long.MIN_VALUE;
     } catch (Exception e) {
       System.out.println("Query failed: " + sql + " -- " + e.getMessage());
@@ -765,7 +765,7 @@ public class DateTimeTest {
     try {
       client.runSql(sqlUpdate);
     } catch (TOmniSciException e) {
-      System.out.println("Update failed: " + sqlUpdate + " " + e.error_msg);
+      System.out.println("Update failed: " + sqlUpdate + " " + e.getError_msg());
     }
   }
 

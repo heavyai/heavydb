@@ -28,9 +28,11 @@
 #include "QueryEngine/ExternalExecutor.h"
 #include "QueryEngine/FromTableReordering.h"
 #include "QueryEngine/QueryPhysicalInputsCollector.h"
+#include "QueryEngine/QueryPlanDagExtractor.h"
 #include "QueryEngine/RangeTableIndexVisitor.h"
 #include "QueryEngine/RelAlgDagBuilder.h"
 #include "QueryEngine/RelAlgTranslator.h"
+#include "QueryEngine/RelAlgVisitor.h"
 #include "QueryEngine/ResultSetBuilder.h"
 #include "QueryEngine/RexVisitor.h"
 #include "QueryEngine/TableOptimizer.h"
@@ -153,6 +155,28 @@ void prepare_foreign_table_for_execution(const RelAlgNode& ra_node,
   prepare_string_dictionaries(ra_node, catalog);
 }
 
+bool is_extracted_dag_valid(ExtractedPlanDag& dag) {
+  return !dag.contain_not_supported_rel_node &&
+         dag.extracted_dag.compare(EMPTY_QUERY_PLAN) != 0;
+}
+
+class RelLeftDeepTreeIdsCollector : public RelAlgVisitor<std::vector<unsigned>> {
+ public:
+  std::vector<unsigned> visitLeftDeepInnerJoin(
+      const RelLeftDeepInnerJoin* left_deep_join_tree) const override {
+    return {left_deep_join_tree->getId()};
+  }
+
+ protected:
+  std::vector<unsigned> aggregateResult(
+      const std::vector<unsigned>& aggregate,
+      const std::vector<unsigned>& next_result) const override {
+    auto result = aggregate;
+    std::copy(next_result.begin(), next_result.end(), std::back_inserter(result));
+    return result;
+  }
+};
+
 }  // namespace
 
 size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
@@ -191,7 +215,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
 
   decltype(temporary_tables_)().swap(temporary_tables_);
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
-  executor_->catalog_ = &cat_;
+  executor_->setCatalog(&cat_);
   executor_->temporary_tables_ = &temporary_tables_;
 
   WindowProjectNodeContext::reset(executor_);
@@ -486,6 +510,19 @@ void RelAlgExecutor::cleanupPostExecution() {
   executor_->row_set_mem_owner_ = nullptr;
 }
 
+std::pair<std::vector<unsigned>, std::unordered_map<unsigned, JoinQualsPerNestingLevel>>
+RelAlgExecutor::getJoinInfo(const RelAlgNode* root_node) {
+  auto sort_node = dynamic_cast<const RelSort*>(root_node);
+  if (sort_node) {
+    // we assume that test query that needs join info does not contain any sort node
+    return {};
+  }
+  auto work_unit = createWorkUnit(root_node, {}, ExecutionOptions::defaults());
+  RelLeftDeepTreeIdsCollector visitor;
+  auto left_deep_tree_ids = visitor.visit(root_node);
+  return {left_deep_tree_ids, getLeftDeepJoinTreesInfo()};
+}
+
 namespace {
 
 inline void check_sort_node_source_constraint(const RelSort* sort) {
@@ -600,7 +637,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
     decltype(temporary_tables_)().swap(temporary_tables_);
   }
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
-  executor_->catalog_ = &cat_;
+  decltype(left_deep_join_info_)().swap(left_deep_join_info_);
+  executor_->setCatalog(&cat_);
   executor_->temporary_tables_ = &temporary_tables_;
 
   time(&now_);
@@ -622,7 +660,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
   };
 
   const auto exec_desc_count = get_descriptor_count();
-
+  // this join info needs to be maintained throughout an entire query runtime
   for (size_t i = 0; i < exec_desc_count; i++) {
     VLOG(1) << "Executing query step " << i;
     // only render on the last step
@@ -666,9 +704,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
     RenderInfo* render_info,
     const int64_t queue_time_ms) {
   INJECT_TIMER(executeRelAlgSubSeq);
-  executor_->catalog_ = &cat_;
+  executor_->setCatalog(&cat_);
   executor_->temporary_tables_ = &temporary_tables_;
-
+  decltype(left_deep_join_info_)().swap(left_deep_join_info_);
   time(&now_);
   for (size_t i = interval.first; i < interval.second; i++) {
     // only render on the last step
@@ -2725,6 +2763,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
                               {sort_info.order_entries, sort_algorithm, limit, offset},
                               scan_total_limit,
                               source_exe_unit.query_hint,
+                              EMPTY_QUERY_PLAN, /* skip sort node's recycling */
+                              {},
                               source_exe_unit.use_bump_allocator,
                               source_exe_unit.union_all,
                               source_exe_unit.query_state},
@@ -3551,7 +3591,9 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                          : std::vector<JoinType>{get_join_type(compound)};
   std::vector<size_t> input_permutation;
   std::vector<size_t> left_deep_join_input_sizes;
+  std::optional<unsigned> left_deep_tree_id;
   if (left_deep_join) {
+    left_deep_tree_id = left_deep_join->getId();
     left_deep_join_input_sizes = get_left_deep_join_input_sizes(left_deep_join);
     left_deep_join_quals = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
@@ -3602,19 +3644,48 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
       sort_info,
       0,
       query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults(),
+      EMPTY_QUERY_PLAN,
+      {},
       false,
       std::nullopt,
       query_state_};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
-  const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
+  auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta = get_targets_meta(compound, rewritten_exe_unit.target_exprs);
   compound->setOutputMetainfo(targets_meta);
+  auto& left_deep_trees_info = getLeftDeepJoinTreesInfo();
+  if (left_deep_tree_id && left_deep_tree_id.has_value()) {
+    left_deep_trees_info.emplace(left_deep_tree_id.value(),
+                                 rewritten_exe_unit.join_quals);
+  }
+  auto dag_info = QueryPlanDagExtractor::extractQueryPlanDag(compound,
+                                                             cat_,
+                                                             left_deep_tree_id,
+                                                             left_deep_trees_info,
+                                                             temporary_tables_,
+                                                             executor_,
+                                                             translator);
+  if (is_extracted_dag_valid(dag_info)) {
+    rewritten_exe_unit.query_plan_dag = dag_info.extracted_dag;
+    rewritten_exe_unit.hash_table_build_plan_dag = dag_info.hash_table_plan_dag;
+  }
   return {rewritten_exe_unit,
           compound,
           g_default_max_groups_buffer_entry_guess,
           std::move(query_rewriter),
           input_permutation,
           left_deep_join_input_sizes};
+}
+
+std::shared_ptr<RelAlgTranslator> RelAlgExecutor::getRelAlgTranslator(
+    const RelAlgNode* node) {
+  auto input_to_nest_level = get_input_nest_levels(node, {});
+  const auto left_deep_join =
+      dynamic_cast<const RelLeftDeepInnerJoin*>(node->getInput(0));
+  const auto join_types = left_deep_join ? left_deep_join_types(left_deep_join)
+                                         : std::vector<JoinType>{get_join_type(node)};
+  return std::make_shared<RelAlgTranslator>(
+      cat_, query_state_, executor_, input_to_nest_level, join_types, now_, false);
 }
 
 namespace {
@@ -3837,6 +3908,13 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
       target_exprs_owned_, scalar_sources, groupby_exprs, aggregate, translator);
   const auto targets_meta = get_targets_meta(aggregate, target_exprs);
   aggregate->setOutputMetainfo(targets_meta);
+  auto dag_info = QueryPlanDagExtractor::extractQueryPlanDag(aggregate,
+                                                             cat_,
+                                                             std::nullopt,
+                                                             getLeftDeepJoinTreesInfo(),
+                                                             temporary_tables_,
+                                                             executor_,
+                                                             translator);
   return {RelAlgExecutionUnit{
               input_descs,
               input_col_descs,
@@ -3849,6 +3927,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
               sort_info,
               0,
               query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults(),
+              dag_info.extracted_dag,
+              dag_info.hash_table_plan_dag,
               false,
               std::nullopt,
               query_state_},
@@ -3875,7 +3955,9 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
                                          : std::vector<JoinType>{get_join_type(project)};
   std::vector<size_t> input_permutation;
   std::vector<size_t> left_deep_join_input_sizes;
+  std::optional<unsigned> left_deep_tree_id;
   if (left_deep_join) {
+    left_deep_tree_id = left_deep_join->getId();
     left_deep_join_input_sizes = get_left_deep_join_input_sizes(left_deep_join);
     const auto query_infos = get_table_infos(input_descs, executor_);
     left_deep_join_quals = translateLeftDeepJoinFilter(
@@ -3921,13 +4003,31 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
       sort_info,
       0,
       query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults(),
+      EMPTY_QUERY_PLAN,
+      {},
       false,
       std::nullopt,
       query_state_};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
-  const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
+  auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta = get_targets_meta(project, rewritten_exe_unit.target_exprs);
   project->setOutputMetainfo(targets_meta);
+  auto& left_deep_trees_info = getLeftDeepJoinTreesInfo();
+  if (left_deep_tree_id && left_deep_tree_id.has_value()) {
+    left_deep_trees_info.emplace(left_deep_tree_id.value(),
+                                 rewritten_exe_unit.join_quals);
+  }
+  auto dag_info = QueryPlanDagExtractor::extractQueryPlanDag(project,
+                                                             cat_,
+                                                             left_deep_tree_id,
+                                                             left_deep_trees_info,
+                                                             temporary_tables_,
+                                                             executor_,
+                                                             translator);
+  if (is_extracted_dag_valid(dag_info)) {
+    rewritten_exe_unit.query_plan_dag = dag_info.extracted_dag;
+    rewritten_exe_unit.hash_table_build_plan_dag = dag_info.hash_table_plan_dag;
+  }
   return {rewritten_exe_unit,
           project,
           g_default_max_groups_buffer_entry_guess,
@@ -4009,6 +4109,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
       sort_info,
       max_num_tuples,
       query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults(),
+      EMPTY_QUERY_PLAN,
+      {},
       false,
       logical_union->isAll(),
       query_state_};
@@ -4140,8 +4242,15 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
         auto& input_expr = input_exprs[input_index];
         auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr);
         CHECK(col_var);
-        input_expr->set_type_info(
-            ti);  // ti is shared in between all columns in the same column_list
+
+        // avoid setting type info to ti here since ti doesn't have all the
+        // properties correctly set
+        auto type_info = input_expr->get_type_info();
+        type_info.set_subtype(type_info.get_type());  // set type to be subtype
+        type_info.set_type(ti.get_type());            // set type to column list
+        type_info.set_dimension(ti.get_dimension());
+        input_expr->set_type_info(type_info);
+
         input_col_exprs.push_back(col_var);
         input_index++;
       }
@@ -4149,18 +4258,18 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       auto& input_expr = input_exprs[input_index];
       auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr);
       CHECK(col_var);
-      input_expr->set_type_info(ti);
+
+      // same here! avoid setting type info to ti since it doesn't have all the
+      // properties correctly set
+      auto type_info = input_expr->get_type_info();
+      type_info.set_subtype(type_info.get_type());  // set type to be subtype
+      type_info.set_type(ti.get_type());            // set type to column list
+      input_expr->set_type_info(type_info);
+
       input_col_exprs.push_back(col_var);
       input_index++;
     } else {
       input_index++;
-    }
-    if (ti.is_subtype_dict_encoded_string()) {
-      if (dict_id.has_value()) {
-        LOG(WARNING) << "dict_id value is already set to " << *dict_id;
-      } else {
-        dict_id = ti.get_comp_param();
-      }
     }
   }
   CHECK_EQ(input_col_exprs.size(), rel_table_func->getColInputsSize());
@@ -4168,8 +4277,21 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   for (size_t i = 0; i < table_function_impl.getOutputsSize(); i++) {
     auto ti = table_function_impl.getOutputSQLType(i);
     if (ti.is_dict_encoded_string()) {
-      CHECK(dict_id.has_value());
-      ti.set_comp_param(*dict_id);
+      auto p = table_function_impl.getInputID(i);
+
+      int32_t input_pos = p.first;
+      // Iterate over the list of arguments to compute the offset. Use this offset to
+      // get the corresponding input
+      int32_t offset = 0;
+      for (int j = 0; j < input_pos; j++) {
+        const auto ti = table_function_type_infos[j];
+        offset += ti.is_column_list() ? ti.get_dimension() : 1;
+      }
+      input_pos = offset + p.second;
+
+      CHECK_LT(input_pos, input_exprs.size());
+      int32_t comp_param = input_exprs_owned[input_pos]->get_type_info().get_comp_param();
+      ti.set_comp_param(comp_param);
     }
     target_exprs_owned_.push_back(std::make_shared<Analyzer::ColumnVar>(ti, 0, i, -1));
     table_func_outputs.push_back(target_exprs_owned_.back().get());
@@ -4259,6 +4381,13 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   filter->setOutputMetainfo(in_metainfo);
   const auto rewritten_qual = rewrite_expr(qual.get());
+  auto dag_info = QueryPlanDagExtractor::extractQueryPlanDag(filter,
+                                                             cat_,
+                                                             std::nullopt,
+                                                             getLeftDeepJoinTreesInfo(),
+                                                             temporary_tables_,
+                                                             executor_,
+                                                             translator);
   return {{input_descs,
            input_col_descs,
            {},
@@ -4269,7 +4398,9 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            nullptr,
            sort_info,
            0,
-           query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults()},
+           query_dag_ ? query_dag_->getQueryHints() : RegisteredQueryHint::defaults(),
+           dag_info.extracted_dag,
+           dag_info.hash_table_plan_dag},
           filter,
           g_default_max_groups_buffer_entry_guess,
           nullptr};

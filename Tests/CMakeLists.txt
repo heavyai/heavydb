@@ -29,6 +29,7 @@ add_executable(ShardedTableEpochConsistencyTest ShardedTableEpochConsistencyTest
 add_executable(DiskCacheQueryTest DiskCacheQueryTest.cpp)
 add_executable(CachingFileMgrTest CachingFileMgrTest.cpp)
 add_executable(JSONTest JSONTest.cpp)
+add_executable(DataRecyclerTest DataRecyclerTest.cpp)
 
 if(ENABLE_CUDA)
   message(DEBUG "Tests CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
@@ -72,7 +73,6 @@ add_executable(ComputeMetadataTest ComputeMetadataTest.cpp)
 add_executable(BumpAllocatorTest BumpAllocatorTest.cpp)
 add_executable(SpecialCharsTest SpecialCharsTest.cpp)
 add_executable(TableFunctionsTest TableFunctionsTest.cpp)
-add_executable(StringTableFunctionsTest StringTableFunctionsTest.cpp)
 add_executable(ArrayTest ArrayTest.cpp)
 add_executable(GroupByTest GroupByTest.cpp)
 add_executable(ParallelExecutorsTest ParallelExecutorsTest.cpp)
@@ -146,9 +146,8 @@ target_link_libraries(UpdelStorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ComputeMetadataTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(TableFunctionsTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(StringTableFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrayTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(ParallelExecutorsTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(ParallelExecutorsTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(GroupByTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(MigrationMgrTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(BumpAllocatorTest ${EXECUTE_TEST_LIBS})
@@ -200,10 +199,11 @@ target_link_libraries(ShardedTableEpochConsistencyTest ${THRIFT_HANDLER_TEST_LIB
 target_link_libraries(DiskCacheQueryTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CachingFileMgrTest gtest DataMgr ${Boost_LIBRARIES})
 target_link_libraries(LoadTableTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(DataRecyclerTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(JSONTest gtest Logger Shared)
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
-  target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS})
+  target_link_libraries(UdfTest gtest UdfCompiler ${EXECUTE_TEST_LIBS})
 endif()
 
 target_link_libraries(TableUpdateDeleteBenchmark benchmark ${EXECUTE_TEST_LIBS})
@@ -248,7 +248,6 @@ add_test(ComputeMetadataTest ComputeMetadataTest ${TEST_ARGS})
 add_test(BumpAllocatorTest BumpAllocatorTest ${TEST_ARGS})
 add_test(SpecialCharsTest SpecialCharsTest ${TEST_ARGS})
 add_test(TableFunctionsTest TableFunctionsTest ${TEST_ARGS})
-add_test(StringTableFunctionsTest StringTableFunctionsTest ${TEST_ARGS})
 add_test(ArrayTest ArrayTest ${TEST_ARGS})
 add_test(ParallelExecutorsTest ParallelExecutorsTest ${TEST_ARGS})
 add_test(GroupByTest GroupByTest ${TEST_ARGS})
@@ -284,6 +283,7 @@ add_test(PersistentStorageTest PersistentStorageTest ${TEST_ARGS})
 add_test(ShardedTableEpochConsistencyTest ShardedTableEpochConsistencyTest ${TEST_ARGS})
 add_test(DiskCacheQueryTest DiskCacheQueryTest ${TEST_ARGS})
 add_test(CachingFileMgrTest CachingFileMgrTest ${TEST_ARGS})
+add_test(DataRecyclerTest DataRecyclerTest ${TEST_ARGS})
 add_test(LoadTableTest LoadTableTest ${TEST_ARGS})
 add_test(JSONTest JSONTest ${TEST_ARGS})
 
@@ -340,7 +340,6 @@ set(TEST_PROGRAMS
   BumpAllocatorTest
   SpecialCharsTest
   TableFunctionsTest
-  StringTableFunctionsTest
   ArrayTest
   GroupByTest
   ParallelExecutorsTest
@@ -376,6 +375,7 @@ set(TEST_PROGRAMS
   ForeignStorageCacheTest
   PersistentStorageTest
   ShardedTableEpochConsistencyTest
+  DataRecyclerTest
   DiskCacheQueryTest
   CachingFileMgrTest
   LoadTableTest

@@ -36,7 +36,6 @@ class ParquetGeospatialEncoder : public ParquetEncoder, public GeospatialEncoder
                   const int16_t* rep_levels,
                   const int64_t values_read,
                   const int64_t levels_read,
-                  const bool is_last_batch,
                   int8_t* values) override {
     auto parquet_data_ptr = reinterpret_cast<const parquet::ByteArray*>(values);
 

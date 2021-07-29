@@ -49,9 +49,9 @@ QueryExecutionContext::QueryExecutionContext(
     , row_set_mem_owner_(row_set_mem_owner)
     , output_columnar_(output_columnar) {
   CHECK(executor);
-  auto& data_mgr = executor->catalog_->getDataMgr();
+  auto data_mgr = executor->getDataMgr();
   if (device_type == ExecutorDeviceType::GPU) {
-    gpu_allocator_ = std::make_unique<CudaAllocator>(&data_mgr, device_id);
+    gpu_allocator_ = std::make_unique<CudaAllocator>(data_mgr, device_id);
   }
 
   auto render_allocator_map = render_info && render_info->isPotentialInSituRender()
@@ -300,16 +300,14 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                                             can_sort_on_gpu,
                                                             output_columnar_,
                                                             render_allocator);
-    if (ra_exe_unit.use_bump_allocator) {
-      const auto max_matched = static_cast<int32_t>(gpu_group_by_buffers.entry_count);
-      copy_to_gpu(data_mgr,
-                  kernel_params[MAX_MATCHED],
-                  &max_matched,
-                  sizeof(max_matched),
-                  device_id);
-    }
+    const auto max_matched = static_cast<int32_t>(gpu_group_by_buffers.entry_count);
+    copy_to_gpu(data_mgr,
+                kernel_params[MAX_MATCHED],
+                &max_matched,
+                sizeof(max_matched),
+                device_id);
 
-    kernel_params[GROUPBY_BUF] = gpu_group_by_buffers.first;
+    kernel_params[GROUPBY_BUF] = gpu_group_by_buffers.ptrs;
     std::vector<void*> param_ptrs;
     for (auto& param : kernel_params) {
       param_ptrs.push_back(&param);
@@ -566,6 +564,20 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                   query_buffers_->getCountDistinctHostPtr(),
                   count_distinct_bitmap_mem,
                   query_buffers_->getCountDistinctBitmapBytes(),
+                  device_id);
+  }
+
+  const auto varlen_output_gpu_buf = query_buffers_->getVarlenOutputPtr();
+  if (varlen_output_gpu_buf) {
+    CHECK(query_mem_desc_.varlenOutputBufferElemSize());
+    const size_t varlen_output_buf_bytes =
+        query_mem_desc_.getEntryCount() *
+        query_mem_desc_.varlenOutputBufferElemSize().value();
+    CHECK(query_buffers_->getVarlenOutputHostPtr());
+    copy_from_gpu(data_mgr,
+                  query_buffers_->getVarlenOutputHostPtr(),
+                  varlen_output_gpu_buf,
+                  varlen_output_buf_bytes,
                   device_id);
   }
 

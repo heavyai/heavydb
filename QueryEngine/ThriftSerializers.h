@@ -618,6 +618,7 @@ inline TUserDefinedTableFunction to_thrift(const table_functions::TableFunction&
   tfunc.inputArgTypes = to_thrift(func.getInputArgs());
   tfunc.outputArgTypes = to_thrift(func.getOutputArgs());
   tfunc.sqlArgTypes = to_thrift(func.getSqlArgs());
+  tfunc.annotations = func.getAnnotations();
   return tfunc;
 }
 
