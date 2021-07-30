@@ -304,7 +304,7 @@ if(ENABLE_MLPACK)
   add_definitions("-DHAVE_MLPACK")
 endif()
 
-option(ENABLE_ONEDAL "Use Intel oneDAL" ON)
+option(ENABLE_ONEDAL "Use Intel oneDAL" OFF)
 if(ENABLE_ONEDAL)
   set(USE_DPCPP no)
   set(USE_NEW_IFACES no)
