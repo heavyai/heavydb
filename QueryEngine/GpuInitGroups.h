@@ -48,8 +48,4 @@ void init_columnar_group_by_buffer_on_device(int64_t* groups_buffer,
                                              const size_t block_size_x,
                                              const size_t grid_size_x);
 
-void init_render_buffer_on_device(int64_t* render_buffer,
-                                  const uint32_t qw_count,
-                                  const size_t block_size_x,
-                                  const size_t grid_size_x);
 #endif  // GPUINITGROUPS_H

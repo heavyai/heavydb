@@ -49,16 +49,11 @@ class StreamingTopNNotSupportedInRenderQuery : public std::runtime_error {
       : std::runtime_error("Streaming-Top-N not supported in Render Query") {}
 };
 
-enum class RAExecutionPolicy { Host, Device };
-
 class RenderAllocator : public Allocator {
  public:
   RenderAllocator(int8_t* preallocated_ptr,
                   const size_t preallocated_size,
-                  const size_t device_id,
-                  const unsigned block_size_x,
-                  const unsigned grid_size_x,
-                  const RAExecutionPolicy execution_policy = RAExecutionPolicy::Device);
+                  const size_t device_id);
 
   int8_t* alloc(const size_t bytes) final;
 
@@ -70,8 +65,6 @@ class RenderAllocator : public Allocator {
 
   int8_t* getBasePtr() const;
 
-  RAExecutionPolicy getExecutionPolicy() const;
-
  private:
   int8_t* preallocated_ptr_;
   const size_t preallocated_size_;
@@ -80,15 +73,11 @@ class RenderAllocator : public Allocator {
   size_t crt_allocated_bytes_;
 
   std::unique_ptr<std::mutex> alloc_mtx_ptr_;
-
-  RAExecutionPolicy execution_policy_;
 };
 
 class RenderAllocatorMap {
  public:
-  RenderAllocatorMap(::QueryRenderer::QueryRenderManager* render_manager,
-                     const unsigned block_size_x,
-                     const unsigned grid_size_x);
+  RenderAllocatorMap(::QueryRenderer::QueryRenderManager* render_manager);
   ~RenderAllocatorMap();
 
   RenderAllocator* getRenderAllocator(size_t device_id);

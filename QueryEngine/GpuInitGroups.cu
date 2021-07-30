@@ -107,19 +107,6 @@ extern "C" __device__ void init_columnar_group_by_buffer_gpu_impl(
   __syncthreads();
 }
 
-__device__ void init_render_buffer(int64_t* render_buffer, const uint32_t qw_count) {
-  const uint32_t start = blockIdx.x * blockDim.x + threadIdx.x;
-  const uint32_t step = blockDim.x * gridDim.x;
-  for (uint32_t i = start; i < qw_count; i += step) {
-    render_buffer[i] = EMPTY_KEY_64;
-  }
-}
-
-__global__ void init_render_buffer_wrapper(int64_t* render_buffer,
-                                           const uint32_t qw_count) {
-  init_render_buffer(render_buffer, qw_count);
-}
-
 template <typename K>
 inline __device__ void fill_empty_device_key(K* keys_ptr,
                                              const uint32_t key_count,
@@ -240,11 +227,4 @@ void init_columnar_group_by_buffer_on_device(int64_t* groups_buffer,
       need_padding,
       keyless,
       key_size);
-}
-
-void init_render_buffer_on_device(int64_t* render_buffer,
-                                  const uint32_t qw_count,
-                                  const size_t block_size_x,
-                                  const size_t grid_size_x) {
-  init_render_buffer_wrapper<<<grid_size_x, block_size_x>>>(render_buffer, qw_count);
 }
