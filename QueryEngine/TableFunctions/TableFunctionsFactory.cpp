@@ -268,7 +268,7 @@ void TableFunctionsFactory::add(
       if (it->second.isRuntime()) {
         LOG(WARNING)
             << "Overriding existing run-time table function (reset not called?): "
-                << name;
+            << name;
         it = functions_.erase(it);
       } else {
         throw std::runtime_error("Will not override existing load-time table function: " +

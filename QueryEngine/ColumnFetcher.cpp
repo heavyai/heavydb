@@ -1032,7 +1032,7 @@ const int8_t* ColumnFetcher::getResultSetColumn(
     if (frag_id_to_result.empty() || !frag_id_to_result.count(frag_id)) {
       frag_id_to_result.insert(std::make_pair(
           frag_id,
-                         std::shared_ptr<const ColumnarResults>(columnarize_result(
+          std::shared_ptr<const ColumnarResults>(columnarize_result(
               executor_->row_set_mem_owner_, buffer, thread_idx, frag_id))));
     }
     CHECK_NE(size_t(0), columnarized_table_cache_.count(table_id));
