@@ -2195,6 +2195,28 @@ TEST_F(GeoSpatialTempTables, Geos) {
                   v<int64_t>(run_simple_agg("SELECT count(*) FROM geospatial_test "
                                             "WHERE ST_Equals(l, 'LINESTRING(2 0, 4 4)');",
                                             dt))));
+    // confirm geos recognizes equality of 4326 column and a geo literal, both compressed
+    EXPECT_GPU_THROW(
+        ASSERT_EQ(static_cast<int64_t>(1),
+                  v<int64_t>(run_simple_agg(
+                      "SELECT count(*) FROM geospatial_test WHERE ST_Equals(gpoly4326, "
+                      "ST_GeomFromText('POLYGON ((0 0,4 0.0,0.0 4,0 0))', 4326));",
+                      dt))));
+    // same as above but add two extra vertices to the geo literal without changing shape
+    EXPECT_GPU_THROW(ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM geospatial_test WHERE ST_Equals(gpoly4326, "
+            "ST_GeomFromText('POLYGON ((0 0,2 0,4 0.0,0.0 4,0 2,0 0))', 4326));",
+            dt))));
+    // giving geos a tolerance margin to recognize spatial equality of
+    // an uncompressed geo stored in 4326 column and a compressed geo literal
+    EXPECT_GPU_THROW(
+        ASSERT_EQ(static_cast<int64_t>(1),
+                  v<int64_t>(run_simple_agg(
+                      "SELECT count(*) FROM geospatial_test WHERE ST_Equals(gl4326none, "
+                      "ST_GeomFromText('LINESTRING (4 0,8 8)', 4326))",
+                      dt))));
     // geos-backed ST_Union(MULTIPOLYGON,MULTIPOLYGON)
     EXPECT_GPU_THROW(ASSERT_NEAR(
         static_cast<double>(14.0),

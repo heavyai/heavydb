@@ -437,7 +437,12 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb_Predicate(
     auto* g2 = GEOSGeomFromWKB_buf_r(context, wkb2.data(), wkb2.size());
     if (g2) {
       if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kEQUALS) {
-        *result = GEOSEquals_r(context, g1, g2);
+        if (arg1_ic != arg2_ic &&
+            (arg1_ic == COMPRESSION_GEOINT32 || arg2_ic == COMPRESSION_GEOINT32)) {
+          *result = GEOSEqualsExact_r(context, g1, g2, TOLERANCE_GEOINT32);
+        } else {
+          *result = GEOSEquals_r(context, g1, g2);
+        }
         status = true;
       }
       GEOSGeom_destroy_r(context, g2);

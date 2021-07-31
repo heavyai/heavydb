@@ -1234,7 +1234,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
         // ST_Equals(g1,g2) to ST_Distance(g1,g2,thereshold=tolerance)<=tolerance
         Datum tolerance;
         // Tolerance representing 0.44" to cover shifts due to GEOINT(32) compression
-        tolerance.doubleval = 0.0000001;
+        tolerance.doubleval = TOLERANCE_GEOINT32;
         threshold_expr = makeExpr<Analyzer::Constant>(kDOUBLE, false, tolerance);
         compare_expr = threshold_expr;
       } else {
