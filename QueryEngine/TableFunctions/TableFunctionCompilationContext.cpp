@@ -279,7 +279,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
           col_heads[i], llvm::PointerType::get(get_fp_type(get_bit_width(ti), ctx), 0));
       func_args.push_back(cgen_state->ir_builder_.CreateLoad(r));
       CHECK_EQ(col_index, -1);
-    } else if (ti.is_integer()) {
+    } else if (ti.is_integer() || ti.is_boolean()) {
       auto r = cgen_state->ir_builder_.CreateBitCast(
           col_heads[i], llvm::PointerType::get(get_int_type(get_bit_width(ti), ctx), 0));
       func_args.push_back(cgen_state->ir_builder_.CreateLoad(r));

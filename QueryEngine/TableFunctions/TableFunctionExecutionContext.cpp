@@ -200,6 +200,11 @@ ResultSetPtr TableFunctionExecutionContext::execute(
           default:
             UNREACHABLE();
         }
+      } else if (ti.is_boolean()) {
+        col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.boolval,
+                                                     device_type,
+                                                     literals_owner,
+                                                     device_allocator.get()));
       } else {
         throw std::runtime_error("Literal value " + constant_val->toString() +
                                  " is not yet supported.");

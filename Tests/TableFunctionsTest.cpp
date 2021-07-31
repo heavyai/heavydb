@@ -229,6 +229,37 @@ TEST_F(TableFunctions, BasicProjection) {
         ASSERT_EQ(s, expected_result_set[i]);
       }
     }
+
+    // Test boolean scalars AND return of less rows than allocated in table function
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(sort_column_limit(CURSOR(SELECT x FROM tf_test), 2, "
+          "true, "
+          "true)) ORDER by out0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(2));
+      std::vector<int64_t> expected_result_set{0, 1};
+      for (size_t i = 0; i < 2; i++) {
+        auto row = rows->getNextRow(true, false);
+        auto v = TestHelpers::v<int64_t>(row[0]);
+        ASSERT_EQ(v, expected_result_set[i]);
+      }
+    }
+
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(sort_column_limit(CURSOR(SELECT x FROM tf_test), 3, "
+          "false, "
+          "true)) ORDER by out0 DESC;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(3));
+      std::vector<int64_t> expected_result_set{4, 3, 2};
+      for (size_t i = 0; i < 3; i++) {
+        auto row = rows->getNextRow(true, false);
+        auto v = TestHelpers::v<int64_t>(row[0]);
+        ASSERT_EQ(v, expected_result_set[i]);
+      }
+    }
   }
 }
 

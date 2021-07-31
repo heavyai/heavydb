@@ -173,6 +173,10 @@ class TableFunction {
            ExtensionFunctionsWhitelist::toString(input_args_) + ")";
   }
 
+  bool hasCompileTimeOutputSizeConstant() const {
+    return output_sizer_.type == OutputBufferSizeType::kConstant;
+  }
+
   bool hasNonUserSpecifiedOutputSizeConstant() const {
     return output_sizer_.type == OutputBufferSizeType::kConstant ||
            output_sizer_.type == OutputBufferSizeType::kTableFunctionSpecifiedParameter;

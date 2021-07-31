@@ -512,3 +512,72 @@ int32_t ct_binding_column__cpu_template(const Column<T>& input, Column<int32_t>&
   }
   return 1;
 }
+
+//#ifndef __CUDACC__
+#include <algorithm>
+//#endif // __CUDACC__
+
+template <typename T>
+struct SortAsc {
+  SortAsc(const bool nulls_last)
+      : null_value_(std::numeric_limits<T>::lowest())
+      , null_value_mapped_(map_null_value(nulls_last)) {}
+  static T map_null_value(const bool nulls_last) {
+    return nulls_last ? std::numeric_limits<T>::max() : std::numeric_limits<T>::lowest();
+  }
+  inline T mapValue(const T& val) {
+    return val == null_value_ ? null_value_mapped_ : val;
+  }
+  bool operator()(const T& a, const T& b) { return mapValue(a) < mapValue(b); }
+  const T null_value_;
+  const T null_value_mapped_;
+};
+
+template <typename T>
+struct SortDesc {
+  SortDesc(const bool nulls_last)
+      : null_value_(std::numeric_limits<T>::lowest())
+      , null_value_mapped_(map_null_value(nulls_last)) {}
+  static T map_null_value(const bool nulls_last) {
+    return nulls_last ? std::numeric_limits<T>::lowest() : std::numeric_limits<T>::max();
+  }
+
+  inline T mapValue(const T& val) {
+    return val == null_value_ ? null_value_mapped_ : val;
+  }
+
+  bool operator()(const T& a, const T& b) { return mapValue(a) > mapValue(b); }
+  const T null_value_;
+  const T null_value_mapped_;
+};
+
+// clang-format off
+/*
+  UDTF: sort_column_limit__cpu_template(Cursor<Column<int8_t>>, int32_t, bool, bool) -> Column<int8_t>
+  UDTF: sort_column_limit__cpu_template(Cursor<Column<int16_t>>, int32_t, bool, bool) -> Column<int16_t>
+  UDTF: sort_column_limit__cpu_template(Cursor<Column<int32_t>>, int32_t, bool, bool) -> Column<int32_t>
+  UDTF: sort_column_limit__cpu_template(Cursor<Column<int64_t>>, int32_t, bool, bool) -> Column<int64_t>
+  UDTF: sort_column_limit__cpu_template(Cursor<Column<float>>, int32_t, bool, bool) -> Column<float>
+  UDTF: sort_column_limit__cpu_template(Cursor<Column<double>>, int32_t, bool, bool) -> Column<double>
+*/
+// clang-format on
+
+template <typename T>
+int32_t sort_column_limit__cpu_template(const Column<T>& input,
+                                        const int32_t limit,
+                                        const bool sort_ascending,
+                                        const bool nulls_last,
+                                        Column<T>& output) {
+  const int64_t num_rows = input.size();
+  set_output_row_size(num_rows);
+  output = input;
+  if (sort_ascending) {
+    std::sort(output.ptr_, output.ptr_ + num_rows, SortAsc<T>(nulls_last));
+  } else {
+    std::sort(output.ptr_, output.ptr_ + num_rows, SortDesc<T>(nulls_last));
+  }
+  if (limit < 0 || limit > num_rows) {
+    return num_rows;
+  }
+  return limit;
+}

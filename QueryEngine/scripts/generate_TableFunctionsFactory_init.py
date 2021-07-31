@@ -188,7 +188,9 @@ class Bracket:
         elif name.startswith('Column'):
             name = name.lstrip('Column')
             clsname = 'Column'
-        if name.startswith('Int'):
+        if name.startswith('Bool'):
+            ctype = name.lower()
+        elif name.startswith('Int'):
             ctype = name.lower() + '_t'
         elif name in ['Double', 'Float']:
             ctype = name.lower()
