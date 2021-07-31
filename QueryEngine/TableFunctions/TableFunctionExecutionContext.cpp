@@ -269,7 +269,7 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   if (err) {
     throw std::runtime_error("Error executing table function: " + std::to_string(err));
   }
-  if (exe_unit.table_func.hasNonUserSpecifiedOutputSizeConstant()) {
+  if (exe_unit.table_func.hasCompileTimeOutputSizeConstant()) {
     if (static_cast<size_t>(output_row_count) != mgr->get_nrows()) {
       throw std::runtime_error(
           "Table function with constant sizing parameter must return " +
