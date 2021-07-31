@@ -1144,15 +1144,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
     // Inject ST_DWithin's short-circuiting threshold into ST_MaxDistance
     threshold_expr = translateScalarRex(rex_function->getOperand(2));
   } else if (function_name == "ST_Equals"sv) {
-    // Translate ST_Equals(g1,g2) to ST_Distance(g1,g2,thereshold=tol)<=tol
+    // Translate ST_Equals(g1,g2) to ST_Distance(g1,g2)<=0.0
     CHECK_EQ(size_t(2), rex_function->size());
     function_name = "ST_Distance";
     return_type = SQLTypeInfo(kDOUBLE, false);
-    Datum tolerance;
-    // Could pick up compression-specific tolerance from runtime
-    tolerance.doubleval = 0.0000001;
-    threshold_expr = makeExpr<Analyzer::Constant>(kDOUBLE, false, tolerance);
-    compare_expr = threshold_expr;
+    threshold_expr = nullptr;
+    Datum d;
+    d.doubleval = 0.0;
+    compare_expr = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
   } else if (function_name == "ST_DFullyWithin"sv) {
     CHECK_EQ(size_t(3), rex_function->size());
     function_name = "ST_MaxDistance";
@@ -1215,12 +1214,34 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
     throw QueryNotSupported(rex_function->getName() + " cannot accept different SRIDs");
   }
   if (compare_expr) {
-    // TODO: ST_Equals could return false for different geo types being compared, e.g.
-    // POLYGON vs POINT. Though tiny POLYGON could be "spatially" equal to a POINT..
+    // We could fold the check to false here if argument geo types are different, e.g.
+    // POLYGON vs POINT. However, tiny POLYGON could be "spatially" equal to a POINT.
     if (arg0_ti.get_type() != kPOINT || arg1_ti.get_type() != kPOINT) {
       // ST_Equals is translated to a simple distance check for POINTs,
       // otherwise geometries are passed to GEOS's Equals
       return nullptr;
+    }
+    // Look at POINT compression modes.
+    if (arg0_ti.get_compression() != arg1_ti.get_compression()) {
+      if ((arg0_ti.get_compression() == kENCODING_GEOINT &&
+           arg0_ti.get_comp_param() == 32 &&
+           arg1_ti.get_compression() == kENCODING_NONE) ||
+          (arg0_ti.get_compression() == kENCODING_NONE &&
+           arg1_ti.get_compression() == kENCODING_GEOINT &&
+           arg0_ti.get_comp_param() == 32)) {
+        // Spatial equality comparison of a compressed point vs uncompressed point.
+        // Introduce tolerance into distance calculation and comparison, translate
+        // ST_Equals(g1,g2) to ST_Distance(g1,g2,thereshold=tolerance)<=tolerance
+        Datum tolerance;
+        // Tolerance representing 0.44" to cover shifts due to GEOINT(32) compression
+        tolerance.doubleval = 0.0000001;
+        threshold_expr = makeExpr<Analyzer::Constant>(kDOUBLE, false, tolerance);
+        compare_expr = threshold_expr;
+      } else {
+        throw QueryNotSupported(
+            rex_function->getName() +
+            " unable to calculate compression tolerance for arguments");
+      }
     }
   }
 

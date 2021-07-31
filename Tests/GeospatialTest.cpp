@@ -570,7 +570,23 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     // point equals
     ASSERT_EQ(static_cast<int64_t>(1),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
+                                        "WHERE ST_Equals('POINT(2 2)', p);",
+                                        dt)));
+    // precise comparisons for uncompressed points
+    ASSERT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
                                         "WHERE ST_Equals('POINT(2.000000002 2)', p);",
+                                        dt)));
+    // 4326 geo literals are compressed by default, check equality with uncompressed col
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM geospatial_test "
+                  "WHERE ST_Equals(ST_GeomFromText('POINT(2 2)', 4326), gp4326none);",
+                  dt)));
+    // spatial equality of same points stored in compressed and uncompressed columns
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
+                                        "WHERE ST_Equals(gp4326, gp4326none);",
                                         dt)));
 
     // intersects
@@ -1560,10 +1576,10 @@ TEST(GeoSpatial, Math) {
     // ST_Equals
     ASSERT_EQ(static_cast<int64_t>(1),
               v<int64_t>(run_simple_agg(
-                  R"(SELECT ST_Equals('POINT(1 1)', 'POINT(1.000000001 1)');)", dt)));
+                  R"(SELECT ST_Equals('POINT(1 1)', 'POINT(1 1)');)", dt)));
     ASSERT_EQ(static_cast<int64_t>(0),
               v<int64_t>(run_simple_agg(
-                  R"(SELECT ST_Equals('POINT(1 1)', 'POINT(1.000001 1)');)", dt)));
+                  R"(SELECT ST_Equals('POINT(1 1)', 'POINT(1.00000001 1)');)", dt)));
 
     // ST_Intersects
     ASSERT_EQ(
