@@ -48,6 +48,7 @@
 #include "Shared/File.h"
 #include "Shared/StringTransform.h"
 #include "Shared/measure.h"
+#include "Shared/misc.h"
 #include "include/bcrypt.h"
 
 using std::list;
@@ -2712,4 +2713,63 @@ void SysCatalog::removeCatalog(const std::string& dbName) {
   cat_map_.erase(dbName);
 }
 
+void SysCatalog::reassignObjectOwners(
+    const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
+    int32_t new_owner_id,
+    const Catalog_Namespace::Catalog& catalog) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    UserMetadata new_owner;
+    CHECK(getMetadataForUserById(new_owner_id, new_owner));
+    for (const auto& [old_owner_id, db_objects] : old_owner_db_objects) {
+      UserMetadata old_owner;
+      CHECK(getMetadataForUserById(old_owner_id, old_owner));
+      if (!old_owner.isSuper) {
+        revokeDBObjectPrivilegesBatch_unsafe({old_owner.userName}, db_objects, catalog);
+      }
+      if (!new_owner.isSuper) {
+        grantDBObjectPrivilegesBatch_unsafe({new_owner.userName}, db_objects, catalog);
+      }
+    }
+
+    std::set<int32_t> old_owner_ids;
+    for (const auto& [old_owner_id, db_objects] : old_owner_db_objects) {
+      old_owner_ids.emplace(old_owner_id);
+    }
+
+    auto db_id = catalog.getDatabaseId();
+    for (const auto old_user_id : old_owner_ids) {
+      sqliteConnector_->query_with_text_params(
+          "UPDATE mapd_object_permissions SET objectOwnerId = ? WHERE objectOwnerId = ? "
+          "AND dbId = ? AND objectId != -1",
+          std::vector<std::string>{std::to_string(new_owner_id),
+                                   std::to_string(old_user_id),
+                                   std::to_string(db_id)});
+    }
+
+    for (const auto& [user_or_role, grantee] : granteeMap_) {
+      grantee->reassignObjectOwners(old_owner_ids, new_owner_id, db_id);
+    }
+
+    for (const auto& [object_key, object_descriptor] : objectDescriptorMap_) {
+      if (object_descriptor->objectId != -1 && object_descriptor->dbId == db_id &&
+          shared::contains(old_owner_ids, object_descriptor->objectOwnerId)) {
+        object_descriptor->objectOwnerId = new_owner_id;
+      }
+    }
+  } catch (std::exception& e) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+
+    // Rebuild updated maps from storage
+    granteeMap_.clear();
+    buildRoleMap();
+    objectDescriptorMap_.clear();
+    buildObjectDescriptorMap();
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+}
 }  // namespace Catalog_Namespace

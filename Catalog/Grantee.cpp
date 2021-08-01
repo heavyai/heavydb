@@ -15,7 +15,10 @@
  */
 
 #include "Grantee.h"
+
 #include <stack>
+
+#include "Shared/misc.h"
 
 using std::runtime_error;
 using std::string;
@@ -306,6 +309,24 @@ void Grantee::checkCycles(Role* newRole) {
       for (auto g : r->getGrantees()) {
         grantees.push(g);
       }
+    }
+  }
+}
+
+void Grantee::reassignObjectOwners(const std::set<int32_t>& old_owner_ids,
+                                   int32_t new_owner_id,
+                                   int32_t db_id) {
+  for (const auto& [object_key, object] : effectivePrivileges_) {
+    if (object_key.objectId != -1 && object_key.dbId == db_id &&
+        shared::contains(old_owner_ids, object->getOwner())) {
+      object->setOwner(new_owner_id);
+    }
+  }
+
+  for (const auto& [object_key, object] : directPrivileges_) {
+    if (object_key.objectId != -1 && object_key.dbId == db_id &&
+        shared::contains(old_owner_ids, object->getOwner())) {
+      object->setOwner(new_owner_id);
     }
   }
 }

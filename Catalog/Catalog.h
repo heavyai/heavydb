@@ -543,6 +543,17 @@ class Catalog final {
   void deleteCustomExpressions(const std::vector<int32_t>& custom_expression_ids,
                                bool do_soft_delete);
 
+  /**
+   * Reassigns database object ownership from a set of users (old owners) to another user
+   * (new owner).
+   *
+   * @param old_owners - users whose database object ownership will be reassigned to a new
+   * user
+   * @param new_owner - user who will own reassigned database objects
+   */
+  void reassignOwners(const std::set<std::string>& old_owners,
+                      const std::string& new_owner);
+
  protected:
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();
@@ -700,6 +711,13 @@ class Catalog final {
 
   void buildCustomExpressionsMap();
   std::unique_ptr<CustomExpression> getCustomExpressionFromConnector(size_t row);
+
+  void restoreOldOwners(
+      const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
+      int32_t new_owner_id);
+  void restoreOldOwnersInMemory(
+      const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
+      int32_t new_owner_id);
 
  public:
   mutable std::mutex sqliteMutex_;

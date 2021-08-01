@@ -58,6 +58,10 @@ class Grantee {
   }
   void checkCycles(Role* newRole);
 
+  void reassignObjectOwners(const std::set<int32_t>& old_owner_ids,
+                            int32_t new_owner_id,
+                            int32_t db_id);
+
  protected:
   std::string name_;
   std::unordered_set<Role*> roles_;

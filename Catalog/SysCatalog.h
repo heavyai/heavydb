@@ -346,6 +346,20 @@ class SysCatalog : private CommonFileOperations {
 
   virtual ~SysCatalog();
 
+  /**
+   * Reassigns database object ownership from a set of users (old owners) to another user
+   * (new owner).
+   *
+   * @param old_owner_db_objects - map of user ids and database objects whose ownership
+   * will be reassigned
+   * @param new_owner_id - id of user who will own reassigned database objects
+   * @param catalog - catalog for database where ownership reassignment occurred
+   */
+  void reassignObjectOwners(
+      const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
+      int32_t new_owner_id,
+      const Catalog_Namespace::Catalog& catalog);
+
  private:
   using GranteeMap = std::map<std::string, std::unique_ptr<Grantee>>;
   using ObjectRoleDescriptorMap =

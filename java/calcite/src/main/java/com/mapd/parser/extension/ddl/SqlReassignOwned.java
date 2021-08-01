@@ -9,15 +9,20 @@ import org.apache.calcite.sql.parser.SqlParserPos;
 
 import java.util.List;
 
-public class SqlShowTableDetails extends SqlCustomDdl {
+public class SqlReassignOwned extends SqlCustomDdl {
   private static final SqlOperator OPERATOR =
-          new SqlSpecialOperator("SHOW_TABLE_DETAILS", SqlKind.OTHER_DDL);
+          new SqlSpecialOperator("REASSIGN_OWNED", SqlKind.OTHER_DDL);
 
   @Expose
-  private List<String> tableNames;
+  private List<String> oldOwners;
 
-  public SqlShowTableDetails(final SqlParserPos pos, final List<String> tableNames) {
+  @Expose
+  private String newOwner;
+
+  public SqlReassignOwned(
+          final SqlParserPos pos, final List<String> oldOwners, final String newOwner) {
     super(OPERATOR, pos);
-    this.tableNames = tableNames;
+    this.oldOwners = oldOwners;
+    this.newOwner = newOwner;
   }
 }
