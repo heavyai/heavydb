@@ -9,11 +9,11 @@ import org.apache.calcite.sql.parser.SqlParserPos;
 
 import java.util.List;
 
-public abstract class SqlShowCommand extends SqlDdl implements JsonSerializableDdl {
+public abstract class SqlCustomDdl extends SqlDdl implements JsonSerializableDdl {
   @Expose
   private String command;
 
-  public SqlShowCommand(final SqlOperator operator, final SqlParserPos pos) {
+  public SqlCustomDdl(final SqlOperator operator, final SqlParserPos pos) {
     super(operator, pos);
     this.command = operator.getName();
   }

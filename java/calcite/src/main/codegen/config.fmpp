@@ -52,6 +52,7 @@ data: {
         "com.mapd.parser.extension.ddl.SqlAlterForeignTable"
         "com.mapd.parser.extension.ddl.SqlCreateForeignTable"
         "com.mapd.parser.extension.ddl.SqlDropForeignTable"
+        "com.mapd.parser.extension.ddl.SqlReassignOwned"
         "com.mapd.parser.extension.ddl.SqlRefreshForeignTables"
         "com.mapd.parser.extension.ddl.SqlShowUserDetails"
         "com.mapd.parser.extension.ddl.SqlShowUserSessions"
@@ -108,6 +109,8 @@ data: {
         "STORED" 
         "TABLES"
         "VIRTUAL"
+        "REASSIGN"
+        "OWNED"
       ]
 
       # List of keywords from "keywords" section that are not reserved.
@@ -453,6 +456,8 @@ data: {
         "STORED" 
         "TABLES"
         "VIRTUAL"
+        "REASSIGN"
+        "OWNED"
       ]
 
       # List of non-reserved keywords to remove;
@@ -476,6 +481,7 @@ data: {
         "SqlAlterServer(span())"
         "SqlAlterForeignTable(span())"
         "SqlAlterUser(span())"
+        "SqlReassignOwned(span())"
         "SqlRefreshForeignTables(span())"
         "SqlRenameDB(span())"
         "SqlRenameTable(span())"

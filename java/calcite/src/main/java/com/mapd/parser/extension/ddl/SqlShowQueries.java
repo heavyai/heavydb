@@ -5,7 +5,7 @@ import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlSpecialOperator;
 import org.apache.calcite.sql.parser.SqlParserPos;
 
-public class SqlShowQueries extends SqlShowCommand {
+public class SqlShowQueries extends SqlCustomDdl {
   private static final SqlOperator OPERATOR =
           new SqlSpecialOperator("SHOW_QUERIES", SqlKind.OTHER_DDL);
 

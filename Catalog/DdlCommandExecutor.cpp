@@ -447,6 +447,8 @@ ExecutionResult DdlCommandExecutor::execute() {
     result = ShowDiskCacheUsageCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "SHOW_USER_DETAILS") {
     result = ShowUserDetailsCommand{*ddl_data_, session_ptr_}.execute();
+  } else if (ddl_command_ == "REASSIGN_OWNED") {
+    result = ReassignOwnedCommand{*ddl_data_, session_ptr_}.execute();
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }
@@ -472,7 +474,7 @@ DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails()
       ddl_command_ == "CREATE_TABLE" || ddl_command_ == "DROP_TABLE" ||
       ddl_command_ == "RENAME_TABLE" || ddl_command_ == "ALTER_TABLE" ||
       ddl_command_ == "CREATE_DB" || ddl_command_ == "DROP_DB" ||
-      ddl_command_ == "RENAME_DB") {
+      ddl_command_ == "RENAME_DB" || ddl_command_ == "REASSIGN_OWNED") {
     // commands
     execution_details.execution_location = ExecutionLocation::ALL_NODES;
     execution_details.aggregation_type = AggregationType::NONE;
@@ -1668,4 +1670,30 @@ ExecutionResult ShowUserDetailsCommand::execute() {
       ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
 
   return ExecutionResult(rSet, label_infos);
+}
+
+ReassignOwnedCommand::ReassignOwnedCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data_);
+  CHECK(ddl_payload.HasMember("oldOwners"));
+  CHECK(ddl_payload["oldOwners"].IsArray());
+  for (const auto& old_owner : ddl_payload["oldOwners"].GetArray()) {
+    CHECK(old_owner.IsString());
+    old_owners_.emplace(old_owner.GetString());
+  }
+  CHECK(ddl_payload.HasMember("newOwner"));
+  CHECK(ddl_payload["newOwner"].IsString());
+  new_owner_ = ddl_payload["newOwner"].GetString();
+}
+
+ExecutionResult ReassignOwnedCommand::execute() {
+  if (!session_ptr_->get_currentUser().isSuper) {
+    throw std::runtime_error{
+        "Only super users can reassign ownership of database objects."};
+  }
+  const auto catalog = session_ptr_->get_catalog_ptr();
+  catalog->reassignOwners(old_owners_, new_owner_);
+  return ExecutionResult();
 }

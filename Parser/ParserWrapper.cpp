@@ -42,7 +42,8 @@ const std::vector<std::string> ParserWrapper::ddl_cmd = {"ARCHIVE",
                                                          "REVOKE",
                                                          "SHOW",
                                                          "TRUNCATE",
-                                                         "KILL"};
+                                                         "KILL",
+                                                         "REASSIGN"};
 
 const std::vector<std::string> ParserWrapper::update_dml_cmd = {
     "INSERT",
@@ -239,6 +240,11 @@ ParserWrapper::ParserWrapper(std::string query_string) {
           is_legacy_ddl_ = false;
           return;
         }
+      } else if (ddl == "REASSIGN") {
+        query_type_ = QueryType::SchemaWrite;
+        is_calcite_ddl_ = true;
+        is_legacy_ddl_ = false;
+        return;
       }
       // ctas may look like ddl, but is neither legacy_dll nor calcite_ddl
       if (!is_ctas) {

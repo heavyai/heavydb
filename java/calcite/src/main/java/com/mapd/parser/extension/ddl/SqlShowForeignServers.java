@@ -8,7 +8,7 @@ import org.apache.calcite.sql.parser.SqlParserPos;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SqlShowForeignServers extends SqlShowCommand {
+public class SqlShowForeignServers extends SqlCustomDdl {
   private static final SqlOperator OPERATOR =
           new SqlSpecialOperator("SHOW_SERVERS", SqlKind.OTHER_DDL);
 

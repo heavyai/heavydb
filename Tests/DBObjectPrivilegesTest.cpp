@@ -25,6 +25,11 @@
 using namespace TestHelpers;
 
 using QR = QueryRunner::QueryRunner;
+
+using Catalog_Namespace::DBMetadata;
+using Catalog_Namespace::SysCatalog;
+using Catalog_Namespace::UserMetadata;
+
 extern size_t g_leaf_count;
 extern bool g_enable_fsi;
 std::string g_test_binary_file_path;
@@ -3785,6 +3790,426 @@ TEST(Temporary, Users) {
   EXPECT_NO_THROW(sys_cat.renameUser("username1", "username2"));
   CHECK(sys_cat.getMetadataForUser("username2", g_user));
   EXPECT_EQ(g_user.userName, "username2");
+}
+
+class ReassignOwnedTest : public DBHandlerTestFixture {
+ protected:
+  static void SetUpTestSuite() {
+    createDBHandler();
+    createTestUser("test_user_1", "test_pass");
+    createTestUser("test_user_2", "test_pass");
+    createTestUser("test_user_3", "test_pass");
+    createTestUser("all_permissions_test_user", "test_pass");
+    sql("GRANT ALL ON DATABASE omnisci TO all_permissions_test_user;");
+  }
+
+  static void TearDownTestSuite() {
+    loginAdmin();
+    dropTestUser("test_user_1");
+    dropTestUser("test_user_2");
+    dropTestUser("test_user_3");
+    dropTestUser("all_permissions_test_user");
+  }
+
+  void SetUp() override { dropAllDatabaseObjects(); }
+
+  void TearDown() override { dropAllDatabaseObjects(); }
+
+  void dropAllDatabaseObjects() {
+    loginAdmin();
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    auto dashboards = getCatalog().getAllDashboardsMetadata();
+    for (const auto dashboard : dashboards) {
+      db_handler->delete_dashboard(session_id, dashboard->dashboardId);
+    }
+    sql("DROP TABLE IF EXISTS test_table_1;");
+    sql("DROP TABLE IF EXISTS test_table_2;");
+    sql("DROP VIEW IF EXISTS test_view_1;");
+    sql("DROP VIEW IF EXISTS test_view_2;");
+    sql("DROP SERVER IF EXISTS test_server_1;");
+    sql("DROP SERVER IF EXISTS test_server_2;");
+    sql("DROP DATABASE IF EXISTS test_db;");
+  }
+
+  static int32_t createTestUser(const std::string& user_name, const std::string& pass) {
+    sql("CREATE USER " + user_name + " (password = '" + pass + "');");
+    sql("GRANT ACCESS, CREATE TABLE, CREATE VIEW, CREATE DASHBOARD ON "
+        "DATABASE omnisci TO " +
+        user_name + ";");
+    if (!isDistributedMode()) {
+      // FSI is currently not supported in distributed mode.
+      sql("GRANT CREATE SERVER ON DATABASE omnisci TO " + user_name + ";");
+    }
+    UserMetadata user_metadata{};
+    SysCatalog::instance().getMetadataForUser(user_name, user_metadata);
+    return user_metadata.userId;
+  }
+
+  static void dropTestUser(const std::string& user_name) {
+    try {
+      sql("DROP USER " + user_name + ";");
+    } catch (const std::exception& e) {
+      // TODO: Remove try/catch when IF EXISTS clause is implemented.
+      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
+      LOG(WARNING) << e.what();
+    }
+  }
+
+  void createDatabaseObjects(const std::string& name_suffix) {
+    sql("CREATE TABLE test_table_" + name_suffix + " (i INTEGER);");
+    sql("CREATE VIEW test_view_" + name_suffix + " AS SELECT * FROM test_table_" +
+        name_suffix + ";");
+    if (!isDistributedMode()) {
+      sql("CREATE SERVER test_server_" + name_suffix +
+          " FOREIGN DATA WRAPPER omnisci_csv "
+          "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
+    }
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    db_handler->create_dashboard(
+        session_id, "test_dashboard_" + name_suffix, "state", "image", "metadata");
+  }
+
+  void assertDatabaseObjectsOwnership(const std::string& user_name,
+                                      const std::string& name_suffix) {
+    UserMetadata user;
+    SysCatalog::instance().getMetadataForUser(user_name, user);
+    auto user_id = user.userId;
+    const auto& catalog = getCatalog();
+
+    auto td = catalog.getMetadataForTable("test_table_" + name_suffix, false);
+    ASSERT_NE(td, nullptr);
+    ASSERT_EQ(user_id, td->userId);
+
+    auto view = catalog.getMetadataForTable("test_view_" + name_suffix, false);
+    ASSERT_NE(view, nullptr);
+    ASSERT_EQ(user_id, view->userId);
+
+    auto dashboard = catalog.getMetadataForDashboard(std::to_string(user_id),
+                                                     "test_dashboard_" + name_suffix);
+    ASSERT_NE(dashboard, nullptr);
+    ASSERT_EQ(user_id, dashboard->userId);
+
+    // Permission entries are not added for super users
+    if (!user.isSuper) {
+      ASSERT_TRUE(SysCatalog::instance().verifyDBObjectOwnership(
+          user, DBObject{td->tableId, TableDBObjectType}, catalog));
+      ASSERT_TRUE(SysCatalog::instance().verifyDBObjectOwnership(
+          user, DBObject{view->tableId, ViewDBObjectType}, catalog));
+      ASSERT_TRUE(SysCatalog::instance().verifyDBObjectOwnership(
+          user, DBObject{dashboard->dashboardId, DashboardDBObjectType}, catalog));
+
+      assertObjectRoleDescriptor(DBObjectType::TableDBObjectType, td->tableId, user_id);
+      assertObjectRoleDescriptor(DBObjectType::ViewDBObjectType, view->tableId, user_id);
+      assertObjectRoleDescriptor(
+          DBObjectType::DashboardDBObjectType, dashboard->dashboardId, user_id);
+    }
+
+    if (!isDistributedMode()) {
+      auto server = catalog.getForeignServer("test_server_" + name_suffix);
+      ASSERT_NE(server, nullptr);
+      ASSERT_EQ(user_id, server->user_id);
+
+      if (!user.isSuper) {
+        ASSERT_TRUE(SysCatalog::instance().verifyDBObjectOwnership(
+            user, DBObject{server->id, ServerDBObjectType}, catalog));
+        assertObjectRoleDescriptor(DBObjectType::ServerDBObjectType, server->id, user_id);
+      }
+    }
+  }
+
+  void assertObjectRoleDescriptor(DBObjectType object_type,
+                                  int32_t object_id,
+                                  int32_t owner_id) {
+    auto object_type_id = static_cast<int>(object_type);
+    for (const auto object : SysCatalog::instance().getMetadataForObject(
+             getCatalog().getDatabaseId(), object_type_id, object_id)) {
+      if (object->objectType == object_type_id && object->objectId == object_id &&
+          object->objectOwnerId == owner_id) {
+        return;
+      }
+    }
+    FAIL() << "No ObjectRoleDescriptor found for object type: " << object_type_id
+           << ", object id: " << object_id << ", owner id: " << owner_id;
+  }
+
+  void assertObjectPermissions(const std::string& user_name,
+                               const std::string& name_suffix,
+                               bool has_object_permissions,
+                               const std::string& owner_user_name) {
+    const auto& catalog = getCatalog();
+
+    auto td = catalog.getMetadataForTable("test_table_" + name_suffix, false);
+    ASSERT_NE(td, nullptr);
+    assertObjectPermissions(user_name,
+                            td->tableId,
+                            AccessPrivileges::ALL_TABLE,
+                            DBObjectType::TableDBObjectType,
+                            has_object_permissions);
+
+    auto view = catalog.getMetadataForTable("test_view_" + name_suffix, false);
+    ASSERT_NE(view, nullptr);
+    assertObjectPermissions(user_name,
+                            view->tableId,
+                            AccessPrivileges::ALL_VIEW,
+                            DBObjectType::ViewDBObjectType,
+                            has_object_permissions);
+
+    if (!isDistributedMode()) {
+      auto server = catalog.getForeignServer("test_server_" + name_suffix);
+      ASSERT_NE(server, nullptr);
+      assertObjectPermissions(user_name,
+                              server->id,
+                              AccessPrivileges::ALL_SERVER,
+                              DBObjectType::ServerDBObjectType,
+                              has_object_permissions);
+    }
+
+    UserMetadata user;
+    SysCatalog::instance().getMetadataForUser(owner_user_name, user);
+    auto dashboard = catalog.getMetadataForDashboard(std::to_string(user.userId),
+                                                     "test_dashboard_" + name_suffix);
+    ASSERT_NE(dashboard, nullptr);
+    assertObjectPermissions(user_name,
+                            dashboard->dashboardId,
+                            AccessPrivileges::ALL_DASHBOARD,
+                            DBObjectType::DashboardDBObjectType,
+                            has_object_permissions);
+  }
+
+  void assertObjectPermissions(const std::string& user_name,
+                               int32_t object_id,
+                               const AccessPrivileges& privilege_type,
+                               DBObjectType object_type,
+                               bool has_object_permissions) {
+    AccessPrivileges privileges;
+    privileges.add(privilege_type);
+    DBObject object(object_id, object_type);
+    object.loadKey(getCatalog());
+    object.setPrivileges(privileges);
+    ASSERT_EQ(SysCatalog::instance().checkPrivileges(user_name, {object}),
+              has_object_permissions);
+  }
+
+  void assertNoDashboardsForUsers(const std::vector<std::string>& user_names) {
+    const auto& catalog = getCatalog();
+    for (const auto& user_name : user_names) {
+      UserMetadata user;
+      SysCatalog::instance().getMetadataForUser(user_name, user);
+      for (const auto dashboard : catalog.getAllDashboardsMetadata()) {
+        ASSERT_NE(dashboard->userId, user.userId);
+        ASSERT_EQ(catalog.getMetadataForDashboard(std::to_string(user.userId),
+                                                  dashboard->dashboardName),
+                  nullptr);
+      }
+    }
+  }
+
+  void assertDatabaseOwnership(const std::string& db_name, const std::string& user_name) {
+    UserMetadata user;
+    SysCatalog::instance().getMetadataForUser(user_name, user);
+
+    DBMetadata database;
+    SysCatalog::instance().getMetadataForDB(db_name, database);
+    ASSERT_EQ(user.userId, database.dbOwner);
+
+    auto& catalog = getCatalog();
+    ASSERT_EQ(db_name, catalog.name());
+
+    // Permission entries are not added for super users
+    if (!user.isSuper) {
+      ASSERT_TRUE(SysCatalog::instance().verifyDBObjectOwnership(
+          user, DBObject{db_name, DatabaseDBObjectType}, catalog));
+      assertObjectRoleDescriptor(DBObjectType::DatabaseDBObjectType, -1, user.userId);
+    }
+  }
+};
+
+TEST_F(ReassignOwnedTest, SuperUser) {
+  login("test_user_1", "test_pass");
+  createDatabaseObjects("1");
+  assertDatabaseObjectsOwnership("test_user_1", "1");
+  assertObjectPermissions("test_user_1", "1", true, "test_user_1");
+
+  login("test_user_2", "test_pass");
+  createDatabaseObjects("2");
+  assertDatabaseObjectsOwnership("test_user_2", "2");
+  assertObjectPermissions("test_user_2", "2", true, "test_user_2");
+
+  loginAdmin();
+  sql("REASSIGN OWNED BY test_user_1, test_user_2 TO test_user_3;");
+
+  assertDatabaseObjectsOwnership("test_user_3", "1");
+  assertDatabaseObjectsOwnership("test_user_3", "2");
+  assertObjectPermissions("test_user_3", "1", true, "test_user_3");
+  assertObjectPermissions("test_user_3", "2", true, "test_user_3");
+  assertNoDashboardsForUsers({"test_user_1", "test_user_2"});
+
+  // Assert that old owners no longer have permissions to database objects
+  assertObjectPermissions("test_user_1", "1", false, "test_user_3");
+  assertObjectPermissions("test_user_2", "2", false, "test_user_3");
+}
+
+TEST_F(ReassignOwnedTest, UserWithAllPermissions) {
+  login("all_permissions_test_user", "test_pass");
+  createDatabaseObjects("1");
+  assertDatabaseObjectsOwnership("all_permissions_test_user", "1");
+  assertObjectPermissions(
+      "all_permissions_test_user", "1", true, "all_permissions_test_user");
+
+  loginAdmin();
+  sql("REASSIGN OWNED BY all_permissions_test_user TO test_user_1;");
+
+  assertDatabaseObjectsOwnership("test_user_1", "1");
+  assertObjectPermissions("test_user_1", "1", true, "test_user_1");
+  assertNoDashboardsForUsers({"all_permissions_test_user"});
+
+  // Assert that old owner still has permissions to database objects because of previous
+  // grant of all permissions
+  assertObjectPermissions("all_permissions_test_user", "1", true, "test_user_1");
+}
+
+TEST_F(ReassignOwnedTest, ReassignToSameUser) {
+  login("test_user_1", "test_pass");
+  createDatabaseObjects("1");
+  assertDatabaseObjectsOwnership("test_user_1", "1");
+  assertObjectPermissions("test_user_1", "1", true, "test_user_1");
+
+  loginAdmin();
+  sql("REASSIGN OWNED BY test_user_1 TO test_user_1;");
+
+  assertDatabaseObjectsOwnership("test_user_1", "1");
+  assertObjectPermissions("test_user_1", "1", true, "test_user_1");
+}
+
+TEST_F(ReassignOwnedTest, DatabaseOwner) {
+  loginAdmin();
+  sql("CREATE DATABASE test_db (owner = 'test_user_1');");
+
+  login("test_user_1", "test_pass", "test_db");
+  createDatabaseObjects("1");
+  assertDatabaseObjectsOwnership("test_user_1", "1");
+  assertObjectPermissions("test_user_1", "1", true, "test_user_1");
+  assertDatabaseOwnership("test_db", "test_user_1");
+
+  login("admin", "HyperInteractive", "test_db");
+  sql("REASSIGN OWNED BY test_user_1 TO test_user_2;");
+
+  assertDatabaseObjectsOwnership("test_user_2", "1");
+  assertObjectPermissions("test_user_2", "1", true, "test_user_2");
+  assertNoDashboardsForUsers({"test_user_1"});
+
+  // Assert that the old owner still owns the database
+  assertDatabaseOwnership("test_db", "test_user_1");
+
+  // Assert that the old owner still has permissions to database objects because of
+  // database ownership
+  assertObjectPermissions("test_user_1", "1", true, "test_user_2");
+}
+
+TEST_F(ReassignOwnedTest, MultipleDatabases) {
+  // Create objects in the default database
+  login("test_user_1", "test_pass");
+  createDatabaseObjects("1");
+  assertDatabaseObjectsOwnership("test_user_1", "1");
+  assertObjectPermissions("test_user_1", "1", true, "test_user_1");
+
+  loginAdmin();
+  sql("CREATE DATABASE test_db;");
+  sql("GRANT ALL ON DATABASE test_db TO test_user_1;");
+
+  // Create objects in the new database
+  login("test_user_1", "test_pass", "test_db");
+  createDatabaseObjects("1");
+  assertDatabaseObjectsOwnership("test_user_1", "1");
+  assertObjectPermissions("test_user_1", "1", true, "test_user_1");
+
+  login("admin", "HyperInteractive", "test_db");
+  sql("REASSIGN OWNED BY test_user_1 TO test_user_2;");
+
+  assertDatabaseObjectsOwnership("test_user_2", "1");
+  assertObjectPermissions("test_user_2", "1", true, "test_user_2");
+  assertNoDashboardsForUsers({"test_user_1"});
+
+  // Assert that ownership in the default database is not changed
+  loginAdmin();
+  assertDatabaseObjectsOwnership("test_user_1", "1");
+  assertObjectPermissions("test_user_1", "1", true, "test_user_1");
+  assertNoDashboardsForUsers({"test_user_2"});
+}
+
+TEST_F(ReassignOwnedTest, ReassignToSuperUser) {
+  login("test_user_1", "test_pass");
+  createDatabaseObjects("1");
+  assertDatabaseObjectsOwnership("test_user_1", "1");
+  assertObjectPermissions("test_user_1", "1", true, "test_user_1");
+
+  loginAdmin();
+  sql("REASSIGN OWNED BY test_user_1 TO admin;");
+
+  assertDatabaseObjectsOwnership("admin", "1");
+  assertObjectPermissions("admin", "1", true, "admin");
+  assertNoDashboardsForUsers({"test_user_1"});
+
+  // Assert that the old owner no longer has permissions to database objects
+  assertObjectPermissions("test_user_1", "1", false, "admin");
+}
+
+TEST_F(ReassignOwnedTest, ReassignFromSuperUser) {
+  loginAdmin();
+  // Use a different database for this test case in order to avoid changing database
+  // objects that are created outside the scope of this test in the default database.
+  sql("CREATE DATABASE test_db;");
+
+  login("admin", "HyperInteractive", "test_db");
+  createDatabaseObjects("1");
+  assertDatabaseObjectsOwnership("admin", "1");
+  assertObjectPermissions("admin", "1", true, "admin");
+
+  sql("REASSIGN OWNED BY admin TO test_user_1;");
+
+  assertDatabaseObjectsOwnership("test_user_1", "1");
+  assertObjectPermissions("test_user_1", "1", true, "test_user_1");
+  assertNoDashboardsForUsers({"admin"});
+
+  // Assert that the super user/admin still owns the database
+  assertDatabaseOwnership("test_db", "admin");
+
+  // Assert that the super user/admin still has permissions to database objects
+  assertObjectPermissions("admin", "1", true, "test_user_1");
+}
+
+TEST_F(ReassignOwnedTest, NonSuperUser) {
+  login("test_user_1", "test_pass");
+  createDatabaseObjects("1");
+  assertDatabaseObjectsOwnership("test_user_1", "1");
+  assertObjectPermissions("test_user_1", "1", true, "test_user_1");
+
+  login("test_user_2", "test_pass");
+  queryAndAssertException("REASSIGN OWNED BY test_user_1 TO test_user_2;",
+                          "Only super users can reassign ownership of database objects.");
+}
+
+TEST_F(ReassignOwnedTest, NonExistentOldOwner) {
+  login("test_user_1", "test_pass");
+  createDatabaseObjects("1");
+  assertDatabaseObjectsOwnership("test_user_1", "1");
+  assertObjectPermissions("test_user_1", "1", true, "test_user_1");
+
+  loginAdmin();
+  queryAndAssertException(
+      "REASSIGN OWNED BY test_user_1, nonexistent_user TO test_user_2;",
+      "User with username \"nonexistent_user\" does not exist.");
+}
+
+TEST_F(ReassignOwnedTest, NonExistentNewOwner) {
+  login("test_user_1", "test_pass");
+  createDatabaseObjects("1");
+  assertDatabaseObjectsOwnership("test_user_1", "1");
+  assertObjectPermissions("test_user_1", "1", true, "test_user_1");
+
+  loginAdmin();
+  queryAndAssertException("REASSIGN OWNED BY test_user_1 TO nonexistent_user;",
+                          "User with username \"nonexistent_user\" does not exist.");
 }
 
 int main(int argc, char* argv[]) {

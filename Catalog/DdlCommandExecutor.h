@@ -191,6 +191,18 @@ class RefreshForeignTablesCommand : public DdlCommand {
   ExecutionResult execute() override;
 };
 
+class ReassignOwnedCommand : public DdlCommand {
+ public:
+  ReassignOwnedCommand(const DdlCommandData& ddl_data,
+                       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute() override;
+
+ private:
+  std::string new_owner_;
+  std::set<std::string> old_owners_;
+};
+
 enum class ExecutionLocation { ALL_NODES, AGGREGATOR_ONLY, LEAVES_ONLY };
 enum class AggregationType { NONE, UNION };
 

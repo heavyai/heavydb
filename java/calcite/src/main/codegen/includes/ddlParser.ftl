@@ -1193,3 +1193,33 @@ SqlDdl SqlRevokePrivilege(Span s, SqlNodeList privileges) :
 
 
 
+/*
+ * Reassign owned database objects using the following syntax:
+ *
+ * REASSIGN OWNED BY <old_owner>, <old_owner>, ... TO <new_owner>
+ */
+SqlDdl SqlReassignOwned(Span s) :
+{
+    SqlIdentifier userName = null;
+    List<String> oldOwners = null;
+}
+{
+    <REASSIGN> <OWNED> <BY>
+    userName = CompoundIdentifier()
+    {
+        oldOwners = new ArrayList<String>();
+        oldOwners.add(userName.toString());
+    }
+    (
+        <COMMA>
+        userName = CompoundIdentifier()
+        {
+            oldOwners.add(userName.toString());
+        }
+    )*
+    <TO>
+    userName = CompoundIdentifier()
+    {
+        return new SqlReassignOwned(s.end(this), oldOwners, userName.toString());
+    }
+}
