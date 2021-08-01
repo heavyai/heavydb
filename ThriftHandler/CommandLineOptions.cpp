@@ -765,6 +765,12 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_estimator_failure_max_groupby_size),
       "Maximum size of the groupby buffer if the estimator fails. By default we use the "
       "number of tuples in the table up to this value.");
+  help_desc.add_options()(
+      "allow-query-step-cpu-retry",
+      po::value<bool>(&g_allow_query_step_cpu_retry)
+          ->default_value(g_allow_query_step_cpu_retry)
+          ->implicit_value(true),
+      R"(Allow certain query steps to retry on CPU, even when allow-cpu-retry is disabled)");
 }
 
 namespace {

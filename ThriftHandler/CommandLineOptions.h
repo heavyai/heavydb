@@ -150,6 +150,7 @@ extern unsigned g_trivial_loop_join_threshold;
 extern bool g_from_table_reordering;
 extern bool g_enable_filter_push_down;
 extern bool g_allow_cpu_retry;
+extern bool g_allow_query_step_cpu_retry;
 extern bool g_null_div_by_zero;
 extern bool g_bigint_count;
 extern bool g_inner_join_fragment_skipping;

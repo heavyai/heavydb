@@ -281,6 +281,25 @@ class CompilationRetryNoCompaction : public std::runtime_error {
       : std::runtime_error("Retry query compilation with no compaction.") {}
 };
 
+// Throwing QueryMustRunOnCpu allows us retry a query step on CPU if
+// g_allow_query_step_cpu_retry is true (on by default) by catching
+// the exception at the query step execution level in RelAlgExecutor,
+// or if g_allow_query_step_cpu_retry is false but g_allow_cpu_retry is true,
+// by retrying the entire query on CPU (if both flags are false, we return an
+// error). This flag is thrown for the following broad categories of conditions:
+// 1) we have not implemented an operator on GPU and so cannot codegen for GPU
+// 2) we catch an unexpected GPU compilation/linking error (perhaps due
+//    to an outdated driver/CUDA installation not allowing a modern operator)
+// 3) when we detect up front that we will not have enough GPU memory to execute
+//    a query.
+// There is a fourth scenerio where our pre-flight GPU memory check passed but for
+// whatever reason we still run out of memory. In those cases we go down the
+// handleOutOfMemoryRetry path, which will first try per-fragment execution on GPU,
+// and if that fails, CPU execution.
+// Note that for distributed execution failures on leaves, we do not retry queries
+// TODO(todd): See if CPU retry of individual steps can be turned on safely for
+// distributed
+
 class QueryMustRunOnCpu : public std::runtime_error {
  public:
   QueryMustRunOnCpu() : std::runtime_error("Query must run in cpu mode.") {}

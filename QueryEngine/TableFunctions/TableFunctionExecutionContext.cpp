@@ -326,7 +326,6 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
     const int device_id,
     Executor* executor) {
 #ifdef HAVE_CUDA
-
   if (exe_unit.table_func.hasTableFunctionSpecifiedParameter()) {
     throw QueryMustRunOnCpu();
   }

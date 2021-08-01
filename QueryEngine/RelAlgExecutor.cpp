@@ -674,6 +674,22 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
                         eo,
                         (i == exec_desc_count - 1) ? render_info : nullptr,
                         queue_time_ms);
+    } catch (const QueryMustRunOnCpu&) {
+      // Do not allow per-step retry if flag is off or in distributed mode
+      // TODO(todd): Determine if and when we can relax this restriction
+      // for distributed
+      CHECK(co.device_type == ExecutorDeviceType::GPU);
+      if (!g_allow_query_step_cpu_retry || g_cluster) {
+        throw;
+      }
+      LOG(INFO) << "Retrying current query step " << i << " on CPU";
+      const auto co_cpu = CompilationOptions::makeCpuOnly(co);
+      executeRelAlgStep(seq,
+                        i,
+                        co_cpu,
+                        eo,
+                        (i == exec_desc_count - 1) ? render_info : nullptr,
+                        queue_time_ms);
     } catch (const NativeExecutionError&) {
       if (!g_enable_interop) {
         throw;
@@ -713,12 +729,30 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
   time(&now_);
   for (size_t i = interval.first; i < interval.second; i++) {
     // only render on the last step
-    executeRelAlgStep(seq,
-                      i,
-                      co,
-                      eo,
-                      (i == interval.second - 1) ? render_info : nullptr,
-                      queue_time_ms);
+    try {
+      executeRelAlgStep(seq,
+                        i,
+                        co,
+                        eo,
+                        (i == interval.second - 1) ? render_info : nullptr,
+                        queue_time_ms);
+    } catch (const QueryMustRunOnCpu&) {
+      // Do not allow per-step retry if flag is off or in distributed mode
+      // TODO(todd): Determine if and when we can relax this restriction
+      // for distributed
+      CHECK(co.device_type == ExecutorDeviceType::GPU);
+      if (!g_allow_query_step_cpu_retry || g_cluster) {
+        throw;
+      }
+      LOG(INFO) << "Retrying current query step " << i << " on CPU";
+      const auto co_cpu = CompilationOptions::makeCpuOnly(co);
+      executeRelAlgStep(seq,
+                        i,
+                        co_cpu,
+                        eo,
+                        (i == interval.second - 1) ? render_info : nullptr,
+                        queue_time_ms);
+    }
   }
 
   return seq.getDescriptor(interval.second - 1)->getResult();
@@ -4181,7 +4215,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       } catch (ExtensionFunctionBindingError& e) {
         LOG(WARNING) << "createTableFunctionWorkUnit[GPU]: " << e.what()
                      << " Redirecting " << rel_table_func->getFunctionName()
-                     << " to run on CPU.";
+                     << " step to run on CPU.";
         throw QueryMustRunOnCpu();
       }
     } else {

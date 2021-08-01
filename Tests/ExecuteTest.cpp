@@ -52,6 +52,7 @@ bool g_aggregator{false};
 extern int g_test_against_columnId_gap;
 extern bool g_enable_smem_group_by;
 extern bool g_allow_cpu_retry;
+extern bool g_allow_query_step_cpu_retry;
 extern bool g_enable_watchdog;
 extern bool g_skip_intermediate_count;
 extern bool g_use_tbb_pool;
@@ -11062,14 +11063,18 @@ TEST(Select, PuntToCPU) {
   SKIP_ALL_ON_AGGREGATOR();
 
   const auto cpu_retry_state = g_allow_cpu_retry;
+  const auto cpu_step_retry_state = g_allow_query_step_cpu_retry;
   const auto watchdog_state = g_enable_watchdog;
   g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = false;
   g_enable_watchdog = true;
-  ScopeGuard reset_global_flag_state = [&cpu_retry_state, &watchdog_state] {
-    g_allow_cpu_retry = cpu_retry_state;
-    g_enable_watchdog = watchdog_state;
-    g_gpu_mem_limit_percent = 0.9;  // Reset to 90%
-  };
+  ScopeGuard reset_global_flag_state =
+      [&cpu_retry_state, &cpu_step_retry_state, &watchdog_state] {
+        g_allow_cpu_retry = cpu_retry_state;
+        g_allow_query_step_cpu_retry = cpu_step_retry_state;
+        g_enable_watchdog = watchdog_state;
+        g_gpu_mem_limit_percent = 0.9;  // Reset to 90%
+      };
 
   const auto dt = ExecutorDeviceType::GPU;
   if (skip_tests(dt)) {
@@ -11086,6 +11091,74 @@ TEST(Select, PuntToCPU) {
   EXPECT_NO_THROW(run_multiple_agg("SELECT x, COUNT(*) FROM test GROUP BY x;", dt));
   EXPECT_NO_THROW(run_multiple_agg(
       "SELECT COUNT(*) FROM test WHERE x IN (SELECT y FROM test WHERE y > 3);", dt));
+}
+
+TEST(Select, PuntQueryStepToCPU) {
+  SKIP_ALL_ON_AGGREGATOR();
+
+  const auto cpu_retry_state = g_allow_cpu_retry;
+  const auto cpu_step_retry_state = g_allow_query_step_cpu_retry;
+  const auto watchdog_state = g_enable_watchdog;
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = false;
+  g_enable_watchdog = true;
+  ScopeGuard reset_global_flag_state =
+      [&cpu_retry_state, &cpu_step_retry_state, &watchdog_state] {
+        g_allow_cpu_retry = cpu_retry_state;
+        g_allow_query_step_cpu_retry = cpu_step_retry_state;
+        g_enable_watchdog = watchdog_state;
+        g_gpu_mem_limit_percent = 0.9;  // Reset to 90%
+      };
+
+  const auto dt = ExecutorDeviceType::GPU;
+  if (skip_tests(dt)) {
+    return;
+  }
+
+  // Query is single step and can run on GPU
+  EXPECT_NO_THROW(run_multiple_agg("SELECT x, COUNT(*) FROM test GROUP BY x;", dt));
+
+  // Query is multi-step and second step can only run on CPU, will fail without
+  // g_allow_cpu_retry Note: If and when we implement APPROX_MEDIAN for GPU, this will
+  // fail and need adjustment
+  EXPECT_THROW(run_multiple_agg("SELECT x, APPROX_MEDIAN(n) AS n_median FROM (SELECT x, "
+                                "y, COUNT(*) AS n FROM test GROUP BY x, y) GROUP BY x;",
+                                dt),
+               std::runtime_error);
+
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = true;
+
+  EXPECT_NO_THROW(run_multiple_agg("SELECT x, COUNT(*) FROM test GROUP BY x;", dt));
+  // Even without g_allow_cpu_retry = true, this should run with
+  // g_allow_query_step_cpu_retry = true, as second step can drop to CPU without
+  // triggering global punt to CPU
+  EXPECT_NO_THROW(
+      run_multiple_agg("SELECT x, APPROX_MEDIAN(n) AS n_median FROM (SELECT x, y, "
+                       "COUNT(*) AS n FROM test GROUP BY x, y) GROUP BY x;",
+                       dt));
+
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = false;
+  g_gpu_mem_limit_percent = 1e-10;
+
+  // Out of memory errors caught pre-allocation should (currently) trigger a
+  // QueryMustRunOnCPU exception and will be caught with either g_allow_cpu_retry or
+  // g_allow_query_step_cpu_retry
+
+  EXPECT_THROW(run_multiple_agg("SELECT x, AVG(n) AS n_avg FROM (SELECT x, "
+                                "y, COUNT(*) AS n FROM test GROUP BY x, y) GROUP BY x;",
+                                dt),
+               std::runtime_error);
+
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = true;
+  g_gpu_mem_limit_percent = 1e-10;
+
+  EXPECT_NO_THROW(
+      run_multiple_agg("SELECT x, AVG(n) AS n_avg FROM (SELECT x, y, "
+                       "COUNT(*) AS n FROM test GROUP BY x, y) GROUP BY x;",
+                       dt));
 }
 
 TEST(Select, TimestampMeridiesEncoding) {

@@ -305,7 +305,7 @@ void CgenState::replaceFunctionForGpu(const std::string& fcn_to_replace,
   if (map_it == gpu_replacement_functions.end()) {
     throw QueryMustRunOnCpu("Codegen failed: Could not find replacement functon for " +
                             fcn_to_replace +
-                            " to run on gpu. Query must run in cpu mode.");
+                            " to run on gpu. Query step must run in cpu mode.");
   }
   const auto& gpu_fcn_obj = map_it->second;
   CHECK(gpu_fcn_obj);

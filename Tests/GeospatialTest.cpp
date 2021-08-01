@@ -34,6 +34,7 @@ extern size_t g_leaf_count;
 extern bool g_cluster;
 extern bool g_is_test_env;
 extern bool g_allow_cpu_retry;
+extern bool g_allow_query_step_cpu_retry;
 
 using QR = QueryRunner::QueryRunner;
 using namespace TestHelpers;
@@ -2454,6 +2455,7 @@ int main(int argc, char** argv) {
 
   // disable CPU retry to catch illegal code generation on GPU
   g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = false;
 
   QR::init(BASE_PATH);
 
