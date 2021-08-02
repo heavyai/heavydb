@@ -164,8 +164,8 @@ class Distance : public Codegen {
                           second_operand_ti.get_type() == kPOINT) ||
                          (first_operand_ti.get_type() == kPOINT &&
                           second_operand_ti.get_type() == kLINESTRING))) {
-      throw std::runtime_error(
-          "ST_Distance currently doesn't accept non-POINT geographies");
+      throw std::runtime_error(getName() +
+                               " currently doesn't accept non-POINT geographies");
     }
 
     std::string func_name = getName() + suffix(first_operand_ti.get_type()) +

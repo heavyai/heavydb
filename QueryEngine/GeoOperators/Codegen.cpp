@@ -40,7 +40,7 @@ std::unique_ptr<Codegen> Codegen::init(const Analyzer::GeoOperator* geo_operator
     return std::make_unique<AreaPerimeter>(geo_operator, catalog);
   } else if (operator_name == "ST_Centroid") {
     return std::make_unique<Centroid>(geo_operator, catalog);
-  } else if (operator_name == "ST_Distance") {
+  } else if (operator_name == "ST_Distance" || operator_name == "ST_MaxDistance") {
     return std::make_unique<Distance>(geo_operator, catalog);
   }
   UNREACHABLE();

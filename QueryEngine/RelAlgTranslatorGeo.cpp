@@ -1086,7 +1086,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
     return makeExpr<Analyzer::FunctionOper>(return_type, function_name, geo_args);
   }
 
-  if (function_name == "ST_Distance"sv) {
+  if (function_name == "ST_Distance"sv || function_name == "ST_MaxDistance"sv) {
     CHECK_EQ(size_t(2), rex_function->size());
     std::vector<std::shared_ptr<Analyzer::Expr>> args;
     for (size_t i = 0; i < rex_function->size(); i++) {
@@ -1100,7 +1100,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
                                              /*use_geo_expressions=*/true);
       args.insert(args.end(), geoargs.begin(), geoargs.end());
     }
-    // TODO: return type nullable?
     return makeExpr<Analyzer::GeoOperator>(
         SQLTypeInfo(kDOUBLE, /*not_null=*/false), function_name, args);
   }
