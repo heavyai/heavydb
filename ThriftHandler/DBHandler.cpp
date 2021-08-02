@@ -5085,9 +5085,24 @@ void DBHandler::import_geo_table(const TSessionId& session,
       }
     }
 
-    // by this point, the table should exist, one way or another
-    const TableDescriptor* td = cat.getMetadataForTable(this_table_name);
-    if (!td) {
+    // match locking sequence for CopyTableStmt::execute
+    mapd_unique_lock<mapd_shared_mutex> execute_read_lock(
+        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+            legacylockmgr::ExecutorOuterLock, true));
+
+    const TableDescriptor* td{nullptr};
+    std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>> td_with_lock;
+    std::unique_ptr<lockmgr::WriteLock> insert_data_lock;
+
+    try {
+      td_with_lock =
+          std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
+              lockmgr::TableSchemaLockContainer<
+                  lockmgr::WriteLock>::acquireTableDescriptor(cat, this_table_name));
+      td = (*td_with_lock)();
+      insert_data_lock = std::make_unique<lockmgr::WriteLock>(
+          lockmgr::InsertDataLockMgr::getWriteLockForTable(cat, this_table_name));
+    } catch (const std::runtime_error& e) {
       // capture the error and abort this layer
       std::string exception_message =
           "Could not import geo file '" + file_path.filename().string() + "' to table '" +
@@ -5095,6 +5110,7 @@ void DBHandler::import_geo_table(const TSessionId& session,
       caught_exception_messages.emplace_back(exception_message);
       continue;
     }
+    CHECK(td);
 
     // then, we have to verify that the structure matches
     // get column descriptors (non-system, non-deleted, logical columns only)
