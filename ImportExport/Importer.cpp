@@ -5180,18 +5180,24 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
   auto query_session = session_info ? session_info->get_session_id() : "";
   auto query_submitted_time = ::toString(std::chrono::system_clock::now());
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-  if (g_enable_non_kernel_time_query_interrupt && !query_session.empty()) {
+  auto is_session_already_registered = false;
+  {
+    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+    is_session_already_registered =
+        executor->checkIsQuerySessionEnrolled(query_session, session_read_lock);
+  }
+  if (g_enable_non_kernel_time_query_interrupt && !query_session.empty() &&
+      !is_session_already_registered) {
     executor->enrollQuerySession(query_session,
-                                 "Import Geo Table",
+                                 "IMPORT_GEO_TABLE",
                                  query_submitted_time,
                                  Executor::UNITARY_EXECUTOR_ID,
-                                 QuerySessionStatus::QueryStatus::RUNNING);
+                                 QuerySessionStatus::QueryStatus::RUNNING_IMPORTER);
   }
-
   ScopeGuard clearInterruptStatus = [executor, &query_session, &query_submitted_time] {
     // reset the runtime query interrupt status
     if (g_enable_non_kernel_time_query_interrupt && !query_session.empty()) {
-      executor->clearQuerySessionStatus(query_session, query_submitted_time, false);
+      executor->clearQuerySessionStatus(query_session, query_submitted_time);
     }
   };
 

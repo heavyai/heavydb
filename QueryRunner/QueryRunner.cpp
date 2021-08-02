@@ -883,8 +883,10 @@ void ImportDriver::importGeoTable(const std::string& file_path,
   copy_params.geo_assign_render_groups = true;
   copy_params.geo_explode_collections = explode_collections;
 
-  auto cds = Importer::gdalToColumnDescriptors(file_path, geo_column_name, copy_params);
   std::map<std::string, std::string> colname_to_src;
+  auto& cat = session_info_->getCatalog();
+  auto cds = Importer::gdalToColumnDescriptors(file_path, geo_column_name, copy_params);
+
   for (auto& cd : cds) {
     const auto col_name_sanitized = ImportHelpers::sanitize_name(cd.columnName);
     const auto ret =
@@ -892,8 +894,6 @@ void ImportDriver::importGeoTable(const std::string& file_path,
     CHECK(ret.second);
     cd.columnName = col_name_sanitized;
   }
-
-  auto& cat = session_info_->getCatalog();
 
   if (create_table) {
     const auto td = cat.getMetadataForTable(table_name);
