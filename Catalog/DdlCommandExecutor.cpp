@@ -418,21 +418,10 @@ ExecutionResult DdlCommandExecutor::execute() {
     result = AlterForeignTableCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "REFRESH_FOREIGN_TABLES") {
     result = RefreshForeignTablesCommand{*ddl_data_, session_ptr_}.execute();
-  } else if (ddl_command_ == "SHOW_QUERIES") {
-    LOG(ERROR) << "SHOW QUERIES DDL is not ready yet!\n";
   } else if (ddl_command_ == "SHOW_DISK_CACHE_USAGE") {
     result = ShowDiskCacheUsageCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "SHOW_USER_DETAILS") {
     result = ShowUserDetailsCommand{*ddl_data_, session_ptr_}.execute();
-  } else if (ddl_command_ == "KILL_QUERY") {
-    auto& ddl_payload = extractPayload(*ddl_data_);
-    CHECK(ddl_payload.HasMember("querySession"));
-    const std::string& querySessionPayload = ddl_payload["querySession"].GetString();
-    auto querySession = querySessionPayload.substr(1, 8);
-    CHECK_EQ(querySession.length(),
-             (unsigned long)8);  // public_session_id's length + two quotes
-    LOG(ERROR) << "TRY TO KILL QUERY " << querySession
-               << " BUT KILL QUERY DDL is not ready yet!\n";
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }

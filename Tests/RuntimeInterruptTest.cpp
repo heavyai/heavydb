@@ -72,6 +72,17 @@ inline void run_ddl_statement(const std::string& create_table_stmt) {
   QR::get()->runDDLStatement(create_table_stmt);
 }
 
+void geofile_importer_for_interrupt_test(const std::string& session_id) {
+  std::string file_path_str{"../../Tests/Import/datafiles/interrupt_table_gdal.geojson"};
+  QueryRunner::ImportDriver import_driver(QR::get()->getCatalog(),
+                                          QR::get()->getSession()->get_currentUser(),
+                                          ExecutorDeviceType::CPU,
+                                          session_id);
+  auto file_path = boost::filesystem::path(file_path_str);
+  ASSERT_TRUE(boost::filesystem::exists(file_path));
+  import_driver.importGeoTable(file_path_str, "t_gdal", false, false, false);
+}
+
 int create_and_populate_table() {
   try {
     run_ddl_statement("DROP TABLE IF EXISTS t_very_large_agg;");
@@ -635,6 +646,7 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
                                         PENDING_QUERY_INTERRUPT_CHECK_FREQ);
   bool startQueryExec = false;
   std::atomic<bool> catchInterruption(false);
+  std::atomic<bool> detect_time_out = false;
   std::exception_ptr exception_ptr1 = nullptr;
   std::exception_ptr exception_ptr2 = nullptr;
   std::exception_ptr exception_ptr3 = nullptr;
@@ -731,8 +743,6 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
 
     CHECK(ready_to_interrupt);
     executor->interrupt(session1, session1);
-    bool detect_time_out = false;
-
     auto check_interrup_msg = [&catchInterruption](const std::string& msg,
                                                    bool is_pending_query) {
       auto check_interrupted_msg = msg.find("interrupted");
@@ -748,7 +758,7 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
           do {
             status = thread.wait_for(std::chrono::seconds(timeout_sec));
             if (status == std::future_status::timeout) {
-              detect_time_out = true;
+              detect_time_out.store(true);
               res = thread.get();
               break;
             } else if (status == std::future_status::ready) {
@@ -800,7 +810,7 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
       throw std::runtime_error("SUCCESS");
     }
 
-    if (detect_time_out) {
+    if (detect_time_out.load()) {
       throw std::runtime_error("TIME_OUT");
     }
 
@@ -846,6 +856,7 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
 
 TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV) {
   std::atomic<bool> catchInterruption(false);
+  std::atomic<bool> detect_time_out(false);
   std::string import_very_large_table_str{
       "COPY t_very_large_csv FROM "
       "'../../Tests/Import/datafiles/interrupt_table_very_large.csv' WITH "
@@ -861,35 +872,34 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV) {
   try {
     std::string session1 = generate_random_string(32);
     QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
-    bool detect_time_out = false;
 
     auto interrupt_thread = std::async(std::launch::async, [&] {
       // make sure our server recognizes a session for running query correctly
-      std::string curRunningSession{""};
+      QuerySessionStatus::QueryStatus curRunningSessionStatus;
       bool startQueryExec = false;
       auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
       int cnt = 0;
-      while (cnt < 600) {
+      while (cnt < 6000) {
         {
           mapd_shared_lock<mapd_shared_mutex> session_read_lock(
               executor->getSessionLock());
-          curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+          curRunningSessionStatus =
+              executor->getQuerySessionStatus(session1, session_read_lock);
         }
-        if (curRunningSession.compare(session1) == 0) {
+        if (curRunningSessionStatus == QuerySessionStatus::RUNNING_IMPORTER) {
           startQueryExec = true;
           break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         ++cnt;
-        if (cnt == 600) {
+        if (cnt == 6000) {
           std::cout << "Detect timeout while performing COPY stmt on csv table"
                     << std::endl;
-          detect_time_out = true;
+          detect_time_out.store(true);
           return;
         }
       }
       CHECK(startQueryExec);
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
       executor->interrupt(session1, session1);
       return;
     });
@@ -919,7 +929,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV) {
       CHECK_EQ((int64_t)0, ret_val);
       return;
     }
-    if (detect_time_out) {
+    if (detect_time_out.load()) {
       return;
     }
   } catch (...) {
@@ -929,6 +939,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV) {
 
 TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Parquet) {
   std::atomic<bool> catchInterruption(false);
+  std::atomic<bool> detect_time_out(false);
   std::string import_very_large_parquet_table_str{
       "COPY t_very_large_parquet FROM "
       "'../../Tests/Import/datafiles/interrupt_table_very_large.parquet' WITH "
@@ -937,7 +948,6 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Parquet) {
   try {
     std::string session1 = generate_random_string(32);
     QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
-    bool detect_time_out = false;
     auto check_interrup_msg = [&catchInterruption](const std::string& msg,
                                                    bool is_pending_query) {
       auto check_interrupted_msg = msg.find("interrupted");
@@ -946,31 +956,32 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Parquet) {
     };
 
     auto interrupt_thread = std::async(std::launch::async, [&] {
-      std::string curRunningSession{""};
+      // make sure our server recognizes a session for running query correctly
+      QuerySessionStatus::QueryStatus curRunningSessionStatus;
       bool startQueryExec = false;
       auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
       int cnt = 0;
-      while (cnt < 600) {
+      while (cnt < 6000) {
         {
           mapd_shared_lock<mapd_shared_mutex> session_read_lock(
               executor->getSessionLock());
-          curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+          curRunningSessionStatus =
+              executor->getQuerySessionStatus(session1, session_read_lock);
         }
-        if (curRunningSession.compare(session1) == 0) {
+        if (curRunningSessionStatus == QuerySessionStatus::RUNNING_IMPORTER) {
           startQueryExec = true;
           break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         ++cnt;
-        if (cnt == 600) {
-          std::cout << "Detect timeout while performing COPY stmt on parquet table"
+        if (cnt == 6000) {
+          std::cout << "Detect timeout while performing COPY stmt on csv table"
                     << std::endl;
-          detect_time_out = true;
+          detect_time_out.store(true);
           return;
         }
       }
       CHECK(startQueryExec);
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
       executor->interrupt(session1, session1);
       return;
     });
@@ -1000,7 +1011,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Parquet) {
       CHECK_EQ((int64_t)0, ret_val);
       return;
     }
-    if (detect_time_out) {
+    if (detect_time_out.load()) {
       return;
     }
   } catch (...) {
@@ -1010,6 +1021,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Parquet) {
 
 TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV_Sharded) {
   std::atomic<bool> catchInterruption(false);
+  std::atomic<bool> detect_time_out(false);
   std::string import_very_large_sharded_table_str{
       "COPY t_very_large_sharded FROM "
       "'../../Tests/Import/datafiles/interrupt_table_very_large.csv' WITH "
@@ -1025,35 +1037,34 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV_Sharded) {
   try {
     std::string session1 = generate_random_string(32);
     QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
-    bool detect_time_out = false;
 
     auto interrupt_thread = std::async(std::launch::async, [&] {
-      std::string curRunningSession{""};
+      // make sure our server recognizes a session for running query correctly
+      QuerySessionStatus::QueryStatus curRunningSessionStatus;
       bool startQueryExec = false;
       auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
       int cnt = 0;
-      while (cnt < 600) {
+      while (cnt < 6000) {
         {
           mapd_shared_lock<mapd_shared_mutex> session_read_lock(
               executor->getSessionLock());
-          curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+          curRunningSessionStatus =
+              executor->getQuerySessionStatus(session1, session_read_lock);
         }
-        if (curRunningSession.compare(session1) == 0) {
+        if (curRunningSessionStatus == QuerySessionStatus::RUNNING_IMPORTER) {
           startQueryExec = true;
           break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         ++cnt;
-        if (cnt == 600) {
-          std::cout
-              << "Detect timeout while performing COPY stmt on the sharded csv table"
-              << std::endl;
-          detect_time_out = true;
+        if (cnt == 6000) {
+          std::cout << "Detect timeout while performing COPY stmt on csv table"
+                    << std::endl;
+          detect_time_out.store(true);
           return;
         }
       }
       CHECK(startQueryExec);
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
       executor->interrupt(session1, session1);
       return;
     });
@@ -1084,7 +1095,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV_Sharded) {
       CHECK_EQ((int64_t)0, ret_val);
       return;
     }
-    if (detect_time_out) {
+    if (detect_time_out.load()) {
       return;
     }
   } catch (...) {
@@ -1094,6 +1105,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV_Sharded) {
 
 TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_GDAL) {
   std::atomic<bool> catchInterruption(false);
+  std::atomic<bool> detect_time_out(false);
   std::string import_gdal_table_str{
       "COPY t_gdal FROM "
       "'../../Tests/Import/datafiles/interrupt_table_gdal.geojson' WITH "
@@ -1108,46 +1120,40 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_GDAL) {
 
   try {
     std::string session1 = generate_random_string(32);
-    bool detect_time_out = false;
 
     auto interrupt_thread = std::async(std::launch::async, [&] {
-      std::string curRunningSession{""};
+      // make sure our server recognizes a session for running query correctly
+      QuerySessionStatus::QueryStatus curRunningSessionStatus;
       bool startQueryExec = false;
       auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
       int cnt = 0;
-      while (cnt < 600) {
+      while (cnt < 6000) {
         {
           mapd_shared_lock<mapd_shared_mutex> session_read_lock(
               executor->getSessionLock());
-          curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+          curRunningSessionStatus =
+              executor->getQuerySessionStatus(session1, session_read_lock);
         }
-        if (curRunningSession.compare(session1) == 0) {
+        if (curRunningSessionStatus == QuerySessionStatus::RUNNING_IMPORTER) {
           startQueryExec = true;
           break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         ++cnt;
-        if (cnt == 600) {
-          std::cout << "Detect timeout while performing COPY stmt on gdal table"
+        if (cnt == 6000) {
+          std::cout << "Detect timeout while performing COPY stmt on csv table"
                     << std::endl;
-          detect_time_out = true;
+          detect_time_out.store(true);
           return;
         }
       }
       CHECK(startQueryExec);
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
       executor->interrupt(session1, session1);
       return;
     });
 
     try {
-      const auto file_path = boost::filesystem::path(
-          "../../Tests/Import/datafiles/interrupt_table_gdal.geojson");
-      QueryRunner::ImportDriver import_driver(QR::get()->getCatalog(),
-                                              QR::get()->getSession()->get_currentUser(),
-                                              ExecutorDeviceType::CPU,
-                                              session1);
-      import_driver.importGeoTable(file_path.string(), "t_gdal", false, false, false);
+      geofile_importer_for_interrupt_test(session1);
     } catch (const QueryExecutionError& e) {
       if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
         catchInterruption.store(true);
@@ -1171,7 +1177,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_GDAL) {
       CHECK_LT(ret_val, (int64_t)1000001);
       return;
     }
-    if (detect_time_out) {
+    if (detect_time_out.load()) {
       return;
     }
   } catch (...) {
@@ -1181,6 +1187,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_GDAL) {
 
 TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Geo) {
   std::atomic<bool> catchInterruption(false);
+  std::atomic<bool> detect_time_out(false);
   std::string import_geo_table_str{
       "COPY t_geo FROM "
       "'../../Tests/Import/datafiles/interrupt_table_geo.csv';"};
@@ -1195,7 +1202,6 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Geo) {
   try {
     std::string session1 = generate_random_string(32);
     QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
-    bool detect_time_out = false;
 
     auto interrupt_thread = std::async(std::launch::async, [&] {
       std::string curRunningSession{""};
@@ -1217,7 +1223,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Geo) {
         if (cnt == 600) {
           std::cout << "Detect timeout while performing COPY stmt on geo table"
                     << std::endl;
-          detect_time_out = true;
+          detect_time_out.store(true);
           return;
         }
       }
@@ -1252,7 +1258,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Geo) {
       CHECK_EQ((int64_t)0, ret_val);
       return;
     }
-    if (detect_time_out) {
+    if (detect_time_out.load()) {
       return;
     }
   } catch (...) {
@@ -1262,6 +1268,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Geo) {
 
 TEST(Non_Kernel_Time_Interrupt, Interrupt_During_Reduction) {
   std::atomic<bool> catchInterruption(false);
+  std::atomic<bool> detect_time_out(false);
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   bool keep_global_columnar_flag = g_enable_columnar_output;
   g_enable_columnar_output = true;
@@ -1283,7 +1290,6 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_During_Reduction) {
   try {
     std::string session1 = generate_random_string(32);
     QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
-    bool detect_time_out = false;
 
     auto interrupt_thread = std::async(std::launch::async, [&] {
       std::string curRunningSession{""};
@@ -1309,7 +1315,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_During_Reduction) {
         ++cnt;
         if (cnt == 6000) {
           std::cout << "Detect timeout while performing reduction" << std::endl;
-          detect_time_out = true;
+          detect_time_out.store(true);
           return;
         }
       }
@@ -1340,7 +1346,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_During_Reduction) {
       std::cout << "Detect interrupt request while performing reduction" << std::endl;
       return;
     }
-    if (detect_time_out) {
+    if (detect_time_out.load()) {
       return;
     }
   } catch (...) {

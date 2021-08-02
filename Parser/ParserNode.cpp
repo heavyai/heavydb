@@ -3034,14 +3034,14 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
                                      query_str,
                                      start_time,
                                      Executor::UNITARY_EXECUTOR_ID,
-                                     QuerySessionStatus::QueryStatus::RUNNING);
+                                     QuerySessionStatus::QueryStatus::RUNNING_IMPORTER);
       }
 
       ScopeGuard clearInterruptStatus = [executor, &query_session, &start_time] {
         // this data population is non-kernel operation, so we manually cleanup
         // the query session info in the cleanup phase
         if (g_enable_non_kernel_time_query_interrupt) {
-          executor->clearQuerySessionStatus(query_session, start_time, false);
+          executor->clearQuerySessionStatus(query_session, start_time);
         }
       };
 
@@ -4816,14 +4816,14 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
                                      query_str,
                                      start_time,
                                      Executor::UNITARY_EXECUTOR_ID,
-                                     QuerySessionStatus::QueryStatus::RUNNING);
+                                     QuerySessionStatus::QueryStatus::RUNNING_IMPORTER);
       }
 
       ScopeGuard clearInterruptStatus =
           [executor, &query_str, &query_session, &start_time, &importer] {
             // reset the runtime query interrupt status
             if (g_enable_non_kernel_time_query_interrupt) {
-              executor->clearQuerySessionStatus(query_session, start_time, false);
+              executor->clearQuerySessionStatus(query_session, start_time);
             }
           };
       import_export::ImportStatus import_result;

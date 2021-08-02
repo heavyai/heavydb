@@ -2684,7 +2684,7 @@ void DBHandler::set_cur_session(const TSessionId& parent_session,
                                label,
                                start_time_str,
                                Executor::UNITARY_EXECUTOR_ID,
-                               QuerySessionStatus::QueryStatus::RUNNING);
+                               QuerySessionStatus::QueryStatus::RUNNING_QUERY_KERNEL);
   if (leaf_aggregator_.leafCount() > 0) {
     leaf_aggregator_.set_cur_session(parent_session, start_time_str, label);
   }
@@ -2698,7 +2698,7 @@ void DBHandler::invalidate_cur_session(const TSessionId& parent_session,
   auto stdlog = STDLOG(get_session_ptr(leaf_session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
-  executor->clearQuerySessionStatus(parent_session, start_time_str, false);
+  executor->clearQuerySessionStatus(parent_session, start_time_str);
   if (leaf_aggregator_.leafCount() > 0) {
     leaf_aggregator_.invalidate_cur_session(parent_session, start_time_str, label);
   }
@@ -4722,13 +4722,13 @@ void DBHandler::import_table(const TSessionId& session,
                                    "IMPORT_TABLE",
                                    start_time,
                                    Executor::UNITARY_EXECUTOR_ID,
-                                   QuerySessionStatus::QueryStatus::RUNNING);
+                                   QuerySessionStatus::QueryStatus::RUNNING_IMPORTER);
     }
 
     ScopeGuard clearInterruptStatus = [executor, &session, &start_time] {
       // reset the runtime query interrupt status
       if (g_enable_non_kernel_time_query_interrupt) {
-        executor->clearQuerySessionStatus(session, start_time, false);
+        executor->clearQuerySessionStatus(session, start_time);
       }
     };
     const auto td_with_lock =
@@ -4850,13 +4850,13 @@ void DBHandler::import_geo_table(const TSessionId& session,
                                  "IMPORT_GEO_TABLE",
                                  start_time,
                                  Executor::UNITARY_EXECUTOR_ID,
-                                 QuerySessionStatus::QueryStatus::RUNNING);
+                                 QuerySessionStatus::QueryStatus::RUNNING_IMPORTER);
   }
 
   ScopeGuard clearInterruptStatus = [executor, &session, &start_time] {
     // reset the runtime query interrupt status
     if (g_enable_non_kernel_time_query_interrupt) {
-      executor->clearQuerySessionStatus(session, start_time, false);
+      executor->clearQuerySessionStatus(session, start_time);
     }
   };
 
@@ -7128,14 +7128,23 @@ ExecutionResult DBHandler::getQueries(
                                                       session_read_lock);
         }
         // if there exists query info fired from this session we report it to user
-        const std::string getQueryStatusStr[] = {
-            "UNDEFINED", "PENDING_QUEUE", "PENDING_EXECUTOR", "RUNNING"};
+        const std::string getQueryStatusStr[] = {"UNDEFINED",
+                                                 "PENDING_QUEUE",
+                                                 "PENDING_EXECUTOR",
+                                                 "RUNNING_QUERY_KERNEL",
+                                                 "RUNNING_REDUCTION",
+                                                 "RUNNING_IMPORTER"};
+        bool is_table_import_session = false;
         for (QuerySessionStatus& query_info : query_infos) {
           logical_values.emplace_back(RelLogicalValues::RowValues{});
           logical_values.back().emplace_back(
               genLiteralStr(query_session_ptr->get_public_session_id()));
+          auto query_status = query_info.getQueryStatus();
           logical_values.back().emplace_back(
-              genLiteralStr(getQueryStatusStr[query_info.getQueryStatus()]));
+              genLiteralStr(getQueryStatusStr[query_status]));
+          if (query_status == QuerySessionStatus::QueryStatus::RUNNING_IMPORTER) {
+            is_table_import_session = true;
+          }
           logical_values.back().emplace_back(
               genLiteralStr(::toString(query_info.getExecutorId())));
           logical_values.back().emplace_back(
@@ -7147,7 +7156,8 @@ ExecutionResult DBHandler::getQueries(
               genLiteralStr(query_session_ptr->get_connection_info()));
           logical_values.back().emplace_back(
               genLiteralStr(query_session_ptr->getCatalog().getCurrentDB().dbName));
-          if (query_session_ptr->get_executor_device_type() == ExecutorDeviceType::GPU) {
+          if (query_session_ptr->get_executor_device_type() == ExecutorDeviceType::GPU &&
+              !is_table_import_session) {
             logical_values.back().emplace_back(genLiteralStr("GPU"));
           } else {
             logical_values.back().emplace_back(genLiteralStr("CPU"));

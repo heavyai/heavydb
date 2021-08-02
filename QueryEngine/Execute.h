@@ -89,8 +89,9 @@ class QuerySessionStatus {
     UNDEFINED = 0,
     PENDING_QUEUE,
     PENDING_EXECUTOR,
-    RUNNING,
-    RUNNING_REDUCTION
+    RUNNING_QUERY_KERNEL,
+    RUNNING_REDUCTION,
+    RUNNING_IMPORTER
   };
 
   QuerySessionStatus(const QuerySessionId& query_session,
@@ -130,9 +131,6 @@ class QuerySessionStatus {
     query_status_ = status;
   }
   void setExecutorId(const size_t executor_id) { executor_id_ = executor_id; }
-  void setQueryStatusAsRunning() {
-    query_status_ = QuerySessionStatus::QueryStatus::RUNNING;
-  }
 
  private:
   const QuerySessionId query_session_;
@@ -944,11 +942,9 @@ class Executor {
   }
 
   QuerySessionId& getCurrentQuerySession(mapd_shared_lock<mapd_shared_mutex>& read_lock);
-  size_t getRunningExecutorId(mapd_shared_lock<mapd_shared_mutex>& read_lock);
-  void setCurrentQuerySession(const QuerySessionId& query_session,
-                              mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  void setRunningExecutorId(const size_t id,
-                            mapd_unique_lock<mapd_shared_mutex>& write_lock);
+  QuerySessionStatus::QueryStatus getQuerySessionStatus(
+      const QuerySessionId& candidate_query_session,
+      mapd_shared_lock<mapd_shared_mutex>& read_lock);
   bool checkCurrentQuerySession(const std::string& candidate_query_session,
                                 mapd_shared_lock<mapd_shared_mutex>& read_lock);
   void invalidateRunningQuerySession(mapd_unique_lock<mapd_shared_mutex>& write_lock);
@@ -963,11 +959,8 @@ class Executor {
                                   mapd_unique_lock<mapd_shared_mutex>& write_lock);
   void setQuerySessionAsInterrupted(const QuerySessionId& query_session,
                                     mapd_unique_lock<mapd_shared_mutex>& write_lock);
-  void resetQuerySessionInterruptFlag(const std::string& query_session,
-                                      mapd_unique_lock<mapd_shared_mutex>& write_lock);
   bool checkIsQuerySessionInterrupted(const std::string& query_session,
                                       mapd_shared_lock<mapd_shared_mutex>& read_lock);
-  bool checkIsRunningQuerySessionInterrupted();
   bool checkIsQuerySessionEnrolled(const QuerySessionId& query_session,
                                    mapd_shared_lock<mapd_shared_mutex>& read_lock);
   bool updateQuerySessionStatusWithLock(
@@ -991,8 +984,7 @@ class Executor {
       const std::string& query_submitted_time);
   void checkPendingQueryStatus(const QuerySessionId& query_session);
   void clearQuerySessionStatus(const QuerySessionId& query_session,
-                               const std::string& submitted_time_str,
-                               const bool acquire_spin_lock);
+                               const std::string& submitted_time_str);
   void updateQuerySessionStatus(
       std::shared_ptr<const query_state::QueryState>& query_state,
       const QuerySessionStatus::QueryStatus new_query_status);
@@ -1096,7 +1088,7 @@ class Executor {
   // a query session that currently is running
   static QuerySessionId current_query_session_;
   // an executor's id that executes the running query
-  static size_t running_query_executor_id_;
+  static std::optional<size_t> running_query_executor_id_;
   // a pair of <QuerySessionId, interrupted_flag>
   static InterruptFlagMap queries_interrupt_flag_;
   // a pair of <QuerySessionId, query_session_status>
