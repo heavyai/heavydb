@@ -394,9 +394,8 @@ public class ExtensionFunction {
       case Cursor:
         return SqlTypeName.CURSOR;
       case TextEncodingNone:
-        return SqlTypeName.VARCHAR;
       case TextEncodingDict:
-        return SqlTypeName.INTEGER;
+        return SqlTypeName.VARCHAR;
       case ColumnListInt8:
       case ColumnListInt16:
       case ColumnListInt32:
