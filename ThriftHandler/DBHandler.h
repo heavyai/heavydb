@@ -259,11 +259,13 @@ class DBHandler : public OmniSciIf {
   void set_cur_session(const TSessionId& parent_session,
                        const TSessionId& leaf_session,
                        const std::string& start_time_str,
-                       const std::string& label) override;
+                       const std::string& label,
+                       bool for_running_query_kernel) override;
   void invalidate_cur_session(const TSessionId& parent_session,
                               const TSessionId& leaf_session,
                               const std::string& start_time_str,
-                              const std::string& label) override;
+                              const std::string& label,
+                              bool for_running_query_kernel) override;
   void set_table_epoch(const TSessionId& session,
                        const int db_id,
                        const int table_id,

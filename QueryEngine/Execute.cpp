@@ -3975,31 +3975,6 @@ void Executor::clearQuerySessionStatus(const QuerySessionId& query_session,
 }
 
 void Executor::updateQuerySessionStatus(
-    std::shared_ptr<const query_state::QueryState>& query_state,
-    const QuerySessionStatus::QueryStatus new_query_status) {
-  // update the running query session's the current status
-  if (query_state) {
-    mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
-    auto query_session = query_state->getConstSessionInfo()->get_session_id();
-    if (query_session.empty()) {
-      return;
-    }
-    if (new_query_status == QuerySessionStatus::QueryStatus::RUNNING_QUERY_KERNEL) {
-      CHECK(!running_query_executor_id_)
-          << "update query session failed: running executor exists";
-      current_query_session_ = query_session;
-      running_query_executor_id_ = executor_id_;
-      LOG(INFO) << "Update executor (id: " << *running_query_executor_id_
-                << ") state as running";
-    }
-    updateQuerySessionStatusWithLock(query_session,
-                                     query_state->getQuerySubmittedTime(),
-                                     new_query_status,
-                                     session_write_lock);
-  }
-}
-
-void Executor::updateQuerySessionStatus(
     const QuerySessionId& query_session,
     const std::string& submitted_time_str,
     const QuerySessionStatus::QueryStatus new_query_status) {

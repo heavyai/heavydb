@@ -985,9 +985,6 @@ class Executor {
   void checkPendingQueryStatus(const QuerySessionId& query_session);
   void clearQuerySessionStatus(const QuerySessionId& query_session,
                                const std::string& submitted_time_str);
-  void updateQuerySessionStatus(
-      std::shared_ptr<const query_state::QueryState>& query_state,
-      const QuerySessionStatus::QueryStatus new_query_status);
   void updateQuerySessionStatus(const QuerySessionId& query_session,
                                 const std::string& submitted_time_str,
                                 const QuerySessionStatus::QueryStatus new_query_status);
