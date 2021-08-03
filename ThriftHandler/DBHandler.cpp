@@ -2673,7 +2673,8 @@ void DBHandler::clear_cpu_memory(const TSessionId& session) {
 void DBHandler::set_cur_session(const TSessionId& parent_session,
                                 const TSessionId& leaf_session,
                                 const std::string& start_time_str,
-                                const std::string& label) {
+                                const std::string& label,
+                                bool for_running_query_kernel) {
   // internal API to manage query interruption in distributed mode
   auto stdlog = STDLOG(get_session_ptr(leaf_session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
@@ -2684,24 +2685,21 @@ void DBHandler::set_cur_session(const TSessionId& parent_session,
                                label,
                                start_time_str,
                                Executor::UNITARY_EXECUTOR_ID,
-                               QuerySessionStatus::QueryStatus::RUNNING_QUERY_KERNEL);
-  if (leaf_aggregator_.leafCount() > 0) {
-    leaf_aggregator_.set_cur_session(parent_session, start_time_str, label);
-  }
+                               for_running_query_kernel
+                                   ? QuerySessionStatus::QueryStatus::RUNNING_QUERY_KERNEL
+                                   : QuerySessionStatus::QueryStatus::RUNNING_IMPORTER);
 }
 
 void DBHandler::invalidate_cur_session(const TSessionId& parent_session,
                                        const TSessionId& leaf_session,
                                        const std::string& start_time_str,
-                                       const std::string& label) {
+                                       const std::string& label,
+                                       bool for_running_query_kernel) {
   // internal API to manage query interruption in distributed mode
   auto stdlog = STDLOG(get_session_ptr(leaf_session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   executor->clearQuerySessionStatus(parent_session, start_time_str);
-  if (leaf_aggregator_.leafCount() > 0) {
-    leaf_aggregator_.invalidate_cur_session(parent_session, start_time_str, label);
-  }
 }
 
 TSessionId DBHandler::getInvalidSessionId() const {
