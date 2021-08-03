@@ -88,15 +88,15 @@ class RexLiteral : public RexScalar {
              const SQLTypes target_type,
              const unsigned scale,
              const unsigned precision,
-             const unsigned type_scale,
-             const unsigned type_precision)
+             const unsigned target_scale,
+             const unsigned target_precision)
       : literal_(val)
       , type_(type)
       , target_type_(target_type)
       , scale_(scale)
       , precision_(precision)
-      , type_scale_(type_scale)
-      , type_precision_(type_precision) {
+      , target_scale_(target_scale)
+      , target_precision_(target_precision) {
     CHECK(type == kDECIMAL || type == kINTERVAL_DAY_TIME ||
           type == kINTERVAL_YEAR_MONTH || is_datetime(type) || type == kBIGINT ||
           type == kINT);
@@ -107,15 +107,15 @@ class RexLiteral : public RexScalar {
              const SQLTypes target_type,
              const unsigned scale,
              const unsigned precision,
-             const unsigned type_scale,
-             const unsigned type_precision)
+             const unsigned target_scale,
+             const unsigned target_precision)
       : literal_(val)
       , type_(type)
       , target_type_(target_type)
       , scale_(scale)
       , precision_(precision)
-      , type_scale_(type_scale)
-      , type_precision_(type_precision) {
+      , target_scale_(target_scale)
+      , target_precision_(target_precision) {
     CHECK_EQ(kDOUBLE, type);
   }
 
@@ -124,15 +124,15 @@ class RexLiteral : public RexScalar {
              const SQLTypes target_type,
              const unsigned scale,
              const unsigned precision,
-             const unsigned type_scale,
-             const unsigned type_precision)
+             const unsigned target_scale,
+             const unsigned target_precision)
       : literal_(val)
       , type_(type)
       , target_type_(target_type)
       , scale_(scale)
       , precision_(precision)
-      , type_scale_(type_scale)
-      , type_precision_(type_precision) {
+      , target_scale_(target_scale)
+      , target_precision_(target_precision) {
     CHECK_EQ(kTEXT, type);
   }
 
@@ -141,15 +141,15 @@ class RexLiteral : public RexScalar {
              const SQLTypes target_type,
              const unsigned scale,
              const unsigned precision,
-             const unsigned type_scale,
-             const unsigned type_precision)
+             const unsigned target_scale,
+             const unsigned target_precision)
       : literal_(val)
       , type_(type)
       , target_type_(target_type)
       , scale_(scale)
       , precision_(precision)
-      , type_scale_(type_scale)
-      , type_precision_(type_precision) {
+      , target_scale_(target_scale)
+      , target_precision_(target_precision) {
     CHECK_EQ(kBOOLEAN, type);
   }
 
@@ -159,8 +159,8 @@ class RexLiteral : public RexScalar {
       , target_type_(target_type)
       , scale_(0)
       , precision_(0)
-      , type_scale_(0)
-      , type_precision_(0) {}
+      , target_scale_(0)
+      , target_precision_(0) {}
 
   template <class T>
   T getVal() const {
@@ -177,61 +177,34 @@ class RexLiteral : public RexScalar {
 
   unsigned getPrecision() const { return precision_; }
 
-  unsigned getTypeScale() const { return type_scale_; }
+  unsigned getTargetScale() const { return target_scale_; }
 
-  unsigned getTypePrecision() const { return type_precision_; }
+  unsigned getTargetPrecision() const { return target_precision_; }
 
   std::string toString() const override {
-    return cat(::typeName(this),
-               "(",
-               boost::lexical_cast<std::string>(literal_),
-               ", type=",
-               (type_ == kNULLT ? "null" : ::toString(type_)),
-               ", target_type=",
-               (target_type_ == kNULLT ? "null" : ::toString(target_type_)),
-               ")");
+    std::ostringstream oss;
+    oss << "RexLiteral(" << literal_ << " type=" << type_ << '(' << precision_ << ','
+        << scale_ << ") target_type=" << target_type_ << '(' << target_precision_ << ','
+        << target_scale_ << "))";
+    return oss.str();
   }
 
   size_t toHash() const override {
     if (!hash_) {
       hash_ = typeid(RexLiteral).hash_code();
-      boost::hash_combine(*hash_, boost::lexical_cast<std::string>(literal_));
-      boost::hash_combine(*hash_, type_ == kNULLT ? "n" : ::toString(type_));
-      boost::hash_combine(*hash_,
-                          target_type_ == kNULLT ? "n" : ::toString(target_type_));
+      boost::hash_combine(*hash_, literal_);
+      boost::hash_combine(*hash_, type_);
+      boost::hash_combine(*hash_, target_type_);
+      boost::hash_combine(*hash_, scale_);
+      boost::hash_combine(*hash_, precision_);
+      boost::hash_combine(*hash_, target_scale_);
+      boost::hash_combine(*hash_, target_precision_);
     }
     return *hash_;
   }
 
   std::unique_ptr<RexLiteral> deepCopy() const {
-    switch (literal_.which()) {
-      case 0: {
-        int64_t val = getVal<int64_t>();
-        return std::make_unique<RexLiteral>(
-            val, type_, target_type_, scale_, precision_, type_scale_, type_precision_);
-      }
-      case 1: {
-        double val = getVal<double>();
-        return std::make_unique<RexLiteral>(
-            val, type_, target_type_, scale_, precision_, type_scale_, type_precision_);
-      }
-      case 2: {
-        auto val = getVal<std::string>();
-        return std::make_unique<RexLiteral>(
-            val, type_, target_type_, scale_, precision_, type_scale_, type_precision_);
-      }
-      case 3: {
-        bool val = getVal<bool>();
-        return std::make_unique<RexLiteral>(
-            val, type_, target_type_, scale_, precision_, type_scale_, type_precision_);
-      }
-      case 4: {
-        return std::make_unique<RexLiteral>(target_type_);
-      }
-      default:
-        CHECK(false);
-    }
-    return nullptr;
+    return std::make_unique<RexLiteral>(*this);
   }
 
  private:
@@ -240,8 +213,8 @@ class RexLiteral : public RexScalar {
   const SQLTypes target_type_;
   const unsigned scale_;
   const unsigned precision_;
-  const unsigned type_scale_;
-  const unsigned type_precision_;
+  const unsigned target_scale_;
+  const unsigned target_precision_;
 };
 
 using RexLiteralArray = std::vector<RexLiteral>;

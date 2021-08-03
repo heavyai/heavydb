@@ -41,6 +41,13 @@ constexpr std::array<T, sizeof...(Indices)> powersOfImpl(
   return {power(a, static_cast<T>(Indices))...};
 }
 
+template <size_t... Indices>
+constexpr std::array<double, sizeof...(Indices)> inversePowersOfImpl(
+    double const a,
+    std::index_sequence<Indices...>) {
+  return {(1.0 / power(a, static_cast<double>(Indices)))...};
+}
+
 }  // namespace
 
 namespace shared {
@@ -184,10 +191,16 @@ inline bool contains(const T& container, const U& element) {
   }
 }
 
-// Return constexpr std::array<T, N> of {1, 10, 100, 1000, ..., 10^(N-1)}.
+// Return constexpr std::array<T, N> of {1, a, a^2, a^3, ..., a^(N-1)}.
 template <typename T, size_t N>
 constexpr std::array<T, N> powersOf(T const a) {
   return powersOfImpl<T>(a, std::make_index_sequence<N>{});
+}
+
+// Return constexpr std::array<double, N> of {1, 1/a, 1/a^2, 1/a^3, ..., 1/a^(N-1)}.
+template <size_t N>
+constexpr std::array<double, N> inversePowersOf(double const a) {
+  return inversePowersOfImpl(a, std::make_index_sequence<N>{});
 }
 
 // May be constexpr in C++20.

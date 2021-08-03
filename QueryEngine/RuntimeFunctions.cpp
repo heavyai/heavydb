@@ -240,6 +240,15 @@ DEF_UMINUS_NULLABLE(double, double)
     return operand == from_null_val ? to_null_val : operand;                   \
   }
 
+#define DEF_CAST_SCALED_NULLABLE(from_type, to_type)                                  \
+  extern "C" ALWAYS_INLINE to_type cast_##from_type##_to_##to_type##_scaled_nullable( \
+      const from_type operand,                                                        \
+      const from_type from_null_val,                                                  \
+      const to_type to_null_val,                                                      \
+      const to_type multiplier) {                                                     \
+    return operand == from_null_val ? to_null_val : multiplier * operand;             \
+  }
+
 #define DEF_CAST_NULLABLE_BIDIR(type1, type2) \
   DEF_CAST_NULLABLE(type1, type2)             \
   DEF_CAST_NULLABLE(type2, type1)
@@ -261,8 +270,11 @@ DEF_CAST_NULLABLE_BIDIR(double, int32_t)
 DEF_CAST_NULLABLE_BIDIR(double, int64_t)
 DEF_CAST_NULLABLE(uint8_t, int32_t)
 DEF_CAST_NULLABLE(uint16_t, int32_t)
+DEF_CAST_SCALED_NULLABLE(int64_t, float)
+DEF_CAST_SCALED_NULLABLE(int64_t, double)
 
 #undef DEF_CAST_NULLABLE_BIDIR
+#undef DEF_CAST_SCALED_NULLABLE
 #undef DEF_CAST_NULLABLE
 
 extern "C" ALWAYS_INLINE int8_t logical_not(const int8_t operand, const int8_t null_val) {

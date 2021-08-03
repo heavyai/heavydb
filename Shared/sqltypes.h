@@ -29,6 +29,7 @@
 #include <cassert>
 #include <ctime>
 #include <memory>
+#include <ostream>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -137,6 +138,11 @@ inline std::string toString(const SQLTypes& type) {
   }
   LOG(FATAL) << "Invalid SQL type: " << type;
   return "";
+}
+
+inline std::ostream& operator<<(std::ostream& os, SQLTypes const sql_type) {
+  os << toString(sql_type);
+  return os;
 }
 
 #endif

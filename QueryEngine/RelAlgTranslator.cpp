@@ -275,8 +275,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
   auto lit_ti = build_type_info(
       rex_literal->getType(), rex_literal->getScale(), rex_literal->getPrecision());
   auto target_ti = build_type_info(rex_literal->getTargetType(),
-                                   rex_literal->getTypeScale(),
-                                   rex_literal->getTypePrecision());
+                                   rex_literal->getTargetScale(),
+                                   rex_literal->getTargetPrecision());
   switch (rex_literal->getType()) {
     case kINT:
     case kBIGINT: {

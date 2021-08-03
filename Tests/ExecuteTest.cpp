@@ -6211,6 +6211,23 @@ TEST(Select, CastFromNull) {
   }
 }
 
+TEST(Select, CastFromNull2) {
+  auto* const drop = "DROP TABLE IF EXISTS cast_from_null2;";
+  auto* const create = "CREATE TABLE cast_from_null2 (d DOUBLE, dd DECIMAL(8,2));";
+  auto* const insert = "INSERT INTO cast_from_null2 VALUES (1.0, NULL);";
+  auto* const select = "SELECT d * dd FROM cast_from_null2;";
+  run_ddl_statement(drop);
+  g_sqlite_comparator.query(drop);
+  run_ddl_statement(create);
+  g_sqlite_comparator.query(create);
+  run_multiple_agg(insert, ExecutorDeviceType::CPU);
+  g_sqlite_comparator.query(insert);
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c(select, dt);
+  }
+}
+
 TEST(Select, CastRound) {
   auto const run = [](char const* n, char const* type, ExecutorDeviceType const dt) {
     return run_simple_agg(std::string("SELECT CAST(") + n + " AS " + type + ");", dt);

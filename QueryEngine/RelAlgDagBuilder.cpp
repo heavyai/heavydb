@@ -2123,7 +2123,7 @@ int64_t get_int_literal_field(const rapidjson::Value& obj,
   std::unique_ptr<RexLiteral> lit(parse_literal(it->value));
   CHECK_EQ(kDECIMAL, lit->getType());
   CHECK_EQ(unsigned(0), lit->getScale());
-  CHECK_EQ(unsigned(0), lit->getTypeScale());
+  CHECK_EQ(unsigned(0), lit->getTargetScale());
   return lit->getVal<int64_t>();
 }
 
