@@ -64,6 +64,7 @@ extern bool g_enable_debug_timer;
 namespace logger {
 
 // Channel, ChannelNames, and ChannelSymbols must be updated together.
+// Each Channel has its own ChannelLogger declared below and defined in Logger.cpp.
 enum Channel { IR = 0, PTX, ASM, _NCHANNELS };
 
 constexpr std::array<char const*, 3> ChannelNames{"IR", "PTX", "ASM"};
@@ -154,7 +155,9 @@ using FatalFunc = void (*)() noexcept;
 void set_once_fatal_func(FatalFunc);
 
 using ChannelLogger = boost::log::sources::channel_logger_mt<Channel>;
-BOOST_LOG_GLOBAL_LOGGER(gChannelLogger, ChannelLogger)
+BOOST_LOG_GLOBAL_LOGGER(gChannelLogger_IR, ChannelLogger)
+BOOST_LOG_GLOBAL_LOGGER(gChannelLogger_PTX, ChannelLogger)
+BOOST_LOG_GLOBAL_LOGGER(gChannelLogger_ASM, ChannelLogger)
 
 using SeverityLogger = boost::log::sources::severity_logger_mt<Severity>;
 BOOST_LOG_GLOBAL_LOGGER(gSeverityLogger, SeverityLogger)
@@ -168,8 +171,8 @@ class Logger {
   std::unique_ptr<boost::log::record_ostream> stream_;
 
  public:
-  Logger(Channel);
-  Logger(Severity);
+  explicit Logger(Channel);
+  explicit Logger(Severity);
   Logger(Logger&&) = default;
   ~Logger();
   operator bool() const;

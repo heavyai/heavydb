@@ -57,7 +57,15 @@ BOOST_LOG_ATTRIBUTE_KEYWORD(process_id, "ProcessID", attr::current_process_id::v
 BOOST_LOG_ATTRIBUTE_KEYWORD(channel, "Channel", Channel)
 BOOST_LOG_ATTRIBUTE_KEYWORD(severity, "Severity", Severity)
 
-BOOST_LOG_GLOBAL_LOGGER_DEFAULT(gChannelLogger, ChannelLogger)
+BOOST_LOG_GLOBAL_LOGGER_CTOR_ARGS(gChannelLogger_IR,
+                                  ChannelLogger,
+                                  (keywords::channel = IR))
+BOOST_LOG_GLOBAL_LOGGER_CTOR_ARGS(gChannelLogger_PTX,
+                                  ChannelLogger,
+                                  (keywords::channel = PTX))
+BOOST_LOG_GLOBAL_LOGGER_CTOR_ARGS(gChannelLogger_ASM,
+                                  ChannelLogger,
+                                  (keywords::channel = ASM))
 BOOST_LOG_GLOBAL_LOGGER_DEFAULT(gSeverityLogger, SeverityLogger)
 
 // Return last component of path
@@ -384,11 +392,25 @@ std::ostream& operator<<(std::ostream& out, Severity const& sev) {
   return out << SeverityNames.at(sev);
 }
 
+namespace {
+ChannelLogger& get_channel_logger(Channel const channel) {
+  switch (channel) {
+    default:
+    case IR:
+      return gChannelLogger_IR::get();
+    case PTX:
+      return gChannelLogger_PTX::get();
+    case ASM:
+      return gChannelLogger_ASM::get();
+  }
+}
+}  // namespace
+
 Logger::Logger(Channel channel)
     : is_channel_(true)
     , enum_value_(channel)
     , record_(std::make_unique<boost::log::record>(
-          gChannelLogger::get().open_record(boost::log::keywords::channel = channel))) {
+          get_channel_logger(channel).open_record())) {
   if (*record_) {
     stream_ = std::make_unique<boost::log::record_ostream>(*record_);
   }
@@ -397,8 +419,8 @@ Logger::Logger(Channel channel)
 Logger::Logger(Severity severity)
     : is_channel_(false)
     , enum_value_(severity)
-    , record_(std::make_unique<boost::log::record>(gSeverityLogger::get().open_record(
-          boost::log::keywords::severity = severity))) {
+    , record_(std::make_unique<boost::log::record>(
+          gSeverityLogger::get().open_record(keywords::severity = severity))) {
   if (*record_) {
     stream_ = std::make_unique<boost::log::record_ostream>(*record_);
   }
@@ -407,7 +429,8 @@ Logger::Logger(Severity severity)
 Logger::~Logger() {
   if (stream_) {
     if (is_channel_) {
-      gChannelLogger::get().push_record(boost::move(stream_->get_record()));
+      get_channel_logger(static_cast<Channel>(enum_value_))
+          .push_record(boost::move(stream_->get_record()));
     } else {
       gSeverityLogger::get().push_record(boost::move(stream_->get_record()));
     }
