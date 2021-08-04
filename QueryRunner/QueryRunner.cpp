@@ -242,10 +242,6 @@ QueryRunner::QueryRunner(const char* db_path,
       cat, user, ExecutorDeviceType::GPU, "");
 }
 
-QueryRunner::~QueryRunner() {
-  Executor::nukeCacheOfExecutors();
-}
-
 void QueryRunner::resizeDispatchQueue(const size_t num_executors) {
   dispatch_queue_ = std::make_unique<QueryDispatchQueue>(num_executors);
 }
