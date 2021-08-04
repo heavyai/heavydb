@@ -259,6 +259,61 @@ void init_logger_stderr_only() {
   logger::init(log_options);
 }
 
+struct ShardInfo {
+  const std::string shard_col;
+  const size_t shard_count;
+};
+
+struct SharedDictionaryInfo {
+  const std::string col;
+  const std::string ref_table;
+  const std::string ref_col;
+};
+
+std::string build_create_table_statement(
+    const std::string& columns_definition,
+    const std::string& table_name,
+    const ShardInfo& shard_info,
+    const std::vector<SharedDictionaryInfo>& shared_dict_info,
+    const size_t fragment_size,
+    const bool use_temporary_tables,
+    const bool delete_support = true,
+    const bool replicated = false) {
+  const std::string shard_key_def{
+      shard_info.shard_col.empty() ? "" : ", SHARD KEY (" + shard_info.shard_col + ")"};
+
+  std::vector<std::string> shared_dict_def;
+  if (shared_dict_info.size() > 0) {
+    for (size_t idx = 0; idx < shared_dict_info.size(); ++idx) {
+      shared_dict_def.push_back(", SHARED DICTIONARY (" + shared_dict_info[idx].col +
+                                ") REFERENCES " + shared_dict_info[idx].ref_table + "(" +
+                                shared_dict_info[idx].ref_col + ")");
+    }
+  }
+
+  std::ostringstream with_statement_assembly;
+  if (!shard_info.shard_col.empty()) {
+    with_statement_assembly << "shard_count=" << shard_info.shard_count << ", ";
+  }
+  with_statement_assembly << "fragment_size=" << fragment_size;
+
+  if (delete_support) {
+    with_statement_assembly << ", vacuum='delayed'";
+  } else {
+    with_statement_assembly << ", vacuum='immediate'";
+  }
+
+  const std::string replicated_def{
+      (!replicated || !shard_info.shard_col.empty()) ? "" : ", PARTITIONS='REPLICATED' "};
+
+  const std::string create_def{use_temporary_tables ? "CREATE TEMPORARY TABLE "
+                                                    : "CREATE TABLE "};
+
+  return create_def + table_name + "(" + columns_definition + shard_key_def +
+         boost::algorithm::join(shared_dict_def, "") + ") WITH (" +
+         with_statement_assembly.str() + replicated_def + ");";
+}
+
 }  // namespace TestHelpers
 
 #endif  // TEST_HELPERS_H_

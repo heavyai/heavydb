@@ -91,61 +91,6 @@ size_t choose_shard_count() {
   return g_num_leafs * (device_count > 1 ? device_count : 1);
 }
 
-struct ShardInfo {
-  const std::string shard_col;
-  const size_t shard_count;
-};
-
-struct SharedDictionaryInfo {
-  const std::string col;
-  const std::string ref_table;
-  const std::string ref_col;
-};
-
-std::string build_create_table_statement(
-    const std::string& columns_definition,
-    const std::string& table_name,
-    const ShardInfo& shard_info,
-    const std::vector<SharedDictionaryInfo>& shared_dict_info,
-    const size_t fragment_size,
-    const bool use_temporary_tables,
-    const bool delete_support = true,
-    const bool replicated = false) {
-  const std::string shard_key_def{
-      shard_info.shard_col.empty() ? "" : ", SHARD KEY (" + shard_info.shard_col + ")"};
-
-  std::vector<std::string> shared_dict_def;
-  if (shared_dict_info.size() > 0) {
-    for (size_t idx = 0; idx < shared_dict_info.size(); ++idx) {
-      shared_dict_def.push_back(", SHARED DICTIONARY (" + shared_dict_info[idx].col +
-                                ") REFERENCES " + shared_dict_info[idx].ref_table + "(" +
-                                shared_dict_info[idx].ref_col + ")");
-    }
-  }
-
-  std::ostringstream with_statement_assembly;
-  if (!shard_info.shard_col.empty()) {
-    with_statement_assembly << "shard_count=" << shard_info.shard_count << ", ";
-  }
-  with_statement_assembly << "fragment_size=" << fragment_size;
-
-  if (delete_support) {
-    with_statement_assembly << ", vacuum='delayed'";
-  } else {
-    with_statement_assembly << ", vacuum='immediate'";
-  }
-
-  const std::string replicated_def{
-      (!replicated || !shard_info.shard_col.empty()) ? "" : ", PARTITIONS='REPLICATED' "};
-
-  const std::string create_def{use_temporary_tables ? "CREATE TEMPORARY TABLE "
-                                                    : "CREATE TABLE "};
-
-  return create_def + table_name + "(" + columns_definition + shard_key_def +
-         boost::algorithm::join(shared_dict_def, "") + ") WITH (" +
-         with_statement_assembly.str() + replicated_def + ");";
-}
-
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
                                             const ExecutorDeviceType device_type,
                                             const bool allow_loop_joins) {
@@ -19990,7 +19935,7 @@ namespace {
 int create_sharded_join_table(const std::string& table_name,
                               size_t fragment_size,
                               size_t num_rows,
-                              const ShardInfo& shard_info,
+                              const TestHelpers::ShardInfo& shard_info,
                               bool with_delete_support = true) {
   std::string columns_definition{"i INTEGER, j INTEGER, s TEXT ENCODING DICT(32)"};
 
@@ -20959,7 +20904,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
     // functional or not.
     const size_t single_node_shard_multiplier = 10;
 
-    ShardInfo shard_info{(num_shards) ? "i" : "", num_shards};
+    TestHelpers::ShardInfo shard_info{(num_shards) ? "i" : "", num_shards};
     size_t fragment_size = 2;
     bool delete_support = false;
 
