@@ -10,8 +10,6 @@
 #  TODO: autogenerate this file from conda/meta.yaml requirements
 name: omnisci-dev
 channels:
-  - local
-  - defaults
   - conda-forge
 
 dependencies:
@@ -20,13 +18,14 @@ dependencies:
   - ccache
   - libgdal    >=2.3
   - sysroot_linux-64 >=2.14
-  - arrow-cpp  2.0
-  - pyarrow    2.0
-  - pandas     1.2.3
-  - thrift-cpp  0.13.*
-  - thrift      0.13.*
+  - arrow-cpp  3.0
+  - pyarrow    3.0
+  - pandas     1.3
+  - ray-core   1.4
+  - thrift-cpp
+  - thrift
   - llvmdev     9.*
-  - librdkafka <1.4
+  - librdkafka
   - openjdk     8.*
   - cmake       3.16
   - libpng
