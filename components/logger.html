@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 21ac014
+                5.8.0dev 83053ad
               </div>
             
           
@@ -309,7 +309,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_analyzer_1_1_geo_column_var.html">Class Analyzer::GeoColumnVar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_analyzer_1_1_geo_constant.html">Class Analyzer::GeoConstant</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_analyzer_1_1_geo_expr.html">Class Analyzer::GeoExpr</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/class_analyzer_1_1_geo_function_operator.html">Class Analyzer::GeoFunctionOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_analyzer_1_1_geo_operator.html">Class Analyzer::GeoOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_analyzer_1_1_geo_transform_operator.html">Class Analyzer::GeoTransformOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_analyzer_1_1_geo_u_oper.html">Class Analyzer::GeoUOper</a></li>
@@ -1166,6 +1165,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classlogger_1_1_json_encoder.html">Class logger::JsonEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classlogger_1_1_log_options.html">Class logger::LogOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classlogger_1_1_logger.html">Class logger::Logger</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classlogger_1_1_qid_scope_guard.html">Class logger::QidScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classmigrations_1_1_migration_mgr.html">Class migrations::MigrationMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classomnisci_1_1_j_s_o_n.html">Class omnisci::JSON</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classomnisci_1_1_u_u_i_d.html">Class omnisci::UUID</a></li>
@@ -1472,6 +1472,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classquery__state_1_1_std_log.html">Class query_state::StdLog</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classquery__state_1_1_std_log_data.html">Class query_state::StdLogData</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classquery__state_1_1_timer.html">Class query_state::Timer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classspatial__type_1_1_area_perimeter.html">Class spatial_type::AreaPerimeter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classspatial__type_1_1_centroid.html">Class spatial_type::Centroid</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classspatial__type_1_1_codegen.html">Class spatial_type::Codegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classspatial__type_1_1_n_points.html">Class spatial_type::NPoints</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classspatial__type_1_1_n_rings.html">Class spatial_type::NRings</a></li>
@@ -2165,7 +2167,7 @@ suffix points to the latest version. Example:</p>
 <div class="section" id="format">
 <h4>Format<a class="headerlink" href="#format" title="Permalink to this headline">¶</a></h4>
 <p>The general format of a log entry is:</p>
-<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">timestamp</span><span class="p">)</span> <span class="p">(</span><span class="n">severity</span><span class="p">)</span> <span class="p">(</span><span class="n">process_id</span><span class="p">)</span> <span class="p">(</span><span class="n">thread_id</span><span class="p">)</span> <span class="p">(</span><span class="nl">filename</span><span class="p">:</span><span class="n">line_number</span><span class="p">)</span> <span class="p">(</span><span class="n">message</span><span class="p">)</span>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">timestamp</span><span class="p">)</span> <span class="p">(</span><span class="n">severity</span><span class="p">)</span> <span class="p">(</span><span class="n">process_id</span><span class="p">)</span> <span class="p">(</span><span class="n">query_id</span><span class="p">)</span> <span class="p">(</span><span class="n">thread_id</span><span class="p">)</span> <span class="p">(</span><span class="nl">filename</span><span class="p">:</span><span class="n">line_number</span><span class="p">)</span> <span class="p">(</span><span class="n">message</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Example:</p>
@@ -2181,9 +2183,10 @@ suffix points to the latest version. Example:</p>
 <div class="line">For instance the <code class="docutils literal notranslate"><span class="pre">I</span></code> implies that the above log entry is of <code class="docutils literal notranslate"><span class="pre">INFO</span></code> severity.</div>
 </div>
 <div class="line">3. The <cite>process_id</cite> assigned by the operating system.</div>
-<div class="line">4. The <cite>thread_id</cite> is a unique 64-bit integer incrementally assigned to each new thread. <cite>thread_id=1</cite> is assigned to the first thread each time the program starts.</div>
-<div class="line">5. Source filename:Line number.</div>
-<div class="line">6. Custom message sent to <code class="docutils literal notranslate"><span class="pre">LOG()</span></code> via the insertion <code class="docutils literal notranslate"><span class="pre">&lt;&lt;</span></code> operator.</div>
+<div class="line">4. The <cite>query_id</cite> is a unique 64-bit positive integer incrementally assigned to each new SQL query. A value of <cite>0</cite> indicates that the log line is outside of the context of any particular query, or that the <cite>query_id</cite> is not available.</div>
+<div class="line">5. The <cite>thread_id</cite> is a unique 64-bit positive integer incrementally assigned to each new thread. <cite>thread_id=1</cite> is assigned to the first thread each time the program starts.</div>
+<div class="line">6. Source filename:Line number.</div>
+<div class="line">7. Custom message sent to <code class="docutils literal notranslate"><span class="pre">LOG()</span></code> via the insertion <code class="docutils literal notranslate"><span class="pre">&lt;&lt;</span></code> operator.</div>
 </div>
 <p>Note that log entries can contain line breaks, thus not all log lines will begin with these fields if
 the message itself contains multiple lines.</p>
@@ -2230,7 +2233,7 @@ optionally catch the <code class="docutils literal notranslate"><span class="pre
 <h4>STDLOG<a class="headerlink" href="#stdlog" title="Permalink to this headline">¶</a></h4>
 <p><code class="docutils literal notranslate"><span class="pre">DBHandler</span></code> uses a logging helper class <code class="docutils literal notranslate"><span class="pre">StdLog</span></code> for logging query-specific information in
 a standard format:</p>
-<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">timestamp</span><span class="p">)</span> <span class="p">(</span><span class="n">severity</span><span class="p">)</span> <span class="p">(</span><span class="n">process_id</span><span class="p">)</span> <span class="p">(</span><span class="n">thread_id</span><span class="p">)</span> <span class="p">(</span><span class="nl">filename</span><span class="p">:</span><span class="n">line_number</span><span class="p">)</span> <span class="n">stdlog</span> <span class="p">(</span><span class="n">function_name</span><span class="p">)</span> <span class="p">(</span><span class="n">match_id</span><span class="p">)</span>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">timestamp</span><span class="p">)</span> <span class="p">(</span><span class="n">severity</span><span class="p">)</span> <span class="p">(</span><span class="n">process_id</span><span class="p">)</span> <span class="p">(</span><span class="n">query_id</span><span class="p">)</span> <span class="p">(</span><span class="n">thread_id</span><span class="p">)</span> <span class="p">(</span><span class="nl">filename</span><span class="p">:</span><span class="n">line_number</span><span class="p">)</span> <span class="n">stdlog</span> <span class="p">(</span><span class="n">function_name</span><span class="p">)</span> <span class="p">(</span><span class="n">match_id</span><span class="p">)</span>
 <span class="p">(</span><span class="n">time_ms</span><span class="p">)</span> <span class="p">(</span><span class="n">username</span><span class="p">)</span> <span class="p">(</span><span class="n">dbname</span><span class="p">)</span> <span class="p">(</span><span class="n">public_session_id</span><span class="p">)</span> <span class="p">(</span><span class="n">array</span> <span class="n">of</span> <span class="n">names</span><span class="p">)</span> <span class="p">(</span><span class="n">array</span> <span class="n">of</span> <span class="n">values</span><span class="p">)</span>
 </pre></div>
 </div>

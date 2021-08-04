@@ -161,7 +161,7 @@ Format
 
 The general format of a log entry is::
 
-    (timestamp) (severity) (process_id) (thread_id) (filename:line_number) (message)
+    (timestamp) (severity) (process_id) (query_id) (thread_id) (filename:line_number) (message)
 
 Example::
 
@@ -174,9 +174,10 @@ Field descriptions:
 |    ``F`` ``E`` ``W`` ``I`` ``1`` ``2`` ``3`` ``4``
 |    For instance the ``I`` implies that the above log entry is of ``INFO`` severity.
 | 3. The `process_id` assigned by the operating system.
-| 4. The `thread_id` is a unique 64-bit integer incrementally assigned to each new thread. `thread_id=1` is assigned to the first thread each time the program starts.
-| 5. Source filename:Line number.
-| 6. Custom message sent to ``LOG()`` via the insertion ``<<`` operator.
+| 4. The `query_id` is a unique 64-bit positive integer incrementally assigned to each new SQL query. A value of `0` indicates that the log line is outside of the context of any particular query, or that the `query_id` is not available.
+| 5. The `thread_id` is a unique 64-bit positive integer incrementally assigned to each new thread. `thread_id=1` is assigned to the first thread each time the program starts.
+| 6. Source filename:Line number.
+| 7. Custom message sent to ``LOG()`` via the insertion ``<<`` operator.
 
 Note that log entries can contain line breaks, thus not all log lines will begin with these fields if
 the message itself contains multiple lines.
@@ -227,7 +228,7 @@ STDLOG
 ``DBHandler`` uses a logging helper class ``StdLog`` for logging query-specific information in
 a standard format::
 
- (timestamp) (severity) (process_id) (thread_id) (filename:line_number) stdlog (function_name) (match_id)
+ (timestamp) (severity) (process_id) (query_id) (thread_id) (filename:line_number) stdlog (function_name) (match_id)
  (time_ms) (username) (dbname) (public_session_id) (array of names) (array of values)
 
 Since this contains timing information, it is logged at the end of query execution.  If the ``DEBUG1`` severity is

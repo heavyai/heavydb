@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 21ac014
+                5.8.0dev 83053ad
               </div>
             
           
@@ -309,7 +309,6 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_column_var.html">Class Analyzer::GeoColumnVar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_constant.html">Class Analyzer::GeoConstant</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_expr.html">Class Analyzer::GeoExpr</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_function_operator.html">Class Analyzer::GeoFunctionOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_operator.html">Class Analyzer::GeoOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_transform_operator.html">Class Analyzer::GeoTransformOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_u_oper.html">Class Analyzer::GeoUOper</a></li>
@@ -1166,6 +1165,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_json_encoder.html">Class logger::JsonEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_log_options.html">Class logger::LogOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_logger.html">Class logger::Logger</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_qid_scope_guard.html">Class logger::QidScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classmigrations_1_1_migration_mgr.html">Class migrations::MigrationMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1_j_s_o_n.html">Class omnisci::JSON</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1_u_u_i_d.html">Class omnisci::UUID</a></li>
@@ -1472,6 +1472,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_std_log.html">Class query_state::StdLog</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_std_log_data.html">Class query_state::StdLogData</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_timer.html">Class query_state::Timer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_area_perimeter.html">Class spatial_type::AreaPerimeter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_centroid.html">Class spatial_type::Centroid</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_codegen.html">Class spatial_type::Codegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_n_points.html">Class spatial_type::NPoints</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_n_rings.html">Class spatial_type::NRings</a></li>
@@ -2038,7 +2040,7 @@
 
 <dl class="function">
 <dt id="_CPPv4NK11query_state10QueryState5getIdEv">
-<span id="_CPPv3NK11query_state10QueryState5getIdEv"></span><span id="_CPPv2NK11query_state10QueryState5getIdEv"></span><span id="query_state::QueryState::getIdC"></span><span class="target" id="classquery__state_1_1_query_state_1aeb817f071f9d7979ab355f7eb79823e2"></span>Id <code class="sig-name descname">getId</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK11query_state10QueryState5getIdEv" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3NK11query_state10QueryState5getIdEv"></span><span id="_CPPv2NK11query_state10QueryState5getIdEv"></span><span id="query_state::QueryState::getIdC"></span><span class="target" id="classquery__state_1_1_query_state_1aee0070d99d236bd811e33dd926d5759c"></span>logger::QueryId <code class="sig-name descname">getId</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK11query_state10QueryState5getIdEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2064,6 +2066,11 @@
 <dl class="function">
 <dt id="_CPPv4N11query_state10QueryState12logCallStackERNSt12stringstreamE">
 <span id="_CPPv3N11query_state10QueryState12logCallStackERNSt12stringstreamE"></span><span id="_CPPv2N11query_state10QueryState12logCallStackERNSt12stringstreamE"></span><span id="query_state::QueryState::logCallStack__std::stringstreamR"></span><span class="target" id="classquery__state_1_1_query_state_1af635df2e7ea2737d1c4cd0aefa32a9b9"></span>void <code class="sig-name descname">logCallStack</code><span class="sig-paren">(</span>std::stringstream &amp;<em>ss</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11query_state10QueryState12logCallStackERNSt12stringstreamE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK11query_state10QueryState21setThreadLocalQueryIdEv">
+<span id="_CPPv3NK11query_state10QueryState21setThreadLocalQueryIdEv"></span><span id="_CPPv2NK11query_state10QueryState21setThreadLocalQueryIdEv"></span><span id="query_state::QueryState::setThreadLocalQueryIdC"></span><span class="target" id="classquery__state_1_1_query_state_1adf527fd4319de18b9c485ff8c8a084c3"></span>logger::<a class="reference internal" href="classlogger_1_1_qid_scope_guard.html#_CPPv4N6logger13QidScopeGuardE" title="logger::QidScopeGuard">QidScopeGuard</a> <code class="sig-name descname">setThreadLocalQueryId</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK11query_state10QueryState21setThreadLocalQueryIdEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2107,7 +2114,7 @@
 <p class="breathe-sectiondef-title rubric">Private Members</p>
 <dl class="member">
 <dt id="_CPPv4N11query_state10QueryState3id_E">
-<span id="_CPPv3N11query_state10QueryState3id_E"></span><span id="_CPPv2N11query_state10QueryState3id_E"></span><span id="query_state::QueryState::id___IdC"></span><span class="target" id="classquery__state_1_1_query_state_1aedc17183e3abb3b859bc523985ffaa58"></span>Id <em class="property">const</em> <code class="sig-name descname">id_</code><a class="headerlink" href="#_CPPv4N11query_state10QueryState3id_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N11query_state10QueryState3id_E"></span><span id="_CPPv2N11query_state10QueryState3id_E"></span><span id="query_state::QueryState::id___logger::QueryIdC"></span><span class="target" id="classquery__state_1_1_query_state_1abb182a1d48f7ed46316be1767a4f5343"></span>logger::QueryId <em class="property">const</em> <code class="sig-name descname">id_</code><a class="headerlink" href="#_CPPv4N11query_state10QueryState3id_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
@@ -2145,7 +2152,7 @@
 <p class="breathe-sectiondef-title rubric">Private Static Attributes</p>
 <dl class="member">
 <dt id="_CPPv4N11query_state10QueryState9s_next_idE">
-<span id="_CPPv3N11query_state10QueryState9s_next_idE"></span><span id="_CPPv2N11query_state10QueryState9s_next_idE"></span><span id="query_state::QueryState::s_next_id__std::atomic:query_state::Id:"></span><span class="target" id="classquery__state_1_1_query_state_1a4669e4593a6cff3369e62599d64edfab"></span>std::atomic&lt;query_state::Id&gt; <code class="sig-name descname">s_next_id</code> = {0}<a class="headerlink" href="#_CPPv4N11query_state10QueryState9s_next_idE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N11query_state10QueryState9s_next_idE"></span><span id="_CPPv2N11query_state10QueryState9s_next_idE"></span><span id="query_state::QueryState::s_next_id__std::atomic:logger::QueryId:"></span><span class="target" id="classquery__state_1_1_query_state_1ae60a24031e1bf4d553c7c2711374a2bf"></span>std::atomic&lt;logger::QueryId&gt; <code class="sig-name descname">s_next_id</code> = {1}<a class="headerlink" href="#_CPPv4N11query_state10QueryState9s_next_idE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

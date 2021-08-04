@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.7.0dev 21ac014
+                5.8.0dev 83053ad
               </div>
             
           
@@ -309,7 +309,6 @@
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_column_var.html">Class Analyzer::GeoColumnVar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_constant.html">Class Analyzer::GeoConstant</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_expr.html">Class Analyzer::GeoExpr</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_function_operator.html">Class Analyzer::GeoFunctionOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_operator.html">Class Analyzer::GeoOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_transform_operator.html">Class Analyzer::GeoTransformOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_analyzer_1_1_geo_u_oper.html">Class Analyzer::GeoUOper</a></li>
@@ -1166,6 +1165,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_json_encoder.html">Class logger::JsonEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_log_options.html">Class logger::LogOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_logger.html">Class logger::Logger</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_qid_scope_guard.html">Class logger::QidScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classmigrations_1_1_migration_mgr.html">Class migrations::MigrationMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1_j_s_o_n.html">Class omnisci::JSON</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classomnisci_1_1_u_u_i_d.html">Class omnisci::UUID</a></li>
@@ -1472,6 +1472,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_std_log.html">Class query_state::StdLog</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_std_log_data.html">Class query_state::StdLogData</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classquery__state_1_1_timer.html">Class query_state::Timer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_area_perimeter.html">Class spatial_type::AreaPerimeter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_centroid.html">Class spatial_type::Centroid</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_codegen.html">Class spatial_type::Codegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_n_points.html">Class spatial_type::NPoints</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classspatial__type_1_1_n_rings.html">Class spatial_type::NRings</a></li>
@@ -2034,8 +2036,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringERKNSt6stringEbRKNSt6stringEb">
-<span id="_CPPv3N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringERKNSt6stringEbRKNSt6stringEb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringERKNSt6stringEbRKNSt6stringEb"></span><span id="Catalog_Namespace::SysCatalog::createUser__ssCR.ssCR.b.ssCR.b"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a2fd8822c782ae7bf6852d2ddc2ea8ba7"></span>void <code class="sig-name descname">createUser</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>name</em>, <em class="property">const</em> std::string &amp;<em>passwd</em>, bool <em>issuper</em>, <em class="property">const</em> std::string &amp;<em>dbname</em>, bool <em>can_login</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringERKNSt6stringEbRKNSt6stringEb" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringERKNSt6stringEbRKNSt6stringEbb">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringERKNSt6stringEbRKNSt6stringEbb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringERKNSt6stringEbRKNSt6stringEbb"></span><span id="Catalog_Namespace::SysCatalog::createUser__ssCR.ssCR.b.ssCR.b.b"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a756be1920c01951d06f88cc6053bb9af"></span>void <code class="sig-name descname">createUser</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>name</em>, <em class="property">const</em> std::string &amp;<em>passwd</em>, bool <em>is_super</em>, <em class="property">const</em> std::string &amp;<em>dbname</em>, bool <em>can_login</em>, bool <em>is_temporary</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringERKNSt6stringEbRKNSt6stringEbb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2044,8 +2046,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace10SysCatalog9alterUserEK7int32_tPKNSt6stringEPbPKNSt6stringEPb">
-<span id="_CPPv3N17Catalog_Namespace10SysCatalog9alterUserEK7int32_tPKNSt6stringEPbPKNSt6stringEPb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog9alterUserEK7int32_tPKNSt6stringEPbPKNSt6stringEPb"></span><span id="Catalog_Namespace::SysCatalog::alterUser__int32_tC.ssCP.bP.ssCP.bP"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a82ffc68e65c6446ec090474146d0bee0"></span>void <code class="sig-name descname">alterUser</code><span class="sig-paren">(</span><em class="property">const</em> int32_t <em>userid</em>, <em class="property">const</em> std::string *<em>passwd</em>, bool *<em>issuper</em>, <em class="property">const</em> std::string *<em>dbname</em>, bool *<em>can_login</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog9alterUserEK7int32_tPKNSt6stringEPbPKNSt6stringEPb" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog9alterUserERKNSt6stringEPKNSt6stringEPbPKNSt6stringEPb">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog9alterUserERKNSt6stringEPKNSt6stringEPbPKNSt6stringEPb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog9alterUserERKNSt6stringEPKNSt6stringEPbPKNSt6stringEPb"></span><span id="Catalog_Namespace::SysCatalog::alterUser__ssCR.ssCP.bP.ssCP.bP"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a6439d1838eb6aa3e4de437b97d0018c8"></span>void <code class="sig-name descname">alterUser</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>name</em>, <em class="property">const</em> std::string *<em>passwd</em>, bool *<em>issuper</em>, <em class="property">const</em> std::string *<em>dbname</em>, bool *<em>can_login</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog9alterUserERKNSt6stringEPKNSt6stringEPbPKNSt6stringEPb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2224,13 +2226,13 @@
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace10SysCatalog10createRoleERKNSt6stringERKb">
-<span id="_CPPv3N17Catalog_Namespace10SysCatalog10createRoleERKNSt6stringERKb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog10createRoleERKNSt6stringERKb"></span><span id="Catalog_Namespace::SysCatalog::createRole__ssCR.bCR"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1adfe6331930fadc1a6803c7a233877a38"></span>void <code class="sig-name descname">createRole</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>roleName</em>, <em class="property">const</em> bool &amp;<em>userPrivateRole</em> = false<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog10createRoleERKNSt6stringERKb" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog10createRoleERKNSt6stringEKbKb">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog10createRoleERKNSt6stringEKbKb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog10createRoleERKNSt6stringEKbKb"></span><span id="Catalog_Namespace::SysCatalog::createRole__ssCR.bC.bC"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1aec1d28b70d732b461071b0ff7d653514"></span>void <code class="sig-name descname">createRole</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>roleName</em>, <em class="property">const</em> bool <em>user_private_role</em>, <em class="property">const</em> bool <em>is_temporary</em> = false<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog10createRoleERKNSt6stringEKbKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace10SysCatalog8dropRoleERKNSt6stringE">
-<span id="_CPPv3N17Catalog_Namespace10SysCatalog8dropRoleERKNSt6stringE"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog8dropRoleERKNSt6stringE"></span><span id="Catalog_Namespace::SysCatalog::dropRole__ssCR"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1ad512350b588b79496e48f0b92835a3ab"></span>void <code class="sig-name descname">dropRole</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>roleName</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog8dropRoleERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog8dropRoleERKNSt6stringEKb">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog8dropRoleERKNSt6stringEKb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog8dropRoleERKNSt6stringEKb"></span><span id="Catalog_Namespace::SysCatalog::dropRole__ssCR.bC"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1aa7f6f19a15c140069bf339a59158636f"></span>void <code class="sig-name descname">dropRole</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>roleName</em>, <em class="property">const</em> bool <em>is_temporary</em> = false<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog8dropRoleERKNSt6stringEKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2239,8 +2241,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace10SysCatalog9grantRoleERKNSt6stringERKNSt6stringE">
-<span id="_CPPv3N17Catalog_Namespace10SysCatalog9grantRoleERKNSt6stringERKNSt6stringE"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog9grantRoleERKNSt6stringERKNSt6stringE"></span><span id="Catalog_Namespace::SysCatalog::grantRole__ssCR.ssCR"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a5cc3c1335398a1c77bf2c2b99a9d1a37"></span>void <code class="sig-name descname">grantRole</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>role</em>, <em class="property">const</em> std::string &amp;<em>grantee</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog9grantRoleERKNSt6stringERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog9grantRoleERKNSt6stringERKNSt6stringEKb">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog9grantRoleERKNSt6stringERKNSt6stringEKb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog9grantRoleERKNSt6stringERKNSt6stringEKb"></span><span id="Catalog_Namespace::SysCatalog::grantRole__ssCR.ssCR.bC"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a8f6c1ad330c3e8a6fb9ade0fc648505b"></span>void <code class="sig-name descname">grantRole</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>role</em>, <em class="property">const</em> std::string &amp;<em>grantee</em>, <em class="property">const</em> bool <em>is_temporary</em> = false<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog9grantRoleERKNSt6stringERKNSt6stringEKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2249,8 +2251,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace10SysCatalog10revokeRoleERKNSt6stringERKNSt6stringE">
-<span id="_CPPv3N17Catalog_Namespace10SysCatalog10revokeRoleERKNSt6stringERKNSt6stringE"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog10revokeRoleERKNSt6stringERKNSt6stringE"></span><span id="Catalog_Namespace::SysCatalog::revokeRole__ssCR.ssCR"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a2923c33b5ca05e30b6f69502d208f2b7"></span>void <code class="sig-name descname">revokeRole</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>role</em>, <em class="property">const</em> std::string &amp;<em>grantee</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog10revokeRoleERKNSt6stringERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog10revokeRoleERKNSt6stringERKNSt6stringEKb">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog10revokeRoleERKNSt6stringERKNSt6stringEKb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog10revokeRoleERKNSt6stringERKNSt6stringEKb"></span><span id="Catalog_Namespace::SysCatalog::revokeRole__ssCR.ssCR.bC"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a2ac04fdfaa96d3dd63bfd2480451f801"></span>void <code class="sig-name descname">revokeRole</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>role</em>, <em class="property">const</em> std::string &amp;<em>grantee</em>, <em class="property">const</em> bool <em>is_temporary</em> = false<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog10revokeRoleERKNSt6stringERKNSt6stringEKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2301,11 +2303,6 @@
 <dl class="function">
 <dt id="_CPPv4N17Catalog_Namespace10SysCatalog8getRolesERKNSt6stringEK7int32_t">
 <span id="_CPPv3N17Catalog_Namespace10SysCatalog8getRolesERKNSt6stringEK7int32_t"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog8getRolesERKNSt6stringEK7int32_t"></span><span id="Catalog_Namespace::SysCatalog::getRoles__ssCR.int32_tC"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a646ef01d462b987aaf14a729c0be555a"></span>std::vector&lt;std::string&gt; <code class="sig-name descname">getRoles</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>userName</em>, <em class="property">const</em> int32_t <em>dbId</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog8getRolesERKNSt6stringEK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace10SysCatalog25revokeDashboardSystemRoleEKNSt6stringEKNSt6vectorINSt6stringEEE">
-<span id="_CPPv3N17Catalog_Namespace10SysCatalog25revokeDashboardSystemRoleEKNSt6stringEKNSt6vectorINSt6stringEEE"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog25revokeDashboardSystemRoleEKNSt6stringEKNSt6vectorINSt6stringEEE"></span><span id="Catalog_Namespace::SysCatalog::revokeDashboardSystemRole__ssC.std::vector:ss:C"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a41fffd1e8d483d7bba875e4276a62843"></span>void <code class="sig-name descname">revokeDashboardSystemRole</code><span class="sig-paren">(</span><em class="property">const</em> std::string <em>roleName</em>, <em class="property">const</em> std::vector&lt;std::string&gt; <em>grantees</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog25revokeDashboardSystemRoleEKNSt6stringEKNSt6vectorINSt6stringEEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2406,6 +2403,21 @@
 <span id="_CPPv3N17Catalog_Namespace10SysCatalog13dummyCatalog_E"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog13dummyCatalog_E"></span><span id="Catalog_Namespace::SysCatalog::dummyCatalog___std::shared_ptr:Catalog:"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a0ac9ea51e788a8f4a6bf8147f7b53eea"></span>std::shared_ptr&lt;<a class="reference internal" href="class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7CatalogE" title="Catalog_Namespace::Catalog">Catalog</a>&gt; <code class="sig-name descname">dummyCatalog_</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog13dummyCatalog_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="member">
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog24temporary_users_by_name_E">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog24temporary_users_by_name_E"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog24temporary_users_by_name_E"></span><span id="Catalog_Namespace::SysCatalog::temporary_users_by_name___std::unordered_map:ss.std::shared_ptr:UserMetadata::"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a7a20b4292a88fc5ee0d9bf80ff283cf5"></span>std::unordered_map&lt;std::string, std::shared_ptr&lt;<a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadataE" title="Catalog_Namespace::UserMetadata">UserMetadata</a>&gt;&gt; <code class="sig-name descname">temporary_users_by_name_</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog24temporary_users_by_name_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog22temporary_users_by_id_E">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog22temporary_users_by_id_E"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog22temporary_users_by_id_E"></span><span id="Catalog_Namespace::SysCatalog::temporary_users_by_id___std::unordered_map:int32_t.std::shared_ptr:UserMetadata::"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1ab49b4ac2c47fc27b4de0cf32cfd2851c"></span>std::unordered_map&lt;int32_t, std::shared_ptr&lt;<a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadataE" title="Catalog_Namespace::UserMetadata">UserMetadata</a>&gt;&gt; <code class="sig-name descname">temporary_users_by_id_</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog22temporary_users_by_id_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog23next_temporary_user_id_E">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog23next_temporary_user_id_E"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog23next_temporary_user_id_E"></span><span id="Catalog_Namespace::SysCatalog::next_temporary_user_id___int32_t"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1aa50d3405ba07d97f62a3ece29c66e57c"></span>int32_t <code class="sig-name descname">next_temporary_user_id_</code> = {OMNISCI_TEMPORARY_USER_ID_RANGE}<a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog23next_temporary_user_id_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Static Functions</p>
@@ -2484,8 +2496,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace10SysCatalog15createUserRolesEv">
-<span id="_CPPv3N17Catalog_Namespace10SysCatalog15createUserRolesEv"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog15createUserRolesEv"></span><span id="Catalog_Namespace::SysCatalog::createUserRoles"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1aaa5338543df4afbb6214aa7b50f1c746"></span>void <code class="sig-name descname">createUserRoles</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog15createUserRolesEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog11createRolesEv">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog11createRolesEv"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog11createRolesEv"></span><span id="Catalog_Namespace::SysCatalog::createRoles"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a3f80109ed0610a29646c12f83a462e16"></span>void <code class="sig-name descname">createRoles</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog11createRolesEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog17fixRolesMigrationEv">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog17fixRolesMigrationEv"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog17fixRolesMigrationEv"></span><span id="Catalog_Namespace::SysCatalog::fixRolesMigration"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a6d8e6ac1e62676fcbcb2fda1aedb2b9e"></span>void <code class="sig-name descname">fixRolesMigration</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog17fixRolesMigrationEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2544,13 +2561,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace10SysCatalog17createRole_unsafeERKNSt6stringEKb">
-<span id="_CPPv3N17Catalog_Namespace10SysCatalog17createRole_unsafeERKNSt6stringEKb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog17createRole_unsafeERKNSt6stringEKb"></span><span id="Catalog_Namespace::SysCatalog::createRole_unsafe__ssCR.bC"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1ae69b244ed26b4f326cdf45c5cd0921a3"></span>void <code class="sig-name descname">createRole_unsafe</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>roleName</em>, <em class="property">const</em> bool <em>userPrivateRole</em> = false<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog17createRole_unsafeERKNSt6stringEKb" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog17createRole_unsafeERKNSt6stringEKbKb">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog17createRole_unsafeERKNSt6stringEKbKb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog17createRole_unsafeERKNSt6stringEKbKb"></span><span id="Catalog_Namespace::SysCatalog::createRole_unsafe__ssCR.bC.bC"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1ada1f41b68b6efe94ff3a721cb8d3659f"></span>void <code class="sig-name descname">createRole_unsafe</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>roleName</em>, <em class="property">const</em> bool <em>userPrivateRole</em>, <em class="property">const</em> bool <em>is_temporary</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog17createRole_unsafeERKNSt6stringEKbKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace10SysCatalog15dropRole_unsafeERKNSt6stringE">
-<span id="_CPPv3N17Catalog_Namespace10SysCatalog15dropRole_unsafeERKNSt6stringE"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog15dropRole_unsafeERKNSt6stringE"></span><span id="Catalog_Namespace::SysCatalog::dropRole_unsafe__ssCR"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a6665d1445823310e98946c9b58b8a324"></span>void <code class="sig-name descname">dropRole_unsafe</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>roleName</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog15dropRole_unsafeERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog15dropRole_unsafeERKNSt6stringEKb">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog15dropRole_unsafeERKNSt6stringEKb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog15dropRole_unsafeERKNSt6stringEKb"></span><span id="Catalog_Namespace::SysCatalog::dropRole_unsafe__ssCR.bC"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1ae069199820a63fafb199f67b712e0b12"></span>void <code class="sig-name descname">dropRole_unsafe</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>roleName</em>, <em class="property">const</em> bool <em>is_temporary</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog15dropRole_unsafeERKNSt6stringEKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2559,8 +2576,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace10SysCatalog16grantRole_unsafeERKNSt6stringERKNSt6stringE">
-<span id="_CPPv3N17Catalog_Namespace10SysCatalog16grantRole_unsafeERKNSt6stringERKNSt6stringE"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog16grantRole_unsafeERKNSt6stringERKNSt6stringE"></span><span id="Catalog_Namespace::SysCatalog::grantRole_unsafe__ssCR.ssCR"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a66efc352d49b7db88b821de868acbcf8"></span>void <code class="sig-name descname">grantRole_unsafe</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>roleName</em>, <em class="property">const</em> std::string &amp;<em>granteeName</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog16grantRole_unsafeERKNSt6stringERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog16grantRole_unsafeERKNSt6stringERKNSt6stringEKb">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog16grantRole_unsafeERKNSt6stringERKNSt6stringEKb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog16grantRole_unsafeERKNSt6stringERKNSt6stringEKb"></span><span id="Catalog_Namespace::SysCatalog::grantRole_unsafe__ssCR.ssCR.bC"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1acf3bdb043af01b82fcc0c52fd06b347b"></span>void <code class="sig-name descname">grantRole_unsafe</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>roleName</em>, <em class="property">const</em> std::string &amp;<em>granteeName</em>, <em class="property">const</em> bool <em>is_temporary</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog16grantRole_unsafeERKNSt6stringERKNSt6stringEKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2569,8 +2586,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace10SysCatalog17revokeRole_unsafeERKNSt6stringERKNSt6stringE">
-<span id="_CPPv3N17Catalog_Namespace10SysCatalog17revokeRole_unsafeERKNSt6stringERKNSt6stringE"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog17revokeRole_unsafeERKNSt6stringERKNSt6stringE"></span><span id="Catalog_Namespace::SysCatalog::revokeRole_unsafe__ssCR.ssCR"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a318d76177c9e89c741c1bbe9b9eeadf7"></span>void <code class="sig-name descname">revokeRole_unsafe</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>roleName</em>, <em class="property">const</em> std::string &amp;<em>granteeName</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog17revokeRole_unsafeERKNSt6stringERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog17revokeRole_unsafeERKNSt6stringERKNSt6stringEKb">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog17revokeRole_unsafeERKNSt6stringERKNSt6stringEKb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog17revokeRole_unsafeERKNSt6stringERKNSt6stringEKb"></span><span id="Catalog_Namespace::SysCatalog::revokeRole_unsafe__ssCR.ssCR.bC"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a42d7f64f921864cbeacfbb659636d4bd"></span>void <code class="sig-name descname">revokeRole_unsafe</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>roleName</em>, <em class="property">const</em> std::string &amp;<em>granteeName</em>, <em class="property">const</em> bool <em>is_temporary</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog17revokeRole_unsafeERKNSt6stringERKNSt6stringEKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

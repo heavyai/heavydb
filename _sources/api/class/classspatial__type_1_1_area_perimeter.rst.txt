@@ -1,0 +1,9 @@
+Class spatial_type::AreaPerimeter
+=================================
+
+.. doxygenclass:: spatial_type::AreaPerimeter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

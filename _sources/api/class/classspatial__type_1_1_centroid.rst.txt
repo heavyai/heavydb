@@ -1,0 +1,9 @@
+Class spatial_type::Centroid
+============================
+
+.. doxygenclass:: spatial_type::Centroid
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

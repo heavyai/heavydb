@@ -1,0 +1,9 @@
+Class logger::QidScopeGuard
+===========================
+
+.. doxygenclass:: logger::QidScopeGuard
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

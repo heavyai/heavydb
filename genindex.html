@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.7.0dev 21ac014
+                5.8.0dev 83053ad
               </div>
             
           
@@ -308,7 +308,6 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_geo_column_var.html">Class Analyzer::GeoColumnVar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_geo_constant.html">Class Analyzer::GeoConstant</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_geo_expr.html">Class Analyzer::GeoExpr</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_geo_function_operator.html">Class Analyzer::GeoFunctionOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_geo_operator.html">Class Analyzer::GeoOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_geo_transform_operator.html">Class Analyzer::GeoTransformOperator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_analyzer_1_1_geo_u_oper.html">Class Analyzer::GeoUOper</a></li>
@@ -1165,6 +1164,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlogger_1_1_json_encoder.html">Class logger::JsonEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlogger_1_1_log_options.html">Class logger::LogOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlogger_1_1_logger.html">Class logger::Logger</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classlogger_1_1_qid_scope_guard.html">Class logger::QidScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classmigrations_1_1_migration_mgr.html">Class migrations::MigrationMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classomnisci_1_1_j_s_o_n.html">Class omnisci::JSON</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classomnisci_1_1_u_u_i_d.html">Class omnisci::UUID</a></li>
@@ -1471,6 +1471,8 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classquery__state_1_1_std_log.html">Class query_state::StdLog</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classquery__state_1_1_std_log_data.html">Class query_state::StdLogData</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classquery__state_1_1_timer.html">Class query_state::Timer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classspatial__type_1_1_area_perimeter.html">Class spatial_type::AreaPerimeter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classspatial__type_1_1_centroid.html">Class spatial_type::Centroid</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classspatial__type_1_1_codegen.html">Class spatial_type::Codegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classspatial__type_1_1_n_points.html">Class spatial_type::NPoints</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classspatial__type_1_1_n_rings.html">Class spatial_type::NRings</a></li>
@@ -2805,37 +2807,15 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_geo_expr.html#_CPPv4NK8Analyzer7GeoExpr13getChildExprsEv">Analyzer::GeoExpr::getChildExprs (C++ function)</a>
 </li>
-      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4N8Analyzer19GeoFunctionOperatorE">Analyzer::GeoFunctionOperator (C++ class)</a>
-</li>
-      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4N8Analyzer19GeoFunctionOperator5args_E">Analyzer::GeoFunctionOperator::args_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4NK8Analyzer19GeoFunctionOperator18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::GeoFunctionOperator::collect_column_var (C++ function)</a>
-</li>
-      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4NK8Analyzer19GeoFunctionOperator15collect_rte_idxERNSt3setIiEE">Analyzer::GeoFunctionOperator::collect_rte_idx (C++ function)</a>
-</li>
-      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4NK8Analyzer19GeoFunctionOperator9deep_copyEv">Analyzer::GeoFunctionOperator::deep_copy (C++ function)</a>
-</li>
-      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4N8Analyzer19GeoFunctionOperator19GeoFunctionOperatorERK11SQLTypeInfoRKNSt6stringERKNSt6vectorINSt10shared_ptrIN8Analyzer4ExprEEEEE">Analyzer::GeoFunctionOperator::GeoFunctionOperator (C++ function)</a>
-</li>
-      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4NK8Analyzer19GeoFunctionOperator6getArgEK6size_t">Analyzer::GeoFunctionOperator::getArg (C++ function)</a>
-</li>
-      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4NK8Analyzer19GeoFunctionOperator13getChildExprsEv">Analyzer::GeoFunctionOperator::getChildExprs (C++ function)</a>
-</li>
-      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4NK8Analyzer19GeoFunctionOperator7getNameEv">Analyzer::GeoFunctionOperator::getName (C++ function)</a>
-</li>
-      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4N8Analyzer19GeoFunctionOperator5name_E">Analyzer::GeoFunctionOperator::name_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4NK8Analyzer19GeoFunctionOperatoreqERK4Expr">Analyzer::GeoFunctionOperator::operator== (C++ function)</a>
-</li>
-      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4NK8Analyzer19GeoFunctionOperator4sizeEv">Analyzer::GeoFunctionOperator::size (C++ function)</a>
-</li>
-      <li><a href="api/class/class_analyzer_1_1_geo_function_operator.html#_CPPv4NK8Analyzer19GeoFunctionOperator8toStringEv">Analyzer::GeoFunctionOperator::toString (C++ function)</a>
-</li>
       <li><a href="api/class/class_analyzer_1_1_geo_operator.html#_CPPv4N8Analyzer11GeoOperatorE">Analyzer::GeoOperator (C++ class)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_geo_operator.html#_CPPv4N8Analyzer11GeoOperator5args_E">Analyzer::GeoOperator::args_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_geo_operator.html#_CPPv4N8Analyzer11GeoOperator24cloneWithUpdatedTypeInfoERK11SQLTypeInfo">Analyzer::GeoOperator::cloneWithUpdatedTypeInfo (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_operator.html#_CPPv4NK8Analyzer11GeoOperator18collect_column_varERNSt3setIPK9ColumnVarXbool(*colvar_set)( const   ColumnVar  *,  const   ColumnVar  *)EEEb">Analyzer::GeoOperator::collect_column_var (C++ function)</a>
+</li>
+      <li><a href="api/class/class_analyzer_1_1_geo_operator.html#_CPPv4NK8Analyzer11GeoOperator15collect_rte_idxERNSt3setIiEE">Analyzer::GeoOperator::collect_rte_idx (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_geo_operator.html#_CPPv4NK8Analyzer11GeoOperator9deep_copyEv">Analyzer::GeoOperator::deep_copy (C++ function)</a>
 </li>
@@ -2983,8 +2963,6 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_large_n_d_v_estimator.html#_CPPv4N8Analyzer17LargeNDVEstimator17LargeNDVEstimatorERKNSt4listINSt10shared_ptrIN8Analyzer4ExprEEEEE">Analyzer::LargeNDVEstimator::LargeNDVEstimator (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4N8Analyzer8LikeExprE">Analyzer::LikeExpr (C++ class)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4N8Analyzer8LikeExpr3argE">Analyzer::LikeExpr::arg (C++ member)</a>
@@ -2995,6 +2973,8 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr9deep_copyEv">Analyzer::LikeExpr::deep_copy (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4N8Analyzer8LikeExpr11escape_exprE">Analyzer::LikeExpr::escape_expr (C++ member)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr9find_exprEPFbPK4ExprERNSt4listIPK4ExprEE">Analyzer::LikeExpr::find_expr (C++ function)</a>
@@ -5165,7 +5145,7 @@
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4NK17Catalog_Namespace10SysCatalog15allowLocalLoginEv">Catalog_Namespace::SysCatalog::allowLocalLogin (C++ function)</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog9alterUserEK7int32_tPKNSt6stringEPbPKNSt6stringEPb">Catalog_Namespace::SysCatalog::alterUser (C++ function)</a>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog9alterUserERKNSt6stringEPKNSt6stringEPbPKNSt6stringEPb">Catalog_Namespace::SysCatalog::alterUser (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog13authMetadata_E">Catalog_Namespace::SysCatalog::authMetadata_ (C++ member)</a>
 </li>
@@ -5197,13 +5177,13 @@
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog14createDBObjectERK12UserMetadataRKNSt6stringE12DBObjectTypeRKN17Catalog_Namespace7CatalogE7int32_t">Catalog_Namespace::SysCatalog::createDBObject (C++ function)</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog10createRoleERKNSt6stringERKb">Catalog_Namespace::SysCatalog::createRole (C++ function)</a>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog10createRoleERKNSt6stringEKbKb">Catalog_Namespace::SysCatalog::createRole (C++ function)</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog17createRole_unsafeERKNSt6stringEKb">Catalog_Namespace::SysCatalog::createRole_unsafe (C++ function)</a>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog17createRole_unsafeERKNSt6stringEKbKb">Catalog_Namespace::SysCatalog::createRole_unsafe (C++ function)</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringERKNSt6stringEbRKNSt6stringEb">Catalog_Namespace::SysCatalog::createUser (C++ function)</a>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog11createRolesEv">Catalog_Namespace::SysCatalog::createRoles (C++ function)</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog15createUserRolesEv">Catalog_Namespace::SysCatalog::createUserRoles (C++ function)</a>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringERKNSt6stringEbRKNSt6stringEbb">Catalog_Namespace::SysCatalog::createUser (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog8dataMgr_E">Catalog_Namespace::SysCatalog::dataMgr_ (C++ member)</a>
 </li>
@@ -5215,15 +5195,17 @@
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog12dropDatabaseERK10DBMetadata">Catalog_Namespace::SysCatalog::dropDatabase (C++ function)</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog8dropRoleERKNSt6stringE">Catalog_Namespace::SysCatalog::dropRole (C++ function)</a>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog8dropRoleERKNSt6stringEKb">Catalog_Namespace::SysCatalog::dropRole (C++ function)</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog15dropRole_unsafeERKNSt6stringE">Catalog_Namespace::SysCatalog::dropRole_unsafe (C++ function)</a>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog15dropRole_unsafeERKNSt6stringEKb">Catalog_Namespace::SysCatalog::dropRole_unsafe (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog8dropUserERKNSt6stringE">Catalog_Namespace::SysCatalog::dropUser (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog13dummyCatalog_E">Catalog_Namespace::SysCatalog::dummyCatalog_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4I0DpEN17Catalog_Namespace10SysCatalog17execInTransactionEvRR1FDpRR4Args">Catalog_Namespace::SysCatalog::execInTransaction (C++ function)</a>
+</li>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog17fixRolesMigrationEv">Catalog_Namespace::SysCatalog::fixRolesMigration (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog16getAllDBMetadataEv">Catalog_Namespace::SysCatalog::getAllDBMetadata (C++ function)</a>
 </li>
@@ -5285,9 +5267,9 @@
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog11granteeMap_E">Catalog_Namespace::SysCatalog::granteeMap_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog9grantRoleERKNSt6stringERKNSt6stringE">Catalog_Namespace::SysCatalog::grantRole (C++ function)</a>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog9grantRoleERKNSt6stringERKNSt6stringEKb">Catalog_Namespace::SysCatalog::grantRole (C++ function)</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog16grantRole_unsafeERKNSt6stringERKNSt6stringE">Catalog_Namespace::SysCatalog::grantRole_unsafe (C++ function)</a>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog16grantRole_unsafeERKNSt6stringERKNSt6stringEKb">Catalog_Namespace::SysCatalog::grantRole_unsafe (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog14grantRoleBatchERKNSt6vectorINSt6stringEEERKNSt6vectorINSt6stringEEE">Catalog_Namespace::SysCatalog::grantRoleBatch (C++ function)</a>
 </li>
@@ -5323,6 +5305,8 @@
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4NK17Catalog_Namespace10SysCatalog4nameEv">Catalog_Namespace::SysCatalog::name (C++ function)</a>
 </li>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog23next_temporary_user_id_E">Catalog_Namespace::SysCatalog::next_temporary_user_id_ (C++ member)</a>
+</li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog20objectDescriptorMap_E">Catalog_Namespace::SysCatalog::objectDescriptorMap_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog23ObjectRoleDescriptorMapE">Catalog_Namespace::SysCatalog::ObjectRoleDescriptorMap (C++ type)</a>
@@ -5343,8 +5327,6 @@
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog26revokeAllOnDatabase_unsafeERKNSt6stringE7int32_tP7Grantee">Catalog_Namespace::SysCatalog::revokeAllOnDatabase_unsafe (C++ function)</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog25revokeDashboardSystemRoleEKNSt6stringEKNSt6vectorINSt6stringEEE">Catalog_Namespace::SysCatalog::revokeDashboardSystemRole (C++ function)</a>
-</li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog24revokeDBObjectPrivilegesERKNSt6stringERK8DBObjectRKN17Catalog_Namespace7CatalogE">Catalog_Namespace::SysCatalog::revokeDBObjectPrivileges (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog31revokeDBObjectPrivileges_unsafeERKNSt6stringE8DBObjectRKN17Catalog_Namespace7CatalogE">Catalog_Namespace::SysCatalog::revokeDBObjectPrivileges_unsafe (C++ function)</a>
@@ -5361,9 +5343,9 @@
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog43revokeDBObjectPrivilegesFromAllBatch_unsafeERNSt6vectorI8DBObjectEEP7Catalog">Catalog_Namespace::SysCatalog::revokeDBObjectPrivilegesFromAllBatch_unsafe (C++ function)</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog10revokeRoleERKNSt6stringERKNSt6stringE">Catalog_Namespace::SysCatalog::revokeRole (C++ function)</a>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog10revokeRoleERKNSt6stringERKNSt6stringEKb">Catalog_Namespace::SysCatalog::revokeRole (C++ function)</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog17revokeRole_unsafeERKNSt6stringERKNSt6stringE">Catalog_Namespace::SysCatalog::revokeRole_unsafe (C++ function)</a>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog17revokeRole_unsafeERKNSt6stringERKNSt6stringEKb">Catalog_Namespace::SysCatalog::revokeRole_unsafe (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog15revokeRoleBatchERKNSt6vectorINSt6stringEEERKNSt6vectorINSt6stringEEE">Catalog_Namespace::SysCatalog::revokeRoleBatch (C++ function)</a>
 </li>
@@ -5382,6 +5364,10 @@
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog26syncUserWithRemoteProviderERKNSt6stringENSt6vectorINSt6stringEEEPb">Catalog_Namespace::SysCatalog::syncUserWithRemoteProvider (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog10SysCatalogEv">Catalog_Namespace::SysCatalog::SysCatalog (C++ function)</a>
+</li>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog22temporary_users_by_id_E">Catalog_Namespace::SysCatalog::temporary_users_by_id_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog24temporary_users_by_name_E">Catalog_Namespace::SysCatalog::temporary_users_by_name_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_sys_catalog.html#_CPPv4N17Catalog_Namespace10SysCatalog26thread_holding_sqlite_lockE">Catalog_Namespace::SysCatalog::thread_holding_sqlite_lock (C++ member)</a>
 </li>
@@ -5423,7 +5409,11 @@
 </li>
       <li><a href="api/struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadata11defaultDbIdE">Catalog_Namespace::UserMetadata::defaultDbId (C++ member)</a>
 </li>
+      <li><a href="api/struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadata12is_temporaryE">Catalog_Namespace::UserMetadata::is_temporary (C++ member)</a>
+</li>
       <li><a href="api/struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadata7isSuperE">Catalog_Namespace::UserMetadata::isSuper (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadataaSERK12UserMetadata">Catalog_Namespace::UserMetadata::operator= (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadata11passwd_hashE">Catalog_Namespace::UserMetadata::passwd_hash (C++ member)</a>
 </li>
@@ -5435,7 +5425,7 @@
 </li>
       <li><a href="api/struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4NK17Catalog_Namespace12UserMetadata12userLoggableEv">Catalog_Namespace::UserMetadata::userLoggable (C++ function)</a>
 </li>
-      <li><a href="api/struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadata12UserMetadataE7int32_tRKNSt6stringERKNSt6stringEb7int32_tb">Catalog_Namespace::UserMetadata::UserMetadata (C++ function)</a>, <a href="api/struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadata12UserMetadataERK12UserMetadata">[1]</a>, <a href="api/struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadata12UserMetadataEv">[2]</a>
+      <li><a href="api/struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadata12UserMetadataE7int32_tRKNSt6stringERKNSt6stringEb7int32_tbb">Catalog_Namespace::UserMetadata::UserMetadata (C++ function)</a>, <a href="api/struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadata12UserMetadataERK12UserMetadata">[1]</a>, <a href="api/struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadata12UserMetadataEv">[2]</a>
 </li>
       <li><a href="api/struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadata8userNameE">Catalog_Namespace::UserMetadata::userName (C++ member)</a>
 </li>
@@ -5627,6 +5617,8 @@
 </li>
       <li><a href="api/class/class_chunk___n_s_1_1_chunk.html#_CPPv4N8Chunk_NS5Chunk9setBufferEP14AbstractBuffer">Chunk_NS::Chunk::setBuffer (C++ function)</a>
 </li>
+      <li><a href="api/class/class_chunk___n_s_1_1_chunk.html#_CPPv4N8Chunk_NS5Chunk13setColumnDescEPK16ColumnDescriptor">Chunk_NS::Chunk::setColumnDesc (C++ function)</a>
+</li>
       <li><a href="api/class/class_chunk___n_s_1_1_chunk.html#_CPPv4N8Chunk_NS5Chunk14setIndexBufferEP14AbstractBuffer">Chunk_NS::Chunk::setIndexBuffer (C++ function)</a>
 </li>
       <li><a href="api/class/class_chunk___n_s_1_1_chunk.html#_CPPv4NK8Chunk_NS5Chunk8toStringEv">Chunk_NS::Chunk::toString (C++ function)</a>
@@ -5769,14 +5761,14 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator32codegenFixedLengthColVarInWindowEPKN8Analyzer9ColumnVarEPN4llvm5ValueEPN4llvm5ValueE">CodeGenerator::codegenFixedLengthColVarInWindow (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator14codegenFpArithEPKN8Analyzer7BinOperEPN4llvm5ValueEPN4llvm5ValueE">CodeGenerator::codegenFpArith (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator19codegenFunctionOperEPKN8Analyzer12FunctionOperERK18CompilationOptions">CodeGenerator::codegenFunctionOper (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator27codegenFunctionOperCastArgsEPKN8Analyzer12FunctionOperEPK17ExtensionFunctionRKNSt6vectorIPN4llvm5ValueEEERKNSt6vectorI6size_tEERKNSt13unordered_mapIPN4llvm5ValueEPN4llvm5ValueEEERK18CompilationOptions">CodeGenerator::codegenFunctionOperCastArgs (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator26codegenFunctionOperNullArgEPKN8Analyzer12FunctionOperERKNSt6vectorIPN4llvm5ValueEEE">CodeGenerator::codegenFunctionOperNullArg (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator41codegenFunctionOperWithCustomTypeHandlingEPKN8Analyzer34FunctionOperWithCustomTypeHandlingERK18CompilationOptions">CodeGenerator::codegenFunctionOperWithCustomTypeHandling (C++ function)</a>
@@ -5792,8 +5784,6 @@
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator18codegenGeoConstantEPKN8Analyzer11GeoConstantERK18CompilationOptions">CodeGenerator::codegenGeoConstant (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator14codegenGeoExprEPKN8Analyzer7GeoExprERK18CompilationOptions">CodeGenerator::codegenGeoExpr (C++ function)</a>
-</li>
-      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator26codegenGeoFunctionOperatorEPKN8Analyzer19GeoFunctionOperatorERK18CompilationOptions">CodeGenerator::codegenGeoFunctionOperator (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator24codegenGeoLineStringArgsERKNSt6stringE6size_tPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueERNSt6vectorIPN4llvm5ValueEEE">CodeGenerator::codegenGeoLineStringArgs (C++ function)</a>
 </li>
@@ -6114,6 +6104,8 @@
       <li><a href="api/struct/struct_column_descriptor.html#_CPPv4N16ColumnDescriptor10columnTypeE">ColumnDescriptor::columnType (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_column_descriptor.html#_CPPv4N16ColumnDescriptor13default_valueE">ColumnDescriptor::default_value (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_column_descriptor.html#_CPPv4NK16ColumnDescriptor22getDefaultValueLiteralEv">ColumnDescriptor::getDefaultValueLiteral (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_column_descriptor.html#_CPPv4N16ColumnDescriptor12isDeletedColE">ColumnDescriptor::isDeletedCol (C++ member)</a>
 </li>
@@ -7689,7 +7681,7 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4NK9DBHandler15execute_rel_algER15ExecutionResult15QueryStateProxyRKNSt6stringEKbK18ExecutorDeviceTypeK7int32_tK7int32_tKbKbRK11ExplainInfoKNSt8optionalI6size_tEE">DBHandler::execute_rel_alg (C++ function)</a>
 </li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4NK9DBHandler18execute_rel_alg_dfER10TDataFrameRKNSt6stringE15QueryStateProxyRKN17Catalog_Namespace11SessionInfoEK18ExecutorDeviceTypeK6size_tK7int32_tKN15TArrowTransport4typeE">DBHandler::execute_rel_alg_df (C++ function)</a>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4NK9DBHandler18execute_rel_alg_dfER10TDataFrameRKNSt6stringE15QueryStateProxyRKN17Catalog_Namespace11SessionInfoEK18ExecutorDeviceTypeK18ExecutorDeviceTypeK6size_tK7int32_tKN15TArrowTransport4typeE">DBHandler::execute_rel_alg_df (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler37execute_rel_alg_with_filter_push_downER15ExecutionResult15QueryStateProxyRNSt6stringEKbK18ExecutorDeviceTypeK7int32_tK7int32_tKbKbRKNSt6vectorI20PushedDownFilterInfoEE">DBHandler::execute_rel_alg_with_filter_push_down (C++ function)</a>
 </li>
@@ -7700,6 +7692,10 @@
       <li><a href="api/class/class_d_b_handler.html#_CPPv4I0EN9DBHandler27expire_idle_sessions_unsafeEvR16SESSION_MAP_LOCK">DBHandler::expire_idle_sessions_unsafe (C++ function)</a>, <a href="api/class/class_d_b_handler.html#_CPPv4IEN9DBHandler27expire_idle_sessions_unsafeEvR16mapd_unique_lockI17mapd_shared_mutexE">[1]</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler26fill_column_names_by_tableERNSt6vectorINSt6stringEEERN11query_state6StdLogE">DBHandler::fill_column_names_by_table (C++ function)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler14fillGeoColumnsERK10TSessionIdRKN17Catalog_Namespace7CatalogERNSt6vectorINSt10unique_ptrIN13import_export17TypedImportBufferEEEEEPK16ColumnDescriptorR6size_t6size_tRKNSt6stringEb">DBHandler::fillGeoColumns (C++ function)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler18fillMissingBuffersERK10TSessionIdRKN17Catalog_Namespace7CatalogERNSt6vectorINSt10unique_ptrIN13import_export17TypedImportBufferEEEEERKNSt4listIPK16ColumnDescriptorEERKNSt6vectorIiEE6size_tRKNSt6stringEb">DBHandler::fillMissingBuffers (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler20fixup_row_descriptorERK14TRowDescriptorRKN17Catalog_Namespace7CatalogE">DBHandler::fixup_row_descriptor (C++ function)</a>
 </li>
@@ -7865,10 +7861,10 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler12import_path_E">DBHandler::import_path_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler12import_tableERK10TSessionIdRKNSt6stringERKNSt6stringERK11TCopyParams">DBHandler::import_table (C++ function)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler12import_tableERK10TSessionIdRKNSt6stringERKNSt6stringERK11TCopyParams">DBHandler::import_table (C++ function)</a>
+</li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler19import_table_statusER13TImportStatusRK10TSessionIdRKNSt6stringE">DBHandler::import_table_status (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler10initializeEKb">DBHandler::initialize (C++ function)</a>
@@ -8077,7 +8073,7 @@
 </li>
       <li><a href="api/class/class_d_b_object.html#_CPPv4N8DBObject14copyPrivilegesERK8DBObject">DBObject::copyPrivileges (C++ function)</a>
 </li>
-      <li><a href="api/class/class_d_b_object.html#_CPPv4N8DBObject8DBObjectE11DBObjectKey16AccessPrivileges7int32_t">DBObject::DBObject (C++ function)</a>, <a href="api/class/class_d_b_object.html#_CPPv4N8DBObject8DBObjectEK7int32_tRK12DBObjectType">[1]</a>, <a href="api/class/class_d_b_object.html#_CPPv4N8DBObject8DBObjectERK8DBObject">[2]</a>, <a href="api/class/class_d_b_object.html#_CPPv4N8DBObject8DBObjectERKNSt6stringERK12DBObjectType">[3]</a>
+      <li><a href="api/class/class_d_b_object.html#_CPPv4N8DBObject8DBObjectE11DBObjectKey16AccessPrivileges7int32_t">DBObject::DBObject (C++ function)</a>, <a href="api/class/class_d_b_object.html#_CPPv4N8DBObject8DBObjectEK7int32_tRK12DBObjectType">[1]</a>, <a href="api/class/class_d_b_object.html#_CPPv4N8DBObject8DBObjectERK8DBObject">[2]</a>, <a href="api/class/class_d_b_object.html#_CPPv4N8DBObject8DBObjectERKNSt6stringE12DBObjectType11DBObjectKey16AccessPrivileges7int32_t">[3]</a>, <a href="api/class/class_d_b_object.html#_CPPv4N8DBObject8DBObjectERKNSt6stringERK12DBObjectType">[4]</a>
 </li>
       <li><a href="api/class/class_d_b_object.html#_CPPv4NK8DBObject7getNameEv">DBObject::getName (C++ function)</a>
 </li>
@@ -9349,7 +9345,7 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor21kernel_queue_time_ms_E">Executor::kernel_queue_time_ms_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_executor.html#_CPPv4I0EN8Executor13launchKernelsEvR19SharedKernelContextRRNSt6vectorINSt10unique_ptrI15ExecutionKernelEEEE">Executor::launchKernels (C++ function)</a>, <a href="api/class/class_executor.html#_CPPv4I0EN8Executor13launchKernelsEvR19SharedKernelContextRRNSt6vectorINSt10unique_ptrI15ExecutionKernelEEEE">[1]</a>
+      <li><a href="api/class/class_executor.html#_CPPv4I0EN8Executor13launchKernelsEvR19SharedKernelContextRRNSt6vectorINSt10unique_ptrI15ExecutionKernelEEEEK18ExecutorDeviceType">Executor::launchKernels (C++ function)</a>, <a href="api/class/class_executor.html#_CPPv4I0EN8Executor13launchKernelsEvR19SharedKernelContextRRNSt6vectorINSt10unique_ptrI15ExecutionKernelEEEEK18ExecutorDeviceType">[1]</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor13max_gpu_countE">Executor::max_gpu_count (C++ member)</a>
 </li>
@@ -10141,8 +10137,6 @@
 </li>
       <li><a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr14clearFileInfosEv">File_Namespace::FileMgr::clearFileInfos (C++ function)</a>
 </li>
-      <li><a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr10clearSlabsEv">File_Namespace::FileMgr::clearSlabs (C++ function)</a>
-</li>
       <li><a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr21closePhysicalUnlockedEv">File_Namespace::FileMgr::closePhysicalUnlocked (C++ function)</a>
 </li>
       <li><a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr19closeRemovePhysicalEv">File_Namespace::FileMgr::closeRemovePhysical (C++ function)</a>
@@ -10398,8 +10392,6 @@
       <li><a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr9basePath_E">File_Namespace::GlobalFileMgr::basePath_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr10checkpointEK7int32_tK7int32_t">File_Namespace::GlobalFileMgr::checkpoint (C++ function)</a>, <a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr10checkpointEv">[1]</a>
-</li>
-      <li><a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr10clearSlabsEv">File_Namespace::GlobalFileMgr::clearSlabs (C++ function)</a>
 </li>
       <li><a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr12closeFileMgrEK7int32_tK7int32_t">File_Namespace::GlobalFileMgr::closeFileMgr (C++ function)</a>
 </li>
@@ -11305,8 +11297,6 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr16clearDataWrapperERK8ChunkKey">foreign_storage::ForeignStorageMgr::clearDataWrapper (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr10clearSlabsEv">foreign_storage::ForeignStorageMgr::clearSlabs (C++ function)</a>
-</li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr38clearTempChunkBufferMapEntriesForTableERK8ChunkKey">foreign_storage::ForeignStorageMgr::clearTempChunkBufferMapEntriesForTable (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr46clearTempChunkBufferMapEntriesForTableUnlockedERK8ChunkKey">foreign_storage::ForeignStorageMgr::clearTempChunkBufferMapEntriesForTableUnlocked (C++ function)</a>
@@ -12166,8 +12156,6 @@
       <li><a href="api/class/class_foreign_storage_buffer_mgr.html#_CPPv4N23ForeignStorageBufferMgr12chunk_index_E">ForeignStorageBufferMgr::chunk_index_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_foreign_storage_buffer_mgr.html#_CPPv4N23ForeignStorageBufferMgr18chunk_index_mutex_E">ForeignStorageBufferMgr::chunk_index_mutex_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_foreign_storage_buffer_mgr.html#_CPPv4N23ForeignStorageBufferMgr10clearSlabsEv">ForeignStorageBufferMgr::clearSlabs (C++ function)</a>
 </li>
       <li><a href="api/class/class_foreign_storage_buffer_mgr.html#_CPPv4N23ForeignStorageBufferMgr12createBufferERK8ChunkKeyK6size_tK6size_t">ForeignStorageBufferMgr::createBuffer (C++ function)</a>
 </li>
@@ -14137,7 +14125,7 @@
 </li>
       <li><a href="api/class/classimport__export_1_1_render_group_analyzer.html#_CPPv4N13import_export19RenderGroupAnalyzer5RTreeE">import_export::RenderGroupAnalyzer::RTree (C++ type)</a>
 </li>
-      <li><a href="api/class/classimport__export_1_1_render_group_analyzer.html#_CPPv4N13import_export19RenderGroupAnalyzer29seedFromExistingTableContentsERN17Catalog_Namespace7CatalogERKNSt6stringERKNSt6stringE">import_export::RenderGroupAnalyzer::seedFromExistingTableContents (C++ function)</a>
+      <li><a href="api/class/classimport__export_1_1_render_group_analyzer.html#_CPPv4N13import_export19RenderGroupAnalyzer29seedFromExistingTableContentsERKN17Catalog_Namespace7CatalogERKNSt6stringERKNSt6stringE">import_export::RenderGroupAnalyzer::seedFromExistingTableContents (C++ function)</a>
 </li>
       <li><a href="api/class/classimport__export_1_1_typed_import_buffer.html#_CPPv4N13import_export17TypedImportBufferE">import_export::TypedImportBuffer (C++ class)</a>
 </li>
@@ -14154,6 +14142,8 @@
       <li><a href="api/class/classimport__export_1_1_typed_import_buffer.html#_CPPv4N13import_export17TypedImportBuffer9addBigintEK7int64_t">import_export::TypedImportBuffer::addBigint (C++ function)</a>
 </li>
       <li><a href="api/class/classimport__export_1_1_typed_import_buffer.html#_CPPv4N13import_export17TypedImportBuffer10addBooleanEK6int8_t">import_export::TypedImportBuffer::addBoolean (C++ function)</a>
+</li>
+      <li><a href="api/class/classimport__export_1_1_typed_import_buffer.html#_CPPv4N13import_export17TypedImportBuffer16addDefaultValuesEPK16ColumnDescriptor6size_t">import_export::TypedImportBuffer::addDefaultValues (C++ function)</a>
 </li>
       <li><a href="api/class/classimport__export_1_1_typed_import_buffer.html#_CPPv4N13import_export17TypedImportBuffer20addDictEncodedStringERKNSt6vectorINSt6stringEEE">import_export::TypedImportBuffer::addDictEncodedString (C++ function)</a>
 </li>
@@ -15011,14 +15001,14 @@
 </li>
       <li><a href="api/class/classlockmgr_1_1_table_schema_lock_mgr.html#_CPPv4N7lockmgr18TableSchemaLockMgr18TableSchemaLockMgrEv">lockmgr::TableSchemaLockMgr::TableSchemaLockMgr (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4I0EN7lockmgr14TrackedRefLockE">lockmgr::TrackedRefLock (C++ class)</a>
 </li>
       <li><a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLock5lock_E">lockmgr::TrackedRefLock::lock_ (C++ member)</a>
 </li>
       <li><a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLock6mutex_E">lockmgr::TrackedRefLock::mutex_ (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLockaSERK14TrackedRefLock">lockmgr::TrackedRefLock::operator= (C++ function)</a>
 </li>
       <li><a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLock14TrackedRefLockEP12MutexTracker">lockmgr::TrackedRefLock::TrackedRefLock (C++ function)</a>, <a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLock14TrackedRefLockERK14TrackedRefLock">[1]</a>, <a href="api/class/classlockmgr_1_1_tracked_ref_lock.html#_CPPv4N7lockmgr14TrackedRefLock14TrackedRefLockERR14TrackedRefLock">[2]</a>
@@ -15188,6 +15178,18 @@
       <li><a href="api/struct/structlogger_1_1_log_shutdown.html#_CPPv4N6logger11LogShutdownE">logger::LogShutdown (C++ class)</a>
 </li>
       <li><a href="api/struct/structlogger_1_1_log_shutdown.html#_CPPv4N6logger11LogShutdownD0Ev">logger::LogShutdown::~LogShutdown (C++ function)</a>
+</li>
+      <li><a href="api/class/classlogger_1_1_qid_scope_guard.html#_CPPv4N6logger13QidScopeGuardE">logger::QidScopeGuard (C++ class)</a>
+</li>
+      <li><a href="api/class/classlogger_1_1_qid_scope_guard.html#_CPPv4NK6logger13QidScopeGuard2idEv">logger::QidScopeGuard::id (C++ function)</a>
+</li>
+      <li><a href="api/class/classlogger_1_1_qid_scope_guard.html#_CPPv4N6logger13QidScopeGuard3id_E">logger::QidScopeGuard::id_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classlogger_1_1_qid_scope_guard.html#_CPPv4N6logger13QidScopeGuardaSERK13QidScopeGuard">logger::QidScopeGuard::operator= (C++ function)</a>, <a href="api/class/classlogger_1_1_qid_scope_guard.html#_CPPv4N6logger13QidScopeGuardaSERR13QidScopeGuard">[1]</a>
+</li>
+      <li><a href="api/class/classlogger_1_1_qid_scope_guard.html#_CPPv4N6logger13QidScopeGuard13QidScopeGuardEK7QueryId">logger::QidScopeGuard::QidScopeGuard (C++ function)</a>, <a href="api/class/classlogger_1_1_qid_scope_guard.html#_CPPv4N6logger13QidScopeGuard13QidScopeGuardERK13QidScopeGuard">[1]</a>, <a href="api/class/classlogger_1_1_qid_scope_guard.html#_CPPv4N6logger13QidScopeGuard13QidScopeGuardERR13QidScopeGuard">[2]</a>
+</li>
+      <li><a href="api/class/classlogger_1_1_qid_scope_guard.html#_CPPv4N6logger13QidScopeGuardD0Ev">logger::QidScopeGuard::~QidScopeGuard (C++ function)</a>
 </li>
       <li><a href="api/class/class_lru_cache.html#_CPPv4I000E8LruCache">LruCache (C++ class)</a>
 </li>
@@ -17417,10 +17419,10 @@
 </li>
       <li><a href="api/class/class_parser_1_1_order_spec.html#_CPPv4N6Parser9OrderSpec12nulls_first_E">Parser::OrderSpec::nulls_first_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_parser_1_1_order_spec.html#_CPPv4N6Parser9OrderSpec9OrderSpecEiP9ColumnRefbb">Parser::OrderSpec::OrderSpec (C++ function)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_parser_1_1_order_spec.html#_CPPv4N6Parser9OrderSpec9OrderSpecEiP9ColumnRefbb">Parser::OrderSpec::OrderSpec (C++ function)</a>
+</li>
       <li><a href="api/struct/struct_parser_1_1_positive_or_zero_validate.html#_CPPv4N6Parser22PositiveOrZeroValidateE">Parser::PositiveOrZeroValidate (C++ class)</a>
 </li>
       <li><a href="api/struct/struct_parser_1_1_positive_or_zero_validate.html#_CPPv4I0EN6Parser22PositiveOrZeroValidateclEDc1T">Parser::PositiveOrZeroValidate::operator() (C++ function)</a>
@@ -18183,8 +18185,6 @@
 </li>
       <li><a href="api/class/class_persistent_storage_mgr.html#_CPPv4N20PersistentStorageMgr10checkpointEKiKi">PersistentStorageMgr::checkpoint (C++ function)</a>, <a href="api/class/class_persistent_storage_mgr.html#_CPPv4N20PersistentStorageMgr10checkpointEv">[1]</a>
 </li>
-      <li><a href="api/class/class_persistent_storage_mgr.html#_CPPv4N20PersistentStorageMgr10clearSlabsEv">PersistentStorageMgr::clearSlabs (C++ function)</a>
-</li>
       <li><a href="api/class/class_persistent_storage_mgr.html#_CPPv4N20PersistentStorageMgr12createBufferERK8ChunkKeyK6size_tK6size_t">PersistentStorageMgr::createBuffer (C++ function)</a>
 </li>
       <li><a href="api/class/class_persistent_storage_mgr.html#_CPPv4N20PersistentStorageMgr26createPersistentStorageMgrERKNSt6stringEK6size_tRKN14File_Namespace15DiskCacheConfigE">PersistentStorageMgr::createPersistentStorageMgr (C++ function)</a>
@@ -18536,6 +18536,8 @@
       <li><a href="api/class/classquery__state_1_1_query_state.html#_CPPv4N11query_state10QueryState9setLoggedEb">query_state::QueryState::setLogged (C++ function)</a>
 </li>
       <li><a href="api/class/classquery__state_1_1_query_state.html#_CPPv4N11query_state10QueryState21setQuerySubmittedTimeERKNSt6stringE">query_state::QueryState::setQuerySubmittedTime (C++ function)</a>
+</li>
+      <li><a href="api/class/classquery__state_1_1_query_state.html#_CPPv4NK11query_state10QueryState21setThreadLocalQueryIdEv">query_state::QueryState::setThreadLocalQueryId (C++ function)</a>
 </li>
       <li><a href="api/class/classquery__state_1_1_query_state.html#_CPPv4N11query_state10QueryState10submitted_E">query_state::QueryState::submitted_ (C++ member)</a>
 </li>
@@ -18911,10 +18913,10 @@
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor23hasInterleavedBinsOnGpuEv">QueryMemoryDescriptor::hasInterleavedBinsOnGpu (C++ function)</a>
 </li>
-      <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor14hasKeylessHashEv">QueryMemoryDescriptor::hasKeylessHash (C++ function)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor14hasKeylessHashEv">QueryMemoryDescriptor::hasKeylessHash (C++ function)</a>
+</li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor8hasNullsEv">QueryMemoryDescriptor::hasNulls (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_memory_descriptor.html#_CPPv4NK21QueryMemoryDescriptor15hasVarlenOutputEv">QueryMemoryDescriptor::hasVarlenOutput (C++ function)</a>
@@ -20725,10 +20727,10 @@
 </li>
       <li><a href="api/class/class_render_handler.html#_CPPv4N13RenderHandler24get_result_row_for_pixelER20TPixelTableRowResultKNSt10shared_ptrIN17Catalog_Namespace11SessionInfoEEEK7int64_tRK6TPixelRKNSt3mapINSt6stringENSt6vectorINSt6stringEEEEEKbK7int32_tRKNSt6stringE">RenderHandler::get_result_row_for_pixel (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_render_handler_1_1_impl.html#_CPPv4N13RenderHandler4ImplE">RenderHandler::Impl (C++ class)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_render_handler.html#_CPPv4N13RenderHandler5impl_E">RenderHandler::impl_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_render_handler.html#_CPPv4N13RenderHandler11render_vegaER13TRenderResultKNSt10shared_ptrIN17Catalog_Namespace11SessionInfoEEEK7int64_tRKNSt6stringEK7int32_tRKNSt6stringE">RenderHandler::render_vega (C++ function)</a>
@@ -21062,6 +21064,8 @@
       <li><a href="api/class/class_result_set.html#_CPPv4NK9ResultSet21initPermutationBufferE15PermutationViewK14PermutationIdxK14PermutationIdx">ResultSet::initPermutationBuffer (C++ function)</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4NK9ResultSet34isDirectColumnarConversionPossibleEv">ResultSet::isDirectColumnarConversionPossible (C++ function)</a>
+</li>
+      <li><a href="api/class/class_result_set.html#_CPPv4NK9ResultSet7isEmptyEv">ResultSet::isEmpty (C++ function)</a>
 </li>
       <li><a href="api/class/class_result_set.html#_CPPv4NK9ResultSet9isExplainEv">ResultSet::isExplain (C++ function)</a>
 </li>
@@ -22391,6 +22395,34 @@
 </li>
       <li><a href="api/struct/struct_sort_info.html#_CPPv4N8SortInfo13order_entriesE">SortInfo::order_entries (C++ member)</a>
 </li>
+      <li><a href="api/class/classspatial__type_1_1_area_perimeter.html#_CPPv4N12spatial_type13AreaPerimeterE">spatial_type::AreaPerimeter (C++ class)</a>
+</li>
+      <li><a href="api/class/classspatial__type_1_1_area_perimeter.html#_CPPv4N12spatial_type13AreaPerimeter13AreaPerimeterEPKN8Analyzer11GeoOperatorEPKN17Catalog_Namespace7CatalogE">spatial_type::AreaPerimeter::AreaPerimeter (C++ function)</a>
+</li>
+      <li><a href="api/class/classspatial__type_1_1_area_perimeter.html#_CPPv4N12spatial_type13AreaPerimeter7codegenERKNSt6vectorIPN4llvm5ValueEEEPN13CodeGenerator16NullCheckCodegenEP9CgenStateRK18CompilationOptions">spatial_type::AreaPerimeter::codegen (C++ function)</a>
+</li>
+      <li><a href="api/class/classspatial__type_1_1_area_perimeter.html#_CPPv4N12spatial_type13AreaPerimeter12codegenLoadsERKNSt6vectorIPN4llvm5ValueEEEPN4llvm5ValueEP9CgenState">spatial_type::AreaPerimeter::codegenLoads (C++ function)</a>
+</li>
+      <li><a href="api/class/classspatial__type_1_1_area_perimeter.html#_CPPv4NK12spatial_type13AreaPerimeter11getNullTypeEv">spatial_type::AreaPerimeter::getNullType (C++ function)</a>
+</li>
+      <li><a href="api/class/classspatial__type_1_1_area_perimeter.html#_CPPv4NK12spatial_type13AreaPerimeter18getPositionOperandEv">spatial_type::AreaPerimeter::getPositionOperand (C++ function)</a>
+</li>
+      <li><a href="api/class/classspatial__type_1_1_area_perimeter.html#_CPPv4NK12spatial_type13AreaPerimeter4sizeEv">spatial_type::AreaPerimeter::size (C++ function)</a>
+</li>
+      <li><a href="api/class/classspatial__type_1_1_centroid.html#_CPPv4N12spatial_type8CentroidE">spatial_type::Centroid (C++ class)</a>
+</li>
+      <li><a href="api/class/classspatial__type_1_1_centroid.html#_CPPv4N12spatial_type8Centroid8CentroidEPKN8Analyzer11GeoOperatorEPKN17Catalog_Namespace7CatalogE">spatial_type::Centroid::Centroid (C++ function)</a>
+</li>
+      <li><a href="api/class/classspatial__type_1_1_centroid.html#_CPPv4N12spatial_type8Centroid7codegenERKNSt6vectorIPN4llvm5ValueEEEPN13CodeGenerator16NullCheckCodegenEP9CgenStateRK18CompilationOptions">spatial_type::Centroid::codegen (C++ function)</a>
+</li>
+      <li><a href="api/class/classspatial__type_1_1_centroid.html#_CPPv4N12spatial_type8Centroid12codegenLoadsERKNSt6vectorIPN4llvm5ValueEEEPN4llvm5ValueEP9CgenState">spatial_type::Centroid::codegenLoads (C++ function)</a>
+</li>
+      <li><a href="api/class/classspatial__type_1_1_centroid.html#_CPPv4NK12spatial_type8Centroid11getNullTypeEv">spatial_type::Centroid::getNullType (C++ function)</a>
+</li>
+      <li><a href="api/class/classspatial__type_1_1_centroid.html#_CPPv4NK12spatial_type8Centroid18getPositionOperandEv">spatial_type::Centroid::getPositionOperand (C++ function)</a>
+</li>
+      <li><a href="api/class/classspatial__type_1_1_centroid.html#_CPPv4NK12spatial_type8Centroid4sizeEv">spatial_type::Centroid::size (C++ function)</a>
+</li>
       <li><a href="api/class/classspatial__type_1_1_codegen.html#_CPPv4N12spatial_type7CodegenE">spatial_type::Codegen (C++ class)</a>
 </li>
       <li><a href="api/class/classspatial__type_1_1_codegen.html#_CPPv4N12spatial_type7Codegen4cat_E">spatial_type::Codegen::cat_ (C++ member)</a>
@@ -22471,8 +22503,6 @@
 </li>
       <li><a href="api/class/classspatial__type_1_1_point_accessors.html#_CPPv4NK12spatial_type14PointAccessors11getNullTypeEv">spatial_type::PointAccessors::getNullType (C++ function)</a>
 </li>
-      <li><a href="api/class/classspatial__type_1_1_point_accessors.html#_CPPv4N12spatial_type14PointAccessors10getOperandEK6size_t">spatial_type::PointAccessors::getOperand (C++ function)</a>
-</li>
       <li><a href="api/class/classspatial__type_1_1_point_accessors.html#_CPPv4NK12spatial_type14PointAccessors18getPositionOperandEv">spatial_type::PointAccessors::getPositionOperand (C++ function)</a>
 </li>
       <li><a href="api/class/classspatial__type_1_1_point_accessors.html#_CPPv4N12spatial_type14PointAccessors14PointAccessorsEPKN8Analyzer11GeoOperatorEPKN17Catalog_Namespace7CatalogE">spatial_type::PointAccessors::PointAccessors (C++ function)</a>
@@ -22488,8 +22518,6 @@
       <li><a href="api/class/classspatial__type_1_1_point_constructor.html#_CPPv4N12spatial_type16PointConstructor19getNullCheckCodegenEPN4llvm5ValueEP9CgenStateP8Executor">spatial_type::PointConstructor::getNullCheckCodegen (C++ function)</a>
 </li>
       <li><a href="api/class/classspatial__type_1_1_point_constructor.html#_CPPv4NK12spatial_type16PointConstructor11getNullTypeEv">spatial_type::PointConstructor::getNullType (C++ function)</a>
-</li>
-      <li><a href="api/class/classspatial__type_1_1_point_constructor.html#_CPPv4N12spatial_type16PointConstructor10getOperandEK6size_t">spatial_type::PointConstructor::getOperand (C++ function)</a>
 </li>
       <li><a href="api/class/classspatial__type_1_1_point_constructor.html#_CPPv4NK12spatial_type16PointConstructor18getPositionOperandEv">spatial_type::PointConstructor::getPositionOperand (C++ function)</a>
 </li>
@@ -22509,8 +22537,6 @@
 </li>
       <li><a href="api/class/classspatial__type_1_1_point_n.html#_CPPv4NK12spatial_type6PointN11getNullTypeEv">spatial_type::PointN::getNullType (C++ function)</a>
 </li>
-      <li><a href="api/class/classspatial__type_1_1_point_n.html#_CPPv4N12spatial_type6PointN10getOperandEK6size_t">spatial_type::PointN::getOperand (C++ function)</a>
-</li>
       <li><a href="api/class/classspatial__type_1_1_point_n.html#_CPPv4NK12spatial_type6PointN18getPositionOperandEv">spatial_type::PointN::getPositionOperand (C++ function)</a>
 </li>
       <li><a href="api/class/classspatial__type_1_1_point_n.html#_CPPv4N12spatial_type6PointN6PointNEPKN8Analyzer11GeoOperatorEPKN17Catalog_Namespace7CatalogE">spatial_type::PointN::PointN (C++ function)</a>
@@ -22524,8 +22550,6 @@
       <li><a href="api/class/classspatial__type_1_1_start_end_point.html#_CPPv4N12spatial_type13StartEndPoint12codegenLoadsERKNSt6vectorIPN4llvm5ValueEEEPN4llvm5ValueEP9CgenState">spatial_type::StartEndPoint::codegenLoads (C++ function)</a>
 </li>
       <li><a href="api/class/classspatial__type_1_1_start_end_point.html#_CPPv4NK12spatial_type13StartEndPoint11getNullTypeEv">spatial_type::StartEndPoint::getNullType (C++ function)</a>
-</li>
-      <li><a href="api/class/classspatial__type_1_1_start_end_point.html#_CPPv4N12spatial_type13StartEndPoint10getOperandEK6size_t">spatial_type::StartEndPoint::getOperand (C++ function)</a>
 </li>
       <li><a href="api/class/classspatial__type_1_1_start_end_point.html#_CPPv4NK12spatial_type13StartEndPoint18getPositionOperandEv">spatial_type::StartEndPoint::getPositionOperand (C++ function)</a>
 </li>
@@ -22542,8 +22566,6 @@
       <li><a href="api/class/classspatial__type_1_1_transform.html#_CPPv4N12spatial_type9Transform12codegenLoadsERKNSt6vectorIPN4llvm5ValueEEEPN4llvm5ValueEP9CgenState">spatial_type::Transform::codegenLoads (C++ function)</a>
 </li>
       <li><a href="api/class/classspatial__type_1_1_transform.html#_CPPv4NK12spatial_type9Transform11getNullTypeEv">spatial_type::Transform::getNullType (C++ function)</a>
-</li>
-      <li><a href="api/class/classspatial__type_1_1_transform.html#_CPPv4N12spatial_type9Transform10getOperandEK6size_t">spatial_type::Transform::getOperand (C++ function)</a>
 </li>
       <li><a href="api/class/classspatial__type_1_1_transform.html#_CPPv4NK12spatial_type9Transform18getPositionOperandEv">spatial_type::Transform::getPositionOperand (C++ function)</a>
 </li>
@@ -22705,6 +22727,8 @@
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo13get_elem_typeEv">SQLTypeInfo::get_elem_type (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo16get_logical_sizeEv">SQLTypeInfo::get_logical_size (C++ function)</a>
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo17get_physical_colsEv">SQLTypeInfo::get_physical_cols (C++ function)</a>
@@ -22715,8 +22739,6 @@
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo13get_type_nameEv">SQLTypeInfo::get_type_name (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo10has_boundsEv">SQLTypeInfo::has_bounds (C++ function)</a>
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo16has_render_groupEv">SQLTypeInfo::has_render_group (C++ function)</a>
