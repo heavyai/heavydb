@@ -474,7 +474,7 @@ def parse_annotations(input_files):
 
             if sizer is None:
                 name = 'kTableFunctionSpecifiedParameter'
-                idx = -1  # this sizer is not actually materialized in the UDTF
+                idx = 1  # this sizer is not actually materialized in the UDTF
                 sizer = 'TableFunctionOutputRowSizer{OutputBufferSizeType::%s, %s}'  % (name, idx)
 
             assert sizer is not None
