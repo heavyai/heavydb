@@ -439,6 +439,62 @@ TEST_F(TableFunctions, ConstantCasts) {
   }
 }
 
+TEST_F(TableFunctions, Template) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(ct_binding_column2(cursor(SELECT x FROM tf_test), "
+          "cursor(SELECT d from tf_test)))",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(10));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(ct_binding_column2(cursor(SELECT d FROM tf_test), "
+          "cursor(SELECT d2 from tf_test)))",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(20));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(ct_binding_column2(cursor(SELECT x FROM tf_test), "
+          "cursor(SELECT x from tf_test)))",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(30));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(ct_binding_column2(cursor(SELECT d FROM tf_test), "
+          "cursor(SELECT x from tf_test)))",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(40));
+    }
+    // TextEncodingDict
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(ct_binding_column2(cursor(SELECT base FROM sd_test),"
+          "cursor(SELECT derived from sd_test)))",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+      std::vector<std::string> expected_result_set{"hello", "foo", "bar", "world", "baz"};
+      for (size_t i = 0; i < 5; i++) {
+        auto row = rows->getNextRow(true, false);
+        auto s = boost::get<std::string>(TestHelpers::v<NullableString>(row[0]));
+        ASSERT_EQ(s, expected_result_set[i]);
+      }
+    }
+  }
+}
+
 TEST_F(TableFunctions, Unsupported) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

@@ -603,3 +603,37 @@ int32_t sort_column_limit__cpu_template(const Column<T>& input,
   }
   return limit;
 }
+
+// clang-format off
+/*
+  UDTF: ct_binding_column2__cpu_template(Column<T>, Column<U>) -> Column<K>, T=[int32_t, double], U=[int32_t, double], K=[int32_t]
+  UDTF: ct_binding_column2__cpu_template(Column<T>, Column<T>) -> Column<T> | input_id=args<0>, T=[TextEncodingDict]
+*/
+// clang-format on
+template <typename T, typename U, typename K>
+int32_t ct_binding_column2__cpu_template(const Column<T>& input1,
+                                         const Column<U>& input2,
+                                         Column<K>& out) {
+  if constexpr (std::is_same<T, TextEncodingDict>::value &&
+                std::is_same<U, TextEncodingDict>::value) {
+    set_output_row_size(input1.size());
+    for (int64_t i = 0; i < input1.size(); i++) {
+      out[i] = input1[i];
+    }
+    return input1.size();
+  }
+
+  set_output_row_size(1);
+  if constexpr (std::is_same<T, int32_t>::value && std::is_same<U, double>::value) {
+    out[0] = 10;
+  } else if constexpr (std::is_same<T, double>::value && std::is_same<U, double>::value) {
+    out[0] = 20;
+  } else if constexpr (std::is_same<T, int32_t>::value &&
+                       std::is_same<U, int32_t>::value) {
+    out[0] = 30;
+  } else if constexpr (std::is_same<T, double>::value &&
+                       std::is_same<U, int32_t>::value) {
+    out[0] = 40;
+  }
+  return 1;
+}

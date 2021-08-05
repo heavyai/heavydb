@@ -43,13 +43,23 @@ Supported annotation labels are:
 # Author: Pearu Peterson
 # Created: January 2021
 
+
 import os
-import re
 import sys
-from collections import namedtuple
+import itertools
+import copy
+from abc import abstractmethod
 
-Signature = namedtuple('Signature', ['name', 'inputs', 'outputs', 'line'])
+from collections import deque, namedtuple
 
+if sys.version_info > (3, 0):
+    from abc import ABC
+    from collections.abc import Iterable
+else:
+    from abc import ABCMeta as ABC
+    from collections import Iterable
+
+# fmt: off
 Signature = namedtuple('Signature', ['name', 'inputs', 'outputs', 'input_annotations', 'output_annotations'])
 
 ExtArgumentTypes = ''' Int8, Int16, Int32, Int64, Float, Double, Void, PInt8, PInt16,
@@ -85,9 +95,6 @@ for t in ['Int8', 'Int16', 'Int32', 'Int64', 'Float', 'Double', 'Bool',
     translate_map[t.lower()] = t
     if t.startswith('Int'):
         translate_map[t.lower() + '_t'] = t
-
-
-_is_int = re.compile(r'\d+').match
 
 
 class Bracket:
@@ -137,6 +144,11 @@ class Bracket:
         """
         if self.is_column():
             return Bracket('Cursor', args=(self,))
+        return self
+
+    def apply_column(self):
+        if not self.is_column() and not self.is_column_list():
+            return Bracket('Column' + self.name)
         return self
 
     def apply_namespace(self, ns='ExtArgumentType'):
@@ -246,52 +258,958 @@ def line_is_incomplete(line):
     # TODO: try to parse the line to be certain about completeness.
     # `!' is used to separate the UDTF signature and the expected result
     return line.endswith(',') or line.endswith('->') or line.endswith('!')
+# fmt: on
 
 
-def find_signatures(input_file):
-    """Returns a list of parsed UDTF signatures.
-    """
+class TokenizeException(Exception):
+    pass
 
-    def get_function_name(line):
-        return line.split('(')[0]
 
-    def get_types_and_annotations(line):
-        """Line is a comma separated string of types.
+class ParserException(Exception):
+    pass
+
+
+# Tokens
+class Token:
+    LESS = (1,)  # <
+    GREATER = (2,)  # >
+    COMMA = (3,)  # ,
+    EQUAL = (4,)  # =
+    RARROW = (5,)  # ->
+    STRING = (6,)  #
+    NUMBER = (7,)  #
+    VBAR = (8,)  # |
+    BANG = (9,)  # !
+    LPAR = (10,)  # (
+    RPAR = (11,)  # )
+    LSQB = (12,)  # [
+    RSQB = (13,)  # ]
+
+    def __init__(self, type, lexeme):
         """
-        rest = line.strip()
-        types, annotations = [], []
-        while rest:
-            i = find_comma(rest)
-            if i == -1:
-                type_annot, rest = rest, ''
+        Parameters
+        ----------
+        type : int
+          One of the tokens in the list above
+        lexeme : str
+          Corresponding string in the text
+        """
+        self.type = type
+        self.lexeme = lexeme
+
+    @classmethod
+    def tok_name(cls, token):
+        names = {
+            Token.LESS: "LESS",
+            Token.GREATER: "GREATER",
+            Token.COMMA: "COMMA",
+            Token.EQUAL: "EQUAL",
+            Token.RARROW: "RARROW",
+            Token.STRING: "STRING",
+            Token.NUMBER: "NUMBER",
+            Token.VBAR: "VBAR",
+            Token.BANG: "BANG",
+            Token.LPAR: "LPAR",
+            Token.RPAR: "RPAR",
+            Token.LSQB: "LSQB",
+            Token.RSQB: "RSQB",
+        }
+        return names.get(token)
+
+    def __str__(self):
+        return 'Token(%s, "%s")' % (Token.tok_name(self.type), self.lexeme)
+
+    __repr__ = __str__
+
+
+class Tokenize:
+    def __init__(self, line):
+        self._line = line
+        self._tokens = []
+        self.start = 0
+        self.curr = 0
+        self.tokenize()
+
+    @property
+    def line(self):
+        return self._line
+
+    @property
+    def tokens(self):
+        return self._tokens
+
+    def tokenize(self):
+        while not self.is_at_end():
+            self.start = self.curr
+
+            if self.is_token_whitespace():
+                self.consume_whitespace()
+            elif self.is_digit():
+                self.consume_number()
+            elif self.is_token_alphanum():
+                self.consume_alphanum()
+            elif self.can_token_be_double_char():
+                self.consume_double_char()
             else:
-                type_annot, rest = rest[:i].rstrip(), rest[i+1:].lstrip()
-            if '|' in type_annot:
-                typ, annots = type_annot.split('|', 1)
-                typ, annots = typ.rstrip(), annots.lstrip().split('|')
+                self.consume_single_char()
+
+    def is_at_end(self):
+        return len(self.line) == self.curr
+
+    def add_token(self, type):
+        lexeme = self.line[self.start:self.curr + 1]
+        self._tokens.append(Token(type, lexeme))
+
+    def lookahead(self):
+        if self.curr + 1 >= len(self.line):
+            return None
+        return self.line[self.curr + 1]
+
+    def advance(self):
+        self.curr += 1
+
+    def peek(self):
+        return self.line[self.curr]
+
+    def can_token_be_double_char(self):
+        char = self.peek()
+        return char in ("-",)
+
+    def consume_double_char(self):
+        ahead = self.lookahead()
+        if ahead == ">":
+            self.advance()
+            self.add_token(Token.RARROW)  # ->
+            self.advance()
+        else:
+            self.raise_tokenize_error()
+
+    def consume_single_char(self):
+        char = self.peek()
+        if char == "(":
+            self.add_token(Token.LPAR)
+        elif char == ")":
+            self.add_token(Token.RPAR)
+        elif char == "<":
+            self.add_token(Token.LESS)
+        elif char == ">":
+            self.add_token(Token.GREATER)
+        elif char == ",":
+            self.add_token(Token.COMMA)
+        elif char == "=":
+            self.add_token(Token.EQUAL)
+        elif char == "|":
+            self.add_token(Token.VBAR)
+        elif char == "!":
+            self.add_token(Token.BANG)
+        elif char == "[":
+            self.add_token(Token.LSQB)
+        elif char == "]":
+            self.add_token(Token.RSQB)
+        else:
+            self.raise_tokenize_error()
+        self.advance()
+
+    def consume_whitespace(self):
+        self.advance()
+
+    def consume_alphanum(self):
+        while True:
+            char = self.lookahead()
+            if char and char.isalnum() or char == "_":
+                self.advance()
             else:
-                typ, annots = type_annot, []
-            types.append(typ)
-            pairs = []
-            for annot in annots:
-                label, value = annot.strip().split('=', 1)
-                label, value = label.rstrip(), value.lstrip()
-                pairs.append((label, value))
-            annotations.append(pairs)
-        return types, annotations
+                break
+        self.add_token(Token.STRING)
+        self.advance()
 
-    def get_input_types_and_annotations(line):
-        start = line.rfind('(') + 1
-        end = line.find(')')
-        assert -1 not in [start, end], line
-        return get_types_and_annotations(line[start:end])
+    def consume_number(self):
+        while True:
+            char = self.lookahead()
+            if char.isdigit() or char == "_":
+                self.advance()
+            else:
+                break
+        self.add_token(Token.NUMBER)
+        self.advance()
 
-    def get_output_types_and_annotations(line):
-        start = line.rfind('->') + 2
-        end = len(line)
-        assert -1 not in [start, end], line
-        return get_types_and_annotations(line[start:end])
+    def is_token_alphanum(self):
+        return self.peek().isalnum() or self.peek() == "_"
 
+    def is_digit(self):
+        return self.peek().isdigit()
+
+    def is_alpha(self):
+        return self.peek().isalpha()
+
+    def is_token_whitespace(self):
+        return self.peek().isspace()
+
+    def raise_tokenize_error(self):
+        curr = self.curr
+        char = self.peek()
+        raise TokenizeException(
+            'Could not match char "%s" at pos %d on line\n%s' % (char, curr, self.line)
+        )
+
+
+class AstVisitor(object):
+    __metaclass__ = ABC
+
+    @abstractmethod
+    def visit_udtf_node(self, node):
+        pass
+
+    @abstractmethod
+    def visit_composed_node(self, node):
+        pass
+
+    @abstractmethod
+    def visit_arg_node(self, node):
+        pass
+
+    @abstractmethod
+    def visit_primitive_node(self, node):
+        pass
+
+    @abstractmethod
+    def visit_annotation_node(self, node):
+        pass
+
+    @abstractmethod
+    def visit_template_node(self, node):
+        pass
+
+
+class AstTransformer(AstVisitor):
+    """Only overload the methods you need"""
+
+    def visit_udtf_node(self, udtf_node):
+        udtf = copy.copy(udtf_node)
+        udtf.inputs = [arg.accept(self) for arg in udtf.inputs]
+        udtf.outputs = [arg.accept(self) for arg in udtf.outputs]
+        if udtf.templates:
+            udtf.templates = [t.accept(self) for t in udtf.templates]
+        return udtf
+
+    def visit_composed_node(self, composed_node):
+        c = copy.copy(composed_node)
+        c.inner = [i.accept(self) for i in c.inner]
+        return c
+
+    def visit_arg_node(self, arg_node):
+        arg_node = copy.copy(arg_node)
+        arg_node.type = arg_node.type.accept(self)
+        if arg_node.annotations:
+            arg_node.annotations = [a.accept(self) for a in arg_node.annotations]
+        return arg_node
+
+    def visit_primitive_node(self, primitive_node):
+        return copy.copy(primitive_node)
+
+    def visit_template_node(self, template_node):
+        return copy.copy(template_node)
+
+    def visit_annotation_node(self, annotation_node):
+        return copy.copy(annotation_node)
+
+
+class AstPrinter(AstVisitor):
+    """Returns a line formatted. Useful for testing"""
+
+    def visit_udtf_node(self, udtf_node):
+        name = udtf_node.name
+        inputs = ", ".join([arg.accept(self) for arg in udtf_node.inputs])
+        outputs = ", ".join([arg.accept(self) for arg in udtf_node.outputs])
+        if udtf_node.templates:
+            templates = ", ".join([t.accept(self) for t in udtf_node.templates])
+            return "%s(%s) -> %s, %s" % (name, inputs, outputs, templates)
+        else:
+            return "%s(%s) -> %s" % (name, inputs, outputs)
+
+    def visit_template_node(self, template_node):
+        # T=[T1, T2, ..., TN]
+        key = template_node.key
+        types = ['"%s"' % typ for typ in template_node.types]
+        return "%s=[%s]" % (key, ", ".join(types))
+
+    def visit_annotation_node(self, annotation_node):
+        # key=value
+        key = annotation_node.key
+        value = annotation_node.value
+        return "%s=%s" % (key, value)
+
+    def visit_arg_node(self, arg_node):
+        # type | annotation
+        typ = arg_node.type.accept(self)
+        if arg_node.annotations:
+            ann = " | ".join([a.accept(self) for a in arg_node.annotations])
+            s = "%s | %s" % (typ, ann)
+        else:
+            s = "%s" % (typ,)
+        # insert input_id=args<0> if input_id is not specified
+        if s == "ColumnTextEncodingDict" and arg_node.kind == "output":
+            return s + " | input_id=args<0>"
+        return s
+
+    def visit_composed_node(self, composed_node):
+        T = composed_node.inner[0].accept(self)
+        if composed_node.is_column():
+            # Column<T>
+            assert len(composed_node.inner) == 1
+            return "Column" + T
+        if composed_node.is_column_list():
+            # ColumnList<T>
+            assert len(composed_node.inner) == 1
+            return "ColumnList" + T
+        if composed_node.is_output_buffer_sizer():
+            # kConstant<N>
+            N = T
+            assert len(composed_node.inner) == 1
+            return translate_map.get(composed_node.type) + "<%s>" % (N,)
+        if composed_node.is_cursor():
+            # Cursor<T1, T2, ..., TN>
+            Ts = ", ".join([i.accept(self) for i in composed_node.inner])
+            return "Cursor<%s>" % (Ts)
+        raise ValueError(composed_node)
+
+    def visit_primitive_node(self, primitive_node):
+        t = primitive_node.type
+        if primitive_node.is_output_buffer_sizer():
+            # arg_pos is zero-based
+            return translate_map.get(t, t) + "<%d>" % (
+                primitive_node.get_parent(ArgNode).arg_pos + 1,
+            )
+        return translate_map.get(t, t)
+
+
+def product_dict(**kwargs):
+    keys = kwargs.keys()
+    vals = kwargs.values()
+    for instance in itertools.product(*vals):
+        yield dict(zip(keys, instance))
+
+
+class TemplateTransformer(AstTransformer):
+    """Expand template definition into multiple inputs"""
+
+    def visit_udtf_node(self, udtf_node):
+        if not udtf_node.templates:
+            return udtf_node
+
+        udtfs = []
+
+        d = dict([(node.key, node.types) for node in udtf_node.templates])
+        name = udtf_node.name
+
+        for product in product_dict(**d):
+            self.mapping_dict = product
+            inputs = [input_arg.accept(self) for input_arg in udtf_node.inputs]
+            outputs = [output_arg.accept(self) for output_arg in udtf_node.outputs]
+            udtfs.append(UdtfNode(name, inputs, outputs, None))
+            self.mapping_dict = {}
+
+        if len(udtfs) == 1:
+            return udtfs[0]
+
+        return udtfs
+
+    def visit_composed_node(self, composed_node):
+        typ = composed_node.type
+        typ = self.mapping_dict.get(typ, typ)
+
+        inner = [i.accept(self) for i in composed_node.inner]
+        return composed_node.copy(typ, inner)
+
+    def visit_primitive_node(self, primitive_node):
+        typ = primitive_node.type
+        typ = self.mapping_dict.get(typ, typ)
+        return primitive_node.copy(typ)
+
+
+class NormalizeTransformer(AstTransformer):
+    def visit_primitive_node(self, primitive_node):
+        """
+        * Rename nodes using translate_map as dictionary
+            int -> Int32
+            float -> Float
+
+        * Fix kUserSpecifiedRowMultiplier without a pos arg
+        """
+        t = primitive_node.type
+
+        if primitive_node.is_output_buffer_sizer():
+            pos = PrimitiveNode(str(primitive_node.get_parent(ArgNode).arg_pos + 1))
+            node = ComposedNode(t, inner=[pos])
+            return node
+
+        return primitive_node.copy(translate_map.get(t, t))
+
+
+class SignatureTransformer(AstTransformer):
+    def visit_udtf_node(self, udtf_node):
+        name = udtf_node.name
+        inputs = []
+        input_annotations = []
+        outputs = []
+        output_annotations = []
+
+        for i in udtf_node.inputs:
+            inp, anns = i.accept(self)
+            if isinstance(inp, list):
+                inputs += inp
+            else:
+                inputs.append(inp)
+            input_annotations.append(anns)
+
+        for o in udtf_node.outputs:
+            inp, anns = o.accept(self)
+            if isinstance(inp, list):
+                outputs += inp
+            else:
+                outputs.append(inp)
+            output_annotations.append(anns)
+        return Signature(name, inputs, outputs, input_annotations, output_annotations)
+
+    def visit_arg_node(self, arg_node):
+        t = arg_node.type.accept(self)
+        anns = [a.accept(self) for a in arg_node.annotations]
+        return t, anns
+
+    def visit_composed_node(self, composed_node):
+        typ = translate_map.get(composed_node.type, composed_node.type)
+        inner = [i.accept(self) for i in composed_node.inner]
+        if composed_node.is_cursor():
+            inner = list(map(lambda x: x.apply_column(), inner))
+            return Bracket(typ, args=tuple(inner))
+        elif composed_node.is_output_buffer_sizer():
+            return Bracket(typ, args=tuple(inner))
+        else:
+            return Bracket(typ + str(inner[0]))
+
+    def visit_primitive_node(self, primitive_node):
+        t = primitive_node.type
+        return Bracket(translate_map.get(t, t))
+
+    def visit_annotation_node(self, annotation_node):
+        key = annotation_node.key
+        value = annotation_node.value
+        return (key, value)
+
+
+class Node(object):
+    __metaclass__ = ABC
+
+    @abstractmethod
+    def accept(self, visitor):
+        pass
+
+    @abstractmethod
+    def __str__(self):
+        pass
+
+    def get_parent(self, _class):
+        while self.parent is not None:
+            if isinstance(self.parent, _class):
+                return self.parent
+
+        raise ValueError("could not find parent with given class %s" % (_class))
+
+    def copy(self, *args):
+        other = self.__class__(*args)
+
+        for attr, value in self.__dict__.items():
+            if attr not in other.__dict__:
+                setattr(other, attr, value)
+
+        return other
+
+
+class IterableNode(Iterable):
+    pass
+
+
+class UdtfNode(Node, IterableNode):
+    def __init__(self, name, inputs, outputs, templates):
+        """
+        Parameters
+        ----------
+        name : str
+        inputs : list[ArgNode]
+        outputs : list[ArgNode]
+        templates : Optional[list[TemplateNode]]
+        """
+        self.name = name
+        self.inputs = inputs
+        self.outputs = outputs
+        self.templates = templates
+
+    def accept(self, visitor):
+        return visitor.visit_udtf_node(self)
+
+    def __str__(self):
+        name = self.name
+        inputs = [str(i) for i in self.inputs]
+        outputs = [str(o) for o in self.outputs]
+        if self.templates:
+            templates = [str(t) for t in self.templates]
+            return "UDFT: %s (%s) -> %s, %s" % (name, inputs, outputs, templates)
+        else:
+            return "UDFT: %s (%s) -> %s" % (name, inputs, outputs)
+
+    def __iter__(self):
+        for i in self.inputs:
+            yield i
+        for o in self.outputs:
+            yield o
+        if self.templates:
+            for t in self.templates:
+                yield t
+
+    __repr__ = __str__
+
+
+class ArgNode(Node, IterableNode):
+    def __init__(self, type, annotations):
+        """
+        Parameters
+        ----------
+        type : TypeNode
+        annotations : List[AnnotationNode]
+        """
+        self.type = type
+        self.annotations = annotations
+
+    def accept(self, visitor):
+        return visitor.visit_arg_node(self)
+
+    def __str__(self):
+        t = str(self.type)
+        anns = ""
+        if self.annotations:
+            anns = "| ".join([str(a) for a in self.annotations])
+            return "ArgNode(%s %s)" % (t, anns)
+        return "ArgNode(%s)" % (t)
+
+    def __iter__(self):
+        yield self.type
+        for a in self.annotations:
+            yield a
+
+    __repr__ = __str__
+
+
+class TypeNode(Node):
+    def is_column(self):
+        return self.type == "Column"
+
+    def is_column_list(self):
+        return self.type == "ColumnList"
+
+    def is_cursor(self):
+        return self.type == "Cursor"
+
+    def is_output_buffer_sizer(self):
+        t = self.type
+        return translate_map.get(t, t) in OutputBufferSizeTypes
+
+
+class PrimitiveNode(TypeNode):
+    def __init__(self, type):
+        """
+        Parameters
+        ----------
+        type : str
+        """
+        self.type = type
+
+    def accept(self, visitor):
+        return visitor.visit_primitive_node(self)
+
+    def __str__(self):
+        return "Primitive(%s)" % (self.type)
+
+    __repr__ = __str__
+
+
+class ComposedNode(TypeNode, IterableNode):
+    def __init__(self, type, inner):
+        """
+        Parameters
+        ----------
+        type : str
+        inner : list[TypeNode]
+        """
+        self.type = type
+        self.inner = inner
+
+    def accept(self, visitor):
+        return visitor.visit_composed_node(self)
+
+    def cursor_length(self):
+        assert self.is_cursor()
+        return len(self.inner)
+
+    def __str__(self):
+        i = ", ".join([str(i) for i in self.inner])
+        return "Composed(%s<%s>)" % (self.type, i)
+
+    def __iter__(self):
+        for i in self.inner:
+            yield i
+
+    __repr__ = __str__
+
+
+class AnnotationNode(Node):
+    def __init__(self, key, value):
+        """
+        Parameters
+        ----------
+        key : str
+        value : str
+        """
+        self.key = key
+        self.value = value
+
+    def accept(self, visitor):
+        return visitor.visit_annotation_node(self)
+
+    def __str__(self):
+        printer = AstPrinter()
+        return self.accept(printer)
+
+    __repr__ = __str__
+
+
+class TemplateNode(Node):
+    def __init__(self, key, types):
+        """
+        Parameters
+        ----------
+        key : str
+        types : tuple[str]
+        """
+        self.key = key
+        self.types = types
+
+    def accept(self, visitor):
+        return visitor.visit_template_node(self)
+
+    def __str__(self):
+        printer = AstPrinter()
+        return self.accept(printer)
+
+    __repr__ = __str__
+
+
+class Pipeline(object):
+    def __init__(self, *passes):
+        self.passes = passes
+
+    def __call__(self, lst):
+        if not isinstance(lst, list):
+            lst = [lst]
+
+        for c in self.passes:
+            l2 = []
+            for i, e in enumerate(lst):
+                node = e.accept(c())
+                if isinstance(node, list):
+                    l2.extend(node)
+                else:
+                    l2.append(node)
+                lst = l2
+        return lst
+
+
+class Parser:
+    def __init__(self, line):
+        self._tokens = Tokenize(line).tokens
+        self._curr = 0
+
+    @property
+    def tokens(self):
+        return self._tokens
+
+    def is_at_end(self):
+        return self._curr >= len(self._tokens)
+
+    def current_token(self):
+        return self._tokens[self._curr]
+
+    def advance(self):
+        self._curr += 1
+
+    def expect(self, expected_type):
+        curr_token = self.current_token()
+        msg = "Expected token %s but got %s at pos %d.\n Tokens: %s" % (
+            curr_token,
+            Token.tok_name(expected_type),
+            self._curr,
+            self._tokens,
+        )
+        assert curr_token.type == expected_type, msg
+        self.advance()
+
+    def consume(self, expected_type):
+        """consumes the current token iff its type matches the
+        expected_type. Otherwise, an error is raised
+        """
+        curr_token = self.current_token()
+        if curr_token.type == expected_type:
+            self.advance()
+            return curr_token
+        else:
+            expected_token = Token.tok_name(expected_type)
+            self.raise_parser_error(
+                "Token mismatch at function consume. "
+                'Expected type "%s" but got token "%s"' % (expected_token, curr_token)
+            )
+
+    def current_pos(self):
+        return self._curr
+
+    def raise_parser_error(self, msg=None):
+        if not msg:
+            token = self.current_token()
+            pos = self.current_pos()
+            tokens = self.tokens
+            msg = "\n\nError while trying to parse token %s at pos %d.\n" "Tokens: %s" % (
+                token,
+                pos,
+                tokens,
+            )
+        raise ParserException(msg)
+
+    def match(self, expected_type):
+        curr_token = self.current_token()
+        return curr_token.type == expected_type
+
+    def parse_udtf(self):
+        """fmt: off
+
+        udtf: STRING "(" args ")" "->" args ("," templates)?
+
+        fmt: on
+        """
+        name = self.parse_string()
+        self.expect(Token.LPAR)  # (
+        input_args = self.parse_args()
+        self.expect(Token.RPAR)  # )
+        self.expect(Token.RARROW)
+        output_args = self.parse_args()
+
+        templates = None
+        if not self.is_at_end() and self.match(Token.COMMA):
+            self.consume(Token.COMMA)
+            templates = self.parse_templates()
+
+        # set arg_pos
+        i = 0
+        for arg in input_args:
+            arg.arg_pos = i
+            arg.kind = "input"
+            i += arg.type.cursor_length() if arg.type.is_cursor() else 1
+
+        i = 0
+        for arg in output_args:
+            arg.arg_pos = i
+            arg.kind = "output"
+            i += arg.type.cursor_length() if arg.type.is_cursor() else 1
+
+        return UdtfNode(name, input_args, output_args, templates)
+
+    def parse_args(self):
+        """fmt: off
+
+        args: arg ("," arg)*
+
+        fmt: on
+        """
+        args = []
+        args.append(self.parse_arg())
+        while not self.is_at_end() and self.match(Token.COMMA):
+            try:
+                curr = self._curr
+                self.consume(Token.COMMA)
+                args.append(self.parse_arg())
+            except:  # noqa E722
+                self._curr = curr
+                break
+        return args
+
+    def parse_arg(self):
+        """fmt: off
+
+        arg: type ("|" annotation)*
+
+        fmt: on
+        """
+        typ = self.parse_type()
+        if not self.is_at_end() and self.match(Token.EQUAL):
+            # not an argument
+            self.raise_parser_error()
+
+        annotations = []
+        while not self.is_at_end() and self.match(Token.VBAR):
+            self.consume(Token.VBAR)
+            annotations.append(self.parse_annotation())
+        return ArgNode(typ, annotations)
+
+    def parse_type(self):
+        """fmt: off
+
+        type: composed
+            | primitive
+
+        fmt: on
+        """
+        # to-do: find a better way to save the state
+        try:
+            curr = self._curr
+            node = self.parse_composed()
+        except ParserException:
+            self._curr = curr
+            node = self.parse_primitive()
+        return node
+
+    def parse_composed(self):
+        """fmt: off
+
+        composed: STRING "<" type ("," type)* ">"
+
+        fmt: on
+        """
+        token = self.consume(Token.STRING)
+        try:
+            self.consume(Token.LESS)
+        except:  # noqa E722
+            raise ParserException()
+        inner = [self.parse_type()]
+        while self.match(Token.COMMA):
+            self.consume(Token.COMMA)
+            inner.append(self.parse_type())
+        self.consume(Token.GREATER)
+        return ComposedNode(token.lexeme, inner)
+
+    def parse_primitive(self):
+        """fmt: off
+
+        primitive: STRING
+                 | NUMBER
+
+        fmt: on
+        """
+        if self.match(Token.STRING):
+            token = self.consume(Token.STRING)
+        elif self.match(Token.NUMBER):
+            token = self.consume(Token.NUMBER)
+        return PrimitiveNode(token.lexeme)
+
+    def parse_templates(self):
+        """fmt: off
+
+        templates: template ("," template)
+
+        fmt: on
+        """
+        T = []
+        T.append(self.parse_template())
+        while not self.is_at_end() and self.match(Token.COMMA):
+            self.consume(Token.COMMA)
+            T.append(self.parse_template())
+        return T
+
+    def parse_template(self):
+        """fmt: off
+
+        template: STRING "=" "[" STRING ("," STRING)* "]"
+
+        fmt: on
+        """
+        key = self.consume(Token.STRING).lexeme
+        types = []
+        self.consume(Token.EQUAL)
+        self.consume(Token.LSQB)
+        types.append(self.consume(Token.STRING).lexeme)
+        while self.match(Token.COMMA):
+            self.consume(Token.COMMA)
+            types.append(self.consume(Token.STRING).lexeme)
+        self.consume(Token.RSQB)
+        return TemplateNode(key, tuple(types))
+
+    def parse_annotation(self):
+        """fmt: off
+
+        annotation: STRING "=" STRING ("<" NUMBER ("," NUMBER) ">")?
+
+        fmt: on
+        """
+        key = self.consume(Token.STRING).lexeme
+        self.consume(Token.EQUAL)
+        value = self.consume(Token.STRING).lexeme
+        if not self.is_at_end() and self.match(Token.LESS):
+            self.consume(Token.LESS)
+            num1 = self.consume(Token.NUMBER)
+            if self.match(Token.COMMA):
+                self.consume(Token.COMMA)
+                num2 = self.consume(Token.NUMBER)
+                value += "<%s,%s>" % (num1.lexeme, num2.lexeme)
+            else:
+                value += "<%s>" % (num1.lexeme)
+            self.consume(Token.GREATER)
+        return AnnotationNode(key, value)
+
+    def parse_string(self):
+        token = self.consume(Token.STRING)
+        return token.lexeme
+
+    def parse(self):
+        """fmt: off
+
+        udtf: STRING "(" args ")" "->" args ("," templates)?
+
+        args: arg ("," arg)*
+
+        arg: type ("|" annotation)*
+
+        type: composed
+            | primitive
+
+        composed: STRING "<" type ("," type)* ">"
+        primitive: STRING
+                 | NUMBER
+
+        annotation: STRING "=" STRING ("<" NUMBER ("," NUMBER) ">")?
+
+        templates: template ("," template)
+        template: STRING "=" "[" STRING ("," STRING)* "]"
+
+        STRING: [A-Za-z0-9]
+
+        fmt: on
+        """
+        self._curr = 0
+        udtf = self.parse_udtf()
+
+        # set parent
+
+        udtf.parent = None
+        d = deque()
+        d.append(udtf)
+        while len(d):
+            node = d.pop()
+            if isinstance(node, Iterable):
+                for child in node:
+                    child.parent = node
+                    d.append(child)
+        return udtf 
+
+
+# fmt: off
+def find_signatures(input_file):
+    """Returns a list of parsed UDTF signatures."""
     signatures = []
 
     last_line = None
@@ -316,79 +1234,29 @@ def find_signatures(input_file):
         expected_result = None
         if '!' in line:
             line, expected_result = line.split('!', 1)
-            expected_result = expected_result.strip()
+            expected_result = expected_result.strip().split('!')
+            expected_result = list(map(lambda s: s.strip(), expected_result))
 
-        name = get_function_name(line)
-        input_types, input_annotations = get_input_types_and_annotations(line)
-        output_types, output_annotations = get_output_types_and_annotations(line)
+        ast = Parser(line).parse()
 
-        input_types = tuple([Bracket.parse(typ).normalize(kind='input') for typ in input_types])
-        output_types = tuple([Bracket.parse(typ).normalize(kind='output') for typ in output_types])
-
-        # Apply default sizer
-        has_sizer = False
-        consumed_nargs = 0
-        for i, t in enumerate(input_types):
-            if t.is_output_buffer_sizer():
-                has_sizer = True
-                if t.is_row_multiplier():
-                    if not t.args:
-                        t.args = Bracket.parse('RowMultiplier<%s>' % (consumed_nargs + 1)).args
-            elif t.is_cursor():
-                consumed_nargs += len(t.args)
-            else:
-                consumed_nargs += 1
-        if not has_sizer:
-            t = Bracket.parse('kTableFunctionSpecifiedParameter<1>')
-            input_types += (t,)
-
-        # Apply default input_id to output TextEncodedDict columns
-        default_input_id = None
-        for i, t in enumerate(input_types):
-            if t.is_column_text_encoded_dict():
-                default_input_id = 'args<%s>' % (i,)
-                break
-            elif t.is_column_list_text_encoded_dict():
-                default_input_id = 'args<%s, 0>' % (i,)
-                break
-        for t, annots in zip(output_types, output_annotations):
-            if t.is_any_text_encoded_dict():
-                has_input_id = False
-                for a in annots:
-                    if a[0] == 'input_id':
-                        has_input_id = True
-                        break
-                if not has_input_id:
-                    assert default_input_id is not None
-                    annots.append(('input_id', default_input_id))
-
-        result = name + '('
-        result += ', '.join([' | '.join([str(t)] + [k + '=' + v for k, v in a]) for t, a in zip(input_types, input_annotations)])
-        result += ') -> '
-        result += ', '.join([' | '.join([str(t)] + [k + '=' + v for k, v in a]) for t, a in zip(output_types, output_annotations)])
 
         if expected_result is not None:
-            assert result == expected_result, (result, expected_result)
-            if 1:
-                # Make sure that we have stable parsing result
-                line = result
-                name = get_function_name(line)
-                input_types, input_annotations = get_input_types_and_annotations(line)
-                output_types, output_annotations = get_output_types_and_annotations(line)
-                input_types = tuple([Bracket.parse(typ).normalize(kind='input') for typ in input_types])
-                output_types = tuple([Bracket.parse(typ).normalize(kind='output') for typ in output_types])
-                result2 = name + '('
-                result2 += ', '.join([' | '.join([str(t)] + [k + '=' + v for k, v in a]) for t, a in zip(input_types, input_annotations)])
-                result2 += ') -> '
-                result2 += ', '.join([' | '.join([str(t)] + [k + '=' + v for k, v in a]) for t, a in zip(output_types, output_annotations)])
-                assert result == result2, (result, result2)
-        signatures.append(Signature(name, input_types, output_types, input_annotations, output_annotations))
+            # Template transformer expands templates into multiple lines
+            result = Pipeline(TemplateTransformer, NormalizeTransformer, AstPrinter)(ast)
+            assert set(result) == set(expected_result), "\n\tresult: %s != \n\texpected: %s" % (
+                result,
+                expected_result,
+            )
+
+        signature = Pipeline(TemplateTransformer,
+                             NormalizeTransformer,
+                             SignatureTransformer)(ast)
+        if isinstance(signature, list):
+            signatures.extend(signature)
+        else:
+            signatures.append(signature)
 
     return signatures
-
-
-def is_template_function(sig):
-    return '_template' in sig.name
 
 
 def build_template_function_call(caller, callee, input_types, output_types):
@@ -438,6 +1306,10 @@ def format_annotations(annotations_):
     s += ', '.join(('{' + ', '.join('{"%s", "%s"}' % (k, v) for k, v in a) + '}') for a in annotations_)
     s += "}"
     return s
+
+
+def is_template_function(sig):
+    return "_template" in sig.name
 
 
 def parse_annotations(input_files):
@@ -556,4 +1428,3 @@ if dirname and not os.path.exists(dirname):
 f = open(output_filename, 'w')
 f.write(content)
 f.close()
-
