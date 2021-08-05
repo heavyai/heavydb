@@ -1627,6 +1627,22 @@ TEST_F(ImportTestGDAL, KML_Simple) {
   }
 }
 
+TEST_F(ImportTestGDAL, FlatGeobuf_Point_Import) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.fgb");
+  import_test_geofile_importer(file_path.string(), "geospatial", false, true, false);
+  check_geo_gdal_point_import();
+  check_geo_num_rows("omnisci_geo, trip", 10);
+}
+
+TEST_F(ImportTestGDAL, FlatGeobuf_MultiPolygon_Import) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.fgb");
+  import_test_geofile_importer(file_path.string(), "geospatial", false, true, false);
+  check_geo_gdal_poly_or_mpoly_import(false, false);  // poly, not exploded
+  check_geo_num_rows("omnisci_geo, trip", 10);
+}
+
 #ifdef HAVE_AWS_S3
 // s3 compressed (non-parquet) test cases
 TEST_F(ImportTest, S3_One_csv_file) {
@@ -2010,17 +2026,17 @@ class ExportTest : public ::testing::Test {
     }
 
     // select a comparable value from the first row
-    // hopefully immune to any re-ordering due to export query non-determinism
+    // tolerate any re-ordering due to export query non-determinism
     // scope this block so that the ResultSet is destroyed before the table is dropped
-    // @TODO(se) make this mo better
-    // push scope to ensure ResultSet deletion before table drop
     {
       auto rows =
           run_query("SELECT col_big FROM query_export_test_reimport WHERE rowid=0");
       rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
       auto crt_row = rows->getNextRow(true, true);
       const auto col_big = v<int64_t>(crt_row[0]);
-      ASSERT_EQ(20395569495LL, col_big);
+      constexpr std::array<int64_t, 5> values{
+          84212876526LL, 53000912292LL, 31851544292LL, 31334726270LL, 20395569495LL};
+      ASSERT_NE(std::find(values.begin(), values.end(), col_big), values.end());
     }
 
     // drop the table
@@ -2604,6 +2620,55 @@ TEST_F(ExportTest, Shapefile_Zip_Unimplemented) {
     EXPECT_THROW(
         doExport(shp_file, "Shapefile", "Zip", geo_type, NO_ARRAYS, DEFAULT_SRID),
         std::runtime_error);
+  };
+  RUN_TEST_ON_ALL_GEO_TYPES();
+}
+
+TEST_F(ExportTest, FlatGeobuf) {
+  SKIP_ALL_ON_AGGREGATOR();
+  doCreateAndImport();
+  auto run_test = [&](const std::string& geo_type) {
+    std::string exp_file = "query_export_test_fgb_" + geo_type + ".fgb";
+    ASSERT_NO_THROW(
+        doExport(exp_file, "FlatGeobuf", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
+    std::string layer_name = "query_export_test_fgb_" + geo_type;
+    ASSERT_NO_THROW(doCompareWithOGRInfo(exp_file, layer_name, COMPARE_EXPLICIT));
+    doImportAgainAndCompare(exp_file, "FlatGeobuf", geo_type, NO_ARRAYS);
+    removeExportedFile(exp_file);
+  };
+  RUN_TEST_ON_ALL_GEO_TYPES();
+}
+
+TEST_F(ExportTest, FlatGeobuf_Overwrite) {
+  SKIP_ALL_ON_AGGREGATOR();
+  doCreateAndImport();
+  auto run_test = [&](const std::string& geo_type) {
+    std::string exp_file = "query_export_test_fgb_" + geo_type + ".fgb";
+    ASSERT_NO_THROW(
+        doExport(exp_file, "FlatGeobuf", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
+    ASSERT_NO_THROW(
+        doExport(exp_file, "FlatGeobuf", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
+    removeExportedFile(exp_file);
+  };
+  RUN_TEST_ON_ALL_GEO_TYPES();
+}
+
+TEST_F(ExportTest, FlatGeobuf_InvalidName) {
+  SKIP_ALL_ON_AGGREGATOR();
+  doCreateAndImport();
+  std::string geo_type = "point";
+  std::string exp_file = "query_export_test_fgb_" + geo_type + ".jpg";
+  EXPECT_THROW(doExport(exp_file, "FlatGeobuf", "", geo_type, NO_ARRAYS, DEFAULT_SRID),
+               std::runtime_error);
+}
+
+TEST_F(ExportTest, FlatGeobuf_Invalid_SRID) {
+  SKIP_ALL_ON_AGGREGATOR();
+  doCreateAndImport();
+  auto run_test = [&](const std::string& geo_type) {
+    std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".fgb";
+    EXPECT_THROW(doExport(exp_file, "FlatGeobuf", "", geo_type, NO_ARRAYS, INVALID_SRID),
+                 std::runtime_error);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }

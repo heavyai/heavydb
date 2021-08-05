@@ -5575,10 +5575,12 @@ void ExportQueryStmt::parseOptions(
           file_type = import_export::QueryExporter::FileType::kGeoJSONL;
         } else if (file_type_str == "shapefile") {
           file_type = import_export::QueryExporter::FileType::kShapefile;
+        } else if (file_type_str == "flatgeobuf") {
+          file_type = import_export::QueryExporter::FileType::kFlatGeobuf;
         } else {
           throw std::runtime_error(
-              "File Type option must be 'CSV', 'GeoJSON', 'GeoJSONL' or "
-              "'Shapefile'");
+              "File Type option must be 'CSV', 'GeoJSON', 'GeoJSONL', "
+              "'Shapefile', or 'FlatGeobuf'");
         }
       } else if (boost::iequals(*p->get_name(), "layer_name")) {
         const StringLiteral* str_literal =

@@ -61,15 +61,17 @@ void QueryExporterGDAL::cleanUp() {
 
 namespace {
 
-static constexpr std::array<const char*, 4> driver_names = {"INVALID",
+static constexpr std::array<const char*, 5> driver_names = {"INVALID",
                                                             "GeoJSON",
                                                             "GeoJSONSeq",
-                                                            "ESRI Shapefile"};
+                                                            "ESRI Shapefile",
+                                                            "FlatGeobuf"};
 
-static constexpr std::array<const char*, 4> file_type_names = {"CSV",
+static constexpr std::array<const char*, 5> file_type_names = {"CSV",
                                                                "GeoJSON",
                                                                "GeoJSONL",
-                                                               "Shapefile"};
+                                                               "Shapefile",
+                                                               "FlatGeobuf"};
 
 static constexpr std::array<const char*, 3> compression_prefix = {"",
                                                                   "/vsigzip/",
@@ -79,14 +81,15 @@ static constexpr std::array<const char*, 3> compression_suffix = {"", ".gz", ".z
 
 // this table is by file type then by compression type
 // @TODO(se) implement more compression options
-static constexpr std::array<std::array<bool, 3>, 4> compression_implemented = {
+static constexpr std::array<std::array<bool, 3>, 5> compression_implemented = {
     {{true, false, false},    // CSV: none
      {true, true, false},     // GeoJSON: on-the-fly GZip only
      {true, true, false},     // GeoJSONL: on-the-fly GZip only
-     {true, false, false}}};  // Shapefile: none
+     {true, false, false},    // Shapefile: none
+     {true, false, false}}};  // FlatGeobuf: none
 
-static std::array<std::unordered_set<std::string>, 4> file_type_valid_extensions = {
-    {{".csv", ".tsv"}, {".geojson", ".json"}, {".geojson", ".json"}, {".shp"}}};
+static std::array<std::unordered_set<std::string>, 5> file_type_valid_extensions = {
+    {{".csv", ".tsv"}, {".geojson", ".json"}, {".geojson", ".json"}, {".shp"}, {".fgb"}}};
 
 OGRFieldType sql_type_info_to_ogr_field_type(const std::string& name,
                                              const SQLTypeInfo& type_info,
@@ -118,7 +121,8 @@ OGRFieldType sql_type_info_to_ogr_field_type(const std::string& name,
     case kINTERVAL_YEAR_MONTH:
       return OFTInteger64;
     case kARRAY:
-      if (file_type != QueryExporter::FileType::kShapefile) {
+      if (file_type != QueryExporter::FileType::kShapefile &&
+          file_type != QueryExporter::FileType::kFlatGeobuf) {
         switch (type_info.get_subtype()) {
           case kBOOLEAN:
           case kTINYINT:

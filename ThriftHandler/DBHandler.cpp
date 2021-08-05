@@ -3807,7 +3807,7 @@ bool is_a_supported_geo_file(const std::string& path, bool include_gz) {
   if (boost::iends_with(path, ".shp") || boost::iends_with(path, ".geojson") ||
       boost::iends_with(path, ".json") || boost::iends_with(path, ".kml") ||
       boost::iends_with(path, ".kmz") || boost::iends_with(path, ".gdb") ||
-      boost::iends_with(path, ".gdb.zip")) {
+      boost::iends_with(path, ".gdb.zip") || boost::iends_with(path, ".fgb")) {
     return true;
   }
   return false;
