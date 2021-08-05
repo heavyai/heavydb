@@ -4861,6 +4861,11 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
 }  // namespace Parser
 
 // CREATE ROLE payroll_dept_role;
+CreateRoleStmt::CreateRoleStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("role"));
+  role_ = std::make_unique<std::string>(json_str(payload["role"]));
+}
+
 void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
@@ -4872,6 +4877,11 @@ void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 // DROP ROLE payroll_dept_role;
+DropRoleStmt::DropRoleStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("role"));
+  role_ = std::make_unique<std::string>(json_str(payload["role"]));
+}
+
 void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
@@ -5071,6 +5081,32 @@ static void verifyObject(Catalog_Namespace::Catalog& sessionCatalog,
 }
 
 // GRANT SELECT/INSERT/CREATE ON TABLE payroll_table TO payroll_dept_role;
+GrantPrivilegesStmt::GrantPrivilegesStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("type"));
+  type_ = std::make_unique<std::string>(json_str(payload["type"]));
+
+  CHECK(payload.HasMember("target"));
+  target_ = std::make_unique<std::string>(json_str(payload["target"]));
+
+  if (payload.HasMember("privileges")) {
+    CHECK(payload["privileges"].IsArray());
+    for (auto& privilege : payload["privileges"].GetArray()) {
+      auto r = json_str(privilege);
+      // privilege was a StringLiteral
+      //   and is wrapped with quotes which need to get removed
+      boost::algorithm::trim_if(r, boost::is_any_of(" \"'`"));
+      privileges_.emplace_back(r);
+    }
+  }
+  if (payload.HasMember("grantees")) {
+    CHECK(payload["grantees"].IsArray());
+    for (auto& grantee : payload["grantees"].GetArray()) {
+      std::string g = json_str(grantee);
+      grantees_.emplace_back(g);
+    }
+  }
+}
+
 void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
   const auto& currentUser = session.get_currentUser();
@@ -5108,6 +5144,32 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
 }
 
 // REVOKE SELECT/INSERT/CREATE ON TABLE payroll_table FROM payroll_dept_role;
+RevokePrivilegesStmt::RevokePrivilegesStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("type"));
+  type_ = std::make_unique<std::string>(json_str(payload["type"]));
+
+  CHECK(payload.HasMember("target"));
+  target_ = std::make_unique<std::string>(json_str(payload["target"]));
+
+  if (payload.HasMember("privileges")) {
+    CHECK(payload["privileges"].IsArray());
+    for (auto& privilege : payload["privileges"].GetArray()) {
+      auto r = json_str(privilege);
+      // privilege was a StringLiteral
+      //   and is wrapped with quotes which need to get removed
+      boost::algorithm::trim_if(r, boost::is_any_of(" \"'`"));
+      privileges_.emplace_back(r);
+    }
+  }
+  if (payload.HasMember("grantees")) {
+    CHECK(payload["grantees"].IsArray());
+    for (auto& grantee : payload["grantees"].GetArray()) {
+      std::string g = json_str(grantee);
+      grantees_.emplace_back(g);
+    }
+  }
+}
+
 void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
   const auto& currentUser = session.get_currentUser();
@@ -5241,6 +5303,23 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
 }
 
 // GRANT payroll_dept_role TO joe;
+GrantRoleStmt::GrantRoleStmt(const rapidjson::Value& payload) {
+  if (payload.HasMember("roles")) {
+    CHECK(payload["roles"].IsArray());
+    for (auto& role : payload["roles"].GetArray()) {
+      std::string r = json_str(role);
+      roles_.emplace_back(r);
+    }
+  }
+  if (payload.HasMember("grantees")) {
+    CHECK(payload["grantees"].IsArray());
+    for (auto& grantee : payload["grantees"].GetArray()) {
+      std::string g = json_str(grantee);
+      grantees_.emplace_back(g);
+    }
+  }
+}
+
 void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
@@ -5256,7 +5335,24 @@ void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   SysCatalog::instance().grantRoleBatch(get_roles(), get_grantees());
 }
 
-// REVOKE payroll_dept_role FROM joe;get_users
+// REVOKE payroll_dept_role FROM joe;
+RevokeRoleStmt::RevokeRoleStmt(const rapidjson::Value& payload) {
+  if (payload.HasMember("roles")) {
+    CHECK(payload["roles"].IsArray());
+    for (auto& role : payload["roles"].GetArray()) {
+      std::string r = json_str(role);
+      roles_.emplace_back(r);
+    }
+  }
+  if (payload.HasMember("grantees")) {
+    CHECK(payload["grantees"].IsArray());
+    for (auto& grantee : payload["grantees"].GetArray()) {
+      std::string g = json_str(grantee);
+      grantees_.emplace_back(g);
+    }
+  }
+}
+
 void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
@@ -6028,6 +6124,24 @@ void execute_calcite_ddl(
   } else if (ddl_command == "RENAME_USER") {
     auto rename_user_stmt = Parser::RenameUserStmt(payload);
     rename_user_stmt.execute(*session_ptr);
+  } else if (ddl_command == "CREATE_ROLE") {
+    auto create_role_stmt = Parser::CreateRoleStmt(payload);
+    create_role_stmt.execute(*session_ptr);
+  } else if (ddl_command == "DROP_ROLE") {
+    auto drop_role_stmt = Parser::DropRoleStmt(payload);
+    drop_role_stmt.execute(*session_ptr);
+  } else if (ddl_command == "GRANT_ROLE") {
+    auto grant_role_stmt = Parser::GrantRoleStmt(payload);
+    grant_role_stmt.execute(*session_ptr);
+  } else if (ddl_command == "REVOKE_ROLE") {
+    auto revoke_role_stmt = Parser::RevokeRoleStmt(payload);
+    revoke_role_stmt.execute(*session_ptr);
+  } else if (ddl_command == "GRANT_PRIVILEGE") {
+    auto grant_privilege_stmt = Parser::GrantPrivilegesStmt(payload);
+    grant_privilege_stmt.execute(*session_ptr);
+  } else if (ddl_command == "REVOKE_PRIVILEGE") {
+    auto revoke_privilege_stmt = Parser::RevokePrivilegesStmt(payload);
+    revoke_privilege_stmt.execute(*session_ptr);
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }

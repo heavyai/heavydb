@@ -157,7 +157,7 @@ ParserWrapper::ParserWrapper(std::string query_string) {
             is_legacy_ddl_ = true;
           }
         } else {
-          boost::regex create_regex{R"(CREATE\s+(TABLE|VIEW|DATABASE|USER).*)",
+          boost::regex create_regex{R"(CREATE\s+(TABLE|ROLE|VIEW|DATABASE|USER).*)",
                                     boost::regex::extended | boost::regex::icase};
           if (g_enable_calcite_ddl_parser &&
               boost::regex_match(query_string, create_regex)) {
@@ -188,9 +188,10 @@ ParserWrapper::ParserWrapper(std::string query_string) {
           return;
         }
       } else if (ddl == "DROP") {
-        boost::regex drop_regex{R"(DROP\s+(TABLE|VIEW|DATABASE|USER).*)",
+        boost::regex drop_regex{R"(DROP\s+(TABLE|ROLE|VIEW|DATABASE|USER).*)",
                                 boost::regex::extended | boost::regex::icase};
-        if (g_enable_calcite_ddl_parser && boost::regex_match(query_string, drop_regex)) {
+        if (g_enable_calcite_ddl_parser &&
+            (boost::regex_match(query_string, drop_regex))) {
           is_calcite_ddl_ = true;
           is_legacy_ddl_ = false;
           return;
@@ -216,6 +217,24 @@ ParserWrapper::ParserWrapper(std::string query_string) {
                                  boost::regex::extended | boost::regex::icase};
         if (g_enable_calcite_ddl_parser &&
             boost::regex_match(query_string, alter_regex)) {
+          is_calcite_ddl_ = true;
+          is_legacy_ddl_ = false;
+          return;
+        }
+      } else if (ddl == "GRANT") {
+        boost::regex grant_regex{R"(GRANT.*)",
+                                 boost::regex::extended | boost::regex::icase};
+        if (g_enable_calcite_ddl_parser &&
+            boost::regex_match(query_string, grant_regex)) {
+          is_calcite_ddl_ = true;
+          is_legacy_ddl_ = false;
+          return;
+        }
+      } else if (ddl == "REVOKE") {
+        boost::regex revoke_regex{R"(REVOKE.*)",
+                                  boost::regex::extended | boost::regex::icase};
+        if (g_enable_calcite_ddl_parser &&
+            boost::regex_match(query_string, revoke_regex)) {
           is_calcite_ddl_ = true;
           is_legacy_ddl_ = false;
           return;

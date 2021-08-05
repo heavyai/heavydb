@@ -57,7 +57,7 @@ SqlCreate SqlCreateUserMapping(Span s, boolean replace) :
  * DROP USER MAPPING [IF EXISTS] FOR { <user> | CURRENT_USER | PUBLIC }
  *     SERVER <server_name>
  */
-SqlDrop SqlDropUserMapping(Span s, boolean replace) :
+SqlDrop SqlDropUserMapping(Span s) :
 {
     final boolean ifExists;
     final String user;

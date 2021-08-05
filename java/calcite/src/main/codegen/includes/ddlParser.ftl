@@ -66,6 +66,24 @@ SqlNodeList TableElementList() :
     }
 }
 
+SqlNodeList idList() :
+{
+    final Span s;
+    SqlIdentifier id;
+    final List<SqlNode> list = new ArrayList<SqlNode>();
+}
+{
+    { s = span(); }
+    id = CompoundIdentifier() { list.add(id); }
+    (
+        <COMMA> 
+        id = CompoundIdentifier() { list.add(id); }
+    )*
+    {
+        return new SqlNodeList(list, s.end(this));
+    }
+}
+
 // Parse an optional data type encoding, default is NONE.
 Pair<OmniSciEncoding, Integer> OmniSciEncodingOpt() :
 {
@@ -385,7 +403,6 @@ void TableElement(List<SqlNode> list) :
     final SqlNode defval;
     final SqlNode constraint;
     SqlIdentifier name = null;
-    final SqlNodeList columnList;
     final Span s = Span.of();
     final ColumnStrategy strategy;
 }
@@ -553,13 +570,15 @@ SqlDdl SqlCustomDrop(Span s) :
         |
         LOOKAHEAD(1) drop = SqlDropView(s)
         |
-        LOOKAHEAD(1) drop = SqlDropServer(s, replace)
+        LOOKAHEAD(1) drop = SqlDropServer(s)
         |
-        LOOKAHEAD(1) drop = SqlDropForeignTable(s, replace)
+        LOOKAHEAD(1) drop = SqlDropForeignTable(s)
         |
-        LOOKAHEAD(2) drop = SqlDropUserMapping(s, replace)
+        LOOKAHEAD(2) drop = SqlDropUserMapping(s)
         |
         LOOKAHEAD(2) drop = SqlDropUser(s)
+        |
+        LOOKAHEAD(2) drop = SqlDropRole(s)
     )
     {
         return drop;
@@ -917,4 +936,260 @@ SqlDdl SqlAlterUser(Span s) :
         }
     }
 }
+
+/*
+ * Create a role using the following syntax:
+ *
+ * CREATE ROLE <role_name>
+ *
+ */
+SqlCreate SqlCreateRole(Span s, boolean replace) :
+{
+    final SqlIdentifier role;
+}
+{
+    <ROLE> role = CompoundIdentifier()
+    {
+        return new SqlCreateRole(s.end(this), role);
+    }
+}
+
+/*
+ * Drop a role using the following syntax:
+ *
+ * DROP ROLE <role_name>
+ *
+ */
+SqlDrop SqlDropRole(Span s) :
+{
+    final SqlIdentifier role;
+}
+{
+    <ROLE> role = CompoundIdentifier()
+    {
+        return new SqlDropRole(s.end(this), role.toString());
+    }
+}
+
+/*
+ * Base class for:
+ *
+ * Grant using the following syntax:
+ *
+ * GRANT <nodeList> ...
+ *
+ */
+SqlDdl SqlGrant(Span si) :
+{
+    Span s;
+    SqlNodeList nodeList;
+    final SqlDdl grant;
+}
+{
+    <GRANT> { s = span(); }
+    (
+        nodeList = privilegeList()
+        grant = SqlGrantPrivilege(s, nodeList)
+        |
+        nodeList = idList()
+        grant = SqlGrantRole(s, nodeList)
+    )
+    {
+        return grant;
+    }
+}
+
+/*
+ * Base class for:
+ *
+ * Revoke using the following syntax:
+ *
+ * REVOKE <nodeList> ...
+ *
+ */
+SqlDdl SqlRevoke(Span si) :
+{
+    Span s;
+    SqlNodeList nodeList;
+    final SqlDdl revoke;
+}
+{
+    <REVOKE> { s = span(); }
+    (
+        nodeList = privilegeList()
+        revoke = SqlRevokePrivilege(s, nodeList)
+        |
+        nodeList = idList()
+        revoke = SqlRevokeRole(s, nodeList)
+    )
+    {
+        return revoke;
+    }
+}
+
+/*
+ * Grant a role using the following syntax:
+ *
+ * (GRANT <rolenames>) TO <grantees>
+ *
+ */
+SqlDdl SqlGrantRole(Span s, SqlNodeList roleList) :
+{
+    SqlNodeList granteeList;
+}
+{
+    <TO>
+    granteeList = idList()
+
+    { return new SqlGrantRole(s.end(this), roleList, granteeList); }
+}
+
+/*
+ * Revoke a role using the following syntax:
+ *
+ * (REVOKE <rolenames>) FROM <grantees>
+ *
+ */
+SqlDdl SqlRevokeRole(Span s, SqlNodeList roleList) :
+{
+    SqlNodeList granteeList;
+}
+{
+    <FROM>
+    granteeList = idList()
+
+    { return new SqlRevokeRole(s.end(this), roleList, granteeList); }
+}
+
+SqlNode Privilege(Span s) :
+{
+    String type;
+}
+{
+    (
+        LOOKAHEAD(2) <SERVER> <USAGE> { type = "SERVER USAGE"; }
+    |   LOOKAHEAD(2) <ALTER> <SERVER> { type = "ALTER SERVER"; }
+    |   LOOKAHEAD(2) <CREATE> <SERVER> { type = "CREATE SERVER"; }
+    |   LOOKAHEAD(2) <CREATE> <TABLE> { type = "CREATE TABLE"; }
+    |   LOOKAHEAD(2) <CREATE> <VIEW> { type = "CREATE VIEW"; }
+    |   LOOKAHEAD(2) <SELECT> <VIEW> { type = "SELECT VIEW"; }
+    |   LOOKAHEAD(2) <DROP> <VIEW> { type = "DROP VIEW"; }
+    |   LOOKAHEAD(2) <DROP> <SERVER> { type = "DROP SERVER"; }
+    |   LOOKAHEAD(2) <CREATE> <DASHBOARD> { type = "CREATE DASHBOARD"; }
+    |   LOOKAHEAD(2) <EDIT> <DASHBOARD> { type = "EDIT DASHBOARD"; }
+    |   LOOKAHEAD(2) <VIEW> <DASHBOARD> { type = "VIEW DASHBOARD"; }
+    |   LOOKAHEAD(2) <DELETE> <DASHBOARD> { type = "DELETE DASHBOARD"; }
+    |   LOOKAHEAD(2) <VIEW> <SQL> <EDITOR> { type = "VIEW SQL EDITOR"; }
+    |   LOOKAHEAD(2) <ALL> [<PRIVILEGES>] { type = "ALL"; }
+    |   <ACCESS> { type = "ACCESS"; }
+    |   <ALTER> { type = "ALTER"; }
+    |   <CREATE> { type = "CREATE"; }
+    |   <DELETE> { type = "DELETE"; }
+    |   <DROP> { type = "DROP"; }
+    |   <EDIT> { type = "EDIT"; }
+    |   <INSERT> { type = "INSERT"; }
+    |   <SELECT> { type = "SELECT"; }
+    |   <TRUNCATE> { type = "TRUNCATE"; }
+    |   <UPDATE> { type = "UPDATE"; }
+    |   <USAGE> { type = "USAGE"; }
+    |   <VIEW> { type = "VIEW"; }
+    )
+    { return SqlLiteral.createCharString(type, s.end(this)); }
+}
+
+SqlNodeList privilegeList() :
+{
+    Span s;
+    SqlNode privilege;
+    final List<SqlNode> list = new ArrayList<SqlNode>();
+}
+{
+    { s = span(); }
+    privilege = Privilege(s) { list.add(privilege); }
+    (
+        <COMMA> 
+        privilege = Privilege(s) { list.add(privilege); }
+    )*
+    {
+        return new SqlNodeList(list, s.end(this));
+    }
+}
+
+String PrivilegeType() :
+{
+    String type;
+}
+{
+    (
+        <DATABASE> { type = "DATABASE"; }
+    |   <TABLE> { type = "TABLE"; }
+    |   <DASHBOARD> { type = "DASHBOARD"; }
+    |   <VIEW> { type = "VIEW"; }
+    |   <SERVER> { type = "SERVER"; }
+    )
+    { return type; }
+}
+
+String PrivilegeTarget() :
+{
+    final SqlIdentifier target;
+    final Integer iTarget;
+    final String result;
+}
+{
+    (
+        target = CompoundIdentifier() { result = target.toString(); }
+    |   
+        iTarget = IntLiteral() { result = iTarget.toString(); }
+    )
+    { return result; }
+}
+
+/*
+ * Grant privileges using the following syntax:
+ *
+ * (GRANT privileges) ON privileges_target_type privileges_target TO grantees
+ *
+ */
+SqlDdl SqlGrantPrivilege(Span s, SqlNodeList privileges) :
+{
+    final String type;
+    final String target;
+    final SqlNodeList grantees;
+}
+{
+    <ON>
+    type = PrivilegeType()
+    target = PrivilegeTarget()
+    <TO>
+    grantees = idList()
+    {
+        return new SqlGrantPrivilege(s.end(this), privileges, type, target, grantees);
+    }
+}
+
+/*
+ * Revoke privileges using the following syntax:
+ *
+ * (REVOKE <privileges>) ON <type> <target> FROM <entityList>;
+ *
+ */
+SqlDdl SqlRevokePrivilege(Span s, SqlNodeList privileges) :
+{
+    final String type;
+    final String target;
+    final SqlNodeList grantees;
+}
+{
+    <ON>
+    type = PrivilegeType()
+    target = PrivilegeTarget()
+    <FROM>
+    grantees = idList()
+    {
+        return new SqlRevokePrivilege(s.end(this), privileges, type, target, grantees);
+    }
+}
+
+
 

@@ -141,14 +141,8 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| drop_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| alter_table_param_statement { $<nodeval>$ = $<nodeval>1; }
 	| copy_table_statement { $<nodeval>$ = $<nodeval>1; }
-	| create_role_statement { $<nodeval>$ = $<nodeval>1; }
-	| drop_role_statement { $<nodeval>$ = $<nodeval>1; }
-	| grant_privileges_statement { $<nodeval>$ = $<nodeval>1; }
-	| revoke_privileges_statement { $<nodeval>$ = $<nodeval>1; }
-	| grant_role_statement { $<nodeval>$ = $<nodeval>1; }
 	| optimize_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| validate_system_statement { $<nodeval>$ = $<nodeval>1; }
-	| revoke_role_statement { $<nodeval>$ = $<nodeval>1; }
 	| dump_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| restore_table_statement { $<nodeval>$ = $<nodeval>1; }
 	;
@@ -327,43 +321,6 @@ restore_table_statement:
 	    $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new RestoreTableStmt(($<stringval>3)->release(), ($<stringval>5)->release(), reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>6)->release())));
     }
     ;
-
-create_role_statement:
-		CREATE ROLE rolename
-		{
-		    $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new CreateRoleStmt(($<stringval>3)->release()));
-		}
-		;
-drop_role_statement:
-		DROP ROLE rolename
-		{
-		    $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new DropRoleStmt(($<stringval>3)->release()));
-		}
-		;
-grant_privileges_statement:
-		GRANT privileges ON privileges_target_type privileges_target TO grantees
-		{
-		    $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new GrantPrivilegesStmt(($<slistval>2)->release(), ($<stringval>4)->release(), ($<stringval>5)->release(), ($<slistval>7)->release()));
-		}
-		;
-revoke_privileges_statement:
-		REVOKE privileges ON privileges_target_type privileges_target FROM grantees
-		{
-		    $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new RevokePrivilegesStmt(($<slistval>2)->release(), ($<stringval>4)->release(), ($<stringval>5)->release(), ($<slistval>7)->release()));
-		}
-		;
-grant_role_statement:
-		GRANT rolenames TO grantees
-		{
-		    $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new GrantRoleStmt(($<slistval>2)->release(), ($<slistval>4)->release()));
-		}
-		;
-revoke_role_statement:
-		REVOKE rolenames FROM grantees
-		{
-		    $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new RevokeRoleStmt(($<slistval>2)->release(), ($<slistval>4)->release()));
-		}
-		;
 
 optimize_table_statement:
 		OPTIMIZE TABLE opt_table opt_with_option_list

@@ -327,7 +327,7 @@ OmniSqlOptionPair TableOption() :
  *
  * DROP FOREIGN TABLE [ IF EXISTS ] <table_name>
  */
-SqlDrop SqlDropForeignTable(Span s, boolean replace) :
+SqlDrop SqlDropForeignTable(Span s) :
 {
     final boolean ifExists;
     final SqlIdentifier tableName;

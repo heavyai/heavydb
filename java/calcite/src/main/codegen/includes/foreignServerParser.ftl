@@ -114,7 +114,7 @@ SqlDdl SqlAlterServer(Span s) :
  *
  * DROP SERVER [ IF EXISTS ] <server_name>
  */
-SqlDrop SqlDropServer(Span s, boolean replace) :
+SqlDrop SqlDropServer(Span s) :
 {
     final boolean ifExists;
     final SqlIdentifier serverName;

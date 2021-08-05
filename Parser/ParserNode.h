@@ -1542,6 +1542,7 @@ class CopyTableStmt : public DDLStmt {
 class CreateRoleStmt : public DDLStmt {
  public:
   CreateRoleStmt(std::string* r) : role_(r) {}
+  CreateRoleStmt(const rapidjson::Value& payload);
   const std::string& get_role() const { return *role_; }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
@@ -1556,6 +1557,7 @@ class CreateRoleStmt : public DDLStmt {
 class DropRoleStmt : public DDLStmt {
  public:
   DropRoleStmt(std::string* r) : role_(r) {}
+  DropRoleStmt(const rapidjson::Value& payload);
   const std::string& get_role() const { return *role_; }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
@@ -1583,21 +1585,22 @@ class GrantPrivilegesStmt : public DDLStmt {
                       std::string* t,
                       std::string* o,
                       std::list<std::string*>* g)
-      : object_type_(t), object_(o) {
-    parser_slistval_to_vector(p, privs_);
+      : type_(t), target_(o) {
+    parser_slistval_to_vector(p, privileges_);
     parser_slistval_to_vector(g, grantees_);
   }
+  GrantPrivilegesStmt(const rapidjson::Value& payload);
 
-  const std::vector<std::string>& get_privs() const { return privs_; }
-  const std::string& get_object_type() const { return *object_type_; }
-  const std::string& get_object() const { return *object_; }
+  const std::vector<std::string>& get_privs() const { return privileges_; }
+  const std::string& get_object_type() const { return *type_; }
+  const std::string& get_object() const { return *target_; }
   const std::vector<std::string>& get_grantees() const { return grantees_; }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:
-  std::vector<std::string> privs_;
-  std::unique_ptr<std::string> object_type_;
-  std::unique_ptr<std::string> object_;
+  std::vector<std::string> privileges_;
+  std::unique_ptr<std::string> type_;
+  std::unique_ptr<std::string> target_;
   std::vector<std::string> grantees_;
 };
 
@@ -1611,21 +1614,22 @@ class RevokePrivilegesStmt : public DDLStmt {
                        std::string* t,
                        std::string* o,
                        std::list<std::string*>* g)
-      : object_type_(t), object_(o) {
-    parser_slistval_to_vector(p, privs_);
+      : type_(t), target_(o) {
+    parser_slistval_to_vector(p, privileges_);
     parser_slistval_to_vector(g, grantees_);
   }
+  RevokePrivilegesStmt(const rapidjson::Value& payload);
 
-  const std::vector<std::string>& get_privs() const { return privs_; }
-  const std::string& get_object_type() const { return *object_type_; }
-  const std::string& get_object() const { return *object_; }
+  const std::vector<std::string>& get_privs() const { return privileges_; }
+  const std::string& get_object_type() const { return *type_; }
+  const std::string& get_object() const { return *target_; }
   const std::vector<std::string>& get_grantees() const { return grantees_; }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:
-  std::vector<std::string> privs_;
-  std::unique_ptr<std::string> object_type_;
-  std::unique_ptr<std::string> object_;
+  std::vector<std::string> privileges_;
+  std::unique_ptr<std::string> type_;
+  std::unique_ptr<std::string> target_;
   std::vector<std::string> grantees_;
 };
 
@@ -1658,6 +1662,8 @@ class GrantRoleStmt : public DDLStmt {
     parser_slistval_to_vector(r, roles_);
     parser_slistval_to_vector(g, grantees_);
   }
+  GrantRoleStmt(const rapidjson::Value& payload);
+
   const std::vector<std::string>& get_roles() const { return roles_; }
   const std::vector<std::string>& get_grantees() const { return grantees_; }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
@@ -1677,6 +1683,8 @@ class RevokeRoleStmt : public DDLStmt {
     parser_slistval_to_vector(r, roles_);
     parser_slistval_to_vector(g, grantees_);
   }
+  RevokeRoleStmt(const rapidjson::Value& payload);
+
   const std::vector<std::string>& get_roles() const { return roles_; }
   const std::vector<std::string>& get_grantees() const { return grantees_; }
   void execute(const Catalog_Namespace::SessionInfo& session) override;

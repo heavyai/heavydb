@@ -353,7 +353,12 @@ class InvalidGrantSyntax : public DBHandlerTestFixture {};
 
 TEST_F(InvalidGrantSyntax, InvalidGrantSyntax) {
   std::string error_message;
-  error_message = "Syntax error at: ON";
+  error_message =
+      "SQL Error: Encountered \"ON\" at line 1, column 23.\nWas expecting one of:\n    "
+      "\"ALTER\" ...\n    \"CREATE\" ...\n    \"DELETE\" ...\n    \"DROP\" ...\n    "
+      "\"INSERT\" ...\n    \"SELECT\" ...\n    \"TRUNCATE\" ...\n    \"UPDATE\" ...\n    "
+      "\"USAGE\" ...\n    \"VIEW\" ...\n    \"ACCESS\" ...\n    \"EDIT\" ...\n    "
+      "\"SERVER\" ...\n    \"ALL\" ...\n    ";
 
   queryAndAssertException("GRANT SELECT, INSERT, ON TABLE tbl TO Arsenal, Juventus;",
                           error_message);
@@ -382,10 +387,10 @@ TEST(UserRoles, InvalidGrantsRevokesTest) {
 
   EXPECT_THROW(run_ddl_statement("GRANT Antazin to Antazin;"), std::runtime_error);
   EXPECT_THROW(run_ddl_statement("REVOKE Antazin from Antazin;"), std::runtime_error);
-  EXPECT_THROW(run_ddl_statement("GRANT Antazin to Max;"), std::runtime_error);
-  EXPECT_THROW(run_ddl_statement("REVOKE Antazin from Max;"), std::runtime_error);
-  EXPECT_THROW(run_ddl_statement("GRANT Max to Antazin;"), std::runtime_error);
-  EXPECT_THROW(run_ddl_statement("REVOKE Max from Antazin;"), std::runtime_error);
+  EXPECT_THROW(run_ddl_statement("GRANT Antazin to \"Max\";"), std::runtime_error);
+  EXPECT_THROW(run_ddl_statement("REVOKE Antazin from \"Max\";"), std::runtime_error);
+  EXPECT_THROW(run_ddl_statement("GRANT \"Max\" to Antazin;"), std::runtime_error);
+  EXPECT_THROW(run_ddl_statement("REVOKE \"Max\" from Antazin;"), std::runtime_error);
 
   run_ddl_statement("DROP USER Antazin;");
   run_ddl_statement("DROP USER \"Max\";");
@@ -403,20 +408,21 @@ TEST(UserRoles, ValidNames) {
   EXPECT_NO_THROW(
       run_ddl_statement("CREATE USER \"vasya-vasya\" (password = 'password');"));
   EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE developer;"));
-  EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE developer-backend;"));
-  EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE developer-backend-rendering;"));
-  EXPECT_NO_THROW(run_ddl_statement("GRANT developer-backend-rendering TO vasya;"));
+  EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE \"developer-backend\";"));
+  EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE \"developer-backend-rendering\";"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT \"developer-backend-rendering\" TO vasya;"));
+  EXPECT_NO_THROW(run_ddl_statement(
+      "GRANT \"developer-backend\" TO \"vasya ivanov@vasya.ivanov.com\";"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT developer TO \"vasya.vasya@vasya.com\";"));
   EXPECT_NO_THROW(
-      run_ddl_statement("GRANT developer-backend TO \"vasya ivanov@vasya.ivanov.com\";"));
-  EXPECT_NO_THROW(run_ddl_statement("GRANT developer TO vasya.vasya@vasya.com;"));
-  EXPECT_NO_THROW(run_ddl_statement("GRANT developer-backend-rendering TO vasya-vasya;"));
+      run_ddl_statement("GRANT \"developer-backend-rendering\" TO \"vasya-vasya\";"));
   EXPECT_NO_THROW(run_ddl_statement("DROP USER vasya;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP USER \"vasya.vasya@vasya.com\";"));
   EXPECT_NO_THROW(run_ddl_statement("DROP USER \"vasya ivanov@vasya.ivanov.com\";"));
   EXPECT_NO_THROW(run_ddl_statement("DROP USER \"vasya-vasya\";"));
   EXPECT_NO_THROW(run_ddl_statement("DROP ROLE developer;"));
-  EXPECT_NO_THROW(run_ddl_statement("DROP ROLE developer-backend;"));
-  EXPECT_NO_THROW(run_ddl_statement("DROP ROLE developer-backend-rendering;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP ROLE \"developer-backend\";"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP ROLE \"developer-backend-rendering\";"));
 }
 
 TEST(UserRoles, RoleHierarchies) {

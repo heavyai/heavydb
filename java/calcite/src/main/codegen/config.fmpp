@@ -59,6 +59,12 @@ data: {
         "com.mapd.parser.extension.ddl.SqlShowQueries"
         "com.mapd.parser.extension.ddl.SqlShowDiskCacheUsage"
         "com.mapd.parser.extension.ddl.SqlKillQuery"
+        "com.mapd.parser.extension.ddl.SqlCreateRole"
+        "com.mapd.parser.extension.ddl.SqlDropRole"
+        "com.mapd.parser.extension.ddl.SqlGrantRole"
+        "com.mapd.parser.extension.ddl.SqlRevokeRole"
+        "com.mapd.parser.extension.ddl.SqlGrantPrivilege"
+        "com.mapd.parser.extension.ddl.SqlRevokePrivilege"
         "com.mapd.parser.extension.ddl.omnisql.*"
         "java.util.Map"
         "java.util.HashMap"
@@ -84,9 +90,14 @@ data: {
         "DICTIONARY"
         
         # Non-reserved keywords (keywords that do not start a command and may therefore be used as regular text elsewhere in the parser. must add to nonReservedKeywordsToAdd below)
+        "ACCESS"
         "CACHE"
+        "DASHBOARD"
         "DATABASES"
         "DISK"
+        "DETAILS"
+        "EDIT"
+        "EDITOR"
         "MAPPING"
         "OWNER"
         "QUERY"
@@ -97,7 +108,6 @@ data: {
         "STORED" 
         "TABLES"
         "VIRTUAL"
-        "DETAILS"
       ]
 
       # List of keywords from "keywords" section that are not reserved.
@@ -425,9 +435,14 @@ data: {
       # List of non-reserved keywords to add;
       # items in this list become non-reserved
       nonReservedKeywordsToAdd: [
+        "ACCESS"
         "CACHE"
+        "DASHBOARD"
         "DATABASES"
         "DISK"
+        "DETAILS"
+        "EDIT"
+        "EDITOR"
         "MAPPING"
         "OWNER"
         "QUERY"
@@ -438,7 +453,6 @@ data: {
         "STORED" 
         "TABLES"
         "VIRTUAL"
-        "DETAILS"
       ]
 
       # List of non-reserved keywords to remove;
@@ -470,6 +484,8 @@ data: {
         "SqlShowDiskCacheUsage(span())"
         "SqlKillQuery(span())"
         "SqlCustomDrop(span())"
+        "SqlGrant(span())"
+        "SqlRevoke(span())"
       ]
 
       # List of methods for parsing custom literals.
@@ -504,6 +520,7 @@ data: {
         "SqlCreateTable"
         "SqlCreateUser"
         "SqlCreateView"
+        "SqlCreateRole"
       ]
 
       # List of methods for parsing extensions to "DROP" calls.

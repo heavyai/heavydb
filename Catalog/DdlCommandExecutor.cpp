@@ -387,6 +387,31 @@ ExecutionResult DdlCommandExecutor::execute() {
     auto rename_user_stmt = Parser::RenameUserStmt(extractPayload(*ddl_data_));
     rename_user_stmt.execute(*session_ptr_);
     return result;
+  } else if (ddl_command_ == "CREATE_ROLE") {
+    auto create_role_stmt = Parser::CreateRoleStmt(extractPayload(*ddl_data_));
+    create_role_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "DROP_ROLE") {
+    auto drop_role_stmt = Parser::DropRoleStmt(extractPayload(*ddl_data_));
+    drop_role_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "GRANT_ROLE") {
+    auto grant_role_stmt = Parser::GrantRoleStmt(extractPayload(*ddl_data_));
+    grant_role_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "REVOKE_ROLE") {
+    auto revoke_role_stmt = Parser::RevokeRoleStmt(extractPayload(*ddl_data_));
+    revoke_role_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "GRANT_PRIVILEGE") {
+    auto grant_privilege_stmt = Parser::GrantPrivilegesStmt(extractPayload(*ddl_data_));
+    grant_privilege_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "REVOKE_PRIVILEGE") {
+    auto revoke_privileges_stmt =
+        Parser::RevokePrivilegesStmt(extractPayload(*ddl_data_));
+    revoke_privileges_stmt.execute(*session_ptr_);
+    return result;
   }
 
   // the following commands require a global unique lock until proper table locking has
@@ -447,11 +472,30 @@ DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails()
       ddl_command_ == "CREATE_TABLE" || ddl_command_ == "DROP_TABLE" ||
       ddl_command_ == "RENAME_TABLE" || ddl_command_ == "ALTER_TABLE" ||
       ddl_command_ == "CREATE_DB" || ddl_command_ == "DROP_DB" ||
-      ddl_command_ == "RENAME_DB" || ddl_command_ == "CREATE_USER" ||
-      ddl_command_ == "DROP_USER" || ddl_command_ == "ALTER_USER" ||
-      ddl_command_ == "RENAME_USER") {
+      ddl_command_ == "RENAME_DB") {
+    // commands
     execution_details.execution_location = ExecutionLocation::ALL_NODES;
     execution_details.aggregation_type = AggregationType::NONE;
+  } else if (ddl_command_ == "CREATE_USER" || ddl_command_ == "DROP_USER" ||
+             ddl_command_ == "ALTER_USER" || ddl_command_ == "RENAME_USER" ||
+             ddl_command_ == "CREATE_ROLE" || ddl_command_ == "DROP_ROLE" ||
+             ddl_command_ == "GRANT_ROLE" || ddl_command_ == "REVOKE_ROLE") {
+    // group user/role/db commands
+    execution_details.execution_location = ExecutionLocation::ALL_NODES;
+    execution_details.aggregation_type = AggregationType::NONE;
+  } else if (ddl_command_ == "GRANT_PRIVILEGE" || ddl_command_ == "REVOKE_PRIVILEGE") {
+    auto& ddl_payload = extractPayload(*ddl_data_);
+    CHECK(ddl_payload.HasMember("type"));
+    const std::string& targetType = ddl_payload["type"].GetString();
+    if (targetType == "DASHBOARD") {
+      // dashboard commands should run on Aggregator alone
+      execution_details.execution_location = ExecutionLocation::AGGREGATOR_ONLY;
+      execution_details.aggregation_type = AggregationType::NONE;
+    } else {
+      execution_details.execution_location = ExecutionLocation::ALL_NODES;
+      execution_details.aggregation_type = AggregationType::NONE;
+    }
+
   } else if (ddl_command_ == "SHOW_TABLE_DETAILS") {
     execution_details.execution_location = ExecutionLocation::LEAVES_ONLY;
     execution_details.aggregation_type = AggregationType::UNION;
