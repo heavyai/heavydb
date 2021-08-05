@@ -149,7 +149,12 @@ void ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
   CHECK(is_table_key(key_prefix));
   checkIfS3NeedsToBeEnabled(key_prefix);
   createDataWrapperIfNotExists(key_prefix);
-  getDataWrapper(key_prefix)->populateChunkMetadata(chunk_metadata);
+  try {
+    getDataWrapper(key_prefix)->populateChunkMetadata(chunk_metadata);
+  } catch (...) {
+    clearDataWrapper(key_prefix);
+    throw;
+  }
 }
 
 void ForeignStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {
