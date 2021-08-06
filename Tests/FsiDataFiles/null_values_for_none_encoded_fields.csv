@@ -1,0 +1,5 @@
+non_encoded_text, text, point
+1,,text_encoded, "POINT(0 0)"
+2,text_none,, "POINT(0 0)"
+3,text_none, text_encoded,
+4,,,

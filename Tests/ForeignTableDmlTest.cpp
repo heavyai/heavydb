@@ -1437,6 +1437,51 @@ TEST_P(DataWrapperSelectQueryTest, AggregateAndGroupByNull) {
   // clang-format on
 }
 
+TEST_P(DataWrapperSelectQueryTest, null_values_for_non_encoded_types) {
+  // This tests looks at the situation where all values in a chunk of a
+  // unencoded column are null.  To facilitate this the fragment size
+  // is set to 1.
+  auto wrapper_type = GetParam();
+
+  std::vector<NameTypePair> column_pairs{
+      {"idx", "SMALLINT"},
+      {"txt", "TEXT ENCODING NONE"},
+      {"txt_encoded", "TEXT"},
+      // the p columns is removed for the odbc dw test
+      {"p", "GEOMETRY(POINT,4326) ENCODING NONE"},
+  };
+
+  std::string source_file_name =
+      getDataFilesPath() + "null_values_for_none_encoded_fields";
+  std::vector<std::vector<NullableTargetValue>> expected_results;
+  if (wrapper_type == "postgres" || wrapper_type == "sqlite") {
+    // remove the geo column from the source data
+    // and column definitions.
+    column_pairs.pop_back();
+    source_file_name += ".odbc";
+    expected_results = {{i(1), Null, "text_encoded"},
+                        {i(2), "text_none", Null},
+                        {i(3), "text_none", "text_encoded"},
+                        {i(4), Null, Null}};
+  } else {
+    expected_results = {{i(1), Null, "text_encoded", "POINT (0 0)"},
+                        {i(2), "text_none", Null, "POINT (0 0)"},
+                        {i(3), "text_none", "text_encoded", Null},
+                        {i(4), Null, Null, Null}};
+  }
+
+  source_file_name += wrapper_ext(wrapper_type);
+
+  sql(createForeignTableQuery(column_pairs,
+                              source_file_name,
+                              wrapper_type,
+                              {{"FRAGMENT_SIZE", std::to_string(1)}}));
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM test_foreign_table order by idx;");
+  assertResultSetEqual(expected_results, result);
+}
+
 TEST_P(DataWrapperSelectQueryTest, ArrayWithNullValues) {
   if (is_odbc(GetParam())) {
     GTEST_SKIP()

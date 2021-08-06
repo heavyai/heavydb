@@ -74,9 +74,29 @@ void ForeignStorageCache::checkpoint(const int32_t db_id, const int32_t tb_id) {
 File_Namespace::FileBuffer* ForeignStorageCache::getCachedChunkIfExists(
     const ChunkKey& chunk_key) {
   auto buf = caching_file_mgr_->getBufferIfExists(chunk_key);
-  if (buf && (*buf)->hasDataPages()) {
-    return *buf;
+
+  if (buf) {
+    if ((*buf)->hasDataPages()) {
+      // 1. If the buffer has data pages then must be in the cache.
+      return *buf;
+    }
+    if (is_varlen_data_key(chunk_key)) {
+      // 2. If the buffer is a varlen data buffer and the
+      // corresponding chunk contains only nulls, then even
+      // without data pages it will still have been cached
+      // if it has a corresponding index buffer which does
+      // have dataPages
+      // Note the empty buffer proviso that the size be 0,
+      // corresponding to  all nulls in the chunk
+      auto index_chunk_key = chunk_key;
+      index_chunk_key[CHUNK_KEY_VARLEN_IDX] = 2;
+      auto index_buffer = caching_file_mgr_->getBufferIfExists(index_chunk_key);
+      if (index_buffer && (*index_buffer)->hasDataPages() && (*buf)->size() == 0) {
+        return *buf;
+      }
+    }
   }
+  // 3. Otherwise this chunk hasn't been cached.
   return nullptr;
 }
 
