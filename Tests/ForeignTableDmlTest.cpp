@@ -632,91 +632,6 @@ class RecoverCacheQueryTest : public ForeignTableTest {
   }
 };
 
-class RecoverCacheQueryTest : public ForeignTableTest {
- public:
-  inline static std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache";
-  Catalog_Namespace::Catalog* cat_;
-  PersistentStorageMgr* psm_;
-  foreign_storage::ForeignStorageCache* cache_;
-
- protected:
-  void resetPersistentStorageMgr(File_Namespace::DiskCacheLevel cache_level) {
-    for (auto table_it : cat_->getAllTableMetadata()) {
-      cat_->removeFragmenterForTable(table_it->tableId);
-    }
-    cat_->getDataMgr().resetPersistentStorage(
-        {cache_path_, cache_level}, 0, getSystemParameters());
-    psm_ = cat_->getDataMgr().getPersistentStorageMgr();
-    cache_ = psm_->getDiskCache();
-  }
-
-  bool isTableDatawrapperRestored(const std::string& name) {
-    auto td = getCatalog().getMetadataForTable(name, false);
-    ChunkKey table_key{getCatalog().getCurrentDB().dbId, td->tableId};
-    return getCatalog()
-        .getDataMgr()
-        .getPersistentStorageMgr()
-        ->getForeignStorageMgr()
-        ->isDatawrapperRestored(table_key);
-  }
-
-  bool isTableDatawrapperDataOnDisk(const std::string& name) {
-    auto td = getCatalog().getMetadataForTable(name, false);
-    auto db_id = getCatalog().getCurrentDB().dbId;
-    ChunkKey table_key{db_id, td->tableId};
-    return bf::exists(getCatalog()
-                          .getDataMgr()
-                          .getPersistentStorageMgr()
-                          ->getDiskCache()
-                          ->getSerializedWrapperPath(db_id, td->tableId));
-  }
-
-  bool compareTableDatawrapperMetadataToFile(const std::string& name,
-                                             const std::string& filepath) {
-    auto td = getCatalog().getMetadataForTable(name, false);
-    auto db_id = getCatalog().getCurrentDB().dbId;
-    ChunkKey table_key{db_id, td->tableId};
-    return compare_json_files(getCatalog()
-                                  .getDataMgr()
-                                  .getPersistentStorageMgr()
-                                  ->getDiskCache()
-                                  ->getSerializedWrapperPath(db_id, td->tableId),
-                              filepath,
-                              getDataFilesPath());
-  }
-
-  void resetStorageManagerAndClearTableMemory(const ChunkKey& table_key) {
-    // Reset cache and clear memory representations.
-    resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::fsi);
-    cat_->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
-    cat_->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
-  }
-
-  std::string getWrapperMetadataPath(const std::string& prefix,
-                                     const std::string& data_wrapper_type = {}) {
-    std::string path = getDataFilesPath() + "/wrapper_metadata/" + prefix;
-    if (!data_wrapper_type.empty()) {
-      path += "_" + data_wrapper_type;
-    }
-    return path + ".json";
-  }
-
-  void SetUp() override {
-    ForeignTableTest::SetUp();
-    cat_ = &getCatalog();
-    psm_ = cat_->getDataMgr().getPersistentStorageMgr();
-    cache_ = psm_->getDiskCache();
-    sqlDropForeignTable();
-    cache_->clear();
-  }
-
-  void TearDown() override {
-    sqlDropForeignTable();
-    cache_->clear();
-    ForeignTableTest::TearDown();
-  }
-};
-
 using AppendRefreshTestParam = std::tuple<int, std::string, std::string, bool, bool>;
 
 struct AppendRefreshTestStruct {
@@ -1937,6 +1852,13 @@ TEST_F(CsvDelimiterTest, CSVLineDelim) {
 TEST_F(CsvDelimiterTest, CSVQuote) {
   const auto& query = getCreateForeignTableQuery(
       "(t TEXT, i BIGINT, f DOUBLE)", {{"quote", "~"}}, "example_2_quote", "csv");
+  sql(query);
+  queryAndAssertExample2Result();
+}
+
+TEST_F(CsvDelimiterTest, CSVCarriageReturn) {
+  const auto& query = getCreateForeignTableQuery(
+      "(t TEXT, i BIGINT, f DOUBLE)", {}, "example_2_crlf", "csv");
   sql(query);
   queryAndAssertExample2Result();
 }
