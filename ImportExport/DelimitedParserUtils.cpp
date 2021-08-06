@@ -269,6 +269,11 @@ const char* get_row(const char* buf,
             while (p + 1 < buf_end && is_eol(*(p + 1), copy_params)) {
               p++;
             }
+          } else {
+            // skip DOS carriage return line feed only
+            if (p + 1 < buf_end && *p == '\r' && *(p + 1) == '\n') {
+              p++;
+            }
           }
           break;
         }
