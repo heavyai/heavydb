@@ -513,9 +513,31 @@ int32_t ct_binding_column__cpu_template(const Column<T>& input, Column<int32_t>&
   return 1;
 }
 
-//#ifndef __CUDACC__
+// clang-format off
+/*
+  UDTF: ct_binding_scalar_multiply__cpu_template(Cursor<Column<float>>, float) -> Column<float>
+  UDTF: ct_binding_scalar_multiply__cpu_template(Cursor<Column<double>>, double) -> Column<double>
+  UDTF: ct_binding_scalar_multiply__cpu_template(Cursor<Column<int32_t>>, int32_t) -> Column<int32_t>
+  UDTF: ct_binding_scalar_multiply__cpu_template(Cursor<Column<int64_t>>, int64_t) -> Column<int64_t>
+*/
+// clang-format on
+template <typename T>
+int32_t ct_binding_scalar_multiply__cpu_template(const Column<T>& input,
+                                                 const T multiplier,
+                                                 Column<T>& out) {
+  const int64_t num_rows = input.size();
+  set_output_row_size(num_rows);
+  for (int64_t r = 0; r < num_rows; ++r) {
+    if (!input.isNull(r)) {
+      out[r] = input[r] * multiplier;
+    } else {
+      out.setNull(r);
+    }
+  }
+  return num_rows;
+}
+
 #include <algorithm>
-//#endif // __CUDACC__
 
 template <typename T>
 struct SortAsc {

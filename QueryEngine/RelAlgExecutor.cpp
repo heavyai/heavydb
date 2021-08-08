@@ -4273,6 +4273,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   std::vector<Analyzer::ColumnVar*> input_col_exprs;
   std::optional<int32_t> dict_id;
   size_t input_index = 0;
+  const auto table_func_args = table_function_impl.getArgs();
   for (const auto& ti : table_function_type_infos) {
     if (ti.is_column_list()) {
       for (int i = 0; i < ti.get_dimension(); i++) {
@@ -4300,12 +4301,18 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       // properties correctly set
       auto type_info = input_expr->get_type_info();
       type_info.set_subtype(type_info.get_type());  // set type to be subtype
-      type_info.set_type(ti.get_type());            // set type to column list
+      type_info.set_type(ti.get_type());            // set type to column
       input_expr->set_type_info(type_info);
 
       input_col_exprs.push_back(col_var);
       input_index++;
     } else {
+      auto input_expr = input_exprs[input_index];
+      auto ext_func_arg_ti = ext_arg_type_to_type_info(table_func_args[input_index]);
+
+      if (ext_func_arg_ti != input_expr->get_type_info()) {
+        input_exprs[input_index] = input_expr->add_cast(ext_func_arg_ti).get();
+      }
       input_index++;
     }
   }

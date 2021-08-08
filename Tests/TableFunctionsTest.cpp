@@ -61,12 +61,13 @@ class TableFunctions : public ::testing::Test {
     {
       run_ddl_statement("DROP TABLE IF EXISTS tf_test;");
       run_ddl_statement(
-          "CREATE TABLE tf_test (x INT, d DOUBLE, d2 DOUBLE) WITH (FRAGMENT_SIZE=2);");
+          "CREATE TABLE tf_test (x INT, f FLOAT, d DOUBLE, d2 DOUBLE) WITH "
+          "(FRAGMENT_SIZE=2);");
 
       TestHelpers::ValuesGenerator gen("tf_test");
 
       for (int i = 0; i < 5; i++) {
-        const auto insert_query = gen(i, i * 1.1, 1.0 - i * 2.2);
+        const auto insert_query = gen(i, i * 1.1, i * 1.1, 1.0 - i * 2.2);
         run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       }
     }
@@ -372,6 +373,68 @@ TEST_F(TableFunctions, GroupByInAndOut) {
         auto s = boost::get<std::string>(TestHelpers::v<NullableString>(row[0]));
         ASSERT_EQ(s, expected_result_set[i]);
       }
+    }
+  }
+}
+
+TEST_F(TableFunctions, ConstantCasts) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // Numeric constant to float
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT f FROM "
+          "tf_test), 2.2));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
+    // Numeric constant to double
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT d FROM "
+          "tf_test), 2.2));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
+    // Integer constant to double
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT d FROM "
+          "tf_test), 2));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
+    // Numeric (integer) constant to double
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT d FROM "
+          "tf_test), 2.));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
+    // Integer constant
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT x FROM "
+          "tf_test), 2));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
+    // Numeric constant to integer
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT x FROM "
+          "tf_test), 2.2));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
+    // Should throw: boolean constant to integer
+    {
+      EXPECT_THROW(run_multiple_agg(
+                       "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT "
+                       "x FROM tf_test), true));",
+                       dt),
+                   std::invalid_argument);
     }
   }
 }
