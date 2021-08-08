@@ -156,9 +156,12 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         case ExtArgumentType::Int64:
           penalty_score += 8000;
           break;
+        case ExtArgumentType::Float:
+          penalty_score += 1016000;
+          break;
         case ExtArgumentType::Double:
-          penalty_score += 1008000;
-          break;  // temporary: allow integers as double arguments
+          penalty_score += 1032000;
+          break;
         default:
           return -1;
       }
@@ -174,9 +177,12 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         case ExtArgumentType::Int64:
           penalty_score += 4000;
           break;
+        case ExtArgumentType::Float:
+          penalty_score += 1008000;
+          break;
         case ExtArgumentType::Double:
-          penalty_score += 1004000;
-          break;  // temporary: allow integers as double arguments
+          penalty_score += 1016000;
+          break;
         default:
           return -1;
       }
@@ -189,9 +195,12 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         case ExtArgumentType::Int64:
           penalty_score += 2000;
           break;
+        case ExtArgumentType::Float:
+          penalty_score += 1004000;
+          break;
         case ExtArgumentType::Double:
-          penalty_score += 1002000;
-          break;  // temporary: allow integers as double arguments
+          penalty_score += 1008000;
+          break;
         default:
           return -1;
       }
@@ -201,9 +210,12 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         case ExtArgumentType::Int64:
           penalty_score += 1000;
           break;
+        case ExtArgumentType::Float:
+          penalty_score += 1002000;
+          break;
         case ExtArgumentType::Double:
-          penalty_score += 1001000;
-          break;  // temporary: allow integers as double arguments
+          penalty_score += 1004000;
+          break;
         default:
           return -1;
       }
@@ -215,7 +227,7 @@ static int match_arguments(const SQLTypeInfo& arg_type,
           break;
         case ExtArgumentType::Double:
           penalty_score += 2000;
-          break;  // is it ok to use floats as double arguments?
+          break;
         default:
           return -1;
       }
@@ -276,9 +288,7 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         penalty_score += 1000;
         return 1;
       }
-
       break;
-
     case kMULTIPOLYGON:
       if (stype == ExtArgumentType::PInt8 && sig_pos + 5 < max_pos &&
           sig_types[sig_pos + 1] == ExtArgumentType::Int64 &&
@@ -295,13 +305,33 @@ static int match_arguments(const SQLTypeInfo& arg_type,
       break;
     case kDECIMAL:
     case kNUMERIC:
-      if (stype == ExtArgumentType::Double && arg_type.get_logical_size() == 8) {
-        penalty_score += 1000;
+      if (stype == ExtArgumentType::Double) {
+        // prefer doubles for anything over 7 significant digits
+        penalty_score += 1000 * (arg_type.get_dimension() > 7 ? 1 : 2);
         return 1;
       }
-      if (stype == ExtArgumentType::Float && arg_type.get_logical_size() == 4) {
-        penalty_score += 1000;
+      if (stype == ExtArgumentType::Float) {
+        // prefer floats for anything with 7 significant digits or less
+        penalty_score += 1000 * (arg_type.get_dimension() <= 7 ? 1 : 2);
         return 1;
+      }
+      if (is_ext_arg_type_scalar_integer(stype)) {
+        const auto num_digits_left_of_decimal =
+            arg_type.get_dimension() - arg_type.get_scale();
+        const bool has_trailing_digits = arg_type.get_scale() == 0 ? true : false;
+        const auto stype_max_integer_digits = max_digits_for_ext_integer_arg(stype);
+        if (num_digits_left_of_decimal <=
+            stype_max_integer_digits) {  // If arg_type doesn't fit into stype, its not a
+                                         // match
+          if (has_trailing_digits) {
+            // penalize a decimal input with digits trailing the decimal being coerced to
+            // an integer type
+            penalty_score += 1000100;
+            return 1;
+          }
+          penalty_score += 1000;
+          return 1;
+        }
       }
       break;
     case kNULLT:  // NULL maps to a pointer and size argument
