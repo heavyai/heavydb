@@ -78,9 +78,11 @@ bool need_to_hold_chunk(const Chunk_NS::Chunk* chunk,
 }
 
 bool need_to_hold_chunk(const std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks,
-                        const RelAlgExecutionUnit& ra_exe_unit) {
+                        const RelAlgExecutionUnit& ra_exe_unit,
+                        const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
+                        const ExecutorDeviceType device_type) {
   for (const auto& chunk : chunks) {
-    if (need_to_hold_chunk(chunk.get(), ra_exe_unit)) {
+    if (need_to_hold_chunk(chunk.get(), ra_exe_unit, lazy_fetch_info, device_type)) {
       return true;
     }
   }
@@ -317,7 +319,10 @@ void ExecutionKernel::runImpl(Executor* executor,
   // be referenced by many ResultSets. So, some outer
   // structure to hold all ResultSets and all chunks is
   // required.
-  can_run_subkernels = can_run_subkernels && !need_to_hold_chunk(chunks, ra_exe_unit_);
+  can_run_subkernels =
+      can_run_subkernels &&
+      !need_to_hold_chunk(
+          chunks, ra_exe_unit_, std::vector<ColumnLazyFetchInfo>(), chosen_device_type);
 
   // TODO: check for literals? We serialize literals before execution
   // and hold them in result sets. Can we simply do it once and hold
