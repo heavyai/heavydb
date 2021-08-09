@@ -1712,7 +1712,6 @@ TEST(Select, GroupBy) {
       boost::filesystem::remove(data_path);
     }
     std::ofstream out1(data_path.string());
-    // num_sets (-1) because data started out with 1 set of (10) items
     for (int i = 0; i < 1000000; i++) {
       if (out1.is_open()) {
         out1 << i << "\n";
@@ -1724,6 +1723,97 @@ TEST(Select, GroupBy) {
     run_ddl_statement(copy_data_str);
     boost::filesystem::remove(data_path);
   }
+
+  std::vector<std::string> runnable_column_names = {
+      "x", "w", "y", "z", "fx", "f", "d", "dd", "dd_notnull", "u", "smallint_nulls"};
+  std::set<std::string> str_col_names = {
+      "str", "fixed_str", "shared_dict", "null_str", "fixed_null_str"};
+  // some column type can execute a subset of agg ops without an exception
+  using TypeAndAvaliableAggOps = std::pair<std::string, std::vector<SQLAgg>>;
+  std::vector<TypeAndAvaliableAggOps> column_names_with_available_agg_ops = {
+      {"str", std::vector<SQLAgg>{SQLAgg::kSAMPLE}},
+      {"fixed_str", std::vector<SQLAgg>{SQLAgg::kSAMPLE}},
+      {"shared_dict", std::vector<SQLAgg>{SQLAgg::kSAMPLE}},
+      {"null_str", std::vector<SQLAgg>{SQLAgg::kSAMPLE}},
+      {"fixed_null_str", std::vector<SQLAgg>{SQLAgg::kSAMPLE}},
+      {"b", std::vector<SQLAgg>{SQLAgg::kMIN, SQLAgg::kMAX, SQLAgg::kSAMPLE}},
+      {"m", std::vector<SQLAgg>{SQLAgg::kMIN, SQLAgg::kMAX, SQLAgg::kSAMPLE}},
+      {"m_3", std::vector<SQLAgg>{SQLAgg::kMIN, SQLAgg::kMAX, SQLAgg::kSAMPLE}},
+      {"m_6", std::vector<SQLAgg>{SQLAgg::kMIN, SQLAgg::kMAX, SQLAgg::kSAMPLE}},
+      {"m_9", std::vector<SQLAgg>{SQLAgg::kMIN, SQLAgg::kMAX, SQLAgg::kSAMPLE}},
+      {"n", std::vector<SQLAgg>{SQLAgg::kMIN, SQLAgg::kMAX, SQLAgg::kSAMPLE}},
+      {"o", std::vector<SQLAgg>{SQLAgg::kMIN, SQLAgg::kMAX, SQLAgg::kSAMPLE}},
+      {"o1", std::vector<SQLAgg>{SQLAgg::kMIN, SQLAgg::kMAX, SQLAgg::kSAMPLE}}};
+  auto get_query_str = [](SQLAgg agg_op, const std::string& col_name) {
+    std::ostringstream oss;
+    oss << "SELECT " << col_name << " v1, ";
+    switch (agg_op) {
+      case SQLAgg::kMIN:
+        oss << "MIN(" << col_name << ")";
+        break;
+      case SQLAgg::kMAX:
+        oss << "MAX(" << col_name << ")";
+        break;
+      case SQLAgg::kAVG:
+        oss << "AVG(" << col_name << ")";
+        break;
+      case SQLAgg::kSAMPLE:
+        oss << "SAMPLE(" << col_name << ")";
+        break;
+      case SQLAgg::kAPPROX_QUANTILE:
+        oss << "APPROX_QUANTILE(" << col_name << ", 0.5) ";
+        break;
+      default:
+        CHECK(false);
+        break;
+    }
+    oss << " v2 FROM test GROUP BY " << col_name;
+    return oss.str();
+  };
+  auto perform_test = [&get_query_str, &str_col_names](SQLAgg agg_op,
+                                                       const std::string& col_name,
+                                                       ExecutorDeviceType dt) {
+    std::string omnisci_cnt_query, sqlite_cnt_query, omnisci_min_query, sqlite_min_query;
+    if (agg_op == SQLAgg::kAPPROX_QUANTILE || agg_op == SQLAgg::kSAMPLE) {
+      if (agg_op == SQLAgg::kAPPROX_QUANTILE && g_aggregator) {
+        LOG(WARNING) << "Skipping ApproxQuantile tests in distributed mode.";
+        return;
+      } else {
+        omnisci_cnt_query =
+            "SELECT COUNT(*) FROM (" + get_query_str(agg_op, col_name) + ")";
+        omnisci_min_query =
+            "SELECT MIN(v2) FROM (" + get_query_str(agg_op, col_name) + ")";
+        // since sqlite does not support sample and approx_quantile
+        // we instead use max agg op; min and avg are also possible
+        sqlite_cnt_query =
+            "SELECT COUNT(*) FROM (" + get_query_str(SQLAgg::kMAX, col_name) + ")";
+        sqlite_min_query =
+            "SELECT MIN(v2) FROM (" + get_query_str(SQLAgg::kMAX, col_name) + ")";
+        if (col_name.compare("d") != 0 && col_name.compare("f") != 0 &&
+            col_name.compare("fx") != 0) {
+          omnisci_cnt_query += " WHERE v1 = v2";
+          sqlite_cnt_query += " WHERE v1 = v2";
+        }
+      }
+    } else {
+      omnisci_cnt_query =
+          "SELECT COUNT(*) FROM (" + get_query_str(agg_op, col_name) + ")";
+      omnisci_min_query = "SELECT MIN(v2) FROM (" + get_query_str(agg_op, col_name) + ")";
+      if (col_name.compare("d") != 0 && col_name.compare("f") != 0 &&
+          col_name.compare("fx") != 0) {
+        omnisci_cnt_query += " WHERE v1 = v2";
+      }
+      sqlite_cnt_query = omnisci_cnt_query;
+      sqlite_min_query = omnisci_min_query;
+    }
+    c(omnisci_cnt_query, sqlite_cnt_query, dt);
+    if (!str_col_names.count(col_name)) {
+      c(omnisci_min_query, sqlite_min_query, dt);
+    } else {
+      LOG(WARNING) << "Skipping aggregation query on string column: "
+                   << omnisci_min_query;
+    }
+  };
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -1752,6 +1842,9 @@ TEST(Select, GroupBy) {
     c("SELECT f, ff, APPROX_COUNT_DISTINCT(str) from test group by f, ff ORDER BY f, ff;",
       "SELECT f, ff, COUNT(distinct str) FROM test GROUP BY f, ff ORDER BY f, ff;",
       dt);
+
+    // check rewriting agg on gby col to its equivalent case-when
+    // 1. check count-distinct op runs successfully
     ASSERT_NO_THROW(run_multiple_agg(
         "SELECT v1, COUNT(DISTINCT v1) FROM count_distinct_rewrite GROUP BY v1 limit "
         "1;",
@@ -1773,6 +1866,27 @@ TEST(Select, GroupBy) {
         "SELECT v1, APPROX_COUNT_DISTINCT(v1), CASE WHEN v1 IS NOT NULL THEN 1 ELSE 0 "
         "END, COUNT(DISTINCT v1) FROM count_distinct_rewrite GROUP BY v1 limit 1;",
         dt));
+
+    // 2. remaining agg ops: avg / min / max / sample / approx_quantile
+    // there are two exceptions when perform gby-agg: 1) gby fails and 2) agg fails
+    // otherwise this rewriting should return the same result as the original query
+    std::vector<SQLAgg> test_agg_ops = {SQLAgg::kMIN,
+                                        SQLAgg::kMAX,
+                                        SQLAgg::kSAMPLE,
+                                        SQLAgg::kAVG,
+                                        SQLAgg::kAPPROX_QUANTILE};
+    for (auto& col_name : runnable_column_names) {
+      for (auto& agg_op : test_agg_ops) {
+        perform_test(agg_op, col_name, dt);
+      }
+    }
+    for (TypeAndAvaliableAggOps& info : column_names_with_available_agg_ops) {
+      const auto& col_name = info.first;
+      const auto& agg_ops = info.second;
+      for (auto& agg_op : agg_ops) {
+        perform_test(agg_op, col_name, dt);
+      }
+    }
   }
   run_ddl_statement("DROP TABLE IF EXISTS count_distinct_rewrite;");
 }

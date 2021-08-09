@@ -24,13 +24,14 @@
 #include "ExpressionRewrite.h"
 #include "Logger/Logger.h"
 #include "Parser/ParserNode.h"
+#include "Shared/sqltypes.h"
 
 RelAlgExecutionUnit QueryRewriter::rewrite(
     const RelAlgExecutionUnit& ra_exe_unit_in) const {
   auto rewritten_exe_unit = rewriteConstrainedByIn(ra_exe_unit_in);
-  auto rewritten_count_distinct_op_exe_unit =
-      rewriteCountDistinctOnGroupByColumn(rewritten_exe_unit);
-  return rewriteOverlapsJoin(rewritten_count_distinct_op_exe_unit);
+  auto rewritten_exe_unit_for_agg_on_gby_col =
+      rewriteAggregateOnGroupByColumn(rewritten_exe_unit);
+  return rewriteOverlapsJoin(rewritten_exe_unit_for_agg_on_gby_col);
 }
 
 RelAlgExecutionUnit QueryRewriter::rewriteOverlapsJoin(
@@ -510,35 +511,87 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarDelete(
   return rewritten_exe_unit;
 }
 
-RelAlgExecutionUnit QueryRewriter::rewriteCountDistinctOnGroupByColumn(
+std::pair<bool, std::set<size_t>> QueryRewriter::is_all_groupby_exprs_are_col_var(
+    const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs) const {
+  std::set<size_t> gby_col_exprs_hash;
+  for (auto gby_expr : groupby_exprs) {
+    if (auto gby_col_var = std::dynamic_pointer_cast<Analyzer::ColumnVar>(gby_expr)) {
+      gby_col_exprs_hash.insert(boost::hash_value(gby_col_var->toString()));
+    } else {
+      return {false, {}};
+    }
+  }
+  return {true, gby_col_exprs_hash};
+}
+
+RelAlgExecutionUnit QueryRewriter::rewriteAggregateOnGroupByColumn(
     const RelAlgExecutionUnit& ra_exe_unit_in) const {
-  auto is_expr_on_gby_col = [&ra_exe_unit_in](const Analyzer::AggExpr* agg_expr) {
-    auto gby_cols = ra_exe_unit_in.groupby_exprs;
-    for (auto gby_col : gby_cols) {
-      if (gby_col == agg_expr->get_own_arg()) {
+  auto check_precond = is_all_groupby_exprs_are_col_var(ra_exe_unit_in.groupby_exprs);
+  auto is_expr_on_gby_col = [&check_precond](const Analyzer::AggExpr* agg_expr) {
+    CHECK(agg_expr);
+    if (agg_expr->get_arg()) {
+      // some expr does not have its own arg, i.e., count(*)
+      auto agg_expr_hash = boost::hash_value(agg_expr->get_arg()->toString());
+      // a valid expr should have hashed value > 0
+      CHECK_GT(agg_expr_hash, 0u);
+      if (check_precond.second.count(agg_expr_hash)) {
         return true;
       }
     }
     return false;
   };
-
-  auto is_count_distinct_agg = [](const Analyzer::AggExpr* agg_expr) {
-    return (agg_expr->get_aggtype() == SQLAgg::kCOUNT && agg_expr->get_is_distinct()) ||
-           agg_expr->get_aggtype() == SQLAgg::kAPPROX_COUNT_DISTINCT;
-  };
+  if (!check_precond.first) {
+    // return the input ra_exe_unit if we have gby expr which is not col_var
+    // i.e., group by x+1, y instead of group by x, y
+    // todo (yoonmin) : can we relax this with a simple analysis of groupby / agg exprs?
+    return ra_exe_unit_in;
+  }
 
   std::vector<Analyzer::Expr*> new_target_exprs;
   for (auto expr : ra_exe_unit_in.target_exprs) {
+    bool rewritten = false;
     if (auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(expr)) {
-      if (is_count_distinct_agg(agg_expr) && is_expr_on_gby_col(agg_expr)) {
-        auto case_expr =
-            generateCaseExprForCountDistinctOnGroupByCol(agg_expr->get_own_arg());
-        new_target_exprs.push_back(case_expr.get());
-        target_exprs_owned_.emplace_back(case_expr);
-        continue;
+      if (is_expr_on_gby_col(agg_expr)) {
+        auto target_expr = agg_expr->get_arg();
+        // we have some issues when this rewriting is applied to float_type groupby column
+        // in subquery, i.e., SELECT MIN(v1) FROM (SELECT v1, AGG(v1) FROM T GROUP BY v1);
+        if (target_expr && target_expr->get_type_info().get_type() != SQLTypes::kFLOAT) {
+          switch (agg_expr->get_aggtype()) {
+            case SQLAgg::kCOUNT:
+            case SQLAgg::kAPPROX_COUNT_DISTINCT: {
+              auto case_expr =
+                  generateCaseExprForCountDistinctOnGroupByCol(agg_expr->get_own_arg());
+              new_target_exprs.push_back(case_expr.get());
+              target_exprs_owned_.emplace_back(case_expr);
+              rewritten = true;
+              break;
+            }
+            case SQLAgg::kAPPROX_QUANTILE:
+            case SQLAgg::kAVG:
+            case SQLAgg::kSAMPLE:
+            case SQLAgg::kMAX:
+            case SQLAgg::kMIN: {
+              // we just replace the agg_expr into a plain expr
+              // i.e, avg(x1) --> x1
+              auto agg_expr_ti = agg_expr->get_type_info();
+              auto target_expr = agg_expr->get_own_arg();
+              if (agg_expr_ti != target_expr->get_type_info()) {
+                target_expr = target_expr->add_cast(agg_expr_ti);
+              }
+              new_target_exprs.push_back(target_expr.get());
+              target_exprs_owned_.emplace_back(target_expr);
+              rewritten = true;
+              break;
+            }
+            default:
+              break;
+          }
+        }
       }
     }
-    new_target_exprs.push_back(expr);
+    if (!rewritten) {
+      new_target_exprs.push_back(expr);
+    }
   }
 
   RelAlgExecutionUnit rewritten_exe_unit{ra_exe_unit_in.input_descs,
