@@ -155,11 +155,11 @@ int32_t TableFunction::countScalarArgs() const {
 
 const std::map<std::string, std::string>& TableFunction::getAnnotation(
     const size_t idx) const {
-  CHECK_LT(idx, annotations_.size());
   if (annotations_.size() == 0) {
     static const std::map<std::string, std::string> empty = {};
     return empty;
   }
+  CHECK_LT(idx, annotations_.size());
   return annotations_[idx];
 }
 
