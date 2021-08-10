@@ -695,6 +695,8 @@ class Executor {
   int32_t executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                  const CompilationResult&,
                                  const bool hoist_literals,
+                                 // Pass nullptr if ResultSet shouldn't be extracted
+                                 // from the execution context
                                  ResultSetPtr* results,
                                  const ExecutorDeviceType device_type,
                                  std::vector<std::vector<const int8_t*>>& col_buffers,
@@ -715,6 +717,8 @@ class Executor {
       const RelAlgExecutionUnit& ra_exe_unit,
       const CompilationResult&,
       const bool hoist_literals,
+      // Pass nullptr if ResultSet shouldn't be extracted
+      // from the execution context
       ResultSetPtr* results,
       const std::vector<Analyzer::Expr*>& target_exprs,
       const ExecutorDeviceType device_type,
