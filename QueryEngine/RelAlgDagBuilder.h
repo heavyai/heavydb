@@ -2160,6 +2160,8 @@ class RelAlgDagBuilder : public boost::noncopyable {
   }
 
   void registerQueryHints(Hints* hints_delivered) {
+    bool detect_columnar_output_hint = false;
+    bool detect_rowwise_output_hint = false;
     for (auto it = hints_delivered->begin(); it != hints_delivered->end(); it++) {
       auto target = it->second;
       auto hint_type = it->first;
@@ -2168,6 +2170,14 @@ class RelAlgDagBuilder : public boost::noncopyable {
           query_hint_.registerHint(QueryHint::kCpuMode);
           query_hint_.cpu_mode = true;
           VLOG(1) << "A user forces to run the query on the CPU execution mode";
+          break;
+        }
+        case QueryHint::kColumnarOutput: {
+          detect_columnar_output_hint = true;
+          break;
+        }
+        case QueryHint::kRowwiseOutput: {
+          detect_rowwise_output_hint = true;
           break;
         }
         case QueryHint::kOverlapsBucketThreshold: {
@@ -2225,6 +2235,42 @@ class RelAlgDagBuilder : public boost::noncopyable {
         }
         default:
           break;
+      }
+    }
+    // we have four cases depending on 1) g_enable_columnar_output flag
+    // and 2) query hint status: columnar_output and rowwise_output
+    // case 1. g_enable_columnar_output = true
+    // case 1.a) columnar_output = true (so rowwise_output = false);
+    // case 1.b) rowwise_output = true (so columnar_output = false);
+    // case 2. g_enable_columnar_output = false
+    // case 2.a) columnar_output = true (so rowwise_output = false);
+    // case 2.b) rowwise_output = true (so columnar_output = false);
+    // case 1.a --> use columnar output
+    // case 1.b --> use rowwise output
+    // case 2.a --> use columnar output
+    // case 2.b --> use rowwise output
+    if (detect_columnar_output_hint && detect_rowwise_output_hint) {
+      VLOG(1)
+          << "Two hints 1) columnar output and 2) rowwise output are enabled together, "
+          << "so skip them and use the runtime configuration "
+             "\"g_enable_columnar_output\"";
+    } else if (detect_columnar_output_hint && !detect_rowwise_output_hint) {
+      if (g_enable_columnar_output) {
+        VLOG(1) << "We already enable columnar output by default "
+                   "(g_enable_columnar_output = true), so skip this columnar output hint";
+      } else {
+        query_hint_.registerHint(QueryHint::kColumnarOutput);
+        query_hint_.columnar_output = true;
+        VLOG(1) << "A user forces the query to run with columnar output";
+      }
+    } else if (!detect_columnar_output_hint && detect_rowwise_output_hint) {
+      if (!g_enable_columnar_output) {
+        VLOG(1) << "We already use the default rowwise output (g_enable_columnar_output "
+                   "= false), so skip this rowwise output hint";
+      } else {
+        query_hint_.registerHint(QueryHint::kRowwiseOutput);
+        query_hint_.rowwise_output = true;
+        VLOG(1) << "A user forces the query to run with rowwise output";
       }
     }
   }

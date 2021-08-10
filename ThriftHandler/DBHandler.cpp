@@ -5665,7 +5665,13 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
       intel_jit_profile_};
   auto validate_or_explain_query =
       explain_info.justExplain() || explain_info.justCalciteExplain() || just_validate;
-  ExecutionOptions eo = {g_enable_columnar_output,
+  auto columnar_output_enabled = g_enable_columnar_output;
+  if (query_hints.isHintRegistered(QueryHint::kColumnarOutput)) {
+    columnar_output_enabled = true;
+  } else if (query_hints.isHintRegistered(QueryHint::kRowwiseOutput)) {
+    columnar_output_enabled = false;
+  }
+  ExecutionOptions eo = {columnar_output_enabled,
                          allow_multifrag_,
                          explain_info.justExplain(),
                          allow_loop_joins_ || just_validate,
@@ -5755,6 +5761,11 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                                                .empty(),
       g_running_query_interrupt_freq,
       g_pending_query_interrupt_freq};
+  if (query_hints.isHintRegistered(QueryHint::kColumnarOutput)) {
+    eo.output_columnar_hint = true;
+  } else if (query_hints.isHintRegistered(QueryHint::kRowwiseOutput)) {
+    eo.output_columnar_hint = false;
+  }
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),

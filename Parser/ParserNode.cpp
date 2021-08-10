@@ -2643,6 +2643,10 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                          g_pending_query_interrupt_freq,
                          ExecutorType::Native,
                          outer_fragment_indices};
+  // we can skip to check rowwise query hint since we assume false by default in this eo
+  const auto columnar_output_enabled =
+      query_hints.isHintRegistered(QueryHint::kColumnarOutput);
+  eo.output_columnar_hint = columnar_output_enabled;
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
@@ -2699,6 +2703,10 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
                          false,
                          0.9,
                          false};
+  // we can skip to check rowwise query hint since we assume false by default in this eo
+  const auto columnar_output_enabled =
+      query_hints.isHintRegistered(QueryHint::kColumnarOutput);
+  eo.output_columnar_hint = columnar_output_enabled;
   return ra_executor.getOuterFragmentCount(co, eo);
 }
 

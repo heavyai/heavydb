@@ -12,6 +12,8 @@ public class OmniSciHintStrategyTable {
 
   static HintStrategyTable createHintStrategies(HintStrategyTable.Builder builder) {
     return builder.hintStrategy("cpu_mode", HintPredicates.SET_VAR)
+            .hintStrategy("columnar_output", HintPredicates.SET_VAR)
+            .hintStrategy("rowwise_output", HintPredicates.SET_VAR)
             .hintStrategy("overlaps_bucket_threshold", HintPredicates.SET_VAR)
             .hintStrategy("overlaps_max_size", HintPredicates.SET_VAR)
             .hintStrategy("overlaps_allow_gpu_build", HintPredicates.SET_VAR)

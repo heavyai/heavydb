@@ -227,6 +227,138 @@ TEST(QueryHint, CheckQueryHintForOverlapsJoin) {
   }
 }
 
+TEST(QueryHint, checkQueryLayoutHintWithEnablingColumnarOutput) {
+  const auto enable_columnar_output = g_enable_columnar_output;
+  g_enable_columnar_output = true;
+  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
+    g_enable_columnar_output = enable_columnar_output;
+  };
+
+  const auto create_table_ddl = "CREATE TABLE SQL_HINT_DUMMY(key int)";
+  const auto drop_table_ddl = "DROP TABLE IF EXISTS SQL_HINT_DUMMY";
+  const auto q1 = "SELECT /*+ columnar_output */ * FROM SQL_HINT_DUMMY";
+  const auto q2 = "SELECT /*+ rowwise_output */ * FROM SQL_HINT_DUMMY";
+  const auto q3 = "SELECT /*+ columnar_output, rowwise_output */ * FROM SQL_HINT_DUMMY";
+  const auto q4 = "SELECT /*+ rowwise_output, columnar_output */ * FROM SQL_HINT_DUMMY";
+  const auto q5 =
+      "SELECT /*+ rowwise_output, columnar_output, rowwise_output */ * FROM "
+      "SQL_HINT_DUMMY";
+  const auto q6 = "SELECT /*+ rowwise_output, rowwise_output */ * FROM SQL_HINT_DUMMY";
+  const auto q7 = "SELECT /*+ columnar_output, columnar_output */ * FROM SQL_HINT_DUMMY";
+  QR::get()->runDDLStatement(drop_table_ddl);
+  QR::get()->runDDLStatement(create_table_ddl);
+
+  {
+    auto query_hints = QR::get()->getParsedQueryHint(q1);
+    auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
+    CHECK(!hint_enabled);
+  }
+
+  {
+    auto query_hints = QR::get()->getParsedQueryHint(q2);
+    auto hint_enabled = query_hints.isHintRegistered(QueryHint::kRowwiseOutput);
+    CHECK(hint_enabled);
+  }
+
+  {
+    auto query_hints = QR::get()->getParsedQueryHint(q3);
+    auto hint_enabled = query_hints.isAnyQueryHintDelivered();
+    CHECK(!hint_enabled);
+  }
+
+  {
+    auto query_hints = QR::get()->getParsedQueryHint(q4);
+    auto hint_enabled = query_hints.isAnyQueryHintDelivered();
+    CHECK(!hint_enabled);
+  }
+
+  {
+    auto query_hints = QR::get()->getParsedQueryHint(q5);
+    auto hint_enabled = query_hints.isAnyQueryHintDelivered();
+    CHECK(!hint_enabled);
+  }
+
+  {
+    auto query_hints = QR::get()->getParsedQueryHint(q6);
+    auto hint_enabled = query_hints.isHintRegistered(QueryHint::kRowwiseOutput);
+    CHECK(hint_enabled);
+  }
+
+  {
+    auto query_hints = QR::get()->getParsedQueryHint(q7);
+    auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
+    CHECK(!hint_enabled);
+  }
+
+  QR::get()->runDDLStatement(drop_table_ddl);
+}
+
+TEST(QueryHint, checkQueryLayoutHintWithoutEnablingColumnarOutput) {
+  const auto enable_columnar_output = g_enable_columnar_output;
+  g_enable_columnar_output = false;
+  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
+    g_enable_columnar_output = enable_columnar_output;
+  };
+
+  const auto create_table_ddl = "CREATE TABLE SQL_HINT_DUMMY(key int)";
+  const auto drop_table_ddl = "DROP TABLE IF EXISTS SQL_HINT_DUMMY";
+  const auto q1 = "SELECT /*+ columnar_output */ * FROM SQL_HINT_DUMMY";
+  const auto q2 = "SELECT /*+ rowwise_output */ * FROM SQL_HINT_DUMMY";
+  const auto q3 = "SELECT /*+ columnar_output, rowwise_output */ * FROM SQL_HINT_DUMMY";
+  const auto q4 = "SELECT /*+ rowwise_output, columnar_output */ * FROM SQL_HINT_DUMMY";
+  const auto q5 =
+      "SELECT /*+ rowwise_output, columnar_output, rowwise_output */ * FROM "
+      "SQL_HINT_DUMMY";
+  const auto q6 = "SELECT /*+ rowwise_output, rowwise_output */ * FROM SQL_HINT_DUMMY";
+  const auto q7 = "SELECT /*+ columnar_output, columnar_output */ * FROM SQL_HINT_DUMMY";
+  QR::get()->runDDLStatement(drop_table_ddl);
+  QR::get()->runDDLStatement(create_table_ddl);
+
+  {
+    auto query_hints = QR::get()->getParsedQueryHint(q1);
+    auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
+    CHECK(hint_enabled);
+  }
+
+  {
+    auto query_hints = QR::get()->getParsedQueryHint(q2);
+    auto hint_enabled = query_hints.isHintRegistered(QueryHint::kRowwiseOutput);
+    CHECK(!hint_enabled);
+  }
+
+  {
+    auto query_hints = QR::get()->getParsedQueryHint(q3);
+    auto hint_enabled = query_hints.isAnyQueryHintDelivered();
+    CHECK(!hint_enabled);
+  }
+
+  {
+    auto query_hints = QR::get()->getParsedQueryHint(q4);
+    auto hint_enabled = query_hints.isAnyQueryHintDelivered();
+    CHECK(!hint_enabled);
+  }
+
+  {
+    auto query_hints = QR::get()->getParsedQueryHint(q5);
+    auto hint_enabled = query_hints.isAnyQueryHintDelivered();
+    CHECK(!hint_enabled);
+  }
+
+  {
+    auto query_hints = QR::get()->getParsedQueryHint(q6);
+    auto hint_enabled = query_hints.isHintRegistered(QueryHint::kRowwiseOutput);
+    CHECK(!hint_enabled);
+  }
+
+  {
+    auto query_hints = QR::get()->getParsedQueryHint(q7);
+    auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
+    CHECK(hint_enabled);
+  }
+
+  QR::get()->runDDLStatement(drop_table_ddl);
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

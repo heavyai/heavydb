@@ -582,6 +582,11 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
         if (cpu_mode_enabled) {
           co.device_type = ExecutorDeviceType::CPU;
         }
+        if (query_hints.isHintRegistered(QueryHint::kColumnarOutput)) {
+          eo.output_columnar_hint = true;
+        } else if (query_hints.isHintRegistered(QueryHint::kRowwiseOutput)) {
+          eo.output_columnar_hint = false;
+        }
         result = std::make_shared<ExecutionResult>(
             ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
       });
@@ -693,6 +698,11 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
   if (cpu_mode_enabled) {
     co.device_type = ExecutorDeviceType::CPU;
   }
+  if (query_hints.isHintRegistered(QueryHint::kColumnarOutput)) {
+    eo.output_columnar_hint = true;
+  } else if (query_hints.isHintRegistered(QueryHint::kRowwiseOutput)) {
+    eo.output_columnar_hint = false;
+  }
   auto result = std::make_shared<ExecutionResult>(
       ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
   const auto& filter_push_down_requests = result->getPushedDownFilterInfo();
@@ -781,6 +791,11 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
         const bool cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
         if (cpu_mode_enabled) {
           co.device_type = ExecutorDeviceType::CPU;
+        }
+        if (query_hints.isHintRegistered(QueryHint::kColumnarOutput)) {
+          eo.output_columnar_hint = true;
+        } else if (query_hints.isHintRegistered(QueryHint::kRowwiseOutput)) {
+          eo.output_columnar_hint = false;
         }
         result = std::make_shared<ExecutionResult>(
             ra_executor.executeRelAlgQuery(co, eo, false, nullptr));

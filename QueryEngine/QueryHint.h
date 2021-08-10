@@ -27,6 +27,8 @@
 // and let remaining enum value to be auto-incremented
 enum QueryHint {
   kCpuMode = 0,
+  kColumnarOutput,
+  kRowwiseOutput,
   kOverlapsBucketThreshold,
   kOverlapsMaxSize,
   kOverlapsAllowGpuBuild,
@@ -39,6 +41,8 @@ enum QueryHint {
 
 static const std::unordered_map<std::string, QueryHint> SupportedQueryHints = {
     {"cpu_mode", QueryHint::kCpuMode},
+    {"columnar_output", QueryHint::kColumnarOutput},
+    {"rowwise_output", QueryHint::kRowwiseOutput},
     {"overlaps_bucket_threshold", QueryHint::kOverlapsBucketThreshold},
     {"overlaps_max_size", QueryHint::kOverlapsMaxSize},
     {"overlaps_allow_gpu_build", QueryHint::kOverlapsAllowGpuBuild},
@@ -132,6 +136,8 @@ struct RegisteredQueryHint {
   // registered and its detailed info such as the hint's parameter values given by user
   RegisteredQueryHint()
       : cpu_mode(false)
+      , columnar_output(g_enable_columnar_output)
+      , rowwise_output(!g_enable_columnar_output)
       , overlaps_bucket_threshold(std::numeric_limits<double>::max())
       , overlaps_max_size(g_overlaps_max_table_size_bytes)
       , overlaps_allow_gpu_build(true)
@@ -141,6 +147,8 @@ struct RegisteredQueryHint {
 
   RegisteredQueryHint& operator=(const RegisteredQueryHint& other) {
     cpu_mode = other.cpu_mode;
+    columnar_output = other.columnar_output;
+    rowwise_output = other.rowwise_output;
     overlaps_bucket_threshold = other.overlaps_bucket_threshold;
     overlaps_max_size = other.overlaps_max_size;
     overlaps_allow_gpu_build = other.overlaps_allow_gpu_build;
@@ -152,6 +160,8 @@ struct RegisteredQueryHint {
 
   RegisteredQueryHint(const RegisteredQueryHint& other) {
     cpu_mode = other.cpu_mode;
+    columnar_output = other.columnar_output;
+    rowwise_output = other.rowwise_output;
     overlaps_bucket_threshold = other.overlaps_bucket_threshold;
     overlaps_max_size = other.overlaps_max_size;
     overlaps_allow_gpu_build = other.overlaps_allow_gpu_build;
@@ -162,6 +172,8 @@ struct RegisteredQueryHint {
 
   // general query execution
   bool cpu_mode;
+  bool columnar_output;
+  bool rowwise_output;
 
   // overlaps hash join
   double overlaps_bucket_threshold;  // defined in "OverlapsJoinHashTable.h"
