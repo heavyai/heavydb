@@ -1734,6 +1734,8 @@ class GeoConstant : public GeoExpr {
 
   std::shared_ptr<Analyzer::Expr> add_cast(const SQLTypeInfo& new_type_info) final;
 
+  std::string getWKTString() const;
+
  private:
   std::unique_ptr<Geospatial::GeoBase> geo_;
 };

@@ -3380,6 +3380,11 @@ std::string GeoConstant::toString() const {
   return str;
 }
 
+std::string GeoConstant::getWKTString() const {
+  CHECK(geo_);
+  return geo_->getWktString();
+}
+
 bool GeoConstant::operator==(const Expr& rhs) const {
   if (typeid(rhs) != typeid(GeoConstant)) {
     return false;
