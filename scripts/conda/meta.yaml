@@ -228,7 +228,7 @@ outputs:
         - {{ pin_subpackage('omniscidb-common', exact=True) }}
     test:
       imports:
-        - dbe
+        - omniscidbe
     about:
       home: https://www.omnisci.com/
       license: Apache-2.0
