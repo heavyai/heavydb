@@ -1,5 +1,7 @@
 c_compiler: gcc
+c_compiler_version: 9
 cxx_compiler: gxx
+cxx_compiler_version: 9
 ignore_build_only_deps:
 - numpy
 - python
