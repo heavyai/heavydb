@@ -4308,10 +4308,8 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       input_index++;
     } else {
       auto input_expr = input_exprs[input_index];
-      auto ext_func_arg_ti = ext_arg_type_to_type_info(table_func_args[input_index]);
-
-      if (ext_func_arg_ti != input_expr->get_type_info()) {
-        input_exprs[input_index] = input_expr->add_cast(ext_func_arg_ti).get();
+      if (ti != input_expr->get_type_info()) {
+        input_exprs[input_index] = input_expr->add_cast(ti).get();
       }
       input_index++;
     }
