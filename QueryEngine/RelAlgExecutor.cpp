@@ -4273,7 +4273,9 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   std::vector<Analyzer::ColumnVar*> input_col_exprs;
   std::optional<int32_t> dict_id;
   size_t input_index = 0;
-  const auto table_func_args = table_function_impl.getArgs();
+  size_t arg_index = 0;
+  const auto table_func_args = table_function_impl.getInputArgs();
+  CHECK_EQ(table_func_args.size(), table_function_type_infos.size());
   for (const auto& ti : table_function_type_infos) {
     if (ti.is_column_list()) {
       for (int i = 0; i < ti.get_dimension(); i++) {
@@ -4308,11 +4310,13 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       input_index++;
     } else {
       auto input_expr = input_exprs[input_index];
-      if (ti != input_expr->get_type_info()) {
-        input_exprs[input_index] = input_expr->add_cast(ti).get();
+      auto ext_func_arg_ti = ext_arg_type_to_type_info(table_func_args[arg_index]);
+      if (ext_func_arg_ti != input_expr->get_type_info()) {
+        input_exprs[input_index] = input_expr->add_cast(ext_func_arg_ti).get();
       }
       input_index++;
     }
+    arg_index++;
   }
   CHECK_EQ(input_col_exprs.size(), rel_table_func->getColInputsSize());
   std::vector<Analyzer::Expr*> table_func_outputs;
