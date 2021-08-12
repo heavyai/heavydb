@@ -22,13 +22,14 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* const
                                                  const int dict_id,
                                                  const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
+  unsigned AS = co.device_type == ExecutorDeviceType::L0 ? 4 : 0;
   if (co.hoist_literals) {
     if (const auto geo_constant = dynamic_cast<const Analyzer::GeoConstant*>(constant)) {
       return codegenGeoConstant(geo_constant, co);
     } else {
       std::vector<const Analyzer::Constant*> constants(
           executor()->deviceCount(co.device_type), constant);
-      return codegenHoistedConstants(constants, enc_type, dict_id);
+      return codegenHoistedConstants(constants, enc_type, dict_id, AS);
     }
   }
   const auto& type_info = constant->get_type_info();
@@ -120,7 +121,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
     const SQLTypeInfo& type_info,
     const EncodingType enc_type,
     const int dict_id,
-    const int16_t lit_off) {
+    const int16_t lit_off,
+    const unsigned addr_space) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   std::string literal_name = "literal_" + std::to_string(lit_off);
   auto lit_buff_query_func_lv = get_arg_by_name(cgen_state_->query_func_, "literals");
@@ -133,7 +135,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
              CgenState::literalBytes(CgenState::LiteralValue(std::string(""))));
     auto off_and_len_ptr = cgen_state_->query_func_entry_ir_builder_.CreateBitCast(
         lit_buf_start,
-        llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0));
+        llvm::PointerType::get(get_int_type(32, cgen_state_->context_), addr_space));
     // packed offset + length, 16 bits each
     auto off_and_len =
         cgen_state_->query_func_entry_ir_builder_.CreateLoad(off_and_len_ptr);
@@ -165,7 +167,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
 
     auto off_and_len_ptr = cgen_state_->query_func_entry_ir_builder_.CreateBitCast(
         lit_buf_start,
-        llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0));
+        llvm::PointerType::get(get_int_type(32, cgen_state_->context_), addr_space));
     // packed offset + length, 16 bits each
     auto off_and_len =
         cgen_state_->query_func_entry_ir_builder_.CreateLoad(off_and_len_ptr);
@@ -192,12 +194,12 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
   if (type_info.is_integer() || type_info.is_decimal() || type_info.is_time() ||
       type_info.is_timeinterval() || type_info.is_string() || type_info.is_boolean()) {
     val_ptr_type = llvm::PointerType::get(
-        llvm::IntegerType::get(cgen_state_->context_, val_bits), 0);
+        llvm::IntegerType::get(cgen_state_->context_, val_bits), addr_space);
   } else {
     CHECK(type_info.get_type() == kFLOAT || type_info.get_type() == kDOUBLE);
     val_ptr_type = (type_info.get_type() == kFLOAT)
-                       ? llvm::Type::getFloatPtrTy(cgen_state_->context_)
-                       : llvm::Type::getDoublePtrTy(cgen_state_->context_);
+                       ? llvm::Type::getFloatPtrTy(cgen_state_->context_, addr_space)
+                       : llvm::Type::getDoublePtrTy(cgen_state_->context_, addr_space);
   }
   auto lit_lv = cgen_state_->query_func_entry_ir_builder_.CreateLoad(
       cgen_state_->query_func_entry_ir_builder_.CreateBitCast(lit_buf_start,
@@ -285,7 +287,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsPlaceholders(
 std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstants(
     const std::vector<const Analyzer::Constant*>& constants,
     const EncodingType enc_type,
-    const int dict_id) {
+    const int dict_id,
+    const unsigned addr_space) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   CHECK(!constants.empty());
   const auto& type_info = constants.front()->get_type_info();
@@ -309,7 +312,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstants(
 
   if (entry == cgen_state_->query_func_literal_loads_.end()) {
     hoisted_literal_loads =
-        codegenHoistedConstantsLoads(type_info, enc_type, dict_id, lit_off);
+        codegenHoistedConstantsLoads(type_info, enc_type, dict_id, lit_off, addr_space);
     cgen_state_->query_func_literal_loads_[lit_off] = hoisted_literal_loads;
   } else {
     hoisted_literal_loads = entry->second;

@@ -333,6 +333,7 @@ void TargetExprCodegen::codegenAggregate(
                                                           out_row_idx,
                                                           agg_out_ptr_w_idx,
                                                           query_mem_desc,
+                                                          co,
                                                           chosen_bytes,
                                                           slot_index,
                                                           target_idx);
@@ -714,6 +715,7 @@ void TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions(
                                                         out_row_idx,
                                                         agg_out_ptr_w_idx,
                                                         query_mem_desc,
+                                                        co,
                                                         agg_column_size_bytes,
                                                         first_sample_expr.base_slot_index,
                                                         first_sample_expr.target_idx);

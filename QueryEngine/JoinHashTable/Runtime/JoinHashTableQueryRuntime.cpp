@@ -323,7 +323,9 @@ get_candidate_rows(int32_t* out_arr,
       for (int64_t j = 0; j < buffer_range.element_count; j++) {
         const auto rowid = buffer_range.buffer[j];
         elem_count += insert_sorted(out_arr, elem_count, rowid);
+#ifndef HAVE_L0
         assert(max_arr_size >= elem_count);
+#endif
       }
     }
   }

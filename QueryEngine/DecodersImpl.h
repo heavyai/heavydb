@@ -28,7 +28,7 @@
 #include "../Shared/funcannotations.h"
 
 extern "C" DEVICE ALWAYS_INLINE int64_t
-SUFFIX(fixed_width_int_decode)(const int8_t* byte_stream,
+SUFFIX(fixed_width_int_decode)(ADDR_SPACE const int8_t* byte_stream,
                                const int32_t byte_width,
                                const int64_t pos) {
 #ifdef WITH_DECODERS_BOUNDS_CHECKING
@@ -38,14 +38,19 @@ SUFFIX(fixed_width_int_decode)(const int8_t* byte_stream,
     case 1:
       return static_cast<int64_t>(byte_stream[pos * byte_width]);
     case 2:
-      return *(reinterpret_cast<const int16_t*>(&byte_stream[pos * byte_width]));
+      return *(
+          reinterpret_cast<ADDR_SPACE const int16_t*>(&byte_stream[pos * byte_width]));
     case 4:
-      return *(reinterpret_cast<const int32_t*>(&byte_stream[pos * byte_width]));
+      return *(
+          reinterpret_cast<ADDR_SPACE const int32_t*>(&byte_stream[pos * byte_width]));
     case 8:
-      return *(reinterpret_cast<const int64_t*>(&byte_stream[pos * byte_width]));
+      return *(
+          reinterpret_cast<ADDR_SPACE const int64_t*>(&byte_stream[pos * byte_width]));
     default:
 // TODO(alex)
 #ifdef __CUDACC__
+      return -1;
+#elif defined(HAVE_L0)
       return -1;
 #else
 #ifdef _WIN32

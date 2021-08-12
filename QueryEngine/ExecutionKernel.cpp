@@ -122,7 +122,8 @@ void ExecutionKernel::runImpl(Executor* executor,
                               const size_t thread_idx,
                               SharedKernelContext& shared_context) {
   CHECK(executor);
-  const auto memory_level = chosen_device_type == ExecutorDeviceType::GPU
+  const auto memory_level = (chosen_device_type == ExecutorDeviceType::GPU ||
+                             chosen_device_type == ExecutorDeviceType::L0)
                                 ? Data_Namespace::GPU_LEVEL
                                 : Data_Namespace::CPU_LEVEL;
   CHECK_GE(frag_list.size(), size_t(1));
@@ -143,12 +144,18 @@ void ExecutionKernel::runImpl(Executor* executor,
   auto chunk_iterators_ptr = std::make_shared<std::list<ChunkIter>>();
   std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks;
   std::unique_ptr<std::lock_guard<std::mutex>> gpu_lock;
-  std::unique_ptr<CudaAllocator> device_allocator;
+  std::unique_ptr<DeviceAllocator> device_allocator;
   if (chosen_device_type == ExecutorDeviceType::GPU) {
     gpu_lock.reset(
         new std::lock_guard<std::mutex>(executor->gpu_exec_mutex_[chosen_device_id]));
     device_allocator =
         std::make_unique<CudaAllocator>(&catalog->getDataMgr(), chosen_device_id);
+  }
+  if (chosen_device_type == ExecutorDeviceType::L0) {
+    gpu_lock.reset(
+        new std::lock_guard<std::mutex>(executor->gpu_exec_mutex_[chosen_device_id]));
+    device_allocator =
+        std::make_unique<L0Allocator>(&catalog->getDataMgr(), chosen_device_id);
   }
   FetchResult fetch_result;
   try {

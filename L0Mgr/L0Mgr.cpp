@@ -81,6 +81,18 @@ std::vector<std::shared_ptr<L0Driver>> get_drivers() {
 
 L0CommandList::L0CommandList(ze_command_list_handle_t handle) : handle_(handle) {}
 
+void L0CommandList::launch(L0Kernel* kernel, std::vector<int8_t*>& params) {
+  for (unsigned i = 0; i < params.size(); ++i) {
+    L0_SAFE_CALL(zeKernelSetArgumentValue(
+        kernel->handle(), i, sizeof(params[i]), params[i] ? &params[i] : nullptr));
+  }
+
+  L0_SAFE_CALL(zeCommandListAppendLaunchKernel(
+      handle_, kernel->handle(), &kernel->group_size(), nullptr, 0, nullptr));
+
+  L0_SAFE_CALL(zeCommandListAppendBarrier(handle_, nullptr, 0, nullptr));
+}
+
 void L0CommandList::submit(L0CommandQueue& queue) {
   L0_SAFE_CALL(zeCommandListClose(handle_));
   L0_SAFE_CALL(zeCommandQueueExecuteCommandLists(queue.handle(), 1, &handle_, nullptr));
@@ -110,8 +122,8 @@ void* allocate_device_mem(const size_t num_bytes, L0Device& device) {
   alloc_desc.ordinal = 0;
 
   void* mem;
-  L0_SAFE_CALL(zeMemAllocDevice(
-      device.ctx(), &alloc_desc, num_bytes, 0 /*align*/, device.device(), &mem));
+  L0_SAFE_CALL(
+      zeMemAllocDevice(device.ctx(), &alloc_desc, num_bytes, 64, device.device(), &mem));
   return mem;
 }
 
@@ -177,7 +189,7 @@ std::shared_ptr<L0Module> L0Device::create_module(uint8_t* code,
       .format = ZE_MODULE_FORMAT_IL_SPIRV,
       .inputSize = len,
       .pInputModule = code,
-      .pBuildFlags = "",
+      .pBuildFlags = "-ze-opt-greater-than-4GB-buffer-required",
       .pConstants = nullptr,
   };
   ze_module_handle_t handle;
@@ -263,8 +275,8 @@ L0Kernel::~L0Kernel() {
   }
 }
 
-void L0Manager::copyHostToDevice(void* device_ptr,
-                                 const void* host_ptr,
+void L0Manager::copyHostToDevice(int8_t* device_ptr,
+                                 const int8_t* host_ptr,
                                  const size_t num_bytes,
                                  const int device_num) {
   auto& device = drivers()[0]->devices()[device_num];
@@ -275,8 +287,8 @@ void L0Manager::copyHostToDevice(void* device_ptr,
   cl->submit(*queue);
 }
 
-void L0Manager::copyDeviceToHost(void* host_ptr,
-                                 const void* device_ptr,
+void L0Manager::copyDeviceToHost(int8_t* host_ptr,
+                                 const int8_t* device_ptr,
                                  const size_t num_bytes,
                                  const int device_num) {
   auto& device = drivers_[0]->devices()[device_num];
@@ -287,8 +299,8 @@ void L0Manager::copyDeviceToHost(void* host_ptr,
   cl->submit(*queue);
 }
 
-void L0Manager::copyDeviceToDevice(void* dest_ptr,
-                                   void* src_ptr,
+void L0Manager::copyDeviceToDevice(int8_t* dest_ptr,
+                                   int8_t* src_ptr,
                                    const size_t num_bytes,
                                    const int dest_device_num,
                                    const int src_device_num) {
@@ -330,5 +342,9 @@ void L0Manager::synchronizeDevices() const {
     L0_SAFE_CALL(zeCommandQueueSynchronize(device->command_queue()->handle(),
                                            std::numeric_limits<uint32_t>::max()));
   }
+}
+
+int L0Manager::getDeviceCount() const {
+  return 1;
 }
 }  // namespace l0

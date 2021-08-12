@@ -65,7 +65,10 @@ void L0Allocator::copyToDevice(void* device_dst,
                                const size_t num_bytes) const {
   const auto l0_mgr = data_mgr_->getL0Mgr();
   CHECK(l0_mgr);
-  l0_mgr->copyHostToDevice(device_dst, host_src, num_bytes, device_id_);
+  l0_mgr->copyHostToDevice(reinterpret_cast<int8_t*>(device_dst),
+                           reinterpret_cast<const int8_t*>(host_src),
+                           num_bytes,
+                           device_id_);
 }
 
 void L0Allocator::copyFromDevice(void* host_dst,
@@ -73,7 +76,10 @@ void L0Allocator::copyFromDevice(void* host_dst,
                                  const size_t num_bytes) const {
   const auto l0_mgr = data_mgr_->getL0Mgr();
   CHECK(l0_mgr);
-  l0_mgr->copyDeviceToHost(host_dst, device_src, num_bytes, device_id_);
+  l0_mgr->copyDeviceToHost(reinterpret_cast<int8_t*>(host_dst),
+                           reinterpret_cast<const int8_t*>(device_src),
+                           num_bytes,
+                           device_id_);
 }
 
 void L0Allocator::zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes) const {

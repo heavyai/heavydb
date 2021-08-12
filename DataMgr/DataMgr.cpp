@@ -22,6 +22,7 @@
 #include "DataMgr/DataMgr.h"
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
+#include "BufferMgr/GpuL0BufferMgr/GpuL0BufferMgr.h"
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/Allocators/CudaAllocator.h"
 #include "DataMgr/Allocators/L0Allocator.h"
@@ -245,10 +246,36 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                                                                       bufferMgrs_[1][0]));
     }
     levelSizes_.push_back(numGpus);
+  } else if (l0Mgr_ /*fixme*/) {
+    bufferMgrs_.resize(3);
+    bufferMgrs_[1].push_back(new Buffer_Namespace::CpuBufferMgr(0,
+                                                                cpuBufferSize,
+                                                                l0Mgr_.get(),
+                                                                minCpuSlabSize,
+                                                                maxCpuSlabSize,
+                                                                page_size,
+                                                                bufferMgrs_[0][0]));
+    levelSizes_.push_back(1);
+
+    int numGpus = l0Mgr_->getDeviceCount();
+
+    for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
+      size_t gpuMaxMemSize = 1024 * 4 * 1024;  // 4MB for now
+      size_t minGpuSlabSize = gpuMaxMemSize;
+      size_t maxGpuSlabSize = gpuMaxMemSize;
+      bufferMgrs_[2].push_back(new Buffer_Namespace::GpuL0BufferMgr(gpuNum,
+                                                                    gpuMaxMemSize,
+                                                                    l0Mgr_.get(),
+                                                                    minGpuSlabSize,
+                                                                    maxGpuSlabSize,
+                                                                    4096UL,
+                                                                    bufferMgrs_[1][0]));
+    }
+    levelSizes_.push_back(numGpus);
   } else {
     bufferMgrs_[1].push_back(new Buffer_Namespace::CpuBufferMgr(0,
                                                                 cpuBufferSize,
-                                                                cudaMgr_.get(),
+                                                                nullptr,
                                                                 minCpuSlabSize,
                                                                 maxCpuSlabSize,
                                                                 page_size,

@@ -501,7 +501,8 @@ llvm::Value* CodeGenerator::colByteStream(const Analyzer::ColumnVar* col_var,
       "col_buf" + std::to_string(plan_state_->getLocalColumnId(col_var, fetch_column));
   for (auto& arg : cgen_state_->row_func_->args()) {
     if (arg.getName() == stream_arg_name) {
-      CHECK(arg.getType() == llvm::Type::getInt8PtrTy(cgen_state_->context_));
+      CHECK(arg.getType() == llvm::Type::getInt8PtrTy(cgen_state_->context_, 4) ||
+            arg.getType() == llvm::Type::getInt8PtrTy(cgen_state_->context_));
       return &arg;
     }
   }

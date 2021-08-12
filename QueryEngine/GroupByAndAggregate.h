@@ -160,6 +160,7 @@ class GroupByAndAggregate {
       llvm::Value* out_row_idx,
       const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
       const QueryMemoryDescriptor& query_mem_desc,
+      const CompilationOptions& co,
       const size_t chosen_bytes,
       const size_t agg_out_off,
       const size_t target_idx);
@@ -256,7 +257,8 @@ inline size_t get_count_distinct_sub_bitmap_count(const size_t bitmap_sz_bits,
   // the bitmap into multiple sub-bitmaps which are unified to get the full result.
   // The threshold value for bitmap_sz_bits works well on Kepler.
   return bitmap_sz_bits < 50000 && ra_exe_unit.groupby_exprs.empty() &&
-                 (device_type == ExecutorDeviceType::GPU || g_cluster)
+                 (device_type == ExecutorDeviceType::GPU ||
+                  device_type == ExecutorDeviceType::L0 || g_cluster)
              ? 64  // NB: must be a power of 2 to keep runtime offset computations cheap
              : 1;
 }

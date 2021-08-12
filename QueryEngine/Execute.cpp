@@ -1421,6 +1421,24 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
   }
 }
 
+std::ostream& operator<<(std::ostream& os, const ExecutorDeviceType& type) {
+  switch (type) {
+    case ExecutorDeviceType::CPU:
+      os << "ExecutorDeviceType::CPU";
+      break;
+    case ExecutorDeviceType::GPU:
+      os << "ExecutorDeviceType::GPU";
+      break;
+    case ExecutorDeviceType::L0:
+      os << "ExecutorDeviceType::L0";
+      break;
+
+    default:
+      os << "unknown device type";
+  }
+  return os;
+}
+
 ResultSetPtr Executor::executeWorkUnitImpl(
     size_t& max_groups_buffer_entry_guess,
     const bool is_agg,
@@ -2988,6 +3006,7 @@ int32_t Executor::executePlanWithoutGroupBy(
   if (g_enable_dynamic_watchdog && interrupted_.load()) {
     throw QueryExecutionError(ERR_INTERRUPTED);
   }
+
   if (device_type == ExecutorDeviceType::CPU) {
     auto cpu_generated_code = std::dynamic_pointer_cast<CpuCompilationContext>(
         compilation_result.generated_code);
@@ -3417,10 +3436,17 @@ int8_t Executor::warpSize() const {
 unsigned Executor::gridSize() const {
   CHECK(catalog_);
   const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
-  if (!cuda_mgr) {
-    return 0;
+  const auto l0_mgr = catalog_->getDataMgr().getL0Mgr();
+
+  if (cuda_mgr) {
+    return grid_size_x_ ? grid_size_x_ : 2 * cuda_mgr->getMinNumMPsForAllDevices();
   }
-  return grid_size_x_ ? grid_size_x_ : 2 * cuda_mgr->getMinNumMPsForAllDevices();
+
+  if (l0_mgr) {
+    return 1;
+  }
+
+  return 0;
 }
 
 unsigned Executor::numBlocksPerMP() const {
@@ -3434,11 +3460,18 @@ unsigned Executor::numBlocksPerMP() const {
 unsigned Executor::blockSize() const {
   CHECK(catalog_);
   const auto cuda_mgr = catalog_->getDataMgr().getCudaMgr();
-  if (!cuda_mgr) {
-    return 0;
+  const auto l0_mgr = catalog_->getDataMgr().getL0Mgr();
+
+  if (cuda_mgr) {
+    const auto& dev_props = cuda_mgr->getAllDeviceProperties();
+    return block_size_x_ ? block_size_x_ : dev_props.front().maxThreadsPerBlock;
   }
-  const auto& dev_props = cuda_mgr->getAllDeviceProperties();
-  return block_size_x_ ? block_size_x_ : dev_props.front().maxThreadsPerBlock;
+
+  if (l0_mgr) {
+    return 1;
+  }
+
+  return 0;
 }
 
 size_t Executor::maxGpuSlabSize() const {

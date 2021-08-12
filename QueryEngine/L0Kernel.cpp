@@ -19,22 +19,29 @@ L0BinResult spv_to_bin(const std::string& spv,
   CHECK(driver);
   CHECK(device);
 
+#ifndef NDEBUG
   std::ofstream out("complete.spv", std::ios::binary);
   out.write((char*)spv.data(), spv.size());
+#endif
 
   auto module = device->create_module((uint8_t*)spv.data(), spv.size(), true);
   auto kernel = module->create_kernel(name.c_str(), 1, 1, 1);
 
-  return {kernel, module};
+  return {device, kernel, module};
 }
 
 L0DeviceCompilationContext::L0DeviceCompilationContext(
+    std::shared_ptr<l0::L0Device> device,
     std::shared_ptr<l0::L0Kernel> kernel,
     std::shared_ptr<l0::L0Module> module,
     const l0::L0Manager* l0_mgr,
     const int device_id,
     unsigned int num_options,
     void** option_vals)
-    : kernel_(kernel), module_(module), l0_mgr_(l0_mgr), device_id_(device_id) {}
+    : device_(device)
+    , kernel_(kernel)
+    , module_(module)
+    , l0_mgr_(l0_mgr)
+    , device_id_(device_id) {}
 
 L0DeviceCompilationContext::~L0DeviceCompilationContext() {}

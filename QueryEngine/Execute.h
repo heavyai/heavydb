@@ -836,7 +836,7 @@ class Executor {
                                    const std::vector<InputTableInfo>& input_table_infos);
 
   void insertErrorCodeChecker(llvm::Function* query_func,
-                              bool hoist_literals,
+                              const CompilationOptions& co,
                               bool allow_runtime_query_interrupt);
 
   void preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,

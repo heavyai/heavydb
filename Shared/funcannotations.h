@@ -57,6 +57,14 @@
 #define ALWAYS_INLINE __attribute__((always_inline))
 #endif
 
+#ifdef HAVE_L0
+#define ADDR_SPACE __attribute__((opencl_generic))
+#define GLOBAL_ADDR_SPACE __attribute__((opencl_global))
+#else
+#define ADDR_SPACE
+#define GLOBAL_ADDR_SPACE
+#endif
+
 #ifdef __CUDACC__
 #define NEVER_INLINE
 #elif defined(_MSC_VER)

@@ -5,6 +5,7 @@
 #include "QueryEngine/CompilationContext.h"
 
 struct L0BinResult {
+  std::shared_ptr<l0::L0Device> device;
   std::shared_ptr<l0::L0Kernel> kernel;
   std::shared_ptr<l0::L0Module> module;
 };
@@ -16,20 +17,23 @@ L0BinResult spv_to_bin(const std::string& spv,
 
 class L0DeviceCompilationContext {
  public:
-  L0DeviceCompilationContext(std::shared_ptr<l0::L0Kernel> kernel,
+  L0DeviceCompilationContext(std::shared_ptr<l0::L0Device> device,
+                             std::shared_ptr<l0::L0Kernel> kernel,
                              std::shared_ptr<l0::L0Module> module,
                              const l0::L0Manager* l0_mgr,
                              const int device_id,
                              unsigned int num_options,
                              void** option_vals = nullptr);
   l0::L0Kernel* kernel() { return kernel_.get(); }
+  l0::L0Device* device() { return device_.get(); }
   ~L0DeviceCompilationContext();
 
  private:
+  std::shared_ptr<l0::L0Device> device_;
   std::shared_ptr<l0::L0Kernel> kernel_;
   std::shared_ptr<l0::L0Module> module_;
   const l0::L0Manager* l0_mgr_;
-  const int device_id_;
+  const int device_id_;  // todo: remove
 };
 
 class L0CompilationContext : public CompilationContext {
@@ -44,6 +48,18 @@ class L0CompilationContext : public CompilationContext {
       fn_ptrs.push_back(ctx->kernel());
     }
     return fn_ptrs;
+  }
+
+  l0::L0Kernel* getNativeCode(const size_t device_id) const {
+    CHECK_LT(device_id, contexts_per_device_.size());
+    auto device_context = contexts_per_device_[device_id].get();
+    return device_context->kernel();
+  }
+
+  l0::L0Device* getDevice(const size_t device_id) const {
+    CHECK_LT(device_id, contexts_per_device_.size());
+    auto device_context = contexts_per_device_[device_id].get();
+    return device_context->device();
   }
 
   void addDeviceCode(L0DevCompilationContextPtr&& device_context) {

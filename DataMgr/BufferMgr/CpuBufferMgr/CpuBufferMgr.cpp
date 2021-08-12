@@ -47,7 +47,7 @@ void CpuBufferMgr::allocateBuffer(BufferList::iterator seg_it,
   new CpuBuffer(this,
                 seg_it,
                 device_id_,
-                cuda_mgr_,
+                gpu_mgr_,
                 page_size,
                 initial_size);  // this line is admittedly a bit weird but
                                 // the segment iterator passed into buffer

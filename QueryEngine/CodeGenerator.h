@@ -46,7 +46,8 @@ class CodeGenerator {
   std::vector<llvm::Value*> codegenHoistedConstants(
       const std::vector<const Analyzer::Constant*>& constants,
       const EncodingType enc_type,
-      const int dict_id);
+      const int dict_id,
+      const unsigned addr_space = 0);
 
   static llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant,
                                             CgenState* cgen_state);
@@ -268,7 +269,8 @@ class CodeGenerator {
   std::vector<llvm::Value*> codegenHoistedConstantsLoads(const SQLTypeInfo& type_info,
                                                          const EncodingType enc_type,
                                                          const int dict_id,
-                                                         const int16_t lit_off);
+                                                         const int16_t lit_off,
+                                                         const unsigned addr_space);
 
   std::vector<llvm::Value*> codegenHoistedConstantsPlaceholders(
       const SQLTypeInfo& type_info,

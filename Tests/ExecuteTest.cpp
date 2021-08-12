@@ -2649,6 +2649,34 @@ TEST(Select, ApproxMedianValidate) {
   }
 }
 
+TEST(Select, Simplest) {
+  for (auto dt : {ExecutorDeviceType::L0}) {
+    c("SELECT count(x) FROM test where x >= 8;", dt);
+  }
+}
+
+TEST(Select, SimplestGroupBy) {
+  for (auto dt : {ExecutorDeviceType::L0}) {
+    c("SELECT x FROM test where x >= 8;", dt);
+  }
+}
+
+TEST(Select, SimplestAgg) {
+  run_ddl_statement("DROP TABLE IF EXISTS test_simplest;");
+  run_ddl_statement("create table test_simplest (val BIGINT);");
+  run_multiple_agg("insert into test_simplest VALUES (2)", ExecutorDeviceType::CPU);
+  run_multiple_agg("insert into test_simplest VALUES (1)", ExecutorDeviceType::CPU);
+  run_multiple_agg("insert into test_simplest VALUES (6)", ExecutorDeviceType::CPU);
+  run_multiple_agg("insert into test_simplest VALUES (9)", ExecutorDeviceType::CPU);
+  auto res = run_multiple_agg("SELECT count(val) FROM test_simplest where val >= 8;",
+                              ExecutorDeviceType::L0);
+  auto row = res->getNextRow(true, true);
+  auto val = boost::get<ScalarTargetValue>(&row[0]);
+  auto val_i64 = *boost::get<int64_t>(val);
+  std::cout << val_i64 << std::endl;
+  run_ddl_statement("drop table test_simplest;");
+}
+
 TEST(Select, ScanNoAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

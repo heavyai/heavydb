@@ -17,6 +17,7 @@
 #pragma once
 
 #include "DataMgr/BufferMgr/Buffer.h"
+#include "DataMgr/GpuMgr.h"
 
 namespace CudaMgr_Namespace {
 class CudaMgr;
@@ -28,7 +29,7 @@ class CpuBuffer : public Buffer {
   CpuBuffer(BufferMgr* bm,
             BufferList::iterator segment_iter,
             const int device_id,
-            CudaMgr_Namespace::CudaMgr* cuda_mgr,
+            GpuMgr* gpu_mgr,
             const size_t page_size = 512,
             const size_t num_bytes = 0);
 
@@ -46,6 +47,6 @@ class CpuBuffer : public Buffer {
                  const MemoryLevel src_memory_level = CPU_LEVEL,
                  const int src_device_id = -1) override;
 
-  CudaMgr_Namespace::CudaMgr* cuda_mgr_;
+  GpuMgr* gpu_mgr_;
 };
 }  // namespace Buffer_Namespace

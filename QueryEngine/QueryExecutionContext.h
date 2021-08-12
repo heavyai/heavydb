@@ -19,6 +19,7 @@
 
 #include "CompilationOptions.h"
 #include "DataMgr/Allocators/CudaAllocator.h"
+#include "DataMgr/Allocators/L0Allocator.h"
 #include "GpuMemUtils.h"
 #include "Rendering/RenderInfo.h"
 #include "ResultSet.h"

@@ -35,7 +35,7 @@ class DeviceKernel {
                       unsigned int blockDimY,
                       unsigned int blockDimZ,
                       unsigned int sharedMemBytes,
-                      void** kernelParams) = 0;
+                      std::vector<int8_t*>& kernelParams) = 0;
 
   virtual void initializeDynamicWatchdog(bool could_interrupt, uint64_t cycle_budget) = 0;
   virtual void initializeRuntimeInterrupter() = 0;

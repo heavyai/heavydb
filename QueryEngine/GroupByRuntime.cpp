@@ -239,8 +239,8 @@ get_columnar_group_bin_offset(int64_t* key_base_ptr,
   return off;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t* get_scan_output_slot(
-    int64_t* output_buffer,
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE ADDR_SPACE int64_t* get_scan_output_slot(
+    ADDR_SPACE int64_t* output_buffer,
     const uint32_t output_buffer_entry_count,
     const uint32_t pos,
     const int64_t offset_in_fragment,

@@ -39,7 +39,9 @@ inline llvm::Type* get_pointer_element_type(llvm::Value* value) {
 }
 
 template <class Attributes>
-llvm::Function* default_func_builder(llvm::Module* mod, const std::string& name) {
+llvm::Function* default_func_builder(llvm::Module* mod,
+                                     const std::string& name,
+                                     llvm::CallingConv::ID CC) {
   using namespace llvm;
 
   std::vector<Type*> func_args;
@@ -55,7 +57,7 @@ llvm::Function* default_func_builder(llvm::Module* mod, const std::string& name)
         /*Linkage=*/GlobalValue::ExternalLinkage,
         /*Name=*/name,
         mod);  // (external, no body)
-    func_ptr->setCallingConv(CallingConv::C);
+    func_ptr->setCallingConv(CC);
   }
 
   Attributes func_pal;
@@ -76,17 +78,20 @@ llvm::Function* default_func_builder(llvm::Module* mod, const std::string& name)
 }
 
 template <class Attributes>
-llvm::Function* pos_start(llvm::Module* mod) {
-  return default_func_builder<Attributes>(mod, "pos_start");
+llvm::Function* pos_start(llvm::Module* mod,
+                          llvm::CallingConv::ID CC = llvm::CallingConv::C) {
+  return default_func_builder<Attributes>(mod, "pos_start", CC);
 }
 
 template <class Attributes>
-llvm::Function* group_buff_idx(llvm::Module* mod) {
-  return default_func_builder<Attributes>(mod, "group_buff_idx");
+llvm::Function* group_buff_idx(llvm::Module* mod,
+                               llvm::CallingConv::ID CC = llvm::CallingConv::C) {
+  return default_func_builder<Attributes>(mod, "group_buff_idx", CC);
 }
 
 template <class Attributes>
-llvm::Function* pos_step(llvm::Module* mod) {
+llvm::Function* pos_step(llvm::Module* mod,
+                         llvm::CallingConv::ID CC = llvm::CallingConv::C) {
   using namespace llvm;
 
   std::vector<Type*> func_args;
@@ -102,7 +107,7 @@ llvm::Function* pos_step(llvm::Module* mod) {
         /*Linkage=*/GlobalValue::ExternalLinkage,
         /*Name=*/"pos_step",
         mod);  // (external, no body)
-    func_ptr->setCallingConv(CallingConv::C);
+    func_ptr->setCallingConv(CC);
   }
 
   Attributes func_pal;
@@ -125,15 +130,17 @@ llvm::Function* pos_step(llvm::Module* mod) {
 template <class Attributes>
 llvm::Function* row_process(llvm::Module* mod,
                             const size_t aggr_col_count,
-                            const bool hoist_literals) {
+                            const bool hoist_literals,
+                            llvm::CallingConv::ID CC = llvm::CallingConv::C,
+                            unsigned int AS = 0) {
   using namespace llvm;
 
   std::vector<Type*> func_args;
   auto i8_type = IntegerType::get(mod->getContext(), 8);
   auto i32_type = IntegerType::get(mod->getContext(), 32);
   auto i64_type = IntegerType::get(mod->getContext(), 64);
-  auto pi32_type = PointerType::get(i32_type, 0);
-  auto pi64_type = PointerType::get(i64_type, 0);
+  auto pi32_type = PointerType::get(i32_type, AS);
+  auto pi64_type = PointerType::get(i64_type, AS);
 
   if (aggr_col_count) {
     for (size_t i = 0; i < aggr_col_count; ++i) {
@@ -153,7 +160,7 @@ llvm::Function* row_process(llvm::Module* mod,
   func_args.push_back(pi64_type);
   func_args.push_back(pi64_type);
   if (hoist_literals) {
-    func_args.push_back(PointerType::get(i8_type, 0));
+    func_args.push_back(PointerType::get(i8_type, AS));
   }
   FunctionType* func_type = FunctionType::get(
       /*Result=*/i32_type,
@@ -169,7 +176,7 @@ llvm::Function* row_process(llvm::Module* mod,
         /*Linkage=*/GlobalValue::ExternalLinkage,
         /*Name=*/func_name,
         mod);  // (external, no body)
-    func_ptr->setCallingConv(CallingConv::C);
+    func_ptr->setCallingConv(CC);
 
     Attributes func_pal;
     {
@@ -203,14 +210,17 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
                                                                  : CallingConv::C;
   unsigned int addr_space = (co.device_type == ExecutorDeviceType::L0) ? 4 : 0;
 
-  auto func_pos_start = pos_start<Attributes>(mod);
+  auto func_pos_start = pos_start<Attributes>(mod, calling_conv);
   CHECK(func_pos_start);
-  auto func_pos_step = pos_step<Attributes>(mod);
+  auto func_pos_step = pos_step<Attributes>(mod, calling_conv);
   CHECK(func_pos_step);
-  auto func_group_buff_idx = group_buff_idx<Attributes>(mod);
+  auto func_group_buff_idx = group_buff_idx<Attributes>(mod, calling_conv);
   CHECK(func_group_buff_idx);
-  auto func_row_process = row_process<Attributes>(
-      mod, is_estimate_query ? 1 : aggr_col_count, co.hoist_literals);
+  auto func_row_process = row_process<Attributes>(mod,
+                                                  is_estimate_query ? 1 : aggr_col_count,
+                                                  co.hoist_literals,
+                                                  calling_conv,
+                                                  addr_space);
   CHECK(func_row_process);
 
   auto i8_type = IntegerType::get(mod->getContext(), 8);
@@ -327,13 +337,18 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
   auto bb_exit = BasicBlock::Create(mod->getContext(), ".exit", query_func_ptr, 0);
 
   // Block  (.entry)
-  std::vector<Value*> result_ptr_vec;
+  std::vector<Value*> result_ptr_vec;  // todo: remove
+  std::vector<Value*> result_ptr_cast_vec;
   llvm::CallInst* smem_output_buffer{nullptr};
   if (!is_estimate_query) {
     for (size_t i = 0; i < aggr_col_count; ++i) {
       auto result_ptr = new AllocaInst(i64_type, 0, "result", bb_entry);
       result_ptr->setAlignment(LLVM_ALIGN(8));
+
+      auto result_ptr_cast =
+          new AddrSpaceCastInst(result_ptr, pi64_type, "result.cst", bb_entry);
       result_ptr_vec.push_back(result_ptr);
+      result_ptr_cast_vec.push_back(result_ptr_cast);
     }
     if (gpu_smem_context.isSharedMemoryUsed()) {
       auto init_smem_func = mod->getFunction("init_shared_mem");
@@ -367,7 +382,8 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
           get_pointer_element_type(agg_init_gep), agg_init_gep, "", false, bb_entry);
       agg_init_val->setAlignment(LLVM_ALIGN(8));
       agg_init_val_vec.push_back(agg_init_val);
-      auto init_val_st = new StoreInst(agg_init_val, result_ptr_vec[i], false, bb_entry);
+      auto init_val_st =
+          new StoreInst(agg_init_val, result_ptr_cast_vec[i], false, bb_entry);
       init_val_st->setAlignment(LLVM_ALIGN(8));
     }
   }
@@ -410,7 +426,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
 
   std::vector<Value*> row_process_params;
   row_process_params.insert(
-      row_process_params.end(), result_ptr_vec.begin(), result_ptr_vec.end());
+      row_process_params.end(), result_ptr_cast_vec.begin(), result_ptr_cast_vec.end());
   if (is_estimate_query) {
     row_process_params.push_back(
         new LoadInst(get_pointer_element_type(out), out, "", false, bb_forbody));
@@ -440,8 +456,8 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
   std::vector<Instruction*> result_vec_pre;
   if (!is_estimate_query) {
     for (size_t i = 0; i < aggr_col_count; ++i) {
-      auto result = new LoadInst(get_pointer_element_type(result_ptr_vec[i]),
-                                 result_ptr_vec[i],
+      auto result = new LoadInst(get_pointer_element_type(result_ptr_cast_vec[i]),
+                                 result_ptr_cast_vec[i],
                                  ".pre.result",
                                  false,
                                  bb_crit_edge);
@@ -535,7 +551,14 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
   pos_inc_pre->replaceAllUsesWith(pos_inc);
   delete pos_inc_pre;
 
-  if (verifyFunction(*query_func_ptr)) {
+#ifndef NDEBUG
+  std::error_code ec;
+  raw_fd_ostream query_template_dump("query.ll", ec);
+  mod->print(query_template_dump, nullptr);
+#endif
+
+  llvm::raw_os_ostream output(std::cerr);
+  if (verifyFunction(*query_func_ptr, &output)) {
     LOG(FATAL) << "Generated invalid code. ";
   }
 
@@ -554,14 +577,18 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
     CHECK(device_type == ExecutorDeviceType::GPU);
   }
   using namespace llvm;
+  auto calling_conv =
+      (device_type == ExecutorDeviceType::L0) ? CallingConv::SPIR_FUNC : CallingConv::C;
+  unsigned int addr_space = (device_type == ExecutorDeviceType::L0) ? 4 : 0;
 
-  auto func_pos_start = pos_start<Attributes>(mod);
+  auto func_pos_start = pos_start<Attributes>(mod, calling_conv);
   CHECK(func_pos_start);
-  auto func_pos_step = pos_step<Attributes>(mod);
+  auto func_pos_step = pos_step<Attributes>(mod, calling_conv);
   CHECK(func_pos_step);
-  auto func_group_buff_idx = group_buff_idx<Attributes>(mod);
+  auto func_group_buff_idx = group_buff_idx<Attributes>(mod, calling_conv);
   CHECK(func_group_buff_idx);
-  auto func_row_process = row_process<Attributes>(mod, 0, hoist_literals);
+  auto func_row_process =
+      row_process<Attributes>(mod, 0, hoist_literals, calling_conv, addr_space);
   CHECK(func_row_process);
   auto func_init_shared_mem = gpu_smem_context.isSharedMemoryUsed()
                                   ? mod->getFunction("init_shared_mem")
@@ -573,11 +600,11 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
 
   auto i32_type = IntegerType::get(mod->getContext(), 32);
   auto i64_type = IntegerType::get(mod->getContext(), 64);
-  auto pi8_type = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
-  auto pi32_type = PointerType::get(i32_type, 0);
-  auto pi64_type = PointerType::get(i64_type, 0);
-  auto ppi64_type = PointerType::get(pi64_type, 0);
-  auto ppi8_type = PointerType::get(pi8_type, 0);
+  auto pi8_type = PointerType::get(IntegerType::get(mod->getContext(), 8), addr_space);
+  auto pi32_type = PointerType::get(i32_type, addr_space);
+  auto pi64_type = PointerType::get(i64_type, addr_space);
+  auto ppi64_type = PointerType::get(pi64_type, addr_space);
+  auto ppi8_type = PointerType::get(pi8_type, addr_space);
 
   std::vector<Type*> query_args;
   query_args.push_back(ppi8_type);
@@ -610,7 +637,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
       /*Name=*/"query_group_by_template",
       mod);
 
-  query_func_ptr->setCallingConv(CallingConv::C);
+  query_func_ptr->setCallingConv(calling_conv);
 
   Attributes query_func_pal;
   {
@@ -707,21 +734,25 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
   max_matched->setAlignment(LLVM_ALIGN(8));
 
   auto crt_matched_ptr = new AllocaInst(i32_type, 0, "crt_matched", bb_entry);
+  auto crt_matched_cast_ptr =
+      new AddrSpaceCastInst(crt_matched_ptr, pi32_type, "crt_matched.cst", bb_entry);
   auto old_total_matched_ptr = new AllocaInst(i32_type, 0, "old_total_matched", bb_entry);
+  auto old_total_matched_cast_ptr = new AddrSpaceCastInst(
+      old_total_matched_ptr, pi32_type, "old_total_matched.cst", bb_entry);
   CallInst* pos_start = CallInst::Create(func_pos_start, "", bb_entry);
-  pos_start->setCallingConv(CallingConv::C);
+  pos_start->setCallingConv(calling_conv);
   pos_start->setTailCall(true);
   Attributes pos_start_pal;
   pos_start->setAttributes(pos_start_pal);
 
   CallInst* pos_step = CallInst::Create(func_pos_step, "", bb_entry);
-  pos_step->setCallingConv(CallingConv::C);
+  pos_step->setCallingConv(calling_conv);
   pos_step->setTailCall(true);
   Attributes pos_step_pal;
   pos_step->setAttributes(pos_step_pal);
 
   CallInst* group_buff_idx = CallInst::Create(func_group_buff_idx, "", bb_entry);
-  group_buff_idx->setCallingConv(CallingConv::C);
+  group_buff_idx->setCallingConv(calling_conv);
   group_buff_idx->setTailCall(true);
   Attributes group_buff_idx_pal;
   group_buff_idx->setAttributes(group_buff_idx_pal);
@@ -762,9 +793,9 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
 
   std::vector<Value*> row_process_params;
   row_process_params.push_back(result_buffer);
-  row_process_params.push_back(crt_matched_ptr);
+  row_process_params.push_back(crt_matched_cast_ptr);
   row_process_params.push_back(total_matched);
-  row_process_params.push_back(old_total_matched_ptr);
+  row_process_params.push_back(old_total_matched_cast_ptr);
   row_process_params.push_back(max_matched_ptr);
   row_process_params.push_back(agg_init_val);
   row_process_params.push_back(pos);
@@ -776,12 +807,12 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
   }
   if (check_scan_limit) {
     new StoreInst(ConstantInt::get(IntegerType::get(mod->getContext(), 32), 0),
-                  crt_matched_ptr,
+                  crt_matched_cast_ptr,
                   bb_forbody);
   }
   CallInst* row_process =
       CallInst::Create(func_row_process, row_process_params, "", bb_forbody);
-  row_process->setCallingConv(CallingConv::C);
+  row_process->setCallingConv(calling_conv);
   row_process->setTailCall(true);
   Attributes row_process_pal;
   row_process->setAttributes(row_process_pal);
@@ -801,16 +832,16 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
   ICmpInst* loop_or_exit =
       new ICmpInst(*bb_forbody, ICmpInst::ICMP_SLT, pos_inc, row_count, "");
   if (check_scan_limit) {
-    auto crt_matched = new LoadInst(get_pointer_element_type(crt_matched_ptr),
-                                    crt_matched_ptr,
+    auto crt_matched = new LoadInst(get_pointer_element_type(crt_matched_cast_ptr),
+                                    crt_matched_cast_ptr,
                                     "crt_matched",
                                     false,
                                     bb_forbody);
     auto filter_match = BasicBlock::Create(
         mod->getContext(), "filter_match", query_func_ptr, bb_crit_edge);
     llvm::Value* new_total_matched =
-        new LoadInst(get_pointer_element_type(old_total_matched_ptr),
-                     old_total_matched_ptr,
+        new LoadInst(get_pointer_element_type(old_total_matched_cast_ptr),
+                     old_total_matched_cast_ptr,
                      "",
                      false,
                      filter_match);

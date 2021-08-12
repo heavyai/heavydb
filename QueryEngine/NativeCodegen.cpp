@@ -85,6 +85,10 @@ extern std::unique_ptr<llvm::Module> g_rt_module;
 extern std::unique_ptr<llvm::Module> g_rt_libdevice_module;
 #endif
 
+#ifdef HAVE_L0
+extern std::unique_ptr<llvm::Module> g_rt_l0_module;
+#endif
+
 #ifdef ENABLE_GEOS
 extern std::unique_ptr<llvm::Module> g_rt_geos_module;
 
@@ -1204,13 +1208,42 @@ std::shared_ptr<L0CompilationContext> CodeGenerator::generateNativeL0Code(
 #ifdef HAVE_L0
   auto module = func->getParent();
 
+  CHECK(module);
+
+  CHECK(wrapper_func);
+  for (auto& Fn : *module) {
+    Fn.setCallingConv(llvm::CallingConv::SPIR_FUNC);
+  }
+  wrapper_func->setCallingConv(llvm::CallingConv::SPIR_KERNEL);
+
+  for (auto& Fn : *module) {
+    for (auto I = llvm::inst_begin(Fn), E = llvm::inst_end(Fn); I != E; ++I) {
+      if (auto* CI = llvm::dyn_cast<llvm::CallInst>(&*I)) {
+        CI->setCallingConv(llvm::CallingConv::SPIR_FUNC);
+      }
+    }
+  }
+
+#ifndef NDEBUG
+  {
+    llvm::errs() << "PRIOR OPTIMIZATION -----\n";
+    llvm::errs() << *module;
+    llvm::errs() << "\nPRIOR OPTIMIZATION END -----\n";
+  }
+#endif
+
   auto pass_manager_builder = llvm::PassManagerBuilder();
   llvm::legacy::PassManager PM;
   pass_manager_builder.populateModulePassManager(PM);
   optimize_ir(func, module, PM, live_funcs, co);
 
-  std::ostringstream ss;
-  std::string err;
+#ifndef NDEBUG
+  {
+    llvm::errs() << "AFTER OPTIMIZATION -----\n";
+    llvm::errs() << *module;
+    llvm::errs() << "\nAFTER OPTIMIZATION END -----\n";
+  }
+#endif
 
   module->setTargetTriple("spir64-unknown-unknown");
 
@@ -1230,51 +1263,21 @@ std::shared_ptr<L0CompilationContext> CodeGenerator::generateNativeL0Code(
   opts.setDesiredBIsRepresentation(SPIRV::BIsRepresentation::OpenCL12);
   opts.setDebugInfoEIS(SPIRV::DebugInfoEIS::OpenCL_DebugInfo_100);
 
-  std::unordered_set<llvm::Function*> roots{wrapper_func, func};
-
   // todo: add helper funcs
   // todo: add udf funcs
 
-  std::vector<llvm::Function*> rt_funcs;
-  for (auto& Fn : *module) {
-    if (!roots.count(&Fn)) {
-      rt_funcs.push_back(&Fn);
-    }
-  }
-
-  for (auto& pFn : rt_funcs) {
-    // pFn->removeFromParent();
-    pFn->eraseFromParent();
-  }
-
-  // todo: enable when runtime functions are supported
-  // for (auto& pFn : rt_funcs) {
-  //   module->getFunctionList().push_back(pFn);
-  // }
-
-  for (auto& Fn : *module) {
-    Fn.setCallingConv(llvm::CallingConv::SPIR_FUNC);
-  }
-
-  llvm::errs() << "func: " << (func ? func->getName() : "null") << "\n";
-  llvm::errs() << "wrapper func: " << (wrapper_func ? wrapper_func->getName() : "null")
-               << "\n";
-  CHECK(wrapper_func);
-
-  wrapper_func->setCallingConv(llvm::CallingConv::SPIR_KERNEL);
-
-  std::error_code EC;
-  llvm::raw_fd_ostream OS("ir.bc", EC, llvm::sys::fs::F_None);
-  llvm::WriteBitcodeToFile(*module, OS);
-  OS.flush();
-  llvm::errs() << EC.category().name() << '\n';
-
+  std::ostringstream ss;
+  std::string err;
   auto success = writeSpirv(module, opts, ss, err);
+
+#ifndef NDEBUG
   if (!success) {
     llvm::errs() << "Spirv translation failed with error: " << err << "\n";
   } else {
     llvm::errs() << "Spirv tranlsation success.\n";
   }
+#endif
+
   CHECK(success);
 
   const auto func_name = wrapper_func->getName().str();
@@ -1288,7 +1291,7 @@ std::shared_ptr<L0CompilationContext> CodeGenerator::generateNativeL0Code(
 
   auto compilation_ctx = std::make_shared<L0CompilationContext>();
   auto device_compilation_ctx = std::make_unique<L0DeviceCompilationContext>(
-      bin_result.kernel, bin_result.module, l0_mgr, 0, 1);
+      bin_result.device, bin_result.kernel, bin_result.module, l0_mgr, 0, 1);
   compilation_ctx->addDeviceCode(move(device_compilation_ctx));
   return compilation_ctx;
 #else
@@ -1307,6 +1310,10 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenL0(
   auto module = multifrag_query_func->getParent();
   CHECK(l0_mgr);
   // todo: cache
+
+  // override rt functions
+  CodeGenerator::link_udf_module(
+      g_rt_l0_module, *module, cgen_state_.get(), llvm::Linker::Flags::OverrideFromSrc);
 
   std::shared_ptr<L0CompilationContext> compilation_context;
   try {
@@ -1508,11 +1515,10 @@ bool CodeGenerator::alwaysCloneRuntimeFunction(const llvm::Function* func) {
          func->getName() == "init_shared_mem_nop" || func->getName() == "write_back_nop";
 }
 
-llvm::Module* read_template_module(llvm::LLVMContext& context) {
+llvm::Module* read_module(llvm::LLVMContext& context, const std::string& path) {
   llvm::SMDiagnostic err;
 
-  auto buffer_or_error = llvm::MemoryBuffer::getFile(omnisci::get_root_abs_path() +
-                                                     "/QueryEngine/RuntimeFunctions.bc");
+  auto buffer_or_error = llvm::MemoryBuffer::getFile(omnisci::get_root_abs_path() + path);
   CHECK(!buffer_or_error.getError()) << "root path=" << omnisci::get_root_abs_path();
   llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
 
@@ -1523,6 +1529,16 @@ llvm::Module* read_template_module(llvm::LLVMContext& context) {
 
   return module;
 }
+
+llvm::Module* read_template_module(llvm::LLVMContext& context) {
+  return read_module(context, "/QueryEngine/RuntimeFunctions.bc");
+}
+
+#ifdef HAVE_L0
+llvm::Module* read_l0_rt_module(llvm::LLVMContext& context) {
+  return read_module(context, "/QueryEngine/l0_mapd_rt.bc");
+}
+#endif
 
 #ifdef HAVE_CUDA
 llvm::Module* read_libdevice_module(llvm::LLVMContext& context) {
@@ -1555,19 +1571,7 @@ llvm::Module* read_libdevice_module(llvm::LLVMContext& context) {
 
 #ifdef ENABLE_GEOS
 llvm::Module* read_geos_module(llvm::LLVMContext& context) {
-  llvm::SMDiagnostic err;
-
-  auto buffer_or_error = llvm::MemoryBuffer::getFile(omnisci::get_root_abs_path() +
-                                                     "/QueryEngine/GeosRuntime.bc");
-  CHECK(!buffer_or_error.getError()) << "root path=" << omnisci::get_root_abs_path();
-  llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
-
-  auto owner = llvm::parseBitcodeFile(buffer->getMemBufferRef(), context);
-  CHECK(!owner.takeError());
-  auto module = owner.get().release();
-  CHECK(module);
-
-  return module;
+  return read_module(context, "/QueryEngine/GeosRuntime.bc");
 }
 #endif
 
@@ -1852,6 +1856,10 @@ std::unique_ptr<llvm::Module> g_rt_geos_module(read_geos_module(getGlobalLLVMCon
 #ifdef HAVE_CUDA
 std::unique_ptr<llvm::Module> g_rt_libdevice_module(
     read_libdevice_module(getGlobalLLVMContext()));
+#endif
+
+#ifdef HAVE_L0
+std::unique_ptr<llvm::Module> g_rt_l0_module(read_l0_rt_module(getGlobalLLVMContext()));
 #endif
 
 bool is_udf_module_present(bool cpu_only) {
@@ -2464,6 +2472,9 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
   if (device_type == ExecutorDeviceType::CPU) {
     return false;
   }
+  if (device_type == ExecutorDeviceType::L0) {
+    return false;
+  }
   if (query_mem_desc_ptr->didOutputColumnar()) {
     return false;
   }
@@ -2724,6 +2735,12 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   const GpuSharedMemoryContext gpu_smem_context(
       get_shared_memory_size(gpu_shared_mem_optimization, query_mem_desc.get()));
 
+  if (co.device_type == ExecutorDeviceType::L0) {
+    CHECK(gpu_smem_context.getSharedMemorySize() == 0);
+    CHECK(gpu_smem_context.isSharedMemoryUsed() == false);
+  }
+
+  // fixme
   if (co.device_type == ExecutorDeviceType::GPU) {
     const size_t num_count_distinct_descs =
         query_mem_desc->getCountDistinctDescriptorsSize();
@@ -2954,9 +2971,10 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       "multifrag_query" + std::string(co.hoist_literals ? "_hoisted_literals" : ""));
   CHECK(multifrag_query_func);
 
-  if (co.device_type == ExecutorDeviceType::GPU && eo.allow_multifrag) {
-    insertErrorCodeChecker(
-        multifrag_query_func, co.hoist_literals, eo.allow_runtime_query_interrupt);
+  if (((co.device_type == ExecutorDeviceType::GPU) ||
+       (co.device_type == ExecutorDeviceType::L0)) &&
+      eo.allow_multifrag) {
+    insertErrorCodeChecker(multifrag_query_func, co, eo.allow_runtime_query_interrupt);
   }
 
   bind_query(query_func,
@@ -3025,6 +3043,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   // Run some basic validation checks on the LLVM IR before code is generated below.
   verify_function_ir(cgen_state_->row_func_);
+  verify_function_ir(multifrag_query_func);
+  verify_function_ir(query_func);
   if (cgen_state_->filter_func_) {
     verify_function_ir(cgen_state_->filter_func_);
   }
@@ -3062,10 +3082,10 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 }
 
 void Executor::insertErrorCodeChecker(llvm::Function* query_func,
-                                      bool hoist_literals,
+                                      const CompilationOptions& co,
                                       bool allow_runtime_query_interrupt) {
   auto query_stub_func_name =
-      "query_stub" + std::string(hoist_literals ? "_hoisted_literals" : "");
+      "query_stub" + std::string(co.hoist_literals ? "_hoisted_literals" : "");
   for (auto bb_it = query_func->begin(); bb_it != query_func->end(); ++bb_it) {
     for (auto inst_it = bb_it->begin(); inst_it != bb_it->end(); ++inst_it) {
       if (!llvm::isa<llvm::CallInst>(*inst_it)) {
@@ -3088,7 +3108,7 @@ void Executor::insertErrorCodeChecker(llvm::Function* query_func,
              arg_it++, ++arg_cnt) {
           // since multi_frag_* func has anonymous arguments so we use arg_offset
           // explicitly to capture "error_code" argument in the func's argument list
-          if (hoist_literals) {
+          if (co.hoist_literals) {
             if (arg_cnt == 9) {
               error_code_arg = &*arg_it;
               break;
@@ -3132,10 +3152,16 @@ void Executor::insertErrorCodeChecker(llvm::Function* query_func,
             llvm::ICmpInst::ICMP_NE, err_code, cgen_state_->llInt(0));
         auto error_bb = llvm::BasicBlock::Create(
             cgen_state_->context_, ".error_exit", query_func, new_bb);
-        llvm::CallInst::Create(cgen_state_->module_->getFunction("record_error_code"),
-                               std::vector<llvm::Value*>{err_code, error_code_arg},
-                               "",
-                               error_bb);
+        unsigned int AS = (co.device_type == ExecutorDeviceType::L0) ? 4 : 0;
+        auto i32_type = llvm::IntegerType::get(cgen_state_->module_->getContext(), 32);
+        auto pi32_ty = llvm::PointerType::get(i32_type, AS);
+        auto error_code_cast_arg =
+            ir_builder.CreateAddrSpaceCast(error_code_arg, pi32_ty);
+        auto record_error_code_call_ = llvm::CallInst::Create(
+            cgen_state_->module_->getFunction("record_error_code"),
+            std::vector<llvm::Value*>{err_code, error_code_cast_arg},
+            "",
+            error_bb);
         llvm::ReturnInst::Create(cgen_state_->context_, error_bb);
         llvm::ReplaceInstWithInst(&br_instr,
                                   llvm::BranchInst::Create(error_bb, new_bb, err_lv));
@@ -3188,6 +3214,10 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
                            const CompilationOptions& co,
                            const GpuSharedMemoryContext& gpu_smem_context) {
   AUTOMATIC_IR_METADATA(cgen_state_.get());
+
+  auto calling_conv = (co.device_type == ExecutorDeviceType::L0)
+                          ? llvm::CallingConv::SPIR_FUNC
+                          : llvm::CallingConv::C;
 
   // Switch the code generation into a separate filter function if enabled.
   // Note that accesses to function arguments are still codegenned from the
@@ -3264,6 +3294,7 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
     cgen_state_->current_func_ = cgen_state_->row_func_;
     cgen_state_->filter_func_call_ =
         cgen_state_->ir_builder_.CreateCall(cgen_state_->filter_func_, {});
+    cgen_state_->filter_func_call_->setCallingConv(calling_conv);
 
     // Create real filter function declaration after placeholder call
     // is emitted.
