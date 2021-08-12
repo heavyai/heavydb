@@ -16,11 +16,19 @@
 
 #include "DataMgr/ForeignStorage/CsvFileBufferParser.h"
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
+#include "Geospatial/Types.h"
+#include "ImportExport/DelimitedParserUtils.h"
 #include "ImportExport/Importer.h"
 #include "Shared/StringTransform.h"
 
 namespace foreign_storage {
-namespace csv_file_buffer_parser {
+
+namespace {
+constexpr bool PROMOTE_POLYGON_TO_MULTIPOLYGON = true;
+
+inline bool skip_column_import(ParseBufferRequest& request, int column_idx) {
+  return request.import_buffers[column_idx] == nullptr;
+}
 
 void set_array_flags_and_geo_columns_count(
     std::unique_ptr<bool[]>& array_flags,
@@ -246,47 +254,67 @@ std::map<int, DataBlockPtr> convert_import_buffers_to_data_blocks(
   return result;
 }
 
-ParseBufferRequest::ParseBufferRequest(size_t buffer_size,
-                                       const import_export::CopyParams& copy_params,
-                                       int db_id,
-                                       const ForeignTable* foreign_table,
-                                       std::set<int> column_filter_set,
-                                       const std::string& full_path)
-    : buffer_size(buffer_size)
-    , buffer_alloc_size(buffer_size)
-    , copy_params(copy_params)
-    , db_id(db_id)
-    , foreign_table_schema(std::make_unique<ForeignTableSchema>(db_id, foreign_table))
-    , full_path(full_path) {
-  if (buffer_size > 0) {
-    buffer = std::make_unique<char[]>(buffer_size);
-  }
-  // initialize import buffers from columns.
-  for (const auto column : getColumns()) {
-    if (column_filter_set.find(column->columnId) == column_filter_set.end()) {
-      import_buffers.emplace_back(nullptr);
+std::string validate_and_get_delimiter(const ForeignTable* foreign_table,
+                                       const std::string& option_name) {
+  if (auto it = foreign_table->options.find(option_name);
+      it != foreign_table->options.end()) {
+    if (it->second.length() == 1) {
+      return it->second;
     } else {
-      StringDictionary* string_dictionary = nullptr;
-      if (column->columnType.is_dict_encoded_string() ||
-          (column->columnType.is_array() && IS_STRING(column->columnType.get_subtype()) &&
-           column->columnType.get_compression() == kENCODING_DICT)) {
-        auto dict_descriptor = getCatalog()->getMetadataForDictUnlocked(
-            column->columnType.get_comp_param(), true);
-        string_dictionary = dict_descriptor->stringDict.get();
+      if (it->second == std::string("\\n")) {
+        return "\n";
+      } else if (it->second == std::string("\\t")) {
+        return "\t";
+      } else {
+        throw std::runtime_error{"Invalid value specified for option \"" + option_name +
+                                 "\". Expected a single character, \"\\n\" or  \"\\t\"."};
       }
-      import_buffers.emplace_back(
-          std::make_unique<import_export::TypedImportBuffer>(column, string_dictionary));
     }
   }
+  return "";
 }
+
+std::string validate_and_get_string_with_length(const ForeignTable* foreign_table,
+                                                const std::string& option_name,
+                                                const size_t expected_num_chars) {
+  if (auto it = foreign_table->options.find(option_name);
+      it != foreign_table->options.end()) {
+    if (it->second.length() != expected_num_chars) {
+      throw std::runtime_error{"Value of \"" + option_name +
+                               "\" foreign table option has the wrong number of "
+                               "characters. Expected " +
+                               std::to_string(expected_num_chars) + " character(s)."};
+    }
+    return it->second;
+  }
+  return "";
+}
+
+std::optional<bool> validate_and_get_bool_value(const ForeignTable* foreign_table,
+                                                const std::string& option_name) {
+  if (auto it = foreign_table->options.find(option_name);
+      it != foreign_table->options.end()) {
+    if (boost::iequals(it->second, "TRUE")) {
+      return true;
+    } else if (boost::iequals(it->second, "FALSE")) {
+      return false;
+    } else {
+      throw std::runtime_error{"Invalid boolean value specified for \"" + option_name +
+                               "\" foreign table option. "
+                               "Value must be either 'true' or 'false'."};
+    }
+  }
+  return std::nullopt;
+}
+}  // namespace
 
 /**
  * Parses a given CSV file buffer and returns data blocks for each column in the
  * file along with metadata related to rows and row offsets within the buffer.
  */
-ParseBufferResult parse_buffer(ParseBufferRequest& request,
-                               bool convert_data_blocks,
-                               bool columns_are_pre_filtered) {
+ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
+                                                   bool convert_data_blocks,
+                                                   bool columns_are_pre_filtered) const {
   CHECK(request.buffer);
   size_t begin = import_export::delimited_parser::find_beginning(
       request.buffer.get(), request.begin_pos, request.end_pos, request.copy_params);
@@ -413,12 +441,12 @@ ParseBufferResult parse_buffer(ParseBufferRequest& request,
  * Takes a single row and verifies number of columns is valid for num_cols and point_cols
  * (number of point columns)
  */
-void parse_and_validate_expected_column_count(
+void CsvFileBufferParser::validateExpectedColumnCount(
     const std::string& row,
     const import_export::CopyParams& copy_params,
     size_t num_cols,
     int point_cols,
-    const std::string& file_name) {
+    const std::string& file_name) const {
   bool is_array = false;
   bool try_single_thread = false;
   std::vector<std::unique_ptr<char[]>> tmp_buffers;
@@ -438,5 +466,76 @@ void parse_and_validate_expected_column_count(
   validate_expected_column_count(fields, num_cols, point_cols, file_name);
 }
 
-}  // namespace csv_file_buffer_parser
+import_export::CopyParams CsvFileBufferParser::validateAndGetCopyParams(
+    const ForeignTable* foreign_table) const {
+  import_export::CopyParams copy_params{};
+  copy_params.plain_text = true;
+  if (const auto& value =
+          validate_and_get_string_with_length(foreign_table, "ARRAY_DELIMITER", 1);
+      !value.empty()) {
+    copy_params.array_delim = value[0];
+  }
+  if (const auto& value =
+          validate_and_get_string_with_length(foreign_table, "ARRAY_MARKER", 2);
+      !value.empty()) {
+    copy_params.array_begin = value[0];
+    copy_params.array_end = value[1];
+  }
+  if (auto it = foreign_table->options.find("BUFFER_SIZE");
+      it != foreign_table->options.end()) {
+    copy_params.buffer_size = std::stoi(it->second);
+  }
+  if (const auto& value = validate_and_get_delimiter(foreign_table, "DELIMITER");
+      !value.empty()) {
+    copy_params.delimiter = value[0];
+  }
+  if (const auto& value = validate_and_get_string_with_length(foreign_table, "ESCAPE", 1);
+      !value.empty()) {
+    copy_params.escape = value[0];
+  }
+  auto has_header = validate_and_get_bool_value(foreign_table, "HEADER");
+  if (has_header.has_value()) {
+    if (has_header.value()) {
+      copy_params.has_header = import_export::ImportHeaderRow::HAS_HEADER;
+    } else {
+      copy_params.has_header = import_export::ImportHeaderRow::NO_HEADER;
+    }
+  }
+  if (const auto& value = validate_and_get_delimiter(foreign_table, "LINE_DELIMITER");
+      !value.empty()) {
+    copy_params.line_delim = value[0];
+  }
+  copy_params.lonlat =
+      validate_and_get_bool_value(foreign_table, "LONLAT").value_or(copy_params.lonlat);
+
+  if (auto it = foreign_table->options.find("NULLS");
+      it != foreign_table->options.end()) {
+    copy_params.null_str = it->second;
+  }
+  if (const auto& value = validate_and_get_string_with_length(foreign_table, "QUOTE", 1);
+      !value.empty()) {
+    copy_params.quote = value[0];
+  }
+  copy_params.quoted =
+      validate_and_get_bool_value(foreign_table, "QUOTED").value_or(copy_params.quoted);
+  return copy_params;
+}
+
+size_t CsvFileBufferParser::findRowEndPosition(
+    size_t& alloc_size,
+    std::unique_ptr<char[]>& buffer,
+    size_t& buffer_size,
+    const import_export::CopyParams& copy_params,
+    const size_t buffer_first_row_index,
+    unsigned int& num_rows_in_buffer,
+    foreign_storage::FileReader* file_reader) const {
+  return import_export::delimited_parser::find_row_end_pos(alloc_size,
+                                                           buffer,
+                                                           buffer_size,
+                                                           copy_params,
+                                                           buffer_first_row_index,
+                                                           num_rows_in_buffer,
+                                                           nullptr,
+                                                           file_reader);
+}
 }  // namespace foreign_storage

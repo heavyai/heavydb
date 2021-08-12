@@ -17,7 +17,6 @@
 #include "ForeignDataWrapperFactory.h"
 
 #include "CsvDataWrapper.h"
-#include "DataMgr/ForeignStorage/CsvShared.h"
 #include "ForeignDataWrapper.h"
 #ifdef ENABLE_IMPORT_PARQUET
 #include "ParquetDataWrapper.h"
@@ -30,7 +29,7 @@ std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::create(
     const ForeignTable* foreign_table) {
   std::unique_ptr<ForeignDataWrapper> data_wrapper;
   if (data_wrapper_type == DataWrapperType::CSV) {
-    if (Csv::validate_and_get_is_s3_select(foreign_table)) {
+    if (CsvDataWrapper::validateAndGetIsS3Select(foreign_table)) {
       UNREACHABLE();
     } else {
       data_wrapper = std::make_unique<CsvDataWrapper>(db_id, foreign_table);
@@ -52,7 +51,7 @@ const ForeignDataWrapper& ForeignDataWrapperFactory::createForValidation(
   std::string data_wrapper_type_key{data_wrapper_type};
   constexpr const char* S3_SELECT_WRAPPER_KEY = "CSV_S3_SELECT";
   if (foreign_table && data_wrapper_type == DataWrapperType::CSV &&
-      Csv::validate_and_get_is_s3_select(foreign_table)) {
+      CsvDataWrapper::validateAndGetIsS3Select(foreign_table)) {
     is_s3_select_wrapper = true;
     data_wrapper_type_key = S3_SELECT_WRAPPER_KEY;
   }

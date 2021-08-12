@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "DataMgr/ForeignStorage/CsvReader.h"
+#include "DataMgr/ForeignStorage/FileReader.h"
 #include "ForeignStorageException.h"
 #include "FsiJsonUtils.h"
 
@@ -25,7 +25,7 @@ namespace {
  * Adds an end of line character (specified by the line_delim parameter) to provided
  * buffer, if this is the last read buffer and if the buffer does not already end with an
  * end of line character. This allows for appropriate parsing by the
- * csv_file_buffer_parser utility functions, which expect the end of rows to be indicated
+ * file_buffer_parser utility functions, which expect the end of rows to be indicated
  * by end of line characters in the buffer.
  * Also removes extra EOL that may be inserted at the EOF that will not be present if the
  * file is appended to
@@ -68,7 +68,7 @@ size_t get_data_size(size_t file_size, size_t header_size) {
 
 SingleFileReader::SingleFileReader(const std::string& file_path,
                                    const import_export::CopyParams& copy_params)
-    : CsvReader(file_path, copy_params)
+    : FileReader(file_path, copy_params)
     , scan_finished_(false)
     , header_offset_(0)
     , total_bytes_read_(0) {
@@ -100,7 +100,7 @@ SingleFileReader::SingleFileReader(const std::string& file_path,
 SingleFileReader::SingleFileReader(const std::string& file_path,
                                    const import_export::CopyParams& copy_params,
                                    const rapidjson::Value& value)
-    : CsvReader(file_path, copy_params)
+    : FileReader(file_path, copy_params)
     , scan_finished_(true)
     , header_offset_(0)
     , total_bytes_read_(0) {
@@ -214,7 +214,7 @@ void ArchiveWrapper::fetchBlock() {
 
 CompressedFileReader::CompressedFileReader(const std::string& file_path,
                                            const import_export::CopyParams& copy_params)
-    : CsvReader(file_path, copy_params)
+    : FileReader(file_path, copy_params)
     , archive_(file_path)
     , initial_scan_(true)
     , scan_finished_(false)
@@ -330,7 +330,7 @@ void CompressedFileReader::nextEntry() {
 }
 
 /**
- * Skip Header of CSV file
+ * Skip file header
  */
 void CompressedFileReader::skipHeader() {
   if (copy_params_.has_header != import_export::ImportHeaderRow::NO_HEADER) {
@@ -420,33 +420,33 @@ void CompressedFileReader::checkForMoreRows(size_t file_offset,
     }
   } else {
     // No new files but this may be an archive of a single file
-    // Check if we only have one CSV file and check if it has more data
+    // Check if we only have one file and check if it has more data
     // May have still have multiple entries with some empty that are ignored
     // like directories
     size_t last_size = 0;
-    size_t csv_index = -1;
-    size_t num_csv_entries = 0;
+    size_t file_index = -1;
+    size_t num_file_entries = 0;
     for (size_t index = 0; index < cumulative_sizes_.size(); index++) {
       if (cumulative_sizes_[index] > last_size) {
-        csv_index = index;
-        num_csv_entries++;
+        file_index = index;
+        num_file_entries++;
         last_size = cumulative_sizes_[index];
       }
     }
-    if (num_csv_entries == 1) {
-      current_index_ = static_cast<int>(csv_index);
+    if (num_file_entries == 1) {
+      current_index_ = static_cast<int>(file_index);
       current_offset_ = 0;
-      size_t last_eof = cumulative_sizes_[csv_index];
+      size_t last_eof = cumulative_sizes_[file_index];
 
       // reset cumulative_sizes_ with initial zero sizes
       auto old_cumulative_sizes = std::move(cumulative_sizes_);
       cumulative_sizes_ = {};
-      for (size_t zero_index = 0; zero_index < csv_index; zero_index++) {
+      for (size_t zero_index = 0; zero_index < file_index; zero_index++) {
         cumulative_sizes_.emplace_back(0);
       }
 
-      // Go to Index of CSV file and read to where we left off
-      archive_.skipToEntry(archive_entry_index_[csv_index]);
+      // Go to Index of file and read to where we left off
+      archive_.skipToEntry(archive_entry_index_[file_index]);
       skipHeader();
       skipBytes(last_eof);
       if (!archive_.currentEntryFinished()) {
@@ -475,12 +475,12 @@ void CompressedFileReader::serialize(
 
 MultiFileReader::MultiFileReader(const std::string& file_path,
                                  const import_export::CopyParams& copy_params)
-    : CsvReader(file_path, copy_params), current_index_(0), current_offset_(0) {}
+    : FileReader(file_path, copy_params), current_index_(0), current_offset_(0) {}
 
 MultiFileReader::MultiFileReader(const std::string& file_path,
                                  const import_export::CopyParams& copy_params,
                                  const rapidjson::Value& value)
-    : CsvReader(file_path, copy_params), current_index_(0), current_offset_(0) {
+    : FileReader(file_path, copy_params), current_index_(0), current_offset_(0) {
   json_utils::get_value_from_object(value, file_locations_, "file_locations");
   json_utils::get_value_from_object(value, cumulative_sizes_, "cumulative_sizes");
   json_utils::get_value_from_object(value, current_offset_, "current_offset");

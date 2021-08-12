@@ -27,15 +27,15 @@ namespace foreign_storage {
 struct ForeignServer;
 struct UserMapping;
 
-// Archive reader for csv archives
+// File reader
 // Supports an initial full scan with calls to read()
-// When the entire Csv object has been read isScanFinished() returns true
+// When the entire object has been read isScanFinished() returns true
 // Previously read data can then be re-read with readRegion()
-class CsvReader {
+class FileReader {
  public:
-  CsvReader(const std::string& file_path, const import_export::CopyParams& copy_params)
+  FileReader(const std::string& file_path, const import_export::CopyParams& copy_params)
       : copy_params_(copy_params), file_path_(file_path){};
-  virtual ~CsvReader() = default;
+  virtual ~FileReader() = default;
 
   /**
    * Read up to max_size bytes from archive into buffer starting
@@ -48,7 +48,7 @@ class CsvReader {
   virtual size_t read(void* buffer, size_t max_size) = 0;
 
   /**
-   * @return true if the entire CSV has been read
+   * @return true if the entire file has been read
    */
   virtual bool isScanFinished() = 0;
 
@@ -64,7 +64,7 @@ class CsvReader {
   virtual size_t readRegion(void* buffer, size_t offset, size_t size) = 0;
 
   /**
-   * @return size of the CSV remaining to be read
+   * @return size of the remaining content to be read
    * */
   virtual size_t getRemainingSize() = 0;
 
@@ -78,8 +78,8 @@ class CsvReader {
    * or not supported)
    * @param file_offset - where to resume the scan from (end of the last row) as
    *  not all of the bytes may have been consumed by the upstream compoennet
-   * @param server_options - only needed for S3 backed CSV
-   * @param user_mapping - only needed for S3 backed CSV
+   * @param server_options - only needed for S3 backed files
+   * @param user_mapping - only needed for S3 backed files
    */
   virtual void checkForMoreRows(size_t file_offset,
                                 const ForeignServer* server_options = nullptr,
@@ -104,7 +104,7 @@ class CsvReader {
 };
 
 // Single uncompressed file, that supports FSEEK for faster random access
-class SingleFileReader : public CsvReader {
+class SingleFileReader : public FileReader {
  public:
   SingleFileReader(const std::string& file_path,
                    const import_export::CopyParams& copy_params);
@@ -151,12 +151,12 @@ class SingleFileReader : public CsvReader {
 
  private:
   std::FILE* file_;
-  // Size of CSV data in file
+  // Size of data in file
   size_t data_size_;
   // We've reached the end of the file
   bool scan_finished_;
 
-  // Size of the CSV header in bytes
+  // Size of the header in bytes
   size_t header_offset_;
 
   size_t total_bytes_read_;
@@ -215,7 +215,7 @@ class ArchiveWrapper {
 };
 
 // Single archive, does not support random access
-class CompressedFileReader : public CsvReader {
+class CompressedFileReader : public FileReader {
  public:
   CompressedFileReader(const std::string& file_path,
                        const import_export::CopyParams& copy_params);
@@ -251,7 +251,7 @@ class CompressedFileReader : public CsvReader {
   void nextEntry();
 
   /**
-   * Skip Header of CSV file
+   * Skip Header of file
    */
   void skipHeader();
 
@@ -288,7 +288,7 @@ class CompressedFileReader : public CsvReader {
 };
 
 // Combines several archives into single object
-class MultiFileReader : public CsvReader {
+class MultiFileReader : public FileReader {
  public:
   MultiFileReader(const std::string& file_path,
                   const import_export::CopyParams& copy_params);
@@ -310,7 +310,7 @@ class MultiFileReader : public CsvReader {
                  rapidjson::Document::AllocatorType& allocator) const override;
 
  protected:
-  std::vector<std::unique_ptr<CsvReader>> files_;
+  std::vector<std::unique_ptr<FileReader>> files_;
   std::vector<std::string> file_locations_;
 
   // Size of each file + all previous files

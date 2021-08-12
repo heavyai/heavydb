@@ -16,7 +16,6 @@
 
 #include "CachingForeignStorageMgr.h"
 #include "Catalog/ForeignTable.h"
-#include "CsvDataWrapper.h"
 #include "ForeignStorageException.h"
 #include "ForeignTableSchema.h"
 #ifdef ENABLE_IMPORT_PARQUET

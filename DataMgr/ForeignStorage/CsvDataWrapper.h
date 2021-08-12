@@ -16,86 +16,28 @@
 
 #pragma once
 
-#include <map>
-#include <vector>
-
-#include "AbstractFileStorageDataWrapper.h"
-#include "Catalog/Catalog.h"
-#include "Catalog/ForeignTable.h"
-#include "DataMgr/Chunk/Chunk.h"
-#include "DataMgr/ForeignStorage/CsvReader.h"
-#include "DataMgr/ForeignStorage/CsvShared.h"
-#include "ForeignDataWrapper.h"
-#include "ImportExport/Importer.h"
+#include "AbstractTextFileDataWrapper.h"
+#include "DataMgr/ForeignStorage/CsvFileBufferParser.h"
 
 namespace foreign_storage {
-
-class CsvDataWrapper : public AbstractFileStorageDataWrapper {
+class CsvDataWrapper : public AbstractTextFileDataWrapper {
  public:
   CsvDataWrapper();
 
   CsvDataWrapper(const int db_id, const ForeignTable* foreign_table);
 
-  void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override;
-
-  void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
-                            const ChunkToBufferMap& optional_buffers) override;
-
   void validateTableOptions(const ForeignTable* foreign_table) const override;
 
   const std::set<std::string_view>& getSupportedTableOptions() const override;
 
-  std::string getSerializedDataWrapper() const override;
+  static bool validateAndGetIsS3Select(const ForeignTable* foreign_table);
 
-  void restoreDataWrapperInternals(const std::string& file_path,
-                                   const ChunkMetadataVector& chunk_metadata) override;
-  bool isRestored() const override;
-
-  ParallelismLevel getCachedParallelismLevel() const override { return INTRA_FRAGMENT; }
-
-  ParallelismLevel getNonCachedParallelismLevel() const override {
-    return INTRA_FRAGMENT;
-  }
+ protected:
+  const TextFileBufferParser& getFileBufferParser() const override;
 
  private:
-  CsvDataWrapper(const ForeignTable* foreign_table);
-
-  /**
-   * Populates provided chunks with appropriate data by parsing all file regions
-   * containing chunk data.
-   *
-   * @param column_id_to_chunk_map - map of column id to chunks to be populated
-   * @param fragment_id - fragment id of given chunks
-   */
-  void populateChunks(std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
-                      int fragment_id);
-
-  void populateChunkMapForColumns(const std::set<const ColumnDescriptor*>& columns,
-                                  const int fragment_id,
-                                  const ChunkToBufferMap& buffers,
-                                  std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map);
-
-  void updateMetadata(std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
-                      int fragment_id);
-
   std::set<std::string_view> getAllCsvTableOptions() const;
-
-  std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
-  std::map<int, FileRegions> fragment_id_to_file_regions_map_;
-
-  std::unique_ptr<CsvReader> csv_reader_;
-
-  const int db_id_;
-  const ForeignTable* foreign_table_;
-
-  // Data needed for append workflow
-  std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_encoder_buffers_;
-  // How many rows have been read
-  size_t num_rows_;
-  // What byte offset we left off at in the csv_reader
-  size_t append_start_offset_;
-  // Is this datawrapper restored from disk
-  bool is_restored_;
   static const std::set<std::string_view> csv_table_options_;
+  static const CsvFileBufferParser csv_file_buffer_parser_;
 };
 }  // namespace foreign_storage

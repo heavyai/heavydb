@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,10 @@
 
 #pragma once
 
-#include <map>
+#include <string>
 #include <vector>
 
-#include "Catalog/Catalog.h"
-#include "Catalog/ForeignTable.h"
-#include "DataMgr/Chunk/Chunk.h"
-#include "ForeignDataWrapper.h"
-#include "ImportExport/Importer.h"
+#include <rapidjson/document.h>
 
 namespace foreign_storage {
 /**
@@ -76,26 +72,4 @@ void set_value(rapidjson::Value& json_val,
                rapidjson::Document::AllocatorType& allocator);
 
 void get_value(const rapidjson::Value& json_val, FileRegion& file_region);
-
-namespace Csv {
-
-// Validate CSV Specific options
-void validate_options(const ForeignTable* foreign_table);
-
-import_export::CopyParams validate_and_get_copy_params(const ForeignTable* foreign_table);
-
-// Return true if this used s3 select to access underlying CSV
-bool validate_and_get_is_s3_select(const ForeignTable* foreign_table);
-
-void init_chunk_for_column(
-    const ChunkKey& chunk_key,
-    const std::map<ChunkKey, std::shared_ptr<ChunkMetadata>>& chunk_metadata_map,
-    const std::map<ChunkKey, AbstractBuffer*>& buffers,
-    Chunk_NS::Chunk& chunk);
-
-// Construct default metadata for given column descriptor with num_elements
-std::shared_ptr<ChunkMetadata> get_placeholder_metadata(const ColumnDescriptor* column,
-                                                        size_t num_elements);
-
-}  // namespace Csv
 }  // namespace foreign_storage

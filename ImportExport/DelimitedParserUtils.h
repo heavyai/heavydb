@@ -25,7 +25,7 @@
 #include <string>
 #include <vector>
 
-#include "DataMgr/ForeignStorage/CsvReader.h"
+#include "DataMgr/ForeignStorage/FileReader.h"
 #include "ImportExport/CopyParams.h"
 
 namespace import_export {
@@ -77,7 +77,7 @@ void set_max_buffer_resize(const size_t max_buffer_resize);
  * @param buffer_first_row_index Index of first row in the buffer.
  * @param num_rows_in_buffer     Number of rows until the closest possible row ending.
  * @param file                   Handle to CSV file being parsed. (optional)
- * @param csv_reader             Handle to a CsvReader class, must be valid if file isnt
+ * @param file_reader            Handle to a FileReader class, must be valid if file isnt
  *
  * @return The position of the closest possible row ending to the end of the given
  * buffer.
@@ -89,7 +89,7 @@ size_t find_row_end_pos(size_t& alloc_size,
                         const size_t buffer_first_row_index,
                         unsigned int& num_rows_in_buffer,
                         FILE* file,
-                        foreign_storage::CsvReader* csv_reader = nullptr);
+                        foreign_storage::FileReader* file_reader = nullptr);
 
 /**
  * @brief Parses the first row in the given buffer and inserts fields into given vector.
