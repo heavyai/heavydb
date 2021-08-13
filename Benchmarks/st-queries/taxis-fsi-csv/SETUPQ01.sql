@@ -58,4 +58,4 @@ CREATE FOREIGN TABLE ##TAB## (
     dropoff_ntacode         TEXT  ENCODING DICT,
     dropoff_ntaname         TEXT ENCODING DICT,
     dropoff_puma            TEXT  ENCODING DICT
-) SERVER fsi_benchmark_csv_server WITH ( file_path = '##FILE##')
+) SERVER omnisci_local_csv WITH ( file_path = '##FILE##', header = 'false' )

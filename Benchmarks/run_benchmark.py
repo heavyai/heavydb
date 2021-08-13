@@ -598,6 +598,42 @@ def calculate_query_times(**kwargs):
     }
 
 
+def clear_memory(**kwargs):
+    """
+      Clears CPU or GPU memory
+
+      Kwargs:
+        con(class 'pymapd.connection.Connection'): Mapd connection
+        mem_type(str): [gpu, cpu] Type of memory to clear
+
+      Returns:
+          None
+    """
+    try:
+        session = kwargs["con"]._session
+        mem_type = kwargs["mem_type"]
+        if mem_type == 'cpu':
+            kwargs["con"]._client.clear_cpu_memory(session)
+        elif mem_type == 'gpu':
+            kwargs["con"]._client.clear_gpu_memory(session)
+        else:
+            raise TypeError("Unkown mem_type '" + str(mem_type) + "' supplied to 'clear_memory'")
+    except Exception as e:
+        errormessage = "Clear memory failed with error: " + str(e)
+        logging.error(errormessage)
+
+
+def clear_system_caches():
+    """
+      Clears system caches
+    """
+    try:
+        os.system('sudo sh -c "/bin/echo 3 > /proc/sys/vm/drop_caches"')
+    except Exception as e:
+        errormessage = "Clear system caches failed with error: " + str(e)
+        logging.error(errormessage)
+
+
 def get_mem_usage(**kwargs):
     """
       Calculates memory statistics from mapd_server _client.get_memory call
@@ -660,6 +696,8 @@ def run_query(**kwargs):
         iterations(int): Number of iterations of each query to run
         trim(float): Trim decimal to remove from top and bottom of results
         con(class 'pymapd.connection.Connection'): Mapd connection
+        clear_all_memory_pre_query(bool,optional): Flag to determine if memory is cleared
+        between query runs
 
       Returns:
         query_results(dict):::
@@ -724,6 +762,15 @@ def run_query(**kwargs):
         pre_query_gpu_mem_usage = get_mem_usage(
             con=kwargs["con"], mem_type="gpu"
         )
+        if "clear_all_memory_pre_query" in kwargs and kwargs["clear_all_memory_pre_query"]:
+            # Clear GPU & CPU memory
+            clear_memory(
+                con=kwargs["con"], mem_type="cpu"
+            )
+            clear_memory(
+                con=kwargs["con"], mem_type="gpu"
+            )
+            clear_system_caches()
         # Run query iteration
         logging.debug(
             "Running iteration "
@@ -1510,6 +1557,13 @@ def process_arguments(input_arguments):
         'not used.]',
     )
     optional.add_argument(
+        "--clear-all-memory-pre-query",
+        dest="clear_all_memory_pre_query",
+        action="store_true",
+        help='Clear gpu & cpu memory before every query.'
+        ' [Default: False]'
+    )
+    optional.add_argument(
         "--run-setup-teardown-per-query",
         dest="run_setup_teardown_per_query",
         action="store_true",
@@ -1583,6 +1637,7 @@ def benchmark(input_arguments):
     foreign_table_filename = args.foreign_table_filename
     jenkins_thresholds_name = args.jenkins_thresholds_name
     jenkins_thresholds_field = args.jenkins_thresholds_field
+    clear_all_memory_pre_query = args.clear_all_memory_pre_query
 
     # Hard-coded vars
     trim = 0.15
@@ -1670,7 +1725,7 @@ def benchmark(input_arguments):
         queries_results.extend(st_qr)
         # Run benchmark query
         query_result = run_query(
-            query=query, iterations=iterations, trim=trim, con=con
+            query=query, iterations=iterations, trim=trim, con=con, clear_all_memory_pre_query=clear_all_memory_pre_query
         )
         queries_results.append(query_result)
         # Run tear-down queries
