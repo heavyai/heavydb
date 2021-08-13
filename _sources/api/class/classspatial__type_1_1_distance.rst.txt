@@ -1,0 +1,9 @@
+Class spatial_type::Distance
+============================
+
+.. doxygenclass:: spatial_type::Distance
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

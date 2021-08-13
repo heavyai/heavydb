@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::SqlReassignOwned
+=========================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::SqlReassignOwned
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

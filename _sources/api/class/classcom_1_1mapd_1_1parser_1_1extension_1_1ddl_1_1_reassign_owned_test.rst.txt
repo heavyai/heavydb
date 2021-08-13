@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::ReassignOwnedTest
+==========================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::ReassignOwnedTest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

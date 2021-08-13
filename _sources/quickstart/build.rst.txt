@@ -42,3 +42,4 @@ The following ``cmake``/``ccmake`` options can enable/disable different features
 * ``-DENALBE_JAVA_REMOTE_DEBUG=on`` - Enable Java Remote Debug. Default is ``off``.
 * ``-DMAPD_DOCS_DOWNLOAD=on`` - Download the latest master build of the documentation / ``docs.mapd.com``. Default is ``off``. **Note:** this is a >50MB download.
 * ``-DPREFER_STATIC_LIBS=off`` - Static link dependencies, if available. Default is ``off``.
+* ``-DUSE_ALTERNATE_LINKER=""`` - Use alternate linker (eg 'gold', 'lld', 'mold'). Default is blank (use system default linker).
