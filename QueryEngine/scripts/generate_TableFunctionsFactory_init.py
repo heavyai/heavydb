@@ -269,21 +269,21 @@ class ParserException(Exception):
     pass
 
 
-# Tokens
 class Token:
-    LESS = (1,)  # <
-    GREATER = (2,)  # >
-    COMMA = (3,)  # ,
-    EQUAL = (4,)  # =
-    RARROW = (5,)  # ->
-    STRING = (6,)  #
-    NUMBER = (7,)  #
-    VBAR = (8,)  # |
-    BANG = (9,)  # !
-    LPAR = (10,)  # (
-    RPAR = (11,)  # )
-    LSQB = (12,)  # [
-    RSQB = (13,)  # ]
+    LESS = 1         # <
+    GREATER = 2      # >
+    COMMA = 3        # ,
+    EQUAL = 4        # =
+    RARROW = 5       # ->
+    STRING = 6       #
+    NUMBER = 7       #
+    VBAR = 8         # |
+    BANG = 9         # !
+    LPAR = 10        # (
+    RPAR = 11        # )
+    LSQB = 12        # [
+    RSQB = 13        # ]
+    IDENTIFIER = 14  #
 
     def __init__(self, type, lexeme):
         """
@@ -313,6 +313,7 @@ class Token:
             Token.RPAR: "RPAR",
             Token.LSQB: "LSQB",
             Token.RSQB: "RSQB",
+            Token.IDENTIFIER: "IDENTIFIER",
         }
         return names.get(token)
 
@@ -346,8 +347,10 @@ class Tokenize:
                 self.consume_whitespace()
             elif self.is_digit():
                 self.consume_number()
-            elif self.is_token_alphanum():
-                self.consume_alphanum()
+            elif self.is_token_identifier():
+                self.consume_identifier()
+            elif self.is_token_string():
+                self.consume_string()
             elif self.can_token_be_double_char():
                 self.consume_double_char()
             else:
@@ -413,7 +416,10 @@ class Tokenize:
     def consume_whitespace(self):
         self.advance()
 
-    def consume_alphanum(self):
+    def consume_string(self):
+        """
+        STRING: [A-Za-z0-9_]+
+        """
         while True:
             char = self.lookahead()
             if char and char.isalnum() or char == "_":
@@ -423,17 +429,39 @@ class Tokenize:
         self.add_token(Token.STRING)
         self.advance()
 
-    def consume_number(self):
+    def consume_identifier(self):
+        """
+        IDENTIFIER: [A-Za-z_][A-Za-z0-9_]*
+        """
         while True:
             char = self.lookahead()
-            if char.isdigit() or char == "_":
+            if char and char.isalnum() or char == "_":
+                self.advance()
+            else:
+                break
+        self.add_token(Token.IDENTIFIER)
+        self.advance()
+
+    def consume_number(self):
+        """
+        NUMBER: [0-9]+
+        """
+
+        # we know at this point the current token is
+        # the start of a number
+        while True:
+            char = self.lookahead()
+            if char.isdigit():
                 self.advance()
             else:
                 break
         self.add_token(Token.NUMBER)
         self.advance()
 
-    def is_token_alphanum(self):
+    def is_token_identifier(self):
+        return self.peek().isalpha() or self.peek() == "_"
+
+    def is_token_string(self):
         return self.peek().isalnum() or self.peek() == "_"
 
     def is_digit(self):
@@ -963,8 +991,9 @@ class Parser:
         else:
             expected_token = Token.tok_name(expected_type)
             self.raise_parser_error(
-                "Token mismatch at function consume. "
-                'Expected type "%s" but got token "%s"' % (expected_token, curr_token)
+                'Token mismatch at function consume. '
+                'Expected type "%s" but got token "%s"\n\n'
+                'Tokens: %s\n' % (expected_token, curr_token, self._tokens)
             )
 
     def current_pos(self):
@@ -989,11 +1018,11 @@ class Parser:
     def parse_udtf(self):
         """fmt: off
 
-        udtf: STRING "(" args ")" "->" args ("," templates)?
+        udtf: IDENTIFIER "(" args ")" "->" args ("," templates)?
 
         fmt: on
         """
-        name = self.parse_string()
+        name = self.parse_identifier()
         self.expect(Token.LPAR)  # (
         input_args = self.parse_args()
         self.expect(Token.RPAR)  # )
@@ -1034,7 +1063,7 @@ class Parser:
                 curr = self._curr
                 self.consume(Token.COMMA)
                 args.append(self.parse_arg())
-            except:  # noqa E722
+            except ParserException:
                 self._curr = curr
                 break
         return args
@@ -1065,47 +1094,48 @@ class Parser:
 
         fmt: on
         """
-        # to-do: find a better way to save the state
-        try:
-            curr = self._curr
-            node = self.parse_composed()
-        except ParserException:
-            self._curr = curr
-            node = self.parse_primitive()
-        return node
+        curr = self._curr  # save state
+        primitive = self.parse_primitive()
+        if self.is_at_end():
+            return primitive
+
+        if not self.match(Token.LESS):
+            return primitive
+
+        self._curr = curr  # return state
+        return self.parse_composed()
 
     def parse_composed(self):
         """fmt: off
 
-        composed: STRING "<" type ("," type)* ">"
+        composed: IDENTIFIER "<" type ("," type)* ">"
 
         fmt: on
         """
-        token = self.consume(Token.STRING)
-        try:
-            self.consume(Token.LESS)
-        except:  # noqa E722
-            raise ParserException()
+        idtn = self.parse_identifier()
+        self.consume(Token.LESS)
         inner = [self.parse_type()]
         while self.match(Token.COMMA):
             self.consume(Token.COMMA)
             inner.append(self.parse_type())
         self.consume(Token.GREATER)
-        return ComposedNode(token.lexeme, inner)
+        return ComposedNode(idtn, inner)
 
     def parse_primitive(self):
         """fmt: off
 
-        primitive: STRING
+        primitive: IDENTIFIER
                  | NUMBER
 
         fmt: on
         """
-        if self.match(Token.STRING):
-            token = self.consume(Token.STRING)
+        if self.match(Token.IDENTIFIER):
+            lexeme = self.parse_identifier()
         elif self.match(Token.NUMBER):
-            token = self.consume(Token.NUMBER)
-        return PrimitiveNode(token.lexeme)
+            lexeme = self.parse_number()
+        else:
+            raise self.raise_parser_error()
+        return PrimitiveNode(lexeme)
 
     def parse_templates(self):
         """fmt: off
@@ -1128,14 +1158,14 @@ class Parser:
 
         fmt: on
         """
-        key = self.consume(Token.STRING).lexeme
+        key = self.parse_string()
         types = []
         self.consume(Token.EQUAL)
         self.consume(Token.LSQB)
-        types.append(self.consume(Token.STRING).lexeme)
+        types.append(self.parse_string())
         while self.match(Token.COMMA):
             self.consume(Token.COMMA)
-            types.append(self.consume(Token.STRING).lexeme)
+            types.append(self.parse_string())
         self.consume(Token.RSQB)
         return TemplateNode(key, tuple(types))
 
@@ -1146,29 +1176,59 @@ class Parser:
 
         fmt: on
         """
-        key = self.consume(Token.STRING).lexeme
+        key = self.parse_string()
         self.consume(Token.EQUAL)
-        value = self.consume(Token.STRING).lexeme
+        value = self.parse_string()
         if not self.is_at_end() and self.match(Token.LESS):
             self.consume(Token.LESS)
-            num1 = self.consume(Token.NUMBER)
+            num1 = self.parse_number()
             if self.match(Token.COMMA):
                 self.consume(Token.COMMA)
-                num2 = self.consume(Token.NUMBER)
-                value += "<%s,%s>" % (num1.lexeme, num2.lexeme)
+                num2 = self.parse_number()
+                value += "<%s,%s>" % (num1, num2)
             else:
-                value += "<%s>" % (num1.lexeme)
+                value += "<%s>" % (num1)
             self.consume(Token.GREATER)
         return AnnotationNode(key, value)
 
-    def parse_string(self):
-        token = self.consume(Token.STRING)
+    def parse_identifier(self):
+        """ fmt: off
+
+        IDENTIFIER: [A-Za-z_][A-Za-z0-9_]*
+
+        fmt: on
+        """
+        token = self.consume(Token.IDENTIFIER)
         return token.lexeme
+
+    def parse_number(self):
+        """ fmt: off
+
+        NUMBER: [0-9]+
+
+        fmt: on
+        """
+        token = self.consume(Token.NUMBER)
+        return token.lexeme
+
+    def parse_string(self):
+        """ fmt: off
+
+        STRING: [A-Za-z0-9_]+
+
+        fmt: on
+        """
+        if self.match(Token.STRING):
+            return self.consume(Token.STRING).lexeme
+        elif self.match(Token.IDENTIFIER):
+            return self.consume(Token.IDENTIFIER).lexeme
+        else:
+            self.raise_parser_error()
 
     def parse(self):
         """fmt: off
 
-        udtf: STRING "(" args ")" "->" args ("," templates)?
+        udtf: IDENTIFIER "(" args ")" "->" args ("," templates)?
 
         args: arg ("," arg)*
 
@@ -1177,8 +1237,8 @@ class Parser:
         type: composed
             | primitive
 
-        composed: STRING "<" type ("," type)* ">"
-        primitive: STRING
+        composed: IDENTIFIER "<" type ("," type)* ">"
+        primitive: IDENTIFIER
                  | NUMBER
 
         annotation: STRING "=" STRING ("<" NUMBER ("," NUMBER) ">")?
@@ -1186,7 +1246,9 @@ class Parser:
         templates: template ("," template)
         template: STRING "=" "[" STRING ("," STRING)* "]"
 
-        STRING: [A-Za-z0-9]
+        IDENTIFIER: [A-Za-z_][A-Za-z0-9_]*
+        STRING: [A-Za-z0-9_]+
+        NUMBER: [0-9]+
 
         fmt: on
         """
@@ -1194,7 +1256,6 @@ class Parser:
         udtf = self.parse_udtf()
 
         # set parent
-
         udtf.parent = None
         d = deque()
         d.append(udtf)
@@ -1239,7 +1300,6 @@ def find_signatures(input_file):
 
         ast = Parser(line).parse()
 
-
         if expected_result is not None:
             # Template transformer expands templates into multiple lines
             result = Pipeline(TemplateTransformer, NormalizeTransformer, AstPrinter)(ast)
@@ -1251,10 +1311,7 @@ def find_signatures(input_file):
         signature = Pipeline(TemplateTransformer,
                              NormalizeTransformer,
                              SignatureTransformer)(ast)
-        if isinstance(signature, list):
-            signatures.extend(signature)
-        else:
-            signatures.append(signature)
+        signatures.extend(signature)
 
     return signatures
 
