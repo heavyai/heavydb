@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cassert>
 #include <type_traits>
+#include "thread_count.h"
 
 namespace threading_std {
 
@@ -114,10 +115,20 @@ private:
 
 template<typename Int, typename Body, typename Partitioner = auto_partitioner>
 void parallel_for( const blocked_range<Int>& range, const Body& body, const Partitioner &p = Partitioner()) {
+    const Int worker_count = cpu_threads();
     std::vector<std::future<void>> worker_threads;
-    for (auto r = range.begin(), re = range.end(); r < re; r++) // TODO grainsize?
-        worker_threads.push_back(
-            std::async(std::launch::async, body, blocked_range<Int>(r, r+1)));
+    worker_threads.reserve(worker_count);
+
+    for(Int i = 0,
+            start_entry = range.begin(),
+            stop_entry = range.end(),
+            stride = (range.size() + worker_count - 1) / worker_count;
+        i < worker_count && start_entry < stop_entry; ++i, start_entry += stride) {
+        const auto end_entry = std::min(start_entry + stride, stop_entry);
+        // TODO grainsize?
+        worker_threads.emplace_back(
+            std::async(std::launch::async, body, blocked_range<Int>(start_entry, end_entry)));
+    }
     for (auto& child : worker_threads)
         child.wait();
 }
@@ -126,31 +137,36 @@ void parallel_for( const blocked_range<Int>& range, const Body& body, const Part
 template <typename Index, typename Function, typename Partitioner = auto_partitioner>
 void parallel_for(Index first, Index last, const Function& f, const Partitioner &p = Partitioner()) {
     parallel_for(blocked_range<Index>(first, last), [&f](const blocked_range<Index>&r){
-        f(r.begin());
+        //#pragma ivdep
+        //#pragma omp simd
+        for (auto i = r.begin(), e = r.end(); i < e; i++)
+            f(i);
     }, p);
 }
 
-/** \page parallel_reduce_body_req Requirements on parallel_reduce body
-    Class \c Body implementing the concept of parallel_reduce body must define:
-    - \code Body::Body( Body&, split ); \endcode        Splitting constructor.
-                                                        Must be able to run concurrently with operator() and method \c join
-    - \code Body::~Body(); \endcode                     Destructor
-    - \code void Body::operator()( Range& r ); \endcode Function call operator applying body to range \c r
-                                                        and accumulating the result
-    - \code void Body::join( Body& b ); \endcode        Join results.
-                                                        The result in \c b should be merged into the result of \c this
-**/
-
-//! Parallel reduction
-/** @ingroup algorithms **/
-// template<typename Range, typename Body, typename Partitioner = auto_partitioner>
-// void parallel_reduce( const Range& range, Body& body, const Partitioner &p = Partitioner()) {
-//     ...
-// }
-
 //! Parallel iteration with reduction
 /** @ingroup algorithms **/
-//template<typename Range, typename Value, typename RealBody, typename Reduction, typename Partitioner = auto_partitioner>
-//Value parallel_reduce( const Range& range, const Value& identity, const RealBody& real_body, const Reduction& reduction, const Partitioner& p = Partitioner());
+template<typename Int, typename Value, typename RealBody, typename Reduction, typename Partitioner = auto_partitioner>
+Value parallel_reduce( const blocked_range<Int>& range, const Value& identity, const RealBody& real_body,
+                       const Reduction& reduction, const Partitioner& p = Partitioner()) {
+    const size_t worker_count = cpu_threads();
+    std::vector<std::future<Value>> worker_threads;
+    worker_threads.reserve(worker_count);
+
+    for(Int i = 0,
+            start_entry = range.begin(),
+            stop_entry = range.end(),
+            stride = (range.size() + worker_count - 1) / worker_count;
+        i < worker_count && start_entry < stop_entry; ++i, start_entry += stride) {
+        const auto end_entry = std::min(start_entry + stride, stop_entry);
+        // TODO grainsize?
+        worker_threads.emplace_back(
+            std::async(std::launch::async, real_body, blocked_range<Int>(start_entry, end_entry), Value{} ));
+    }
+    Value v = identity;
+    for (auto& child : worker_threads)
+        v = reduction(v, child.get());
+    return v;
+}
 
 } // namespace

@@ -11,6 +11,16 @@ TEST(THREADING, MODED(ParallelFor_)) {
     ASSERT_EQ(g_counter, 9999); g_counter = 0;
 }
 
+TEST(THREADING, MODED(ParallelReduce_)) {
+    using namespace MODED(threading_);
+    g_counter = 0;
+    int res = parallel_reduce(blocked_range<size_t>(1, 10000), int(0), [&](auto r, int v) {
+      g_counter += r.size();
+      return int(v + r.size());
+    }, std::plus<int>()  );
+    ASSERT_EQ(g_counter, res); g_counter = 0;
+}
+
 TEST(THREADING, MODED(Async_)) {
     using namespace MODED(threading_);
     g_counter = 0;

@@ -71,7 +71,7 @@
 #include "Shared/misc.h"
 #include "Shared/scope.h"
 #include "Shared/shard_key.h"
-#include "Shared/threadpool.h"
+#include "Shared/threading.h"
 
 bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
@@ -1532,7 +1532,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
         if (g_use_tbb_pool) {
 #ifdef HAVE_TBB
           VLOG(1) << "Using TBB thread pool for kernel dispatch.";
-          launchKernels<threadpool::TbbThreadPool<void>>(
+          launchKernels<threading::task_group>(
               shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
 #else
           throw std::runtime_error(
@@ -1540,7 +1540,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
               "\"enable-modern-thread-pool\" disabled.");
 #endif
         } else {
-          launchKernels<threadpool::FuturesThreadPool<void>>(
+          launchKernels<threading_std::task_group>(
               shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
         }
       } catch (QueryExecutionError& e) {
@@ -2268,18 +2268,15 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
           << (device_type == ExecutorDeviceType::CPU ? "CPU"s : "GPU"s) << ".";
   size_t kernel_idx = 1;
   for (auto& kernel : kernels) {
-    thread_pool.spawn(
-        [this, &shared_context, parent_thread_id = logger::thread_id()](
-            ExecutionKernel* kernel, const size_t crt_kernel_idx) {
-          CHECK(kernel);
+    CHECK(kernel.get());
+    thread_pool.run(
+        [this, &kernel, &shared_context, parent_thread_id = logger::thread_id(), crt_kernel_idx = kernel_idx++] {
           DEBUG_TIMER_NEW_THREAD(parent_thread_id);
-          const size_t thread_idx = crt_kernel_idx % cpu_threads();
-          kernel->run(this, thread_idx, shared_context);
-        },
-        kernel.get(),
-        kernel_idx++);
+          const size_t thread_i = crt_kernel_idx % cpu_threads();
+          kernel->run(this, thread_i, shared_context);
+        });
   }
-  thread_pool.join();
+  thread_pool.wait();
 
   for (auto& exec_ctx : shared_context.getTlsExecutionContext()) {
     // The first arg is used for GPU only, it's not our case.
