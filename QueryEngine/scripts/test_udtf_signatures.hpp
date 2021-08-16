@@ -30,10 +30,18 @@
   UDTF: foo(Column<int32>|name=a) -> Column<int32>|name=out !
         foo(ColumnInt32 | name=a) -> ColumnInt32 | name=out
 
-  UDTF: foo(Column<TextEncodedDict>) -> Column<TextEncodedDict> !
-        foo(ColumnTextEncodedDict) -> ColumnTextEncodedDict | input_id=args<0>
-  UDTF: foo(Column<TextEncodedDict>) | name = a -> Column<TextEncodedDict> | name=out | input_id=args<0> !
-        foo(ColumnTextEncodedDict) -> ColumnTextEncodedDict | name=out | input_id=args<0>
+  UDTF: foo(Column<TextEncodingDict>) -> Column<TextEncodingDict> !
+        foo(ColumnTextEncodingDict) -> ColumnTextEncodingDict | input_id=args<0>
+  UDTF: foo(ColumnList<TextEncodingDict>) -> Column<TextEncodingDict> !
+        foo(ColumnListTextEncodingDict) -> ColumnTextEncodingDict | input_id=args<0, 0>
+  UDTF: foo(ColumnList<TextEncodingDict>, Column<int>, Column<TextEncodingDict>) -> Column<TextEncodingDict> | input_id=args<2> !
+        foo(ColumnListTextEncodingDict, ColumnInt32, ColumnTextEncodingDict) -> ColumnTextEncodingDict | input_id=args<2>
+  UDTF: foo(Column<int>, Column<TextEncodingDict>) -> Column<TextEncodingDict> | input_id=args<1> !
+        foo(ColumnInt32, ColumnTextEncodingDict) -> ColumnTextEncodingDict | input_id=args<1>
+  UDTF: foo(Column<int>, ColumnList<TextEncodingDict>) -> Column<TextEncodingDict> !
+        foo(ColumnInt32, ColumnListTextEncodingDict) -> ColumnTextEncodingDict | input_id=args<1, 0>
+  UDTF: foo(Column<TextEncodingDict> | name = a) -> Column<TextEncodingDict> | name=out | input_id=args<0> !
+        foo(ColumnTextEncodingDict | name=a) -> ColumnTextEncodingDict | name=out | input_id=args<0>
 
   UDTF: foo__cpu_template(Column<int32_t>) -> Column<int32_t> !
         foo__cpu_template(ColumnInt32) -> ColumnInt32

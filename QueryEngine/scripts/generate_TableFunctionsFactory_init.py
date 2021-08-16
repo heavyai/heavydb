@@ -170,14 +170,14 @@ class Bracket:
     def is_column(self):
         return self.name.rsplit("::", 1)[-1].startswith('Column') and not self.is_column_list()
 
-    def is_any_text_encoded_dict(self):
-        return self.name.rsplit("::", 1)[-1].endswith('TextEncodedDict')
+    def is_any_text_encoding_dict(self):
+        return self.name.rsplit("::", 1)[-1].endswith('TextEncodingDict')
 
-    def is_column_text_encoded_dict(self):
-        return self.name.rsplit("::", 1)[-1] == 'ColumnTextEncodedDict'
+    def is_column_text_encoding_dict(self):
+        return self.name.rsplit("::", 1)[-1] == 'ColumnTextEncodingDict'
 
-    def is_column_list_text_encoded_dict(self):
-        return self.name.rsplit("::", 1)[-1] == 'ColumnListTextEncodedDict'
+    def is_column_list_text_encoding_dict(self):
+        return self.name.rsplit("::", 1)[-1] == 'ColumnListTextEncodingDict'
 
     def is_output_buffer_sizer(self):
         return self.name.rsplit("::", 1)[-1] in OutputBufferSizeTypes
@@ -656,6 +656,35 @@ class TemplateTransformer(AstTransformer):
 
 
 class NormalizeTransformer(AstTransformer):
+    def visit_udtf_node(self, udtf_node):
+        """
+        * Add default_input_id to Column(List)<TextEncodingDict> without one
+        """
+        udtf_node = super().visit_udtf_node(udtf_node)
+
+        # add default input_id
+        for idx, t in enumerate(udtf_node.inputs):
+            t = t.type
+            if not isinstance(t, ComposedNode):
+                continue
+            if t.is_column_text_encoding_dict():
+                default_input_id = AnnotationNode('input_id', 'args<%s>' % (idx,))
+                break
+            elif t.is_column_list_text_encoding_dict():
+                default_input_id = AnnotationNode('input_id', 'args<%s, 0>' % (idx,))
+                break
+
+        for t in udtf_node.outputs:
+            if isinstance(t.type, ComposedNode) and t.type.is_any_text_encoding_dict():
+                has_input_id = False
+                for a in t.annotations:
+                    if a.key == 'input_id':
+                        has_input_id = True
+                if not has_input_id:
+                    t.annotations.append(default_input_id)
+
+        return udtf_node
+
     def visit_primitive_node(self, primitive_node):
         """
         * Rename nodes using translate_map as dictionary
@@ -857,6 +886,9 @@ class PrimitiveNode(TypeNode):
     def __str__(self):
         return "Primitive(%s)" % (self.type)
 
+    def is_text_encoding_dict(self):
+        return self.type == 'TextEncodingDict'
+
     __repr__ = __str__
 
 
@@ -885,6 +917,15 @@ class ComposedNode(TypeNode, IterableNode):
     def __iter__(self):
         for i in self.inner:
             yield i
+
+    def is_column_text_encoding_dict(self):
+        return self.is_column() and self.inner[0].is_text_encoding_dict()
+
+    def is_column_list_text_encoding_dict(self):
+        return self.is_column_list() and self.inner[0].is_text_encoding_dict()
+
+    def is_any_text_encoding_dict(self):
+        return self.inner[0].is_text_encoding_dict()
 
     __repr__ = __str__
 
@@ -1265,7 +1306,7 @@ class Parser:
                 for child in node:
                     child.parent = node
                     d.append(child)
-        return udtf 
+        return udtf
 
 
 # fmt: off
