@@ -2592,8 +2592,9 @@ FetchResult Executor::fetchChunks(
       }
       CHECK_LT(frag_id, fragments->size());
       auto memory_level_for_column = memory_level;
-      if (plan_state_->columns_to_fetch_.find(
-              std::make_pair(col_id->getScanDesc().getTableId(), col_id->getColId())) ==
+      auto tbl_col_ids =
+          std::make_pair(col_id->getScanDesc().getTableId(), col_id->getColId());
+      if (plan_state_->columns_to_fetch_.find(tbl_col_ids) ==
           plan_state_->columns_to_fetch_.end()) {
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
@@ -2612,16 +2613,23 @@ FetchResult Executor::fetchChunks(
           // geo point coordianates but we can support more types in this way
           if (needLinearizeAllFragments(
                   cd, *col_id, ra_exe_unit, selected_fragments, memory_level)) {
-            frag_col_buffers[it->second] =
-                column_fetcher.linearizeColumnFragments(table_id,
-                                                        col_id->getColId(),
-                                                        all_tables_fragments,
-                                                        chunks,
-                                                        chunk_iterators,
-                                                        memory_level,
-                                                        device_id,
-                                                        device_allocator,
-                                                        thread_idx);
+            bool for_lazy_fetch = false;
+            if (plan_state_->columns_to_not_fetch_.find(tbl_col_ids) !=
+                plan_state_->columns_to_not_fetch_.end()) {
+              for_lazy_fetch = true;
+              VLOG(2) << "Try to linearize lazy fetch column (col_id: " << cd->columnId
+                      << ", col_name: " << cd->columnName << ")";
+            }
+            frag_col_buffers[it->second] = column_fetcher.linearizeColumnFragments(
+                table_id,
+                col_id->getColId(),
+                all_tables_fragments,
+                chunks,
+                chunk_iterators,
+                for_lazy_fetch ? Data_Namespace::CPU_LEVEL : memory_level,
+                for_lazy_fetch ? 0 : device_id,
+                device_allocator,
+                thread_idx);
           } else {
             frag_col_buffers[it->second] =
                 column_fetcher.getAllTableColumnFragments(table_id,

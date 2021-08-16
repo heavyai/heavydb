@@ -1218,6 +1218,22 @@ TEST_P(GeoSpatialNullTablesFixture, Constructors) {
   }
 }
 
+TEST_P(GeoSpatialNullTablesFixture, LazyFetch) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_ALL_ON_AGGREGATOR();
+    SKIP_NO_GPU();
+    std::vector<std::string> col_names{"p", "l", "poly", "mpoly"};
+    for (auto& col_name : col_names) {
+      std::string query =
+          "SELECT b." + col_name +
+          " FROM geospatial_null_test a INNER JOIN geospatial_null_test b ON "
+          "ST_Intersects(ST_SetSRID(b.mpoly, 4326), a.gp4326) WHERE a.id = 1;";
+      const auto query_res = QR::get()->runSQL(query, dt);
+      EXPECT_EQ(size_t(8), query_res->rowCount());
+    }
+  }
+}
+
 INSTANTIATE_TEST_SUITE_P(GeospatialNullTests,
                          GeoSpatialNullTablesFixture,
                          ::testing::Values(true, false));
