@@ -1,5 +1,6 @@
 
 #include <functional>
+#define TBB_PREVIEW_TASK_GROUP_EXTENSIONS 1
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
 #include <tbb/blocked_range.h>
@@ -77,9 +78,14 @@ template <typename Fn,
 future<Result> async(Fn&& fn, Args&&... args) {
   auto f = std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...);
   auto ptask = std::make_unique<tbb_packaged_task<Result>>();
-  ptask->run(f);
+#if TBB_INTERFACE_VERSION >= 12040
+  g_tbb_arena.enqueue(ptask->defer(f));
+#else
+  g_tbb_arena.execute( [&]{
+    ptask->run(f);
+  });
+#endif
   return future<Result>(std::move(ptask));
 }
-
 
 } // namespace
