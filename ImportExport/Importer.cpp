@@ -65,7 +65,7 @@
 #include "RenderGroupAnalyzer.h"
 #include "Shared/DateTimeParser.h"
 #include "Shared/SqlTypesLayout.h"
-#include "Shared/glob_local_recursive_files.h"
+#include "Shared/file_glob.h"
 #include "Shared/import_helpers.h"
 #include "Shared/likely.h"
 #include "Shared/measure.h"

@@ -26,7 +26,7 @@
 
 #include "Fragmenter/FragmentDefaultValues.h"
 #include "Parser/ReservedKeywords.h"
-#include "Shared/glob_local_recursive_files.h"
+#include "Shared/file_glob.h"
 #include "Shared/misc.h"
 #include "Shared/sqltypes.h"
 

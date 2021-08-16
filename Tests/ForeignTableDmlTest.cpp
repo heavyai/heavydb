@@ -1553,6 +1553,38 @@ TEST_P(DataWrapperSelectQueryTest, WildcardOnDirectory) {
   // clang-format on
 }
 
+TEST_P(DataWrapperSelectQueryTest, NoMatchRegexPathFilter) {
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
+  sql(createForeignTableQuery({{"i1", "INT"}},
+                              getDataFilesPath(),
+                              wrapper_type_,
+                              {{"REGEX_PATH_FILTER", "very?obscure?pattern"}}));
+  queryAndAssertException(
+      "SELECT * FROM " + default_table_name + ";",
+      "No files matched the regex file path \"very?obscure?pattern\".");
+}
+
+TEST_P(DataWrapperSelectQueryTest, RegexPathFilterOnFiles) {
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
+  sql(createForeignTableQuery({{"t", "TEXT"}, {"i", "INT"}, {"d", "DOUBLE"}},
+                              getDataFilesPath() + "example_2_" + GetParam() + "_dir/",
+                              GetParam(),
+                              {{"REGEX_PATH_FILTER", ".*_dir/file.*"}}));
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY t;");
+  // clang-format off
+  assertResultSetEqual({{"a", i(1), 1.1},
+                        {"aa", i(1), 1.1},
+                        {"aa", i(2), 2.2},
+                        {"aaa", i(1), 1.1}},
+                       result);
+  // clang-format on
+}
+
 TEST_P(DataWrapperSelectQueryTest, OutOfRange) {
   sql(createForeignTableQuery(
       {{"i", "INTEGER"}, {"i2", "INTEGER"}},

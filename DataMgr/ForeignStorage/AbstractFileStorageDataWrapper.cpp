@@ -139,7 +139,8 @@ void AbstractFileStorageDataWrapper::validateFilePathOptionKey(
 }
 
 const std::set<std::string_view> AbstractFileStorageDataWrapper::supported_table_options_{
-    FILE_PATH_KEY};
+    FILE_PATH_KEY,
+    REGEX_PATH_FILTER_KEY};
 
 const std::set<std::string_view>
     AbstractFileStorageDataWrapper::supported_server_options_{STORAGE_TYPE_KEY,

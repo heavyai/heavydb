@@ -25,7 +25,7 @@
 #include "FsiJsonUtils.h"
 #include "LazyParquetChunkLoader.h"
 #include "ParquetShared.h"
-#include "Shared/glob_local_recursive_files.h"
+#include "Shared/file_glob.h"
 #include "Shared/misc.h"
 #include "Utils/DdlUtils.h"
 
@@ -280,10 +280,12 @@ std::set<std::string> ParquetDataWrapper::getAllFilePaths() {
   auto timer = DEBUG_TIMER(__func__);
   std::set<std::string> found_file_paths;
   auto file_path = getFullFilePath(foreign_table_);
+  const auto& regex_pattern = foreign_table_->getOption(REGEX_PATH_FILTER_KEY);
 
   auto& server_options = foreign_table_->foreign_server->options;
   if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
-    found_file_paths = shared::glob_local_recursive_files(file_path);
+    found_file_paths =
+        shared::glob_recursive_and_filter_local_files(file_path, regex_pattern);
   } else {
     UNREACHABLE();
   }

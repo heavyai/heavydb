@@ -17,7 +17,7 @@
 #include "DataMgr/ForeignStorage/FileReader.h"
 #include "ForeignStorageException.h"
 #include "FsiJsonUtils.h"
-#include "Shared/glob_local_recursive_files.h"
+#include "Shared/file_glob.h"
 
 namespace foreign_storage {
 
@@ -527,10 +527,13 @@ bool MultiFileReader::isRemainingSizeKnown() {
   return size_known;
 };
 
-LocalMultiFileReader::LocalMultiFileReader(const std::string& file_path,
-                                           const import_export::CopyParams& copy_params)
+LocalMultiFileReader::LocalMultiFileReader(
+    const std::string& file_path,
+    const import_export::CopyParams& copy_params,
+    const std::optional<std::string>& regex_pattern)
     : MultiFileReader(file_path, copy_params) {
-  auto found_file_locations = shared::glob_local_recursive_files(file_path);
+  auto found_file_locations =
+      shared::glob_recursive_and_filter_local_files(file_path, regex_pattern);
   for (const auto& location : found_file_locations) {
     insertFile(location);
   }

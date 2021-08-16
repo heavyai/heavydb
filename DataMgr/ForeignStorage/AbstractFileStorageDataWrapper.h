@@ -21,6 +21,7 @@ class AbstractFileStorageDataWrapper : public ForeignDataWrapper {
   inline static const std::string STORAGE_TYPE_KEY = "STORAGE_TYPE";
   inline static const std::string BASE_PATH_KEY = "BASE_PATH";
   inline static const std::string FILE_PATH_KEY = "FILE_PATH";
+  inline static const std::string REGEX_PATH_FILTER_KEY = "REGEX_PATH_FILTER";
   inline static const std::string LOCAL_FILE_STORAGE_TYPE = "LOCAL_FILE";
   inline static const std::string S3_STORAGE_TYPE = "AWS_S3";
 

@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include <boost/filesystem.hpp>
 #include "rapidjson/document.h"
 
@@ -325,7 +327,8 @@ class MultiFileReader : public FileReader {
 class LocalMultiFileReader : public MultiFileReader {
  public:
   LocalMultiFileReader(const std::string& file_path,
-                       const import_export::CopyParams& copy_params);
+                       const import_export::CopyParams& copy_params,
+                       const std::optional<std::string>& regex_pattern);
 
   LocalMultiFileReader(const std::string& file_path,
                        const import_export::CopyParams& copy_params,
