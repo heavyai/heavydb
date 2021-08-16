@@ -1,0 +1,9 @@
+Class shared::FileNotFoundException
+===================================
+
+.. doxygenclass:: shared::FileNotFoundException
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
