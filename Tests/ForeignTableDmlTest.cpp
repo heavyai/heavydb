@@ -284,7 +284,8 @@ class ForeignTableTest : public DBHandlerTestFixture {
   static void createODBCSourceTable(const std::string table_name,
                                     const std::string& table_schema,
                                     const std::string& src_file,
-                                    const std::string& data_wrapper_type) {}
+                                    const std::string& data_wrapper_type,
+                                    const bool is_odbc_geo = false) {}
 
   /**
    * Returns a query to create a foreign table.  Creates a source odbc table for odbc
@@ -295,7 +296,9 @@ class ForeignTableTest : public DBHandlerTestFixture {
       const std::string& src_path,
       const std::string& data_wrapper_type,
       const std::map<std::string, std::string> options = {},
-      const std::string& table_name = default_table_name) {
+      const std::string& table_name = default_table_name,
+      const std::vector<NameTypePair>& db_specific_column_pairs = {},
+      const bool is_odbc_geo = false) {
     std::stringstream ss;
     ss << "CREATE FOREIGN TABLE " << table_name << " ";
     std::string schema = createSchemaString(column_pairs);
@@ -1202,6 +1205,16 @@ INSTANTIATE_TEST_SUITE_P(DataWrapperParameterizedTests,
                          ::testing::ValuesIn(local_wrappers),
                          [](const auto& info) { return info.param; });
 
+TEST_P(DataWrapperSelectQueryTest, SelectCount) {
+  sql(createForeignTableQuery({{"t", "TEXT"}, {"i", "INT"}, {"d", "DOUBLE"}},
+                              getDataFilesPath() + "example_2" + wrapper_ext(GetParam()),
+                              GetParam()));
+
+  TQueryResult result;
+  sql(result, "SELECT COUNT(*) FROM " + default_table_name + ";");
+  assertResultSetEqual({{i(6)}}, result);
+}
+
 TEST_P(DataWrapperSelectQueryTest, Int8EmptyAndNullArrayPermutations) {
   auto wrapper_type = GetParam();
   if (is_odbc(wrapper_type)) {
@@ -1282,7 +1295,7 @@ TEST_P(DataWrapperSelectQueryTest, AggregateAndGroupBy) {
   // clang-format on
 }
 
-TEST_P(DataWrapperSelectQueryTest, Filter) {
+TEST_P(DataWrapperSelectQueryTest, FilterGreater) {
   sql(createForeignTableQuery({{"t", "TEXT"}, {"i", "BIGINT"}, {"f", "DOUBLE"}},
                               getDataFilesPath() + "example_2" + wrapper_ext(GetParam()),
                               GetParam()));
@@ -1293,6 +1306,23 @@ TEST_P(DataWrapperSelectQueryTest, Filter) {
   assertResultSetEqual({{"aa", i(2), 2.2},
                         {"aaa", i(2), 2.2},
                         {"aaa", i(3), 3.3}},
+                       result);
+  // clang-format on
+}
+
+TEST_P(DataWrapperSelectQueryTest, FilterLesser) {
+  sql(createForeignTableQuery({{"t", "TEXT"}, {"i", "BIGINT"}, {"f", "DOUBLE"}},
+                              getDataFilesPath() + "example_2" + wrapper_ext(GetParam()),
+                              GetParam()));
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + " WHERE i <= 2;");
+  // clang-format off
+  assertResultSetEqual({{"a", i(1), 1.1},
+                        {"aa", i(1), 1.1},
+                        {"aa", i(2), 2.2},
+                        {"aaa", i(1), 1.1},
+                        {"aaa", i(2), 2.2}},
                        result);
   // clang-format on
 }
@@ -3043,13 +3073,13 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes_subset) {
   // clang-format off
   assertResultSetEqual({
     {
-      True,i(100), i(30000), i(2000000000), i(9000000000000000000),10.1f,  100.1234, "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "\"quoted text\""
+      True,i(100), i(30000), i(2000000000), i(9000000000000000000),10.1f,  100.1234, "00:00:00", "1/1/1000 00:00:00", "1/1/1000", "text_1", "\"quoted text\""
     },
     {
       False,i(110), i(30500), i(2000500000), i(9000000050000000000), 100.12f,  2.1234, "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "\"quoted text 2\""
     },
     {
-      True,i(120), i(31000), i(2100000000), i(9100000000000000000), 1000.123f, 100.1, "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "\"quoted text 3\""
+      True,i(120), i(31000), i(2100000000), i(9100000000000000000), 1000.123f, 100.1, "23:59:59", "12/31/2900 23:59:59", "12/31/2900", "text_3", "\"quoted text 3\""
     },
     { wrapper_type_ == "sqlite" ?  False : NULL_BOOLEAN, // sqlite ODBC driver does not return null Booleans correctly
       wrapper_type_ == "postgres" ? i(NULL_SMALLINT) : i(NULL_TINYINT), // TINYINT
@@ -3276,7 +3306,7 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
       "GEOMETRY(LINESTRING,4326) ENCODING COMPRESSED(32), poly GEOMETRY(POLYGON,4326) "
       "ENCODING COMPRESSED(32), mpoly GEOMETRY(MULTIPOLYGON,4326) ENCODING "
       "COMPRESSED(32) )",
-      "geo_types_with_nulls",
+      "geo_types",
       "parquet");
   sql(query);
 
@@ -3330,7 +3360,7 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
 TEST_F(SelectQueryTest, ParquetNullGeoTypes) {
   const auto& query = getCreateForeignTableQuery(
       "( index INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON )",
-      "geo_types_with_nulls",
+      "geo_types",
       "parquet");
   sql(query);
 
@@ -3372,29 +3402,27 @@ TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
   sql(result, "SELECT * FROM " + default_table_name + " ORDER BY index;");
 
   std::map<std::pair<int, int>, std::unique_ptr<ChunkMetadata>> test_chunk_metadata_map;
-  test_chunk_metadata_map[{0, 1}] = createChunkMetadata<int32_t>(1, 12, 3, 1, 3, false);
-  test_chunk_metadata_map[{0, 2}] = createChunkMetadata(2, 0, 3, false);
-  test_chunk_metadata_map[{0, 3}] = createChunkMetadata<int8_t>(3, 48, 3, -16, 64, false);
-  test_chunk_metadata_map[{0, 4}] = createChunkMetadata(4, 0, 3, false);
-  test_chunk_metadata_map[{0, 5}] =
-      createChunkMetadata<int8_t>(5, 112, 3, -16, 64, false);
+  test_chunk_metadata_map[{0, 1}] = createChunkMetadata<int32_t>(1, 20, 5, 1, 5, false);
+  test_chunk_metadata_map[{0, 2}] = createChunkMetadata(2, 0, 5, true);
+  test_chunk_metadata_map[{0, 3}] = createChunkMetadata<int8_t>(3, 80, 5, -16, 64, true);
+  test_chunk_metadata_map[{0, 4}] = createChunkMetadata(4, 0, 5, true);
+  test_chunk_metadata_map[{0, 5}] = createChunkMetadata<int8_t>(5, 112, 5, -16, 64, true);
   test_chunk_metadata_map[{0, 6}] =
-      createChunkMetadata<double>(6, 96, 3, 0.000000, 3.000000, false);
-  test_chunk_metadata_map[{0, 7}] = createChunkMetadata(7, 0, 3, false);
-  test_chunk_metadata_map[{0, 8}] =
-      createChunkMetadata<int8_t>(8, 160, 3, -16, 64, false);
-  test_chunk_metadata_map[{0, 9}] = createChunkMetadata<int32_t>(9, 12, 3, 3, 4, false);
+      createChunkMetadata<double>(6, 160, 5, 0.000000, 3.000000, true);
+  test_chunk_metadata_map[{0, 7}] = createChunkMetadata(7, 0, 5, true);
+  test_chunk_metadata_map[{0, 8}] = createChunkMetadata<int8_t>(8, 160, 5, -16, 64, true);
+  test_chunk_metadata_map[{0, 9}] = createChunkMetadata<int32_t>(9, 12, 5, 3, 4, true);
   test_chunk_metadata_map[{0, 10}] =
-      createChunkMetadata<double>(10, 96, 3, 0.000000, 7.000000, false);
-  test_chunk_metadata_map[{0, 11}] = createChunkMetadata<int32_t>(11, 12, 3, 0, 0, false);
-  test_chunk_metadata_map[{0, 12}] = createChunkMetadata(12, 0, 3, false);
+      createChunkMetadata<double>(10, 160, 5, 0.000000, 7.000000, true);
+  test_chunk_metadata_map[{0, 11}] = createChunkMetadata<int32_t>(11, 20, 5, 0, 0, true);
+  test_chunk_metadata_map[{0, 12}] = createChunkMetadata(12, 0, 5, true);
   test_chunk_metadata_map[{0, 13}] =
-      createChunkMetadata<int8_t>(13, 288, 3, -16, 64, false);
-  test_chunk_metadata_map[{0, 14}] = createChunkMetadata<int32_t>(14, 24, 3, 3, 3, false);
-  test_chunk_metadata_map[{0, 15}] = createChunkMetadata<int32_t>(15, 24, 3, 1, 1, false);
+      createChunkMetadata<int8_t>(13, 288, 5, -16, 64, true);
+  test_chunk_metadata_map[{0, 14}] = createChunkMetadata<int32_t>(14, 24, 5, 3, 3, true);
+  test_chunk_metadata_map[{0, 15}] = createChunkMetadata<int32_t>(15, 24, 5, 1, 1, true);
   test_chunk_metadata_map[{0, 16}] =
-      createChunkMetadata<double>(16, 96, 3, 0.000000, 3.000000, false);
-  test_chunk_metadata_map[{0, 17}] = createChunkMetadata<int32_t>(17, 12, 3, 0, 0, false);
+      createChunkMetadata<double>(16, 160, 5, 0.000000, 3.000000, true);
+  test_chunk_metadata_map[{0, 17}] = createChunkMetadata<int32_t>(17, 20, 5, 0, 0, true);
   assertExpectedChunkMetadata(test_chunk_metadata_map);
 }
 
@@ -3585,23 +3613,31 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, FixedLengthArrayTypes) {
     result);
 }
 
-
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, GeoTypes) {
   auto [fragment_size, data_wrapper_type, extension] = GetParam();
-  if (is_odbc(data_wrapper_type)) {
-    GTEST_SKIP() <<"UNIMPLEMENTED: no geotype support for odbc yet";
+  // geotypes in odbc data wrappers are currently only supported by text data types
+  std::vector<NameTypePair> odbc_columns{};
+  if(is_odbc(data_wrapper_type)) {
+    odbc_columns ={{"id", "INT"},
+                  {"p", "TEXT"},
+                  {"l", "TEXT"},
+                  {"poly", "TEXT"},
+                  {"multipoly", "TEXT"}}; 
   }
-  sql(createForeignTableQuery({{"index", "INT"},
+  sql(createForeignTableQuery({{"id", "INT"},
                                {"p", "POINT"},
                                {"l", "LINESTRING"},
                                {"poly", "POLYGON"},
                                {"multipoly", "MULTIPOLYGON"}},
                               getDataFilesPath() + "geo_types" + extension,
                               data_wrapper_type,
-                              {{"FRAGMENT_SIZE", std::to_string(fragment_size)}}));
+                              {{"FRAGMENT_SIZE", fragmentSizeStr()}},
+                              default_table_name,
+                              odbc_columns,
+                              is_odbc(data_wrapper_type) ? true : false));
 
   TQueryResult result;
-  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY index;");
+  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY id;");
   // clang-format off
   assertResultSetEqual({
     {
@@ -3609,12 +3645,75 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, GeoTypes) {
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
     },
     {
-      i(2), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
+      i(2), Null, Null, Null, Null
+    },
+    {
+      i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
     },
     {
-      i(3), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
+      i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
       "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+    },
+    {
+      i(5), Null, Null, Null, Null
+    }},
+    result);
+  // clang-format on
+}
+
+class PostGisSelectQueryTest : public SelectQueryTest {
+  // These test is intended to run from a POSTGIS enabled database, assumes the database
+  // in use has POSTGIS enabled.
+ public:
+  void SetUp() override {
+    wrapper_type_ = "postgres";
+    SelectQueryTest::SetUp();
+  }
+};
+
+TEST_F(PostGisSelectQueryTest, GeometryFromPostGisAsText) {
+  sql(createForeignTableQuery(
+      {{"id", "INT"},
+       {"p", "POINT"},
+       {"l", "LINESTRING"},
+       {"poly", "POLYGON"},
+       {"multipoly", "MULTIPOLYGON"}},
+      getDataFilesPath() + "geo_types.csv",
+      "postgres",
+      {{"sql_select",
+        "select id, ST_AsText(p) as p, ST_AsText(l) as l, ST_AsText(poly) as poly, "
+        "ST_AsText(multipoly) as multipoly from "s +
+            default_table_name}},
+      default_table_name,
+      {{"id", "INT"},
+       {"p", "TEXT"},
+       {"l", "TEXT"},
+       {"poly", "TEXT"},
+       {"multipoly", "TEXT"}},
+      true));
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY id;");
+  // clang-format off
+  assertResultSetEqual({
+    {
+      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,0 1,1 1,0 0))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
+    },
+    {
+      i(2), Null, Null, Null, Null
+    },
+    {
+      i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+    },
+    {
+      i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
+      "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+    },
+    {
+      i(5), Null, Null, Null, Null
     }},
     result);
   // clang-format on
@@ -4779,12 +4878,17 @@ TEST_P(DifferentTableSchemaOdbcTest, FileHasTooFewColumns_Create) {
       "(i BIGINT, i2 BIGINT) SERVER temp_odbc WITH (sql_select "
       "= 'select i, i2 from " +
       default_table_name + "');");
-  queryAndAssertException(
-      "SELECT * FROM "s + default_table_name,
-      "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] "
-      "[Odbc error SQLSTATE = [HY000]. Native Error Code = [1]. Details:\"no such "
-      "column: i2 (1)\"] .Extra details [select i, i2 from " +
-          default_table_name + "]");
+  std::string error_msg{
+      (GetParam() == "postgres")
+          ? "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] "
+            "[Odbc error SQLSTATE = [42703]. Native Error Code = [1]. Details:\"ERROR: "
+            "column \"i2\" does not exist;\nNo query has been executed with that "
+            "handle\"]"
+          : "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] "
+            "[Odbc error SQLSTATE = [HY000]. Native Error Code = [1]. Details:\"no such "
+            "column: i2 (1)\"] .Extra details [select i, i2 from " +
+                default_table_name + "]"};
+  queryAndAssertException("SELECT * FROM "s + default_table_name, error_msg);
 }
 
 TEST_P(DifferentTableSchemaOdbcTest, FileHasMoreColumns_Refresh) {
@@ -4810,12 +4914,17 @@ TEST_P(DifferentTableSchemaOdbcTest, FileHasTooFewColumns_Refresh) {
       "(i BIGINT, i2 BIGINT) SERVER temp_odbc WITH (sql_select "
       "= 'select i, i2 from " +
       default_table_name + "');");
-  queryAndAssertException(
-      "SELECT * FROM "s + default_table_name,
-      "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] "
-      "[Odbc error SQLSTATE = [HY000]. Native Error Code = [1]. Details:\"no such "
-      "column: i2 (1)\"] .Extra details [select i, i2 from " +
-          default_table_name + "]");
+  std::string error_msg{
+      (GetParam() == "postgres")
+          ? "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] "
+            "[Odbc error SQLSTATE = [42703]. Native Error Code = [1]. Details:\"ERROR: "
+            "column \"i2\" does not exist;\nNo query has been executed with that "
+            "handle\"]"
+          : "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] "
+            "[Odbc error SQLSTATE = [HY000]. Native Error Code = [1]. Details:\"no such "
+            "column: i2 (1)\"] .Extra details [select i, i2 from " +
+                default_table_name + "]"};
+  queryAndAssertException("SELECT * FROM "s + default_table_name, error_msg);
 }
 
 class AlterForeignTableTest : public ScheduledRefreshTest {
@@ -5075,8 +5184,8 @@ TEST_F(AlterForeignTableTest, NonExistantOption) {
 
 TEST_F(AlterForeignTableTest, TableDoesNotExist) {
   queryAndAssertException(
-      "ALTER FOREIGN TABLE test_foreign_table RENAME TO renamed_table;",
-      "Table/View test_foreign_table for catalog omnisci does not exist");
+      "ALTER FOREIGN TABLE " + default_table_name + " RENAME TO renamed_table;",
+      "Table/View " + default_table_name + " for catalog omnisci does not exist");
 }
 
 TEST_F(AlterForeignTableTest, Table) {
