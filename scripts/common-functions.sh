@@ -343,23 +343,33 @@ function install_maven() {
     mv apache-maven-${MAVEN_VERSION} $PREFIX/maven
 }
 
-TBB_VERSION=2020.3
+TBB_VERSION=2021.3.0
 
 function install_tbb() {
   download https://github.com/oneapi-src/oneTBB/archive/v${TBB_VERSION}.tar.gz
   extract v${TBB_VERSION}.tar.gz
   pushd oneTBB-${TBB_VERSION}
+  mkdir build
+  pushd build
   if [ "$1" == "static" ]; then
-    make CXXFLAGS="${TBB_TSAN}" extra_inc=big_iron.inc
-    install -d $PREFIX/lib
-    install -m755 build/linux_*/*.a* $PREFIX/lib
+    cmake \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=$PREFIX \
+      -DTBB_TEST=off -DBUILD_SHARED_LIBS=off \
+      ${TBB_TSAN} \
+      ..
   else
-    make CXXFLAGS="${TBB_TSAN}"
-    install -d $PREFIX/lib
-    install -m755 build/linux_*/*.so* $PREFIX/lib
+    cmake \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=$PREFIX \
+      -DTBB_TEST=off \
+      -DBUILD_SHARED_LIBS=on \
+      ${TBB_TSAN} \
+      ..
   fi
-  install -d $PREFIX/include
-  cp -R include/tbb $PREFIX/include
+  makej
+  make install
+  popd
   popd
 }
 
