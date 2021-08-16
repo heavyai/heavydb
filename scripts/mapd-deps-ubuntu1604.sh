@@ -101,7 +101,7 @@ install_llvm
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)
 
-VERS=0.13.0
+VERS=0.14.2
 wget --continue http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
 tar xvf thrift-$VERS.tar.gz
 pushd thrift-$VERS
