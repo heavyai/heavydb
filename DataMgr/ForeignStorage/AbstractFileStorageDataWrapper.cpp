@@ -67,8 +67,8 @@ AbstractFileStorageDataWrapper::getSupportedUserMappingOptions() const {
 void AbstractFileStorageDataWrapper::validateFilePath(const ForeignTable* foreign_table) {
   auto& server_options = foreign_table->foreign_server->options;
   if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
-    ddl_utils::validate_allowed_file_path(getFullFilePath(foreign_table),
-                                          ddl_utils::DataTransferType::IMPORT);
+    ddl_utils::validate_allowed_file_path(
+        getFullFilePath(foreign_table), ddl_utils::DataTransferType::IMPORT, true);
   }
 }
 

@@ -182,7 +182,7 @@ const char* create_table_trips =
 
 void init_table_data(const std::string& table = "trips",
                      const std::string& create_table_cmd = create_table_trips,
-                     const std::string& file = "trip_data_b.txt") {
+                     const std::string& file = "trip_data_dir/trip_data_b.txt") {
   run_ddl_statement("drop table if exists " + table + ";");
   run_ddl_statement(create_table_cmd);
   if (file.size()) {

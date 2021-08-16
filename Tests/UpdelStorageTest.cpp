@@ -64,7 +64,7 @@ bool UpdelTestConfig::enableVarUpdelPerfTest = false;
 bool UpdelTestConfig::enableFixUpdelPerfTest = false;
 int64_t UpdelTestConfig::fixNumRows = fixNumRowsByDefault;
 int64_t UpdelTestConfig::varNumRows = varNumRowsByDefault;
-std::string UpdelTestConfig::fixFile = "trip_data_b.txt";
+std::string UpdelTestConfig::fixFile = "trip_data_dir/trip_data_b.txt";
 std::string UpdelTestConfig::varFile = "varlen.txt";
 std::string UpdelTestConfig::sequence = "rate_code_id";
 }  // namespace

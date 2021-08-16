@@ -7,7 +7,8 @@ set(shared_source_files
     base64.cpp
     misc.cpp
     thread_count.cpp
-    MathUtils.cpp)
+    MathUtils.cpp
+    glob_local_recursive_files.cpp)
 
 include_directories(${CMAKE_SOURCE_DIR})
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")

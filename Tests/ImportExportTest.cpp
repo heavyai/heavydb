@@ -867,8 +867,8 @@ class ImportTest : public ::testing::Test {
 
 // parquet test cases
 TEST_F(ImportTest, One_parquet_file_1k_rows_in_10_groups) {
-  EXPECT_TRUE(
-      import_test_local_parquet(".", "trip_data_1k_rows_in_10_grps.parquet", 1000, 1.0));
+  EXPECT_TRUE(import_test_local_parquet(
+      ".", "trip_data_dir/trip_data_1k_rows_in_10_grps.parquet", 1000, 1.0));
 }
 TEST_F(ImportTest, One_parquet_file) {
   EXPECT_TRUE(import_test_local_parquet(
@@ -973,7 +973,7 @@ TEST_F(ImportTest, S3_Wildcard_Prefix) {
 #endif  // ENABLE_IMPORT_PARQUET
 
 TEST_F(ImportTest, One_csv_file) {
-  EXPECT_TRUE(import_test_local("trip_data_9.csv", 100, 1.0));
+  EXPECT_TRUE(import_test_local("trip_data_dir/csv/trip_data_9.csv", 100, 1.0));
 }
 
 TEST_F(ImportTest, array_including_quoted_fields) {
@@ -1005,47 +1005,66 @@ TEST_F(ImportTest, with_quoted_fields) {
 }
 
 TEST_F(ImportTest, One_csv_file_no_newline) {
-  EXPECT_TRUE(import_test_local("trip_data_no_newline_1.csv", 100, 1.0));
+  EXPECT_TRUE(import_test_local(
+      "trip_data_dir/csv/no_newline/trip_data_no_newline_1.csv", 100, 1.0));
 }
 
 TEST_F(ImportTest, Many_csv_file) {
-  EXPECT_TRUE(import_test_local("trip_data_*.csv", 1200, 1.0));
+  EXPECT_TRUE(import_test_local("trip_data_dir/csv/trip_data_*.csv", 1000, 1.0));
 }
 
 TEST_F(ImportTest, Many_csv_file_no_newline) {
-  EXPECT_TRUE(import_test_local("trip_data_no_newline_*.csv", 200, 1.0));
+  EXPECT_TRUE(import_test_local(
+      "trip_data_dir/csv/no_newline/trip_data_no_newline_*.csv", 200, 1.0));
 }
 
 TEST_F(ImportTest, One_gz_file) {
-  EXPECT_TRUE(import_test_local("trip_data_9.gz", 100, 1.0));
+  EXPECT_TRUE(import_test_local("trip_data_dir/compressed/trip_data_9.gz", 100, 1.0));
 }
 
 TEST_F(ImportTest, One_bz2_file) {
-  EXPECT_TRUE(import_test_local("trip_data_9.bz2", 100, 1.0));
+  EXPECT_TRUE(import_test_local("trip_data_dir/compressed/trip_data_9.bz2", 100, 1.0));
 }
 
 TEST_F(ImportTest, One_tar_with_many_csv_files) {
-  EXPECT_TRUE(import_test_local("trip_data.tar", 1000, 1.0));
+  EXPECT_TRUE(import_test_local("trip_data_dir/compressed/trip_data.tar", 1000, 1.0));
 }
 
 TEST_F(ImportTest, One_tgz_with_many_csv_files) {
-  EXPECT_TRUE(import_test_local("trip_data.tgz", 100000, 1.0));
+  EXPECT_TRUE(import_test_local("trip_data_dir/compressed/trip_data.tgz", 100000, 1.0));
 }
 
 TEST_F(ImportTest, One_rar_with_many_csv_files) {
-  EXPECT_TRUE(import_test_local("trip_data.rar", 1000, 1.0));
+  EXPECT_TRUE(import_test_local("trip_data_dir/compressed/trip_data.rar", 1000, 1.0));
 }
 
 TEST_F(ImportTest, One_zip_with_many_csv_files) {
-  EXPECT_TRUE(import_test_local("trip_data.zip", 1000, 1.0));
+  EXPECT_TRUE(import_test_local("trip_data_dir/compressed/trip_data.zip", 1000, 1.0));
 }
 
 TEST_F(ImportTest, One_7z_with_many_csv_files) {
-  EXPECT_TRUE(import_test_local("trip_data.7z", 1000, 1.0));
+  EXPECT_TRUE(import_test_local("trip_data_dir/compressed/trip_data.7z", 1000, 1.0));
 }
 
 TEST_F(ImportTest, One_tgz_with_many_csv_files_no_newline) {
-  EXPECT_TRUE(import_test_local("trip_data_some_with_no_newline.tgz", 500, 1.0));
+  EXPECT_TRUE(import_test_local(
+      "trip_data_dir/compressed/trip_data_some_with_no_newline.tgz", 500, 1.0));
+}
+
+TEST_F(ImportTest, No_match_wildcard) {
+  try {
+    run_ddl_statement("COPY trips FROM '../../Tests/Import/datafiles/no_match*';");
+    FAIL() << "An exception should have been thrown for this test case.";
+  } catch (std::runtime_error& e) {
+    std::string expected_error_message{
+        "File or directory \"../../Tests/Import/datafiles/no_match*\" "
+        "does not exist."};
+    ASSERT_EQ(expected_error_message, e.what());
+  }
+}
+
+TEST_F(ImportTest, Many_files_directory) {
+  EXPECT_TRUE(import_test_local("trip_data_dir/csv", 1200, 1.0));
 }
 
 // Sharding tests
@@ -1085,7 +1104,7 @@ class ImportTestSharded : public ::testing::Test {
 };
 
 TEST_F(ImportTestSharded, One_csv_file) {
-  EXPECT_TRUE(import_test_local("sharded_trip_data_9.csv", 100, 1.0));
+  EXPECT_TRUE(import_test_local("trip_data_dir/sharded_trip_data_9.csv", 100, 1.0));
 }
 
 const char* create_table_trips_dict_sharded_text = R"(
@@ -1124,7 +1143,7 @@ class ImportTestShardedText : public ::testing::Test {
 };
 
 TEST_F(ImportTestShardedText, One_csv_file) {
-  EXPECT_TRUE(import_test_local("sharded_trip_data_9.csv", 100, 1.0));
+  EXPECT_TRUE(import_test_local("trip_data_dir/sharded_trip_data_9.csv", 100, 1.0));
 }
 
 const char* create_table_trips_dict_sharded_text_8bit = R"(
@@ -1163,7 +1182,7 @@ class ImportTestShardedText8 : public ::testing::Test {
 };
 
 TEST_F(ImportTestShardedText8, One_csv_file) {
-  EXPECT_TRUE(import_test_local("sharded_trip_data_9.csv", 100, 1.0));
+  EXPECT_TRUE(import_test_local("trip_data_dir/sharded_trip_data_9.csv", 100, 1.0));
 }
 
 namespace {

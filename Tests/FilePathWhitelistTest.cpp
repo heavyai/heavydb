@@ -672,7 +672,7 @@ TEST_F(FilePathWhitelistTest, ThrowOnAsterisk) {
 
 TEST_F(FilePathWhitelistTest, AllowAsteriskForWildcard) {
   whitelistRootPath();
-  validate_allowed_file_path("/tmp/*", ddl_utils::DataTransferType::IMPORT, true);
+  validate_allowed_file_path("./tmp/*", ddl_utils::DataTransferType::IMPORT, true);
 }
 
 TEST_F(FilePathWhitelistTest, AllowRelativePath) {

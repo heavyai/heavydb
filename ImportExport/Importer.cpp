@@ -59,13 +59,13 @@
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "Logger/Logger.h"
-#include "OSDependent/omnisci_glob.h"
 #include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TypePunning.h"
 #include "RenderGroupAnalyzer.h"
 #include "Shared/DateTimeParser.h"
 #include "Shared/SqlTypesLayout.h"
+#include "Shared/glob_local_recursive_files.h"
 #include "Shared/import_helpers.h"
 #include "Shared/likely.h"
 #include "Shared/measure.h"
@@ -3634,8 +3634,13 @@ ImportStatus DataStreamSink::archivePlumber(
   // in generalized importing scheme, reaching here file_path may
   // contain a file path, a url or a wildcard of file paths.
   // see CopyTableStmt::execute.
-  auto file_paths = omnisci::glob(file_path);
-  if (file_paths.size() == 0) {
+
+  std::vector<std::string> file_paths;
+  try {
+    auto file_paths_set = shared::glob_local_recursive_files(file_path);
+    file_paths = std::vector<std::string>(file_paths_set.begin(), file_paths_set.end());
+  } catch (const shared::FileNotFoundException& e) {
+    // After finding no matching files locally, file_path may still be an s3 url
     file_paths.push_back(file_path);
   }
 

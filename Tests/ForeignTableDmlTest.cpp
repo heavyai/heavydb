@@ -1449,8 +1449,78 @@ TEST_P(DataWrapperSelectQueryTest, EmptyDirectory) {
                     "SERVER omnisci_local_" + GetParam() + " WITH (file_path = '" +
                     dir_path.string() + "');"};
   sql(query);
-  sqlAndCompareResult(default_select, {});
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + ";");
+  assertResultSetEqual({}, result);
   boost::filesystem::remove_all(dir_path);
+}
+
+TEST_P(DataWrapperSelectQueryTest, RecursiveDirectory) {
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
+  sql(createForeignTableQuery({{"t", "TEXT"}, {"i", "INT"}, {"d", "DOUBLE"}},
+                              getDataFilesPath() + "example_2_" + GetParam() + "_dir/",
+                              wrapper_type_));
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY t;");
+  // clang-format off
+  assertResultSetEqual({{"a", i(1), 1.1},
+                        {"aa", i(1), 1.1},
+                        {"aa", i(2), 2.2},
+                        {"aaa", i(1), 1.1},
+                        {"aaa", i(2), 2.2},
+                        {"aaa", i(3), 3.3}},
+                        result);
+  // clang-format on
+}
+
+TEST_P(DataWrapperSelectQueryTest, NoMatchWildcard) {
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
+  queryAndAssertException(
+      createForeignTableQuery(
+          {{"i", "INT"}}, getDataFilesPath() + "no_match_*", wrapper_type_),
+      "File or directory \"" + getDataFilesPath() + "no_match_*" + "\" does not exist.");
+}
+
+TEST_P(DataWrapperSelectQueryTest, WildcardOnFiles) {
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
+  sql(createForeignTableQuery({{"t", "TEXT"}, {"i", "INT"}, {"d", "DOUBLE"}},
+                              getDataFilesPath() + "example_2_" + GetParam() + "_dir/f*",
+                              wrapper_type_));
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY t;");
+  // clang-format off
+  assertResultSetEqual({{"a", i(1), 1.1}, 
+                        {"aa", i(1), 1.1}, 
+                        {"aa", i(2), 2.2}, 
+                        {"aaa", i(1), 1.1}},
+                        result);
+  // clang-format on
+}
+
+TEST_P(DataWrapperSelectQueryTest, WildcardOnDirectory) {
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
+  sql(createForeignTableQuery({{"t", "TEXT"}, {"i", "INT"}, {"d", "DOUBLE"}},
+                              getDataFilesPath() + "example_2_" + GetParam() + "_d*",
+                              wrapper_type_));
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY t;");
+  // clang-format off
+  assertResultSetEqual({{"a", i(1), 1.1},
+                        {"aa", i(1), 1.1},
+                        {"aa", i(2), 2.2},
+                        {"aaa", i(1), 1.1},
+                        {"aaa", i(2), 2.2},
+                        {"aaa", i(3), 3.3}},
+                       result);
+  // clang-format on
 }
 
 TEST_P(DataWrapperSelectQueryTest, OutOfRange) {
