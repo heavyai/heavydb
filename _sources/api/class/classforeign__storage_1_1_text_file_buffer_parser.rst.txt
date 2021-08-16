@@ -1,0 +1,9 @@
+Class foreign_storage::TextFileBufferParser
+===========================================
+
+.. doxygenclass:: foreign_storage::TextFileBufferParser
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

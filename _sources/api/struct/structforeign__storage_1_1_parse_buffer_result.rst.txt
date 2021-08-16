@@ -1,0 +1,9 @@
+Struct foreign_storage::ParseBufferResult
+=========================================
+
+.. doxygenstruct:: foreign_storage::ParseBufferResult
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

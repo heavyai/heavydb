@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.8.0dev 8be7ca3
+                5.8.0dev e636f32
               </div>
             
           
@@ -1092,12 +1092,14 @@
 <li class="toctree-l2"><a class="reference internal" href="classddl__utils_1_1_sql_type.html">Class ddl_utils::SqlType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classdetails_1_1_rel_alg_dispatcher.html">Class details::RelAlgDispatcher</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_abstract_file_storage_data_wrapper.html">Class foreign_storage::AbstractFileStorageDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_abstract_text_file_data_wrapper.html">Class foreign_storage::AbstractTextFileDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_archive_wrapper.html">Class foreign_storage::ArchiveWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_caching_foreign_storage_mgr.html">Class foreign_storage::CachingForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_compressed_file_reader.html">Class foreign_storage::CompressedFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_reader.html">Class foreign_storage::CsvReader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_file_buffer_parser.html">Class foreign_storage::CsvFileBufferParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_date_in_seconds_bounds_validator.html">Class foreign_storage::DateInSecondsBoundsValidator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader.html">Class foreign_storage::FileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader_map.html">Class foreign_storage::FileReaderMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_float_point_validator.html">Class foreign_storage::FloatPointValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper.html">Class foreign_storage::ForeignDataWrapper</a></li>
@@ -1134,6 +1136,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_variable_length_array_encoder.html">Class foreign_storage::ParquetVariableLengthArrayEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_file_reader.html">Class foreign_storage::SingleFileReader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_text_file_buffer_parser.html">Class foreign_storage::TextFileBufferParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_timestamp_bounds_validator.html">Class foreign_storage::TimestampBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classgenerate___table_functions_factory__init_1_1_bracket.html">Class generate_TableFunctionsFactory_init::Bracket</a></li>
@@ -1856,11 +1859,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_interval.html">Struct foreign_storage::Interval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_metadata_scan_multi_threading_params.html">Struct foreign_storage::MetadataScanMultiThreadingParams</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_options_container.html">Struct foreign_storage::OptionsContainer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_parse_buffer_request.html">Struct foreign_storage::ParseBufferRequest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_parse_buffer_result.html">Struct foreign_storage::ParseBufferResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_parse_file_region_result.html">Struct foreign_storage::ParseFileRegionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_interval.html">Struct foreign_storage::RowGroupInterval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_metadata.html">Struct foreign_storage::RowGroupMetadata</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_request.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferRequest</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1csv__file__buffer__parser_1_1_parse_buffer_result.html">Struct foreign_storage::csv_file_buffer_parser::ParseBufferResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structimport__export_1_1_bad_rows_tracker.html">Struct import_export::BadRowsTracker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structimport__export_1_1_copy_params.html">Struct import_export::CopyParams</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structimport__export_1_1_geo_import_exception.html">Struct import_export::GeoImportException</a></li>
@@ -2027,7 +2030,7 @@
 <h1>Class foreign_storage::MultiFileReader<a class="headerlink" href="#class-foreign-storage-multifilereader" title="Permalink to this headline">¶</a></h1>
 <dl class="class">
 <dt id="_CPPv4N15foreign_storage15MultiFileReaderE">
-<span id="_CPPv3N15foreign_storage15MultiFileReaderE"></span><span id="_CPPv2N15foreign_storage15MultiFileReaderE"></span><span id="foreign_storage::MultiFileReader"></span><span class="target" id="classforeign__storage_1_1_multi_file_reader"></span><em class="property">class </em><code class="sig-name descname">MultiFileReader</code> : <em class="property">public</em> foreign_storage::<a class="reference internal" href="classforeign__storage_1_1_csv_reader.html#_CPPv4N15foreign_storage9CsvReaderE" title="foreign_storage::CsvReader">CsvReader</a><a class="headerlink" href="#_CPPv4N15foreign_storage15MultiFileReaderE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N15foreign_storage15MultiFileReaderE"></span><span id="_CPPv2N15foreign_storage15MultiFileReaderE"></span><span id="foreign_storage::MultiFileReader"></span><span class="target" id="classforeign__storage_1_1_multi_file_reader"></span><em class="property">class </em><code class="sig-name descname">MultiFileReader</code> : <em class="property">public</em> foreign_storage::<a class="reference internal" href="classforeign__storage_1_1_file_reader.html#_CPPv4N15foreign_storage10FileReaderE" title="foreign_storage::FileReader">FileReader</a><a class="headerlink" href="#_CPPv4N15foreign_storage15MultiFileReaderE" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Subclassed by <a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html#classforeign__storage_1_1_local_multi_file_reader"><span class="std std-ref">foreign_storage::LocalMultiFileReader</span></a></p>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
@@ -2045,7 +2048,7 @@
 <dt id="_CPPv4N15foreign_storage15MultiFileReader16getRemainingSizeEv">
 <span id="_CPPv3N15foreign_storage15MultiFileReader16getRemainingSizeEv"></span><span id="_CPPv2N15foreign_storage15MultiFileReader16getRemainingSizeEv"></span><span id="foreign_storage::MultiFileReader::getRemainingSize"></span><span class="target" id="classforeign__storage_1_1_multi_file_reader_1a12f27ac60c9a13a75b0a032858c87213"></span>size_t <code class="sig-name descname">getRemainingSize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage15MultiFileReader16getRemainingSizeEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p><dl class="simple">
-<dt><strong>Return</strong></dt><dd><p>size of the CSV remaining to be read </p>
+<dt><strong>Return</strong></dt><dd><p>size of the remaining content to be read </p>
 </dd>
 </dl>
 </p>
@@ -2098,7 +2101,7 @@
 <dt id="_CPPv4N15foreign_storage15MultiFileReader14isScanFinishedEv">
 <span id="_CPPv3N15foreign_storage15MultiFileReader14isScanFinishedEv"></span><span id="_CPPv2N15foreign_storage15MultiFileReader14isScanFinishedEv"></span><span id="foreign_storage::MultiFileReader::isScanFinished"></span><span class="target" id="classforeign__storage_1_1_multi_file_reader_1a0d456e406ceedf3de161051553d21e1e"></span>bool <code class="sig-name descname">isScanFinished</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage15MultiFileReader14isScanFinishedEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p><dl class="simple">
-<dt><strong>Return</strong></dt><dd><p>true if the entire CSV has been read </p>
+<dt><strong>Return</strong></dt><dd><p>true if the entire file has been read </p>
 </dd>
 </dl>
 </p>
@@ -2122,7 +2125,7 @@
 <p class="breathe-sectiondef-title rubric">Protected Attributes</p>
 <dl class="member">
 <dt id="_CPPv4N15foreign_storage15MultiFileReader6files_E">
-<span id="_CPPv3N15foreign_storage15MultiFileReader6files_E"></span><span id="_CPPv2N15foreign_storage15MultiFileReader6files_E"></span><span id="foreign_storage::MultiFileReader::files___std::vector:std::unique_ptr:CsvReader::"></span><span class="target" id="classforeign__storage_1_1_multi_file_reader_1a8ee234f4044c5db939a1c6223939809b"></span>std::vector&lt;std::unique_ptr&lt;<a class="reference internal" href="classforeign__storage_1_1_csv_reader.html#_CPPv4N15foreign_storage9CsvReaderE" title="foreign_storage::CsvReader">CsvReader</a>&gt;&gt; <code class="sig-name descname">files_</code><a class="headerlink" href="#_CPPv4N15foreign_storage15MultiFileReader6files_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N15foreign_storage15MultiFileReader6files_E"></span><span id="_CPPv2N15foreign_storage15MultiFileReader6files_E"></span><span id="foreign_storage::MultiFileReader::files___std::vector:std::unique_ptr:FileReader::"></span><span class="target" id="classforeign__storage_1_1_multi_file_reader_1a152645da17a36d2e75dc449389cd0681"></span>std::vector&lt;std::unique_ptr&lt;<a class="reference internal" href="classforeign__storage_1_1_file_reader.html#_CPPv4N15foreign_storage10FileReaderE" title="foreign_storage::FileReader">FileReader</a>&gt;&gt; <code class="sig-name descname">files_</code><a class="headerlink" href="#_CPPv4N15foreign_storage15MultiFileReader6files_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
