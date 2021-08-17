@@ -265,7 +265,7 @@ StandardCommand(Help, {
   std::cout << "\\privileges {<roleName>|<userName>} Reports all database objects "
                "privileges granted to role or "
                "user.\n";
-  std::cout << "\\object_privileges {database|table} <object_name> Reports all "
+  std::cout << "\\object_privileges {database|table|server} <object_name> Reports all "
                "privileges granted to an object for all "
                "roles and users.\n";
   std::cout << "\\detect {parquet} <file_name|s3_details> Reads a sample of the "
