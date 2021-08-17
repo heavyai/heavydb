@@ -100,17 +100,17 @@ void completion(const char* buf, linenoiseCompletions* lc) {
 
 #define LOAD_PATCH_SIZE 10000
 
-void copy_table(char const* filepath, char const* table, ClientContext& context) {
+bool copy_table(char const* filepath, char const* table, ClientContext& context) {
   if (context.session == INVALID_SESSION_ID) {
     std::cerr << "Not connected to any databases." << std::endl;
-    return;
+    return false;
   }
   if (!boost::filesystem::exists(filepath)) {
     std::cerr << "File does not exist." << std::endl;
-    return;
+    return false;
   }
   if (!thrift_with_retry(kGET_TABLE_DETAILS, context, table)) {
-    return;
+    return false;
   }
   const TRowDescriptor& row_desc = context.table_details.row_desc;
   std::ifstream infile(filepath);
@@ -160,9 +160,12 @@ void copy_table(char const* filepath, char const* table, ClientContext& context)
     }
   } catch (TOmniSciException& e) {
     std::cerr << e.error_msg << std::endl;
+    return false;
   } catch (TException& te) {
     std::cerr << "Thrift error: " << te.what() << std::endl;
+    return false;
   }
+  return true;
 }
 
 void detect_table(char* file_name, TCopyParams& copy_params, ClientContext& context) {
@@ -227,12 +230,12 @@ size_t get_row_count(const TQueryResult& query_result) {
   return query_result.row_set.columns.front().nulls.size();
 }
 
-void get_table_epoch(ClientContext& context, const std::string& table_specifier) {
+bool get_table_epoch(ClientContext& context, const std::string& table_specifier) {
   if (table_specifier.size() == 0) {
     std::cerr
         << "get table epoch requires table to be specified by name or by db_id:table_id"
         << std::endl;
-    return;
+    return false;
   }
 
   if (isdigit(table_specifier.at(0))) {
@@ -247,7 +250,7 @@ void get_table_epoch(ClientContext& context, const std::string& table_specifier)
     if (split_result.size() != 2) {
       std::cerr << "get table epoch does not contain db_id:table_id " << table_specifier
                 << std::endl;
-      return;
+      return false;
     }
 
     // validate db identifier is a number
@@ -255,18 +258,20 @@ void get_table_epoch(ClientContext& context, const std::string& table_specifier)
       context.db_id = std::stoi(split_result[0]);
     } catch (std::exception& e) {
       std::cerr << "non numeric db number: " << table_specifier << std::endl;
-      return;
+      return false;
     }
     // validate table identifier is a number
     try {
       context.table_id = std::stoi(split_result[1]);
     } catch (std::exception& e) {
       std::cerr << "non-numeric table number: " << table_specifier << std::endl;
-      return;
+      return false;
     }
 
     if (thrift_with_retry(kGET_TABLE_EPOCH, context, nullptr)) {
       std::cout << "table epoch is " << context.epoch_value << std::endl;
+    } else {
+      return false;
     }
   } else {
     // presume we have a table name
@@ -276,25 +281,28 @@ void get_table_epoch(ClientContext& context, const std::string& table_specifier)
                     context.names_return.end(),
                     table_specifier) == context.names_return.end()) {
         std::cerr << "table " << table_specifier << " not found" << std::endl;
-        return;
+        return false;
       }
     } else {
-      return;
+      return false;
     }
     context.table_name = table_specifier;
 
     if (thrift_with_retry(kGET_TABLE_EPOCH_BY_NAME, context, nullptr)) {
       std::cout << "table epoch is " << context.epoch_value << std::endl;
+    } else {
+      return false;
     }
   }
+  return true;
 }
 
-void set_table_epoch(ClientContext& context, const std::string& table_details) {
+bool set_table_epoch(ClientContext& context, const std::string& table_details) {
   if (table_details.size() == 0) {
     std::cerr << "set table epoch requires table and epoch to be specified by name epoch "
                  "or by db_id:table_id:epoch"
               << std::endl;
-    return;
+    return false;
   }
   if (isdigit(table_details.at(0))) {
     std::vector<std::string> split_result;
@@ -308,7 +316,7 @@ void set_table_epoch(ClientContext& context, const std::string& table_details) {
     if (split_result.size() != 3) {
       std::cerr << "Set table epoch does not contain db_id:table_id:epoch "
                 << table_details << std::endl;
-      return;
+      return false;
     }
 
     // validate db identifier is a number
@@ -316,7 +324,7 @@ void set_table_epoch(ClientContext& context, const std::string& table_details) {
       context.db_id = std::stoi(split_result[0]);
     } catch (std::exception& e) {
       std::cerr << "non numeric db number: " << table_details << std::endl;
-      return;
+      return false;
     }
 
     // validate table identifier is a number
@@ -324,7 +332,7 @@ void set_table_epoch(ClientContext& context, const std::string& table_details) {
       context.table_id = std::stoi(split_result[1]);
     } catch (std::exception& e) {
       std::cerr << "non-numeric table number: " << table_details << std::endl;
-      return;
+      return false;
     }
 
     // validate epoch value
@@ -332,15 +340,17 @@ void set_table_epoch(ClientContext& context, const std::string& table_details) {
       context.epoch_value = std::stoi(split_result[2]);
     } catch (std::exception& e) {
       std::cerr << "non-numeric epoch number: " << table_details << std::endl;
-      return;
+      return false;
     }
     if (context.epoch_value < 0) {
       std::cerr << "Epoch value can not be negative: " << table_details << std::endl;
-      return;
+      return false;
     }
 
     if (thrift_with_retry(kSET_TABLE_EPOCH, context, nullptr)) {
       std::cout << "table epoch set" << std::endl;
+    } else {
+      return false;
     }
   } else {
     std::vector<std::string> split_result;
@@ -349,7 +359,7 @@ void set_table_epoch(ClientContext& context, const std::string& table_details) {
 
     if (split_result.size() < 2) {
       std::cerr << "Set table epoch does not contain table_name epoch " << std::endl;
-      return;
+      return false;
     }
 
     if (thrift_with_retry(kGET_PHYSICAL_TABLES, context, nullptr)) {
@@ -357,10 +367,10 @@ void set_table_epoch(ClientContext& context, const std::string& table_details) {
                     context.names_return.end(),
                     split_result[0]) == context.names_return.end()) {
         std::cerr << "table " << split_result[0] << " not found" << std::endl;
-        return;
+        return false;
       }
     } else {
-      return;
+      return false;
     }
     context.table_name = split_result[0];
     // validate epoch value
@@ -368,16 +378,19 @@ void set_table_epoch(ClientContext& context, const std::string& table_details) {
       context.epoch_value = std::stoi(split_result[1]);
     } catch (std::exception& e) {
       std::cerr << "non-numeric epoch number: " << table_details << std::endl;
-      return;
+      return false;
     }
     if (context.epoch_value < 0) {
       std::cerr << "Epoch value can not be negative: " << table_details << std::endl;
-      return;
+      return false;
     }
     if (thrift_with_retry(kSET_TABLE_EPOCH_BY_NAME, context, nullptr)) {
       std::cout << "table epoch set" << std::endl;
+    } else {
+      return false;
     }
   }
+  return true;
 }
 
 void process_backslash_commands(char* command, ClientContext& context) {
@@ -900,7 +913,8 @@ std::ostream& operator<<(std::ostream& os, const PrivilegeRow& priv_row) {
 
 }  // namespace
 
-void get_db_objects_for_grantee(ClientContext& context) {
+bool get_db_objects_for_grantee(ClientContext& context) {
+  bool success{false};
   context.db_objects.clear();
   std::ostringstream tss;
   tss << std::left << std::setfill(' ');
@@ -941,7 +955,7 @@ void get_db_objects_for_grantee(ClientContext& context) {
   const std::vector<std::string> headers = {
       "ObjectName", "ObjectId", "ObjectType", "PrivilegeType", "Privileges"};
   write_table_header(headers);
-  if (thrift_with_retry(kGET_OBJECTS_FOR_GRANTEE, context, nullptr)) {
+  if ((success = thrift_with_retry(kGET_OBJECTS_FOR_GRANTEE, context, nullptr))) {
     std::vector<PrivilegeRow> table_values;
     for (const auto& db_object : context.db_objects) {
       PrivilegeRow out_row;
@@ -964,11 +978,13 @@ void get_db_objects_for_grantee(ClientContext& context) {
     }
     write_table_rows(table_values);
   }
+  return success;
 }
 
-void get_db_object_privs(ClientContext& context) {
+bool get_db_object_privs(ClientContext& context) {
   context.db_objects.clear();
-  if (thrift_with_retry(kGET_OBJECT_PRIVS, context, nullptr)) {
+  bool success{false};
+  if ((success = thrift_with_retry(kGET_OBJECT_PRIVS, context, nullptr))) {
     for (const auto& db_object : context.db_objects) {
       if (boost::to_upper_copy<std::string>(context.privs_object_name)
               .compare(boost::to_upper_copy<std::string>(db_object.objectName))) {
@@ -986,11 +1002,13 @@ void get_db_object_privs(ClientContext& context) {
       std::cout << std::endl;
     }
   }
+  return success;
 }
 
-void set_license_key(ClientContext& context, const std::string& token) {
+bool set_license_key(ClientContext& context, const std::string& token) {
+  bool success{false};
   context.license_key = token;
-  if (thrift_with_retry(kSET_LICENSE_KEY, context, nullptr)) {
+  if ((success = thrift_with_retry(kSET_LICENSE_KEY, context, nullptr))) {
     for (auto claims : context.license_info.claims) {
       std::vector<std::string> jwt;
       boost::split(jwt, claims, boost::is_any_of("."));
@@ -999,10 +1017,12 @@ void set_license_key(ClientContext& context, const std::string& token) {
       }
     }
   }
+  return success;
 }
 
-void get_license_claims(ClientContext& context) {
-  if (thrift_with_retry(kGET_LICENSE_CLAIMS, context, nullptr)) {
+bool get_license_claims(ClientContext& context) {
+  bool success{false};
+  if ((success = thrift_with_retry(kGET_LICENSE_CLAIMS, context, nullptr))) {
     for (auto claims : context.license_info.claims) {
       std::vector<std::string> jwt;
       boost::split(jwt, claims, boost::is_any_of("."));
@@ -1011,6 +1031,7 @@ void get_license_claims(ClientContext& context) {
       }
     }
   }
+  return success;
 }
 
 std::string hide_sensitive_data_from_connect(const std::string& connect_str) {
@@ -1104,7 +1125,7 @@ void print_status(ClientContext& context) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  bool success = true;
+  bool success{true};
 
   std::string server_host{"localhost"};
   int port = 6274;
@@ -1241,7 +1262,7 @@ int main(int argc, char** argv) {
     std::cout << "Failed to open transport. Is omnisci_server running?" << std::endl;
     return 1;
   }
-  if (thrift_with_retry(kCONNECT, context, nullptr)) {
+  if ((success = thrift_with_retry(kCONNECT, context, nullptr))) {
     global_session = context.session;
     if (print_connection) {
       std::cout << "User " << context.user_name << " connected to database "
@@ -1250,6 +1271,7 @@ int main(int argc, char** argv) {
   }
   if (context.db_name.empty()) {
     std::cout << "Not connected to any database. See \\h for help." << std::endl;
+    success = false;
   }
 
   register_signal_handler();
@@ -1275,6 +1297,7 @@ int main(int argc, char** argv) {
    * The typed string that is malloc() allocated by linenoise() is managed by a smart
    * pointer with a custom free() deleter; no need to free this memory explicitly. */
 
+  bool incomplete_line{false};
   while (true) {
     using LineType = std::remove_pointer<decltype(linenoise(prompt.c_str()))>::type;
     using LineTypePtr = LineType*;
@@ -1296,6 +1319,7 @@ int main(int argc, char** argv) {
       // printf("echo: '%s'\n", line);
       if (context.session == INVALID_SESSION_ID) {
         std::cerr << "Not connected to any OmniSci databases." << std::endl;
+        success = false;
         continue;
       }
       std::string trimmed_line = std::string(line);
@@ -1303,6 +1327,7 @@ int main(int argc, char** argv) {
       current_line.append(" ").append(trimmed_line);
       boost::algorithm::trim(current_line);
       if (current_line.back() == ';') {
+        incomplete_line = false;
         std::string query(current_line);
         linenoiseHistoryAdd(hide_sensitive_data_from_query(current_line).c_str());
         linenoiseHistorySave(cmd_file);
@@ -1371,6 +1396,7 @@ int main(int argc, char** argv) {
           success = false;
         }
       } else {
+        incomplete_line = true;
         // change the prommpt
         prompt.assign("..> ");
       }
@@ -1463,13 +1489,15 @@ int main(int argc, char** argv) {
         if (!context.privs_role_name.compare(OMNISCI_ROOT_USER)) {
           std::cerr << "Command privileges failed because " << OMNISCI_ROOT_USER
                     << " root user has all privileges by default." << std::endl;
+          success = false;
         } else {
-          get_db_objects_for_grantee(context);
+          success = get_db_objects_for_grantee(context);
         }
       } else {
         std::cerr << "Command privileges failed because parameter role name or user name "
                      "is missing."
                   << std::endl;
+        success = false;
       }
     } else if (!strncmp(line, "\\object_privileges", 18)) {
       std::string cmd(line);
@@ -1480,21 +1508,23 @@ int main(int argc, char** argv) {
         context.privs_object_name = args[2];
         if (args[1] == "database") {
           context.object_type = TDBObjectType::DatabaseDBObjectType;
-          get_db_object_privs(context);
+          success = get_db_object_privs(context);
         } else if (args[1] == "table") {
           context.object_type = TDBObjectType::TableDBObjectType;
-          get_db_object_privs(context);
+          success = get_db_object_privs(context);
         } else if (args[1] == "server") {
           context.object_type = TDBObjectType::ServerDBObjectType;
-          get_db_object_privs(context);
+          success = get_db_object_privs(context);
         } else {
           std::cerr << "Object type should be one of { database, table, server }"
                     << std::endl;
+          success = false;
         }
       } else {
         std::cerr << "Command object_privileges failed. It requires two parameters: "
                      "object type and object name."
                   << std::endl;
+        success = false;
       }
     } else if (line[0] == '\\' && line[1] == 'q') {
       break;
@@ -1503,14 +1533,14 @@ int main(int argc, char** argv) {
 
       // clang-format off
       auto resolution_status = CommandResolutionChain<>( line, "\\copygeo", 1, 4, CopyGeoCmd<>(context), "") // deprecated
-        ( "\\copy", 3, 3, [&](Params const& p) { copy_table(p[1].c_str() /* filepath */, p[2].c_str() /* table */, context); } )
-        ( "\\ste", 2, 2, [&](Params const& p) { set_table_epoch(context, p[1] /* table_details */); } )
-        ( "\\gte", 2, 2, [&](Params const& p) { get_table_epoch(context, p[1] /* table_details */); } )
+        ( "\\copy", 3, 3, [&](Params const& p) { success = copy_table(p[1].c_str() /* filepath */, p[2].c_str() /* table */, context); } )
+        ( "\\ste", 2, 2, [&](Params const& p) { success = set_table_epoch(context, p[1] /* table_details */); } )
+        ( "\\gte", 2, 2, [&](Params const& p) { success = get_table_epoch(context, p[1] /* table_details */); } )
         ( "\\export_dashboard", 3, 4, ExportDashboardCmd<>( context ), "Usage \\export_dashboard <dash name> <file name> <optional:dash_owner>" )
         ( "\\import_dashboard", 3, 3, ImportDashboardCmd<>( context ), "Usage \\import_dashboard <dash name> <file name>"  )
         ( "\\role_list", 2, 2, RoleListCmd<>(context), "Usage: \\role_list <userName>")
-        ( "\\roles", 1, 1, RolesCmd<>(context))("\\set_license", 2, 2, [&](Params const& p ) { set_license_key(context, p[1]); })
-        ( "\\get_license", 1, 1, [&](Params const&) { get_license_claims(context); })
+        ( "\\roles", 1, 1, RolesCmd<>(context))("\\set_license", 2, 2, [&](Params const& p ) { success = set_license_key(context, p[1]); })
+        ( "\\get_license", 1, 1, [&](Params const&) { success = get_license_claims(context); })
         ( "\\status", 1, 1, StatusCmd<>( context ), "Usage \\status" )
         ( "\\dash", 1, 1, ListDashboardsCmd<>( context ) )
         ( "\\multiline", 1, 1, [&](Params const&) { linenoiseSetMultiLine(1); } )
@@ -1538,6 +1568,10 @@ int main(int argc, char** argv) {
       linenoiseHistoryAdd(hide_sensitive_data_from_query(line).c_str());
     }
     linenoiseHistorySave(cmd_file);
+  }
+  if (incomplete_line) {
+    std::cerr << "Missing semicolon at end of SQL command." << std::endl;
+    success = false;
   }
 
   if (context.session != INVALID_SESSION_ID) {
