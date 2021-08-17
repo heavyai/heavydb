@@ -29,6 +29,8 @@
         foo(ColumnInt32) -> ColumnInt32, ColumnFloat
   UDTF: foo(Column<int32>|name=a) -> Column<int32>|name=out !
         foo(ColumnInt32 | name=a) -> ColumnInt32 | name=out
+  UDTF: foo(Column<int32>|name=a) -> Column<int32>|name=123out !
+        foo(ColumnInt32 | name=a) -> ColumnInt32 | name=123out
 
   UDTF: foo(Column<TextEncodingDict>) -> Column<TextEncodingDict> !
         foo(ColumnTextEncodingDict) -> ColumnTextEncodingDict | input_id=args<0>

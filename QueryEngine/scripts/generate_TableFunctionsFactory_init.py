@@ -132,14 +132,11 @@ class Bracket:
 
     def apply_cursor(self):
         """Apply cursor to a non-cursor column argument type.
-
         TODO: this method is currently unused but we should apply
         cursor to all input column arguments in order to distingush
         signatures like:
-
           foo(Cursor(Column<int32>, Column<float>)) -> Column<int32>
           foo(Cursor(Column<int32>), Cursor(Column<float>)) -> Column<int32>
-
         that at the moment are treated as the same :(
         """
         if self.is_column():
@@ -170,14 +167,14 @@ class Bracket:
     def is_column(self):
         return self.name.rsplit("::", 1)[-1].startswith('Column') and not self.is_column_list()
 
-    def is_any_text_encoding_dict(self):
-        return self.name.rsplit("::", 1)[-1].endswith('TextEncodingDict')
+    def is_any_text_encoded_dict(self):
+        return self.name.rsplit("::", 1)[-1].endswith('TextEncodedDict')
 
-    def is_column_text_encoding_dict(self):
-        return self.name.rsplit("::", 1)[-1] == 'ColumnTextEncodingDict'
+    def is_column_text_encoded_dict(self):
+        return self.name.rsplit("::", 1)[-1] == 'ColumnTextEncodedDict'
 
-    def is_column_list_text_encoding_dict(self):
-        return self.name.rsplit("::", 1)[-1] == 'ColumnListTextEncodingDict'
+    def is_column_list_text_encoded_dict(self):
+        return self.name.rsplit("::", 1)[-1] == 'ColumnListTextEncodedDict'
 
     def is_output_buffer_sizer(self):
         return self.name.rsplit("::", 1)[-1] in OutputBufferSizeTypes
@@ -346,11 +343,9 @@ class Tokenize:
             if self.is_token_whitespace():
                 self.consume_whitespace()
             elif self.is_digit():
-                self.consume_number()
+                self.consume_number_or_string()
             elif self.is_token_identifier():
                 self.consume_identifier()
-            elif self.is_token_string():
-                self.consume_string()
             elif self.can_token_be_double_char():
                 self.consume_double_char()
             else:
@@ -358,6 +353,9 @@ class Tokenize:
 
     def is_at_end(self):
         return len(self.line) == self.curr
+
+    def current_token(self):
+        return self.line[self.start:self.curr + 1]
 
     def add_token(self, type):
         lexeme = self.line[self.start:self.curr + 1]
@@ -416,8 +414,9 @@ class Tokenize:
     def consume_whitespace(self):
         self.advance()
 
-    def consume_string(self):
+    def consume_number_or_string(self):
         """
+        NUMBER: [0-9]+
         STRING: [A-Za-z0-9_]+
         """
         while True:
@@ -426,7 +425,10 @@ class Tokenize:
                 self.advance()
             else:
                 break
-        self.add_token(Token.STRING)
+        tok_type = Token.STRING
+        if self.current_token().isdigit():
+            tok_type = Token.NUMBER
+        self.add_token(tok_type)
         self.advance()
 
     def consume_identifier(self):
@@ -440,22 +442,6 @@ class Tokenize:
             else:
                 break
         self.add_token(Token.IDENTIFIER)
-        self.advance()
-
-    def consume_number(self):
-        """
-        NUMBER: [0-9]+
-        """
-
-        # we know at this point the current token is
-        # the start of a number
-        while True:
-            char = self.lookahead()
-            if char.isdigit():
-                self.advance()
-            else:
-                break
-        self.add_token(Token.NUMBER)
         self.advance()
 
     def is_token_identifier(self):
@@ -660,9 +646,10 @@ class NormalizeTransformer(AstTransformer):
         """
         * Add default_input_id to Column(List)<TextEncodingDict> without one
         """
-        udtf_node = super().visit_udtf_node(udtf_node)
+        udtf_node = super(type(self), self).visit_udtf_node(udtf_node)
 
         # add default input_id
+        default_input_id = None
         for idx, t in enumerate(udtf_node.inputs):
             t = t.type
             if not isinstance(t, ComposedNode):
@@ -676,11 +663,10 @@ class NormalizeTransformer(AstTransformer):
 
         for t in udtf_node.outputs:
             if isinstance(t.type, ComposedNode) and t.type.is_any_text_encoding_dict():
-                has_input_id = False
                 for a in t.annotations:
                     if a.key == 'input_id':
-                        has_input_id = True
-                if not has_input_id:
+                        break
+                else:
                     t.annotations.append(default_input_id)
 
         return udtf_node
@@ -755,6 +741,7 @@ class SignatureTransformer(AstTransformer):
 
 
 class Node(object):
+
     __metaclass__ = ABC
 
     @abstractmethod
@@ -775,9 +762,10 @@ class Node(object):
     def copy(self, *args):
         other = self.__class__(*args)
 
-        for attr, value in self.__dict__.items():
-            if attr not in other.__dict__:
-                setattr(other, attr, value)
+        # copy parent and arg_pos
+        for attr in ['parent', 'arg_pos']:
+            if attr in self.__dict__:
+                setattr(other, attr, getattr(self, attr))
 
         return other
 
@@ -787,6 +775,8 @@ class IterableNode(Iterable):
 
 
 class UdtfNode(Node, IterableNode):
+
+
     def __init__(self, name, inputs, outputs, templates):
         """
         Parameters
@@ -827,6 +817,8 @@ class UdtfNode(Node, IterableNode):
 
 
 class ArgNode(Node, IterableNode):
+
+
     def __init__(self, type, annotations):
         """
         Parameters
@@ -836,6 +828,7 @@ class ArgNode(Node, IterableNode):
         """
         self.type = type
         self.annotations = annotations
+        self.arg_pos = None
 
     def accept(self, visitor):
         return visitor.visit_arg_node(self)
@@ -872,6 +865,8 @@ class TypeNode(Node):
 
 
 class PrimitiveNode(TypeNode):
+
+
     def __init__(self, type):
         """
         Parameters
@@ -893,6 +888,8 @@ class PrimitiveNode(TypeNode):
 
 
 class ComposedNode(TypeNode, IterableNode):
+
+
     def __init__(self, type, inner):
         """
         Parameters
@@ -931,6 +928,8 @@ class ComposedNode(TypeNode, IterableNode):
 
 
 class AnnotationNode(Node):
+
+
     def __init__(self, key, value):
         """
         Parameters
@@ -952,6 +951,8 @@ class AnnotationNode(Node):
 
 
 class TemplateNode(Node):
+
+
     def __init__(self, key, types):
         """
         Parameters
@@ -982,7 +983,7 @@ class Pipeline(object):
 
         for c in self.passes:
             l2 = []
-            for i, e in enumerate(lst):
+            for e in lst:
                 node = e.accept(c())
                 if isinstance(node, list):
                     l2.extend(node)
@@ -1195,29 +1196,29 @@ class Parser:
     def parse_template(self):
         """fmt: off
 
-        template: STRING "=" "[" STRING ("," STRING)* "]"
+        template: IDENTIFIER "=" "[" IDENTIFIER ("," IDENTIFIER)* "]"
 
         fmt: on
         """
-        key = self.parse_string()
+        key = self.parse_identifier()
         types = []
         self.consume(Token.EQUAL)
         self.consume(Token.LSQB)
-        types.append(self.parse_string())
+        types.append(self.parse_identifier())
         while self.match(Token.COMMA):
             self.consume(Token.COMMA)
-            types.append(self.parse_string())
+            types.append(self.parse_identifier())
         self.consume(Token.RSQB)
         return TemplateNode(key, tuple(types))
 
     def parse_annotation(self):
         """fmt: off
 
-        annotation: STRING "=" STRING ("<" NUMBER ("," NUMBER) ">")?
+        annotation: IDENTIFIER "=" STRING ("<" NUMBER ("," NUMBER) ">")?
 
         fmt: on
         """
-        key = self.parse_string()
+        key = self.parse_identifier()
         self.consume(Token.EQUAL)
         value = self.parse_string()
         if not self.is_at_end() and self.match(Token.LESS):
@@ -1282,10 +1283,10 @@ class Parser:
         primitive: IDENTIFIER
                  | NUMBER
 
-        annotation: STRING "=" STRING ("<" NUMBER ("," NUMBER) ">")?
+        annotation: IDENTIFIER "=" STRING ("<" NUMBER ("," NUMBER) ">")?
 
         templates: template ("," template)
-        template: STRING "=" "[" STRING ("," STRING)* "]"
+        template: IDENTIFIER "=" "[" IDENTIFIER ("," IDENTIFIER)* "]"
 
         IDENTIFIER: [A-Za-z_][A-Za-z0-9_]*
         STRING: [A-Za-z0-9_]+
@@ -1300,7 +1301,7 @@ class Parser:
         udtf.parent = None
         d = deque()
         d.append(udtf)
-        while len(d):
+        while d:
             node = d.pop()
             if isinstance(node, Iterable):
                 for child in node:
@@ -1407,7 +1408,8 @@ def format_annotations(annotations_):
 
 
 def is_template_function(sig):
-    return "_template" in sig.name
+    i = sig.name.rfind('_template')
+    return i >= 0 and '__' in sig.name[:i+1]
 
 
 def parse_annotations(input_files):
