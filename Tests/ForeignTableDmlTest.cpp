@@ -3180,6 +3180,24 @@ TEST_F(SelectQueryTest, CsvArrayQuotedText) {
   // clang-format on
 }
 
+TEST_F(SelectQueryTest, CsvMultipleFilesWithExpectedAndMismatchedColumns) {
+  auto file_path = getDataFilesPath() + "different_cols";
+  sql("CREATE FOREIGN TABLE " + default_table_name +
+      " (t TEXT, i1 BIGINT) SERVER omnisci_local_csv WITH ("
+      "file_path = '" +
+      file_path + "');");
+  queryAndAssertException("SELECT * FROM " + default_table_name + ";",
+                          "Mismatched number of logical columns: (expected 2 "
+                          "columns, has 3): in file '" +
+                              file_path + "'");
+
+  // Second query would previously result in a crash
+  queryAndAssertException("SELECT * FROM " + default_table_name + ";",
+                          "Mismatched number of logical columns: (expected 2 "
+                          "columns, has 3): in file '" +
+                              file_path + "'");
+}
+
 TEST_F(SelectQueryTest, ParquetArrayInt8EmptyWithFixedLengthArray) {
   const auto& query = getCreateForeignTableQuery(
       "(tinyint_arr_empty TINYINT[1])", "int8_empty_array", "parquet");

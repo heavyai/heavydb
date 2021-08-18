@@ -103,9 +103,13 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
 void CachingForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
     ChunkMetadataVector& chunk_metadata,
     const ChunkKey& keyPrefix) {
-  ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(chunk_metadata, keyPrefix);
-
   auto [db_id, tb_id] = get_table_prefix(keyPrefix);
+  try {
+    ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(chunk_metadata, keyPrefix);
+  } catch (...) {
+    clearTable({db_id, tb_id});
+    throw;
+  }
   auto doc = getDataWrapper(keyPrefix)->getSerializedDataWrapper();
   disk_cache_->storeDataWrapper(doc, db_id, tb_id);
 
