@@ -75,7 +75,6 @@
 
 bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
-bool g_use_tbb_pool{false};
 bool g_enable_cpu_sub_tasks{false};
 size_t g_cpu_sub_task_size{500'000};
 bool g_enable_filter_function{true};
@@ -1529,20 +1528,8 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                      render_info,
                                      available_gpus,
                                      available_cpus);
-        if (g_use_tbb_pool) {
-#ifdef HAVE_TBB
-          VLOG(1) << "Using TBB thread pool for kernel dispatch.";
-          launchKernels<threading::task_group>(
-              shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
-#else
-          throw std::runtime_error(
-              "This build is not TBB enabled. Restart the server with "
-              "\"enable-modern-thread-pool\" disabled.");
-#endif
-        } else {
-          launchKernels<threading_std::task_group>(
-              shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
-        }
+        launchKernels<threading::task_group>(
+            shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
       } catch (QueryExecutionError& e) {
         if (eo.with_dynamic_watchdog && interrupted_.load() &&
             e.getErrorCode() == ERR_OUT_OF_TIME) {

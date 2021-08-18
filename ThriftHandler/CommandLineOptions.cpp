@@ -535,12 +535,6 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->implicit_value(true),
       "Enable runtime support for the JIT code profiling using Intel VTune.");
   developer_desc.add_options()(
-      "enable-modern-thread-pool",
-      po::value<bool>(&g_use_tbb_pool)
-          ->default_value(g_use_tbb_pool)
-          ->implicit_value(true),
-      "Enable a new thread pool implementation for queuing kernels for execution.");
-  developer_desc.add_options()(
       "enable-cpu-sub-tasks",
       po::value<bool>(&g_enable_cpu_sub_tasks)
           ->default_value(g_enable_cpu_sub_tasks)

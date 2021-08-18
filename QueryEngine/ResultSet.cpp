@@ -41,7 +41,6 @@
 #include <future>
 #include <numeric>
 
-extern bool g_use_tbb_pool;
 
 size_t g_parallel_top_min = 100e3;
 size_t g_parallel_top_max = 20e6;  // In effect only with g_enable_watchdog.
