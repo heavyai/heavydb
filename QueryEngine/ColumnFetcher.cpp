@@ -613,11 +613,14 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
       if (cached_data_buf_it != cd_cache.end()) {
         has_cached_merged_data_buf = true;
         merged_data_buffer = cached_data_buf_it->second;
+        VLOG(2) << "Recycle merged data buffer for linearized chunks (memory_level: "
+                << getMemoryLevelString(memory_level) << ", device_id: " << device_id
+                << ")";
       } else {
         merged_data_buffer =
             cat.getDataMgr().alloc(memory_level, device_id, total_data_buf_size);
         VLOG(2) << "Allocate " << total_data_buf_size
-                << " bytes of buffer space for linearized chunks (memory_level: "
+                << " bytes of data buffer space for linearized chunks (memory_level: "
                 << getMemoryLevelString(memory_level) << ", device_id: " << device_id
                 << ")";
         cd_cache.insert(std::make_pair(device_id, merged_data_buffer));
@@ -627,7 +630,7 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
       merged_data_buffer =
           cat.getDataMgr().alloc(memory_level, device_id, total_data_buf_size);
       VLOG(2) << "Allocate " << total_data_buf_size
-              << " bytes of buffer space for linearized chunks (memory_level: "
+              << " bytes of data buffer space for linearized chunks (memory_level: "
               << getMemoryLevelString(memory_level) << ", device_id: " << device_id
               << ")";
       m.insert(std::make_pair(device_id, merged_data_buffer));
@@ -639,11 +642,15 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
     if (cached_index_buf_it != linearlized_temporary_cpu_index_buf_cache_.end()) {
       has_cached_merged_idx_buf = true;
       merged_index_buffer_in_cpu = cached_index_buf_it->second;
+      VLOG(2)
+          << "Recycle merged temporary idx buffer for linearized chunks (memory_level: "
+          << getMemoryLevelString(memory_level) << ", device_id: " << device_id << ")";
     } else {
-      merged_index_buffer_in_cpu = cat.getDataMgr().alloc(
-          Data_Namespace::CPU_LEVEL, 0, total_idx_buf_size + sizeof(ArrayOffsetT));
-      VLOG(2) << "Allocate " << total_data_buf_size
-              << " bytes of temorary buffer space on CPU for linearized chunks";
+      auto idx_buf_size = total_idx_buf_size + sizeof(ArrayOffsetT);
+      merged_index_buffer_in_cpu =
+          cat.getDataMgr().alloc(Data_Namespace::CPU_LEVEL, 0, idx_buf_size);
+      VLOG(2) << "Allocate " << idx_buf_size
+              << " bytes of temporary idx buffer space on CPU for linearized chunks";
       // just copy the buf addr since we access it via the pointer itself
       linearlized_temporary_cpu_index_buf_cache_.insert(
           std::make_pair(cd->columnId, merged_index_buffer_in_cpu));
@@ -792,7 +799,7 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
       sum_data_buf_size -= ArrayNoneEncoder::DEFAULT_NULL_PADDING_SIZE;
       null_padded_first_elem = false;  // set for the next chunk
     }
-    if (cur_sum_num_tuples == total_num_tuples) {
+    if (!has_cached_merged_idx_buf && cur_sum_num_tuples == total_num_tuples) {
       auto merged_index_buffer_ptr =
           reinterpret_cast<ArrayOffsetT*>(merged_index_buffer_in_cpu->getMemoryPtr());
       merged_index_buffer_ptr[total_num_tuples] =
@@ -802,8 +809,8 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
   }
 
   // put linearized index buffer to per-device cache
-  std::lock_guard<std::mutex> linearized_col_cache_guard(linearized_col_cache_mutex_);
   AbstractBuffer* merged_index_buffer = nullptr;
+  size_t buf_size = total_idx_buf_size + sizeof(ArrayOffsetT);
   auto copyBuf =
       [&device_allocator](
           int8_t* src, int8_t* dest, size_t buf_size, MemoryLevel memory_level) {
@@ -814,30 +821,39 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
           device_allocator->copyToDevice(dest, src, buf_size);
         }
       };
-  auto merged_idx_buf_cache_it = linearized_idx_buf_cache_.find(icd);
-  size_t buf_size = total_idx_buf_size + sizeof(ArrayOffsetT);
-  if (merged_idx_buf_cache_it != linearized_idx_buf_cache_.end()) {
-    auto& merged_idx_buf_cache = merged_idx_buf_cache_it->second;
-    auto merged_idx_buf_it = merged_idx_buf_cache.find(device_id);
-    if (merged_idx_buf_it != merged_idx_buf_cache.end()) {
-      merged_index_buffer = merged_idx_buf_it->second;
+  {
+    std::lock_guard<std::mutex> linearized_col_cache_guard(linearized_col_cache_mutex_);
+    auto merged_idx_buf_cache_it = linearized_idx_buf_cache_.find(icd);
+    // for CPU execution, we can use `merged_index_buffer_in_cpu` as is
+    // but for GPU, we have to copy it to corresponding device
+    if (memory_level == MemoryLevel::GPU_LEVEL) {
+      if (merged_idx_buf_cache_it != linearized_idx_buf_cache_.end()) {
+        auto& merged_idx_buf_cache = merged_idx_buf_cache_it->second;
+        auto merged_idx_buf_it = merged_idx_buf_cache.find(device_id);
+        if (merged_idx_buf_it != merged_idx_buf_cache.end()) {
+          merged_index_buffer = merged_idx_buf_it->second;
+        } else {
+          merged_index_buffer = cat.getDataMgr().alloc(memory_level, device_id, buf_size);
+          copyBuf(merged_index_buffer_in_cpu->getMemoryPtr(),
+                  merged_index_buffer->getMemoryPtr(),
+                  buf_size,
+                  memory_level);
+          merged_idx_buf_cache.insert(std::make_pair(device_id, merged_index_buffer));
+        }
+      } else {
+        merged_index_buffer = cat.getDataMgr().alloc(memory_level, device_id, buf_size);
+        copyBuf(merged_index_buffer_in_cpu->getMemoryPtr(),
+                merged_index_buffer->getMemoryPtr(),
+                buf_size,
+                memory_level);
+        DeviceMergedChunkMap m;
+        m.insert(std::make_pair(device_id, merged_index_buffer));
+        linearized_idx_buf_cache_.insert(std::make_pair(icd, m));
+      }
     } else {
-      merged_index_buffer = cat.getDataMgr().alloc(memory_level, device_id, buf_size);
-      copyBuf(merged_index_buffer_in_cpu->getMemoryPtr(),
-              merged_index_buffer->getMemoryPtr(),
-              buf_size,
-              memory_level);
-      merged_idx_buf_cache.insert(std::make_pair(device_id, merged_index_buffer));
+      // `linearlized_temporary_cpu_index_buf_cache_` has this buf
+      merged_index_buffer = merged_index_buffer_in_cpu;
     }
-  } else {
-    merged_index_buffer = cat.getDataMgr().alloc(memory_level, device_id, buf_size);
-    copyBuf(merged_index_buffer_in_cpu->getMemoryPtr(),
-            merged_index_buffer->getMemoryPtr(),
-            buf_size,
-            memory_level);
-    DeviceMergedChunkMap m;
-    m.insert(std::make_pair(device_id, merged_index_buffer));
-    linearized_idx_buf_cache_.insert(std::make_pair(icd, m));
   }
   CHECK(merged_index_buffer);
   linearization_time_ms += timer_stop(clock_begin);
@@ -864,29 +880,62 @@ MergedChunk ColumnFetcher::linearizeFixedLenArrayColFrags(
   int64_t linearization_time_ms = 0;
   auto clock_begin = timer_start();
   // linearize collected fragments
-  auto merged_data_buffer =
-      cat.getDataMgr().alloc(memory_level, device_id, total_data_buf_size);
-  VLOG(2) << "Allocate " << total_data_buf_size
-          << " bytes of buffer space for linearized chunks (memory_level: "
-          << getMemoryLevelString(memory_level) << ", device_id: " << device_id << ")";
-  size_t sum_data_buf_size = 0;
-  auto chunk_holder_it = local_chunk_holder.begin();
-  auto chunk_iter_holder_it = local_chunk_iter_holder.begin();
-  for (; chunk_holder_it != local_chunk_holder.end();
-       chunk_holder_it++, chunk_iter_holder_it++) {
-    if (g_enable_non_kernel_time_query_interrupt && check_interrupt()) {
-      throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+  AbstractBuffer* merged_data_buffer = nullptr;
+  bool has_cached_merged_data_buf = false;
+  const InputColDescriptor icd(cd->columnId, cd->tableId, int(0));
+  {
+    std::lock_guard<std::mutex> linearized_col_cache_guard(linearized_col_cache_mutex_);
+    auto cached_data_buf_cache_it = linearized_data_buf_cache_.find(icd);
+    if (cached_data_buf_cache_it != linearized_data_buf_cache_.end()) {
+      auto& cd_cache = cached_data_buf_cache_it->second;
+      auto cached_data_buf_it = cd_cache.find(device_id);
+      if (cached_data_buf_it != cd_cache.end()) {
+        has_cached_merged_data_buf = true;
+        merged_data_buffer = cached_data_buf_it->second;
+        VLOG(2) << "Recycle merged data buffer for linearized chunks (memory_level: "
+                << getMemoryLevelString(memory_level) << ", device_id: " << device_id
+                << ")";
+      } else {
+        merged_data_buffer =
+            cat.getDataMgr().alloc(memory_level, device_id, total_data_buf_size);
+        VLOG(2) << "Allocate " << total_data_buf_size
+                << " bytes of data buffer space for linearized chunks (memory_level: "
+                << getMemoryLevelString(memory_level) << ", device_id: " << device_id
+                << ")";
+        cd_cache.insert(std::make_pair(device_id, merged_data_buffer));
+      }
+    } else {
+      DeviceMergedChunkMap m;
+      merged_data_buffer =
+          cat.getDataMgr().alloc(memory_level, device_id, total_data_buf_size);
+      VLOG(2) << "Allocate " << total_data_buf_size
+              << " bytes of data buffer space for linearized chunks (memory_level: "
+              << getMemoryLevelString(memory_level) << ", device_id: " << device_id
+              << ")";
+      m.insert(std::make_pair(device_id, merged_data_buffer));
+      linearized_data_buf_cache_.insert(std::make_pair(icd, m));
     }
-    auto target_chunk = chunk_holder_it->get();
-    auto target_chunk_data_buffer = target_chunk->getBuffer();
-    merged_data_buffer->append(target_chunk_data_buffer->getMemoryPtr(),
-                               target_chunk_data_buffer->size(),
-                               Data_Namespace::CPU_LEVEL,
-                               device_id);
-    sum_data_buf_size += target_chunk_data_buffer->size();
   }
-  // check whether each chunk's data buffer is clean under chunk merging
-  CHECK_EQ(total_data_buf_size, sum_data_buf_size);
+  if (!has_cached_merged_data_buf) {
+    size_t sum_data_buf_size = 0;
+    auto chunk_holder_it = local_chunk_holder.begin();
+    auto chunk_iter_holder_it = local_chunk_iter_holder.begin();
+    for (; chunk_holder_it != local_chunk_holder.end();
+         chunk_holder_it++, chunk_iter_holder_it++) {
+      if (g_enable_non_kernel_time_query_interrupt && check_interrupt()) {
+        throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+      }
+      auto target_chunk = chunk_holder_it->get();
+      auto target_chunk_data_buffer = target_chunk->getBuffer();
+      merged_data_buffer->append(target_chunk_data_buffer->getMemoryPtr(),
+                                 target_chunk_data_buffer->size(),
+                                 Data_Namespace::CPU_LEVEL,
+                                 device_id);
+      sum_data_buf_size += target_chunk_data_buffer->size();
+    }
+    // check whether each chunk's data buffer is clean under chunk merging
+    CHECK_EQ(total_data_buf_size, sum_data_buf_size);
+  }
   linearization_time_ms += timer_stop(clock_begin);
   VLOG(2) << "Linearization has been successfully done, elapsed time: "
           << linearization_time_ms << " ms.";

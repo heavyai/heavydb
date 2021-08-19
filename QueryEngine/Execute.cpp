@@ -1458,9 +1458,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     ColumnFetcher column_fetcher(this, column_cache);
     ScopeGuard scope_guard = [&column_fetcher, &device_type] {
       column_fetcher.freeLinearizedBuf();
-      if (device_type == ExecutorDeviceType::GPU) {
-        column_fetcher.freeTemporaryCpuLinearizedIdxBuf();
-      }
+      column_fetcher.freeTemporaryCpuLinearizedIdxBuf();
     };
     auto query_comp_desc_owned = std::make_unique<QueryCompilationDescriptor>();
     std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
