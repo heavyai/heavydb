@@ -29,8 +29,6 @@
         foo(ColumnInt32) -> ColumnInt32, ColumnFloat
   UDTF: foo(Column<int32>|name=a) -> Column<int32>|name=out !
         foo(ColumnInt32 | name=a) -> ColumnInt32 | name=out
-  UDTF: foo(Column<int32>|name=a) -> Column<int32>|name=123out !
-        foo(ColumnInt32 | name=a) -> ColumnInt32 | name=123out
 
   UDTF: foo(Column<TextEncodingDict>) -> Column<TextEncodingDict> !
         foo(ColumnTextEncodingDict) -> ColumnTextEncodingDict | input_id=args<0>
@@ -47,5 +45,15 @@
 
   UDTF: foo__cpu_template(Column<int32_t>) -> Column<int32_t> !
         foo__cpu_template(ColumnInt32) -> ColumnInt32
+
+  UDTF: foo__cpu(Column<T>, T, Cursor<ColumnList<U>>) -> Column<T>, T=[int32], U=[float] !
+        foo__cpu(ColumnInt32, Int32, Cursor<ColumnListFloat>) -> ColumnInt32
+
+  UDTF: foo__cpu_template(Column<T>) -> Column<U>, T=[int32, int64], U=[float, double] !
+        foo__cpu_template(ColumnInt32) -> ColumnFloat  !
+        foo__cpu_template(ColumnInt64) -> ColumnFloat  !
+        foo__cpu_template(ColumnInt32) -> ColumnDouble !
+        foo__cpu_template(ColumnInt64) -> ColumnDouble
+
  */
 // clang-format on

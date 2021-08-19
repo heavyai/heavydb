@@ -272,7 +272,7 @@ class Token:
     COMMA = 3        # ,
     EQUAL = 4        # =
     RARROW = 5       # ->
-    STRING = 6       #
+    STRING = 6       #  not used
     NUMBER = 7       #
     VBAR = 8         # |
     BANG = 9         # !
@@ -343,7 +343,7 @@ class Tokenize:
             if self.is_token_whitespace():
                 self.consume_whitespace()
             elif self.is_digit():
-                self.consume_number_or_string()
+                self.consume_number()
             elif self.is_token_identifier():
                 self.consume_identifier()
             elif self.can_token_be_double_char():
@@ -414,21 +414,17 @@ class Tokenize:
     def consume_whitespace(self):
         self.advance()
 
-    def consume_number_or_string(self):
+    def consume_number(self):
         """
         NUMBER: [0-9]+
-        STRING: [A-Za-z0-9_]+
         """
         while True:
             char = self.lookahead()
-            if char and char.isalnum() or char == "_":
+            if char and char.isdigit():
                 self.advance()
             else:
                 break
-        tok_type = Token.STRING
-        if self.current_token().isdigit():
-            tok_type = Token.NUMBER
-        self.add_token(tok_type)
+        self.add_token(Token.NUMBER)
         self.advance()
 
     def consume_identifier(self):
@@ -446,9 +442,6 @@ class Tokenize:
 
     def is_token_identifier(self):
         return self.peek().isalpha() or self.peek() == "_"
-
-    def is_token_string(self):
-        return self.peek().isalnum() or self.peek() == "_"
 
     def is_digit(self):
         return self.peek().isdigit()
@@ -620,7 +613,7 @@ class TemplateTransformer(AstTransformer):
             self.mapping_dict = product
             inputs = [input_arg.accept(self) for input_arg in udtf_node.inputs]
             outputs = [output_arg.accept(self) for output_arg in udtf_node.outputs]
-            udtfs.append(UdtfNode(name, inputs, outputs, None))
+            udtfs.append(UdtfNode(name, inputs, outputs, None, udtf_node.line))
             self.mapping_dict = {}
 
         if len(udtfs) == 1:
@@ -667,6 +660,10 @@ class NormalizeTransformer(AstTransformer):
                     if a.key == 'input_id':
                         break
                 else:
+                    if not default_input_id:
+                        raise TypeError('Cannot parse line "%s".\n'
+                                        'Missing TextEncodingDict input?' %
+                                        (udtf_node.line))
                     t.annotations.append(default_input_id)
 
         return udtf_node
@@ -699,19 +696,14 @@ class SignatureTransformer(AstTransformer):
 
         for i in udtf_node.inputs:
             inp, anns = i.accept(self)
-            if isinstance(inp, list):
-                inputs += inp
-            else:
-                inputs.append(inp)
+            inputs += inp if isinstance(inp, list) else [inp]
             input_annotations.append(anns)
 
         for o in udtf_node.outputs:
-            inp, anns = o.accept(self)
-            if isinstance(inp, list):
-                outputs += inp
-            else:
-                outputs.append(inp)
+            out, anns = o.accept(self)
+            outputs += out if isinstance(out, list) else [out]
             output_annotations.append(anns)
+
         return Signature(name, inputs, outputs, input_annotations, output_annotations)
 
     def visit_arg_node(self, arg_node):
@@ -752,12 +744,14 @@ class Node(object):
     def __str__(self):
         pass
 
-    def get_parent(self, _class):
-        while self.parent is not None:
-            if isinstance(self.parent, _class):
-                return self.parent
+    def get_parent(self, cls):
+        if isinstance(self, cls):
+            return self
 
-        raise ValueError("could not find parent with given class %s" % (_class))
+        if self.parent is not None:
+            return self.parent.get_parent(cls)
+
+        raise ValueError("could not find parent with given class %s" % (cls))
 
     def copy(self, *args):
         other = self.__class__(*args)
@@ -776,8 +770,7 @@ class IterableNode(Iterable):
 
 class UdtfNode(Node, IterableNode):
 
-
-    def __init__(self, name, inputs, outputs, templates):
+    def __init__(self, name, inputs, outputs, templates, line):
         """
         Parameters
         ----------
@@ -785,11 +778,13 @@ class UdtfNode(Node, IterableNode):
         inputs : list[ArgNode]
         outputs : list[ArgNode]
         templates : Optional[list[TemplateNode]]
+        line: str
         """
         self.name = name
         self.inputs = inputs
         self.outputs = outputs
         self.templates = templates
+        self.line = line
 
     def accept(self, visitor):
         return visitor.visit_udtf_node(self)
@@ -817,7 +812,6 @@ class UdtfNode(Node, IterableNode):
 
 
 class ArgNode(Node, IterableNode):
-
 
     def __init__(self, type, annotations):
         """
@@ -866,7 +860,6 @@ class TypeNode(Node):
 
 class PrimitiveNode(TypeNode):
 
-
     def __init__(self, type):
         """
         Parameters
@@ -888,7 +881,6 @@ class PrimitiveNode(TypeNode):
 
 
 class ComposedNode(TypeNode, IterableNode):
-
 
     def __init__(self, type, inner):
         """
@@ -929,7 +921,6 @@ class ComposedNode(TypeNode, IterableNode):
 
 class AnnotationNode(Node):
 
-
     def __init__(self, key, value):
         """
         Parameters
@@ -951,7 +942,6 @@ class AnnotationNode(Node):
 
 
 class TemplateNode(Node):
-
 
     def __init__(self, key, types):
         """
@@ -977,26 +967,22 @@ class Pipeline(object):
     def __init__(self, *passes):
         self.passes = passes
 
-    def __call__(self, lst):
-        if not isinstance(lst, list):
-            lst = [lst]
+    def __call__(self, ast_list):
+        if not isinstance(ast_list, list):
+            ast_list = [ast_list]
 
         for c in self.passes:
-            l2 = []
-            for e in lst:
-                node = e.accept(c())
-                if isinstance(node, list):
-                    l2.extend(node)
-                else:
-                    l2.append(node)
-                lst = l2
-        return lst
+            ast_list = [ast.accept(c()) for ast in ast_list]
+            ast_list = itertools.chain.from_iterable(  # flatten the list
+                map(lambda x: x if isinstance(x, list) else [x], ast_list))
+        return ast_list
 
 
 class Parser:
     def __init__(self, line):
         self._tokens = Tokenize(line).tokens
         self._curr = 0
+        self.line = line
 
     @property
     def tokens(self):
@@ -1083,13 +1069,11 @@ class Parser:
             arg.kind = "input"
             i += arg.type.cursor_length() if arg.type.is_cursor() else 1
 
-        i = 0
-        for arg in output_args:
+        for i, arg in enumerate(output_args):
             arg.arg_pos = i
             arg.kind = "output"
-            i += arg.type.cursor_length() if arg.type.is_cursor() else 1
 
-        return UdtfNode(name, input_args, output_args, templates)
+        return UdtfNode(name, input_args, output_args, templates, self.line)
 
     def parse_args(self):
         """fmt: off
@@ -1101,13 +1085,16 @@ class Parser:
         args = []
         args.append(self.parse_arg())
         while not self.is_at_end() and self.match(Token.COMMA):
-            try:
-                curr = self._curr
-                self.consume(Token.COMMA)
-                args.append(self.parse_arg())
-            except ParserException:
-                self._curr = curr
+            curr = self._curr
+            self.consume(Token.COMMA)
+            self.parse_type()  # assuming that we are not ending with COMMA
+            if not self.is_at_end() and self.match(Token.EQUAL):
+                # arg type cannot be assigned, so this must be a template specification
+                self._curr = curr  # step back and let the code below parse the templates
                 break
+            else:
+                self._curr = curr + 1  # step back from self.parse_type(), parse_arg will parse it again
+                args.append(self.parse_arg())
         return args
 
     def parse_arg(self):
@@ -1118,9 +1105,6 @@ class Parser:
         fmt: on
         """
         typ = self.parse_type()
-        if not self.is_at_end() and self.match(Token.EQUAL):
-            # not an argument
-            self.raise_parser_error()
 
         annotations = []
         while not self.is_at_end() and self.match(Token.VBAR):
@@ -1182,7 +1166,7 @@ class Parser:
     def parse_templates(self):
         """fmt: off
 
-        templates: template ("," template)
+        templates: template ("," template)*
 
         fmt: on
         """
@@ -1214,13 +1198,13 @@ class Parser:
     def parse_annotation(self):
         """fmt: off
 
-        annotation: IDENTIFIER "=" STRING ("<" NUMBER ("," NUMBER) ">")?
+        annotation: IDENTIFIER "=" IDENTIFIER ("<" NUMBER ("," NUMBER) ">")?
 
         fmt: on
         """
         key = self.parse_identifier()
         self.consume(Token.EQUAL)
-        value = self.parse_string()
+        value = self.parse_identifier()
         if not self.is_at_end() and self.match(Token.LESS):
             self.consume(Token.LESS)
             num1 = self.parse_number()
@@ -1253,20 +1237,6 @@ class Parser:
         token = self.consume(Token.NUMBER)
         return token.lexeme
 
-    def parse_string(self):
-        """ fmt: off
-
-        STRING: [A-Za-z0-9_]+
-
-        fmt: on
-        """
-        if self.match(Token.STRING):
-            return self.consume(Token.STRING).lexeme
-        elif self.match(Token.IDENTIFIER):
-            return self.consume(Token.IDENTIFIER).lexeme
-        else:
-            self.raise_parser_error()
-
     def parse(self):
         """fmt: off
 
@@ -1283,13 +1253,12 @@ class Parser:
         primitive: IDENTIFIER
                  | NUMBER
 
-        annotation: IDENTIFIER "=" STRING ("<" NUMBER ("," NUMBER) ">")?
+        annotation: IDENTIFIER "=" IDENTIFIER ("<" NUMBER ("," NUMBER) ">")?
 
         templates: template ("," template)
         template: IDENTIFIER "=" "[" IDENTIFIER ("," IDENTIFIER)* "]"
 
         IDENTIFIER: [A-Za-z_][A-Za-z0-9_]*
-        STRING: [A-Za-z0-9_]+
         NUMBER: [0-9]+
 
         fmt: on
