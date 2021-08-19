@@ -177,7 +177,7 @@ target_link_libraries(CtasIntegrationTest gtest Logger Shared mapd_thrift Thrift
 target_link_libraries(DateTimeUtilsTest gtest Logger Shared ${LLVM_LINKER_FLAGS})
 target_link_libraries(ThreadingTest gtest Logger Shared ${LLVM_LINKER_FLAGS} ${TBB_LIBRARIES})
 target_link_libraries(ThreadingTestSTD gtest Logger Shared ${LLVM_LINKER_FLAGS})
-target_compile_definitions(ThreadingTestSTD PRIVATE HAVE_TBB=0)
+target_compile_definitions(ThreadingTestSTD PRIVATE ENABLE_TBB=0)
 target_link_libraries(CalciteOptimizeTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(JoinHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CachedHashTableTest ${EXECUTE_TEST_LIBS})

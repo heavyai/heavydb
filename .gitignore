@@ -91,6 +91,3 @@ data/
 
 # Python
 *.egg-info/
-
-*.bak
-*.orig

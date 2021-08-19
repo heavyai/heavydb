@@ -589,12 +589,17 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 endif()
 
 # TBB
+
+option(ENABLE_TBB "Enable OneTBB if found" ON)
 set(TBB_LIBS "")
 find_package(TBB)
 if(TBB_FOUND)
   message(STATUS "Building with TBB support")
   add_definitions("-DHAVE_TBB")
   list(APPEND TBB_LIBS ${TBB_LIBRARIES})
+  if(ENABLE_TBB)
+    add_definitions("-DENABLE_TBB")
+  endif()
 endif()
 
 set(gen_cpp_files

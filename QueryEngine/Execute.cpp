@@ -1528,8 +1528,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                      render_info,
                                      available_gpus,
                                      available_cpus);
-        launchKernels<threading::task_group>(
-            shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
+        launchKernels(shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
       } catch (QueryExecutionError& e) {
         if (eo.with_dynamic_watchdog && interrupted_.load() &&
             e.getErrorCode() == ERR_OUT_OF_TIME) {
@@ -2227,7 +2226,6 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
   return execution_kernels;
 }
 
-template <typename THREAD_POOL>
 void Executor::launchKernels(SharedKernelContext& shared_context,
                              std::vector<std::unique_ptr<ExecutionKernel>>&& kernels,
                              const ExecutorDeviceType device_type) {
@@ -2235,18 +2233,14 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
   std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);
   kernel_queue_time_ms_ += timer_stop(clock_begin);
 
-  THREAD_POOL thread_pool;
+  threading::task_group tg;
   // A hack to have unused unit for results collection.
   const RelAlgExecutionUnit* ra_exe_unit =
       kernels.empty() ? nullptr : &kernels[0]->ra_exe_unit_;
 
 #ifdef HAVE_TBB
-  if constexpr (std::is_same<decltype(&thread_pool),
-                             decltype(shared_context.getThreadPool())>::value) {
-    if (g_use_tbb_pool && g_enable_cpu_sub_tasks &&
-        device_type == ExecutorDeviceType::CPU) {
-      shared_context.setThreadPool(&thread_pool);
-    }
+  if (g_enable_cpu_sub_tasks && device_type == ExecutorDeviceType::CPU) {
+    shared_context.setThreadPool(&tg);
   }
   ScopeGuard pool_guard([&shared_context]() { shared_context.setThreadPool(nullptr); });
 #endif  // HAVE_TBB
@@ -2256,14 +2250,14 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
   size_t kernel_idx = 1;
   for (auto& kernel : kernels) {
     CHECK(kernel.get());
-    thread_pool.run(
+    tg.run(
         [this, &kernel, &shared_context, parent_thread_id = logger::thread_id(), crt_kernel_idx = kernel_idx++] {
           DEBUG_TIMER_NEW_THREAD(parent_thread_id);
           const size_t thread_i = crt_kernel_idx % cpu_threads();
           kernel->run(this, thread_i, shared_context);
         });
   }
-  thread_pool.wait();
+  tg.wait();
 
   for (auto& exec_ctx : shared_context.getTlsExecutionContext()) {
     // The first arg is used for GPU only, it's not our case.

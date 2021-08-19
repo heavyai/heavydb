@@ -338,7 +338,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                      sub_start,
                                                      sub_size,
                                                      thread_idx);
-      shared_context.getThreadPool()->spawn(
+      shared_context.getThreadPool()->run(
           [subtask, executor] { subtask->run(executor); });
     }
 
