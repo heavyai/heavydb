@@ -41,7 +41,6 @@
 #include <future>
 #include <numeric>
 
-
 size_t g_parallel_top_min = 100e3;
 size_t g_parallel_top_max = 20e6;  // In effect only with g_enable_watchdog.
 
@@ -364,7 +363,9 @@ size_t ResultSet::binSearchRowCount() const {
 
 size_t ResultSet::parallelRowCount() const {
   using namespace threading;
-  auto execute_parallel_row_count = [this, query_id = logger::query_id()](const blocked_range<size_t> &r, size_t row_count) {
+  auto execute_parallel_row_count = [this, query_id = logger::query_id()](
+                                        const blocked_range<size_t>& r,
+                                        size_t row_count) {
     auto qid_scope_guard = logger::set_thread_local_query_id(query_id);
     for (size_t i = r.begin(); i < r.end(); ++i) {
       if (!isRowAtEmpty(i)) {
@@ -373,9 +374,10 @@ size_t ResultSet::parallelRowCount() const {
     }
     return row_count;
   };
-  const auto row_count =
-    parallel_reduce( blocked_range<size_t>(0, entryCount()), size_t(0)
-                   , execute_parallel_row_count, std::plus<int>() );
+  const auto row_count = parallel_reduce(blocked_range<size_t>(0, entryCount()),
+                                         size_t(0),
+                                         execute_parallel_row_count,
+                                         std::plus<int>());
   return get_truncated_row_count(row_count, getLimit(), drop_first_);
 }
 

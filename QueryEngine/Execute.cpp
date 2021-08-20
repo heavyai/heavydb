@@ -1528,7 +1528,8 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                      render_info,
                                      available_gpus,
                                      available_cpus);
-        launchKernels(shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
+        launchKernels(
+            shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
       } catch (QueryExecutionError& e) {
         if (eo.with_dynamic_watchdog && interrupted_.load() &&
             e.getErrorCode() == ERR_OUT_OF_TIME) {
@@ -2250,12 +2251,15 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
   size_t kernel_idx = 1;
   for (auto& kernel : kernels) {
     CHECK(kernel.get());
-    tg.run(
-        [this, &kernel, &shared_context, parent_thread_id = logger::thread_id(), crt_kernel_idx = kernel_idx++] {
-          DEBUG_TIMER_NEW_THREAD(parent_thread_id);
-          const size_t thread_i = crt_kernel_idx % cpu_threads();
-          kernel->run(this, thread_i, shared_context);
-        });
+    tg.run([this,
+            &kernel,
+            &shared_context,
+            parent_thread_id = logger::thread_id(),
+            crt_kernel_idx = kernel_idx++] {
+      DEBUG_TIMER_NEW_THREAD(parent_thread_id);
+      const size_t thread_i = crt_kernel_idx % cpu_threads();
+      kernel->run(this, thread_i, shared_context);
+    });
   }
   tg.wait();
 
