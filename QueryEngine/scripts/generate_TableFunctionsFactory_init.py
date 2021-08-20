@@ -1,7 +1,7 @@
 """Given a list of input files, scan for lines containing UDTF
 specification statements in the following form:
 
-  UDTF: function_name(<arguments>) -> <output column types>
+  UDTF: function_name(<arguments>) -> <output column types> (, <template type specifications>)?
 
 where <arguments> is a comma-separated list of argument types. The
 argument types specifications are:
@@ -22,6 +22,7 @@ argument types specifications are:
 The output column types is a comma-separated list of column types, see above.
 
 In addition, the following equivalents are suppored:
+
   Column<T> == ColumnT
   ColumnList<T> == ColumnListT
   Cursor<T, V, ...> == Cursor<ColumnT, ColumnV, ...>
@@ -39,6 +40,20 @@ Supported annotation labels are:
 
 - name: to specify argument name
 - input_id: to specify the dict id mapping for output TextEncodingDict columns.
+
+If argument type follows an identifier, it will be mapped to name
+annotations. For example, the following argument type specifications
+are equivalent:
+
+  Int8 a
+  Int8 | name=a
+
+Template type specifications is a comma separated list of template
+type assignments where values are lists of argument type names. For
+instance:
+
+  T = [Int8, Int16, Int32, Float], V = [Float, Double]
+
 """
 # Author: Pearu Peterson
 # Created: January 2021
@@ -272,7 +287,7 @@ class Token:
     COMMA = 3        # ,
     EQUAL = 4        # =
     RARROW = 5       # ->
-    STRING = 6       #  not used
+    STRING = 6       # reserved for string constants
     NUMBER = 7       #
     VBAR = 8         # |
     BANG = 9         # !
@@ -975,7 +990,8 @@ class Pipeline(object):
             ast_list = [ast.accept(c()) for ast in ast_list]
             ast_list = itertools.chain.from_iterable(  # flatten the list
                 map(lambda x: x if isinstance(x, list) else [x], ast_list))
-        return ast_list
+
+        return list(ast_list)
 
 
 class Parser:
@@ -1100,16 +1116,22 @@ class Parser:
     def parse_arg(self):
         """fmt: off
 
-        arg: type ("|" annotation)*
+        arg: type IDENTIFIER? ("|" annotation)*
 
         fmt: on
         """
         typ = self.parse_type()
 
         annotations = []
+
+        if not self.is_at_end() and self.match(Token.IDENTIFIER):
+            name = self.parse_identifier()
+            annotations.append(AnnotationNode('name', name))
+
         while not self.is_at_end() and self.match(Token.VBAR):
             self.consume(Token.VBAR)
             annotations.append(self.parse_annotation())
+
         return ArgNode(typ, annotations)
 
     def parse_type(self):
@@ -1244,7 +1266,7 @@ class Parser:
 
         args: arg ("," arg)*
 
-        arg: type ("|" annotation)*
+        arg: type IDENTIFIER? ("|" annotation)*
 
         type: composed
             | primitive
@@ -1418,7 +1440,7 @@ def parse_annotations(input_files):
             if sizer is None:
                 name = 'kTableFunctionSpecifiedParameter'
                 idx = 1  # this sizer is not actually materialized in the UDTF
-                sizer = 'TableFunctionOutputRowSizer{OutputBufferSizeType::%s, %s}'  % (name, idx)
+                sizer = 'TableFunctionOutputRowSizer{OutputBufferSizeType::%s, %s}' % (name, idx)
 
             assert sizer is not None
 
@@ -1430,7 +1452,6 @@ def parse_annotations(input_files):
             output_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(str, ns_output_types)))
             sql_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(str, ns_sql_types)))
             annotations = format_annotations(sig.input_annotations + sig.output_annotations)
-
 
             if is_template_function(sig):
                 name = sig.name + '_' + str(counter)
