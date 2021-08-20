@@ -297,6 +297,11 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
     }
     return;
   }
+  auto executor = query_mem_desc_.getExecutor();
+  if (!executor) {
+    executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  }
+  auto executor_id = executor->getExecutorId();
   if (use_multithreaded_reduction(entry_count)) {
     const size_t thread_count = cpu_threads();
     std::vector<std::future<void>> reduction_threads;
@@ -312,14 +317,16 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
                                                    start_index,
                                                    end_index,
                                                    &that,
-                                                   &serialized_varlen_buffer] {
+                                                   &serialized_varlen_buffer,
+                                                   &executor_id] {
                                                     reduceEntriesNoCollisionsColWise(
                                                         this_buff,
                                                         that_buff,
                                                         that,
                                                         start_index,
                                                         end_index,
-                                                        serialized_varlen_buffer);
+                                                        serialized_varlen_buffer,
+                                                        executor_id);
                                                   }));
       } else {
         reduction_threads.emplace_back(std::async(std::launch::async,
@@ -359,7 +366,8 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
                                        that,
                                        0,
                                        query_mem_desc_.getEntryCount(),
-                                       serialized_varlen_buffer);
+                                       serialized_varlen_buffer,
+                                       executor_id);
     } else {
       CHECK(reduction_code.ir_reduce_loop);
       run_reduction_code(reduction_code,
@@ -403,7 +411,8 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
     const ResultSetStorage& that,
     const size_t start_index,
     const size_t end_index,
-    const std::vector<std::string>& serialized_varlen_buffer) const {
+    const std::vector<std::string>& serialized_varlen_buffer,
+    const size_t executor_id) const {
   // TODO(adb / saman): Support column wise output when serializing distributed agg
   // functions
   CHECK(serialized_varlen_buffer.empty());
@@ -412,6 +421,8 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
 
   auto this_crt_col_ptr = get_cols_ptr(this_buff, query_mem_desc_);
   auto that_crt_col_ptr = get_cols_ptr(that_buff, query_mem_desc_);
+  auto executor = Executor::getExecutor(executor_id);
+  CHECK(executor);
   for (size_t target_idx = 0; target_idx < targets_.size(); ++target_idx) {
     const auto& agg_info = targets_[target_idx];
     const auto& slots_for_col = col_slot_context.getSlotsForCol(target_idx);
@@ -425,7 +436,8 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
       // should better codify and store this information in the future
       two_slot_target = true;
     }
-    if (UNLIKELY(g_enable_non_kernel_time_query_interrupt && check_interrupt())) {
+    if (UNLIKELY(g_enable_non_kernel_time_query_interrupt &&
+                 executor->checkNonKernelTimeInterrupted())) {
       throw std::runtime_error(
           "Query execution was interrupted during result set reduction");
     }

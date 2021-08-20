@@ -341,12 +341,14 @@ T v(const TargetValue& r) {
 
 TEST(Interrupt, Kill_RunningQuery) {
   auto dt = ExecutorDeviceType::CPU;
+  // assume a single executor is allowed for this test
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   bool startQueryExec = false;
   executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
                                         PENDING_QUERY_INTERRUPT_CHECK_FREQ);
   std::shared_ptr<ResultSet> res1 = nullptr;
   std::exception_ptr exception_ptr = nullptr;
+  std::vector<size_t> assigned_executor_ids;
   try {
     std::string query_session = generate_random_string(32);
     // we first run the query as async function call
@@ -360,12 +362,22 @@ TEST(Interrupt, Kill_RunningQuery) {
       return res;
     });
 
+    while (assigned_executor_ids.empty()) {
+      assigned_executor_ids = executor->getExecutorIdsRunningQuery(query_session);
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    CHECK_EQ(assigned_executor_ids.size(), static_cast<size_t>(1));
+
     // wait until our server starts to process the first query
     std::string curRunningSession = "";
+    size_t assigned_executor_id = *assigned_executor_ids.begin();
+    auto assigned_executor_ptr = Executor::getExecutor(assigned_executor_id);
+    CHECK(assigned_executor_ptr);
     while (!startQueryExec) {
       mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
-      curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+      curRunningSession =
+          assigned_executor_ptr->getCurrentQuerySession(session_read_lock);
       if (curRunningSession == query_session) {
         startQueryExec = true;
       }
@@ -400,6 +412,7 @@ TEST(Interrupt, Check_Query_Runs_After_Interruption) {
   auto dt = ExecutorDeviceType::CPU;
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   bool startQueryExec = false;
+  std::vector<size_t> assigned_executor_ids;
   executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
                                         PENDING_QUERY_INTERRUPT_CHECK_FREQ);
   std::shared_ptr<ResultSet> res1 = nullptr;
@@ -419,12 +432,22 @@ TEST(Interrupt, Check_Query_Runs_After_Interruption) {
       return res;
     });
 
+    while (assigned_executor_ids.empty()) {
+      assigned_executor_ids = executor->getExecutorIdsRunningQuery(query_session);
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    CHECK_EQ(assigned_executor_ids.size(), static_cast<size_t>(1));
+
     // wait until our server starts to process the first query
     std::string curRunningSession = "";
+    size_t assigned_executor_id = *assigned_executor_ids.begin();
+    auto assigned_executor_ptr = Executor::getExecutor(assigned_executor_id);
+    CHECK(assigned_executor_ptr);
     while (!startQueryExec) {
       mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
-      curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+      curRunningSession =
+          assigned_executor_ptr->getCurrentQuerySession(session_read_lock);
       if (curRunningSession == query_session) {
         startQueryExec = true;
       }
@@ -469,6 +492,8 @@ TEST(Interrupt, Kill_PendingQuery) {
   std::future<std::shared_ptr<ResultSet>> query_thread1;
   std::future<std::shared_ptr<ResultSet>> query_thread2;
   QR::get()->resizeDispatchQueue(2);
+  std::vector<size_t> assigned_executor_ids_for_session1;
+  std::vector<size_t> assigned_executor_ids_for_session2;
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
                                         PENDING_QUERY_INTERRUPT_CHECK_FREQ);
@@ -490,11 +515,24 @@ TEST(Interrupt, Kill_PendingQuery) {
       }
       return res;
     });
+
+    while (assigned_executor_ids_for_session1.empty()) {
+      assigned_executor_ids_for_session1 = executor->getExecutorIdsRunningQuery(session1);
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    CHECK_EQ(assigned_executor_ids_for_session1.size(), static_cast<size_t>(1));
+
     // make sure our server recognizes a session for running query correctly
     std::string curRunningSession = "";
+    size_t assigned_executor_id_for_session1 =
+        *assigned_executor_ids_for_session1.begin();
+    auto assigned_executor_ptr_for_session1 =
+        Executor::getExecutor(assigned_executor_id_for_session1);
+    CHECK(assigned_executor_ptr_for_session1);
     while (!startQueryExec) {
       mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
-      curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+      curRunningSession =
+          assigned_executor_ptr_for_session1->getCurrentQuerySession(session_read_lock);
       if (curRunningSession == session1) {
         startQueryExec = true;
       }
@@ -510,10 +548,21 @@ TEST(Interrupt, Kill_PendingQuery) {
       return res;
     });
     bool s2_enrolled = false;
+    while (assigned_executor_ids_for_session2.empty()) {
+      assigned_executor_ids_for_session2 = executor->getExecutorIdsRunningQuery(session2);
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    CHECK_EQ(assigned_executor_ids_for_session2.size(), static_cast<size_t>(1));
+    size_t assigned_executor_id_for_session2 =
+        *assigned_executor_ids_for_session2.begin();
+    auto assigned_executor_ptr_for_session2 =
+        Executor::getExecutor(assigned_executor_id_for_session2);
+    CHECK(assigned_executor_ptr_for_session2);
     while (!s2_enrolled) {
       {
         mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
-        s2_enrolled = executor->checkIsQuerySessionEnrolled(session2, session_read_lock);
+        s2_enrolled = assigned_executor_ptr_for_session2->checkIsQuerySessionEnrolled(
+            session2, session_read_lock);
       }
       if (s2_enrolled) {
         break;
@@ -555,6 +604,7 @@ TEST(Interrupt, Make_PendingQuery_Run) {
   std::future<std::shared_ptr<ResultSet>> query_thread1;
   std::future<std::shared_ptr<ResultSet>> query_thread2;
   QR::get()->resizeDispatchQueue(2);
+  std::vector<size_t> assigned_executor_ids_for_session1;
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
                                         PENDING_QUERY_INTERRUPT_CHECK_FREQ);
@@ -576,11 +626,24 @@ TEST(Interrupt, Make_PendingQuery_Run) {
       }
       return res;
     });
+
+    while (assigned_executor_ids_for_session1.empty()) {
+      assigned_executor_ids_for_session1 = executor->getExecutorIdsRunningQuery(session1);
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    CHECK_EQ(assigned_executor_ids_for_session1.size(), static_cast<size_t>(1));
+
     // make sure our server recognizes a session for running query correctly
     std::string curRunningSession = "";
+    size_t assigned_executor_id_for_session1 =
+        *assigned_executor_ids_for_session1.begin();
+    auto assigned_executor_ptr_for_session1 =
+        Executor::getExecutor(assigned_executor_id_for_session1);
+    CHECK(assigned_executor_ptr_for_session1);
     while (!startQueryExec) {
       mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
-      curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+      curRunningSession =
+          assigned_executor_ptr_for_session1->getCurrentQuerySession(session_read_lock);
       if (curRunningSession == session1) {
         startQueryExec = true;
       }
@@ -641,6 +704,7 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
   std::future<std::shared_ptr<ResultSet>> query_thread4;
   std::future<std::shared_ptr<ResultSet>> query_thread5;
   QR::get()->resizeDispatchQueue(4);
+  std::vector<size_t> assigned_executor_ids_for_session1;
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
                                         PENDING_QUERY_INTERRUPT_CHECK_FREQ);
@@ -675,11 +739,23 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
       return res;
     });
 
+    while (assigned_executor_ids_for_session1.empty()) {
+      assigned_executor_ids_for_session1 = executor->getExecutorIdsRunningQuery(session1);
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    CHECK_EQ(assigned_executor_ids_for_session1.size(), static_cast<size_t>(1));
+
     // make sure our server recognizes a session for running query correctly
     std::string curRunningSession = "";
+    size_t assigned_executor_id_for_session1 =
+        *assigned_executor_ids_for_session1.begin();
+    auto assigned_executor_ptr_for_session1 =
+        Executor::getExecutor(assigned_executor_id_for_session1);
+    CHECK(assigned_executor_ptr_for_session1);
     while (!startQueryExec) {
       mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
-      curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+      curRunningSession =
+          assigned_executor_ptr_for_session1->getCurrentQuerySession(session_read_lock);
       if (curRunningSession.compare(session1) == 0) {
         startQueryExec = true;
         break;
@@ -688,34 +764,31 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
     }
     CHECK(startQueryExec);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
     query_thread2 = std::async(std::launch::async, [&] {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
         // run pending query as async call
-        res = run_query(test_query_small, dt, session1);
+        res = run_query(test_query_large, dt, session1);
       } catch (...) {
         exception_ptr2 = std::current_exception();
       }
       return res;
     });
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
     query_thread3 = std::async(std::launch::async, [&] {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
         // run pending query as async call
-        res = run_query(test_query_small, dt, session1);
+        res = run_query(test_query_large, dt, session1);
       } catch (...) {
         exception_ptr3 = std::current_exception();
       }
       return res;
     });
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
     query_thread4 = std::async(std::launch::async, [&] {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
         // run pending query as async call
-        res = run_query(test_query_small, dt, session1);
+        res = run_query(test_query_large, dt, session1);
       } catch (...) {
         exception_ptr4 = std::current_exception();
       }
@@ -726,23 +799,22 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
     // by providing the interrupt signal with the running query's session info
     // so we can expect that running query session releases all H/W resources and locks,
     // and so pending query takes them for its query execution (becomes running query)
-    size_t queue_size = 0;
-    bool ready_to_interrupt = false;
-    while (!ready_to_interrupt && startQueryExec) {
+    int queue_size = -1;
+    bool send_interrupt_signal = false;
+    while (startQueryExec) {
       // check all Q1~Q4 of Session1 are enrolled in the session map
       {
         mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
         queue_size = executor->getQuerySessionInfo(session1, session_read_lock).size();
       }
       if (queue_size == 4) {
-        ready_to_interrupt = true;
+        executor->interrupt(session1, session1);
+        send_interrupt_signal = true;
         break;
       }
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
+    CHECK(send_interrupt_signal);
 
-    CHECK(ready_to_interrupt);
-    executor->interrupt(session1, session1);
     auto check_interrup_msg = [&catchInterruption](const std::string& msg,
                                                    bool is_pending_query) {
       auto check_interrupted_msg = msg.find("interrupted");
@@ -806,7 +878,7 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
         mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
         queue_size = executor->getQuerySessionInfo(session1, session_read_lock).size();
       }
-      CHECK_EQ(queue_size, (size_t)0);
+      CHECK_EQ(queue_size, 0);
       throw std::runtime_error("SUCCESS");
     }
 
@@ -1269,6 +1341,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Geo) {
 TEST(Non_Kernel_Time_Interrupt, Interrupt_During_Reduction) {
   std::atomic<bool> catchInterruption(false);
   std::atomic<bool> detect_time_out(false);
+  std::vector<size_t> assigned_executor_ids;
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   bool keep_global_columnar_flag = g_enable_columnar_output;
   g_enable_columnar_output = true;
@@ -1292,18 +1365,26 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_During_Reduction) {
     QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
 
     auto interrupt_thread = std::async(std::launch::async, [&] {
+      while (assigned_executor_ids.empty()) {
+        assigned_executor_ids = executor->getExecutorIdsRunningQuery(session1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
       std::string curRunningSession{""};
       bool startReduction = false;
       QuerySessionStatus::QueryStatus qss = QuerySessionStatus::QueryStatus::UNDEFINED;
-      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+      size_t assigned_executor_id = *assigned_executor_ids.begin();
+      auto assigned_executor_ptr = Executor::getExecutor(assigned_executor_id);
+      CHECK(assigned_executor_ptr);
       int cnt = 0;
       while (cnt < 6000) {
         {
           mapd_shared_lock<mapd_shared_mutex> session_read_lock(
               executor->getSessionLock());
-          curRunningSession = executor->getCurrentQuerySession(session_read_lock);
+          curRunningSession =
+              assigned_executor_ptr->getCurrentQuerySession(session_read_lock);
           if (curRunningSession.compare(session1) == 0) {
-            qss = executor->getQuerySessionInfo(curRunningSession, session_read_lock)[0]
+            qss = assigned_executor_ptr
+                      ->getQuerySessionInfo(curRunningSession, session_read_lock)[0]
                       .getQueryStatus();
             if (qss == QuerySessionStatus::QueryStatus::RUNNING_REDUCTION) {
               startReduction = true;
@@ -1320,8 +1401,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_During_Reduction) {
         }
       }
       CHECK(startReduction);
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-      executor->interrupt(session1, session1);
+      assigned_executor_ptr->interrupt(session1, session1);
       return;
     });
 
@@ -1329,6 +1409,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_During_Reduction) {
       run_query("SELECT k1, k2, AVG(i) FROM t_very_large_agg GROUP BY k1, k2",
                 ExecutorDeviceType::CPU,
                 session1);
+      CHECK_EQ(assigned_executor_ids.size(), static_cast<size_t>(1));
     } catch (const QueryExecutionError& e) {
       if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
         // timing issue... the query is interrupted before entering the reduction

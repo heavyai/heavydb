@@ -330,29 +330,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     std::tie(query_session, query_str) = executor_->attachExecutorToQuerySession(
         query_session, query_str, query_submitted_time);
 
-    // For now we can run a single query at a time, so if other query is already
-    // executed by different executor (i.e., when we turn on parallel executor),
-    // we can check the possibility of running this query by using the spinlock.
-    // If it fails to acquire a lock, it sleeps {g_pending_query_interrupt_freq} ms.
-    // And then try to get the lock (and again and again...)
-    while (executor_->execute_spin_lock_.test_and_set(std::memory_order_acquire)) {
-      try {
-        executor_->checkPendingQueryStatus(query_session);
-      } catch (QueryExecutionError& e) {
-        executor_->clearQuerySessionStatus(query_session, query_submitted_time);
-        if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
-          throw std::runtime_error(
-              "Query execution has been interrupted (pending query)");
-        }
-        throw e;
-      } catch (...) {
-        executor_->clearQuerySessionStatus(query_session, query_submitted_time);
-        throw std::runtime_error("Checking pending query status failed: unknown error");
-      }
-      // here it fails to acquire the lock, so sleep...
-      std::this_thread::sleep_for(
-          std::chrono::milliseconds(g_pending_query_interrupt_freq));
-    }
     // now the query is going to be executed, so update the status as
     // "RUNNING_QUERY_KERNEL"
     executor_->updateQuerySessionStatus(
@@ -361,18 +338,13 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
         QuerySessionStatus::QueryStatus::RUNNING_QUERY_KERNEL);
   }
 
-  // now this thread acquires the spin_lock...
-  // so it should do cleanup the "acquired" spin_lock after finishing its execution
-  ScopeGuard clearSpinLock =
+  // so it should do cleanup session info after finishing its execution
+  ScopeGuard clearQuerySessionInfo =
       [this, &query_session, &interruptable, &query_submitted_time] {
         // reset the runtime query interrupt status after the end of query execution
         if (interruptable) {
-          // cleanup running session's info first
+          // cleanup running session's info
           executor_->clearQuerySessionStatus(query_session, query_submitted_time);
-          // after then, unlock the spinlock
-          // now the pending query can get the spin_lock
-          // and register its session as running query session safely
-          executor_->execute_spin_lock_.clear(std::memory_order_release);
         }
       };
 
@@ -380,8 +352,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     auto ret = executor->acquireExecuteMutex();
     return ret;
   };
-  // now we get the spinlock that means this query is ready to run by the executor
-  // so we acquire executor lock in here to make sure that this executor holds
+  // now we acquire executor lock in here to make sure that this executor holds
   // all necessary resources and at the same time protect them against other executor
   auto lock = acquire_execute_mutex(executor_);
 
@@ -389,8 +360,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     // check whether this query session is "already" interrupted
     // this case occurs when there is very short gap between being interrupted and
     // taking the execute lock
-    // for instance, the session can fire multiple queries that other queries are waiting
-    // in the spinlock but the user can request the query interruption
     // if so we have to remove "all" queries initiated by this session and we do in here
     // without running the query
     try {

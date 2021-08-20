@@ -23,7 +23,7 @@ void Executor::registerActiveModule(void* module, const int device_id) const {
   CHECK_LT(device_id, max_gpu_count);
   gpu_active_modules_device_mask_ |= (1 << device_id);
   gpu_active_modules_[device_id] = module;
-  VLOG(1) << "Executor " << this << ", mask 0x" << std::hex
+  VLOG(1) << "Executor " << executor_id_ << ", mask 0x" << std::hex
           << gpu_active_modules_device_mask_ << ": Registered module " << module
           << " on device " << std::to_string(device_id);
 #endif
@@ -38,7 +38,7 @@ void Executor::unregisterActiveModule(void* module, const int device_id) const {
   }
   CHECK_EQ(gpu_active_modules_[device_id], module);
   gpu_active_modules_device_mask_ ^= (1 << device_id);
-  VLOG(1) << "Executor " << this << ", mask 0x" << std::hex
+  VLOG(1) << "Executor " << executor_id_ << ", mask 0x" << std::hex
           << gpu_active_modules_device_mask_ << ": Unregistered module " << module
           << " on device " << std::to_string(device_id);
 #endif
@@ -80,9 +80,15 @@ void Executor::interrupt(const std::string& query_session,
     if (!is_running_query) {
       return;
     }
+    // mark the interrupted status of this executor
     interrupted_.store(true);
   }
 
+  // for both GPU and CPU kernel execution, interrupt flag that running kernel accesses
+  // is a global variable from a view of Executors
+  // but it's okay for now since we hold a kernel_lock when starting the query execution
+  // this indicates we should revisit this logic when starting to use multi-query
+  // execution for supporting per-kernel interrupt
   bool CPU_execution_mode = true;
 
 #ifdef HAVE_CUDA
@@ -97,8 +103,8 @@ void Executor::interrupt(const std::string& query_session,
     // population happens on CPU but select_query can be processed via GPU
     CHECK_GE(cuda_mgr->getDeviceCount(), 1);
     std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
-    VLOG(1) << "Executor " << this << ": Interrupting Active Modules: mask 0x" << std::hex
-            << gpu_active_modules_device_mask_;
+    VLOG(1) << "Executor " << executor_id_ << ": Interrupting Active Modules: mask 0x"
+            << std::hex << gpu_active_modules_device_mask_;
     CUcontext old_cu_context;
     checkCudaErrors(cuCtxGetCurrent(&old_cu_context));
     for (int device_id = 0; device_id < max_gpu_count; device_id++) {
@@ -108,10 +114,11 @@ void Executor::interrupt(const std::string& query_session,
         if (!cu_module) {
           continue;
         } else {
-          VLOG(1) << "Try to interrupt the running query on GPU";
+          VLOG(1) << "Try to interrupt the running query on GPU assigned to Executor "
+                  << executor_id_;
           CPU_execution_mode = false;
         }
-        VLOG(1) << "Executor " << this << ": Interrupting Active Modules: mask 0x"
+        VLOG(1) << "Executor " << executor_id_ << ": Interrupting Active Modules: mask 0x"
                 << std::hex << gpu_active_modules_device_mask_ << " on device "
                 << std::to_string(device_id);
 
@@ -154,7 +161,8 @@ void Executor::interrupt(const std::string& query_session,
                                           cu_module,
                                           "runtime_interrupt_flag");
           if (status == CUDA_SUCCESS) {
-            VLOG(1) << "Interrupt on GPU status: CUDA_SUCCESS";
+            VLOG(1) << "Executor " << executor_id_
+                    << " retrieves interrupt status from GPU " << device_id;
             CHECK_EQ(runtime_interrupt_flag_size, sizeof(uint32_t));
             int32_t abort_val = 1;
             checkCudaErrors(cuMemcpyHtoDAsync(runtime_interrupt_flag,
@@ -162,12 +170,13 @@ void Executor::interrupt(const std::string& query_session,
                                               sizeof(int32_t),
                                               cu_stream1));
             if (device_id == 0) {
-              VLOG(1) << "GPU: Async Abort submitted to Device "
-                      << std::to_string(device_id);
+              VLOG(1) << "GPU: send interrupt signal from Executor " << executor_id_
+                      << " to Device " << std::to_string(device_id);
             }
           } else if (status == CUDA_ERROR_NOT_FOUND) {
             std::runtime_error(
-                "Runtime query interrupt has failed: an interrupt flag on the GPU could "
+                "Runtime query interrupt on Executor " + std::to_string(executor_id_) +
+                " has failed: an interrupt flag on the GPU could "
                 "not be initialized (CUDA_ERROR_CODE: CUDA_ERROR_NOT_FOUND)");
           } else {
             // if we reach here, query runtime interrupt is failed due to
@@ -181,7 +190,9 @@ void Executor::interrupt(const std::string& query_session,
             }
             std::string error_str(error_ret_str);
             std::runtime_error(
-                "Runtime interrupt has failed due to a device related issue "
+                "Runtime interrupt on Executor " + std::to_string(executor_id_) +
+                " has failed due to a device " + std::to_string(device_id) +
+                "'s issue "
                 "(CUDA_ERROR_CODE: " +
                 error_str + ")");
           }
@@ -191,8 +202,8 @@ void Executor::interrupt(const std::string& query_session,
           float milliseconds = 0;
           cuEventElapsedTime(&milliseconds, start, stop);
           VLOG(1) << "Device " << std::to_string(device_id)
-                  << ": submitted async request to abort SUCCESS: "
-                  << std::to_string(milliseconds) << " ms";
+                  << ": submitted async interrupt request from Executor " << executor_id_
+                  << " : SUCCESS: " << std::to_string(milliseconds) << " ms";
           checkCudaErrors(cuStreamDestroy(cu_stream1));
         }
       }
@@ -206,7 +217,7 @@ void Executor::interrupt(const std::string& query_session,
 
   if (allow_interrupt && CPU_execution_mode) {
     // turn interrupt flag on for CPU mode
-    VLOG(1) << "Try to interrupt the running query on CPU";
+    VLOG(1) << "Try to interrupt the running query on CPU from Executor " << executor_id_;
     check_interrupt_init(static_cast<unsigned>(INT_ABORT));
   }
 }
@@ -220,11 +231,14 @@ void Executor::resetInterrupt() {
   if (g_enable_dynamic_watchdog) {
     dynamic_watchdog_init(static_cast<unsigned>(DW_RESET));
   } else if (allow_interrupt) {
+    VLOG(1) << "Reset interrupt flag for CPU execution kernel on Executor "
+            << executor_id_;
     check_interrupt_init(static_cast<unsigned>(INT_RESET));
   }
 
   if (interrupted_.load()) {
-    VLOG(1) << "RESET Executor " << this << " that had previously been interrupted";
+    VLOG(1) << "RESET Executor " << executor_id_
+            << " that had previously been interrupted";
     interrupted_.store(false);
   }
 }
