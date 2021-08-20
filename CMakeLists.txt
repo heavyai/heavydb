@@ -602,6 +602,11 @@ if(TBB_FOUND)
   endif()
 endif()
 
+option(DISABLE_CONCURRENCY "disable threading layer parallellism" OFF)
+if(DISABLE_CONCURRENCY)
+  add_definitions("-DDISABLE_CONCURRENCY")
+endif()
+
 set(gen_cpp_files
     ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h

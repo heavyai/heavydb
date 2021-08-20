@@ -6,7 +6,9 @@
 
 std::atomic<int> g_counter{0};
 
-#if ENABLE_TBB
+#if DISABLE_CONCURRENCY
+#define THREADING THREADING_SERIAL
+#elif ENABLE_TBB
 #define THREADING THREADING_TBB
 #else
 #define THREADING THREADING_STD

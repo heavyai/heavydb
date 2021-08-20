@@ -5,29 +5,11 @@
 #include <type_traits>
 #include "thread_count.h"
 
-namespace threading_std {
+#ifndef THREADING_STD_LAUNCH
+#define THREADING_STD_LAUNCH deferred //async or deferred
+#endif
 
-using std::future;
-
-template <typename Fn, typename... Args, typename Result = std::result_of_t<Fn && (Args && ...)>>
-future<Result> async(Fn&& fn, Args&&... args) {
-    return std::async(std::launch::async, std::forward<Fn>(fn), std::forward<Args>(args)...);
-}
-
-class task_group {
-  std::vector<future<void>> threads_;
-public:
-    template<typename F>
-    void run(F&& f) {
-        threads_.emplace_back( async(std::forward<F>(f)));
-    }
-    void cancel() {/*not implemented*/}
-    void wait() { // TODO task_group_status ?
-        for (auto& child : this->threads_)
-            child.wait();
-    }
-}; // class task_group
-
+namespace threading_common {
 class split {};
 
 class auto_partitioner {};
@@ -107,6 +89,32 @@ private:
         return middle;
     }
 };
+}
+
+namespace threading_std {
+
+using std::future;
+using namespace threading_common;
+constexpr auto launch = std::launch::THREADING_STD_LAUNCH;
+
+template <typename Fn, typename... Args, typename Result = std::result_of_t<Fn && (Args && ...)>>
+future<Result> async(Fn&& fn, Args&&... args) {
+    return std::async(launch, std::forward<Fn>(fn), std::forward<Args>(args)...);
+}
+
+class task_group {
+  std::vector<future<void>> threads_;
+public:
+    template<typename F>
+    void run(F&& f) {
+        threads_.emplace_back( async(std::forward<F>(f)));
+    }
+    void cancel() {/*not implemented*/}
+    void wait() { // TODO task_group_status ?
+        for (auto& child : this->threads_)
+            child.wait();
+    }
+}; // class task_group
 
 //! Parallel iteration over range with default partitioner.
 /** @ingroup algorithms **/
@@ -127,7 +135,7 @@ void parallel_for( const blocked_range<Int>& range, const Body& body, const Part
         const auto end_entry = std::min(start_entry + stride, stop_entry);
         // TODO grainsize?
         worker_threads.emplace_back(
-            std::async(std::launch::async, body, blocked_range<Int>(start_entry, end_entry)));
+            std::async(launch, body, blocked_range<Int>(start_entry, end_entry)));
     }
     for (auto& child : worker_threads)
         child.wait();
@@ -161,7 +169,7 @@ Value parallel_reduce( const blocked_range<Int>& range, const Value& identity, c
         const auto end_entry = std::min(start_entry + stride, stop_entry);
         // TODO grainsize?
         worker_threads.emplace_back(
-            std::async(std::launch::async, real_body, blocked_range<Int>(start_entry, end_entry), Value{} ));
+            std::async(launch, real_body, blocked_range<Int>(start_entry, end_entry), Value{} ));
     }
     Value v = identity;
     for (auto& child : worker_threads)

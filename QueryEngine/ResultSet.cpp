@@ -727,7 +727,7 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeCountDistinctCo
   } else {
     threading::task_group thread_pool;
     for (auto interval : makeIntervals<size_t>(0, num_non_empty_entries, cpu_threads())) {
-      thread_pool.run([&] { work(interval.begin, interval.end); });
+      thread_pool.run([=] { work(interval.begin, interval.end); });
     }
     thread_pool.wait();
   }
@@ -769,7 +769,7 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeApproxQuantileC
   } else {
     threading::task_group thread_pool;
     for (auto interval : makeIntervals<size_t>(0, size, cpu_threads())) {
-      thread_pool.run([&] { work(interval.begin, interval.end); });
+      thread_pool.run([=] { work(interval.begin, interval.end); });
     }
     thread_pool.wait();
   }
