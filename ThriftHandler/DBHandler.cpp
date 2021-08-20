@@ -34,6 +34,7 @@
 #include "Calcite/Calcite.h"
 #include "gen-cpp/CalciteServer.h"
 
+#include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/RelAlgExecutor.h"
 
 #include "Catalog/Catalog.h"
@@ -789,16 +790,30 @@ void DBHandler::interrupt(const TSessionId& query_session,
                                           system_parameters_);
     CHECK(executor);
 
-    VLOG(1) << "Received interrupt: "
-            << "Session " << *session_it->second << ", Executor " << executor
-            << ", leafCount " << leaf_aggregator_.leafCount() << ", User "
-            << session_it->second->get_currentUser().userLoggable() << ", Database "
-            << dbname << std::endl;
-
     if (leaf_aggregator_.leafCount() > 0) {
       leaf_aggregator_.interrupt(query_session, interrupt_session);
     }
-    executor->interrupt(query_session, interrupt_session);
+    auto target_executor_ids = executor->getExecutorIdsRunningQuery(query_session);
+    if (target_executor_ids.empty()) {
+      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+      if (executor->checkIsQuerySessionEnrolled(query_session, session_read_lock)) {
+        session_read_lock.unlock();
+        VLOG(1) << "Received interrupt: "
+                << "Session " << *session_it->second << ", User "
+                << session_it->second->get_currentUser().userLoggable() << ", Database "
+                << dbname << std::endl;
+        executor->interrupt(query_session, interrupt_session);
+      }
+    } else {
+      for (auto& executor_id : target_executor_ids) {
+        VLOG(1) << "Received interrupt: "
+                << "Session " << *session_it->second << ", Executor " << executor_id
+                << ", User " << session_it->second->get_currentUser().userLoggable()
+                << ", Database " << dbname << std::endl;
+        auto target_executor = Executor::getExecutor(executor_id);
+        target_executor->interrupt(query_session, interrupt_session);
+      }
+    }
 
     LOG(INFO) << "User " << session_it->second->get_currentUser().userName
               << " interrupted session with database " << dbname << std::endl;
@@ -6100,6 +6115,8 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     }
     const auto explain_info = pw.getExplainInfo();
     std::vector<PushedDownFilterInfo> filter_push_down_requests;
+    auto submitted_time_str = query_state_proxy.getQueryState().getQuerySubmittedTime();
+    auto query_session = session_ptr ? session_ptr->get_session_id() : "";
     auto execute_rel_alg_task = std::make_shared<QueryDispatchQueue::Task>(
         [this,
          &filter_push_down_requests,
@@ -6109,6 +6126,8 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
          &query_ra_calcite_explain,
          &query_ra,
          &query_str,
+         &submitted_time_str,
+         &query_session,
          &locks,
          column_format,
          executor_device_type,
@@ -6170,14 +6189,26 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
           }
         });
     CHECK(dispatch_queue_);
-    if (g_enable_runtime_query_interrupt && !session_ptr->get_session_id().empty()) {
-      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-      auto submitted_time_str = query_state_proxy.getQueryState().getQuerySubmittedTime();
-      executor->enrollQuerySession(session_ptr->get_session_id(),
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+    if (g_enable_runtime_query_interrupt && !query_session.empty()) {
+      executor->enrollQuerySession(query_session,
                                    query_str,
                                    submitted_time_str,
                                    Executor::UNITARY_EXECUTOR_ID,
                                    QuerySessionStatus::QueryStatus::PENDING_QUEUE);
+      while (!dispatch_queue_->hasIdleWorker()) {
+        try {
+          executor->checkPendingQueryStatus(query_session);
+        } catch (QueryExecutionError& e) {
+          executor->clearQuerySessionStatus(query_session, submitted_time_str);
+          if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+            throw std::runtime_error(
+                "Query execution has been interrupted (pending query).");
+          }
+          throw e;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
     }
     dispatch_queue_->submit(execute_rel_alg_task,
                             pw.getDMLType() == ParserWrapper::DMLType::Update ||
@@ -7200,16 +7231,19 @@ ExecutionResult DBHandler::getQueries(
 
 void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_info,
                                const std::string& target_session) {
-  // capture the interrupt request from user and then pass to the query runtime (executor)
+  // capture the interrupt request from user and then pass to corresponding Executors
+  // that queries fired by the given session are assigned
   // Basic-flow that each query session gets through:
   // Enroll --> Update (query session info / executor) --> Running -> Cleanup
-
   // 1. We have to separate 1) "target" query session to interrupt and 2) request session
   // Here, we have to focus on "target" session: all interruption management is based on
   // the "target" session
-  // 2. Session info and its required data structures are global to executor, so
-  // we can manage the interrupt status via UNITARY_EXECUTOR (note that the actual query
-  // is processed by specific executor but can also access the global data structure)
+  // 2. Session info and its required data structures are global to Executor, so
+  // we can send the interrupt request from UNITARY_EXECUTOR (note that the actual query
+  // is processed by specific Executor but can also access the global data structure)
+  // to the Executor that the session's query has been assigned
+  // this means each Executor should handle the interrupt request, and then update its
+  // the latest status to the global session map for the correctness
   // 3. Three target session's status: PENDING_QUEUE / PENDING_EXECUTOR / RUNNING
   // (for now we can interrupt a query at "PENDING_EXECUTOR" and "RUNNING")
   // 4. each session has 1) a list of queries that the session tries to initiate and
@@ -7235,14 +7269,14 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
     // todo(yoonmin): improve kill query cmd under both types of query
     throw std::runtime_error(
         "KILL QUERY failed: neither non-kernel time nor kernel-time query interrupt is "
-        "disabled.");
+        "enabled.");
   }
   if (!session_info.get_currentUser().isSuper.load()) {
     throw std::runtime_error(
         "KILL QUERY failed: only super user can interrupt the query via KILL QUERY "
         "command.");
   }
-  CHECK_EQ(target_session.length(), (unsigned long)8);
+  CHECK_EQ(target_session.length(), static_cast<unsigned long>(8));
   bool found_valid_session = false;
   for (auto& kv : sessions_) {
     if (kv.second->get_public_session_id().compare(target_session) == 0) {
@@ -7255,8 +7289,32 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
       if (leaf_aggregator_.leafCount() > 0) {
         leaf_aggregator_.interrupt(target_query_session, session_info.get_session_id());
       }
-      executor->interrupt(target_query_session, session_info.get_session_id());
-      found_valid_session = true;
+      auto target_executor_ids =
+          executor->getExecutorIdsRunningQuery(target_query_session);
+      if (target_executor_ids.empty()) {
+        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        if (executor->checkIsQuerySessionEnrolled(target_query_session,
+                                                  session_read_lock)) {
+          VLOG(1) << "Received interrupt: "
+                  << "Session " << target_query_session << ", leafCount "
+                  << leaf_aggregator_.leafCount() << ", User "
+                  << session_info.get_currentUser().userLoggable() << ", Database "
+                  << session_info.getCatalog().getCurrentDB().dbName << std::endl;
+          executor->interrupt(target_query_session, session_info.get_session_id());
+          found_valid_session = true;
+        }
+      } else {
+        for (auto& executor_id : target_executor_ids) {
+          VLOG(1) << "Received interrupt: "
+                  << "Session " << target_query_session << ", Executor " << executor_id
+                  << ", leafCount " << leaf_aggregator_.leafCount() << ", User "
+                  << session_info.get_currentUser().userLoggable() << ", Database "
+                  << session_info.getCatalog().getCurrentDB().dbName << std::endl;
+          auto target_executor = Executor::getExecutor(executor_id);
+          target_executor->interrupt(target_query_session, session_info.get_session_id());
+          found_valid_session = true;
+        }
+      }
       break;
     }
   }

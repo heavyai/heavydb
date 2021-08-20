@@ -964,7 +964,7 @@ class Executor {
   void setColRangeCache(const AggregatedColRange& aggregated_col_range) {
     agg_col_range_cache_ = aggregated_col_range;
   }
-
+  ExecutorId getExecutorId() const { return executor_id_; };
   QuerySessionId& getCurrentQuerySession(mapd_shared_lock<mapd_shared_mutex>& read_lock);
   QuerySessionStatus::QueryStatus getQuerySessionStatus(
       const QuerySessionId& candidate_query_session,
@@ -1017,6 +1017,13 @@ class Executor {
                           const std::string& submitted_time_str,
                           const size_t executor_id,
                           const QuerySessionStatus::QueryStatus query_session_status);
+  // get a set of executor ids that a given session has fired regardless of
+  // each executor's status: pending or running
+  const std::vector<size_t> getExecutorIdsRunningQuery(
+      const QuerySessionId& interrupt_session) const;
+  // check whether the current session that this executor manages is interrupted
+  // while performing non-kernel time task
+  bool checkNonKernelTimeInterrupted() const;
 
   // true when we have matched cardinality, and false otherwise
   using CachedCardinality = std::pair<bool, size_t>;
@@ -1069,7 +1076,8 @@ class Executor {
   static std::mutex gpu_active_modules_mutex_;
   static uint32_t gpu_active_modules_device_mask_;
   static void* gpu_active_modules_[max_gpu_count];
-  static std::atomic<bool> interrupted_;
+  // indicates whether this executor has been interrupted
+  std::atomic<bool> interrupted_;
 
   mutable std::mutex str_dict_mutex_;
 
@@ -1106,17 +1114,13 @@ class Executor {
   AggregatedColRange agg_col_range_cache_;
   TableGenerations table_generations_;
   static mapd_shared_mutex executor_session_mutex_;
-  // a query session that currently is running
-  static QuerySessionId current_query_session_;
-  // an executor's id that executes the running query
-  static std::optional<size_t> running_query_executor_id_;
+  // a query session that this executor manages
+  QuerySessionId current_query_session_;
   // a pair of <QuerySessionId, interrupted_flag>
   static InterruptFlagMap queries_interrupt_flag_;
   // a pair of <QuerySessionId, query_session_status>
   static QuerySessionMap queries_session_map_;
-
   static std::map<int, std::shared_ptr<Executor>> executors_;
-  static std::atomic_flag execute_spin_lock_;
 
   // SQL queries take a shared lock, exclusive options (cache clear, memory clear) take a
   // write lock

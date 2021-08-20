@@ -31,6 +31,7 @@ inline const ColumnarResults* columnarize_result(
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const ResultSetPtr& result,
     const size_t thread_idx,
+    const size_t executor_id,
     const int frag_id) {
   INJECT_TIMER(columnarize_result);
   CHECK_EQ(0, frag_id);
@@ -40,7 +41,7 @@ inline const ColumnarResults* columnarize_result(
     col_types.push_back(get_logical_type_info(result->getColType(i)));
   }
   return new ColumnarResults(
-      row_set_mem_owner, *result, result->colCount(), col_types, thread_idx);
+      row_set_mem_owner, *result, result->colCount(), col_types, executor_id, thread_idx);
 }
 
 std::string getMemoryLevelString(Data_Namespace::MemoryLevel memoryLevel) {
@@ -125,6 +126,7 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
                            std::shared_ptr<const ColumnarResults>(columnarize_result(
                                executor->row_set_mem_owner_,
                                get_temporary_table(executor->temporary_tables_, table_id),
+                               executor->executor_id_,
                                thread_idx,
                                frag_id))));
       }
@@ -172,7 +174,8 @@ JoinColumn ColumnFetcher::makeJoinColumn(
   size_t num_elems = 0;
   size_t num_chunks = 0;
   for (auto& frag : fragments) {
-    if (g_enable_non_kernel_time_query_interrupt && check_interrupt()) {
+    if (g_enable_non_kernel_time_query_interrupt &&
+        executor->checkNonKernelTimeInterrupted()) {
       throw QueryExecutionError(Executor::ERR_INTERRUPTED);
     }
     auto [col_buff, elem_count] = getOneColumnFragment(
@@ -300,7 +303,8 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
     auto column_it = columnarized_scan_table_cache_.find(col_desc);
     if (column_it == columnarized_scan_table_cache_.end()) {
       for (size_t frag_id = 0; frag_id < frag_count; ++frag_id) {
-        if (g_enable_non_kernel_time_query_interrupt && check_interrupt()) {
+        if (g_enable_non_kernel_time_query_interrupt &&
+            executor_->checkNonKernelTimeInterrupted()) {
           throw QueryExecutionError(Executor::ERR_INTERRUPTED);
         }
         std::list<std::shared_ptr<Chunk_NS::Chunk>> chunk_holder;
@@ -325,6 +329,7 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
                                               col_buffer,
                                               fragment.getNumTuples(),
                                               chunk_meta_it->second->sqlType,
+                                              executor_->executor_id_,
                                               thread_idx));
       }
       auto merged_results =
@@ -669,7 +674,8 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
   bool null_padded_last_val = false;
   for (; chunk_holder_it != local_chunk_holder.end();
        chunk_holder_it++, chunk_iter_holder_it++, chunk_num_tuple_it++) {
-    if (g_enable_non_kernel_time_query_interrupt && check_interrupt()) {
+    if (g_enable_non_kernel_time_query_interrupt &&
+        executor_->checkNonKernelTimeInterrupted()) {
       throw QueryExecutionError(Executor::ERR_INTERRUPTED);
     }
     auto target_chunk = chunk_holder_it->get();
@@ -1079,10 +1085,14 @@ const int8_t* ColumnFetcher::getResultSetColumn(
     auto& frag_id_to_result = columnarized_table_cache_[table_id];
     int frag_id = 0;
     if (frag_id_to_result.empty() || !frag_id_to_result.count(frag_id)) {
-      frag_id_to_result.insert(std::make_pair(
-          frag_id,
-          std::shared_ptr<const ColumnarResults>(columnarize_result(
-              executor_->row_set_mem_owner_, buffer, thread_idx, frag_id))));
+      frag_id_to_result.insert(
+          std::make_pair(frag_id,
+                         std::shared_ptr<const ColumnarResults>(
+                             columnarize_result(executor_->row_set_mem_owner_,
+                                                buffer,
+                                                executor_->executor_id_,
+                                                thread_idx,
+                                                frag_id))));
     }
     CHECK_NE(size_t(0), columnarized_table_cache_.count(table_id));
     result = columnarized_table_cache_[table_id][frag_id].get();

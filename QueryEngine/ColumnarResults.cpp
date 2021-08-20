@@ -47,6 +47,7 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
                                  const ResultSet& rows,
                                  const size_t num_columns,
                                  const std::vector<SQLTypeInfo>& target_types,
+                                 const size_t executor_id,
                                  const size_t thread_idx,
                                  const bool is_parallel_execution_enforced)
     : column_buffers_(num_columns)
@@ -62,6 +63,8 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
     , thread_idx_(thread_idx) {
   auto timer = DEBUG_TIMER(__func__);
   column_buffers_.resize(num_columns);
+  executor_ = Executor::getExecutor(executor_id);
+  CHECK(executor_);
   for (size_t i = 0; i < num_columns; ++i) {
     const bool is_varlen = target_types[i].is_array() ||
                            (target_types[i].is_string() &&
@@ -88,6 +91,7 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
                                  const int8_t* one_col_buffer,
                                  const size_t num_rows,
                                  const SQLTypeInfo& target_type,
+                                 const size_t executor_id,
                                  const size_t thread_idx)
     : column_buffers_(1)
     , num_rows_(num_rows)
@@ -103,6 +107,8 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
   if (is_varlen) {
     throw ColumnarConversionNotSupported();
   }
+  executor_ = Executor::getExecutor(executor_id);
+  CHECK(executor_);
   const auto buf_size = num_rows * target_type.get_size();
   column_buffers_[0] =
       reinterpret_cast<int8_t*>(row_set_mem_owner->allocate(buf_size, thread_idx_));
@@ -171,11 +177,12 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
     for (auto interval : makeIntervals(size_t(0), rows.entryCount(), worker_count)) {
       conversion_threads.push_back(std::async(
           std::launch::async,
-          [&do_work](const size_t start, const size_t end) {
+          [&do_work, this](const size_t start, const size_t end) {
             if (g_enable_non_kernel_time_query_interrupt) {
               size_t local_idx = 0;
               for (size_t i = start; i < end; ++i, ++local_idx) {
-                if (UNLIKELY((local_idx & 0xFFFF) == 0 && check_interrupt())) {
+                if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
+                             executor_->checkNonKernelTimeInterrupted())) {
                   throw QueryExecutionError(Executor::ERR_INTERRUPTED);
                 }
                 do_work(i);
@@ -221,7 +228,8 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
   };
   if (g_enable_non_kernel_time_query_interrupt) {
     while (!done) {
-      if (UNLIKELY((row_idx & 0xFFFF) == 0 && check_interrupt())) {
+      if (UNLIKELY((row_idx & 0xFFFF) == 0 &&
+                   executor_->checkNonKernelTimeInterrupted())) {
         throw QueryExecutionError(Executor::ERR_INTERRUPTED);
       }
       do_work();
@@ -480,12 +488,13 @@ void ColumnarResults::materializeAllLazyColumns(
     for (auto interval : makeIntervals(size_t(0), rows.entryCount(), worker_count)) {
       conversion_threads.push_back(std::async(
           std::launch::async,
-          [&do_work_just_lazy_columns, &targets_to_skip](const size_t start,
-                                                         const size_t end) {
+          [&do_work_just_lazy_columns, &targets_to_skip, this](const size_t start,
+                                                               const size_t end) {
             if (g_enable_non_kernel_time_query_interrupt) {
               size_t local_idx = 0;
               for (size_t i = start; i < end; ++i, ++local_idx) {
-                if (UNLIKELY((local_idx & 0xFFFF) == 0 && check_interrupt())) {
+                if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
+                             executor_->checkNonKernelTimeInterrupted())) {
                   throw QueryExecutionError(Executor::ERR_INTERRUPTED);
                 }
                 do_work_just_lazy_columns(i, targets_to_skip);
@@ -575,27 +584,28 @@ void ColumnarResults::locateAndCountEntries(const ResultSet& rows,
       bitmap.set(local_idx, thread_idx, true);
     }
   };
-  auto locate_and_count_func = [&do_work, &non_empty_per_thread](size_t start_index,
-                                                                 size_t end_index,
-                                                                 size_t thread_idx) {
-    size_t total_non_empty = 0;
-    size_t local_idx = 0;
-    if (g_enable_non_kernel_time_query_interrupt) {
-      for (size_t entry_idx = start_index; entry_idx < end_index;
-           entry_idx++, local_idx++) {
-        if (UNLIKELY((local_idx & 0xFFFF) == 0 && check_interrupt())) {
-          throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+  auto locate_and_count_func =
+      [&do_work, &non_empty_per_thread, this](
+          size_t start_index, size_t end_index, size_t thread_idx) {
+        size_t total_non_empty = 0;
+        size_t local_idx = 0;
+        if (g_enable_non_kernel_time_query_interrupt) {
+          for (size_t entry_idx = start_index; entry_idx < end_index;
+               entry_idx++, local_idx++) {
+            if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
+                         executor_->checkNonKernelTimeInterrupted())) {
+              throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+            }
+            do_work(total_non_empty, local_idx, entry_idx, thread_idx);
+          }
+        } else {
+          for (size_t entry_idx = start_index; entry_idx < end_index;
+               entry_idx++, local_idx++) {
+            do_work(total_non_empty, local_idx, entry_idx, thread_idx);
+          }
         }
-        do_work(total_non_empty, local_idx, entry_idx, thread_idx);
-      }
-    } else {
-      for (size_t entry_idx = start_index; entry_idx < end_index;
-           entry_idx++, local_idx++) {
-        do_work(total_non_empty, local_idx, entry_idx, thread_idx);
-      }
-    }
-    non_empty_per_thread[thread_idx] = total_non_empty;
-  };
+        non_empty_per_thread[thread_idx] = total_non_empty;
+      };
 
   std::vector<std::future<void>> conversion_threads;
   for (size_t thread_idx = 0; thread_idx < num_threads; thread_idx++) {
@@ -746,16 +756,18 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
     }
   };
 
-  auto compact_buffer_func = [&non_empty_per_thread, &do_work](const size_t start_index,
-                                                               const size_t end_index,
-                                                               const size_t thread_idx) {
+  auto compact_buffer_func = [&non_empty_per_thread, &do_work, this](
+                                 const size_t start_index,
+                                 const size_t end_index,
+                                 const size_t thread_idx) {
     const size_t total_non_empty = non_empty_per_thread[thread_idx];
     size_t non_empty_idx = 0;
     size_t local_idx = 0;
     if (g_enable_non_kernel_time_query_interrupt) {
       for (size_t entry_idx = start_index; entry_idx < end_index;
            entry_idx++, local_idx++) {
-        if (UNLIKELY((local_idx & 0xFFFF) == 0 && check_interrupt())) {
+        if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
+                     executor_->checkNonKernelTimeInterrupted())) {
           throw QueryExecutionError(Executor::ERR_INTERRUPTED);
         }
         do_work(
@@ -846,16 +858,18 @@ void ColumnarResults::compactAndCopyEntriesWithoutTargetSkipping(
       non_empty_idx++;
     }
   };
-  auto compact_buffer_func = [&non_empty_per_thread, &do_work](const size_t start_index,
-                                                               const size_t end_index,
-                                                               const size_t thread_idx) {
+  auto compact_buffer_func = [&non_empty_per_thread, &do_work, this](
+                                 const size_t start_index,
+                                 const size_t end_index,
+                                 const size_t thread_idx) {
     const size_t total_non_empty = non_empty_per_thread[thread_idx];
     size_t non_empty_idx = 0;
     size_t local_idx = 0;
     if (g_enable_non_kernel_time_query_interrupt) {
       for (size_t entry_idx = start_index; entry_idx < end_index;
            entry_idx++, local_idx++) {
-        if (UNLIKELY((local_idx & 0xFFFF) == 0 && check_interrupt())) {
+        if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
+                     executor_->checkNonKernelTimeInterrupted())) {
           throw QueryExecutionError(Executor::ERR_INTERRUPTED);
         }
         do_work(

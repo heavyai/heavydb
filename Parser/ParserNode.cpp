@@ -91,12 +91,13 @@ using DataframeDefFuncPtr =
                          const std::list<ColumnDescriptor>& columns)>;
 
 namespace Parser {
-bool checkInterrupt(const QuerySessionId& query_session, Executor* executor) {
+bool check_session_interrupted(const QuerySessionId& query_session, Executor* executor) {
+  // we call this function with unitary executor but is okay since
+  // we know the exact session info from a global session map object
+  // in the executor
   if (g_enable_non_kernel_time_query_interrupt) {
     mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
-    const auto isInterrupted =
-        executor->checkIsQuerySessionInterrupted(query_session, session_read_lock);
-    return isInterrupted;
+    return executor->checkIsQuerySessionInterrupted(query_session, session_read_lock);
   }
   return false;
 }
@@ -3054,7 +3055,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
       };
 
       for (auto& res : query_results) {
-        if (UNLIKELY(checkInterrupt(query_session, executor))) {
+        if (UNLIKELY(check_session_interrupted(query_session, executor))) {
           throw std::runtime_error(
               "Query execution has been interrupted while performing " + work_type_str);
         }
@@ -3122,7 +3123,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
             size_t local_idx = 0;
             for (idx = start; idx < end; ++idx, ++local_idx) {
               if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
-                           checkInterrupt(query_session, executor))) {
+                           check_session_interrupted(query_session, executor))) {
                 throw std::runtime_error(
                     "Query execution has been interrupted while performing " +
                     work_type_str);
@@ -3179,7 +3180,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
             size_t local_idx = 0;
             for (idx = start; idx < end; ++idx, ++local_idx) {
               if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
-                           checkInterrupt(query_session, executor))) {
+                           check_session_interrupted(query_session, executor))) {
                 throw std::runtime_error(
                     "Query execution has been interrupted while performing " +
                     work_type_str);
@@ -3292,7 +3293,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
           for (int col_idx = 0; col_idx < target_column_descriptors.size(); col_idx++) {
             if (UNLIKELY(g_enable_non_kernel_time_query_interrupt &&
-                         checkInterrupt(query_session, executor))) {
+                         check_session_interrupted(query_session, executor))) {
               throw std::runtime_error(
                   "Query execution has been interrupted while performing " +
                   work_type_str);

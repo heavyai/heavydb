@@ -96,12 +96,10 @@ inline auto get_filesize(const std::string& file_path) {
 }
 
 namespace {
-bool checkInterrupt(const QuerySessionId& query_session, Executor* executor) {
+bool check_session_interrupted(const QuerySessionId& query_session, Executor* executor) {
   if (g_enable_non_kernel_time_query_interrupt && !query_session.empty()) {
     mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
-    const auto isInterrupted =
-        executor->checkIsQuerySessionInterrupted(query_session, session_read_lock);
-    return isInterrupted;
+    return executor->checkIsQuerySessionInterrupted(query_session, session_read_lock);
   }
   return false;
 }
@@ -2297,7 +2295,7 @@ static ImportStatus import_thread_delimited(
             }
           }
           if (UNLIKELY((thread_import_status.rows_completed & 0xFFFF) == 0 &&
-                       checkInterrupt(query_session, executor))) {
+                       check_session_interrupted(query_session, executor))) {
             thread_import_status.load_failed = true;
             thread_import_status.load_msg =
                 "Table load was cancelled via Query Interrupt";
@@ -2465,7 +2463,7 @@ static ImportStatus import_thread_shapefile(
       size_t col_idx = 0;
       try {
         if (UNLIKELY((thread_import_status.rows_completed & 0xFFFF) == 0 &&
-                     checkInterrupt(query_session, executor))) {
+                     check_session_interrupted(query_session, executor))) {
           thread_import_status.load_failed = true;
           thread_import_status.load_msg = "Table load was cancelled via Query Interrupt";
           throw QueryExecutionError(Executor::ERR_INTERRUPTED);
@@ -3866,7 +3864,7 @@ void Importer::import_local_parquet(const std::string& file_path,
       }
       // a sliced row group will be handled like a (logic) parquet file, with
       // a entirely clean set of bad_rows_tracker, import_buffers_vec, ... etc
-      if (UNLIKELY(checkInterrupt(query_session, executor))) {
+      if (UNLIKELY(check_session_interrupted(query_session, executor))) {
         mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
         import_status_.load_failed = true;
         import_status_.load_msg = "Table load was cancelled via Query Interrupt";
@@ -3906,7 +3904,7 @@ void Importer::import_local_parquet(const std::string& file_path,
         const size_t slice_size = (array_size + num_slices - 1) / num_slices;
         ThreadController_NS::SimpleThreadController<void> thread_controller(num_slices);
         for (int slice = 0; slice < num_slices; ++slice) {
-          if (UNLIKELY(checkInterrupt(query_session, executor))) {
+          if (UNLIKELY(check_session_interrupted(query_session, executor))) {
             mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
             import_status_.load_failed = true;
             import_status_.load_msg = "Table load was cancelled via Query Interrupt";

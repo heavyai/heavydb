@@ -126,7 +126,8 @@ ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
     for (size_t bin_base_off = query_mem_desc_.getColOffInBytes(0), bin_idx = 0;
          bin_idx < result_set->entryCount();
          ++bin_idx, bin_base_off += query_mem_desc_.getColOffInBytesInNextBin(0)) {
-      if (UNLIKELY((bin_idx & 0xFFFF) == 0 && check_interrupt())) {
+      if (UNLIKELY((bin_idx & 0xFFFF) == 0 &&
+                   executor_->checkNonKernelTimeInterrupted())) {
         throw std::runtime_error(
             "Query execution has interrupted during result set reduction");
       }

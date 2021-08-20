@@ -36,6 +36,8 @@ class QueryDispatchQueue {
       // worker IDs are 1-indexed, leaving Executor 0 for non-dispatch queue worker tasks
       workers_[i] = std::thread(&QueryDispatchQueue::worker, this, i + 1);
     }
+    num_running_workers_ = 0;
+    num_workers_ = parallel_executors_max;
   }
 
   /**
@@ -64,6 +66,11 @@ class QueryDispatchQueue {
     cv_.notify_all();
   }
 
+  bool hasIdleWorker() {
+    std::lock_guard<decltype(queue_mutex_)> lock(queue_mutex_);
+    return num_running_workers_ < num_workers_;
+  }
+
   ~QueryDispatchQueue() {
     {
       std::lock_guard<decltype(queue_mutex_)> lock(queue_mutex_);
@@ -88,16 +95,19 @@ class QueryDispatchQueue {
       if (!queue_.empty()) {
         auto task = queue_.front();
         queue_.pop();
+        ++num_running_workers_;
 
         LOG(INFO) << "Worker " << worker_idx
                   << " running query and returning control. There are now "
-                  << queue_.size() << " queries in the queue.";
+                  << num_running_workers_ << " workers are running and " << queue_.size()
+                  << " queries in the queue.";
         // allow other threads to pick up tasks
         lock.unlock();
         CHECK(task);
         (*task)(worker_idx);
         // wait for signal
         lock.lock();
+        --num_running_workers_;
       }
     }
   }
@@ -110,4 +120,6 @@ class QueryDispatchQueue {
   bool threads_should_exit_{false};
   std::queue<std::shared_ptr<Task>> queue_;
   std::vector<std::thread> workers_;
+  int num_running_workers_;  // manipulate this under queue_lock
+  int num_workers_;
 };
