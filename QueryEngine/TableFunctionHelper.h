@@ -179,7 +179,8 @@ inline int32_t max_digits_for_ext_integer_arg(const ExtArgumentType ext_arg_type
     case ExtArgumentType::Int64:
       return 18;
     default:
-      CHECK(false);
+      UNREACHABLE();
+      return 0;
   }
 }
 
