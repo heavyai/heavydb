@@ -4271,7 +4271,6 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   }
 
   std::vector<Analyzer::ColumnVar*> input_col_exprs;
-  std::optional<int32_t> dict_id;
   size_t input_index = 0;
   size_t arg_index = 0;
   const auto table_func_args = table_function_impl.getInputArgs();
