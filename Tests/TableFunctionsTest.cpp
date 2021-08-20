@@ -87,7 +87,7 @@ class TableFunctions : public ::testing::Test {
                                                             {"'world'", "'foo'"},
                                                             {"'baz'", "'hello'"}};
 
-      for (const auto p : v) {
+      for (const auto& p : v) {
         const auto insert_query = gen(p.first, p.second);
         run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       }

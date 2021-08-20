@@ -1094,7 +1094,7 @@ class Parser:
     def parse_args(self):
         """fmt: off
 
-        args: arg ("," arg)*
+        args: arg IDENTIFIER ("," arg)*
 
         fmt: on
         """
