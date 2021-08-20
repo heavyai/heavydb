@@ -457,13 +457,13 @@ ct_binding_dict_encoded6__cpu_1(const ColumnList<TextEncodingDict>& input,
 
 // clang-format off
 /*
-  UDTF: ct_binding_template__template(Cursor<TextEncodingDict>) -> Column<TextEncodingDict> | input_id=args<0>
-  UDTF: ct_binding_template__template(Cursor<int>) -> Column<int>
-  UDTF: ct_binding_template__template(Cursor<float>) -> Column<float>
+  UDTF: ct_binding_template__cpu_template(Cursor<TextEncodingDict>) -> Column<TextEncodingDict> | input_id=args<0>
+  UDTF: ct_binding_template__cpu_template(Cursor<int>) -> Column<int>
+  UDTF: ct_binding_template__cpu_template(Cursor<float>) -> Column<float>
 */
 // clang-format on
 template <typename T>
-int32_t ct_binding_template__template(const Column<T>& input, Column<T>& out) {
+int32_t ct_binding_template__cpu_template(const Column<T>& input, Column<T>& out) {
   set_output_row_size(input.size());
   for (int64_t i = 0; i < input.size(); i++) {
     out[i] = input[i];
