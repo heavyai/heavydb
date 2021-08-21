@@ -152,9 +152,10 @@ int main(int argc, char* argv[]) {
   desc.add_options()("help,h", "Print help messages ")(
       "data",
       po::value<std::string>(&base_path)->required(),
-      "Directory path to OmniSci catalogs")(
-      "force,f", "Force overwriting of existing OmniSci instance")(
-      "skip-geo", "Skip inserting sample geo data");
+      "Directory path to OmniSci catalogs")("force,f",
+                                            "Force overwriting of existing OmniSci "
+                                            "instance")("skip-geo",
+                                                        "Skip inserting sample geo data");
 
   desc.add_options()("enable-thrift-logs",
                      po::value<bool>(&g_enable_thrift_logs)
