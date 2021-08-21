@@ -928,6 +928,7 @@ void DBHandler::get_hardware_info(TClusterHardwareInfo& _return,
 
 void DBHandler::get_session_info(TSessionInfo& _return, const TSessionId& session) {
   auto session_ptr = get_session_ptr(session);
+  CHECK(session_ptr);
   auto stdlog = STDLOG(session_ptr);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto user_metadata = session_ptr->get_currentUser();
@@ -1333,6 +1334,7 @@ void DBHandler::sql_execute(ExecutionResult& _return,
       use_calcite ? query_str : boost::trim_copy(query_str.substr(exec_ra_prefix.size()));
 
   auto session_ptr = get_session_ptr(session);
+  CHECK(session_ptr);
   auto query_state = create_query_state(session_ptr, actual_query);
   auto stdlog = STDLOG(session_ptr, query_state);
   auto timer = DEBUG_TIMER(__func__);
@@ -1418,6 +1420,7 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
                                const int32_t first_n,
                                const TArrowTransport::type transport_method) {
   auto session_ptr = get_session_ptr(session);
+  CHECK(session_ptr);
   auto query_state = create_query_state(session_ptr, query_str);
   auto stdlog = STDLOG(session_ptr, query_state);
 
@@ -7078,6 +7081,7 @@ void DBHandler::convertResultSet(ExecutionResult& result,
   // calls convertRows, but after some setup using session_info
 
   auto session_ptr = get_session_ptr(session_info.get_session_id());
+  CHECK(session_ptr);
   auto qs = create_query_state(session_ptr, query_state_str);
   QueryStateProxy qsp = qs->createQueryStateProxy();
 
