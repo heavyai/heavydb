@@ -59,7 +59,7 @@ During import, the **Fragmenter** handles assigning input data to a fragment and
 ChunkKey
 ----------------
 
-The `ChunkKey` is a set of integer values that uniquely identify a chunk. The `ChunkKey` is represented using a C++ `vector` with 4 to 5 entries, depending on the data type of the chunk. Roughly, the entries correspond to **DB**, **Table**, **Column**, **Chunk**, and **VarlenOffset**. Note that a negative **DB** identifier refers to an ephemeral chunk, created during an intermediate query execution step as a temporary result for input to the next step. 
+The `ChunkKey` is a set of integer values that uniquely identify a chunk. The `ChunkKey` is represented using a C++ `vector` with 4 to 5 entries, depending on the data type of the chunk. Roughly, the entries correspond to **DB**, **Table**, **Column**, **Fragment**, and **IsVarlenOffsetSubChunk**. Note that a negative **DB** identifier refers to an ephemeral chunk, created during an intermediate query execution step as a temporary result for input to the next step. 
 
 The table below describes the `ChunkKey` representation for common chunk indexing scenarios across the system.
 

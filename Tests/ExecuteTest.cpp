@@ -19152,6 +19152,118 @@ TEST(Select, WindowFunctionComplexExpressions) {
   }
 }
 
+TEST(Select, FilterNodeCoalesce) {
+  // If we do not coalesce the filter with a subsequent project (manufacturing one if
+  // neccessary), we currently pull all table columns into memory, which is highly
+  // undesirable. For window functions with a preceding filter node, we can not coalesce
+  // the filter node into the window function projection node, as this leads to incorrect
+  // results, so we manufacture a preceding projection
+
+  // Do not run with temp tables as temp tables are pinned and so do not get cleared
+  // with clearCpuMemory(), which in turn means we can't properly measure what
+  // chunks the query is pulling into memory
+  SKIP_WITH_TEMP_TABLES();
+  // Do not run with sharded as we cannot measure the number of logical tables
+  // with getBufferPoolStats
+  SKIP_IF_SHARDED();
+  // Do not run on distributed as getBufferPoolStats not implemented on distributed
+  SKIP_ALL_ON_AGGREGATOR();
+  // Running on GPU with new inter-mixed executon means memory is not all in one buffer
+  // pool
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+
+  // One-level projection - sanity test
+  {
+    // Clear CPU memory and hash table caches
+    QR::get()->clearCpuMemory();
+    {
+      std::string part1 =
+          R"(SELECT x, t, x * t  FROM test_window_func WHERE x >= 3 ORDER BY x ASC)";
+      std::string part2 = ", t ASC;";
+      c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+    }
+    const auto buffer_pool_stats =
+        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL);
+    ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(2));
+    ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
+    ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(2));
+    ASSERT_EQ(buffer_pool_stats.num_fragments, static_cast<size_t>(1));
+    ASSERT_EQ(buffer_pool_stats.num_chunks, static_cast<size_t>(2));
+  }
+
+  // Single-step window function
+  {
+    // Clear CPU memory and hash table caches
+    QR::get()->clearCpuMemory();
+    {
+      std::string part1 =
+          R"(SELECT x, y, LAG(f) OVER (PARTITION BY y ORDER BY x ASC) f_lag FROM test_window_func WHERE x >= 3 ORDER BY x ASC)";
+      std::string part2 = ", y ASC, f_lag ASC;";
+      c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+    }
+
+    const auto buffer_pool_stats =
+        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL);
+    ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(3));
+    ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
+    ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
+    ASSERT_EQ(buffer_pool_stats.num_fragments, static_cast<size_t>(1));
+    ASSERT_EQ(buffer_pool_stats.num_chunks, static_cast<size_t>(3));
+  }
+
+  // Multi-step window function to ensure project is inserted before each window step
+  {
+    // Clear CPU memory and hash table caches
+    QR::get()->clearCpuMemory();
+    {
+      std::string part1 =
+          R"(SELECT x, y, RANK() OVER (PARTITION BY y ORDER BY x ASC) rk FROM (SELECT x, y, LAG(f) OVER (PARTITION BY y ORDER BY x ASC) f_lag FROM test_window_func WHERE x >= 3) foo WHERE x >= 3 ORDER BY x ASC)";
+      std::string part2 = ", y ASC, f_lag ASC;";
+      c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+    }
+
+    const auto buffer_pool_stats =
+        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL);
+    ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(3));
+    ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
+    ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
+    ASSERT_EQ(buffer_pool_stats.num_fragments, static_cast<size_t>(1));
+    ASSERT_EQ(buffer_pool_stats.num_chunks, static_cast<size_t>(3));
+  }
+
+  // Multi-fragment window function with filter should run due to preceding compound node
+  {
+    // Clear CPU memory and hash table caches
+    QR::get()->clearCpuMemory();
+    {
+      std::string part1 =
+          R"(SELECT x, y, d, SUM(d) OVER (PARTITION BY x ORDER BY d) sum_d FROM test_x WHERE x > 6 ORDER BY x, y, d;)";
+      c(part1, part1, dt);
+    }
+
+    const auto buffer_pool_stats =
+        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL);
+    ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(30));
+    ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
+    ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
+    ASSERT_EQ(buffer_pool_stats.num_fragments, static_cast<size_t>(10));
+    ASSERT_EQ(buffer_pool_stats.num_chunks, static_cast<size_t>(30));
+  }
+
+  // Multi-fragment window function without filter should throw currently due to not
+  // having preceding node injected (as there is no filter) Note: Will need to change when
+  // we enable multi-fragment direct inputs for window functions
+  {
+    // Clear CPU memory and hash table caches
+    QR::get()->clearCpuMemory();
+    {
+      std::string part1 =
+          R"(SELECT x, y, d, SUM(d) OVER (PARTITION BY x ORDER BY d) sum_d FROM test_x ORDER BY x, y, d;)";
+      EXPECT_THROW(run_multiple_agg(part1, dt), std::exception);
+    }
+  }
+}
+
 TEST(Select, EmptyString) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

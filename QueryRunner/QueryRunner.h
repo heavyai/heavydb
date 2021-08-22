@@ -66,6 +66,28 @@ struct QueryPlanDagInfo {
   std::shared_ptr<RelAlgTranslator> rel_alg_translator;
 };
 
+struct BufferPoolStats {
+  size_t num_buffers;
+  size_t num_bytes;
+  size_t num_tables;
+  size_t num_columns;
+  size_t num_fragments;
+  size_t num_chunks;
+
+  void print() const {
+    std::cout << std::endl
+              << std::endl
+              << "------------ Buffer Pool Stats  ------------" << std::endl;
+    std::cout << "Num buffers: " << num_buffers << std::endl;
+    std::cout << "Num bytes: " << num_bytes << std::endl;
+    std::cout << "Num tables: " << num_tables << std::endl;
+    std::cout << "Num columns: " << num_columns << std::endl;
+    std::cout << "Num fragments: " << num_fragments << std::endl;
+    std::cout << "Num chunks: " << num_chunks << std::endl;
+    std::cout << "--------------------------------------------" << std::endl << std::endl;
+  }
+};
+
 class QueryRunner {
  public:
   static QueryRunner* init(const char* db_path,
@@ -140,6 +162,10 @@ class QueryRunner {
   bool gpusPresent() const;
   virtual void clearGpuMemory() const;
   virtual void clearCpuMemory() const;
+  std::vector<MemoryInfo> getMemoryInfo(
+      const Data_Namespace::MemoryLevel memory_level) const;
+  BufferPoolStats getBufferPoolStats(
+      const Data_Namespace::MemoryLevel memory_level) const;
 
   virtual void runDDLStatement(const std::string&);
   virtual void validateDDLStatement(const std::string&);

@@ -1670,10 +1670,9 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
       }
       case CoalesceState::Filter: {
         if (auto project_node = std::dynamic_pointer_cast<const RelProject>(ra_node)) {
-          if (project_node->hasWindowFunctionExpr()) {
-            reset_state();
-            break;
-          }
+          // Given we now add preceding projects for all window functions following
+          // RelFilter nodes, the following should never occur
+          CHECK(!project_node->hasWindowFunctionExpr());
           crt_pattern.push_back(size_t(nodeIt));
           crt_state = CoalesceState::FirstProject;
           nodeIt.advance(RANodeIterator::AdvancingMode::DUChain);
@@ -2053,13 +2052,20 @@ class RexInputCollector : public RexVisitor<RexInputSet> {
 /**
  * Inserts a simple project before any project containing a window function node. Forces
  * all window function inputs into a single contiguous buffer for centralized processing
- * (e.g. in distributed mode). Once the new project has been created, the inputs in the
+ * (e.g. in distributed mode). This is also needed when a window function node is preceded
+ * by a filter node, both for correctness (otherwise a window operator will be coalesced
+ * with its preceding filter node and be computer over unfiltered results, and for
+ * performance, as currently filter nodes that are not coalesced into projects keep all
+ * columns from the table as inputs, and hence bring everything in memory.
+ * Once the new project has been created, the inputs in the
  * window function project must be rewritten to read from the new project, and to index
  * off the projected exprs in the new project.
  */
-void add_window_function_pre_project(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+void add_window_function_pre_project(
+    std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+    const bool always_add_project_if_first_project_is_window_expr) {
   std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
-
+  size_t window_node_counter{0};
   for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
     const auto node = *node_itr;
     auto window_func_project_node = std::dynamic_pointer_cast<RelProject>(node);
@@ -2067,14 +2073,42 @@ void add_window_function_pre_project(std::vector<std::shared_ptr<RelAlgNode>>& n
       continue;
     }
     if (!window_func_project_node->hasWindowFunctionExpr()) {
-      // the first projection node in the query plan does not have a window function
-      // expression -- this step is not requierd.
-      return;
+      // this projection node does not have a window function
+      // expression -- skip to the next node in the DAG.
+      continue;
     }
+    window_node_counter++;
 
     const auto prev_node_itr = std::prev(node_itr);
     const auto prev_node = *prev_node_itr;
     CHECK(prev_node);
+
+    auto filter_node = std::dynamic_pointer_cast<RelFilter>(prev_node);
+
+    // We currently add a preceding project node in one of two conditions:
+    // 1. always_add_project_if_first_project_is_window_expr = true, which
+    // we currently only set for distributed, but could also be set to support
+    // multi-frag window function inputs, either if we can detect that an input table
+    // is multi-frag up front, or using a retry mechanism like we do for join filter
+    // push down.
+    // TODO(todd): Investigate a viable approach for the above.
+    // 2. Regardless of #1, if the window function project node is preceded by a
+    // filter node. This is required both for correctness and to avoid pulling
+    // all source input columns into memory since non-coalesced filter node
+    // inputs are currently not pruned or eliminated via dead column elimination.
+    // Note that we expect any filter node followed by a project node to be coalesced
+    // into a single compound node in RelAlgDagBuilder::coalesce_nodes, and that action
+    // prunes unused inputs.
+    // TODO(todd): Investigate whether the shotgun filter node issue affects other
+    // query plans, i.e. filters before joins, and whether there is a more general
+    // approach to solving this (will still need the preceding project node for
+    // window functions preceded by filter nodes for correctness though)
+
+    if (!((always_add_project_if_first_project_is_window_expr &&
+           window_node_counter == 1) ||
+          (filter_node))) {
+      continue;
+    }
 
     RexInputSet inputs;
     RexInputCollector input_collector;
@@ -2106,8 +2140,6 @@ void add_window_function_pre_project(std::vector<std::shared_ptr<RelAlgNode>>& n
     node_list.insert(node_itr, new_project);
     window_func_project_node->replaceInput(
         prev_node, new_project, old_index_to_new_index);
-
-    break;
   }
 
   nodes.assign(node_list.begin(), node_list.end());
@@ -2685,9 +2717,8 @@ void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
   eliminate_dead_columns(nodes_);
   eliminate_dead_subqueries(subqueries_, nodes_.back().get());
   separate_window_function_expressions(nodes_);
-  if (g_cluster) {
-    add_window_function_pre_project(nodes_);
-  }
+  add_window_function_pre_project(
+      nodes_, g_cluster /* always_add_project_if_first_project_is_window_expr */);
   coalesce_nodes(nodes_, left_deep_joins);
   CHECK(nodes_.back().use_count() == 1);
   create_left_deep_join(nodes_);
