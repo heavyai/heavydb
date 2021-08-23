@@ -78,6 +78,10 @@ if(ENABLE_AWS_S3)
   set_arrow_has_private_aws_sdk()
 endif()
 
+if(ENABLE_MEMKIND)
+  list(APPEND datamgr_source_files Allocators/HeteroMem/MemResourceProvider.cpp)
+endif()
+
 add_library(DataMgr ${datamgr_source_files})
 
 target_link_libraries(DataMgr CudaMgr $<$<BOOL:${ENABLE_FOLLY}>:${Folly_LIBRARIES}> Shared ${Boost_THREAD_LIBRARY} ${TBB_LIBS} ${CMAKE_DL_LIBS})
