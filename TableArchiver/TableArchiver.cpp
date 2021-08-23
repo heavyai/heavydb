@@ -112,9 +112,24 @@ inline std::string run(const std::string& cmd, const std::string& chdir = "") {
         if (1 == rcode && errors.find("changed as we read") != std::string::npos) {
       LOG(ERROR) << "tar error ignored under concurrent inserts";
     } else {
-      throw std::runtime_error("Failed to run command: " + cmd +
-                               "\nexit code: " + std::to_string(rcode) + "\nerrors:\n" +
-                               (rcode ? errors : ec.message()));
+      int error_code;
+      std::string error_message;
+      if (ec) {
+        error_code = ec.value();
+        error_message = ec.message();
+      } else {
+        error_code = rcode;
+        // Show a more concise message for permission errors instead of the default
+        // verbose message. Error logs will still contain all details.
+        if (to_lower(errors).find("permission denied") != std::string::npos) {
+          error_message = "Insufficient file read/write permission.";
+        } else {
+          error_message = errors;
+        }
+      }
+      throw std::runtime_error(
+          "An error occurred while executing an internal command. Error code: " +
+          std::to_string(error_code) + ", message: " + error_message);
     }
   } else {
     VLOG(3) << "finished cmd: " << cmd;

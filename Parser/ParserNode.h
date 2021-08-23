@@ -1395,6 +1395,12 @@ class DumpRestoreTableStmtBase : public DDLStmt {
                            std::list<NameValueAssign*>* options,
                            const bool is_restore)
       : table_(tab), path_(path) {
+    for (const auto& program : {"tar", "rm", "mkdir", "mv", "cat"}) {
+      if (boost::process::search_path(program).empty()) {
+        throw std::runtime_error{"Required program \"" + std::string{program} +
+                                 "\" was not found."};
+      }
+    }
     auto options_deleter = [](std::list<NameValueAssign*>* options) {
       for (auto option : *options) {
         delete option;
