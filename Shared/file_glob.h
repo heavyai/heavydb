@@ -27,6 +27,11 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <vector>
+
+#ifdef HAVE_AWS_S3
+#include <aws/s3/model/Object.h>
+#endif  // HAVE_AWS_S3
 
 namespace shared {
 
@@ -58,6 +63,12 @@ std::set<std::string> regex_file_filter(const std::string& pattern,
 std::set<std::pair<std::string, size_t>> regex_file_filter(
     const std::string& pattern,
     const std::set<std::pair<std::string, size_t>>& file_infos);
+
+#ifdef HAVE_AWS_S3
+std::vector<Aws::S3::Model::Object> regex_file_filter(
+    const std::string& pattern,
+    const std::vector<Aws::S3::Model::Object>& objects_list);
+#endif  // HAVE_AWS_S3
 
 std::set<std::string> glob_recursive_and_filter_local_files(
     const std::string& file_path,

@@ -29,6 +29,7 @@
 
 #include "DataMgr/OmniSciAwsSdk.h"
 #include "Logger/Logger.h"
+#include "Shared/file_glob.h"
 
 bool g_allow_s3_server_privileges{false};
 
@@ -83,6 +84,9 @@ void S3Archive::init_for_read() {
         // pass only object keys to next stage, which may be Importer::import_parquet,
         // Importer::import_compressed or else, depending on copy_params (eg. .is_parquet)
         auto object_list = list_objects_outcome.GetResult().GetContents();
+        if (regex_path_filter.has_value()) {
+          object_list = shared::regex_file_filter(regex_path_filter.value(), object_list);
+        }
         if (0 == object_list.size()) {
           if (objkeys.empty()) {
             throw std::runtime_error("no object was found with s3 url '" + url + "'");

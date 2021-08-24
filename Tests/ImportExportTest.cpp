@@ -44,6 +44,7 @@
 #include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
+#include "Shared/file_glob.h"
 #include "Shared/misc.h"
 #include "Shared/scope.h"
 
@@ -95,6 +96,14 @@ bool compare_agg(const int64_t cnt, const double avg) {
     LOG(ERROR) << "error: " << r_cnt << ":" << cnt << ", " << r_avg << ":" << avg;
   }
   return r_cnt == cnt && fabs(r_avg - avg) < 1E-9;
+}
+
+std::string options_to_string(const std::map<std::string, std::string>& options) {
+  std::string options_str;
+  for (auto const& [key, val] : options) {
+    options_str += "," + key + "='" + val + "'";
+  }
+  return options_str;
 }
 
 #ifdef ENABLE_IMPORT_PARQUET
@@ -177,12 +186,15 @@ void import_test_geofile_importer(const std::string& file_str,
       file_path.string(), table_name, compression, create_table, explode_collections));
 }
 
-bool import_test_local(const string& filename, const int64_t cnt, const double avg) {
+bool import_test_local(const string& filename,
+                       const int64_t cnt,
+                       const double avg,
+                       const std::map<std::string, std::string>& options = {}) {
   return import_test_common(
       string("COPY trips FROM '") + "../../Tests/Import/datafiles/" + filename +
           "' WITH (header='true'" +
           (filename.find(".parquet") != std::string::npos ? ",parquet='true'" : "") +
-          ");",
+          options_to_string(options) + ");",
       cnt,
       avg);
 }
@@ -254,7 +266,8 @@ bool import_test_local_geo(const string& filename,
 bool import_test_s3(const string& prefix,
                     const string& filename,
                     const int64_t cnt,
-                    const double avg) {
+                    const double avg,
+                    const std::map<std::string, std::string>& options = {}) {
   // unlikely we will expose any credentials in clear text here.
   // likely credentials will be passed as the "tester"'s env.
   // though s3 sdk should by default access the env, if any,
@@ -282,15 +295,16 @@ bool import_test_s3(const string& prefix,
                    filename.find(".parquet") != std::string::npos
                ? ",parquet='true'"
                : "") +
-          ");",
+          options_to_string(options) + ");",
       cnt,
       avg);
 }
 
 bool import_test_s3_compressed(const string& filename,
                                const int64_t cnt,
-                               const double avg) {
-  return import_test_s3("trip.compressed", filename, cnt, avg);
+                               const double avg,
+                               const std::map<std::string, std::string>& options = {}) {
+  return import_test_s3("trip.compressed", filename, cnt, avg, options);
 }
 #endif  // HAVE_AWS_S3
 
@@ -298,15 +312,17 @@ bool import_test_s3_compressed(const string& filename,
 bool import_test_local_parquet(const string& prefix,
                                const string& filename,
                                const int64_t cnt,
-                               const double avg) {
-  return import_test_local(prefix + "/" + filename, cnt, avg);
+                               const double avg,
+                               const std::map<std::string, std::string>& options = {}) {
+  return import_test_local(prefix + "/" + filename, cnt, avg, options);
 }
 #ifdef HAVE_AWS_S3
 bool import_test_s3_parquet(const string& prefix,
                             const string& filename,
                             const int64_t cnt,
-                            const double avg) {
-  return import_test_s3(prefix, filename, cnt, avg);
+                            const double avg,
+                            const std::map<std::string, std::string>& options = {}) {
+  return import_test_s3(prefix, filename, cnt, avg, options);
 }
 #endif  // HAVE_AWS_S3
 #endif  // ENABLE_IMPORT_PARQUET
@@ -961,6 +977,21 @@ TEST_F(ImportTest, S3_All_parquet_file) {
 TEST_F(ImportTest, S3_All_parquet_file_drop) {
   EXPECT_TRUE(import_test_s3_parquet("trip+1.parquet", "", 1200, 1.0));
 }
+TEST_F(ImportTest, S3_Regex_path_filter_parquet_match) {
+  EXPECT_TRUE(import_test_s3_parquet(
+      "trip.parquet",
+      "",
+      100,
+      1.0,
+      {{"REGEX_PATH_FILTER",
+        ".*part-00000-9109acad-a559-4a00-b05c-878aeb8bca24-c000.snappy.parquet.*"}}));
+}
+TEST_F(ImportTest, S3_Regex_path_filter_parquet_no_match) {
+  EXPECT_THROW(
+      import_test_s3_parquet(
+          "trip.parquet", "", -1, -1.0, {{"REGEX_PATH_FILTER", "very?obscure?pattern"}}),
+      shared::NoRegexFilterMatchException);
+}
 TEST_F(ImportTest, S3_Null_Prefix) {
   EXPECT_THROW(run_ddl_statement("copy trips from 's3://omnisci_ficticiousbucket/';"),
                std::runtime_error);
@@ -1065,6 +1096,18 @@ TEST_F(ImportTest, No_match_wildcard) {
 
 TEST_F(ImportTest, Many_files_directory) {
   EXPECT_TRUE(import_test_local("trip_data_dir/csv", 1200, 1.0));
+}
+
+TEST_F(ImportTest, Regex_path_filter_match) {
+  EXPECT_TRUE(import_test_local(
+      "trip_data_dir/csv", 300, 1.0, {{"REGEX_PATH_FILTER", ".*trip_data_[5-7]\.csv"}}));
+}
+
+TEST_F(ImportTest, Regex_path_filter_no_match) {
+  EXPECT_THROW(
+      import_test_local(
+          "trip_data_dir/csv", -1, -1.0, {{"REGEX_PATH_FILTER", "very?obscure?path"}}),
+      shared::NoRegexFilterMatchException);
 }
 
 // Sharding tests
@@ -1698,6 +1741,17 @@ TEST_F(ImportTest, S3_One_7z_with_many_csv_files) {
 
 TEST_F(ImportTest, S3_All_files) {
   EXPECT_TRUE(import_test_s3_compressed("", 105200, 1.0));
+}
+
+TEST_F(ImportTest, S3_Regex_path_filter_match) {
+  EXPECT_TRUE(import_test_s3_compressed(
+      "", 300, 1.0, {{"REGEX_PATH_FILTER", ".*trip_data_[5-7]\.csv"}}));
+}
+
+TEST_F(ImportTest, S3_Regex_path_filter_no_match) {
+  EXPECT_THROW(import_test_s3_compressed(
+                   "", -1, -1.0, {{"REGEX_PATH_FILTER", "very?obscure?pattern"}}),
+               shared::NoRegexFilterMatchException);
 }
 
 TEST_F(ImportTest, S3_GCS_One_gz_file) {

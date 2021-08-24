@@ -96,6 +96,24 @@ std::set<std::pair<std::string, size_t>> regex_file_filter(
   return matched_file_infos;
 }
 
+#ifdef HAVE_AWS_S3
+std::vector<Aws::S3::Model::Object> regex_file_filter(
+    const std::string& pattern,
+    const std::vector<Aws::S3::Model::Object>& objects_list) {
+  std::regex regex_pattern(pattern);
+  std::vector<Aws::S3::Model::Object> matched_objects_list;
+  for (const auto& object : objects_list) {
+    if (std::regex_match(object.GetKey(), regex_pattern)) {
+      matched_objects_list.push_back(object);
+    }
+  }
+  if (matched_objects_list.empty()) {
+    throw_no_filter_match(pattern);
+  }
+  return matched_objects_list;
+}
+#endif  // HAVE_AWS_S3
+
 std::set<std::string> glob_recursive_and_filter_local_files(
     const std::string& file_path,
     const std::optional<std::string>& filter) {

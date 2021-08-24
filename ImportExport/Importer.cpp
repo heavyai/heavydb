@@ -3635,7 +3635,8 @@ ImportStatus DataStreamSink::archivePlumber(
 
   std::vector<std::string> file_paths;
   try {
-    auto file_paths_set = shared::glob_local_recursive_files(file_path);
+    auto file_paths_set = shared::glob_recursive_and_filter_local_files(
+        file_path, copy_params.regex_path_filter);
     file_paths = std::vector<std::string>(file_paths_set.begin(), file_paths_set.end());
   } catch (const shared::FileNotFoundException& e) {
     // After finding no matching files locally, file_path may still be an s3 url
@@ -4014,7 +4015,8 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths,
                                            copy_params.s3_session_token,
                                            copy_params.s3_region,
                                            copy_params.s3_endpoint,
-                                           copy_params.plain_text));
+                                           copy_params.plain_text,
+                                           copy_params.regex_path_filter));
         us3arch->init_for_read();
         total_file_size += us3arch->get_total_file_size();
         objkeys = us3arch->get_objkeys();
@@ -4053,6 +4055,11 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths,
     if (teptr) {
       std::rethrow_exception(teptr);
     }
+  } catch (const shared::NoRegexFilterMatchException& e) {
+    mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
+    import_status_.load_failed = true;
+    import_status_.load_msg = e.what();
+    throw e;
   } catch (const std::exception& e) {
     mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
     import_status_.load_failed = true;
@@ -4140,7 +4147,8 @@ void DataStreamSink::import_compressed(
                                       copy_params.s3_session_token,
                                       copy_params.s3_region,
                                       copy_params.s3_endpoint,
-                                      copy_params.plain_text));
+                                      copy_params.plain_text,
+                                      copy_params.regex_path_filter));
           us3arch->init_for_read();
           total_file_size += us3arch->get_total_file_size();
           // not land all files here but one by one in following iterations

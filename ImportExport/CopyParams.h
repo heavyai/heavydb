@@ -83,6 +83,7 @@ struct CopyParams {
   bool geo_assign_render_groups;
   bool geo_explode_collections;
   int32_t source_srid;
+  std::optional<std::string> regex_path_filter;
 
   CopyParams()
       : delimiter(',')

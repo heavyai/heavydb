@@ -65,13 +65,15 @@ class S3Archive : public Archive {
             const std::string& s3_session_token,
             const std::string& s3_region,
             const std::string& s3_endpoint,
-            const bool plain_text)
+            const bool plain_text,
+            const std::optional<std::string>& regex_path_filter)
       : S3Archive(url, plain_text) {
     this->s3_access_key = s3_access_key;
     this->s3_secret_key = s3_secret_key;
     this->s3_session_token = s3_session_token;
     this->s3_region = s3_region;
     this->s3_endpoint = s3_endpoint;
+    this->regex_path_filter = regex_path_filter;
 
     // this must be local to omnisci_server not client
     // or posix dir path accessible to omnisci_server
@@ -132,6 +134,7 @@ class S3Archive : public Archive {
 
   std::string bucket_name;
   std::string prefix_name;
+  std::optional<std::string> regex_path_filter;
   std::vector<std::string> objkeys;
   std::map<const std::string, const std::string> file_paths;
   size_t total_file_size{0};
@@ -145,14 +148,16 @@ class S3ParquetArchive : public S3Archive {
                    const std::string& s3_session_token,
                    const std::string& s3_region,
                    const std::string& s3_endpoint,
-                   const bool plain_text)
+                   const bool plain_text,
+                   const std::optional<std::string>& regex_path_filter)
       : S3Archive(url,
                   s3_access_key,
                   s3_secret_key,
                   s3_session_token,
                   s3_region,
                   s3_endpoint,
-                  plain_text) {}
+                  plain_text,
+                  regex_path_filter) {}
 };
 
 #endif /* ARCHIVE_S3ARCHIVE_H_ */

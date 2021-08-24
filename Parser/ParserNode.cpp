@@ -4785,6 +4785,15 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
           throw std::runtime_error(
               "'source_srid' option can only be used on csv/tsv files");
         }
+      } else if (boost::iequals(*p->get_name(), "regex_path_filter")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option regex_path_filter must be a string.");
+        }
+        const auto string_val = *str_literal->get_stringval();
+        copy_params.regex_path_filter =
+            string_val.empty() ? std::nullopt : std::optional<std::string>{string_val};
       } else {
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }
