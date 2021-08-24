@@ -70,7 +70,7 @@ struct QueryOutputBufferMemoryManager {
       , executor_(executor)
       , col_buf_ptrs_(col_buf_ptrs)
       , row_set_mem_owner_(row_set_mem_owner)
-      , output_num_rows_(0) {
+      , output_num_rows_(-1) {
     set_singleton(this);  // start of singleton life
     auto num_out_columns = get_ncols();
     output_col_buf_ptrs.reserve(num_out_columns);
@@ -99,7 +99,8 @@ struct QueryOutputBufferMemoryManager {
   }
 
   void allocate_output_buffers(int64_t output_num_rows) {
-    CHECK_EQ(output_num_rows_, 0);  // re-allocation of output buffers is not supported
+    CHECK_EQ(output_num_rows_,
+             size_t(-1));  // re-allocation of output buffers is not supported
     output_num_rows_ = output_num_rows;
     auto num_out_columns = get_ncols();
     QueryMemoryDescriptor query_mem_desc(executor_,
@@ -113,18 +114,6 @@ struct QueryOutputBufferMemoryManager {
       query_mem_desc.addColSlotInfo({std::make_tuple(8, 8)});
     }
 
-    query_buffers = std::make_unique<QueryMemoryInitializer>(
-        exe_unit_,
-        query_mem_desc,
-        /*device_id=*/0,
-        ExecutorDeviceType::CPU,
-        output_num_rows_,
-        std::vector<std::vector<const int8_t*>>{col_buf_ptrs_},
-        std::vector<std::vector<uint64_t>>{{0}},  // frag offsets
-        row_set_mem_owner_,
-        nullptr,
-        executor_);
-
     // The members layout of Column must match with Column defined in
     // OmniSciTypes.h
     struct Column {
@@ -136,16 +125,29 @@ struct QueryOutputBufferMemoryManager {
       }
     };
 
-    auto group_by_buffers_ptr = query_buffers->getGroupByBuffersPtr();
-    CHECK(group_by_buffers_ptr);
-    auto output_buffers_ptr = reinterpret_cast<int64_t*>(group_by_buffers_ptr[0]);
-    for (size_t i = 0; i < num_out_columns; i++) {
-      Column* col = reinterpret_cast<Column*>(output_column_ptrs[i]);
-      CHECK(col);
-      output_col_buf_ptrs[i] = output_buffers_ptr + i * output_num_rows_;
-      // set the members of output Column instances:
-      col->ptr = reinterpret_cast<int8_t*>(output_col_buf_ptrs[i]);
-      col->size = output_num_rows_;
+    query_buffers = std::make_unique<QueryMemoryInitializer>(
+        exe_unit_,
+        query_mem_desc,
+        /*device_id=*/0,
+        ExecutorDeviceType::CPU,
+        (output_num_rows_ == 0 ? 1 : output_num_rows_),
+        std::vector<std::vector<const int8_t*>>{col_buf_ptrs_},
+        std::vector<std::vector<uint64_t>>{{0}},  // frag offsets
+        row_set_mem_owner_,
+        nullptr,
+        executor_);
+    if (output_num_rows_ != 0) {
+      auto group_by_buffers_ptr = query_buffers->getGroupByBuffersPtr();
+      CHECK(group_by_buffers_ptr);
+      auto output_buffers_ptr = reinterpret_cast<int64_t*>(group_by_buffers_ptr[0]);
+      for (size_t i = 0; i < num_out_columns; i++) {
+        Column* col = reinterpret_cast<Column*>(output_column_ptrs[i]);
+        CHECK(col);
+        // set the members of output Column instances:
+        output_col_buf_ptrs[i] = output_buffers_ptr + i * output_num_rows_;
+        col->ptr = reinterpret_cast<int8_t*>(output_col_buf_ptrs[i]);
+        col->size = output_num_rows_;
+      }
     }
   }
 

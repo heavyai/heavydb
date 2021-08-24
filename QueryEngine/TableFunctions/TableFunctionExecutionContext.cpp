@@ -265,7 +265,6 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
                                         col_sizes.data(),  // input column sizes
                                         nullptr,
                                         &output_row_count);
-
   if (err) {
     throw std::runtime_error("Error executing table function: " + std::to_string(err));
   }
@@ -282,11 +281,20 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
     }
   }
   // Update entry count, it may differ from allocated mem size
+  if (exe_unit.table_func.hasTableFunctionSpecifiedParameter() && !mgr->query_buffers) {
+    // set_output_row_size has not been called
+    if (output_row_count == 0) {
+      // allocate for empty output columns
+      mgr->allocate_output_buffers(0);
+    } else {
+      throw std::runtime_error("Table function must call set_output_row_size");
+    }
+  }
+
   mgr->query_buffers->getResultSet(0)->updateStorageEntryCount(output_row_count);
 
   const size_t column_size = output_row_count * sizeof(int64_t);
   const size_t allocated_column_size = mgr->get_nrows() * sizeof(int64_t);
-
   auto group_by_buffers_ptr = mgr->query_buffers->getGroupByBuffersPtr();
   CHECK(group_by_buffers_ptr);
   auto output_buffers_ptr = reinterpret_cast<int64_t*>(group_by_buffers_ptr[0]);
@@ -365,7 +373,7 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
       query_mem_desc,
       device_id,
       ExecutorDeviceType::GPU,
-      allocated_output_row_count,
+      (allocated_output_row_count == 0 ? 1 : allocated_output_row_count),
       std::vector<std::vector<const int8_t*>>{col_buf_ptrs},
       std::vector<std::vector<uint64_t>>{{0}},  // frag offsets
       row_set_mem_owner_,

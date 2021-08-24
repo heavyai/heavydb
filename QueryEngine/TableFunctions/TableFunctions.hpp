@@ -21,6 +21,7 @@
 /*
   UDTF: row_copier(Column<double>, RowMultiplier) -> Column<double>
   UDTF: row_copier_text(Column<TextEncodingDict>, RowMultiplier) -> Column<TextEncodingDict> | input_id=args<0>
+  UDTF: row_copier2__cpu__(Column<double>, int) -> Column<double>, Column<double>
 */
 // clang-format on
 EXTENSION_NOINLINE int32_t row_copier(const Column<double>& input_col,
@@ -52,6 +53,47 @@ EXTENSION_NOINLINE int32_t row_copier(const Column<double>& input_col,
   }
 
   return output_row_count;
+}
+
+EXTENSION_NOINLINE int32_t row_copier2__cpu__(const Column<double>& input_col,
+                                              int copy_multiplier,
+                                              Column<double>& output_col,
+                                              Column<double>& output_col2) {
+  if (copy_multiplier == -1) {
+    // Test UDTF return without allocating output columns, expect
+    // empty output columns.
+    return 0;
+  }
+  if (copy_multiplier == -2) {
+    // Test UDTF return without allocating output columns but
+    // returning positive row size, expect runtime error.
+    return 1;
+  }
+#ifndef __CUDACC__
+  if (copy_multiplier == -3) {
+    // Test UDTF throw before allocating output columns, expect
+    // runtime error.
+    throw std::runtime_error("row_copier2: throw before calling set_output_row_size");
+  }
+  if (copy_multiplier == -4) {
+    // Test UDTF throw after allocating output columns, expect
+    // runtime error.
+    set_output_row_size(1);
+    throw std::runtime_error("row_copier2: throw after calling set_output_row_size");
+  }
+#endif
+  if (copy_multiplier == -5) {
+    // Test UDTF setting negative row size, expect runtime error.
+    set_output_row_size(-1);
+  }
+  int32_t output_row_count = copy_multiplier * input_col.size();
+  /* set_output_row_size can be used only when an UDTF is executed on CPU */
+  set_output_row_size(output_row_count);
+  auto result = row_copier(input_col, copy_multiplier, output_col);
+  if (result >= 0) {
+    result = row_copier(input_col, copy_multiplier, output_col2);
+  }
+  return result;
 }
 
 EXTENSION_NOINLINE int32_t row_copier_text(const Column<TextEncodingDict>& input_col,

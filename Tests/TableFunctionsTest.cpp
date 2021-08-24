@@ -105,6 +105,13 @@ TEST_F(TableFunctions, BasicProjection) {
     SKIP_NO_GPU();
     {
       const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 0)) ORDER BY "
+          "out0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(0));
+    }
+    {
+      const auto rows = run_multiple_agg(
           "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 1)) ORDER BY "
           "out0;",
           dt);
@@ -130,6 +137,22 @@ TEST_F(TableFunctions, BasicProjection) {
           "out0;",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(20));
+    }
+    if (dt == ExecutorDeviceType::CPU) {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), 0)) ORDER "
+          "BY "
+          "out0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(0));
+    }
+    if (dt == ExecutorDeviceType::CPU) {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), 1)) ORDER "
+          "BY "
+          "out0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
     }
     {
       const auto rows = run_multiple_agg(
@@ -260,6 +283,46 @@ TEST_F(TableFunctions, BasicProjection) {
         auto v = TestHelpers::v<int64_t>(row[0]);
         ASSERT_EQ(v, expected_result_set[i]);
       }
+    }
+
+    // Tests various invalid returns from a table function:
+    if (dt == ExecutorDeviceType::CPU) {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), -1));", dt);
+      ASSERT_EQ(rows->rowCount(), size_t(0));
+    }
+
+    if (dt == ExecutorDeviceType::CPU) {
+      EXPECT_THROW(
+          run_multiple_agg(
+              "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), -2));",
+              dt),
+          std::runtime_error);
+    }
+
+    // TODO: enable the following tests after QE-50 is resolved:
+    if (false && dt == ExecutorDeviceType::CPU) {
+      EXPECT_THROW(
+          run_multiple_agg(
+              "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), -3));",
+              dt),
+          std::runtime_error);
+    }
+
+    if (false && dt == ExecutorDeviceType::CPU) {
+      EXPECT_THROW(
+          run_multiple_agg(
+              "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), -4));",
+              dt),
+          std::runtime_error);
+    }
+
+    if (false && dt == ExecutorDeviceType::CPU) {
+      EXPECT_THROW(
+          run_multiple_agg(
+              "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), -5));",
+              dt),
+          std::runtime_error);
     }
   }
 }
