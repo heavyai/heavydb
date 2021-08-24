@@ -2065,19 +2065,19 @@ void add_window_function_pre_project(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes,
     const bool always_add_project_if_first_project_is_window_expr) {
   std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
-  size_t window_node_counter{0};
+  size_t project_node_counter{0};
   for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
     const auto node = *node_itr;
     auto window_func_project_node = std::dynamic_pointer_cast<RelProject>(node);
     if (!window_func_project_node) {
       continue;
     }
+    project_node_counter++;
     if (!window_func_project_node->hasWindowFunctionExpr()) {
       // this projection node does not have a window function
       // expression -- skip to the next node in the DAG.
       continue;
     }
-    window_node_counter++;
 
     const auto prev_node_itr = std::prev(node_itr);
     const auto prev_node = *prev_node_itr;
@@ -2105,7 +2105,7 @@ void add_window_function_pre_project(
     // window functions preceded by filter nodes for correctness though)
 
     if (!((always_add_project_if_first_project_is_window_expr &&
-           window_node_counter == 1) ||
+           project_node_counter == 1) ||
           (filter_node))) {
       continue;
     }

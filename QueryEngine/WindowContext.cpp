@@ -27,6 +27,32 @@
 #include "Shared/checked_alloc.h"
 #include "Shared/funcannotations.h"
 
+// Non-partitioned version (no join table provided)
+WindowFunctionContext::WindowFunctionContext(
+    const Analyzer::WindowFunction* window_func,
+    const size_t elem_count,
+    const ExecutorDeviceType device_type,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
+    : window_func_(window_func)
+    , partitions_(nullptr)
+    , elem_count_(elem_count)
+    , output_(nullptr)
+    , partition_start_(nullptr)
+    , partition_end_(nullptr)
+    , device_type_(device_type)
+    , row_set_mem_owner_(row_set_mem_owner)
+    , dummy_count_(elem_count)
+    , dummy_offset_(0)
+    , dummy_payload_(nullptr) {
+  CHECK_LE(elem_count_, static_cast<size_t>(std::numeric_limits<int32_t>::max()));
+  if (elem_count_ > 0) {
+    dummy_payload_ =
+        reinterpret_cast<int32_t*>(checked_malloc(elem_count_ * sizeof(int32_t)));
+    std::iota(dummy_payload_, dummy_payload_ + elem_count_, int32_t(0));
+  }
+}
+
+// Partitioned version
 WindowFunctionContext::WindowFunctionContext(
     const Analyzer::WindowFunction* window_func,
     const std::shared_ptr<HashJoin>& partitions,
@@ -40,11 +66,19 @@ WindowFunctionContext::WindowFunctionContext(
     , partition_start_(nullptr)
     , partition_end_(nullptr)
     , device_type_(device_type)
-    , row_set_mem_owner_(row_set_mem_owner) {}
+    , row_set_mem_owner_(row_set_mem_owner)
+    , dummy_count_(elem_count)
+    , dummy_offset_(0)
+    , dummy_payload_(nullptr) {
+  CHECK(partitions_);  // This version should have hash table
+}
 
 WindowFunctionContext::~WindowFunctionContext() {
   free(partition_start_);
   free(partition_end_);
+  if (dummy_payload_) {
+    free(dummy_payload_);
+  }
 }
 
 void WindowFunctionContext::addOrderColumn(
@@ -215,6 +249,7 @@ int64_t get_lag_or_lead_argument(const Analyzer::WindowFunction* window_func) {
 // output_for_partition_buff, reusing it as an output buffer.
 void apply_permutation_to_partition(int64_t* output_for_partition_buff,
                                     const int32_t* original_indices,
+
                                     const size_t partition_size) {
   std::vector<int64_t> new_output_for_partition_buff(partition_size);
   for (size_t i = 0; i < partition_size; ++i) {
@@ -416,7 +451,8 @@ void WindowFunctionContext::compute() {
   }
   std::unique_ptr<int64_t[]> scratchpad(new int64_t[elem_count_]);
   int64_t off = 0;
-  for (size_t i = 0; i < partitionCount(); ++i) {
+  const size_t partition_count{partitionCount()};
+  for (size_t i = 0; i < partition_count; ++i) {
     auto partition_size = counts()[i];
     if (partition_size == 0) {
       continue;
@@ -772,24 +808,37 @@ void WindowFunctionContext::fillPartitionEnd() {
 }
 
 const int32_t* WindowFunctionContext::payload() const {
-  return reinterpret_cast<const int32_t*>(
-      partitions_->getJoinHashBuffer(device_type_, 0) + partitions_->payloadBufferOff());
+  if (partitions_) {
+    return reinterpret_cast<const int32_t*>(
+        partitions_->getJoinHashBuffer(device_type_, 0) +
+        partitions_->payloadBufferOff());
+  }
+  return dummy_payload_;  // non-partitioned window function
 }
 
 const int32_t* WindowFunctionContext::offsets() const {
-  return reinterpret_cast<const int32_t*>(
-      partitions_->getJoinHashBuffer(device_type_, 0) + partitions_->offsetBufferOff());
+  if (partitions_) {
+    return reinterpret_cast<const int32_t*>(
+        partitions_->getJoinHashBuffer(device_type_, 0) + partitions_->offsetBufferOff());
+  }
+  return &dummy_offset_;
 }
 
 const int32_t* WindowFunctionContext::counts() const {
-  return reinterpret_cast<const int32_t*>(
-      partitions_->getJoinHashBuffer(device_type_, 0) + partitions_->countBufferOff());
+  if (partitions_) {
+    return reinterpret_cast<const int32_t*>(
+        partitions_->getJoinHashBuffer(device_type_, 0) + partitions_->countBufferOff());
+  }
+  return &dummy_count_;
 }
 
 size_t WindowFunctionContext::partitionCount() const {
-  const auto partition_count = counts() - offsets();
-  CHECK_GE(partition_count, 0);
-  return partition_count;
+  if (partitions_) {
+    const auto partition_count = counts() - offsets();
+    CHECK_GE(partition_count, 0);
+    return partition_count;
+  }
+  return 1;  // non-partitioned window function
 }
 
 void WindowProjectNodeContext::addWindowFunctionContext(

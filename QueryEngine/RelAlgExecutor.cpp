@@ -1948,31 +1948,31 @@ void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
     }
     // Always use baseline layout hash tables for now, make the expression a tuple.
     const auto& partition_keys = window_func->getPartitionKeys();
-    std::shared_ptr<Analyzer::Expr> partition_key_tuple;
-    if (partition_keys.size() > 1) {
-      partition_key_tuple = makeExpr<Analyzer::ExpressionTuple>(partition_keys);
-    } else {
-      if (partition_keys.empty()) {
-        throw std::runtime_error(
-            "Empty window function partitions are not supported yet");
+    std::shared_ptr<Analyzer::BinOper> partition_key_cond;
+    if (partition_keys.size() >= 1) {
+      std::shared_ptr<Analyzer::Expr> partition_key_tuple;
+      if (partition_keys.size() > 1) {
+        partition_key_tuple = makeExpr<Analyzer::ExpressionTuple>(partition_keys);
+      } else {
+        CHECK_EQ(partition_keys.size(), size_t(1));
+        partition_key_tuple = partition_keys.front();
       }
-      CHECK_EQ(partition_keys.size(), size_t(1));
-      partition_key_tuple = partition_keys.front();
+      // Creates a tautology equality with the partition expression on both sides.
+      partition_key_cond =
+          makeExpr<Analyzer::BinOper>(kBOOLEAN,
+                                      kBW_EQ,
+                                      kONE,
+                                      partition_key_tuple,
+                                      transform_to_inner(partition_key_tuple.get()));
     }
-    // Creates a tautology equality with the partition expression on both sides.
-    const auto partition_key_cond =
-        makeExpr<Analyzer::BinOper>(kBOOLEAN,
-                                    kBW_EQ,
-                                    kONE,
-                                    partition_key_tuple,
-                                    transform_to_inner(partition_key_tuple.get()));
-    auto context = createWindowFunctionContext(window_func,
-                                               partition_key_cond,
-                                               ra_exe_unit,
-                                               query_infos,
-                                               co,
-                                               column_cache_map,
-                                               executor_->getRowSetMemoryOwner());
+    auto context =
+        createWindowFunctionContext(window_func,
+                                    partition_key_cond /*nullptr if no partition key*/,
+                                    ra_exe_unit,
+                                    query_infos,
+                                    co,
+                                    column_cache_map,
+                                    executor_->getRowSetMemoryOwner());
     context->compute();
     window_project_node_context->addWindowFunctionContext(std::move(context),
                                                           target_index);
@@ -1987,29 +1987,37 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
     const CompilationOptions& co,
     ColumnCacheMap& column_cache_map,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
+  const size_t elem_count = query_infos.front().info.fragments.front().getNumTuples();
   const auto memory_level = co.device_type == ExecutorDeviceType::GPU
                                 ? MemoryLevel::GPU_LEVEL
                                 : MemoryLevel::CPU_LEVEL;
-  const auto join_table_or_err =
-      executor_->buildHashTableForQualifier(partition_key_cond,
-                                            query_infos,
-                                            memory_level,
-                                            JoinType::INVALID,  // for window function
-                                            HashType::OneToMany,
-                                            column_cache_map,
-                                            ra_exe_unit.query_hint);
-  if (!join_table_or_err.fail_reason.empty()) {
-    throw std::runtime_error(join_table_or_err.fail_reason);
+
+  std::unique_ptr<WindowFunctionContext> context;
+  if (partition_key_cond) {
+    const auto join_table_or_err =
+        executor_->buildHashTableForQualifier(partition_key_cond,
+                                              query_infos,
+                                              memory_level,
+                                              JoinType::INVALID,  // for window function
+                                              HashType::OneToMany,
+                                              column_cache_map,
+                                              ra_exe_unit.query_hint);
+    if (!join_table_or_err.fail_reason.empty()) {
+      throw std::runtime_error(join_table_or_err.fail_reason);
+    }
+    CHECK(join_table_or_err.hash_table->getHashType() == HashType::OneToMany);
+    context = std::make_unique<WindowFunctionContext>(window_func,
+                                                      join_table_or_err.hash_table,
+                                                      elem_count,
+                                                      co.device_type,
+                                                      row_set_mem_owner);
+  } else {
+    context = std::make_unique<WindowFunctionContext>(
+        window_func, elem_count, co.device_type, row_set_mem_owner);
   }
-  CHECK(join_table_or_err.hash_table->getHashType() == HashType::OneToMany);
+
   const auto& order_keys = window_func->getOrderKeys();
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
-  const size_t elem_count = query_infos.front().info.fragments.front().getNumTuples();
-  auto context = std::make_unique<WindowFunctionContext>(window_func,
-                                                         join_table_or_err.hash_table,
-                                                         elem_count,
-                                                         co.device_type,
-                                                         row_set_mem_owner);
   for (const auto& order_key : order_keys) {
     const auto order_col =
         std::dynamic_pointer_cast<const Analyzer::ColumnVar>(order_key);
@@ -2028,6 +2036,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                             /*thread_idx=*/0,
                                             chunks_owner,
                                             column_cache_map);
+
     CHECK_EQ(join_col_elem_count, elem_count);
     context->addOrderColumn(column, order_col.get(), chunks_owner);
   }

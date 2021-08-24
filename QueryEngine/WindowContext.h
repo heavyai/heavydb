@@ -65,6 +65,13 @@ class Executor;
 // we do for non-window queries.
 class WindowFunctionContext {
  public:
+  // non-partitioned version
+  WindowFunctionContext(const Analyzer::WindowFunction* window_func,
+                        const size_t elem_count,
+                        const ExecutorDeviceType device_type,
+                        std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
+
+  // partitioned version
   WindowFunctionContext(const Analyzer::WindowFunction* window_func,
                         const std::shared_ptr<HashJoin>& partitions,
                         const size_t elem_count,
@@ -165,6 +172,15 @@ class WindowFunctionContext {
   AggregateState aggregate_state_;
   const ExecutorDeviceType device_type_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
+
+  // For use when we do not have partitions_ hash table
+  const int32_t dummy_count_;
+  const int32_t dummy_offset_;
+  // dummy_payload_ is only initialized if there is no partitions_ hash table
+  // TODO(todd): There is no need for index buffer for non-partitioned
+  // window functions, as the row to index mapping is the identity function,
+  // so refactor makeComparator and ilk to allow for this
+  int32_t* dummy_payload_;
 };
 
 // Keeps track of the multiple window functions in a window query.

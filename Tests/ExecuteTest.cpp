@@ -18656,9 +18656,45 @@ TEST(Select, WindowFunctionOneRowPartitions) {
 
 TEST(Select, WindowFunctionEmptyPartitions) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
-  EXPECT_THROW(
-      run_simple_agg("SELECT x, ROW_NUMBER() OVER () FROM test_window_func;", dt),
-      std::runtime_error);
+  {
+    // Evidently SQLite now allows NULLS FIRST/LAST, so we shouldn't need the string
+    // splicing we do in the rest of our tests?
+    std::string query =
+        "SELECT x, ROW_NUMBER() OVER (ORDER BY x NULLS FIRST) FROM test_window_func "
+        "ORDER BY x NULLS FIRST;";
+    c(query, query, dt);
+  }
+
+  // Empty partition with group by
+  {
+    std::string query =
+        "SELECT x, AVG(t) AS avg_t, AVG(t) - AVG(AVG(t)) OVER () as avg_t_diff FROM "
+        "test_window_func WHERE x IS NOT NULL GROUP BY x ORDER BY x;";
+    c(query, query, dt);
+  }
+
+  // Empty partition with order by
+  {
+    std::string query =
+        "SELECT d, x, y, t, LAG(t) OVER(ORDER BY t ASC NULLS FIRST) AS lag_t_order_by_t, "
+        "LEAD(d) OVER(ORDER BY t NULLS FIRST) AS lead_d_order_by_t, LAG(x) OVER (ORDER "
+        "BY x NULLS FIRST) as lag_x_order_by_x, SUM(t) OVER () as total_t FROM "
+        "test_window_func WHERE d IS NOT NULL ORDER BY d ASC NULLS FIRST, t ASC NULLS "
+        "FIRST;";
+    c(query, query, dt);
+  }
+
+  {
+    // Manually verified against Postgres
+    // TODO(todd): Rework to also run in SQLite, which doesn't support DATE_TRUNC
+    std::string query =
+        "SELECT DATE_TRUNC(DAY, d) AS binned_day, COUNT(*) AS n, SUM(x) AS sum_x, "
+        "COUNT(*) - LAG(COUNT(*)) OVER ( ORDER BY DATE_TRUNC(DAY, d) ) AS "
+        "lag_n_order_by_d, SUM(x) / SUM(SUM(x+1)) OVER ( ORDER BY DATE_TRUNC(DAY, d)) AS "
+        "sum_over_lag_sum_x FROM test_window_func GROUP BY DATE_TRUNC(DAY, d) ORDER BY "
+        "DATE_TRUNC(DAY, d) NULLS FIRST;";
+    EXPECT_NO_THROW(run_multiple_agg(query, dt));
+  }
 }
 
 TEST(Select, WindowFunctionPercentRank) {
