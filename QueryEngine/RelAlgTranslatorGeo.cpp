@@ -615,7 +615,9 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         return {geo_expr->add_cast(arg_ti)};
       }
       if (use_geo_expressions) {
-        arg_ti = arg0.front()->get_type_info();  // TODO: remove
+        arg_ti = arg0.front()->get_type_info();
+        arg_ti.set_subtype(kGEOGRAPHY);
+        arg0.front()->set_type_info(arg_ti);
       }
       if (!IS_GEO(arg_ti.get_type())) {
         throw QueryNotSupported(rex_function->getName() + " expects geometry argument");

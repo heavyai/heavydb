@@ -797,7 +797,7 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
             R"(SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(ST_EndPoint(l),l)=0.0;)",
             dt)));
 
-    // Point geometries, literals in different spatial references, transforms
+    // Point geometries/geographies, literals in different spatial references, transforms
     ASSERT_EQ(
         static_cast<int64_t>(g_num_rows),
         v<int64_t>(run_simple_agg(
@@ -823,6 +823,13 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
         v<double>(run_simple_agg(
             R"(SELECT conv_4326_900913_x(ST_X(gp4326)) FROM geospatial_test WHERE id = 1;)",
             dt)));
+    // Check that geography casts are registered in geo operators
+    ASSERT_NEAR(
+        static_cast<double>(157293.74),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Distance(CastToGeography(gp4326), ST_GeogFromText('POINT(1 1)',4326)) from geospatial_test limit 1;)",
+            dt)),
+        static_cast<double>(0.01));
 
     // ST_NRings
     ASSERT_EQ(static_cast<int64_t>(1),
