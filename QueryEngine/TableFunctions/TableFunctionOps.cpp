@@ -32,7 +32,11 @@ extern "C" DEVICE RUNTIME_EXPORT void set_output_row_size(int64_t num_rows) {
   CHECK(mgr != nullptr);  // failure means that set_output_row_size
                           // is called out-of-scope of
                           // QueryOutputBufferMemoryManager usage
-  CHECK_GE(num_rows, 0);
+  if (num_rows < 0) {
+    throw std::runtime_error(
+        "set_output_row_size: expected non-negative row size but got " +
+        std::to_string(num_rows));
+  }
   mgr->allocate_output_buffers(num_rows);
 }
 

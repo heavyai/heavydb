@@ -104,6 +104,13 @@ TEST_F(TableFunctions, BasicProjection) {
     SKIP_NO_GPU();
     {
       const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 0)) ORDER BY "
+          "out0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(0));
+    }
+    {
+      const auto rows = run_multiple_agg(
           "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 1)) ORDER BY "
           "out0;",
           dt);
@@ -129,6 +136,22 @@ TEST_F(TableFunctions, BasicProjection) {
           "out0;",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(20));
+    }
+    if (dt == ExecutorDeviceType::CPU) {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), 0)) ORDER "
+          "BY "
+          "out0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(0));
+    }
+    if (dt == ExecutorDeviceType::CPU) {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), 1)) ORDER "
+          "BY "
+          "out0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
     }
     {
       const auto rows = run_multiple_agg(
