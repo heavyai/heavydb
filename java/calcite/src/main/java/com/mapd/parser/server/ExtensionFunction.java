@@ -85,13 +85,17 @@ public class ExtensionFunction {
     this.args = args;
     this.ret = ret;
     this.outs = null;
+    this.names = null;
     this.isRowUdf = true;
   }
 
-  ExtensionFunction(final List<ExtArgumentType> args, final List<ExtArgumentType> outs) {
+  ExtensionFunction(final List<ExtArgumentType> args,
+          final List<ExtArgumentType> outs,
+          final List<String> names) {
     this.args = args;
     this.ret = null;
     this.outs = outs;
+    this.names = names;
     this.isRowUdf = false;
   }
 
@@ -101,6 +105,20 @@ public class ExtensionFunction {
 
   public List<ExtArgumentType> getOuts() {
     return this.outs;
+  }
+
+  public List<String> getArgNames() {
+    if (this.names != null) {
+      return this.names.subList(0, this.args.size());
+    }
+    return null;
+  }
+
+  public List<String> getOutNames() {
+    if (this.names != null) {
+      return this.names.subList(this.args.size(), this.names.size());
+    }
+    return null;
   }
 
   public ExtArgumentType getRet() {
@@ -262,6 +280,7 @@ public class ExtensionFunction {
 
   private final List<ExtArgumentType> args;
   private final List<ExtArgumentType> outs; // only used by UDTFs
+  private final List<String> names;
   private final ExtArgumentType ret; // only used by UDFs
   private final boolean isRowUdf;
 

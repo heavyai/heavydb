@@ -429,17 +429,27 @@ public class CalciteServerHandler implements CalciteServer.Iface {
   }
 
   private static ExtensionFunction toExtensionFunction(TUserDefinedTableFunction udtf) {
+    int index = 0;
+    int out_index = 0;
+    List<String> names = new ArrayList<String>();
     List<ExtensionFunction.ExtArgumentType> args =
             new ArrayList<ExtensionFunction.ExtArgumentType>();
     for (TExtArgumentType atype : udtf.sqlArgTypes) {
       args.add(toExtArgumentType(atype));
+      Map<String, String> annot = udtf.annotations.get(index);
+      names.add(annot.getOrDefault("name", "inp" + index));
+      index++;
     }
     List<ExtensionFunction.ExtArgumentType> outs =
             new ArrayList<ExtensionFunction.ExtArgumentType>();
     for (TExtArgumentType otype : udtf.outputArgTypes) {
       outs.add(toExtArgumentType(otype));
+      Map<String, String> annot = udtf.annotations.get(index);
+      names.add(annot.getOrDefault("name", "out" + out_index));
+      index++;
+      out_index++;
     }
-    return new ExtensionFunction(args, outs);
+    return new ExtensionFunction(args, outs, names);
   }
 
   private static ExtensionFunction.ExtArgumentType toExtArgumentType(

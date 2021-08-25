@@ -637,3 +637,20 @@ int32_t ct_binding_column2__cpu_template(const Column<T>& input1,
   }
   return 1;
 }
+
+// clang-format off
+/*
+  UDTF: ct_named_output__cpu_template(Column<T> input) -> Column<T> total, T=[int32_t, double]
+*/
+// clang-format on
+
+template <typename T>
+int32_t ct_named_output__cpu_template(const Column<T>& input, Column<T>& out) {
+  set_output_row_size(1);
+  T acc = 0;
+  for (int64_t i = 0; i < input.size(); i++) {
+    acc += input[i];
+  }
+  out[0] = acc;
+  return 1;
+}

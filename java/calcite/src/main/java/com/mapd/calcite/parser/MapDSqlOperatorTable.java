@@ -1855,6 +1855,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               OperandTypes.family(sig.toSqlSignature()),
               SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
       outs = sig.getSqlOuts();
+      out_names = sig.getOutNames();
     }
 
     @Override
@@ -1862,13 +1863,14 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       return opBinding -> {
         FieldInfoBuilder ret = opBinding.getTypeFactory().builder();
         for (int out_idx = 0; out_idx < outs.size(); ++out_idx) {
-          ret = ret.add("OUT" + out_idx, outs.get(out_idx));
+          ret = ret.add(out_names.get(out_idx), outs.get(out_idx));
         }
         return ret.build();
       };
     }
 
     private final List<SqlTypeName> outs;
+    private final List<String> out_names;
   }
 
   //
