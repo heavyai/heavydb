@@ -1063,13 +1063,15 @@ class Parser:
     def parse_udtf(self):
         """fmt: off
 
-        udtf: IDENTIFIER "(" args ")" "->" args ("," templates)?
+        udtf: IDENTIFIER "(" (args)? ")" "->" args ("," templates)?
 
         fmt: on
         """
         name = self.parse_identifier()
         self.expect(Token.LPAR)  # (
-        input_args = self.parse_args()
+        input_args = [] 
+        if not self.match(Token.RPAR):
+            input_args = self.parse_args()
         self.expect(Token.RPAR)  # )
         self.expect(Token.RARROW)
         output_args = self.parse_args()
@@ -1263,7 +1265,7 @@ class Parser:
     def parse(self):
         """fmt: off
 
-        udtf: IDENTIFIER "(" args ")" "->" args ("," templates)?
+        udtf: IDENTIFIER "(" (args)? ")" "->" args ("," templates)?
 
         args: arg ("," arg)*
 

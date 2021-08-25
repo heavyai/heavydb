@@ -1,3 +1,5 @@
+#include <iostream>
+
 /*
   This file contains tesing compile-time UDTFs. The unit-tests are
   implemented within the RBC package.
@@ -704,4 +706,84 @@ TEMPLATE_NOINLINE int32_t ct_named_rowmul_output__template(const Column<T>& inpu
     }
   }
   return m * input.size();
+}
+
+// clang-format off
+/*
+  UDTF: ct_no_arg_runtime_sizing__cpu_template() -> Column<T> answer, T=[int32_t]
+*/
+// clang-format on
+
+template <typename T>
+TEMPLATE_NOINLINE int32_t ct_no_arg_runtime_sizing__cpu_template(Column<T>& answer) {
+  set_output_row_size(1);
+  answer[0] = 42;
+  return 1;
+}
+
+// clang-format off
+/*
+  UDTF: ct_no_arg_constant_sizing__cpu_(Constant<42>) -> Column<int32_t> answer 
+*/
+// clang-format on
+
+EXTENSION_NOINLINE int32_t ct_no_arg_constant_sizing__cpu_(Column<int32_t>& answer) {
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t stop = static_cast<int32_t>(42);
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  auto start = 0;
+  auto stop = 42;
+  auto step = 1;
+#endif
+  for (auto i = start; i < stop; i += step) {
+    answer[i] = 42 * i;
+  }
+  return 42;
+}
+
+// clang-format off
+/*
+  UDTF: ct_scalar_1_arg_runtime_sizing__cpu_template(T) -> Column<T> answer, T=[float, double, int32_t, int64_t]
+*/
+// clang-format on
+
+template <typename T>
+TEMPLATE_NOINLINE int32_t
+ct_scalar_1_arg_runtime_sizing__cpu_template(const T num, Column<T>& answer) {
+  T quotient = num;
+  set_output_row_size(30);
+  int32_t counter{0};
+  while (quotient >= 1) {
+    answer[counter++] = quotient;
+    quotient /= 10;
+  }
+  return counter;
+}
+
+// clang-format off
+/*
+  UDTF: ct_scalar_2_args_constant_sizing(int64_t, int64_t, Constant<5>) -> Column<int64_t> answer1, Column<int64_t> answer2
+*/
+// clang-format on
+
+EXTENSION_NOINLINE int32_t ct_scalar_2_args_constant_sizing(const int64_t num1,
+                                                            const int64_t num2,
+                                                            Column<int64_t>& answer1,
+                                                            Column<int64_t>& answer2) {
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t stop = static_cast<int32_t>(5);
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  auto start = 0;
+  auto stop = 5;
+  auto step = 1;
+#endif
+  for (auto i = start; i < stop; i += step) {
+    answer1[i] = num1 + i * num2;
+    answer2[i] = num1 - i * num2;
+  }
+  return 5;
 }

@@ -176,7 +176,8 @@ DAG build_dag(const RelAlgNode* sink) {
     const auto input_num = node->inputCount();
     switch (input_num) {
       case 0:
-        CHECK(dynamic_cast<const RelLogicalValues*>(node));
+        CHECK(dynamic_cast<const RelLogicalValues*>(node) ||
+              dynamic_cast<const RelTableFunction*>(node));
       case 1:
         break;
       case 2:

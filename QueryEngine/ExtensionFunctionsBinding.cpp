@@ -500,6 +500,16 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
     type_infos_input.push_back(atype->get_type_info());
   }
 
+  if (type_infos_input.size() == 0 && ext_funcs.size() > 0) {
+    CHECK_EQ(ext_funcs.size(), static_cast<size_t>(1));
+    CHECK_EQ(ext_funcs[0].getInputArgs().size(), static_cast<size_t>(0));
+    if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
+      CHECK(ext_funcs[0].hasNonUserSpecifiedOutputSizeConstant());
+    }
+    std::vector<SQLTypeInfo> empty_type_info_variant(0);
+    return {ext_funcs[0], empty_type_info_variant};
+  }
+
   // clang-format off
   /*
     Table functions may have arguments such as ColumnList that collect

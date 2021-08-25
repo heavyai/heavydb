@@ -1139,7 +1139,8 @@ get_join_source_used_inputs(const RelAlgNode* ra_node,
   if (dynamic_cast<const RelLogicalUnion*>(ra_node)) {
     CHECK_GT(ra_node->inputCount(), 1u) << ra_node->toString();
   } else if (dynamic_cast<const RelTableFunction*>(ra_node)) {
-    CHECK_GT(ra_node->inputCount(), 0u) << ra_node->toString();
+    // no-op
+    CHECK_GE(ra_node->inputCount(), 0u) << ra_node->toString();
   } else {
     CHECK_EQ(ra_node->inputCount(), 1u) << ra_node->toString();
   }

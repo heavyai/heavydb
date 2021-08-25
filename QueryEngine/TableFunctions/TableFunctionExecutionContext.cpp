@@ -213,7 +213,12 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   }
   CHECK_EQ(col_buf_ptrs.size(), exe_unit.input_exprs.size());
   CHECK_EQ(col_sizes.size(), exe_unit.input_exprs.size());
-  CHECK(output_column_size);
+  if (!exe_unit.table_func
+           .hasNonUserSpecifiedOutputSizeConstant()) {  // includes compile-time constants
+                                                        // and runtime table funtion
+                                                        // specified sizing
+    CHECK(output_column_size);
+  }
   switch (device_type) {
     case ExecutorDeviceType::CPU:
       return launchCpuCode(exe_unit,
@@ -255,14 +260,23 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   }
 
   // setup the inputs
-  const auto byte_stream_ptr = reinterpret_cast<const int8_t**>(col_buf_ptrs.data());
-  CHECK(byte_stream_ptr);
+  // We can have an empty col_buf_ptrs vector if there are no arguments to the function
+  const auto byte_stream_ptr = !col_buf_ptrs.empty()
+                                   ? reinterpret_cast<const int8_t**>(col_buf_ptrs.data())
+                                   : nullptr;
+  if (!col_buf_ptrs.empty()) {
+    CHECK(byte_stream_ptr);
+  }
+  const auto col_sizes_ptr = !col_sizes.empty() ? col_sizes.data() : nullptr;
+  if (!col_sizes.empty()) {
+    CHECK(col_sizes_ptr);
+  }
 
   // execute
   auto timer = DEBUG_TIMER(__func__);
   const auto err =
-      compilation_context->getFuncPtr()(byte_stream_ptr,   // input columns buffer
-                                        col_sizes.data(),  // input column sizes
+      compilation_context->getFuncPtr()(byte_stream_ptr,  // input columns buffer
+                                        col_sizes_ptr,    // input column sizes
                                         nullptr,
                                         &output_row_count);
   if (err) {
@@ -343,17 +357,26 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   auto gpu_allocator = std::make_unique<CudaAllocator>(data_mgr, device_id);
   CHECK(gpu_allocator);
   std::vector<CUdeviceptr> kernel_params(KERNEL_PARAM_COUNT, 0);
+
   // setup the inputs
-  auto byte_stream_ptr = gpu_allocator->alloc(col_buf_ptrs.size() * sizeof(int64_t));
-  gpu_allocator->copyToDevice(byte_stream_ptr,
-                              reinterpret_cast<int8_t*>(col_buf_ptrs.data()),
-                              col_buf_ptrs.size() * sizeof(int64_t));
+  auto byte_stream_ptr = !(col_buf_ptrs.empty())
+                             ? gpu_allocator->alloc(col_buf_ptrs.size() * sizeof(int64_t))
+                             : nullptr;
+  if (byte_stream_ptr) {
+    gpu_allocator->copyToDevice(byte_stream_ptr,
+                                reinterpret_cast<int8_t*>(col_buf_ptrs.data()),
+                                col_buf_ptrs.size() * sizeof(int64_t));
+  }
   kernel_params[COL_BUFFERS] = reinterpret_cast<CUdeviceptr>(byte_stream_ptr);
 
-  auto col_sizes_ptr = gpu_allocator->alloc(col_sizes.size() * sizeof(int64_t));
-  gpu_allocator->copyToDevice(col_sizes_ptr,
-                              reinterpret_cast<int8_t*>(col_sizes.data()),
-                              col_sizes.size() * sizeof(int64_t));
+  auto col_sizes_ptr = !(col_sizes.empty())
+                           ? gpu_allocator->alloc(col_sizes.size() * sizeof(int64_t))
+                           : nullptr;
+  if (col_sizes_ptr) {
+    gpu_allocator->copyToDevice(col_sizes_ptr,
+                                reinterpret_cast<int8_t*>(col_sizes.data()),
+                                col_sizes.size() * sizeof(int64_t));
+  }
   kernel_params[COL_SIZES] = reinterpret_cast<CUdeviceptr>(col_sizes_ptr);
 
   kernel_params[ERROR_BUFFER] =

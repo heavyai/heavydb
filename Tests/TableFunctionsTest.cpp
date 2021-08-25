@@ -641,6 +641,71 @@ TEST_F(TableFunctions, NamedOutput) {
   }
 }
 
+TEST_F(TableFunctions, CursorlessInputs) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT answer FROM TABLE(ct_no_arg_constant_sizing()) ORDER BY answer;", dt);
+      ASSERT_EQ(rows->rowCount(), size_t(42));
+      for (size_t i = 0; i < 42; i++) {
+        auto crt_row = rows->getNextRow(false, false);
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(42 * i));
+      }
+    }
+
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT answer / 882 AS g, COUNT(*) AS n FROM "
+          "TABLE(ct_no_arg_constant_sizing()) GROUP BY g ORDER BY g;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(2));
+
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(0));
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]), static_cast<int32_t>(21));
+
+      crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(1));
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]), static_cast<int32_t>(21));
+    }
+
+    {
+      const auto rows =
+          run_multiple_agg("SELECT answer FROM TABLE(ct_no_arg_runtime_sizing());", dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(42));
+    }
+
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT answer FROM TABLE(ct_scalar_1_arg_runtime_sizing(123));", dt);
+      ASSERT_EQ(rows->rowCount(), size_t(3));
+
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(123));
+      crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(12));
+      crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(1));
+    }
+
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT answer1, answer2 FROM TABLE(ct_scalar_2_args_constant_sizing(100, 5));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+
+      for (size_t r = 0; r < 5; ++r) {
+        auto crt_row = rows->getNextRow(false, false);
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(100 + r * 5));
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]), static_cast<int32_t>(100 - r * 5));
+      }
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
