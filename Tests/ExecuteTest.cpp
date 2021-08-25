@@ -18678,9 +18678,9 @@ TEST(Select, WindowFunctionEmptyPartitions) {
     std::string query =
         "SELECT d, x, y, t, LAG(t) OVER(ORDER BY t ASC NULLS FIRST) AS lag_t_order_by_t, "
         "LEAD(d) OVER(ORDER BY t NULLS FIRST) AS lead_d_order_by_t, LAG(x) OVER (ORDER "
-        "BY x NULLS FIRST) as lag_x_order_by_x, SUM(t) OVER () as total_t FROM "
-        "test_window_func WHERE d IS NOT NULL ORDER BY d ASC NULLS FIRST, t ASC NULLS "
-        "FIRST;";
+        "BY t NULLS FIRST) as lag_x_order_by_t, x - SUM(t) OVER (PARTITION BY x ORDER by "
+        "t ASC NULLS FIRST) as x_t_diff, SUM(t) OVER () as total_t FROM test_window_func "
+        "WHERE d IS NOT NULL ORDER BY d ASC NULLS FIRST, t ASC NULLS FIRST;";
     c(query, query, dt);
   }
 
