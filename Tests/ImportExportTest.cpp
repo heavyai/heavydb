@@ -1100,7 +1100,7 @@ TEST_F(ImportTest, Many_files_directory) {
 
 TEST_F(ImportTest, Regex_path_filter_match) {
   EXPECT_TRUE(import_test_local(
-      "trip_data_dir/csv", 300, 1.0, {{"REGEX_PATH_FILTER", ".*trip_data_[5-7]\.csv"}}));
+      "trip_data_dir/csv", 300, 1.0, {{"REGEX_PATH_FILTER", ".*trip_data_[5-7]\\.csv"}}));
 }
 
 TEST_F(ImportTest, Regex_path_filter_no_match) {
@@ -1745,7 +1745,7 @@ TEST_F(ImportTest, S3_All_files) {
 
 TEST_F(ImportTest, S3_Regex_path_filter_match) {
   EXPECT_TRUE(import_test_s3_compressed(
-      "", 300, 1.0, {{"REGEX_PATH_FILTER", ".*trip_data_[5-7]\.csv"}}));
+      "", 300, 1.0, {{"REGEX_PATH_FILTER", ".*trip_data_[5-7]\\.csv"}}));
 }
 
 TEST_F(ImportTest, S3_Regex_path_filter_no_match) {
