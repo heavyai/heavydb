@@ -827,7 +827,7 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     ASSERT_NEAR(
         static_cast<double>(157293.74),
         v<double>(run_simple_agg(
-            R"(SELECT ST_Distance(CastToGeography(gp4326), ST_GeogFromText('POINT(1 1)',4326)) from geospatial_test limit 1;)",
+            R"(SELECT ST_Distance(CastToGeography(gp4326), ST_GeogFromText('POINT(1 1)',4326)) from geospatial_test WHERE id = 0;)",
             dt)),
         static_cast<double>(0.01));
 
