@@ -711,13 +711,18 @@ class SignatureTransformer(AstTransformer):
 
         for i in udtf_node.inputs:
             inp, anns = i.accept(self)
+            assert not isinstance(inp, list)  # list inp is not tested
             inputs += inp if isinstance(inp, list) else [inp]
             input_annotations.append(anns)
 
         for o in udtf_node.outputs:
             out, anns = o.accept(self)
+            assert not isinstance(out, list)  # list out is not tested
             outputs += out if isinstance(out, list) else [out]
             output_annotations.append(anns)
+
+        assert len(inputs) == len(input_annotations), (inputs, input_annotations)
+        assert len(outputs) == len(output_annotations), (outputs, output_annotations)
 
         return Signature(name, inputs, outputs, input_annotations, output_annotations)
 
@@ -1416,21 +1421,25 @@ def parse_annotations(input_files):
             # Compute sql_types, input_types, and sizer
             sql_types_ = []
             input_types_ = []
+            input_annotations = []
             sizer = None
-            for t in sig.inputs:
+            for t, annot in zip(sig.inputs, sig.input_annotations):
                 if t.is_output_buffer_sizer():
                     if t.is_user_specified():
                         sql_types_.append(Bracket.parse('int32').normalize(kind='input'))
                         input_types_.append(sql_types_[-1])
+                        input_annotations.append(annot)
                     assert sizer is None  # exactly one sizer argument is allowed
                     assert len(t.args) == 1, t
                     sizer = 'TableFunctionOutputRowSizer{OutputBufferSizeType::%s, %s}' % (t.name, t.args[0])
                 elif t.name == 'Cursor':
                     for t_ in t.args:
                         input_types_.append(t_)
+                    input_annotations.append(annot)
                     sql_types_.append(Bracket('Cursor', args=()))
                 else:
                     input_types_.append(t)
+                    input_annotations.append(annot)
                     if t.is_column_any():
                         # XXX: let Bracket handle mapping of column to cursor(column)
                         sql_types_.append(Bracket('Cursor', args=()))
@@ -1443,7 +1452,6 @@ def parse_annotations(input_files):
                 sizer = 'TableFunctionOutputRowSizer{OutputBufferSizeType::%s, %s}' % (name, idx)
 
             assert sizer is not None
-
             ns_output_types = tuple([a.apply_namespace(ns='ExtArgumentType') for a in sig.outputs])
             ns_input_types = tuple([t.apply_namespace(ns='ExtArgumentType') for t in input_types_])
             ns_sql_types = tuple([t.apply_namespace(ns='ExtArgumentType') for t in sql_types_])
@@ -1451,7 +1459,7 @@ def parse_annotations(input_files):
             input_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(str, ns_input_types)))
             output_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(str, ns_output_types)))
             sql_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(str, ns_sql_types)))
-            annotations = format_annotations(sig.input_annotations + sig.output_annotations)
+            annotations = format_annotations(input_annotations + sig.output_annotations)
 
             if is_template_function(sig):
                 name = sig.name + '_' + str(counter)

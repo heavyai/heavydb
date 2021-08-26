@@ -593,6 +593,51 @@ TEST_F(TableFunctions, NamedOutput) {
       auto crt_row = rows->getNextRow(false, false);
       ASSERT_EQ(TestHelpers::v<double>(crt_row[0]), static_cast<double>(11));
     }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT total FROM TABLE(ct_named_const_output(cursor(SELECT x FROM "
+          "tf_test)));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(2));
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(6));
+      crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(4));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT total FROM TABLE(ct_named_user_const_output(cursor(SELECT x FROM "
+          "tf_test), 1));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(10));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT total FROM TABLE(ct_named_user_const_output(cursor(SELECT x FROM "
+          "tf_test), 2));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(2));
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(6));
+      crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(4));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT total FROM TABLE(ct_named_rowmul_output(cursor(SELECT x FROM "
+          "tf_test), 1));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT total FROM TABLE(ct_named_rowmul_output(cursor(SELECT x FROM "
+          "tf_test), 2));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(10));
+    }
   }
 }
 

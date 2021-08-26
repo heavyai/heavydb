@@ -641,6 +641,9 @@ int32_t ct_binding_column2__cpu_template(const Column<T>& input1,
 // clang-format off
 /*
   UDTF: ct_named_output__cpu_template(Column<T> input) -> Column<T> total, T=[int32_t, double]
+  UDTF: ct_named_const_output__cpu_template(Column<T> input, Constant<2>) -> Column<T> total, T=[int32_t, double]
+  UDTF: ct_named_user_const_output__cpu_template(Column<T> input, ConstantParameter c) -> Column<T> total, T=[int32_t, double]
+  UDTF: ct_named_rowmul_output__cpu_template(Column<T> input, RowMultiplier m) -> Column<T> total, T=[int32_t, double]
 */
 // clang-format on
 
@@ -653,4 +656,44 @@ int32_t ct_named_output__cpu_template(const Column<T>& input, Column<T>& out) {
   }
   out[0] = acc;
   return 1;
+}
+
+template <typename T>
+int32_t ct_named_const_output__cpu_template(const Column<T>& input, Column<T>& out) {
+  T acc1 = 0, acc2 = 0;
+  for (int64_t i = 0; i < input.size(); i++) {
+    if (i % 2 == 0) {
+      acc1 += input[i];
+    } else {
+      acc2 += input[i];
+    }
+  }
+  out[0] = acc1;
+  out[1] = acc2;
+  return 2;
+}
+
+template <typename T>
+int32_t ct_named_user_const_output__cpu_template(const Column<T>& input,
+                                                 int32_t c,
+                                                 Column<T>& out) {
+  for (int64_t i = 0; i < c; i++) {
+    out[i] = 0;
+  }
+  for (int64_t i = 0; i < input.size(); i++) {
+    out[i % c] += input[i];
+  }
+  return c;
+}
+
+template <typename T>
+int32_t ct_named_rowmul_output__cpu_template(const Column<T>& input,
+                                             int32_t m,
+                                             Column<T>& out) {
+  for (int64_t j = 0; j < m; j++) {
+    for (int64_t i = 0; i < input.size(); i++) {
+      out[j * input.size() + i] += input[i];
+    }
+  }
+  return m * input.size();
 }
