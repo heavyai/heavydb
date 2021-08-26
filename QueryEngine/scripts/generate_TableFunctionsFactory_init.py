@@ -16,8 +16,8 @@ argument types specifications are:
     Cursor<t0, t1, ...>
   where t0, t1 are column or column list types
 - output buffer size parameter type:
-    RowMultiplier<i>, ConstantParameter<i>, Constant<i>
-  where i is literal integer
+    RowMultiplier<i>, ConstantParameter<i>, Constant<i>, TableFunctionSpecifiedParameter<i>
+  where i is a literal integer.
 
 The output column types is a comma-separated list of column types, see above.
 
@@ -675,7 +675,7 @@ class NormalizeTransformer(AstTransformer):
                     if a.key == 'input_id':
                         break
                 else:
-                    if not default_input_id:
+                    if default_input_id is None:
                         raise TypeError('Cannot parse line "%s".\n'
                                         'Missing TextEncodingDict input?' %
                                         (udtf_node.line))
@@ -702,6 +702,7 @@ class NormalizeTransformer(AstTransformer):
 
 
 class SignatureTransformer(AstTransformer):
+
     def visit_udtf_node(self, udtf_node):
         name = udtf_node.name
         inputs = []
@@ -711,18 +712,13 @@ class SignatureTransformer(AstTransformer):
 
         for i in udtf_node.inputs:
             inp, anns = i.accept(self)
-            assert not isinstance(inp, list)  # list inp is not tested
-            inputs += inp if isinstance(inp, list) else [inp]
+            inputs.append(inp)
             input_annotations.append(anns)
 
         for o in udtf_node.outputs:
             out, anns = o.accept(self)
-            assert not isinstance(out, list)  # list out is not tested
-            outputs += out if isinstance(out, list) else [out]
+            outputs.append(out)
             output_annotations.append(anns)
-
-        assert len(inputs) == len(input_annotations), (inputs, input_annotations)
-        assert len(outputs) == len(output_annotations), (outputs, output_annotations)
 
         return Signature(name, inputs, outputs, input_annotations, output_annotations)
 
@@ -1460,6 +1456,14 @@ def parse_annotations(input_files):
             output_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(str, ns_output_types)))
             sql_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(str, ns_sql_types)))
             annotations = format_annotations(input_annotations + sig.output_annotations)
+
+            # Notice that input_types and sig.input_types, (and
+            # similarly, input_annotations and sig.input_annotations)
+            # have different lengths when the sizer argument is
+            # Constant or TableFunctionSpecifiedParameter. That is,
+            # input_types contains all the user-specified arguments
+            # while sig.input_types contains all arguments of the
+            # implementation of an UDTF.
 
             if is_template_function(sig):
                 name = sig.name + '_' + str(counter)
