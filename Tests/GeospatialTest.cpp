@@ -1724,14 +1724,22 @@ TEST(GeoSpatial, Math) {
             R"(SELECT ST_DFullyWithin('POINT(1 1)', 'LINESTRING (9 0,18 18,19 19)', 26.0) AND NOT ST_DFullyWithin('LINESTRING (9 0,18 18,19 19)', 'POINT(1 1)', 25.0);)",
             dt)));
 
-    // Check if Paris and LA are within a 10000km geodesic distance
+    // Check if Paris and LA are within a 9500km geodesic distance
     ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
-            R"(SELECT ST_DWithin(ST_GeogFromText('POINT(-118.4079 33.9434)', 4326), ST_GeogFromText('POINT(2.5559 49.0083)', 4326), 10000000.0);)",
+            R"(SELECT ST_DWithin(ST_GeogFromText('POINT(-118.4079 33.9434)', 4326), ST_GeogFromText('POINT(2.5559 49.0083)', 4326), 9500000.0);)",
             dt)));
-    // TODO: ST_DWithin support for geographic paths, needs geodesic
-    // ST_Distance(linestring)
+    // .. though not within 9000km
+    ASSERT_EQ(
+        static_cast<int64_t>(0),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_DWithin(ST_GeogFromText('POINT(-118.4079 33.9434)', 4326), ST_GeogFromText('POINT(2.5559 49.0083)', 4326), 9000000.0);)",
+            dt)));
+    // Make sure geodesic form of ST_DWithin rejects non-POINT GEOGRAPHYs
+    EXPECT_ANY_THROW(run_simple_agg(
+        R"(SELECT ST_DWithin(ST_GeogFromText('POLYGON((-118.4079 33.9434, -119.4079 32.9434, -117.4079 34.9434))', 4326), ST_GeogFromText('POINT(2.5559 49.0083)', 4326), 9000000.0);)",
+        dt));
 
     // Coord accessors
     ASSERT_NEAR(

@@ -1296,10 +1296,19 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateTernaryGeoFunction(
         rex_function->getOperand(0), arg0_ti, with_bounds, false, false);
     auto geoargs1 = translateGeoFunctionArg(
         rex_function->getOperand(1), arg1_ti, with_bounds, false, false);
-    if (arg0_ti.get_subtype() == kGEOMETRY &&
-        arg0_ti.get_subtype() != arg1_ti.get_subtype()) {
+    if (arg0_ti.get_subtype() != arg1_ti.get_subtype()) {
       throw QueryNotSupported(rex_function->getName() +
-                              " accepts only accepts GEOMETRY arguments");
+                              " cannot accept mixed GEOMETRY/GEOGRAPHY arguments");
+    }
+    auto is_geodesic = false;
+    if (arg0_ti.get_subtype() == kGEOGRAPHY) {
+      if (arg0_ti.get_type() == kPOINT && arg1_ti.get_type() == kPOINT) {
+        is_geodesic = true;
+      } else {
+        throw QueryNotSupported(
+            rex_function->getName() +
+            " in geodesic form can only accept POINT GEOGRAPHY arguments");
+      }
     }
     // Check SRID match if at least one is set/valid
     if ((arg0_ti.get_output_srid() > 0 || arg1_ti.get_output_srid() > 0) &&
@@ -1344,6 +1353,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateTernaryGeoFunction(
       geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid0));
     } else {
       specialized_geofunc += suffix(arg0_ti.get_type()) + suffix(arg1_ti.get_type());
+      if (is_geodesic) {
+        specialized_geofunc += "_Geodesic"s;
+      }
       geoargs.insert(geoargs.end(), geoargs0.begin(), geoargs0.end());
       geoargs.insert(geoargs.end(), geoargs1.begin(), geoargs1.end());
       geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression0));

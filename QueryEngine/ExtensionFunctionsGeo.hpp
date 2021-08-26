@@ -2521,6 +2521,22 @@ bool ST_DWithin_Point_Point(int8_t* p1,
 }
 
 EXTENSION_INLINE
+bool ST_DWithin_Point_Point_Geodesic(int8_t* p1,
+                                     int64_t p1size,
+                                     int8_t* p2,
+                                     int64_t p2size,
+                                     int32_t ic1,
+                                     int32_t isr1,
+                                     int32_t ic2,
+                                     int32_t isr2,
+                                     int32_t osr,
+                                     double distance_within) {
+  auto dist_meters =
+      ST_Distance_Point_Point_Geodesic(p1, p1size, p2, p2size, ic1, isr1, ic2, isr2, osr);
+  return (dist_meters <= distance_within);
+}
+
+EXTENSION_INLINE
 bool ST_DWithin_Point_LineString(int8_t* p1,
                                  int64_t p1size,
                                  int8_t* l2,
