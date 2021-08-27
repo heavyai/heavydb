@@ -17,6 +17,11 @@
 #include "../../QueryEngine/OmniSciTypes.h"
 #include "../../Shared/funcannotations.h"
 
+#ifdef HAVE_ONEDAL
+#include <type_traits>
+#include "daal.h"
+#endif
+
 // clang-format off
 /*
   UDTF: row_copier(Column<double>, RowMultiplier) -> Column<double>
@@ -289,5 +294,73 @@ EXTENSION_NOINLINE int32_t column_list_row_sum__cpu_(const ColumnList<int32_t>& 
   }
   return output_num_rows;
 }
+
+#ifdef HAVE_ONEDAL
+
+// clang-format off
+/*
+  UDTF: k_means(Cursor<Column<int>, ColumnList<float>>, int, int, RowMultiplier) -> Column<int>, Column<int>
+ */
+// clang-format on
+
+EXTENSION_NOINLINE int32_t k_means(const Column<int>& input_ids,
+                                   const ColumnList<float>& input,
+                                   const int num_clusters,
+                                   const int num_iterations,
+                                   const int output_multiplier,
+                                   Column<int>& output_ids,
+                                   Column<int>& output_cluster) {
+  using namespace daal::algorithms;
+  using namespace daal::data_management;
+
+  // Float data type
+  using float_type =
+      std::remove_cv_t<std::remove_reference_t<decltype(input)>>::value_type;
+
+  // Assignments data type
+  using assignments_type =
+      std::remove_cv_t<std::remove_reference_t<decltype(output_cluster)>>::value_type;
+
+  // Data dimensions
+  const size_t num_rows = input_ids.size();
+  const size_t num_columns = input.numCols();
+
+  // Prepare input data as structure of arrays (SOA) as columnar format (zero-copy)
+  const auto dataTable = SOANumericTable::create(num_columns, num_rows);
+  for (size_t i = 0; i < num_columns; ++i) {
+    dataTable->setArray<float_type>(input[i].ptr_, i);
+  }
+
+  // Initialization phase of K-Means
+  kmeans::init::Batch<float_type, kmeans::init::randomDense> init(num_clusters);
+  init.input.set(kmeans::init::data, dataTable);
+  init.compute();
+  const NumericTablePtr centroids = init.getResult()->get(kmeans::init::centroids);
+
+  // Prepare output data as homogeneous numeric table to allow zero-copy for assignments
+  const auto assignmentsTable =
+      HomogenNumericTable<assignments_type>::create(output_cluster.ptr_, 1, num_rows);
+  const kmeans::ResultPtr result(new kmeans::Result);
+  result->set(kmeans::assignments, assignmentsTable);
+  result->set(kmeans::objectiveFunction,
+              HomogenNumericTable<float>::create(1, 1, NumericTable::doAllocate));
+  result->set(kmeans::nIterations,
+              HomogenNumericTable<int>::create(1, 1, NumericTable::doAllocate));
+
+  // Clustering phase of K-Means
+  kmeans::Batch<> algorithm(num_clusters, num_iterations);
+  algorithm.input.set(kmeans::data, dataTable);
+  algorithm.input.set(kmeans::inputCentroids, centroids);
+  algorithm.parameter().resultsToEvaluate = kmeans::computeAssignments;
+  algorithm.setResult(result);
+  algorithm.compute();
+
+  // Copying from input_ids to output_ids
+  output_ids = input_ids;
+
+  return num_rows;
+}
+
+#endif
 
 #include "MLFunctions.hpp"

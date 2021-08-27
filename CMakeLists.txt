@@ -322,6 +322,20 @@ if(ENABLE_MLPACK)
   add_definitions("-DHAVE_MLPACK")
 endif()
 
+option(ENABLE_ONEDAL "Use Intel oneDAL" OFF)
+if(ENABLE_ONEDAL)
+  set(USE_DPCPP no)
+  set(USE_NEW_IFACES no)
+  set(TARGET_LINK static)
+  find_package(oneDAL REQUIRED)
+  list(APPEND ONEDAL_LIBRARIES "libonedal_core.a")
+  list(APPEND ONEDAL_LIBRARIES "libonedal_thread.a")
+  list(APPEND LATEST_TBB_LIBRARIES "$ENV{TBBROOT}/lib/intel64/gcc4.8/libtbb.so.12")
+  list(APPEND LATEST_TBB_LIBRARIES "$ENV{TBBROOT}/lib/intel64/gcc4.8/libtbbmalloc.so.2")
+  include_directories(${oneDAL_INCLUDE_DIRS})
+  add_definitions("-DHAVE_ONEDAL")
+endif()
+
 if(MSVC)
   include_directories(include_directories("${LIBS_PATH}/include/pdcurses"))
 else()
@@ -748,6 +762,11 @@ endif()
 
 list(APPEND MAPD_LIBRARIES ${TBB_LIBS})
 
+if(ENABLE_ONEDAL)
+  list(APPEND MAPD_LIBRARIES ${ONEDAL_LIBRARIES})
+endif()
+
+
 if(ENABLE_CANONICAL_RAFT)
   list(APPEND MAPD_LIBRARIES raft_canonical)
 endif()
@@ -830,11 +849,11 @@ add_custom_target(rerun_cmake ALL
   )
 add_dependencies(omnisci_server rerun_cmake)
 
-target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
+target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG} ${LATEST_TBB_LIBRARIES})
 
 target_link_libraries(initdb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
     ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
-    ${LOCALE_LINK_FLAG})
+    ${LOCALE_LINK_FLAG} ${LATEST_TBB_LIBRARIES})
 
 macro(set_dpkg_arch arch_in arch_out)
   if("${arch_in}" STREQUAL "x86_64")

@@ -160,6 +160,8 @@ struct GeoMultiPolygon {
 
 template <typename T>
 struct Column {
+  using value_type = T;
+
   T* ptr_;        // row data
   int64_t size_;  // row count
 
@@ -225,6 +227,8 @@ DEVICE inline void Column<TextEncodingDict>::setNull(int64_t index) {
 */
 template <typename T>
 struct ColumnList {
+  using value_type = T;
+
   int8_t** ptrs_;     // ptrs to columns data
   int64_t num_cols_;  // the length of columns list
   int64_t size_;      // the size of columns
