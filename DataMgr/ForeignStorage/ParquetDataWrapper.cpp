@@ -284,36 +284,6 @@ std::set<std::string> ParquetDataWrapper::getAllFilePaths() {
   auto& server_options = foreign_table_->foreign_server->options;
   if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
     found_file_paths = shared::glob_local_recursive_files(file_path);
-#if defined(MAPD_EDITION_EE) && defined(HAVE_AWS_S3)
-  } else if (server_options.find(STORAGE_TYPE_KEY)->second == S3_STORAGE_TYPE) {
-    auto file_info_result = file_system_->GetFileInfo(file_path);
-    if (!file_info_result.ok()) {
-      throw_file_access_error(file_path, file_info_result.status().message());
-    } else {
-      auto& file_info = file_info_result.ValueOrDie();
-      if (file_info.type() == arrow::fs::FileType::NotFound) {
-        throw_file_not_found_error(file_path);
-      } else if (file_info.type() == arrow::fs::FileType::File) {
-        found_file_paths.emplace(file_path);
-      } else {
-        CHECK_EQ(arrow::fs::FileType::Directory, file_info.type());
-        arrow::fs::FileSelector file_selector{};
-        file_selector.base_dir = file_path;
-        file_selector.recursive = true;
-        auto selector_result = file_system_->GetFileInfo(file_selector);
-        if (!selector_result.ok()) {
-          throw_file_access_error(file_path, selector_result.status().message());
-        } else {
-          auto& file_info_vector = selector_result.ValueOrDie();
-          for (const auto& file_info : file_info_vector) {
-            if (file_info.type() == arrow::fs::FileType::File) {
-              found_file_paths.emplace(file_info.path());
-            }
-          }
-        }
-      }
-    }
-#endif  //  defined(MAPD_EDITION_EE) && defined(HAVE_AWS_S3)
   } else {
     UNREACHABLE();
   }
