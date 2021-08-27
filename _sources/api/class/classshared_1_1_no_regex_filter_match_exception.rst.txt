@@ -1,0 +1,9 @@
+Class shared::NoRegexFilterMatchException
+=========================================
+
+.. doxygenclass:: shared::NoRegexFilterMatchException
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

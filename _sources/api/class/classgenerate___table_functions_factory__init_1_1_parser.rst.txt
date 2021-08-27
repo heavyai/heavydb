@@ -1,0 +1,9 @@
+Class generate_TableFunctionsFactory_init::Parser
+=================================================
+
+.. doxygenclass:: generate_TableFunctionsFactory_init::Parser
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

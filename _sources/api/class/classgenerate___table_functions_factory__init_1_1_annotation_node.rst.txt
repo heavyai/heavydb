@@ -1,0 +1,9 @@
+Class generate_TableFunctionsFactory_init::AnnotationNode
+=========================================================
+
+.. doxygenclass:: generate_TableFunctionsFactory_init::AnnotationNode
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

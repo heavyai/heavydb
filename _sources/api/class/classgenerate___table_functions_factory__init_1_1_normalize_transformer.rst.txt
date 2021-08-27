@@ -1,0 +1,9 @@
+Class generate_TableFunctionsFactory_init::NormalizeTransformer
+===============================================================
+
+.. doxygenclass:: generate_TableFunctionsFactory_init::NormalizeTransformer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

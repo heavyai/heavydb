@@ -1,0 +1,9 @@
+Class generate_TableFunctionsFactory_init::IterableNode
+=======================================================
+
+.. doxygenclass:: generate_TableFunctionsFactory_init::IterableNode
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

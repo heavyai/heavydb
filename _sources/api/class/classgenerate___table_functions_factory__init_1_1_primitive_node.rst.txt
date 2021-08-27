@@ -1,0 +1,9 @@
+Class generate_TableFunctionsFactory_init::PrimitiveNode
+========================================================
+
+.. doxygenclass:: generate_TableFunctionsFactory_init::PrimitiveNode
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

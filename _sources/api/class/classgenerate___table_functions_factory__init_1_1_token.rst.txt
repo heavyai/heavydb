@@ -1,0 +1,9 @@
+Class generate_TableFunctionsFactory_init::Token
+================================================
+
+.. doxygenclass:: generate_TableFunctionsFactory_init::Token
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
