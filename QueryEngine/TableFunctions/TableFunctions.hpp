@@ -290,6 +290,7 @@ EXTENSION_NOINLINE int32_t column_list_row_sum__cpu_(const ColumnList<int32_t>& 
   return output_num_rows;
 }
 
+#include "ExampleFunctions.hpp"
 #include "MLFunctions.hpp"
 
 /*
