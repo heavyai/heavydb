@@ -744,6 +744,11 @@ FragmentInfo* InsertOrderFragmenter::createNewFragment(
   return fragmentInfoVec_.back().get();
 }
 
+size_t InsertOrderFragmenter::getNumFragments() {
+  mapd_shared_lock<mapd_shared_mutex> readLock(fragmentInfoMutex_);
+  return fragmentInfoVec_.size();
+}
+
 TableInfo InsertOrderFragmenter::getFragmentsForQuery() {
   mapd_shared_lock<mapd_shared_mutex> readLock(fragmentInfoMutex_);
   TableInfo queryInfo;

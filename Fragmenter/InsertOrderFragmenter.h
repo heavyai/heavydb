@@ -69,6 +69,13 @@ class InsertOrderFragmenter : public AbstractFragmenter {
       const bool uses_foreign_storage = false);
 
   ~InsertOrderFragmenter() override;
+
+  /**
+   * @brief returns the number of fragments in a table
+   */
+
+  size_t getNumFragments() override;
+
   /**
    * @brief returns (inside QueryInfo) object all
    * ids and row sizes of fragments

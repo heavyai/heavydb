@@ -841,6 +841,10 @@ class RelScan : public RelAlgNode {
 
   const TableDescriptor* getTableDescriptor() const { return td_; }
 
+  const size_t getNumFragments() const { return td_->fragmenter->getNumFragments(); }
+
+  const size_t getNumShards() const { return td_->nShards; }
+
   const std::vector<std::string>& getFieldNames() const { return field_names_; }
 
   const std::string getFieldName(const size_t i) const { return field_names_[i]; }

@@ -2089,6 +2089,12 @@ void add_window_function_pre_project(
 
     auto filter_node = std::dynamic_pointer_cast<RelFilter>(prev_node);
 
+    auto scan_node = std::dynamic_pointer_cast<RelScan>(prev_node);
+    const bool has_multi_fragment_scan_input =
+        (scan_node && (scan_node->getNumShards() > 0 || scan_node->getNumFragments() > 1))
+            ? true
+            : false;
+
     // We currently add a preceding project node in one of two conditions:
     // 1. always_add_project_if_first_project_is_window_expr = true, which
     // we currently only set for distributed, but could also be set to support
@@ -2110,7 +2116,7 @@ void add_window_function_pre_project(
 
     if (!((always_add_project_if_first_project_is_window_expr &&
            project_node_counter == 1) ||
-          (filter_node))) {
+          filter_node || has_multi_fragment_scan_input)) {
       continue;
     }
 

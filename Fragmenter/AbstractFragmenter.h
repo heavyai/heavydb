@@ -121,6 +121,12 @@ class AbstractFragmenter {
   // 0
 
   /**
+   * @brief returns the number of fragments in a table
+   */
+
+  virtual size_t getNumFragments() = 0;
+
+  /**
    * @brief Get all fragments for the current table.
    */
   virtual TableInfo getFragmentsForQuery() = 0;
