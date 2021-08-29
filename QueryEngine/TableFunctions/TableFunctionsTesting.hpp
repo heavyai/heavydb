@@ -463,7 +463,8 @@ ct_binding_dict_encoded6__cpu_1(const ColumnList<TextEncodingDict>& input,
 */
 // clang-format on
 template <typename T>
-int32_t ct_binding_template__cpu_template(const Column<T>& input, Column<T>& out) {
+TEMPLATE_NOINLINE int32_t ct_binding_template__cpu_template(const Column<T>& input,
+                                                            Column<T>& out) {
   set_output_row_size(input.size());
   for (int64_t i = 0; i < input.size(); i++) {
     out[i] = input[i];
@@ -480,9 +481,9 @@ int32_t ct_binding_template__cpu_template(const Column<T>& input, Column<T>& out
 */
 // clang-format on
 template <typename T>
-int32_t ct_binding_columnlist__cpu_template(const Column<T>& input1,
-                                            const ColumnList<T>& input2,
-                                            Column<int32_t>& out) {
+TEMPLATE_NOINLINE int32_t ct_binding_columnlist__cpu_template(const Column<T>& input1,
+                                                              const ColumnList<T>& input2,
+                                                              Column<int32_t>& out) {
   set_output_row_size(1);
   if constexpr (std::is_same<T, int32_t>::value) {
     out[0] = 1;
@@ -503,7 +504,8 @@ int32_t ct_binding_columnlist__cpu_template(const Column<T>& input1,
 */
 // clang-format on
 template <typename T>
-int32_t ct_binding_column__cpu_template(const Column<T>& input, Column<int32_t>& out) {
+TEMPLATE_NOINLINE int32_t ct_binding_column__cpu_template(const Column<T>& input,
+                                                          Column<int32_t>& out) {
   set_output_row_size(1);
   if constexpr (std::is_same<T, int32_t>::value) {
     out[0] = 10;
@@ -522,9 +524,9 @@ int32_t ct_binding_column__cpu_template(const Column<T>& input, Column<int32_t>&
 */
 // clang-format on
 template <typename T>
-int32_t ct_binding_scalar_multiply__cpu_template(const Column<T>& input,
-                                                 const T multiplier,
-                                                 Column<T>& out) {
+TEMPLATE_NOINLINE int32_t ct_binding_scalar_multiply__cpu_template(const Column<T>& input,
+                                                                   const T multiplier,
+                                                                   Column<T>& out) {
   const int64_t num_rows = input.size();
   set_output_row_size(num_rows);
   for (int64_t r = 0; r < num_rows; ++r) {
@@ -536,6 +538,8 @@ int32_t ct_binding_scalar_multiply__cpu_template(const Column<T>& input,
   }
   return num_rows;
 }
+
+#ifndef __CUDACC__
 
 #include <algorithm>
 
@@ -585,11 +589,11 @@ struct SortDesc {
 // clang-format on
 
 template <typename T>
-int32_t sort_column_limit__cpu_template(const Column<T>& input,
-                                        const int32_t limit,
-                                        const bool sort_ascending,
-                                        const bool nulls_last,
-                                        Column<T>& output) {
+TEMPLATE_NOINLINE int32_t sort_column_limit__cpu_template(const Column<T>& input,
+                                                          const int32_t limit,
+                                                          const bool sort_ascending,
+                                                          const bool nulls_last,
+                                                          Column<T>& output) {
   const int64_t num_rows = input.size();
   set_output_row_size(num_rows);
   output = input;
@@ -604,6 +608,8 @@ int32_t sort_column_limit__cpu_template(const Column<T>& input,
   return limit;
 }
 
+#endif
+
 // clang-format off
 /*
   UDTF: ct_binding_column2__cpu_template(Column<T>, Column<U>) -> Column<K>, T=[int32_t, double], U=[int32_t, double], K=[int32_t]
@@ -611,9 +617,9 @@ int32_t sort_column_limit__cpu_template(const Column<T>& input,
 */
 // clang-format on
 template <typename T, typename U, typename K>
-int32_t ct_binding_column2__cpu_template(const Column<T>& input1,
-                                         const Column<U>& input2,
-                                         Column<K>& out) {
+TEMPLATE_NOINLINE int32_t ct_binding_column2__cpu_template(const Column<T>& input1,
+                                                           const Column<U>& input2,
+                                                           Column<K>& out) {
   if constexpr (std::is_same<T, TextEncodingDict>::value &&
                 std::is_same<U, TextEncodingDict>::value) {
     set_output_row_size(input1.size());
@@ -641,14 +647,15 @@ int32_t ct_binding_column2__cpu_template(const Column<T>& input1,
 // clang-format off
 /*
   UDTF: ct_named_output__cpu_template(Column<T> input) -> Column<T> total, T=[int32_t, double]
-  UDTF: ct_named_const_output__cpu_template(Column<T> input, Constant<2>) -> Column<T> total, T=[int32_t, double]
-  UDTF: ct_named_user_const_output__cpu_template(Column<T> input, ConstantParameter c) -> Column<T> total, T=[int32_t, double]
-  UDTF: ct_named_rowmul_output__cpu_template(Column<T> input, RowMultiplier m) -> Column<T> total, T=[int32_t, double]
+  UDTF: ct_named_const_output__template(Column<T> input, Constant<2>) -> Column<T> total, T=[int32_t, double]
+  UDTF: ct_named_user_const_output__template(Column<T> input, ConstantParameter c) -> Column<T> total, T=[int32_t, double]
+  UDTF: ct_named_rowmul_output__template(Column<T> input, RowMultiplier m) -> Column<T> total, T=[int32_t, double]
 */
 // clang-format on
 
 template <typename T>
-int32_t ct_named_output__cpu_template(const Column<T>& input, Column<T>& out) {
+TEMPLATE_NOINLINE int32_t ct_named_output__cpu_template(const Column<T>& input,
+                                                        Column<T>& out) {
   set_output_row_size(1);
   T acc = 0;
   for (int64_t i = 0; i < input.size(); i++) {
@@ -659,7 +666,8 @@ int32_t ct_named_output__cpu_template(const Column<T>& input, Column<T>& out) {
 }
 
 template <typename T>
-int32_t ct_named_const_output__cpu_template(const Column<T>& input, Column<T>& out) {
+TEMPLATE_NOINLINE int32_t ct_named_const_output__template(const Column<T>& input,
+                                                          Column<T>& out) {
   T acc1 = 0, acc2 = 0;
   for (int64_t i = 0; i < input.size(); i++) {
     if (i % 2 == 0) {
@@ -674,9 +682,9 @@ int32_t ct_named_const_output__cpu_template(const Column<T>& input, Column<T>& o
 }
 
 template <typename T>
-int32_t ct_named_user_const_output__cpu_template(const Column<T>& input,
-                                                 int32_t c,
-                                                 Column<T>& out) {
+TEMPLATE_NOINLINE int32_t ct_named_user_const_output__template(const Column<T>& input,
+                                                               int32_t c,
+                                                               Column<T>& out) {
   for (int64_t i = 0; i < c; i++) {
     out[i] = 0;
   }
@@ -687,9 +695,9 @@ int32_t ct_named_user_const_output__cpu_template(const Column<T>& input,
 }
 
 template <typename T>
-int32_t ct_named_rowmul_output__cpu_template(const Column<T>& input,
-                                             int32_t m,
-                                             Column<T>& out) {
+TEMPLATE_NOINLINE int32_t ct_named_rowmul_output__template(const Column<T>& input,
+                                                           int32_t m,
+                                                           Column<T>& out) {
   for (int64_t j = 0; j < m; j++) {
     for (int64_t i = 0; i < input.size(); i++) {
       out[j * input.size() + i] += input[i];

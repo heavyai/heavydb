@@ -291,3 +291,15 @@ EXTENSION_NOINLINE int32_t column_list_row_sum__cpu_(const ColumnList<int32_t>& 
 }
 
 #include "MLFunctions.hpp"
+
+/*
+  Include the UDTF template initiations:
+*/
+#ifdef __CUDACC__
+#include "gen-cpp/TableFunctionsFactory_init_gpu.hpp"
+#else
+#include "gen-cpp/TableFunctionsFactory_init_cpu.hpp"
+#endif
+/*
+  Don't put any code containing UDTF template definitions below.
+*/
