@@ -130,6 +130,31 @@ std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<Analyzer::BinOper> op) {
       op, memory_level, HashType::OneToOne, device_count, column_cache, executor.get());
 }
 
+std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
+    std::vector<std::shared_ptr<Analyzer::BinOper>> quals) {
+  auto catalog = QR::get()->getCatalog();
+  CHECK(catalog);
+
+  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  CHECK(executor);
+  executor->setCatalog(catalog.get());
+
+  auto memory_level =
+      (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
+                                                : Data_Namespace::GPU_LEVEL);
+
+  auto device_count = deviceCount(catalog.get(), g_device_type);
+
+  ColumnCacheMap column_cache;
+
+  return HashJoin::getSyntheticInstance(quals,
+                                        memory_level,
+                                        HashType::OneToOne,
+                                        device_count,
+                                        column_cache,
+                                        executor.get());
+}
+
 TEST(Build, PerfectOneToOne1) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -323,6 +348,108 @@ TEST(Build, PerfectOneToMany2) {
 
     EXPECT_EQ(s1, s2);
 
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+    )");
+  }
+}
+
+TEST(Build, detectProperJoinQual) {
+  auto catalog = QR::get()->getCatalog();
+  CHECK(catalog);
+
+  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId).get();
+  CHECK(executor);
+  executor->setCatalog(catalog.get());
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    g_device_type = dt;
+
+    JoinHashTableCacheInvalidator::invalidateCaches();
+
+    // | perfect one-to-many | offsets 0 2 4 6 8 | counts 2 2 2 2 2 | payloads 0 5 1 6 2 7
+    // 3 8 4 9 |
+    const DecodedJoinHashBufferSet s1 = {
+        {{0}, {0, 5}}, {{1}, {1, 6}}, {{2}, {2, 7}}, {{3}, {3, 8}}, {{4}, {4, 9}}};
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+
+      create table table1 (t11 integer, t12 integer);
+      create table table2 (t21 integer, t22 integer);
+
+      insert into table1 values (1, 1);
+      insert into table1 values (8, 1);
+
+      insert into table2 values (0, 1);
+      insert into table2 values (1, 1);
+      insert into table2 values (2, 1);
+      insert into table2 values (3, 1);
+      insert into table2 values (4, 1);
+      insert into table2 values (0, 1);
+      insert into table2 values (1, 1);
+      insert into table2 values (2, 1);
+      insert into table2 values (3, 1);
+      insert into table2 values (4, 1);
+    )");
+
+    Datum d;
+    d.intval = 1;
+    SQLTypeInfo ti(kINT, 0, 0, false);
+    auto c = std::make_shared<Analyzer::Constant>(ti, false, d);
+
+    // case 1: t12 = 1 AND t11 = t21
+    // case 2: 1 = t12 AND t11 = t21
+    // case 3: t22 = 1 AND t11 = t21
+    // case 4: 1 = t22 AND t11 = t21
+    auto t11 = getSyntheticColumnVar("table1", "t11", 0, executor);
+    auto t21 = getSyntheticColumnVar("table2", "t21", 1, executor);
+    auto qual2 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, t11, t21);
+    auto create_join_qual = [&c, &executor](int case_num) {
+      std::shared_ptr<Analyzer::ColumnVar> q1_lhs;
+      std::shared_ptr<Analyzer::BinOper> qual1;
+      switch (case_num) {
+        case 1: {
+          q1_lhs = getSyntheticColumnVar("table1", "t12", 0, executor);
+          qual1 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, c, q1_lhs);
+          break;
+        }
+        case 2: {
+          q1_lhs = getSyntheticColumnVar("table1", "t12", 0, executor);
+          qual1 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, q1_lhs, c);
+          break;
+        }
+        case 3: {
+          q1_lhs = getSyntheticColumnVar("table2", "t22", 1, executor);
+          qual1 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, c, q1_lhs);
+          break;
+        }
+        case 4: {
+          q1_lhs = getSyntheticColumnVar("table2", "t22", 1, executor);
+          qual1 = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, q1_lhs, c);
+          break;
+        }
+        default:
+          break;
+      }
+      return qual1;
+    };
+
+    for (int i = 1; i <= 4; ++i) {
+      auto qual1 = create_join_qual(i);
+      std::vector<std::shared_ptr<Analyzer::BinOper>> quals;
+      quals.push_back(qual1);
+      quals.push_back(qual2);
+      auto res = checkProperQualDetection(quals);
+      auto hash_table = res.second;
+      EXPECT_EQ(hash_table->getHashType(), HashType::OneToMany);
+      auto s2 = hash_table->toSet(g_device_type, 0);
+      EXPECT_EQ(s1, s2);
+      EXPECT_TRUE(!res.first.empty());
+    }
     sql(R"(
       drop table if exists table1;
       drop table if exists table2;

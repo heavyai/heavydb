@@ -712,6 +712,8 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
       plan_state_->join_info_.equi_join_tautologies_.push_back(qual_bin_oper);
     } else {
       fail_reasons.push_back(hash_table_or_error.fail_reason);
+      VLOG(2) << "Building a hashtable based on a qual " << qual_bin_oper->toString()
+              << " fails: " << hash_table_or_error.fail_reason;
       if (current_level_join_conditions.type == JoinType::INNER ||
           current_level_join_conditions.type == JoinType::SEMI ||
           current_level_join_conditions.type == JoinType::ANTI) {

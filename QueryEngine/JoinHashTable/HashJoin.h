@@ -202,6 +202,14 @@ class HashJoin {
       ColumnCacheMap& column_cache,
       Executor* executor);
 
+  static std::pair<std::string, std::shared_ptr<HashJoin>> getSyntheticInstance(
+      std::vector<std::shared_ptr<Analyzer::BinOper>>,
+      const Data_Namespace::MemoryLevel memory_level,
+      const HashType preferred_hash_type,
+      const int device_count,
+      ColumnCacheMap& column_cache,
+      Executor* executor);
+
   static int getInnerTableId(const std::vector<InnerOuter>& inner_outer_pairs) {
     CHECK(!inner_outer_pairs.empty());
     const auto first_inner_col = inner_outer_pairs.front().first;

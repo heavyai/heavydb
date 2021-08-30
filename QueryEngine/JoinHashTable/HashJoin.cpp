@@ -529,6 +529,45 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
   return hash_table;
 }
 
+std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance(
+    std::vector<std::shared_ptr<Analyzer::BinOper>> qual_bin_opers,
+    const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
+    const int device_count,
+    ColumnCacheMap& column_cache,
+    Executor* executor) {
+  std::set<const Analyzer::ColumnVar*> cvs;
+  for (auto& qual : qual_bin_opers) {
+    auto cv = AllColumnVarsVisitor().visit(qual.get());
+    cvs.insert(cv.begin(), cv.end());
+  }
+  auto query_infos = getSyntheticInputTableInfo(cvs, executor);
+  setupSyntheticCaching(cvs, executor);
+  RegisteredQueryHint query_hint = RegisteredQueryHint::defaults();
+  std::shared_ptr<HashJoin> hash_table;
+  std::string error_msg;
+  for (auto& qual : qual_bin_opers) {
+    try {
+      auto candidate_hash_table = HashJoin::getInstance(qual,
+                                                        query_infos,
+                                                        memory_level,
+                                                        JoinType::INNER,
+                                                        preferred_hash_type,
+                                                        device_count,
+                                                        column_cache,
+                                                        executor,
+                                                        query_hint);
+      if (candidate_hash_table) {
+        hash_table = candidate_hash_table;
+      }
+    } catch (HashJoinFail& e) {
+      error_msg = e.what();
+      continue;
+    }
+  }
+  return std::make_pair(error_msg, hash_table);
+}
+
 void HashJoin::checkHashJoinReplicationConstraint(const int table_id,
                                                   const size_t shard_count,
                                                   const Executor* executor) {
@@ -610,6 +649,13 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
     throw HashJoinFail("Cannot use hash join for given expression");
   }
   if (!outer_col) {
+    // check whether outer_col is a constant, i.e., inner_col = K;
+    const auto outer_constant_col = dynamic_cast<const Analyzer::Constant*>(outer_expr);
+    if (outer_constant_col) {
+      throw HashJoinFail(
+          "Cannot use hash join for given expression: try to join with a constant "
+          "value");
+    }
     MaxRangeTableIndexVisitor rte_idx_visitor;
     int outer_rte_idx = rte_idx_visitor.visit(outer_expr);
     // The inner column candidate is not actually inner; the outer
