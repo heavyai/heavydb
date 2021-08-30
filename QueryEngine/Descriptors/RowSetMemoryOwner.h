@@ -62,13 +62,10 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   int8_t* allocateCountDistinctBuffer(const size_t num_bytes,
                                       const size_t thread_idx = 0) {
-    CHECK_LT(thread_idx, allocators_.size());
-    auto allocator = allocators_[thread_idx].get();
-    std::lock_guard<std::mutex> lock(state_mutex_);
-    auto ret = reinterpret_cast<int8_t*>(allocator->allocateAndZero(num_bytes));
-    count_distinct_bitmaps_.emplace_back(
-        CountDistinctBitmapBuffer{ret, num_bytes, /*physical_buffer=*/true});
-    return ret;
+    int8_t* buffer = allocate(num_bytes, thread_idx);
+    std::memset(buffer, 0, num_bytes);
+    addCountDistinctBuffer(buffer, num_bytes, /*physical_buffer=*/true);
+    return buffer;
   }
 
   void addCountDistinctBuffer(int8_t* count_distinct_buffer,
