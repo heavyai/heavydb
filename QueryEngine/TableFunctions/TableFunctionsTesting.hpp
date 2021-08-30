@@ -787,3 +787,79 @@ EXTENSION_NOINLINE int32_t ct_scalar_2_args_constant_sizing(const int64_t num1,
   }
   return 5;
 }
+
+// clang-format off
+/*
+  UDTF: ct_no_cursor_user_constant_sizer__cpu_(int32_t, ConstantParameter c) -> Column<int32_t> output
+*/
+// clang-format on
+
+EXTENSION_NOINLINE int32_t
+ct_no_cursor_user_constant_sizer__cpu_(const int32_t input_num,
+                                       int32_t c,
+                                       Column<int32_t>& output) {
+  for (int32_t i = 0; i < c; i++) {
+    output[i] = input_num;
+  }
+  return c;
+}
+
+// clang-format off
+/*
+  UDTF: ct_templated_no_cursor_user_constant_sizer__cpu_template(T, ConstantParameter c) -> Column<T> output, T=[int32_t, float]
+*/
+// clang-format on
+
+template <typename T>
+TEMPLATE_NOINLINE int32_t
+ct_templated_no_cursor_user_constant_sizer__cpu_template(const T input_num,
+                                                         int32_t c,
+                                                         Column<T>& output) {
+  for (int32_t i = 0; i < c; i++) {
+    output[i] = input_num;
+  }
+  return c;
+}
+
+#ifdef __CUDACC__
+
+// clang-format off
+/*
+  UDTF: ct_user_constant_sizer__gpu_(int32_t, ConstantParameter c) -> Column<int32_t> output
+*/
+// clang-format on
+
+EXTENSION_NOINLINE int32_t
+ct_no_cursor_user_constant_sizer__gpu_(const int32_t input_num,
+                                       int32_t c,
+                                       Column<int32_t>& output) {
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+
+  for (int32_t i = start; i < c; i += step) {
+    output[i] = input_num;
+  }
+  return c;
+}
+
+// clang-format off
+/*
+  UDTF: ct_templated_no_cursor_user_constant_sizer__gpu_template(T, ConstantParameter c) -> Column<T> output, T=[int32_t, float]
+*/
+// clang-format on
+
+template <typename T>
+TEMPLATE_NOINLINE int32_t
+ct_templated_no_cursor_user_constant_sizer__gpu_template(const T input_num,
+                                                         int32_t c,
+                                                         Column<T>& output) {
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+
+  for (int32_t i = start; i < c; i += step) {
+    output[i] = input_num;
+  }
+  return c;
+}
+
+#endif  //__CUDACC__

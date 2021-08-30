@@ -4211,8 +4211,8 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   const auto& table_function_type_infos = std::get<1>(table_function_impl_and_type_infos);
 
   size_t output_row_sizing_param = 0;
-  if (table_function_impl.hasUserSpecifiedOutputSizeMultiplier() ||
-      table_function_impl.hasUserSpecifiedOutputSizeConstant()) {
+  if (table_function_impl
+          .hasUserSpecifiedOutputSizeParameter()) {  // constant and row multiplier
     const auto parameter_index =
         table_function_impl.getOutputRowSizeParameter(table_function_type_infos);
     CHECK_GT(parameter_index, size_t(0));
@@ -4243,7 +4243,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       input_exprs.insert(input_exprs.begin() + parameter_index - 1,
                          DEFAULT_ROW_MULTIPLIER_EXPR.get());
     }
-  } else if (table_function_impl.hasNonUserSpecifiedOutputSizeConstant()) {
+  } else if (table_function_impl.hasNonUserSpecifiedOutputSize()) {
     output_row_sizing_param = table_function_impl.getOutputRowSizeParameter();
   } else {
     UNREACHABLE();

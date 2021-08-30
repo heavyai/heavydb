@@ -364,7 +364,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
 
   // output column members must be set before loading column when
   // column instances are passed by value
-  if (!exe_unit.table_func.hasTableFunctionSpecifiedParameter() && !is_gpu) {
+  if (exe_unit.table_func.hasOutputSizeKnownPreLaunch() && !is_gpu) {
     cgen_state->emitExternalCall(
         "set_output_row_size",
         llvm::Type::getVoidTy(ctx),

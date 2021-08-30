@@ -177,21 +177,43 @@ class TableFunction {
     return output_sizer_.type == OutputBufferSizeType::kConstant;
   }
 
-  bool hasNonUserSpecifiedOutputSizeConstant() const {
-    return output_sizer_.type == OutputBufferSizeType::kConstant ||
-           output_sizer_.type == OutputBufferSizeType::kTableFunctionSpecifiedParameter;
-  }
-
   bool hasUserSpecifiedOutputSizeConstant() const {
     return output_sizer_.type == OutputBufferSizeType::kUserSpecifiedConstantParameter;
   }
 
-  bool hasUserSpecifiedOutputSizeMultiplier() const {
-    return output_sizer_.type == OutputBufferSizeType::kUserSpecifiedRowMultiplier;
+  bool hasConstantOutputSize() const {
+    return output_sizer_.type == OutputBufferSizeType::kConstant ||
+           output_sizer_.type == OutputBufferSizeType::kUserSpecifiedConstantParameter;
   }
 
   bool hasTableFunctionSpecifiedParameter() const {
     return output_sizer_.type == OutputBufferSizeType::kTableFunctionSpecifiedParameter;
+  }
+
+  bool hasUserSpecifiedOutputSizeParameter() const {
+    return output_sizer_.type == OutputBufferSizeType::kUserSpecifiedConstantParameter ||
+           output_sizer_.type == OutputBufferSizeType::kUserSpecifiedRowMultiplier;
+  }
+
+  bool hasNonUserSpecifiedOutputSize() const {
+    return output_sizer_.type == OutputBufferSizeType::kConstant ||
+           output_sizer_.type == OutputBufferSizeType::kTableFunctionSpecifiedParameter;
+  }
+
+  bool hasOutputSizeIndependentOfInputSize() const {
+    return output_sizer_.type == OutputBufferSizeType::kConstant ||
+           output_sizer_.type == OutputBufferSizeType::kUserSpecifiedConstantParameter ||
+           output_sizer_.type == OutputBufferSizeType::kTableFunctionSpecifiedParameter;
+  }
+
+  bool hasOutputSizeKnownPreLaunch() const {
+    return output_sizer_.type == OutputBufferSizeType::kConstant ||
+           output_sizer_.type == OutputBufferSizeType::kUserSpecifiedConstantParameter ||
+           output_sizer_.type == OutputBufferSizeType::kUserSpecifiedRowMultiplier;
+  }
+
+  bool hasUserSpecifiedOutputSizeMultiplier() const {
+    return output_sizer_.type == OutputBufferSizeType::kUserSpecifiedRowMultiplier;
   }
 
   OutputBufferSizeType getOutputRowSizeType() const { return output_sizer_.type; }

@@ -96,7 +96,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   }
   std::vector<const int8_t*> col_buf_ptrs;
   std::vector<int64_t> col_sizes;
-  std::optional<size_t> output_column_size;
+  std::optional<size_t> input_num_rows;
 
   int col_index = -1;
   // TODO: col_list_bufs are allocated on CPU memory, so UDTFs with column_list
@@ -125,9 +125,10 @@ ResultSetPtr TableFunctionExecutionContext::execute(
           /*thread_idx=*/0,
           chunks_owner,
           column_fetcher.columnarized_table_cache_);
-      // We use the size of the first column to be the size of the output column
-      if (!output_column_size) {
-        output_column_size = (buf_elem_count ? buf_elem_count : 1);
+      // We use the number of entries in the first column to be the number of rows to base
+      // the output off of (optionally depending on the sizing parameter)
+      if (!input_num_rows) {
+        input_num_rows = (buf_elem_count ? buf_elem_count : 1);
       }
       if (ti.is_column_list()) {
         if (col_index == -1) {
@@ -214,10 +215,14 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   CHECK_EQ(col_buf_ptrs.size(), exe_unit.input_exprs.size());
   CHECK_EQ(col_sizes.size(), exe_unit.input_exprs.size());
   if (!exe_unit.table_func
-           .hasNonUserSpecifiedOutputSizeConstant()) {  // includes compile-time constants
-                                                        // and runtime table funtion
-                                                        // specified sizing
-    CHECK(output_column_size);
+           .hasOutputSizeIndependentOfInputSize()) {  // includes compile-time constants,
+                                                      // user-specified constants,
+                                                      // and runtime table funtion
+                                                      // specified sizing, only
+                                                      // user-specified row-multipliers
+                                                      // currently take into account input
+                                                      // row size
+    CHECK(input_num_rows);
   }
   switch (device_type) {
     case ExecutorDeviceType::CPU:
@@ -225,14 +230,14 @@ ResultSetPtr TableFunctionExecutionContext::execute(
                            compilation_context,
                            col_buf_ptrs,
                            col_sizes,
-                           *output_column_size,
+                           *input_num_rows,
                            executor);
     case ExecutorDeviceType::GPU:
       return launchGpuCode(exe_unit,
                            compilation_context,
                            col_buf_ptrs,
                            col_sizes,
-                           *output_column_size,
+                           *input_num_rows,
                            /*device_id=*/0,
                            executor);
   }
@@ -245,7 +250,7 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
     const TableFunctionCompilationContext* compilation_context,
     std::vector<const int8_t*>& col_buf_ptrs,
     std::vector<int64_t>& col_sizes,
-    const size_t elem_count,
+    const size_t elem_count,  // taken from first source only currently
     Executor* executor) {
   int64_t output_row_count = 0;
 
@@ -253,9 +258,10 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   auto mgr = std::make_unique<QueryOutputBufferMemoryManager>(
       exe_unit, executor, col_buf_ptrs, row_set_mem_owner_);
 
-  if (!exe_unit.table_func.hasTableFunctionSpecifiedParameter()) {
-    // allocate output buffers because the size is defined by the size
-    // of input buffers
+  if (exe_unit.table_func.hasOutputSizeKnownPreLaunch()) {
+    // allocate output buffers because the size is known up front, from
+    // user specified parameters (and table size in the case of a user
+    // specified row multiplier)
     output_row_count = get_output_row_count(exe_unit, elem_count);
   }
 
@@ -457,7 +463,7 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
       reinterpret_cast<int8_t*>(&output_row_count),
       reinterpret_cast<int8_t*>(kernel_params[OUTPUT_ROW_COUNT]),
       sizeof(int64_t));
-  if (exe_unit.table_func.hasNonUserSpecifiedOutputSizeConstant()) {
+  if (exe_unit.table_func.hasNonUserSpecifiedOutputSize()) {
     if (static_cast<size_t>(output_row_count) != allocated_output_row_count) {
       throw std::runtime_error(
           "Table function with constant sizing parameter must return " +

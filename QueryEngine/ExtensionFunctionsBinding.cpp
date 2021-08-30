@@ -504,7 +504,7 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
     CHECK_EQ(ext_funcs.size(), static_cast<size_t>(1));
     CHECK_EQ(ext_funcs[0].getInputArgs().size(), static_cast<size_t>(0));
     if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
-      CHECK(ext_funcs[0].hasNonUserSpecifiedOutputSizeConstant());
+      CHECK(ext_funcs[0].hasNonUserSpecifiedOutputSize());
     }
     std::vector<SQLTypeInfo> empty_type_info_variant(0);
     return {ext_funcs[0], empty_type_info_variant};

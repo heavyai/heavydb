@@ -703,6 +703,31 @@ TEST_F(TableFunctions, CursorlessInputs) {
         ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]), static_cast<int32_t>(100 - r * 5));
       }
     }
+
+    // Tests for user-defined constant parameter sizing, which were separately broken from
+    // the above
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT output FROM TABLE(ct_no_cursor_user_constant_sizer(8, 10));", dt);
+      ASSERT_EQ(rows->rowCount(), size_t(10));
+
+      for (size_t r = 0; r < 10; ++r) {
+        auto crt_row = rows->getNextRow(false, false);
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(8));
+      }
+    }
+
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT output FROM TABLE(ct_templated_no_cursor_user_constant_sizer(7, 4));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(4));
+
+      for (size_t r = 0; r < 4; ++r) {
+        auto crt_row = rows->getNextRow(false, false);
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(7));
+      }
+    }
   }
 }
 
