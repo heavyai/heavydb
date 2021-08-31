@@ -6,7 +6,7 @@
 #include "thread_count.h"
 
 #ifndef THREADING_STD_LAUNCH
-#define THREADING_STD_LAUNCH deferred  // async or deferred
+#define THREADING_STD_LAUNCH async  // async or deferred
 #endif
 
 namespace threading_common {

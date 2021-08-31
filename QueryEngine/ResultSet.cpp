@@ -611,7 +611,8 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   std::vector<PermutationView> permutation_views(nthreads);
   threading::task_group top_sort_threads;
   for (auto interval : makeIntervals<PermutationIdx>(0, permutation_.size(), nthreads)) {
-    top_sort_threads.run([&, top_n, executor, query_id = logger::query_id(), interval] {
+    top_sort_threads.run([this, &order_entries, &permutation_views, top_n
+                         , executor, query_id = logger::query_id(), interval] {
       auto qid_scope_guard = logger::set_thread_local_query_id(query_id);
       PermutationView pv(permutation_.data() + interval.begin, 0, interval.size());
       pv = initPermutationBuffer(pv, interval.begin, interval.end);
