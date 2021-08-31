@@ -293,12 +293,13 @@ class DBHandlerTestFixture : public testing::Test {
   }
 
   static void sql(TQueryResult& result, const std::string& query) {
-    db_handler_->sql_execute(result, session_id_, query, true, "", -1, -1);
+    db_handler_->sql_execute(
+        result, session_id_, boost::trim_copy(query), true, "", -1, -1);
   }
 
   // Execute SQL with session_id
   static void sql(TQueryResult& result, const std::string& query, TSessionId& sess_id) {
-    db_handler_->sql_execute(result, sess_id, query, true, "", -1, -1);
+    db_handler_->sql_execute(result, sess_id, boost::trim_copy(query), true, "", -1, -1);
   }
 
   Catalog_Namespace::UserMetadata getCurrentUser() {
