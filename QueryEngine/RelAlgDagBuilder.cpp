@@ -1032,7 +1032,11 @@ std::vector<size_t> indices_from_json_array(
 }
 
 std::unique_ptr<const RexAgg> parse_aggregate_expr(const rapidjson::Value& expr) {
-  const auto agg = to_agg_kind(json_str(field(expr, "agg")));
+  const auto agg_str = json_str(field(expr, "agg"));
+  if (agg_str == "APPROX_QUANTILE") {
+    LOG(INFO) << "APPROX_QUANTILE is deprecated. Please use APPROX_PERCENTILE instead.";
+  }
+  const auto agg = to_agg_kind(agg_str);
   const auto distinct = json_bool(field(expr, "distinct"));
   const auto agg_ti = parse_type(field(expr, "type"));
   const auto operands = indices_from_json_array(field(expr, "operands"));

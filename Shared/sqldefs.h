@@ -140,7 +140,7 @@ inline std::string toString(const SQLAgg& kind) {
     case kAPPROX_COUNT_DISTINCT:
       return "APPROX_COUNT_DISTINCT";
     case kAPPROX_QUANTILE:
-      return "APPROX_QUANTILE";
+      return "APPROX_PERCENTILE";
     case kSAMPLE:
       return "SAMPLE";
     case kSINGLE_VALUE:

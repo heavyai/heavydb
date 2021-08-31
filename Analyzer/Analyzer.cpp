@@ -2730,7 +2730,7 @@ std::string AggExpr::toString() const {
       agg = "APPROX_COUNT_DISTINCT";
       break;
     case kAPPROX_QUANTILE:
-      agg = "APPROX_QUANTILE";
+      agg = "APPROX_PERCENTILE";
       break;
     case kSINGLE_VALUE:
       agg = "SINGLE_VALUE";

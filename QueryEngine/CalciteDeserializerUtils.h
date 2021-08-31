@@ -110,7 +110,8 @@ inline SQLAgg to_agg_kind(const std::string& agg_name) {
   if (agg_name == std::string("APPROX_COUNT_DISTINCT")) {
     return kAPPROX_COUNT_DISTINCT;
   }
-  if (agg_name == "APPROX_MEDIAN" || agg_name == "APPROX_QUANTILE") {
+  if (agg_name == "APPROX_MEDIAN" || agg_name == "APPROX_PERCENTILE" ||
+      agg_name == "APPROX_QUANTILE") {
     return kAPPROX_QUANTILE;
   }
   if (agg_name == std::string("SAMPLE") || agg_name == std::string("LAST_SAMPLE")) {

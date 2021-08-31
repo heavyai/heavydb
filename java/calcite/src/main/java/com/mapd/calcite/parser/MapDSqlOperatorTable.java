@@ -231,6 +231,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new OffsetInFragment());
     opTab.addOperator(new ApproxCountDistinct());
     opTab.addOperator(new ApproxMedian());
+    opTab.addOperator(new ApproxPercentile());
     opTab.addOperator(new ApproxQuantile());
     opTab.addOperator(new MapDAvg());
     opTab.addOperator(new Sample());
@@ -1733,6 +1734,27 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               null,
               null,
               OperandTypes.family(SqlTypeFamily.NUMERIC),
+              SqlFunctionCategory.SYSTEM,
+              false,
+              false,
+              Optionality.FORBIDDEN);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+    }
+  }
+
+  static class ApproxPercentile extends SqlAggFunction {
+    ApproxPercentile() {
+      super("APPROX_PERCENTILE",
+              null,
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.NUMERIC, SqlTypeFamily.NUMERIC),
               SqlFunctionCategory.SYSTEM,
               false,
               false,

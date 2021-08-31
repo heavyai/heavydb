@@ -225,7 +225,7 @@ bool is_agg_supported_for_type(const SQLAgg& agg_kind, const SQLTypeInfo& arg_ti
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
     const RexAgg* rex,
     const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources) {
-  const auto agg_kind = rex->getKind();
+  SQLAgg agg_kind = rex->getKind();
   const bool is_distinct = rex->isDistinct();
   const bool takes_arg{rex->size() > 0};
   std::shared_ptr<Analyzer::Expr> arg_expr;
@@ -247,7 +247,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
     } else if (agg_kind == kAPPROX_QUANTILE) {
       if (g_cluster) {
         throw std::runtime_error(
-            "APPROX_QUANTILE/MEDIAN is not supported in distributed mode at this time.");
+            "APPROX_PERCENTILE/MEDIAN is not supported in distributed mode at this "
+            "time.");
       }
       // If second parameter is not given then APPROX_MEDIAN is assumed.
       if (rex->size() == 2) {

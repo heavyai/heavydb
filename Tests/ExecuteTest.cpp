@@ -1761,7 +1761,7 @@ TEST(Select, GroupBy) {
         oss << "SAMPLE(" << col_name << ")";
         break;
       case SQLAgg::kAPPROX_QUANTILE:
-        oss << "APPROX_QUANTILE(" << col_name << ", 0.5) ";
+        oss << "APPROX_PERCENTILE(" << col_name << ", 0.5) ";
         break;
       default:
         CHECK(false);
@@ -2601,10 +2601,10 @@ TEST(Select, ApproxMedianSanity) {
       approx_median("w");
       EXPECT_TRUE(false) << "Exception expected for approx_median query.";
     } catch (std::runtime_error const& e) {
-      EXPECT_EQ(
-          std::string(e.what()),
-          "TException - service has thrown: TOmniSciException(error_msg="
-          "APPROX_QUANTILE/MEDIAN is not supported in distributed mode at this time.)");
+      EXPECT_EQ(std::string(e.what()),
+                "TException - service has thrown: "
+                "TOmniSciException(error_msg=APPROX_PERCENTILE/MEDIAN is not supported "
+                "in distributed mode at this time.)");
     } catch (...) {
       EXPECT_TRUE(false) << "std::runtime_error expected for approx_median query.";
     }
@@ -2724,6 +2724,24 @@ TEST(Select, ApproxMedianSort) {
   }
 }
 
+// APPROX_PERCENTILE is exact when the number of rows is low.
+TEST(Select, ApproxPercentileExactValues) {
+  if (g_aggregator) {
+    LOG(WARNING) << "Skipping ApproxPercentileExactValues tests in distributed mode.";
+  } else {
+    auto const dt = ExecutorDeviceType::CPU;
+    // clang-format off
+    double tests[][2]{{0.0, 2.2}, {0.25, 2.2}, {0.45, 2.2}, {0.5, 2.3}, {0.55, 2.4},
+                      {0.7, 2.4}, {0.75, 2.5}, {0.8, 2.6}, {1.0, 2.6}};
+    // clang-format on
+    for (auto test : tests) {
+      std::stringstream query;
+      query << "SELECT APPROX_PERCENTILE(d," << test[0] << ") FROM test;";
+      EXPECT_EQ(test[1], v<double>(run_simple_agg(query.str(), dt)));
+    }
+  }
+}
+
 // APPROX_QUANTILE is exact when the number of rows is low.
 TEST(Select, ApproxQuantileExactValues) {
   if (g_aggregator) {
@@ -2742,9 +2760,9 @@ TEST(Select, ApproxQuantileExactValues) {
   }
 }
 
-TEST(Select, ApproxQuantileMinMax) {
+TEST(Select, ApproxPercentileMinMax) {
   if (g_aggregator) {
-    LOG(WARNING) << "Skipping ApproxQuantileMinMax tests in distributed mode.";
+    LOG(WARNING) << "Skipping ApproxPercentileMinMax tests in distributed mode.";
   } else {
     auto const dt = ExecutorDeviceType::CPU;
     // clang-format off
@@ -2752,44 +2770,44 @@ TEST(Select, ApproxQuantileMinMax) {
                        "dd_notnull", "u", "ofd", "ufd", "ofq", "ufq", "smallint_nulls"};
     // clang-format on
     for (std::string col : cols) {
-      c("SELECT APPROX_QUANTILE(" + col + ",0) FROM test;",
+      c("SELECT APPROX_PERCENTILE(" + col + ",0) FROM test;",
         // MIN(ofq) = -1 but MIN(CAST(ofq AS DOUBLE)) = -2^63 due to null sentinel logic
         //"SELECT CAST(MIN(" + col + ") AS DOUBLE) FROM test;",
         "SELECT MIN(CAST(" + col + " AS DOUBLE)) FROM test;",
         dt);
-      c("SELECT APPROX_QUANTILE(" + col + ",1) FROM test;",
+      c("SELECT APPROX_PERCENTILE(" + col + ",1) FROM test;",
         "SELECT CAST(MAX(" + col + ") AS DOUBLE) FROM test;",
         dt);
     }
   }
 }
 
-TEST(Select, ApproxQuantileSubqueries) {
+TEST(Select, ApproxPercentileSubqueries) {
   if (g_aggregator) {
-    LOG(WARNING) << "Skipping ApproxMedianSubqueries tests in distributed mode.";
+    LOG(WARNING) << "Skipping ApproxPercentileSubqueries tests in distributed mode.";
   } else {
     auto const dt = ExecutorDeviceType::CPU;
     const char* query =
         "SELECT MIN(am) FROM (SELECT x, APPROX_MEDIAN(w) AS am FROM test GROUP BY x);";
     EXPECT_EQ(-8.0, v<double>(run_simple_agg(query, dt)));
     query =
-        "SELECT MIN(am) FROM (SELECT x, APPROX_QUANTILE(w,0.5) AS am FROM test GROUP BY "
-        "x);";
+        "SELECT MIN(am) FROM (SELECT x, APPROX_PERCENTILE(w,0.5) AS am FROM test GROUP "
+        "BY x);";
     EXPECT_EQ(-8.0, v<double>(run_simple_agg(query, dt)));
     query =
         "SELECT MAX(am) FROM (SELECT x, APPROX_MEDIAN(w) AS am FROM test GROUP BY x);";
     EXPECT_EQ(-7.0, v<double>(run_simple_agg(query, dt)));
     query =
-        "SELECT MAX(am) FROM (SELECT x, APPROX_QUANTILE(w,0.5) AS am FROM test GROUP BY "
-        "x);";
+        "SELECT MAX(am) FROM (SELECT x, APPROX_PERCENTILE(w,0.5) AS am FROM test GROUP "
+        "BY x);";
     EXPECT_EQ(-7.0, v<double>(run_simple_agg(query, dt)));
   }
 }
 
 // Immerse invokes sql_validate which requires testing.
-TEST(Select, ApproxQuantileValidate) {
+TEST(Select, ApproxPercentileValidate) {
   if (g_aggregator) {
-    LOG(WARNING) << "Skipping ApproxMedianValidate tests in distributed mode.";
+    LOG(WARNING) << "Skipping ApproxPercentileValidate tests in distributed mode.";
   } else {
     auto const dt = ExecutorDeviceType::CPU;
     auto eo = QR::defaultExecutionOptionsForRunSQL();
@@ -2801,8 +2819,8 @@ TEST(Select, ApproxQuantileValidate) {
     auto crt_row = rows->getNextRow(true, true);
     CHECK_EQ(1u, crt_row.size()) << query;
     EXPECT_EQ(NULL_DOUBLE, v<double>(crt_row[0]));
-    // APPROX_QUANTILE
-    query = "SELECT APPROX_QUANTILE(x,0.1) FROM test;";
+    // APPROX_PERCENTILE
+    query = "SELECT APPROX_PERCENTILE(x,0.1) FROM test;";
     rows = QR::get()->runSQL(query, CompilationOptions::defaults(dt), std::move(eo));
     crt_row = rows->getNextRow(true, true);
     CHECK_EQ(1u, crt_row.size()) << query;
