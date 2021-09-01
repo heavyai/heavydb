@@ -1193,6 +1193,7 @@ class DropTableStmt : public DDLStmt {
 class TruncateTableStmt : public DDLStmt {
  public:
   TruncateTableStmt(std::string* tab) : table_(tab) {}
+  TruncateTableStmt(const rapidjson::Value& payload);
   const std::string* get_table() const { return table_.get(); }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
@@ -1213,6 +1214,7 @@ class OptimizeTableStmt : public DDLStmt {
       delete o;
     }
   }
+  OptimizeTableStmt(const rapidjson::Value& payload);
 
   const std::string getTableName() const { return *(table_.get()); }
 
@@ -1225,10 +1227,7 @@ class OptimizeTableStmt : public DDLStmt {
     return false;
   }
 
-  void execute(const Catalog_Namespace::SessionInfo& session) override {
-    // Should pass optimize params to the table optimizer
-    CHECK(false);
-  }
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:
   std::unique_ptr<std::string> table_;
@@ -1407,9 +1406,9 @@ class DumpRestoreTableStmtBase : public DDLStmt {
       }
       delete options;
     };
+
     std::unique_ptr<std::list<NameValueAssign*>, decltype(options_deleter)> options_ptr(
         options, options_deleter);
-    std::vector<std::string> allowed_compression_programs{"lz4", "gzip", "none"};
     // specialize decompressor or break on osx bsdtar...
     if (options) {
       for (const auto option : *options) {
@@ -1417,15 +1416,7 @@ class DumpRestoreTableStmtBase : public DDLStmt {
           if (const auto str_literal =
                   dynamic_cast<const StringLiteral*>(option->get_value())) {
             compression_ = *str_literal->get_stringval();
-            const std::string lowercase_compression =
-                boost::algorithm::to_lower_copy(compression_);
-            if (allowed_compression_programs.end() ==
-                std::find(allowed_compression_programs.begin(),
-                          allowed_compression_programs.end(),
-                          lowercase_compression)) {
-              throw std::runtime_error("Compression program " + compression_ +
-                                       " is not supported.");
-            }
+            validateCompression(compression_, is_restore);
           } else {
             throw std::runtime_error("Compression option must be a string.");
           }
@@ -1434,27 +1425,12 @@ class DumpRestoreTableStmtBase : public DDLStmt {
         }
       }
     }
-    // default lz4 compression, next gzip, or none.
-    if (compression_.empty()) {
-      if (boost::process::search_path(compression_ = "gzip").string().empty()) {
-        if (boost::process::search_path(compression_ = "lz4").string().empty()) {
-          compression_ = "none";
-        }
-      }
-    }
-    if (boost::iequals(compression_, "none")) {
-      compression_.clear();
-    } else {
-      std::map<std::string, std::string> decompression{{"lz4", "unlz4"},
-                                                       {"gzip", "gunzip"}};
-      const auto use_program = is_restore ? decompression[compression_] : compression_;
-      const auto prog_path = boost::process::search_path(use_program);
-      if (prog_path.string().empty()) {
-        throw std::runtime_error("Compression program " + use_program + " is not found.");
-      }
-      compression_ = "--use-compress-program=" + use_program;
-    }
   }
+
+  DumpRestoreTableStmtBase(const rapidjson::Value& payload, const bool is_restore);
+
+  void validateCompression(std::string& compression, const bool is_restore);
+
   const std::string* getTable() const { return table_.get(); }
   const std::string* getPath() const { return path_.get(); }
   const std::string getCompression() const { return compression_; }
@@ -1469,6 +1445,7 @@ class DumpTableStmt : public DumpRestoreTableStmtBase {
  public:
   DumpTableStmt(std::string* tab, std::string* path, std::list<NameValueAssign*>* options)
       : DumpRestoreTableStmtBase(tab, path, options, false) {}
+  DumpTableStmt(const rapidjson::Value& payload);
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 };
 
@@ -1482,6 +1459,7 @@ class RestoreTableStmt : public DumpRestoreTableStmtBase {
                    std::string* path,
                    std::list<NameValueAssign*>* options)
       : DumpRestoreTableStmtBase(tab, path, options, true) {}
+  RestoreTableStmt(const rapidjson::Value& payload);
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 };
 
@@ -1863,6 +1841,8 @@ class SelectStmt : public DMLStmt {
 class ShowCreateTableStmt : public DDLStmt {
  public:
   ShowCreateTableStmt(std::string* tab) : table_(tab) {}
+  ShowCreateTableStmt(const rapidjson::Value& payload);
+
   std::string getCreateStmt() { return create_stmt_; }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 

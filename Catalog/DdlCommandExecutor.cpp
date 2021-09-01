@@ -359,6 +359,28 @@ ExecutionResult DdlCommandExecutor::execute() {
   } else if (ddl_command_ == "ALTER_TABLE") {
     Parser::AlterTableStmt::delegateExecute(extractPayload(*ddl_data_), *session_ptr_);
     return result;
+  } else if (ddl_command_ == "TRUNCATE_TABLE") {
+    auto truncate_table_stmt = Parser::TruncateTableStmt(extractPayload(*ddl_data_));
+    truncate_table_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "DUMP_TABLE") {
+    auto dump_table_stmt = Parser::DumpTableStmt(extractPayload(*ddl_data_));
+    dump_table_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "RESTORE_TABLE") {
+    auto restore_table_stmt = Parser::RestoreTableStmt(extractPayload(*ddl_data_));
+    restore_table_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "OPTIMIZE_TABLE") {
+    auto optimize_table_stmt = Parser::OptimizeTableStmt(extractPayload(*ddl_data_));
+    optimize_table_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "SHOW_CREATE_TABLE") {
+    auto show_create_table_stmt = Parser::ShowCreateTableStmt(extractPayload(*ddl_data_));
+    show_create_table_stmt.execute(*session_ptr_);
+    const auto create_string = show_create_table_stmt.getCreateStmt();
+    result.updateResultSet(create_string, ExecutionResult::SimpleResult);
+    return result;
   } else if (ddl_command_ == "CREATE_DB") {
     auto create_db_stmt = Parser::CreateDBStmt(extractPayload(*ddl_data_));
     create_db_stmt.execute(*session_ptr_);
@@ -468,21 +490,23 @@ bool DdlCommandExecutor::isKillQuery() {
   return (ddl_command_ == "KILL_QUERY");
 }
 
+bool DdlCommandExecutor::isShowCreateTable() {
+  return (ddl_command_ == "SHOW_CREATE_TABLE");
+}
+
 DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails() {
   DistributedExecutionDetails execution_details;
-  if (ddl_command_ == "CREATE_VIEW" || ddl_command_ == "DROP_VIEW" ||
+  if (ddl_command_ == "RENAME_TABLE" || ddl_command_ == "ALTER_TABLE" ||
       ddl_command_ == "CREATE_TABLE" || ddl_command_ == "DROP_TABLE" ||
-      ddl_command_ == "RENAME_TABLE" || ddl_command_ == "ALTER_TABLE" ||
+      ddl_command_ == "TRUNCATE_TABLE" || ddl_command_ == "DUMP_TABLE" ||
+      ddl_command_ == "RESTORE_TABLE" || ddl_command_ == "OPTIMIZE_TABLE" ||
+      ddl_command_ == "CREATE_VIEW" || ddl_command_ == "DROP_VIEW" ||
       ddl_command_ == "CREATE_DB" || ddl_command_ == "DROP_DB" ||
-      ddl_command_ == "RENAME_DB" || ddl_command_ == "REASSIGN_OWNED") {
-    // commands
-    execution_details.execution_location = ExecutionLocation::ALL_NODES;
-    execution_details.aggregation_type = AggregationType::NONE;
-  } else if (ddl_command_ == "CREATE_USER" || ddl_command_ == "DROP_USER" ||
-             ddl_command_ == "ALTER_USER" || ddl_command_ == "RENAME_USER" ||
-             ddl_command_ == "CREATE_ROLE" || ddl_command_ == "DROP_ROLE" ||
-             ddl_command_ == "GRANT_ROLE" || ddl_command_ == "REVOKE_ROLE") {
-    // group user/role/db commands
+      ddl_command_ == "RENAME_DB" || ddl_command_ == "CREATE_USER" ||
+      ddl_command_ == "DROP_USER" || ddl_command_ == "ALTER_USER" ||
+      ddl_command_ == "RENAME_USER" || ddl_command_ == "REASSIGN_OWNED" ||
+      ddl_command_ == "CREATE_ROLE" || ddl_command_ == "DROP_ROLE" ||
+      ddl_command_ == "GRANT_ROLE" || ddl_command_ == "REVOKE_ROLE") {
     execution_details.execution_location = ExecutionLocation::ALL_NODES;
     execution_details.aggregation_type = AggregationType::NONE;
   } else if (ddl_command_ == "GRANT_PRIVILEGE" || ddl_command_ == "REVOKE_PRIVILEGE") {

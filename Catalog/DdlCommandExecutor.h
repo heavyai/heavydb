@@ -235,6 +235,11 @@ class DdlCommandExecutor {
   bool isShowQueries();
 
   /**
+   * Returns true if this command is SHOW CREATE TABLE
+   */
+  bool isShowCreateTable();
+
+  /**
    * Returns true if this command is KILL QUERY
    */
   bool isKillQuery();

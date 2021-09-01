@@ -112,12 +112,6 @@ ParserWrapper::ParserWrapper(std::string query_string) {
     }
   }
 
-  if (boost::istarts_with(query_string, optimize_str)) {
-    query_type_ = QueryType::SchemaWrite;
-    is_optimize = true;
-    return;
-  }
-
   if (boost::istarts_with(query_string, validate_str)) {
     is_validate = true;
     return;
@@ -180,14 +174,9 @@ ParserWrapper::ParserWrapper(std::string query_string) {
         }
       } else if (ddl == "SHOW") {
         query_type_ = QueryType::SchemaRead;
-        boost::regex show_create_table_regex{
-            R"(SHOW\s+CREATE\s+TABLE\s+.*)",
-            boost::regex::extended | boost::regex::icase};
-        if (!boost::regex_match(query_string, show_create_table_regex)) {
-          is_calcite_ddl_ = true;
-          is_legacy_ddl_ = false;
-          return;
-        }
+        is_calcite_ddl_ = true;
+        is_legacy_ddl_ = false;
+        return;
       } else if (ddl == "DROP") {
         boost::regex drop_regex{R"(DROP\s+(TABLE|ROLE|VIEW|DATABASE|USER).*)",
                                 boost::regex::extended | boost::regex::icase};
@@ -245,7 +234,18 @@ ParserWrapper::ParserWrapper(std::string query_string) {
         is_calcite_ddl_ = true;
         is_legacy_ddl_ = false;
         return;
+      } else if (ddl == "ARCHIVE" || ddl == "DUMP" || ddl == "OPTIMIZE" ||
+                 ddl == "RESTORE" || ddl == "TRUNCATE") {
+        if (ddl == "ARCHIVE" || ddl == "DUMP") {
+          query_type_ = QueryType::SchemaRead;
+        } else {
+          query_type_ = QueryType::SchemaWrite;
+        }
+        is_calcite_ddl_ = true;
+        is_legacy_ddl_ = false;
+        return;
       }
+
       // ctas may look like ddl, but is neither legacy_dll nor calcite_ddl
       if (!is_ctas) {
         is_legacy_ddl_ = !is_calcite_ddl_;

@@ -61,6 +61,7 @@
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/RelAlgExecutor.h"
+#include "QueryEngine/TableOptimizer.h"
 #include "ReservedKeywords.h"
 #include "Shared/StringTransform.h"
 #include "Shared/measure.h"
@@ -1246,6 +1247,44 @@ void QuerySpec::analyze(const Catalog_Namespace::Catalog& catalog,
   analyze_having_clause(catalog, query);
 }
 
+namespace {
+
+void extract_options(const rapidjson::Value& payload,
+                     std::list<std::unique_ptr<NameValueAssign>>& nameValueList,
+                     bool stringToNull = false,
+                     bool stringToInteger = false) {
+  if (payload.HasMember("options") && payload["options"].IsObject()) {
+    for (const auto& option : payload["options"].GetObject()) {
+      auto option_name = std::make_unique<std::string>(json_str(option.name));
+      std::unique_ptr<Literal> literal_value;
+      if (option.value.IsString()) {
+        std::string value_string = json_str(option.value);
+        if (stringToNull && option.value == "") {
+          literal_value = std::make_unique<NullLiteral>();
+        } else if (stringToInteger &&
+                   std::all_of(value_string.begin(), value_string.end(), ::isdigit)) {
+          int iVal = std::stoi(value_string);
+          literal_value = std::make_unique<IntLiteral>(iVal);
+        } else {
+          auto literal_string = std::make_unique<std::string>(json_str(option.value));
+          literal_value = std::make_unique<StringLiteral>(literal_string.release());
+        }
+      } else if (option.value.IsInt() || option.value.IsInt64()) {
+        literal_value = std::make_unique<IntLiteral>(json_i64(option.value));
+      } else if (option.value.IsNull()) {
+        literal_value = std::make_unique<NullLiteral>();
+      } else {
+        throw std::runtime_error("Unable to handle literal for " + *option_name);
+      }
+      CHECK(literal_value);
+
+      nameValueList.emplace_back(std::make_unique<NameValueAssign>(
+          option_name.release(), literal_value.release()));
+    }
+  }
+}
+}  // namespace
+
 void SelectStmt::analyze(const Catalog_Namespace::Catalog& catalog,
                          Analyzer::Query& query) const {
   query.set_stmt_type(kSELECT);
@@ -2405,29 +2444,7 @@ CreateTableStmt::CreateTableStmt(const rapidjson::Value& payload) {
     }
   }
 
-  CHECK(payload.HasMember("options"));
-  if (payload["options"].IsObject()) {
-    for (const auto& option : payload["options"].GetObject()) {
-      auto option_name = std::make_unique<std::string>(json_str(option.name));
-      std::unique_ptr<Literal> literal_value;
-      if (option.value.IsString()) {
-        auto literal_string = std::make_unique<std::string>(json_str(option.value));
-        literal_value = std::make_unique<StringLiteral>(literal_string.release());
-      } else if (option.value.IsInt() || option.value.IsInt64()) {
-        literal_value = std::make_unique<IntLiteral>(json_i64(option.value));
-      } else if (option.value.IsNull()) {
-        literal_value = std::make_unique<NullLiteral>();
-      } else {
-        throw std::runtime_error("Unable to handle literal for " + *option_name);
-      }
-      CHECK(literal_value);
-
-      storage_options_.emplace_back(std::make_unique<NameValueAssign>(
-          option_name.release(), literal_value.release()));
-    }
-  } else {
-    CHECK(payload["options"].IsNull());
-  }
+  extract_options(payload, storage_options_);
 }
 
 void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& session,
@@ -3424,29 +3441,7 @@ CreateTableAsSelectStmt::CreateTableAsSelectStmt(const rapidjson::Value& payload
     if_not_exists_ = false;
   }
 
-  CHECK(payload.HasMember("options"));
-  if (payload["options"].IsObject()) {
-    for (const auto& option : payload["options"].GetObject()) {
-      auto option_name = std::make_unique<std::string>(json_str(option.name));
-      std::unique_ptr<Literal> literal_value;
-      if (option.value.IsString()) {
-        auto literal_string = std::make_unique<std::string>(json_str(option.value));
-        literal_value = std::make_unique<StringLiteral>(literal_string.release());
-      } else if (option.value.IsInt() || option.value.IsInt64()) {
-        literal_value = std::make_unique<IntLiteral>(json_i64(option.value));
-      } else if (option.value.IsNull()) {
-        literal_value = std::make_unique<NullLiteral>();
-      } else {
-        throw std::runtime_error("Unable to handle literal for " + *option_name);
-      }
-      CHECK(literal_value);
-
-      storage_options_.emplace_back(std::make_unique<NameValueAssign>(
-          option_name.release(), literal_value.release()));
-    }
-  } else {
-    CHECK(payload["options"].IsNull());
-  }
+  extract_options(payload, storage_options_);
 }
 
 void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -3808,6 +3803,11 @@ void AlterTableStmt::delegateExecute(const rapidjson::Value& payload,
   }
 }
 
+TruncateTableStmt::TruncateTableStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("tableName"));
+  table_ = std::make_unique<std::string>(json_str(payload["tableName"]));
+}
+
 void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
@@ -3847,6 +3847,52 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   // invalidate cached hashtable
   DeleteTriggeredCacheInvalidator::invalidateCaches();
+}
+
+OptimizeTableStmt::OptimizeTableStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("tableName"));
+  table_ = std::make_unique<std::string>(json_str(payload["tableName"]));
+  extract_options(payload, options_);
+}
+
+namespace {
+bool user_can_access_table(const Catalog_Namespace::SessionInfo& session_info,
+                           const TableDescriptor* td,
+                           const AccessPrivileges access_priv) {
+  CHECK(td);
+  auto& cat = session_info.getCatalog();
+  std::vector<DBObject> privObjects;
+  DBObject dbObject(td->tableName, TableDBObjectType);
+  dbObject.loadKey(cat);
+  dbObject.setPrivileges(access_priv);
+  privObjects.push_back(dbObject);
+  return SysCatalog::instance().checkPrivileges(session_info.get_currentUser(),
+                                                privObjects);
+};
+}  // namespace
+
+void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.getCatalog();
+
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+          catalog, *table_);
+  const auto td = td_with_lock();
+
+  if (!td || !user_can_access_table(session, td, AccessPrivileges::DELETE_FROM_TABLE)) {
+    throw std::runtime_error("Table " + *table_ + " does not exist.");
+  }
+
+  if (td->isView) {
+    throw std::runtime_error("OPTIMIZE TABLE command is not supported on views.");
+  }
+
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  const TableOptimizer optimizer(td, executor, catalog);
+  if (shouldVacuumDeletedRows()) {
+    optimizer.vacuumDeletedRows();
+  }
+  optimizer.recomputeMetadata();
 }
 
 void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
@@ -5386,6 +5432,11 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   SysCatalog::instance().revokeRoleBatch(get_roles(), get_grantees());
 }
 
+ShowCreateTableStmt::ShowCreateTableStmt(const rapidjson::Value& payload) {
+  CHECK(payload.HasMember("tableName"));
+  table_ = std::make_unique<std::string>(json_str(payload["tableName"]));
+}
+
 void ShowCreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   using namespace Catalog_Namespace;
 
@@ -5791,26 +5842,7 @@ CreateDBStmt::CreateDBStmt(const rapidjson::Value& payload) {
     if_not_exists_ = json_bool(payload["ifNotExists"]);
   }
 
-  if (payload.HasMember("options")) {
-    for (const auto& option : payload["options"].GetObject()) {
-      auto option_name = std::make_unique<std::string>(json_str(option.name));
-      std::unique_ptr<Literal> literal_value;
-      if (option.value.IsString()) {
-        auto literal_string = std::make_unique<std::string>(json_str(option.value));
-        literal_value = std::make_unique<StringLiteral>(literal_string.release());
-      } else if (option.value.IsInt() || option.value.IsInt64()) {
-        literal_value = std::make_unique<IntLiteral>(json_i64(option.value));
-      } else if (option.value.IsNull()) {
-        literal_value = std::make_unique<NullLiteral>();
-      } else {
-        throw std::runtime_error("Unable to handle literal for " + *option_name);
-      }
-      CHECK(literal_value);
-
-      name_value_list_.emplace_back(std::make_unique<NameValueAssign>(
-          option_name.release(), literal_value.release()));
-    }
-  }
+  extract_options(payload, name_value_list_);
 }
 
 void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -5899,26 +5931,7 @@ CreateUserStmt::CreateUserStmt(const rapidjson::Value& payload) {
   CHECK(payload.HasMember("name"));
   user_name_ = std::make_unique<std::string>(json_str(payload["name"]));
 
-  if (payload.HasMember("options")) {
-    for (const auto& option : payload["options"].GetObject()) {
-      auto option_name = std::make_unique<std::string>(json_str(option.name));
-      std::unique_ptr<Literal> literal_value;
-      if (option.value.IsString()) {
-        auto literal_string = std::make_unique<std::string>(json_str(option.value));
-        literal_value = std::make_unique<StringLiteral>(literal_string.release());
-      } else if (option.value.IsInt() || option.value.IsInt64()) {
-        literal_value = std::make_unique<IntLiteral>(json_i64(option.value));
-      } else if (option.value.IsNull()) {
-        literal_value = std::make_unique<NullLiteral>();
-      } else {
-        throw std::runtime_error("Unable to handle literal for " + *option_name);
-      }
-      CHECK(literal_value);
-
-      name_value_list_.emplace_back(std::make_unique<NameValueAssign>(
-          option_name.release(), literal_value.release()));
-    }
-  }
+  extract_options(payload, name_value_list_);
 }
 
 void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -5956,30 +5969,7 @@ AlterUserStmt::AlterUserStmt(const rapidjson::Value& payload) {
   CHECK(payload.HasMember("name"));
   user_name_ = std::make_unique<std::string>(json_str(payload["name"]));
 
-  if (payload.HasMember("options")) {
-    for (const auto& option : payload["options"].GetObject()) {
-      auto option_name = std::make_unique<std::string>(json_str(option.name));
-      std::unique_ptr<Literal> literal_value;
-      if (option.value.IsString()) {
-        if (option.value == "") {
-          literal_value = std::make_unique<NullLiteral>();
-        } else {
-          auto literal_string = std::make_unique<std::string>(json_str(option.value));
-          literal_value = std::make_unique<StringLiteral>(literal_string.release());
-        }
-      } else if (option.value.IsInt() || option.value.IsInt64()) {
-        literal_value = std::make_unique<IntLiteral>(json_i64(option.value));
-      } else if (option.value.IsNull()) {
-        literal_value = std::make_unique<NullLiteral>();
-      } else {
-        throw std::runtime_error("Unable to handle literal for " + *option_name);
-      }
-      CHECK(literal_value);
-
-      name_value_list_.emplace_back(std::make_unique<NameValueAssign>(
-          option_name.release(), literal_value.release()));
-    }
-  }
+  extract_options(payload, name_value_list_, true, false);
 }
 
 void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -6052,6 +6042,77 @@ void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   SysCatalog::instance().dropUser(*user_name_);
 }
 
+DumpRestoreTableStmtBase::DumpRestoreTableStmtBase(const rapidjson::Value& payload,
+                                                   const bool is_restore) {
+  CHECK(payload.HasMember("tableName"));
+  table_ = std::make_unique<std::string>(json_str(payload["tableName"]));
+
+  CHECK(payload.HasMember("filePath"));
+  path_ = std::make_unique<std::string>(json_str(payload["filePath"]));
+
+  std::list<std::unique_ptr<NameValueAssign>> name_value_list;
+  extract_options(payload, name_value_list);
+
+  if (!name_value_list.empty()) {
+    for (auto& p : name_value_list) {
+      if (boost::iequals(*p->get_name(), "compression")) {
+        checkStringLiteral("compression", p);
+        compression_ =
+            *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+        validateCompression(compression_, is_restore);
+      }
+    }
+  }
+
+  for (const auto& program : {"tar", "rm", "mkdir", "mv", "cat"}) {
+    if (boost::process::search_path(program).empty()) {
+      throw std::runtime_error{"Required program \"" + std::string{program} +
+                               "\" was not found."};
+    }
+  }
+}
+
+void DumpRestoreTableStmtBase::validateCompression(std::string& compression_type,
+                                                   const bool is_restore) {
+  // default lz4 compression, next gzip, or none.
+  if (compression_type.empty()) {
+    if (boost::process::search_path(compression_type = "gzip").string().empty()) {
+      if (boost::process::search_path(compression_type = "lz4").string().empty()) {
+        compression_type = "none";
+      }
+    }
+  } else {
+    std::vector<std::string> allowed_compression_programs{"lz4", "gzip", "none"};
+
+    const std::string lowercase_compression =
+        boost::algorithm::to_lower_copy(compression_type);
+    if (allowed_compression_programs.end() ==
+        std::find(allowed_compression_programs.begin(),
+                  allowed_compression_programs.end(),
+                  lowercase_compression)) {
+      throw std::runtime_error("Compression program " + compression_type +
+                               " is not supported.");
+    }
+  }
+
+  if (boost::iequals(compression_type, "none")) {
+    compression_type.clear();
+  } else {
+    std::map<std::string, std::string> decompression{{"lz4", "unlz4"},
+                                                     {"gzip", "gunzip"}};
+    const auto use_program =
+        is_restore ? decompression[compression_type] : compression_type;
+    const auto prog_path = boost::process::search_path(use_program);
+    if (prog_path.string().empty()) {
+      throw std::runtime_error("Compression program " + use_program + " is not found.");
+    }
+    compression_type = "--use-compress-program=" + use_program;
+  }
+}
+
+DumpTableStmt::DumpTableStmt(const rapidjson::Value& payload)
+    : DumpRestoreTableStmtBase(payload, false) {}
+
 void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   // check access privileges
   if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
@@ -6070,6 +6131,9 @@ void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   TableArchiver table_archiver(&catalog);
   table_archiver.dumpTable(td, *path_, compression_);
 }
+
+RestoreTableStmt::RestoreTableStmt(const rapidjson::Value& payload)
+    : DumpRestoreTableStmtBase(payload, true) {}
 
 void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
@@ -6112,17 +6176,34 @@ void execute_calcite_ddl(
   } else if (ddl_command == "DROP_TABLE") {
     auto drop_table_stmt = Parser::DropTableStmt(payload);
     drop_table_stmt.execute(*session_ptr);
+  } else if (ddl_command == "RENAME_TABLE") {
+    auto rename_table_stmt = Parser::RenameTableStmt(payload);
+    rename_table_stmt.execute(*session_ptr);
+  } else if (ddl_command == "ALTER_TABLE") {
+    Parser::AlterTableStmt::delegateExecute(payload, *session_ptr);
+  } else if (ddl_command == "TRUNCATE_TABLE") {
+    auto truncate_table_stmt = Parser::TruncateTableStmt(payload);
+    truncate_table_stmt.execute(*session_ptr);
+  } else if (ddl_command == "DUMP_TABLE") {
+    auto dump_table_stmt = Parser::DumpTableStmt(payload);
+    dump_table_stmt.execute(*session_ptr);
+  } else if (ddl_command == "RESTORE_TABLE") {
+    auto restore_table_stmt = Parser::RestoreTableStmt(payload);
+    restore_table_stmt.execute(*session_ptr);
+  } else if (ddl_command == "OPTIMIZE_TABLE") {
+    auto optimize_table_stmt = Parser::OptimizeTableStmt(payload);
+    optimize_table_stmt.execute(*session_ptr);
+  } else if (ddl_command == "SHOW_CREATE_TABLE") {
+    auto show_create_table_stmt = Parser::ShowCreateTableStmt(payload);
+    show_create_table_stmt.execute(*session_ptr);
+
   } else if (ddl_command == "CREATE_VIEW") {
     auto create_view_stmt = Parser::CreateViewStmt(payload);
     create_view_stmt.execute(*session_ptr);
   } else if (ddl_command == "DROP_VIEW") {
     auto drop_view_stmt = Parser::DropViewStmt(payload);
     drop_view_stmt.execute(*session_ptr);
-  } else if (ddl_command == "RENAME_TABLE") {
-    auto rename_table_stmt = Parser::RenameTableStmt(payload);
-    rename_table_stmt.execute(*session_ptr);
-  } else if (ddl_command == "ALTER_TABLE") {
-    Parser::AlterTableStmt::delegateExecute(payload, *session_ptr);
+
   } else if (ddl_command == "CREATE_DB") {
     auto create_db_stmt = Parser::CreateDBStmt(payload);
     create_db_stmt.execute(*session_ptr);
@@ -6132,6 +6213,7 @@ void execute_calcite_ddl(
   } else if (ddl_command == "RENAME_DB") {
     auto rename_db_stmt = Parser::RenameDBStmt(payload);
     rename_db_stmt.execute(*session_ptr);
+
   } else if (ddl_command == "CREATE_USER") {
     auto create_user_stmt = Parser::CreateUserStmt(payload);
     create_user_stmt.execute(*session_ptr);

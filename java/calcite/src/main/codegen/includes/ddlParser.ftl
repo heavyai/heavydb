@@ -757,6 +757,95 @@ SqlInsertIntoTable SqlInsertIntoTable(Span s) :
 }
 
 /*
+ * Dump a table using the following syntax:
+ *
+ * DUMP TABLE <tableName> [WITH options]
+ *
+ */
+SqlDdl SqlDumpTable(Span s) :
+{
+    final SqlIdentifier tableName;
+    OmniSciOptionsMap withOptions = null;
+    SqlNode filePath = null;
+}
+{
+    ( <DUMP> | <ARCHIVE> )
+    <TABLE>
+    tableName = CompoundIdentifier()
+    <TO>
+    filePath = StringLiteral()
+    [ <WITH> withOptions = OptionsOpt() ]
+    {
+        return new SqlDumpTable(s.end(this), tableName.toString(), filePath.toString(), withOptions);
+    }
+}
+
+/*
+ * Restore a table using the following syntax:
+ *
+ * RESTORE TABLE <tableName> [WITH options]
+ *
+ */
+SqlDdl SqlRestoreTable(Span s) :
+{
+    final SqlIdentifier tableName;
+    OmniSciOptionsMap withOptions = null;
+    SqlNode filePath = null; 
+}
+{
+    <RESTORE>
+    <TABLE>
+    tableName = CompoundIdentifier()
+    <FROM>
+    filePath = StringLiteral()
+    [ <WITH> withOptions = OptionsOpt() ]
+    {
+        return new SqlRestoreTable(s.end(this), tableName.toString(), filePath.toString(), withOptions);
+    }
+}
+
+/*
+ * Truncate a table using the following syntax:
+ *
+ * TRUNCATE TABLE <tableName>
+ *
+ */
+SqlDdl SqlTruncateTable(Span s) :
+{
+    final SqlIdentifier tableName;
+}
+{
+    <TRUNCATE>
+    <TABLE>
+    tableName = CompoundIdentifier()
+    {       
+        return new SqlTruncateTable(s.end(this), tableName.toString());
+    }
+}
+
+/*
+ * Optimize a table using the following syntax:
+ *
+ * OPTIMIZE TABLE <tableName> [WITH options]
+ *
+ */
+SqlDdl SqlOptimizeTable(Span s) :
+{
+    final SqlIdentifier tableName;
+    OmniSciOptionsMap withOptions = null;   
+}
+{
+    <OPTIMIZE>
+    <TABLE>
+    tableName = CompoundIdentifier()
+    [ <WITH> withOptions = OptionsOpt() ]
+    {
+        return new SqlOptimizeTable(s.end(this), tableName.toString(), withOptions);
+    }
+}
+
+
+/*
  * Create a view using the following syntax:
  *
  * CREATE VIEW [ IF NOT EXISTS ] <view_name> [(columns)] AS <query>

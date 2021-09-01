@@ -130,21 +130,17 @@ sql_list:
 sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	create_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_dataframe_statement { $<nodeval>$ = $<nodeval>1; }
-	| show_table_schema { $<nodeval>$ = $<nodeval>1; }
 	/* | prvililege_def { $<nodeval>$ = $<nodeval>1; } */
 	| drop_view_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_table_statement { $<nodeval>$ = $<nodeval>1; }
-	| truncate_table_statement { $<nodeval>$ = $<nodeval>1; }
+
 	| rename_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| rename_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| add_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| alter_table_param_statement { $<nodeval>$ = $<nodeval>1; }
 	| copy_table_statement { $<nodeval>$ = $<nodeval>1; }
-	| optimize_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| validate_system_statement { $<nodeval>$ = $<nodeval>1; }
-	| dump_table_statement { $<nodeval>$ = $<nodeval>1; }
-	| restore_table_statement { $<nodeval>$ = $<nodeval>1; }
 	;
 
 /* NOT SUPPORTED
@@ -211,12 +207,6 @@ create_dataframe_statement:
 		}
 	;
 
-show_table_schema:
-		SHOW CREATE TABLE table
-		{
-		  $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new ShowCreateTableStmt(($<stringval>4)->release()));
-		}
-
 opt_if_exists:
 		IF EXISTS { $<boolval>$ = true; }
 		| /* empty */ { $<boolval>$ = false; }
@@ -226,12 +216,6 @@ drop_table_statement:
 		DROP TABLE opt_if_exists table
 		{
 		  $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new DropTableStmt(($<stringval>4)->release(), $<boolval>3));
-		}
-		;
-truncate_table_statement:
-		TRUNCATE TABLE table
-		{
-		  $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new TruncateTableStmt(($<stringval>3)->release()));
 		}
 		;
 rename_table_statement:
@@ -304,30 +288,6 @@ copy_table_statement:
 	    $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new ExportQueryStmt(($<stringval>3)->release(), ($<stringval>6)->release(), reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>7)->release())));
 	}
 	;
-
-dump_or_archive:
-	DUMP | ARCHIVE;
-
-dump_table_statement:
-	dump_or_archive TABLE table TO STRING opt_with_option_list
-	{
-	    $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new DumpTableStmt(($<stringval>3)->release(), ($<stringval>5)->release(), reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>6)->release())));
-    }
-    ;
-
-restore_table_statement:
-	RESTORE TABLE table FROM STRING opt_with_option_list
-	{
-	    $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new RestoreTableStmt(($<stringval>3)->release(), ($<stringval>5)->release(), reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>6)->release())));
-    }
-    ;
-
-optimize_table_statement:
-		OPTIMIZE TABLE opt_table opt_with_option_list
-		{
-			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new OptimizeTableStmt(($<stringval>3)->release(), reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>4)->release())));
-		}
-		;
 
 validate_system_statement:
 		VALIDATE CLUSTER opt_with_option_list

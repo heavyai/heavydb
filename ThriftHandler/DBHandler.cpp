@@ -7357,7 +7357,11 @@ void DBHandler::executeDdl(
       // reduce execution time by the time spent during queue waiting
       _return.execution_time_ms -= result.getRows()->getQueueTime();
 
-      convertResultSet(result, *session_ptr, commandStr, _return);
+      if (executor.isShowCreateTable()) {
+        convertResult(_return, *result.getDataPtr(), true);
+      } else {
+        convertResultSet(result, *session_ptr, commandStr, _return);
+      }
     }
   }
 }
@@ -7386,7 +7390,11 @@ void DBHandler::executeDdl(
     }
     _return.setExecutionTime(execution_time_ms);
   }
-  _return.setResultType(ExecutionResult::CalciteDdl);
+  if (executor.isShowCreateTable()) {
+    _return.setResultType(ExecutionResult::SimpleResult);
+  } else {
+    _return.setResultType(ExecutionResult::CalciteDdl);
+  }
 }
 
 void DBHandler::resizeDispatchQueue(size_t queue_size) {

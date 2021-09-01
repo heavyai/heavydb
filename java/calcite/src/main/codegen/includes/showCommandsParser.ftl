@@ -149,3 +149,20 @@ SqlDdl SqlShowTableDetails(Span s) :
         return new SqlShowTableDetails(s.end(this), tableNames);
     }
 }
+
+/*
+ * Show create table using the following syntax:
+ *
+ * SHOW CREATE TABLE [<table_name>]
+ */
+SqlDdl SqlShowCreateTable(Span s) :
+{
+    SqlIdentifier tableName = null;
+}
+{
+    <SHOW> <CREATE> <TABLE>
+    tableName = CompoundIdentifier()
+    {
+        return new SqlShowCreateTable(s.end(this), tableName.toString());
+    }
+}
