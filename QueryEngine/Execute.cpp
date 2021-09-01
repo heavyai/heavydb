@@ -3991,7 +3991,7 @@ CurrentQueryStatus Executor::attachExecutorToQuerySession(
 void Executor::checkPendingQueryStatus(const QuerySessionId& query_session) {
   // check whether we are okay to execute the "pending" query
   // i.e., before running the query check if this query session is "ALREADY" interrupted
-  mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor_session_mutex_);
+  mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
   if (query_session.empty()) {
     return;
   }

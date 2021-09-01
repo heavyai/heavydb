@@ -7299,6 +7299,7 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
         mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
         if (executor->checkIsQuerySessionEnrolled(target_query_session,
                                                   session_read_lock)) {
+          session_read_lock.unlock();
           VLOG(1) << "Received interrupt: "
                   << "Session " << target_query_session << ", leafCount "
                   << leaf_aggregator_.leafCount() << ", User "

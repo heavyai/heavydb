@@ -2863,7 +2863,7 @@ TEST_F(Errors, CtasItas) {
 
   // itas table 'test_itas' does not exist
   EXPECT_ANY_THROW(sql("INSERT INTO test_itas SELECT * FROM test_src_a;"));
-};
+}
 
 class Non_Kernel_Time_Interrupt : public DBHandlerTestFixture {
  public:
@@ -2878,7 +2878,7 @@ class Non_Kernel_Time_Interrupt : public DBHandlerTestFixture {
         boost::filesystem::remove(file_path_very_large);
       }
       std::ofstream very_large_out(file_path_very_large.string());
-      for (int i = 0; i < 10000000; i++) {
+      for (int i = 0; i < 2000000; i++) {
         if (very_large_out.is_open()) {
           very_large_out << "1,1,1\n2,2,2\n3,3,3\n4,4,4\n5,5,5\n";
         }
@@ -2905,9 +2905,17 @@ class Non_Kernel_Time_Interrupt : public DBHandlerTestFixture {
 };
 
 TEST_F(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
+  // disable interrupt test on dist mode due to catalog inconsistency issue
+  if (isDistributedMode()) {
+    GTEST_SKIP();
+  }
   std::atomic<bool> catchInterruption(false);
+  bool detect_time_out = false;
+
   try {
-    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    const auto& [db_handler_ptr, db_handler_session] = getDbHandlerAndSessionId();
+    DBHandler* db_handler = db_handler_ptr;
+    std::string session_id = db_handler_session;
 
     // do ITAS
     sql("DROP TABLE IF EXISTS t_ITAS;");
@@ -2932,7 +2940,9 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
 
     auto itas_thread = std::async(std::launch::async, [&] {
       try {
-        sql("INSERT INTO t_ITAS SELECT x FROM t_very_large");
+        auto query = "INSERT INTO t_ITAS SELECT x FROM t_very_large";
+        ExecutionResult result;
+        db_handler->sql_execute(result, session_id, query, false, -1, -1);
       } catch (const QueryExecutionError& e) {
         if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
           catchInterruption.store(true);
@@ -2952,11 +2962,9 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
       return;
     });
 
-    std::string curRunningSession{""};
     std::vector<QuerySessionStatus> query_status;
     auto start_time = std::chrono::system_clock::now();
     bool startITAS = false;
-    bool detect_time_out = false;
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
     while (!startITAS && !detect_time_out) {
       {
@@ -2971,7 +2979,7 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
         if (query_str.find("INSERT_DATA") != std::string::npos) {
           startITAS = true;
           std::this_thread::sleep_for(std::chrono::milliseconds(100));
-          executor->interrupt(session_id, session_id);
+          db_handler->interrupt(session_id, session_id);
           break;
         }
       }
@@ -2979,14 +2987,8 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
       auto cur_sec =
           std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
       if (cur_sec.count() > 60) {
-        std::cout << "Detect time_out while performing ITAS" << std::endl;
-        {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
-              executor->getSessionLock());
-          query_status = executor->getQuerySessionInfo(session_id, session_read_lock);
-        }
         detect_time_out = true;
-        executor->interrupt(session_id, session_id);
+        throw std::runtime_error("Detect time_out while performing ITAS");
         break;
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -3007,19 +3009,26 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
       CHECK_EQ((int64_t)1, val);
       return;
     }
+  } catch (...) {
     if (detect_time_out) {
       return;
     }
-
-  } catch (...) {
     CHECK(false);
   }
 }
 
 TEST_F(Non_Kernel_Time_Interrupt, Interrupt_CTAS) {
+  // disable interrupt test on dist mode due to catalog inconsistency issue
+  if (isDistributedMode()) {
+    GTEST_SKIP();
+  }
   std::atomic<bool> catchInterruption(false);
+  bool detect_time_out = false;
+
   try {
-    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    const auto& [db_handler_ptr, db_handler_session] = getDbHandlerAndSessionId();
+    DBHandler* db_handler = db_handler_ptr;
+    std::string session_id = db_handler_session;
 
     auto check_interrup_msg = [&catchInterruption](const std::string& msg,
                                                    bool is_pending_query) {
@@ -3040,7 +3049,9 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_CTAS) {
     sql("DROP TABLE IF EXISTS t_CTAS;");
     auto ctas_thread = std::async(std::launch::async, [&] {
       try {
-        sql("CREATE TABLE t_CTAS AS SELECT * FROM t_very_large WHERE x < 3;");
+        auto query = "CREATE TABLE t_CTAS AS SELECT * FROM t_very_large WHERE x < 3;";
+        ExecutionResult result;
+        db_handler->sql_execute(result, session_id, query, false, -1, -1);
       } catch (const QueryExecutionError& e) {
         if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
           catchInterruption.store(true);
@@ -3059,11 +3070,9 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_CTAS) {
       }
       return;
     });
-    std::string curRunningSession{""};
     std::vector<QuerySessionStatus> query_status;
     auto start_time = std::chrono::system_clock::now();
     bool startCTAS = false;
-    bool detect_time_out = false;
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
     while (!startCTAS && !detect_time_out) {
       {
@@ -3077,7 +3086,7 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_CTAS) {
         auto query_str = query_status[0].getQueryStr();
         if (query_str.find("INSERT_DATA") != std::string::npos) {
           startCTAS = true;
-          executor->interrupt(session_id, session_id);
+          db_handler->interrupt(session_id, session_id);
           break;
         }
       }
@@ -3086,7 +3095,7 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_CTAS) {
           std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
       if (cur_sec.count() > 60) {
         detect_time_out = true;
-        std::cout << "Detect time_out while performing CTAS" << std::endl;
+        throw std::runtime_error("Detect time_out while performing CTAS");
         break;
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -3097,10 +3106,10 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_CTAS) {
       EXPECT_ANY_THROW(sql("SELECT COUNT(1) FROM t_CTAS"));
       return;
     }
+  } catch (...) {
     if (detect_time_out) {
       return;
     }
-  } catch (...) {
     CHECK(false);
   }
 }
