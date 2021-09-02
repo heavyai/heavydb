@@ -199,8 +199,15 @@ llvm::BasicBlock* JoinLoop::codegen(
         }
         auto match_found_bb = builder.GetInsertBlock();
         switch (join_loop.type_) {
-          case JoinType::INNER: {
+          case JoinType::INNER:
+          case JoinType::SEMI: {
             prev_comparison_result = match_found;
+            break;
+          }
+          case JoinType::ANTI: {
+            auto match_found_for_anti_join = builder.CreateICmpSLT(
+                iteration_domain.slot_lookup_result, ll_int<int64_t>(0, context));
+            prev_comparison_result = match_found_for_anti_join;
             break;
           }
           case JoinType::LEFT: {

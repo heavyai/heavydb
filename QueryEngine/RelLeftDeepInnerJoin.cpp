@@ -45,7 +45,9 @@ RelLeftDeepInnerJoin::RelLeftDeepInnerJoin(
                               .get_notnull();
       }
       switch (original_join->getJoinType()) {
-        case JoinType::INNER: {
+        case JoinType::INNER:
+        case JoinType::SEMI:
+        case JoinType::ANTI: {
           if (original_join->getCondition()) {
             operands.emplace_back(original_join->getAndReleaseCondition());
           }
@@ -98,6 +100,11 @@ const RexScalar* RelLeftDeepInnerJoin::getOuterCondition(
   // must be consistent with the order of the loops (which is reverse depth-first).
   return outer_conditions_per_level_[outer_conditions_per_level_.size() - nesting_level]
       .get();
+}
+
+const JoinType RelLeftDeepInnerJoin::getJoinType(const size_t nesting_level) const {
+  CHECK_LE(nesting_level, original_joins_.size());
+  return original_joins_[original_joins_.size() - nesting_level]->getJoinType();
 }
 
 std::string RelLeftDeepInnerJoin::toString() const {
@@ -251,7 +258,8 @@ std::shared_ptr<const RelAlgNode> get_left_deep_join_root(
     if (!join) {
       return nullptr;
     }
-    if (join->getJoinType() == JoinType::INNER) {
+    if (join->getJoinType() == JoinType::INNER || join->getJoinType() == JoinType::SEMI ||
+        join->getJoinType() == JoinType::ANTI) {
       return node;
     }
   }

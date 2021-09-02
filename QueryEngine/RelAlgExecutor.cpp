@@ -3529,6 +3529,10 @@ std::vector<JoinType> left_deep_join_types(const RelLeftDeepInnerJoin* left_deep
     if (left_deep_join->getOuterCondition(nesting_level)) {
       join_types[nesting_level - 1] = JoinType::LEFT;
     }
+    auto cur_level_join_type = left_deep_join->getJoinType(nesting_level);
+    if (cur_level_join_type == JoinType::SEMI || cur_level_join_type == JoinType::ANTI) {
+      join_types[nesting_level - 1] = cur_level_join_type;
+    }
   }
   return join_types;
 }
@@ -3859,8 +3863,10 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
       }
     }
     CHECK_LE(rte_idx, join_types.size());
-    CHECK(join_types[rte_idx - 1] == JoinType::INNER);
-    result[rte_idx - 1].type = JoinType::INNER;
+    CHECK(join_types[rte_idx - 1] == JoinType::INNER ||
+          join_types[rte_idx - 1] == JoinType::SEMI ||
+          join_types[rte_idx - 1] == JoinType::ANTI);
+    result[rte_idx - 1].type = join_types[rte_idx - 1];
   }
   return result;
 }

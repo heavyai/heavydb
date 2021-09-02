@@ -1487,6 +1487,8 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
 
   const RexScalar* getOuterCondition(const size_t nesting_level) const;
 
+  const JoinType getJoinType(const size_t nesting_level) const;
+
   std::string toString() const override;
 
   size_t toHash() const override;
