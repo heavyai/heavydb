@@ -72,8 +72,42 @@ std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
 std::string SQLTypeInfo::comp_name[kENCODING_LAST] =
     {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
 
+namespace {
+// Return decimal_value * 10^dscale
+int64_t convert_decimal_value_to_scale_internal(const int64_t decimal_value,
+                                                int const dscale) {
+  constexpr int max_scale = std::numeric_limits<uint64_t>::digits10;  // 19
+  constexpr auto pow10 = shared::powersOf<uint64_t, max_scale + 1>(10);
+  if (dscale < 0) {
+    if (dscale < -max_scale) {
+      return 0;  // +/- 0.09223372036854775807 rounds to 0
+    }
+    uint64_t const u = std::abs(decimal_value);
+    uint64_t const pow = pow10[-dscale];
+    uint64_t div = u / pow;
+    uint64_t rem = u % pow;
+    div += pow / 2 <= rem;
+    return decimal_value < 0 ? -div : div;
+  } else if (dscale < max_scale) {
+    int64_t retval;
+    if (!__builtin_mul_overflow(decimal_value, pow10[dscale], &retval)) {
+      return retval;
+    }
+  }
+  if (decimal_value == 0) {
+    return 0;
+  }
+  throw std::runtime_error("Overflow in DECIMAL-to-DECIMAL conversion.");
+}
+}  // namespace
+
 int64_t parse_numeric(const std::string_view s, SQLTypeInfo& ti) {
-  assert(s.length() <= 20);
+  // if we are given a dimension, first parse to the maximum precision of the string
+  // and then convert to the correct size
+  if (ti.get_dimension() != 0) {
+    SQLTypeInfo ti_string(kNUMERIC, 0, 0, false);
+    return convert_decimal_value_to_scale(parse_numeric(s, ti_string), ti_string, ti);
+  }
   size_t dot = s.find_first_of('.', 0);
   std::string before_dot;
   std::string after_dot;
@@ -91,34 +125,32 @@ int64_t parse_numeric(const std::string_view s, SQLTypeInfo& ti) {
   result = std::abs(std::stoll(before_dot));
   int64_t fraction = 0;
   const size_t before_dot_digits = before_dot.length() - (is_negative ? 1 : 0);
+
+  constexpr int max_digits = std::numeric_limits<int64_t>::digits10;
   if (!after_dot.empty()) {
+    int64_t next_digit = 0;
+    // After dot will be used to scale integer part so make sure it wont overflow
+    if (after_dot.size() + before_dot_digits > max_digits) {
+      if (before_dot_digits >= max_digits) {
+        after_dot = "0";
+      } else {
+        next_digit = std::stoll(after_dot.substr(max_digits - before_dot_digits, 1));
+        after_dot = after_dot.substr(0, max_digits - before_dot_digits);
+      }
+    }
     fraction = std::stoll(after_dot);
+    fraction += next_digit >= 5 ? 1 : 0;
   }
-  if (ti.get_dimension() == 0) {
-    // set the type info based on the literal string
-    ti.set_scale(static_cast<int>(after_dot.length()));
-    ti.set_dimension(static_cast<int>(before_dot_digits + ti.get_scale()));
-    ti.set_notnull(false);
-  } else {
-    CHECK_GE(ti.get_scale(), 0);
-    if (before_dot_digits + ti.get_scale() > static_cast<size_t>(ti.get_dimension())) {
-      throw std::runtime_error("numeric value " + std::string(s) +
-                               " exceeds the maximum precision of " +
-                               std::to_string(ti.get_dimension()));
-    }
-    for (size_t i = static_cast<size_t>(ti.get_scale()); i < after_dot.length(); ++i) {
-      fraction /= 10;  // truncate the digits after decimal point.
-    }
+
+  // set the type info based on the literal string
+  ti.set_scale(static_cast<int>(after_dot.length()));
+  ti.set_dimension(static_cast<int>(before_dot_digits + ti.get_scale()));
+  ti.set_notnull(false);
+  if (ti.get_scale()) {
+    result = convert_decimal_value_to_scale_internal(result, ti.get_scale());
   }
-  // the following loop can be made more efficient if needed
-  for (int i = 0; i < ti.get_scale(); i++) {
-    result *= 10;
-  }
-  if (result < 0) {
-    result -= fraction;
-  } else {
-    result += fraction;
-  }
+  result += fraction;
+
   return result * sign;
 }
 
@@ -437,27 +469,6 @@ SQLTypes decimal_to_int_type(const SQLTypeInfo& ti) {
 int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
                                        const SQLTypeInfo& type_info,
                                        const SQLTypeInfo& new_type_info) {
-  constexpr int max_scale = std::numeric_limits<uint64_t>::digits10;  // 19
-  constexpr auto pow10 = shared::powersOf<uint64_t, max_scale + 1>(10);
   int const dscale = new_type_info.get_scale() - type_info.get_scale();
-  if (dscale < 0) {
-    if (dscale < -max_scale) {
-      return 0;  // +/- 0.09223372036854775807 rounds to 0
-    }
-    uint64_t const u = std::abs(decimal_value);
-    uint64_t const pow = pow10[-dscale];
-    uint64_t div = u / pow;
-    uint64_t rem = u % pow;
-    div += pow / 2 <= rem;
-    return decimal_value < 0 ? -div : div;
-  } else if (dscale < max_scale) {
-    int64_t retval;
-    if (!__builtin_mul_overflow(decimal_value, pow10[dscale], &retval)) {
-      return retval;
-    }
-  }
-  if (decimal_value == 0) {
-    return 0;
-  }
-  throw std::runtime_error("Overflow in DECIMAL-to-DECIMAL conversion.");
+  return convert_decimal_value_to_scale_internal(decimal_value, dscale);
 }

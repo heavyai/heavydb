@@ -618,11 +618,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     case kDECIMAL:
     case kNUMERIC: {
       if (!is_null) {
-        SQLTypeInfo ti(kNUMERIC, 0, 0, false);
+        auto ti = cd->columnType;
         Datum d = StringToDatum(val, ti);
-        const auto converted_decimal_value =
-            convert_decimal_value_to_scale(d.bigintval, ti, cd->columnType);
-        addBigint(converted_decimal_value);
+        addBigint(d.bigintval);
       } else {
         if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);

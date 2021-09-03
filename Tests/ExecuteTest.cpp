@@ -16870,7 +16870,7 @@ TEST(Update, ImplicitCastToNumericTypes) {
         run_multiple_agg("update dectest set d=cast( 'nonsense' as varchar );", dt));
     run_multiple_agg("update dectest set d=cast( '128.90' as varchar );", dt);
     EXPECT_EQ(
-        int64_t(128),
+        int64_t(129),
         v<int64_t>(run_simple_agg("select cast( d as integer ) from dectest;", dt)));
 
     run_multiple_agg("update dectest set d=cast( '2000-01-01 10:11:12' as timestamp );",

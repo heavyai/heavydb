@@ -61,6 +61,7 @@ using UseDsnFlag = bool;
 using DsnType = std::string;
 using FileExtType = std::string;
 using EvictCacheString = std::string;
+using ImportFlag = bool;
 
 // sets of wrappers for parametarized testing
 static const std::vector<WrapperType> local_wrappers{"csv",
@@ -1928,6 +1929,216 @@ TEST_F(SelectQueryTest, ByteArrayDecimalFilterAndSort) {
   sql(result, "SELECT * FROM " + default_table_name + " where dc > 25 ORDER BY dc;");
   assertResultSetEqual({{25.55}, {50.11}}, result);
 }
+
+/**
+ * Test for both FSI and Import tables
+ */
+class FsiImportSelectTest : public SelectQueryTest {
+ protected:
+  void SetUp() override {
+    wrapper_type_ = "csv";
+    SelectQueryTest::SetUp();
+  }
+
+  void TearDown() override {
+    try {
+      // This may throw if default_table_name is a foreign table instead of a regular one
+      sql("DROP TABLE IF EXISTS " + default_table_name + ";");
+    } catch (...) {
+    }
+    SelectQueryTest::TearDown();
+  }
+
+  /* Create option string from key/value pairs */
+  static std::string createOptionsString(
+      const std::map<std::string, std::string>& options = {}) {
+    std::stringstream opt_ss;
+    for (auto& [key, value] : options) {
+      if (opt_ss.str().size() > 0) {
+        opt_ss << ", ";
+      }
+      if (atoi(value.c_str())) {
+        opt_ss << key << " = " << value << "";
+      } else {
+        opt_ss << key << " = '" << value << "'";
+      }
+    }
+    return opt_ss.str();
+  }
+
+  /**
+   * Returns a query to create an import table.
+   */
+  static std::string createImportTableQuery(
+      const std::string& columns,
+      const std::map<std::string, std::string>& options = {},
+      const std::string& table_name = default_table_name) {
+    std::stringstream ss;
+    ss << "CREATE TABLE " << table_name << " ";
+    ss << columns;
+    if (options.size() > 0) {
+      ss << " WITH (" << createOptionsString(options) << ")";
+    }
+    ss << ";";
+    return ss.str();
+  }
+
+  /**
+   * Returns a query to copy into an import table.
+   */
+  static std::string sqlCopyFromQuery(
+      const std::string& src_path,
+      const std::map<std::string, std::string> options = {},
+      const std::string& table_name = default_table_name) {
+    std::stringstream ss;
+    ss << "COPY " << table_name << " ";
+    ss << " FROM '" << src_path << "'";
+    if (options.size() > 0) {
+      ss << " WITH (" << createOptionsString(options) << ")";
+    }
+    ss << ";";
+    return ss.str();
+  }
+
+  /**
+   * Create FSI/Import table and import data from files
+   */
+  static void sqlCreateTable(const ImportFlag import,
+                             const std::string& columns,
+                             const std::string& file_name,
+                             const std::string& data_wrapper_type,
+                             const std::map<std::string, std::string>& table_options) {
+    if (import) {
+      sql(createImportTableQuery(columns, table_options));
+      std::string filename = getDataFilesPath() + file_name + "." + data_wrapper_type;
+      sql(sqlCopyFromQuery(getDataFilesPath() + file_name + "." + data_wrapper_type));
+    } else {
+      sqlCreateForeignTable(columns, file_name, data_wrapper_type, table_options);
+    }
+  }
+
+  // Return last row of data file
+  std::string getLastRow(const std::string& filename) {
+    std::ifstream source_file(getDataFilesPath() + filename + "." + wrapper_type_);
+    std::string value;
+    // Return last line
+    while (source_file) {
+      std::getline(source_file, value);
+    }
+    return value;
+  }
+};
+
+class FsiImportDecimalTest : public FsiImportSelectTest,
+                             public ::testing::WithParamInterface<ImportFlag> {};
+
+TEST_P(FsiImportDecimalTest, LongStrTruncate) {
+  sqlCreateTable(GetParam(), "(d DECIMAL(18,2))", "decimal_longstr", wrapper_type_, {});
+  TQueryResult result;
+  sql(result, default_select);
+  assertResultSetEqual(
+      {
+          {float(0)},
+          {-0.01},
+          {-10.01},
+          {10.01},
+          {9999999999999999.99},   // Max supported value
+          {-9999999999999999.99},  // Min supported value
+          {9999999999999999.99},   // Max supported value with trailing digit rounded down
+          {-9999999999999999.99}   // Min supported value with trailing digit rounded down
+      },
+      result);
+}
+
+TEST_P(FsiImportDecimalTest, OutOfRangeBeforeDot) {
+  auto import_flag = GetParam();
+  std::string file_name = "decimal_out_of_range";
+  sqlCreateTable(import_flag, "(d DECIMAL(18,2))", file_name, wrapper_type_, {});
+  if (import_flag) {
+    TQueryResult result;
+    sql(result, default_select);
+    // Failure will result in empty table
+    assertResultSetEqual({}, result);
+  } else {
+    queryAndAssertException(default_select,
+                            "Parsing failure \""
+                            "Got out of range error during conversion from string to "
+                            "DECIMAL(18,2)\" in row \"" +
+                                getLastRow(file_name) + "\" in file \"" +
+                                getDataFilesPath() + file_name + ".csv\"");
+  }
+}
+
+TEST_P(FsiImportDecimalTest, OutOfRangeMax) {
+  auto import_flag = GetParam();
+  std::string file_name = "decimal_out_of_range_max";
+  sqlCreateTable(import_flag, "(d DECIMAL(18,2))", file_name, wrapper_type_, {});
+  if (import_flag) {
+    TQueryResult result;
+    sql(result, default_select);
+    // Failure will result in empty table
+    assertResultSetEqual({}, result);
+  } else {
+    queryAndAssertException(default_select,
+                            "Decimal overflow: value is greater than 10^16 max "
+                            "1000000000000000000 value 1000000000000000000");
+  }
+}
+
+TEST_P(FsiImportDecimalTest, OutOfRangeMaxRound) {
+  auto import_flag = GetParam();
+  std::string file_name = "decimal_out_of_range_max_round";
+  sqlCreateTable(import_flag, "(d DECIMAL(18,2))", file_name, wrapper_type_, {});
+  if (import_flag) {
+    TQueryResult result;
+    sql(result, default_select);
+    // Failure will result in empty table
+    assertResultSetEqual({}, result);
+  } else {
+    queryAndAssertException(default_select,
+                            "Decimal overflow: value is greater than 10^16 max "
+                            "1000000000000000000 value 1000000000000000000");
+  }
+}
+
+TEST_P(FsiImportDecimalTest, OutOfRangeMin) {
+  auto import_flag = GetParam();
+  std::string file_name = "decimal_out_of_range_min";
+  sqlCreateTable(import_flag, "(d DECIMAL(18,2))", file_name, wrapper_type_, {});
+  if (import_flag) {
+    TQueryResult result;
+    sql(result, default_select);
+    // Failure will result in empty table
+    assertResultSetEqual({}, result);
+  } else {
+    queryAndAssertException(default_select,
+                            "Decimal overflow: value is less than -10^16 min "
+                            "-1000000000000000000 value -1000000000000000000");
+  }
+}
+
+TEST_P(FsiImportDecimalTest, OutOfRangeMinRound) {
+  auto import_flag = GetParam();
+  std::string file_name = "decimal_out_of_range_min_round";
+  sqlCreateTable(import_flag, "(d DECIMAL(18,2))", file_name, wrapper_type_, {});
+  if (import_flag) {
+    TQueryResult result;
+    sql(result, default_select);
+    // Failure will result in empty table
+    assertResultSetEqual({}, result);
+  } else {
+    queryAndAssertException(default_select,
+                            "Decimal overflow: value is less than -10^16 min "
+                            "-1000000000000000000 value -1000000000000000000");
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(FsiImportDecimalParamaterizedTest,
+                         FsiImportDecimalTest,
+                         ::testing::Values(True, False),
+                         [](const auto& info) {
+                           return ((info.param) ? "Import" : "FSI");
+                         });
 
 class CsvDelimiterTest : public SelectQueryTest {
  protected:
