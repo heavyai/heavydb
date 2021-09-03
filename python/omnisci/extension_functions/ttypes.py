@@ -52,9 +52,16 @@ class TExtArgumentType(object):
     ColumnDouble = 32
     ColumnBool = 33
     TextEncodingNone = 34
-    TextEncodingDict8 = 35
-    TextEncodingDict16 = 36
-    TextEncodingDict32 = 37
+    TextEncodingDict = 35
+    ColumnListInt8 = 36
+    ColumnListInt16 = 37
+    ColumnListInt32 = 38
+    ColumnListInt64 = 39
+    ColumnListFloat = 40
+    ColumnListDouble = 41
+    ColumnListBool = 42
+    ColumnTextEncodingDict = 43
+    ColumnListTextEncodingDict = 44
 
     _VALUES_TO_NAMES = {
         0: "Int8",
@@ -92,9 +99,16 @@ class TExtArgumentType(object):
         32: "ColumnDouble",
         33: "ColumnBool",
         34: "TextEncodingNone",
-        35: "TextEncodingDict8",
-        36: "TextEncodingDict16",
-        37: "TextEncodingDict32",
+        35: "TextEncodingDict",
+        36: "ColumnListInt8",
+        37: "ColumnListInt16",
+        38: "ColumnListInt32",
+        39: "ColumnListInt64",
+        40: "ColumnListFloat",
+        41: "ColumnListDouble",
+        42: "ColumnListBool",
+        43: "ColumnTextEncodingDict",
+        44: "ColumnListTextEncodingDict",
     }
 
     _NAMES_TO_VALUES = {
@@ -133,9 +147,16 @@ class TExtArgumentType(object):
         "ColumnDouble": 32,
         "ColumnBool": 33,
         "TextEncodingNone": 34,
-        "TextEncodingDict8": 35,
-        "TextEncodingDict16": 36,
-        "TextEncodingDict32": 37,
+        "TextEncodingDict": 35,
+        "ColumnListInt8": 36,
+        "ColumnListInt16": 37,
+        "ColumnListInt32": 38,
+        "ColumnListInt64": 39,
+        "ColumnListFloat": 40,
+        "ColumnListDouble": 41,
+        "ColumnListBool": 42,
+        "ColumnTextEncodingDict": 43,
+        "ColumnListTextEncodingDict": 44,
     }
 
 
@@ -143,17 +164,20 @@ class TOutputBufferSizeType(object):
     kConstant = 0
     kUserSpecifiedConstantParameter = 1
     kUserSpecifiedRowMultiplier = 2
+    kTableFunctionSpecifiedParameter = 3
 
     _VALUES_TO_NAMES = {
         0: "kConstant",
         1: "kUserSpecifiedConstantParameter",
         2: "kUserSpecifiedRowMultiplier",
+        3: "kTableFunctionSpecifiedParameter",
     }
 
     _NAMES_TO_VALUES = {
         "kConstant": 0,
         "kUserSpecifiedConstantParameter": 1,
         "kUserSpecifiedRowMultiplier": 2,
+        "kTableFunctionSpecifiedParameter": 3,
     }
 
 
@@ -253,17 +277,19 @@ class TUserDefinedTableFunction(object):
      - inputArgTypes
      - outputArgTypes
      - sqlArgTypes
+     - annotations
 
     """
 
 
-    def __init__(self, name=None, sizerType=None, sizerArgPos=None, inputArgTypes=None, outputArgTypes=None, sqlArgTypes=None,):
+    def __init__(self, name=None, sizerType=None, sizerArgPos=None, inputArgTypes=None, outputArgTypes=None, sqlArgTypes=None, annotations=None,):
         self.name = name
         self.sizerType = sizerType
         self.sizerArgPos = sizerArgPos
         self.inputArgTypes = inputArgTypes
         self.outputArgTypes = outputArgTypes
         self.sqlArgTypes = sqlArgTypes
+        self.annotations = annotations
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -319,6 +345,22 @@ class TUserDefinedTableFunction(object):
                     iprot.readListEnd()
                 else:
                     iprot.skip(ftype)
+            elif fid == 7:
+                if ftype == TType.LIST:
+                    self.annotations = []
+                    (_etype28, _size25) = iprot.readListBegin()
+                    for _i29 in range(_size25):
+                        _elem30 = {}
+                        (_ktype32, _vtype33, _size31) = iprot.readMapBegin()
+                        for _i35 in range(_size31):
+                            _key36 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                            _val37 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                            _elem30[_key36] = _val37
+                        iprot.readMapEnd()
+                        self.annotations.append(_elem30)
+                    iprot.readListEnd()
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -344,22 +386,33 @@ class TUserDefinedTableFunction(object):
         if self.inputArgTypes is not None:
             oprot.writeFieldBegin('inputArgTypes', TType.LIST, 4)
             oprot.writeListBegin(TType.I32, len(self.inputArgTypes))
-            for iter25 in self.inputArgTypes:
-                oprot.writeI32(iter25)
+            for iter38 in self.inputArgTypes:
+                oprot.writeI32(iter38)
             oprot.writeListEnd()
             oprot.writeFieldEnd()
         if self.outputArgTypes is not None:
             oprot.writeFieldBegin('outputArgTypes', TType.LIST, 5)
             oprot.writeListBegin(TType.I32, len(self.outputArgTypes))
-            for iter26 in self.outputArgTypes:
-                oprot.writeI32(iter26)
+            for iter39 in self.outputArgTypes:
+                oprot.writeI32(iter39)
             oprot.writeListEnd()
             oprot.writeFieldEnd()
         if self.sqlArgTypes is not None:
             oprot.writeFieldBegin('sqlArgTypes', TType.LIST, 6)
             oprot.writeListBegin(TType.I32, len(self.sqlArgTypes))
-            for iter27 in self.sqlArgTypes:
-                oprot.writeI32(iter27)
+            for iter40 in self.sqlArgTypes:
+                oprot.writeI32(iter40)
+            oprot.writeListEnd()
+            oprot.writeFieldEnd()
+        if self.annotations is not None:
+            oprot.writeFieldBegin('annotations', TType.LIST, 7)
+            oprot.writeListBegin(TType.MAP, len(self.annotations))
+            for iter41 in self.annotations:
+                oprot.writeMapBegin(TType.STRING, TType.STRING, len(iter41))
+                for kiter42, viter43 in iter41.items():
+                    oprot.writeString(kiter42.encode('utf-8') if sys.version_info[0] == 2 else kiter42)
+                    oprot.writeString(viter43.encode('utf-8') if sys.version_info[0] == 2 else viter43)
+                oprot.writeMapEnd()
             oprot.writeListEnd()
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
@@ -394,6 +447,7 @@ TUserDefinedTableFunction.thrift_spec = (
     (4, TType.LIST, 'inputArgTypes', (TType.I32, None, False), None, ),  # 4
     (5, TType.LIST, 'outputArgTypes', (TType.I32, None, False), None, ),  # 5
     (6, TType.LIST, 'sqlArgTypes', (TType.I32, None, False), None, ),  # 6
+    (7, TType.LIST, 'annotations', (TType.MAP, (TType.STRING, 'UTF8', TType.STRING, 'UTF8', False), False), None, ),  # 7
 )
 fix_spec(all_structs)
 del all_structs

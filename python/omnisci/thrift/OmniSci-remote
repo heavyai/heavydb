@@ -33,11 +33,14 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
     print('   get_status(TSessionId session)')
     print('  TClusterHardwareInfo get_hardware_info(TSessionId session)')
     print('   get_tables(TSessionId session)')
+    print('   get_tables_for_database(TSessionId session, string database_name)')
     print('   get_physical_tables(TSessionId session)')
     print('   get_views(TSessionId session)')
     print('   get_tables_meta(TSessionId session)')
     print('  TTableDetails get_table_details(TSessionId session, string table_name)')
+    print('  TTableDetails get_table_details_for_database(TSessionId session, string table_name, string database_name)')
     print('  TTableDetails get_internal_table_details(TSessionId session, string table_name)')
+    print('  TTableDetails get_internal_table_details_for_database(TSessionId session, string table_name, string database_name)')
     print('   get_users(TSessionId session)')
     print('   get_databases(TSessionId session)')
     print('  string get_version()')
@@ -47,6 +50,8 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
     print('   get_memory(TSessionId session, string memory_level)')
     print('  void clear_cpu_memory(TSessionId session)')
     print('  void clear_gpu_memory(TSessionId session)')
+    print('  void set_cur_session(TSessionId parent_session, TSessionId leaf_session, string start_time_str, string label, bool for_running_query_kernel)')
+    print('  void invalidate_cur_session(TSessionId parent_session, TSessionId leaf_session, string start_time_str, string label, bool for_running_query_kernel)')
     print('  void set_table_epoch(TSessionId session, i32 db_id, i32 table_id, i32 new_epoch)')
     print('  void set_table_epoch_by_name(TSessionId session, string table_name, i32 new_epoch)')
     print('  i32 get_table_epoch(TSessionId session, i32 db_id, i32 table_id)')
@@ -64,6 +69,10 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
     print('  void set_execution_mode(TSessionId session, TExecuteMode mode)')
     print('  TRenderResult render_vega(TSessionId session, i64 widget_id, string vega_json, i32 compression_level, string nonce)')
     print('  TPixelTableRowResult get_result_row_for_pixel(TSessionId session, i64 widget_id, TPixel pixel,  table_col_names, bool column_format, i32 pixelRadius, string nonce)')
+    print('  i32 create_custom_expression(TSessionId session, TCustomExpression custom_expression)')
+    print('   get_custom_expressions(TSessionId session)')
+    print('  void update_custom_expression(TSessionId session, i32 id, string expression_json)')
+    print('  void delete_custom_expressions(TSessionId session,  custom_expression_ids, bool do_soft_delete)')
     print('  TDashboard get_dashboard(TSessionId session, i32 dashboard_id)')
     print('   get_dashboards(TSessionId session)')
     print('  i32 create_dashboard(TSessionId session, string dashboard_name, string dashboard_state, string image_hash, string dashboard_metadata)')
@@ -79,6 +88,7 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
     print('  string create_link(TSessionId session, string view_state, string view_metadata)')
     print('  void load_table_binary(TSessionId session, string table_name,  rows,  column_names)')
     print('  void load_table_binary_columnar(TSessionId session, string table_name,  cols,  column_names)')
+    print('  void load_table_binary_columnar_polys(TSessionId session, string table_name,  cols,  column_names, bool assign_render_groups)')
     print('  void load_table_binary_arrow(TSessionId session, string table_name, string arrow_stream, bool use_column_names)')
     print('  void load_table(TSessionId session, string table_name,  rows,  column_names)')
     print('  TDetectResult detect_column_types(TSessionId session, string file_name, TCopyParams copy_params)')
@@ -91,8 +101,8 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
     print('   get_layers_in_geo_file(TSessionId session, string file_name, TCopyParams copy_params)')
     print('  i64 query_get_outer_fragment_count(TSessionId session, string query)')
     print('  TTableMeta check_table_consistency(TSessionId session, i32 table_id)')
-    print('  TPendingQuery start_query(TSessionId leaf_session, TSessionId parent_session, string query_ra, bool just_explain,  outer_fragment_indices)')
-    print('  TStepResult execute_query_step(TPendingQuery pending_query, TSubqueryId subquery_id)')
+    print('  TPendingQuery start_query(TSessionId leaf_session, TSessionId parent_session, string query_ra, string start_time_str, bool just_explain,  outer_fragment_indices)')
+    print('  TStepResult execute_query_step(TPendingQuery pending_query, TSubqueryId subquery_id, string start_time_str)')
     print('  void broadcast_serialized_rows(TSerializedRows serialized_rows, TRowDescriptor row_desc, TQueryId query_id, TSubqueryId subquery_id, bool is_final_subquery_result)')
     print('  TPendingRenderQuery start_render_query(TSessionId session, i64 widget_id, i16 node_idx, string vega_json)')
     print('  TRenderStepResult execute_next_render_step(TPendingRenderQuery pending_render, TRenderAggDataMap merged_data)')
@@ -241,6 +251,12 @@ elif cmd == 'get_tables':
         sys.exit(1)
     pp.pprint(client.get_tables(eval(args[0]),))
 
+elif cmd == 'get_tables_for_database':
+    if len(args) != 2:
+        print('get_tables_for_database requires 2 args')
+        sys.exit(1)
+    pp.pprint(client.get_tables_for_database(eval(args[0]), args[1],))
+
 elif cmd == 'get_physical_tables':
     if len(args) != 1:
         print('get_physical_tables requires 1 args')
@@ -265,11 +281,23 @@ elif cmd == 'get_table_details':
         sys.exit(1)
     pp.pprint(client.get_table_details(eval(args[0]), args[1],))
 
+elif cmd == 'get_table_details_for_database':
+    if len(args) != 3:
+        print('get_table_details_for_database requires 3 args')
+        sys.exit(1)
+    pp.pprint(client.get_table_details_for_database(eval(args[0]), args[1], args[2],))
+
 elif cmd == 'get_internal_table_details':
     if len(args) != 2:
         print('get_internal_table_details requires 2 args')
         sys.exit(1)
     pp.pprint(client.get_internal_table_details(eval(args[0]), args[1],))
+
+elif cmd == 'get_internal_table_details_for_database':
+    if len(args) != 3:
+        print('get_internal_table_details_for_database requires 3 args')
+        sys.exit(1)
+    pp.pprint(client.get_internal_table_details_for_database(eval(args[0]), args[1], args[2],))
 
 elif cmd == 'get_users':
     if len(args) != 1:
@@ -324,6 +352,18 @@ elif cmd == 'clear_gpu_memory':
         print('clear_gpu_memory requires 1 args')
         sys.exit(1)
     pp.pprint(client.clear_gpu_memory(eval(args[0]),))
+
+elif cmd == 'set_cur_session':
+    if len(args) != 5:
+        print('set_cur_session requires 5 args')
+        sys.exit(1)
+    pp.pprint(client.set_cur_session(eval(args[0]), eval(args[1]), args[2], args[3], eval(args[4]),))
+
+elif cmd == 'invalidate_cur_session':
+    if len(args) != 5:
+        print('invalidate_cur_session requires 5 args')
+        sys.exit(1)
+    pp.pprint(client.invalidate_cur_session(eval(args[0]), eval(args[1]), args[2], args[3], eval(args[4]),))
 
 elif cmd == 'set_table_epoch':
     if len(args) != 4:
@@ -427,6 +467,30 @@ elif cmd == 'get_result_row_for_pixel':
         sys.exit(1)
     pp.pprint(client.get_result_row_for_pixel(eval(args[0]), eval(args[1]), eval(args[2]), eval(args[3]), eval(args[4]), eval(args[5]), args[6],))
 
+elif cmd == 'create_custom_expression':
+    if len(args) != 2:
+        print('create_custom_expression requires 2 args')
+        sys.exit(1)
+    pp.pprint(client.create_custom_expression(eval(args[0]), eval(args[1]),))
+
+elif cmd == 'get_custom_expressions':
+    if len(args) != 1:
+        print('get_custom_expressions requires 1 args')
+        sys.exit(1)
+    pp.pprint(client.get_custom_expressions(eval(args[0]),))
+
+elif cmd == 'update_custom_expression':
+    if len(args) != 3:
+        print('update_custom_expression requires 3 args')
+        sys.exit(1)
+    pp.pprint(client.update_custom_expression(eval(args[0]), eval(args[1]), args[2],))
+
+elif cmd == 'delete_custom_expressions':
+    if len(args) != 3:
+        print('delete_custom_expressions requires 3 args')
+        sys.exit(1)
+    pp.pprint(client.delete_custom_expressions(eval(args[0]), eval(args[1]), eval(args[2]),))
+
 elif cmd == 'get_dashboard':
     if len(args) != 2:
         print('get_dashboard requires 2 args')
@@ -517,6 +581,12 @@ elif cmd == 'load_table_binary_columnar':
         sys.exit(1)
     pp.pprint(client.load_table_binary_columnar(eval(args[0]), args[1], eval(args[2]), eval(args[3]),))
 
+elif cmd == 'load_table_binary_columnar_polys':
+    if len(args) != 5:
+        print('load_table_binary_columnar_polys requires 5 args')
+        sys.exit(1)
+    pp.pprint(client.load_table_binary_columnar_polys(eval(args[0]), args[1], eval(args[2]), eval(args[3]), eval(args[4]),))
+
 elif cmd == 'load_table_binary_arrow':
     if len(args) != 4:
         print('load_table_binary_arrow requires 4 args')
@@ -590,16 +660,16 @@ elif cmd == 'check_table_consistency':
     pp.pprint(client.check_table_consistency(eval(args[0]), eval(args[1]),))
 
 elif cmd == 'start_query':
-    if len(args) != 5:
-        print('start_query requires 5 args')
+    if len(args) != 6:
+        print('start_query requires 6 args')
         sys.exit(1)
-    pp.pprint(client.start_query(eval(args[0]), eval(args[1]), args[2], eval(args[3]), eval(args[4]),))
+    pp.pprint(client.start_query(eval(args[0]), eval(args[1]), args[2], args[3], eval(args[4]), eval(args[5]),))
 
 elif cmd == 'execute_query_step':
-    if len(args) != 2:
-        print('execute_query_step requires 2 args')
+    if len(args) != 3:
+        print('execute_query_step requires 3 args')
         sys.exit(1)
-    pp.pprint(client.execute_query_step(eval(args[0]), eval(args[1]),))
+    pp.pprint(client.execute_query_step(eval(args[0]), eval(args[1]), args[2],))
 
 elif cmd == 'broadcast_serialized_rows':
     if len(args) != 5:

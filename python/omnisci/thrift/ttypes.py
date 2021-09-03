@@ -236,6 +236,18 @@ class TDBObjectType(object):
     }
 
 
+class TDataSourceType(object):
+    TABLE = 0
+
+    _VALUES_TO_NAMES = {
+        0: "TABLE",
+    }
+
+    _NAMES_TO_VALUES = {
+        "TABLE": 0,
+    }
+
+
 class TDatumVal(object):
     """
     Attributes:
@@ -482,11 +494,12 @@ class TColumnType(object):
      - is_system
      - is_physical
      - col_id
+     - default_value
 
     """
 
 
-    def __init__(self, col_name=None, col_type=None, is_reserved_keyword=None, src_name=None, is_system=None, is_physical=None, col_id=None,):
+    def __init__(self, col_name=None, col_type=None, is_reserved_keyword=None, src_name=None, is_system=None, is_physical=None, col_id=None, default_value=None,):
         self.col_name = col_name
         self.col_type = col_type
         self.is_reserved_keyword = is_reserved_keyword
@@ -494,6 +507,7 @@ class TColumnType(object):
         self.is_system = is_system
         self.is_physical = is_physical
         self.col_id = col_id
+        self.default_value = default_value
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -540,6 +554,11 @@ class TColumnType(object):
                     self.col_id = iprot.readI64()
                 else:
                     iprot.skip(ftype)
+            elif fid == 8:
+                if ftype == TType.STRING:
+                    self.default_value = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -577,6 +596,10 @@ class TColumnType(object):
         if self.col_id is not None:
             oprot.writeFieldBegin('col_id', TType.I64, 7)
             oprot.writeI64(self.col_id)
+            oprot.writeFieldEnd()
+        if self.default_value is not None:
+            oprot.writeFieldBegin('default_value', TType.STRING, 8)
+            oprot.writeString(self.default_value.encode('utf-8') if sys.version_info[0] == 2 else self.default_value)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -2271,11 +2294,12 @@ class TServerStatus(object):
      - host_name
      - poly_rendering_enabled
      - role
+     - renderer_status_json
 
     """
 
 
-    def __init__(self, read_only=None, version=None, rendering_enabled=None, start_time=None, edition=None, host_name=None, poly_rendering_enabled=None, role=None,):
+    def __init__(self, read_only=None, version=None, rendering_enabled=None, start_time=None, edition=None, host_name=None, poly_rendering_enabled=None, role=None, renderer_status_json=None,):
         self.read_only = read_only
         self.version = version
         self.rendering_enabled = rendering_enabled
@@ -2284,6 +2308,7 @@ class TServerStatus(object):
         self.host_name = host_name
         self.poly_rendering_enabled = poly_rendering_enabled
         self.role = role
+        self.renderer_status_json = renderer_status_json
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -2334,6 +2359,11 @@ class TServerStatus(object):
                     self.role = iprot.readI32()
                 else:
                     iprot.skip(ftype)
+            elif fid == 9:
+                if ftype == TType.STRING:
+                    self.renderer_status_json = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -2375,6 +2405,10 @@ class TServerStatus(object):
         if self.role is not None:
             oprot.writeFieldBegin('role', TType.I32, 8)
             oprot.writeI32(self.role)
+            oprot.writeFieldEnd()
+        if self.renderer_status_json is not None:
+            oprot.writeFieldBegin('renderer_status_json', TType.STRING, 9)
+            oprot.writeString(self.renderer_status_json.encode('utf-8') if sys.version_info[0] == 2 else self.renderer_status_json)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -4144,16 +4178,18 @@ class TInsertData(object):
      - column_ids
      - data
      - num_rows
+     - is_default
 
     """
 
 
-    def __init__(self, db_id=None, table_id=None, column_ids=None, data=None, num_rows=None,):
+    def __init__(self, db_id=None, table_id=None, column_ids=None, data=None, num_rows=None, is_default=None,):
         self.db_id = db_id
         self.table_id = table_id
         self.column_ids = column_ids
         self.data = data
         self.num_rows = num_rows
+        self.is_default = is_default
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -4200,6 +4236,16 @@ class TInsertData(object):
                     self.num_rows = iprot.readI64()
                 else:
                     iprot.skip(ftype)
+            elif fid == 6:
+                if ftype == TType.LIST:
+                    self.is_default = []
+                    (_etype190, _size187) = iprot.readListBegin()
+                    for _i191 in range(_size187):
+                        _elem192 = iprot.readBool()
+                        self.is_default.append(_elem192)
+                    iprot.readListEnd()
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -4221,20 +4267,27 @@ class TInsertData(object):
         if self.column_ids is not None:
             oprot.writeFieldBegin('column_ids', TType.LIST, 3)
             oprot.writeListBegin(TType.I32, len(self.column_ids))
-            for iter187 in self.column_ids:
-                oprot.writeI32(iter187)
+            for iter193 in self.column_ids:
+                oprot.writeI32(iter193)
             oprot.writeListEnd()
             oprot.writeFieldEnd()
         if self.data is not None:
             oprot.writeFieldBegin('data', TType.LIST, 4)
             oprot.writeListBegin(TType.STRUCT, len(self.data))
-            for iter188 in self.data:
-                iter188.write(oprot)
+            for iter194 in self.data:
+                iter194.write(oprot)
             oprot.writeListEnd()
             oprot.writeFieldEnd()
         if self.num_rows is not None:
             oprot.writeFieldBegin('num_rows', TType.I64, 5)
             oprot.writeI64(self.num_rows)
+            oprot.writeFieldEnd()
+        if self.is_default is not None:
+            oprot.writeFieldBegin('is_default', TType.LIST, 6)
+            oprot.writeListBegin(TType.BOOL, len(self.is_default))
+            for iter195 in self.is_default:
+                oprot.writeBool(iter195)
+            oprot.writeListEnd()
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -4583,12 +4636,12 @@ class TRawPixelData(object):
             elif fid == 3:
                 if ftype == TType.MAP:
                     self.render_pass_map = {}
-                    (_ktype190, _vtype191, _size189) = iprot.readMapBegin()
-                    for _i193 in range(_size189):
-                        _key194 = iprot.readI32()
-                        _val195 = TRawRenderPassDataResult()
-                        _val195.read(iprot)
-                        self.render_pass_map[_key194] = _val195
+                    (_ktype197, _vtype198, _size196) = iprot.readMapBegin()
+                    for _i200 in range(_size196):
+                        _key201 = iprot.readI32()
+                        _val202 = TRawRenderPassDataResult()
+                        _val202.read(iprot)
+                        self.render_pass_map[_key201] = _val202
                     iprot.readMapEnd()
                 else:
                     iprot.skip(ftype)
@@ -4613,9 +4666,9 @@ class TRawPixelData(object):
         if self.render_pass_map is not None:
             oprot.writeFieldBegin('render_pass_map', TType.MAP, 3)
             oprot.writeMapBegin(TType.I32, TType.STRUCT, len(self.render_pass_map))
-            for kiter196, viter197 in self.render_pass_map.items():
-                oprot.writeI32(kiter196)
-                viter197.write(oprot)
+            for kiter203, viter204 in self.render_pass_map.items():
+                oprot.writeI32(kiter203)
+                viter204.write(oprot)
             oprot.writeMapEnd()
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
@@ -4746,35 +4799,35 @@ class TRenderStepResult(object):
             if fid == 1:
                 if ftype == TType.MAP:
                     self.merge_data = {}
-                    (_ktype199, _vtype200, _size198) = iprot.readMapBegin()
-                    for _i202 in range(_size198):
-                        _key203 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
-                        _val204 = {}
-                        (_ktype206, _vtype207, _size205) = iprot.readMapBegin()
-                        for _i209 in range(_size205):
-                            _key210 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
-                            _val211 = {}
-                            (_ktype213, _vtype214, _size212) = iprot.readMapBegin()
-                            for _i216 in range(_size212):
-                                _key217 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
-                                _val218 = {}
-                                (_ktype220, _vtype221, _size219) = iprot.readMapBegin()
-                                for _i223 in range(_size219):
-                                    _key224 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
-                                    _val225 = []
-                                    (_etype229, _size226) = iprot.readListBegin()
-                                    for _i230 in range(_size226):
-                                        _elem231 = TRenderDatum()
-                                        _elem231.read(iprot)
-                                        _val225.append(_elem231)
+                    (_ktype206, _vtype207, _size205) = iprot.readMapBegin()
+                    for _i209 in range(_size205):
+                        _key210 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                        _val211 = {}
+                        (_ktype213, _vtype214, _size212) = iprot.readMapBegin()
+                        for _i216 in range(_size212):
+                            _key217 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                            _val218 = {}
+                            (_ktype220, _vtype221, _size219) = iprot.readMapBegin()
+                            for _i223 in range(_size219):
+                                _key224 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                                _val225 = {}
+                                (_ktype227, _vtype228, _size226) = iprot.readMapBegin()
+                                for _i230 in range(_size226):
+                                    _key231 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                                    _val232 = []
+                                    (_etype236, _size233) = iprot.readListBegin()
+                                    for _i237 in range(_size233):
+                                        _elem238 = TRenderDatum()
+                                        _elem238.read(iprot)
+                                        _val232.append(_elem238)
                                     iprot.readListEnd()
-                                    _val218[_key224] = _val225
+                                    _val225[_key231] = _val232
                                 iprot.readMapEnd()
-                                _val211[_key217] = _val218
+                                _val218[_key224] = _val225
                             iprot.readMapEnd()
-                            _val204[_key210] = _val211
+                            _val211[_key217] = _val218
                         iprot.readMapEnd()
-                        self.merge_data[_key203] = _val204
+                        self.merge_data[_key210] = _val211
                     iprot.readMapEnd()
                 else:
                     iprot.skip(ftype)
@@ -4812,20 +4865,20 @@ class TRenderStepResult(object):
         if self.merge_data is not None:
             oprot.writeFieldBegin('merge_data', TType.MAP, 1)
             oprot.writeMapBegin(TType.STRING, TType.MAP, len(self.merge_data))
-            for kiter232, viter233 in self.merge_data.items():
-                oprot.writeString(kiter232.encode('utf-8') if sys.version_info[0] == 2 else kiter232)
-                oprot.writeMapBegin(TType.STRING, TType.MAP, len(viter233))
-                for kiter234, viter235 in viter233.items():
-                    oprot.writeString(kiter234.encode('utf-8') if sys.version_info[0] == 2 else kiter234)
-                    oprot.writeMapBegin(TType.STRING, TType.MAP, len(viter235))
-                    for kiter236, viter237 in viter235.items():
-                        oprot.writeString(kiter236.encode('utf-8') if sys.version_info[0] == 2 else kiter236)
-                        oprot.writeMapBegin(TType.STRING, TType.LIST, len(viter237))
-                        for kiter238, viter239 in viter237.items():
-                            oprot.writeString(kiter238.encode('utf-8') if sys.version_info[0] == 2 else kiter238)
-                            oprot.writeListBegin(TType.STRUCT, len(viter239))
-                            for iter240 in viter239:
-                                iter240.write(oprot)
+            for kiter239, viter240 in self.merge_data.items():
+                oprot.writeString(kiter239.encode('utf-8') if sys.version_info[0] == 2 else kiter239)
+                oprot.writeMapBegin(TType.STRING, TType.MAP, len(viter240))
+                for kiter241, viter242 in viter240.items():
+                    oprot.writeString(kiter241.encode('utf-8') if sys.version_info[0] == 2 else kiter241)
+                    oprot.writeMapBegin(TType.STRING, TType.MAP, len(viter242))
+                    for kiter243, viter244 in viter242.items():
+                        oprot.writeString(kiter243.encode('utf-8') if sys.version_info[0] == 2 else kiter243)
+                        oprot.writeMapBegin(TType.STRING, TType.LIST, len(viter244))
+                        for kiter245, viter246 in viter244.items():
+                            oprot.writeString(kiter245.encode('utf-8') if sys.version_info[0] == 2 else kiter245)
+                            oprot.writeListBegin(TType.STRUCT, len(viter246))
+                            for iter247 in viter246:
+                                iter247.write(oprot)
                             oprot.writeListEnd()
                         oprot.writeMapEnd()
                     oprot.writeMapEnd()
@@ -5298,14 +5351,16 @@ class TServerPermissions(object):
      - create_
      - drop_
      - alter_
+     - usage_
 
     """
 
 
-    def __init__(self, create_=None, drop_=None, alter_=None,):
+    def __init__(self, create_=None, drop_=None, alter_=None, usage_=None,):
         self.create_ = create_
         self.drop_ = drop_
         self.alter_ = alter_
+        self.usage_ = usage_
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -5331,6 +5386,11 @@ class TServerPermissions(object):
                     self.alter_ = iprot.readBool()
                 else:
                     iprot.skip(ftype)
+            elif fid == 4:
+                if ftype == TType.BOOL:
+                    self.usage_ = iprot.readBool()
+                else:
+                    iprot.skip(ftype)
             else:
                 iprot.skip(ftype)
             iprot.readFieldEnd()
@@ -5352,6 +5412,10 @@ class TServerPermissions(object):
         if self.alter_ is not None:
             oprot.writeFieldBegin('alter_', TType.BOOL, 3)
             oprot.writeBool(self.alter_)
+            oprot.writeFieldEnd()
+        if self.usage_ is not None:
+            oprot.writeFieldBegin('usage_', TType.BOOL, 4)
+            oprot.writeBool(self.usage_)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -5485,16 +5549,18 @@ class TDBObject(object):
      - privs
      - grantee
      - privilegeObjectType
+     - objectId
 
     """
 
 
-    def __init__(self, objectName=None, objectType=None, privs=None, grantee=None, privilegeObjectType=None,):
+    def __init__(self, objectName=None, objectType=None, privs=None, grantee=None, privilegeObjectType=None, objectId=None,):
         self.objectName = objectName
         self.objectType = objectType
         self.privs = privs
         self.grantee = grantee
         self.privilegeObjectType = privilegeObjectType
+        self.objectId = objectId
 
     def read(self, iprot):
         if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
@@ -5518,10 +5584,10 @@ class TDBObject(object):
             elif fid == 3:
                 if ftype == TType.LIST:
                     self.privs = []
-                    (_etype244, _size241) = iprot.readListBegin()
-                    for _i245 in range(_size241):
-                        _elem246 = iprot.readBool()
-                        self.privs.append(_elem246)
+                    (_etype251, _size248) = iprot.readListBegin()
+                    for _i252 in range(_size248):
+                        _elem253 = iprot.readBool()
+                        self.privs.append(_elem253)
                     iprot.readListEnd()
                 else:
                     iprot.skip(ftype)
@@ -5533,6 +5599,11 @@ class TDBObject(object):
             elif fid == 5:
                 if ftype == TType.I32:
                     self.privilegeObjectType = iprot.readI32()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 6:
+                if ftype == TType.I32:
+                    self.objectId = iprot.readI32()
                 else:
                     iprot.skip(ftype)
             else:
@@ -5556,8 +5627,8 @@ class TDBObject(object):
         if self.privs is not None:
             oprot.writeFieldBegin('privs', TType.LIST, 3)
             oprot.writeListBegin(TType.BOOL, len(self.privs))
-            for iter247 in self.privs:
-                oprot.writeBool(iter247)
+            for iter254 in self.privs:
+                oprot.writeBool(iter254)
             oprot.writeListEnd()
             oprot.writeFieldEnd()
         if self.grantee is not None:
@@ -5567,6 +5638,10 @@ class TDBObject(object):
         if self.privilegeObjectType is not None:
             oprot.writeFieldBegin('privilegeObjectType', TType.I32, 5)
             oprot.writeI32(self.privilegeObjectType)
+            oprot.writeFieldEnd()
+        if self.objectId is not None:
+            oprot.writeFieldBegin('objectId', TType.I32, 6)
+            oprot.writeI32(self.objectId)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -5835,10 +5910,10 @@ class TLicenseInfo(object):
             if fid == 1:
                 if ftype == TType.LIST:
                     self.claims = []
-                    (_etype251, _size248) = iprot.readListBegin()
-                    for _i252 in range(_size248):
-                        _elem253 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
-                        self.claims.append(_elem253)
+                    (_etype258, _size255) = iprot.readListBegin()
+                    for _i259 in range(_size255):
+                        _elem260 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                        self.claims.append(_elem260)
                     iprot.readListEnd()
                 else:
                     iprot.skip(ftype)
@@ -5855,8 +5930,8 @@ class TLicenseInfo(object):
         if self.claims is not None:
             oprot.writeFieldBegin('claims', TType.LIST, 1)
             oprot.writeListBegin(TType.STRING, len(self.claims))
-            for iter254 in self.claims:
-                oprot.writeString(iter254.encode('utf-8') if sys.version_info[0] == 2 else iter254)
+            for iter261 in self.claims:
+                oprot.writeString(iter261.encode('utf-8') if sys.version_info[0] == 2 else iter261)
             oprot.writeListEnd()
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
@@ -6112,6 +6187,118 @@ class TTableEpochInfo(object):
 
     def __ne__(self, other):
         return not (self == other)
+
+
+class TCustomExpression(object):
+    """
+    Attributes:
+     - id
+     - name
+     - expression_json
+     - data_source_type
+     - data_source_id
+     - is_deleted
+
+    """
+
+
+    def __init__(self, id=None, name=None, expression_json=None, data_source_type=None, data_source_id=None, is_deleted=None,):
+        self.id = id
+        self.name = name
+        self.expression_json = expression_json
+        self.data_source_type = data_source_type
+        self.data_source_id = data_source_id
+        self.is_deleted = is_deleted
+
+    def read(self, iprot):
+        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+            iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
+            return
+        iprot.readStructBegin()
+        while True:
+            (fname, ftype, fid) = iprot.readFieldBegin()
+            if ftype == TType.STOP:
+                break
+            if fid == 1:
+                if ftype == TType.I32:
+                    self.id = iprot.readI32()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 2:
+                if ftype == TType.STRING:
+                    self.name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 4:
+                if ftype == TType.STRING:
+                    self.expression_json = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 5:
+                if ftype == TType.I32:
+                    self.data_source_type = iprot.readI32()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 6:
+                if ftype == TType.I32:
+                    self.data_source_id = iprot.readI32()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 7:
+                if ftype == TType.BOOL:
+                    self.is_deleted = iprot.readBool()
+                else:
+                    iprot.skip(ftype)
+            else:
+                iprot.skip(ftype)
+            iprot.readFieldEnd()
+        iprot.readStructEnd()
+
+    def write(self, oprot):
+        if oprot._fast_encode is not None and self.thrift_spec is not None:
+            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            return
+        oprot.writeStructBegin('TCustomExpression')
+        if self.id is not None:
+            oprot.writeFieldBegin('id', TType.I32, 1)
+            oprot.writeI32(self.id)
+            oprot.writeFieldEnd()
+        if self.name is not None:
+            oprot.writeFieldBegin('name', TType.STRING, 2)
+            oprot.writeString(self.name.encode('utf-8') if sys.version_info[0] == 2 else self.name)
+            oprot.writeFieldEnd()
+        if self.expression_json is not None:
+            oprot.writeFieldBegin('expression_json', TType.STRING, 4)
+            oprot.writeString(self.expression_json.encode('utf-8') if sys.version_info[0] == 2 else self.expression_json)
+            oprot.writeFieldEnd()
+        if self.data_source_type is not None:
+            oprot.writeFieldBegin('data_source_type', TType.I32, 5)
+            oprot.writeI32(self.data_source_type)
+            oprot.writeFieldEnd()
+        if self.data_source_id is not None:
+            oprot.writeFieldBegin('data_source_id', TType.I32, 6)
+            oprot.writeI32(self.data_source_id)
+            oprot.writeFieldEnd()
+        if self.is_deleted is not None:
+            oprot.writeFieldBegin('is_deleted', TType.BOOL, 7)
+            oprot.writeBool(self.is_deleted)
+            oprot.writeFieldEnd()
+        oprot.writeFieldStop()
+        oprot.writeStructEnd()
+
+    def validate(self):
+        return
+
+    def __repr__(self):
+        L = ['%s=%r' % (key, value)
+             for key, value in self.__dict__.items()]
+        return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+    def __ne__(self, other):
+        return not (self == other)
 all_structs.append(TDatumVal)
 TDatumVal.thrift_spec = (
     None,  # 0
@@ -6142,6 +6329,7 @@ TColumnType.thrift_spec = (
     (5, TType.BOOL, 'is_system', None, None, ),  # 5
     (6, TType.BOOL, 'is_physical', None, None, ),  # 6
     (7, TType.I64, 'col_id', None, None, ),  # 7
+    (8, TType.STRING, 'default_value', 'UTF8', None, ),  # 8
 )
 all_structs.append(TRow)
 TRow.thrift_spec = (
@@ -6252,7 +6440,7 @@ TCopyParams.thrift_spec = (
     (23, TType.BOOL, 'geo_assign_render_groups', None, True, ),  # 23
     (24, TType.BOOL, 'geo_explode_collections', None, False, ),  # 24
     (25, TType.I32, 'source_srid', None, 0, ),  # 25
-    (26, TType.STRING, 's3_session_token', 'UTF8', None, ), #26
+    (26, TType.STRING, 's3_session_token', 'UTF8', None, ),  # 26
 )
 all_structs.append(TCreateParams)
 TCreateParams.thrift_spec = (
@@ -6293,6 +6481,7 @@ TServerStatus.thrift_spec = (
     (6, TType.STRING, 'host_name', 'UTF8', None, ),  # 6
     (7, TType.BOOL, 'poly_rendering_enabled', None, None, ),  # 7
     (8, TType.I32, 'role', None, None, ),  # 8
+    (9, TType.STRING, 'renderer_status_json', 'UTF8', None, ),  # 9
 )
 all_structs.append(TPixel)
 TPixel.thrift_spec = (
@@ -6448,6 +6637,7 @@ TInsertData.thrift_spec = (
     (3, TType.LIST, 'column_ids', (TType.I32, None, False), None, ),  # 3
     (4, TType.LIST, 'data', (TType.STRUCT, [TDataBlockPtr, None], False), None, ),  # 4
     (5, TType.I64, 'num_rows', None, None, ),  # 5
+    (6, TType.LIST, 'is_default', (TType.BOOL, None, False), None, ),  # 6
 )
 all_structs.append(TPendingRenderQuery)
 TPendingRenderQuery.thrift_spec = (
@@ -6542,6 +6732,7 @@ TServerPermissions.thrift_spec = (
     (1, TType.BOOL, 'create_', None, None, ),  # 1
     (2, TType.BOOL, 'drop_', None, None, ),  # 2
     (3, TType.BOOL, 'alter_', None, None, ),  # 3
+    (4, TType.BOOL, 'usage_', None, None, ),  # 4
 )
 all_structs.append(TDBObjectPermissions)
 TDBObjectPermissions.thrift_spec = (
@@ -6560,6 +6751,7 @@ TDBObject.thrift_spec = (
     (3, TType.LIST, 'privs', (TType.BOOL, None, False), None, ),  # 3
     (4, TType.STRING, 'grantee', 'UTF8', None, ),  # 4
     (5, TType.I32, 'privilegeObjectType', None, None, ),  # 5
+    (6, TType.I32, 'objectId', None, None, ),  # 6
 )
 all_structs.append(TDashboardGrantees)
 TDashboardGrantees.thrift_spec = (
@@ -6606,6 +6798,17 @@ TTableEpochInfo.thrift_spec = (
     (1, TType.I32, 'table_id', None, None, ),  # 1
     (2, TType.I32, 'table_epoch', None, None, ),  # 2
     (3, TType.I32, 'leaf_index', None, None, ),  # 3
+)
+all_structs.append(TCustomExpression)
+TCustomExpression.thrift_spec = (
+    None,  # 0
+    (1, TType.I32, 'id', None, None, ),  # 1
+    (2, TType.STRING, 'name', 'UTF8', None, ),  # 2
+    None,  # 3
+    (4, TType.STRING, 'expression_json', 'UTF8', None, ),  # 4
+    (5, TType.I32, 'data_source_type', None, None, ),  # 5
+    (6, TType.I32, 'data_source_id', None, None, ),  # 6
+    (7, TType.BOOL, 'is_deleted', None, None, ),  # 7
 )
 fix_spec(all_structs)
 del all_structs
