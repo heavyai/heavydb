@@ -492,8 +492,10 @@ class SelectQueryTest : public ForeignTableTest {
                    fragment_id % column_id;
         expected_metadata_found[fragment_column_ids] = true;
         ASSERT_EQ(*chunk_metadata, *expected_metadata_iter->second)
-            << boost::format("At fragment_id: %d, column_id: %d") % fragment_id %
-                   column_id;
+            << (boost::format("At fragment_id: %d, column_id: %d") % fragment_id %
+                column_id)
+            << " Expected: " << expected_metadata_iter->second.get()->dump()
+            << ", Found: " << chunk_metadata.get()->dump();
       }
     }
 
@@ -671,6 +673,74 @@ class DataTypeFragmentSizeAndDataWrapperTest
   void SetUp() override {
     std::tie(fragment_size_, wrapper_type_, extension_) = GetParam();
     SelectQueryTest::SetUp();
+  }
+
+  std::map<std::pair<int, int>, std::unique_ptr<ChunkMetadata>>
+  getExpectedScalarTypeMetadata(bool data_loaded) {
+    std::map<std::pair<int, int>, std::unique_ptr<ChunkMetadata>> test_chunk_metadata_map;
+
+    // sqlite does not encode NULL boolean
+    if (wrapper_type_ == "sqlite" && !data_loaded) {
+      // sqlite does not cast boolean to integer correctly
+      test_chunk_metadata_map[{0, 1}] = createChunkMetadata<int8_t>(1, 4, 4, 0, 0, true);
+    } else {
+      test_chunk_metadata_map[{0, 1}] = createChunkMetadata<int8_t>(1, 4, 4, 0, 1, true);
+    }
+    if (wrapper_type_ == "postgres") {
+      // Postgres does not support tinyint
+      test_chunk_metadata_map[{0, 2}] =
+          createChunkMetadata<int16_t>(2, 8, 4, 100, 120, true);
+    } else {
+      test_chunk_metadata_map[{0, 2}] =
+          createChunkMetadata<int8_t>(2, 4, 4, 100, 120, true);
+    }
+    test_chunk_metadata_map[{0, 3}] =
+        createChunkMetadata<int16_t>(3, 8, 4, 30000, 31000, true);
+    test_chunk_metadata_map[{0, 4}] =
+        createChunkMetadata<int32_t>(4, 16, 4, 2000000000, 2100000000, true);
+    test_chunk_metadata_map[{0, 5}] = createChunkMetadata<int64_t>(
+        5, 32, 4, 9000000000000000000, 9100000000000000000, true);
+    if (wrapper_type_ == "sqlite") {
+      // sqlite does not support decimal or float
+      test_chunk_metadata_map[{0, 6}] =
+          createChunkMetadata<double>(6, 32, 4, 10.1, 1000.123, true);
+      test_chunk_metadata_map[{0, 7}] =
+          createChunkMetadata<double>(7, 32, 4, 2.1234, 100.1234, true);
+    } else {
+      test_chunk_metadata_map[{0, 6}] =
+          createChunkMetadata<float>(6, 16, 4, 10.1f, 1000.123f, true);
+      test_chunk_metadata_map[{0, 7}] =
+          createChunkMetadata<int64_t>(7, 32, 4, 212340, 10012340, true);
+    }
+    test_chunk_metadata_map[{0, 8}] =
+        createChunkMetadata<int64_t>(8, 32, 4, 10, 10 * 60 * 60, true);
+    if (wrapper_type_ == "sqlite" && !data_loaded) {
+      // Sqlite seems to incorrectly calculate the max timestamp as the 2020
+      test_chunk_metadata_map[{0, 9}] =
+          createChunkMetadata<int64_t>(9, 32, 4, 946684859, 1592182799, true);
+      test_chunk_metadata_map[{0, 10}] =
+          createChunkMetadata<int64_t>(10, 16, 4, 946684800, 1592179200, true);
+    } else {
+      test_chunk_metadata_map[{0, 9}] =
+          createChunkMetadata<int64_t>(9, 32, 4, 946684859, 16756761599, true);
+      test_chunk_metadata_map[{0, 10}] =
+          createChunkMetadata<int64_t>(10, 16, 4, 946684800, 16756675200, true);
+    }
+    // encoded string
+    if (data_loaded) {
+      test_chunk_metadata_map[{0, 11}] =
+          createChunkMetadata<int64_t>(11, 16, 4, 0, 2, true);
+    } else {
+      test_chunk_metadata_map[{0, 11}] =
+          createChunkMetadata<int64_t>(11, 16, 4, 2147483647, -2147483648, true);
+    }
+    // unencoded string
+    if (data_loaded || wrapper_type_ == "csv") {
+      test_chunk_metadata_map[{0, 12}] = createChunkMetadata(12, 37, 4, true);
+    } else {
+      test_chunk_metadata_map[{0, 12}] = createChunkMetadata(12, 0, 4, true);
+    }
+    return test_chunk_metadata_map;
   }
 
   std::string fragmentSizeStr() { return std::to_string(fragment_size_); }
@@ -2456,11 +2526,6 @@ TEST_P(RefreshParamTests, SingleTable) {
 }
 
 TEST_P(RefreshParamTests, FragmentSkip) {
-  if (is_odbc(wrapper_type_)) {
-    GTEST_SKIP() << "BUG: This test currently fails on odbc (likely because it "
-                    "is not setting metadata correctly)";
-  }
-
   // Create initial files and tables
   createFilesAndTables({"0", "1"});
 
@@ -3286,10 +3351,7 @@ INSTANTIATE_TEST_SUITE_P(DataTypeFragmentSizeAndDataWrapperOdbcTests,
                                             ::testing::Values(".csv")),
                          DataTypeFragmentSizeAndDataWrapperTest::getTestName);
 
-TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes_subset) {
-  if (!is_odbc(wrapper_type_) || extension_ != ".csv") {
-    GTEST_SKIP() << "UNIMPLEMENTED: sub test does not support " << extension_ << " type";
-  }
+TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes) {
   // Data type changes to handle unimplemented types in ODBC
   // Note: This requires the following option to be added to the postgres entry of
   // .odbc.ini:
@@ -3307,24 +3369,38 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes_subset) {
        {"d", "DATE"},
        {"txt", "TEXT"},
        {"txt_2", "TEXT ENCODING NONE"}},
-      getDataFilesPath() + "scalar_types_subset" + extension_,
+      getDataFilesPath() + "scalar_types" + extension_,
       wrapper_type_,
       {{"FRAGMENT_SIZE", fragmentSizeStr()}}));
+
+  // Initial select count(*) for metadata scan prior to loading
+  {
+    TQueryResult result;
+    sql(result, "SELECT COUNT(*) FROM " + default_table_name + ";");
+  }
+
+  std::map<std::pair<int, int>, std::unique_ptr<ChunkMetadata>> test_chunk_metadata_map;
+
+  // Compare expected metadata if we are loading all values into a single fragment
+  if (fragment_size_ >= 4) {
+    assertExpectedChunkMetadata(getExpectedScalarTypeMetadata(false), default_table_name);
+  }
 
   TQueryResult result;
   sql(result, "SELECT * FROM " + default_table_name + " ORDER BY s;");
   // clang-format off
   assertResultSetEqual({
     {
-      True,i(100), i(30000), i(2000000000), i(9000000000000000000),10.1f,  100.1234, "00:00:00", "1/1/1000 00:00:00", "1/1/1000", "text_1", "\"quoted text\""
+
+      True,i(100), i(30000), i(2000000000), i(9000000000000000000),10.1f,  100.1234, "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"
     },
     {
-      False,i(110), i(30500), i(2000500000), i(9000000050000000000), 100.12f,  2.1234, "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "\"quoted text 2\""
+      False,i(110), i(30500), i(2000500000), i(9000000050000000000), 100.12f,  2.1234, "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"
     },
     {
-      True,i(120), i(31000), i(2100000000), i(9100000000000000000), 1000.123f, 100.1, "23:59:59", "12/31/2900 23:59:59", "12/31/2900", "text_3", "\"quoted text 3\""
+      True,i(120), i(31000), i(2100000000), i(9100000000000000000), 1000.123f, 100.1, "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"
     },
-    { wrapper_type_ == "sqlite" ?  False : NULL_BOOLEAN, // sqlite ODBC driver does not return null Booleans correctly
+    { i(NULL_BOOLEAN),  
       wrapper_type_ == "postgres" ? i(NULL_SMALLINT) : i(NULL_TINYINT), // TINYINT
       i(NULL_SMALLINT), i(NULL_INT), i(NULL_BIGINT),
       wrapper_type_ == "sqlite" ? NULL_DOUBLE : NULL_FLOAT, // FLOAT
@@ -3332,47 +3408,12 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes_subset) {
     }},
     result);
   // clang-format on
-}
 
-TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes) {
-  if (is_odbc(wrapper_type_)) {
-    GTEST_SKIP()
-        << "UNIMPLEMENTED: ODBC wrapper does not support decimal/timestamp types yet";
+  // check metadata again after loading
+
+  if (fragment_size_ >= 4) {
+    assertExpectedChunkMetadata(getExpectedScalarTypeMetadata(true), default_table_name);
   }
-  sql(createForeignTableQuery({{"b", "BOOLEAN"},
-                               {"t", "TINYINT"},
-                               {"s", "SMALLINT"},
-                               {"i", "INTEGER"},
-                               {"bi", "BIGINT"},
-                               {"f", "FLOAT"},
-                               {"dc", "DECIMAL(10, 5)"},
-                               {"tm", "TIME"},
-                               {"tp", "TIMESTAMP"},
-                               {"d", "DATE"},
-                               {"txt", "TEXT"},
-                               {"txt_2", "TEXT ENCODING NONE"}},
-                              getDataFilesPath() + "scalar_types" + extension_,
-                              wrapper_type_,
-                              {{"FRAGMENT_SIZE", fragmentSizeStr()}}));
-
-  TQueryResult result;
-  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY t;");
-  // clang-format off
-  assertResultSetEqual({
-    {
-      True, i(100), i(30000), i(2000000000), i(9000000000000000000), 10.1f, 100.1234, "00:00:10",
-      "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"
-    },
-    {
-      False, i(110), i(30500), i(2000500000), i(9000000050000000000), 100.12f, 2.1234, "00:10:00",
-      "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"
-    },
-    {
-      True, i(120), i(31000), i(2100000000), i(9100000000000000000), 1000.123f, 100.1, "10:00:00",
-      "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"
-    }},
-    result);
-  // clang-format on
 }
 
 TEST_F(SelectQueryTest, CsvArrayQuotedText) {

@@ -1,0 +1,2 @@
+boolean,tiny_int,small_int,int,big_int,float,decimal,time,timestamp,date,text,quoted_text
+,,,,,,,,,,,
