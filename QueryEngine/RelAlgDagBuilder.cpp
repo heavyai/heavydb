@@ -1663,10 +1663,15 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
           crt_pattern.push_back(size_t(nodeIt));
           crt_state = CoalesceState::Filter;
           nodeIt.advance(RANodeIterator::AdvancingMode::DUChain);
-        } else if (std::dynamic_pointer_cast<const RelProject>(ra_node)) {
-          crt_pattern.push_back(size_t(nodeIt));
-          crt_state = CoalesceState::FirstProject;
-          nodeIt.advance(RANodeIterator::AdvancingMode::DUChain);
+        } else if (auto project_node =
+                       std::dynamic_pointer_cast<const RelProject>(ra_node)) {
+          if (project_node->hasWindowFunctionExpr()) {
+            nodeIt.advance(RANodeIterator::AdvancingMode::InOrder);
+          } else {
+            crt_pattern.push_back(size_t(nodeIt));
+            crt_state = CoalesceState::FirstProject;
+            nodeIt.advance(RANodeIterator::AdvancingMode::DUChain);
+          }
         } else {
           nodeIt.advance(RANodeIterator::AdvancingMode::InOrder);
         }
@@ -1700,28 +1705,30 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
       }
       case CoalesceState::Aggregate: {
         if (auto project_node = std::dynamic_pointer_cast<const RelProject>(ra_node)) {
-          // TODO(adb): overloading the simple project terminology again here
-          bool is_simple_project{true};
-          for (size_t i = 0; i < project_node->size(); i++) {
-            const auto scalar_rex = project_node->getProjectAt(i);
-            // If the top level scalar rex is an input node, we can bypass the visitor
-            if (auto input_rex = dynamic_cast<const RexInput*>(scalar_rex)) {
-              if (!input_can_be_coalesced(
-                      input_rex->getSourceNode(), input_rex->getIndex(), true)) {
+          if (!project_node->hasWindowFunctionExpr()) {
+            // TODO(adb): overloading the simple project terminology again here
+            bool is_simple_project{true};
+            for (size_t i = 0; i < project_node->size(); i++) {
+              const auto scalar_rex = project_node->getProjectAt(i);
+              // If the top level scalar rex is an input node, we can bypass the visitor
+              if (auto input_rex = dynamic_cast<const RexInput*>(scalar_rex)) {
+                if (!input_can_be_coalesced(
+                        input_rex->getSourceNode(), input_rex->getIndex(), true)) {
+                  is_simple_project = false;
+                  break;
+                }
+                continue;
+              }
+              CoalesceSecondaryProjectVisitor visitor;
+              if (!visitor.visit(project_node->getProjectAt(i))) {
                 is_simple_project = false;
                 break;
               }
-              continue;
             }
-            CoalesceSecondaryProjectVisitor visitor;
-            if (!visitor.visit(project_node->getProjectAt(i))) {
-              is_simple_project = false;
-              break;
+            if (is_simple_project) {
+              crt_pattern.push_back(size_t(nodeIt));
+              nodeIt.advance(RANodeIterator::AdvancingMode::InOrder);
             }
-          }
-          if (is_simple_project) {
-            crt_pattern.push_back(size_t(nodeIt));
-            nodeIt.advance(RANodeIterator::AdvancingMode::InOrder);
           }
         }
         CHECK_GE(crt_pattern.size(), size_t(2));
@@ -1942,7 +1949,7 @@ void separate_window_function_expressions(
       continue;
     }
 
-    // map scalar expression index in the project node to wiondow function ptr
+    // map scalar expression index in the project node to window function ptr
     std::unordered_map<size_t, const RexScalar*> embedded_window_function_expressions;
 
     // Iterate the target exprs of the project node and check for window function
@@ -2072,6 +2079,7 @@ void add_window_function_pre_project(
   size_t project_node_counter{0};
   for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
     const auto node = *node_itr;
+
     auto window_func_project_node = std::dynamic_pointer_cast<RelProject>(node);
     if (!window_func_project_node) {
       continue;

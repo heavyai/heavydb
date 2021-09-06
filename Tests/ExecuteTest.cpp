@@ -18730,29 +18730,109 @@ TEST(Select, WindowFunctionEmptyPartitions) {
   }
 }
 
-// TEST(Select, WindowFunctionMultiFragsAndShards) {
-//  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
-//  // Cannot use test_window_func as it is single frag
-//  // test table has 10 frags of 2 rows each
-//  {
-//    std::string query =
-//        "SELECT x, AVG(y) OVER (PARTITION BY z ORDER BY t ASC NULLS FIRST), LEAD(x) OVER
-//        "
-//        "(ORDER BY x ASC NULLS FIRST) FROM test ORDER BY x ASC NULLS FIRST, z ASC NULLS
-//        " "FIRST, t ASC NULLS FIRST";
-//    c(query, query, dt);
-//  }
-//
-//  {
-//    std::string query =
-//        "SELECT x, AVG(y) OVER (PARTITION BY z ORDER BY t ASC NULLS FIRST), LEAD(x) OVER
-//        "
-//        "(ORDER BY x ASC NULLS FIRST) FROM test WHERE t > 3ORDER BY x ASC NULLS FIRST, z
-//        " "ASC NULLS FIRST, t ASC NULLS FIRST";
-//    c(query, query, dt);
-//  }
-//  // Todo(todd): Add tests for shards
-//}
+TEST(Select, WindowFunctionInitialGroupBy) {
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+
+  for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
+    {
+      std::string query = "SELECT y, COUNT(*) OVER () AS n FROM " + table_name +
+                          " GROUP BY y ORDER BY y NULLS FIRST;";
+      c(query, query, dt);
+    }
+    {
+      std::string query =
+          "SELECT y, COUNT(*) OVER (ORDER BY AVG(x) ASC NULLS FIRST) AS n FROM " +
+          table_name + " GROUP BY y ORDER BY y NULLS FIRST;";
+      c(query, query, dt);
+    }
+    {
+      std::string query =
+          "SELECT y, x, COUNT(*) OVER (ORDER BY AVG(x) ASC NULLS FIRST) AS n FROM " +
+          table_name + " GROUP BY y, x ORDER BY y NULLS FIRST, x NULLS FIRST;";
+      c(query, query, dt);
+    }
+    {
+      std::string query =
+          "SELECT y, x, COUNT(*) OVER (ORDER BY AVG(x) ASC NULLS FIRST) AS n FROM " +
+          table_name + " GROUP BY y, x ORDER BY y NULLS FIRST, x NULLS FIRST;";
+      c(query, query, dt);
+    }
+    {
+      std::string query =
+          "SELECT y, x, LAG(AVG(t)) OVER (ORDER BY MIN(x) ASC NULLS FIRST) AS lag_avg_t "
+          "FROM " +
+          table_name + " GROUP BY y, x ORDER BY y NULLS FIRST, x NULLS FIRST;";
+      c(query, query, dt);
+    }
+    {
+      std::string query =
+          "SELECT y, x, SUM(t) AS sum_t, LAG(SUM(t)) OVER (ORDER BY MIN(x) ASC NULLS "
+          "FIRST) AS lag_sum_t, SUM(x) OVER (ORDER BY MIN(x) ASC NULLS FIRST) AS sum_x "
+          "FROM " +
+          table_name + " GROUP BY y, x ORDER BY y NULLS FIRST, x NULLS FIRST;";
+      c(query, query, dt);
+    }
+  }
+}
+
+TEST(Select, WindowFunctionSubquery) {
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+
+  auto replace_date_trunc = [](const std::string& date_trunc_query) {
+    const std::string date_trunc_day_expr{"DATE_TRUNC(DAY, d)"};
+    const std::string sqlite_date_trunc_day_substitution{
+        "CAST((julianday(d) - 2440587.5) * 86400 AS INT)"};
+    const size_t pos = date_trunc_query.find(date_trunc_day_expr);
+    if (pos == std::string::npos) {
+      return date_trunc_query;
+    }
+    std::string sqlite_str(date_trunc_query);
+    return sqlite_str.replace(
+        pos, date_trunc_day_expr.size(), sqlite_date_trunc_day_substitution);
+  };
+
+  for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
+    {
+      std::string query =
+          "SELECT lag_sum_t, lag_sum_t + 1 AS lag_sum_t_plus_1 FROM (SELECT "
+          "DATE_TRUNC(DAY, d) AS binned_day, LAG(SUM(t)) OVER (ORDER BY MIN(t) NULLS "
+          "FIRST) AS lag_sum_t FROM " +
+          table_name + " GROUP BY binned_day) ORDER BY binned_day NULLS FIRST;";
+      std::string sqlite_query = replace_date_trunc(query);
+      c(query, sqlite_query, dt);
+    }
+
+    {
+      std::string query =
+          "SELECT SUM(lag_sum_t) AS sum_lag_sum_t FROM (SELECT DATE_TRUNC(DAY, d) AS "
+          "binned_day, LAG(SUM(t)) OVER (ORDER BY MIN(t) NULLS FIRST) AS lag_sum_t "
+          "FROM " +
+          table_name + " GROUP BY binned_day)";
+      std::string sqlite_query = replace_date_trunc(query);
+      c(query, sqlite_query, dt);
+    }
+
+    {
+      std::string query =
+          "SELECT SUM(lag_sum_t) AS sum_lag_sum_t FROM (SELECT DATE_TRUNC(DAY, d) AS "
+          "binned_day, COUNT(*) AS n, SUM(t) AS sum_t, LAG(SUM(t)) OVER (PARTITION BY y "
+          "ORDER BY MIN(t) NULLS FIRST) AS lag_sum_t FROM " +
+          table_name + " GROUP BY binned_day, y)";
+      std::string sqlite_query = replace_date_trunc(query);
+      c(query, sqlite_query, dt);
+    }
+    {
+      std::string query =
+          "SELECT y, SUM(SUM(n)) OVER (ORDER BY SUM(lag_sum_t) ASC NULLS FIRST) as "
+          "sum_n, SUM(lag_sum_t) AS sum_lag_sum_t FROM (SELECT DATE_TRUNC(DAY, d) AS "
+          "binned_day, y, COUNT(*) AS n, SUM(t) AS sum_t, LAG(SUM(t)) OVER (PARTITION BY "
+          "y ORDER BY MIN(t) NULLS FIRST) AS lag_sum_t FROM test_window_func GROUP BY "
+          "binned_day, y) GROUP BY y ORDER BY y ASC NULLS FIRST;";
+      std::string sqlite_query = replace_date_trunc(query);
+      c(query, sqlite_query, dt);
+    }
+  }
+}
 
 TEST(Select, WindowFunctionPercentRank) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
