@@ -19,10 +19,9 @@
 
 RenderInfo::RenderInfo(
     const std::shared_ptr<const ::QueryRenderer::RenderSession> in_render_session,
-    std::optional<RenderQueryOptions> in_render_query_opts,
+    const RenderQueryOptions& in_render_query_opts,
     const bool force_non_in_situ_data)
-    : render_session(in_render_session)
-    , render_query_opts_(std::move(in_render_query_opts)) {
+    : render_session(in_render_session), render_query_opts_(in_render_query_opts) {
   CHECK(false);
 }
 
@@ -100,18 +99,12 @@ bool RenderInfo::setInSituDataIfUnset(const bool is_in_situ_data) {
   return false;
 }
 
-const RenderQueryOptions* RenderInfo::getRenderQueryOptions() const {
-  CHECK(false);
-  return nullptr;
-}
-
-const std::optional<RenderQueryOptions>& RenderInfo::getOptionalRenderQueryOptions()
-    const {
+const RenderQueryOptions& RenderInfo::getRenderQueryOptions() const {
   CHECK(false);
   return render_query_opts_;
 }
 
-void RenderInfo::reset(std::optional<RenderQueryOptions> in_query_opts,
+void RenderInfo::reset(std::unique_ptr<RenderQueryOptions> in_query_opts,
                        const bool in_force_non_in_situ_data,
                        const bool in_disallow_in_situ_only_if_final_ED_is_aggregate) {
   CHECK(false);
