@@ -25,11 +25,6 @@ using namespace Data_Namespace;
 
 class PersistentStorageMgr : public AbstractBufferMgr {
  public:
-  static PersistentStorageMgr* createPersistentStorageMgr(
-      const std::string& data_dir,
-      const size_t num_reader_threads,
-      const File_Namespace::DiskCacheConfig& disk_cache_config);
-
   PersistentStorageMgr(const std::string& data_dir,
                        const size_t num_reader_threads,
                        const File_Namespace::DiskCacheConfig& disk_cache_config);

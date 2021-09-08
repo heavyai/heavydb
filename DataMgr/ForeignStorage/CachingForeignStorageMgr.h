@@ -34,6 +34,9 @@ class CachingForeignStorageMgr : public ForeignStorageMgr {
                    const size_t num_bytes) override;
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metadata,
                                        const ChunkKey& chunk_key_prefix) override;
+  void getChunkMetadataVecFromDataWrapper(ChunkMetadataVector& chunk_metadata,
+                                          const ChunkKey& chunk_key_prefix);
+  void removeTableRelatedDS(const int db_id, const int table_id) override;
   void refreshTable(const ChunkKey& table_key, const bool evict_cached_entries) override;
   bool createDataWrapperIfNotExists(const ChunkKey& chunk_key) override;
 

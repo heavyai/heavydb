@@ -16,21 +16,10 @@
 
 #include "PersistentStorageMgr.h"
 #include "Catalog/Catalog.h"
+#include "DataMgr/FileMgr/CachingGlobalFileMgr.h"
 #include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "DataMgr/ForeignStorage/CachingForeignStorageMgr.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
-#include "MutableCachePersistentStorageMgr.h"
-
-PersistentStorageMgr* PersistentStorageMgr::createPersistentStorageMgr(
-    const std::string& data_dir,
-    const size_t num_reader_threads,
-    const File_Namespace::DiskCacheConfig& config) {
-  if (config.isEnabledForMutableTables()) {
-    return new MutableCachePersistentStorageMgr(data_dir, num_reader_threads, config);
-  } else {
-    return new PersistentStorageMgr(data_dir, num_reader_threads, config);
-  }
-}
 
 PersistentStorageMgr::PersistentStorageMgr(
     const std::string& data_dir,
@@ -41,16 +30,26 @@ PersistentStorageMgr::PersistentStorageMgr(
   ::registerArrowForeignStorage(fsi_);
   ::registerArrowCsvForeignStorage(fsi_);
 
-  global_file_mgr_ = std::make_unique<File_Namespace::GlobalFileMgr>(
-      0, fsi_, data_dir, num_reader_threads);
   disk_cache_ =
       disk_cache_config_.isEnabled()
           ? std::make_unique<foreign_storage::ForeignStorageCache>(disk_cache_config)
           : nullptr;
-  foreign_storage_mgr_ =
-      disk_cache_config_.isEnabledForFSI()
-          ? std::make_unique<foreign_storage::CachingForeignStorageMgr>(disk_cache_.get())
-          : std::make_unique<foreign_storage::ForeignStorageMgr>();
+  if (disk_cache_config_.isEnabledForMutableTables()) {
+    CHECK(disk_cache_);
+    global_file_mgr_ = std::make_unique<File_Namespace::CachingGlobalFileMgr>(
+        0, fsi_, data_dir, num_reader_threads, disk_cache_.get());
+  } else {
+    global_file_mgr_ = std::make_unique<File_Namespace::GlobalFileMgr>(
+        0, fsi_, data_dir, num_reader_threads);
+  }
+
+  if (disk_cache_config_.isEnabledForFSI()) {
+    CHECK(disk_cache_);
+    foreign_storage_mgr_ =
+        std::make_unique<foreign_storage::CachingForeignStorageMgr>(disk_cache_.get());
+  } else {
+    foreign_storage_mgr_ = std::make_unique<foreign_storage::ForeignStorageMgr>();
+  }
 }
 
 AbstractBuffer* PersistentStorageMgr::createBuffer(const ChunkKey& chunk_key,
@@ -78,23 +77,8 @@ AbstractBuffer* PersistentStorageMgr::getBuffer(const ChunkKey& chunk_key,
 void PersistentStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
                                        AbstractBuffer* destination_buffer,
                                        const size_t num_bytes) {
-  AbstractBufferMgr* mgr = getStorageMgrForTableKey(chunk_key);
-  if (isChunkPrefixCacheable(chunk_key)) {
-    AbstractBuffer* buffer = disk_cache_->getCachedChunkIfExists(chunk_key);
-    if (buffer) {
-      buffer->copyTo(destination_buffer, num_bytes);
-      return;
-    } else {
-      mgr->fetchBuffer(chunk_key, destination_buffer, num_bytes);
-      if (!isForeignStorage(chunk_key)) {
-        // Foreign storage will read into cache buffers directly if enabled, so we do
-        // not want to cache foreign table chunks here as they will already be cached.
-        disk_cache_->putBuffer(chunk_key, destination_buffer, num_bytes);
-      }
-      return;
-    }
-  }
-  mgr->fetchBuffer(chunk_key, destination_buffer, num_bytes);
+  getStorageMgrForTableKey(chunk_key)->fetchBuffer(
+      chunk_key, destination_buffer, num_bytes);
 }
 
 AbstractBuffer* PersistentStorageMgr::putBuffer(const ChunkKey& chunk_key,
@@ -106,27 +90,9 @@ AbstractBuffer* PersistentStorageMgr::putBuffer(const ChunkKey& chunk_key,
 
 void PersistentStorageMgr::getChunkMetadataVecForKeyPrefix(
     ChunkMetadataVector& chunk_metadata,
-    const ChunkKey& keyPrefix) {
-  CHECK(has_table_prefix(keyPrefix));
-  // If the disk has any cached metadata for a prefix then it is guaranteed to have all
-  // metadata for that table, so we can return a complete set.  If it has no metadata,
-  // then it may be that the table has no data, or that it's just not cached, so we need
-  // to go to storage to check.
-  if (isChunkPrefixCacheable(keyPrefix)) {
-    if (disk_cache_->hasCachedMetadataForKeyPrefix(keyPrefix)) {
-      disk_cache_->getCachedMetadataVecForKeyPrefix(chunk_metadata, keyPrefix);
-      if (isForeignStorage(keyPrefix)) {
-        getForeignStorageMgr()->createDataWrapperIfNotExists(keyPrefix);
-      }
-      return;
-    }
-    getStorageMgrForTableKey(keyPrefix)->getChunkMetadataVecForKeyPrefix(chunk_metadata,
-                                                                         keyPrefix);
-    disk_cache_->cacheMetadataVec(chunk_metadata);
-  } else {
-    getStorageMgrForTableKey(keyPrefix)->getChunkMetadataVecForKeyPrefix(chunk_metadata,
-                                                                         keyPrefix);
-  }
+    const ChunkKey& key_prefix) {
+  getStorageMgrForTableKey(key_prefix)
+      ->getChunkMetadataVecForKeyPrefix(chunk_metadata, key_prefix);
 }
 
 bool PersistentStorageMgr::isBufferOnDevice(const ChunkKey& chunk_key) {
@@ -186,11 +152,7 @@ File_Namespace::GlobalFileMgr* PersistentStorageMgr::getGlobalFileMgr() const {
 }
 
 void PersistentStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {
-  const ChunkKey table_key{db_id, table_id};
-  if (isChunkPrefixCacheable(table_key)) {
-    disk_cache_->clearForTablePrefix(table_key);
-  }
-  getStorageMgrForTableKey(table_key)->removeTableRelatedDS(db_id, table_id);
+  getStorageMgrForTableKey({db_id, table_id})->removeTableRelatedDS(db_id, table_id);
 }
 
 bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) const {
@@ -228,16 +190,4 @@ foreign_storage::ForeignStorageMgr* PersistentStorageMgr::getForeignStorageMgr()
 
 foreign_storage::ForeignStorageCache* PersistentStorageMgr::getDiskCache() const {
   return disk_cache_ ? disk_cache_.get() : nullptr;
-}
-
-bool PersistentStorageMgr::isChunkPrefixCacheable(const ChunkKey& chunk_prefix) const {
-  CHECK(has_table_prefix(chunk_prefix));
-  // If this is an Arrow FSI table then we can't cache it.
-  if (fsi_->lookupBufferManager(chunk_prefix[CHUNK_KEY_DB_IDX],
-                                chunk_prefix[CHUNK_KEY_TABLE_IDX])) {
-    return false;
-  }
-  return ((disk_cache_config_.isEnabledForMutableTables() &&
-           !isForeignStorage(chunk_prefix)) ||
-          (disk_cache_config_.isEnabledForFSI() && isForeignStorage(chunk_prefix)));
 }

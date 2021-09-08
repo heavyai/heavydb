@@ -45,13 +45,13 @@ GlobalFileMgr::GlobalFileMgr(const int32_t deviceId,
                              const size_t num_reader_threads,
                              const size_t defaultPageSize)
     : AbstractBufferMgr(deviceId)
+    , fsi_(fsi)
     , basePath_(basePath)
     , num_reader_threads_(num_reader_threads)
     , epoch_(-1)
     ,  // set the default epoch for all tables corresponding to the time of
        // last checkpoint
-    defaultPageSize_(defaultPageSize)
-    , fsi_(fsi) {
+    defaultPageSize_(defaultPageSize) {
   omnisci_db_version_ = 2;
   // DS changes also triggered by individual FileMgr per table project (release 2.1.0)
   dbConvert_ = false;

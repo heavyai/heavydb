@@ -62,6 +62,8 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
                 const size_t num_reader_threads = 0,
                 const size_t defaultPageSize = DEFAULT_PAGE_SIZE);
 
+  virtual ~GlobalFileMgr() {}
+
   /// Creates a chunk with the specified key and page size.
   AbstractBuffer* createBuffer(const ChunkKey& key,
                                size_t pageSize = 0,
@@ -187,6 +189,8 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   void closeFileMgr(const int32_t db_id,
                     const int32_t tb_id);  // A locked public wrapper for deleteFileMgr,
                                            // for now for unit testing
+ protected:
+  std::shared_ptr<ForeignStorageInterface> fsi_;
 
  private:
   bool existsDiffBetweenFileMgrParamsAndFileMgr(
@@ -214,7 +218,6 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   std::map<TablePair, std::shared_ptr<FileMgr>> ownedFileMgrs_;
   std::map<TablePair, AbstractBufferMgr*> allFileMgrs_;
   std::map<TablePair, int32_t> max_rollback_epochs_per_table_;
-  std::shared_ptr<ForeignStorageInterface> fsi_;
 
   mapd_shared_mutex fileMgrs_mutex_;
 };

@@ -12,6 +12,7 @@ set(datamgr_source_files
     StringNoneEncoder.cpp
     FileMgr/CachingFileMgr.cpp
     FileMgr/GlobalFileMgr.cpp
+    FileMgr/CachingGlobalFileMgr.cpp
     FileMgr/FileMgr.cpp
     FileMgr/FileBuffer.cpp
     FileMgr/FileInfo.cpp
@@ -38,7 +39,6 @@ set(datamgr_source_files
     BufferMgr/CpuBufferMgr/TieredCpuBufferMgr.cpp
     BufferMgr/BufferMgr.cpp
     BufferMgr/Buffer.cpp
-    PersistentStorageMgr/MutableCachePersistentStorageMgr.cpp
     PersistentStorageMgr/PersistentStorageMgr.cpp
     ForeignStorage/ForeignTableRefresh.cpp
     ForeignStorage/AbstractFileStorageDataWrapper.cpp

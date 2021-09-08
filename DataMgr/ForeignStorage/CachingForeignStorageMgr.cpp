@@ -68,49 +68,73 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
   CHECK(destination_buffer);
   CHECK(!destination_buffer->isDirty());
 
-  // TODO: Populate optional buffers as part of CSV performance improvement
-  std::vector<ChunkKey> chunk_keys = get_keys_vec_from_table(chunk_key);
-  std::vector<ChunkKey> optional_keys;
-  ChunkToBufferMap optional_buffers;
+  AbstractBuffer* buffer = disk_cache_->getCachedChunkIfExists(chunk_key);
+  if (buffer) {
+    buffer->copyTo(destination_buffer, num_bytes);
+    return;
+  } else {
+    std::vector<ChunkKey> chunk_keys = get_keys_vec_from_table(chunk_key);
+    std::vector<ChunkKey> optional_keys;
+    ChunkToBufferMap optional_buffers;
 
-  // Use hints to prefetch other chunks in fragment into cache
-  auto& data_wrapper = *getDataWrapper(chunk_key);
-  std::set<ChunkKey> optional_set;
-  getOptionalChunkKeySet(optional_set,
-                         chunk_key,
-                         get_keys_set_from_table(chunk_key),
-                         data_wrapper.getCachedParallelismLevel());
-  for (const auto& key : optional_set) {
-    if (disk_cache_->getCachedChunkIfExists(key) == nullptr) {
-      optional_keys.emplace_back(key);
+    // Use hints to prefetch other chunks in fragment into cache
+    auto& data_wrapper = *getDataWrapper(chunk_key);
+    std::set<ChunkKey> optional_set;
+    getOptionalChunkKeySet(optional_set,
+                           chunk_key,
+                           get_keys_set_from_table(chunk_key),
+                           data_wrapper.getCachedParallelismLevel());
+    for (const auto& key : optional_set) {
+      if (disk_cache_->getCachedChunkIfExists(key) == nullptr) {
+        optional_keys.emplace_back(key);
+      }
     }
+
+    if (optional_keys.size()) {
+      optional_buffers = disk_cache_->getChunkBuffersForCaching(optional_keys);
+    }
+
+    ChunkToBufferMap required_buffers =
+        disk_cache_->getChunkBuffersForCaching(chunk_keys);
+    CHECK(required_buffers.find(chunk_key) != required_buffers.end());
+    populateChunkBuffersSafely(data_wrapper, required_buffers, optional_buffers);
+
+    AbstractBuffer* buffer = required_buffers.at(chunk_key);
+    CHECK(buffer);
+
+    buffer->copyTo(destination_buffer, num_bytes);
   }
-
-  if (optional_keys.size()) {
-    optional_buffers = disk_cache_->getChunkBuffersForCaching(optional_keys);
-  }
-
-  ChunkToBufferMap required_buffers = disk_cache_->getChunkBuffersForCaching(chunk_keys);
-  CHECK(required_buffers.find(chunk_key) != required_buffers.end());
-  populateChunkBuffersSafely(data_wrapper, required_buffers, optional_buffers);
-
-  AbstractBuffer* buffer = required_buffers.at(chunk_key);
-  CHECK(buffer);
-
-  buffer->copyTo(destination_buffer, num_bytes);
 }
 
 void CachingForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
     ChunkMetadataVector& chunk_metadata,
-    const ChunkKey& keyPrefix) {
-  auto [db_id, tb_id] = get_table_prefix(keyPrefix);
+    const ChunkKey& key_prefix) {
+  CHECK(has_table_prefix(key_prefix));
+  // If the disk has any cached metadata for a prefix then it is guaranteed to have all
+  // metadata for that table, so we can return a complete set.  If it has no metadata,
+  // then it may be that the table has no data, or that it's just not cached, so we need
+  // to go to storage to check.
+  if (disk_cache_->hasCachedMetadataForKeyPrefix(key_prefix)) {
+    disk_cache_->getCachedMetadataVecForKeyPrefix(chunk_metadata, key_prefix);
+    createDataWrapperIfNotExists(key_prefix);
+    return;
+  }
+  getChunkMetadataVecFromDataWrapper(chunk_metadata, key_prefix);
+  disk_cache_->cacheMetadataVec(chunk_metadata);
+}
+
+void CachingForeignStorageMgr::getChunkMetadataVecFromDataWrapper(
+    ChunkMetadataVector& chunk_metadata,
+    const ChunkKey& chunk_key_prefix) {
+  CHECK(has_table_prefix(chunk_key_prefix));
+  auto [db_id, tb_id] = get_table_prefix(chunk_key_prefix);
   try {
-    ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(chunk_metadata, keyPrefix);
+    ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(chunk_metadata, chunk_key_prefix);
   } catch (...) {
     clearTable({db_id, tb_id});
     throw;
   }
-  auto doc = getDataWrapper(keyPrefix)->getSerializedDataWrapper();
+  auto doc = getDataWrapper(chunk_key_prefix)->getSerializedDataWrapper();
   disk_cache_->storeDataWrapper(doc, db_id, tb_id);
 
   // If the wrapper populated buffers we want that action to be checkpointed.
@@ -170,7 +194,7 @@ void CachingForeignStorageMgr::refreshAppendTableInCache(
   int last_frag_id = getHighestCachedFragId(table_key);
 
   ChunkMetadataVector storage_metadata;
-  getChunkMetadataVecForKeyPrefix(storage_metadata, table_key);
+  getChunkMetadataVecFromDataWrapper(storage_metadata, table_key);
   try {
     disk_cache_->cacheMetadataWithFragIdGreaterOrEqualTo(storage_metadata, last_frag_id);
     refreshChunksInCacheByFragment(old_chunk_keys, last_frag_id);
@@ -185,7 +209,7 @@ void CachingForeignStorageMgr::refreshNonAppendTableInCache(
   CHECK(is_table_key(table_key));
   ChunkMetadataVector storage_metadata;
   clearTable(table_key);
-  getChunkMetadataVecForKeyPrefix(storage_metadata, table_key);
+  getChunkMetadataVecFromDataWrapper(storage_metadata, table_key);
 
   try {
     disk_cache_->cacheMetadataVec(storage_metadata);
@@ -283,6 +307,11 @@ bool CachingForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chun
         disk_cache_->getSerializedWrapperPath(db, tb), chunk_metadata);
   }
   return true;
+}
+
+void CachingForeignStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {
+  disk_cache_->clearForTablePrefix({db_id, table_id});
+  ForeignStorageMgr::removeTableRelatedDS(db_id, table_id);
 }
 
 }  // namespace foreign_storage

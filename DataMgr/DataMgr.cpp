@@ -210,8 +210,8 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                            const File_Namespace::DiskCacheConfig& cache_config) {
   // no need for locking, as this is only called in the constructor
   bufferMgrs_.resize(2);
-  bufferMgrs_[0].push_back(PersistentStorageMgr::createPersistentStorageMgr(
-      dataDir_, userSpecifiedNumReaderThreads, cache_config));
+  bufferMgrs_[0].push_back(
+      new PersistentStorageMgr(dataDir_, userSpecifiedNumReaderThreads, cache_config));
 
   levelSizes_.push_back(1);
   size_t page_size{512};

@@ -52,6 +52,8 @@ class ForeignStorageMgr : public AbstractBufferMgr {
  public:
   ForeignStorageMgr();
 
+  virtual ~ForeignStorageMgr() {}
+
   AbstractBuffer* createBuffer(const ChunkKey& chunk_key,
                                const size_t page_size,
                                const size_t initial_size) override;

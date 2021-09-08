@@ -75,7 +75,6 @@ void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
     }
   }
 
-  // TODO: Populate optional buffers as part of CSV performance improvement
   std::set<ChunkKey> chunk_keys = get_keys_set_from_table(chunk_key);
   chunk_keys.erase(chunk_key);
 

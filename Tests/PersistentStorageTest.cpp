@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "DataMgr/PersistentStorageMgr/MutableCachePersistentStorageMgr.h"
 #include "DataMgr/PersistentStorageMgr/PersistentStorageMgr.h"
 #include "DataMgrTestHelpers.h"
 #include "TestHelpers.h"
@@ -44,11 +43,6 @@ TEST_F(PersistentStorageMgrTest, DiskCache_CustomPath) {
 TEST_F(PersistentStorageMgrTest, DiskCache_InitializeWithoutCache) {
   PersistentStorageMgr psm(data_path, 0, {});
   ASSERT_EQ(psm.getDiskCache(), nullptr);
-}
-
-TEST_F(PersistentStorageMgrTest, MutableDiskCache_CustomPath) {
-  MutableCachePersistentStorageMgr psm(data_path, 0, {cache_path_, DiskCacheLevel::all});
-  ASSERT_EQ(psm.getDiskCache()->getCacheDirectory(), cache_path_);
 }
 
 int main(int argc, char** argv) {
