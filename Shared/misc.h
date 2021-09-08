@@ -191,6 +191,59 @@ inline bool contains(const T& container, const U& element) {
   }
 }
 
+// Calculate polynomial c0 + c1*x + c2*x^2 + ... + cn*x^n using Horner's method.
+template <typename... COEFFICIENTS>
+constexpr double horner(double const x, double const c0, COEFFICIENTS... c) {
+  if constexpr (sizeof...(COEFFICIENTS) == 0) {
+    return c0;
+  } else {
+    return horner(x, c...) * x + c0;
+  }
+  return {};  // quiet nvcc warning https://stackoverflow.com/a/64561686/2700898
+}
+
+// OK for -0.15 <= x <= 0.15
+inline double fastAtanh(double const x) {
+  // Mathematica: CoefficientList[Normal@Series[ArcTanh[x],{x,0,16}],x] // InputForm
+  return x * horner(x * x, 1, 1 / 3., 1 / 5., 1 / 7., 1 / 9., 1 / 11., 1 / 13., 1 / 15.);
+}
+
+// OK for -1 <= x <= 1
+inline double fastCos(double const x) {
+  // Mathematica: CoefficientList[Normal@Series[Cos[x],{x,0,16}],x] // InputForm
+  // clang-format off
+  return horner(x * x, 1, -1/2., 1/24., -1/720., 1/40320., -1/3628800.,
+                1/479001600., -1/87178291200., 1/20922789888000.);
+  // clang-format on
+}
+
+// OK for -1 <= x <= 1
+inline double fastCosh(double const x) {
+  // Mathematica: CoefficientList[Normal@Series[Cosh[x],{x,0,16}],x] // InputForm
+  // clang-format off
+  return horner(x * x, 1, 1/2., 1/24., 1/720., 1/40320., 1/3628800.,
+                1/479001600., 1/87178291200., 1/20922789888000.);
+  // clang-format on
+}
+
+// OK for -1 <= x <= 1
+inline double fastSin(double const x) {
+  // Mathematica: CoefficientList[Normal@Series[Sin[x],{x,0,16}],x] // InputForm
+  // clang-format off
+  return x * horner(x * x, 1, -1/6., 1/120., -1/5040., 1/362880.,
+                    -1/39916800., 1/6227020800., -1/1307674368000.);
+  // clang-format on
+}
+
+// OK for -1 <= x <= 1
+inline double fastSinh(double const x) {
+  // Mathematica: CoefficientList[Normal@Series[Sinh[x],{x,0,16}],x] // InputForm
+  // clang-format off
+  return x * horner(x * x, 1, 1/6., 1/120., 1/5040., 1/362880.,
+                    1/39916800., 1/6227020800., 1/1307674368000.);
+  // clang-format on
+}
+
 // Return constexpr std::array<T, N> of {1, a, a^2, a^3, ..., a^(N-1)}.
 template <typename T, size_t N>
 constexpr std::array<T, N> powersOf(T const a) {

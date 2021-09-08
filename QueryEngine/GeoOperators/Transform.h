@@ -41,6 +41,10 @@ class Transform : public Codegen {
 
   SQLTypeInfo getNullType() const override { return SQLTypeInfo(kBOOLEAN); }
 
+  inline static bool isUtm(unsigned const srid) {
+    return (32601 <= srid && srid <= 32660) || (32701 <= srid && srid <= 32760);
+  }
+
   std::tuple<std::vector<llvm::Value*>, llvm::Value*> codegenLoads(
       const std::vector<llvm::Value*>& arg_lvs,
       const std::vector<llvm::Value*>& pos_lvs,
@@ -136,62 +140,91 @@ class Transform : public Codegen {
     }
     CHECK(arr_buff_ptr->getType() == llvm::Type::getDoublePtrTy(cgen_state->context_));
 
-    if (transform_operator_->getInputSRID() == transform_operator_->getOutputSRID()) {
+    auto const srid_in = static_cast<unsigned>(transform_operator_->getInputSRID());
+    auto const srid_out = static_cast<unsigned>(transform_operator_->getOutputSRID());
+    if (srid_in == srid_out) {
       // noop
       return {args.front()};
     }
 
     // transform in place
     std::string transform_function_prefix{""};
-    if (transform_operator_->getOutputSRID() == 900913) {
-      if (transform_operator_->getInputSRID() != 4326) {
-        throw std::runtime_error("Unsupported input SRID " +
-                                 std::to_string(transform_operator_->getInputSRID()) +
-                                 " for output SRID " +
-                                 std::to_string(transform_operator_->getOutputSRID()));
+    std::vector<llvm::Value*> transform_args;
+
+    if (srid_out == 900913) {
+      if (srid_in == 4326) {
+        transform_function_prefix = "transform_4326_900913_";
+      } else if (isUtm(srid_in)) {
+        transform_function_prefix = "transform_utm_900913_";
+        transform_args.push_back(cgen_state->llInt(srid_in));
+      } else {
+        throw std::runtime_error("Unsupported input SRID " + std::to_string(srid_in) +
+                                 " for output SRID " + std::to_string(srid_out));
       }
-      transform_function_prefix = "transform_4326_900913_";
-    } else if (transform_operator_->getOutputSRID() == 4326) {
-      if (transform_operator_->getInputSRID() != 900913) {
-        throw std::runtime_error("Unsupported input SRID " +
-                                 std::to_string(transform_operator_->getInputSRID()) +
-                                 " for output SRID " +
-                                 std::to_string(transform_operator_->getOutputSRID()));
+    } else if (srid_out == 4326) {
+      if (srid_in == 900913) {
+        transform_function_prefix = "transform_900913_4326_";
+      } else if (isUtm(srid_in)) {
+        transform_function_prefix = "transform_utm_4326_";
+        transform_args.push_back(cgen_state->llInt(srid_in));
+      } else {
+        throw std::runtime_error("Unsupported input SRID " + std::to_string(srid_in) +
+                                 " for output SRID " + std::to_string(srid_out));
       }
-      transform_function_prefix = "transform_900913_4326_";
+    } else if (isUtm(srid_out)) {
+      if (srid_in == 4326) {
+        transform_function_prefix = "transform_4326_utm_";
+      } else if (srid_in == 900913) {
+        transform_function_prefix = "transform_900913_utm_";
+      } else {
+        throw std::runtime_error("Unsupported input SRID " + std::to_string(srid_in) +
+                                 " for output SRID " + std::to_string(srid_out));
+      }
+      transform_args.push_back(cgen_state->llInt(srid_out));
     } else {
-      throw std::runtime_error("Unsupported SRID for ST_Transform: " +
-                               std::to_string(transform_operator_->getOutputSRID()));
+      throw std::runtime_error("Unsupported output SRID for ST_Transform: " +
+                               std::to_string(srid_out));
     }
     CHECK(!transform_function_prefix.empty());
 
     auto x_coord_ptr_lv =
         builder.CreateGEP(arr_buff_ptr, cgen_state->llInt(0), "x_coord_ptr");
-    builder.CreateStore(
-        cgen_state->emitCall(transform_function_prefix + "x",
-                             {builder.CreateLoad(x_coord_ptr_lv, "x_coord")}),
-        x_coord_ptr_lv);
-
+    transform_args.push_back(builder.CreateLoad(x_coord_ptr_lv, "x_coord"));
     auto y_coord_ptr_lv =
         builder.CreateGEP(arr_buff_ptr, cgen_state->llInt(1), "y_coord_ptr");
+    transform_args.push_back(builder.CreateLoad(y_coord_ptr_lv, "y_coord"));
     if (co.device_type == ExecutorDeviceType::GPU) {
-      auto fn = cgen_state->module_->getFunction(transform_function_prefix + "y");
-      CHECK(fn);
-      cgen_state->maybeCloneFunctionRecursive(fn);
-      CHECK(!fn->isDeclaration());
+      auto fn_x = cgen_state->module_->getFunction(transform_function_prefix + 'x');
+      CHECK(fn_x);
+      cgen_state->maybeCloneFunctionRecursive(fn_x);
+      CHECK(!fn_x->isDeclaration());
 
-      auto gpu_functions_to_replace = cgen_state->gpuFunctionsToReplace(fn);
+      auto gpu_functions_to_replace = cgen_state->gpuFunctionsToReplace(fn_x);
       for (const auto& fcn_name : gpu_functions_to_replace) {
-        cgen_state->replaceFunctionForGpu(fcn_name, fn);
+        cgen_state->replaceFunctionForGpu(fcn_name, fn_x);
       }
-      verify_function_ir(fn);
-      auto transform_call =
-          builder.CreateCall(fn, {builder.CreateLoad(y_coord_ptr_lv, "y_coord")});
+      verify_function_ir(fn_x);
+      auto transform_call = builder.CreateCall(fn_x, transform_args);
+      builder.CreateStore(transform_call, x_coord_ptr_lv);
+
+      auto fn_y = cgen_state->module_->getFunction(transform_function_prefix + 'y');
+      CHECK(fn_y);
+      cgen_state->maybeCloneFunctionRecursive(fn_y);
+      CHECK(!fn_y->isDeclaration());
+
+      gpu_functions_to_replace = cgen_state->gpuFunctionsToReplace(fn_y);
+      for (const auto& fcn_name : gpu_functions_to_replace) {
+        cgen_state->replaceFunctionForGpu(fcn_name, fn_y);
+      }
+      verify_function_ir(fn_y);
+      transform_call = builder.CreateCall(fn_y, transform_args);
       builder.CreateStore(transform_call, y_coord_ptr_lv);
     } else {
       builder.CreateStore(
-          cgen_state->emitCall(transform_function_prefix + "y",
-                               {builder.CreateLoad(y_coord_ptr_lv, "y_coord")}),
+          cgen_state->emitCall(transform_function_prefix + 'x', transform_args),
+          x_coord_ptr_lv);
+      builder.CreateStore(
+          cgen_state->emitCall(transform_function_prefix + 'y', transform_args),
           y_coord_ptr_lv);
     }
     auto ret = arr_buff_ptr;

@@ -54,6 +54,11 @@ double Atan(const double x) {
 }
 
 EXTENSION_NOINLINE
+double Atanh(const double x) {
+  return atanh(x);
+}
+
+EXTENSION_NOINLINE
 double Atan2(const double y, const double x) {
   return atan2(y, x);
 }
@@ -86,6 +91,11 @@ int64_t Ceil__3(int64_t x) {
 EXTENSION_NOINLINE
 double Cos(const double x) {
   return cos(x);
+}
+
+EXTENSION_NOINLINE
+double Cosh(const double x) {
+  return cosh(x);
 }
 
 EXTENSION_NOINLINE
@@ -293,8 +303,23 @@ double Sin(const double x) {
 }
 
 EXTENSION_NOINLINE
+double Sinh(const double x) {
+  return sinh(x);
+}
+
+EXTENSION_NOINLINE
+double Sqrt(const double x) {
+  return sqrt(x);
+}
+
+EXTENSION_NOINLINE
 double Tan(const double x) {
   return tan(x);
+}
+
+EXTENSION_NOINLINE
+double Tanh(const double x) {
+  return tanh(x);
 }
 
 EXTENSION_NOINLINE

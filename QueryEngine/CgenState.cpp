@@ -198,79 +198,55 @@ void CgenState::emitErrorCheck(llvm::Value* condition,
 
 namespace {
 
-struct GpuFunctionDefinition {
-  GpuFunctionDefinition(const std::string& name) : name(name) {}
-  std::string name;
+// clang-format off
+template <typename T>
+llvm::Type* getTy(llvm::LLVMContext& ctx) { return getTy<std::remove_pointer_t<T>>(ctx)->getPointerTo(); }
+// Commented out to avoid -Wunused-function warnings, but enable as needed.
+// template<> llvm::Type* getTy<bool>(llvm::LLVMContext& ctx) { return llvm::Type::getInt1Ty(ctx); }
+//template<> llvm::Type* getTy<int8_t>(llvm::LLVMContext& ctx) { return llvm::Type::getInt8Ty(ctx); }
+// template<> llvm::Type* getTy<int16_t>(llvm::LLVMContext& ctx) { return llvm::Type::getInt16Ty(ctx); }
+//template<> llvm::Type* getTy<int32_t>(llvm::LLVMContext& ctx) { return llvm::Type::getInt32Ty(ctx); }
+// template<> llvm::Type* getTy<int64_t>(llvm::LLVMContext& ctx) { return llvm::Type::getInt64Ty(ctx); }
+// template<> llvm::Type* getTy<float>(llvm::LLVMContext& ctx) { return llvm::Type::getFloatTy(ctx); }
+template<> llvm::Type* getTy<double>(llvm::LLVMContext& ctx) { return llvm::Type::getDoubleTy(ctx); }
+//template<> llvm::Type* getTy<void>(llvm::LLVMContext& ctx) { return llvm::Type::getVoidTy(ctx); }
+// clang-format on
 
-  virtual ~GpuFunctionDefinition() {}
+struct GpuFunctionDefinition {
+  GpuFunctionDefinition(char const* name) : name_(name) {}
+  char const* const name_;
+
+  virtual ~GpuFunctionDefinition() = default;
 
   virtual llvm::FunctionCallee getFunction(llvm::Module* module,
                                            llvm::LLVMContext& context) const = 0;
 };
 
-struct GpuPowerFunction : public GpuFunctionDefinition {
-  GpuPowerFunction() : GpuFunctionDefinition("power") {}
+// TYPES = return_type, arg0_type, arg1_type, arg2_type, ...
+template <typename... TYPES>
+struct GpuFunction final : public GpuFunctionDefinition {
+  GpuFunction(char const* name) : GpuFunctionDefinition(name) {}
 
   llvm::FunctionCallee getFunction(llvm::Module* module,
-                                   llvm::LLVMContext& context) const final {
-    return module->getOrInsertFunction(name,
-                                       /*ret_type=*/llvm::Type::getDoubleTy(context),
-                                       /*args=*/llvm::Type::getDoubleTy(context),
-                                       llvm::Type::getDoubleTy(context));
-  }
-};
-
-struct GpuAtanFunction : public GpuFunctionDefinition {
-  GpuAtanFunction() : GpuFunctionDefinition("Atan") {}
-
-  llvm::FunctionCallee getFunction(llvm::Module* module,
-                                   llvm::LLVMContext& context) const final {
-    return module->getOrInsertFunction(name,
-                                       /*ret_type=*/llvm::Type::getDoubleTy(context),
-                                       /*args=*/llvm::Type::getDoubleTy(context));
-  }
-};
-
-struct GpuLogFunction : public GpuFunctionDefinition {
-  GpuLogFunction() : GpuFunctionDefinition("ln") {}
-
-  llvm::FunctionCallee getFunction(llvm::Module* module,
-                                   llvm::LLVMContext& context) const final {
-    return module->getOrInsertFunction(name,
-                                       /*ret_type=*/llvm::Type::getDoubleTy(context),
-                                       /*args=*/llvm::Type::getDoubleTy(context));
-  }
-};
-
-struct GpuTanFunction : public GpuFunctionDefinition {
-  GpuTanFunction() : GpuFunctionDefinition("Tan") {}
-
-  llvm::FunctionCallee getFunction(llvm::Module* module,
-                                   llvm::LLVMContext& context) const final {
-    return module->getOrInsertFunction(name,
-                                       /*ret_type=*/llvm::Type::getDoubleTy(context),
-                                       /*args=*/llvm::Type::getDoubleTy(context));
-  }
-};
-
-struct GpuExpFunction : public GpuFunctionDefinition {
-  GpuExpFunction() : GpuFunctionDefinition("Exp") {}
-
-  llvm::FunctionCallee getFunction(llvm::Module* module,
-                                   llvm::LLVMContext& context) const final {
-    return module->getOrInsertFunction(name,
-                                       /*ret_type=*/llvm::Type::getDoubleTy(context),
-                                       /*args=*/llvm::Type::getDoubleTy(context));
+                                   llvm::LLVMContext& context) const {
+    return module->getOrInsertFunction(name_, getTy<TYPES>(context)...);
   }
 };
 
 static const std::unordered_map<std::string, std::shared_ptr<GpuFunctionDefinition>>
-    gpu_replacement_functions{{"pow", std::make_shared<GpuPowerFunction>()},
-                              {"atan", std::make_shared<GpuAtanFunction>()},
-                              {"log", std::make_shared<GpuLogFunction>()},
-                              {"tan", std::make_shared<GpuTanFunction>()},
-                              {"exp", std::make_shared<GpuExpFunction>()}};
-
+    gpu_replacement_functions{
+        {"asin", std::make_shared<GpuFunction<double, double>>("Asin")},
+        {"atanh", std::make_shared<GpuFunction<double, double>>("Atanh")},
+        {"atan", std::make_shared<GpuFunction<double, double>>("Atan")},
+        {"cosh", std::make_shared<GpuFunction<double, double>>("Cosh")},
+        {"cos", std::make_shared<GpuFunction<double, double>>("Cos")},
+        {"exp", std::make_shared<GpuFunction<double, double>>("Exp")},
+        {"log", std::make_shared<GpuFunction<double, double>>("ln")},
+        {"pow", std::make_shared<GpuFunction<double, double, double>>("power")},
+        {"sinh", std::make_shared<GpuFunction<double, double>>("Sinh")},
+        {"sin", std::make_shared<GpuFunction<double, double>>("Sin")},
+        {"sqrt", std::make_shared<GpuFunction<double, double>>("Sqrt")},
+        {"tan", std::make_shared<GpuFunction<double, double>>("Tan")}};
 }  // namespace
 
 std::vector<std::string> CgenState::gpuFunctionsToReplace(llvm::Function* fn) {
@@ -309,8 +285,7 @@ void CgenState::replaceFunctionForGpu(const std::string& fcn_to_replace,
   }
   const auto& gpu_fcn_obj = map_it->second;
   CHECK(gpu_fcn_obj);
-  const auto& gpu_fcn_name = gpu_fcn_obj->name;
-  VLOG(1) << "Replacing " << fcn_to_replace << " with " << gpu_fcn_name
+  VLOG(1) << "Replacing " << fcn_to_replace << " with " << gpu_fcn_obj->name_
           << " for parent function " << fn->getName().str();
 
   for (auto& basic_block : *fn) {

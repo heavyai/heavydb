@@ -16,9 +16,10 @@
 
 #include "TestHelpers.h"
 
-#include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
-#include "../QueryRunner/QueryRunner.h"
-#include "../Shared/scope.h"
+#include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
+#include "QueryRunner/QueryRunner.h"
+#include "Shared/StringTransform.h"
+#include "Shared/scope.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -1018,18 +1019,32 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
         inline_fp_null_value<double>(),
         v<double>(run_simple_agg(
             "SELECT ST_Y(ST_Point(id, null)) FROM geospatial_test WHERE id = 2;", dt)));
-    EXPECT_EQ(
-        "POINT (222638.981556 222684.208469473)",
-        boost::get<std::string>(v<NullableString>(run_simple_agg(
-            R"(SELECT ST_Transform(ST_SetSRID(ST_Point(id,id),4326), 900913) FROM geospatial_test WHERE id = 2;)",
-            dt,
-            false))));
-    EXPECT_EQ(
-        "POINT (222638.977720049 222684.204631182)",
-        boost::get<std::string>(v<NullableString>(run_simple_agg(
-            R"(SELECT ST_Transform(gp4326, 900913) FROM geospatial_test WHERE id = 2;)",
-            dt,
-            false))));
+    EXPECT_NEAR(222638.981586547,
+                v<double>(run_simple_agg(
+                    "SELECT ST_X(ST_Transform(ST_SetSRID(ST_Point(id,id),4326), 900913)) "
+                    "FROM geospatial_test WHERE id = 2;",
+                    dt,
+                    false)),
+                10e-8);
+    EXPECT_NEAR(222684.208505543,
+                v<double>(run_simple_agg(
+                    "SELECT ST_Y(ST_Transform(ST_SetSRID(ST_Point(id,id),4326), 900913)) "
+                    "FROM geospatial_test WHERE id = 2;",
+                    dt,
+                    false)),
+                10e-8);
+    EXPECT_NEAR(222638.977750596,
+                v<double>(run_simple_agg("SELECT ST_X(ST_Transform(gp4326, 900913)) FROM "
+                                         "geospatial_test WHERE id = 2;",
+                                         dt,
+                                         false)),
+                10e-8);
+    EXPECT_NEAR(222684.204667253,
+                v<double>(run_simple_agg("SELECT ST_Y(ST_Transform(gp4326, 900913)) FROM "
+                                         "geospatial_test WHERE id = 2;",
+                                         dt,
+                                         false)),
+                10e-8);
     SKIP_ON_AGGREGATOR({
       // ensure transforms run on GPU. transforms use math functions which need to be
       // specialized for GPU
@@ -1049,25 +1064,25 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
       }
     });
     EXPECT_DOUBLE_EQ(
-        double(222638.977720049),
+        222638.97775059601,
         v<double>(run_simple_agg(
             R"(SELECT ST_X(ST_Transform(gp4326, 900913)) FROM geospatial_test WHERE id = 2;)",
             dt,
             false)));
     EXPECT_DOUBLE_EQ(
-        double(1.796630568489136e-05),
+        1.7966305682390428e-05,
         v<double>(run_simple_agg(
             R"(SELECT ST_X(ST_Transform(gp900913, 4326)) FROM geospatial_test WHERE id = 2;)",
             dt,
             false)));
     EXPECT_DOUBLE_EQ(
-        double(1.796630569117497e-05),
+        1.7966305676964112e-05,
         v<double>(run_simple_agg(
             R"(SELECT ST_Y(ST_Transform(gp900913, 4326)) FROM geospatial_test WHERE id = 2;)",
             dt,
             false)));
     EXPECT_EQ(
-        "POINT (0.000017966305685 0.000017966305691)",
+        "POINT (0.000017966305682 0.000017966305677)",
         boost::get<std::string>(v<NullableString>(run_simple_agg(
             R"(SELECT ST_Transform(gp900913, 4326) FROM geospatial_test WHERE id = 2;)",
             dt,
@@ -2454,6 +2469,77 @@ TEST_P(GeoSpatialMultiFragTestTablesFixture, LoopJoin) {
             R"(SELECT MAX(ST_DISTANCE(t1.pt, t2.pt)) FROM geospatial_multi_frag_test t1, geospatial_multi_frag_test t2;)",
             dt)),
         static_cast<double>(0.01));
+  }
+}
+
+// For each of the 120 UTM (curvi-)rectangular zones, test 4326 <-> UTM transformations
+// on each of the 4 corners and the center point along the equator.
+TEST(GeoSpatial, UTMTransform) {
+  constexpr double eps = 1e-10;
+  struct Point {
+    double x;
+    double y;
+  };
+  auto const query = [](char dim, Point p, auto from, auto to) {
+    std::ostringstream oss;
+    oss.precision(17);
+    oss << "SELECT ST_" << dim << "(ST_Transform(ST_SetSRID(ST_Point(" << p.x << ','
+        << p.y << "), " << from << "), " << to << "));";
+    return oss.str();
+  };
+  auto const transform_point = [&](Point p, auto from, auto to, auto dt) {
+    return Point{v<double>(run_simple_agg(query('X', p, from, to), dt, false)),
+                 v<double>(run_simple_agg(query('Y', p, from, to), dt, false))};
+  };
+  // Given (lon,lat) and (utm_x,utm_y,srid) test transformations in both directions.
+  // Triangulate results with the 900913 srid.
+  auto run_tests = [&](Point wgs, Point utm, unsigned utm_srid, auto dt) {
+    Point const wgs_utm = transform_point(wgs, 4326, utm_srid, dt);
+    ASSERT_NEAR(utm.x, wgs_utm.x, eps * std::fabs(utm.x));
+    ASSERT_NEAR(utm.y, wgs_utm.y, eps * std::fabs(utm.y));
+
+    Point const utm_wgs = transform_point(utm, utm_srid, 4326, dt);
+    ASSERT_NEAR(wgs.x, utm_wgs.x, wgs.x ? eps * std::fabs(wgs.x) : 1e-14);
+    ASSERT_NEAR(wgs.y, utm_wgs.y, eps * std::fabs(wgs.y));
+
+    Point const web = transform_point(wgs, 4326, 900913, dt);
+    Point const utm_web = transform_point(utm, utm_srid, 900913, dt);
+    ASSERT_NEAR(web.x, utm_web.x, web.x ? eps * std::fabs(web.x) : 1e-9);
+    ASSERT_NEAR(web.y, utm_web.y, eps * std::fabs(web.y));
+
+    Point const wgs_web_utm = transform_point(web, 900913, utm_srid, dt);
+    ASSERT_NEAR(utm.x, wgs_web_utm.x, eps * std::fabs(utm.x));
+    ASSERT_NEAR(utm.y, wgs_web_utm.y, utm.y ? eps * std::fabs(utm.y) : 1e-8);
+  };
+  for (auto const dt : {ExecutorDeviceType::GPU, ExecutorDeviceType::CPU}) {
+    SKIP_NO_GPU();
+    for (bool const is_south : {false, true}) {
+      for (unsigned zone = 1; zone <= 60; ++zone) {
+        unsigned const utm_srid = 32600 + is_south * 100 + zone;
+        int const x = ((zone - 1u) % 60u) * 6 - 177;  // [-177, 177]
+        double const E0 = 500e3;                      // UTM False easting
+        double const N0 = is_south ? 10e6 : 0;        // UTM False northing
+        // Test values for each zone's equatorial/meridian point to/from UTM coordinates.
+        run_tests({x + 0., 0.}, {E0, N0}, utm_srid, dt);
+        // Test UTM zone boundary points along equator.
+        constexpr double x0 = 333978.55691946047591;
+        run_tests({x - 3., 0.}, {E0 - x0, N0}, utm_srid, dt);
+        run_tests({x + 3., 0.}, {E0 + x0, N0}, utm_srid, dt);
+        if (is_south) {
+          // Test points along southern boundary of each UTM zone.
+          constexpr double x80s = 58132.215132799166895;
+          constexpr double y80s = 1116915.0440516974777;
+          run_tests({x - 3., -80.}, {E0 - x80s, y80s}, utm_srid, dt);
+          run_tests({x + 3., -80.}, {E0 + x80s, y80s}, utm_srid, dt);
+        } else {
+          // Test points along northern boundary of each UTM zone.
+          constexpr double x84n = 34994.655061136436416;
+          constexpr double y84n = 9329005.1824474334717;
+          run_tests({x - 3., 84.}, {E0 - x84n, y84n}, utm_srid, dt);
+          run_tests({x + 3., 84.}, {E0 + x84n, y84n}, utm_srid, dt);
+        }
+      }
+    }
   }
 }
 

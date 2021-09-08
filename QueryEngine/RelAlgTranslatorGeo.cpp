@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#include "QueryEngine/RelAlgTranslator.h"
-
 #include <memory>
 #include <vector>
 
 #include "Geospatial/Compression.h"
 #include "Geospatial/Types.h"
 #include "QueryEngine/ExpressionRewrite.h"
+#include "QueryEngine/GeoOperators/Transform.h"
+#include "QueryEngine/RelAlgTranslator.h"
 
 std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColumn(
     const RexInput* rex_input,
@@ -300,7 +300,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       } else {
         throw QueryNotSupported(rex_function->getName() + ": expecting integer SRID");
       }
-      if (srid != 900913 && ((use_geo_expressions || is_projection) && srid != 4326)) {
+      if (srid != 900913 && ((use_geo_expressions || is_projection) && srid != 4326 &&
+                             !spatial_type::Transform::isUtm(srid))) {
         throw QueryNotSupported(rex_function->getName() + ": unsupported output SRID " +
                                 std::to_string(srid));
       }
