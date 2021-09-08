@@ -132,7 +132,9 @@ class WindowFunctionContext {
                                    const int32_t* partition_indices,
                                    const bool nulls_first);
 
-  void computePartition(
+  void computePartition(const size_t partition_idx, int64_t* output_for_partition_buff);
+
+  void computePartitionBuffer(
       int64_t* output_for_partition_buff,
       const size_t partition_size,
       const size_t off,

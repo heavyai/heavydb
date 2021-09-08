@@ -27,6 +27,19 @@
 #include "Shared/checked_alloc.h"
 #include "Shared/funcannotations.h"
 
+#ifdef HAVE_TBB
+#include <tbb/parallel_for.h>
+#include <tbb/parallel_sort.h>
+#else
+#include <thrust/sort.h>
+#endif
+
+bool g_enable_parallel_window_function_compute{true};
+size_t g_parallel_window_function_compute_threshold{1 << 12};  // 4096
+
+bool g_enable_parallel_window_function_sort{true};
+size_t g_parallel_window_function_sort_threshold{1 << 10};  // 1024
+
 // Non-partitioned version (no join table provided)
 WindowFunctionContext::WindowFunctionContext(
     const Analyzer::WindowFunction* window_func,
@@ -438,7 +451,74 @@ bool window_function_requires_peer_handling(const Analyzer::WindowFunction* wind
   }
 }
 
+void WindowFunctionContext::computePartition(const size_t partition_idx,
+                                             int64_t* output_for_partition_buff) {
+  const size_t partition_size{static_cast<size_t>(counts()[partition_idx])};
+  if (partition_size == 0) {
+    return;
+  }
+  const auto offset = offsets()[partition_idx];
+  std::iota(
+      output_for_partition_buff, output_for_partition_buff + partition_size, int64_t(0));
+  std::vector<Comparator> comparators;
+  const auto& order_keys = window_func_->getOrderKeys();
+  const auto& collation = window_func_->getCollation();
+  CHECK_EQ(order_keys.size(), collation.size());
+  for (size_t order_column_idx = 0; order_column_idx < order_columns_.size();
+       ++order_column_idx) {
+    auto order_column_buffer = order_columns_[order_column_idx];
+    const auto order_col =
+        dynamic_cast<const Analyzer::ColumnVar*>(order_keys[order_column_idx].get());
+    CHECK(order_col);
+    const auto& order_col_collation = collation[order_column_idx];
+    const auto asc_comparator = makeComparator(order_col,
+                                               order_column_buffer,
+                                               payload() + offset,
+                                               order_col_collation.nulls_first);
+    auto comparator = asc_comparator;
+    if (order_col_collation.is_desc) {
+      comparator = [asc_comparator](const int64_t lhs, const int64_t rhs) {
+        return asc_comparator(rhs, lhs);
+      };
+    }
+    comparators.push_back(comparator);
+  }
+  const auto col_tuple_comparator = [&comparators](const int64_t lhs, const int64_t rhs) {
+    for (const auto& comparator : comparators) {
+      if (comparator(lhs, rhs)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  if (g_enable_parallel_window_function_sort &&
+      partition_size >= g_parallel_window_function_sort_threshold) {
+#ifdef HAVE_TBB
+    tbb::parallel_sort(output_for_partition_buff,
+                       output_for_partition_buff + partition_size,
+                       col_tuple_comparator);
+#else
+    thrust::sort(output_for_partition_buff,
+                 output_for_partition_buff + partition_size,
+                 col_tuple_comparator);
+#endif
+  } else {
+    std::sort(output_for_partition_buff,
+              output_for_partition_buff + partition_size,
+              col_tuple_comparator);
+  }
+  computePartitionBuffer(output_for_partition_buff,
+                         partition_size,
+                         offset,
+                         window_func_,
+                         col_tuple_comparator);
+}
+
+// static std::mutex print_mutex;
+
 void WindowFunctionContext::compute() {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(!output_);
   output_ = static_cast<int8_t*>(row_set_mem_owner_->allocate(
       elem_count_ * window_function_buffer_element_size(window_func_->getKind()),
@@ -450,72 +530,85 @@ void WindowFunctionContext::compute() {
     }
   }
   std::unique_ptr<int64_t[]> scratchpad(new int64_t[elem_count_]);
-  int64_t off = 0;
   const size_t partition_count{partitionCount()};
-  for (size_t i = 0; i < partition_count; ++i) {
-    auto partition_size = counts()[i];
-    if (partition_size == 0) {
-      continue;
-    }
-    auto output_for_partition_buff = scratchpad.get() + offsets()[i];
-    std::iota(output_for_partition_buff,
-              output_for_partition_buff + partition_size,
-              int64_t(0));
-    std::vector<Comparator> comparators;
-    const auto& order_keys = window_func_->getOrderKeys();
-    const auto& collation = window_func_->getCollation();
-    CHECK_EQ(order_keys.size(), collation.size());
-    for (size_t order_column_idx = 0; order_column_idx < order_columns_.size();
-         ++order_column_idx) {
-      auto order_column_buffer = order_columns_[order_column_idx];
-      const auto order_col =
-          dynamic_cast<const Analyzer::ColumnVar*>(order_keys[order_column_idx].get());
-      CHECK(order_col);
-      const auto& order_col_collation = collation[order_column_idx];
-      const auto asc_comparator = makeComparator(order_col,
-                                                 order_column_buffer,
-                                                 payload() + offsets()[i],
-                                                 order_col_collation.nulls_first);
-      auto comparator = asc_comparator;
-      if (order_col_collation.is_desc) {
-        comparator = [asc_comparator](const int64_t lhs, const int64_t rhs) {
-          return asc_comparator(rhs, lhs);
-        };
-      }
-      comparators.push_back(comparator);
-    }
-    const auto col_tuple_comparator = [&comparators](const int64_t lhs,
-                                                     const int64_t rhs) {
-      for (const auto& comparator : comparators) {
-        if (comparator(lhs, rhs)) {
-          return true;
-        }
-      }
-      return false;
-    };
-    std::sort(output_for_partition_buff,
-              output_for_partition_buff + partition_size,
-              col_tuple_comparator);
-    computePartition(output_for_partition_buff,
-                     partition_size,
-                     off,
-                     window_func_,
-                     col_tuple_comparator);
-    if (window_function_is_value(window_func_->getKind()) ||
-        window_function_is_aggregate(window_func_->getKind())) {
-      off += partition_size;
-    }
-  }
-  if (window_function_is_value(window_func_->getKind()) ||
-      window_function_is_aggregate(window_func_->getKind())) {
-    CHECK_EQ(static_cast<size_t>(off), elem_count_);
-  }
-  auto output_i64 = reinterpret_cast<int64_t*>(output_);
-  if (window_function_is_aggregate(window_func_->getKind())) {
-    std::copy(scratchpad.get(), scratchpad.get() + elem_count_, output_i64);
+#ifdef HAVE_TBB
+  const bool should_parallelize{g_enable_parallel_window_function_compute &&
+                                elem_count_ >=
+                                    g_parallel_window_function_compute_threshold};
+#else
+  const bool should_parallelize{false};
+#endif
+
+  if (should_parallelize) {
+#ifdef HAVE_TBB
+    auto timer = DEBUG_TIMER("Window Function Parallel Partition Compute");
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, partition_count),
+                      [&](const tbb::blocked_range<size_t>& r) {
+                        const size_t r_end_idx = r.end();
+                        for (size_t partition_idx = r.begin(); partition_idx != r_end_idx;
+                             ++partition_idx) {
+                          computePartition(partition_idx,
+                                           scratchpad.get() + offsets()[partition_idx]);
+                        }
+                      });
+#else
+    UNREACHABLE();  // We only allow parallel_sort to be true if HAVE_TBB is defined
+#endif  // HAVE_TBB
   } else {
-    for (size_t i = 0; i < elem_count_; ++i) {
-      output_i64[payload()[i]] = scratchpad[i];
+    auto timer = DEBUG_TIMER("Window Function Non-Parallelized Partition Compute");
+    for (size_t partition_idx = 0; partition_idx != partition_count; ++partition_idx) {
+      computePartition(partition_idx, scratchpad.get() + offsets()[partition_idx]);
+    }
+  }
+
+  auto output_i64 = reinterpret_cast<int64_t*>(output_);
+
+  if (should_parallelize) {
+#ifdef HAVE_TBB
+    const size_t max_elems_per_thread = g_parallel_window_function_compute_threshold * 4;
+    if (window_function_is_aggregate(window_func_->getKind())) {
+      auto timer = DEBUG_TIMER("Window Function Aggregate Payload Copy Parallelized");
+      const size_t num_threads =
+          (elem_count_ + max_elems_per_thread - 1) / max_elems_per_thread;
+      const size_t grain_size{1};
+      tbb::parallel_for(tbb::blocked_range<size_t>(0, num_threads, grain_size),
+                        [&](const tbb::blocked_range<size_t>& r) {
+                          const size_t end_thread_id = r.end();
+                          for (size_t thread_id = r.begin(); thread_id < end_thread_id;
+                               ++thread_id) {
+                            const size_t start_elem = thread_id * max_elems_per_thread;
+                            const size_t end_elem =
+                                std::min(start_elem + max_elems_per_thread, elem_count_);
+                            std::copy(scratchpad.get() + start_elem,
+                                      scratchpad.get() + end_elem,
+                                      output_i64 + start_elem);
+                          }
+                        });
+    } else {
+      auto timer = DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Parallelized");
+      tbb::parallel_for(
+          tbb::blocked_range<size_t>(0, elem_count_, max_elems_per_thread),
+          [&](const tbb::blocked_range<size_t>& r) {
+            const size_t r_end_idx = r.end();
+            for (size_t i = r.begin(); i != r_end_idx; ++i) {
+              output_i64[payload()[i]] = scratchpad[i];
+            }
+          },
+          tbb::simple_partitioner());
+    }
+#else
+    UNREACHABLE();  // should_parallelize can only be true if HAVE_TBB defined
+#endif  // HAVE_TBB
+  } else {
+    if (window_function_is_aggregate(window_func_->getKind())) {
+      auto timer = DEBUG_TIMER("Window Function Aggregate Payload Copy Non-Parallelized");
+      std::copy(scratchpad.get(), scratchpad.get() + elem_count_, output_i64);
+    } else {
+      auto timer =
+          DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Non-Parallelized");
+      for (size_t i = 0; i < elem_count_; ++i) {
+        output_i64[payload()[i]] = scratchpad[i];
+      }
     }
   }
 }
@@ -674,7 +767,7 @@ WindowFunctionContext::makeComparator(const Analyzer::ColumnVar* col_var,
   throw std::runtime_error("Type not supported yet");
 }
 
-void WindowFunctionContext::computePartition(
+void WindowFunctionContext::computePartitionBuffer(
     int64_t* output_for_partition_buff,
     const size_t partition_size,
     const size_t off,
