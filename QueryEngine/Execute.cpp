@@ -1462,6 +1462,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     };
     auto query_comp_desc_owned = std::make_unique<QueryCompilationDescriptor>();
     std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
+
     if (eo.executor_type == ExecutorType::Native) {
       try {
         INJECT_TIMER(query_step_compilation);
@@ -3042,7 +3043,8 @@ int32_t Executor::executePlanWithoutGroupBy(
       error_code == Executor::ERR_OUT_OF_TIME ||
       error_code == Executor::ERR_INTERRUPTED ||
       error_code == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES ||
-      error_code == Executor::ERR_GEOS) {
+      error_code == Executor::ERR_GEOS ||
+      error_code == Executor::ERR_WIDTH_BUCKET_INVALID_ARGUMENT) {
     return error_code;
   }
   if (ra_exe_unit.estimator) {
@@ -3310,7 +3312,8 @@ int32_t Executor::executePlanWithGroupBy(
       error_code == Executor::ERR_OUT_OF_TIME ||
       error_code == Executor::ERR_INTERRUPTED ||
       error_code == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES ||
-      error_code == Executor::ERR_GEOS) {
+      error_code == Executor::ERR_GEOS ||
+      error_code == Executor::ERR_WIDTH_BUCKET_INVALID_ARGUMENT) {
     return error_code;
   }
 

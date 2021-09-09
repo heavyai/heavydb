@@ -72,6 +72,10 @@ class ScalarExprVisitor {
     if (sample_ratio) {
       return visitSampleRatio(sample_ratio);
     }
+    const auto width_bucket = dynamic_cast<const Analyzer::WidthBucketExpr*>(expr);
+    if (width_bucket) {
+      return visitWidthBucket(width_bucket);
+    }
     const auto lower = dynamic_cast<const Analyzer::LowerExpr*>(expr);
     if (lower) {
       return visitLower(lower);
@@ -79,6 +83,10 @@ class ScalarExprVisitor {
     const auto cardinality = dynamic_cast<const Analyzer::CardinalityExpr*>(expr);
     if (cardinality) {
       return visitCardinality(cardinality);
+    }
+    const auto width_bucket_expr = dynamic_cast<const Analyzer::WidthBucketExpr*>(expr);
+    if (width_bucket_expr) {
+      return visitWidthBucket(width_bucket_expr);
     }
     const auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
     if (like_expr) {
@@ -239,6 +247,15 @@ class ScalarExprVisitor {
     if (regexp->get_escape_expr()) {
       result = aggregateResult(result, visit(regexp->get_escape_expr()));
     }
+    return result;
+  }
+
+  virtual T visitWidthBucket(const Analyzer::WidthBucketExpr* width_bucket_expr) const {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(width_bucket_expr->get_target_value()));
+    result = aggregateResult(result, visit(width_bucket_expr->get_lower_bound()));
+    result = aggregateResult(result, visit(width_bucket_expr->get_upper_bound()));
+    result = aggregateResult(result, visit(width_bucket_expr->get_partition_count()));
     return result;
   }
 

@@ -140,6 +140,8 @@ class ExpressionRange {
 
   void setHasNulls() { has_nulls_ = true; }
 
+  void setNulls(bool n) { has_nulls_ = n; }
+
   ExpressionRange operator+(const ExpressionRange& other) const;
   ExpressionRange operator-(const ExpressionRange& other) const;
   ExpressionRange operator*(const ExpressionRange& other) const;

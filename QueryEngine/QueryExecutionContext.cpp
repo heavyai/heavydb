@@ -777,7 +777,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
       query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection) {
     query_buffers_->compactProjectionBuffersCpu(query_mem_desc_, total_matched_init);
   }
-
   return out_vec;
 }
 

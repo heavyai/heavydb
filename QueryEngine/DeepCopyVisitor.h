@@ -107,6 +107,15 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
                                           escape_expr ? visit(escape_expr) : nullptr);
   }
 
+  RetType visitWidthBucket(
+      const Analyzer::WidthBucketExpr* width_bucket_expr) const override {
+    return makeExpr<Analyzer::WidthBucketExpr>(
+        visit(width_bucket_expr->get_target_value()),
+        visit(width_bucket_expr->get_lower_bound()),
+        visit(width_bucket_expr->get_upper_bound()),
+        visit(width_bucket_expr->get_partition_count()));
+  }
+
   RetType visitCaseExpr(const Analyzer::CaseExpr* case_expr) const override {
     std::list<std::pair<RetType, RetType>> new_list;
     for (auto p : case_expr->get_expr_pair_list()) {

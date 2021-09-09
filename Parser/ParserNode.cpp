@@ -716,6 +716,27 @@ std::shared_ptr<Analyzer::Expr> LikelihoodExpr::get(
   return result;
 }
 
+std::shared_ptr<Analyzer::Expr> WidthBucketExpr::analyze(
+    const Catalog_Namespace::Catalog& catalog,
+    Analyzer::Query& query,
+    TlistRefType allow_tlist_ref) const {
+  auto target_value = target_value_->analyze(catalog, query, allow_tlist_ref);
+  auto lower_bound = lower_bound_->analyze(catalog, query, allow_tlist_ref);
+  auto upper_bound = upper_bound_->analyze(catalog, query, allow_tlist_ref);
+  auto partition_count = partition_count_->analyze(catalog, query, allow_tlist_ref);
+  return WidthBucketExpr::get(target_value, lower_bound, upper_bound, partition_count);
+}
+
+std::shared_ptr<Analyzer::Expr> WidthBucketExpr::get(
+    std::shared_ptr<Analyzer::Expr> target_value,
+    std::shared_ptr<Analyzer::Expr> lower_bound,
+    std::shared_ptr<Analyzer::Expr> upper_bound,
+    std::shared_ptr<Analyzer::Expr> partition_count) {
+  std::shared_ptr<Analyzer::Expr> result = makeExpr<Analyzer::WidthBucketExpr>(
+      target_value, lower_bound, upper_bound, partition_count);
+  return result;
+}
+
 std::shared_ptr<Analyzer::Expr> ExistsExpr::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
@@ -1494,6 +1515,19 @@ std::string RegexpExpr::to_string() const {
   if (escape_string_ != nullptr) {
     str += " ESCAPE " + escape_string_->to_string();
   }
+  return str;
+}
+
+std::string WidthBucketExpr::to_string() const {
+  std::string str = " WIDTH_BUCKET ";
+  str += target_value_->to_string();
+  str += " ";
+  str += lower_bound_->to_string();
+  str += " ";
+  str += upper_bound_->to_string();
+  str += " ";
+  str += partition_count_->to_string();
+  str += " ";
   return str;
 }
 

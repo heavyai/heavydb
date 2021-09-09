@@ -1023,6 +1023,114 @@ class RegexpExpr : public Expr {
 };
 
 /*
+ * @type WidthBucketExpr
+ * @brief expression for width_bucket functions.
+ */
+class WidthBucketExpr : public Expr {
+ public:
+  WidthBucketExpr(const std::shared_ptr<Analyzer::Expr> target_value,
+                  const std::shared_ptr<Analyzer::Expr> lower_bound,
+                  const std::shared_ptr<Analyzer::Expr> upper_bound,
+                  const std::shared_ptr<Analyzer::Expr> partition_count)
+      : Expr(kINT, target_value->get_type_info().get_notnull())
+      , target_value_(target_value)
+      , lower_bound_(lower_bound)
+      , upper_bound_(upper_bound)
+      , partition_count_(partition_count)
+      , constant_expr_(false)
+      , skip_out_of_bound_check_(false) {}
+  const Expr* get_target_value() const { return target_value_.get(); }
+  const Expr* get_lower_bound() const { return lower_bound_.get(); }
+  const Expr* get_upper_bound() const { return upper_bound_.get(); }
+  const Expr* get_partition_count() const { return partition_count_.get(); }
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+  void group_predicates(std::list<const Expr*>& scan_predicates,
+                        std::list<const Expr*>& join_predicates,
+                        std::list<const Expr*>& const_predicates) const override;
+  void collect_rte_idx(std::set<int>& rte_idx_set) const override {
+    target_value_->collect_rte_idx(rte_idx_set);
+  }
+  void collect_column_var(
+      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>&
+          colvar_set,
+      bool include_agg) const override {
+    target_value_->collect_column_var(colvar_set, include_agg);
+  }
+  std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
+    return makeExpr<WidthBucketExpr>(target_value_->rewrite_with_targetlist(tlist),
+                                     lower_bound_,
+                                     upper_bound_,
+                                     partition_count_);
+  }
+  std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
+    return makeExpr<WidthBucketExpr>(target_value_->rewrite_with_child_targetlist(tlist),
+                                     lower_bound_,
+                                     upper_bound_,
+                                     partition_count_);
+  }
+  std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
+    return makeExpr<WidthBucketExpr>(target_value_->rewrite_agg_to_var(tlist),
+                                     lower_bound_,
+                                     upper_bound_,
+                                     partition_count_);
+  }
+  double get_bound_val(const Analyzer::Expr* bound_expr) const;
+  int32_t get_partition_count_val() const;
+  template <typename T>
+  int32_t compute_bucket(T target_const_val, SQLTypeInfo& ti) const {
+    // this utility function is useful for optimizing expression range decision
+    // for an expression depending on width_bucket expr
+    T null_val = ti.is_integer() ? inline_int_null_val(ti) : inline_fp_null_val(ti);
+    double lower_bound_val = get_bound_val(lower_bound_.get());
+    double upper_bound_val = get_bound_val(upper_bound_.get());
+    auto partition_count_val = get_partition_count_val();
+    if (target_const_val == null_val) {
+      return INT32_MIN;
+    }
+    float res;
+    if (lower_bound_val < upper_bound_val) {
+      if (target_const_val < lower_bound_val) {
+        return 0;
+      } else if (target_const_val >= upper_bound_val) {
+        return partition_count_val + 1;
+      }
+      double dividend = upper_bound_val - lower_bound_val;
+      res = ((partition_count_val * (target_const_val - lower_bound_val)) / dividend) + 1;
+    } else {
+      if (target_const_val > lower_bound_val) {
+        return 0;
+      } else if (target_const_val <= upper_bound_val) {
+        return partition_count_val + 1;
+      }
+      double dividend = lower_bound_val - upper_bound_val;
+      res = ((partition_count_val * (lower_bound_val - target_const_val)) / dividend) + 1;
+    }
+    return res;
+  }
+  bool operator==(const Expr& rhs) const override;
+  std::string toString() const override;
+  void find_expr(bool (*f)(const Expr*),
+                 std::list<const Expr*>& expr_list) const override;
+  bool can_skip_out_of_bound_check() const { return skip_out_of_bound_check_; }
+  void skip_out_of_bound_check() const { skip_out_of_bound_check_ = true; }
+  void set_constant_expr() const { constant_expr_ = true; }
+  bool is_constant_expr() const { return constant_expr_; }
+
+ private:
+  std::shared_ptr<Analyzer::Expr> target_value_;     // target value expression
+  std::shared_ptr<Analyzer::Expr> lower_bound_;      // lower_bound
+  std::shared_ptr<Analyzer::Expr> upper_bound_;      // upper_bound
+  std::shared_ptr<Analyzer::Expr> partition_count_;  // partition_count
+  // true if lower, upper and partition count exprs are constant
+  mutable bool constant_expr_;
+  // true if we can skip oob check and is determined within compile time
+  mutable bool skip_out_of_bound_check_;
+};
+
+/*
  * @type LikelihoodExpr
  * @brief expression for LIKELY and UNLIKELY boolean identity functions.
  */

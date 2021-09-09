@@ -117,6 +117,10 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (regexp_expr) {
     return {codegen(regexp_expr, co)};
   }
+  auto width_bucket_expr = dynamic_cast<const Analyzer::WidthBucketExpr*>(expr);
+  if (width_bucket_expr) {
+    return {codegen(width_bucket_expr, co)};
+  }
   auto likelihood_expr = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
   if (likelihood_expr) {
     return {codegen(likelihood_expr->get_arg(), fetch_columns, co)};
@@ -233,6 +237,256 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::SampleRatioExpr* expr,
     ret = nullcheck_codegen->finalize(ll_bool(false, cgen_state_->context_), ret);
   }
   return ret;
+}
+
+llvm::Value* CodeGenerator::codegen(const Analyzer::WidthBucketExpr* expr,
+                                    const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+  auto target_value_expr = expr->get_target_value();
+  auto lower_bound_expr = expr->get_lower_bound();
+  auto upper_bound_expr = expr->get_upper_bound();
+  auto partition_count_expr = expr->get_partition_count();
+  CHECK(target_value_expr);
+  CHECK(lower_bound_expr);
+  CHECK(upper_bound_expr);
+  CHECK(partition_count_expr);
+
+  llvm::Value* computed_bucket_lv{nullptr};
+  auto is_constant_expr = [](const Analyzer::Expr* expr) {
+    auto target_expr = expr;
+    if (auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr)) {
+      if (cast_expr->get_optype() == SQLOps::kCAST) {
+        target_expr = cast_expr->get_operand();
+      }
+    }
+    // there are more complex constant expr like 1+2, 1/2*3, and so on
+    // but when considering a typical usage of width_bucket function
+    // it is sufficient to consider a singleton constant expr
+    auto constant_expr = dynamic_cast<const Analyzer::Constant*>(target_expr);
+    if (constant_expr) {
+      return true;
+    }
+    return false;
+  };
+  if (is_constant_expr(lower_bound_expr) && is_constant_expr(upper_bound_expr) &&
+      is_constant_expr(partition_count_expr)) {
+    expr->set_constant_expr();
+  }
+  // compute width_bucket's expresn range and check the possibility of avoiding oob check
+  auto col_range =
+      getExpressionRange(expr,
+                         plan_state_->query_infos_,
+                         executor_,
+                         boost::make_optional(plan_state_->getSimpleQuals()));
+  // check whether target_expr is valid
+  if (col_range.getType() == ExpressionRangeType::Integer &&
+      !expr->can_skip_out_of_bound_check() && col_range.getIntMin() > 0 &&
+      col_range.getIntMax() <= expr->get_partition_count_val()) {
+    // check whether target_col is not-nullable or has filter expr on it
+    if (!col_range.hasNulls()) {
+      // Even if the target_expr has its filter expression, target_col_range may exactly
+      // the same with the col_range of the target_expr's operand col,
+      // i.e., SELECT WIDTH_BUCKET(v1, 1, 10, 10) FROM T WHERE v1 != 1;
+      // In that query, col_range of v1 with/without considering the filter expression
+      // v1 != 1 have exactly the same col ranges, so we cannot recognize the existence
+      // of the filter expression based on them. Also, is (not) null is located in
+      // FilterNode, so we cannot trace it in here.
+      // todo (yoonmin): relax this to allow skipping oob check more cases
+      expr->skip_out_of_bound_check();
+    }
+  }
+  if (expr->is_constant_expr()) {
+    computed_bucket_lv = codegenConstantWidthBucketExpr(expr, co);
+  } else {
+    computed_bucket_lv = codegenWidthBucketExpr(expr, co);
+  }
+  CHECK(computed_bucket_lv);
+  // return the largest integer equal to or less than the computed bucket number
+  // truncate double type computed bucket number
+  // the reason of casting it to float is the restriction of fptrunc func
+  // fptrunc value to ty2 --> The size of value must be larger than the size of ty2
+  auto truncated = cgen_state_->ir_builder_.CreateFPTrunc(
+      computed_bucket_lv, llvm::Type::getFloatTy(cgen_state_->context_), "truncated");
+  // cast 4-byte fp type to int32_t type
+  return cgen_state_->ir_builder_.CreateFPToSI(
+      truncated, llvm::Type::getInt32Ty(cgen_state_->context_), "bucket_number");
+}
+
+llvm::Value* CodeGenerator::codegenConstantWidthBucketExpr(
+    const Analyzer::WidthBucketExpr* expr,
+    const CompilationOptions& co) {
+  auto target_value_expr = expr->get_target_value();
+  auto lower_bound_expr = expr->get_lower_bound();
+  auto upper_bound_expr = expr->get_upper_bound();
+  auto partition_count_expr = expr->get_partition_count();
+
+  auto num_partitions = expr->get_partition_count_val();
+  if (num_partitions < 1 || num_partitions > INT32_MAX) {
+    throw std::runtime_error(
+        "PARTITION_COUNT expression of width_bucket function should be in a valid "
+        "range: 0 < PARTITION_COUNT <= 2147483647");
+  }
+  double lower = expr->get_bound_val(lower_bound_expr);
+  double upper = expr->get_bound_val(upper_bound_expr);
+  if (lower == upper) {
+    throw std::runtime_error(
+        "LOWER_BOUND and UPPER_BOUND expressions of width_bucket function cannot have "
+        "the same constant value");
+  }
+  if (lower == NULL_DOUBLE || upper == NULL_DOUBLE) {
+    throw std::runtime_error(
+        "Both LOWER_BOUND and UPPER_BOUND of width_bucket function should be finite "
+        "numeric constants.");
+  }
+
+  bool reversed = false;
+  double scale_factor = num_partitions / (upper - lower);
+  if (lower > upper) {
+    reversed = true;
+    scale_factor = num_partitions / (lower - upper);
+  }
+
+  std::string func_name = "width_bucket";
+  if (reversed) {
+    func_name += "_reversed";
+  }
+
+  auto get_double_constant_lvs = [this, &co](double const_val) {
+    Datum d;
+    d.doubleval = const_val;
+    auto double_const_expr =
+        makeExpr<Analyzer::Constant>(SQLTypeInfo(kDOUBLE, false), false, d);
+    return codegen(double_const_expr.get(), false, co);
+  };
+
+  auto target_value_ti = target_value_expr->get_type_info();
+  auto target_value_expr_lvs = codegen(target_value_expr, true, co);
+  CHECK_EQ(size_t(1), target_value_expr_lvs.size());
+  auto lower_expr_lvs = codegen(lower_bound_expr, true, co);
+  CHECK_EQ(size_t(1), lower_expr_lvs.size());
+  auto scale_factor_lvs = get_double_constant_lvs(scale_factor);
+  CHECK_EQ(size_t(1), scale_factor_lvs.size());
+
+  std::vector<llvm::Value*> width_bucket_args{target_value_expr_lvs[0],
+                                              lower_expr_lvs[0]};
+  if (expr->can_skip_out_of_bound_check()) {
+    func_name += "_no_oob_check";
+    width_bucket_args.push_back(scale_factor_lvs[0]);
+  } else {
+    auto upper_expr_lvs = codegen(upper_bound_expr, true, co);
+    CHECK_EQ(size_t(1), upper_expr_lvs.size());
+    auto partition_count_expr_lvs = codegen(partition_count_expr, true, co);
+    CHECK_EQ(size_t(1), partition_count_expr_lvs.size());
+    width_bucket_args.push_back(upper_expr_lvs[0]);
+    width_bucket_args.push_back(scale_factor_lvs[0]);
+    width_bucket_args.push_back(partition_count_expr_lvs[0]);
+    if (!target_value_ti.get_notnull()) {
+      func_name += "_nullable";
+      auto translated_null_value = target_value_ti.is_fp()
+                                       ? inline_fp_null_val(target_value_ti)
+                                       : inline_int_null_val(target_value_ti);
+      auto null_value_lvs = get_double_constant_lvs(translated_null_value);
+      CHECK_EQ(size_t(1), null_value_lvs.size());
+      width_bucket_args.push_back(null_value_lvs[0]);
+    }
+  }
+  return cgen_state_->emitCall(func_name, width_bucket_args);
+}
+
+llvm::Value* CodeGenerator::codegenWidthBucketExpr(const Analyzer::WidthBucketExpr* expr,
+                                                   const CompilationOptions& co) {
+  auto target_value_expr = expr->get_target_value();
+  auto lower_bound_expr = expr->get_lower_bound();
+  auto upper_bound_expr = expr->get_upper_bound();
+  auto partition_count_expr = expr->get_partition_count();
+
+  std::string func_name = "width_bucket_expr";
+  bool nullable_expr = false;
+  if (expr->can_skip_out_of_bound_check()) {
+    func_name += "_no_oob_check";
+  } else if (!target_value_expr->get_type_info().get_notnull()) {
+    func_name += "_nullable";
+    nullable_expr = true;
+  }
+
+  auto target_value_expr_lvs = codegen(target_value_expr, true, co);
+  CHECK_EQ(size_t(1), target_value_expr_lvs.size());
+  auto lower_bound_expr_lvs = codegen(lower_bound_expr, true, co);
+  CHECK_EQ(size_t(1), lower_bound_expr_lvs.size());
+  auto upper_bound_expr_lvs = codegen(upper_bound_expr, true, co);
+  CHECK_EQ(size_t(1), upper_bound_expr_lvs.size());
+  auto partition_count_expr_lvs = codegen(partition_count_expr, true, co);
+  CHECK_EQ(size_t(1), partition_count_expr_lvs.size());
+  auto target_value_ti = target_value_expr->get_type_info();
+  auto null_value_lv = cgen_state_->inlineFpNull(target_value_ti);
+
+  // check partition count : 1 ~ INT32_MAX
+  // INT32_MAX will be checked during casting by OVERFLOW checking step
+  auto partition_count_ti = partition_count_expr->get_type_info();
+  CHECK(partition_count_ti.is_integer());
+  auto int32_ti = SQLTypeInfo(kINT, partition_count_ti.get_notnull());
+  auto partition_count_expr_lv =
+      codegenCastBetweenIntTypes(partition_count_expr_lvs[0],
+                                 partition_count_ti,
+                                 int32_ti,
+                                 partition_count_ti.get_size() < int32_ti.get_size());
+  llvm::Value* chosen_min = cgen_state_->llInt(static_cast<int32_t>(0));
+  llvm::Value* partition_count_min =
+      cgen_state_->ir_builder_.CreateICmpSLE(partition_count_expr_lv, chosen_min);
+  llvm::BasicBlock* width_bucket_partition_count_ok_bb =
+      llvm::BasicBlock::Create(cgen_state_->context_,
+                               "width_bucket_partition_count_ok_bb",
+                               cgen_state_->current_func_);
+  llvm::BasicBlock* width_bucket_argument_check_fail_bb =
+      llvm::BasicBlock::Create(cgen_state_->context_,
+                               "width_bucket_argument_check_fail_bb",
+                               cgen_state_->current_func_);
+  cgen_state_->ir_builder_.CreateCondBr(partition_count_min,
+                                        width_bucket_argument_check_fail_bb,
+                                        width_bucket_partition_count_ok_bb);
+  cgen_state_->ir_builder_.SetInsertPoint(width_bucket_argument_check_fail_bb);
+  cgen_state_->ir_builder_.CreateRet(
+      cgen_state_->llInt(Executor::ERR_WIDTH_BUCKET_INVALID_ARGUMENT));
+  cgen_state_->ir_builder_.SetInsertPoint(width_bucket_partition_count_ok_bb);
+
+  llvm::BasicBlock* width_bucket_bound_check_ok_bb =
+      llvm::BasicBlock::Create(cgen_state_->context_,
+                               "width_bucket_bound_check_ok_bb",
+                               cgen_state_->current_func_);
+  llvm::Value* bound_check{nullptr};
+  if (lower_bound_expr->get_type_info().get_notnull() &&
+      upper_bound_expr->get_type_info().get_notnull()) {
+    bound_check = cgen_state_->ir_builder_.CreateFCmpOEQ(
+        lower_bound_expr_lvs[0], upper_bound_expr_lvs[0], "bound_check");
+  } else {
+    std::vector<llvm::Value*> bound_check_args{
+        lower_bound_expr_lvs[0],
+        upper_bound_expr_lvs[0],
+        null_value_lv,
+        cgen_state_->llInt(static_cast<int8_t>(1))};
+    bound_check = toBool(cgen_state_->emitCall("eq_double_nullable", bound_check_args));
+  }
+  cgen_state_->ir_builder_.CreateCondBr(
+      bound_check, width_bucket_argument_check_fail_bb, width_bucket_bound_check_ok_bb);
+  cgen_state_->ir_builder_.SetInsertPoint(width_bucket_bound_check_ok_bb);
+  cgen_state_->needs_error_check_ = true;
+  auto reversed_expr = toBool(codegenCmp(SQLOps::kGT,
+                                         kONE,
+                                         lower_bound_expr_lvs,
+                                         lower_bound_expr->get_type_info(),
+                                         upper_bound_expr,
+                                         co));
+  auto lower_bound_expr_lv = lower_bound_expr_lvs[0];
+  auto upper_bound_expr_lv = upper_bound_expr_lvs[0];
+  std::vector<llvm::Value*> width_bucket_args{target_value_expr_lvs[0],
+                                              reversed_expr,
+                                              lower_bound_expr_lv,
+                                              upper_bound_expr_lv,
+                                              partition_count_expr_lv};
+  if (nullable_expr) {
+    width_bucket_args.push_back(null_value_lv);
+  }
+  return cgen_state_->emitCall(func_name, width_bucket_args);
 }
 
 namespace {

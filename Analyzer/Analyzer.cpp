@@ -154,9 +154,17 @@ std::shared_ptr<Analyzer::Expr> RegexpExpr::deep_copy() const {
                               escape_expr ? escape_expr->deep_copy() : nullptr);
 }
 
+std::shared_ptr<Analyzer::Expr> WidthBucketExpr::deep_copy() const {
+  return makeExpr<WidthBucketExpr>(target_value_->deep_copy(),
+                                   lower_bound_->deep_copy(),
+                                   upper_bound_->deep_copy(),
+                                   partition_count_->deep_copy());
+}
+
 std::shared_ptr<Analyzer::Expr> LikelihoodExpr::deep_copy() const {
   return makeExpr<LikelihoodExpr>(arg->deep_copy(), likelihood);
 }
+
 std::shared_ptr<Analyzer::Expr> AggExpr::deep_copy() const {
   return makeExpr<AggExpr>(
       type_info, aggtype, arg ? arg->deep_copy() : nullptr, is_distinct, arg1);
@@ -1699,6 +1707,20 @@ void RegexpExpr::group_predicates(std::list<const Expr*>& scan_predicates,
   }
 }
 
+void WidthBucketExpr::group_predicates(std::list<const Expr*>& scan_predicates,
+                                       std::list<const Expr*>& join_predicates,
+                                       std::list<const Expr*>& const_predicates) const {
+  std::set<int> rte_idx_set;
+  target_value_->collect_rte_idx(rte_idx_set);
+  if (rte_idx_set.size() > 1) {
+    join_predicates.push_back(this);
+  } else if (rte_idx_set.size() == 1) {
+    scan_predicates.push_back(this);
+  } else {
+    const_predicates.push_back(this);
+  }
+}
+
 void LikelihoodExpr::group_predicates(std::list<const Expr*>& scan_predicates,
                                       std::list<const Expr*>& join_predicates,
                                       std::list<const Expr*>& const_predicates) const {
@@ -2274,6 +2296,26 @@ bool RegexpExpr::operator==(const Expr& rhs) const {
   return false;
 }
 
+bool WidthBucketExpr::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(WidthBucketExpr)) {
+    return false;
+  }
+  const WidthBucketExpr& rhs_l = dynamic_cast<const WidthBucketExpr&>(rhs);
+  if (!(*target_value_ == *rhs_l.get_target_value())) {
+    return false;
+  }
+  if (!(*lower_bound_ == *rhs_l.get_lower_bound())) {
+    return false;
+  }
+  if (!(*upper_bound_ == *rhs_l.get_upper_bound())) {
+    return false;
+  }
+  if (!(*partition_count_ == *rhs_l.get_partition_count())) {
+    return false;
+  }
+  return true;
+}
+
 bool LikelihoodExpr::operator==(const Expr& rhs) const {
   if (typeid(rhs) != typeid(LikelihoodExpr)) {
     return false;
@@ -2702,6 +2744,15 @@ std::string RegexpExpr::toString() const {
   return str;
 }
 
+std::string WidthBucketExpr::toString() const {
+  std::string str{"(WIDTH_BUCKET "};
+  str += target_value_->toString();
+  str += lower_bound_->toString();
+  str += upper_bound_->toString();
+  str += partition_count_->toString();
+  return str + ") ";
+}
+
 std::string LikelihoodExpr::toString() const {
   std::string str{"(LIKELIHOOD "};
   str += arg->toString();
@@ -2996,6 +3047,18 @@ void RegexpExpr::find_expr(bool (*f)(const Expr*),
   if (escape_expr != nullptr) {
     escape_expr->find_expr(f, expr_list);
   }
+}
+
+void WidthBucketExpr::find_expr(bool (*f)(const Expr*),
+                                std::list<const Expr*>& expr_list) const {
+  if (f(this)) {
+    add_unique(expr_list);
+    return;
+  }
+  target_value_->find_expr(f, expr_list);
+  lower_bound_->find_expr(f, expr_list);
+  upper_bound_->find_expr(f, expr_list);
+  partition_count_->find_expr(f, expr_list);
 }
 
 void LikelihoodExpr::find_expr(bool (*f)(const Expr*),
@@ -3329,6 +3392,42 @@ bool FunctionOperWithCustomTypeHandling::operator==(const Expr& rhs) const {
     }
   }
   return true;
+}
+
+double WidthBucketExpr::get_bound_val(const Analyzer::Expr* bound_expr) const {
+  CHECK(bound_expr);
+  auto copied_expr = bound_expr->deep_copy();
+  auto casted_expr = copied_expr->add_cast(SQLTypeInfo(kDOUBLE, false));
+  CHECK(casted_expr);
+  auto casted_constant = std::dynamic_pointer_cast<const Analyzer::Constant>(casted_expr);
+  CHECK(casted_constant);
+  return casted_constant->get_constval().doubleval;
+}
+
+int32_t WidthBucketExpr::get_partition_count_val() const {
+  auto const_partition_count_expr =
+      dynamic_cast<const Analyzer::Constant*>(partition_count_.get());
+  if (!const_partition_count_expr) {
+    return -1;
+  }
+  auto d = const_partition_count_expr->get_constval();
+  switch (const_partition_count_expr->get_type_info().get_type()) {
+    case kTINYINT:
+      return d.tinyintval;
+    case kSMALLINT:
+      return d.smallintval;
+    case kINT:
+      return d.intval;
+    case kBIGINT: {
+      auto bi = d.bigintval;
+      if (bi < 1 || bi > INT32_MAX) {
+        return -1;
+      }
+      return bi;
+    }
+    default:
+      return -1;
+  }
 }
 
 namespace {

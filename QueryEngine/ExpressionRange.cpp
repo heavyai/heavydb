@@ -323,6 +323,12 @@ ExpressionRange getExpressionRange(
     boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals);
 
 ExpressionRange getExpressionRange(
+    const Analyzer::WidthBucketExpr* width_bucket_expr,
+    const std::vector<InputTableInfo>& query_infos,
+    const Executor* executor,
+    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals);
+
+ExpressionRange getExpressionRange(
     const Analyzer::Expr* expr,
     const std::vector<InputTableInfo>& query_infos,
     const Executor* executor,
@@ -362,6 +368,10 @@ ExpressionRange getExpressionRange(
   auto datetrunc_expr = dynamic_cast<const Analyzer::DatetruncExpr*>(expr);
   if (datetrunc_expr) {
     return getExpressionRange(datetrunc_expr, query_infos, executor, simple_quals);
+  }
+  auto width_bucket_expr = dynamic_cast<const Analyzer::WidthBucketExpr*>(expr);
+  if (width_bucket_expr) {
+    return getExpressionRange(width_bucket_expr, query_infos, executor, simple_quals);
   }
   return ExpressionRange::makeInvalidRange();
 }
@@ -957,4 +967,76 @@ ExpressionRange getExpressionRange(
           : get_conservative_datetrunc_bucket(datetrunc_expr->get_field());
 
   return ExpressionRange::makeIntRange(min_ts, max_ts, bucket, arg_range.hasNulls());
+}
+
+ExpressionRange getExpressionRange(
+    const Analyzer::WidthBucketExpr* width_bucket_expr,
+    const std::vector<InputTableInfo>& query_infos,
+    const Executor* executor,
+    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
+  auto target_value_expr = width_bucket_expr->get_target_value();
+  auto target_ti = target_value_expr->get_type_info();
+  if (width_bucket_expr->is_constant_expr()) {
+    auto const_target_value = dynamic_cast<const Analyzer::Constant*>(target_value_expr);
+    if (const_target_value) {
+      if (const_target_value->get_is_null()) {
+        // null constant, return default width_bucket range
+        return ExpressionRange::makeIntRange(
+            0, width_bucket_expr->get_partition_count_val(), 0, true);
+      } else {
+        auto target_value_range =
+            getExpressionRange(target_value_expr, query_infos, executor);
+        CHECK(target_value_range.getFpMax() == target_value_range.getFpMin());
+        auto target_value_bucket =
+            width_bucket_expr->compute_bucket(target_value_range.getFpMax(), target_ti);
+        return ExpressionRange::makeIntRange(
+            target_value_bucket, target_value_bucket, 0, false);
+      }
+    }
+    // compute possible bucket range based on lower and upper bound constants
+    // to elucidate a target bucket range
+    const auto target_value_range =
+        getExpressionRange(target_value_expr, query_infos, executor);
+    const auto target_value_range_with_qual =
+        getExpressionRange(target_value_expr, query_infos, executor, simple_quals);
+    auto compute_bucket_range = [&width_bucket_expr](const ExpressionRange& target_range,
+                                                     SQLTypeInfo ti) {
+      // target value is casted ti double
+      auto lower_bound_bucket =
+          width_bucket_expr->compute_bucket<double>(target_range.getFpMin(), ti);
+      auto upper_bound_bucket =
+          width_bucket_expr->compute_bucket<double>(target_range.getFpMax(), ti);
+      return ExpressionRange::makeIntRange(
+          lower_bound_bucket, upper_bound_bucket, 0, target_range.hasNulls());
+    };
+    auto res_range = compute_bucket_range(target_value_range_with_qual, target_ti);
+    // check target_value expression's col range to be not nullable iff it has its filter
+    // expression i.e., in simple_quals
+    // todo (yoonmin) : need to search simple_quals to cover more cases?
+    if (target_value_range.getFpMin() < target_value_range_with_qual.getFpMin() ||
+        target_value_range.getFpMax() > target_value_range_with_qual.getFpMax()) {
+      res_range.setNulls(false);
+    }
+    return res_range;
+  } else {
+    // we cannot determine a possibility of skipping oob check safely
+    auto target_expression_range = getExpressionRange(
+        width_bucket_expr->get_partition_count(), query_infos, executor, simple_quals);
+    auto res = ExpressionRange::makeIntRange(
+        0, INT32_MAX, 0, target_value_expr->get_type_info().get_notnull());
+    switch (target_expression_range.getType()) {
+      case ExpressionRangeType::Integer: {
+        res.setIntMax(target_expression_range.getIntMax() + 1);
+        break;
+      }
+      case ExpressionRangeType::Float:
+      case ExpressionRangeType::Double: {
+        res.setIntMax(static_cast<int64_t>(target_expression_range.getFpMax()) + 1);
+        break;
+      }
+      default:
+        break;
+    }
+    return res;
+  }
 }

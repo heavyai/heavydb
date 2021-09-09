@@ -183,6 +183,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new CharLength());
     opTab.addOperator(new KeyForString());
     opTab.addOperator(new SampleRatio());
+    opTab.addOperator(new WidthBucket());
     opTab.addOperator(new ArrayLength());
     opTab.addOperator(new PgILike());
     opTab.addOperator(new RegexpLike());
@@ -633,6 +634,33 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       java.util.ArrayList<SqlTypeFamily> families =
               new java.util.ArrayList<SqlTypeFamily>();
       families.add(SqlTypeFamily.NUMERIC);
+      return families;
+    }
+  }
+
+  public static class WidthBucket extends SqlFunction {
+    public WidthBucket() {
+      super("WIDTH_BUCKET",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.NUMERIC);
+      families.add(SqlTypeFamily.NUMERIC);
+      families.add(SqlTypeFamily.NUMERIC);
+      families.add(SqlTypeFamily.INTEGER);
       return families;
     }
   }

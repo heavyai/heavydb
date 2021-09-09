@@ -769,6 +769,15 @@ declare i32 @char_length_encoded(i8*, i32);
 declare i32 @char_length_encoded_nullable(i8*, i32, i32);
 declare i32 @key_for_string_encoded(i32);
 declare i1 @sample_ratio(double, i64);
+declare double @width_bucket(double, double, double, double, i32);
+declare double @width_bucket_reverse(double, double, double, double, i32);
+declare double @width_bucket_nullable(double, double, double, double, i32, double);
+declare double @width_bucket_reversed_nullable(double, double, double, double, i32, double);
+declare double @width_bucket_no_oob_check(double, double, double);
+declare double @width_bucket_reverse_no_oob_check(double, double, double);
+declare double @width_bucket_expr(double, i1, double, double, i32);
+declare double @width_bucket_expr_nullable(double, i1, double, double, i32, double);
+declare double @width_bucket_expr_no_oob_check(double, i1, double, double, i32);
 declare i1 @string_like(i8*, i32, i8*, i32, i8);
 declare i1 @string_ilike(i8*, i32, i8*, i32, i8);
 declare i8 @string_like_nullable(i8*, i32, i8*, i32, i8, i8);
@@ -2720,6 +2729,9 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       buildJoinLoops(body_execution_unit, co, eo, query_infos, column_cache);
 
   plan_state_->allocateLocalColumnIds(ra_exe_unit.input_col_descs);
+  for (auto& simple_qual : ra_exe_unit.simple_quals) {
+    plan_state_->addSimpleQual(simple_qual);
+  }
   const auto is_not_deleted_bb = codegenSkipDeletedOuterTableRow(ra_exe_unit, co);
   if (is_not_deleted_bb) {
     cgen_state_->row_func_bb_ = is_not_deleted_bb;

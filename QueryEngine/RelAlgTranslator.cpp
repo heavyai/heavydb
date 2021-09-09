@@ -946,6 +946,51 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCase(
   return Parser::CaseExpr::normalize(expr_list, else_expr);
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWidthBucket(
+    const RexFunctionOperator* rex_function) const {
+  CHECK(rex_function->size() == 4);
+  auto target_value = translateScalarRex(rex_function->getOperand(0));
+  auto lower_bound = translateScalarRex(rex_function->getOperand(1));
+  auto upper_bound = translateScalarRex(rex_function->getOperand(2));
+  auto partition_count = translateScalarRex(rex_function->getOperand(3));
+  if (!partition_count->get_type_info().is_integer()) {
+    throw std::runtime_error(
+        "PARTITION_COUNT expression of width_bucket function expects an integer type.");
+  }
+  auto check_numeric_type =
+      [](const std::string& col_name, const Analyzer::Expr* expr, bool allow_null_type) {
+        if (expr->get_type_info().get_type() == kNULLT) {
+          if (!allow_null_type) {
+            throw std::runtime_error(
+                col_name + " expression of width_bucket function expects non-null type.");
+          }
+          return;
+        }
+        if (!expr->get_type_info().is_number()) {
+          throw std::runtime_error(
+              col_name + " expression of width_bucket function expects a numeric type.");
+        }
+      };
+  // target value may have null value
+  check_numeric_type("TARGET_VALUE", target_value.get(), true);
+  check_numeric_type("LOWER_BOUND", lower_bound.get(), false);
+  check_numeric_type("UPPER_BOUND", upper_bound.get(), false);
+
+  auto cast_to_double_if_necessary = [](std::shared_ptr<Analyzer::Expr> arg) {
+    const auto& arg_ti = arg->get_type_info();
+    if (arg_ti.get_type() != kDOUBLE) {
+      const auto& double_ti = SQLTypeInfo(kDOUBLE, arg_ti.get_notnull());
+      return arg->add_cast(double_ti);
+    }
+    return arg;
+  };
+  target_value = cast_to_double_if_necessary(target_value);
+  lower_bound = cast_to_double_if_necessary(lower_bound);
+  upper_bound = cast_to_double_if_necessary(upper_bound);
+  return makeExpr<Analyzer::WidthBucketExpr>(
+      target_value, lower_bound, upper_bound, partition_count);
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLike(
     const RexFunctionOperator* rex_function) const {
   CHECK(rex_function->size() == 2 || rex_function->size() == 3);
@@ -1452,6 +1497,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   }
   if (rex_function->getName() == "KEY_FOR_STRING"sv) {
     return translateKeyForString(rex_function);
+  }
+  if (rex_function->getName() == "WIDTH_BUCKET"sv) {
+    return translateWidthBucket(rex_function);
   }
   if (rex_function->getName() == "SAMPLE_RATIO"sv) {
     return translateSampleRatio(rex_function);

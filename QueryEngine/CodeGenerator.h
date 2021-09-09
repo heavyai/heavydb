@@ -194,6 +194,14 @@ class CodeGenerator {
 
   llvm::Value* codegen(const Analyzer::SampleRatioExpr*, const CompilationOptions&);
 
+  llvm::Value* codegen(const Analyzer::WidthBucketExpr*, const CompilationOptions&);
+
+  llvm::Value* codegenConstantWidthBucketExpr(const Analyzer::WidthBucketExpr*,
+                                              const CompilationOptions&);
+
+  llvm::Value* codegenWidthBucketExpr(const Analyzer::WidthBucketExpr*,
+                                      const CompilationOptions&);
+
   llvm::Value* codegen(const Analyzer::LowerExpr*, const CompilationOptions&);
 
   llvm::Value* codegen(const Analyzer::LikeExpr*, const CompilationOptions&);

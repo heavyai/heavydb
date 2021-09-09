@@ -64,6 +64,7 @@ struct PlanState {
   JoinInfo join_info_;
   const DeletedColumnsMap deleted_columns_;
   const std::vector<InputTableInfo>& query_infos_;
+  std::list<std::shared_ptr<Analyzer::Expr>> simple_quals_;
   const Executor* executor_;
 
   void allocateLocalColumnIds(
@@ -87,5 +88,13 @@ struct PlanState {
       return deleted_cols_it->second;
     }
     return nullptr;
+  }
+
+  void addSimpleQual(std::shared_ptr<Analyzer::Expr> simple_qual) {
+    simple_quals_.push_back(simple_qual);
+  }
+
+  std::list<std::shared_ptr<Analyzer::Expr>> getSimpleQuals() const {
+    return simple_quals_;
   }
 };

@@ -2232,6 +2232,205 @@ TEST(Select, Having) {
   }
 }
 
+TEST(Select, ConstantWidthBucketExpr) {
+  auto drop = "DROP TABLE IF EXISTS wb_test;";
+  auto create =
+      "CREATE TABLE wb_test (i1 tinyint, i2 smallint, i4 int, i8 bigint, f float, d "
+      "double, dc decimal(15,8), n numeric(15,8));";
+  auto insert =
+      "INSERT INTO wb_test VALUES (NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);";
+  run_ddl_statement(drop);
+  g_sqlite_comparator.query(drop);
+  run_ddl_statement(create);
+  g_sqlite_comparator.query(create);
+  run_multiple_agg(insert, ExecutorDeviceType::CPU);
+  g_sqlite_comparator.query(insert);
+  auto test_queries = [](const std::string col_name) {
+    std::string omnisci_query =
+        "SELECT WIDTH_BUCKET(" + col_name + ", 1, 2, 3) FROM wb_test;";
+    std::string sqlite_query = "SELECT " + col_name + " FROM wb_test;";
+    return std::make_pair(omnisci_query, sqlite_query);
+  };
+  std::vector<std::string> col_names{"i1", "i2", "i4", "i8", "d", "f", "dc", "n"};
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // in single-mode, we can see std::runtime_error exception for the below test queries
+    // having unsupported or invalid arguments of the function
+    // but in dist-mode, we detect Calcite SQL error instead of std::runtime_error
+    // so we try to detect 'any' exception instead of the specific exception type
+    EXPECT_ANY_THROW(run_simple_agg("SELECT WIDTH_BUCKET(1, 2, 3, 0);", dt));
+    EXPECT_ANY_THROW(run_simple_agg("SELECT WIDTH_BUCKET(1, 2, 3, -1);", dt));
+    EXPECT_ANY_THROW(run_simple_agg("SELECT WIDTH_BUCKET(1, 2, 3, NULL);", dt));
+    EXPECT_ANY_THROW(run_simple_agg("SELECT WIDTH_BUCKET(1, 2, 3, 2147483649);", dt));
+    EXPECT_ANY_THROW(run_simple_agg("SELECT WIDTH_BUCKET(1, 2, 3, -2147483649);", dt));
+    EXPECT_ANY_THROW(
+        run_simple_agg("SELECT WIDTH_BUCKET(1, 2, 3, 9223372036854775800);", dt));
+    EXPECT_ANY_THROW(
+        run_simple_agg("SELECT WIDTH_BUCKET(1, 2, 3, -9223372036854775800);", dt));
+    EXPECT_ANY_THROW(run_simple_agg("SELECT WIDTH_BUCKET(1, 2, 3, 1.11112);", dt));
+    EXPECT_ANY_THROW(run_simple_agg("SELECT WIDTH_BUCKET(1, 2, 3, 1.111121112);", dt));
+    EXPECT_ANY_THROW(run_simple_agg("SELECT WIDTH_BUCKET(1, 2, 3, -1.11112);", dt));
+    EXPECT_ANY_THROW(run_simple_agg("SELECT WIDTH_BUCKET(1, 2, 3, -1.111121112);", dt));
+    EXPECT_ANY_THROW(run_simple_agg("SELECT WIDTH_BUCKET(1, 2, 2, 3);", dt));
+    EXPECT_ANY_THROW(
+        run_simple_agg("SELECT WIDTH_BUCKET(1, 2147483647, 2147483647, 3);", dt));
+    EXPECT_ANY_THROW(
+        run_simple_agg("SELECT WIDTH_BUCKET(1, 2147483649, 2147483649, 3);", dt));
+    EXPECT_ANY_THROW(
+        run_simple_agg("SELECT WIDTH_BUCKET(1, -2147483647, -2147483647, 3);", dt));
+    EXPECT_ANY_THROW(
+        run_simple_agg("SELECT WIDTH_BUCKET(1, -2147483649, -2147483649, 3);", dt));
+    EXPECT_ANY_THROW(run_simple_agg(
+        "SELECT WIDTH_BUCKET(1, 9223372036854775808, 9223372036854775808, 3);", dt));
+    EXPECT_ANY_THROW(run_simple_agg(
+        "SELECT WIDTH_BUCKET(1, -9223372036854775808, -9223372036854775808, 3);", dt));
+    EXPECT_NO_THROW(run_simple_agg("SELECT WIDTH_BUCKET(NULL, 2, 3, 100);", dt));
+
+    // check the correctness of the function based on postgres 12.7's result
+    EXPECT_EQ(int64_t(0),
+              v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(1, 2, 3, 100);", dt)));
+    EXPECT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(2, 2, 3, 100);", dt)));
+    EXPECT_EQ(int64_t(101),
+              v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(3, 2, 3, 100);", dt)));
+    EXPECT_EQ(int64_t(11),
+              v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(2.1, 2, 3, 100);", dt)));
+    EXPECT_EQ(
+        int64_t(11),
+        v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(2.11, 2.1, 2.2, 100);", dt)));
+    EXPECT_EQ(int64_t(91),
+              v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(2.1, 3, 2, 100);", dt)));
+    EXPECT_EQ(
+        int64_t(95),
+        v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(2.156789, 3, 2.11, 100);", dt)));
+    EXPECT_EQ(int64_t(26),
+              v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(1, 2, -2, 100);", dt)));
+    EXPECT_EQ(int64_t(48),
+              v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(0.1, 2, -2, 100);", dt)));
+    EXPECT_EQ(int64_t(48),
+              v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(-0.1, -2, 2, 100);", dt)));
+    EXPECT_EQ(int64_t(53),
+              v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(-0.1, 2, -2, 100);", dt)));
+
+    for (auto& col : col_names) {
+      auto queries = test_queries(col);
+      c(queries.first, queries.second, dt);
+    }
+  }
+  run_ddl_statement(drop);
+  g_sqlite_comparator.query(drop);
+}
+
+TEST(Select, WidthBucketExpr) {
+  auto drop = "DROP TABLE IF EXISTS wb_test;";
+  auto create =
+      "CREATE TABLE wb_test (i1 tinyint, i2 smallint, i4 int, i8 bigint, f float, d "
+      "double, dc decimal(15,8), n numeric(15,8),"
+      "i1n tinyint, i2n smallint, i4n int, i8n bigint, fn float, dn double, dcn "
+      "decimal(15,8), nn numeric(15,8));";
+  auto create_sqlite =
+      "CREATE TABLE wb_test (i1n tinyint, i2n smallint, i4n int, i8n bigint, fn float, "
+      "dn "
+      "double, dcn decimal(15,8), nn numeric(15,8));";
+  auto insert_sqlite =
+      "INSERT INTO wb_test VALUES (NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);";
+  run_ddl_statement(drop);
+  run_ddl_statement(create);
+  g_sqlite_comparator.query(drop);
+  g_sqlite_comparator.query(create_sqlite);
+  g_sqlite_comparator.query(insert_sqlite);
+  auto insert =
+      "INSERT INTO wb_test VALUES (1, 1, 1, 1, 1.0, 1.0, 1.0, 1.0, NULL, NULL, NULL, "
+      "NULL, NULL, NULL, NULL, NULL);";
+  run_multiple_agg(insert, ExecutorDeviceType::CPU);
+  auto test_queries = [](const std::string col_name) {
+    std::string omnisci_query =
+        "SELECT WIDTH_BUCKET(" + col_name + ", i4, i4*10, i4*10) FROM wb_test;";
+    std::string sqlite_query = "SELECT " + col_name + " FROM wb_test;";
+    return std::make_pair(omnisci_query, sqlite_query);
+  };
+  std::vector<std::string> col_names{"i1", "i2", "i4", "i8", "d", "f", "dc", "n"};
+  std::vector<std::string> wrong_partition_expr{"i1-1", "-1*i1", "d", "f", "dc", "n"};
+  std::vector<std::string> null_col_names{
+      "i1n", "i2n", "i4n", "i8n", "dn", "fn", "dcn", "nn"};
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    for (auto& col : col_names) {
+      std::string q = "SELECT WIDTH_BUCKET(i1, i1, " + col + ", i1) FROM wb_test;";
+      EXPECT_ANY_THROW(run_simple_agg(q, dt));
+    }
+
+    for (auto& col : col_names) {
+      std::string q =
+          "SELECT WIDTH_BUCKET(i1, " + col + ", " + col + ", i1) FROM wb_test;";
+      EXPECT_ANY_THROW(run_simple_agg(q, dt));
+    }
+
+    for (auto& expr : wrong_partition_expr) {
+      std::string q = "SELECT WIDTH_BUCKET(i1, i1*2, i1*3, " + expr + ") FROM wb_test;";
+      EXPECT_ANY_THROW(run_simple_agg(q, dt)) << q;
+    }
+
+    for (size_t i = 0; i < col_names.size(); ++i) {
+      auto col = col_names[i];
+      auto ncol = null_col_names[i];
+      std::string q1 =
+          "SELECT WIDTH_BUCKET(i1, " + col + ", " + ncol + ", i1) FROM wb_test;";
+      std::string q2 =
+          "SELECT WIDTH_BUCKET(i1, " + ncol + ", " + col + ", i1) FROM wb_test;";
+      EXPECT_ANY_THROW(run_simple_agg(q1, dt));
+      EXPECT_ANY_THROW(run_simple_agg(q2, dt));
+    }
+
+    for (auto& ncol : null_col_names) {
+      std::string q = "SELECT WIDTH_BUCKET(i1, i1*2, i1*3," + ncol + ") FROM wb_test;";
+      EXPECT_ANY_THROW(run_simple_agg(q, dt));
+    }
+
+    EXPECT_EQ(int64_t(5),
+              v<int64_t>(run_simple_agg(
+                  "SELECT WIDTH_BUCKET(i1*5, i4, i4*10, i4*10) FROM wb_test;", dt)));
+    EXPECT_EQ(int64_t(6),
+              v<int64_t>(run_simple_agg(
+                  "SELECT WIDTH_BUCKET(i1*5, i4*10, i4, i4*10) FROM wb_test;", dt)));
+    EXPECT_EQ(int64_t(5),
+              v<int64_t>(run_simple_agg(
+                  "SELECT WIDTH_BUCKET(i1*5, i4*10, i4, i4*10) - 1 FROM wb_test;", dt)));
+    EXPECT_EQ(
+        int64_t(-1),
+        v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(i1*5, i4, i4*10, i4*10) - "
+                                  "WIDTH_BUCKET(i1*5, i4*10, i4, i4*10) FROM wb_test;",
+                                  dt)));
+    EXPECT_EQ(int64_t(12),
+              v<int64_t>(run_simple_agg(
+                  "select width_bucket(i2+15, cast(i2*(d+1) as int), cast(i4*(n+25) as "
+                  "int), cast(i8*20 as int)) from wb_test;",
+                  dt)));
+    EXPECT_EQ(
+        int64_t(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT WIDTH_BUCKET(i1, i4, i4*10, i4*10) b FROM wb_test GROUP BY b;", dt)));
+    EXPECT_EQ(
+        int64_t(0),
+        v<int64_t>(run_simple_agg(
+            "SELECT WIDTH_BUCKET(i1-1, i4, i4*10, i4*10) b FROM wb_test GROUP BY b;",
+            dt)));
+    EXPECT_EQ(
+        int64_t(11),
+        v<int64_t>(run_simple_agg(
+            "SELECT WIDTH_BUCKET(i1+11, i4, i4*10, i4*10) b FROM wb_test GROUP BY b;",
+            dt)));
+
+    for (auto& col : null_col_names) {
+      auto queries = test_queries(col);
+      c(queries.first, queries.second, dt);
+    }
+  }
+  run_ddl_statement(drop);
+  g_sqlite_comparator.query(drop);
+}
+
 TEST(Select, CountWithLimitAndOffset) {
   SKIP_ALL_ON_AGGREGATOR();
   run_ddl_statement("DROP TABLE IF EXISTS count_test;");

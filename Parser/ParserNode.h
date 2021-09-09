@@ -550,6 +550,32 @@ class RegexpExpr : public Expr {
   static bool translate_to_like_pattern(std::string& pattern_str, char escape_char);
 };
 
+class WidthBucketExpr : public Expr {
+ public:
+  WidthBucketExpr(Expr* t, Expr* l, Expr* u, Expr* p)
+      : target_value_(t), lower_bound_(l), upper_bound_(u), partition_count_(p) {}
+  const Expr* get_target_value() const { return target_value_.get(); }
+  const Expr* get_lower_bound() const { return lower_bound_.get(); }
+  const Expr* get_upper_bound() const { return upper_bound_.get(); }
+  const Expr* get_partition_count() const { return partition_count_.get(); }
+  std::shared_ptr<Analyzer::Expr> analyze(
+      const Catalog_Namespace::Catalog& catalog,
+      Analyzer::Query& query,
+      TlistRefType allow_tlist_ref = TLIST_NONE) const override;
+  static std::shared_ptr<Analyzer::Expr> get(
+      std::shared_ptr<Analyzer::Expr> target_value,
+      std::shared_ptr<Analyzer::Expr> lower_bound,
+      std::shared_ptr<Analyzer::Expr> upper_bound,
+      std::shared_ptr<Analyzer::Expr> partition_count);
+  std::string to_string() const override;
+
+ private:
+  std::unique_ptr<Expr> target_value_;
+  std::unique_ptr<Expr> lower_bound_;
+  std::unique_ptr<Expr> upper_bound_;
+  std::unique_ptr<Expr> partition_count_;
+};
+
 /*
  * @type LikelihoodExpr
  * @brief expression for LIKELY, UNLIKELY

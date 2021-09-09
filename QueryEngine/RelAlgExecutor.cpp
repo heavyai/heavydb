@@ -3389,6 +3389,10 @@ ErrorInfo getErrorDescription(const int32_t error_code) {
               .description = "Multiple distinct values encountered"};
     case Executor::ERR_GEOS:
       return {.code = "ERR_GEOS", .description = "ERR_GEOS"};
+    case Executor::ERR_WIDTH_BUCKET_INVALID_ARGUMENT:
+      return {.code = "ERR_WIDTH_BUCKET_INVALID_ARGUMENT",
+              .description =
+                  "Arguments of WIDTH_BUCKET function does not satisfy the condition"};
     default:
       return {.code = nullptr, .description = nullptr};
   }
