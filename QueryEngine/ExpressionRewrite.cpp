@@ -790,11 +790,13 @@ static const std::unordered_set<std::string> overlaps_supported_functions = {
     "ST_Contains_MultiPolygon_MultiPolygon",
     "ST_Contains_MultiPolygon_Polygon",
     "ST_Intersects_Polygon_Point",
+    "ST_cIntersects_Polygon_Point",
     "ST_Intersects_Polygon_Polygon",
     "ST_Intersects_Polygon_MultiPolygon",
     "ST_Intersects_MultiPolygon_MultiPolygon",
     "ST_Intersects_MultiPolygon_Polygon",
     "ST_Intersects_MultiPolygon_Point",
+    "ST_cIntersects_MultiPolygon_Point",
     "ST_Approx_Overlaps_MultiPolygon_Point",
     "ST_Overlaps"};
 

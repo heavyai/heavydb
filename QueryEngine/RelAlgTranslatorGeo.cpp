@@ -1346,6 +1346,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
           function_name, "ST_Contains"sv, "ST_Intersects"sv, "ST_Approx_Overlaps"sv)) {
     with_bounds = true;
   }
+  if (function_name == "ST_Intersects"sv) {
+    rex_function->getOperand(0) swap_args = true;
+  }
 
   std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
   SQLTypeInfo arg0_ti;
@@ -1413,6 +1416,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   }
 
   if (function_name == "ST_Contains"sv) {
+    const bool lhs_is_point = arg1_ti.get_type() == kPOINT;
     const bool lhs_is_literal =
         geoargs1.size() == 1 &&
         std::dynamic_pointer_cast<const Analyzer::Constant>(geoargs1.front()) != nullptr;
@@ -1424,6 +1428,46 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
         arg1_ti.get_input_srid() == arg1_ti.get_output_srid()) {
       // use the compressed version of ST_Contains
       function_name = "ST_cContains";
+    }
+  }
+
+  if (function_name == "ST_Intersects"sv) {
+    bool can_used_compressed_coords =
+        [](const SQLTypeInfo& input_a_type,
+           const Analyzer::ExpressionPtrVector& input_a_operands,
+           const SQLTypeInfo& input_b_type,
+           const Analyzer::ExpressionPtrVector& input_b_operands)
+
+            if (arg1_ti.get_type() != kPOINT) {
+      return false;
+    }
+    if (arg1_ti.)
+      geoargs1.size() == 1 && std::dynamic_pointer_cast<const Analyzer::Constant>(
+                                  geoargs1.front()) != nullptr;
+
+    const bool arg0_is_point = arg0_ti.get_type() == kPOINT;
+    const bool arg0_is_literal =
+        geoargs0.size() == 1 &&
+        std::dynamic_pointer_cast<const Analyzer::Constant>(geoargs0.front()) != nullptr;
+    const bool arg1_is_point = arg1_ti.get_type() == kPOINT;
+    const bool arg1_is_literal =
+        geoargs1.size() == 1 &&
+        std::dynamic_pointer_cast<const Analyzer::Constant>(geoargs1.front()) != nullptr;
+
+    const bool lhs_is_literal =
+        geoargs1.size() == 1 &&
+        std::dynamic_pointer_cast<const Analyzer::Constant>(geoargs1.front()) != nullptr;
+    const bool rhs_is_literal =
+        geoargs1.size() == 1 &&
+        std::dynamic_pointer_cast<const Analyzer::Constant>(geoargs1.front()) != nullptr;
+    const bool lhs_is_point = arg1_ti.get_type() == kPOINT;
+    if (!(lhs_is_literal && lhs_is_point) &&
+        arg0_ti.get_compression() == kENCODING_GEOINT &&
+        arg0_ti.get_input_srid() == arg0_ti.get_output_srid() &&
+        arg0_ti.get_compression() == arg1_ti.get_compression() &&
+        arg1_ti.get_input_srid() == arg1_ti.get_output_srid()) {
+      // use the compressed version of ST_Contains
+      function_name = "ST_cIntersects";
     }
   }
 

@@ -642,9 +642,12 @@ DEVICE ALWAYS_INLINE bool point_in_polygon_winding_number(const int8_t* poly,
 
     if constexpr (include_point_on_edge) {
       const T xp = (px - e1x) * (e0y - e1y) - (py - e1y) * (e0x - e1x);
+      if (!tol_zero_template(xp, epsilon)) {
+        return false;
+      }
       const T pt_vec_magnitude = (px - e0x) * (px - e0x) + (py - e0y) * (py - e0y);
       const T edge_vec_magnitude = (e1x - e0x) * (e1x - e0x) + (e1y - e0y) * (e1y - e0y);
-      if (tol_zero_template(xp, epsilon) && (pt_vec_magnitude <= edge_vec_magnitude)) {
+      if (pt_vec_magnitude <= edge_vec_magnitude) {
         DEBUG_STMT(printf("point is on edge: %e && %e <= %e\n",
                           (double)xp,
                           (double)pt_vec_magnitude,
@@ -3775,6 +3778,36 @@ bool ST_Intersects_Point_Polygon(int8_t* p,
 }
 
 EXTENSION_INLINE
+bool ST_cIntersects_Point_Polygon(int8_t* p,
+                                  int64_t psize,
+                                  int8_t* poly,
+                                  int64_t polysize,
+                                  int32_t* poly_ring_sizes,
+                                  int64_t poly_num_rings,
+                                  double* poly_bounds,
+                                  int64_t poly_bounds_size,
+                                  int32_t ic1,
+                                  int32_t isr1,
+                                  int32_t ic2,
+                                  int32_t isr2,
+                                  int32_t osr) {
+  return Contains_Polygon_Point_Impl<int64_t, EdgeBehavior::kIncludePointOnEdge>(
+      poly,
+      polysize,
+      poly_ring_sizes,
+      poly_num_rings,
+      poly_bounds,
+      poly_bounds_size,
+      p,
+      psize,
+      ic2,
+      isr2,
+      ic1,
+      isr1,
+      osr);
+}
+
+EXTENSION_INLINE
 bool ST_Intersects_Point_MultiPolygon(int8_t* p,
                                       int64_t psize,
                                       int8_t* mpoly_coords,
@@ -3790,21 +3823,56 @@ bool ST_Intersects_Point_MultiPolygon(int8_t* p,
                                       int32_t ic2,
                                       int32_t isr2,
                                       int32_t osr) {
-  return ST_Contains_MultiPolygon_Point(mpoly_coords,
-                                        mpoly_coords_size,
-                                        mpoly_ring_sizes,
-                                        mpoly_num_rings,
-                                        mpoly_poly_sizes,
-                                        mpoly_num_polys,
-                                        mpoly_bounds,
-                                        mpoly_bounds_size,
-                                        p,
-                                        psize,
-                                        ic2,
-                                        isr2,
-                                        ic1,
-                                        isr1,
-                                        osr);
+  return Contains_MultiPolygon_Point_Impl<double, EdgeBehavior::kIncludePointOnEdge>(
+      mpoly_coords,
+      mpoly_coords_size,
+      mpoly_ring_sizes,
+      mpoly_num_rings,
+      mpoly_poly_sizes,
+      mpoly_num_polys,
+      mpoly_bounds,
+      mpoly_bounds_size,
+      p,
+      psize,
+      ic1,
+      isr1,
+      ic2,
+      isr2,
+      osr);
+}
+
+EXTENSION_INLINE
+bool ST_cIntersects_Point_MultiPolygon(int8_t* p,
+                                       int64_t psize,
+                                       int8_t* mpoly_coords,
+                                       int64_t mpoly_coords_size,
+                                       int32_t* mpoly_ring_sizes,
+                                       int64_t mpoly_num_rings,
+                                       int32_t* mpoly_poly_sizes,
+                                       int64_t mpoly_num_polys,
+                                       double* mpoly_bounds,
+                                       int64_t mpoly_bounds_size,
+                                       int32_t ic1,
+                                       int32_t isr1,
+                                       int32_t ic2,
+                                       int32_t isr2,
+                                       int32_t osr) {
+  return Contains_MultiPolygon_Point_Impl<int64_t, EdgeBehavior::kIncludePointOnEdge>(
+      mpoly_coords,
+      mpoly_coords_size,
+      mpoly_ring_sizes,
+      mpoly_num_rings,
+      mpoly_poly_sizes,
+      mpoly_num_polys,
+      mpoly_bounds,
+      mpoly_bounds_size,
+      p,
+      psize,
+      ic1,
+      isr1,
+      ic2,
+      isr2,
+      osr);
 }
 
 EXTENSION_INLINE
@@ -3968,6 +4036,36 @@ bool ST_Intersects_Polygon_Point(int8_t* poly,
 }
 
 EXTENSION_INLINE
+bool ST_cIntersects_Polygon_Point(int8_t* poly,
+                                  int64_t polysize,
+                                  int32_t* poly_ring_sizes,
+                                  int64_t poly_num_rings,
+                                  double* poly_bounds,
+                                  int64_t poly_bounds_size,
+                                  int8_t* p,
+                                  int64_t psize,
+                                  int32_t ic1,
+                                  int32_t isr1,
+                                  int32_t ic2,
+                                  int32_t isr2,
+                                  int32_t osr) {
+  return Contains_Polygon_Point_Impl<int64_t, EdgeBehavior::kIncludePointOnEdge>(
+      poly,
+      polysize,
+      poly_ring_sizes,
+      poly_num_rings,
+      poly_bounds,
+      poly_bounds_size,
+      p,
+      psize,
+      ic1,
+      isr1,
+      ic2,
+      isr2,
+      osr);
+}
+
+EXTENSION_INLINE
 bool ST_Intersects_Polygon_LineString(int8_t* poly,
                                       int64_t polysize,
                                       int32_t* poly_ring_sizes,
@@ -4103,6 +4201,40 @@ bool ST_Intersects_MultiPolygon_Point(int8_t* mpoly_coords,
                                       int32_t isr2,
                                       int32_t osr) {
   return Contains_MultiPolygon_Point_Impl<double, EdgeBehavior::kIncludePointOnEdge>(
+      mpoly_coords,
+      mpoly_coords_size,
+      mpoly_ring_sizes,
+      mpoly_num_rings,
+      mpoly_poly_sizes,
+      mpoly_num_polys,
+      mpoly_bounds,
+      mpoly_bounds_size,
+      p,
+      psize,
+      ic1,
+      isr1,
+      ic2,
+      isr2,
+      osr);
+}
+
+EXTENSION_INLINE
+bool ST_cIntersects_MultiPolygon_Point(int8_t* mpoly_coords,
+                                       int64_t mpoly_coords_size,
+                                       int32_t* mpoly_ring_sizes,
+                                       int64_t mpoly_num_rings,
+                                       int32_t* mpoly_poly_sizes,
+                                       int64_t mpoly_num_polys,
+                                       double* mpoly_bounds,
+                                       int64_t mpoly_bounds_size,
+                                       int8_t* p,
+                                       int64_t psize,
+                                       int32_t ic1,
+                                       int32_t isr1,
+                                       int32_t ic2,
+                                       int32_t isr2,
+                                       int32_t osr) {
+  return Contains_MultiPolygon_Point_Impl<int64_t, EdgeBehavior::kIncludePointOnEdge>(
       mpoly_coords,
       mpoly_coords_size,
       mpoly_ring_sizes,
