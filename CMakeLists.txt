@@ -332,6 +332,13 @@ else()
   endif()
 endif()
 
+option(ENABLE_MEMKIND "Use Memkind library for heterogeneous memory" OFF)
+if(ENABLE_MEMKIND)
+  set(MEMKIND_REQUIRED_VERSION 1.11.0)
+  find_package(PkgConfig QUIET)
+  pkg_check_modules(memkind REQUIRED memkind>=${MEMKIND_REQUIRED_VERSION})
+endif()
+
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 
 if(MSVC)
@@ -830,11 +837,11 @@ add_custom_target(rerun_cmake ALL
   )
 add_dependencies(omnisci_server rerun_cmake)
 
-target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
+target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG} ${memkind_LIBRARIES})
 
 target_link_libraries(initdb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
     ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
-    ${LOCALE_LINK_FLAG})
+    ${LOCALE_LINK_FLAG} ${memkind_LIBRARIES})
 
 macro(set_dpkg_arch arch_in arch_out)
   if("${arch_in}" STREQUAL "x86_64")

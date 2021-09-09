@@ -58,8 +58,8 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     git \
     wget \
     curl \
-    gcc-8 \
-    g++-8 \
+    gcc-9 \
+    g++-9 \
     libboost-all-dev \
     libgoogle-glog-dev \
     libssl-dev \
@@ -104,10 +104,10 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     libxerces-c-dev \
     libxmlsec1-dev
 
-# Set up gcc-8 as default gcc
+# Set up gcc-9 as default gcc
 sudo update-alternatives \
-  --install /usr/bin/gcc gcc /usr/bin/gcc-8 800 \
-  --slave /usr/bin/g++ g++ /usr/bin/g++-8
+  --install /usr/bin/gcc gcc /usr/bin/gcc-9 800 \
+  --slave /usr/bin/g++ g++ /usr/bin/g++-9
 
 # Needed to find sqlite3, xmltooling, and xml_security_c
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
