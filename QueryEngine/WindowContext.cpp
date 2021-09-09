@@ -515,21 +515,30 @@ void WindowFunctionContext::computePartition(const size_t partition_idx,
                          col_tuple_comparator);
 }
 
-// static std::mutex print_mutex;
-
 void WindowFunctionContext::compute() {
   auto timer = DEBUG_TIMER(__func__);
   CHECK(!output_);
   output_ = static_cast<int8_t*>(row_set_mem_owner_->allocate(
       elem_count_ * window_function_buffer_element_size(window_func_->getKind()),
       /*thread_idx=*/0));
-  if (window_function_is_aggregate(window_func_->getKind())) {
+  const bool is_window_function_aggregate =
+      window_function_is_aggregate(window_func_->getKind());
+  if (is_window_function_aggregate) {
     fillPartitionStart();
     if (window_function_requires_peer_handling(window_func_)) {
       fillPartitionEnd();
     }
   }
-  std::unique_ptr<int64_t[]> scratchpad(new int64_t[elem_count_]);
+
+  std::unique_ptr<int64_t[]> scratchpad;
+  int64_t* intermediate_output_buffer;
+  if (is_window_function_aggregate) {
+    intermediate_output_buffer = reinterpret_cast<int64_t*>(output_);
+  } else {
+    scratchpad.reset(new int64_t[elem_count_]);
+    intermediate_output_buffer = scratchpad.get();
+  }
+
   const size_t partition_count{partitionCount()};
 #ifdef HAVE_TBB
   const bool should_parallelize{g_enable_parallel_window_function_compute &&
@@ -547,8 +556,9 @@ void WindowFunctionContext::compute() {
                         const size_t r_end_idx = r.end();
                         for (size_t partition_idx = r.begin(); partition_idx != r_end_idx;
                              ++partition_idx) {
-                          computePartition(partition_idx,
-                                           scratchpad.get() + offsets()[partition_idx]);
+                          computePartition(
+                              partition_idx,
+                              intermediate_output_buffer + offsets()[partition_idx]);
                         }
                       });
 #else
@@ -557,8 +567,14 @@ void WindowFunctionContext::compute() {
   } else {
     auto timer = DEBUG_TIMER("Window Function Non-Parallelized Partition Compute");
     for (size_t partition_idx = 0; partition_idx != partition_count; ++partition_idx) {
-      computePartition(partition_idx, scratchpad.get() + offsets()[partition_idx]);
+      computePartition(partition_idx,
+                       intermediate_output_buffer + offsets()[partition_idx]);
     }
+  }
+  if (is_window_function_aggregate) {
+    // If window function is aggregate we were able to write to the final output buffer
+    // directly in computePartition and we are done.
+    return;
   }
 
   auto output_i64 = reinterpret_cast<int64_t*>(output_);
@@ -566,49 +582,21 @@ void WindowFunctionContext::compute() {
   if (should_parallelize) {
 #ifdef HAVE_TBB
     const size_t max_elems_per_thread = g_parallel_window_function_compute_threshold * 4;
-    if (window_function_is_aggregate(window_func_->getKind())) {
-      auto timer = DEBUG_TIMER("Window Function Aggregate Payload Copy Parallelized");
-      const size_t num_threads =
-          (elem_count_ + max_elems_per_thread - 1) / max_elems_per_thread;
-      const size_t grain_size{1};
-      tbb::parallel_for(tbb::blocked_range<size_t>(0, num_threads, grain_size),
-                        [&](const tbb::blocked_range<size_t>& r) {
-                          const size_t end_thread_id = r.end();
-                          for (size_t thread_id = r.begin(); thread_id < end_thread_id;
-                               ++thread_id) {
-                            const size_t start_elem = thread_id * max_elems_per_thread;
-                            const size_t end_elem =
-                                std::min(start_elem + max_elems_per_thread, elem_count_);
-                            std::copy(scratchpad.get() + start_elem,
-                                      scratchpad.get() + end_elem,
-                                      output_i64 + start_elem);
-                          }
-                        });
-    } else {
-      auto timer = DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Parallelized");
-      tbb::parallel_for(
-          tbb::blocked_range<size_t>(0, elem_count_, max_elems_per_thread),
-          [&](const tbb::blocked_range<size_t>& r) {
-            const size_t r_end_idx = r.end();
-            for (size_t i = r.begin(); i != r_end_idx; ++i) {
-              output_i64[payload()[i]] = scratchpad[i];
-            }
-          },
-          tbb::simple_partitioner());
-    }
+    auto timer = DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Parallelized");
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, elem_count_, max_elems_per_thread),
+                      [&](const tbb::blocked_range<size_t>& r) {
+                        const size_t r_end_idx = r.end();
+                        for (size_t i = r.begin(); i != r_end_idx; ++i) {
+                          output_i64[payload()[i]] = intermediate_output_buffer[i];
+                        }
+                      });
 #else
     UNREACHABLE();  // should_parallelize can only be true if HAVE_TBB defined
 #endif  // HAVE_TBB
   } else {
-    if (window_function_is_aggregate(window_func_->getKind())) {
-      auto timer = DEBUG_TIMER("Window Function Aggregate Payload Copy Non-Parallelized");
-      std::copy(scratchpad.get(), scratchpad.get() + elem_count_, output_i64);
-    } else {
-      auto timer =
-          DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Non-Parallelized");
-      for (size_t i = 0; i < elem_count_; ++i) {
-        output_i64[payload()[i]] = scratchpad[i];
-      }
+    DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Non-Parallelized");
+    for (size_t i = 0; i < elem_count_; ++i) {
+      output_i64[payload()[i]] = intermediate_output_buffer[i];
     }
   }
 }
