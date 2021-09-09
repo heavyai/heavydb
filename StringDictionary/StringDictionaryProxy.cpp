@@ -26,8 +26,9 @@
 #include "Utils/StringLike.h"
 
 StringDictionaryProxy::StringDictionaryProxy(std::shared_ptr<StringDictionary> sd,
+                                             const int32_t string_dict_id,
                                              const int64_t generation)
-    : string_dict_(sd), generation_(generation) {}
+    : string_dict_(sd), string_dict_id_(string_dict_id), generation_(generation) {}
 
 int32_t truncate_to_generation(const int32_t id, const size_t generation) {
   if (id == StringDictionary::INVALID_STR_ID) {
@@ -237,4 +238,20 @@ StringDictionary* StringDictionaryProxy::getDictionary() noexcept {
 
 int64_t StringDictionaryProxy::getGeneration() const noexcept {
   return generation_;
+}
+
+bool operator==(const StringDictionaryProxy& sdp1, const StringDictionaryProxy& sdp2) {
+  if (sdp1.string_dict_id_ != sdp2.string_dict_id_) {
+    return false;
+  }
+  if (sdp1.transient_int_to_str_.size() != sdp2.transient_int_to_str_.size()) {
+    return false;
+  }
+  return std::equal(sdp1.transient_int_to_str_.begin(),
+                    sdp1.transient_int_to_str_.end(),
+                    sdp2.transient_int_to_str_.begin());
+}
+
+bool operator!=(const StringDictionaryProxy& sdp1, const StringDictionaryProxy& sdp2) {
+  return !(sdp1 == sdp2);
 }

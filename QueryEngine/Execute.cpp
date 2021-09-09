@@ -251,7 +251,8 @@ StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
   if (!lit_str_dict_proxy_) {
     std::shared_ptr<StringDictionary> tsd =
         std::make_shared<StringDictionary>("", false, true, g_cache_string_hash);
-    lit_str_dict_proxy_.reset(new StringDictionaryProxy(tsd, 0));
+    lit_str_dict_proxy_.reset(new StringDictionaryProxy(
+        tsd, 0, 0));  // use 0 string_dict_id to denote literal proxy
   }
   return lit_str_dict_proxy_.get();
 }

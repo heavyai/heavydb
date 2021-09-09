@@ -128,8 +128,9 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
       return it->second.get();
     }
     it = str_dict_proxy_owned_
-             .emplace(dict_id,
-                      std::make_shared<StringDictionaryProxy>(str_dict, generation))
+             .emplace(
+                 dict_id,
+                 std::make_shared<StringDictionaryProxy>(str_dict, dict_id, generation))
              .first;
     return it->second.get();
   }

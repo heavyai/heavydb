@@ -283,7 +283,17 @@ bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
                                          executor->getTemporaryTables());
   CHECK_EQ(inner_ti.is_string(), outer_ti.is_string());
   // If the two columns don't share the dictionary, translation is needed.
-  return outer_ti.get_comp_param() != inner_ti.get_comp_param();
+  if (outer_ti.get_comp_param() != inner_ti.get_comp_param()) {
+    return true;
+  }
+  const auto inner_str_dict_proxy =
+      executor->getStringDictionaryProxy(inner_col->get_comp_param(), true);
+  CHECK(inner_str_dict_proxy);
+  const auto outer_str_dict_proxy =
+      executor->getStringDictionaryProxy(inner_col->get_comp_param(), true);
+  CHECK(outer_str_dict_proxy);
+
+  return *inner_str_dict_proxy != *outer_str_dict_proxy;
 }
 
 std::vector<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(

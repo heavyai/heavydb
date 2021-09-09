@@ -1393,6 +1393,7 @@ void fill_one_to_many_hash_table_impl(int32_t* buff,
                                       const unsigned cpu_thread_count,
                                       COUNT_MATCHES_LAUNCH_FUNCTOR count_matches_func,
                                       FILL_ROW_IDS_LAUNCH_FUNCTOR fill_row_ids_func) {
+  auto timer = DEBUG_TIMER(__func__);
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
   memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
@@ -1452,6 +1453,7 @@ void fill_one_to_many_hash_table(int32_t* buff,
                                  const void* sd_inner_proxy,
                                  const void* sd_outer_proxy,
                                  const unsigned cpu_thread_count) {
+  auto timer = DEBUG_TIMER(__func__);
   auto launch_count_matches = [count_buff = buff + hash_entry_info.hash_entry_count,
                                invalid_slot_val,
                                &join_column,
@@ -1509,6 +1511,7 @@ void fill_one_to_many_hash_table_bucketized(int32_t* buff,
                                             const void* sd_inner_proxy,
                                             const void* sd_outer_proxy,
                                             const unsigned cpu_thread_count) {
+  auto timer = DEBUG_TIMER(__func__);
   auto bucket_normalization = hash_entry_info.bucket_normalization;
   auto hash_entry_count = hash_entry_info.getNormalizedHashEntryCount();
   auto launch_count_matches = [bucket_normalization,
@@ -1577,6 +1580,7 @@ void fill_one_to_many_hash_table_sharded_impl(
     const unsigned cpu_thread_count,
     COUNT_MATCHES_LAUNCH_FUNCTOR count_matches_launcher,
     FILL_ROW_IDS_LAUNCH_FUNCTOR fill_row_ids_launcher) {
+  auto timer = DEBUG_TIMER(__func__);
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
   memset(count_buff, 0, hash_entry_count * sizeof(int32_t));

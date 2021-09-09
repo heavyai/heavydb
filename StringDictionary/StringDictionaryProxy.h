@@ -27,8 +27,15 @@
 
 // used to access a StringDictionary when transient strings are involved
 class StringDictionaryProxy {
+  friend bool operator==(const StringDictionaryProxy& sdp1,
+                         const StringDictionaryProxy& sdp2);
+  friend bool operator!=(const StringDictionaryProxy& sdp1,
+                         const StringDictionaryProxy& sdp2);
+
  public:
-  StringDictionaryProxy(std::shared_ptr<StringDictionary> sd, const int64_t generation);
+  StringDictionaryProxy(std::shared_ptr<StringDictionary> sd,
+                        const int32_t string_dict_id,
+                        const int64_t generation);
 
   int32_t getOrAdd(const std::string& str) noexcept;
   StringDictionary* getDictionary() noexcept;
@@ -58,6 +65,7 @@ class StringDictionaryProxy {
 
  private:
   std::shared_ptr<StringDictionary> string_dict_;
+  const int32_t string_dict_id_;
   std::map<int32_t, std::string> transient_int_to_str_;
   std::map<std::string, int32_t> transient_str_to_int_;
   int64_t generation_;
