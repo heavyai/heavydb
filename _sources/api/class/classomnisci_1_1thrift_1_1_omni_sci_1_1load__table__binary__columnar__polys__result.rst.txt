@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::load_table_binary_columnar_polys_result
+=======================================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::load_table_binary_columnar_polys_result
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

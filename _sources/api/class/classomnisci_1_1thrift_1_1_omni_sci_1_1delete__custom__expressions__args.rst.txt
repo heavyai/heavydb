@@ -1,0 +1,9 @@
+Class omnisci::thrift::OmniSci::delete_custom_expressions_args
+==============================================================
+
+.. doxygenclass:: omnisci::thrift::OmniSci::delete_custom_expressions_args
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

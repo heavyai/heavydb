@@ -1,0 +1,9 @@
+Class omnisci::thrift::ttypes::TCustomExpression
+================================================
+
+.. doxygenclass:: omnisci::thrift::ttypes::TCustomExpression
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

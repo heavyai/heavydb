@@ -1,0 +1,9 @@
+Class Transform4326ToUTM
+========================
+
+.. doxygenclass:: Transform4326ToUTM
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
