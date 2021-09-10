@@ -53,6 +53,8 @@ extern size_t g_approx_quantile_centroids;
 extern size_t g_parallel_top_min;
 extern size_t g_parallel_top_max;
 extern size_t g_estimator_failure_max_groupby_size;
+extern bool g_columnar_large_projections;
+extern size_t g_columnar_large_projections_threshold;
 
 namespace Catalog_Namespace {
 extern bool g_log_user_id;
@@ -804,6 +806,20 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_estimator_failure_max_groupby_size),
       "Maximum size of the groupby buffer if the estimator fails. By default we use the "
       "number of tuples in the table up to this value.");
+  developer_desc.add_options()("columnar-large-projections",
+                               po::value<bool>(&g_columnar_large_projections)
+                                   ->default_value(g_columnar_large_projections)
+                                   ->implicit_value(true),
+                               "Prefer columnar output if projection size is >= "
+                               "threshold set by --columnar-large-projections-threshold "
+                               "(default 1,000,000 rows).");
+  developer_desc.add_options()(
+      "columnar-large-projections-threshold",
+      po::value<size_t>(&g_columnar_large_projections_threshold)
+          ->default_value(g_columnar_large_projections_threshold),
+      "Threshold (in minimum number of rows) to prefer columnar output for projections. "
+      "Requires --columnar-large-projections to be set.");
+
   help_desc.add_options()(
       "allow-query-step-cpu-retry",
       po::value<bool>(&g_allow_query_step_cpu_retry)

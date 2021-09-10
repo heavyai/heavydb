@@ -57,6 +57,8 @@ bool g_skip_intermediate_count{true};
 bool g_enable_interop{false};
 bool g_enable_union{false};
 size_t g_estimator_failure_max_groupby_size{256000000};
+bool g_columnar_large_projections{true};
+size_t g_columnar_large_projections_threshold{1000000};
 
 extern bool g_enable_bump_allocator;
 extern bool g_enable_watchdog;
@@ -71,6 +73,21 @@ extern bool g_allow_query_step_cpu_retry;
 extern bool g_enable_dynamic_watchdog;
 
 namespace {
+
+bool is_projection(const RelAlgExecutionUnit& ra_exe_unit) {
+  return ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front();
+}
+
+bool should_output_columnar(const RelAlgExecutionUnit& ra_exe_unit,
+                            const RenderInfo* render_info) {
+  if (!is_projection(ra_exe_unit)) {
+    return false;
+  }
+  if (render_info && render_info->isPotentialInSituRender()) {
+    return false;
+  }
+  return ra_exe_unit.scan_limit >= g_columnar_large_projections_threshold;
+}
 
 bool node_is_aggregate(const RelAlgNode* ra) {
   const auto compound = dynamic_cast<const RelCompound*>(ra);
@@ -2717,7 +2734,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     const std::vector<TargetMetaInfo>& targets_meta,
     const bool is_agg,
     const CompilationOptions& co_in,
-    const ExecutionOptions& eo,
+    const ExecutionOptions& eo_in,
     RenderInfo* render_info,
     const int64_t queue_time_ms,
     const std::optional<size_t> previous_count) {
@@ -2725,6 +2742,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   auto timer = DEBUG_TIMER(__func__);
 
   auto co = co_in;
+  auto eo = eo_in;
   ColumnCacheMap column_cache;
   if (is_window_execution_unit(work_unit.exe_unit)) {
     if (!g_enable_window_functions) {
@@ -2799,6 +2817,17 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       }
     }
   }
+
+  if (g_columnar_large_projections) {
+    const auto prefer_columnar = should_output_columnar(ra_exe_unit, render_info);
+    if (prefer_columnar) {
+      VLOG(1) << "Using columnar layout for projection as output size of "
+              << ra_exe_unit.scan_limit << " rows exceeds threshold of "
+              << g_columnar_large_projections_threshold << ".";
+      eo.output_columnar_hint = true;
+    }
+  }
+
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      co.device_type,
                                                      QueryMemoryDescriptor(),
