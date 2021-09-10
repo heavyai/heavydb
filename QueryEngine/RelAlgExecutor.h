@@ -284,7 +284,7 @@ class RelAlgExecutor : private StorageIOFacility {
       const std::vector<TargetMetaInfo>& targets_meta,
       const bool is_agg,
       const CompilationOptions& co_in,
-      const ExecutionOptions& eo,
+      const ExecutionOptions& eo_in,
       RenderInfo*,
       const int64_t queue_time_ms,
       const std::optional<size_t> previous_count = std::nullopt);
