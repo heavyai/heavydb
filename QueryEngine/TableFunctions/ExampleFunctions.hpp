@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "../../QueryEngine/OmniSciTypes.h"
+
 // Modified from original code by Akanksha Jolly,
 // originally posted at https://www.geeksforgeeks.org/fractals-in-cc/,
 // Author profile: https://auth.geeksforgeeks.org/user/akankshajolly/articles

@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "../../QueryEngine/OmniSciTypes.h"
-#include "../../Shared/funcannotations.h"
 
 // clang-format off
 /*
@@ -239,8 +240,6 @@ EXTENSION_NOINLINE int32_t get_max_with_row_offset(const Column<int>& input_col,
   return 1;
 }
 
-#include "TableFunctionsTesting.hpp"
-
 // clang-format off
 /*
   UDTF: column_list_get__cpu_(ColumnList<double>, int, RowMultiplier) -> Column<double>
@@ -289,18 +288,3 @@ EXTENSION_NOINLINE int32_t column_list_row_sum__cpu_(const ColumnList<int32_t>& 
   }
   return output_num_rows;
 }
-
-#include "ExampleFunctions.hpp"
-#include "MLFunctions.hpp"
-
-/*
-  Include the UDTF template initiations:
-*/
-#ifdef __CUDACC__
-#include "gen-cpp/TableFunctionsFactory_init_gpu.hpp"
-#else
-#include "gen-cpp/TableFunctionsFactory_init_cpu.hpp"
-#endif
-/*
-  Don't put any code containing UDTF template definitions below.
-*/

@@ -7,7 +7,7 @@
 #include "ExtensionFunctions.hpp"
 #include "GpuRtConstants.h"
 #include "HyperLogLogRank.h"
-#include "TableFunctions/TableFunctions.hpp"
+#include "gen-cpp/TableFunctionsFactory_init_gpu.hpp"
 
 #if CUDA_VERSION < 10000
 static_assert(false, "CUDA v10.0 or later is required.");

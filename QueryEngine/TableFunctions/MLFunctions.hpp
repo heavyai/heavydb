@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #ifdef HAVE_MLPACK
+
+#include "../../QueryEngine/OmniSciTypes.h"
 
 #include <mlpack/methods/dbscan/dbscan.hpp>
 #include <mlpack/methods/kmeans/kmeans.hpp>
