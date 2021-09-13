@@ -331,7 +331,7 @@ TEST_F(RangeJoinTest, IsEnabledByDefault) {
       .device_type = ExecutorDeviceType::CPU,
       .hash_join_enabled = true,
   };
-  int expected_hash_tables{0};
+  size_t expected_hash_tables{0};
 
   ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
       << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
@@ -368,7 +368,7 @@ TEST_F(RangeJoinTest, CanBeDisabled) {
       .hash_join_enabled = false,
   };
 
-  const int expected_hash_tables{0};
+  const size_t expected_hash_tables{0};
 
   ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
       << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
