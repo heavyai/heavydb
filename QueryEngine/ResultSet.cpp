@@ -33,15 +33,13 @@
 #include "Shared/checked_alloc.h"
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"
-#include "Shared/threadpool.h"
+#include "Shared/threading.h"
 
 #include <algorithm>
 #include <atomic>
 #include <bitset>
 #include <future>
 #include <numeric>
-
-extern bool g_use_tbb_pool;
 
 size_t g_parallel_top_min = 100e3;
 size_t g_parallel_top_max = 20e6;  // In effect only with g_enable_watchdog.
@@ -364,38 +362,22 @@ size_t ResultSet::binSearchRowCount() const {
 }
 
 size_t ResultSet::parallelRowCount() const {
-  auto execute_parallel_row_count = [this](auto counter_threads) -> size_t {
-    const size_t worker_count = cpu_threads();
-    for (size_t i = 0,
-                start_entry = 0,
-                stride = (entryCount() + worker_count - 1) / worker_count;
-         i < worker_count && start_entry < entryCount();
-         ++i, start_entry += stride) {
-      const auto end_entry = std::min(start_entry + stride, entryCount());
-      counter_threads.spawn(
-          [this, query_id = logger::query_id()](const size_t start, const size_t end) {
-            auto qid_scope_guard = logger::set_thread_local_query_id(query_id);
-            size_t row_count{0};
-            for (size_t i = start; i < end; ++i) {
-              if (!isRowAtEmpty(i)) {
-                ++row_count;
-              }
-            }
-            return row_count;
-          },
-          start_entry,
-          end_entry);
+  using namespace threading;
+  auto execute_parallel_row_count = [this, query_id = logger::query_id()](
+                                        const blocked_range<size_t>& r,
+                                        size_t row_count) {
+    auto qid_scope_guard = logger::set_thread_local_query_id(query_id);
+    for (size_t i = r.begin(); i < r.end(); ++i) {
+      if (!isRowAtEmpty(i)) {
+        ++row_count;
+      }
     }
-    const auto row_counts = counter_threads.join();
-    const size_t row_count = std::accumulate(row_counts.begin(), row_counts.end(), 0);
     return row_count;
   };
-  // will fall back to futures threadpool if TBB is not enabled
-  const auto row_count =
-      g_use_tbb_pool
-          ? execute_parallel_row_count(threadpool::ThreadPool<size_t>())
-          : execute_parallel_row_count(threadpool::FuturesThreadPool<size_t>());
-
+  const auto row_count = parallel_reduce(blocked_range<size_t>(0, entryCount()),
+                                         size_t(0),
+                                         execute_parallel_row_count,
+                                         std::plus<int>());
   return get_truncated_row_count(row_count, getLimit(), drop_first_);
 }
 
@@ -627,19 +609,23 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   // Split permutation_ into nthreads subranges and top-sort in-place.
   permutation_.resize(query_mem_desc_.getEntryCount());
   std::vector<PermutationView> permutation_views(nthreads);
-  const auto top_sort_interval =
-      [&, top_n, executor, query_id = logger::query_id()](const auto interval) {
-        auto qid_scope_guard = logger::set_thread_local_query_id(query_id);
-        PermutationView pv(permutation_.data() + interval.begin, 0, interval.size());
-        pv = initPermutationBuffer(pv, interval.begin, interval.end);
-        const auto compare = createComparator(order_entries, pv, executor, true);
-        permutation_views[interval.index] = topPermutation(pv, top_n, compare);
-      };
-  threadpool::FuturesThreadPool<void> top_sort_threads;
+  threading::task_group top_sort_threads;
   for (auto interval : makeIntervals<PermutationIdx>(0, permutation_.size(), nthreads)) {
-    top_sort_threads.spawn(top_sort_interval, interval);
+    top_sort_threads.run([this,
+                          &order_entries,
+                          &permutation_views,
+                          top_n,
+                          executor,
+                          query_id = logger::query_id(),
+                          interval] {
+      auto qid_scope_guard = logger::set_thread_local_query_id(query_id);
+      PermutationView pv(permutation_.data() + interval.begin, 0, interval.size());
+      pv = initPermutationBuffer(pv, interval.begin, interval.end);
+      const auto compare = createComparator(order_entries, pv, executor, true);
+      permutation_views[interval.index] = topPermutation(pv, top_n, compare);
+    });
   }
-  top_sort_threads.join();
+  top_sort_threads.wait();
 
   // In case you are considering implementing a parallel reduction, note that the
   // ResultSetComparator constructor is O(N) in order to materialize some of the aggregate
@@ -727,6 +713,7 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeCountDistinctCo
   const CountDistinctDescriptor count_distinct_descriptor =
       result_set_->query_mem_desc_.getCountDistinctDescriptor(order_entry.tle_no - 1);
   const size_t num_non_empty_entries = permutation_.size();
+
   const auto work = [&, query_id = logger::query_id()](const size_t start,
                                                        const size_t end) {
     auto qid_scope_guard = logger::set_thread_local_query_id(query_id);
@@ -746,11 +733,11 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeCountDistinctCo
   if (single_threaded_) {
     work(0, num_non_empty_entries);
   } else {
-    threadpool::FuturesThreadPool<void> thread_pool;
+    threading::task_group thread_pool;
     for (auto interval : makeIntervals<size_t>(0, num_non_empty_entries, cpu_threads())) {
-      thread_pool.spawn(work, interval.begin, interval.end);
+      thread_pool.run([=] { work(interval.begin, interval.end); });
     }
-    thread_pool.join();
+    thread_pool.wait();
   }
   return count_distinct_materialized_buffer;
 }
@@ -788,11 +775,11 @@ ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::materializeApproxQuantileC
   if (single_threaded_) {
     work(0, size);
   } else {
-    threadpool::FuturesThreadPool<void> thread_pool;
+    threading::task_group thread_pool;
     for (auto interval : makeIntervals<size_t>(0, size, cpu_threads())) {
-      thread_pool.spawn(work, interval.begin, interval.end);
+      thread_pool.run([=] { work(interval.begin, interval.end); });
     }
-    thread_pool.join();
+    thread_pool.wait();
   }
   return materialized_buffer;
 }

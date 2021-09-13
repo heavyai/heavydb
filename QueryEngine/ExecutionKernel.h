@@ -20,7 +20,7 @@
 #include "QueryEngine/ColumnFetcher.h"
 #include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
 
-#include "Shared/threadpool.h"
+#include "Shared/threading.h"
 
 #ifdef HAVE_TBB
 #include "tbb/enumerable_thread_specific.h"
@@ -31,7 +31,7 @@ class SharedKernelContext {
   SharedKernelContext(const std::vector<InputTableInfo>& query_infos)
       : query_infos_(query_infos)
 #ifdef HAVE_TBB
-      , thread_pool_(nullptr)
+      , task_group_(nullptr)
 #endif
   {
   }
@@ -48,8 +48,8 @@ class SharedKernelContext {
   std::atomic_flag dynamic_watchdog_set = ATOMIC_FLAG_INIT;
 
 #ifdef HAVE_TBB
-  auto getThreadPool() { return thread_pool_; }
-  void setThreadPool(threadpool::ThreadPool<void>* pool) { thread_pool_ = pool; }
+  auto getThreadPool() { return task_group_; }
+  void setThreadPool(threading::task_group* tg) { task_group_ = tg; }
   auto& getTlsExecutionContext() { return tls_execution_context_; }
 #endif  // HAVE_TBB
 
@@ -63,7 +63,7 @@ class SharedKernelContext {
   const RegisteredQueryHint query_hint_;
 
 #ifdef HAVE_TBB
-  threadpool::ThreadPool<void>* thread_pool_;
+  threading::task_group* task_group_;
   tbb::enumerable_thread_specific<std::unique_ptr<QueryExecutionContext>>
       tls_execution_context_;
 #endif  // HAVE_TBB

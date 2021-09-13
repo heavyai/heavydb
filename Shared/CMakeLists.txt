@@ -7,6 +7,7 @@ set(shared_source_files
     base64.cpp
     misc.cpp
     thread_count.cpp
+    threading.cpp
     MathUtils.cpp
     file_glob.cpp)
 

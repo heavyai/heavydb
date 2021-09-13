@@ -541,12 +541,6 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->implicit_value(true),
       "Enable runtime support for the JIT code profiling using Intel VTune.");
   developer_desc.add_options()(
-      "enable-modern-thread-pool",
-      po::value<bool>(&g_use_tbb_pool)
-          ->default_value(g_use_tbb_pool)
-          ->implicit_value(true),
-      "Enable a new thread pool implementation for queuing kernels for execution.");
-  developer_desc.add_options()(
       "enable-cpu-sub-tasks",
       po::value<bool>(&g_enable_cpu_sub_tasks)
           ->default_value(g_enable_cpu_sub_tasks)
@@ -902,6 +896,13 @@ void CommandLineOptions::validate() {
   }
   g_read_only = read_only;
   LOG(INFO) << " Server read-only mode is " << read_only;
+#if DISABLE_CONCURRENCY
+  LOG(INFO) << " Threading layer: serial";
+#elif ENABLE_TBB
+  LOG(INFO) << " Threading layer: TBB";
+#else
+  LOG(INFO) << " Threading layer: std";
+#endif
   LOG(INFO) << " Watchdog is set to " << enable_watchdog;
   LOG(INFO) << " Dynamic Watchdog is set to " << enable_dynamic_watchdog;
   if (enable_dynamic_watchdog) {

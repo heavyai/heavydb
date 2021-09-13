@@ -34,8 +34,6 @@
 #include "Shared/SqlTypesLayout.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/likely.h"
-#include "Shared/thread_count.h"
-#include "Shared/threadpool.h"
 
 #include <algorithm>
 #include <bitset>

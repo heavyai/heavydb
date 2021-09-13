@@ -55,7 +55,6 @@ extern bool g_allow_cpu_retry;
 extern bool g_allow_query_step_cpu_retry;
 extern bool g_enable_watchdog;
 extern bool g_skip_intermediate_count;
-extern bool g_use_tbb_pool;
 extern bool g_enable_left_join_filter_hoisting;
 
 extern unsigned g_trivial_loop_join_threshold;
@@ -22252,11 +22251,6 @@ int main(int argc, char** argv) {
                      " Currently only supports single node tests.");
   desc.add_options()("use-temporary-tables",
                      "Use temporary tables instead of physical storage.");
-  desc.add_options()("use-tbb",
-                     po::value<bool>(&g_use_tbb_pool)
-                         ->default_value(g_use_tbb_pool)
-                         ->implicit_value(true),
-                     "Use TBB thread pool implementation for query dispatch.");
   desc.add_options()("use-disk-cache",
                      "Use the disk cache for all tables with minimum size settings.");
 
