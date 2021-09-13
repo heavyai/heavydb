@@ -388,7 +388,6 @@ llvm::Value* CodeGenerator::codegenCastToFp(llvm::Value* operand_lv,
                                             const SQLTypeInfo& operand_ti,
                                             const SQLTypeInfo& ti) {
   AUTOMATIC_IR_METADATA(cgen_state_);
-  constexpr std::array<double, 19> one_div_pow10 = shared::inversePowersOf<19>(10);
   if (!ti.is_fp()) {
     throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " +
                              ti.get_type_name() + " not supported");
@@ -400,15 +399,13 @@ llvm::Value* CodeGenerator::codegenCastToFp(llvm::Value* operand_lv,
                              : llvm::Type::getDoubleTy(cgen_state_->context_);
     result_lv = cgen_state_->ir_builder_.CreateSIToFP(operand_lv, fp_type);
     if (auto const scale = static_cast<unsigned>(operand_ti.get_scale())) {
-      CHECK_LT(scale, one_div_pow10.size());
-      double const multiplier = one_div_pow10[scale];
+      double const multiplier = shared::power10inv(scale);
       result_lv = cgen_state_->ir_builder_.CreateFMul(
           result_lv, llvm::ConstantFP::get(result_lv->getType(), multiplier));
     }
   } else {
     if (auto const scale = static_cast<unsigned>(operand_ti.get_scale())) {
-      CHECK_LT(scale, one_div_pow10.size());
-      double const multiplier = one_div_pow10[scale];
+      double const multiplier = shared::power10inv(scale);
       auto const fp_type = ti.get_type() == kFLOAT
                                ? llvm::Type::getFloatTy(cgen_state_->context_)
                                : llvm::Type::getDoubleTy(cgen_state_->context_);

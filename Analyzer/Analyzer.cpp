@@ -736,16 +736,7 @@ namespace {
 template <typename T>
 T floatFromDecimal(int64_t const dec, unsigned const scale) {
   static_assert(std::is_floating_point_v<T>);
-  constexpr auto pow10 = shared::powersOf<T, 16>(10);
-  T num = static_cast<T>(dec);
-  if (scale == 0) {
-    return num;
-  }
-  T den = pow10[scale & 15];
-  for (unsigned sc = scale >> 4; sc; --sc) {
-    den *= 1e16;
-  }
-  return num / den;
+  return static_cast<T>(dec) / shared::power10(scale);
 }
 
 // Q: Why is there a maxRound() but no minRound()?

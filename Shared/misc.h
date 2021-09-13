@@ -256,6 +256,20 @@ constexpr std::array<double, N> inversePowersOf(double const a) {
   return inversePowersOfImpl(a, std::make_index_sequence<N>{});
 }
 
+// Return pow(10,x).  Single-lookup for x < 20.
+inline double power10(unsigned const x) {
+  constexpr unsigned N = 20;
+  constexpr auto pow10 = powersOf<double, N>(10.0);
+  return x < N ? pow10[x] : (pow10[N - 1] * 10) * power10(x - N);
+}
+
+// Return 1/pow(10,x).  Single-lookup for x < 20.
+inline double power10inv(unsigned const x) {
+  constexpr unsigned N = 20;
+  constexpr auto pow10inv = inversePowersOf<N>(10.0);
+  return x < N ? pow10inv[x] : (pow10inv[N - 1] / 10) * power10inv(x - N);
+}
+
 // May be constexpr in C++20.
 template <typename TO, typename FROM>
 inline TO reinterpret_bits(FROM const from) {
