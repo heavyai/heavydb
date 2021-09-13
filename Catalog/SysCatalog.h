@@ -330,7 +330,8 @@ class SysCatalog : private CommonFileOperations {
                                     const Catalog_Namespace::Catalog& cat);
   void syncUserWithRemoteProvider(const std::string& user_name,
                                   std::vector<std::string> idp_roles,
-                                  bool* issuper);
+                                  bool* issuper,
+                                  const std::string& default_db = {});
   std::unordered_map<std::string, std::vector<std::string>> getGranteesOfSharedDashboards(
       const std::vector<std::string>& dashboard_ids);
   void check_for_session_encryption(const std::string& pki_cert, std::string& session);

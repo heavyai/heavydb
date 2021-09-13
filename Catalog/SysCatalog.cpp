@@ -2555,7 +2555,8 @@ void SysCatalog::revokeDBObjectPrivilegesFromAllBatch(vector<DBObject>& objects,
 
 void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
                                             std::vector<std::string> idp_roles,
-                                            bool* is_super) {
+                                            bool* is_super,
+                                            const std::string& default_db) {
   UserMetadata user_meta;
   bool is_super_user = is_super ? *is_super : false;
   // need to escalate to a write lock
@@ -2568,7 +2569,7 @@ void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
     createUser(user_name,
                generate_random_string(72),
                is_super_user,
-               "",
+               default_db,
                /*can_login=*/true,
                /*is_temporary=*/enable_idp_temporary_users);
     LOG(INFO) << "User " << user_name << " has been created by remote identity provider"
