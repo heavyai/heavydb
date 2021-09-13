@@ -779,9 +779,13 @@ void debug_timer_new_thread(ThreadId parent_thread_id) {
   CHECK(parent_itr != g_duration_tree_map.end());
   auto const current_depth = parent_itr->second->currentDepth();
   auto& duration_tree_ptr = g_duration_tree_map[g_thread_id];
-  CHECK(!duration_tree_ptr) << __func__ << " called twice on same thread.";
-  duration_tree_ptr = std::make_unique<DurationTree>(g_thread_id, current_depth + 1);
-  parent_itr->second->pushDurationTree(*duration_tree_ptr);
+  if (!duration_tree_ptr) {
+    duration_tree_ptr = std::make_unique<DurationTree>(g_thread_id, current_depth + 1);
+    parent_itr->second->pushDurationTree(*duration_tree_ptr);
+  } else {
+    // If this is executed, then this was not really a new thread.
+    // Since some libraries recycle threads, we won't trigger an error here.
+  }
 }
 
 ThreadId thread_id() {
