@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,21 @@
  * limitations under the License.
  */
 
-#include "ExpressionRewrite.h"
-#include "../Analyzer/Analyzer.h"
-#include "../Parser/ParserNode.h"
-#include "../Shared/sqldefs.h"
-#include "DeepCopyVisitor.h"
-#include "Execute.h"
-#include "Logger/Logger.h"
-#include "RelAlgTranslator.h"
-#include "ScalarExprVisitor.h"
-#include "WindowExpressionRewrite.h"
+#include "QueryEngine/ExpressionRewrite.h"
 
+#include <algorithm>
 #include <boost/locale/conversion.hpp>
 #include <unordered_set>
+
+#include "Analyzer/Analyzer.h"
+#include "Logger/Logger.h"
+#include "Parser/ParserNode.h"
+#include "QueryEngine/DeepCopyVisitor.h"
+#include "QueryEngine/Execute.h"
+#include "QueryEngine/RelAlgTranslator.h"
+#include "QueryEngine/ScalarExprVisitor.h"
+#include "QueryEngine/WindowExpressionRewrite.h"
+#include "Shared/sqldefs.h"
 
 namespace {
 
@@ -873,6 +875,36 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
       }
     } else {
       VLOG(1) << "Overlaps join not enabled for " << func_oper->getName();
+    }
+    return boost::none;
+  }
+  auto bin_oper = dynamic_cast<Analyzer::BinOper*>(expr.get());
+  if (g_enable_distance_rangejoin && bin_oper &&
+      (bin_oper->get_optype() == kLE || bin_oper->get_optype() == kLT)) {
+    auto lhs = dynamic_cast<const Analyzer::GeoOperator*>(bin_oper->get_left_operand());
+    auto rhs = dynamic_cast<const Analyzer::Constant*>(bin_oper->get_right_operand());
+    if (lhs && rhs && lhs->getName() == "ST_Distance") {
+      const auto args = lhs->getChildExprs();
+      CHECK_GE(args.size(), size_t(2));
+      auto l_arg = dynamic_cast<const Analyzer::ColumnVar*>(args[0]);
+      auto r_arg = dynamic_cast<const Analyzer::ColumnVar*>(args[1]);
+      if (l_arg && r_arg) {
+        const int64_t hash_table_arg_index =
+            l_arg->get_rte_idx() > r_arg->get_rte_idx() ? 0 : 1;
+        auto hash_table_col_var = args[hash_table_arg_index];
+        if (!hash_table_col_var->get_type_info().is_geometry()) {
+          return boost::none;
+        }
+        const int64_t probe_arg_index = std::max<int64_t>(hash_table_arg_index - 1, 0);
+        auto probe_col_var = args[probe_arg_index]->deep_copy();
+
+        const bool inclusive = bin_oper->get_optype() == kLE;
+        auto range_expr = makeExpr<Analyzer::RangeOper>(
+            inclusive, inclusive, hash_table_col_var->deep_copy(), rhs->deep_copy());
+        auto overlaps_oper = makeExpr<Analyzer::BinOper>(
+            kBOOLEAN, kOVERLAPS, kONE, probe_col_var, range_expr);
+        return OverlapsJoinConjunction{{expr}, {overlaps_oper}};
+      }
     }
   }
   return boost::none;

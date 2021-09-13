@@ -40,7 +40,7 @@ void ColumnsForDevice::setBucketInfo(
     const auto inner_col = inner_outer_pair.first;
     const auto& ti = inner_col->get_type_info();
     const auto elem_ti = ti.get_elem_type();
-    CHECK(elem_ti.is_fp());
+    // CHECK(elem_ti.is_fp());
 
     join_buckets.emplace_back(JoinBucketInfo{inverse_bucket_sizes_for_dimension,
                                              elem_ti.get_type() == kDOUBLE});

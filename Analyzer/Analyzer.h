@@ -517,6 +517,40 @@ class BinOper : public Expr {
   std::shared_ptr<Analyzer::Expr> right_operand;  // the right operand expression
 };
 
+/**
+ * @type RangeOper
+ * @brief
+ */
+class RangeOper : public Expr {
+ public:
+  RangeOper(const bool l_inclusive,
+            const bool r_inclusive,
+            std::shared_ptr<Analyzer::Expr> l,
+            std::shared_ptr<Analyzer::Expr> r)
+      : Expr(SQLTypeInfo(kNULLT), /*not_null=*/false)
+      , left_inclusive_(l_inclusive)
+      , right_inclusive_(r_inclusive)
+      , left_operand_(l)
+      , right_operand_(r) {
+    CHECK(left_operand_);
+    CHECK(right_operand_);
+  }
+
+  const Expr* get_left_operand() const { return left_operand_.get(); }
+  const Expr* get_right_operand() const { return right_operand_.get(); }
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+  bool operator==(const Expr& rhs) const override;
+  std::string toString() const override;
+
+ private:
+  // build a range between these two operands
+  bool left_inclusive_;
+  bool right_inclusive_;
+  std::shared_ptr<Analyzer::Expr> left_operand_;
+  std::shared_ptr<Analyzer::Expr> right_operand_;
+};
+
 class Query;
 
 /*
@@ -1876,6 +1910,8 @@ class GeoOperator : public GeoExpr {
   Analyzer::Expr* getOperand(const size_t index) const;
 
   const std::string& getName() const { return name_; }
+
+  std::vector<std::shared_ptr<Analyzer::Expr>> getArgs() const { return args_; }
 
   std::vector<Analyzer::Expr*> getChildExprs() const override {
     std::vector<Analyzer::Expr*> ret;

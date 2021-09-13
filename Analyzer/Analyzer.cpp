@@ -106,6 +106,13 @@ std::shared_ptr<Analyzer::Expr> BinOper::deep_copy() const {
                            right_operand->deep_copy());
 }
 
+std::shared_ptr<Analyzer::Expr> RangeOper::deep_copy() const {
+  return makeExpr<RangeOper>(left_inclusive_,
+                             right_inclusive_,
+                             left_operand_->deep_copy(),
+                             right_operand_->deep_copy());
+}
+
 std::shared_ptr<Analyzer::Expr> Subquery::deep_copy() const {
   // not supported yet.
   CHECK(false);
@@ -2206,6 +2213,17 @@ bool BinOper::operator==(const Expr& rhs) const {
          *right_operand == *rhs_bo.get_right_operand();
 }
 
+bool RangeOper::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(RangeOper)) {
+    return false;
+  }
+  const RangeOper& rhs_rg = dynamic_cast<const RangeOper&>(rhs);
+  return left_inclusive_ == rhs_rg.left_inclusive_ &&
+         right_inclusive_ == rhs_rg.right_inclusive_ &&
+         *left_operand_ == *rhs_rg.left_operand_ &&
+         *right_operand_ == *rhs_rg.right_operand_;
+}
+
 bool CharLengthExpr::operator==(const Expr& rhs) const {
   if (typeid(rhs) != typeid(CharLengthExpr)) {
     return false;
@@ -2621,6 +2639,13 @@ std::string BinOper::toString() const {
   str += right_operand->toString();
   str += ") ";
   return str;
+}
+
+std::string RangeOper::toString() const {
+  const std::string lhs = left_inclusive_ ? "[" : "(";
+  const std::string rhs = right_inclusive_ ? "]" : ")";
+  return "(RangeOper " + lhs + " " + left_operand_->toString() + " , " +
+         right_operand_->toString() + " " + rhs + " )";
 }
 
 std::string Subquery::toString() const {

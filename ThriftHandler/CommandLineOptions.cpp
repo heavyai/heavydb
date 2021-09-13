@@ -163,6 +163,12 @@ void CommandLineOptions::fillOptions() {
                               ->implicit_value(true),
                           "Enable the overlaps hash join framework allowing for range "
                           "join (e.g. spatial overlaps) computation using a hash table.");
+  help_desc.add_options()("enable-distance-rangejoin",
+                          po::value<bool>(&g_enable_distance_rangejoin)
+                              ->default_value(g_enable_distance_rangejoin)
+                              ->implicit_value(true),
+                          "Enable accelerating point distance joins with a hash table. "
+                          "This rewrites ST_Distance when using an upperbound (<= X).");
   help_desc.add_options()("enable-runtime-query-interrupt",
                           po::value<bool>(&enable_runtime_query_interrupt)
                               ->default_value(enable_runtime_query_interrupt)

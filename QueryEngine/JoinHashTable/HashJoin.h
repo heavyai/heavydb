@@ -26,6 +26,7 @@
 #include "QueryEngine/ColumnarResults.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
+#include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/JoinHashTable/HashTable.h"
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
 

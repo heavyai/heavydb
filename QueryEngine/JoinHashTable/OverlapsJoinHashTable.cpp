@@ -22,6 +22,7 @@
 #include "QueryEngine/JoinHashTable/Builders/BaselineHashTableBuilder.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 #include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/RangeJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinKeyHandlers.h"
 #include "QueryEngine/JoinHashTable/Runtime/JoinHashTableGpuUtils.h"
 
@@ -50,8 +51,25 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     Executor* executor,
     const RegisteredQueryHint& query_hint) {
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
-  auto inner_outer_pairs = HashJoin::normalizeColumnPairs(
-      condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
+
+  std::vector<InnerOuter> inner_outer_pairs;
+
+  if (const auto range_expr =
+          dynamic_cast<const Analyzer::RangeOper*>(condition->get_right_operand())) {
+    return RangeJoinHashTable::getInstance(condition,
+                                           range_expr,
+                                           query_infos,
+                                           memory_level,
+                                           join_type,
+                                           device_count,
+                                           column_cache,
+                                           executor,
+                                           query_hint);
+  } else {
+    inner_outer_pairs = HashJoin::normalizeColumnPairs(
+        condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
+  }
+  CHECK(!inner_outer_pairs.empty());
 
   const auto getHashTableType =
       [](const std::shared_ptr<Analyzer::BinOper> condition,
@@ -69,7 +87,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     return layout;
   };
 
-  auto layout = getHashTableType(condition, inner_outer_pairs);
+  const auto layout = getHashTableType(condition, inner_outer_pairs);
 
   if (VLOGGING(1)) {
     VLOG(1) << "Building geo hash table " << getHashTypeString(layout)

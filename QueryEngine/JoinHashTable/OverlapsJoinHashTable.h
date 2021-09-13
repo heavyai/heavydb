@@ -142,7 +142,7 @@ class OverlapsJoinHashTable : public HashJoin {
  protected:
   void reify(const HashType preferred_layout);
 
-  void reifyWithLayout(const HashType layout);
+  virtual void reifyWithLayout(const HashType layout);
 
   virtual void reifyImpl(std::vector<ColumnsForDevice>& columns_per_device,
                          const Fragmenter_Namespace::TableInfo& query_info,
@@ -261,7 +261,7 @@ class OverlapsJoinHashTable : public HashJoin {
     query_hint_ = query_hint;
   }
 
- private:
+ protected:
   size_t getEntryCount() const {
     auto hash_table = getHashTableForDevice(0);
     CHECK(hash_table);

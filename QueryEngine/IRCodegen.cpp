@@ -21,6 +21,8 @@
 #include "MaxwellCodegenPatch.h"
 #include "RelAlgTranslator.h"
 
+#include "QueryEngine/JoinHashTable/RangeJoinHashTable.h"
+
 // Driver methods for the IR generation.
 
 extern bool g_enable_left_join_filter_hoisting;
@@ -630,6 +632,38 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                 : nullptr,
             /*hoisted_filters=*/hoisted_filters_cb,
             /*is_deleted=*/is_deleted_cb);
+      } else if (auto range_join_table =
+                     dynamic_cast<RangeJoinHashTable*>(current_level_hash_table.get())) {
+        join_loops.emplace_back(
+            /* kind= */ JoinLoopKind::MultiSet,
+            /* type= */ current_level_join_conditions.type,
+            /* iteration_domain_codegen= */
+            [this,
+             range_join_table,
+             current_hash_table_idx,
+             level_idx,
+             current_level_hash_table,
+             &co](const std::vector<llvm::Value*>& prev_iters) {
+              addJoinLoopIterator(prev_iters, level_idx);
+              JoinLoopDomain domain{{0}};
+              CHECK(!prev_iters.empty());
+              const auto matching_set = range_join_table->codegenMatchingSetWithOffset(
+                  co, current_hash_table_idx, prev_iters.back());
+              domain.values_buffer = matching_set.elements;
+              domain.element_count = matching_set.count;
+              return domain;
+            },
+            /* outer_condition_match= */
+            current_level_join_conditions.type == JoinType::LEFT
+                ? std::function<llvm::Value*(const std::vector<llvm::Value*>&)>(
+                      outer_join_condition_multi_quals_cb)
+                : nullptr,
+            /* found_outer_matches= */
+            current_level_join_conditions.type == JoinType::LEFT
+                ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
+                : nullptr,
+            /* hoisted_filters= */ nullptr,  // <<! TODO
+            /* is_deleted= */ is_deleted_cb);
       } else {
         join_loops.emplace_back(
             /*kind=*/JoinLoopKind::Set,
@@ -1110,38 +1144,165 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
   cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt<int32_t>(0));
   cgen_state_->ir_builder_.SetInsertPoint(entry_bb);
   CodeGenerator code_generator(this);
-  const auto loops_entry_bb = JoinLoop::codegen(
-      join_loops,
-      /*body_codegen=*/
-      [this,
-       query_func,
-       &query_mem_desc,
-       &co,
-       &eo,
-       &group_by_and_aggregate,
-       &join_loops,
-       &ra_exe_unit](const std::vector<llvm::Value*>& prev_iters) {
-        AUTOMATIC_IR_METADATA(cgen_state_.get());
-        addJoinLoopIterator(prev_iters, join_loops.size());
-        auto& builder = cgen_state_->ir_builder_;
-        const auto loop_body_bb = llvm::BasicBlock::Create(
-            builder.getContext(), "loop_body", builder.GetInsertBlock()->getParent());
-        builder.SetInsertPoint(loop_body_bb);
-        const bool can_return_error =
-            compileBody(ra_exe_unit, group_by_and_aggregate, query_mem_desc, co);
-        if (can_return_error || cgen_state_->needs_error_check_ ||
-            eo.with_dynamic_watchdog || eo.allow_runtime_query_interrupt) {
-          createErrorCheckControlFlow(query_func,
-                                      eo.with_dynamic_watchdog,
-                                      eo.allow_runtime_query_interrupt,
-                                      co.device_type,
-                                      group_by_and_aggregate.query_infos_);
-        }
-        return loop_body_bb;
-      },
-      /*outer_iter=*/code_generator.posArg(nullptr),
-      exit_bb,
-      cgen_state_.get());
+
+  llvm::BasicBlock* loops_entry_bb{nullptr};
+  auto has_range_join =
+      std::any_of(join_loops.begin(), join_loops.end(), [](const auto& join_loop) {
+        return join_loop.kind() == JoinLoopKind::MultiSet;
+      });
+  if (has_range_join) {
+    CHECK_EQ(join_loops.size(), size_t(1));
+    const auto element_count =
+        llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), 9);
+
+    auto compute_packed_offset = [](const int32_t x, const int32_t y) -> uint64_t {
+      const uint64_t y_shifted = static_cast<uint64_t>(y) << 32;
+      return y_shifted | static_cast<uint32_t>(x);
+    };
+
+    const auto values_arr = std::vector<llvm::Constant*>{
+        llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), 0),
+        llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
+                               compute_packed_offset(0, 1)),
+        llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
+                               compute_packed_offset(0, -1)),
+        llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
+                               compute_packed_offset(1, 0)),
+        llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
+                               compute_packed_offset(1, 1)),
+        llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
+                               compute_packed_offset(1, -1)),
+        llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
+                               compute_packed_offset(-1, 0)),
+        llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
+                               compute_packed_offset(-1, 1)),
+        llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
+                               compute_packed_offset(-1, -1))};
+
+    const auto constant_values_array = llvm::ConstantArray::get(
+        get_int_array_type(64, 9, cgen_state_->context_), values_arr);
+    CHECK(cgen_state_->module_);
+    const auto values =
+        new llvm::GlobalVariable(*cgen_state_->module_,
+                                 get_int_array_type(64, 9, cgen_state_->context_),
+                                 true,
+                                 llvm::GlobalValue::LinkageTypes::InternalLinkage,
+                                 constant_values_array);
+    JoinLoop join_loop(
+        JoinLoopKind::Set,
+        JoinType::INNER,
+        [element_count, values](const std::vector<llvm::Value*>& v) {
+          JoinLoopDomain domain{{0}};
+          domain.element_count = element_count;
+          domain.values_buffer = values;
+          return domain;
+        },
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        "range_key_loop");
+
+    loops_entry_bb = JoinLoop::codegen(
+        {join_loop},
+        [this,
+         query_func,
+         &query_mem_desc,
+         &co,
+         &eo,
+         &group_by_and_aggregate,
+         &join_loops,
+         &ra_exe_unit](const std::vector<llvm::Value*>& prev_iters) {
+          auto& builder = cgen_state_->ir_builder_;
+
+          auto body_exit_bb =
+              llvm::BasicBlock::Create(cgen_state_->context_,
+                                       "range_key_inner_body_exit",
+                                       builder.GetInsertBlock()->getParent());
+
+          auto range_key_body_bb =
+              llvm::BasicBlock::Create(cgen_state_->context_,
+                                       "range_key_loop_body",
+                                       builder.GetInsertBlock()->getParent());
+          builder.SetInsertPoint(range_key_body_bb);
+
+          const auto body_loops_entry_bb = JoinLoop::codegen(
+              join_loops,
+              [this,
+               query_func,
+               &query_mem_desc,
+               &co,
+               &eo,
+               &group_by_and_aggregate,
+               &join_loops,
+               &ra_exe_unit](const std::vector<llvm::Value*>& prev_iters) {
+                addJoinLoopIterator(prev_iters, join_loops.size());
+                auto& builder = cgen_state_->ir_builder_;
+                const auto loop_body_bb =
+                    llvm::BasicBlock::Create(builder.getContext(),
+                                             "loop_body",
+                                             builder.GetInsertBlock()->getParent());
+                builder.SetInsertPoint(loop_body_bb);
+                const bool can_return_error =
+                    compileBody(ra_exe_unit, group_by_and_aggregate, query_mem_desc, co);
+                if (can_return_error || cgen_state_->needs_error_check_ ||
+                    eo.with_dynamic_watchdog || eo.allow_runtime_query_interrupt) {
+                  createErrorCheckControlFlow(query_func,
+                                              eo.with_dynamic_watchdog,
+                                              eo.allow_runtime_query_interrupt,
+                                              co.device_type,
+                                              group_by_and_aggregate.query_infos_);
+                }
+                return loop_body_bb;
+              },
+              prev_iters.back(),
+              body_exit_bb,
+              cgen_state_.get());
+
+          builder.SetInsertPoint(range_key_body_bb);
+          cgen_state_->ir_builder_.CreateBr(body_loops_entry_bb);
+
+          builder.SetInsertPoint(body_exit_bb);
+          return range_key_body_bb;
+        },
+        code_generator.posArg(nullptr),
+        exit_bb,
+        cgen_state_.get());
+  } else {
+    loops_entry_bb = JoinLoop::codegen(
+        join_loops,
+        /*body_codegen=*/
+        [this,
+         query_func,
+         &query_mem_desc,
+         &co,
+         &eo,
+         &group_by_and_aggregate,
+         &join_loops,
+         &ra_exe_unit](const std::vector<llvm::Value*>& prev_iters) {
+          AUTOMATIC_IR_METADATA(cgen_state_.get());
+          addJoinLoopIterator(prev_iters, join_loops.size());
+          auto& builder = cgen_state_->ir_builder_;
+          const auto loop_body_bb = llvm::BasicBlock::Create(
+              builder.getContext(), "loop_body", builder.GetInsertBlock()->getParent());
+          builder.SetInsertPoint(loop_body_bb);
+          const bool can_return_error =
+              compileBody(ra_exe_unit, group_by_and_aggregate, query_mem_desc, co);
+          if (can_return_error || cgen_state_->needs_error_check_ ||
+              eo.with_dynamic_watchdog || eo.allow_runtime_query_interrupt) {
+            createErrorCheckControlFlow(query_func,
+                                        eo.with_dynamic_watchdog,
+                                        eo.allow_runtime_query_interrupt,
+                                        co.device_type,
+                                        group_by_and_aggregate.query_infos_);
+          }
+          return loop_body_bb;
+        },
+        /*outer_iter=*/code_generator.posArg(nullptr),
+        exit_bb,
+        cgen_state_.get());
+  }
+  CHECK(loops_entry_bb);
   cgen_state_->ir_builder_.SetInsertPoint(entry_bb);
   cgen_state_->ir_builder_.CreateBr(loops_entry_bb);
 }

@@ -1386,26 +1386,18 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoComparison(
     return nullptr;
   }
 
-  const auto rex_operand = rex_operator->getOperand(0);
-  const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex_operand);
-  if (!rex_function) {
-    return nullptr;
+  auto geo_distance_expr = translateScalarRex(rex_operator->getOperand(0));
+  auto func_oper = dynamic_cast<Analyzer::GeoOperator*>(geo_distance_expr.get());
+  if (func_oper && func_oper->getName() == "ST_Distance"sv) {
+    const auto& distance_ti = SQLTypeInfo(kDOUBLE, false);
+    auto distance_expr = translateScalarRex(rex_operator->getOperand(1));
+    if (distance_expr->get_type_info().get_type() != kDOUBLE) {
+      distance_expr = distance_expr->add_cast(distance_ti);
+    }
+    distance_expr = fold_expr(distance_expr.get());
+    return makeExpr<Analyzer::BinOper>(
+        kBOOLEAN, rex_operator->getOperator(), kONE, geo_distance_expr, distance_expr);
   }
-  if (rex_function->getName() == "ST_Distance"sv && rex_operator->getOperator() == kLE) {
-    // TODO: fixup
-    return nullptr;
-    /*
-    auto ti = rex_operator->getType();
-    std::vector<std::unique_ptr<const RexScalar>> st_dwithin_operands;
-    st_dwithin_operands.emplace_back(rex_function->getOperandAndRelease(0));
-    st_dwithin_operands.emplace_back(rex_function->getOperandAndRelease(1));
-    st_dwithin_operands.emplace_back(rex_operator->getOperandAndRelease(1));
-    std::unique_ptr<RexFunctionOperator> st_dwithin(
-        new RexFunctionOperator("ST_DWithin", st_dwithin_operands, ti));
-    return translateTernaryGeoFunction(st_dwithin.get());
-    */
-  }
-
   return nullptr;
 }
 

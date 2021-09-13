@@ -97,6 +97,7 @@ bool g_enable_columnar_output{false};
 bool g_enable_left_join_filter_hoisting{true};
 bool g_optimize_row_initialization{true};
 bool g_enable_overlaps_hashjoin{true};
+bool g_enable_distance_rangejoin{true};
 bool g_enable_hashjoin_many_to_many{false};
 size_t g_overlaps_max_table_size_bytes{1024 * 1024 * 1024};
 double g_overlaps_target_entries_per_bin{1.3};

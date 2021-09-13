@@ -1778,6 +1778,27 @@ int overlaps_fill_baseline_hash_join_buff_32(int8_t* hash_buff,
                                                cpu_thread_count);
 }
 
+int range_fill_baseline_hash_join_buff_32(int8_t* hash_buff,
+                                          const size_t entry_count,
+                                          const int32_t invalid_slot_val,
+                                          const size_t key_component_count,
+                                          const bool with_val_slot,
+                                          const RangeKeyHandler* key_handler,
+                                          const size_t num_elems,
+                                          const int32_t cpu_thread_idx,
+                                          const int32_t cpu_thread_count) {
+  return fill_baseline_hash_join_buff<int32_t>(hash_buff,
+                                               entry_count,
+                                               invalid_slot_val,
+                                               false,
+                                               key_component_count,
+                                               with_val_slot,
+                                               key_handler,
+                                               num_elems,
+                                               cpu_thread_idx,
+                                               cpu_thread_count);
+}
+
 int fill_baseline_hash_join_buff_64(int8_t* hash_buff,
                                     const int64_t entry_count,
                                     const int32_t invalid_slot_val,
@@ -1821,6 +1842,27 @@ int overlaps_fill_baseline_hash_join_buff_64(int8_t* hash_buff,
                                                cpu_thread_count);
 }
 
+int range_fill_baseline_hash_join_buff_64(int8_t* hash_buff,
+                                          const size_t entry_count,
+                                          const int32_t invalid_slot_val,
+                                          const size_t key_component_count,
+                                          const bool with_val_slot,
+                                          const RangeKeyHandler* key_handler,
+                                          const size_t num_elems,
+                                          const int32_t cpu_thread_idx,
+                                          const int32_t cpu_thread_count) {
+  return fill_baseline_hash_join_buff<int64_t>(hash_buff,
+                                               entry_count,
+                                               invalid_slot_val,
+                                               false,
+                                               key_component_count,
+                                               with_val_slot,
+                                               key_handler,
+                                               num_elems,
+                                               cpu_thread_idx,
+                                               cpu_thread_count);
+}
+
 template <typename T>
 void fill_one_to_many_baseline_hash_table(
     int32_t* buff,
@@ -1833,13 +1875,39 @@ void fill_one_to_many_baseline_hash_table(
     const std::vector<JoinBucketInfo>& join_buckets_per_key,
     const std::vector<const void*>& sd_inner_proxy_per_key,
     const std::vector<const void*>& sd_outer_proxy_per_key,
-    const size_t cpu_thread_count) {
+    const size_t cpu_thread_count,
+    const bool is_range_join,
+    const bool is_geo_compressed) {
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
   memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
   std::vector<std::future<void>> counter_threads;
   for (size_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
-    if (join_buckets_per_key.size() > 0) {
+    if (is_range_join) {
+      counter_threads.push_back(std::async(
+          std::launch::async,
+          [count_buff,
+           composite_key_dict,
+           &hash_entry_count,
+           &join_buckets_per_key,
+           &join_column_per_key,
+           &is_geo_compressed,
+           cpu_thread_idx,
+           cpu_thread_count] {
+            const auto key_handler = RangeKeyHandler(
+                is_geo_compressed,
+                join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.size(),
+                &join_column_per_key[0],
+                join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.data());
+            count_matches_baseline(count_buff,
+                                   composite_key_dict,
+                                   hash_entry_count,
+                                   &key_handler,
+                                   join_column_per_key[0].num_elems,
+                                   cpu_thread_idx,
+                                   cpu_thread_count);
+          }));
+    } else if (join_buckets_per_key.size() > 0) {
       counter_threads.push_back(std::async(
           std::launch::async,
           [count_buff,
@@ -1920,7 +1988,34 @@ void fill_one_to_many_baseline_hash_table(
   memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
   std::vector<std::future<void>> rowid_threads;
   for (size_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
-    if (join_buckets_per_key.size() > 0) {
+    if (is_range_join) {
+      rowid_threads.push_back(std::async(
+          std::launch::async,
+          [buff,
+           composite_key_dict,
+           hash_entry_count,
+           invalid_slot_val,
+           &join_column_per_key,
+           &join_buckets_per_key,
+           &is_geo_compressed,
+           cpu_thread_idx,
+           cpu_thread_count] {
+            const auto key_handler = RangeKeyHandler(
+                is_geo_compressed,
+                join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.size(),
+                &join_column_per_key[0],
+                join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.data());
+            SUFFIX(fill_row_ids_baseline)
+            (buff,
+             composite_key_dict,
+             hash_entry_count,
+             invalid_slot_val,
+             &key_handler,
+             join_column_per_key[0].num_elems,
+             cpu_thread_idx,
+             cpu_thread_count);
+          }));
+    } else if (join_buckets_per_key.size() > 0) {
       rowid_threads.push_back(std::async(
           std::launch::async,
           [buff,
@@ -1994,7 +2089,9 @@ void fill_one_to_many_baseline_hash_table_32(
     const std::vector<JoinBucketInfo>& join_bucket_info,
     const std::vector<const void*>& sd_inner_proxy_per_key,
     const std::vector<const void*>& sd_outer_proxy_per_key,
-    const int32_t cpu_thread_count) {
+    const int32_t cpu_thread_count,
+    const bool is_range_join,
+    const bool is_geo_compressed) {
   fill_one_to_many_baseline_hash_table<int32_t>(buff,
                                                 composite_key_dict,
                                                 hash_entry_count,
@@ -2005,7 +2102,9 @@ void fill_one_to_many_baseline_hash_table_32(
                                                 join_bucket_info,
                                                 sd_inner_proxy_per_key,
                                                 sd_outer_proxy_per_key,
-                                                cpu_thread_count);
+                                                cpu_thread_count,
+                                                is_range_join,
+                                                is_geo_compressed);
 }
 
 void fill_one_to_many_baseline_hash_table_64(
@@ -2019,7 +2118,9 @@ void fill_one_to_many_baseline_hash_table_64(
     const std::vector<JoinBucketInfo>& join_bucket_info,
     const std::vector<const void*>& sd_inner_proxy_per_key,
     const std::vector<const void*>& sd_outer_proxy_per_key,
-    const int32_t cpu_thread_count) {
+    const int32_t cpu_thread_count,
+    const bool is_range_join,
+    const bool is_geo_compressed) {
   fill_one_to_many_baseline_hash_table<int64_t>(buff,
                                                 composite_key_dict,
                                                 hash_entry_count,
@@ -2030,7 +2131,9 @@ void fill_one_to_many_baseline_hash_table_64(
                                                 join_bucket_info,
                                                 sd_inner_proxy_per_key,
                                                 sd_outer_proxy_per_key,
-                                                cpu_thread_count);
+                                                cpu_thread_count,
+                                                is_range_join,
+                                                is_geo_compressed);
 }
 
 void approximate_distinct_tuples(uint8_t* hll_buffer_all_cpus,
@@ -2103,6 +2206,57 @@ void approximate_distinct_tuples_overlaps(
           auto hll_buffer = hll_buffer_all_cpus + thread_idx * padded_size_bytes;
 
           const auto key_handler = OverlapsKeyHandler(
+              join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.size(),
+              &join_column_per_key[0],
+              join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.data());
+          approximate_distinct_tuples_impl(hll_buffer,
+                                           row_counts.data(),
+                                           b,
+                                           join_column_per_key[0].num_elems,
+                                           &key_handler,
+                                           thread_idx,
+                                           thread_count);
+        }));
+  }
+  for (auto& child : approx_distinct_threads) {
+    child.get();
+  }
+
+  ::inclusive_scan(
+      row_counts.begin(), row_counts.end(), row_counts.begin(), thread_count);
+}
+
+void approximate_distinct_tuples_range(
+    uint8_t* hll_buffer_all_cpus,
+    std::vector<int32_t>& row_counts,
+    const uint32_t b,
+    const size_t padded_size_bytes,
+    const std::vector<JoinColumn>& join_column_per_key,
+    const std::vector<JoinColumnTypeInfo>& type_info_per_key,
+    const std::vector<JoinBucketInfo>& join_buckets_per_key,
+    const bool is_compressed,
+    const int thread_count) {
+  CHECK_EQ(join_column_per_key.size(), join_buckets_per_key.size());
+  CHECK_EQ(join_column_per_key.size(), type_info_per_key.size());
+  CHECK(!join_column_per_key.empty());
+
+  std::vector<std::future<void>> approx_distinct_threads;
+  for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+    approx_distinct_threads.push_back(std::async(
+        std::launch::async,
+        [&join_column_per_key,
+         &join_buckets_per_key,
+         &row_counts,
+         b,
+         hll_buffer_all_cpus,
+         padded_size_bytes,
+         thread_idx,
+         is_compressed,
+         thread_count] {
+          auto hll_buffer = hll_buffer_all_cpus + thread_idx * padded_size_bytes;
+
+          const auto key_handler = RangeKeyHandler(
+              is_compressed,
               join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.size(),
               &join_column_per_key[0],
               join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.data());

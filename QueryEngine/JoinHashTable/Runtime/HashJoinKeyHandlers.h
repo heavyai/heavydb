@@ -30,6 +30,8 @@
 #include "StringDictionary/StringDictionaryProxy.h"
 #endif
 
+#include "Geospatial/CompressionRuntime.h"
+
 #include <cmath>
 
 #include "Shared/funcannotations.h"
@@ -175,6 +177,63 @@ struct OverlapsKeyHandler {
 
   DEVICE const JoinColumnTypeInfo* get_join_column_type_infos() const { return nullptr; }
 
+  const size_t key_dims_count_;
+  const JoinColumn* join_column_;
+  const double* bucket_sizes_for_dimension_;
+};
+
+struct RangeKeyHandler {
+  explicit RangeKeyHandler(const bool is_compressed,
+                           const size_t key_dims_count,
+                           const JoinColumn* join_column,  // always 1 column
+                           const double* bucket_sizes_for_dimension)
+      : is_compressed_(is_compressed)
+      , key_dims_count_(key_dims_count)
+      , join_column_(join_column)
+      , bucket_sizes_for_dimension_(bucket_sizes_for_dimension) {}
+
+  template <typename T, typename KEY_BUFF_HANDLER>
+  DEVICE int operator()(JoinColumnIterator* join_column_iterators,
+                        T* key_scratch_buff,
+                        KEY_BUFF_HANDLER f) const {
+    double coords[2];
+
+    if (is_compressed_) {
+      coords[0] = Geospatial::decompress_longitude_coord_geoint32(
+          SUFFIX(fixed_width_int_decode_noinline)(
+              join_column_iterators->ptr(), /*byte_width=*/4, 0));
+      coords[1] = Geospatial::decompress_lattitude_coord_geoint32(
+          SUFFIX(fixed_width_int_decode_noinline)(
+              join_column_iterators->ptr(), /*byte_width=*/4, 1));
+    } else {
+      coords[0] =
+          SUFFIX(fixed_width_double_decode_noinline)(join_column_iterators->ptr(), 0);
+      coords[1] =
+          SUFFIX(fixed_width_double_decode_noinline)(join_column_iterators->ptr(), 1);
+    }
+
+    const auto x_bucket_sz = bucket_sizes_for_dimension_[0];
+    const auto y_bucket_sz = bucket_sizes_for_dimension_[1];
+
+    key_scratch_buff[0] = floor(coords[0] * x_bucket_sz);
+    key_scratch_buff[1] = floor(coords[1] * y_bucket_sz);
+    const auto err = f(join_column_iterators[0].index, key_scratch_buff, key_dims_count_);
+    if (err) {
+      return err;
+    }
+
+    return 0;
+  }
+
+  DEVICE size_t get_number_of_columns() const { return 1; }
+
+  DEVICE size_t get_key_component_count() const { return key_dims_count_; }
+
+  DEVICE const JoinColumn* get_join_columns() const { return join_column_; }
+
+  DEVICE const JoinColumnTypeInfo* get_join_column_type_infos() const { return nullptr; }
+
+  const bool is_compressed_;
   const size_t key_dims_count_;
   const JoinColumn* join_column_;
   const double* bucket_sizes_for_dimension_;

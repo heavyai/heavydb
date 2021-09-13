@@ -31,7 +31,8 @@
 enum class JoinLoopKind {
   UpperBound,  // loop join
   Set,         // one to many hash join
-  Singleton    // one to one hash join
+  Singleton,   // one to one hash join
+  MultiSet     // many to many hash join
 };
 
 // The domain of iteration for a join:
@@ -78,6 +79,8 @@ class JoinLoop {
       llvm::Value* outer_iter,
       llvm::BasicBlock* exit_bb,
       CgenState* cgen_state);
+
+  JoinLoopKind kind() const { return kind_; }
 
  private:
   static std::pair<llvm::BasicBlock*, llvm::Value*> evaluateOuterJoinCondition(

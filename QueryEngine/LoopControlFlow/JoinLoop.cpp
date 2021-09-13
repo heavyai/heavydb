@@ -67,7 +67,8 @@ llvm::BasicBlock* JoinLoop::codegen(
   for (const auto& join_loop : join_loops) {
     switch (join_loop.kind_) {
       case JoinLoopKind::UpperBound:
-      case JoinLoopKind::Set: {
+      case JoinLoopKind::Set:
+      case JoinLoopKind::MultiSet: {
         const auto preheader_bb = llvm::BasicBlock::Create(
             context, "ub_iter_preheader_" + join_loop.name_, parent_func);
 
@@ -110,10 +111,26 @@ llvm::BasicBlock* JoinLoop::codegen(
         llvm::Value* iteration_counter = builder.CreateLoad(
             iteration_counter_ptr, "ub_iter_counter_val_" + join_loop.name_);
         auto iteration_val = iteration_counter;
-        CHECK(join_loop.kind_ == JoinLoopKind::Set || !iteration_domain.values_buffer);
-        if (join_loop.kind_ == JoinLoopKind::Set) {
-          iteration_val =
-              builder.CreateGEP(iteration_domain.values_buffer, iteration_counter);
+        CHECK(join_loop.kind_ == JoinLoopKind::Set ||
+              join_loop.kind_ == JoinLoopKind::MultiSet ||
+              !iteration_domain.values_buffer);
+        if (join_loop.kind_ == JoinLoopKind::Set ||
+            join_loop.kind_ == JoinLoopKind::MultiSet) {
+          CHECK(iteration_domain.values_buffer->getType()->isPointerTy());
+          const auto ptr_type =
+              static_cast<llvm::PointerType*>(iteration_domain.values_buffer->getType());
+          if (ptr_type->getElementType()->isArrayTy()) {
+            iteration_val = builder.CreateGEP(
+                iteration_domain.values_buffer,
+                std::vector<llvm::Value*>{
+                    llvm::ConstantInt::get(get_int_type(64, context), 0),
+                    iteration_counter},
+                "ub_iter_counter_" + join_loop.name_);
+          } else {
+            iteration_val = builder.CreateGEP(iteration_domain.values_buffer,
+                                              iteration_counter,
+                                              "ub_iter_counter_" + join_loop.name_);
+          }
         }
         iterators.push_back(iteration_val);
         const auto have_more_inner_rows = builder.CreateICmpSLT(
@@ -230,6 +247,7 @@ llvm::BasicBlock* JoinLoop::codegen(
     }
     prev_join_type = join_loop.type_;
   }
+
   const auto body_bb = body_codegen(iterators);
   builder.CreateBr(prev_iter_advance_bb);
   builder.SetInsertPoint(last_head_bb);
