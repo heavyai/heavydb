@@ -1,0 +1,9 @@
+Class threading_common::blocked_range
+=====================================
+
+.. doxygenclass:: threading_common::blocked_range
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

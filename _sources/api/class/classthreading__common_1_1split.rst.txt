@@ -1,0 +1,9 @@
+Class threading_common::split
+=============================
+
+.. doxygenclass:: threading_common::split
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

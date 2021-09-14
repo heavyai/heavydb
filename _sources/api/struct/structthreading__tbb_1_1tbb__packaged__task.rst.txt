@@ -1,0 +1,9 @@
+Struct threading_tbb::tbb_packaged_task
+=======================================
+
+.. doxygenstruct:: threading_tbb::tbb_packaged_task
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

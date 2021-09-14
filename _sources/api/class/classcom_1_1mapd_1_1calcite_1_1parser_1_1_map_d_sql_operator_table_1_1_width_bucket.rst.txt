@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::WidthBucket
+===================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::WidthBucket
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

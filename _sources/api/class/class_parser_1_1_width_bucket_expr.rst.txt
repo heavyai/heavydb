@@ -1,0 +1,9 @@
+Class Parser::WidthBucketExpr
+=============================
+
+.. doxygenclass:: Parser::WidthBucketExpr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

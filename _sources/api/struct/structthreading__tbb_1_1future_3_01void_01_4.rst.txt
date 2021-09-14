@@ -1,0 +1,9 @@
+Struct threading_tbb::future< void >
+====================================
+
+.. doxygenstruct:: threading_tbb::future< void >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

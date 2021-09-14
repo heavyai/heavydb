@@ -1,0 +1,9 @@
+Class threading_serial::task_group
+==================================
+
+.. doxygenclass:: threading_serial::task_group
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
