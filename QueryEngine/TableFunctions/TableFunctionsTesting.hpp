@@ -863,3 +863,45 @@ ct_templated_no_cursor_user_constant_sizer__gpu_template(const T input_num,
 }
 
 #endif  //__CUDACC__
+
+template <typename T>
+T safe_addition(T x, T y) {
+  if (x >= 0) {
+    if (y > (std::numeric_limits<T>::max() - x)) {
+      throw std::overflow_error("Addition overflow detected");
+    }
+  } else {
+    if (y < (std::numeric_limits<T>::min() - x)) {
+      throw std::underflow_error("Addition underflow detected");
+    }
+  }
+  return x + y;
+}
+
+// clang-format off
+/*
+  UDTF: column_list_safe_row_sum__cpu_template(Cursor<ColumnList<T>>) -> Column<T>, T=[int32_t, int64_t, float, double]
+*/
+// clang-format on
+
+template <typename T>
+int32_t column_list_safe_row_sum__cpu_template(const ColumnList<T>& input,
+                                               Column<T>& out) {
+  int32_t output_num_rows = input.numCols();
+  set_output_row_size(output_num_rows);
+  for (int i = 0; i < output_num_rows; i++) {
+    auto col = input[i];
+    T s = 0;
+    for (int j = 0; j < col.size(); j++) {
+      try {
+        s = safe_addition(s, col[j]);
+      } catch (const std::exception& e) {
+        return table_function_error(e.what());
+      } catch (...) {
+        return table_function_error("Unknown error");
+      }
+    }
+    out[i] = s;
+  }
+  return output_num_rows;
+}

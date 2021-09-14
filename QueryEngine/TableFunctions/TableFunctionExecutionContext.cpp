@@ -22,6 +22,7 @@
 #include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/TableFunctions/QueryOutputBufferMemoryManager.h"
 #include "QueryEngine/TableFunctions/TableFunctionCompilationContext.h"
+#include "QueryEngine/TableFunctions/TableFunctionExceptionManager.h"
 #include "Shared/funcannotations.h"
 
 namespace {
@@ -258,6 +259,9 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   auto mgr = std::make_unique<QueryOutputBufferMemoryManager>(
       exe_unit, executor, col_buf_ptrs, row_set_mem_owner_);
 
+  // except_mgr handles memory for error/exception messages
+  auto except_mgr = std::make_unique<TableFunctionExceptionManager>();
+
   if (exe_unit.table_func.hasOutputSizeKnownPreLaunch()) {
     // allocate output buffers because the size is known up front, from
     // user specified parameters (and table size in the case of a user
@@ -285,9 +289,16 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
                                         col_sizes_ptr,    // input column sizes
                                         nullptr,
                                         &output_row_count);
-  if (err) {
+
+  if (err == TableFunctionError::GenericError) {
+    throw std::runtime_error("Error executing table function: " +
+                             std::string(except_mgr->get_error_message()));
+  }
+
+  else if (err) {
     throw std::runtime_error("Error executing table function: " + std::to_string(err));
   }
+
   if (exe_unit.table_func.hasCompileTimeOutputSizeConstant()) {
     if (static_cast<size_t>(output_row_count) != mgr->get_nrows()) {
       throw std::runtime_error(

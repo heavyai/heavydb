@@ -92,11 +92,29 @@ class TableFunctions : public ::testing::Test {
         run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       }
     }
+    {
+      run_ddl_statement("DROP TABLE IF EXISTS err_test;");
+      run_ddl_statement(
+          "CREATE TABLE err_test (x INT, y BIGINT, f FLOAT, d DOUBLE, x2 INT) WITH "
+          "(FRAGMENT_SIZE=2);");
+
+      TestHelpers::ValuesGenerator gen("err_test");
+
+      for (int i = 0; i < 5; i++) {
+        const auto insert_query = gen(std::numeric_limits<int32_t>::max() - 1,
+                                      std::numeric_limits<int64_t>::max() - 1,
+                                      std::numeric_limits<float>::max() - 1.0,
+                                      std::numeric_limits<double>::max() - 1.0,
+                                      i);
+        run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      }
+    }
   }
 
   void TearDown() override {
     run_ddl_statement("DROP TABLE IF EXISTS tf_test;");
     run_ddl_statement("DROP TABLE IF EXISTS sd_test;");
+    run_ddl_statement("DROP TABLE IF EXISTS err_test");
   }
 };
 
@@ -727,6 +745,54 @@ TEST_F(TableFunctions, CursorlessInputs) {
         auto crt_row = rows->getNextRow(false, false);
         ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(7));
       }
+    }
+  }
+}
+
+TEST_F(TableFunctions, ThrowingTests) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      EXPECT_THROW(
+          run_multiple_agg(
+              "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT x FROM "
+              "err_test)));",
+              dt),
+          std::runtime_error);
+    }
+    {
+      EXPECT_THROW(
+          run_multiple_agg(
+              "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT y FROM "
+              "err_test)));",
+              dt),
+          std::runtime_error);
+    }
+    {
+      EXPECT_THROW(
+          run_multiple_agg(
+              "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT f FROM "
+              "err_test)));",
+              dt),
+          std::runtime_error);
+    }
+    {
+      EXPECT_THROW(
+          run_multiple_agg(
+              "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT d FROM "
+              "err_test)));",
+              dt),
+          std::runtime_error);
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT x2 FROM "
+          "err_test)));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]),
+                static_cast<int32_t>(10));  // 0+1+2+3+4=10
     }
   }
 }

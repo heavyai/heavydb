@@ -17,6 +17,7 @@
 #ifdef EXECUTE_INCLUDE
 
 #include "QueryEngine/TableFunctions/QueryOutputBufferMemoryManager.h"
+#include "QueryEngine/TableFunctions/TableFunctionExceptionManager.h"
 
 /*
   set_output_row_size sets the row size of output Columns and
@@ -52,6 +53,22 @@ extern "C" DEVICE RUNTIME_EXPORT void register_output_column(int32_t index, int8
   auto& mgr = QueryOutputBufferMemoryManager::get_singleton();
   CHECK(mgr);
   mgr->set_output_column(index, ptr);
+}
+
+/*
+  table_function_error allows code from within a table function to
+  set an error message that can be accessed from the execution context.
+  This allows the error message to be propagated as an exception message.
+ */
+extern "C" DEVICE RUNTIME_EXPORT int32_t table_function_error(const char* message) {
+  auto& mgr = TableFunctionExceptionManager::get_singleton();
+  CHECK(mgr);
+  if (message != nullptr) {
+    mgr->set_error_message(message);
+  } else {
+    mgr->set_error_message("no error message set");
+  }
+  return TableFunctionError::GenericError;
 }
 
 #endif  // EXECUTE_INCLUDE

@@ -34,6 +34,8 @@ EXTENSION_NOINLINE int8_t* allocate_varlen_buffer(int64_t element_count,
 
 EXTENSION_NOINLINE void set_output_row_size(int64_t num_rows);
 
+EXTENSION_NOINLINE int32_t table_function_error(const char* message);
+
 // https://www.fluentcpp.com/2018/04/06/strong-types-by-struct/
 struct TextEncodingDict {
   int32_t value;
