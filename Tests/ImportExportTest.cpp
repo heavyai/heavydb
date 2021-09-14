@@ -1476,9 +1476,17 @@ class ImportTestGDAL : public ImportTestGeo {
     copy_params.geo_assign_render_groups = true;
     copy_params.geo_explode_collections = explode_collections;
 
+    // direct Importer calls assume that any GDAL VSI prefixes have
+    // already been added, so we must check for the file types we
+    // are going to encounter, and add the appropriate prefixes here
+    auto vsi_file_path{file_path};
+    if (boost::filesystem::path(vsi_file_path).extension() == ".gz") {
+      vsi_file_path = "/vsigzip/" + vsi_file_path;
+    }
+
     std::map<std::string, std::string> colname_to_src;
     auto cds = import_export::Importer::gdalToColumnDescriptors(
-        file_path, geo_column_name, copy_params);
+        vsi_file_path, geo_column_name, copy_params);
 
     for (auto& cd : cds) {
       const auto col_name_sanitized = ImportHelpers::sanitize_name(cd.columnName);
@@ -2142,10 +2150,6 @@ class ExportTest : public ImportTestGDAL {
       ASSERT_NO_THROW(sql("COPY query_export_test_reimport FROM '" + actual_file +
                           "' WITH (" + import_options + ");"));
     } else {
-      if (boost::filesystem::path(actual_file).extension() == ".gz") {
-        actual_file = "/vsigzip/" BASE_PATH "/mapd_export/" +
-                      getDbHandlerAndSessionId().second + "/" + file;
-      }
       ASSERT_NO_THROW(
           importGeoTable(actual_file, "query_export_test_reimport", false, true, false));
     }
@@ -2519,7 +2523,7 @@ TEST_F(ExportTest, GeoJSON_Invalid_SRID) {
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
 
-TEST_F(ExportTest, DISABLED_GeoJSON_GZip) {
+TEST_F(ExportTest, GeoJSON_GZip) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
@@ -2620,7 +2624,7 @@ TEST_F(ExportTest, GeoJSONL_Invalid_SRID) {
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
 
-TEST_F(ExportTest, DISABLED_GeoJSONL_GZip) {
+TEST_F(ExportTest, GeoJSONL_GZip) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
