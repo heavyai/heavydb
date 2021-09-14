@@ -907,6 +907,8 @@ class CustomExpressionTest : public BaseTestFixture {
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
     loginAdmin();
+    sql("DROP TABLE IF EXISTS test_table_4;");
+    sql("CREATE TABLE test_table_4 (i INTEGER);");
   }
 
   void TearDown() override {
@@ -915,28 +917,28 @@ class CustomExpressionTest : public BaseTestFixture {
       ids.emplace_back(custom_expression->id);
     }
     getCatalog().deleteCustomExpressions(ids, false);
+    loginAdmin();
+    sql("DROP TABLE IF EXISTS test_table_4;");
+    sql("DROP TABLE IF EXISTS test_table_renamed;");
     DBHandlerTestFixture::TearDown();
   }
 
-  TCustomExpression createTestCustomExpression(
+  static TCustomExpression createCustomExpressionThriftObject(
       const std::string& expr_name = "test_expr",
       const std::string& table_name = "test_table_1") {
-    auto td = getCatalog().getMetadataForTable(table_name, false);
-    CHECK(td);
     TCustomExpression custom_expr;
     custom_expr.name = expr_name;
     custom_expr.expression_json = "test_expr_json";
     custom_expr.data_source_type = TDataSourceType::type::TABLE;
-    custom_expr.data_source_id = td->tableId;
+    custom_expr.data_source_name = table_name;
     return custom_expr;
   }
 
-  std::vector<int32_t> createTestCustomExpressions() {
-    std::vector<TCustomExpression> custom_expressions_to_create{
-        createTestCustomExpression("test_expr_1", "test_table_1"),
-        createTestCustomExpression("test_expr_2", "test_table_2"),
-        createTestCustomExpression("test_expr_3", "test_table_3")};
-
+  std::vector<int32_t> createTestCustomExpressions(
+      std::vector<TCustomExpression> custom_expressions_to_create = {
+          createCustomExpressionThriftObject("test_expr_1", "test_table_1"),
+          createCustomExpressionThriftObject("test_expr_2", "test_table_2"),
+          createCustomExpressionThriftObject("test_expr_3", "test_table_3")}) {
     const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
     loginAdmin();
     std::vector<int32_t> custom_expression_ids;
@@ -972,25 +974,38 @@ class CustomExpressionTest : public BaseTestFixture {
   }
 
   void assertExpectedCustomExpression(const TCustomExpression& t_custom_expr,
-                                      int32_t id) {
+                                      int32_t id,
+                                      bool is_data_source_id_set) {
     auto custom_expr_1 = getCatalog().getCustomExpression(id);
-    assertExpectedCustomExpression(t_custom_expr, custom_expr_1, id);
+    assertExpectedCustomExpression(
+        t_custom_expr, custom_expr_1, id, is_data_source_id_set);
 
     auto custom_expr_2 = getCatalog().getCustomExpressionFromStorage(id);
-    assertExpectedCustomExpression(t_custom_expr, custom_expr_2.get(), id);
+    assertExpectedCustomExpression(
+        t_custom_expr, custom_expr_2.get(), id, is_data_source_id_set);
   }
 
   void assertExpectedCustomExpression(
       const TCustomExpression& t_custom_expr,
       const Catalog_Namespace::CustomExpression* custom_expr,
-      int32_t id) {
+      int32_t id,
+      bool is_data_source_id_set) {
     EXPECT_EQ(id, custom_expr->id);
     EXPECT_EQ(t_custom_expr.name, custom_expr->name);
     EXPECT_EQ(t_custom_expr.expression_json, custom_expr->expression_json);
     assertEqualDataSourceType(t_custom_expr.data_source_type,
                               custom_expr->data_source_type);
-    EXPECT_EQ(t_custom_expr.data_source_id, custom_expr->data_source_id);
     EXPECT_EQ(t_custom_expr.is_deleted, custom_expr->is_deleted);
+
+    if (!t_custom_expr.data_source_name.empty()) {
+      auto td = getCatalog().getMetadataForTable(t_custom_expr.data_source_name, false);
+      ASSERT_NE(td, nullptr);
+      EXPECT_EQ(td->tableId, custom_expr->data_source_id);
+    }
+
+    if (is_data_source_id_set) {
+      EXPECT_EQ(t_custom_expr.data_source_id, custom_expr->data_source_id);
+    }
   }
 
   void assertExpectedCustomExpressions(
@@ -998,7 +1013,8 @@ class CustomExpressionTest : public BaseTestFixture {
       const std::vector<TCustomExpression>& actual_expressions) {
     ASSERT_EQ(expected_expression_ids.size(), actual_expressions.size());
     for (size_t i = 0; i < expected_expression_ids.size(); i++) {
-      assertExpectedCustomExpression(actual_expressions[i], expected_expression_ids[i]);
+      assertExpectedCustomExpression(
+          actual_expressions[i], expected_expression_ids[i], true);
     }
   }
 
@@ -1010,13 +1026,24 @@ class CustomExpressionTest : public BaseTestFixture {
       UNREACHABLE() << "Unexpected data source type: " << static_cast<int>(type);
     }
   }
+
+  void assertCustomExpressionWithDataSourceName(
+      const std::vector<int32_t>& custom_expression_ids,
+      const std::string& data_source_name) {
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    std::vector<TCustomExpression> results;
+    db_handler->get_custom_expressions(results, session_id);
+    ASSERT_EQ(results.size(), static_cast<size_t>(1));
+    assertExpectedCustomExpressions(custom_expression_ids, results);
+    ASSERT_EQ(data_source_name, results[0].data_source_name);
+  }
 };
 
 TEST_F(CustomExpressionTest, CreateCustomExpressionSuperUser) {
-  auto custom_expr = createTestCustomExpression();
+  auto custom_expr = createCustomExpressionThriftObject();
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
   auto id = db_handler->create_custom_expression(session_id, custom_expr);
-  assertExpectedCustomExpression(custom_expr, id);
+  assertExpectedCustomExpression(custom_expr, id, false);
 }
 
 TEST_F(CustomExpressionTest, CreateCustomExpressionNonSuperUser) {
@@ -1025,7 +1052,8 @@ TEST_F(CustomExpressionTest, CreateCustomExpressionNonSuperUser) {
   executeLambdaAndAssertException(
       [this, &user_session]() {
         const auto db_handler = getDbHandlerAndSessionId().first;
-        db_handler->create_custom_expression(user_session, createTestCustomExpression());
+        db_handler->create_custom_expression(user_session,
+                                             createCustomExpressionThriftObject());
       },
       "Custom expressions can only be created by super users.");
   logout(user_session);
@@ -1033,9 +1061,9 @@ TEST_F(CustomExpressionTest, CreateCustomExpressionNonSuperUser) {
 
 TEST_F(CustomExpressionTest, CreateCustomExpressionExistingNameAndDataSource) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  auto custom_expr = createTestCustomExpression();
+  auto custom_expr = createCustomExpressionThriftObject();
   auto id = db_handler->create_custom_expression(session_id, custom_expr);
-  assertExpectedCustomExpression(custom_expr, id);
+  assertExpectedCustomExpression(custom_expr, id, false);
   executeLambdaAndAssertException(
       [db_handler = db_handler, session_id = session_id, &custom_expr]() {
         db_handler->create_custom_expression(session_id, custom_expr);
@@ -1046,25 +1074,37 @@ TEST_F(CustomExpressionTest, CreateCustomExpressionExistingNameAndDataSource) {
 TEST_F(CustomExpressionTest,
        CreateCustomExpressionSoftDeletedWithExistingNameAndDataSource) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  auto custom_expr = createTestCustomExpression();
+  auto custom_expr = createCustomExpressionThriftObject();
   auto id_1 = db_handler->create_custom_expression(session_id, custom_expr);
-  assertExpectedCustomExpression(custom_expr, id_1);
+  assertExpectedCustomExpression(custom_expr, id_1, false);
   getCatalog().deleteCustomExpressions({id_1}, true);
   auto id_2 = db_handler->create_custom_expression(session_id, custom_expr);
-  assertExpectedCustomExpression(custom_expr, id_2);
+  assertExpectedCustomExpression(custom_expr, id_2, false);
 }
 
-TEST_F(CustomExpressionTest, CreateCustomExpressionInvalidTableId) {
+TEST_F(CustomExpressionTest, CreateCustomExpressionInvalidTableName) {
   executeLambdaAndAssertException(
       [this]() {
-        auto non_existent_table_id = getLastTableId() + 1;
-        ASSERT_EQ(getCatalog().getMetadataForTable(non_existent_table_id), nullptr);
-        auto custom_expr = createTestCustomExpression();
-        custom_expr.data_source_id = non_existent_table_id;
+        auto non_existent_table_name = "non_existent_table";
+        ASSERT_EQ(getCatalog().getMetadataForTable(non_existent_table_name, false),
+                  nullptr);
+        auto custom_expr = createCustomExpressionThriftObject();
+        custom_expr.data_source_name = non_existent_table_name;
         const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
         db_handler->create_custom_expression(session_id, custom_expr);
       },
-      "Custom expression references a table that does not exist.");
+      "Custom expression references a table \"non_existent_table\" that does not exist.");
+}
+
+TEST_F(CustomExpressionTest, CreateCustomExpressionEmptyDataSourceName) {
+  executeLambdaAndAssertException(
+      [this]() {
+        auto custom_expr = createCustomExpressionThriftObject();
+        custom_expr.data_source_name = "";
+        const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+        db_handler->create_custom_expression(session_id, custom_expr);
+      },
+      "Custom expression data source name cannot be empty.");
 }
 
 TEST_F(CustomExpressionTest, GetCustomExpressionsSuperUser) {
@@ -1098,9 +1138,27 @@ TEST_F(CustomExpressionTest, GetCustomExpressionsNonSuperUser) {
   assertExpectedCustomExpressions(user_custom_expression_ids, result);
 }
 
+TEST_F(CustomExpressionTest, GetCustomExpressionsDataSourceNameChange) {
+  auto custom_expression_ids = createTestCustomExpressions(
+      {createCustomExpressionThriftObject("test_expr", "test_table_4")});
+  ASSERT_EQ(custom_expression_ids.size(), static_cast<size_t>(1));
+  assertCustomExpressionWithDataSourceName(custom_expression_ids, "test_table_4");
+  sql("ALTER TABLE test_table_4 RENAME TO test_table_renamed;");
+  assertCustomExpressionWithDataSourceName(custom_expression_ids, "test_table_renamed");
+}
+
+TEST_F(CustomExpressionTest, GetCustomExpressionsDataSourceDeleted) {
+  auto custom_expression_ids = createTestCustomExpressions(
+      {createCustomExpressionThriftObject("test_expr", "test_table_4")});
+  ASSERT_EQ(custom_expression_ids.size(), static_cast<size_t>(1));
+  assertCustomExpressionWithDataSourceName(custom_expression_ids, "test_table_4");
+  sql("DROP TABLE test_table_4;");
+  assertCustomExpressionWithDataSourceName(custom_expression_ids, "");
+}
+
 TEST_F(CustomExpressionTest, UpdateCustomExpressionSuperUser) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  auto t_custom_expr = createTestCustomExpression();
+  auto t_custom_expr = createCustomExpressionThriftObject();
   auto id = db_handler->create_custom_expression(session_id, t_custom_expr);
   db_handler->update_custom_expression(session_id, id, "new_test_expr_json");
   auto custom_expr = getCatalog().getCustomExpression(id);
@@ -1109,7 +1167,7 @@ TEST_F(CustomExpressionTest, UpdateCustomExpressionSuperUser) {
 
 TEST_F(CustomExpressionTest, UpdateCustomExpressionNonSuperUser) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  auto t_custom_expr = createTestCustomExpression();
+  auto t_custom_expr = createCustomExpressionThriftObject();
   auto id = db_handler->create_custom_expression(session_id, t_custom_expr);
 
   TSessionId user_session;
@@ -1138,7 +1196,7 @@ TEST_F(CustomExpressionTest, UpdateCustomExpressionNonExistentExpression) {
 
 TEST_F(CustomExpressionTest, UpdateCustomExpressionSoftDeletedExpression) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  auto t_custom_expr = createTestCustomExpression();
+  auto t_custom_expr = createCustomExpressionThriftObject();
   auto id = db_handler->create_custom_expression(session_id, t_custom_expr);
   getCatalog().deleteCustomExpressions({id}, true);
   ASSERT_NE(getCatalog().getCustomExpression(id), nullptr);

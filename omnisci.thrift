@@ -540,6 +540,7 @@ struct TCustomExpression {
   5: TDataSourceType data_source_type;
   6: i32 data_source_id;
   7: bool is_deleted;
+  8: string data_source_name;
 }
 
 service OmniSci {

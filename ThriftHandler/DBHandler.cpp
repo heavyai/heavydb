@@ -4096,19 +4096,26 @@ using Catalog_Namespace::CustomExpression;
 using Catalog_Namespace::DataSourceType;
 
 std::unique_ptr<Catalog_Namespace::CustomExpression> create_custom_expr_from_thrift_obj(
-    const TCustomExpression& t_custom_expr) {
+    const TCustomExpression& t_custom_expr,
+    const Catalog& catalog) {
+  if (t_custom_expr.data_source_name.empty()) {
+    THROW_MAPD_EXCEPTION("Custom expression data source name cannot be empty.")
+  }
   CHECK(t_custom_expr.data_source_type == TDataSourceType::type::TABLE)
       << "Unexpected data source type: "
       << static_cast<int>(t_custom_expr.data_source_type);
+  auto td = catalog.getMetadataForTable(t_custom_expr.data_source_name, false);
+  if (!td) {
+    THROW_MAPD_EXCEPTION("Custom expression references a table \"" +
+                         t_custom_expr.data_source_name + "\" that does not exist.")
+  }
   DataSourceType data_source_type = DataSourceType::TABLE;
-  return std::make_unique<CustomExpression>(t_custom_expr.name,
-                                            t_custom_expr.expression_json,
-                                            data_source_type,
-                                            t_custom_expr.data_source_id);
+  return std::make_unique<CustomExpression>(
+      t_custom_expr.name, t_custom_expr.expression_json, data_source_type, td->tableId);
 }
 
-TCustomExpression create_thrift_obj_from_custom_expr(
-    const CustomExpression& custom_expr) {
+TCustomExpression create_thrift_obj_from_custom_expr(const CustomExpression& custom_expr,
+                                                     const Catalog& catalog) {
   TCustomExpression t_custom_expr;
   t_custom_expr.id = custom_expr.id;
   t_custom_expr.name = custom_expr.name;
@@ -4119,6 +4126,14 @@ TCustomExpression create_thrift_obj_from_custom_expr(
       << "Unexpected data source type: "
       << static_cast<int>(custom_expr.data_source_type);
   t_custom_expr.data_source_type = TDataSourceType::type::TABLE;
+  auto td = catalog.getMetadataForTable(custom_expr.data_source_id, false);
+  if (td) {
+    t_custom_expr.data_source_name = td->tableName;
+  } else {
+    LOG(WARNING)
+        << "Custom expression references a deleted data source. Custom expression id: "
+        << custom_expr.id << ", name: " << custom_expr.name;
+  }
   return t_custom_expr;
 }
 }  // namespace
@@ -4134,15 +4149,9 @@ int32_t DBHandler::create_custom_expression(const TSessionId& session,
     THROW_MAPD_EXCEPTION("Custom expressions can only be created by super users.")
   }
   auto& catalog = session_ptr->getCatalog();
-  CHECK(t_custom_expr.data_source_type == TDataSourceType::type::TABLE)
-      << "Unexpected data source type: "
-      << static_cast<int>(t_custom_expr.data_source_type);
-  if (catalog.getMetadataForTable(t_custom_expr.data_source_id, false) == nullptr) {
-    THROW_MAPD_EXCEPTION("Custom expression references a table that does not exist.")
-  }
   mapd_unique_lock<mapd_shared_mutex> write_lock(custom_expressions_mutex_);
   return catalog.createCustomExpression(
-      create_custom_expr_from_thrift_obj(t_custom_expr));
+      create_custom_expr_from_thrift_obj(t_custom_expr, catalog));
 }
 
 void DBHandler::get_custom_expressions(std::vector<TCustomExpression>& _return,
@@ -4156,7 +4165,7 @@ void DBHandler::get_custom_expressions(std::vector<TCustomExpression>& _return,
   auto custom_expressions =
       catalog.getCustomExpressionsForUser(session_ptr->get_currentUser());
   for (const auto& custom_expression : custom_expressions) {
-    _return.emplace_back(create_thrift_obj_from_custom_expr(*custom_expression));
+    _return.emplace_back(create_thrift_obj_from_custom_expr(*custom_expression, catalog));
   }
 }
 
