@@ -266,4 +266,48 @@ BENCHMARK_REGISTER_F(GeospatialTableFixture, GeospatialDistanceGPU)
     ->UseRealTime()
     ->Unit(benchmark::kMillisecond);
 
+BENCHMARK_DEFINE_F(GeospatialTableFixture, TransformPointCPU)(benchmark::State& state) {
+  // warmup: we want to measure JIT performance, not data load
+  QR::get()->clearCpuMemory();
+  QR::get()->clearGpuMemory();
+  run_multiple_agg(
+      R"(SELECT ST_X(ST_Transform(gp4326, 900913)), ST_Y(ST_Transform(gp4326, 900913)) from geospatial_test;)",
+      ExecutorDeviceType::CPU);
+
+  for (auto _ : state) {
+    run_multiple_agg(
+        R"(SELECT ST_X(ST_Transform(gp4326, 900913)), ST_Y(ST_Transform(gp4326, 900913)) from geospatial_test;)",
+        ExecutorDeviceType::CPU);
+  }
+  QR::get()->clearCpuMemory();
+  QR::get()->clearGpuMemory();
+}
+
+BENCHMARK_DEFINE_F(GeospatialTableFixture, TransformPointGPU)(benchmark::State& state) {
+  // warmup: we want to measure JIT performance, not data load
+  QR::get()->clearCpuMemory();
+  QR::get()->clearGpuMemory();
+  run_multiple_agg(
+      R"(SELECT ST_X(ST_Transform(gp4326, 900913)), ST_Y(ST_Transform(gp4326, 900913)) from geospatial_test;)",
+      ExecutorDeviceType::GPU);
+
+  for (auto _ : state) {
+    run_multiple_agg(
+        R"(SELECT ST_X(ST_Transform(gp4326, 900913)), ST_Y(ST_Transform(gp4326, 900913)) from geospatial_test;)",
+        ExecutorDeviceType::GPU);
+  }
+  QR::get()->clearCpuMemory();
+  QR::get()->clearGpuMemory();
+}
+
+BENCHMARK_REGISTER_F(GeospatialTableFixture, TransformPointCPU)
+    ->MeasureProcessCPUTime()
+    ->UseRealTime()
+    ->Unit(benchmark::kMillisecond);
+
+BENCHMARK_REGISTER_F(GeospatialTableFixture, TransformPointGPU)
+    ->MeasureProcessCPUTime()
+    ->UseRealTime()
+    ->Unit(benchmark::kMillisecond);
+
 BENCHMARK_MAIN();

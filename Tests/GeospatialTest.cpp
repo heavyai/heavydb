@@ -1112,6 +1112,67 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
   }
 }
 
+TEST_P(GeoSpatialTestTablesFixture, LLVMOptimization) {
+  SKIP_ALL_ON_AGGREGATOR();
+
+  ScopeGuard reset_explain_type = [] {
+    QR::get()->setExplainType(ExecutorExplainType::Default);
+  };
+  QR::get()->setExplainType(ExecutorExplainType::Optimized);
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    // returns true if search_str is found in the generated IR
+    auto check_explain_result = [](const std::string& query,
+                                   const ExecutorDeviceType dt,
+                                   const std::string& search_str) {
+      const auto query_explain_result =
+          QR::get()->runSelectQuery(query,
+                                    dt,
+                                    /*hoist_literals=*/true,
+                                    /*allow_loop_joins=*/false,
+                                    /*just_explain=*/true);
+      const auto explain_result = query_explain_result->getRows();
+      EXPECT_EQ(size_t(1), explain_result->rowCount());
+      const auto crt_row = explain_result->getNextRow(true, true);
+      EXPECT_EQ(size_t(1), crt_row.size());
+      const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
+      const auto n = explain_str.find(search_str);
+      const bool str_not_found = n == std::string::npos;
+      return !str_not_found;
+    };
+
+    // expect the x decompression code to be absent in optimized IR
+    EXPECT_EQ(check_explain_result(
+                  R"(SELECT ST_Y(ST_Transform(gp4326, 900913)) from geospatial_test;)",
+                  dt,
+                  "decompress_x_coord_geoint"),
+              false);
+
+    // expect the y decompression code to be absent in optimized IR
+    EXPECT_EQ(check_explain_result(
+                  R"(SELECT ST_X(ST_Transform(gp4326, 900913)) from geospatial_test;)",
+                  dt,
+                  "decompress_y_coord_geoint"),
+              false);
+
+    // expect both decompression codes to be present
+    EXPECT_EQ(
+        check_explain_result(
+            R"(SELECT ST_X(ST_Transform(gp4326, 900913)), ST_Y(ST_Transform(gp4326, 900913)) from geospatial_test;)",
+            dt,
+            "decompress_y_coord_geoint"),
+        true);
+    EXPECT_EQ(
+        check_explain_result(
+            R"(SELECT ST_X(ST_Transform(gp4326, 900913)), ST_Y(ST_Transform(gp4326, 900913)) from geospatial_test;)",
+            dt,
+            "decompress_y_coord_geoint"),
+        true);
+  }
+}
+
 INSTANTIATE_TEST_SUITE_P(GeoSpatialTablesTests,
                          GeoSpatialTestTablesFixture,
                          ::testing::Values(true, false));

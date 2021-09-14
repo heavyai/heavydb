@@ -14,24 +14,14 @@
  * limitations under the License.
  */
 
-#include "CodeGenerator.h"
-#include "Execute.h"
-#include "ExtensionFunctionsWhitelist.h"
-#include "GpuSharedMemoryUtils.h"
-#include "LLVMFunctionAttributesUtil.h"
-#include "OutputBufferInitialization.h"
-#include "QueryTemplateGenerator.h"
-
-#include "CudaMgr/CudaMgr.h"
-#include "OSDependent/omnisci_path.h"
-#include "Shared/InlineNullValues.h"
-#include "Shared/MathUtils.h"
-#include "StreamingTopN.h"
+#include "QueryEngine/Execute.h"
 
 #if LLVM_VERSION_MAJOR < 9
 static_assert(false, "LLVM Version >= 9 is required.");
 #endif
 
+#include <llvm/Analysis/ScopedNoAliasAA.h>
+#include <llvm/Analysis/TypeBasedAliasAnalysis.h>
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/ExecutionEngine/MCJIT.h>
@@ -55,10 +45,12 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
+#include <llvm/Transforms/IPO/InferFunctionAttrs.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Instrumentation.h>
 #include <llvm/Transforms/Scalar.h>
+#include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
 #include <llvm/Transforms/Utils.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
@@ -67,6 +59,19 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #if LLVM_VERSION_MAJOR >= 11
 #include <llvm/Support/Host.h>
 #endif
+
+#include "CudaMgr/CudaMgr.h"
+#include "OSDependent/omnisci_path.h"
+#include "QueryEngine/CodeGenerator.h"
+#include "QueryEngine/ExtensionFunctionsWhitelist.h"
+#include "QueryEngine/GpuSharedMemoryUtils.h"
+#include "QueryEngine/LLVMFunctionAttributesUtil.h"
+#include "QueryEngine/Optimization/AnnotateInternalFunctionsPass.h"
+#include "QueryEngine/OutputBufferInitialization.h"
+#include "QueryEngine/QueryTemplateGenerator.h"
+#include "Shared/InlineNullValues.h"
+#include "Shared/MathUtils.h"
+#include "StreamingTopN.h"
 
 float g_fraction_code_cache_to_evict = 0.2;
 
@@ -311,16 +316,38 @@ void optimize_ir(llvm::Function* query_func,
                  llvm::legacy::PassManager& pass_manager,
                  const std::unordered_set<llvm::Function*>& live_funcs,
                  const CompilationOptions& co) {
+  // the always inliner legacy pass must always run first
   pass_manager.add(llvm::createAlwaysInlinerLegacyPass());
-  pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
-  pass_manager.add(llvm::createInstSimplifyLegacyPass());
+
+  pass_manager.add(new AnnotateInternalFunctionsPass());
+
+  pass_manager.add(llvm::createSROAPass());
+  // mem ssa drops unused load and store instructions, e.g. passing variables directly
+  // where possible
+  pass_manager.add(
+      llvm::createEarlyCSEPass(/*enable_mem_ssa=*/true));  // Catch trivial redundancies
+
+  pass_manager.add(llvm::createJumpThreadingPass());  // Thread jumps.
+  pass_manager.add(llvm::createCFGSimplificationPass());
+
+  // remove load/stores in PHIs if instructions can be accessed directly post thread jumps
+  pass_manager.add(llvm::createNewGVNPass());
+
+  pass_manager.add(llvm::createDeadStoreEliminationPass());
+  pass_manager.add(llvm::createLICMPass());
+
   pass_manager.add(llvm::createInstructionCombiningPass());
+
+  // module passes
+  pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
   pass_manager.add(llvm::createGlobalOptimizerPass());
 
-  pass_manager.add(llvm::createLICMPass());
   if (co.opt_level == ExecutorOptLevel::LoopStrengthReduction) {
     pass_manager.add(llvm::createLoopStrengthReducePass());
   }
+
+  pass_manager.add(llvm::createCFGSimplificationPass());  // cleanup after everything
+
   pass_manager.run(*module);
 
   eliminate_dead_self_recursive_funcs(*module, live_funcs);

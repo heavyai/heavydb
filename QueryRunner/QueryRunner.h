@@ -240,6 +240,10 @@ class QueryRunner {
     return query_states_.create(std::forward<Ts>(args)...);
   }
 
+  void setExplainType(const ExecutorExplainType explain_type) {
+    explain_type_ = explain_type;
+  }
+
  protected:
   QueryRunner(const char* db_path,
               const std::string& user,
@@ -255,6 +259,8 @@ class QueryRunner {
               const bool create_db,
               const File_Namespace::DiskCacheConfig* disk_cache_config = nullptr);
   static std::unique_ptr<QueryRunner> qr_instance_;
+
+  ExecutorExplainType explain_type_ = ExecutorExplainType::Default;
 
   std::shared_ptr<Catalog_Namespace::SessionInfo> session_info_;
   std::unique_ptr<QueryDispatchQueue> dispatch_queue_;
