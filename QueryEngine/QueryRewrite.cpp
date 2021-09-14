@@ -559,6 +559,10 @@ RelAlgExecutionUnit QueryRewriter::rewriteAggregateOnGroupByColumn(
           switch (agg_expr->get_aggtype()) {
             case SQLAgg::kCOUNT:
             case SQLAgg::kAPPROX_COUNT_DISTINCT: {
+              if (agg_expr->get_aggtype() == SQLAgg::kCOUNT &&
+                  !agg_expr->get_is_distinct()) {
+                break;
+              }
               auto case_expr =
                   generateCaseExprForCountDistinctOnGroupByCol(agg_expr->get_own_arg());
               new_target_exprs.push_back(case_expr.get());

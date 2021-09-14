@@ -1886,6 +1886,12 @@ TEST(Select, GroupBy) {
         perform_test(agg_op, col_name, dt);
       }
     }
+
+    // check whether we only apply case-when optimization towards count* distinct agg
+    c("SELECT x, COUNT(x) FROM test GROUP BY x;", dt);
+    c("SELECT x, COUNT(DISTINCT x) FROM test GROUP BY x;", dt);
+    c("SELECT x, y, COUNT(x) FROM test GROUP BY x,y;", dt);
+    c("SELECT x, y, COUNT(DISTINCT x) FROM test GROUP BY x,y;", dt);
   }
   run_ddl_statement("DROP TABLE IF EXISTS count_distinct_rewrite;");
 }
