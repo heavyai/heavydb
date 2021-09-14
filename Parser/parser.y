@@ -129,41 +129,14 @@ sql_list:
 	/* schema definition language */
 sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	create_table_statement { $<nodeval>$ = $<nodeval>1; }
-	| create_dataframe_statement { $<nodeval>$ = $<nodeval>1; }
-	/* | prvililege_def { $<nodeval>$ = $<nodeval>1; } */
 	| drop_view_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_table_statement { $<nodeval>$ = $<nodeval>1; }
-
 	| rename_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| rename_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| add_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| alter_table_param_statement { $<nodeval>$ = $<nodeval>1; }
-	| copy_table_statement { $<nodeval>$ = $<nodeval>1; }
-	| validate_system_statement { $<nodeval>$ = $<nodeval>1; }
 	;
-
-/* NOT SUPPORTED
-schema:
-		CREATE SCHEMA AUTHORIZATION user opt_schema_element_list
-	;
-
-opt_schema_element_list:
-		{ $<listval>$ = TrackedListPtr<Node>::makeEmpty(); } // empty
-	|	schema_element_list {	$<listval>$ = $<listval>1; }
-	;
-
-schema_element_list:
-		schema_element
-	|	schema_element_list schema_element
-	;
-
-schema_element:
-	create_table_statement {	$$ = $1; }
-	|	create_view_statement {	$$ = $1; }
-	|	privilege_def {	$$ = $1; }
-	;
-NOT SUPPORTED */
 
 name_eq_value_list:
 		name_eq_value
@@ -197,13 +170,6 @@ create_table_statement:
 		| CREATE CREATE NAME TABLE opt_if_not_exists table '(' base_table_element_commalist ')' opt_with_option_list
 		{
 		  $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new CreateTableStmt(($<stringval>5)->release(), ($<stringval>2)->release(), reinterpret_cast<std::list<TableElement*>*>(($<listval>7)->release()), false,  $<boolval>4, reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>9)->release())));
-		}
-	;
-
-create_dataframe_statement:
-		CREATE DATAFRAME table '(' base_table_element_commalist ')' FROM STRING opt_with_option_list
-		{
-		  $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new CreateDataframeStmt(($<stringval>3)->release(), reinterpret_cast<std::list<TableElement*>*>(($<listval>5)->release()), ($<stringval>8)->release(), reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>9)->release())));
 		}
 	;
 
@@ -273,32 +239,6 @@ alter_table_param_statement:
 		$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new AlterTableParamStmt(($<stringval>3)->release(), reinterpret_cast<NameValueAssign*>(($<nodeval>5)->release())));
 	}
 	;
-
-copy_table_statement:
-	COPY table FROM STRING opt_with_option_list
-	{
-	    $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new CopyTableStmt(($<stringval>2)->release(), ($<stringval>4)->release(), reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>5)->release())));
-    }
-	| COPY '(' FWDSTR ')' TO STRING opt_with_option_list
-	{
-	    if (!boost::istarts_with(*($<stringval>3)->get(), "SELECT") && !boost::istarts_with(*($<stringval>3)->get(), "WITH")) {
-	        throw std::runtime_error("SELECT or WITH statement expected");
-	    }
-	    *($<stringval>3)->get() += ";";
-	    $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new ExportQueryStmt(($<stringval>3)->release(), ($<stringval>6)->release(), reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>7)->release())));
-	}
-	;
-
-validate_system_statement:
-		VALIDATE CLUSTER opt_with_option_list
-		{
-			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new ValidateStmt(($<stringval>2)->release(), reinterpret_cast<std::list<NameValueAssign*>*>(($<listval>3)->release())));
-		}
-		| VALIDATE
-		{
-			$<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new ValidateStmt(new std::string(), nullptr));
-		}
-		;
 
 base_table_element_commalist:
 		base_table_element { $<listval>$ = TrackedListPtr<Node>::make(lexer.parsed_node_list_tokens_, 1, $<nodeval>1); }
@@ -425,58 +365,6 @@ opt_column_commalist:
 	|	'(' column_commalist ')' { $<slistval>$ = $<slistval>2; }
 	;
 
-/* NOT SUPPORTED
-privilege_def:
-		GRANT privileges ON table TO grantee_commalist
-		opt_with_grant_option
-	;
-
-opt_with_grant_option:
-		// empty
-	|	WITH GRANT OPTION
-	;
-
-privileges:
-		ALL PRIVILEGES
-	|	ALL
-	|	operation_commalist
-	;
-
-operation_commalist:
-		operation
-	|	operation_commalist ',' operation
-	;
-
-operation:
-		SELECT
-	|	INSERT
-	|	DELETE
-	|	UPDATE opt_column_commalist
-	|	REFERENCES opt_column_commalist
-	;
-
-
-grantee_commalist:
-		grantee
-	|	grantee_commalist ',' grantee
-	;
-
-grantee:
-		PUBLIC
-	|	user
-	;
-
-sql:
-		cursor_def
-	;
-
-
-cursor_def:
-		DECLARE cursor CURSOR FOR query_exp opt_order_by_clause
-	;
-
-NOT SUPPORTED */
-
 opt_order_by_clause:
 		/* empty */ { $<listval>$ = TrackedListPtr<Node>::makeEmpty(); }
 	|	ORDER BY ordering_spec_commalist { $<listval>$ = $<listval>3; }
@@ -529,24 +417,6 @@ manipulative_statement:
 	|	update_statement
 	;
 
-/* NOT SUPPORTED
-close_statement:
-		CLOSE cursor
-	;
-
-commit_statement:
-		COMMIT WORK
-	;
-
-delete_statement_positioned:
-		DELETE FROM table WHERE CURRENT OF cursor
-	;
-
-fetch_statement:
-		FETCH cursor INTO target_commalist
-	;
-NOT SUPPORTED */
-
 delete_statement:
 		DELETE FROM table opt_where_clause
 		{ $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new DeleteStmt(($<stringval>3)->release(), dynamic_cast<Expr*>(($<nodeval>4)->release()))); }
@@ -559,34 +429,11 @@ insert_statement:
 		}
 	;
 
-/* NOT SUPPORTED
-open_statement:
-		OPEN cursor
-	;
-
-rollback_statement:
-		ROLLBACK WORK
-	;
-
-select_statement:
-		SELECT opt_all_distinct selection
-		INTO target_commalist
-		table_exp
-	;
-NOT SUPPORTED */
-
 opt_all_distinct:
 		/* empty */ { $<boolval>$ = false; }
 	|	ALL { $<boolval>$ = false; }
 	|	DISTINCT { $<boolval>$ = true; }
 	;
-
-/* NOT SUPPORTED
-update_statement_positioned:
-		UPDATE table SET assignment_commalist
-		WHERE CURRENT OF cursor
-	;
-NOT SUPPORTED */
 
 assignment_commalist:
 		assignment
@@ -607,17 +454,6 @@ update_statement:
 		UPDATE table SET assignment_commalist opt_where_clause
 		{ $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new UpdateStmt(($<stringval>2)->release(), reinterpret_cast<std::list<Assignment*>*>(($<listval>4)->release()), dynamic_cast<Expr*>(($<nodeval>5)->release()))); }
 	;
-
-/* NOT SUPPORTED
-target_commalist:
-		target
-	|	target_commalist ',' target
-	;
-
-target:
-		parameter_ref
-	;
-NOT SUPPORTED */
 
 opt_where_clause:
 		/* empty */ { $<nodeval>$ = TrackedPtr<Node>::makeEmpty(); }
@@ -1102,8 +938,9 @@ non_neg_int: INTNUM
 				throw std::runtime_error("No negative number in type definition.");
 			$<intval>$ = $<intval>1;
 		}
+	;
 
-		/* data types */
+	/* data types */
 
 data_type:
 		BIGINT { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(kBIGINT)); }
@@ -1160,11 +997,13 @@ geography_type:	GEOGRAPHY '(' geo_type ')'
 		{ $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(static_cast<SQLTypes>($<intval>3), static_cast<int>(kGEOGRAPHY), 4326, false)); }
 	|	GEOGRAPHY '(' geo_type ',' INTNUM ')'
 		{ $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(static_cast<SQLTypes>($<intval>3), static_cast<int>(kGEOGRAPHY), $<intval>5, false)); }
+	;
 
 geometry_type:	GEOMETRY '(' geo_type ')'
 		{ $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(static_cast<SQLTypes>($<intval>3), static_cast<int>(kGEOMETRY), 0, false)); }
 	|	GEOMETRY '(' geo_type ',' INTNUM ')'
 		{ $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(static_cast<SQLTypes>($<intval>3), static_cast<int>(kGEOMETRY), $<intval>5, false)); }
+	;
 
 	/* the various things you can name */
 
@@ -1180,24 +1019,7 @@ column:
     | 	QUOTED_IDENTIFIER { $<stringval>$ = $<stringval>1; }
 	;
 
-/*
-cursor:		NAME { $<stringval>$ = $<stringval>1; }
-	;
-*/
-
-/* TODO: do Postgres-styl PARAM
-parameter:
-		PARAMETER	// :name handled in parser
-		{ $$ = new Parameter(yytext+1); }
-	;
-*/
-
 range_variable:	NAME { $<stringval>$ = $<stringval>1; }
 	;
-
-/*
-user:		NAME { $<stringval>$ = $<stringval>1; }
-	;
-*/
 
 %%

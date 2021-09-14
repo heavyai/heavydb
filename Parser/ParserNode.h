@@ -1086,6 +1086,8 @@ class CreateDataframeStmt : public CreateTableBaseStmt {
       delete s;
     }
   }
+  CreateDataframeStmt(const rapidjson::Value& payload);
+
   const std::string* get_table() const override { return table_.get(); }
   const std::list<std::unique_ptr<TableElement>>& get_table_element_list()
       const override {
@@ -1183,8 +1185,7 @@ class CreateTableAsSelectStmt : public InsertIntoTableAsSelectStmt {
 
 class AlterTableStmt : public DDLStmt {
  public:
-  static void delegateExecute(const rapidjson::Value& payload,
-                              const Catalog_Namespace::SessionInfo& session);
+  static std::unique_ptr<Parser::DDLStmt> delegate(const rapidjson::Value& payload);
 
   const std::string* get_table() const { return table_.get(); }
 
@@ -1262,33 +1263,8 @@ class OptimizeTableStmt : public DDLStmt {
 
 class ValidateStmt : public DDLStmt {
  public:
-  ValidateStmt(std::string* type, std::list<NameValueAssign*>* with_opts) : type_(type) {
-    if (!type) {
-      throw std::runtime_error("Validation Type is required for VALIDATE command.");
-    }
-    std::list<std::unique_ptr<NameValueAssign>> options;
-    if (with_opts) {
-      for (const auto e : *with_opts) {
-        options.emplace_back(e);
-      }
-      delete with_opts;
-
-      for (const auto& opt : options) {
-        if (boost::iequals(*opt->get_name(), "REPAIR_TYPE")) {
-          const auto repair_type =
-              static_cast<const StringLiteral*>(opt->get_value())->get_stringval();
-          CHECK(repair_type);
-          if (boost::iequals(*repair_type, "REMOVE")) {
-            isRepairTypeRemove_ = true;
-          } else {
-            throw std::runtime_error("REPAIR_TYPE must be REMOVE.");
-          }
-        } else {
-          throw std::runtime_error("The only VALIDATE WITH options is REPAIR_TYPE.");
-        }
-      }
-    }
-  }
+  ValidateStmt(std::string* type, std::list<NameValueAssign*>* with_opts);
+  ValidateStmt(const rapidjson::Value& payload);
 
   bool isRepairTypeRemove() const { return isRepairTypeRemove_; }
 
@@ -1495,15 +1471,9 @@ class RestoreTableStmt : public DumpRestoreTableStmtBase {
  */
 class CopyTableStmt : public DDLStmt {
  public:
-  CopyTableStmt(std::string* t, std::string* f, std::list<NameValueAssign*>* o)
-      : table_(t), file_pattern_(f), success_(true) {
-    if (o) {
-      for (const auto e : *o) {
-        options_.emplace_back(e);
-      }
-      delete o;
-    }
-  }
+  CopyTableStmt(std::string* t, std::string* f, std::list<NameValueAssign*>* o);
+  CopyTableStmt(const rapidjson::Value& payload);
+
   void execute(const Catalog_Namespace::SessionInfo& session) override;
   void execute(const Catalog_Namespace::SessionInfo& session,
                const std::function<std::unique_ptr<import_export::Importer>(
@@ -1892,6 +1862,7 @@ class ExportQueryStmt : public DDLStmt {
       delete o;
     }
   }
+  ExportQueryStmt(const rapidjson::Value& payload);
   void execute(const Catalog_Namespace::SessionInfo& session) override;
   const std::string get_select_stmt() const { return *select_stmt_; }
 
@@ -1964,7 +1935,7 @@ class CreateDBStmt : public DDLStmt {
       : db_name_(n), if_not_exists_(if_not_exists) {
     if (l) {
       for (const auto e : *l) {
-        name_value_list_.emplace_back(e);
+        options_.emplace_back(e);
       }
       delete l;
     }
@@ -1973,7 +1944,7 @@ class CreateDBStmt : public DDLStmt {
 
  private:
   std::unique_ptr<std::string> db_name_;
-  std::list<std::unique_ptr<NameValueAssign>> name_value_list_;
+  std::list<std::unique_ptr<NameValueAssign>> options_;
   bool if_not_exists_;
 };
 
@@ -2004,7 +1975,7 @@ class CreateUserStmt : public DDLStmt {
   CreateUserStmt(std::string* n, std::list<NameValueAssign*>* l) : user_name_(n) {
     if (l) {
       for (const auto e : *l) {
-        name_value_list_.emplace_back(e);
+        options_.emplace_back(e);
       }
       delete l;
     }
@@ -2013,7 +1984,7 @@ class CreateUserStmt : public DDLStmt {
 
  private:
   std::unique_ptr<std::string> user_name_;
-  std::list<std::unique_ptr<NameValueAssign>> name_value_list_;
+  std::list<std::unique_ptr<NameValueAssign>> options_;
 };
 
 /*
@@ -2026,7 +1997,7 @@ class AlterUserStmt : public DDLStmt {
   AlterUserStmt(std::string* n, std::list<NameValueAssign*>* l) : user_name_(n) {
     if (l) {
       for (const auto e : *l) {
-        name_value_list_.emplace_back(e);
+        options_.emplace_back(e);
       }
       delete l;
     }
@@ -2035,7 +2006,7 @@ class AlterUserStmt : public DDLStmt {
 
  private:
   std::unique_ptr<std::string> user_name_;
-  std::list<std::unique_ptr<NameValueAssign>> name_value_list_;
+  std::list<std::unique_ptr<NameValueAssign>> options_;
 };
 
 /*
@@ -2234,13 +2205,15 @@ template <>
 struct ShouldInvalidateSessionsByUser<RenameUserStmt> : public std::true_type {};
 
 /**
- * A helper function for parsing the DDL returned from calcite as part of the plan result
+ * Helper functions for parsing the DDL returned from calcite as part of the plan result
  * to a parser node in this class. Currently only used in
  * QueryRunner/DistributedQueryRunner, where we do not want to link in the thrift
  * dependencies wich DdlCommandExecutor currently brings along.
  */
-void execute_calcite_ddl(
-    const std::string& plan_result,
+std::unique_ptr<Parser::DDLStmt> create_ddl_from_calcite(const std::string& query_json);
+
+void execute_ddl_from_calcite(
+    const std::string& query_json,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
 }  // namespace Parser

@@ -321,19 +321,6 @@ BufferPoolStats QueryRunner::getBufferPoolStats(
           chunk_keys.size()};
 }
 
-std::string apply_copy_to_shim(const std::string& query_str) {
-  auto result = query_str;
-  {
-    boost::regex copy_to{R"(COPY\s*\(([^#])(.+)\)\s+TO\s)",
-                         boost::regex::extended | boost::regex::icase};
-    apply_shim(result, copy_to, [](std::string& result, const boost::smatch& what) {
-      result.replace(
-          what.position(), what.length(), "COPY (#~#" + what[1] + what[2] + "#~#) TO  ");
-    });
-  }
-  return result;
-}
-
 RegisteredQueryHint QueryRunner::getParsedQueryHint(const std::string& query_str) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
@@ -435,6 +422,43 @@ void QueryRunner::printQueryPlanDagCache() const {
   executor->getQueryPlanDagCache().printDag();
 }
 
+std::unique_ptr<Parser::DDLStmt> QueryRunner::createDDLStatement(
+    const std::string& stmt_str_in) {
+  CHECK(session_info_);
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
+
+  std::string stmt_str = stmt_str_in;
+  // First remove special chars
+  boost::algorithm::trim_left_if(stmt_str, boost::algorithm::is_any_of("\n"));
+  // Then remove spaces
+  boost::algorithm::trim_left(stmt_str);
+
+  ParserWrapper pw{stmt_str};
+
+  auto query_state = create_query_state(session_info_, stmt_str);
+  auto stdlog = STDLOG(query_state);
+
+  if (pw.isCalciteDdl()) {
+    const auto& cat = session_info_->getCatalog();
+    auto calcite_mgr = cat.getCalciteMgr();
+    const auto query_json = calcite_mgr
+                                ->process(query_state->createQueryStateProxy(),
+                                          pg_shim(stmt_str),
+                                          {},
+                                          true,
+                                          false,
+                                          false,
+                                          true)
+                                .plan_result;
+    std::unique_ptr<Parser::DDLStmt> ptr = create_ddl_from_calcite(query_json);
+    return ptr;
+  }
+
+  // simply fail here as non-Calcite parsing is about to be removed
+  UNREACHABLE();
+  return nullptr;
+}
+
 void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
@@ -446,9 +470,6 @@ void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
   boost::algorithm::trim_left(stmt_str);
 
   ParserWrapper pw{stmt_str};
-  if (pw.is_copy_to) {
-    stmt_str = apply_copy_to_shim(stmt_str_in);
-  }
 
   auto query_state = create_query_state(session_info_, stmt_str);
   auto stdlog = STDLOG(query_state);

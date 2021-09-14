@@ -31,10 +31,11 @@ using namespace std;
 const std::vector<std::string> ParserWrapper::ddl_cmd = {"ARCHIVE",
                                                          "ALTER",
                                                          "COPY",
-                                                         "GRANT",
                                                          "CREATE",
                                                          "DROP",
                                                          "DUMP",
+                                                         "GRANT",
+                                                         "KILL",
                                                          "OPTIMIZE",
                                                          "REFRESH",
                                                          "RENAME",
@@ -42,8 +43,8 @@ const std::vector<std::string> ParserWrapper::ddl_cmd = {"ARCHIVE",
                                                          "REVOKE",
                                                          "SHOW",
                                                          "TRUNCATE",
-                                                         "KILL",
-                                                         "REASSIGN"};
+                                                         "REASSIGN",
+                                                         "VALIDATE"};
 
 const std::vector<std::string> ParserWrapper::update_dml_cmd = {
     "INSERT",
@@ -112,11 +113,6 @@ ParserWrapper::ParserWrapper(std::string query_string) {
     }
   }
 
-  if (boost::istarts_with(query_string, validate_str)) {
-    is_validate = true;
-    return;
-  }
-
   query_type_ = QueryType::Read;
   for (std::string ddl : ddl_cmd) {
     is_ddl = boost::istarts_with(query_string, ddl);
@@ -152,8 +148,9 @@ ParserWrapper::ParserWrapper(std::string query_string) {
             is_legacy_ddl_ = true;
           }
         } else {
-          boost::regex create_regex{R"(CREATE\s+(TABLE|ROLE|VIEW|DATABASE|USER).*)",
-                                    boost::regex::extended | boost::regex::icase};
+          boost::regex create_regex{
+              R"(CREATE\s+(DATABASE|DATAFRAME|(TEMPORARY\s+|\s*)+TABLE|ROLE|USER|VIEW).*)",
+              boost::regex::extended | boost::regex::icase};
           if (g_enable_calcite_ddl_parser &&
               boost::regex_match(query_string, create_regex)) {
             is_calcite_ddl_ = true;
@@ -163,6 +160,8 @@ ParserWrapper::ParserWrapper(std::string query_string) {
         }
       } else if (ddl == "COPY") {
         is_copy = true;
+        is_calcite_ddl_ = true;
+        is_legacy_ddl_ = false;
         // now check if it is COPY TO
         boost::regex copy_to{R"(COPY\s*\(([^#])(.+)\)\s+TO\s+.*)",
                              boost::regex::extended | boost::regex::icase};
@@ -190,6 +189,13 @@ ParserWrapper::ParserWrapper(std::string query_string) {
         query_type_ = QueryType::Unknown;
         is_calcite_ddl_ = true;
         is_legacy_ddl_ = false;
+        return;
+      } else if (ddl == "VALIDATE") {
+        query_type_ = QueryType::Unknown;
+        is_calcite_ddl_ = true;
+        is_legacy_ddl_ = false;
+        // needs to execute in a different context from other DDL
+        is_validate = true;
         return;
       } else if (ddl == "RENAME") {
         query_type_ = QueryType::SchemaWrite;

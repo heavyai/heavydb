@@ -1533,21 +1533,6 @@ void DBHandler::deallocate_df(const TSessionId& session,
       data_mgr_);
 }
 
-std::string DBHandler::apply_copy_to_shim(const std::string& query_str) {
-  auto result = query_str;
-  {
-    // boost::regex copy_to{R"(COPY\s\((.*)\)\sTO\s(.*))", boost::regex::extended |
-    // boost::regex::icase};
-    boost::regex copy_to{R"(COPY\s*\(([^#])(.+)\)\s+TO\s)",
-                         boost::regex::extended | boost::regex::icase};
-    apply_shim(result, copy_to, [](std::string& result, const boost::smatch& what) {
-      result.replace(
-          what.position(), what.length(), "COPY (#~#" + what[1] + what[2] + "#~#) TO  ");
-    });
-  }
-  return result;
-}
-
 void DBHandler::sql_validate(TRowDescriptor& _return,
                              const TSessionId& session,
                              const std::string& query_str) {
@@ -6075,6 +6060,99 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     }
     return;
 
+  } else if (pw.is_validate) {
+    // check user is superuser
+    if (!session_ptr->get_currentUser().isSuper) {
+      throw std::runtime_error("Superuser is required to run VALIDATE");
+    }
+
+    std::string query_ra;
+    _return.addExecutionTime(measure<>::execution([&]() {
+      TPlanResult result;
+      std::tie(result, locks) =
+          parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_);
+      query_ra = result.plan_result;
+    }));
+    rapidjson::Document ddl_query;
+    ddl_query.Parse(query_ra);
+    CHECK(ddl_query.HasMember("payload"));
+    CHECK(ddl_query["payload"].IsObject());
+    auto validate_stmt = Parser::ValidateStmt(ddl_query["payload"].GetObject());
+    _return.addExecutionTime(measure<>::execution([&]() {
+      // Prevent any other query from running while doing validate
+      executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
+          *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
+
+      std::string output{"Result for validate"};
+      if (g_cluster) {
+        if (leaf_aggregator_.leafCount()) {
+          _return.addExecutionTime(measure<>::execution([&]() {
+            const system_validator::DistributedValidate validator(
+                validate_stmt.getType(),
+                validate_stmt.isRepairTypeRemove(),
+                cat,  // tables may be dropped here
+                leaf_aggregator_,
+                *session_ptr,
+                *this);
+            output = validator.validate(query_state_proxy);
+          }));
+        } else {
+          THROW_MAPD_EXCEPTION("Validate command should be executed on the aggregator.");
+        }
+
+      } else {
+        _return.addExecutionTime(measure<>::execution([&]() {
+          const system_validator::SingleNodeValidator validator(validate_stmt.getType(),
+                                                                cat);
+          output = validator.validate();
+        }));
+      }
+      _return.updateResultSet(output, ExecutionResult::SimpleResult);
+    }));
+
+    return;
+
+  } else if (pw.is_copy && !pw.is_copy_to) {
+    std::string query_ra;
+    _return.addExecutionTime(measure<>::execution([&]() {
+      TPlanResult result;
+      std::tie(result, locks) =
+          parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_);
+      query_ra = result.plan_result;
+    }));
+    std::unique_ptr<Parser::DDLStmt> stmt = create_ddl_from_calcite(query_ra);
+    const auto import_stmt = dynamic_cast<Parser::CopyTableStmt*>(stmt.get());
+    if (import_stmt) {
+      if (g_cluster && !leaf_aggregator_.leafCount()) {
+        // Don't allow copy from imports directly on a leaf node
+        throw std::runtime_error(
+            "Cannot import on an individual leaf. Please import from the Aggregator.");
+      } else if (leaf_aggregator_.leafCount() > 0) {
+        _return.addExecutionTime(measure<>::execution(
+            [&]() { execute_distributed_copy_statement(import_stmt, *session_ptr); }));
+      } else {
+        _return.addExecutionTime(
+            measure<>::execution([&]() { import_stmt->execute(*session_ptr); }));
+      }
+
+      // Read response message
+      _return.updateResultSet(*import_stmt->return_message.get(),
+                              ExecutionResult::SimpleResult,
+                              import_stmt->get_success());
+
+      // get geo_copy_from info
+      if (import_stmt->was_geo_copy_from()) {
+        GeoCopyFromState geo_copy_from_state;
+        import_stmt->get_geo_copy_from_payload(
+            geo_copy_from_state.geo_copy_from_table,
+            geo_copy_from_state.geo_copy_from_file_name,
+            geo_copy_from_state.geo_copy_from_copy_params,
+            geo_copy_from_state.geo_copy_from_partitions);
+        geo_copy_from_sessions.add(session_ptr->get_session_id(), geo_copy_from_state);
+      }
+      return;
+    }
   } else if (pw.isCalcitePathPermissable(read_only_)) {
     // run DDL before the locks as DDL statements should handle their own locking
     if (pw.isCalciteDdl()) {
@@ -6219,7 +6297,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     auto result_future = execute_rel_alg_task->get_future();
     result_future.get();
     return;
-  } else if (pw.is_optimize || pw.is_validate) {
+  } else if (pw.is_optimize) {
     // Get the Stmt object
     DBHandler::parser_with_error_handler(query_str, parse_trees);
 
@@ -6253,53 +6331,11 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
       }));
       return;
     }
-    if (pw.is_validate) {
-      // check user is superuser
-      if (!session_ptr->get_currentUser().isSuper) {
-        throw std::runtime_error("Superuser is required to run VALIDATE");
-      }
-      const auto validate_stmt =
-          dynamic_cast<Parser::ValidateStmt*>(parse_trees.front().get());
-      CHECK(validate_stmt);
-
-      // Prevent any other query from running while doing validate
-      executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
-          *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-              legacylockmgr::ExecutorOuterLock, true));
-
-      std::string output{"Result for validate"};
-      if (g_cluster) {
-        if (leaf_aggregator_.leafCount()) {
-          _return.addExecutionTime(measure<>::execution([&]() {
-            const system_validator::DistributedValidate validator(
-                validate_stmt->getType(),
-                validate_stmt->isRepairTypeRemove(),
-                cat,  // tables may be dropped here
-                leaf_aggregator_,
-                *session_ptr,
-                *this);
-            output = validator.validate(query_state_proxy);
-          }));
-        } else {
-          THROW_MAPD_EXCEPTION("Validate command should be executed on the aggregator.");
-        }
-      } else {
-        _return.addExecutionTime(measure<>::execution([&]() {
-          const system_validator::SingleNodeValidator validator(validate_stmt->getType(),
-                                                                cat);
-          output = validator.validate();
-        }));
-      }
-      _return.updateResultSet(output, ExecutionResult::SimpleResult);
-      return;
-    }
   }
 
   LOG(INFO) << "passing query to legacy processor";
   auto result = query_str;
-  if (pw.is_copy_to) {
-    result = apply_copy_to_shim(query_str);
-  }
+
   DBHandler::parser_with_error_handler(result, parse_trees);
   auto handle_ddl = [&query_state_proxy, &session_ptr, &_return, &locks, this](
                         Parser::DDLStmt* ddl) -> bool {
@@ -6312,38 +6348,6 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
           measure<>::execution([&]() { ddl->execute(*session_ptr); }));
       const auto create_string = show_create_stmt->getCreateStmt();
       _return.updateResultSet(create_string, ExecutionResult::SimpleResult);
-      return true;
-    }
-
-    const auto import_stmt = dynamic_cast<Parser::CopyTableStmt*>(ddl);
-    if (import_stmt) {
-      if (g_cluster && !leaf_aggregator_.leafCount()) {
-        // Don't allow copy from imports directly on a leaf node
-        throw std::runtime_error(
-            "Cannot import on an individual leaf. Please import from the Aggregator.");
-      } else if (leaf_aggregator_.leafCount() > 0) {
-        _return.addExecutionTime(measure<>::execution(
-            [&]() { execute_distributed_copy_statement(import_stmt, *session_ptr); }));
-      } else {
-        _return.addExecutionTime(
-            measure<>::execution([&]() { ddl->execute(*session_ptr); }));
-      }
-
-      // Read response message
-      _return.updateResultSet(*import_stmt->return_message.get(),
-                              ExecutionResult::SimpleResult,
-                              import_stmt->get_success());
-
-      // get geo_copy_from info
-      if (import_stmt->was_geo_copy_from()) {
-        GeoCopyFromState geo_copy_from_state;
-        import_stmt->get_geo_copy_from_payload(
-            geo_copy_from_state.geo_copy_from_table,
-            geo_copy_from_state.geo_copy_from_file_name,
-            geo_copy_from_state.geo_copy_from_copy_params,
-            geo_copy_from_state.geo_copy_from_partitions);
-        geo_copy_from_sessions.add(session_ptr->get_session_id(), geo_copy_from_state);
-      }
       return true;
     }
 

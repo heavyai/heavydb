@@ -13,28 +13,28 @@ import org.apache.calcite.sql.parser.SqlParserPos;
 import java.util.List;
 
 /**
- * Class that encapsulates all information associated with a RESTORE TABLE DDL command.
+ * Class that encapsulates all information associated with a COPY TABLE DDL command.
  */
-public class SqlRestoreTable extends SqlDdl implements JsonSerializableDdl {
+public class SqlCopyTable extends SqlDdl implements JsonSerializableDdl {
   private static final SqlOperator OPERATOR =
-          new SqlSpecialOperator("RESTORE_TABLE", SqlKind.OTHER_DDL);
+          new SqlSpecialOperator("COPY_TABLE", SqlKind.OTHER_DDL);
 
   @Expose
   private String command;
   @Expose
-  private String tableName;
+  private String table;
   @Expose
   private String filePath;
   @Expose
   private OmniSciOptionsMap options;
 
-  public SqlRestoreTable(final SqlParserPos pos,
-          final String tableName,
+  public SqlCopyTable(final SqlParserPos pos,
+          final String table,
           final String filePath,
           OmniSciOptionsMap withOptions) {
     super(OPERATOR, pos);
     this.command = OPERATOR.getName();
-    this.tableName = tableName;
+    this.table = table;
     this.filePath = filePath.replaceAll("^(\'|\")*|(\'|\")*$", "");
     this.options = withOptions;
   }

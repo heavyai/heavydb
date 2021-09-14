@@ -366,15 +366,8 @@ void import_table_file(const std::string& table, const std::string& file) {
                           "../../Tests/Import/datafiles/" + file +
                           "' WITH (header='true');";
 
-  SQLParser parser;
-  std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  std::string last_parsed;
-  if (parser.parse(query_str, parse_trees, last_parsed)) {
-    throw std::runtime_error("Failed to parse: " + query_str);
-  }
-  CHECK_EQ(parse_trees.size(), size_t(1));
+  auto stmt = QR::get()->createDDLStatement(query_str);
 
-  const auto& stmt = parse_trees.front();
   auto copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(stmt.get());
   if (!copy_stmt) {
     throw std::runtime_error("Expected a CopyTableStatment: " + query_str);

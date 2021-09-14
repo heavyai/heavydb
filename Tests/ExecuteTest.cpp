@@ -475,11 +475,9 @@ void c_arrow(const std::string& query_string, const ExecutorDeviceType device_ty
     return;                                                     \
   }
 
-bool validate_statement_syntax(const std::string& stmt) {
-  SQLParser parser;
-  list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  std::string last_parsed;
-  return parser.parse(stmt, parse_trees, last_parsed) == 0;
+bool validate_statement_syntax(const std::string& statement) {
+  auto stmt = QR::get()->createDDLStatement(statement);
+  return (stmt.get() != nullptr);
 }
 
 namespace {

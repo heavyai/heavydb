@@ -357,7 +357,10 @@ ExecutionResult DdlCommandExecutor::execute() {
     rename_table_stmt.execute(*session_ptr_);
     return result;
   } else if (ddl_command_ == "ALTER_TABLE") {
-    Parser::AlterTableStmt::delegateExecute(extractPayload(*ddl_data_), *session_ptr_);
+    auto stmt = Parser::AlterTableStmt::delegate(extractPayload(*ddl_data_));
+    if (stmt != nullptr) {
+      stmt->execute(*session_ptr_);
+    }
     return result;
   } else if (ddl_command_ == "TRUNCATE_TABLE") {
     auto truncate_table_stmt = Parser::TruncateTableStmt(extractPayload(*ddl_data_));
@@ -381,6 +384,15 @@ ExecutionResult DdlCommandExecutor::execute() {
     const auto create_string = show_create_table_stmt.getCreateStmt();
     result.updateResultSet(create_string, ExecutionResult::SimpleResult);
     return result;
+  } else if (ddl_command_ == "COPY_TABLE") {
+    auto copy_table_stmt = Parser::CopyTableStmt(extractPayload(*ddl_data_));
+    copy_table_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "EXPORT_QUERY") {
+    auto export_query_stmt = Parser::ExportQueryStmt(extractPayload(*ddl_data_));
+    export_query_stmt.execute(*session_ptr_);
+    return result;
+
   } else if (ddl_command_ == "CREATE_DB") {
     auto create_db_stmt = Parser::CreateDBStmt(extractPayload(*ddl_data_));
     create_db_stmt.execute(*session_ptr_);
@@ -434,6 +446,13 @@ ExecutionResult DdlCommandExecutor::execute() {
         Parser::RevokePrivilegesStmt(extractPayload(*ddl_data_));
     revoke_privileges_stmt.execute(*session_ptr_);
     return result;
+  } else if (ddl_command_ == "CREATE_DATAFRAME") {
+    auto create_dataframe_stmt = Parser::CreateDataframeStmt(extractPayload(*ddl_data_));
+    create_dataframe_stmt.execute(*session_ptr_);
+    return result;
+  } else if (ddl_command_ == "VALIDATE_SYSTEM") {
+    // VALIDATE should have been excuted in outer context before it reaches here
+    UNREACHABLE();
   }
 
   // the following commands require a global unique lock until proper table locking has
@@ -496,17 +515,19 @@ bool DdlCommandExecutor::isShowCreateTable() {
 
 DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails() {
   DistributedExecutionDetails execution_details;
-  if (ddl_command_ == "RENAME_TABLE" || ddl_command_ == "ALTER_TABLE" ||
-      ddl_command_ == "CREATE_TABLE" || ddl_command_ == "DROP_TABLE" ||
-      ddl_command_ == "TRUNCATE_TABLE" || ddl_command_ == "DUMP_TABLE" ||
-      ddl_command_ == "RESTORE_TABLE" || ddl_command_ == "OPTIMIZE_TABLE" ||
-      ddl_command_ == "CREATE_VIEW" || ddl_command_ == "DROP_VIEW" ||
-      ddl_command_ == "CREATE_DB" || ddl_command_ == "DROP_DB" ||
-      ddl_command_ == "RENAME_DB" || ddl_command_ == "CREATE_USER" ||
-      ddl_command_ == "DROP_USER" || ddl_command_ == "ALTER_USER" ||
-      ddl_command_ == "RENAME_USER" || ddl_command_ == "REASSIGN_OWNED" ||
+  if (ddl_command_ == "CREATE_DATAFRAME" || ddl_command_ == "RENAME_TABLE" ||
+      ddl_command_ == "ALTER_TABLE" || ddl_command_ == "CREATE_TABLE" ||
+      ddl_command_ == "DROP_TABLE" || ddl_command_ == "TRUNCATE_TABLE" ||
+      ddl_command_ == "DUMP_TABLE" || ddl_command_ == "RESTORE_TABLE" ||
+      ddl_command_ == "OPTIMIZE_TABLE" || ddl_command_ == "CREATE_VIEW" ||
+      ddl_command_ == "DROP_VIEW" || ddl_command_ == "CREATE_DB" ||
+      ddl_command_ == "DROP_DB" || ddl_command_ == "RENAME_DB" ||
+      ddl_command_ == "CREATE_USER" || ddl_command_ == "DROP_USER" ||
+      ddl_command_ == "ALTER_USER" || ddl_command_ == "RENAME_USER" ||
       ddl_command_ == "CREATE_ROLE" || ddl_command_ == "DROP_ROLE" ||
-      ddl_command_ == "GRANT_ROLE" || ddl_command_ == "REVOKE_ROLE") {
+      ddl_command_ == "GRANT_ROLE" || ddl_command_ == "REVOKE_ROLE" ||
+      ddl_command_ == "REASSIGN_OWNED") {
+    // group user/role/db commands
     execution_details.execution_location = ExecutionLocation::ALL_NODES;
     execution_details.aggregation_type = AggregationType::NONE;
   } else if (ddl_command_ == "GRANT_PRIVILEGE" || ddl_command_ == "REVOKE_PRIVILEGE") {
@@ -526,6 +547,7 @@ DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails()
     execution_details.execution_location = ExecutionLocation::LEAVES_ONLY;
     execution_details.aggregation_type = AggregationType::UNION;
   } else {
+    // Commands that fall here : COPY_TABLE, EXPORT_QUERY, etc.
     execution_details.execution_location = ExecutionLocation::AGGREGATOR_ONLY;
     execution_details.aggregation_type = AggregationType::NONE;
   }

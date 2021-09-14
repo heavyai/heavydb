@@ -687,7 +687,6 @@ class DBHandler : public OmniSciIf {
                                      const SQLTypeInfo& ti,
                                      TColumn& column);
   static TDatum value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti);
-  static std::string apply_copy_to_shim(const std::string& query_str);
 
   std::pair<TPlanResult, lockmgr::LockedTableDescriptors> parse_to_ra(
       QueryStateProxy,

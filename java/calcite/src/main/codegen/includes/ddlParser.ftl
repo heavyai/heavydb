@@ -759,7 +759,7 @@ SqlInsertIntoTable SqlInsertIntoTable(Span s) :
 /*
  * Dump a table using the following syntax:
  *
- * DUMP TABLE <tableName> [WITH options]
+ * DUMP TABLE <tableName> TO <filePath> [WITH options]
  *
  */
 SqlDdl SqlDumpTable(Span s) :
@@ -783,7 +783,7 @@ SqlDdl SqlDumpTable(Span s) :
 /*
  * Restore a table using the following syntax:
  *
- * RESTORE TABLE <tableName> [WITH options]
+ * RESTORE TABLE <tableName> FROM <path> [WITH options]
  *
  */
 SqlDdl SqlRestoreTable(Span s) :
@@ -1281,6 +1281,29 @@ SqlDdl SqlRevokePrivilege(Span s, SqlNodeList privileges) :
 }
 
 
+/*
+ * Create a table using the following syntax:
+ *
+ *		CREATE DATAFRAME table '(' base_table_element_commalist ')' FROM STRING opt_with_option_list
+ */
+SqlCreate SqlCreateDataframe(Span s, boolean replace) :
+{
+    SqlIdentifier name;
+    SqlNodeList elementList = null;
+    SqlNode filePath = null;
+    OmniSciOptionsMap dataframeOptions = null;
+}
+{
+    <DATAFRAME> 
+    name = CompoundIdentifier()
+    elementList = TableElementList()
+    <FROM>
+    filePath = StringLiteral()
+    [ <WITH> dataframeOptions = OptionsOpt() ]
+    {
+        return new SqlCreateDataframe(s.end(this), name, elementList, filePath, dataframeOptions);
+    }
+}
 
 /*
  * Reassign owned database objects using the following syntax:
@@ -1310,5 +1333,62 @@ SqlDdl SqlReassignOwned(Span s) :
     userName = CompoundIdentifier()
     {
         return new SqlReassignOwned(s.end(this), oldOwners, userName.toString());
+    }
+}
+
+/*
+ * Validate the system using the following syntax:
+ *
+ *		VALIDATE [CLUSTER [WITH options]]
+ */
+SqlCreate SqlValidateSystem(Span s) :
+{
+    OmniSciOptionsMap validateOptions = null;
+    String type = "";
+}
+{
+    <VALIDATE> 
+    [<CLUSTER> {type = "CLUSTER";}
+        [<WITH> validateOptions = OptionsOpt() ]]
+    {
+        return new SqlValidateSystem(s.end(this), type, validateOptions);
+    }
+}
+
+/*
+ * Validate the system using the following syntax:
+ *
+ *	COPY table FROM <STRING> opt_with_option_list
+ *	COPY '(' <FWDSTR> ')' TO <STRING> opt_with_option_list
+ *     -> FWDSTR starts with 'select' or 'with' only 
+ *           (WITH d2 AS (SELECT x ....))
+ *
+ */
+SqlDdl SqlCopyTable(Span s) :
+{
+    OmniSciOptionsMap copyOptions = null;
+    SqlNode filePath = null;
+    SqlIdentifier table = null;
+    SqlNode query = null;
+}
+{
+    <COPY> 
+    (
+        table = CompoundIdentifier()
+        <FROM>  
+    |
+        <LPAREN> 
+        query = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
+        <RPAREN> 
+        <TO> 
+    )
+    filePath = StringLiteral()
+    [<WITH> copyOptions = OptionsOpt()]
+    {
+        if(table != null){
+            return new SqlCopyTable(s.end(this), table.toString(), filePath.toString(), copyOptions);
+        } else {
+            return new SqlExportQuery(s.end(this), query, filePath.toString(), copyOptions);
+        }
     }
 }
