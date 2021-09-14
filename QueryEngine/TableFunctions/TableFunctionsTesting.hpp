@@ -905,3 +905,100 @@ int32_t column_list_safe_row_sum__cpu_template(const ColumnList<T>& input,
   }
   return output_num_rows;
 }
+
+// clang-format off
+/*
+  UDTF: ct_hamming_distance(TextEncodingNone, TextEncodingNone, Constant<1>) -> Column<int32_t> hamming_distance
+*/
+// clang-format on
+
+EXTENSION_NOINLINE int32_t ct_hamming_distance(const TextEncodingNone& str1,
+                                               const TextEncodingNone& str2,
+                                               Column<int32_t>& hamming_distance) {
+  const int32_t str_len = str1.size() <= str2.size() ? str1.size() : str2.size();
+
+#ifdef __CUDACC__
+  const int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  const int32_t step = blockDim.x * gridDim.x;
+  if (start == 0) {
+    hamming_distance[0] = 0;
+  }
+  int32_t* output_ptr = hamming_distance.ptr_;
+  __syncthreads();
+#else
+  const int32_t start = 0;
+  const int32_t step = 1;
+#endif
+
+  int32_t num_chars_unequal = 0;
+  for (int32_t i = start; i < str_len; i += step) {
+    num_chars_unequal += (str1[i] != str2[i]) ? 1 : 0;
+  }
+#ifdef __CUDACC__
+  atomicAdd(output_ptr, num_chars_unequal);
+#else
+  hamming_distance[0] = num_chars_unequal;
+#endif
+  return 1;
+}
+
+// clang-format off
+/*
+  UDTF: ct_get_string_chars__template(Column<T>, TextEncodingNone, RowMultiplier) -> Column<int32_t> idx, Column<int8_t> char_bytes, T=[int16_t, int32_t]
+*/
+// clang-format on
+template <typename T>
+TEMPLATE_NOINLINE int32_t ct_get_string_chars__template(const Column<T>& indices,
+                                                        const TextEncodingNone& str,
+                                                        const int32_t multiplier,
+                                                        Column<int32_t>& idx,
+                                                        Column<int8_t>& char_bytes) {
+  const int32_t str_len = str.size();
+  // Note: we assume RowMultiplier is 1 for this test, was to make running on GPU easy
+  // Todo: Provide Constant RowMultiplier interface
+  if (multiplier != 1) {
+    return 0;
+  }
+  const int32_t num_input_rows = indices.size();
+  const int32_t num_output_rows = num_input_rows * multiplier;
+
+#ifdef __CUDACC__
+  const int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  const int32_t step = blockDim.x * gridDim.x;
+#else
+  const int32_t start = 0;
+  const int32_t step = 1;
+#endif
+
+  for (int32_t i = start; i < num_output_rows; i += step) {
+    idx[i] = indices[i % num_output_rows];
+    char_bytes[i] = str[i % str_len];  // index < str_len ? str[i] : 0;
+  }
+  return num_output_rows;
+}
+
+#ifndef __CUDACC__
+
+#include <iostream>
+#include <string>
+
+// clang-format off
+/*
+  UDTF: ct_string_to_chars__cpu_(TextEncodingNone) -> Column<int32_t> char_idx, Column<int8_t> char_bytes
+*/
+// clang-format on
+
+EXTENSION_NOINLINE int32_t ct_string_to_chars__cpu_(const TextEncodingNone& input,
+                                                    Column<int32_t>& char_idx,
+                                                    Column<int8_t>& char_bytes) {
+  const std::string str{input.getString()};
+  const int64_t str_size(str.size());
+  set_output_row_size(str_size);
+  for (int32_t i = 0; i < str_size; ++i) {
+    char_idx[i] = i;
+    char_bytes[i] = str[i];
+  }
+  return str_size;
+}
+
+#endif

@@ -668,7 +668,7 @@ TEST_F(TableFunctions, CursorlessInputs) {
       ASSERT_EQ(rows->rowCount(), size_t(42));
       for (size_t i = 0; i < 42; i++) {
         auto crt_row = rows->getNextRow(false, false);
-        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(42 * i));
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(42 * i));
       }
     }
 
@@ -680,12 +680,12 @@ TEST_F(TableFunctions, CursorlessInputs) {
       ASSERT_EQ(rows->rowCount(), size_t(2));
 
       auto crt_row = rows->getNextRow(false, false);
-      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(0));
-      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]), static_cast<int32_t>(21));
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(0));
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]), static_cast<int64_t>(21));
 
       crt_row = rows->getNextRow(false, false);
-      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(1));
-      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]), static_cast<int32_t>(21));
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(1));
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]), static_cast<int64_t>(21));
     }
 
     {
@@ -693,7 +693,7 @@ TEST_F(TableFunctions, CursorlessInputs) {
           run_multiple_agg("SELECT answer FROM TABLE(ct_no_arg_runtime_sizing());", dt);
       ASSERT_EQ(rows->rowCount(), size_t(1));
       auto crt_row = rows->getNextRow(false, false);
-      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(42));
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(42));
     }
 
     {
@@ -702,11 +702,11 @@ TEST_F(TableFunctions, CursorlessInputs) {
       ASSERT_EQ(rows->rowCount(), size_t(3));
 
       auto crt_row = rows->getNextRow(false, false);
-      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(123));
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(123));
       crt_row = rows->getNextRow(false, false);
-      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(12));
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(12));
       crt_row = rows->getNextRow(false, false);
-      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(1));
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(1));
     }
 
     {
@@ -717,8 +717,8 @@ TEST_F(TableFunctions, CursorlessInputs) {
 
       for (size_t r = 0; r < 5; ++r) {
         auto crt_row = rows->getNextRow(false, false);
-        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(100 + r * 5));
-        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]), static_cast<int32_t>(100 - r * 5));
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(100 + r * 5));
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]), static_cast<int64_t>(100 - r * 5));
       }
     }
 
@@ -731,7 +731,7 @@ TEST_F(TableFunctions, CursorlessInputs) {
 
       for (size_t r = 0; r < 10; ++r) {
         auto crt_row = rows->getNextRow(false, false);
-        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(8));
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(8));
       }
     }
 
@@ -743,7 +743,61 @@ TEST_F(TableFunctions, CursorlessInputs) {
 
       for (size_t r = 0; r < 4; ++r) {
         auto crt_row = rows->getNextRow(false, false);
-        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(7));
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(7));
+      }
+    }
+  }
+}
+
+TEST_F(TableFunctions, TextEncodedNoneLiteralArgs) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // Following tests ability to transform to std::string running on CPU (runs on CPU
+    // only)
+    {
+      const std::string test_string{"this is only a test"};
+      const size_t test_string_len{test_string.size()};
+      const std::string test_query(
+          "SELECT char_idx, char_bytes FROM TABLE(ct_string_to_chars('" + test_string +
+          "')) ORDER BY char_idx;");
+      const auto rows = run_multiple_agg(test_query, dt);
+      ASSERT_EQ(rows->rowCount(), test_string_len);
+      for (size_t r = 0; r < test_string_len; ++r) {
+        auto crt_row = rows->getNextRow(false, false);
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(r));
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]),
+                  static_cast<int64_t>(test_string[r]));
+      }
+    }
+    // Following tests two text encoding none input, plus running on GPU + CPU
+    {
+      const std::string test_string1{"theater"};
+      const std::string test_string2{"theatre"};
+      const std::string test_query(
+          "SELECT hamming_distance FROM TABLE(ct_hamming_distance('" + test_string1 +
+          "','" + test_string2 + "'));");
+      const auto rows = run_multiple_agg(test_query, dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(2));
+    }
+
+    // Following tests varchar element accessors and that TextEncodedNone literal inputs
+    // play nicely with column inputs + RowMultiplier
+    {
+      const std::string test_string{"theater"};
+      const std::string test_query(
+          "SELECT idx, char_bytes FROM TABLE(ct_get_string_chars(CURSOR(SELECT x FROM "
+          "tf_test), '" +
+          test_string + "', 1)) ORDER BY idx;");
+      const auto rows = run_multiple_agg(test_query, dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));  // size of tf_test
+      for (size_t r = 0; r < 5; ++r) {
+        auto crt_row = rows->getNextRow(false, false);
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(r));
+        ASSERT_EQ(
+            TestHelpers::v<int64_t>(crt_row[1]),
+            static_cast<int64_t>(test_string[r]));  // x in tf_test is {1, 2, 3, 4, 5}
       }
     }
   }

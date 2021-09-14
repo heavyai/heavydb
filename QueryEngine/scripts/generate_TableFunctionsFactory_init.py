@@ -106,7 +106,7 @@ translate_map = dict(
     long='Int64',
 )
 for t in ['Int8', 'Int16', 'Int32', 'Int64', 'Float', 'Double', 'Bool',
-          'TextEncodingDict']:
+          'TextEncodingDict', 'TextEncodingNone']:
     translate_map[t.lower()] = t
     if t.startswith('Int'):
         translate_map[t.lower() + '_t'] = t
@@ -219,6 +219,8 @@ class Bracket:
         elif name in ['Double', 'Float']:
             ctype = name.lower()
         elif name == 'TextEncodingDict':
+            ctype = name
+        elif name == 'TextEncodingNone':
             ctype = name
         else:
             raise NotImplementedError(self)
@@ -1358,12 +1360,15 @@ def build_template_function_call(caller, callee, input_types, output_types):
     def format_cpp_type(cpp_type, idx, is_input=True):
         # Perhaps integrate this to Bracket?
         col_typs = ('Column', 'ColumnList')
+        literal_ref_typs = ('TextEncodingNone',)
         idx = str(idx)
         # TODO: use name in annotations when present?
         arg_name = 'input' + idx if is_input else 'out' + idx
         const = 'const ' if is_input else ''
 
         if any(cpp_type.startswith(ct) for ct in col_typs):
+            return '%s%s& %s' % (const, cpp_type, arg_name), arg_name
+        elif any(cpp_type.startswith(lrt) for lrt in literal_ref_typs):
             return '%s%s& %s' % (const, cpp_type, arg_name), arg_name
         else:
             return '%s %s' % (cpp_type, arg_name), arg_name
@@ -1383,6 +1388,7 @@ def build_template_function_call(caller, callee, input_types, output_types):
         cpp_arg, arg_name = format_cpp_type(cpp_type, idx, is_input=False)
         output_cpp_args.append(cpp_arg)
         arg_names.append(arg_name)
+
 
     args = ', '.join(input_cpp_args + output_cpp_args)
     arg_names = ', '.join(arg_names)

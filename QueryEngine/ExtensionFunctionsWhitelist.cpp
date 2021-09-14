@@ -194,7 +194,7 @@ std::string serialize_type(const ExtArgumentType type,
     case ExtArgumentType::ColumnTextEncodingDict:
       return (declare ? (byval ? "{i32*, i64}" : "i8*") : "column_text_encoding_dict");
     case ExtArgumentType::TextEncodingNone:
-      return (declare ? "{i8*, i32}*" : "text_encoding_node");
+      return (declare ? (byval ? "{i8*, i64}*" : "i8*") : "text_encoding_none");
     case ExtArgumentType::TextEncodingDict:
       return (declare ? "{i8*, i32}*" : "text_encoding_dict");
     case ExtArgumentType::ColumnListInt8:

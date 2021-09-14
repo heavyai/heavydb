@@ -377,13 +377,28 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         }
       }
       break;
-    case kTEXT:
+    case kVARCHAR:
+      if (stype != ExtArgumentType::TextEncodingNone) {
+        return -1;
+      }
       switch (arg_type.get_compression()) {
         case kENCODING_NONE:
-          if (stype == ExtArgumentType::TextEncodingNone) {
-            penalty_score += 1000;
-            return 1;
-          }
+          penalty_score += 1000;
+          return 1;
+        case kENCODING_DICT:
+          return -1;
+          // Todo (todd): Evaluate when and where we can tranlate to none-encoded
+        default:
+          UNREACHABLE();
+      }
+    case kTEXT:
+      if (stype != ExtArgumentType::TextEncodingNone) {
+        return -1;
+      }
+      switch (arg_type.get_compression()) {
+        case kENCODING_NONE:
+          penalty_score += 1000;
+          return 1;
         case kENCODING_DICT:
           return -1;
         default:
@@ -391,7 +406,6 @@ static int match_arguments(const SQLTypeInfo& arg_type,
       }
       /* Not implemented types:
          kCHAR
-         kVARCHAR
          kTIME
          kTIMESTAMP
          kDATE

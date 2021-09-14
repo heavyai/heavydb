@@ -64,8 +64,12 @@ inline llvm::Type* get_llvm_type_from_sql_column_type(const SQLTypeInfo elem_ti,
     return get_int_ptr_type(8, ctx);
   } else if (elem_ti.is_integer()) {
     return get_int_ptr_type(elem_ti.get_size() * 8, ctx);
-  } else if (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT) {
-    return get_int_ptr_type(elem_ti.get_size() * 8, ctx);
+  } else if (elem_ti.is_string()) {
+    if (elem_ti.get_compression() == kENCODING_DICT) {
+      return get_int_ptr_type(elem_ti.get_size() * 8, ctx);
+    }
+    CHECK(elem_ti.is_bytes());  // None encoded string
+    return get_int_ptr_type(8, ctx);
   }
   LOG(FATAL) << "get_llvm_type_from_sql_column_type: not implemented for "
              << ::toString(elem_ti);
@@ -225,6 +229,7 @@ TableFunctionCompilationContext::TableFunctionCompilationContext()
 void TableFunctionCompilationContext::compile(const TableFunctionExecutionUnit& exe_unit,
                                               const CompilationOptions& co,
                                               Executor* executor) {
+  auto timer = DEBUG_TIMER(__func__);
   generateEntryPoint(exe_unit, /*is_gpu=*/co.device_type == ExecutorDeviceType::GPU);
   if (co.device_type == ExecutorDeviceType::GPU) {
     generateGpuKernel();
@@ -291,13 +296,30 @@ void TableFunctionCompilationContext::generateEntryPoint(
     }
     if (ti.is_fp()) {
       auto r = cgen_state->ir_builder_.CreateBitCast(
-          col_heads[i], llvm::PointerType::get(get_fp_type(get_bit_width(ti), ctx), 0));
+          col_heads[i], get_fp_ptr_type(get_bit_width(ti), ctx));
       func_args.push_back(cgen_state->ir_builder_.CreateLoad(r));
       CHECK_EQ(col_index, -1);
     } else if (ti.is_integer() || ti.is_boolean()) {
       auto r = cgen_state->ir_builder_.CreateBitCast(
-          col_heads[i], llvm::PointerType::get(get_int_type(get_bit_width(ti), ctx), 0));
+          col_heads[i], get_int_ptr_type(get_bit_width(ti), ctx));
       func_args.push_back(cgen_state->ir_builder_.CreateLoad(r));
+      CHECK_EQ(col_index, -1);
+    } else if (ti.is_bytes()) {
+      auto varchar_size =
+          cgen_state->ir_builder_.CreateBitCast(col_heads[i], get_int_ptr_type(64, ctx));
+      auto varchar_ptr =
+          cgen_state->ir_builder_.CreateGEP(col_heads[i], cgen_state_->llInt(8));
+      auto [varchar_struct, varchar_struct_ptr] =
+          alloc_column(std::string("varchar_literal.") + std::to_string(func_arg_index),
+                       i,
+                       ti,
+                       varchar_ptr,
+                       varchar_size,
+                       ctx,
+                       cgen_state_->ir_builder_);
+      func_args.push_back((pass_column_by_value
+                               ? cgen_state_->ir_builder_.CreateLoad(varchar_struct)
+                               : varchar_struct_ptr));
       CHECK_EQ(col_index, -1);
     } else if (ti.is_column()) {
       auto [col, col_ptr] =
@@ -403,11 +425,9 @@ void TableFunctionCompilationContext::generateEntryPoint(
   cgen_state->ir_builder_.SetInsertPoint(bb_entry);
   cgen_state->ir_builder_.CreateBr(func_body_bb);
 
-  /*
-  std::cout << "=================================" << std::endl;
-  entry_point_func_->print(llvm::outs());
-  std::cout << "=================================" << std::endl;
-  */
+  // std::cout << "=================================" << std::endl;
+  // entry_point_func_->print(llvm::outs());
+  // std::cout << "=================================" << std::endl;
 
   verify_function_ir(entry_point_func_);
 }

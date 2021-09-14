@@ -62,7 +62,7 @@ struct CompilationOptions {
   }
 };
 
-enum class ExecutorType { Native, Extern };
+enum class ExecutorType { Native, Extern, TableFunctions };
 
 struct ExecutionOptions {
   bool output_columnar_hint;

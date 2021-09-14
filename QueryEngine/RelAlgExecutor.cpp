@@ -1331,6 +1331,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
     const auto rewritten_expr = rewrite_expr(scalar_expr.get());
     if (executor_type == ExecutorType::Native) {
       set_transient_dict_maybe(scalar_sources, rewritten_expr);
+    } else if (executor_type == ExecutorType::TableFunctions) {
+      scalar_sources.push_back(fold_expr(rewritten_expr.get()));
     } else {
       scalar_sources.push_back(cast_dict_to_none(fold_expr(rewritten_expr.get())));
     }
@@ -4190,8 +4192,8 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   const auto query_infos = get_table_infos(input_descs, executor_);
   RelAlgTranslator translator(
       cat_, query_state_, executor_, input_to_nest_level, {}, now_, just_explain);
-  const auto input_exprs_owned =
-      translate_scalar_sources(rel_table_func, translator, ::ExecutorType::Native);
+  const auto input_exprs_owned = translate_scalar_sources(
+      rel_table_func, translator, ::ExecutorType::TableFunctions);
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), input_exprs_owned.begin(), input_exprs_owned.end());
   auto input_exprs = get_exprs_not_owned(input_exprs_owned);

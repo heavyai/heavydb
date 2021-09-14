@@ -28,7 +28,7 @@
 namespace {
 
 template <typename T>
-const int8_t* create_literal_buffer(T literal,
+const int8_t* create_literal_buffer(const T literal,
                                     const ExecutorDeviceType device_type,
                                     std::vector<std::unique_ptr<char[]>>& literals_owner,
                                     CudaAllocator* gpu_allocator) {
@@ -43,7 +43,44 @@ const int8_t* create_literal_buffer(T literal,
       CHECK(gpu_allocator);
       const auto gpu_literal_buf_ptr = gpu_allocator->alloc(sizeof(int64_t));
       gpu_allocator->copyToDevice(
-          gpu_literal_buf_ptr, reinterpret_cast<int8_t*>(&literal), sizeof(T));
+          gpu_literal_buf_ptr, reinterpret_cast<const int8_t*>(&literal), sizeof(T));
+      return gpu_literal_buf_ptr;
+    }
+  }
+  UNREACHABLE();
+  return nullptr;
+}
+
+// Specialization for std::string. Currently we simply hand the UDTF a char* to the
+// first char of a c-style null-terminated string we copy out of the std::string.
+// May want to evaluate moving to sending in the ptr and size
+template <>
+const int8_t* create_literal_buffer(std::string* const literal,
+                                    const ExecutorDeviceType device_type,
+                                    std::vector<std::unique_ptr<char[]>>& literals_owner,
+                                    CudaAllocator* gpu_allocator) {
+  const int64_t string_size = literal->size();
+  const int64_t padded_string_size =
+      (string_size + 7) / 8 * 8;  // round up to the next multiple of 8
+  switch (device_type) {
+    case ExecutorDeviceType::CPU: {
+      literals_owner.emplace_back(
+          std::make_unique<char[]>(sizeof(int64_t) + padded_string_size));
+      std::memcpy(literals_owner.back().get(), &string_size, sizeof(int64_t));
+      std::memcpy(
+          literals_owner.back().get() + sizeof(int64_t), literal->data(), string_size);
+      return reinterpret_cast<const int8_t*>(literals_owner.back().get());
+    }
+    case ExecutorDeviceType::GPU: {
+      CHECK(gpu_allocator);
+      const auto gpu_literal_buf_ptr =
+          gpu_allocator->alloc(sizeof(int64_t) + padded_string_size);
+      gpu_allocator->copyToDevice(gpu_literal_buf_ptr,
+                                  reinterpret_cast<const int8_t*>(&string_size),
+                                  sizeof(int64_t));
+      gpu_allocator->copyToDevice(gpu_literal_buf_ptr + sizeof(int64_t),
+                                  reinterpret_cast<const int8_t*>(literal->data()),
+                                  string_size);
       return gpu_literal_buf_ptr;
     }
   }
@@ -204,6 +241,11 @@ ResultSetPtr TableFunctionExecutionContext::execute(
         }
       } else if (ti.is_boolean()) {
         col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.boolval,
+                                                     device_type,
+                                                     literals_owner,
+                                                     device_allocator.get()));
+      } else if (ti.is_bytes()) {  // text encoding none string
+        col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.stringval,
                                                      device_type,
                                                      literals_owner,
                                                      device_allocator.get()));

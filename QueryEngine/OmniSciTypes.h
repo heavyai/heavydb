@@ -82,6 +82,22 @@ struct Array {
   }
 };
 
+struct TextEncodingNone {
+  char* ptr_;
+  int64_t size_;
+
+#ifndef __CUDACC__
+  std::string getString() const { return std::string(ptr_, size_); }
+#endif
+
+  DEVICE ALWAYS_INLINE char& operator[](const unsigned int index) {
+    return index < size_ ? ptr_[index] : ptr_[size_ - 1];
+  }
+  DEVICE ALWAYS_INLINE operator char*() const { return ptr_; }
+  DEVICE ALWAYS_INLINE int64_t size() const { return size_; }
+  DEVICE ALWAYS_INLINE bool isNull() const { return size_ == 0; }
+};
+
 struct GeoPoint {
   int8_t* ptr;
   int32_t sz;
