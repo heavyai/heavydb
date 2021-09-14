@@ -28,6 +28,7 @@
 const size_t g_num_rows{10};
 
 bool g_keep_data{false};
+bool g_all_utm_zones{false};
 bool g_aggregator{false};
 bool g_hoist_literals{true};
 
@@ -2475,6 +2476,7 @@ TEST_P(GeoSpatialMultiFragTestTablesFixture, LoopJoin) {
 // For each of the 120 UTM (curvi-)rectangular zones, test 4326 <-> UTM transformations
 // on each of the 4 corners and the center point along the equator.
 TEST(GeoSpatial, UTMTransform) {
+  unsigned const skip = g_all_utm_zones ? 1 : 30;
   constexpr double eps = 1e-10;
   struct Point {
     double x;
@@ -2514,7 +2516,7 @@ TEST(GeoSpatial, UTMTransform) {
   for (auto const dt : {ExecutorDeviceType::GPU, ExecutorDeviceType::CPU}) {
     SKIP_NO_GPU();
     for (bool const is_south : {false, true}) {
-      for (unsigned zone = 1; zone <= 60; ++zone) {
+      for (unsigned zone = 1; zone <= 60; zone += skip) {
         unsigned const utm_srid = 32600 + is_south * 100 + zone;
         int const x = ((zone - 1u) % 60u) * 6 - 177;  // [-177, 177]
         double const E0 = 500e3;                      // UTM False easting
@@ -2555,6 +2557,7 @@ int main(int argc, char** argv) {
 
   po::options_description desc("Options");
   desc.add_options()("keep-data", "Don't drop tables at the end of the tests");
+  desc.add_options()("all-utm-zones", "Test all 120 UTM zones");
 
   logger::LogOptions log_options(argv[0]);
   log_options.max_files_ = 0;  // stderr only by default
@@ -2569,6 +2572,7 @@ int main(int argc, char** argv) {
   if (vm.count("keep-data")) {
     g_keep_data = true;
   }
+  g_all_utm_zones = vm.count("all-utm-zones");
 
   // disable CPU retry to catch illegal code generation on GPU
   g_allow_cpu_retry = false;
