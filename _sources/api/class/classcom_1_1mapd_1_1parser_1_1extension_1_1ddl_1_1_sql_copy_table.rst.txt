@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::SqlCopyTable
+=====================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::SqlCopyTable
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

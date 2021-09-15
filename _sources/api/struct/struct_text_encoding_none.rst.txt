@@ -1,0 +1,9 @@
+Struct TextEncodingNone
+=======================
+
+.. doxygenstruct:: TextEncodingNone
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::SqlCreateDataframe
+===========================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::SqlCreateDataframe
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
