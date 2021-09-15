@@ -564,6 +564,18 @@ void CommandLineOptions::fillAdvancedOptions() {
                                    ->default_value(g_enable_window_functions)
                                    ->implicit_value(true),
                                "Enable experimental window function support.");
+  developer_desc.add_options()(
+      "enable-parallel-window-partition-compute",
+      po::value<bool>(&g_enable_parallel_window_partition_compute)
+          ->default_value(g_enable_parallel_window_partition_compute)
+          ->implicit_value(true),
+      "Enable parallel window function partition computation.");
+  developer_desc.add_options()(
+      "enable-parallel-window-partition-sort",
+      po::value<bool>(&g_enable_parallel_window_partition_sort)
+          ->default_value(g_enable_parallel_window_partition_sort)
+          ->implicit_value(true),
+      "Enable parallel window function partition sorting.");
   developer_desc.add_options()("enable-table-functions",
                                po::value<bool>(&g_enable_table_functions)
                                    ->default_value(g_enable_table_functions)
