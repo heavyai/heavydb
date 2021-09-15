@@ -138,6 +138,7 @@ size_t g_enable_parallel_linearization{
 
 size_t g_approx_quantile_buffer{1000};
 size_t g_approx_quantile_centroids{300};
+bool g_enable_cpu_shmem{false};
 
 bool g_enable_automatic_ir_metadata{true};
 
@@ -2278,6 +2279,11 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
       }
       shared_context.addDeviceResults(std::move(results), {});
     }
+  }
+  if (shared_context.getSharedExecutionContext()) {
+    auto results = shared_context.getSharedExecutionContext()->getRowSet(
+        *ra_exe_unit, shared_context.getSharedExecutionContext()->query_mem_desc_);
+    shared_context.addDeviceResults(std::move(results), {});
   }
 }
 

@@ -51,6 +51,14 @@ class SharedKernelContext {
   auto getThreadPool() { return task_group_; }
   void setThreadPool(threading::task_group* tg) { task_group_ = tg; }
   auto& getTlsExecutionContext() { return tls_execution_context_; }
+
+  void setSharedExecutionContext(std::unique_ptr<QueryExecutionContext> ctx) {
+    shared_execution_context_ = std::move(ctx);
+  }
+  QueryExecutionContext* getSharedExecutionContext() {
+    return shared_execution_context_.get();
+  }
+  std::mutex& getSharedExecutionContextMutex() { return shared_execution_context_mutex_; }
 #endif  // HAVE_TBB
 
  private:
@@ -66,6 +74,8 @@ class SharedKernelContext {
   threading::task_group* task_group_;
   tbb::enumerable_thread_specific<std::unique_ptr<QueryExecutionContext>>
       tls_execution_context_;
+  std::unique_ptr<QueryExecutionContext> shared_execution_context_;
+  std::mutex shared_execution_context_mutex_;
 #endif  // HAVE_TBB
 };
 
