@@ -175,6 +175,8 @@ extern bool g_strip_join_covered_quals;
 extern size_t g_constrained_by_in_threshold;
 extern size_t g_big_group_threshold;
 extern bool g_enable_window_functions;
+extern bool g_enable_parallel_window_partition_compute;
+extern bool g_enable_parallel_window_partition_sort;
 extern bool g_enable_table_functions;
 extern bool g_enable_dev_table_functions;
 extern size_t g_max_memory_allocation_size;
@@ -198,7 +200,6 @@ extern bool g_enable_bump_allocator;
 extern size_t g_max_memory_allocation_size;
 extern size_t g_min_memory_allocation_size;
 extern bool g_enable_experimental_string_functions;
-extern bool g_enable_table_functions;
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
 #ifdef ENABLE_IMPORT_PARQUET

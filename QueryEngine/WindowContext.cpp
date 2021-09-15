@@ -34,11 +34,11 @@
 #include <thrust/sort.h>
 #endif
 
-bool g_enable_parallel_window_function_compute{true};
-size_t g_parallel_window_function_compute_threshold{1 << 12};  // 4096
+bool g_enable_parallel_window_partition_compute{true};
+size_t g_parallel_window_partition_compute_threshold{1 << 12};  // 4096
 
-bool g_enable_parallel_window_function_sort{true};
-size_t g_parallel_window_function_sort_threshold{1 << 10};  // 1024
+bool g_enable_parallel_window_partition_sort{true};
+size_t g_parallel_window_partition_sort_threshold{1 << 10};  // 1024
 
 // Non-partitioned version (no join table provided)
 WindowFunctionContext::WindowFunctionContext(
@@ -492,8 +492,8 @@ void WindowFunctionContext::computePartition(const size_t partition_idx,
     return false;
   };
 
-  if (g_enable_parallel_window_function_sort &&
-      partition_size >= g_parallel_window_function_sort_threshold) {
+  if (g_enable_parallel_window_partition_sort &&
+      partition_size >= g_parallel_window_partition_sort_threshold) {
 #ifdef HAVE_TBB
     tbb::parallel_sort(output_for_partition_buff,
                        output_for_partition_buff + partition_size,
@@ -541,9 +541,9 @@ void WindowFunctionContext::compute() {
 
   const size_t partition_count{partitionCount()};
 #ifdef HAVE_TBB
-  const bool should_parallelize{g_enable_parallel_window_function_compute &&
+  const bool should_parallelize{g_enable_parallel_window_partition_compute &&
                                 elem_count_ >=
-                                    g_parallel_window_function_compute_threshold};
+                                    g_parallel_window_partition_compute_threshold};
 #else
   const bool should_parallelize{false};
 #endif
@@ -581,8 +581,8 @@ void WindowFunctionContext::compute() {
 
   if (should_parallelize) {
 #ifdef HAVE_TBB
-    const size_t max_elems_per_thread = g_parallel_window_function_compute_threshold * 4;
     auto timer = DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Parallelized");
+    const size_t max_elems_per_thread = g_parallel_window_partition_compute_threshold * 4;
     tbb::parallel_for(tbb::blocked_range<size_t>(0, elem_count_, max_elems_per_thread),
                       [&](const tbb::blocked_range<size_t>& r) {
                         const size_t r_end_idx = r.end();
@@ -594,7 +594,8 @@ void WindowFunctionContext::compute() {
     UNREACHABLE();  // should_parallelize can only be true if HAVE_TBB defined
 #endif  // HAVE_TBB
   } else {
-    DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Non-Parallelized");
+    auto timer =
+        DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Non-Parallelized");
     for (size_t i = 0; i < elem_count_; ++i) {
       output_i64[payload()[i]] = intermediate_output_buffer[i];
     }
