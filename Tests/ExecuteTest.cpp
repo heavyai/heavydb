@@ -40,6 +40,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <random>
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -19917,6 +19918,69 @@ TEST(Select, WindowFunctionComplexExpressions) {
   }
 }
 
+TEST(Select, WindowFunctionParallelism) {
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  for (std::string table_name :
+       {"test_window_func_large", "test_window_func_large_multi_frag"}) {
+    // Sanity check to ensure tables are identical between sqlite and omnisci
+    {
+      std::string query = "SELECT i_unique, i_1000, i_20, f, d, t FROM " + table_name +
+                          " ORDER BY i_unique ASC NULLS FIRST;";
+      c(query, query, dt);
+    }
+
+    {
+      std::string query =
+          "SELECT i_unique, i_1000, SUM(i_20) OVER (PARTITION BY i_1000) win_1 FROM " +
+          table_name + " ORDER BY i_unique ASC NULLS FIRST;";
+      c(query, query, dt);
+    }
+
+    {
+      std::string query =
+          "SELECT i_unique, i_1000, MAX(i_unique) OVER (PARTITION BY i_1000) win_1 "
+          "FROM " +
+          table_name + " ORDER BY i_unique ASC NULLS FIRST;";
+      c(query, query, dt);
+    }
+
+    {
+      std::string query =
+          "SELECT i_unique, i_1000, MAX(i_unique) OVER (PARTITION BY i_1000 ORDER BY d "
+          "ASC NULLS "
+          "FIRST) win_1 "
+          "FROM " +
+          table_name + " ORDER BY i_unique ASC NULLS FIRST;";
+      c(query, query, dt);
+    }
+
+    {
+      std::string query =
+          "SELECT i_unique, i_20, MAX(i_unique) OVER (PARTITION BY i_20 ORDER BY d ASC "
+          "NULLS "
+          "FIRST) win_1, "
+          "MIN(i_20) OVER (PARTITION BY i_20 ORDER BY f DESC NULLS FIRST) win_2 FROM " +
+          table_name + " ORDER BY i_unique ASC NULLS FIRST;";
+      c(query, query, dt);
+    }
+
+    {
+      std::string query =
+          "SELECT t, i_unique, i_1000, ROW_NUMBER() OVER (PARTITION BY t ORDER BY "
+          "i_unique ASC NULLS "
+          "FIRST) "
+          "win_1, "
+          "SUM(i_20) OVER (PARTITION BY i_1000 ORDER BY i_unique DESC NULLS FIRST) "
+          "win_2, "
+          "LAG(i_1000) OVER (PARTITION BY t ORDER BY i_unique ASC NULLS FIRST) AS win_3 "
+          "FROM " +
+          table_name +
+          " WHERE d > 100.0 ORDER BY t ASC NULLS FIRST, i_unique ASC NULLS FIRST;";
+      c(query, query, dt);
+    }
+  }
+}
+
 TEST(Select, FilterNodeCoalesce) {
   // If we do not coalesce the filter with a subsequent project (manufacturing one if
   // neccessary), we currently pull all table columns into memory, which is highly
@@ -21158,6 +21222,142 @@ int create_sharded_join_table(const std::string& table_name,
   return 0;
 }
 
+struct LargeWindowTableData {
+  const std::string table_name;
+  TestHelpers::ValuesGenerator gen;
+
+  const size_t num_rows;
+
+  std::vector<int64_t> i_unique;
+  std::vector<int32_t> i_1000;
+  std::vector<int16_t> i_20;
+  std::vector<double> d;
+  std::vector<float> f;
+  std::vector<std::string> t;
+
+  LargeWindowTableData(const std::string& table_name,
+                       const size_t num_rows,
+                       const size_t rand_seed)
+      : table_name(table_name)
+      , gen(table_name)
+      , num_rows(num_rows)
+      , i_unique(num_rows)
+      , i_1000(num_rows)
+      , i_20(num_rows)
+      , d(num_rows)
+      , f(num_rows)
+      , t(num_rows) {
+    std::mt19937 rand_gen(rand_seed);
+    std::vector<std::string> text_values{"a", "b", "c", "d", "e"};
+    std::uniform_int_distribution<> i_1000_dist(0, 999);
+    std::uniform_int_distribution<> i_20_dist(0, 19);
+    std::uniform_real_distribution<> d_dist(10.0, 10000.0);
+    std::uniform_real_distribution<> f_dist(10.0, 10000.0);
+    std::uniform_int_distribution<> t_dist(0, text_values.size() - 1);
+    for (size_t r = 0; r != num_rows; ++r) {
+      i_unique[r] = r;
+      i_1000[r] = i_1000_dist(rand_gen);
+      i_20[r] = i_20_dist(rand_gen);
+      d[r] = d_dist(rand_gen);
+      f[r] = f_dist(rand_gen);
+      t[r] = text_values[t_dist(rand_gen)];
+    }
+  }
+
+  void batch_load_into_sqlite() const {
+    SqliteConnector connector("sqliteTestDB", "");
+    std::vector<std::vector<std::string>> insert_text_vals;
+
+    for (size_t r = 0; r < num_rows; ++r) {
+      std::vector<std::string> row_values{std::to_string(i_unique[r]),
+                                          std::to_string(i_1000[r]),
+                                          std::to_string(i_20[r]),
+                                          std::to_string(d[r]),
+                                          std::to_string(f[r]),
+                                          t[r]};
+      insert_text_vals.emplace_back(row_values);
+    }
+    connector.batch_insert(table_name, insert_text_vals);
+  }
+
+  void batch_load_into_omnisci() const {
+    auto& cat = QR::get()->getSession()->getCatalog();
+    const auto td = cat.getMetadataForTable(table_name);
+    CHECK(td);
+    auto loader = QR::get()->getLoader(td);
+    std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
+    const auto col_descs =
+        cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
+    for (const auto cd : col_descs) {
+      import_buffers.emplace_back(new import_export::TypedImportBuffer(
+          cd,
+          cd->columnType.get_compression() == kENCODING_DICT
+              ? cat.getMetadataForDict(cd->columnType.get_comp_param())->stringDict.get()
+              : nullptr));
+    }
+    for (size_t r = 0; r < num_rows; ++r) {
+      import_buffers[0]->addBigint(i_unique[r]);
+      import_buffers[1]->addInt(i_1000[r]);
+      import_buffers[2]->addSmallint(i_20[r]);
+      import_buffers[3]->addDouble(d[r]);
+      import_buffers[4]->addFloat(f[r]);
+      import_buffers[5]->addString(t[r]);
+    }
+    loader->load(import_buffers, num_rows, nullptr);
+  }
+
+  std::string generate_insert_query_for_row(const size_t row_idx) const {
+    CHECK_LT(row_idx, num_rows);
+    return gen(i_unique[row_idx],
+               i_1000[row_idx],
+               i_20[row_idx],
+               d[row_idx],
+               f[row_idx],
+               t[row_idx]);
+  }
+};
+
+int create_and_populate_large_window_func_table(const bool multi_frag,
+                                                const size_t shard_count,
+                                                const size_t num_rows,
+                                                const size_t rand_seed) {
+  std::string create_table_suffix = " WITH (FRAGMENT_SIZE=";
+  const std::string fragment_size = (multi_frag ? "100" : "32000000");
+  create_table_suffix += fragment_size;
+  if (shard_count) {
+    create_table_suffix +=
+        ", SHARD_COUNT=" + std::to_string(static_cast<int32_t>(shard_count));
+  }
+  create_table_suffix += ");";
+
+  const std::string table_name =
+      multi_frag ? "test_window_func_large_multi_frag" : "test_window_func_large";
+
+  const std::string shard_def = (shard_count ? ", SHARD KEY(i_1000))" : ")");
+  const std::string sqlite_create_test_table_prefix = "CREATE TABLE " + table_name;
+  const std::string omni_create_test_table_prefix = "CREATE TABLE " + table_name;
+  const std::string create_test_table_values_stmt =
+      " (i_unique BIGINT, i_1000 INTEGER, i_20 SMALLINT, d DOUBLE, f FLOAT, t TEXT";
+  try {
+    const std::string drop_test_table{"DROP TABLE IF EXISTS " + table_name + ";"};
+    run_ddl_statement(drop_test_table);
+    g_sqlite_comparator.query(drop_test_table);
+    run_ddl_statement(omni_create_test_table_prefix + create_test_table_values_stmt +
+                      shard_def + create_table_suffix);
+    g_sqlite_comparator.query(sqlite_create_test_table_prefix +
+                              create_test_table_values_stmt + ");");
+    const LargeWindowTableData large_window_table_data(table_name, num_rows, rand_seed);
+    large_window_table_data.batch_load_into_sqlite();
+    large_window_table_data.batch_load_into_omnisci();
+  } catch (std::runtime_error const& e) {
+    std::cout << "Error: " << e.what() << std::endl;
+    LOG(ERROR) << "Failed to (re-)create table '" + table_name +
+                      "' with error: " + e.what();
+    return -EEXIST;
+  }
+  return 0;
+}
+
 int create_and_populate_window_func_table(const bool multi_frag,
                                           const size_t shard_count) {
   std::string create_table_suffix = " WITH (FRAGMENT_SIZE=";
@@ -21172,18 +21372,19 @@ int create_and_populate_window_func_table(const bool multi_frag,
   const std::string table_name =
       multi_frag ? "test_window_func_multi_frag" : "test_window_func";
 
+  const std::string shard_def = (shard_count ? ", SHARD KEY(y))" : ")");
+  const std::string create_test_table_prefix =
+      "CREATE TABLE " + table_name +
+      " (x INTEGER, y TEXT, t INTEGER, d DATE, f FLOAT, "
+      "dd "
+      "DOUBLE";
+
   try {
     const std::string drop_test_table{"DROP TABLE IF EXISTS " + table_name + ";"};
     run_ddl_statement(drop_test_table);
     g_sqlite_comparator.query(drop_test_table);
-    const std::string shard_def = (shard_count ? ", SHARD KEY(y))" : ")");
-    const std::string create_test_table =
-        "CREATE TABLE " + table_name +
-        " (x INTEGER, y TEXT, t INTEGER, d DATE, f FLOAT, "
-        "dd "
-        "DOUBLE";  //+ (shard_count ? ", SHARD KEY(y))" : ")");
-    run_ddl_statement(create_test_table + shard_def + create_table_suffix);
-    g_sqlite_comparator.query(create_test_table + ");");
+    run_ddl_statement(create_test_table_prefix + shard_def + create_table_suffix);
+    g_sqlite_comparator.query(create_test_table_prefix + ");");
     {
       const std::string insert_query{"INSERT INTO " + table_name +
                                      " VALUES(1, 'aaa', 4, '2019-03-02', 1, 1);"};
@@ -22346,8 +22547,17 @@ int create_and_populate_tables(const bool use_temporary_tables,
     return rc;
   }
 
-  for (auto is_multi_frag : {false, true}) {
+  for (bool is_multi_frag : {false, true}) {
     int err = create_and_populate_window_func_table(is_multi_frag, g_shard_count);
+    if (err) {
+      return err;
+    }
+  }
+
+  for (bool is_multi_frag : {false, true}) {
+    const size_t rand_seed = is_multi_frag ? 23 : 42;
+    int err = create_and_populate_large_window_func_table(
+        is_multi_frag, g_shard_count, 40000, rand_seed);
     if (err) {
       return err;
     }
@@ -22586,6 +22796,14 @@ void drop_tables() {
       "DROP TABLE test_window_func_multi_frag;"};
   run_ddl_statement(drop_test_window_func_multi_frag);
   g_sqlite_comparator.query(drop_test_window_func_multi_frag);
+  const std::string drop_test_window_func_large_single_frag{
+      "DROP TABLE test_window_func_large;"};
+  run_ddl_statement(drop_test_window_func_large_single_frag);
+  g_sqlite_comparator.query(drop_test_window_func_large_single_frag);
+  const std::string drop_test_window_func_large_multi_frag{
+      "DROP TABLE test_window_func_large_multi_frag;"};
+  run_ddl_statement(drop_test_window_func_large_multi_frag);
+  g_sqlite_comparator.query(drop_test_window_func_large_multi_frag);
   const std::string drop_test_current_user{"DROP TABLE test_current_user;"};
   run_ddl_statement(drop_test_current_user);
 }

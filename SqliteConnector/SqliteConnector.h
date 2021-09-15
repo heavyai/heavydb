@@ -58,6 +58,9 @@ class SqliteConnector {
   virtual void query_with_text_param(const std::string& queryString,
                                      const std::string& text_param);
 
+  virtual void batch_insert(const std::string& table_name,
+                            std::vector<std::vector<std::string>>& insert_vals);
+
   virtual size_t getNumRows() const { return numRows_; }
   virtual size_t getNumCols() const { return numCols_; }
 
