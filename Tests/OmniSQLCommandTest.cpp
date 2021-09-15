@@ -710,7 +710,7 @@ TEST(OmniSQLTest, ImportDashboardCommandTest_SimpleDashSimpleFilename) {
   ImportDashboardCommandMockupContext unit_test_context;
   auto resolution =
       CommandResolutionChain<>(
-          "\\import_dashboard simpledash unlikely_file_to_over_be_opened_1234.txt",
+          "\\import_dashboard simpledash unlikely_file_to_ever_be_opened_1234.txt",
           "\\import_dashboard",
           3,
           3,
@@ -728,7 +728,7 @@ TEST(OmniSQLTest, ImportDashboardCommandTest_SimpleDashSimpleFilename) {
   auto extracted_tokens = TokenExtractor().extract_tokens(output_back_to_input);
   using TokenCount = decltype(extracted_tokens)::size_type;
   EXPECT_EQ(extracted_tokens.size(), 5u);
-  EXPECT_EQ(extracted_tokens[4], "`unlikely_file_to_over_be_opened_1234.txt`");
+  EXPECT_EQ(extracted_tokens[4], "`unlikely_file_to_ever_be_opened_1234.txt`");
 }
 
 TEST(OmniSQLTest, ImportDashboardCommandTest_SimpleDashComplexFilename) {
@@ -861,7 +861,7 @@ TEST(OmniSQLTest, ExportDashboardCommandTest_SimpleDashSimpleFilename) {
   using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
 
   // Create a directory to force file open to fail
-  static const char* test_filename = "export_unlikely_file_to_over_be_opened_1234.txt";
+  static const char* test_filename = "export_unlikely_file_to_ever_be_opened_1234.txt";
   std::string fake_input = std::string("\\export_dashboard simpledash ") + test_filename;
 
 #ifdef _WIN32

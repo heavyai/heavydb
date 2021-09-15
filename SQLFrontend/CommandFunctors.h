@@ -442,8 +442,8 @@ StandardCommand(ImportDashboard, {
   }
 
   if (!replace(state,
-               std::string("\"title\":\"" + old_name + "\","),
-               std::string("\"title\":\"" + cmdContext().view_name + "\","))) {
+               std::string("\"title\":\"" + old_name + "\""),
+               std::string("\"title\":\"" + cmdContext().view_name + "\""))) {
     output_stream << "Failed to update title." << std::endl;
     return;
   }
