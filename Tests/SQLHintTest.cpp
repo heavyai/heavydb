@@ -21,7 +21,6 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/DBObject.h"
 #include "DBHandlerTestHelpers.h"
-#include "DataMgr/DataMgr.h"
 #include "QueryEngine/Execute.h"
 #include "QueryRunner/QueryRunner.h"
 
@@ -32,6 +31,8 @@ namespace po = boost::program_options;
 #endif
 
 using namespace Catalog_Namespace;
+
+extern bool g_enable_table_functions;
 
 using QR = QueryRunner::QueryRunner;
 
@@ -65,13 +66,24 @@ std::shared_ptr<ResultSet> run_query(const std::string& query_str,
   return QR::get()->runSQL(query_str, device_type, true, true);
 }
 
+void createTable() {
+  QR::get()->runDDLStatement("CREATE TABLE SQL_HINT_DUMMY(key int);");
+  QR::get()->runDDLStatement(
+      "CREATE TABLE geospatial_test(id INT, p POINT, l LINESTRING, poly POLYGON);");
+  QR::get()->runDDLStatement(
+      "CREATE TABLE geospatial_inner_join_test(id INT, p POINT, l LINESTRING, poly "
+      "POLYGON);");
+}
+
+void dropTable() {
+  QR::get()->runDDLStatement("DROP TABLE IF EXISTS SQL_HINT_DUMMY;");
+  QR::get()->runDDLStatement("DROP TABLE IF EXISTS geospatial_test;");
+  QR::get()->runDDLStatement("DROP TABLE IF EXISTS geospatial_inner_join_test;");
+}
+
 TEST(kCpuMode, ForceToCPUMode) {
-  const auto create_table_ddl = "CREATE TABLE SQL_HINT_DUMMY(key int)";
-  const auto drop_table_ddl = "DROP TABLE IF EXISTS SQL_HINT_DUMMY";
   const auto query_with_cpu_mode_hint = "SELECT /*+ cpu_mode */ * FROM SQL_HINT_DUMMY";
   const auto query_without_cpu_mode_hint = "SELECT * FROM SQL_HINT_DUMMY";
-  QR::get()->runDDLStatement(drop_table_ddl);
-  QR::get()->runDDLStatement(create_table_ddl);
   if (QR::get()->gpusPresent()) {
     auto query_hints = QR::get()->getParsedQueryHint(query_with_cpu_mode_hint);
     const bool cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
@@ -79,7 +91,6 @@ TEST(kCpuMode, ForceToCPUMode) {
     query_hints = QR::get()->getParsedQueryHint(query_without_cpu_mode_hint);
     CHECK(!query_hints.isAnyQueryHintDelivered());
   }
-  QR::get()->runDDLStatement(drop_table_ddl);
 }
 
 TEST(QueryHint, CheckQueryHintForOverlapsJoin) {
@@ -87,24 +98,6 @@ TEST(QueryHint, CheckQueryHintForOverlapsJoin) {
   g_enable_overlaps_hashjoin = true;
   ScopeGuard reset_loop_join_state = [&overlaps_join_status_backup] {
     g_enable_overlaps_hashjoin = overlaps_join_status_backup;
-  };
-
-  const auto drop_table_ddl_1 = "DROP TABLE IF EXISTS geospatial_test";
-  const auto drop_table_ddl_2 = "DROP TABLE IF EXISTS geospatial_inner_join_test";
-  const auto create_table_ddl_1 =
-      "CREATE TABLE geospatial_test(id INT, p POINT, l LINESTRING, poly POLYGON);";
-  const auto create_table_ddl_2 =
-      "CREATE TABLE geospatial_inner_join_test(id INT, p POINT, l LINESTRING, poly "
-      "POLYGON);";
-
-  QR::get()->runDDLStatement(drop_table_ddl_1);
-  QR::get()->runDDLStatement(drop_table_ddl_2);
-  QR::get()->runDDLStatement(create_table_ddl_1);
-  QR::get()->runDDLStatement(create_table_ddl_2);
-
-  ScopeGuard cleanup = [&] {
-    QR::get()->runDDLStatement(drop_table_ddl_1);
-    QR::get()->runDDLStatement(drop_table_ddl_2);
   };
 
   {
@@ -234,8 +227,6 @@ TEST(QueryHint, checkQueryLayoutHintWithEnablingColumnarOutput) {
     g_enable_columnar_output = enable_columnar_output;
   };
 
-  const auto create_table_ddl = "CREATE TABLE SQL_HINT_DUMMY(key int)";
-  const auto drop_table_ddl = "DROP TABLE IF EXISTS SQL_HINT_DUMMY";
   const auto q1 = "SELECT /*+ columnar_output */ * FROM SQL_HINT_DUMMY";
   const auto q2 = "SELECT /*+ rowwise_output */ * FROM SQL_HINT_DUMMY";
   const auto q3 = "SELECT /*+ columnar_output, rowwise_output */ * FROM SQL_HINT_DUMMY";
@@ -245,9 +236,6 @@ TEST(QueryHint, checkQueryLayoutHintWithEnablingColumnarOutput) {
       "SQL_HINT_DUMMY";
   const auto q6 = "SELECT /*+ rowwise_output, rowwise_output */ * FROM SQL_HINT_DUMMY";
   const auto q7 = "SELECT /*+ columnar_output, columnar_output */ * FROM SQL_HINT_DUMMY";
-  QR::get()->runDDLStatement(drop_table_ddl);
-  QR::get()->runDDLStatement(create_table_ddl);
-
   {
     auto query_hints = QR::get()->getParsedQueryHint(q1);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
@@ -289,8 +277,6 @@ TEST(QueryHint, checkQueryLayoutHintWithEnablingColumnarOutput) {
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
     CHECK(!hint_enabled);
   }
-
-  QR::get()->runDDLStatement(drop_table_ddl);
 }
 
 TEST(QueryHint, checkQueryLayoutHintWithoutEnablingColumnarOutput) {
@@ -299,9 +285,6 @@ TEST(QueryHint, checkQueryLayoutHintWithoutEnablingColumnarOutput) {
   ScopeGuard reset_columnar_output = [&enable_columnar_output] {
     g_enable_columnar_output = enable_columnar_output;
   };
-
-  const auto create_table_ddl = "CREATE TABLE SQL_HINT_DUMMY(key int)";
-  const auto drop_table_ddl = "DROP TABLE IF EXISTS SQL_HINT_DUMMY";
   const auto q1 = "SELECT /*+ columnar_output */ * FROM SQL_HINT_DUMMY";
   const auto q2 = "SELECT /*+ rowwise_output */ * FROM SQL_HINT_DUMMY";
   const auto q3 = "SELECT /*+ columnar_output, rowwise_output */ * FROM SQL_HINT_DUMMY";
@@ -311,9 +294,6 @@ TEST(QueryHint, checkQueryLayoutHintWithoutEnablingColumnarOutput) {
       "SQL_HINT_DUMMY";
   const auto q6 = "SELECT /*+ rowwise_output, rowwise_output */ * FROM SQL_HINT_DUMMY";
   const auto q7 = "SELECT /*+ columnar_output, columnar_output */ * FROM SQL_HINT_DUMMY";
-  QR::get()->runDDLStatement(drop_table_ddl);
-  QR::get()->runDDLStatement(create_table_ddl);
-
   {
     auto query_hints = QR::get()->getParsedQueryHint(q1);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
@@ -355,24 +335,99 @@ TEST(QueryHint, checkQueryLayoutHintWithoutEnablingColumnarOutput) {
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
     CHECK(hint_enabled);
   }
+}
 
-  QR::get()->runDDLStatement(drop_table_ddl);
+TEST(QueryHint, UDF) {
+  const auto enable_columnar_output = g_enable_columnar_output;
+  g_enable_columnar_output = false;
+  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
+    g_enable_columnar_output = enable_columnar_output;
+  };
+
+  const auto q1 =
+      "SELECT out0 FROM TABLE(get_max_with_row_offset(cursor(SELECT /*+ columnar_output "
+      "*/ key FROM SQL_HINT_DUMMY)));";
+  const auto q2 =
+      "SELECT out0 FROM TABLE(get_max_with_row_offset(cursor(SELECT /*+ columnar_output, "
+      "cpu_mode */ key FROM SQL_HINT_DUMMY)));";
+  {
+    auto query_hints = QR::get()->getParsedQueryHints(q1);
+    CHECK(query_hints);
+    CHECK(query_hints->size() == static_cast<size_t>(1));
+    CHECK(query_hints->begin()->second.isHintRegistered(QueryHint::kColumnarOutput));
+  }
+  {
+    auto query_hints = QR::get()->getParsedQueryHints(q2);
+    CHECK(query_hints);
+    CHECK(query_hints->size() == static_cast<size_t>(1));
+    CHECK(query_hints->begin()->second.isHintRegistered(QueryHint::kColumnarOutput));
+    CHECK(query_hints->begin()->second.isHintRegistered(QueryHint::kCpuMode));
+  }
+}
+
+TEST(QueryHint, checkPerQueryBlockHint) {
+  const auto enable_columnar_output = g_enable_columnar_output;
+  g_enable_columnar_output = false;
+  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
+    g_enable_columnar_output = enable_columnar_output;
+  };
+
+  const auto q1 =
+      "SELECT /*+ cpu_mode */ T2.k FROM SQL_HINT_DUMMY T1, (SELECT /*+ columnar_output "
+      "*/ key as k FROM SQL_HINT_DUMMY WHERE key = 1) T2 WHERE T1.key = T2.k;";
+  const auto q2 =
+      "SELECT /*+ cpu_mode */ out0 FROM TABLE(get_max_with_row_offset(cursor(SELECT /*+ "
+      "columnar_output */ key FROM SQL_HINT_DUMMY)));";
+  // to recognize query hint for a specific query block, we need more complex hint getter
+  // func in QR but for test, it is enough to check the functionality in brute-force
+  // manner
+  auto check_registered_hint =
+      [](std::unordered_map<size_t, RegisteredQueryHint>& hints) {
+        bool find_columnar_hint = false;
+        bool find_cpu_mode_hint = false;
+        CHECK(hints.size() == static_cast<size_t>(2));
+        for (auto& hint : hints) {
+          if (hint.second.isHintRegistered(QueryHint::kColumnarOutput)) {
+            find_columnar_hint = true;
+            CHECK(!hint.second.isHintRegistered(QueryHint::kCpuMode));
+            continue;
+          }
+          if (hint.second.isHintRegistered(QueryHint::kCpuMode)) {
+            find_cpu_mode_hint = true;
+            CHECK(!hint.second.isHintRegistered(QueryHint::kColumnarOutput));
+            continue;
+          }
+        }
+        CHECK(find_columnar_hint);
+        CHECK(find_cpu_mode_hint);
+      };
+  {
+    auto query_hints = QR::get()->getParsedQueryHints(q1);
+    CHECK(query_hints);
+    check_registered_hint(query_hints.value());
+  }
+  {
+    auto query_hints = QR::get()->getParsedQueryHints(q2);
+    CHECK(query_hints);
+    check_registered_hint(query_hints.value());
+  }
 }
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
+  g_enable_table_functions = true;
   QR::init(BASE_PATH);
-
   int err{0};
 
   try {
+    createTable();
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-
+  dropTable();
   QR::reset();
   return err;
 }

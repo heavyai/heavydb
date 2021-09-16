@@ -5653,28 +5653,18 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                              cat,
                              query_ra,
                              query_state_proxy.getQueryState().shared_from_this());
-  // handle hints
-  const auto& query_hints = ra_executor.getParsedQueryHints();
-  const bool cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
-  CompilationOptions co = {
-      cpu_mode_enabled ? ExecutorDeviceType::CPU : executor_device_type,
-      /*hoist_literals=*/true,
-      ExecutorOptLevel::Default,
-      g_enable_dynamic_watchdog,
-      /*allow_lazy_fetch=*/true,
-      /*filter_on_deleted_column=*/true,
-      explain_info.explain_optimized ? ExecutorExplainType::Optimized
-                                     : ExecutorExplainType::Default,
-      intel_jit_profile_};
+  CompilationOptions co = {executor_device_type,
+                           /*hoist_literals=*/true,
+                           ExecutorOptLevel::Default,
+                           g_enable_dynamic_watchdog,
+                           /*allow_lazy_fetch=*/true,
+                           /*filter_on_deleted_column=*/true,
+                           explain_info.explain_optimized ? ExecutorExplainType::Optimized
+                                                          : ExecutorExplainType::Default,
+                           intel_jit_profile_};
   auto validate_or_explain_query =
       explain_info.justExplain() || explain_info.justCalciteExplain() || just_validate;
-  auto columnar_output_enabled = g_enable_columnar_output;
-  if (query_hints.isHintRegistered(QueryHint::kColumnarOutput)) {
-    columnar_output_enabled = true;
-  } else if (query_hints.isHintRegistered(QueryHint::kRowwiseOutput)) {
-    columnar_output_enabled = false;
-  }
-  ExecutionOptions eo = {columnar_output_enabled,
+  ExecutionOptions eo = {g_enable_columnar_output,
                          allow_multifrag_,
                          explain_info.justExplain(),
                          allow_loop_joins_ || just_validate,
@@ -5734,17 +5724,14 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                              cat,
                              query_ra,
                              query_state_proxy.getQueryState().shared_from_this());
-  const auto& query_hints = ra_executor.getParsedQueryHints();
-  const bool cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
-  CompilationOptions co = {
-      cpu_mode_enabled ? ExecutorDeviceType::CPU : executor_device_type,
-      /*hoist_literals=*/true,
-      ExecutorOptLevel::Default,
-      g_enable_dynamic_watchdog,
-      /*allow_lazy_fetch=*/true,
-      /*filter_on_deleted_column=*/true,
-      ExecutorExplainType::Default,
-      intel_jit_profile_};
+  CompilationOptions co = {executor_device_type,
+                           /*hoist_literals=*/true,
+                           ExecutorOptLevel::Default,
+                           g_enable_dynamic_watchdog,
+                           /*allow_lazy_fetch=*/true,
+                           /*filter_on_deleted_column=*/true,
+                           ExecutorExplainType::Default,
+                           intel_jit_profile_};
   ExecutionOptions eo = {
       g_enable_columnar_output,
       allow_multifrag_,
@@ -5764,11 +5751,6 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                                                .empty(),
       g_running_query_interrupt_freq,
       g_pending_query_interrupt_freq};
-  if (query_hints.isHintRegistered(QueryHint::kColumnarOutput)) {
-    eo.output_columnar_hint = true;
-  } else if (query_hints.isHintRegistered(QueryHint::kRowwiseOutput)) {
-    eo.output_columnar_hint = false;
-  }
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),

@@ -1238,46 +1238,32 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept
 
 void handleQueryHint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
                      RelAlgDagBuilder* dag_builder) noexcept {
-  Hints* hint_delivered = nullptr;
+  // query hint is delivered by the above three nodes
+  // when a query block has top-sort node, a hint is registered to
+  // one of the node which locates at the nearest from the sort node
   for (auto node : nodes) {
+    Hints* hint_delivered = nullptr;
     const auto agg_node = std::dynamic_pointer_cast<RelAggregate>(node);
     if (agg_node) {
       if (agg_node->hasDeliveredHint()) {
         hint_delivered = agg_node->getDeliveredHints();
-        break;
       }
     }
     const auto project_node = std::dynamic_pointer_cast<RelProject>(node);
     if (project_node) {
       if (project_node->hasDeliveredHint()) {
         hint_delivered = project_node->getDeliveredHints();
-        break;
-      }
-    }
-    const auto scan_node = std::dynamic_pointer_cast<RelScan>(node);
-    if (scan_node) {
-      if (scan_node->hasDeliveredHint()) {
-        hint_delivered = scan_node->getDeliveredHints();
-        break;
-      }
-    }
-    const auto join_node = std::dynamic_pointer_cast<RelJoin>(node);
-    if (join_node) {
-      if (join_node->hasDeliveredHint()) {
-        hint_delivered = join_node->getDeliveredHints();
-        break;
       }
     }
     const auto compound_node = std::dynamic_pointer_cast<RelCompound>(node);
     if (compound_node) {
       if (compound_node->hasDeliveredHint()) {
         hint_delivered = compound_node->getDeliveredHints();
-        break;
       }
     }
-  }
-  if (hint_delivered && !hint_delivered->empty()) {
-    dag_builder->registerQueryHints(hint_delivered);
+    if (hint_delivered && !hint_delivered->empty()) {
+      dag_builder->registerQueryHints(node, hint_delivered);
+    }
   }
 }
 
@@ -1341,8 +1327,10 @@ class RexInputReplacementVisitor : public RexDeepCopyVisitor {
 
 }  // namespace
 
-void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
-                     const std::vector<size_t>& pattern) noexcept {
+void create_compound(
+    std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+    const std::vector<size_t>& pattern,
+    std::unordered_map<size_t, RegisteredQueryHint>& query_hints) noexcept {
   CHECK_GE(pattern.size(), size_t(2));
   CHECK_LE(pattern.size(), size_t(4));
 
@@ -1357,9 +1345,17 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
   RelAlgNode* last_node{nullptr};
 
   std::shared_ptr<ModifyManipulationTarget> manipulation_target;
-
+  size_t node_hash{0};
+  bool hint_registered{false};
+  RegisteredQueryHint registered_query_hint = RegisteredQueryHint::defaults();
   for (const auto node_idx : pattern) {
     const auto ra_node = nodes[node_idx];
+    auto registered_query_hint_it = query_hints.find(ra_node->toHash());
+    hint_registered = registered_query_hint_it != query_hints.end();
+    if (hint_registered) {
+      node_hash = registered_query_hint_it->first;
+      registered_query_hint = registered_query_hint_it->second;
+    }
     const auto ra_filter = std::dynamic_pointer_cast<RelFilter>(ra_node);
     if (ra_filter) {
       CHECK(!filter_rex);
@@ -1453,6 +1449,12 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
   auto first_node = nodes[pattern.front()];
   CHECK_EQ(size_t(1), first_node->inputCount());
   compound_node->addManagedInput(first_node->getAndOwnInput(0));
+  if (hint_registered) {
+    // pass the registered hint from the origin node to newly created compound node
+    // where it is coalesced
+    query_hints.erase(node_hash);
+    query_hints.emplace(compound_node->toHash(), registered_query_hint);
+  }
   for (size_t i = 0; i < pattern.size() - 1; ++i) {
     nodes[pattern[i]].reset();
   }
@@ -1643,7 +1645,8 @@ bool is_window_function_operator(const RexScalar* rex) {
 }  // namespace
 
 void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
-                    const std::vector<const RelAlgNode*>& left_deep_joins) {
+                    const std::vector<const RelAlgNode*>& left_deep_joins,
+                    std::unordered_map<size_t, RegisteredQueryHint>& query_hints) {
   enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
   std::vector<size_t> crt_pattern;
   CoalesceState crt_state{CoalesceState::Initial};
@@ -1697,7 +1700,7 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
           nodeIt.advance(RANodeIterator::AdvancingMode::DUChain);
         } else {
           if (crt_pattern.size() >= 2) {
-            create_compound(nodes, crt_pattern);
+            create_compound(nodes, crt_pattern, query_hints);
           }
           reset_state();
         }
@@ -1732,7 +1735,7 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
           }
         }
         CHECK_GE(crt_pattern.size(), size_t(2));
-        create_compound(nodes, crt_pattern);
+        create_compound(nodes, crt_pattern, query_hints);
         reset_state();
         break;
       }
@@ -1742,7 +1745,7 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
   }
   if (crt_state == CoalesceState::FirstProject || crt_state == CoalesceState::Aggregate) {
     if (crt_pattern.size() >= 2) {
-      create_compound(nodes, crt_pattern);
+      create_compound(nodes, crt_pattern, query_hints);
     }
     CHECK(!crt_pattern.empty());
   }
@@ -2666,7 +2669,7 @@ class RelAlgDispatcher {
 RelAlgDagBuilder::RelAlgDagBuilder(const std::string& query_ra,
                                    const Catalog_Namespace::Catalog& cat,
                                    const RenderInfo* render_info)
-    : cat_(cat), render_info_(render_info), query_hint_(RegisteredQueryHint::defaults()) {
+    : cat_(cat), render_info_(render_info) {
   rapidjson::Document query_ast;
   query_ast.Parse(query_ra.c_str());
   VLOG(2) << "Parsing query RA JSON: " << query_ra;
@@ -2688,7 +2691,7 @@ RelAlgDagBuilder::RelAlgDagBuilder(RelAlgDagBuilder& root_dag_builder,
                                    const rapidjson::Value& query_ast,
                                    const Catalog_Namespace::Catalog& cat,
                                    const RenderInfo* render_info)
-    : cat_(cat), render_info_(render_info), query_hint_(RegisteredQueryHint::defaults()) {
+    : cat_(cat), render_info_(render_info) {
   build(query_ast, root_dag_builder);
 }
 
@@ -2737,7 +2740,7 @@ void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
   separate_window_function_expressions(nodes_);
   add_window_function_pre_project(
       nodes_, g_cluster /* always_add_project_if_first_project_is_window_expr */);
-  coalesce_nodes(nodes_, left_deep_joins);
+  coalesce_nodes(nodes_, left_deep_joins, query_hint_);
   CHECK(nodes_.back().use_count() == 1);
   create_left_deep_join(nodes_);
 }

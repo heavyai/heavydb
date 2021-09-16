@@ -1724,7 +1724,11 @@ Data_Namespace::MemoryLevel OverlapsJoinHashTable::getEffectiveMemoryLevel(
   // always build on CPU
   if (query_hint_.isHintRegistered(QueryHint::kOverlapsAllowGpuBuild) &&
       query_hint_.overlaps_allow_gpu_build) {
-    return memory_level_;
+    if (this->executor_->getDataMgr()->gpusPresent() &&
+        memory_level_ == Data_Namespace::MemoryLevel::CPU_LEVEL) {
+      VLOG(1) << "A user forces to build GPU hash table for this overlaps join operator";
+      return Data_Namespace::MemoryLevel::GPU_LEVEL;
+    }
   }
   return Data_Namespace::MemoryLevel::CPU_LEVEL;
 }

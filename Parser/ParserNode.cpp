@@ -2694,11 +2694,6 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                              query_ra,
                              query_state_proxy.getQueryState().shared_from_this());
   CompilationOptions co = CompilationOptions::defaults(device_type);
-  const auto& query_hints = ra_executor.getParsedQueryHints();
-  const auto cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
-  if (cpu_mode_enabled) {
-    co.device_type = ExecutorDeviceType::CPU;
-  }
   co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
@@ -2719,10 +2714,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                          g_pending_query_interrupt_freq,
                          ExecutorType::Native,
                          outer_fragment_indices};
-  // we can skip to check rowwise query hint since we assume false by default in this eo
-  const auto columnar_output_enabled =
-      query_hints.isHintRegistered(QueryHint::kColumnarOutput);
-  eo.output_columnar_hint = columnar_output_enabled;
+
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
@@ -2758,12 +2750,8 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
               query_state_proxy, pg_shim(sql_query_string), {}, true, false, false, true)
           .plan_result;
   RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
-  const auto& query_hints = ra_executor.getParsedQueryHints();
-  const bool cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
-  CompilationOptions co = {cpu_mode_enabled ? ExecutorDeviceType::CPU : device_type,
-                           true,
-                           ExecutorOptLevel::LoopStrengthReduction,
-                           false};
+  CompilationOptions co = {
+      device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
   ExecutionOptions eo = {false,
@@ -2779,10 +2767,6 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
                          false,
                          0.9,
                          false};
-  // we can skip to check rowwise query hint since we assume false by default in this eo
-  const auto columnar_output_enabled =
-      query_hints.isHintRegistered(QueryHint::kColumnarOutput);
-  eo.output_columnar_hint = columnar_output_enabled;
   return ra_executor.getOuterFragmentCount(co, eo);
 }
 

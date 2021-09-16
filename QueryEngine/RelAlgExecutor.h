@@ -145,9 +145,13 @@ class RelAlgExecutor : private StorageIOFacility {
     CHECK(query_dag_);
     return query_dag_->getSubqueries();
   };
-  RegisteredQueryHint getParsedQueryHints() {
-    CHECK(query_dag_);
-    return query_dag_->getQueryHints();
+
+  std::optional<RegisteredQueryHint> getParsedQueryHint(const RelAlgNode* node) {
+    return query_dag_ ? query_dag_->getQueryHint(node) : std::nullopt;
+  }
+
+  std::optional<std::unordered_map<size_t, RegisteredQueryHint>> getParsedQueryHints() {
+    return query_dag_ ? std::make_optional(query_dag_->getQueryHints()) : std::nullopt;
   }
 
   ExecutionResult executeSimpleInsert(const Analyzer::Query& insert_query);
