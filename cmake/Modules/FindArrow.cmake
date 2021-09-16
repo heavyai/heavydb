@@ -99,5 +99,12 @@ set(Arrow_GPU_CUDA_LIBRARIES ${Arrow_GPU_CUDA_LIBRARY})
 set(Arrow_LIBRARY_DIRS ${Arrow_LIBRARY_DIR})
 set(Arrow_INCLUDE_DIRS ${Arrow_LIBRARY_DIR}/../include)
 
+# Arrow 4+ defines the default io context slightly differently
+try_compile(HAVE_ARROW_4_IO_CONTEXT
+  ${CMAKE_CURRENT_BINARY_DIR}
+  ${CMAKE_SOURCE_DIR}/cmake/Modules/arrow_4_io_context.cpp
+  COMPILE_DEFINITIONS -I${Arrow_INCLUDE_DIRS} -std=c++17
+  LINK_LIBRARIES ${Arrow_LIBRARY} ${Arrow_DEPS_LIBRARY})
+
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(Arrow REQUIRED_VARS Arrow_LIBRARY)
