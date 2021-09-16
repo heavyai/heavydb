@@ -7155,84 +7155,84 @@ ExecutionResult DBHandler::getQueries(
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr) {
   std::shared_ptr<ResultSet> rSet = nullptr;
   std::vector<TargetMetaInfo> label_infos;
+  auto current_user_name = session_ptr->get_currentUser().userName;
+  auto is_super_user = session_ptr->get_currentUser().isSuper.load();
 
-  if (!session_ptr->get_currentUser().isSuper) {
-    throw std::runtime_error(
-        "SHOW QUERIES failed, because it can only be executed by super user.");
-  } else {
-    mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
-    std::vector<std::string> labels{"query_session_id",
-                                    "current_status",
-                                    "executor_id",
-                                    "submitted",
-                                    "query_str",
-                                    "login_name",
-                                    "client_address",
-                                    "db_name",
-                                    "exec_device_type"};
-    for (const auto& label : labels) {
-      label_infos.emplace_back(label, SQLTypeInfo(kTEXT, true));
-    }
+  mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
+  std::vector<std::string> labels{"query_session_id",
+                                  "current_status",
+                                  "executor_id",
+                                  "submitted",
+                                  "query_str",
+                                  "login_name",
+                                  "client_address",
+                                  "db_name",
+                                  "exec_device_type"};
+  for (const auto& label : labels) {
+    label_infos.emplace_back(label, SQLTypeInfo(kTEXT, true));
+  }
 
-    std::vector<RelLogicalValues::RowValues> logical_values;
-    if (!sessions_.empty()) {
-      for (auto session = sessions_.begin(); sessions_.end() != session; session++) {
-        const auto id = session->first;
-        const auto query_session_ptr = session->second;
-        auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
-                                              jit_debug_ ? "/tmp" : "",
-                                              jit_debug_ ? "mapdquery" : "",
-                                              system_parameters_);
-        CHECK(executor);
-        std::vector<QuerySessionStatus> query_infos;
-        {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
-              executor->getSessionLock());
-          query_infos = executor->getQuerySessionInfo(query_session_ptr->get_session_id(),
-                                                      session_read_lock);
+  std::vector<RelLogicalValues::RowValues> logical_values;
+  if (!sessions_.empty()) {
+    for (auto session = sessions_.begin(); sessions_.end() != session; session++) {
+      const auto id = session->first;
+      const auto query_session_ptr = session->second;
+      const auto query_session_user_name = query_session_ptr->get_currentUser().userName;
+      if (!is_super_user && query_session_user_name.compare(current_user_name) != 0) {
+        // non-admin user can only see the owned queries
+        continue;
+      }
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                            jit_debug_ ? "/tmp" : "",
+                                            jit_debug_ ? "mapdquery" : "",
+                                            system_parameters_);
+      CHECK(executor);
+      std::vector<QuerySessionStatus> query_infos;
+      {
+        mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+        query_infos = executor->getQuerySessionInfo(query_session_ptr->get_session_id(),
+                                                    session_read_lock);
+      }
+      // if there exists query info fired from this session we report it to user
+      const std::string getQueryStatusStr[] = {"UNDEFINED",
+                                               "PENDING_QUEUE",
+                                               "PENDING_EXECUTOR",
+                                               "RUNNING_QUERY_KERNEL",
+                                               "RUNNING_REDUCTION",
+                                               "RUNNING_IMPORTER"};
+      bool is_table_import_session = false;
+      for (QuerySessionStatus& query_info : query_infos) {
+        logical_values.emplace_back(RelLogicalValues::RowValues{});
+        logical_values.back().emplace_back(
+            genLiteralStr(query_session_ptr->get_public_session_id()));
+        auto query_status = query_info.getQueryStatus();
+        logical_values.back().emplace_back(
+            genLiteralStr(getQueryStatusStr[query_status]));
+        if (query_status == QuerySessionStatus::QueryStatus::RUNNING_IMPORTER) {
+          is_table_import_session = true;
         }
-        // if there exists query info fired from this session we report it to user
-        const std::string getQueryStatusStr[] = {"UNDEFINED",
-                                                 "PENDING_QUEUE",
-                                                 "PENDING_EXECUTOR",
-                                                 "RUNNING_QUERY_KERNEL",
-                                                 "RUNNING_REDUCTION",
-                                                 "RUNNING_IMPORTER"};
-        bool is_table_import_session = false;
-        for (QuerySessionStatus& query_info : query_infos) {
-          logical_values.emplace_back(RelLogicalValues::RowValues{});
-          logical_values.back().emplace_back(
-              genLiteralStr(query_session_ptr->get_public_session_id()));
-          auto query_status = query_info.getQueryStatus();
-          logical_values.back().emplace_back(
-              genLiteralStr(getQueryStatusStr[query_status]));
-          if (query_status == QuerySessionStatus::QueryStatus::RUNNING_IMPORTER) {
-            is_table_import_session = true;
-          }
-          logical_values.back().emplace_back(
-              genLiteralStr(::toString(query_info.getExecutorId())));
-          logical_values.back().emplace_back(
-              genLiteralStr(query_info.getQuerySubmittedTime()));
-          logical_values.back().emplace_back(genLiteralStr(query_info.getQueryStr()));
-          logical_values.back().emplace_back(
-              genLiteralStr(query_session_ptr->get_currentUser().userName));
-          logical_values.back().emplace_back(
-              genLiteralStr(query_session_ptr->get_connection_info()));
-          logical_values.back().emplace_back(
-              genLiteralStr(query_session_ptr->getCatalog().getCurrentDB().dbName));
-          if (query_session_ptr->get_executor_device_type() == ExecutorDeviceType::GPU &&
-              !is_table_import_session) {
-            logical_values.back().emplace_back(genLiteralStr("GPU"));
-          } else {
-            logical_values.back().emplace_back(genLiteralStr("CPU"));
-          }
+        logical_values.back().emplace_back(
+            genLiteralStr(::toString(query_info.getExecutorId())));
+        logical_values.back().emplace_back(
+            genLiteralStr(query_info.getQuerySubmittedTime()));
+        logical_values.back().emplace_back(genLiteralStr(query_info.getQueryStr()));
+        logical_values.back().emplace_back(genLiteralStr(query_session_user_name));
+        logical_values.back().emplace_back(
+            genLiteralStr(query_session_ptr->get_connection_info()));
+        logical_values.back().emplace_back(
+            genLiteralStr(query_session_ptr->getCatalog().getCurrentDB().dbName));
+        if (query_session_ptr->get_executor_device_type() == ExecutorDeviceType::GPU &&
+            !is_table_import_session) {
+          logical_values.back().emplace_back(genLiteralStr("GPU"));
+        } else {
+          logical_values.back().emplace_back(genLiteralStr("CPU"));
         }
       }
     }
-
-    rSet = std::shared_ptr<ResultSet>(
-        ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
   }
+
+  rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
 
   return ExecutionResult(rSet, label_infos);
 }
@@ -7276,14 +7276,9 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
     // then the request is skipped
     // todo(yoonmin): improve kill query cmd under both types of query
     throw std::runtime_error(
-        "KILL QUERY failed: neither non-kernel time nor kernel-time query interrupt is "
-        "enabled.");
+        "Unable to interrupt running query. Query interrupt is disabled.");
   }
-  if (!session_info.get_currentUser().isSuper.load()) {
-    throw std::runtime_error(
-        "KILL QUERY failed: only super user can interrupt the query via KILL QUERY "
-        "command.");
-  }
+
   CHECK_EQ(target_session.length(), static_cast<unsigned long>(8));
   bool found_valid_session = false;
   for (auto& kv : sessions_) {
@@ -7294,6 +7289,16 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
                                             jit_debug_ ? "mapdquery" : "",
                                             system_parameters_);
       CHECK(executor);
+
+      auto non_admin_interrupt_user = !session_info.get_currentUser().isSuper.load();
+      auto interrupt_user_name = session_info.get_currentUser().userName;
+      if (non_admin_interrupt_user) {
+        auto target_user_name = kv.second->get_currentUser().userName;
+        if (target_user_name.compare(interrupt_user_name) != 0) {
+          throw std::runtime_error("Unable to interrupt running query.");
+        }
+      }
+
       if (leaf_aggregator_.leafCount() > 0) {
         leaf_aggregator_.interrupt(target_query_session, session_info.get_session_id());
       }
@@ -7328,7 +7333,8 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
     }
   }
   if (!found_valid_session) {
-    throw std::runtime_error("KILL QUERY failed: invalid query session is given.");
+    throw std::runtime_error(
+        "Unable to interrupt running query. An invalid query session is given.");
   }
 }
 

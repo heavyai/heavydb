@@ -145,12 +145,12 @@ class QueryRunner {
   }
 
   void addSessionId(const std::string& session_id,
+                    const std::string& user_name = "admin",
                     ExecutorDeviceType device_type = ExecutorDeviceType::GPU) {
-    session_info_ =
-        std::make_unique<Catalog_Namespace::SessionInfo>(session_info_->get_catalog_ptr(),
-                                                         session_info_->get_currentUser(),
-                                                         device_type,
-                                                         session_id);
+    auto user_info = session_info_->get_currentUser();
+    user_info.userName = user_name;
+    session_info_ = std::make_unique<Catalog_Namespace::SessionInfo>(
+        session_info_->get_catalog_ptr(), user_info, device_type, session_id);
   }
 
   void clearSessionId() { session_info_ = nullptr; }
@@ -201,6 +201,7 @@ class QueryRunner {
   virtual std::shared_ptr<ResultSet> runSQLWithAllowingInterrupt(
       const std::string& query_str,
       const std::string& session_id,
+      const std::string& user_name,
       const ExecutorDeviceType device_type,
       const double running_query_check_freq = 0.9,
       const unsigned pending_query_check_freq = 1000);
