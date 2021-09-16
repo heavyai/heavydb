@@ -38,7 +38,7 @@ void CpuBufferMgr::addSlab(const size_t slab_size) {
 
 void CpuBufferMgr::freeAllMem() {
   CHECK(allocator_);
-  allocator_.reset(new Arena(max_slab_size_ + kArenaBlockOverhead));
+  initializeMem();
 }
 
 void CpuBufferMgr::allocateBuffer(BufferList::iterator seg_it,
@@ -53,6 +53,10 @@ void CpuBufferMgr::allocateBuffer(BufferList::iterator seg_it,
                                 // the segment iterator passed into buffer
                                 // takes the address of the new Buffer in its
                                 // buffer member
+}
+
+void CpuBufferMgr::initializeMem() {
+  allocator_.reset(new Arena(max_slab_size_ + kArenaBlockOverhead));
 }
 
 }  // namespace Buffer_Namespace

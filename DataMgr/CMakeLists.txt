@@ -35,6 +35,7 @@ set(datamgr_source_files
     BufferMgr/GpuCudaBufferMgr/GpuCudaBuffer.cpp
     BufferMgr/CpuBufferMgr/CpuBufferMgr.cpp
     BufferMgr/CpuBufferMgr/CpuBuffer.cpp
+    BufferMgr/CpuBufferMgr/TieredCpuBufferMgr.cpp
     BufferMgr/BufferMgr.cpp
     BufferMgr/Buffer.cpp
     PersistentStorageMgr/MutableCachePersistentStorageMgr.cpp

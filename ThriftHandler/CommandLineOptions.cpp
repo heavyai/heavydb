@@ -432,6 +432,13 @@ void CommandLineOptions::fillOptions() {
       "allowed-export-paths",
       po::value<std::string>(&allowed_export_paths),
       "List of allowed root paths that can be used in export operations.");
+  help_desc.add_options()("enable-tiered-cpu-mem",
+                          po::value<bool>(&g_enable_tiered_cpu_mem)
+                              ->default_value(g_enable_tiered_cpu_mem)
+                              ->implicit_value(true),
+                          "Enable additional tiers of CPU memory (PMEM, etc...)");
+  help_desc.add_options()("pmem-size", po::value<size_t>(&g_pmem_size)->default_value(0));
+
   help_desc.add(log_options_.get_options());
 }
 

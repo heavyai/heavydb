@@ -41,25 +41,28 @@ class CpuBufferMgr : public BufferMgr {
                   max_slab_size,
                   page_size,
                   parent_mgr)
-      , cuda_mgr_(cuda_mgr)
-      , allocator_(std::make_unique<Arena>(/*min_block_size=*/max_slab_size +
-                                           kArenaBlockOverhead)) {}
+      , cuda_mgr_(cuda_mgr) {
+    initializeMem();
+  }
 
-  ~CpuBufferMgr() {
+  ~CpuBufferMgr() override {
     /* the destruction of the allocator automatically frees all memory */
   }
 
   inline MgrType getMgrType() override { return CPU_MGR; }
   inline std::string getStringMgrType() override { return ToString(CPU_MGR); }
 
- private:
+ protected:
   void addSlab(const size_t slab_size) override;
   void freeAllMem() override;
   void allocateBuffer(BufferList::iterator segment_iter,
                       const size_t page_size,
                       const size_t initial_size) override;
+  virtual void initializeMem();
 
   CudaMgr_Namespace::CudaMgr* cuda_mgr_;
+
+ private:
   std::unique_ptr<Arena> allocator_;
 };
 

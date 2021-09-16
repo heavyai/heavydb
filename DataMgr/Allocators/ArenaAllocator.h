@@ -50,31 +50,40 @@ class SysAllocator {
 using AllocatorType = char;
 
 constexpr size_t kArenaBlockOverhead =
-    folly::Arena< ::SysAllocator<AllocatorType> >::kBlockOverhead;
+    folly::Arena<::SysAllocator<AllocatorType>>::kBlockOverhead;
 
 /**
  * Arena allocator using checked_malloc with default allocation size 2GB. Note that the
  * allocator only frees memory on destruction.
  */
-class Arena : public folly::Arena< ::SysAllocator<AllocatorType> > {
+class Arena : public folly::Arena<::SysAllocator<AllocatorType>> {
  public:
   explicit Arena(size_t min_block_size = static_cast<size_t>(1ULL << 32) + kBlockOverhead,
                  size_t size_limit = kNoSizeLimit,
                  size_t max_align = kDefaultMaxAlign)
-      : folly::Arena<SysAllocator<AllocatorType> >({},
-                                                   min_block_size,
-                                                   size_limit,
-                                                   max_align) {}
+      : folly::Arena<::SysAllocator<AllocatorType>>({},
+                                                    min_block_size,
+                                                    size_limit,
+                                                    max_align) {}
+  virtual ~Arena() {}
 
-  void* allocateAndZero(const size_t size) {
+  virtual void* allocate(size_t size) {
+    return folly::Arena<::SysAllocator<AllocatorType>>::allocate(size);
+  }
+
+  virtual void* allocateAndZero(const size_t size) {
     auto ret = allocate(size);
     std::memset(ret, 0, size);
     return ret;
   }
+
+  virtual size_t bytesUsed() const {
+    return folly::Arena<::SysAllocator<AllocatorType>>::bytesUsed();
+  }
 };
 
 template <>
-struct folly::ArenaAllocatorTraits< ::SysAllocator<AllocatorType> > {
+struct folly::ArenaAllocatorTraits<::SysAllocator<AllocatorType>> {
   static size_t goodSize(const ::SysAllocator<AllocatorType>& /* alloc */, size_t size) {
     return folly::goodMallocSize(size);
   }
@@ -91,29 +100,39 @@ constexpr size_t kArenaBlockOverhead = 0;
  */
 class Arena {
  public:
-  explicit Arena(size_t min_block_size = 1ULL << 32, size_t size_limit = 0) {}
+  explicit Arena(size_t min_block_size = 1ULL << 32, size_t size_limit = 0)
+      : size_limit_(size_limit), size_(0) {}
 
-  ~Arena() {
-    for (auto ptr : allocations_) {
+  virtual ~Arena() {
+    for (auto [ptr, size] : allocations_) {
       allocator_.deallocate(ptr, 0);
+      size_ -= size;
     }
   }
 
-  void* allocate(size_t num_bytes) {
+  virtual void* allocate(size_t num_bytes) {
+    if (size_limit_ != 0 && size_ + num_bytes > size_limit_) {
+      throw OutOfHostMemory(num_bytes);
+    }
     auto ret = allocator_.allocate(num_bytes);
-    allocations_.push_back(ret);
+    size_ += num_bytes;
+    allocations_.push_back({ret, num_bytes});
     return ret;
   }
 
-  void* allocateAndZero(const size_t size) {
+  virtual void* allocateAndZero(const size_t size) {
     auto ret = allocate(size);
     std::memset(ret, 0, size);
     return ret;
   }
 
+  virtual size_t bytesUsed() const { return size_; }
+
  private:
+  size_t size_limit_;
+  size_t size_;
   SysAllocator<void> allocator_;
-  std::vector<void*> allocations_;
+  std::vector<std::pair<void*, size_t>> allocations_;
 };
 
 #endif

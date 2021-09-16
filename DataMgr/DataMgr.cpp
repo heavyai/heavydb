@@ -21,6 +21,7 @@
 
 #include "DataMgr/DataMgr.h"
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
+#include "BufferMgr/CpuBufferMgr/TieredCpuBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
 #include "CudaMgr/CudaMgr.h"
 #include "FileMgr/GlobalFileMgr.h"
@@ -37,6 +38,8 @@
 #include <limits>
 
 extern bool g_enable_fsi;
+bool g_enable_tiered_cpu_mem{false};
+size_t g_pmem_size{0};
 
 namespace Data_Namespace {
 
@@ -161,6 +164,32 @@ size_t DataMgr::getTotalSystemMemory() {
 #endif
 }
 
+void DataMgr::allocateCpuBufferMgr(int32_t device_id,
+                                   size_t total_cpu_size,
+                                   size_t minCpuSlabSize,
+                                   size_t maxCpuSlabSize,
+                                   size_t page_size,
+                                   const CpuTierSizeVector& cpu_tier_sizes) {
+  if (g_enable_tiered_cpu_mem) {
+    bufferMgrs_[1].push_back(new Buffer_Namespace::TieredCpuBufferMgr(0,
+                                                                      total_cpu_size,
+                                                                      cudaMgr_.get(),
+                                                                      minCpuSlabSize,
+                                                                      maxCpuSlabSize,
+                                                                      page_size,
+                                                                      cpu_tier_sizes,
+                                                                      bufferMgrs_[0][0]));
+  } else {
+    bufferMgrs_[1].push_back(new Buffer_Namespace::CpuBufferMgr(0,
+                                                                total_cpu_size,
+                                                                cudaMgr_.get(),
+                                                                minCpuSlabSize,
+                                                                maxCpuSlabSize,
+                                                                page_size,
+                                                                bufferMgrs_[0][0]));
+  }
+}
+
 // This function exists for testing purposes so that we can test a reset of the cache.
 void DataMgr::resetPersistentStorage(const File_Namespace::DiskCacheConfig& cache_config,
                                      const size_t num_reader_threads,
@@ -202,17 +231,28 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
   LOG(INFO) << "Max CPU Slab Size is " << (float)maxCpuSlabSize / (1024 * 1024) << "MB";
   LOG(INFO) << "Max memory pool size for CPU is " << (float)cpuBufferSize / (1024 * 1024)
             << "MB";
+
+  CpuTierSizeVector cpu_tier_sizes(numCpuTiers, 0);
+  cpu_tier_sizes[CpuTier::DRAM] = cpuBufferSize;
+
+  if (g_enable_tiered_cpu_mem) {
+    cpu_tier_sizes[CpuTier::PMEM] = g_pmem_size;
+    LOG(INFO) << "Max memory pool size for PMEM is " << (float)g_pmem_size / (1024 * 1024)
+              << "MB";
+  }
+
+  size_t total_cpu_size = 0;
+  for (auto cpu_tier_size : cpu_tier_sizes) {
+    total_cpu_size += cpu_tier_size;
+  }
+
   if (hasGpus_ || cudaMgr_) {
     LOG(INFO) << "Reserved GPU memory is " << (float)reservedGpuMem_ / (1024 * 1024)
               << "MB includes render buffer allocation";
     bufferMgrs_.resize(3);
-    bufferMgrs_[1].push_back(new Buffer_Namespace::CpuBufferMgr(0,
-                                                                cpuBufferSize,
-                                                                cudaMgr_.get(),
-                                                                minCpuSlabSize,
-                                                                maxCpuSlabSize,
-                                                                page_size,
-                                                                bufferMgrs_[0][0]));
+    allocateCpuBufferMgr(
+        0, total_cpu_size, minCpuSlabSize, maxCpuSlabSize, page_size, cpu_tier_sizes);
+
     levelSizes_.push_back(1);
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
@@ -242,13 +282,8 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
     }
     levelSizes_.push_back(numGpus);
   } else {
-    bufferMgrs_[1].push_back(new Buffer_Namespace::CpuBufferMgr(0,
-                                                                cpuBufferSize,
-                                                                cudaMgr_.get(),
-                                                                minCpuSlabSize,
-                                                                maxCpuSlabSize,
-                                                                page_size,
-                                                                bufferMgrs_[0][0]));
+    allocateCpuBufferMgr(
+        0, total_cpu_size, minCpuSlabSize, maxCpuSlabSize, page_size, cpu_tier_sizes);
     levelSizes_.push_back(1);
   }
 }
@@ -576,6 +611,10 @@ std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem
 
 PersistentStorageMgr* DataMgr::getPersistentStorageMgr() const {
   return dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0]);
+}
+
+Buffer_Namespace::CpuBufferMgr* DataMgr::getCpuBufferMgr() const {
+  return dynamic_cast<Buffer_Namespace::CpuBufferMgr*>(bufferMgrs_[1][0]);
 }
 
 }  // namespace Data_Namespace

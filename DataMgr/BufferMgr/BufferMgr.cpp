@@ -167,6 +167,11 @@ BufferList::iterator BufferMgr::evict(BufferList::iterator& evict_start,
     if (evict_it->mem_status == USED && evict_it->chunk_key.size() > 0) {
       chunk_index_.erase(evict_it->chunk_key);
     }
+    if (evict_it->buffer != nullptr) {
+      // If we don't delete buffers here then we lose reference to them later and cause a
+      // memleak.
+      delete evict_it->buffer;
+    }
     evict_it = slab_segments_[slab_num].erase(
         evict_it);  // erase operations returns next iterator - safe if we ever move
                     // to a vector (as opposed to erase(evict_it++)

@@ -46,6 +46,10 @@ namespace CudaMgr_Namespace {
 class CudaMgr;
 }
 
+namespace Buffer_Namespace {
+class CpuBufferMgr;
+}
+
 namespace Data_Namespace {
 
 struct MemoryData {
@@ -230,6 +234,9 @@ class DataMgr {
                               const size_t num_reader_threads,
                               const SystemParameters& sys_params);
 
+  // Used for testing.
+  Buffer_Namespace::CpuBufferMgr* getCpuBufferMgr() const;
+
  private:
   void populateMgrs(const SystemParameters& system_parameters,
                     const size_t userSpecifiedNumReaderThreads,
@@ -237,6 +244,12 @@ class DataMgr {
   void convertDB(const std::string basePath);
   void checkpoint();  // checkpoint for whole DB, called from convertDB proc only
   void createTopLevelMetadata() const;
+  void allocateCpuBufferMgr(int32_t device_id,
+                            size_t total_cpu_size,
+                            size_t minCpuSlabSize,
+                            size_t maxCpuSlabSize,
+                            size_t page_size,
+                            const std::vector<size_t>& cpu_tier_sizes);
 
   std::vector<std::vector<AbstractBufferMgr*>> bufferMgrs_;
   std::unique_ptr<CudaMgr_Namespace::CudaMgr> cudaMgr_;

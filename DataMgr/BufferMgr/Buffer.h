@@ -137,6 +137,9 @@ class Buffer : public AbstractBuffer {
     return (pin_count_);
   }
 
+  // Added for testing.
+  int32_t getSlabNum() const { return seg_it_->slab_num; }
+
  protected:
   int8_t* mem_;  /// pointer to beginning of buffer's memory
 

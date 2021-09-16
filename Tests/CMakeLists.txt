@@ -30,6 +30,7 @@ add_executable(DiskCacheQueryTest DiskCacheQueryTest.cpp)
 add_executable(CachingFileMgrTest CachingFileMgrTest.cpp)
 add_executable(JSONTest JSONTest.cpp)
 add_executable(DataRecyclerTest DataRecyclerTest.cpp)
+add_executable(DataMgrTest DataMgrTest.cpp)
 
 if(ENABLE_CUDA)
   message(DEBUG "Tests CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
@@ -209,6 +210,8 @@ target_link_libraries(CachingFileMgrTest gtest DataMgr ${Boost_LIBRARIES})
 target_link_libraries(LoadTableTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(DataRecyclerTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(JSONTest gtest Logger Shared)
+target_link_libraries(DataMgrTest DataMgr ${THRIFT_HANDLER_TEST_LIBRARIES})
+
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   target_link_libraries(UdfTest gtest UdfCompiler ${EXECUTE_TEST_LIBS})
@@ -299,6 +302,7 @@ add_test(CachingFileMgrTest CachingFileMgrTest ${TEST_ARGS})
 add_test(DataRecyclerTest DataRecyclerTest ${TEST_ARGS})
 add_test(LoadTableTest LoadTableTest ${TEST_ARGS})
 add_test(JSONTest JSONTest ${TEST_ARGS})
+add_test(DataMgrTest DataMgrTest ${TEST_ARGS})
 
 if(ENABLE_CUDA)
   add_test(GpuSharedMemoryTest GpuSharedMemoryTest ${TEST_ARGS})
@@ -396,6 +400,7 @@ set(TEST_PROGRAMS
   CachingFileMgrTest
   LoadTableTest
   JSONTest
+  DataMgrTest
 )
 
 if(ENABLE_CUDA)
