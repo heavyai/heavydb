@@ -556,27 +556,14 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
        ++level_idx) {
     const auto& current_level_join_conditions = ra_exe_unit.join_quals[level_idx];
     std::vector<std::string> fail_reasons;
-    const auto build_cur_level_hash_table = [&]() {
-      if (current_level_join_conditions.quals.size() > 1) {
-        const auto first_qual = *current_level_join_conditions.quals.begin();
-        auto qual_bin_oper =
-            std::dynamic_pointer_cast<const Analyzer::BinOper>(first_qual);
-        if (qual_bin_oper && qual_bin_oper->is_overlaps_oper() &&
-            current_level_join_conditions.type == JoinType::LEFT) {
-          JoinCondition join_condition{{first_qual}, current_level_join_conditions.type};
-
-          return buildCurrentLevelHashTable(
-              join_condition, ra_exe_unit, co, query_infos, column_cache, fail_reasons);
-        }
-      }
-      return buildCurrentLevelHashTable(current_level_join_conditions,
-                                        ra_exe_unit,
-                                        co,
-                                        query_infos,
-                                        column_cache,
-                                        fail_reasons);
-    };
-    const auto current_level_hash_table = build_cur_level_hash_table();
+    const auto current_level_hash_table =
+        buildCurrentLevelHashTable(current_level_join_conditions,
+                                   level_idx,
+                                   ra_exe_unit,
+                                   co,
+                                   query_infos,
+                                   column_cache,
+                                   fail_reasons);
     const auto found_outer_join_matches_cb =
         [this, level_idx](llvm::Value* found_outer_join_matches) {
           CHECK_LT(level_idx, cgen_state_->outer_join_match_found_per_level_.size());
@@ -585,27 +572,27 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
               found_outer_join_matches;
         };
     const auto is_deleted_cb = buildIsDeletedCb(ra_exe_unit, level_idx, co);
-    const auto outer_join_condition_multi_quals_cb =
-        [this, level_idx, &co, &current_level_join_conditions](
-            const std::vector<llvm::Value*>& prev_iters) {
-          // The values generated for the match path don't dominate all uses
-          // since on the non-match path nulls are generated. Reset the cache
-          // once the condition is generated to avoid incorrect reuse.
+    auto rem_left_join_quals_it =
+        plan_state_->left_join_non_hashtable_quals_.find(level_idx);
+    bool has_remaining_left_join_quals =
+        rem_left_join_quals_it != plan_state_->left_join_non_hashtable_quals_.end() &&
+        !rem_left_join_quals_it->second.empty();
+    const auto outer_join_condition_remaining_quals_cb =
+        [this, level_idx, &co](const std::vector<llvm::Value*>& prev_iters) {
+          // when we have multiple quals for the left join in the current join level
+          // we first try to build a hashtable by using one of the possible qual,
+          // and deal with remaining quals as extra join conditions
           FetchCacheAnchor anchor(cgen_state_.get());
           addJoinLoopIterator(prev_iters, level_idx + 1);
           llvm::Value* left_join_cond = cgen_state_->llBool(true);
           CodeGenerator code_generator(this);
-          // Do not want to look at all quals! only 1..N quals (ignore first qual)
-          // Note(jclay): this may need to support cases larger than 2
-          // are there any?
-          if (current_level_join_conditions.quals.size() >= 2) {
-            auto qual_it = std::next(current_level_join_conditions.quals.begin(), 1);
-            for (; qual_it != current_level_join_conditions.quals.end();
-                 std::advance(qual_it, 1)) {
+          auto it = plan_state_->left_join_non_hashtable_quals_.find(level_idx);
+          if (it != plan_state_->left_join_non_hashtable_quals_.end()) {
+            for (auto expr : it->second) {
               left_join_cond = cgen_state_->ir_builder_.CreateAnd(
                   left_join_cond,
                   code_generator.toBool(
-                      code_generator.codegen(qual_it->get(), true, co).front()));
+                      code_generator.codegen(expr.get(), true, co).front()));
             }
           }
           return left_join_cond;
@@ -626,7 +613,12 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                   current_level_hash_table->codegenSlot(co, current_hash_table_idx);
               return domain;
             },
-            /*outer_condition_match=*/nullptr,
+            /*outer_condition_match=*/
+            current_level_join_conditions.type == JoinType::LEFT &&
+                    has_remaining_left_join_quals
+                ? std::function<llvm::Value*(const std::vector<llvm::Value*>&)>(
+                      outer_join_condition_remaining_quals_cb)
+                : nullptr,
             /*found_outer_matches=*/current_level_join_conditions.type == JoinType::LEFT
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
                 : nullptr,
@@ -656,7 +648,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             /* outer_condition_match= */
             current_level_join_conditions.type == JoinType::LEFT
                 ? std::function<llvm::Value*(const std::vector<llvm::Value*>&)>(
-                      outer_join_condition_multi_quals_cb)
+                      outer_join_condition_remaining_quals_cb)
                 : nullptr,
             /* found_outer_matches= */
             current_level_join_conditions.type == JoinType::LEFT
@@ -682,7 +674,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             /*outer_condition_match=*/
             current_level_join_conditions.type == JoinType::LEFT
                 ? std::function<llvm::Value*(const std::vector<llvm::Value*>&)>(
-                      outer_join_condition_multi_quals_cb)
+                      outer_join_condition_remaining_quals_cb)
                 : nullptr,
             /*found_outer_matches=*/current_level_join_conditions.type == JoinType::LEFT
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
@@ -956,28 +948,30 @@ Executor::buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
 
 std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
     const JoinCondition& current_level_join_conditions,
+    size_t level_idx,
     RelAlgExecutionUnit& ra_exe_unit,
     const CompilationOptions& co,
     const std::vector<InputTableInfo>& query_infos,
     ColumnCacheMap& column_cache,
     std::vector<std::string>& fail_reasons) {
   AUTOMATIC_IR_METADATA(cgen_state_.get());
-  if (current_level_join_conditions.type != JoinType::INNER &&
-      current_level_join_conditions.type != JoinType::SEMI &&
-      current_level_join_conditions.type != JoinType::ANTI &&
-      current_level_join_conditions.quals.size() > 1) {
-    fail_reasons.emplace_back("No equijoin expression found for outer join");
-    return nullptr;
-  }
   std::shared_ptr<HashJoin> current_level_hash_table;
+  auto handleNonHashtableQual = [&ra_exe_unit, &level_idx, this](
+                                    JoinType join_type,
+                                    std::shared_ptr<Analyzer::Expr> qual) {
+    if (join_type == JoinType::LEFT) {
+      plan_state_->addNonHashtableQualForLeftJoin(level_idx, qual);
+    } else {
+      add_qualifier_to_execution_unit(ra_exe_unit, qual);
+    }
+  };
   for (const auto& join_qual : current_level_join_conditions.quals) {
     auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(join_qual);
-    if (!qual_bin_oper || !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
-      fail_reasons.emplace_back("No equijoin expression found");
-      if (current_level_join_conditions.type == JoinType::INNER ||
-          current_level_join_conditions.type == JoinType::SEMI ||
-          current_level_join_conditions.type == JoinType::ANTI) {
-        add_qualifier_to_execution_unit(ra_exe_unit, join_qual);
+    if (current_level_hash_table || !qual_bin_oper ||
+        !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
+      handleNonHashtableQual(current_level_join_conditions.type, join_qual);
+      if (!current_level_hash_table) {
+        fail_reasons.emplace_back("No equijoin expression found");
       }
       continue;
     }
@@ -1000,13 +994,11 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
       plan_state_->join_info_.equi_join_tautologies_.push_back(qual_bin_oper);
     } else {
       fail_reasons.push_back(hash_table_or_error.fail_reason);
-      VLOG(2) << "Building a hashtable based on a qual " << qual_bin_oper->toString()
-              << " fails: " << hash_table_or_error.fail_reason;
-      if (current_level_join_conditions.type == JoinType::INNER ||
-          current_level_join_conditions.type == JoinType::SEMI ||
-          current_level_join_conditions.type == JoinType::ANTI) {
-        add_qualifier_to_execution_unit(ra_exe_unit, qual_bin_oper);
+      if (!current_level_hash_table) {
+        VLOG(2) << "Building a hashtable based on a qual " << qual_bin_oper->toString()
+                << " fails: " << hash_table_or_error.fail_reason;
       }
+      handleNonHashtableQual(current_level_join_conditions.type, qual_bin_oper);
     }
   }
   return current_level_hash_table;

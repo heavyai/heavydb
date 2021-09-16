@@ -60,6 +60,8 @@ struct PlanState {
   std::unordered_map<InputColDescriptor, size_t> global_to_local_col_ids_;
   std::set<std::pair<TableId, ColumnId>> columns_to_fetch_;
   std::set<std::pair<TableId, ColumnId>> columns_to_not_fetch_;
+  std::unordered_map<size_t, std::vector<std::shared_ptr<Analyzer::Expr>>>
+      left_join_non_hashtable_quals_;
   bool allow_lazy_fetch_;
   JoinInfo join_info_;
   const DeletedColumnsMap deleted_columns_;
@@ -97,4 +99,6 @@ struct PlanState {
   std::list<std::shared_ptr<Analyzer::Expr>> getSimpleQuals() const {
     return simple_quals_;
   }
+
+  void addNonHashtableQualForLeftJoin(size_t idx, std::shared_ptr<Analyzer::Expr> expr);
 };

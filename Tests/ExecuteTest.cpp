@@ -10095,6 +10095,31 @@ TEST(Select, Joins_LeftJoin_Filters) {
   }
 }
 
+TEST(Select, Joins_LeftJoin_MultiQuals) {
+  // a test to check whether we can evaluate left join having multiple-quals
+  // with our hash join framework, instead of using loop join
+  SKIP_ALL_ON_AGGREGATOR();
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_NO_THROW(
+        run_multiple_agg("SELECT a.x, COUNT(b.y) FROM test a LEFT JOIN test_inner b ON "
+                         "b.x = a.x AND b.str NOT LIKE 'box' GROUP BY a.x ORDER BY a.x;",
+                         dt,
+                         false /*=allow_looo_join*/));
+    EXPECT_NO_THROW(
+        run_multiple_agg("SELECT a.x, b.x FROM test a LEFT JOIN test_inner b ON b.x = "
+                         "a.x AND a.y < 10000 and a.y > -10000 and b.str like 'foo';",
+                         dt,
+                         false /*=allow_looo_join*/));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "SELECT a.x, b.x FROM test a INNER JOIN test b ON a.x = b.x INNER JOIN test c ON "
+        "(a.x = c.x AND a.y = c.y) LEFT JOIN test_inner d ON (d.x = a.x AND a.y < 10000 "
+        "and a.y > -10000 and d.str like 'foo');",
+        dt,
+        false /*=allow_looo_join*/));
+  }
+}
+
 TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

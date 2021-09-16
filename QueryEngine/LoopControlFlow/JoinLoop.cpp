@@ -208,8 +208,32 @@ llvm::BasicBlock* JoinLoop::codegen(
         const auto iteration_domain = join_loop.iteration_domain_codegen_(iterators);
         CHECK(!iteration_domain.values_buffer);
         iterators.push_back(iteration_domain.slot_lookup_result);
-        auto match_found = builder.CreateICmpSGE(iteration_domain.slot_lookup_result,
-                                                 ll_int<int64_t>(0, context));
+        auto join_cond_match = builder.CreateICmpSGE(iteration_domain.slot_lookup_result,
+                                                     ll_int<int64_t>(0, context));
+        llvm::Value* remaining_cond_match = builder.CreateAlloca(
+            get_int_type(1, context), nullptr, "remaining_outer_cond_match");
+        builder.CreateStore(ll_bool(true, context), remaining_cond_match);
+
+        if (join_loop.type_ == JoinType::LEFT && join_loop.outer_condition_match_) {
+          const auto parent_func = builder.GetInsertBlock()->getParent();
+          const auto evaluate_remaining_outer_cond_bb = llvm::BasicBlock::Create(
+              context, "eval_remaining_outer_cond_" + join_loop.name_, parent_func);
+          const auto after_evaluate_outer_cond_bb = llvm::BasicBlock::Create(
+              context, "after_eval_outer_cond_" + join_loop.name_, parent_func);
+          builder.CreateCondBr(join_cond_match,
+                               evaluate_remaining_outer_cond_bb,
+                               after_evaluate_outer_cond_bb);
+          builder.SetInsertPoint(evaluate_remaining_outer_cond_bb);
+          const auto outer_cond_match = join_loop.outer_condition_match_(iterators);
+          const auto true_left_cond_match =
+              builder.CreateAnd(outer_cond_match, join_cond_match);
+          builder.CreateStore(true_left_cond_match, remaining_cond_match);
+          builder.CreateBr(after_evaluate_outer_cond_bb);
+          builder.SetInsertPoint(after_evaluate_outer_cond_bb);
+        }
+        auto match_found =
+            builder.CreateAnd(join_cond_match, builder.CreateLoad(remaining_cond_match));
+        CHECK(match_found);
         if (join_loop.is_deleted_) {
           match_found = builder.CreateAnd(
               match_found, builder.CreateNot(join_loop.is_deleted_(iterators, nullptr)));

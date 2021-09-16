@@ -841,6 +841,7 @@ class Executor {
   // Returns null iff on failure and provides the reasons in `fail_reasons`.
   std::shared_ptr<HashJoin> buildCurrentLevelHashTable(
       const JoinCondition& current_level_join_conditions,
+      size_t level_idx,
       RelAlgExecutionUnit& ra_exe_unit,
       const CompilationOptions& co,
       const std::vector<InputTableInfo>& query_infos,

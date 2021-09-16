@@ -73,3 +73,14 @@ int PlanState::getLocalColumnId(const Analyzer::ColumnVar* col_var,
   }
   return it->second;
 }
+
+void PlanState::addNonHashtableQualForLeftJoin(size_t idx,
+                                               std::shared_ptr<Analyzer::Expr> expr) {
+  auto it = left_join_non_hashtable_quals_.find(idx);
+  if (it == left_join_non_hashtable_quals_.end()) {
+    std::vector<std::shared_ptr<Analyzer::Expr>> expr_vec{expr};
+    left_join_non_hashtable_quals_.emplace(idx, std::move(expr_vec));
+  } else {
+    it->second.emplace_back(expr);
+  }
+}
