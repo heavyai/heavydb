@@ -2035,25 +2035,6 @@ class ShowQueriesTest : public ShowTest {
     createDBHandler();
     createTestUser();
     loginAdmin();
-    sql("DROP TABLE IF EXISTS test_table;");
-    sql("CREATE TABLE test_table (x int not null);");
-    const auto data_file_path =
-        boost::filesystem::path("../../Tests/Import/datafiles/show_queries_test.csv");
-    if (boost::filesystem::exists(data_file_path)) {
-      boost::filesystem::remove(data_file_path);
-    }
-    std::ofstream out(data_file_path.string());
-    for (int i = 0; i < 100000; i++) {
-      if (out.is_open()) {
-        out << "1\n";
-      }
-    }
-    out.close();
-    std::string import_table_ddl{
-        "COPY test_table FROM "
-        "'../../Tests/Import/datafiles/show_queries_test.csv' "
-        "WITH (header='false')"};
-    sql(import_table_ddl);
   }
 
   static void TearDownTestSuite() {
@@ -2092,11 +2073,10 @@ TEST_F(ShowQueriesTest, NonAdminUser) {
   TSessionId show_queries_cmd_session;
 
   login("u1", "u1", "omnisci", query_session);
-  auto q1 = std::async(std::launch::async, [&] {
-    sql(res1,
-        "SELECT COUNT(1) FROM test_table t1, test_table t2 WHERE t1.x = t2.x;",
-        query_session);
-  });
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  // mock the running query by just enrolling the meaningless query
+  executor->enrollQuerySession(
+      query_session, "MOCK_QUERY", "0", 0, QuerySessionStatus::RUNNING_QUERY_KERNEL);
 
   auto show_queries_thread1 = std::async(std::launch::deferred, [&] {
     login("u2", "u2", "omnisci", show_queries_cmd_session);
@@ -2112,32 +2092,9 @@ TEST_F(ShowQueriesTest, NonAdminUser) {
   auto show_queries_thread3 = std::async(
       std::launch::deferred, [&] { sql(own_res, "SHOW QUERIES;", query_session); });
 
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-  std::vector<size_t> assigned_executor_ids;
-  size_t loop_cnt = 0;
-  while (assigned_executor_ids.empty() && loop_cnt < 1000) {
-    assigned_executor_ids = executor->getExecutorIdsRunningQuery(query_session);
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    ++loop_cnt;
-  }
-  CHECK_EQ(assigned_executor_ids.size(), static_cast<size_t>(1));
-  auto assigned_executor = Executor::getExecutor(assigned_executor_ids.front());
-  bool run_query = false;
-  loop_cnt = 0;
-  while (!run_query && loop_cnt < 1000) {
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
-    auto current_session = assigned_executor->getCurrentQuerySession(session_read_lock);
-    run_query = !current_session.empty() && (query_session.compare(current_session) == 0);
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    ++loop_cnt;
-  }
-  if (loop_cnt >= 1000) {
-    return;
-  }
   show_queries_thread1.get();
   show_queries_thread2.get();
   show_queries_thread3.get();
-  q1.wait();
 
   EXPECT_TRUE(query_session.compare(show_queries_cmd_session) != 0);
   // non-admin && non-own session cannot see the query status
@@ -2145,6 +2102,10 @@ TEST_F(ShowQueriesTest, NonAdminUser) {
   // admin && own user can see the query status
   EXPECT_TRUE(!admin_res.row_set.columns[0].data.str_col.empty());
   EXPECT_TRUE(!own_res.row_set.columns[0].data.str_col.empty());
+  {
+    mapd_unique_lock<mapd_shared_mutex> session_write_lock(executor->getSessionLock());
+    executor->removeFromQuerySessionList(query_session, "0", session_write_lock);
+  }
 }
 
 int main(int argc, char** argv) {
