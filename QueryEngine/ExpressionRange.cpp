@@ -975,6 +975,7 @@ ExpressionRange getExpressionRange(
     const Executor* executor,
     boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
   auto target_value_expr = width_bucket_expr->get_target_value();
+  auto target_value_range = getExpressionRange(target_value_expr, query_infos, executor);
   auto target_ti = target_value_expr->get_type_info();
   if (width_bucket_expr->is_constant_expr()) {
     auto const_target_value = dynamic_cast<const Analyzer::Constant*>(target_value_expr);
@@ -984,24 +985,20 @@ ExpressionRange getExpressionRange(
         return ExpressionRange::makeIntRange(
             0, width_bucket_expr->get_partition_count_val(), 0, true);
       } else {
-        auto target_value_range =
-            getExpressionRange(target_value_expr, query_infos, executor);
         CHECK(target_value_range.getFpMax() == target_value_range.getFpMin());
         auto target_value_bucket =
             width_bucket_expr->compute_bucket(target_value_range.getFpMax(), target_ti);
         return ExpressionRange::makeIntRange(
-            target_value_bucket, target_value_bucket, 0, false);
+            target_value_bucket, target_value_bucket, 0, target_value_range.hasNulls());
       }
     }
     // compute possible bucket range based on lower and upper bound constants
     // to elucidate a target bucket range
-    const auto target_value_range =
-        getExpressionRange(target_value_expr, query_infos, executor);
     const auto target_value_range_with_qual =
         getExpressionRange(target_value_expr, query_infos, executor, simple_quals);
     auto compute_bucket_range = [&width_bucket_expr](const ExpressionRange& target_range,
                                                      SQLTypeInfo ti) {
-      // target value is casted ti double
+      // we casted bucket bound exprs to double
       auto lower_bound_bucket =
           width_bucket_expr->compute_bucket<double>(target_range.getFpMin(), ti);
       auto upper_bound_bucket =
@@ -1022,8 +1019,8 @@ ExpressionRange getExpressionRange(
     // we cannot determine a possibility of skipping oob check safely
     auto target_expression_range = getExpressionRange(
         width_bucket_expr->get_partition_count(), query_infos, executor, simple_quals);
-    auto res = ExpressionRange::makeIntRange(
-        0, INT32_MAX, 0, target_value_expr->get_type_info().get_notnull());
+    auto res =
+        ExpressionRange::makeIntRange(0, INT32_MAX, 0, target_value_range.hasNulls());
     switch (target_expression_range.getType()) {
       case ExpressionRangeType::Integer: {
         res.setIntMax(target_expression_range.getIntMax() + 1);

@@ -2434,6 +2434,78 @@ TEST(Select, WidthBucketExpr) {
   g_sqlite_comparator.query(drop);
 }
 
+TEST(Select, WidthBucketWithGroupBy) {
+  SKIP_ALL_ON_AGGREGATOR();
+  std::vector<std::string> drop_tables;
+  drop_tables.push_back("DROP TABLE IF EXISTS wb_test_nullable;");
+  drop_tables.push_back("DROP TABLE IF EXISTS wb_test_non_nullable;");
+  drop_tables.push_back("DROP TABLE IF EXISTS wb_test;");
+  std::vector<std::string> create_tables;
+  create_tables.push_back("CREATE TABLE wb_test_nullable (val int);");
+  create_tables.push_back("CREATE TABLE wb_test_non_nullable (val int not null);");
+  create_tables.push_back("CREATE TABLE wb_test (val int);");
+  std::vector<std::string> populate_tables;
+  for (int i = 1; i < 4; ++i) {
+    populate_tables.push_back("INSERT INTO wb_test_nullable VALUES(" + std::to_string(i) +
+                              ");");
+    populate_tables.push_back("INSERT INTO wb_test_non_nullable VALUES(" +
+                              std::to_string(i) + ");");
+    populate_tables.push_back("INSERT INTO wb_test VALUES(" + std::to_string(i) + ");");
+  }
+  populate_tables.push_back("INSERT INTO wb_test_nullable VALUES(null);");
+  for (const auto& stmt : drop_tables) {
+    run_ddl_statement(stmt);
+    g_sqlite_comparator.query(stmt);
+  }
+  for (const auto& stmt : create_tables) {
+    run_ddl_statement(stmt);
+    g_sqlite_comparator.query(stmt);
+  }
+  for (const auto& stmt : populate_tables) {
+    run_multiple_agg(stmt, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(stmt);
+  }
+
+  auto query_gen = [&](const std::string& table_name, bool for_omnisci, bool has_filter) {
+    std::ostringstream oss;
+    oss << "SELECT SUM(cnt) FROM (SELECT ";
+    if (for_omnisci) {
+      oss << "WIDTH_BUCKET(val, 1, 3, 3) b";
+    } else {
+      oss << "val b";
+    }
+    oss << ", COUNT(1) cnt FROM ";
+    oss << table_name;
+    if (has_filter) {
+      oss << " WHERE val < 3";
+    }
+    oss << " GROUP BY b);";
+    return oss.str();
+  };
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c(query_gen("wb_test_nullable", true, false),
+      query_gen("wb_test_nullable", false, false),
+      dt);
+    c(query_gen("wb_test_nullable", true, true),
+      query_gen("wb_test_nullable", false, true),
+      dt);
+    c(query_gen("wb_test_non_nullable", true, false),
+      query_gen("wb_test_non_nullable", false, false),
+      dt);
+    c(query_gen("wb_test_non_nullable", true, true),
+      query_gen("wb_test_non_nullable", false, true),
+      dt);
+    c(query_gen("wb_test", true, false), query_gen("wb_test", false, false), dt);
+    c(query_gen("wb_test", true, true), query_gen("wb_test", false, true), dt);
+  }
+  for (const auto& stmt : drop_tables) {
+    run_ddl_statement(stmt);
+    g_sqlite_comparator.query(stmt);
+  }
+}
+
 TEST(Select, CountWithLimitAndOffset) {
   SKIP_ALL_ON_AGGREGATOR();
   run_ddl_statement("DROP TABLE IF EXISTS count_test;");
