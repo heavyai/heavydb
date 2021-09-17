@@ -4228,10 +4228,7 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
         default_value = std::regex_replace(default_value, array_re, "{$1}");
         boost::erase_all(default_value, "\'");
       }
-      // NULL for default value means no default value
-      if (!boost::iequals(default_value, "NULL")) {
-        default_value_ptr = &default_value;
-      }
+      default_value_ptr = &default_value;
     }
   }
   ddl_utils::set_column_descriptor(*coldef->get_column_name(),

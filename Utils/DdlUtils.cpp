@@ -25,6 +25,7 @@
 #include "rapidjson/document.h"
 
 #include "Fragmenter/FragmentDefaultValues.h"
+#include "Geospatial/Types.h"
 #include "Parser/ReservedKeywords.h"
 #include "Shared/file_glob.h"
 #include "Shared/misc.h"
@@ -507,22 +508,14 @@ void validate_and_set_array_size(ColumnDescriptor& cd, const SqlType* column_typ
   }
 }
 
-void validate_and_set_default_value(ColumnDescriptor& cd,
-                                    const std::string* default_value,
-                                    bool not_null) {
-  bool is_null_literal = default_value && (to_upper(*default_value) == "NULL");
-  if (not_null && is_null_literal) {
-    throw std::runtime_error(cd.columnName +
-                             ": cannot set default value to NULL for "
-                             "NOT NULL column");
-  }
-  if (!default_value || is_null_literal) {
-    cd.default_value = std::nullopt;
+namespace {
+
+void validate_literal(const std::string& val,
+                      SQLTypeInfo column_type,
+                      const std::string& column_name) {
+  if (to_upper(val) == "NULL") {
     return;
   }
-
-  auto column_type = cd.columnType;
-  auto val = *default_value;
   switch (column_type.get_type()) {
     case kBOOLEAN:
     case kTINYINT:
@@ -533,35 +526,35 @@ void validate_and_set_default_value(ColumnDescriptor& cd,
     case kDOUBLE:
     case kTIME:
     case kTIMESTAMP:
-    case kDATE: {
       StringToDatum(val, column_type);
+      break;
+    case kDATE: {
+      auto d = StringToDatum(val, column_type);
+      DateDaysOverflowValidator validator(column_type);
+      validator.validate(d.bigintval);
       break;
     }
     case kDECIMAL:
     case kNUMERIC: {
       SQLTypeInfo ti(kNUMERIC, 0, 0, false);
-      StringToDatum(val, ti);
-      int const dscale = column_type.get_scale() - ti.get_scale();
-      constexpr int max_scale = std::numeric_limits<uint64_t>::digits10;
-      if (dscale > max_scale) {
-        // TODO: that's what TypedImportBuffers check, but decimal/numeric
-        // likely require stricter checks
-        throw std::runtime_error("Overflow in DECIMAL-to-DECIMAL conversion.");
-      }
+      auto d = StringToDatum(val, ti);
+      auto converted_val = convert_decimal_value_to_scale(d.bigintval, ti, column_type);
+      DecimalOverflowValidator validator(column_type);
+      validator.validate(converted_val);
       break;
     }
     case kTEXT:
     case kVARCHAR:
     case kCHAR:
       if (val.length() > StringDictionary::MAX_STRLEN) {
-        throw std::runtime_error("String too long for column " + cd.columnName + " was " +
+        throw std::runtime_error("String too long for column " + column_name + " was " +
                                  std::to_string(val.length()) + " max is " +
                                  std::to_string(StringDictionary::MAX_STRLEN));
       }
       break;
     case kARRAY: {
       if (val.front() != '{' || val.back() != '}') {
-        throw std::runtime_error(cd.columnName +
+        throw std::runtime_error(column_name +
                                  ": arrays should start and end with curly braces");
       }
       std::vector<std::string> elements = split(val.substr(1, val.length() - 2), ", ");
@@ -570,18 +563,15 @@ void validate_and_set_default_value(ColumnDescriptor& cd,
         size_t expected_size = column_type.get_size() / sti.get_size();
         size_t actual_size = elements.size();
         if (actual_size != expected_size) {
-          throw std::runtime_error("Fixed length array column " + cd.columnName +
+          throw std::runtime_error("Fixed length array column " + column_name +
                                    " expects " + std::to_string(expected_size) +
                                    " values, received " + std::to_string(actual_size));
         }
       }
-      // TODO: needs separate checks for geo here as well
-      if (!IS_STRING(column_type.get_subtype()) && !IS_GEO(column_type.get_subtype())) {
-        SQLTypeInfo elem_ti = column_type.get_elem_type();
-        for (const auto& element : elements) {
-          if (to_upper(element) != "NULL") {
-            StringToDatum(element, elem_ti);
-          }
+      SQLTypeInfo element_ti = column_type.get_elem_type();
+      for (const auto& element : elements) {
+        if (to_upper(element) != "NULL") {
+          validate_literal(element, element_ti, column_name);
         }
       }
       break;
@@ -590,13 +580,65 @@ void validate_and_set_default_value(ColumnDescriptor& cd,
     case kLINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
-      // TODO: needs some checks to make sure it's a valid wkt string
+      if (val.empty()) {
+        return;
+      }
+      try {
+        auto geo = Geospatial::GeoTypesFactory::createGeoType(val);
+        if (!geo) {
+          throw std::runtime_error("Unexpected geo literal '" + val + "' for column " +
+                                   column_name);
+        }
+        if (!geo->transform(column_type)) {
+          throw std::runtime_error("Cannot transform SRID for literal '" + val +
+                                   "' for column " + column_name);
+        } else {
+          auto sql_type = column_type.get_type();
+          auto geo_type = geo->getType();
+          if ((geo_type == Geospatial::GeoBase::GeoType::kPOINT && sql_type != kPOINT) ||
+              (geo_type == Geospatial::GeoBase::GeoType::kLINESTRING &&
+               sql_type != kLINESTRING) ||
+              (geo_type == Geospatial::GeoBase::GeoType::kPOLYGON &&
+               sql_type != kPOLYGON) ||
+              (geo_type == Geospatial::GeoBase::GeoType::kMULTIPOLYGON &&
+               sql_type != kMULTIPOLYGON)) {
+            throw std::runtime_error("Geo literal '" + val +
+                                     "' doesn't match the type "
+                                     "of column column " +
+                                     column_name);
+          }
+        }
+      } catch (Geospatial::GeoTypesError& e) {
+        throw std::runtime_error("Unexpected geo literal '" + val + "' for column " +
+                                 column_name + ": " + e.what());
+      }
       break;
     default:
-      CHECK(false) << "validate_and_set_default_value() does not support type "
+      CHECK(false) << "validate_literal() does not support type "
                    << column_type.get_type();
   }
+}
 
+}  // namespace
+
+void validate_and_set_default_value(ColumnDescriptor& cd,
+                                    const std::string* default_value,
+                                    bool not_null) {
+  bool is_null_literal =
+      default_value && ((to_upper(*default_value) == "NULL") ||
+                        (cd.columnType.is_geometry() && default_value->empty()));
+  if (not_null && (is_null_literal)) {
+    throw std::runtime_error(cd.columnName +
+                             ": cannot set default value to NULL for "
+                             "NOT NULL column");
+  }
+  if (!default_value || is_null_literal) {
+    cd.default_value = std::nullopt;
+    return;
+  }
+  const auto& column_type = cd.columnType;
+  const auto& val = *default_value;
+  validate_literal(val, column_type, cd.columnName);
   cd.default_value = std::make_optional(*default_value);
 }
 

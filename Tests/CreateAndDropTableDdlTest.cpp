@@ -2062,10 +2062,10 @@ TEST_F(DefaultValuesTest, NullDefault) {
 }
 
 TEST_F(DefaultValuesTest, NotNullWithNullDefault) {
-  std::string create_table_query =
-      "CREATE TABLE defval_tbl (idx INTEGER, a INTEGER NOT NULL DEFAULT NULL)";
-  sql(create_table_query);
-  queryAndAssertException("INSERT INTO defval_tbl(idx) VALUES (1)", "NULL for column a");
+  queryAndAssertException(
+      "CREATE TABLE defval_tbl (idx INTEGER, "
+      "a INTEGER NOT NULL DEFAULT NULL)",
+      "a: cannot set default value to NULL for NOT NULL column");
 }
 
 struct DefaultValueParams {
@@ -2088,19 +2088,21 @@ struct DefaultValueParams {
   }
 };
 
-SQLTypeInfo decimal = SQLTypeInfo(SQLTypes::kDECIMAL, 3, 1, false);
-SQLTypeInfo integer = SQLTypeInfo(SQLTypes::kINT, false);
+SQLTypeInfo decimal = SQLTypeInfo(SQLTypes::kDECIMAL, 4, 2, false);
+SQLTypeInfo integer = SQLTypeInfo(SQLTypes::kINT);
 SQLTypeInfo integer_notnull = SQLTypeInfo(SQLTypes::kINT, 0, 0, true);
-SQLTypeInfo smallint = SQLTypeInfo(SQLTypes::kSMALLINT, false);
-SQLTypeInfo integer_array =
-    SQLTypeInfo(SQLTypes::kARRAY, 0, 0, false, kENCODING_NONE, 0, SQLTypes::kINT);
-SQLTypeInfo fixed_integer_array =
-    SQLTypeInfo(SQLTypes::kARRAY, 0, 0, false, kENCODING_NONE, 0, SQLTypes::kINT);
-SQLTypeInfo timestamp = SQLTypeInfo(SQLTypes::kTIMESTAMP, false);
+SQLTypeInfo smallint = SQLTypeInfo(SQLTypes::kSMALLINT);
+SQLTypeInfo timestamp = SQLTypeInfo(SQLTypes::kTIMESTAMP);
+SQLTypeInfo date_in_days_16 =
+    SQLTypeInfo(SQLTypes::kDATE, kENCODING_DATE_IN_DAYS, 16, SQLTypes::kNULLT);
+SQLTypeInfo dict_encoded_text = SQLTypeInfo(SQLTypes::kTEXT, false, kENCODING_DICT);
+SQLTypeInfo linestring_notnull = SQLTypeInfo(SQLTypes::kLINESTRING, 0, 0, true);
 SQLTypeInfo text_array =
-    SQLTypeInfo(SQLTypes::kARRAY, 0, 0, false, kENCODING_DICT, 32, SQLTypes::kTEXT);
-SQLTypeInfo fixed_text_array =
-    SQLTypeInfo(SQLTypes::kARRAY, 0, 0, false, kENCODING_DICT, 32, SQLTypes::kTEXT);
+    SQLTypeInfo(SQLTypes::kARRAY, kENCODING_DICT, 32, SQLTypes::kTEXT);
+SQLTypeInfo integer_array =
+    SQLTypeInfo(SQLTypes::kARRAY, kENCODING_NONE, 0, SQLTypes::kINT);
+auto fixed_integer_array = integer_array;
+auto fixed_text_array = text_array;
 
 class ValidateDefaultValuesTest : public testing::Test,
                                   public testing::WithParamInterface<DefaultValueParams> {
@@ -2131,6 +2133,24 @@ INSTANTIATE_TEST_SUITE_P(
                            "Invalid conversion from string to NUMERIC(0,0)",
                            false,
                            "TextAsDecimalValue"),
+        DefaultValueParams(
+            decimal,
+            "123.4",
+            "Decimal overflow: value is greater than 10^2 max 10000 value 12340",
+            false,
+            "DecimalOverflow"),
+        DefaultValueParams(
+            decimal,
+            "123",
+            "Decimal overflow: value is greater than 10^2 max 10000 value 12300",
+            false,
+            "DecimalOverflowNoDot"),
+        DefaultValueParams(
+            decimal,
+            "-123.4",
+            "Decimal overflow: value is less than -10^2 min -10000 value -12340",
+            false,
+            "DecimalUnderflow"),
         DefaultValueParams(integer,
                            "Hello",
                            "Unable to parse Hello to INTEGER",
@@ -2151,11 +2171,44 @@ INSTANTIATE_TEST_SUITE_P(
                            "Integer -999999999 is out of range for SMALLINT",
                            false,
                            "SmallintUnderflow"),
+        DefaultValueParams(dict_encoded_text,
+                           std::string(StringDictionary::MAX_STRLEN + 1, 'a'),
+                           "String too long for column c was 32768 max is 32767",
+                           false,
+                           "LongDictEncodedString"),
+        DefaultValueParams(linestring_notnull,
+                           "",
+                           "c: cannot set default value to NULL for NOT NULL column",
+                           false,
+                           "EmptyNotNullGeo"),
+        DefaultValueParams(linestring_notnull,
+                           "Hello world",
+                           "Unexpected geo literal 'Hello world' for column c: "
+                           "GeoGeoFactory Error: unsupported geometry type",
+                           false,
+                           "HelloGeoString"),
+        DefaultValueParams(linestring_notnull,
+                           "LINESTRING(1)",
+                           "Unexpected geo literal 'LINESTRING(1)' for column c: "
+                           "GeoGeoFactory Error: corrupt input data",
+                           false,
+                           "MalformedGeoString"),
+        DefaultValueParams(
+            linestring_notnull,
+            "POINT(1 -1)",
+            "Geo literal 'POINT(1 -1)' doesn't match the type of column column c",
+            false,
+            "GeoTypeMismatch"),
         DefaultValueParams(integer_array,
                            "{1, 2, 3",
                            "c: arrays should start and end with curly braces",
                            false,
                            "ArrayWithoutClosingBrace"),
+        DefaultValueParams(integer_array,
+                           "{1, 2, 9999999999}",
+                           "Integer 9999999999 is out of range for INTEGER",
+                           false,
+                           "IntegerArrayOverflow"),
         DefaultValueParams(integer_array,
                            "1, 2, 3",
                            "c: arrays should start and end with curly braces",
