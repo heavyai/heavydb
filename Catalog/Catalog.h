@@ -93,6 +93,14 @@ struct TableEpochInfo {
       , leaf_index(leaf_index_param) {}
 };
 
+static constexpr const char* USERS_SYS_TABLE_NAME{"users"};
+static constexpr const char* TABLES_SYS_TABLE_NAME{"tables"};
+static constexpr const char* DASHBOARDS_SYS_TABLE_NAME{"dashboards"};
+static constexpr const char* DATABASES_SYS_TABLE_NAME{"databases"};
+static constexpr const char* PERMISSIONS_SYS_TABLE_NAME{"permissions"};
+static constexpr const char* ROLES_SYS_TABLE_NAME{"roles"};
+static constexpr const char* ROLE_ASSIGNMENTS_SYS_TABLE_NAME{"role_assignments"};
+
 /**
  * @type Catalog
  * @brief class for a per-database catalog.  also includes metadata for the
@@ -218,7 +226,9 @@ class Catalog final {
       const bool fetchPhysicalColumns) const;
 
   std::list<const TableDescriptor*> getAllTableMetadata() const;
+  std::vector<TableDescriptor> getAllTableMetadataCopy() const;
   std::list<const DashboardDescriptor*> getAllDashboardsMetadata() const;
+  std::vector<DashboardDescriptor> getAllDashboardsMetadataCopy() const;
   const DBMetadata& getCurrentDB() const { return currentDB_; }
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
   std::shared_ptr<Calcite> getCalciteMgr() const { return calciteMgr_; }
@@ -718,6 +728,16 @@ class Catalog final {
   void restoreOldOwnersInMemory(
       const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
       int32_t new_owner_id);
+
+  void conditionallyInitializeSystemTables();
+  void createSystemTableServer(const std::string& server_name,
+                               const std::string& data_wrapper_type);
+  void createSystemTable(
+      const std::string& table_name,
+      const std::string& server_name,
+      const std::vector<std::pair<std::string, SQLTypeInfo>>& column_type_by_name);
+
+  static constexpr const char* CATALOG_SERVER_NAME{"omnisci_catalog_server"};
 
  public:
   mutable std::mutex sqliteMutex_;

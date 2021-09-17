@@ -259,6 +259,9 @@ void rename_table_directories(const File_Namespace::GlobalFileMgr* global_file_m
 void TableArchiver::dumpTable(const TableDescriptor* td,
                               const std::string& archive_path,
                               const std::string& compression) {
+  if (td->is_system_table) {
+    throw std::runtime_error("Dumping a system table is not supported.");
+  }
   ddl_utils::validate_allowed_file_path(archive_path,
                                         ddl_utils::DataTransferType::EXPORT);
   if (g_cluster) {

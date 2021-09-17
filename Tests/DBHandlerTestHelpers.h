@@ -37,6 +37,7 @@ using NullableTargetValue = boost::variant<TargetValue, void*>;
 
 extern size_t g_leaf_count;
 extern bool g_cluster;
+extern bool g_enable_system_tables;
 
 /**
  * Helper class for asserting equality between a result set represented as a boost variant
@@ -310,7 +311,7 @@ class DBHandlerTestFixture : public testing::Test {
     return db_handler_->get_session_copy_ptr(session_id_)->getCatalog();
   }
 
-  std::pair<DBHandler*, TSessionId&> getDbHandlerAndSessionId() {
+  static std::pair<DBHandler*, TSessionId&> getDbHandlerAndSessionId() {
     return {db_handler_.get(), session_id_};
   }
 

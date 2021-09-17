@@ -56,6 +56,7 @@ size_t g_estimator_failure_max_groupby_size{256000000};
 
 extern bool g_enable_bump_allocator;
 extern size_t g_default_max_groups_buffer_entry_guess;
+extern bool g_enable_system_tables;
 
 namespace {
 
@@ -84,7 +85,8 @@ void set_parallelism_hints(const RelAlgNode& ra_node,
   for (const auto& physical_input : get_physical_inputs(&ra_node)) {
     int table_id = physical_input.table_id;
     auto table = catalog.getMetadataForTable(table_id, false);
-    if (table && table->storageType == StorageType::FOREIGN_TABLE) {
+    if (table && table->storageType == StorageType::FOREIGN_TABLE &&
+        !table->is_system_table) {
       int col_id = catalog.getColumnIdBySpi(table_id, physical_input.col_id);
       const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
       auto foreign_table = catalog.getForeignTable(table_id);
@@ -153,6 +155,31 @@ void prepare_foreign_table_for_execution(const RelAlgNode& ra_node,
   // the metadata and leave them ready to be used by the query
   set_parallelism_hints(ra_node, catalog);
   prepare_string_dictionaries(ra_node, catalog);
+}
+
+void prepare_for_system_table_execution(const RelAlgNode& ra_node,
+                                        const Catalog_Namespace::Catalog& catalog,
+                                        const CompilationOptions& co) {
+  if (g_enable_system_tables) {
+    std::set<int32_t> system_table_ids;
+    for (const auto& physical_input : get_physical_inputs(&ra_node)) {
+      int table_id = physical_input.table_id;
+      auto table = catalog.getMetadataForTable(table_id, false);
+      if (table && table->is_system_table) {
+        system_table_ids.emplace(table_id);
+      }
+    }
+    // Execute on CPU for queries involving system tables
+    if (!system_table_ids.empty() && co.device_type != ExecutorDeviceType::CPU) {
+      throw QueryMustRunOnCpu();
+    }
+    // Clear any previously cached data, since system tables depend on point in time data
+    // snapshots.
+    for (const auto table_id : system_table_ids) {
+      catalog.getDataMgr().deleteChunksWithPrefix(
+          ChunkKey{catalog.getDatabaseId(), table_id}, Data_Namespace::CPU_LEVEL);
+    }
+  }
 }
 
 bool is_extracted_dag_valid(ExtractedPlanDag& dag) {
@@ -373,6 +400,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       throw std::runtime_error("Checking pending query status failed: unknown error");
     }
   }
+
+  prepare_for_system_table_execution(ra, cat_, co);
 
   // Notify foreign tables to load prior to caching
   prepare_foreign_table_for_execution(ra, cat_);

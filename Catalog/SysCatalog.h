@@ -62,6 +62,8 @@ inline const int OMNISCI_ROOT_USER_ID = 0;
 inline const std::string OMNISCI_ROOT_USER_ID_STR = "0";
 inline const std::string OMNISCI_ROOT_PASSWD_DEFAULT = "HyperInteractive";
 inline const int32_t OMNISCI_TEMPORARY_USER_ID_RANGE = 1000000000;
+inline const std::string INFORMATION_SCHEMA_DB = "information_schema";
+inline const std::string INFORMATION_SCHEMA_MIGRATION = "information_schema_db_created";
 
 class Calcite;
 
@@ -217,7 +219,11 @@ class SysCatalog : private CommonFileOperations {
   const std::string& getCatalogBasePath() const { return basePath_; }
   SqliteConnector* getSqliteConnector() { return sqliteConnector_.get(); }
   std::list<DBMetadata> getAllDBMetadata();
+  // TODO: remove after use of unlocked methods in the data wrapper is resolved
+  std::list<DBMetadata> getAllDBMetadataUnlocked();
   std::list<UserMetadata> getAllUserMetadata();
+  // TODO: remove after use of unlocked methods in the data wrapper is resolved
+  std::list<UserMetadata> getAllUserMetadataUnlocked();
   /**
    * return the users associated with the given DB
    */
@@ -307,6 +313,9 @@ class SysCatalog : private CommonFileOperations {
   std::vector<ObjectRoleDescriptor*> getMetadataForObject(int32_t dbId,
                                                           int32_t dbType,
                                                           int32_t objectId) const;
+  std::vector<ObjectRoleDescriptor> getMetadataForAllObjects() const;
+  // TODO: remove after use of unlocked methods in the data wrapper is resolved
+  std::vector<ObjectRoleDescriptor> getMetadataForAllObjectsUnlocked() const;
   bool isRoleGrantedToGrantee(const std::string& granteeName,
                               const std::string& roleName,
                               bool only_direct) const;
@@ -314,6 +323,11 @@ class SysCatalog : private CommonFileOperations {
                                     bool isSuper,
                                     const std::string& userName);
   std::vector<std::string> getRoles(const std::string& userName, const int32_t dbId);
+  // Get all roles that have been created, even roles that have not been assigned to other
+  // users or roles.
+  std::set<std::string> getCreatedRoles() const;
+  // TODO: remove after use of unlocked methods in the data wrapper is resolved
+  std::set<std::string> getCreatedRolesUnlocked() const;
   bool isAggregator() const { return aggregator_; }
   static SysCatalog& instance() {
     if (!instance_) {
@@ -360,6 +374,8 @@ class SysCatalog : private CommonFileOperations {
       const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
       int32_t new_owner_id,
       const Catalog_Namespace::Catalog& catalog);
+
+  bool hasExecutedMigration(const std::string& migration_name) const;
 
  private:
   using GranteeMap = std::map<std::string, std::unique_ptr<Grantee>>;
@@ -433,7 +449,7 @@ class SysCatalog : private CommonFileOperations {
   void revokeAllOnDatabase_unsafe(const std::string& roleName,
                                   int32_t dbId,
                                   Grantee* grantee);
-  bool isDashboardSystemRole(const std::string& roleName);
+  bool isDashboardSystemRole(const std::string& roleName) const;
   void updateUserRoleName(const std::string& roleName, const std::string& newName);
   void getMetadataWithDefaultDB(std::string& dbname,
                                 const std::string& username,
@@ -448,6 +464,11 @@ class SysCatalog : private CommonFileOperations {
 
   template <typename F, typename... Args>
   void execInTransaction(F&& f, Args&&... args);
+
+  void initializeInformationSchemaDb();
+  void recordExecutedMigration(const std::string& migration_name) const;
+  bool hasVersionHistoryTable() const;
+  void createVersionHistoryTable() const;
 
   std::string basePath_;
   GranteeMap granteeMap_;

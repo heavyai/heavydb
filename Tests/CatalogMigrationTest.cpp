@@ -34,6 +34,7 @@
 
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
+extern bool g_enable_system_tables;
 
 namespace BF = boost::filesystem;
 using SC = Catalog_Namespace::SysCatalog;
@@ -51,13 +52,20 @@ bool has_result(SqliteConnector& conn, const std::string& query) {
 }
 }  // namespace
 
-class CatalogTest : public testing::Test {
+class CatalogTest : public DBHandlerTestFixture {
  protected:
   CatalogTest()
       : cat_conn_("omnisci", BF::absolute("mapd_catalogs", BASE_PATH).string()) {}
 
   static void SetUpTestSuite() {
-    SC::instance().init(BASE_PATH, nullptr, {}, nullptr, false, false, {});
+    DBHandlerTestFixture::createDBHandler();
+    initSysCatalog();
+  }
+
+  static void initSysCatalog() {
+    auto db_handler = getDbHandlerAndSessionId().first;
+    SC::instance().init(
+        BASE_PATH, db_handler->data_mgr_, {}, db_handler->calcite_, false, false, {});
   }
 
   std::vector<std::string> getTables(SqliteConnector& conn) {
@@ -115,7 +123,7 @@ class SysCatalogTest : public CatalogTest {
 
   static void reinitializeSystemCatalog() {
     SC::destroy();
-    SC::instance().init(BASE_PATH, nullptr, {}, nullptr, false, false, {});
+    initSysCatalog();
   }
 
   SqliteConnector syscat_conn_;
@@ -315,6 +323,10 @@ class ForeignTablesTest : public DBHandlerTestFixture {
 };
 
 TEST_F(ForeignTablesTest, ForeignTablesAreNotDroppedWhenFsiIsDisabled) {
+  g_enable_fsi = true;
+  resetCatalog();
+  loginAdmin();
+
   const auto file_path = BF::canonical("../../Tests/FsiDataFiles/example_1.csv").string();
   sql("CREATE FOREIGN TABLE test_foreign_table (c1 int) SERVER omnisci_local_csv "
       "WITH (file_path = '" +
@@ -351,6 +363,59 @@ TEST_F(DefaultForeignServersTest, DefaultServersAreCreatedWhenFsiIsEnabled) {
                               "omnisci_local_parquet",
                               foreign_storage::DataWrapperType::PARQUET,
                               OMNISCI_ROOT_USER_ID);
+}
+
+class SystemTableMigrationTest : public SysCatalogTest {
+ protected:
+  void SetUp() override {
+    dropInformationSchemaDb();
+    deleteInformationSchemaMigration();
+  }
+
+  void TearDown() override {
+    dropInformationSchemaDb();
+    deleteInformationSchemaMigration();
+    g_enable_system_tables = false;
+    g_enable_fsi = false;
+  }
+
+  void dropInformationSchemaDb() {
+    auto& system_catalog = SC::instance();
+    Catalog_Namespace::DBMetadata db_metadata;
+    if (system_catalog.getMetadataForDB(INFORMATION_SCHEMA_DB, db_metadata)) {
+      system_catalog.dropDatabase(db_metadata);
+    }
+  }
+
+  void deleteInformationSchemaMigration() {
+    if (tableExists("mapd_version_history")) {
+      syscat_conn_.query_with_text_param(
+          "DELETE FROM mapd_version_history WHERE migration_history = ?",
+          INFORMATION_SCHEMA_MIGRATION);
+    }
+  }
+
+  bool isInformationSchemaMigrationRecorded() {
+    return hasResult("SELECT * FROM mapd_version_history WHERE migration_history = '" +
+                     INFORMATION_SCHEMA_MIGRATION + "';");
+  }
+};
+
+TEST_F(SystemTableMigrationTest, SystemTablesEnabled) {
+  g_enable_system_tables = true;
+  g_enable_fsi = true;
+  reinitializeSystemCatalog();
+  ASSERT_TRUE(isInformationSchemaMigrationRecorded());
+}
+
+TEST_F(SystemTableMigrationTest, PreExistingInformationSchemaDatabase) {
+  g_enable_system_tables = false;
+  SC::instance().createDatabase("information_schema", OMNISCI_ROOT_USER_ID);
+
+  g_enable_system_tables = true;
+  g_enable_fsi = true;
+  reinitializeSystemCatalog();
+  ASSERT_FALSE(isInformationSchemaMigrationRecorded());
 }
 
 int main(int argc, char** argv) {

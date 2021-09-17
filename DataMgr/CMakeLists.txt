@@ -43,6 +43,7 @@ set(datamgr_source_files
     ForeignStorage/ForeignTableRefresh.cpp
     ForeignStorage/AbstractFileStorageDataWrapper.cpp
     ForeignStorage/ForeignDataWrapperFactory.cpp
+    ForeignStorage/InternalCatalogDataWrapper.cpp
     ForeignStorage/RegexParserDataWrapper.cpp
     ForeignStorage/RegexFileBufferParser.cpp
     ForeignStorage/S3FilePathUtil.cpp

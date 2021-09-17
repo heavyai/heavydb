@@ -30,6 +30,7 @@
 #endif
 
 extern bool g_enable_fsi;
+extern bool g_enable_system_tables;
 
 class ShowUserSessionsTest : public DBHandlerTestFixture {
  public:
@@ -801,9 +802,16 @@ TEST_F(ShowDatabasesTest, DefaultDatabase) {
   TQueryResult result;
   sql(result, "SHOW DATABASES;");
   // clang-format off
-  assertExpectedResult({"Database", "Owner"},
-                       {{"omnisci", "admin"}},
-                       result);
+  if (isDistributedMode()) {
+    assertExpectedResult({"Database", "Owner"},
+                         {{"omnisci", "admin"}},
+                         result);
+  } else {
+    assertExpectedResult({"Database", "Owner"},
+                         {{"omnisci", "admin"},
+                          {"information_schema", "admin"}},
+                     result);
+  }
   // clang-format on
 }
 
@@ -857,12 +865,22 @@ TEST_F(ShowDatabasesTest, AdminLoginAndOtherUserDatabases) {
   TQueryResult result;
   sql(result, "SHOW DATABASES;");
   // clang-format off
-  assertExpectedResult(
-      {"Database", "Owner"},
-      {{"omnisci", "admin"},
-       {"test_db_1", "test_user_1"},
-       {"test_db_2", "test_user_2"}},
-      result);
+  if (isDistributedMode()) {
+    assertExpectedResult(
+        {"Database", "Owner"},
+        {{"omnisci", "admin"},
+         {"test_db_1", "test_user_1"},
+         {"test_db_2", "test_user_2"}},
+        result);
+  } else {
+    assertExpectedResult(
+        {"Database", "Owner"},
+        {{"omnisci", "admin"},
+         {"information_schema", "admin"},
+         {"test_db_1", "test_user_1"},
+         {"test_db_2", "test_user_2"}},
+        result);
+  }
   // clang-format on
 }
 
@@ -874,12 +892,22 @@ TEST_F(ShowDatabasesTest, SuperUserLoginAndOtherUserDatabases) {
   TQueryResult result;
   sql(result, "SHOW DATABASES;");
   // clang-format off
-  assertExpectedResult(
-      {"Database", "Owner"},
-      {{"omnisci", "admin"},
-       {"test_db_1", "test_user_1"},
-       {"test_db_2", "test_user_2"}},
-      result);
+  if (isDistributedMode()) {
+    assertExpectedResult(
+        {"Database", "Owner"},
+        {{"omnisci", "admin"},
+         {"test_db_1", "test_user_1"},
+         {"test_db_2", "test_user_2"}},
+        result);
+  } else {
+    assertExpectedResult(
+        {"Database", "Owner"},
+        {{"omnisci", "admin"},
+         {"information_schema", "admin"},
+         {"test_db_1", "test_user_1"},
+         {"test_db_2", "test_user_2"}},
+        result);
+  }
   // clang-format on
 }
 
@@ -887,6 +915,7 @@ class ShowCreateTableTest : public DBHandlerTestFixture {
  public:
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
+    switchToAdmin();
     sql("DROP TABLE IF EXISTS showcreatetabletest;");
     sql("DROP TABLE IF EXISTS showcreatetabletest1;");
     sql("DROP TABLE IF EXISTS showcreatetabletest2;");
@@ -895,6 +924,7 @@ class ShowCreateTableTest : public DBHandlerTestFixture {
   }
 
   void TearDown() override {
+    switchToAdmin();
     sql("DROP TABLE IF EXISTS showcreatetabletest;");
     sql("DROP TABLE IF EXISTS showcreatetabletest1;");
     sql("DROP TABLE IF EXISTS showcreatetabletest2;");
@@ -1204,6 +1234,72 @@ TEST_F(ShowCreateTableTest, DefaultColumnValues) {
         "TIMESTAMP(0)[] DEFAULT ARRAY['2011-10-23 07:15:01', '2012-09-17 11:59:11'],\n  "
         "f "
         "FLOAT DEFAULT 1.15,\n  n DECIMAL(3,2) DEFAULT 1.25 ENCODING FIXED(16));"}});
+}
+
+class SystemTablesShowCreateTableTest : public ShowCreateTableTest {
+ protected:
+  void SetUp() override {
+    if (isDistributedMode()) {
+      GTEST_SKIP() << "Test is not supported in distributed mode.";
+    }
+    login("admin", "HyperInteractive", "information_schema");
+  }
+};
+
+TEST_F(SystemTablesShowCreateTableTest, Users) {
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE users;",
+      {{"CREATE TABLE users (\n  user_id INTEGER,\n  user_name TEXT ENCODING DICT(32),\n "
+        " "
+        "is_super_user BOOLEAN,\n  default_db_id INTEGER,\n  can_login BOOLEAN);"}});
+}
+
+// TODO: enable after use of unlocked methods in the data wrapper is resolved
+TEST_F(SystemTablesShowCreateTableTest, DISABLED_Tables) {
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE tables;",
+      {{"CREATE TABLE tables (\n  database_id INTEGER,\n  table_id INTEGER,\n  "
+        "table_name TEXT ENCODING DICT(32),\n  owner_id INTEGER,\n  column_count "
+        "INTEGER,\n  is_view BOOLEAN,\n  view_sql TEXT ENCODING DICT(32),\n  "
+        "max_fragment_size INTEGER,\n  max_chunk_size BIGINT,\n  fragment_page_size "
+        "INTEGER,\n  max_rows BIGINT,\n  max_rollback_epochs INTEGER,\n  shard_count "
+        "INTEGER);"}});
+}
+
+// TODO: enable after use of unlocked methods in the data wrapper is resolved
+TEST_F(SystemTablesShowCreateTableTest, DISABLED_Dashboards) {
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE dashboards;",
+      {{"CREATE TABLE dashboards (\n  database_id INTEGER,\n  dashboard_id INTEGER,\n  "
+        "dashboard_name TEXT ENCODING DICT(32),\n  owner_id INTEGER,\n  last_updated_at "
+        "TIMESTAMP(0));"}});
+}
+
+TEST_F(SystemTablesShowCreateTableTest, Databases) {
+  sqlAndCompareResult("SHOW CREATE TABLE databases;",
+                      {{"CREATE TABLE databases (\n  database_id INTEGER,\n  "
+                        "database_name TEXT ENCODING DICT(32),\n  owner_id INTEGER);"}});
+}
+
+TEST_F(SystemTablesShowCreateTableTest, Permissions) {
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE permissions;",
+      {{"CREATE TABLE permissions (\n  role_name TEXT ENCODING DICT(32),\n  is_user_role "
+        "BOOLEAN,\n  database_id INTEGER,\n  object_name TEXT ENCODING DICT(32),\n  "
+        "object_id INTEGER,\n  object_owner_id INTEGER,\n  object_permission_type TEXT "
+        "ENCODING DICT(32),\n  object_permissions TEXT[] ENCODING DICT(32));"}});
+}
+
+// TODO: enable after use of unlocked methods in the data wrapper is resolved
+TEST_F(SystemTablesShowCreateTableTest, DISABLED_RoleAssignments) {
+  sqlAndCompareResult("SHOW CREATE TABLE role_assignments;",
+                      {{"CREATE TABLE role_assignments (\n  role_name TEXT ENCODING "
+                        "DICT(32),\n  user_name TEXT ENCODING DICT(32));"}});
+}
+
+TEST_F(SystemTablesShowCreateTableTest, Roles) {
+  sqlAndCompareResult("SHOW CREATE TABLE roles;",
+                      {{"CREATE TABLE roles (\n  role_name TEXT ENCODING DICT(32));"}});
 }
 
 namespace {
@@ -2108,8 +2204,447 @@ TEST_F(ShowQueriesTest, NonAdminUser) {
   }
 }
 
+class SystemTablesTest : public DBHandlerTestFixture {
+ protected:
+  static void SetUpTestSuite() {
+    if (!isDistributedMode()) {
+      DBHandlerTestFixture::SetUpTestSuite();
+      switchToAdmin();
+      createUser("test_user_1");
+      createUser("test_user_2");
+    }
+  }
+
+  static void TearDownTestSuite() {
+    if (!isDistributedMode()) {
+      switchToAdmin();
+      dropUser("test_user_1");
+      dropUser("test_user_2");
+      DBHandlerTestFixture::TearDownTestSuite();
+    }
+  }
+
+  void SetUp() override {
+    if (isDistributedMode()) {
+      GTEST_SKIP() << "Test is not supported in distributed mode.";
+    }
+    resetDbObjectsAndPermissions();
+    loginInformationSchema();
+    g_enable_system_tables = true;
+  }
+
+  void TearDown() override {
+    if (isDistributedMode()) {
+      GTEST_SKIP() << "Test is not supported in distributed mode.";
+    }
+    switchToAdmin();
+    dropUser("test_user_3");
+    resetDbObjectsAndPermissions();
+  }
+
+  void resetDbObjectsAndPermissions() {
+    switchToAdmin();
+    dropDatabases();
+    dropRoles();
+    resetPermissions();
+  }
+
+  static void createUser(const std::string& user_name) {
+    sql("CREATE USER " + user_name +
+        " (password = 'test_pass', is_super = 'false', default_db = 'omnisci');");
+    sql("GRANT ACCESS ON DATABASE information_schema TO " + user_name + ";");
+  }
+
+  static void dropUser(const std::string& user_name) {
+    switchToAdmin();
+    try {
+      sql("DROP USER " + user_name + ";");
+    } catch (const std::exception& e) {
+      // TODO: remove when IF EXIST option is implemented
+      LOG(WARNING) << e.what();
+    }
+  }
+
+  int64_t getUserId(const std::string& user_name) {
+    auto& system_catalog = Catalog_Namespace::SysCatalog::instance();
+    Catalog_Namespace::UserMetadata user;
+    CHECK(system_catalog.getMetadataForUser(user_name, user));
+    return user.userId;
+  }
+
+  int32_t getTableId(const std::string& table_name) {
+    auto td = getCatalog().getMetadataForTable(table_name, false);
+    CHECK(td);
+    return td->tableId;
+  }
+
+  void createDashboard(const std::string& dashboard_name) {
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    auto id = db_handler->create_dashboard(
+        session_id, dashboard_name, "state", "image", "\"table\":\"test_table\"");
+    dashboard_id_by_name_[dashboard_name] = id;
+  }
+
+  void updateDashboardName(const std::string& old_name, const std::string& new_name) {
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    CHECK(dashboard_id_by_name_.find(old_name) != dashboard_id_by_name_.end());
+    auto id = dashboard_id_by_name_[old_name];
+    auto dashboard = getCatalog().getMetadataForDashboard(id);
+    CHECK(dashboard);
+    db_handler->replace_dashboard(session_id,
+                                  id,
+                                  new_name,
+                                  "admin",
+                                  dashboard->dashboardState,
+                                  dashboard->imageHash,
+                                  dashboard->dashboardMetadata);
+    CHECK(dashboard_id_by_name_.find(old_name) != dashboard_id_by_name_.end());
+    dashboard_id_by_name_[new_name] = dashboard_id_by_name_[old_name];
+    dashboard_id_by_name_.erase(old_name);
+  }
+
+  std::string getLastUpdatedTime(const std::string& dashboard_name) {
+    CHECK(dashboard_id_by_name_.find(dashboard_name) != dashboard_id_by_name_.end());
+    auto dashboard =
+        getCatalog().getMetadataForDashboard(dashboard_id_by_name_[dashboard_name]);
+    CHECK(dashboard);
+    return dashboard->updateTime;
+  }
+
+  void dropDatabases() {
+    sql("DROP DATABASE IF EXISTS test_db_1;");
+    sql("DROP DATABASE IF EXISTS test_db_2;");
+  }
+
+  int64_t getDbId(const std::string& db_name) {
+    auto& system_catalog = Catalog_Namespace::SysCatalog::instance();
+    Catalog_Namespace::DBMetadata db_metadata;
+    CHECK(system_catalog.getMetadataForDB(db_name, db_metadata));
+    return db_metadata.dbId;
+  }
+
+  void dropRoles() {
+    dropRole("test_role_1");
+    dropRole("test_role_2");
+  }
+
+  void dropRole(const std::string& role_name) {
+    try {
+      sql("DROP ROLE " + role_name + ";");
+    } catch (const std::exception& e) {
+      // TODO: Add IF EXIST option
+      LOG(WARNING) << e.what();
+    }
+  }
+
+  void resetPermissions() {
+    sql("REVOKE ALL ON DATABASE omnisci FROM test_user_1, test_user_2;");
+    sql("REVOKE ALL ON DATABASE information_schema FROM test_user_1, test_user_2;");
+    sql("GRANT ACCESS ON DATABASE information_schema TO test_user_1, test_user_2;");
+  }
+
+  void loginInformationSchema() {
+    login("admin", "HyperInteractive", "information_schema");
+  }
+
+  std::map<std::string, int32_t> dashboard_id_by_name_;
+};
+
+TEST_F(SystemTablesTest, SuperUser) {
+  sqlAndCompareResult("SELECT COUNT(*) FROM users;", {{i(3)}});
+}
+
+TEST_F(SystemTablesTest, UserWithTableAccess) {
+  switchToAdmin();
+  sql("GRANT SELECT ON DATABASE information_schema TO test_user_1;");
+
+  login("test_user_1", "test_pass", "information_schema");
+  sqlAndCompareResult("SELECT COUNT(*) FROM users;", {{i(3)}});
+}
+
+TEST_F(SystemTablesTest, UserWithoutTableAccess) {
+  login("test_user_2", "test_pass", "information_schema");
+  queryAndAssertException("SELECT COUNT(*) FROM users;",
+                          "Violation of access privileges: user test_user_2 has no "
+                          "proper privileges for object users");
+}
+
+TEST_F(SystemTablesTest, DatabaseObjectUpdates) {
+  queryAndAssertException(
+      "DELETE FROM users WHERE user_name = 'test_user_1';",
+      "Write requests/queries are not allowed in the information_schema database.");
+  queryAndAssertException(
+      "INSERT INTO users VALUES (10, 'test_user_3', false, 1, true);",
+      "Write requests/queries are not allowed in the information_schema database.");
+  queryAndAssertException(
+      "TRUNCATE TABLE users;",
+      "Write requests/queries are not allowed in the information_schema database.");
+  queryAndAssertException(
+      "UPDATE users SET user_name = 'test_user_3' WHERE user_name = 'test_user_1';",
+      "Write requests/queries are not allowed in the information_schema database.");
+  queryAndAssertException(
+      "OPTIMIZE TABLE users;",
+      "Write requests/queries are not allowed in the information_schema database.");
+  queryAndAssertException(
+      "DROP TABLE users;",
+      "Write requests/queries are not allowed in the information_schema database.");
+  queryAndAssertException(
+      "ALTER TABLE users RENAME TO users2;",
+      "Write requests/queries are not allowed in the information_schema database.");
+  queryAndAssertException("DUMP TABLE users TO 'test_path';",
+                          "Dumping a system table is not supported.");
+  queryAndAssertException(
+      "RESTORE TABLE test_table FROM 'test_path';",
+      "Write requests/queries are not allowed in the information_schema database.");
+  queryAndAssertException(
+      "COPY users FROM 'test_path';",
+      "Write requests/queries are not allowed in the information_schema database.");
+  queryAndAssertException(
+      "CREATE TABLE test_table (i INTEGER);",
+      "Write requests/queries are not allowed in the information_schema database.");
+  queryAndAssertException(
+      "CREATE TABLE test_table AS (SELECT * FROM users);",
+      "Write requests/queries are not allowed in the information_schema database.");
+  queryAndAssertException(
+      "INSERT INTO users SELECT * FROM users;",
+      "Write requests/queries are not allowed in the information_schema database.");
+  queryAndAssertException(
+      "CREATE VIEW test_view AS SELECT * FROM users;",
+      "Write requests/queries are not allowed in the information_schema database.");
+  executeLambdaAndAssertException(
+      [this]() { createDashboard("test_dashboard_1"); },
+      "Write requests/queries are not allowed in the information_schema database.");
+}
+
+TEST_F(SystemTablesTest, DropInformationSchemaDb) {
+  queryAndAssertException(
+      "DROP DATABASE information_schema;",
+      "Write requests/queries are not allowed in the information_schema database.");
+}
+
+TEST_F(SystemTablesTest, SystemTableDisabled) {
+  g_enable_system_tables = false;
+  queryAndAssertException(
+      "SELECT COUNT(*) FROM users;",
+      "Query cannot be executed because use of system tables is currently disabled.");
+}
+
+TEST_F(SystemTablesTest, UsersSystemTable) {
+  sqlAndCompareResult("SELECT * FROM users ORDER BY user_name;",
+                      {{getUserId("admin"), "admin", True, i(-1), True},
+                       {getUserId("test_user_1"), "test_user_1", False, i(1), True},
+                       {getUserId("test_user_2"), "test_user_2", False, i(1), True}});
+
+  switchToAdmin();
+  createUser("test_user_3");
+
+  loginInformationSchema();
+  sqlAndCompareResult("SELECT * FROM users ORDER BY user_name;",
+                      {{getUserId("admin"), "admin", True, i(-1), True},
+                       {getUserId("test_user_1"), "test_user_1", False, i(1), True},
+                       {getUserId("test_user_2"), "test_user_2", False, i(1), True},
+                       {getUserId("test_user_3"), "test_user_3", False, i(1), True}});
+
+  switchToAdmin();
+  sql("ALTER USER test_user_3 (is_super = 'true');");
+
+  loginInformationSchema();
+  sqlAndCompareResult("SELECT * FROM users ORDER BY user_name;",
+                      {{getUserId("admin"), "admin", True, i(-1), True},
+                       {getUserId("test_user_1"), "test_user_1", False, i(1), True},
+                       {getUserId("test_user_2"), "test_user_2", False, i(1), True},
+                       {getUserId("test_user_3"), "test_user_3", True, i(1), True}});
+
+  switchToAdmin();
+  dropUser("test_user_3");
+
+  loginInformationSchema();
+  sqlAndCompareResult("SELECT * FROM users ORDER BY user_name;",
+                      {{getUserId("admin"), "admin", True, i(-1), True},
+                       {getUserId("test_user_1"), "test_user_1", False, i(1), True},
+                       {getUserId("test_user_2"), "test_user_2", False, i(1), True}});
+}
+
+// TODO: enable after use of unlocked methods in the data wrapper is resolved
+TEST_F(SystemTablesTest, DISABLED_TablesSystemTable) {
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_1;");
+
+  login("admin", "HyperInteractive", "test_db_1");
+  sql("CREATE TABLE test_table_1 (i INTEGER);");
+  sql("CREATE VIEW test_view_1 AS SELECT * FROM test_table_1;");
+
+  loginInformationSchema();
+  // Skip the "omnisci" database, since it can contain default created tables
+  // and tables created by other test suites.
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM tables WHERE database_id <> " +
+                      std::to_string(getDbId("omnisci")) + " ORDER BY table_name;",
+                      {{i(3), i(1), "test_table_1", getUserId("admin"), i(3), False, Null,
+                        i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
+                        i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0)},
+                       {i(3), i(2), "test_view_1", getUserId("admin"), i(2), True,
+                        "SELECT * FROM test_table_1;", i(DEFAULT_FRAGMENT_ROWS),
+                        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0)}});
+  // clang-format on
+
+  login("admin", "HyperInteractive", "test_db_1");
+  sql("ALTER TABLE test_table_1 RENAME TO test_table_2;");
+  sql("CREATE VIEW test_view_2 AS SELECT * FROM test_table_2;");
+
+  loginInformationSchema();
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM tables WHERE database_id <> " +
+                      std::to_string(getDbId("omnisci")) + " ORDER BY table_name;",
+                      {{i(3), i(1), "test_table_2", getUserId("admin"), i(3), False, Null,
+                        i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
+                        i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0)},
+                       {i(3), i(2), "test_view_1", getUserId("admin"), i(2), True,
+                        "SELECT * FROM test_table_1;", i(DEFAULT_FRAGMENT_ROWS),
+                        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0)},
+                       {i(3), i(3), "test_view_2", getUserId("admin"), i(2), True,
+                        "SELECT * FROM test_table_2;", i(DEFAULT_FRAGMENT_ROWS),
+                        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0)}});
+  // clang-format on
+}
+
+// TODO: enable after use of unlocked methods in the data wrapper is resolved
+TEST_F(SystemTablesTest, DISABLED_DashboardsSystemTable) {
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_1;");
+
+  login("admin", "HyperInteractive", "test_db_1");
+  createDashboard("test_dashboard_1");
+  auto last_updated_1 = getLastUpdatedTime("test_dashboard_1");
+
+  loginInformationSchema();
+  // Skip the "omnisci" database, since it can contain dashboards created by other test
+  // suites.
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM dashboards WHERE database_id <> " +
+                      std::to_string(getDbId("omnisci")) + " ORDER BY dashboard_name;",
+                      {{i(3), i(1), "test_dashboard_1", getUserId("admin"), last_updated_1}});
+  // clang-format on
+
+  login("admin", "HyperInteractive", "test_db_1");
+  createDashboard("test_dashboard_2");
+  updateDashboardName("test_dashboard_1", "test_dashboard_3");
+  auto last_updated_2 = getLastUpdatedTime("test_dashboard_2");
+  auto last_updated_3 = getLastUpdatedTime("test_dashboard_3");
+
+  loginInformationSchema();
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM dashboards WHERE database_id <> " +
+                      std::to_string(getDbId("omnisci")) + " ORDER BY dashboard_name;",
+                      {{i(3), i(2), "test_dashboard_2", getUserId("admin"), last_updated_2},
+                       {i(3), i(1), "test_dashboard_3", getUserId("admin"), last_updated_3}});
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, DatabasesSystemTable) {
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_1;");
+
+  loginInformationSchema();
+  sqlAndCompareResult(
+      "SELECT * FROM databases ORDER BY database_name;",
+      {{getDbId("information_schema"), "information_schema", getUserId("admin")},
+       {getDbId("omnisci"), "omnisci", getUserId("admin")},
+       {getDbId("test_db_1"), "test_db_1", getUserId("admin")}});
+
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_2;");
+
+  loginInformationSchema();
+  sqlAndCompareResult(
+      "SELECT * FROM databases ORDER BY database_name;",
+      {{getDbId("information_schema"), "information_schema", getUserId("admin")},
+       {getDbId("omnisci"), "omnisci", getUserId("admin")},
+       {getDbId("test_db_1"), "test_db_1", getUserId("admin")},
+       {getDbId("test_db_2"), "test_db_2", getUserId("admin")}});
+
+  switchToAdmin();
+  sql("DROP DATABASE test_db_1;");
+
+  loginInformationSchema();
+  sqlAndCompareResult(
+      "SELECT * FROM databases ORDER BY database_name;",
+      {{getDbId("information_schema"), "information_schema", getUserId("admin")},
+       {getDbId("omnisci"), "omnisci", getUserId("admin")},
+       {getDbId("test_db_2"), "test_db_2", getUserId("admin")}});
+}
+
+TEST_F(SystemTablesTest, PermissionsSystemTable) {
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM permissions ORDER BY role_name;",
+                      {{"test_user_1", True, i(2), "information_schema", i(-1),
+                        getUserId("admin"), "database", array({"access"})},
+                       {"test_user_2", True, i(2), "information_schema", i(-1),
+                        getUserId("admin"), "database", array({"access"})}});
+  // clang-format on
+
+  switchToAdmin();
+  sql("GRANT CREATE, SELECT ON DATABASE omnisci to test_user_1;");
+
+  loginInformationSchema();
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM permissions ORDER BY role_name, object_name;",
+                      {{"test_user_1", True, i(2), "information_schema", i(-1),
+                        getUserId("admin"), "database", array({"access"})},
+                       {"test_user_1", True, i(1), "omnisci", i(-1), getUserId("admin"),
+                        "table", array({"select table", "create table"})},
+                       {"test_user_2", True, i(2), "information_schema", i(-1),
+                        getUserId("admin"), "database", array({"access"})}});
+  // clang-format on
+}
+
+// TODO: enable after use of unlocked methods in the data wrapper is resolved
+TEST_F(SystemTablesTest, DISABLED_RoleAssignmentsSystemTable) {
+  switchToAdmin();
+  sql("CREATE ROLE test_role_1;");
+  sql("GRANT test_role_1 TO test_user_1, test_user_2;");
+
+  loginInformationSchema();
+  sqlAndCompareResult("SELECT * FROM role_assignments ORDER BY user_name;",
+                      {{"test_role_1", "admin"},
+                       {"test_role_1", "test_user_1"},
+                       {"test_role_1", "test_user_2"}});
+
+  switchToAdmin();
+  sql("REVOKE test_role_1 FROM test_user_1;");
+
+  loginInformationSchema();
+  sqlAndCompareResult("SELECT * FROM role_assignments ORDER BY role_name, user_name;",
+                      {{"test_role_1", "admin"}, {"test_role_1", "test_user_2"}});
+}
+
+TEST_F(SystemTablesTest, RolesSystemTable) {
+  switchToAdmin();
+  sql("CREATE ROLE test_role_1;");
+
+  loginInformationSchema();
+  sqlAndCompareResult("SELECT * FROM roles ORDER BY role_name;", {{"test_role_1"}});
+
+  switchToAdmin();
+  sql("CREATE ROLE test_role_2;");
+
+  loginInformationSchema();
+  sqlAndCompareResult("SELECT * FROM roles ORDER BY role_name;",
+                      {{"test_role_1"}, {"test_role_2"}});
+
+  switchToAdmin();
+  sql("DROP ROLE test_role_1;");
+
+  loginInformationSchema();
+  sqlAndCompareResult("SELECT * FROM roles ORDER BY role_name;", {{"test_role_2"}});
+}
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
+  g_enable_system_tables = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   DBHandlerTestFixture::initTestArgs(argc, argv);
@@ -2121,5 +2656,6 @@ int main(int argc, char** argv) {
     LOG(ERROR) << e.what();
   }
   g_enable_fsi = false;
+  g_enable_system_tables = false;
   return err;
 }

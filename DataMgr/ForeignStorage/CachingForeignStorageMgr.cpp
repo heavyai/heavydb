@@ -26,6 +26,16 @@ namespace foreign_storage {
 
 namespace {
 constexpr int64_t MAX_REFRESH_TIME_IN_SECONDS = 60 * 60;
+
+inline bool is_system_table_chunk_key(const ChunkKey& chunk_key) {
+  CHECK(has_table_prefix(chunk_key));
+  auto catalog =
+      Catalog_Namespace::SysCatalog::instance().getCatalog(chunk_key[CHUNK_KEY_DB_IDX]);
+  CHECK(catalog);
+  auto table = catalog->getForeignTableUnlocked(chunk_key[CHUNK_KEY_TABLE_IDX]);
+  CHECK(table);
+  return table->is_system_table;
+}
 }  // namespace
 
 CachingForeignStorageMgr::CachingForeignStorageMgr(ForeignStorageCache* cache)
@@ -65,6 +75,10 @@ void CachingForeignStorageMgr::populateChunkBuffersSafely(
 void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
                                            AbstractBuffer* destination_buffer,
                                            const size_t num_bytes) {
+  if (is_system_table_chunk_key(chunk_key)) {
+    ForeignStorageMgr::fetchBuffer(chunk_key, destination_buffer, num_bytes);
+    return;
+  }
   CHECK(destination_buffer);
   CHECK(!destination_buffer->isDirty());
 
@@ -109,6 +123,10 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
 void CachingForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
     ChunkMetadataVector& chunk_metadata,
     const ChunkKey& key_prefix) {
+  if (is_system_table_chunk_key(key_prefix)) {
+    ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(chunk_metadata, key_prefix);
+    return;
+  }
   CHECK(has_table_prefix(key_prefix));
   // If the disk has any cached metadata for a prefix then it is guaranteed to have all
   // metadata for that table, so we can return a complete set.  If it has no metadata,

@@ -62,6 +62,7 @@ using namespace std::string_literals;
 
 std::string g_base_path;
 bool g_enable_idp_temporary_users{true};
+bool g_enable_system_tables{false};
 
 extern bool g_enable_fsi;
 extern bool g_read_only;
@@ -189,6 +190,7 @@ void SysCatalog::init(const std::string& basePath,
     buildRoleMap();
     buildUserRoleMap();
     buildObjectDescriptorMap();
+    initializeInformationSchemaDb();
   }
 }
 
@@ -1233,6 +1235,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
         "max_rows bigint, partitions text, shard_column_id integer, shard integer, "
         "sort_column_id integer default 0, storage_type text default '', "
         "max_rollback_epochs integer default -1, "
+        "is_system_table boolean default 0, "
         "num_shards integer, key_metainfo TEXT, version_num "
         "BIGINT DEFAULT 1) ");
     dbConn->query(
@@ -1454,6 +1457,10 @@ bool SysCatalog::getMetadataForUserById(const int32_t idIn, UserMetadata& user) 
 
 list<DBMetadata> SysCatalog::getAllDBMetadata() {
   sys_sqlite_lock sqlite_lock(this);
+  return getAllDBMetadataUnlocked();
+}
+
+list<DBMetadata> SysCatalog::getAllDBMetadataUnlocked() {
   sqliteConnector_->query("SELECT dbid, name, owner FROM mapd_databases");
   int numRows = sqliteConnector_->getNumRows();
   list<DBMetadata> db_list;
@@ -1514,6 +1521,10 @@ list<UserMetadata> SysCatalog::getAllUserMetadata(const int64_t dbId) {
 
 list<UserMetadata> SysCatalog::getAllUserMetadata() {
   sys_sqlite_lock sqlite_lock(this);
+  return getAllUserMetadataUnlocked();
+}
+
+list<UserMetadata> SysCatalog::getAllUserMetadataUnlocked() {
   return get_users(*this, sqliteConnector_);
 }
 
@@ -2256,6 +2267,22 @@ SysCatalog::getMetadataForObject(int32_t dbId, int32_t dbType, int32_t objectId)
   return objectsList;  // return pointers to objects
 }
 
+std::vector<ObjectRoleDescriptor> SysCatalog::getMetadataForAllObjects() const {
+  sys_read_lock read_lock(this);
+  return getMetadataForAllObjectsUnlocked();
+}
+
+std::vector<ObjectRoleDescriptor> SysCatalog::getMetadataForAllObjectsUnlocked() const {
+  std::vector<ObjectRoleDescriptor> objects;
+  for (const auto& entry : objectDescriptorMap_) {
+    auto object_role = entry.second.get();
+    if (object_role->dbId != 0 && !isDashboardSystemRole(object_role->roleName)) {
+      objects.emplace_back(*object_role);
+    }
+  }
+  return objects;
+}
+
 bool SysCatalog::isRoleGrantedToGrantee(const std::string& granteeName,
                                         const std::string& roleName,
                                         bool only_direct) const {
@@ -2278,7 +2305,7 @@ bool SysCatalog::isRoleGrantedToGrantee(const std::string& granteeName,
   return is_role_granted;
 }
 
-bool SysCatalog::isDashboardSystemRole(const std::string& roleName) {
+bool SysCatalog::isDashboardSystemRole(const std::string& roleName) const {
   return boost::algorithm::ends_with(roleName, SYSTEM_ROLE_TAG);
 }
 
@@ -2319,6 +2346,21 @@ std::vector<std::string> SysCatalog::getRoles(bool userPrivateRole,
       continue;
     }
     roles.push_back(grantee.second->getName());
+  }
+  return roles;
+}
+
+std::set<std::string> SysCatalog::getCreatedRoles() const {
+  sys_read_lock read_lock(this);
+  return getCreatedRolesUnlocked();
+}
+
+std::set<std::string> SysCatalog::getCreatedRolesUnlocked() const {
+  std::set<std::string> roles;
+  for (const auto& [key, grantee] : granteeMap_) {
+    if (!grantee->isUser() && !isDashboardSystemRole(grantee->getName())) {
+      roles.emplace(grantee->getName());
+    }
   }
   return roles;
 }
@@ -2772,5 +2814,62 @@ void SysCatalog::reassignObjectOwners(
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
+}
+
+void SysCatalog::initializeInformationSchemaDb() {
+  if (g_enable_system_tables && !hasExecutedMigration(INFORMATION_SCHEMA_MIGRATION)) {
+    sys_write_lock write_lock(this);
+    DBMetadata db_metadata;
+    if (getMetadataForDB(INFORMATION_SCHEMA_DB, db_metadata)) {
+      LOG(WARNING) << "A database with name \"" << INFORMATION_SCHEMA_DB
+                   << "\" already exists. System table creation will be skipped. Rename "
+                      "this database in order to use system tables.";
+    } else {
+      createDatabase(INFORMATION_SCHEMA_DB, OMNISCI_ROOT_USER_ID);
+      try {
+        recordExecutedMigration(INFORMATION_SCHEMA_MIGRATION);
+      } catch (...) {
+        getMetadataForDB(INFORMATION_SCHEMA_DB, db_metadata);
+        dropDatabase(db_metadata);
+        throw;
+      }
+    }
+  }
+}
+
+bool SysCatalog::hasExecutedMigration(const std::string& migration_name) const {
+  if (hasVersionHistoryTable()) {
+    sys_sqlite_lock sqlite_lock(this);
+    sqliteConnector_->query_with_text_params(
+        "SELECT migration_history FROM mapd_version_history WHERE migration_history = ?",
+        std::vector<std::string>{migration_name});
+    return (sqliteConnector_->getNumRows() > 0);
+  }
+  return false;
+}
+
+void SysCatalog::recordExecutedMigration(const std::string& migration_name) const {
+  if (!hasVersionHistoryTable()) {
+    createVersionHistoryTable();
+  }
+  sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query_with_text_params(
+      "INSERT INTO mapd_version_history(version, migration_history) values(?, ?)",
+      std::vector<std::string>{std::to_string(MAPD_VERSION), migration_name});
+}
+
+bool SysCatalog::hasVersionHistoryTable() const {
+  sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query(
+      "select name from sqlite_master WHERE type='table' AND "
+      "name='mapd_version_history'");
+  return (sqliteConnector_->getNumRows() > 0);
+}
+
+void SysCatalog::createVersionHistoryTable() const {
+  sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query(
+      "CREATE TABLE mapd_version_history(version integer, migration_history text "
+      "unique)");
 }
 }  // namespace Catalog_Namespace

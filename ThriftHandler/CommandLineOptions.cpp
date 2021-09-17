@@ -49,6 +49,7 @@ extern size_t g_approx_quantile_centroids;
 extern size_t g_parallel_top_min;
 extern size_t g_parallel_top_max;
 extern size_t g_estimator_failure_max_groupby_size;
+extern bool g_enable_system_tables;
 
 namespace Catalog_Namespace {
 extern bool g_log_user_id;
@@ -468,6 +469,11 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(g_enable_tiered_cpu_mem)
                               ->implicit_value(true),
                           "Enable additional tiers of CPU memory (PMEM, etc...)");
+  help_desc.add_options()("enable-system-tables",
+                          po::value<bool>(&g_enable_system_tables)
+                              ->default_value(g_enable_system_tables)
+                              ->implicit_value(true),
+                          "Enable use of system tables.");
   help_desc.add_options()("pmem-size", po::value<size_t>(&g_pmem_size)->default_value(0));
 
   help_desc.add(log_options_.get_options());
@@ -1030,6 +1036,16 @@ void CommandLineOptions::validate() {
     throw std::runtime_error{"vacuum-min-selectivity cannot be less than 0."};
   }
   LOG(INFO) << "Vacuum Min Selectivity: " << g_vacuum_min_selectivity;
+
+  LOG(INFO) << "Enable system tables is set to " << g_enable_system_tables;
+  if (g_enable_system_tables) {
+    // System tables currently reuse FSI infrastructure and therefore, require FSI to be
+    // enabled
+    if (!g_enable_fsi) {
+      g_enable_fsi = true;
+      LOG(INFO) << "FSI has been enabled as a side effect of enabling system tables";
+    }
+  }
 }
 
 boost::optional<int> CommandLineOptions::parse_command_line(

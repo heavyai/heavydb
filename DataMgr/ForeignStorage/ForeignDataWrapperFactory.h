@@ -29,11 +29,13 @@ struct DataWrapperType {
   static constexpr char const* CSV = "OMNISCI_CSV";
   static constexpr char const* PARQUET = "OMNISCI_PARQUET";
   static constexpr char const* REGEX_PARSER = "OMNISCI_REGEX_PARSER";
+  static constexpr char const* INTERNAL_CATALOG = "OMNISCI_INTERNAL_CATALOG";
 
-  static constexpr std::array<std::string_view, 3> supported_data_wrapper_types{
+  static constexpr std::array<std::string_view, 4> supported_data_wrapper_types{
       PARQUET,
       CSV,
-      REGEX_PARSER};
+      REGEX_PARSER,
+      INTERNAL_CATALOG};
 };
 
 class ForeignDataWrapperFactory {

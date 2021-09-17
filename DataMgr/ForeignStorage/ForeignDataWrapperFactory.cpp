@@ -19,6 +19,7 @@
 
 #include "CsvDataWrapper.h"
 #include "ForeignDataWrapper.h"
+#include "InternalCatalogDataWrapper.h"
 #ifdef ENABLE_IMPORT_PARQUET
 #include "ParquetDataWrapper.h"
 #include "ParquetImporter.h"
@@ -188,6 +189,8 @@ std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::create(
 #endif
   } else if (data_wrapper_type == DataWrapperType::REGEX_PARSER) {
     data_wrapper = std::make_unique<RegexParserDataWrapper>(db_id, foreign_table);
+  } else if (data_wrapper_type == DataWrapperType::INTERNAL_CATALOG) {
+    data_wrapper = std::make_unique<InternalCatalogDataWrapper>(db_id, foreign_table);
   } else {
     throw std::runtime_error("Unsupported data wrapper");
   }
@@ -223,6 +226,9 @@ const ForeignDataWrapper& ForeignDataWrapperFactory::createForValidation(
     } else if (data_wrapper_type == DataWrapperType::REGEX_PARSER) {
       validation_data_wrappers_[data_wrapper_type_key] =
           std::make_unique<RegexParserDataWrapper>();
+    } else if (data_wrapper_type == DataWrapperType::INTERNAL_CATALOG) {
+      validation_data_wrappers_[data_wrapper_type_key] =
+          std::make_unique<InternalCatalogDataWrapper>();
     } else {
       UNREACHABLE();
     }
@@ -238,9 +244,15 @@ void ForeignDataWrapperFactory::validateDataWrapperType(
   if (std::find(supported_wrapper_types.begin(),
                 supported_wrapper_types.end(),
                 data_wrapper_type) == supported_wrapper_types.end()) {
+    std::vector<std::string_view> user_facing_wrapper_types;
+    for (const auto& type : supported_wrapper_types) {
+      if (type != DataWrapperType::INTERNAL_CATALOG) {
+        user_facing_wrapper_types.emplace_back(type);
+      }
+    }
     throw std::runtime_error{"Invalid data wrapper type \"" + data_wrapper_type +
                              "\". Data wrapper type must be one of the following: " +
-                             join(supported_wrapper_types, ", ") + "."};
+                             join(user_facing_wrapper_types, ", ") + "."};
   }
 }
 
