@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#include "../RenderInfo.h"
+#include "QueryEngine/Rendering/RenderInfo.h"
 #include "Shared/Rendering/RenderQueryOptions.h"
 
-RenderInfo::RenderInfo(
-    const std::shared_ptr<const ::QueryRenderer::RenderSession> in_render_session,
-    const RenderQueryOptions& in_render_query_opts,
-    const bool force_non_in_situ_data)
-    : render_session(in_render_session), render_query_opts_(in_render_query_opts) {
+RenderInfo::RenderInfo(const ::QueryRenderer::RenderSessionKey& in_render_session_key,
+                       const RenderQueryOptions& in_render_query_opts,
+                       const bool force_non_in_situ_data)
+    : render_session_key(in_render_session_key)
+    , render_query_opts_(in_render_query_opts) {
   CHECK(false);
 }
 

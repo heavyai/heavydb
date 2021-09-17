@@ -14,23 +14,22 @@
  * limitations under the License.
  */
 
-#ifndef QUERYENGINE_RENDERINFO_H
-#define QUERYENGINE_RENDERINFO_H
+#pragma once
 
-#include <Analyzer/Analyzer.h>
-#include <Catalog/Catalog.h>
-#include <Shared/Rendering/RenderQueryOptions.h>
-#include "../Descriptors/RowSetMemoryOwner.h"
-#include "RenderAllocator.h"
+#include "Analyzer/Analyzer.h"
+#include "Catalog/Catalog.h"
+#include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
+#include "QueryEngine/Rendering/RenderAllocator.h"
+#include "Shared/Rendering/RenderQueryOptions.h"
 
 namespace QueryRenderer {
-struct RenderSession;
-}  // namespace QueryRenderer
+struct RenderSessionKey;
+}
 
 class RenderInfo {
  public:
   std::unique_ptr<RenderAllocatorMap> render_allocator_map_ptr;
-  const std::shared_ptr<const ::QueryRenderer::RenderSession> render_session;
+  const ::QueryRenderer::RenderSessionKey& render_session_key;
 
   // Info for all the column targets retrieved in in a query. Used to extract column/table
   // info when rendering.
@@ -40,10 +39,9 @@ class RenderInfo {
   std::unordered_set<std::string> table_names;
   bool disallow_in_situ_only_if_final_ED_is_aggregate;
 
-  RenderInfo(
-      const std::shared_ptr<const ::QueryRenderer::RenderSession> in_render_session,
-      const RenderQueryOptions& in_render_query_opts,
-      const bool force_non_in_situ_data = false);
+  RenderInfo(const ::QueryRenderer::RenderSessionKey& in_render_session_key,
+             const RenderQueryOptions& in_render_query_opts,
+             const bool force_non_in_situ_data = false);
 
   const Catalog_Namespace::SessionInfo& getSessionInfo() const;
   std::shared_ptr<Catalog_Namespace::SessionInfo const> getSessionInfoPtr() const;
@@ -91,5 +89,3 @@ class RenderInfo {
   std::shared_ptr<QueryRenderer::QueryDataLayout> query_ssbo_layout;
   RenderQueryOptions render_query_opts_;
 };
-
-#endif  // QUERYENGINE_RENDERINFO_H
