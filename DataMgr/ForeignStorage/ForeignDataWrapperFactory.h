@@ -26,9 +26,12 @@ namespace foreign_storage {
 struct DataWrapperType {
   static constexpr char const* CSV = "OMNISCI_CSV";
   static constexpr char const* PARQUET = "OMNISCI_PARQUET";
+  static constexpr char const* REGEX_PARSER = "OMNISCI_REGEX_PARSER";
 
-  static constexpr std::array<std::string_view, 2> supported_data_wrapper_types{PARQUET,
-                                                                                CSV};
+  static constexpr std::array<std::string_view, 3> supported_data_wrapper_types{
+      PARQUET,
+      CSV,
+      REGEX_PARSER};
 };
 
 class ForeignDataWrapperFactory {

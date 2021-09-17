@@ -752,7 +752,10 @@ void add_placeholder_metadata(
 
   // Create placeholder metadata for every fragment touched by this scan
   int start_fragment = start_row / foreign_table->maxFragRows;
-  int end_fragment = total_num_rows / foreign_table->maxFragRows;
+  int end_fragment{0};
+  if (total_num_rows > 0) {
+    end_fragment = (total_num_rows - 1) / foreign_table->maxFragRows;
+  }
   for (int fragment_id = start_fragment; fragment_id <= end_fragment; fragment_id++) {
     size_t num_elements = (static_cast<size_t>(foreign_table->maxFragRows *
                                                (fragment_id + 1)) > total_num_rows)
@@ -786,8 +789,10 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
   const auto file_path = getFullFilePath(foreign_table_);
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
   CHECK(catalog);
+  auto& parser = getFileBufferParser();
   auto& server_options = foreign_table_->foreign_server->options;
   if (foreign_table_->isAppendMode() && file_reader_ != nullptr) {
+    parser.validateFiles(file_reader_.get(), foreign_table_);
     if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
       file_reader_->checkForMoreRows(append_start_offset_);
     } else {
@@ -803,6 +808,7 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
     } else {
       UNREACHABLE();
     }
+    parser.validateFiles(file_reader_.get(), foreign_table_);
     num_rows_ = 0;
     append_start_offset_ = 0;
   }
@@ -839,7 +845,6 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
                                          buffer_size);
     multi_threading_params.continue_processing = true;
 
-    auto& parser = getFileBufferParser();
     std::vector<std::future<void>> futures{};
     for (size_t i = 0; i < thread_count; i++) {
       multi_threading_params.request_pool.emplace(buffer_size,

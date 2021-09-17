@@ -21,6 +21,7 @@
 #ifdef ENABLE_IMPORT_PARQUET
 #include "ParquetDataWrapper.h"
 #endif
+#include "RegexParserDataWrapper.h"
 
 namespace foreign_storage {
 std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::create(
@@ -38,6 +39,8 @@ std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::create(
   } else if (data_wrapper_type == DataWrapperType::PARQUET) {
     data_wrapper = std::make_unique<ParquetDataWrapper>(db_id, foreign_table);
 #endif
+  } else if (data_wrapper_type == DataWrapperType::REGEX_PARSER) {
+    data_wrapper = std::make_unique<RegexParserDataWrapper>(db_id, foreign_table);
   } else {
     throw std::runtime_error("Unsupported data wrapper");
   }
@@ -70,6 +73,9 @@ const ForeignDataWrapper& ForeignDataWrapperFactory::createForValidation(
       validation_data_wrappers_[data_wrapper_type_key] =
           std::make_unique<ParquetDataWrapper>();
 #endif
+    } else if (data_wrapper_type == DataWrapperType::REGEX_PARSER) {
+      validation_data_wrappers_[data_wrapper_type_key] =
+          std::make_unique<RegexParserDataWrapper>();
     } else {
       UNREACHABLE();
     }

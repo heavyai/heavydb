@@ -4406,6 +4406,14 @@ void Catalog::createDefaultServersIfNotExists() {
       OMNISCI_ROOT_USER_ID);
   local_parquet_server->validate();
   createForeignServerNoLocks(std::move(local_parquet_server), true);
+
+  auto local_regex_parser_server = std::make_unique<foreign_storage::ForeignServer>(
+      "omnisci_local_regex_parser",
+      foreign_storage::DataWrapperType::REGEX_PARSER,
+      options,
+      OMNISCI_ROOT_USER_ID);
+  local_regex_parser_server->validate();
+  createForeignServerNoLocks(std::move(local_regex_parser_server), true);
 }
 
 // prepare a fresh file reload on next table access

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,15 @@
 
 #pragma once
 
+#include <boost/regex.hpp>
+
 #include "DataMgr/ForeignStorage/TextFileBufferParser.h"
 
 namespace foreign_storage {
-class CsvFileBufferParser : public TextFileBufferParser {
+class RegexFileBufferParser : public TextFileBufferParser {
  public:
+  RegexFileBufferParser(const ForeignTable* foreign_table);
+
   ParseBufferResult parseBuffer(ParseBufferRequest& request,
                                 bool convert_data_blocks,
                                 bool columns_are_pre_filtered = false) const override;
@@ -34,15 +38,29 @@ class CsvFileBufferParser : public TextFileBufferParser {
                             const import_export::CopyParams& copy_params,
                             const size_t buffer_first_row_index,
                             unsigned int& num_rows_in_buffer,
-                            foreign_storage::FileReader* file_reader) const override;
-
-  void validateExpectedColumnCount(const std::string& row,
-                                   const import_export::CopyParams& copy_params,
-                                   size_t num_cols,
-                                   int point_cols,
-                                   const std::string& file_name) const;
+                            FileReader* file_reader) const override;
 
   void validateFiles(const FileReader* file_reader,
-                     const ForeignTable* foreign_table) const override{};
+                     const ForeignTable* foreign_table) const override;
+
+  // For testing purposes only
+  static void setSkipFirstLineForTesting(bool skip);
+  static void setMaxBufferResize(size_t max_buffer_resize);
+
+  inline static const std::string LINE_REGEX_KEY = "LINE_REGEX";
+  inline static const std::string LINE_START_REGEX_KEY = "LINE_START_REGEX";
+  inline static const std::string BUFFER_SIZE_KEY = "BUFFER_SIZE";
+
+ private:
+  static size_t getMaxBufferResize();
+
+  inline static size_t max_buffer_resize_{
+      import_export::max_import_buffer_resize_byte_size};
+
+  // Flag added for testing purposes only
+  inline static bool skip_first_line_{false};
+
+  boost::regex line_regex_;
+  std::optional<boost::regex> line_start_regex_;
 };
 }  // namespace foreign_storage

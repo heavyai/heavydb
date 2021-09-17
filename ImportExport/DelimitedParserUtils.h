@@ -128,6 +128,26 @@ const char* get_row(const char* buf,
 void parse_string_array(const std::string& s,
                         const import_export::CopyParams& copy_params,
                         std::vector<std::string>& string_vec);
+
+/**
+ * Extends the given buffer to the lesser of max_buffer_resize or twice the given
+ * allocation size and reads new content from the file into the newly allocated buffer.
+ *
+ * @param buffer - buffer that will be extended
+ * @param buffer_size - current buffer size
+ * @param alloc_size - current allocation size
+ * @param file - handle for file to be read from (one of file or file_reader must be
+ * present)
+ * @param file_reader - reader for file to be read from (one of file or file_reader must
+ * be present)
+ * @param max_buffer_resize - maximum size that the buffer can be extended to
+ */
+void extend_buffer(std::unique_ptr<char[]>& buffer,
+                   size_t& buffer_size,
+                   size_t& alloc_size,
+                   FILE* file,
+                   foreign_storage::FileReader* file_reader,
+                   size_t max_buffer_resize);
 }  // namespace delimited_parser
 
 }  // namespace import_export

@@ -15,9 +15,11 @@
  */
 
 #include "DataMgr/ForeignStorage/FileReader.h"
+
 #include "ForeignStorageException.h"
 #include "FsiJsonUtils.h"
 #include "Shared/file_glob.h"
+#include "Shared/misc.h"
 
 namespace foreign_storage {
 
@@ -69,7 +71,19 @@ size_t get_data_size(size_t file_size, size_t header_size) {
 
 SingleFileReader::SingleFileReader(const std::string& file_path,
                                    const import_export::CopyParams& copy_params)
-    : FileReader(file_path, copy_params)
+    : FileReader(file_path, copy_params) {}
+
+FirstLineByFilePath SingleFileReader::getFirstLineForEachFile() const {
+  return {{file_path_, getFirstLine()}};
+}
+
+bool SingleFileReader::isEndOfLastFile() {
+  return isScanFinished();
+}
+
+SingleTextFileReader::SingleTextFileReader(const std::string& file_path,
+                                           const import_export::CopyParams& copy_params)
+    : SingleFileReader(file_path, copy_params)
     , scan_finished_(false)
     , header_offset_(0)
     , total_bytes_read_(0) {
@@ -80,14 +94,7 @@ SingleFileReader::SingleFileReader(const std::string& file_path,
   }
 
   // Skip header and record offset
-  if (copy_params.has_header != import_export::ImportHeaderRow::NO_HEADER) {
-    std::ifstream file{file_path};
-    CHECK(file.good());
-    std::string line;
-    std::getline(file, line, copy_params.line_delim);
-    file.close();
-    header_offset_ = line.size() + 1;
-  }
+  skipHeader();
   fseek(file_, 0, SEEK_END);
 
   data_size_ = get_data_size(ftell(file_), header_offset_);
@@ -98,10 +105,10 @@ SingleFileReader::SingleFileReader(const std::string& file_path,
   };
 }
 
-SingleFileReader::SingleFileReader(const std::string& file_path,
-                                   const import_export::CopyParams& copy_params,
-                                   const rapidjson::Value& value)
-    : FileReader(file_path, copy_params)
+SingleTextFileReader::SingleTextFileReader(const std::string& file_path,
+                                           const import_export::CopyParams& copy_params,
+                                           const rapidjson::Value& value)
+    : SingleFileReader(file_path, copy_params)
     , scan_finished_(true)
     , header_offset_(0)
     , total_bytes_read_(0) {
@@ -115,18 +122,19 @@ SingleFileReader::SingleFileReader(const std::string& file_path,
   json_utils::get_value_from_object(value, data_size_, "data_size");
 }
 
-void SingleFileReader::serialize(rapidjson::Value& value,
-                                 rapidjson::Document::AllocatorType& allocator) const {
+void SingleTextFileReader::serialize(
+    rapidjson::Value& value,
+    rapidjson::Document::AllocatorType& allocator) const {
   CHECK(scan_finished_);
   json_utils::add_value_to_object(value, header_offset_, "header_offset", allocator);
   json_utils::add_value_to_object(
       value, total_bytes_read_, "total_bytes_read", allocator);
   json_utils::add_value_to_object(value, data_size_, "data_size", allocator);
-};
+}
 
-void SingleFileReader::checkForMoreRows(size_t file_offset,
-                                        const ForeignServer* server_options,
-                                        const UserMapping* user_mapping) {
+void SingleTextFileReader::checkForMoreRows(size_t file_offset,
+                                            const ForeignServer* server_options,
+                                            const UserMapping* user_mapping) {
   CHECK(isScanFinished());
   // Re-open file and check if there is any new data in it
   fclose(file_);
@@ -151,6 +159,21 @@ void SingleFileReader::checkForMoreRows(size_t file_offset,
     total_bytes_read_ = file_offset;
     data_size_ = new_data_size;
   }
+}
+
+void SingleTextFileReader::skipHeader() {
+  if (copy_params_.has_header != import_export::ImportHeaderRow::NO_HEADER) {
+    header_offset_ = getFirstLine().length() + 1;
+  }
+}
+
+std::string SingleTextFileReader::getFirstLine() const {
+  std::ifstream file{file_path_};
+  CHECK(file.good());
+  std::string line;
+  std::getline(file, line, copy_params_.line_delim);
+  file.close();
+  return line;
 }
 
 /**
@@ -215,7 +238,7 @@ void ArchiveWrapper::fetchBlock() {
 
 CompressedFileReader::CompressedFileReader(const std::string& file_path,
                                            const import_export::CopyParams& copy_params)
-    : FileReader(file_path, copy_params)
+    : SingleFileReader(file_path, copy_params)
     , archive_(file_path)
     , initial_scan_(true)
     , scan_finished_(false)
@@ -335,13 +358,32 @@ void CompressedFileReader::nextEntry() {
  */
 void CompressedFileReader::skipHeader() {
   if (copy_params_.has_header != import_export::ImportHeaderRow::NO_HEADER) {
-    while (!archive_.currentEntryFinished()) {
-      if (archive_.peekNextChar() == copy_params_.line_delim) {
-        archive_.consumeDataFromCurrentEntry(1);
-        break;
-      }
-      archive_.consumeDataFromCurrentEntry(1);
+    std::optional<std::string> str = std::nullopt;
+    consumeFirstLine(str);
+  }
+}
+
+std::string CompressedFileReader::getFirstLine() const {
+  CompressedFileReader reader{file_path_, copy_params_};
+  auto first_line = std::make_optional<std::string>();
+  first_line.value().reserve(DEFAULT_HEADER_READ_SIZE);
+  reader.consumeFirstLine(first_line);
+  return first_line.value();
+}
+
+void CompressedFileReader::consumeFirstLine(std::optional<std::string>& dest_str) {
+  char* dest_buffer = nullptr;
+  while (!archive_.currentEntryFinished()) {
+    if (dest_str.has_value()) {
+      auto& str = dest_str.value();
+      str.resize(str.length() + 1);
+      dest_buffer = str.data() + str.length() - 1;
     }
+    if (archive_.peekNextChar() == copy_params_.line_delim) {
+      archive_.consumeDataFromCurrentEntry(1, dest_buffer);
+      break;
+    }
+    archive_.consumeDataFromCurrentEntry(1, dest_buffer);
   }
 }
 
@@ -476,12 +518,18 @@ void CompressedFileReader::serialize(
 
 MultiFileReader::MultiFileReader(const std::string& file_path,
                                  const import_export::CopyParams& copy_params)
-    : FileReader(file_path, copy_params), current_index_(0), current_offset_(0) {}
+    : FileReader(file_path, copy_params)
+    , current_index_(0)
+    , current_offset_(0)
+    , is_end_of_last_file_(false) {}
 
 MultiFileReader::MultiFileReader(const std::string& file_path,
                                  const import_export::CopyParams& copy_params,
                                  const rapidjson::Value& value)
-    : FileReader(file_path, copy_params), current_index_(0), current_offset_(0) {
+    : FileReader(file_path, copy_params)
+    , current_index_(0)
+    , current_offset_(0)
+    , is_end_of_last_file_(false) {
   json_utils::get_value_from_object(value, file_locations_, "file_locations");
   json_utils::get_value_from_object(value, cumulative_sizes_, "cumulative_sizes");
   json_utils::get_value_from_object(value, current_offset_, "current_offset");
@@ -525,7 +573,19 @@ bool MultiFileReader::isRemainingSizeKnown() {
     size_known = size_known && files_[index]->isRemainingSizeKnown();
   }
   return size_known;
-};
+}
+
+FirstLineByFilePath MultiFileReader::getFirstLineForEachFile() const {
+  FirstLineByFilePath first_line_by_file_path;
+  for (const auto& file : files_) {
+    first_line_by_file_path.merge(file->getFirstLineForEachFile());
+  }
+  return first_line_by_file_path;
+}
+
+bool MultiFileReader::isEndOfLastFile() {
+  return (isScanFinished() || is_end_of_last_file_);
+}
 
 LocalMultiFileReader::LocalMultiFileReader(
     const std::string& file_path,
@@ -543,19 +603,7 @@ namespace {
 bool is_compressed_file(const std::string& location) {
   const std::vector<std::string> compressed_exts = {
       ".zip", ".gz", ".tar", ".rar", ".bz2", ".7z", ".tgz"};
-  const std::vector<std::string> uncompressed_exts = {"", ".csv", ".tsv", ".txt"};
-  if (std::find(compressed_exts.begin(),
-                compressed_exts.end(),
-                boost::filesystem::extension(location)) != compressed_exts.end()) {
-    return true;
-  } else if (std::find(uncompressed_exts.begin(),
-                       uncompressed_exts.end(),
-                       boost::filesystem::extension(location)) !=
-             uncompressed_exts.end()) {
-    return false;
-  } else {
-    throw std::runtime_error{"Invalid extention for file \"" + location + "\"."};
-  }
+  return shared::contains(compressed_exts, boost::filesystem::extension(location));
 }
 }  // namespace
 
@@ -571,10 +619,10 @@ LocalMultiFileReader::LocalMultiFileReader(const std::string& file_path,
           copy_params_,
           value["files_metadata"].GetArray()[index]));
     } else {
-      files_.emplace_back(
-          std::make_unique<SingleFileReader>(file_locations_[index],
-                                             copy_params_,
-                                             value["files_metadata"].GetArray()[index]));
+      files_.emplace_back(std::make_unique<SingleTextFileReader>(
+          file_locations_[index],
+          copy_params_,
+          value["files_metadata"].GetArray()[index]));
     }
   }
 }
@@ -583,7 +631,7 @@ void LocalMultiFileReader::insertFile(std::string location) {
   if (is_compressed_file(location)) {
     files_.emplace_back(std::make_unique<CompressedFileReader>(location, copy_params_));
   } else {
-    files_.emplace_back(std::make_unique<SingleFileReader>(location, copy_params_));
+    files_.emplace_back(std::make_unique<SingleTextFileReader>(location, copy_params_));
   }
   if (files_.back()->isScanFinished()) {
     // skip any initially empty files
@@ -650,6 +698,9 @@ size_t MultiFileReader::read(void* buffer, size_t max_size) {
   if (current_index_ < files_.size() && files_[current_index_].get()->isScanFinished()) {
     cumulative_sizes_.push_back(current_offset_);
     current_index_++;
+    is_end_of_last_file_ = true;
+  } else {
+    is_end_of_last_file_ = false;
   }
   return bytes_read;
 }

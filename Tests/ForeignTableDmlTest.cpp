@@ -27,6 +27,7 @@
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "DataMgr/ForeignStorage/ForeignTableRefresh.h"
+#include "DataMgr/ForeignStorage/RegexFileBufferParser.h"
 #include "DataMgrTestHelpers.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
@@ -67,9 +68,13 @@ using ImportFlag = bool;
 static const std::vector<WrapperType> local_wrappers{"csv",
                                                      "parquet",
                                                      "sqlite",
-                                                     "postgres"};
-static const std::vector<WrapperType> file_wrappers{"csv", "parquet"};
-static const std::vector<WrapperType> s3_wrappers{"csv", "parquet", "csv_s3_select"};
+                                                     "postgres",
+                                                     "regex_parser"};
+static const std::vector<WrapperType> file_wrappers{"csv", "parquet", "regex_parser"};
+static const std::vector<WrapperType> s3_wrappers{"csv",
+                                                  "parquet",
+                                                  "csv_s3_select",
+                                                  "regex_parser"};
 static const std::vector<WrapperType> csv_s3_wrappers{"csv", "csv_s3_select"};
 static const std::vector<WrapperType> odbc_wrappers{"sqlite", "postgres"};
 
@@ -85,8 +90,12 @@ bool is_odbc(const std::string& wrapper_type) {
   return (wrapper_type == "sqlite" || wrapper_type == "postgres");
 }
 
+std::string wrapper_file_type(const std::string& wrapper_type) {
+  return (is_odbc(wrapper_type) || wrapper_type == "regex_parser") ? "csv" : wrapper_type;
+}
+
 FileExtType wrapper_ext(const std::string& wrapper_type) {
-  return (is_odbc(wrapper_type)) ? ".csv" : "." + wrapper_type;
+  return "." + wrapper_file_type(wrapper_type);
 }
 
 void recursive_copy(const std::string& origin, const std::string& dest) {
@@ -147,6 +156,41 @@ bool compare_json_files(const std::string& generated,
   }
   return true;
 }
+
+size_t regex_match_count(const std::string& line, const std::string& regex) {
+  size_t count{0};
+  std::smatch match;
+  auto search_str = line;
+  while (std::regex_search(search_str, match, std::regex{regex})) {
+    count++;
+    search_str = match.suffix().str();
+  }
+  return count;
+}
+
+std::string repeat_regex(size_t repeat_count, const std::string& regex) {
+  std::string repeated_regex;
+  for (size_t i = 0; i < repeat_count; i++) {
+    if (!repeated_regex.empty()) {
+      repeated_regex += "\\s*,\\s*";
+    }
+    repeated_regex += regex;
+  }
+  return repeated_regex;
+}
+
+std::string get_line_regex(size_t column_count) {
+  return repeat_regex(column_count, "\"?([^,\"]*)\"?");
+}
+
+std::string get_line_array_regex(size_t column_count) {
+  return repeat_regex(column_count, "(\\{[^\\}]+\\}|NULL)");
+}
+
+std::string get_line_geo_regex(size_t column_count) {
+  return repeat_regex(column_count,
+                      "\"?((?:POINT|LINESTRING|POLYGON|MULTIPOLYGON)[^\"]+|\\\\N)\"?");
+}
 }  // namespace
 
 /**
@@ -184,6 +228,7 @@ class ForeignTableTest : public DBHandlerTestFixture {
     g_enable_fsi = true;
     DBHandlerTestFixture::SetUp();
     setupOdbcIfEnabled();
+    foreign_storage::RegexFileBufferParser::setSkipFirstLineForTesting(true);
   }
 
   void TearDown() override {
@@ -318,6 +363,10 @@ class ForeignTableTest : public DBHandlerTestFixture {
       ss << "SERVER omnisci_local_" + data_wrapper_type;
       ss << " WITH (file_path = '";
       ss << src_path << "'";
+    }
+    if (data_wrapper_type == "regex_parser" &&
+        options.find("LINE_REGEX") == options.end()) {
+      ss << ", LINE_REGEX = '" + get_line_regex(column_pairs.size()) + "'";
     }
     for (auto& [key, value] : options) {
       ss << ", " << key << " = '" << value << "'";
@@ -617,7 +666,7 @@ class RecoverCacheQueryTest : public ForeignTableTest {
                                      const std::string& data_wrapper_type = {}) {
     std::string path = getDataFilesPath() + "/wrapper_metadata/" + prefix;
     if (!data_wrapper_type.empty()) {
-      path += "_" + data_wrapper_type;
+      path += "_" + (data_wrapper_type == "regex_parser" ? "csv" : data_wrapper_type);
     }
     return path + ".json";
   }
@@ -735,7 +784,7 @@ class DataTypeFragmentSizeAndDataWrapperTest
           createChunkMetadata<int64_t>(11, 16, 4, 2147483647, -2147483648, true);
     }
     // unencoded string
-    if (data_loaded || wrapper_type_ == "csv") {
+    if (data_loaded || wrapper_type_ == "csv" || wrapper_type_ == "regex_parser") {
       test_chunk_metadata_map[{0, 12}] = createChunkMetadata(12, 37, 4, true);
     } else {
       test_chunk_metadata_map[{0, 12}] = createChunkMetadata(12, 0, 4, true);
@@ -1503,12 +1552,17 @@ TEST_P(DataWrapperSelectQueryTest, ArrayWithNullValues) {
     GTEST_SKIP()
         << "Sqlite does notsupport array types; Postgres arrays currently unsupported";
   }
+  std::map<std::string, std::string> options;
+  if (wrapper_type_ == "regex_parser") {
+    options["LINE_REGEX"] = "(\\d+),\\s*" + get_line_array_regex(3);
+  }
   sql(createForeignTableQuery({{"index", "INTEGER"},
                                {"i1", "INTEGER[]"},
                                {"i2", "INTEGER[]"},
                                {"i3", "INTEGER[]"}},
                               getDataFilesPath() + "null_array" + wrapper_ext(GetParam()),
-                              GetParam()));
+                              GetParam(),
+                              options));
   // clang-format off
   sqlAndCompareResult("select * from " + default_table_name + " order by index;",
                       {{i(1), Null, Null, array({Null_i})},
@@ -1531,11 +1585,9 @@ TEST_P(DataWrapperSelectQueryTest, MissingFileOnSelectQuery) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
   auto file_path = boost::filesystem::absolute("missing_file");
-  boost::filesystem::copy_file(getDataFilesPath() + "0." + GetParam(), file_path);
-  std::string query{"CREATE FOREIGN TABLE " + default_table_name + " (i INTEGER) "s +
-                    "SERVER omnisci_local_" + GetParam() + " WITH (file_path = '" +
-                    file_path.string() + "');"};
-  sql(query);
+  boost::filesystem::copy_file(getDataFilesPath() + "0" + wrapper_ext(GetParam()),
+                               file_path);
+  sql(createForeignTableQuery({{"i", "INTEGER"}}, file_path.string(), GetParam()));
   boost::filesystem::remove_all(file_path);
   queryAndAssertFileNotFoundException(file_path.string());
 }
@@ -1546,10 +1598,7 @@ TEST_P(DataWrapperSelectQueryTest, EmptyDirectory) {
   }
   auto dir_path = boost::filesystem::absolute("empty_dir");
   boost::filesystem::create_directory(dir_path);
-  std::string query{"CREATE FOREIGN TABLE " + default_table_name + " (i INTEGER) "s +
-                    "SERVER omnisci_local_" + GetParam() + " WITH (file_path = '" +
-                    dir_path.string() + "');"};
-  sql(query);
+  sql(createForeignTableQuery({{"i", "INTEGER"}}, dir_path.string(), GetParam()));
   TQueryResult result;
   sql(result, "SELECT * FROM " + default_table_name + ";");
   assertResultSetEqual({}, result);
@@ -1560,9 +1609,10 @@ TEST_P(DataWrapperSelectQueryTest, RecursiveDirectory) {
   if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
-  sql(createForeignTableQuery({{"t", "TEXT"}, {"i", "INT"}, {"d", "DOUBLE"}},
-                              getDataFilesPath() + "example_2_" + GetParam() + "_dir/",
-                              wrapper_type_));
+  sql(createForeignTableQuery(
+      {{"t", "TEXT"}, {"i", "INT"}, {"d", "DOUBLE"}},
+      getDataFilesPath() + "example_2_" + wrapper_file_type(GetParam()) + "_dir/",
+      wrapper_type_));
   TQueryResult result;
   sql(result, "SELECT * FROM " + default_table_name + " ORDER BY t;");
   // clang-format off
@@ -1590,9 +1640,10 @@ TEST_P(DataWrapperSelectQueryTest, WildcardOnFiles) {
   if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
-  sql(createForeignTableQuery({{"t", "TEXT"}, {"i", "INT"}, {"d", "DOUBLE"}},
-                              getDataFilesPath() + "example_2_" + GetParam() + "_dir/f*",
-                              wrapper_type_));
+  sql(createForeignTableQuery(
+      {{"t", "TEXT"}, {"i", "INT"}, {"d", "DOUBLE"}},
+      getDataFilesPath() + "example_2_" + wrapper_file_type(GetParam()) + "_dir/f*",
+      wrapper_type_));
   TQueryResult result;
   sql(result, "SELECT * FROM " + default_table_name + " ORDER BY t;");
   // clang-format off
@@ -1608,9 +1659,10 @@ TEST_P(DataWrapperSelectQueryTest, WildcardOnDirectory) {
   if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
-  sql(createForeignTableQuery({{"t", "TEXT"}, {"i", "INT"}, {"d", "DOUBLE"}},
-                              getDataFilesPath() + "example_2_" + GetParam() + "_d*",
-                              wrapper_type_));
+  sql(createForeignTableQuery(
+      {{"t", "TEXT"}, {"i", "INT"}, {"d", "DOUBLE"}},
+      getDataFilesPath() + "example_2_" + wrapper_file_type(GetParam()) + "_d*",
+      wrapper_type_));
   TQueryResult result;
   sql(result, "SELECT * FROM " + default_table_name + " ORDER BY t;");
   // clang-format off
@@ -1641,10 +1693,11 @@ TEST_P(DataWrapperSelectQueryTest, RegexPathFilterOnFiles) {
   if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
   }
-  sql(createForeignTableQuery({{"t", "TEXT"}, {"i", "INT"}, {"d", "DOUBLE"}},
-                              getDataFilesPath() + "example_2_" + GetParam() + "_dir/",
-                              GetParam(),
-                              {{"REGEX_PATH_FILTER", ".*_dir/file.*"}}));
+  sql(createForeignTableQuery(
+      {{"t", "TEXT"}, {"i", "INT"}, {"d", "DOUBLE"}},
+      getDataFilesPath() + "example_2_" + wrapper_file_type(GetParam()) + "_dir/",
+      GetParam(),
+      {{"REGEX_PATH_FILTER", ".*_dir/file.*"}}));
   TQueryResult result;
   sql(result, "SELECT * FROM " + default_table_name + " ORDER BY t;");
   // clang-format off
@@ -1662,7 +1715,7 @@ TEST_P(DataWrapperSelectQueryTest, OutOfRange) {
       getDataFilesPath() + "out_of_range_int" + wrapper_ext(GetParam()),
       GetParam()));
 
-  if (GetParam() == "csv") {
+  if (GetParam() == "csv" || GetParam() == "regex_parser") {
     queryAndAssertException(
         "SELECT * FROM "s + default_table_name,
         "Parsing failure \"Integer -2147483648 exceeds minimum value for "
@@ -1801,17 +1854,6 @@ TEST_P(CacheControllingSelectQueryTest, CsvEmptyArchive) {
   TQueryResult result;
   sql(result, "SELECT * FROM " + default_table_name + "  ORDER BY t;");
   assertResultSetEqual({}, result);
-}
-
-TEST_P(CacheControllingSelectQueryTest, CsvDirectoryBadFileExt) {
-  std::string query = "CREATE FOREIGN TABLE " + default_table_name +
-                      " (t TEXT, i INTEGER[]) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
-                      getDataFilesPath() + "/" + "example_1_dir_bad_ext/" + "');";
-  sql(query);
-  queryAndAssertException("SELECT * FROM " + default_table_name + "  ORDER BY t;",
-                          "Invalid extention for file \"" + getDataFilesPath() +
-                              "example_1_dir_bad_ext/example_1c.tmp\".");
 }
 
 TEST_P(CacheControllingSelectQueryTest, CsvArchiveInvalidFile) {
@@ -2488,7 +2530,7 @@ class RefreshParamTests : public RefreshTests,
   }
 
   void assertExpectedCacheStatePostScan(ChunkKey& chunk_key) {
-    bool cache_on_scan = wrapper_type_ == "csv";
+    bool cache_on_scan = (wrapper_type_ == "csv" || wrapper_type_ == "regex_parser");
     if (cache_on_scan) {
       ASSERT_NE(cache_->getCachedChunkIfExists(chunk_key), nullptr);
     } else {
@@ -2675,6 +2717,11 @@ TEST_P(RefreshParamTests, ChangeSchema) {
   if (is_odbc(wrapper_type_)) {
     // ODBC can handle this case fine, since it can select individual columns.
     sql("REFRESH FOREIGN TABLES " + table_names_[0] + ";");
+  } else if (wrapper_type_ == "regex_parser") {
+    // When the file changes in a way that results in a regex mismatch, the regex parser
+    // wrapper should return rows with all null values.
+    sql("REFRESH FOREIGN TABLES " + table_names_[0] + ";");
+    sqlAndCompareResult("SELECT * FROM " + table_names_[0] + ";", {{NULL_BIGINT}});
   } else {
     try {
       sql("REFRESH FOREIGN TABLES " + table_names_[0] + ";");
@@ -3070,6 +3117,29 @@ INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTestsParquetRecover,
                                           testing::Values(true)),
                          FragmentSizesAppendRefreshTest::getTestName);
 
+INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTestsRegexParser,
+                         FragmentSizesAppendRefreshTest,
+                         testing::Combine(testing::Values(1, 4, 3200000),
+                                          testing::Values("regex_parser"),
+                                          testing::Values("single_file.csv",
+                                                          "single_file.zip",
+                                                          "csv_dir_file",
+                                                          "csv_dir_file_multi",
+                                                          "dir_file_multi.zip"),
+                                          testing::Values(false)),
+                         FragmentSizesAppendRefreshTest::getTestName);
+INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTestsRegexParserRecover,
+                         FragmentSizesAppendRefreshTest,
+                         testing::Combine(testing::Values(1),
+                                          testing::Values("regex_parser"),
+                                          testing::Values("single_file.csv",
+                                                          "single_file.zip",
+                                                          "csv_dir_file",
+                                                          "csv_dir_file_multi",
+                                                          "dir_file_multi.zip"),
+                                          testing::Values(true)),
+                         FragmentSizesAppendRefreshTest::getTestName);
+
 TEST_P(FragmentSizesAppendRefreshTest, AppendFrags) {
   sqlCreateTestTable();
   sqlAndCompareResult("SELECT * FROM "s + table_name_ + " ORDER BY i;", {{i(1)}, {i(2)}});
@@ -3169,6 +3239,15 @@ INSTANTIATE_TEST_SUITE_P(StringDictAppendParamaterizedTestsParquet,
                                           testing::Values(true, false)),
                          StringDictAppendTest::getTestName);
 
+INSTANTIATE_TEST_SUITE_P(StringDictAppendParamaterizedTestsRegexParser,
+                         StringDictAppendTest,
+                         testing::Combine(testing::Values(2, 5, 3200000),
+                                          testing::Values("regex_parser"),
+                                          testing::Values("csv_string_dir"),
+                                          testing::Values(false),
+                                          testing::Values(true, false)),
+                         StringDictAppendTest::getTestName);
+
 // Single fragment size parameterization for recovering from disk
 INSTANTIATE_TEST_SUITE_P(StringDictAppendParamaterizedTestsCsvFromDisk,
                          StringDictAppendTest,
@@ -3184,6 +3263,15 @@ INSTANTIATE_TEST_SUITE_P(StringDictAppendParamaterizedTestsParquetFromDisk,
                          testing::Combine(testing::Values(2),
                                           testing::Values("parquet"),
                                           testing::Values("parquet_string_dir"),
+                                          testing::Values(true),
+                                          testing::Values(true, false)),
+                         StringDictAppendTest::getTestName);
+
+INSTANTIATE_TEST_SUITE_P(StringDictAppendParamaterizedTestsRegexParserFromDisk,
+                         StringDictAppendTest,
+                         testing::Combine(testing::Values(2),
+                                          testing::Values("regex_parser"),
+                                          testing::Values("csv_string_dir"),
                                           testing::Values(true),
                                           testing::Values(true, false)),
                          StringDictAppendTest::getTestName);
@@ -3305,7 +3393,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
   if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
-  file_name_ = wrapper_type_ + "_dir_missing_file";
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_missing_file";
   sqlCreateTestTable();
   sqlAndCompareResult("SELECT * FROM "s + table_name_ + " ORDER BY i;", {{i(1)}, {i(2)}});
   overwriteSourceDir(createSchemaString({{"i", "BIGINT"}}));
@@ -3313,7 +3401,8 @@ TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
       "REFRESH FOREIGN TABLES " + table_name_ + ";",
       "Refresh of foreign table created with \"APPEND\" update type failed as "
       "file \"" +
-          TEMP_DIR + file_name_ + "/one_row_2." + wrapper_type_ + "\" was removed.");
+          TEMP_DIR + file_name_ + "/one_row_2" + wrapper_ext(wrapper_type_) +
+          "\" was removed.");
 }
 
 // This tests the use case where there are multiple files in a
@@ -3322,7 +3411,7 @@ TEST_P(DataWrapperAppendRefreshTest, MultifileAppendtoFile) {
   if (is_odbc(wrapper_type_)) {
     GTEST_SKIP() << "This testcase is not relevant to ODBC";
   }
-  file_name_ = wrapper_type_ + "_dir_file_multi_bad_append";
+  file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_multi_bad_append";
   sqlCreateTestTable();
   sqlAndCompareResult("SELECT * FROM "s + table_name_ + " ORDER BY i;", {{i(1)}, {i(2)}});
   overwriteSourceDir(createSchemaString({{"i", "BIGINT"}}));
@@ -3350,6 +3439,13 @@ INSTANTIATE_TEST_SUITE_P(DataTypeFragmentSizeAndDataWrapperOdbcTests,
                                             ::testing::Values("sqlite", "postgres"),
                                             ::testing::Values(".csv")),
                          DataTypeFragmentSizeAndDataWrapperTest::getTestName);
+INSTANTIATE_TEST_SUITE_P(
+    DataTypeFragmentSizeAndDataWrapperRegexParserTests,
+    DataTypeFragmentSizeAndDataWrapperTest,
+    ::testing::Combine(::testing::Values(1, 2, 32'000'000),
+                       ::testing::Values("regex_parser"),
+                       ::testing::Values(".csv", "_csv_dir", ".zip")),
+    DataTypeFragmentSizeAndDataWrapperTest::getTestName);
 
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes) {
   // Data type changes to handle unimplemented types in ODBC
@@ -3825,6 +3921,11 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ArrayTypes) {
     GTEST_SKIP()
         << "Sqlite does notsupport array types; Postgres arrays currently unsupported";
   }
+  std::map<std::string, std::string> options{
+      {"FRAGMENT_SIZE", std::to_string(fragment_size)}};
+  if (data_wrapper_type == "regex_parser") {
+    options["LINE_REGEX"] = "(\\d+),\\s*" + get_line_array_regex(11);
+  }
   sql(createForeignTableQuery({{"index", "INT"},
                                {"b", "BOOLEAN[]"},
                                {"t", "TINYINT[]"},
@@ -3839,7 +3940,7 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ArrayTypes) {
                                {"fixedpoint", "DECIMAL(10,5)[]"}},
                               getDataFilesPath() + "array_types" + extension,
                               data_wrapper_type,
-                              {{"FRAGMENT_SIZE", std::to_string(fragment_size)}}));
+                              options));
 
   TQueryResult result;
   sql(result, "SELECT * FROM " + default_table_name + " ORDER BY index;");
@@ -3873,6 +3974,11 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, FixedLengthArrayTypes) {
     GTEST_SKIP()
         << "Sqlite does notsupport array types; Postgres arrays currently unsupported";
   }
+  std::map<std::string, std::string> options{
+      {"FRAGMENT_SIZE", std::to_string(fragment_size)}};
+  if (data_wrapper_type == "regex_parser") {
+    options["LINE_REGEX"] = "(\\d+),\\s*" + get_line_array_regex(11);
+  }
   sql(createForeignTableQuery({{"index", "INT"},
                                {"b", "BOOLEAN[2]"},
                                {"t", "TINYINT[2]"},
@@ -3887,7 +3993,7 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, FixedLengthArrayTypes) {
                                {"fixedpoint", "DECIMAL(10,5)[2]"}},
                               getDataFilesPath() + "array_fixed_len_types" + extension,
                               data_wrapper_type,
-                              {{"FRAGMENT_SIZE", std::to_string(fragment_size)}}));
+                              options));
 
   TQueryResult result;
   sql(result, "SELECT * FROM " + default_table_name + " ORDER BY index;");
@@ -3926,6 +4032,10 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, GeoTypes) {
                   {"poly", "TEXT"},
                   {"multipoly", "TEXT"}}; 
   }
+  std::map<std::string, std::string> options{{"FRAGMENT_SIZE", fragmentSizeStr()}};
+  if (data_wrapper_type == "regex_parser") {
+    options["LINE_REGEX"] = "(\\d+),\\s*" + get_line_geo_regex(4);
+  }
   sql(createForeignTableQuery({{"id", "INT"},
                                {"p", "POINT"},
                                {"l", "LINESTRING"},
@@ -3933,7 +4043,7 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, GeoTypes) {
                                {"multipoly", "MULTIPOLYGON"}},
                               getDataFilesPath() + "geo_types" + extension,
                               data_wrapper_type,
-                              {{"FRAGMENT_SIZE", fragmentSizeStr()}},
+                              options,
                               default_table_name,
                               odbc_columns,
                               is_odbc(data_wrapper_type) ? true : false));
@@ -4433,7 +4543,8 @@ INSTANTIATE_TEST_SUITE_P(RecoverCacheParameterizedTests,
                          ::testing::Values(std::make_pair("csv", "a.csv"),
                                            std::make_pair("parquet", "a.parquet"),
                                            std::make_pair("sqlite", "a.csv"),
-                                           std::make_pair("postgres", "a.csv")),
+                                           std::make_pair("postgres", "a.csv"),
+                                           std::make_pair("regex_parser", "a.csv")),
                          [](const auto& param_info) { return param_info.param.first; });
 
 class DataWrapperRecoverCacheQueryTest
@@ -4450,7 +4561,7 @@ class DataWrapperRecoverCacheQueryTest
 };
 
 TEST_P(DataWrapperRecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemand) {
-  bool cache_during_scan = wrapper_type_ == "csv";
+  bool cache_during_scan = (wrapper_type_ == "csv" || wrapper_type_ == "regex_parser");
 
   sql(createForeignTableQuery(
       {{"col1", "BIGINT"}}, getDataFilesPath() + "1" + file_ext_, wrapper_type_));
@@ -5083,8 +5194,15 @@ INSTANTIATE_TEST_SUITE_P(DataWrapperParameterization,
                          [](const auto& info) { return info.param; });
 
 TEST_P(SchemaMismatchTest, FileHasTooManyColumns_Create) {
-  sql(createForeignTableQuery(
-      {{"i", "BIGINT"}}, getDataFilesPath() + "two_col_1_2" + ext_, wrapper_type_));
+  std::map<std::string, std::string> options;
+  // Use a line regex that matches two columns
+  if (wrapper_type_ == "regex_parser") {
+    options["LINE_REGEX"] = get_line_regex(2);
+  }
+  sql(createForeignTableQuery({{"i", "BIGINT"}},
+                              getDataFilesPath() + "two_col_1_2" + ext_,
+                              wrapper_type_,
+                              options));
   queryAndAssertException("SELECT COUNT(*) FROM " + default_table_name + ";",
                           "Mismatched number of logical columns: (expected 1 "
                           "columns, has 2): in file '" +
@@ -5092,9 +5210,15 @@ TEST_P(SchemaMismatchTest, FileHasTooManyColumns_Create) {
 }
 
 TEST_P(SchemaMismatchTest, FileHasTooFewColumns_Create) {
+  std::map<std::string, std::string> options;
+  // Use a line regex that matches only one column
+  if (wrapper_type_ == "regex_parser") {
+    options["LINE_REGEX"] = get_line_regex(1);
+  }
   sql(createForeignTableQuery({{"i", "BIGINT"}, {"i2", "BIGINT"}},
                               getDataFilesPath() + "0" + ext_,
-                              wrapper_type_));
+                              wrapper_type_,
+                              options));
   queryAndAssertException("SELECT COUNT(*) FROM " + default_table_name + ";",
                           "Mismatched number of logical columns: (expected 2 "
                           "columns, has 1): in file '" +
@@ -5102,10 +5226,15 @@ TEST_P(SchemaMismatchTest, FileHasTooFewColumns_Create) {
 }
 
 TEST_P(SchemaMismatchTest, FileHasTooFewColumns_Repeat) {
+  std::map<std::string, std::string> options{{"REFRESH_UPDATE_TYPE", "APPEND"}};
+  // Use a line regex that matches only one column
+  if (wrapper_type_ == "regex_parser") {
+    options["LINE_REGEX"] = get_line_regex(1);
+  }
   sql(createForeignTableQuery({{"i", "BIGINT"}, {"i2", "BIGINT"}},
                               getDataFilesPath() + "0" + ext_,
                               wrapper_type_,
-                              {{"REFRESH_UPDATE_TYPE", "APPEND"}}));
+                              options));
   queryAndAssertException("SELECT COUNT(*) FROM " + default_table_name + ";",
                           "Mismatched number of logical columns: (expected 2 "
                           "columns, has 1): in file '" +
@@ -5117,10 +5246,19 @@ TEST_P(SchemaMismatchTest, FileHasTooFewColumns_Repeat) {
 }
 
 TEST_P(SchemaMismatchTest, FileHasTooManyColumns_Refresh) {
+  std::map<std::string, std::string> options;
+  // Use a line regex that matches two columns
+  if (wrapper_type_ == "regex_parser") {
+    options["LINE_REGEX"] = get_line_regex(2);
+  }
   setTestFile("0", ext_, createSchemaString({{"i", "BIGINT"}}));
   sql(createForeignTableQuery(
-      {{"i", "BIGINT"}}, TEMP_DIR + TEMP_FILE + ext_, wrapper_type_));
+      {{"i", "BIGINT"}}, TEMP_DIR + TEMP_FILE + ext_, wrapper_type_, options));
   sql("SELECT COUNT(*) FROM " + default_table_name + ";");
+  if (wrapper_type_ == "regex_parser") {
+    // Mismatch between file content and regex should result in rows with all null values
+    sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{NULL_BIGINT}});
+  }
   setTestFile("two_col_1_2", ext_, createSchemaString({{"i", "BIGINT"}}));
   queryAndAssertException("REFRESH FOREIGN TABLES " + default_table_name + ";",
                           "Mismatched number of logical columns: (expected 1 "
@@ -5129,11 +5267,23 @@ TEST_P(SchemaMismatchTest, FileHasTooManyColumns_Refresh) {
 }
 
 TEST_P(SchemaMismatchTest, FileHasTooFewColumns_Refresh) {
+  std::map<std::string, std::string> options;
+  // Use a line regex that matches only one column
+  if (wrapper_type_ == "regex_parser") {
+    options["LINE_REGEX"] = get_line_regex(1);
+  }
   setTestFile(
       "two_col_1_2", ext_, createSchemaString({{"i", "BIGINT"}, {"i2", "BIGINT"}}));
-  sql(createForeignTableQuery(
-      {{"i", "BIGINT"}, {"i2", "BIGINT"}}, TEMP_DIR + TEMP_FILE + ext_, wrapper_type_));
+  sql(createForeignTableQuery({{"i", "BIGINT"}, {"i2", "BIGINT"}},
+                              TEMP_DIR + TEMP_FILE + ext_,
+                              wrapper_type_,
+                              options));
   sql("SELECT COUNT(*) FROM " + default_table_name + ";");
+  if (wrapper_type_ == "regex_parser") {
+    // Mismatch between file content and regex should result in rows with all null values
+    sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                        {{NULL_BIGINT, NULL_BIGINT}});
+  }
   setTestFile("0", ext_, createSchemaString({{"i", "BIGINT"}, {"i2", "BIGINT"}}));
   queryAndAssertException("REFRESH FOREIGN TABLES " + default_table_name + ";",
                           "Mismatched number of logical columns: (expected 2 "
@@ -6395,6 +6545,157 @@ TEST_F(ParquetCoercionTest, Float64ToFloat32InformationLoss) {
           "000000",
           base_file_name));
 }
+
+class RegexParserSelectQueryTest : public SelectQueryTest,
+                                   public ::testing::WithParamInterface<size_t> {
+ protected:
+  void SetUp() override {
+    SelectQueryTest::SetUp();
+    foreign_storage::RegexFileBufferParser::setSkipFirstLineForTesting(false);
+  }
+
+  void TearDown() override {
+    foreign_storage::RegexFileBufferParser::setMaxBufferResize(
+        import_export::max_import_buffer_resize_byte_size);
+    SelectQueryTest::TearDown();
+  }
+
+  void createForeignTable(const std::string& file_name,
+                          size_t buffer_size,
+                          bool use_line_start_regex = false,
+                          const std::string& regex_path_filter = {},
+                          const std::string& line_regex = {}) {
+    std::string query{"CREATE FOREIGN TABLE " + default_table_name +
+                      " (t TIMESTAMP, txt TEXT)"
+                      " SERVER omnisci_local_regex_parser"
+                      " WITH (file_path = '" +
+                      getFilePath(file_name) +
+                      "', buffer_size = " + std::to_string(buffer_size)};
+    if (line_regex.empty()) {
+      query += ", line_regex = '^([^\\s]+)\\s+((?:\\w|\\n)+)$'";
+    } else {
+      query += ", line_regex = '" + line_regex + "'";
+    }
+    if (use_line_start_regex) {
+      query += ", line_start_regex = '" + getLineStartRegex() + "'";
+    }
+    if (!regex_path_filter.empty()) {
+      query += ", regex_path_filter = '" + regex_path_filter + "'";
+    }
+    query += ");";
+    sql(query);
+  }
+
+  std::string getLineStartRegex() {
+    return "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}";
+  }
+
+  std::string getFilePath(const std::string& file_name) {
+    return boost::filesystem::canonical(getDataFilesPath() + "regex_parser/" + file_name)
+        .string();
+  }
+
+  std::string getLongRunningRegex() {
+    const std::string base_regex{"([^,]*)"};
+    const size_t repeat_count{50};
+    std::string regex;
+    regex.reserve(base_regex.length() * repeat_count);
+    for (size_t i = 0; i < repeat_count; i++) {
+      regex += base_regex;
+    }
+    return regex;
+  }
+};
+
+TEST_P(RegexParserSelectQueryTest, SingleLines) {
+  createForeignTable("single_lines.log", GetParam());
+  sqlAndCompareResult(
+      "SELECT * FROM " + default_table_name + " ORDER BY t;",
+      {{"2/08/2021 18:11:36", "message1"}, {"3/08/2021 18:11:36", "message2"}});
+}
+
+TEST_P(RegexParserSelectQueryTest, SingleLinesWithNewLines) {
+  createForeignTable("single_lines_with_new_lines.log", GetParam());
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY t;",
+                      {{"2/08/2021 18:11:36", "message1"},
+                       {"3/08/2021 18:11:36", "message2"},
+                       {Null, Null},
+                       {Null, Null}});
+}
+
+TEST_P(RegexParserSelectQueryTest, MultipleLines) {
+  createForeignTable("multi_lines.log", GetParam(), true);
+  sqlAndCompareResult(
+      "SELECT * FROM " + default_table_name + " ORDER BY t;",
+      {{"2/08/2021 18:11:36", "message\n1"}, {"4/08/2021 18:11:36", "message\n\n2"}});
+}
+
+TEST_P(RegexParserSelectQueryTest, MultipleLinesCompressed) {
+  createForeignTable("multi_lines.log.gz", GetParam(), true);
+  sqlAndCompareResult(
+      "SELECT * FROM " + default_table_name + " ORDER BY t;",
+      {{"2/08/2021 18:11:36", "message\n1"}, {"4/08/2021 18:11:36", "message\n\n2"}});
+}
+
+TEST_P(RegexParserSelectQueryTest, MultipleLinesWithSomeMismatches) {
+  createForeignTable("multi_lines_with_mismatch.log", GetParam(), true);
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY t;",
+                      {{"1/08/2021 18:11:36", "message\n1"},
+                       {"3/08/2021 18:11:36", "message2"},
+                       {Null, Null},
+                       {Null, Null}});
+}
+
+TEST_P(RegexParserSelectQueryTest, MultipleLinesWithFirstLineMismatch) {
+  createForeignTable("first_line_mismatch.log", GetParam(), true);
+  queryAndAssertException(
+      "SELECT * FROM " + default_table_name + " ORDER BY t;",
+      "First line in file \"" + getFilePath("first_line_mismatch.log") +
+          "\" does not match line start regex \"" + getLineStartRegex() + "\"");
+}
+
+TEST_P(RegexParserSelectQueryTest, MultipleMultiLineFiles) {
+  createForeignTable("", GetParam(), true, ".*multi_lines.*");
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY t;",
+                      {{"1/08/2021 18:11:36", "message\n1"},
+                       {"2/08/2021 18:11:36", "message\n1"},
+                       {"2/08/2021 18:11:36", "message\n1"},
+                       {"3/08/2021 18:11:36", "message2"},
+                       {"4/08/2021 18:11:36", "message\n\n2"},
+                       {"4/08/2021 18:11:36", "message\n\n2"},
+                       {Null, Null},
+                       {Null, Null}});
+}
+
+TEST_F(RegexParserSelectQueryTest, MaxBufferResizeLessThanRowSize) {
+  foreign_storage::RegexFileBufferParser::setMaxBufferResize(8);
+  createForeignTable("single_lines.log", 4);
+  queryAndAssertException(
+      "SELECT * FROM " + default_table_name + " ORDER BY t;",
+      "Unable to find an end of line character after reading 7 characters.");
+}
+
+TEST_F(RegexParserSelectQueryTest, LongRunningRegex) {
+  createForeignTable("../scalar_types.csv",
+                     import_export::kImportFileBufferSize,
+                     false,
+                     {},
+                     getLongRunningRegex());
+  queryAndAssertException(
+      "SELECT * FROM " + default_table_name + " ORDER BY t;",
+      "Parsing failure \"The complexity of matching the regular expression exceeded "
+      "predefined bounds.  Try refactoring the regular expression to make each choice "
+      "made by the state machine unambiguous.  This exception is thrown to prevent "
+      "\"eternal\" matches that take an indefinite period time to locate.\" in row "
+      "\"boolean,tiny_int,small_int,int,big_int,float,decimal,time,timestamp,date,text,"
+      "quoted_text\" in file \"" +
+          getDataFilesPath() + "scalar_types.csv\"");
+}
+
+INSTANTIATE_TEST_SUITE_P(DifferentBufferSizes,
+                         RegexParserSelectQueryTest,
+                         testing::Values(4, import_export::kImportFileBufferSize),
+                         testing::PrintToStringParamName());
 
 int main(int argc, char** argv) {
   g_enable_fsi = true;

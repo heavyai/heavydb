@@ -29,6 +29,8 @@ namespace foreign_storage {
 struct ForeignServer;
 struct UserMapping;
 
+using FirstLineByFilePath = std::map<std::string, std::string>;
+
 // File reader
 // Supports an initial full scan with calls to read()
 // When the entire object has been read isScanFinished() returns true
@@ -100,24 +102,53 @@ class FileReader {
   virtual void serialize(rapidjson::Value& value,
                          rapidjson::Document::AllocatorType& allocator) const = 0;
 
+  /**
+   * Returns a map containing the first line for each file that will be read.
+   */
+  virtual FirstLineByFilePath getFirstLineForEachFile() const = 0;
+
+  /**
+   * Returns a boolean indicating whether the reader is at the end of the last file that
+   * was read.
+   */
+  virtual bool isEndOfLastFile() = 0;
+
  protected:
   import_export::CopyParams copy_params_;
   std::string file_path_;
 };
 
-// Single uncompressed file, that supports FSEEK for faster random access
 class SingleFileReader : public FileReader {
  public:
   SingleFileReader(const std::string& file_path,
                    const import_export::CopyParams& copy_params);
-  SingleFileReader(const std::string& file_path,
-                   const import_export::CopyParams& copy_params,
-                   const rapidjson::Value& value);
-  ~SingleFileReader() override { fclose(file_); }
+
+  virtual ~SingleFileReader() = default;
+
+  FirstLineByFilePath getFirstLineForEachFile() const override;
+
+  bool isEndOfLastFile() override;
+
+ protected:
+  virtual std::string getFirstLine() const = 0;
+  virtual void skipHeader() = 0;
+
+  static constexpr size_t DEFAULT_HEADER_READ_SIZE{1024};
+};
+
+// Single uncompressed file, that supports FSEEK for faster random access
+class SingleTextFileReader : public SingleFileReader {
+ public:
+  SingleTextFileReader(const std::string& file_path,
+                       const import_export::CopyParams& copy_params);
+  SingleTextFileReader(const std::string& file_path,
+                       const import_export::CopyParams& copy_params,
+                       const rapidjson::Value& value);
+  ~SingleTextFileReader() override { fclose(file_); }
 
   // Delete copy assignment to prevent copying resource pointer
-  SingleFileReader(const SingleFileReader&) = delete;
-  SingleFileReader& operator=(const SingleFileReader&) = delete;
+  SingleTextFileReader(const SingleTextFileReader&) = delete;
+  SingleTextFileReader& operator=(const SingleTextFileReader&) = delete;
 
   size_t read(void* buffer, size_t max_size) override {
     size_t bytes_read = fread(buffer, 1, max_size, file_);
@@ -152,6 +183,9 @@ class SingleFileReader : public FileReader {
                  rapidjson::Document::AllocatorType& allocator) const override;
 
  private:
+  std::string getFirstLine() const override;
+  void skipHeader() override;
+
   std::FILE* file_;
   // Size of data in file
   size_t data_size_;
@@ -217,7 +251,7 @@ class ArchiveWrapper {
 };
 
 // Single archive, does not support random access
-class CompressedFileReader : public FileReader {
+class CompressedFileReader : public SingleFileReader {
  public:
   CompressedFileReader(const std::string& file_path,
                        const import_export::CopyParams& copy_params);
@@ -246,7 +280,6 @@ class CompressedFileReader : public FileReader {
                         const ForeignServer* server_options,
                         const UserMapping* user_mapping) override;
 
- private:
   /**
    * Go to next archive entry/header with valid data
    */
@@ -255,7 +288,7 @@ class CompressedFileReader : public FileReader {
   /**
    * Skip Header of file
    */
-  void skipHeader();
+  void skipHeader() override;
 
   /**
    * Skip forward N bytes in current entry without reading the data
@@ -265,6 +298,10 @@ class CompressedFileReader : public FileReader {
 
   // Read bytes in current entry adjusting for EOF
   size_t readInternal(void* buffer, size_t read_size, size_t buffer_size);
+
+  std::string getFirstLine() const override;
+
+  void consumeFirstLine(std::optional<std::string>& dest_str);
 
   ArchiveWrapper archive_;
 
@@ -311,6 +348,10 @@ class MultiFileReader : public FileReader {
   void serialize(rapidjson::Value& value,
                  rapidjson::Document::AllocatorType& allocator) const override;
 
+  FirstLineByFilePath getFirstLineForEachFile() const override;
+
+  bool isEndOfLastFile() override;
+
  protected:
   std::vector<std::unique_ptr<FileReader>> files_;
   std::vector<std::string> file_locations_;
@@ -321,6 +362,8 @@ class MultiFileReader : public FileReader {
   size_t current_index_;
   // Overall number of bytes read in the directory (minus headers)
   size_t current_offset_;
+
+  bool is_end_of_last_file_;
 };
 
 // Single file or directory with multiple files

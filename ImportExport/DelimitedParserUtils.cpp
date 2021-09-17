@@ -176,22 +176,9 @@ size_t find_row_end_pos(size_t& alloc_size,
       if (file == nullptr && file_reader->isScanFinished()) {
         throw;
       }
-      auto old_buffer = std::move(buffer);
-      alloc_size = std::min(max_buffer_resize, alloc_size * 2);
-      LOG(INFO) << "Setting import thread buffer allocation size to " << alloc_size
-                << " bytes";
-      buffer = std::make_unique<char[]>(alloc_size);
-
-      memcpy(buffer.get(), old_buffer.get(), buffer_size);
-      size_t fread_size;
-      if (file != nullptr) {
-        fread_size = fread(buffer.get() + buffer_size, 1, alloc_size - buffer_size, file);
-      } else {
-        fread_size =
-            file_reader->read(buffer.get() + buffer_size, alloc_size - buffer_size);
-      }
       offset = buffer_size;
-      buffer_size += fread_size;
+      extend_buffer(
+          buffer, buffer_size, alloc_size, file, file_reader, max_buffer_resize);
     }
   }
   return end_pos;
@@ -354,5 +341,27 @@ void parse_string_array(const std::string& s,
   }
 }
 
+void extend_buffer(std::unique_ptr<char[]>& buffer,
+                   size_t& buffer_size,
+                   size_t& alloc_size,
+                   FILE* file,
+                   foreign_storage::FileReader* file_reader,
+                   size_t max_buffer_resize) {
+  auto old_buffer = std::move(buffer);
+  alloc_size = std::min(max_buffer_resize, alloc_size * 2);
+  LOG(INFO) << "Setting import thread buffer allocation size to " << alloc_size
+            << " bytes";
+  buffer = std::make_unique<char[]>(alloc_size);
+
+  memcpy(buffer.get(), old_buffer.get(), buffer_size);
+  size_t fread_size;
+  CHECK(file != nullptr || file_reader != nullptr);
+  if (file != nullptr) {
+    fread_size = fread(buffer.get() + buffer_size, 1, alloc_size - buffer_size, file);
+  } else {
+    fread_size = file_reader->read(buffer.get() + buffer_size, alloc_size - buffer_size);
+  }
+  buffer_size += fread_size;
+}
 }  // namespace delimited_parser
 }  // namespace import_export

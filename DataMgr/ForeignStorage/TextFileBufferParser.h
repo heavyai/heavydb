@@ -113,6 +113,34 @@ class TextFileBufferParser {
                                     const import_export::CopyParams& copy_params,
                                     const size_t buffer_first_row_index,
                                     unsigned int& num_rows_in_buffer,
-                                    foreign_storage::FileReader* file_reader) const = 0;
+                                    FileReader* file_reader) const = 0;
+
+  /**
+   * Performs basic validation of files to be parsed.
+   */
+  virtual void validateFiles(const FileReader* file_reader,
+                             const ForeignTable* foreign_table) const = 0;
+
+  static std::map<int, DataBlockPtr> convertImportBuffersToDataBlocks(
+      const std::vector<std::unique_ptr<import_export::TypedImportBuffer>>&
+          import_buffers);
+
+  static bool isCoordinateScalar(const std::string_view datum);
+
+  static void processGeoColumn(
+      std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
+      size_t& col_idx,
+      const import_export::CopyParams& copy_params,
+      std::list<const ColumnDescriptor*>::iterator& cd_it,
+      std::vector<std::string_view>& row,
+      size_t& import_idx,
+      bool is_null,
+      size_t first_row_index,
+      size_t row_index_plus_one,
+      std::shared_ptr<Catalog_Namespace::Catalog> catalog);
+
+  static bool isNullDatum(const std::string_view datum,
+                          const ColumnDescriptor* column,
+                          const std::string& null_indicator);
 };
 }  // namespace foreign_storage
