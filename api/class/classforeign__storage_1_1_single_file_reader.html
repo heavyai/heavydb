@@ -40,8 +40,8 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Class foreign_storage::TextFileBufferParser" href="classforeign__storage_1_1_text_file_buffer_parser.html" />
-    <link rel="prev" title="Class foreign_storage::ParquetVariableLengthArrayEncoder" href="classforeign__storage_1_1_parquet_variable_length_array_encoder.html" /> 
+    <link rel="next" title="Class foreign_storage::SingleTextFileReader" href="classforeign__storage_1_1_single_text_file_reader.html" />
+    <link rel="prev" title="Class foreign_storage::RegexParserDataWrapper" href="classforeign__storage_1_1_regex_parser_data_wrapper.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.8.0dev eb3a3d0
+                5.8.0dev 645e5c7
               </div>
             
           
@@ -355,6 +355,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_cpu_buffer_mgr.html">Class Buffer_Namespace::CpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer.html">Class Buffer_Namespace::GpuCudaBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer_mgr.html">Class Buffer_Namespace::GpuCudaBufferMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_tiered_cpu_buffer_mgr.html">Class Buffer_Namespace::TieredCpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_eviction_algorithm.html">Class CacheEvictionAlgorithm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_invalidator.html">Class CacheInvalidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_too_small_exception.html">Class CacheTooSmallException</a></li>
@@ -899,6 +900,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___disjoint.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Disjoint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___distance.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Distance</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___end_point.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_EndPoint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___equals.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Equals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geog_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeogFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geom_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeomFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___intersection.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Intersection</a></li>
@@ -1154,7 +1156,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_variable_length_array_encoder.html">Class foreign_storage::ParquetVariableLengthArrayEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_file_buffer_parser.html">Class foreign_storage::RegexFileBufferParser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_parser_data_wrapper.html">Class foreign_storage::RegexParserDataWrapper</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class foreign_storage::SingleFileReader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_text_file_reader.html">Class foreign_storage::SingleTextFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_text_file_buffer_parser.html">Class foreign_storage::TextFileBufferParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_timestamp_bounds_validator.html">Class foreign_storage::TimestampBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
@@ -2100,7 +2105,8 @@
 <dl class="class">
 <dt id="_CPPv4N15foreign_storage16SingleFileReaderE">
 <span id="_CPPv3N15foreign_storage16SingleFileReaderE"></span><span id="_CPPv2N15foreign_storage16SingleFileReaderE"></span><span id="foreign_storage::SingleFileReader"></span><span class="target" id="classforeign__storage_1_1_single_file_reader"></span><em class="property">class </em><code class="sig-name descname">SingleFileReader</code> : <em class="property">public</em> foreign_storage::<a class="reference internal" href="classforeign__storage_1_1_file_reader.html#_CPPv4N15foreign_storage10FileReaderE" title="foreign_storage::FileReader">FileReader</a><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReaderE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><div class="breathe-sectiondef docutils container">
+<dd><p>Subclassed by <a class="reference internal" href="classforeign__storage_1_1_compressed_file_reader.html#classforeign__storage_1_1_compressed_file_reader"><span class="std std-ref">foreign_storage::CompressedFileReader</span></a>, <a class="reference internal" href="classforeign__storage_1_1_single_text_file_reader.html#classforeign__storage_1_1_single_text_file_reader"><span class="std std-ref">foreign_storage::SingleTextFileReader</span></a></p>
+<div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
 <dt id="_CPPv4N15foreign_storage16SingleFileReader16SingleFileReaderERKNSt6stringERKN13import_export10CopyParamsE">
@@ -2108,141 +2114,41 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage16SingleFileReader16SingleFileReaderERKNSt6stringERKN13import_export10CopyParamsERKN9rapidjson5ValueE">
-<span id="_CPPv3N15foreign_storage16SingleFileReader16SingleFileReaderERKNSt6stringERKN13import_export10CopyParamsERKN9rapidjson5ValueE"></span><span id="_CPPv2N15foreign_storage16SingleFileReader16SingleFileReaderERKNSt6stringERKN13import_export10CopyParamsERKN9rapidjson5ValueE"></span><span id="foreign_storage::SingleFileReader::SingleFileReader__ssCR.import_export::CopyParamsCR.rapidjson::ValueCR"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1ad6937c162eff982bbf0ea54286fcf75f"></span><code class="sig-name descname">SingleFileReader</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>file_path</em>, <em class="property">const</em> import_export::<a class="reference internal" href="../struct/structimport__export_1_1_copy_params.html#_CPPv4N13import_export10CopyParamsE" title="import_export::CopyParams">CopyParams</a> &amp;<em>copy_params</em>, <em class="property">const</em> rapidjson::Value &amp;<em>value</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader16SingleFileReaderERKNSt6stringERKN13import_export10CopyParamsERKN9rapidjson5ValueE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4N15foreign_storage16SingleFileReaderD0Ev">
-<span id="_CPPv3N15foreign_storage16SingleFileReaderD0Ev"></span><span id="_CPPv2N15foreign_storage16SingleFileReaderD0Ev"></span><span id="foreign_storage::SingleFileReader::~SingleFileReader"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1a356cb692d033e67f81a81660b024cc7f"></span><code class="sig-name descname">~SingleFileReader</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReaderD0Ev" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N15foreign_storage16SingleFileReaderD0Ev"></span><span id="_CPPv2N15foreign_storage16SingleFileReaderD0Ev"></span><span id="foreign_storage::SingleFileReader::~SingleFileReader"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1ade8c759ff3cabd7b7797b9478074e779"></span><em class="property">virtual</em> <code class="sig-name descname">~SingleFileReader</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReaderD0Ev" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage16SingleFileReader16SingleFileReaderERK16SingleFileReader">
-<span id="_CPPv3N15foreign_storage16SingleFileReader16SingleFileReaderERK16SingleFileReader"></span><span id="_CPPv2N15foreign_storage16SingleFileReader16SingleFileReaderERK16SingleFileReader"></span><span id="foreign_storage::SingleFileReader::SingleFileReader__SingleFileReaderCR"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1a413631b83b676904a3e24daf676d8d62"></span><code class="sig-name descname">SingleFileReader</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv4N15foreign_storage16SingleFileReader16SingleFileReaderERKNSt6stringERKN13import_export10CopyParamsE" title="foreign_storage::SingleFileReader::SingleFileReader">SingleFileReader</a>&amp;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader16SingleFileReaderERK16SingleFileReader" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage16SingleFileReaderaSERK16SingleFileReader">
-<span id="_CPPv3N15foreign_storage16SingleFileReaderaSERK16SingleFileReader"></span><span id="_CPPv2N15foreign_storage16SingleFileReaderaSERK16SingleFileReader"></span><span id="foreign_storage::SingleFileReader::assign-operator__SingleFileReaderCR"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1a352c66b4025e9c913c9cf29177dde73b"></span><a class="reference internal" href="#_CPPv4N15foreign_storage16SingleFileReaderE" title="foreign_storage::SingleFileReader">SingleFileReader</a> &amp;<code class="sig-name descname">operator=</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv4N15foreign_storage16SingleFileReaderE" title="foreign_storage::SingleFileReader">SingleFileReader</a>&amp;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReaderaSERK16SingleFileReader" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage16SingleFileReader4readEPv6size_t">
-<span id="_CPPv3N15foreign_storage16SingleFileReader4readEPv6size_t"></span><span id="_CPPv2N15foreign_storage16SingleFileReader4readEPv6size_t"></span><span id="foreign_storage::SingleFileReader::read__voidP.s"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1acc3ab088dad1d0140fd9d2d9b0f87020"></span>size_t <code class="sig-name descname">read</code><span class="sig-paren">(</span>void *<em>buffer</em>, size_t <em>max_size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader4readEPv6size_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Read up to max_size bytes from archive into buffer starting starting from the end of the last read</p>
-<p><dl class="simple">
-<dt><strong>Return</strong></dt><dd><p>number of bytes actually read </p>
-</dd>
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">buffer</span></code>: - buffer to load into </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">max_size</span></code>: - maximum number of bytes to read into the buffer </p></li>
-</ul>
-</dd>
-</dl>
-</p>
+<dt id="_CPPv4NK15foreign_storage16SingleFileReader23getFirstLineForEachFileEv">
+<span id="_CPPv3NK15foreign_storage16SingleFileReader23getFirstLineForEachFileEv"></span><span id="_CPPv2NK15foreign_storage16SingleFileReader23getFirstLineForEachFileEv"></span><span id="foreign_storage::SingleFileReader::getFirstLineForEachFileC"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1a60c339ff88ffcd2312efa66772e083aa"></span>FirstLineByFilePath <code class="sig-name descname">getFirstLineForEachFile</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage16SingleFileReader23getFirstLineForEachFileEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Returns a map containing the first line for each file that will be read. </p>
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N15foreign_storage16SingleFileReader10readRegionEPv6size_t6size_t">
-<span id="_CPPv3N15foreign_storage16SingleFileReader10readRegionEPv6size_t6size_t"></span><span id="_CPPv2N15foreign_storage16SingleFileReader10readRegionEPv6size_t6size_t"></span><span id="foreign_storage::SingleFileReader::readRegion__voidP.s.s"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1abce98353de720c10bd76a022f3acd30c"></span>size_t <code class="sig-name descname">readRegion</code><span class="sig-paren">(</span>void *<em>buffer</em>, size_t <em>offset</em>, size_t <em>size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader10readRegionEPv6size_t6size_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Read up to max_size bytes from archive, starting at given offset <a class="reference internal" href="#classforeign__storage_1_1_single_file_reader_1ab04825e4db043ef3320216cde8b8412f"><span class="std std-ref">isScanFinished()</span></a> must return true to use readRegion</p>
-<p><dl class="simple">
-<dt><strong>Return</strong></dt><dd><p>number of bytes actually read </p>
-</dd>
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">buffer</span></code>: - buffer to load into </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">offset</span></code>: - starting point into the archive to read </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">size</span></code>: - maximum number of bytes to read into the buffer </p></li>
-</ul>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage16SingleFileReader14isScanFinishedEv">
-<span id="_CPPv3N15foreign_storage16SingleFileReader14isScanFinishedEv"></span><span id="_CPPv2N15foreign_storage16SingleFileReader14isScanFinishedEv"></span><span id="foreign_storage::SingleFileReader::isScanFinished"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1ab04825e4db043ef3320216cde8b8412f"></span>bool <code class="sig-name descname">isScanFinished</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader14isScanFinishedEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p><dl class="simple">
-<dt><strong>Return</strong></dt><dd><p>true if the entire file has been read </p>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage16SingleFileReader16getRemainingSizeEv">
-<span id="_CPPv3N15foreign_storage16SingleFileReader16getRemainingSizeEv"></span><span id="_CPPv2N15foreign_storage16SingleFileReader16getRemainingSizeEv"></span><span id="foreign_storage::SingleFileReader::getRemainingSize"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1a055798cbcbf0592653d5b1d6e0c3ebda"></span>size_t <code class="sig-name descname">getRemainingSize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader16getRemainingSizeEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p><dl class="simple">
-<dt><strong>Return</strong></dt><dd><p>size of the remaining content to be read </p>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage16SingleFileReader20isRemainingSizeKnownEv">
-<span id="_CPPv3N15foreign_storage16SingleFileReader20isRemainingSizeKnownEv"></span><span id="_CPPv2N15foreign_storage16SingleFileReader20isRemainingSizeKnownEv"></span><span id="foreign_storage::SingleFileReader::isRemainingSizeKnown"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1add247d627d1258cd61f7ba62acb21a63"></span>bool <code class="sig-name descname">isRemainingSizeKnown</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader20isRemainingSizeKnownEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p><dl class="simple">
-<dt><strong>Return</strong></dt><dd><p>if remaining size is known </p>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage16SingleFileReader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping">
-<span id="_CPPv3N15foreign_storage16SingleFileReader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping"></span><span id="_CPPv2N15foreign_storage16SingleFileReader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping"></span><span id="foreign_storage::SingleFileReader::checkForMoreRows__s.ForeignServerCP.UserMappingCP"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1a6caaa558094084021198aa77eda000f2"></span>void <code class="sig-name descname">checkForMoreRows</code><span class="sig-paren">(</span>size_t <em>file_offset</em>, <em class="property">const</em> <a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE" title="foreign_storage::ForeignServer">ForeignServer</a> *<em>server_options</em>, <em class="property">const</em> UserMapping *<em>user_mapping</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader16checkForMoreRowsE6size_tPK13ForeignServerPK11UserMapping" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Rescan the target files Throws an exception if the rescan fails (ie files are not in a valid appended state or not supported) <dl class="simple">
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">file_offset</span></code>: - where to resume the scan from (end of the last row) as not all of the bytes may have been consumed by the upstream compoennet </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">server_options</span></code>: - only needed for S3 backed files </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">user_mapping</span></code>: - only needed for S3 backed files </p></li>
-</ul>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK15foreign_storage16SingleFileReader9serializeERN9rapidjson5ValueERN9rapidjson8Document13AllocatorTypeE">
-<span id="_CPPv3NK15foreign_storage16SingleFileReader9serializeERN9rapidjson5ValueERN9rapidjson8Document13AllocatorTypeE"></span><span id="_CPPv2NK15foreign_storage16SingleFileReader9serializeERN9rapidjson5ValueERN9rapidjson8Document13AllocatorTypeE"></span><span id="foreign_storage::SingleFileReader::serialize__rapidjson::ValueR.rapidjson::Document::AllocatorTypeRC"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1aba803740b2350df76f36fcfde9694a03"></span>void <code class="sig-name descname">serialize</code><span class="sig-paren">(</span>rapidjson::Value &amp;<em>value</em>, rapidjson::Document::AllocatorType &amp;<em>allocator</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage16SingleFileReader9serializeERN9rapidjson5ValueERN9rapidjson8Document13AllocatorTypeE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Serialize internal state to given json object This Json will later be used to restore the reader state through a constructor must be called when <a class="reference internal" href="#classforeign__storage_1_1_single_file_reader_1ab04825e4db043ef3320216cde8b8412f"><span class="std std-ref">isScanFinished()</span></a> is true <dl class="simple">
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">value</span></code>: - json object to store needed state to this function can store any needed data or none </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">allocator</span></code>: - allocator to use for json contruction </p></li>
-</ul>
-</dd>
-</dl>
-</p>
+<dt id="_CPPv4N15foreign_storage16SingleFileReader15isEndOfLastFileEv">
+<span id="_CPPv3N15foreign_storage16SingleFileReader15isEndOfLastFileEv"></span><span id="_CPPv2N15foreign_storage16SingleFileReader15isEndOfLastFileEv"></span><span id="foreign_storage::SingleFileReader::isEndOfLastFile"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1a5450762401e516540319299e666e5b64"></span>bool <code class="sig-name descname">isEndOfLastFile</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader15isEndOfLastFileEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Returns a boolean indicating whether the reader is at the end of the last file that was read. </p>
 </dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Members</p>
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage16SingleFileReader5file_E">
-<span id="_CPPv3N15foreign_storage16SingleFileReader5file_E"></span><span id="_CPPv2N15foreign_storage16SingleFileReader5file_E"></span><span id="foreign_storage::SingleFileReader::file___std::FILEP"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1ab24c22450f3a263e1f85a27d4275c87b"></span>std::FILE *<code class="sig-name descname">file_</code><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader5file_E" title="Permalink to this definition">¶</a><br /></dt>
+<p class="breathe-sectiondef-title rubric">Protected Functions</p>
+<dl class="function">
+<dt id="_CPPv4NK15foreign_storage16SingleFileReader12getFirstLineEv">
+<span id="_CPPv3NK15foreign_storage16SingleFileReader12getFirstLineEv"></span><span id="_CPPv2NK15foreign_storage16SingleFileReader12getFirstLineEv"></span><span id="foreign_storage::SingleFileReader::getFirstLineC"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1a1b6edf058a02d56d0918c41ce5bdd997"></span><em class="property">virtual</em> std::string <code class="sig-name descname">getFirstLine</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em> = 0<a class="headerlink" href="#_CPPv4NK15foreign_storage16SingleFileReader12getFirstLineEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage16SingleFileReader10data_size_E">
-<span id="_CPPv3N15foreign_storage16SingleFileReader10data_size_E"></span><span id="_CPPv2N15foreign_storage16SingleFileReader10data_size_E"></span><span id="foreign_storage::SingleFileReader::data_size___s"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1a41c9f4d84e1fe6f531a839c95cc09f78"></span>size_t <code class="sig-name descname">data_size_</code><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader10data_size_E" title="Permalink to this definition">¶</a><br /></dt>
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage16SingleFileReader10skipHeaderEv">
+<span id="_CPPv3N15foreign_storage16SingleFileReader10skipHeaderEv"></span><span id="_CPPv2N15foreign_storage16SingleFileReader10skipHeaderEv"></span><span id="foreign_storage::SingleFileReader::skipHeader"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1aa3d6a6b5fbe7adfd350d2b0637b7ae33"></span><em class="property">virtual</em> void <code class="sig-name descname">skipHeader</code><span class="sig-paren">(</span><span class="sig-paren">)</span> = 0<a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader10skipHeaderEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Protected Static Attributes</p>
 <dl class="member">
-<dt id="_CPPv4N15foreign_storage16SingleFileReader14scan_finished_E">
-<span id="_CPPv3N15foreign_storage16SingleFileReader14scan_finished_E"></span><span id="_CPPv2N15foreign_storage16SingleFileReader14scan_finished_E"></span><span id="foreign_storage::SingleFileReader::scan_finished___b"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1a9af75073ad91eb25bfc9362343998b79"></span>bool <code class="sig-name descname">scan_finished_</code><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader14scan_finished_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage16SingleFileReader14header_offset_E">
-<span id="_CPPv3N15foreign_storage16SingleFileReader14header_offset_E"></span><span id="_CPPv2N15foreign_storage16SingleFileReader14header_offset_E"></span><span id="foreign_storage::SingleFileReader::header_offset___s"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1abc9d76a5c02a29234e4f2f7319a27283"></span>size_t <code class="sig-name descname">header_offset_</code><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader14header_offset_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage16SingleFileReader17total_bytes_read_E">
-<span id="_CPPv3N15foreign_storage16SingleFileReader17total_bytes_read_E"></span><span id="_CPPv2N15foreign_storage16SingleFileReader17total_bytes_read_E"></span><span id="foreign_storage::SingleFileReader::total_bytes_read___s"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1aa5d6d2e427d3a15e43e4d83c4709f473"></span>size_t <code class="sig-name descname">total_bytes_read_</code><a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader17total_bytes_read_E" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N15foreign_storage16SingleFileReader24DEFAULT_HEADER_READ_SIZEE">
+<span id="_CPPv3N15foreign_storage16SingleFileReader24DEFAULT_HEADER_READ_SIZEE"></span><span id="_CPPv2N15foreign_storage16SingleFileReader24DEFAULT_HEADER_READ_SIZEE"></span><span id="foreign_storage::SingleFileReader::DEFAULT_HEADER_READ_SIZE__s"></span><span class="target" id="classforeign__storage_1_1_single_file_reader_1a314e31110a109918545b7f7271ad0c5f"></span><em class="property">constexpr</em> size_t <code class="sig-name descname">DEFAULT_HEADER_READ_SIZE</code> = {1024}<a class="headerlink" href="#_CPPv4N15foreign_storage16SingleFileReader24DEFAULT_HEADER_READ_SIZEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2258,10 +2164,10 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="classforeign__storage_1_1_text_file_buffer_parser.html" class="btn btn-neutral float-right" title="Class foreign_storage::TextFileBufferParser" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="classforeign__storage_1_1_single_text_file_reader.html" class="btn btn-neutral float-right" title="Class foreign_storage::SingleTextFileReader" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="classforeign__storage_1_1_parquet_variable_length_array_encoder.html" class="btn btn-neutral float-left" title="Class foreign_storage::ParquetVariableLengthArrayEncoder" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="classforeign__storage_1_1_regex_parser_data_wrapper.html" class="btn btn-neutral float-left" title="Class foreign_storage::RegexParserDataWrapper" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

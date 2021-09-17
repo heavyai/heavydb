@@ -1,0 +1,9 @@
+Class foreign_storage::RegexFileBufferParser
+============================================
+
+.. doxygenclass:: foreign_storage::RegexFileBufferParser
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

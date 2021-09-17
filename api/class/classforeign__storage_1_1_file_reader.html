@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.8.0dev eb3a3d0
+                5.8.0dev 645e5c7
               </div>
             
           
@@ -355,6 +355,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_cpu_buffer_mgr.html">Class Buffer_Namespace::CpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer.html">Class Buffer_Namespace::GpuCudaBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer_mgr.html">Class Buffer_Namespace::GpuCudaBufferMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_tiered_cpu_buffer_mgr.html">Class Buffer_Namespace::TieredCpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_eviction_algorithm.html">Class CacheEvictionAlgorithm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_invalidator.html">Class CacheInvalidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_too_small_exception.html">Class CacheTooSmallException</a></li>
@@ -899,6 +900,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___disjoint.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Disjoint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___distance.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Distance</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___end_point.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_EndPoint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___equals.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Equals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geog_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeogFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geom_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeomFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___intersection.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Intersection</a></li>
@@ -1154,7 +1156,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_variable_length_array_encoder.html">Class foreign_storage::ParquetVariableLengthArrayEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_file_buffer_parser.html">Class foreign_storage::RegexFileBufferParser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_parser_data_wrapper.html">Class foreign_storage::RegexParserDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_file_reader.html">Class foreign_storage::SingleFileReader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_text_file_reader.html">Class foreign_storage::SingleTextFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_text_file_buffer_parser.html">Class foreign_storage::TextFileBufferParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_timestamp_bounds_validator.html">Class foreign_storage::TimestampBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
@@ -2100,7 +2105,7 @@
 <dl class="class">
 <dt id="_CPPv4N15foreign_storage10FileReaderE">
 <span id="_CPPv3N15foreign_storage10FileReaderE"></span><span id="_CPPv2N15foreign_storage10FileReaderE"></span><span id="foreign_storage::FileReader"></span><span class="target" id="classforeign__storage_1_1_file_reader"></span><em class="property">class </em><code class="sig-name descname">FileReader</code><a class="headerlink" href="#_CPPv4N15foreign_storage10FileReaderE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Subclassed by <a class="reference internal" href="classforeign__storage_1_1_compressed_file_reader.html#classforeign__storage_1_1_compressed_file_reader"><span class="std std-ref">foreign_storage::CompressedFileReader</span></a>, <a class="reference internal" href="classforeign__storage_1_1_multi_file_reader.html#classforeign__storage_1_1_multi_file_reader"><span class="std std-ref">foreign_storage::MultiFileReader</span></a>, <a class="reference internal" href="classforeign__storage_1_1_single_file_reader.html#classforeign__storage_1_1_single_file_reader"><span class="std std-ref">foreign_storage::SingleFileReader</span></a></p>
+<dd><p>Subclassed by <a class="reference internal" href="classforeign__storage_1_1_multi_file_reader.html#classforeign__storage_1_1_multi_file_reader"><span class="std std-ref">foreign_storage::MultiFileReader</span></a>, <a class="reference internal" href="classforeign__storage_1_1_single_file_reader.html#classforeign__storage_1_1_single_file_reader"><span class="std std-ref">foreign_storage::SingleFileReader</span></a></p>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
@@ -2201,6 +2206,18 @@
 </dd>
 </dl>
 </p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK15foreign_storage10FileReader23getFirstLineForEachFileEv">
+<span id="_CPPv3NK15foreign_storage10FileReader23getFirstLineForEachFileEv"></span><span id="_CPPv2NK15foreign_storage10FileReader23getFirstLineForEachFileEv"></span><span id="foreign_storage::FileReader::getFirstLineForEachFileC"></span><span class="target" id="classforeign__storage_1_1_file_reader_1a09e3b86e4e85ac7edda11cee8b55156d"></span><em class="property">virtual</em> FirstLineByFilePath <code class="sig-name descname">getFirstLineForEachFile</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em> = 0<a class="headerlink" href="#_CPPv4NK15foreign_storage10FileReader23getFirstLineForEachFileEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Returns a map containing the first line for each file that will be read. </p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage10FileReader15isEndOfLastFileEv">
+<span id="_CPPv3N15foreign_storage10FileReader15isEndOfLastFileEv"></span><span id="_CPPv2N15foreign_storage10FileReader15isEndOfLastFileEv"></span><span id="foreign_storage::FileReader::isEndOfLastFile"></span><span class="target" id="classforeign__storage_1_1_file_reader_1ab947e8236889c30e4ea17865be2d3274"></span><em class="property">virtual</em> bool <code class="sig-name descname">isEndOfLastFile</code><span class="sig-paren">(</span><span class="sig-paren">)</span> = 0<a class="headerlink" href="#_CPPv4N15foreign_storage10FileReader15isEndOfLastFileEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Returns a boolean indicating whether the reader is at the end of the last file that was read. </p>
 </dd></dl>
 
 </div>

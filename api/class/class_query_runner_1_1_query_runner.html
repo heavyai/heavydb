@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.8.0dev eb3a3d0
+                5.8.0dev 645e5c7
               </div>
             
           
@@ -355,6 +355,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_cpu_buffer_mgr.html">Class Buffer_Namespace::CpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer.html">Class Buffer_Namespace::GpuCudaBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer_mgr.html">Class Buffer_Namespace::GpuCudaBufferMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_tiered_cpu_buffer_mgr.html">Class Buffer_Namespace::TieredCpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_eviction_algorithm.html">Class CacheEvictionAlgorithm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_invalidator.html">Class CacheInvalidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_too_small_exception.html">Class CacheTooSmallException</a></li>
@@ -899,6 +900,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___disjoint.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Disjoint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___distance.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Distance</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___end_point.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_EndPoint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___equals.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Equals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geog_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeogFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geom_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeomFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___intersection.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Intersection</a></li>
@@ -1154,7 +1156,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_variable_length_array_encoder.html">Class foreign_storage::ParquetVariableLengthArrayEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_file_buffer_parser.html">Class foreign_storage::RegexFileBufferParser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_parser_data_wrapper.html">Class foreign_storage::RegexParserDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_file_reader.html">Class foreign_storage::SingleFileReader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_text_file_reader.html">Class foreign_storage::SingleTextFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_text_file_buffer_parser.html">Class foreign_storage::TextFileBufferParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_timestamp_bounds_validator.html">Class foreign_storage::TimestampBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
@@ -2109,8 +2114,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N11QueryRunner11QueryRunner12addSessionIdERKNSt6stringE18ExecutorDeviceType">
-<span id="_CPPv3N11QueryRunner11QueryRunner12addSessionIdERKNSt6stringE18ExecutorDeviceType"></span><span id="_CPPv2N11QueryRunner11QueryRunner12addSessionIdERKNSt6stringE18ExecutorDeviceType"></span><span id="QueryRunner::QueryRunner::addSessionId__ssCR.ExecutorDeviceType"></span><span class="target" id="class_query_runner_1_1_query_runner_1ab18c1990d746774b253196c4bea814c2"></span>void <code class="sig-name descname">addSessionId</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>session_id</em>, ExecutorDeviceType <em>device_type</em> = ExecutorDeviceType::GPU<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner12addSessionIdERKNSt6stringE18ExecutorDeviceType" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N11QueryRunner11QueryRunner12addSessionIdERKNSt6stringERKNSt6stringE18ExecutorDeviceType">
+<span id="_CPPv3N11QueryRunner11QueryRunner12addSessionIdERKNSt6stringERKNSt6stringE18ExecutorDeviceType"></span><span id="_CPPv2N11QueryRunner11QueryRunner12addSessionIdERKNSt6stringERKNSt6stringE18ExecutorDeviceType"></span><span id="QueryRunner::QueryRunner::addSessionId__ssCR.ssCR.ExecutorDeviceType"></span><span class="target" id="class_query_runner_1_1_query_runner_1a85ede22aaa644ca64ec3469909f06046"></span>void <code class="sig-name descname">addSessionId</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>session_id</em>, <em class="property">const</em> std::string &amp;<em>user_name</em> = &quot;admin&quot;, ExecutorDeviceType <em>device_type</em> = ExecutorDeviceType::GPU<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner12addSessionIdERKNSt6stringERKNSt6stringE18ExecutorDeviceType" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2199,8 +2204,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N11QueryRunner11QueryRunner27runSQLWithAllowingInterruptERKNSt6stringERKNSt6stringEK18ExecutorDeviceTypeKdKj">
-<span id="_CPPv3N11QueryRunner11QueryRunner27runSQLWithAllowingInterruptERKNSt6stringERKNSt6stringEK18ExecutorDeviceTypeKdKj"></span><span id="_CPPv2N11QueryRunner11QueryRunner27runSQLWithAllowingInterruptERKNSt6stringERKNSt6stringEK18ExecutorDeviceTypeKdKj"></span><span id="QueryRunner::QueryRunner::runSQLWithAllowingInterrupt__ssCR.ssCR.ExecutorDeviceTypeC.doubleC.unsignedC"></span><span class="target" id="class_query_runner_1_1_query_runner_1aeef8b5e627ce4a2666f2352935509690"></span>std::shared_ptr&lt;<a class="reference internal" href="class_result_set.html#_CPPv49ResultSet" title="ResultSet">ResultSet</a>&gt; <code class="sig-name descname">runSQLWithAllowingInterrupt</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_str</em>, <em class="property">const</em> std::string &amp;<em>session_id</em>, <em class="property">const</em> ExecutorDeviceType <em>device_type</em>, <em class="property">const</em> double <em>running_query_check_freq</em> = 0.9, <em class="property">const</em> unsigned <em>pending_query_check_freq</em> = 1000<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner27runSQLWithAllowingInterruptERKNSt6stringERKNSt6stringEK18ExecutorDeviceTypeKdKj" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N11QueryRunner11QueryRunner27runSQLWithAllowingInterruptERKNSt6stringERKNSt6stringERKNSt6stringEK18ExecutorDeviceTypeKdKj">
+<span id="_CPPv3N11QueryRunner11QueryRunner27runSQLWithAllowingInterruptERKNSt6stringERKNSt6stringERKNSt6stringEK18ExecutorDeviceTypeKdKj"></span><span id="_CPPv2N11QueryRunner11QueryRunner27runSQLWithAllowingInterruptERKNSt6stringERKNSt6stringERKNSt6stringEK18ExecutorDeviceTypeKdKj"></span><span id="QueryRunner::QueryRunner::runSQLWithAllowingInterrupt__ssCR.ssCR.ssCR.ExecutorDeviceTypeC.doubleC.unsignedC"></span><span class="target" id="class_query_runner_1_1_query_runner_1a36fd42a8baa6a99ee31f44ba2f7d9d30"></span>std::shared_ptr&lt;<a class="reference internal" href="class_result_set.html#_CPPv49ResultSet" title="ResultSet">ResultSet</a>&gt; <code class="sig-name descname">runSQLWithAllowingInterrupt</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_str</em>, <em class="property">const</em> std::string &amp;<em>session_id</em>, <em class="property">const</em> std::string &amp;<em>user_name</em>, <em class="property">const</em> ExecutorDeviceType <em>device_type</em>, <em class="property">const</em> double <em>running_query_check_freq</em> = 0.9, <em class="property">const</em> unsigned <em>pending_query_check_freq</em> = 1000<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner27runSQLWithAllowingInterruptERKNSt6stringERKNSt6stringERKNSt6stringEK18ExecutorDeviceTypeKdKj" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2211,6 +2216,11 @@
 <dl class="function">
 <dt id="_CPPv4N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE">
 <span id="_CPPv3N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE"></span><span id="_CPPv2N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE"></span><span id="QueryRunner::QueryRunner::getParsedQueryHint__ssCR"></span><span class="target" id="class_query_runner_1_1_query_runner_1ac1b91d0af56ac284aeb40911764980fd"></span><a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a> <code class="sig-name descname">getParsedQueryHint</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_str</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N11QueryRunner11QueryRunner19getParsedQueryHintsERKNSt6stringE">
+<span id="_CPPv3N11QueryRunner11QueryRunner19getParsedQueryHintsERKNSt6stringE"></span><span id="_CPPv2N11QueryRunner11QueryRunner19getParsedQueryHintsERKNSt6stringE"></span><span id="QueryRunner::QueryRunner::getParsedQueryHints__ssCR"></span><span class="target" id="class_query_runner_1_1_query_runner_1ac1f635afa28f5837f969a28c103d911b"></span>std::optional&lt;std::unordered_map&lt;size_t, <a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a>&gt;&gt; <code class="sig-name descname">getParsedQueryHints</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_str</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner19getParsedQueryHintsERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

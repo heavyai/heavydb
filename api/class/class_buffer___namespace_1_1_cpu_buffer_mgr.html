@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.8.0dev eb3a3d0
+                5.8.0dev 645e5c7
               </div>
             
           
@@ -355,6 +355,7 @@
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class Buffer_Namespace::CpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer.html">Class Buffer_Namespace::GpuCudaBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer_mgr.html">Class Buffer_Namespace::GpuCudaBufferMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_tiered_cpu_buffer_mgr.html">Class Buffer_Namespace::TieredCpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_eviction_algorithm.html">Class CacheEvictionAlgorithm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_invalidator.html">Class CacheInvalidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_too_small_exception.html">Class CacheTooSmallException</a></li>
@@ -899,6 +900,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___disjoint.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Disjoint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___distance.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Distance</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___end_point.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_EndPoint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___equals.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Equals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geog_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeogFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geom_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeomFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___intersection.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Intersection</a></li>
@@ -1154,7 +1156,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_variable_length_array_encoder.html">Class foreign_storage::ParquetVariableLengthArrayEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_file_buffer_parser.html">Class foreign_storage::RegexFileBufferParser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_parser_data_wrapper.html">Class foreign_storage::RegexParserDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_file_reader.html">Class foreign_storage::SingleFileReader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_text_file_reader.html">Class foreign_storage::SingleTextFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_text_file_buffer_parser.html">Class foreign_storage::TextFileBufferParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_timestamp_bounds_validator.html">Class foreign_storage::TimestampBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
@@ -2100,7 +2105,8 @@
 <dl class="class">
 <dt id="_CPPv4N16Buffer_Namespace12CpuBufferMgrE">
 <span id="_CPPv3N16Buffer_Namespace12CpuBufferMgrE"></span><span id="_CPPv2N16Buffer_Namespace12CpuBufferMgrE"></span><span id="Buffer_Namespace::CpuBufferMgr"></span><span class="target" id="class_buffer___namespace_1_1_cpu_buffer_mgr"></span><em class="property">class </em><code class="sig-name descname">CpuBufferMgr</code> : <em class="property">public</em> Buffer_Namespace::<a class="reference internal" href="class_buffer___namespace_1_1_buffer_mgr.html#_CPPv4N16Buffer_Namespace9BufferMgrE" title="Buffer_Namespace::BufferMgr">BufferMgr</a><a class="headerlink" href="#_CPPv4N16Buffer_Namespace12CpuBufferMgrE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><div class="breathe-sectiondef docutils container">
+<dd><p>Subclassed by <a class="reference internal" href="class_buffer___namespace_1_1_tiered_cpu_buffer_mgr.html#class_buffer___namespace_1_1_tiered_cpu_buffer_mgr"><span class="std std-ref">Buffer_Namespace::TieredCpuBufferMgr</span></a></p>
+<div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
 <dt id="_CPPv4N16Buffer_Namespace12CpuBufferMgr12CpuBufferMgrEKiK6size_tPN17CudaMgr_Namespace7CudaMgrEK6size_tK6size_tK6size_tP17AbstractBufferMgr">
@@ -2109,7 +2115,7 @@
 
 <dl class="function">
 <dt id="_CPPv4N16Buffer_Namespace12CpuBufferMgrD0Ev">
-<span id="_CPPv3N16Buffer_Namespace12CpuBufferMgrD0Ev"></span><span id="_CPPv2N16Buffer_Namespace12CpuBufferMgrD0Ev"></span><span id="Buffer_Namespace::CpuBufferMgr::~CpuBufferMgr"></span><span class="target" id="class_buffer___namespace_1_1_cpu_buffer_mgr_1a432f8907654913957be723ff8fbd12a7"></span><code class="sig-name descname">~CpuBufferMgr</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16Buffer_Namespace12CpuBufferMgrD0Ev" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N16Buffer_Namespace12CpuBufferMgrD0Ev"></span><span id="_CPPv2N16Buffer_Namespace12CpuBufferMgrD0Ev"></span><span id="Buffer_Namespace::CpuBufferMgr::~CpuBufferMgr"></span><span class="target" id="class_buffer___namespace_1_1_cpu_buffer_mgr_1a0126a6d4bd9957b09065eabfe6748f4d"></span><code class="sig-name descname">~CpuBufferMgr</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16Buffer_Namespace12CpuBufferMgrD0Ev" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2124,7 +2130,7 @@
 
 </div>
 <div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Functions</p>
+<p class="breathe-sectiondef-title rubric">Protected Functions</p>
 <dl class="function">
 <dt id="_CPPv4N16Buffer_Namespace12CpuBufferMgr7addSlabEK6size_t">
 <span id="_CPPv3N16Buffer_Namespace12CpuBufferMgr7addSlabEK6size_t"></span><span id="_CPPv2N16Buffer_Namespace12CpuBufferMgr7addSlabEK6size_t"></span><span id="Buffer_Namespace::CpuBufferMgr::addSlab__sC"></span><span class="target" id="class_buffer___namespace_1_1_cpu_buffer_mgr_1af4f0f0adc9fbf76292e5b20d64e654a9"></span>void <code class="sig-name descname">addSlab</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>slab_size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16Buffer_Namespace12CpuBufferMgr7addSlabEK6size_t" title="Permalink to this definition">¶</a><br /></dt>
@@ -2140,14 +2146,22 @@
 <span id="_CPPv3N16Buffer_Namespace12CpuBufferMgr14allocateBufferEN10BufferList8iteratorEK6size_tK6size_t"></span><span id="_CPPv2N16Buffer_Namespace12CpuBufferMgr14allocateBufferEN10BufferList8iteratorEK6size_tK6size_t"></span><span id="Buffer_Namespace::CpuBufferMgr::allocateBuffer__BufferList::iterator.sC.sC"></span><span class="target" id="class_buffer___namespace_1_1_cpu_buffer_mgr_1a8f14c2e97c74369b33d1a83105e021d9"></span>void <code class="sig-name descname">allocateBuffer</code><span class="sig-paren">(</span>BufferList::iterator <em>segment_iter</em>, <em class="property">const</em> size_t <em>page_size</em>, <em class="property">const</em> size_t <em>initial_size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16Buffer_Namespace12CpuBufferMgr14allocateBufferEN10BufferList8iteratorEK6size_tK6size_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4N16Buffer_Namespace12CpuBufferMgr13initializeMemEv">
+<span id="_CPPv3N16Buffer_Namespace12CpuBufferMgr13initializeMemEv"></span><span id="_CPPv2N16Buffer_Namespace12CpuBufferMgr13initializeMemEv"></span><span id="Buffer_Namespace::CpuBufferMgr::initializeMem"></span><span class="target" id="class_buffer___namespace_1_1_cpu_buffer_mgr_1ab19d15c8f9208af539b5cc642eb958dc"></span>void <code class="sig-name descname">initializeMem</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16Buffer_Namespace12CpuBufferMgr13initializeMemEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Members</p>
+<p class="breathe-sectiondef-title rubric">Protected Attributes</p>
 <dl class="member">
 <dt id="_CPPv4N16Buffer_Namespace12CpuBufferMgr9cuda_mgr_E">
 <span id="_CPPv3N16Buffer_Namespace12CpuBufferMgr9cuda_mgr_E"></span><span id="_CPPv2N16Buffer_Namespace12CpuBufferMgr9cuda_mgr_E"></span><span id="Buffer_Namespace::CpuBufferMgr::cuda_mgr___CudaMgr_Namespace::CudaMgrP"></span><span class="target" id="class_buffer___namespace_1_1_cpu_buffer_mgr_1a4718888c3907339c5577014c802272d2"></span>CudaMgr_Namespace::<a class="reference internal" href="class_cuda_mgr___namespace_1_1_cuda_mgr.html#_CPPv4N17CudaMgr_Namespace7CudaMgrE" title="CudaMgr_Namespace::CudaMgr">CudaMgr</a> *<code class="sig-name descname">cuda_mgr_</code><a class="headerlink" href="#_CPPv4N16Buffer_Namespace12CpuBufferMgr9cuda_mgr_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Private Members</p>
 <dl class="member">
 <dt id="_CPPv4N16Buffer_Namespace12CpuBufferMgr10allocator_E">
 <span id="_CPPv3N16Buffer_Namespace12CpuBufferMgr10allocator_E"></span><span id="_CPPv2N16Buffer_Namespace12CpuBufferMgr10allocator_E"></span><span id="Buffer_Namespace::CpuBufferMgr::allocator___std::unique_ptr:Arena:"></span><span class="target" id="class_buffer___namespace_1_1_cpu_buffer_mgr_1a762743f558a4d752940f79f172c7089f"></span>std::unique_ptr&lt;<a class="reference internal" href="class_arena.html#_CPPv45Arena" title="Arena">Arena</a>&gt; <code class="sig-name descname">allocator_</code><a class="headerlink" href="#_CPPv4N16Buffer_Namespace12CpuBufferMgr10allocator_E" title="Permalink to this definition">¶</a><br /></dt>

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.8.0dev eb3a3d0
+                5.8.0dev 645e5c7
               </div>
             
           
@@ -355,6 +355,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_cpu_buffer_mgr.html">Class Buffer_Namespace::CpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer.html">Class Buffer_Namespace::GpuCudaBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer_mgr.html">Class Buffer_Namespace::GpuCudaBufferMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_tiered_cpu_buffer_mgr.html">Class Buffer_Namespace::TieredCpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_eviction_algorithm.html">Class CacheEvictionAlgorithm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_invalidator.html">Class CacheInvalidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_too_small_exception.html">Class CacheTooSmallException</a></li>
@@ -899,6 +900,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___disjoint.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Disjoint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___distance.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Distance</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___end_point.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_EndPoint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___equals.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Equals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geog_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeogFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geom_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeomFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___intersection.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Intersection</a></li>
@@ -1154,7 +1156,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_variable_length_array_encoder.html">Class foreign_storage::ParquetVariableLengthArrayEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_file_buffer_parser.html">Class foreign_storage::RegexFileBufferParser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_parser_data_wrapper.html">Class foreign_storage::RegexParserDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_file_reader.html">Class foreign_storage::SingleFileReader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_text_file_reader.html">Class foreign_storage::SingleTextFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_text_file_buffer_parser.html">Class foreign_storage::TextFileBufferParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_timestamp_bounds_validator.html">Class foreign_storage::TimestampBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
@@ -2237,6 +2242,11 @@
 <span id="_CPPv3N14Data_Namespace7DataMgr22resetPersistentStorageERKN14File_Namespace15DiskCacheConfigEK6size_tRK16SystemParameters"></span><span id="_CPPv2N14Data_Namespace7DataMgr22resetPersistentStorageERKN14File_Namespace15DiskCacheConfigEK6size_tRK16SystemParameters"></span><span id="Data_Namespace::DataMgr::resetPersistentStorage__File_Namespace::DiskCacheConfigCR.sC.SystemParametersCR"></span><span class="target" id="class_data___namespace_1_1_data_mgr_1a2a6e571e2dfcfaed8b7cc0b5b73c200f"></span>void <code class="sig-name descname">resetPersistentStorage</code><span class="sig-paren">(</span><em class="property">const</em> File_Namespace::<a class="reference internal" href="../struct/struct_file___namespace_1_1_disk_cache_config.html#_CPPv4N14File_Namespace15DiskCacheConfigE" title="File_Namespace::DiskCacheConfig">DiskCacheConfig</a> &amp;<em>cache_config</em>, <em class="property">const</em> size_t <em>num_reader_threads</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_system_parameters.html#_CPPv416SystemParameters" title="SystemParameters">SystemParameters</a> &amp;<em>sys_params</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14Data_Namespace7DataMgr22resetPersistentStorageERKN14File_Namespace15DiskCacheConfigEK6size_tRK16SystemParameters" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4NK14Data_Namespace7DataMgr15getCpuBufferMgrEv">
+<span id="_CPPv3NK14Data_Namespace7DataMgr15getCpuBufferMgrEv"></span><span id="_CPPv2NK14Data_Namespace7DataMgr15getCpuBufferMgrEv"></span><span id="Data_Namespace::DataMgr::getCpuBufferMgrC"></span><span class="target" id="class_data___namespace_1_1_data_mgr_1acd93220a149acb2d76bfcdf9b8a8b703"></span>Buffer_Namespace::<a class="reference internal" href="class_buffer___namespace_1_1_cpu_buffer_mgr.html#_CPPv4N16Buffer_Namespace12CpuBufferMgrE" title="Buffer_Namespace::CpuBufferMgr">CpuBufferMgr</a> *<code class="sig-name descname">getCpuBufferMgr</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK14Data_Namespace7DataMgr15getCpuBufferMgrEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Members</p>
@@ -2274,6 +2284,11 @@
 <dl class="function">
 <dt id="_CPPv4NK14Data_Namespace7DataMgr22createTopLevelMetadataEv">
 <span id="_CPPv3NK14Data_Namespace7DataMgr22createTopLevelMetadataEv"></span><span id="_CPPv2NK14Data_Namespace7DataMgr22createTopLevelMetadataEv"></span><span id="Data_Namespace::DataMgr::createTopLevelMetadataC"></span><span class="target" id="class_data___namespace_1_1_data_mgr_1aca4cc64c51ca8183e35a157b1dc09e21"></span>void <code class="sig-name descname">createTopLevelMetadata</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK14Data_Namespace7DataMgr22createTopLevelMetadataEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N14Data_Namespace7DataMgr20allocateCpuBufferMgrE7int32_t6size_t6size_t6size_t6size_tRKNSt6vectorI6size_tEE">
+<span id="_CPPv3N14Data_Namespace7DataMgr20allocateCpuBufferMgrE7int32_t6size_t6size_t6size_t6size_tRKNSt6vectorI6size_tEE"></span><span id="_CPPv2N14Data_Namespace7DataMgr20allocateCpuBufferMgrE7int32_t6size_t6size_t6size_t6size_tRKNSt6vectorI6size_tEE"></span><span id="Data_Namespace::DataMgr::allocateCpuBufferMgr__int32_t.s.s.s.s.std::vector:s:CR"></span><span class="target" id="class_data___namespace_1_1_data_mgr_1a32718e083556ffdb07e036719f038b27"></span>void <code class="sig-name descname">allocateCpuBufferMgr</code><span class="sig-paren">(</span>int32_t <em>device_id</em>, size_t <em>total_cpu_size</em>, size_t <em>minCpuSlabSize</em>, size_t <em>maxCpuSlabSize</em>, size_t <em>page_size</em>, <em class="property">const</em> std::vector&lt;size_t&gt; &amp;<em>cpu_tier_sizes</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14Data_Namespace7DataMgr20allocateCpuBufferMgrE7int32_t6size_t6size_t6size_t6size_tRKNSt6vectorI6size_tEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

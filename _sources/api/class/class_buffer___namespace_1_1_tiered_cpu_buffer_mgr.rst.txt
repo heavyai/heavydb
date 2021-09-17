@@ -1,0 +1,9 @@
+Class Buffer_Namespace::TieredCpuBufferMgr
+==========================================
+
+.. doxygenclass:: Buffer_Namespace::TieredCpuBufferMgr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.8.0dev eb3a3d0
+                5.8.0dev 645e5c7
               </div>
             
           
@@ -355,6 +355,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_cpu_buffer_mgr.html">Class Buffer_Namespace::CpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer.html">Class Buffer_Namespace::GpuCudaBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer_mgr.html">Class Buffer_Namespace::GpuCudaBufferMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_tiered_cpu_buffer_mgr.html">Class Buffer_Namespace::TieredCpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_eviction_algorithm.html">Class CacheEvictionAlgorithm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_invalidator.html">Class CacheInvalidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_too_small_exception.html">Class CacheTooSmallException</a></li>
@@ -899,6 +900,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___disjoint.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Disjoint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___distance.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Distance</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___end_point.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_EndPoint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___equals.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Equals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geog_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeogFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geom_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeomFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___intersection.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Intersection</a></li>
@@ -1154,7 +1156,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_variable_length_array_encoder.html">Class foreign_storage::ParquetVariableLengthArrayEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_file_buffer_parser.html">Class foreign_storage::RegexFileBufferParser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_parser_data_wrapper.html">Class foreign_storage::RegexParserDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_file_reader.html">Class foreign_storage::SingleFileReader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_text_file_reader.html">Class foreign_storage::SingleTextFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_text_file_buffer_parser.html">Class foreign_storage::TextFileBufferParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_timestamp_bounds_validator.html">Class foreign_storage::TimestampBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
@@ -2110,22 +2115,37 @@
 
 <dl class="function">
 <dt id="_CPPv4N5ArenaD0Ev">
-<span id="_CPPv3N5ArenaD0Ev"></span><span id="_CPPv2N5ArenaD0Ev"></span><span id="Arena::~Arena"></span><span class="target" id="class_arena_1ae21b399e9e3f6b8ac4ecc44d7d1667fc"></span><code class="sig-name descname">~Arena</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N5ArenaD0Ev" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N5ArenaD0Ev"></span><span id="_CPPv2N5ArenaD0Ev"></span><span id="Arena::~Arena"></span><span class="target" id="class_arena_1a6cb884233665d5f4363b5b1161cff4a8"></span><em class="property">virtual</em> <code class="sig-name descname">~Arena</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N5ArenaD0Ev" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N5Arena8allocateE6size_t">
-<span id="_CPPv3N5Arena8allocateE6size_t"></span><span id="_CPPv2N5Arena8allocateE6size_t"></span><span id="Arena::allocate__s"></span><span class="target" id="class_arena_1a8de05a9faab389072237399d97023f98"></span>void *<code class="sig-name descname">allocate</code><span class="sig-paren">(</span>size_t <em>num_bytes</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N5Arena8allocateE6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N5Arena8allocateE6size_t"></span><span id="_CPPv2N5Arena8allocateE6size_t"></span><span id="Arena::allocate__s"></span><span class="target" id="class_arena_1afac1dab705ae5df399b95e463148b4fa"></span><em class="property">virtual</em> void *<code class="sig-name descname">allocate</code><span class="sig-paren">(</span>size_t <em>num_bytes</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N5Arena8allocateE6size_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N5Arena15allocateAndZeroEK6size_t">
-<span id="_CPPv3N5Arena15allocateAndZeroEK6size_t"></span><span id="_CPPv2N5Arena15allocateAndZeroEK6size_t"></span><span id="Arena::allocateAndZero__sC"></span><span class="target" id="class_arena_1ace7b434182f75b4400377dcb77448d33"></span>void *<code class="sig-name descname">allocateAndZero</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N5Arena15allocateAndZeroEK6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N5Arena15allocateAndZeroEK6size_t"></span><span id="_CPPv2N5Arena15allocateAndZeroEK6size_t"></span><span id="Arena::allocateAndZero__sC"></span><span class="target" id="class_arena_1a0f125c880e5e0ef63f0dc969c3c980f5"></span><em class="property">virtual</em> void *<code class="sig-name descname">allocateAndZero</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N5Arena15allocateAndZeroEK6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK5Arena9bytesUsedEv">
+<span id="_CPPv3NK5Arena9bytesUsedEv"></span><span id="_CPPv2NK5Arena9bytesUsedEv"></span><span id="Arena::bytesUsedC"></span><span class="target" id="class_arena_1a177ac7fc7429adcd9c6164022bb51504"></span><em class="property">virtual</em> size_t <code class="sig-name descname">bytesUsed</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK5Arena9bytesUsedEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Members</p>
+<dl class="member">
+<dt id="_CPPv4N5Arena11size_limit_E">
+<span id="_CPPv3N5Arena11size_limit_E"></span><span id="_CPPv2N5Arena11size_limit_E"></span><span id="Arena::size_limit___s"></span><span class="target" id="class_arena_1a65a2479843cbd1261be94c975bfdad50"></span>size_t <code class="sig-name descname">size_limit_</code><a class="headerlink" href="#_CPPv4N5Arena11size_limit_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N5Arena5size_E">
+<span id="_CPPv3N5Arena5size_E"></span><span id="_CPPv2N5Arena5size_E"></span><span id="Arena::size___s"></span><span class="target" id="class_arena_1a6b872952cbea54a05302895db8b441d6"></span>size_t <code class="sig-name descname">size_</code><a class="headerlink" href="#_CPPv4N5Arena5size_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 <dl class="member">
 <dt id="_CPPv4N5Arena10allocator_E">
 <span id="_CPPv3N5Arena10allocator_E"></span><span id="_CPPv2N5Arena10allocator_E"></span><span id="Arena::allocator___SysAllocator:void:"></span><span class="target" id="class_arena_1ae49a94b4c490f883ceb4cbfa7c6fb13b"></span>SysAllocator&lt;void&gt; <code class="sig-name descname">allocator_</code><a class="headerlink" href="#_CPPv4N5Arena10allocator_E" title="Permalink to this definition">¶</a><br /></dt>
@@ -2133,7 +2153,7 @@
 
 <dl class="member">
 <dt id="_CPPv4N5Arena12allocations_E">
-<span id="_CPPv3N5Arena12allocations_E"></span><span id="_CPPv2N5Arena12allocations_E"></span><span id="Arena::allocations___std::vector:voidP:"></span><span class="target" id="class_arena_1a39ce83e9b114e99b2a210103923f2d3f"></span>std::vector&lt;void *&gt; <code class="sig-name descname">allocations_</code><a class="headerlink" href="#_CPPv4N5Arena12allocations_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N5Arena12allocations_E"></span><span id="_CPPv2N5Arena12allocations_E"></span><span id="Arena::allocations___std::vector:std::pair:voidP.s::"></span><span class="target" id="class_arena_1a401263016ac43aa425febdc1719c0c88"></span>std::vector&lt;std::pair&lt;void *, size_t&gt;&gt; <code class="sig-name descname">allocations_</code><a class="headerlink" href="#_CPPv4N5Arena12allocations_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

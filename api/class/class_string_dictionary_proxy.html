@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.8.0dev eb3a3d0
+                5.8.0dev 645e5c7
               </div>
             
           
@@ -355,6 +355,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_cpu_buffer_mgr.html">Class Buffer_Namespace::CpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer.html">Class Buffer_Namespace::GpuCudaBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer_mgr.html">Class Buffer_Namespace::GpuCudaBufferMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_tiered_cpu_buffer_mgr.html">Class Buffer_Namespace::TieredCpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_eviction_algorithm.html">Class CacheEvictionAlgorithm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_invalidator.html">Class CacheInvalidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_too_small_exception.html">Class CacheTooSmallException</a></li>
@@ -899,6 +900,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___disjoint.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Disjoint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___distance.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Distance</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___end_point.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_EndPoint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___equals.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Equals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geog_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeogFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geom_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeomFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___intersection.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Intersection</a></li>
@@ -1154,7 +1156,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_variable_length_array_encoder.html">Class foreign_storage::ParquetVariableLengthArrayEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_file_buffer_parser.html">Class foreign_storage::RegexFileBufferParser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_parser_data_wrapper.html">Class foreign_storage::RegexParserDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_file_reader.html">Class foreign_storage::SingleFileReader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_text_file_reader.html">Class foreign_storage::SingleTextFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_text_file_buffer_parser.html">Class foreign_storage::TextFileBufferParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_timestamp_bounds_validator.html">Class foreign_storage::TimestampBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
@@ -2103,8 +2108,8 @@
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N21StringDictionaryProxy21StringDictionaryProxyENSt10shared_ptrI16StringDictionaryEEK7int64_t">
-<span id="_CPPv3N21StringDictionaryProxy21StringDictionaryProxyENSt10shared_ptrI16StringDictionaryEEK7int64_t"></span><span id="_CPPv2N21StringDictionaryProxy21StringDictionaryProxyENSt10shared_ptrI16StringDictionaryEEK7int64_t"></span><span id="StringDictionaryProxy::StringDictionaryProxy__std::shared_ptr:StringDictionary:.int64_tC"></span><span class="target" id="class_string_dictionary_proxy_1acb6182c798a5f6e34ea547ad45006130"></span><code class="sig-name descname">StringDictionaryProxy</code><span class="sig-paren">(</span>std::shared_ptr&lt;<a class="reference internal" href="class_string_dictionary.html#_CPPv416StringDictionary" title="StringDictionary">StringDictionary</a>&gt; <em>sd</em>, <em class="property">const</em> int64_t <em>generation</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21StringDictionaryProxy21StringDictionaryProxyENSt10shared_ptrI16StringDictionaryEEK7int64_t" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21StringDictionaryProxy21StringDictionaryProxyENSt10shared_ptrI16StringDictionaryEEK7int32_tK7int64_t">
+<span id="_CPPv3N21StringDictionaryProxy21StringDictionaryProxyENSt10shared_ptrI16StringDictionaryEEK7int32_tK7int64_t"></span><span id="_CPPv2N21StringDictionaryProxy21StringDictionaryProxyENSt10shared_ptrI16StringDictionaryEEK7int32_tK7int64_t"></span><span id="StringDictionaryProxy::StringDictionaryProxy__std::shared_ptr:StringDictionary:.int32_tC.int64_tC"></span><span class="target" id="class_string_dictionary_proxy_1a1ca0bd8ba5a46c02b3e4615522d5a709"></span><code class="sig-name descname">StringDictionaryProxy</code><span class="sig-paren">(</span>std::shared_ptr&lt;<a class="reference internal" href="class_string_dictionary.html#_CPPv416StringDictionary" title="StringDictionary">StringDictionary</a>&gt; <em>sd</em>, <em class="property">const</em> int32_t <em>string_dict_id</em>, <em class="property">const</em> int64_t <em>generation</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21StringDictionaryProxy21StringDictionaryProxyENSt10shared_ptrI16StringDictionaryEEK7int32_tK7int64_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2186,6 +2191,11 @@
 <dd></dd></dl>
 
 <dl class="member">
+<dt id="_CPPv4N21StringDictionaryProxy15string_dict_id_E">
+<span id="_CPPv3N21StringDictionaryProxy15string_dict_id_E"></span><span id="_CPPv2N21StringDictionaryProxy15string_dict_id_E"></span><span id="StringDictionaryProxy::string_dict_id___int32_tC"></span><span class="target" id="class_string_dictionary_proxy_1aac87ca7c8edec202787c3ae012db5b11"></span><em class="property">const</em> int32_t <code class="sig-name descname">string_dict_id_</code><a class="headerlink" href="#_CPPv4N21StringDictionaryProxy15string_dict_id_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
 <dt id="_CPPv4N21StringDictionaryProxy21transient_int_to_str_E">
 <span id="_CPPv3N21StringDictionaryProxy21transient_int_to_str_E"></span><span id="_CPPv2N21StringDictionaryProxy21transient_int_to_str_E"></span><span id="StringDictionaryProxy::transient_int_to_str___std::map:int32_t.ss:"></span><span class="target" id="class_string_dictionary_proxy_1ad8ec99954a6320d3f67493355f34ee1e"></span>std::map&lt;int32_t, std::string&gt; <code class="sig-name descname">transient_int_to_str_</code><a class="headerlink" href="#_CPPv4N21StringDictionaryProxy21transient_int_to_str_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2203,6 +2213,19 @@
 <dl class="member">
 <dt id="_CPPv4N21StringDictionaryProxy9rw_mutex_E">
 <span id="_CPPv3N21StringDictionaryProxy9rw_mutex_E"></span><span id="_CPPv2N21StringDictionaryProxy9rw_mutex_E"></span><span id="StringDictionaryProxy::rw_mutex___mapd_shared_mutex"></span><span class="target" id="class_string_dictionary_proxy_1a30b1219fc52712b745faab696191cb3c"></span>mapd_shared_mutex <code class="sig-name descname">rw_mutex_</code><a class="headerlink" href="#_CPPv4N21StringDictionaryProxy9rw_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Friends</p>
+<dl class="function">
+<dt id="_CPPv4eqRK21StringDictionaryProxyRK21StringDictionaryProxy">
+<span id="_CPPv3eqRK21StringDictionaryProxyRK21StringDictionaryProxy"></span><span id="_CPPv2eqRK21StringDictionaryProxyRK21StringDictionaryProxy"></span><span id="eq-operator__StringDictionaryProxyCR.StringDictionaryProxyCR"></span><span class="target" id="class_string_dictionary_proxy_1af81da50be479be2d29189ba710d66314"></span>bool <code class="sig-name descname">operator==</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv421StringDictionaryProxy" title="StringDictionaryProxy">StringDictionaryProxy</a> &amp;<em>sdp1</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv421StringDictionaryProxy" title="StringDictionaryProxy">StringDictionaryProxy</a> &amp;<em>sdp2</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4eqRK21StringDictionaryProxyRK21StringDictionaryProxy" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4neRK21StringDictionaryProxyRK21StringDictionaryProxy">
+<span id="_CPPv3neRK21StringDictionaryProxyRK21StringDictionaryProxy"></span><span id="_CPPv2neRK21StringDictionaryProxyRK21StringDictionaryProxy"></span><span id="neq-operator__StringDictionaryProxyCR.StringDictionaryProxyCR"></span><span class="target" id="class_string_dictionary_proxy_1a1d0b21d4f17080db19297b9273748994"></span>bool <code class="sig-name descname">operator!=</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv421StringDictionaryProxy" title="StringDictionaryProxy">StringDictionaryProxy</a> &amp;<em>sdp1</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv421StringDictionaryProxy" title="StringDictionaryProxy">StringDictionaryProxy</a> &amp;<em>sdp2</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4neRK21StringDictionaryProxyRK21StringDictionaryProxy" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

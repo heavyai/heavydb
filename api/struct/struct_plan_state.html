@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.8.0dev eb3a3d0
+                5.8.0dev 645e5c7
               </div>
             
           
@@ -355,6 +355,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_buffer___namespace_1_1_cpu_buffer_mgr.html">Class Buffer_Namespace::CpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_buffer___namespace_1_1_gpu_cuda_buffer.html">Class Buffer_Namespace::GpuCudaBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_buffer___namespace_1_1_gpu_cuda_buffer_mgr.html">Class Buffer_Namespace::GpuCudaBufferMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_buffer___namespace_1_1_tiered_cpu_buffer_mgr.html">Class Buffer_Namespace::TieredCpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_cache_eviction_algorithm.html">Class CacheEvictionAlgorithm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_cache_invalidator.html">Class CacheInvalidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_cache_too_small_exception.html">Class CacheTooSmallException</a></li>
@@ -899,6 +900,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___disjoint.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Disjoint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___distance.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Distance</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___end_point.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_EndPoint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___equals.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Equals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geog_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeogFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geom_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeomFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___intersection.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Intersection</a></li>
@@ -1154,7 +1156,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_parquet_variable_length_array_encoder.html">Class foreign_storage::ParquetVariableLengthArrayEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_regex_file_buffer_parser.html">Class foreign_storage::RegexFileBufferParser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_regex_parser_data_wrapper.html">Class foreign_storage::RegexParserDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_single_file_reader.html">Class foreign_storage::SingleFileReader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_single_text_file_reader.html">Class foreign_storage::SingleTextFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_text_file_buffer_parser.html">Class foreign_storage::TextFileBufferParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_timestamp_bounds_validator.html">Class foreign_storage::TimestampBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
@@ -2180,6 +2185,11 @@
 <span id="_CPPv3NK9PlanState14getSimpleQualsEv"></span><span id="_CPPv2NK9PlanState14getSimpleQualsEv"></span><span id="PlanState::getSimpleQualsC"></span><span class="target" id="struct_plan_state_1a0a9c3eb30e94504db5bb40c0dfd11198"></span>std::list&lt;std::shared_ptr&lt;Analyzer::<a class="reference internal" href="../class/class_analyzer_1_1_expr.html#_CPPv4N8Analyzer4ExprE" title="Analyzer::Expr">Expr</a>&gt;&gt; <code class="sig-name descname">getSimpleQuals</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9PlanState14getSimpleQualsEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4N9PlanState30addNonHashtableQualForLeftJoinE6size_tNSt10shared_ptrIN8Analyzer4ExprEEE">
+<span id="_CPPv3N9PlanState30addNonHashtableQualForLeftJoinE6size_tNSt10shared_ptrIN8Analyzer4ExprEEE"></span><span id="_CPPv2N9PlanState30addNonHashtableQualForLeftJoinE6size_tNSt10shared_ptrIN8Analyzer4ExprEEE"></span><span id="PlanState::addNonHashtableQualForLeftJoin__s.std::shared_ptr:Analyzer::Expr:"></span><span class="target" id="struct_plan_state_1a0969d0c4187a6971662da591da62411e"></span>void <code class="sig-name descname">addNonHashtableQualForLeftJoin</code><span class="sig-paren">(</span>size_t <em>idx</em>, std::shared_ptr&lt;Analyzer::<a class="reference internal" href="../class/class_analyzer_1_1_expr.html#_CPPv4N8Analyzer4ExprE" title="Analyzer::Expr">Expr</a>&gt; <em>expr</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9PlanState30addNonHashtableQualForLeftJoinE6size_tNSt10shared_ptrIN8Analyzer4ExprEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Members</p>
@@ -2211,6 +2221,11 @@
 <dl class="member">
 <dt id="_CPPv4N9PlanState21columns_to_not_fetch_E">
 <span id="_CPPv3N9PlanState21columns_to_not_fetch_E"></span><span id="_CPPv2N9PlanState21columns_to_not_fetch_E"></span><span id="PlanState::columns_to_not_fetch___std::set:std::pair:TableId.ColumnId::"></span><span class="target" id="struct_plan_state_1a9b44b52593f4f362c3c9c6ac5529e488"></span>std::set&lt;std::pair&lt;<a class="reference internal" href="#_CPPv4N9PlanState7TableIdE" title="PlanState::TableId">TableId</a>, <a class="reference internal" href="#_CPPv4N9PlanState8ColumnIdE" title="PlanState::ColumnId">ColumnId</a>&gt;&gt; <code class="sig-name descname">columns_to_not_fetch_</code><a class="headerlink" href="#_CPPv4N9PlanState21columns_to_not_fetch_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N9PlanState30left_join_non_hashtable_quals_E">
+<span id="_CPPv3N9PlanState30left_join_non_hashtable_quals_E"></span><span id="_CPPv2N9PlanState30left_join_non_hashtable_quals_E"></span><span id="PlanState::left_join_non_hashtable_quals___std::unordered_map:s.std::vector:std::shared_ptr:Analyzer::Expr:::"></span><span class="target" id="struct_plan_state_1a2d07ec26a50a311c0363ad793b505646"></span>std::unordered_map&lt;size_t, std::vector&lt;std::shared_ptr&lt;Analyzer::<a class="reference internal" href="../class/class_analyzer_1_1_expr.html#_CPPv4N8Analyzer4ExprE" title="Analyzer::Expr">Expr</a>&gt;&gt;&gt; <code class="sig-name descname">left_join_non_hashtable_quals_</code><a class="headerlink" href="#_CPPv4N9PlanState30left_join_non_hashtable_quals_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

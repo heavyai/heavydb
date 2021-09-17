@@ -1,0 +1,9 @@
+Class foreign_storage::RegexParserDataWrapper
+=============================================
+
+.. doxygenclass:: foreign_storage::RegexParserDataWrapper
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

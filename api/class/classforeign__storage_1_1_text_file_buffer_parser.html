@@ -41,7 +41,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Class foreign_storage::TimestampBoundsValidator" href="classforeign__storage_1_1_timestamp_bounds_validator.html" />
-    <link rel="prev" title="Class foreign_storage::SingleFileReader" href="classforeign__storage_1_1_single_file_reader.html" /> 
+    <link rel="prev" title="Class foreign_storage::SingleTextFileReader" href="classforeign__storage_1_1_single_text_file_reader.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.8.0dev eb3a3d0
+                5.8.0dev 645e5c7
               </div>
             
           
@@ -355,6 +355,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_cpu_buffer_mgr.html">Class Buffer_Namespace::CpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer.html">Class Buffer_Namespace::GpuCudaBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer_mgr.html">Class Buffer_Namespace::GpuCudaBufferMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_buffer___namespace_1_1_tiered_cpu_buffer_mgr.html">Class Buffer_Namespace::TieredCpuBufferMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_eviction_algorithm.html">Class CacheEvictionAlgorithm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_invalidator.html">Class CacheInvalidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cache_too_small_exception.html">Class CacheTooSmallException</a></li>
@@ -899,6 +900,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___disjoint.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Disjoint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___distance.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Distance</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___end_point.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_EndPoint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___equals.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Equals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geog_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeogFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___geom_from_text.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_GeomFromText</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_sql_operator_table_1_1_s_t___intersection.html">Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Intersection</a></li>
@@ -1154,7 +1156,10 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_variable_length_array_encoder.html">Class foreign_storage::ParquetVariableLengthArrayEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_file_buffer_parser.html">Class foreign_storage::RegexFileBufferParser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_parser_data_wrapper.html">Class foreign_storage::RegexParserDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_file_reader.html">Class foreign_storage::SingleFileReader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_single_text_file_reader.html">Class foreign_storage::SingleTextFileReader</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class foreign_storage::TextFileBufferParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_timestamp_bounds_validator.html">Class foreign_storage::TimestampBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_typed_parquet_in_place_encoder.html">Class foreign_storage::TypedParquetInPlaceEncoder</a></li>
@@ -2100,7 +2105,7 @@
 <dl class="class">
 <dt id="_CPPv4N15foreign_storage20TextFileBufferParserE">
 <span id="_CPPv3N15foreign_storage20TextFileBufferParserE"></span><span id="_CPPv2N15foreign_storage20TextFileBufferParserE"></span><span id="foreign_storage::TextFileBufferParser"></span><span class="target" id="classforeign__storage_1_1_text_file_buffer_parser"></span><em class="property">class </em><code class="sig-name descname">TextFileBufferParser</code><a class="headerlink" href="#_CPPv4N15foreign_storage20TextFileBufferParserE" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Subclassed by <a class="reference internal" href="classforeign__storage_1_1_csv_file_buffer_parser.html#classforeign__storage_1_1_csv_file_buffer_parser"><span class="std std-ref">foreign_storage::CsvFileBufferParser</span></a></p>
+<dd><p>Subclassed by <a class="reference internal" href="classforeign__storage_1_1_csv_file_buffer_parser.html#classforeign__storage_1_1_csv_file_buffer_parser"><span class="std std-ref">foreign_storage::CsvFileBufferParser</span></a>, <a class="reference internal" href="classforeign__storage_1_1_regex_file_buffer_parser.html#classforeign__storage_1_1_regex_file_buffer_parser"><span class="std std-ref">foreign_storage::RegexFileBufferParser</span></a></p>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
@@ -2123,10 +2128,39 @@
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK15foreign_storage20TextFileBufferParser18findRowEndPositionER6size_tRNSt10unique_ptrIA_cEER6size_tRKN13import_export10CopyParamsEK6size_tRjPN15foreign_storage10FileReaderE">
-<span id="_CPPv3NK15foreign_storage20TextFileBufferParser18findRowEndPositionER6size_tRNSt10unique_ptrIA_cEER6size_tRKN13import_export10CopyParamsEK6size_tRjPN15foreign_storage10FileReaderE"></span><span id="_CPPv2NK15foreign_storage20TextFileBufferParser18findRowEndPositionER6size_tRNSt10unique_ptrIA_cEER6size_tRKN13import_export10CopyParamsEK6size_tRjPN15foreign_storage10FileReaderE"></span><span id="foreign_storage::TextFileBufferParser::findRowEndPosition__sR.std::unique_ptr:cA:R.sR.import_export::CopyParamsCR.sC.unsigned-iR.foreign_storage::FileReaderPC"></span><span class="target" id="classforeign__storage_1_1_text_file_buffer_parser_1a0f25f501b8dea5e814020925bef66da9"></span><em class="property">virtual</em> size_t <code class="sig-name descname">findRowEndPosition</code><span class="sig-paren">(</span>size_t &amp;<em>alloc_size</em>, std::unique_ptr&lt;char[]&gt; &amp;<em>buffer</em>, size_t &amp;<em>buffer_size</em>, <em class="property">const</em> import_export::<a class="reference internal" href="../struct/structimport__export_1_1_copy_params.html#_CPPv4N13import_export10CopyParamsE" title="import_export::CopyParams">CopyParams</a> &amp;<em>copy_params</em>, <em class="property">const</em> size_t <em>buffer_first_row_index</em>, unsigned int &amp;<em>num_rows_in_buffer</em>, foreign_storage::<a class="reference internal" href="classforeign__storage_1_1_file_reader.html#_CPPv4N15foreign_storage10FileReaderE" title="foreign_storage::FileReader">FileReader</a> *<em>file_reader</em><span class="sig-paren">)</span> <em class="property">const</em> = 0<a class="headerlink" href="#_CPPv4NK15foreign_storage20TextFileBufferParser18findRowEndPositionER6size_tRNSt10unique_ptrIA_cEER6size_tRKN13import_export10CopyParamsEK6size_tRjPN15foreign_storage10FileReaderE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK15foreign_storage20TextFileBufferParser18findRowEndPositionER6size_tRNSt10unique_ptrIA_cEER6size_tRKN13import_export10CopyParamsEK6size_tRjP10FileReader">
+<span id="_CPPv3NK15foreign_storage20TextFileBufferParser18findRowEndPositionER6size_tRNSt10unique_ptrIA_cEER6size_tRKN13import_export10CopyParamsEK6size_tRjP10FileReader"></span><span id="_CPPv2NK15foreign_storage20TextFileBufferParser18findRowEndPositionER6size_tRNSt10unique_ptrIA_cEER6size_tRKN13import_export10CopyParamsEK6size_tRjP10FileReader"></span><span id="foreign_storage::TextFileBufferParser::findRowEndPosition__sR.std::unique_ptr:cA:R.sR.import_export::CopyParamsCR.sC.unsigned-iR.FileReaderPC"></span><span class="target" id="classforeign__storage_1_1_text_file_buffer_parser_1a2e5eed924334871bc444f6c041ab2b32"></span><em class="property">virtual</em> size_t <code class="sig-name descname">findRowEndPosition</code><span class="sig-paren">(</span>size_t &amp;<em>alloc_size</em>, std::unique_ptr&lt;char[]&gt; &amp;<em>buffer</em>, size_t &amp;<em>buffer_size</em>, <em class="property">const</em> import_export::<a class="reference internal" href="../struct/structimport__export_1_1_copy_params.html#_CPPv4N13import_export10CopyParamsE" title="import_export::CopyParams">CopyParams</a> &amp;<em>copy_params</em>, <em class="property">const</em> size_t <em>buffer_first_row_index</em>, unsigned int &amp;<em>num_rows_in_buffer</em>, <a class="reference internal" href="classforeign__storage_1_1_file_reader.html#_CPPv4N15foreign_storage10FileReaderE" title="foreign_storage::FileReader">FileReader</a> *<em>file_reader</em><span class="sig-paren">)</span> <em class="property">const</em> = 0<a class="headerlink" href="#_CPPv4NK15foreign_storage20TextFileBufferParser18findRowEndPositionER6size_tRNSt10unique_ptrIA_cEER6size_tRKN13import_export10CopyParamsEK6size_tRjP10FileReader" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Finds and returns the offset of the end of the last row in the given buffer. If the buffer does not contain at least one row, the buffer is extended with more content from the file until a row is read. An exception is thrown if the buffer is extended to a maximum threshold and at least one row has still not been read. </p>
 </dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK15foreign_storage20TextFileBufferParser13validateFilesEPK10FileReaderPK12ForeignTable">
+<span id="_CPPv3NK15foreign_storage20TextFileBufferParser13validateFilesEPK10FileReaderPK12ForeignTable"></span><span id="_CPPv2NK15foreign_storage20TextFileBufferParser13validateFilesEPK10FileReaderPK12ForeignTable"></span><span id="foreign_storage::TextFileBufferParser::validateFiles__FileReaderCP.ForeignTableCPC"></span><span class="target" id="classforeign__storage_1_1_text_file_buffer_parser_1ad253836827bb0d3a7efe48026c59d0cb"></span><em class="property">virtual</em> void <code class="sig-name descname">validateFiles</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="classforeign__storage_1_1_file_reader.html#_CPPv4N15foreign_storage10FileReaderE" title="foreign_storage::FileReader">FileReader</a> *<em>file_reader</em>, <em class="property">const</em> <a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTableE" title="foreign_storage::ForeignTable">ForeignTable</a> *<em>foreign_table</em><span class="sig-paren">)</span> <em class="property">const</em> = 0<a class="headerlink" href="#_CPPv4NK15foreign_storage20TextFileBufferParser13validateFilesEPK10FileReaderPK12ForeignTable" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Performs basic validation of files to be parsed. </p>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Static Functions</p>
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage20TextFileBufferParser32convertImportBuffersToDataBlocksERKNSt6vectorINSt10unique_ptrIN13import_export17TypedImportBufferEEEEE">
+<span id="_CPPv3N15foreign_storage20TextFileBufferParser32convertImportBuffersToDataBlocksERKNSt6vectorINSt10unique_ptrIN13import_export17TypedImportBufferEEEEE"></span><span id="_CPPv2N15foreign_storage20TextFileBufferParser32convertImportBuffersToDataBlocksERKNSt6vectorINSt10unique_ptrIN13import_export17TypedImportBufferEEEEE"></span><span id="foreign_storage::TextFileBufferParser::convertImportBuffersToDataBlocks__std::vector:std::unique_ptr:import_export::TypedImportBuffer::CR"></span><span class="target" id="classforeign__storage_1_1_text_file_buffer_parser_1af1fd78f97852b9d39b659efab2b1735b"></span>std::map&lt;int, <a class="reference internal" href="../union/union_data_block_ptr.html#_CPPv412DataBlockPtr" title="DataBlockPtr">DataBlockPtr</a>&gt; <code class="sig-name descname">convertImportBuffersToDataBlocks</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;std::unique_ptr&lt;import_export::<a class="reference internal" href="classimport__export_1_1_typed_import_buffer.html#_CPPv4N13import_export17TypedImportBufferE" title="import_export::TypedImportBuffer">TypedImportBuffer</a>&gt;&gt; &amp;<em>import_buffers</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage20TextFileBufferParser32convertImportBuffersToDataBlocksERKNSt6vectorINSt10unique_ptrIN13import_export17TypedImportBufferEEEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage20TextFileBufferParser18isCoordinateScalarEKNSt11string_viewE">
+<span id="_CPPv3N15foreign_storage20TextFileBufferParser18isCoordinateScalarEKNSt11string_viewE"></span><span id="_CPPv2N15foreign_storage20TextFileBufferParser18isCoordinateScalarEKNSt11string_viewE"></span><span id="foreign_storage::TextFileBufferParser::isCoordinateScalar__std::string_viewC"></span><span class="target" id="classforeign__storage_1_1_text_file_buffer_parser_1ab3158ff031a3307d9611c6c430277adf"></span>bool <code class="sig-name descname">isCoordinateScalar</code><span class="sig-paren">(</span><em class="property">const</em> std::string_view <em>datum</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage20TextFileBufferParser18isCoordinateScalarEKNSt11string_viewE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage20TextFileBufferParser16processGeoColumnERNSt6vectorINSt10unique_ptrIN13import_export17TypedImportBufferEEEEER6size_tRKN13import_export10CopyParamsERNSt4listIPK16ColumnDescriptorE8iteratorERNSt6vectorINSt11string_viewEEER6size_tb6size_t6size_tNSt10shared_ptrIN17Catalog_Namespace7CatalogEEE">
+<span id="_CPPv3N15foreign_storage20TextFileBufferParser16processGeoColumnERNSt6vectorINSt10unique_ptrIN13import_export17TypedImportBufferEEEEER6size_tRKN13import_export10CopyParamsERNSt4listIPK16ColumnDescriptorE8iteratorERNSt6vectorINSt11string_viewEEER6size_tb6size_t6size_tNSt10shared_ptrIN17Catalog_Namespace7CatalogEEE"></span><span id="_CPPv2N15foreign_storage20TextFileBufferParser16processGeoColumnERNSt6vectorINSt10unique_ptrIN13import_export17TypedImportBufferEEEEER6size_tRKN13import_export10CopyParamsERNSt4listIPK16ColumnDescriptorE8iteratorERNSt6vectorINSt11string_viewEEER6size_tb6size_t6size_tNSt10shared_ptrIN17Catalog_Namespace7CatalogEEE"></span><span id="foreign_storage::TextFileBufferParser::processGeoColumn__std::vector:std::unique_ptr:import_export::TypedImportBuffer::R.sR.import_export::CopyParamsCR.std::list:ColumnDescriptorCP:::iteratorR.std::vector:std::string_view:R.sR.b.s.s.std::shared_ptr:Catalog_Namespace::Catalog:"></span><span class="target" id="classforeign__storage_1_1_text_file_buffer_parser_1aa760687062f74722a4b596c0d5183b6e"></span>void <code class="sig-name descname">processGeoColumn</code><span class="sig-paren">(</span>std::vector&lt;std::unique_ptr&lt;import_export::<a class="reference internal" href="classimport__export_1_1_typed_import_buffer.html#_CPPv4N13import_export17TypedImportBufferE" title="import_export::TypedImportBuffer">TypedImportBuffer</a>&gt;&gt; &amp;<em>import_buffers</em>, size_t &amp;<em>col_idx</em>, <em class="property">const</em> import_export::<a class="reference internal" href="../struct/structimport__export_1_1_copy_params.html#_CPPv4N13import_export10CopyParamsE" title="import_export::CopyParams">CopyParams</a> &amp;<em>copy_params</em>, std::list&lt;<em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *&gt;::iterator &amp;<em>cd_it</em>, std::vector&lt;std::string_view&gt; &amp;<em>row</em>, size_t &amp;<em>import_idx</em>, bool <em>is_null</em>, size_t <em>first_row_index</em>, size_t <em>row_index_plus_one</em>, std::shared_ptr&lt;Catalog_Namespace::<a class="reference internal" href="class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7CatalogE" title="Catalog_Namespace::Catalog">Catalog</a>&gt; <em>catalog</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage20TextFileBufferParser16processGeoColumnERNSt6vectorINSt10unique_ptrIN13import_export17TypedImportBufferEEEEER6size_tRKN13import_export10CopyParamsERNSt4listIPK16ColumnDescriptorE8iteratorERNSt6vectorINSt11string_viewEEER6size_tb6size_t6size_tNSt10shared_ptrIN17Catalog_Namespace7CatalogEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage20TextFileBufferParser11isNullDatumEKNSt11string_viewEPK16ColumnDescriptorRKNSt6stringE">
+<span id="_CPPv3N15foreign_storage20TextFileBufferParser11isNullDatumEKNSt11string_viewEPK16ColumnDescriptorRKNSt6stringE"></span><span id="_CPPv2N15foreign_storage20TextFileBufferParser11isNullDatumEKNSt11string_viewEPK16ColumnDescriptorRKNSt6stringE"></span><span id="foreign_storage::TextFileBufferParser::isNullDatum__std::string_viewC.ColumnDescriptorCP.ssCR"></span><span class="target" id="classforeign__storage_1_1_text_file_buffer_parser_1afe09887ff4b1074de2fddb0905f59652"></span>bool <code class="sig-name descname">isNullDatum</code><span class="sig-paren">(</span><em class="property">const</em> std::string_view <em>datum</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *<em>column</em>, <em class="property">const</em> std::string &amp;<em>null_indicator</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage20TextFileBufferParser11isNullDatumEKNSt11string_viewEPK16ColumnDescriptorRKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
 
 </div>
 </dd></dl>
@@ -2144,7 +2178,7 @@
         <a href="classforeign__storage_1_1_timestamp_bounds_validator.html" class="btn btn-neutral float-right" title="Class foreign_storage::TimestampBoundsValidator" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="classforeign__storage_1_1_single_file_reader.html" class="btn btn-neutral float-left" title="Class foreign_storage::SingleFileReader" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="classforeign__storage_1_1_single_text_file_reader.html" class="btn btn-neutral float-left" title="Class foreign_storage::SingleTextFileReader" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   
