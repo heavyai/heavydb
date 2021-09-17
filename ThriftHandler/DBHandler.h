@@ -112,7 +112,7 @@ class TrackingProcessor : public OmniSciProcessor {
 
   bool process(std::shared_ptr<::apache::thrift::protocol::TProtocol> in,
                std::shared_ptr<::apache::thrift::protocol::TProtocol> out,
-               void* connectionContext) {
+               void* connectionContext) override {
     using namespace ::apache::thrift;
 
     auto transport = in->getTransport();
@@ -256,6 +256,8 @@ class DBHandler : public OmniSciIf {
                   const std::string& memory_level) override;
   void clear_cpu_memory(const TSessionId& session) override;
   void clear_gpu_memory(const TSessionId& session) override;
+  void clearRenderMemory(const TSessionId& session);  // it's not declared on thrifth
+                                                      // and on persisten leaf client
   void set_cur_session(const TSessionId& parent_session,
                        const TSessionId& leaf_session,
                        const std::string& start_time_str,

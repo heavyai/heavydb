@@ -16,6 +16,7 @@ add_executable(StringFunctionsTest StringFunctionsTest.cpp)
 add_executable(ProfileTest ProfileTest.cpp)
 add_executable(ForeignServerDdlTest ForeignServerDdlTest.cpp)
 add_executable(ShowCommandsDdlTest ShowCommandsDdlTest.cpp)
+add_executable(AlterSystemTest AlterSystemTest.cpp)
 add_executable(CatalogMigrationTest CatalogMigrationTest.cpp)
 add_executable(CreateAndDropTableDdlTest CreateAndDropTableDdlTest.cpp)
 add_executable(ForeignTableDmlTest ForeignTableDmlTest.cpp)
@@ -196,6 +197,7 @@ target_link_libraries(ForeignServerDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CatalogMigrationTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CreateAndDropTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(ShowCommandsDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(AlterSystemTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(ForeignTableDmlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(DashboardAndCustomExpressionTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(FileMgrTest gtest DataMgr ${Boost_LIBRARIES})
@@ -286,6 +288,7 @@ add_tesT(RuntimeInterruptTest RuntimeInterruptTest ${TEST_ARGS})
 add_test(CommandLineTest CommandLineTest ${TEST_ARGS})
 add_test(ForeignServerDdlTest ForeignServerDdlTest ${TEST_ARGS})
 add_test(ShowCommandsDdlTest ShowCommandsDdlTest ${TEST_ARGS})
+add_test(AlterSystemTest AlterSystemTest ${TEST_ARGS})
 add_test(CatalogMigrationTest CatalogMigrationTest ${TEST_ARGS})
 add_test(CreateAndDropTableDdlTest CreateAndDropTableDdlTest ${TEST_ARGS})
 add_test(ForeignTableDmlTest ForeignTableDmlTest ${TEST_ARGS})
@@ -384,6 +387,7 @@ set(TEST_PROGRAMS
   CommandLineTest
   ForeignServerDdlTest
   ShowCommandsDdlTest
+  AlterSystemTest
   CatalogMigrationTest
   CreateAndDropTableDdlTest
   ForeignTableDmlTest

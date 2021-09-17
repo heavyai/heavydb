@@ -22,4 +22,32 @@ public class InterruptCommandTest extends DDLTest {
             gson.fromJson(result.plan_result, JsonObject.class);
     assertEquals(expectedJsonObject, actualJsonObject);
   }
+
+  @Test
+  public void alterSystemClear_cpu() throws Exception {
+    final JsonObject expectedJsonObject = getJsonFromFile("alter_system_clear_cpu.json");
+    final TPlanResult result = processDdlCommand("ALTER SYSTEM CLEAR CPU MEMORY;");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
+
+  @Test
+  public void alterSystemClear_gpu() throws Exception {
+    final JsonObject expectedJsonObject = getJsonFromFile("alter_system_clear_gpu.json");
+    final TPlanResult result = processDdlCommand("ALTER SYSTEM CLEAR GPU MEMORY;");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
+
+  @Test
+  public void alterSystemClear_render() throws Exception {
+    final JsonObject expectedJsonObject =
+            getJsonFromFile("alter_system_clear_render.json");
+    final TPlanResult result = processDdlCommand("ALTER SYSTEM CLEAR RENDER MEMORY;");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
 }

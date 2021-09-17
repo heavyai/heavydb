@@ -1,0 +1,7 @@
+{
+  "statementType": "DDL",
+  "payload": {
+    "command": "ALTER_SYSTEM_CLEAR",
+    "cacheType": "GPU"
+  }
+}

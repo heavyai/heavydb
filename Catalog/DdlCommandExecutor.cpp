@@ -250,7 +250,7 @@ class JsonColumnEncoding : public ddl_utils::Encoding {
 class DdlCommandDataImpl : public DdlCommandData {
  public:
   DdlCommandDataImpl(const std::string& ddl_statement);
-  ~DdlCommandDataImpl();
+  ~DdlCommandDataImpl() override;
 
   // The full query available for futher analysis
   const rapidjson::Value& query() const;
@@ -259,7 +259,7 @@ class DdlCommandDataImpl : public DdlCommandData {
   const rapidjson::Value& payload() const;
 
   // commandStr extracted from the payload
-  virtual std::string commandStr() override;
+  std::string commandStr() override;
 
   rapidjson::Document ddl_query;
 };
@@ -511,6 +511,18 @@ bool DdlCommandExecutor::isKillQuery() {
 
 bool DdlCommandExecutor::isShowCreateTable() {
   return (ddl_command_ == "SHOW_CREATE_TABLE");
+}
+
+bool DdlCommandExecutor::isAlterSystemClear() {
+  return (ddl_command_ == "ALTER_SYSTEM_CLEAR");
+}
+
+std::string DdlCommandExecutor::returnCacheType() {
+  CHECK(ddl_command_ == "ALTER_SYSTEM_CLEAR");
+  auto& ddl_payload = extractPayload(*ddl_data_);
+  CHECK(ddl_payload.HasMember("cacheType"));
+  CHECK(ddl_payload["cacheType"].IsString());
+  return ddl_payload["cacheType"].GetString();
 }
 
 DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails() {

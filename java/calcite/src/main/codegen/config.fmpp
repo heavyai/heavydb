@@ -76,6 +76,7 @@ data: {
         "com.mapd.parser.extension.ddl.SqlCopyTable"
         "com.mapd.parser.extension.ddl.SqlExportQuery"
         "com.mapd.parser.extension.ddl.SqlValidateSystem"
+        "com.mapd.parser.extension.ddl.SqlAlterSystemClear"
         "com.mapd.parser.extension.ddl.omnisql.*"
         "java.util.Map"
         "java.util.HashMap"
@@ -99,7 +100,6 @@ data: {
         "SHARD"
         "SHARED"
         "DICTIONARY"
-        
         # Non-reserved keywords (keywords that do not start a command and may therefore be used as regular text elsewhere in the parser. must add to nonReservedKeywordsToAdd below)
         "ACCESS"
         "ARCHIVE"
@@ -129,6 +129,11 @@ data: {
         "TABLES"
         "VALIDATE"
         "VIRTUAL"
+        "CLEAR"
+        "CPU"
+        "GPU"
+        "RENDER"
+        "MEMORY"
       ]
 
       # List of keywords from "keywords" section that are not reserved.
@@ -452,6 +457,7 @@ data: {
         "XML"
         "YEARS"
         "ZONE"
+        "SYSTEM"
       ]
 
       # List of non-reserved keywords to add;
@@ -485,6 +491,11 @@ data: {
         "TABLES"
         "VALIDATE"
         "VIRTUAL"
+        "CLEAR"
+        "CPU"
+        "GPU"
+        "RENDER"
+        "MEMORY"
       ]
 
       # List of non-reserved keywords to remove;
@@ -526,6 +537,7 @@ data: {
         "SqlShowCreateTable(span())"
         "SqlCopyTable(span())"
         "SqlValidateSystem(span())"
+        "SqlAlterSystemClear(span())"
       ]
 
       # List of methods for parsing custom literals.

@@ -245,6 +245,18 @@ class DdlCommandExecutor {
   bool isKillQuery();
 
   /**
+   * Returns true if this command is ALTER SYSTEM CLEAR
+   */
+  bool isAlterSystemClear();
+
+  /**
+   * Returns which kind of caches if to clear
+   * ALTER SYSTEM CLEAR
+   */
+
+  std::string returnCacheType();
+
+  /**
    * Returns target query session if this command is KILL QUERY
    */
   const std::string getTargetQuerySessionToKill();

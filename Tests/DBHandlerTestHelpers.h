@@ -201,7 +201,7 @@ class DBHandlerTestFixture : public testing::Test {
   }
 
  protected:
-  virtual void SetUp() override {
+  void SetUp() override {
     createDBHandler();
     switchToAdmin();
   }
@@ -285,7 +285,7 @@ class DBHandlerTestFixture : public testing::Test {
       db_handler_->set_execution_mode(session_id_, TExecuteMode::CPU);
     }
   }
-  virtual void TearDown() override {}
+  void TearDown() override {}
 
   static void sql(const std::string& query) {
     TQueryResult result;

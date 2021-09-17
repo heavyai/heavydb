@@ -27,3 +27,38 @@ SqlDdl SqlKillQuery(Span s) :
         return new SqlKillQuery(s.end(this), querySession.toString());
     }
 }
+
+/*
+ * Clear CPU or GPU memory
+ *
+ * ALTER SYSTEM CLEAR CPU|GPU|RENDER MEMORY
+ */
+SqlDdl SqlAlterSystemClear(Span s) :
+{
+    String cacheType;
+}
+{
+    <ALTER>
+    <SYSTEM>
+    <CLEAR>
+    (
+        <CPU>
+        {
+            cacheType = "CPU";
+        }
+    |
+        <GPU>
+        {
+            cacheType = "GPU";
+        }
+    |
+        <RENDER>
+        {
+            cacheType = "RENDER";
+        }
+    )
+    <MEMORY>
+    {
+        return new SqlAlterSystemClear(s.end(this), cacheType);
+    }
+}

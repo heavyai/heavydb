@@ -2673,6 +2673,19 @@ void DBHandler::clear_cpu_memory(const TSessionId& session) {
   }
 }
 
+void DBHandler::clearRenderMemory(const TSessionId& session) {
+  auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  auto session_ptr = stdlog.getConstSessionInfo();
+  if (!session_ptr->get_currentUser().isSuper) {
+    THROW_MAPD_EXCEPTION("Superuser privilege is required to run clear_render_memory");
+  }
+  if (render_handler_) {
+    render_handler_->clear_cpu_memory();
+    render_handler_->clear_gpu_memory();
+  }
+}
+
 void DBHandler::set_cur_session(const TSessionId& parent_session,
                                 const TSessionId& leaf_session,
                                 const std::string& start_time_str,
@@ -4237,8 +4250,9 @@ TDashboard DBHandler::get_dashboard_impl(
       dash->dashboardId);
   TDashboard dashboard;
   dashboard.dashboard_name = dash->dashboardName;
-  if (populate_state)
+  if (populate_state) {
     dashboard.dashboard_state = dash->dashboardState;
+  }
   dashboard.image_hash = dash->imageHash;
   dashboard.update_time = dash->updateTime;
   dashboard.dashboard_metadata = dash->dashboardMetadata;
@@ -7340,6 +7354,20 @@ void DBHandler::executeDdl(
       // getUserSessions still requires Thrift cannot be nested into DdlCommandExecutor
       _return.execution_time_ms +=
           measure<>::execution([&]() { result = getUserSessions(session_ptr); });
+    } else if (executor.isAlterSystemClear()) {
+      result = ExecutionResult();
+      if (executor.returnCacheType() == "CPU") {
+        _return.execution_time_ms += measure<>::execution(
+            [&]() { clear_cpu_memory(session_ptr->get_session_id()); });
+      } else if (executor.returnCacheType() == "GPU") {
+        _return.execution_time_ms += measure<>::execution(
+            [&]() { clear_gpu_memory(session_ptr->get_session_id()); });
+      } else if (executor.returnCacheType() == "RENDER") {
+        _return.execution_time_ms += measure<>::execution(
+            [&]() { clearRenderMemory(session_ptr->get_session_id()); });
+      } else {
+        throw std::runtime_error("Unknwon cache type. Cannot clear");
+      }
     } else {
       _return.execution_time_ms +=
           measure<>::execution([&]() { result = executor.execute(); });
@@ -7377,6 +7405,20 @@ void DBHandler::executeDdl(
       // getUserSessions still requires Thrift cannot be nested into DdlCommandExecutor
       execution_time_ms =
           measure<>::execution([&]() { _return = getUserSessions(session_ptr); });
+    } else if (executor.isAlterSystemClear()) {
+      _return = ExecutionResult();
+      if (executor.returnCacheType() == "CPU") {
+        execution_time_ms = measure<>::execution(
+            [&]() { clear_cpu_memory(session_ptr->get_session_id()); });
+      } else if (executor.returnCacheType() == "GPU") {
+        execution_time_ms = measure<>::execution(
+            [&]() { clear_gpu_memory(session_ptr->get_session_id()); });
+      } else if (executor.returnCacheType() == "RENDER") {
+        execution_time_ms = measure<>::execution(
+            [&]() { clearRenderMemory(session_ptr->get_session_id()); });
+      } else {
+        throw std::runtime_error("Unknwon cache type. Cannot clear");
+      }
     } else {
       execution_time_ms = measure<>::execution([&]() { _return = executor.execute(); });
     }

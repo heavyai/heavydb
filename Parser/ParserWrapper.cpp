@@ -44,7 +44,8 @@ const std::vector<std::string> ParserWrapper::ddl_cmd = {"ARCHIVE",
                                                          "SHOW",
                                                          "TRUNCATE",
                                                          "REASSIGN",
-                                                         "VALIDATE"};
+                                                         "VALIDATE",
+                                                         "CLEAR"};
 
 const std::vector<std::string> ParserWrapper::update_dml_cmd = {
     "INSERT",
@@ -208,15 +209,26 @@ ParserWrapper::ParserWrapper(std::string query_string) {
           return;
         }
       } else if (ddl == "ALTER") {
-        query_type_ = QueryType::SchemaWrite;
         boost::regex alter_regex{R"(ALTER\s+(TABLE|DATABASE|USER).*)",
                                  boost::regex::extended | boost::regex::icase};
+        boost::regex alter_system_regex{R"(ALTER\s+(SYSTEM).*)",
+                                        boost::regex::extended | boost::regex::icase};
+
         if (g_enable_calcite_ddl_parser &&
             boost::regex_match(query_string, alter_regex)) {
+          query_type_ = QueryType::SchemaWrite;
           is_calcite_ddl_ = true;
           is_legacy_ddl_ = false;
           return;
+        } else {
+          if (boost::regex_match(query_string, alter_system_regex)) {
+            query_type_ = QueryType::Unknown;
+            is_calcite_ddl_ = true;
+            is_legacy_ddl_ = false;
+            return;
+          }
         }
+
       } else if (ddl == "GRANT") {
         boost::regex grant_regex{R"(GRANT.*)",
                                  boost::regex::extended | boost::regex::icase};
