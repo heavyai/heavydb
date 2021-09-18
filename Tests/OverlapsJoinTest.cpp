@@ -502,32 +502,32 @@ TEST_F(OverlapsTest, SkipHashtableCaching) {
       "SELECT count(*) FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q1, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)2);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)2);
 
   const auto q2 =
       "SELECT /*+ overlaps_bucket_threshold(0.2), overlaps_no_cache */ count(*) FROM "
       "does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q2, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)2);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)2);
 
   QR::get()->clearCpuMemory();
   execSQL(q2, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)0);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)0);
 
   const auto q3 =
       "SELECT /*+ overlaps_no_cache */ count(*) FROM does_not_intersect_b as b JOIN "
       "does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q3, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)0);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)0);
 
   const auto q4 =
       "SELECT /*+ overlaps_max_size(1000), overlaps_no_cache */ count(*) FROM "
       "does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q4, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)0);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)0);
 
   const auto q5 =
       "SELECT /*+ overlaps_bucket_threshold(0.2), overlaps_max_size(1000), "
@@ -535,7 +535,7 @@ TEST_F(OverlapsTest, SkipHashtableCaching) {
       "does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q5, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)0);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)0);
 }
 
 TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
@@ -548,18 +548,19 @@ TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
   // M_D: hashtable_max_size_hint_disabled (use default value)
 
   // here, we only add param setting to auto_tuner iff the initial setting is <T_D, *>
-  // but we try to keep a hashtable for every param setting
+  // and replace the cached hashtable when we have already cached one
+  // (and have different params)
 
-  // let say a hashtable is built from the setting C as C ----> T
-  // then we reuse hashtable iff we have a cached hashtable which is mapped to C
-  // all combinations of <chosen bucket_threshold, max_hashtable_size> combination:
+  // let say a hashtable T is built from the setting C as C ----> T
+  // then we reuse the hashtable T iff we have a cached hashtable which is mapped to C
+  // all combinations of <chosen bucket_threshold, max_hashtable_size> are:
   // <T_E, M_E> --> impossible, we use <T_E, M_D> instead since we skip M_E and set M_D
   // <T_E, M_D> --> possible, but do not add the pair to auto_tuner_cache
   //                and map <T_E, M_D> ----> T to hashtable cache
-  // <T_D, M_E> --> possible, and it is reintepreted as <T_C, M_E> by auto tuner
+  // <T_D, M_E> --> possible, and auto tuner calculates <T_C, M_D>
   //                add map <T_D, M_D> ----> <T_C, M_E> to auto_tuner_cache
   //                add map <T_C, M_E> ----> T to hashtable cache
-  // <T_D, M_D> --> possible, and it is reinterpreted as <T_C, M_D> by auto tuner
+  // <T_D, M_D> --> possible, and auto tuner calculates <T_C, M_D>
   //                add map <T_D, M_D> ----> <T_C, M_D> to auto_tuner_cache
   //                add map <T_C, M_D> ----> T to hashtable cache
   // <T_C, M_E> --> possible, and comes from the initial setting of <T_D, M_E>
@@ -585,28 +586,28 @@ TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
       "SELECT count(*) FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q1, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)2);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)2);
 
   // <T_E, M_D> case, only add hashtable to cache with <T_E: 0.1, M_D>
   const auto q2 =
       "SELECT /*+ overlaps_bucket_threshold(0.1) */ count(*) FROM does_not_intersect_b "
       "as b JOIN does_not_intersect_a as a ON ST_Intersects(a.poly, b.poly);";
   execSQL(q2, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)3);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)3);
 
   // <T_E, M_D> case... only add hashtable to cache with <T_E: 0.2, M_D>
   const auto q3 =
       "SELECT /*+ overlaps_bucket_threshold(0.2) */ count(*) FROM does_not_intersect_b "
       "as b JOIN does_not_intersect_a as a ON ST_Intersects(a.poly, b.poly);";
   execSQL(q3, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)4);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)4);
 
   // only reuse cached hashtable for <T_E: 0.1, M_D>
   const auto q4 =
       "SELECT /*+ overlaps_bucket_threshold(0.1) */ count(*) FROM does_not_intersect_b "
       "as b JOIN does_not_intersect_a as a ON ST_Intersects(a.poly, b.poly);";
   execSQL(q4, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)4);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)4);
 
   // skip max_size hint, so <T_E, M_D> case and only reuse <T_E: 0.1, M_D> hashtable
   const auto q5 =
@@ -614,7 +615,7 @@ TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
       "FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q5, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)4);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)4);
 
   // <T_D, M_E> case, so it now becomes <T_C, M_E>
   // add <T_D, M_E> --> <T_C, M_E: 1000> mapping to auto_tuner
@@ -623,7 +624,7 @@ TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
       "SELECT /*+ overlaps_max_size(1000) */ count(*) FROM does_not_intersect_b as b "
       "JOIN does_not_intersect_a as a ON ST_Intersects(a.poly, b.poly);";
   execSQL(q6, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)6);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)6);
 
   // <T_E, M_D> case, only reuse cached hashtable of <T_E: 0.2, M_D>
   const auto q7 =
@@ -631,7 +632,7 @@ TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
       "FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q7, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)6);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)6);
 
   // <T_E, M_D> case... only add hashtable to cache with <T_E: 0.3, M_D>
   const auto q8 =
@@ -639,7 +640,7 @@ TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
       "FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q8, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), (size_t)7);
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)7);
 }
 
 class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
@@ -687,7 +688,9 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
             HashJoin::normalizeColumnPairs(condition.get(),
                                            *executor->getCatalog(),
                                            executor->getTemporaryTables()),
-            device_count)
+            device_count,
+            EMPTY_QUERY_PLAN,
+            {})
       , expected_values_per_step_(expected_values) {}
 
  protected:

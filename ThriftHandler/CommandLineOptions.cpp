@@ -136,6 +136,28 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(dynamic_watchdog_time_limit)
                               ->implicit_value(10000),
                           "Dynamic watchdog time limit, in milliseconds.");
+  help_desc.add_options()("enable-data-recycler",
+                          po::value<bool>(&enable_data_recycler)
+                              ->default_value(enable_data_recycler)
+                              ->implicit_value(true),
+                          "Use data recycler.");
+  help_desc.add_options()("use-hashtable-cache",
+                          po::value<bool>(&use_hashtable_cache)
+                              ->default_value(use_hashtable_cache)
+                              ->implicit_value(true),
+                          "Use hashtable cache.");
+  help_desc.add_options()(
+      "hashtable-cache-total-bytes",
+      po::value<size_t>(&hashtable_cache_total_bytes)
+          ->default_value(hashtable_cache_total_bytes)
+          ->implicit_value(4294967296),
+      "Size of total memory space for hashtable cache, in bytes (default: 4GB).");
+  help_desc.add_options()("max-cacheable-hashtable-size-bytes",
+                          po::value<size_t>(&max_cacheable_hashtable_size_bytes)
+                              ->default_value(max_cacheable_hashtable_size_bytes)
+                              ->implicit_value(2147483648),
+                          "The maximum size of hashtable that is available to cache, in "
+                          "bytes (default: 2GB).");
   help_desc.add_options()("enable-debug-timer",
                           po::value<bool>(&g_enable_debug_timer)
                               ->default_value(g_enable_debug_timer)
@@ -1073,6 +1095,11 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     g_pending_query_interrupt_freq = pending_query_interrupt_freq;
     g_running_query_interrupt_freq = running_query_interrupt_freq;
     g_use_estimator_result_cache = use_estimator_result_cache;
+    g_enable_data_recycler = enable_data_recycler;
+    g_use_hashtable_cache = use_hashtable_cache;
+    g_max_cacheable_hashtable_size_bytes = max_cacheable_hashtable_size_bytes;
+    g_hashtable_cache_total_bytes = hashtable_cache_total_bytes;
+
   } catch (po::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;
@@ -1179,6 +1206,19 @@ boost::optional<int> CommandLineOptions::parse_command_line(
             << (authMetadata.allowLocalAuthFallback ? "enabled" : "disabled");
   LOG(INFO) << " ParallelTop min threshold: " << g_parallel_top_min;
   LOG(INFO) << " ParallelTop watchdog max: " << g_parallel_top_max;
+
+  LOG(INFO) << " Enable Data Recycler: "
+            << (g_enable_data_recycler ? "enabled" : "disabled");
+  if (g_enable_data_recycler) {
+    LOG(INFO) << " \t Use hashtable cache: "
+              << (g_use_hashtable_cache ? "enabled" : "disabled");
+    if (g_use_hashtable_cache) {
+      LOG(INFO) << " \t\t Total amount of bytes that hashtable cache keeps: "
+                << g_hashtable_cache_total_bytes / (1024 * 1024) << " MB.";
+      LOG(INFO) << " \t\t Per-hashtable size limit: "
+                << g_max_cacheable_hashtable_size_bytes / (1024 * 1024) << " MB.";
+    }
+  }
 
   boost::algorithm::trim_if(authMetadata.distinguishedName, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.uri, boost::is_any_of("\"'"));

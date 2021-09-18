@@ -32,6 +32,7 @@
 #include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
 #include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/QueryHint.h"
+#include "QueryEngine/QueryPlanDagExtractor.h"
 #include "QueryEngine/RelAlgDagBuilder.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"
 #include "QueryEngine/RelAlgTranslator.h"
@@ -216,12 +217,23 @@ class QueryRunner {
   virtual std::unique_ptr<import_export::Loader> getLoader(
       const TableDescriptor* td) const;
 
-  const int32_t* getCachedJoinHashTable(size_t idx);
-  const int8_t* getCachedBaselineHashTable(size_t idx);
-  size_t getEntryCntCachedBaselineHashTable(size_t idx);
-  size_t getNumberOfCachedJoinHashTables();
+  const int32_t* getCachedPerfectHashTable(QueryPlan plan_dag);
+  const int8_t* getCachedBaselineHashTable(QueryPlan plan_dag);
+  size_t getEntryCntCachedBaselineHashTable(QueryPlan plan_dag);
+  std::tuple<QueryPlanHash,
+             std::shared_ptr<HashTable>,
+             std::optional<HashtableCacheMetaInfo>>
+  getCachedHashtableWithoutCacheKey(std::set<size_t>& visited,
+                                    CacheItemType hash_table_type,
+                                    DeviceIdentifier device_identifier);
+  std::shared_ptr<CacheItemMetric> getCacheItemMetric(QueryPlanHash cache_key,
+                                                      CacheItemType hash_table_type,
+                                                      DeviceIdentifier device_identifier);
+  size_t getNumberOfCachedPerfectHashTables();
   size_t getNumberOfCachedBaselineJoinHashTables();
+  size_t getNumberOfCachedOverlapsHashTablesAndTuningParams();
   size_t getNumberOfCachedOverlapsHashTables();
+  size_t getNumberOfCachedOverlapsHashTableTuringParams();
 
   void resizeDispatchQueue(const size_t num_executors);
 
@@ -229,7 +241,7 @@ class QueryRunner {
 
   std::shared_ptr<RelAlgTranslator> getRelAlgTranslator(const std::string&, Executor*);
 
-  void printQueryPlanDagCache() const;
+  ExtractedPlanDag extractQueryPlanDag(const std::string&);
 
   QueryRunner(std::unique_ptr<Catalog_Namespace::SessionInfo> session);
 

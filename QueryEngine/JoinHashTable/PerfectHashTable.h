@@ -19,6 +19,7 @@
 #include <memory>
 #include <vector>
 
+#include "DataMgr/Allocators/CudaAllocator.h"
 #include "QueryEngine/JoinHashTable/HashTable.h"
 
 class PerfectHashTable : public HashTable {

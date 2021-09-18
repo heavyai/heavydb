@@ -305,13 +305,13 @@ void QueryPlanDagExtractor::handleTranslatedJoin(
     if (it == hash_table_query_plan_dag_.end()) {
       VLOG(2) << "Add hashtable access path"
               << ", join col info: " << hash_table_cols_info
-              << ", access path: " << hash_table_identfier;
+              << ", access path: " << hash_table_identfier << "\n";
       hash_table_query_plan_dag_.emplace(
           join_qual_info, std::make_pair(hash_table_cols_info, hash_table_identfier));
     }
   } else {
     VLOG(2) << "Add loop join access path, for LHS: " << outer_table_identifier
-            << ", for RHS: " << hash_table_identfier;
+            << ", for RHS: " << hash_table_identfier << "\n";
   }
 }
 

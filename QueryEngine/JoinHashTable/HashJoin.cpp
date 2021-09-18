@@ -244,6 +244,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
     const int device_count,
     ColumnCacheMap& column_cache,
     Executor* executor,
+    const HashTableBuildDagMap& hashtable_build_dag_map,
     const RegisteredQueryHint& query_hint) {
   auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<HashJoin> join_hash_table;
@@ -261,6 +262,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                          device_count,
                                                          column_cache,
                                                          executor,
+                                                         hashtable_build_dag_map,
                                                          query_hint);
   } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
                  qual_bin_oper->get_left_operand())) {
@@ -272,7 +274,8 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                          preferred_hash_type,
                                                          device_count,
                                                          column_cache,
-                                                         executor);
+                                                         executor,
+                                                         hashtable_build_dag_map);
   } else {
     try {
       VLOG(1) << "Trying to build perfect hash table:";
@@ -283,7 +286,8 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                           preferred_hash_type,
                                                           device_count,
                                                           column_cache,
-                                                          executor);
+                                                          executor,
+                                                          hashtable_build_dag_map);
     } catch (TooManyHashEntries&) {
       const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
       CHECK_EQ(join_quals.size(), size_t(1));
@@ -297,7 +301,8 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                            preferred_hash_type,
                                                            device_count,
                                                            column_cache,
-                                                           executor);
+                                                           executor,
+                                                           hashtable_build_dag_map);
     }
   }
   CHECK(join_hash_table);
@@ -499,6 +504,7 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
                                           device_count,
                                           column_cache,
                                           executor,
+                                          {},
                                           query_hint);
   return hash_table;
 }
@@ -525,6 +531,7 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
                                           device_count,
                                           column_cache,
                                           executor,
+                                          {},
                                           query_hint);
   return hash_table;
 }
@@ -556,6 +563,7 @@ std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance
                                                         device_count,
                                                         column_cache,
                                                         executor,
+                                                        {},
                                                         query_hint);
       if (candidate_hash_table) {
         hash_table = candidate_hash_table;

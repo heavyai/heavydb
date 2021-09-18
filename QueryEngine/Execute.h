@@ -889,6 +889,7 @@ class Executor {
       const JoinType join_type,
       const HashType preferred_hash_type,
       ColumnCacheMap& column_cache,
+      const HashTableBuildDagMap& hashtable_build_dag_map,
       const RegisteredQueryHint& query_hint);
   void nukeOldState(const bool allow_lazy_fetch,
                     const std::vector<InputTableInfo>& query_infos,

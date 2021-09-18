@@ -126,6 +126,9 @@ set(query_engine_source_files
     WindowFunctionIR.cpp
     QueryPlanDagCache.cpp
     QueryPlanDagExtractor.cpp
+    DataRecycler/HashtableRecycler.cpp
+    DataRecycler/HashingSchemeRecycler.cpp
+    DataRecycler/OverlapsTuningParamRecycler.cpp
     Visitors/QueryPlanDagChecker.cpp
 
     Codec.h
@@ -244,7 +247,7 @@ if(ENABLE_MLPACK)
   list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/MLFunctions.hpp)
 endif()
 add_custom_command(
-    DEPENDS ${TABLE_FUNCTION_HEADERS} 
+    DEPENDS ${TABLE_FUNCTION_HEADERS}
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp
     COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_TableFunctionsFactory_init.py ${TABLE_FUNCTION_HEADERS} ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp)
 

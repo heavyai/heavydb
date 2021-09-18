@@ -82,6 +82,11 @@ class CommandLineOptions {
   unsigned dynamic_watchdog_time_limit = 10000;
   std::string disk_cache_level = "";
 
+  bool enable_data_recycler = true;
+  bool use_hashtable_cache = true;
+  size_t hashtable_cache_total_bytes = 4294967296;         // 4GB
+  size_t max_cacheable_hashtable_size_bytes = 2147483648;  // 2GB
+
   /**
    * Number of threads used when loading data
    */
@@ -207,3 +212,7 @@ extern bool g_enable_automatic_ir_metadata;
 extern size_t g_enable_parallel_linearization;
 extern bool g_enable_tiered_cpu_mem;
 extern size_t g_pmem_size;
+extern bool g_enable_data_recycler;
+extern bool g_use_hashtable_cache;
+extern size_t g_hashtable_cache_total_bytes;
+extern size_t g_max_cacheable_hashtable_size_bytes;

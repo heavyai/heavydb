@@ -133,8 +133,13 @@ bool g_enable_smem_non_grouped_agg{
             // non-grouped aggregates
 bool g_is_test_env{false};  // operating under a unit test environment. Currently only
                             // limits the allocation for the output buffer arena
+                            // and data recycler test
 size_t g_enable_parallel_linearization{
     10000};  // # rows that we are trying to linearize varlen col in parallel
+bool g_enable_data_recycler{true};
+bool g_use_hashtable_cache{true};
+size_t g_hashtable_cache_total_bytes{size_t(1) << 32};
+size_t g_max_cacheable_hashtable_size_bytes{size_t(1) << 31};
 
 size_t g_approx_quantile_buffer{1000};
 size_t g_approx_quantile_centroids{300};
@@ -3390,6 +3395,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const JoinType join_type,
     const HashType preferred_hash_type,
     ColumnCacheMap& column_cache,
+    const HashTableBuildDagMap& hashtable_build_dag_map,
     const RegisteredQueryHint& query_hint) {
   if (!g_enable_overlaps_hashjoin && qual_bin_oper->is_overlaps_oper()) {
     return {nullptr, "Overlaps hash join disabled, attempting to fall back to loop join"};
@@ -3406,6 +3412,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                      deviceCountForMemoryLevel(memory_level),
                                      column_cache,
                                      this,
+                                     hashtable_build_dag_map,
                                      query_hint);
     return {tbl, ""};
   } catch (const HashJoinFail& e) {

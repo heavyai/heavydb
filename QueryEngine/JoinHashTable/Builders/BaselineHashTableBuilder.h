@@ -306,6 +306,7 @@ class BaselineJoinHashTableBuilder {
     auto cpu_hash_table_ptr = hash_table_->getCpuBuffer();
     int thread_count = cpu_threads();
     std::vector<std::future<void>> init_cpu_buff_threads;
+    setHashLayout(layout);
     for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
       init_cpu_buff_threads.emplace_back(
           std::async(std::launch::async,
@@ -411,6 +412,7 @@ class BaselineJoinHashTableBuilder {
           is_geo_compressed = range_handler->is_compressed_;
         }
       }
+      setHashLayout(layout);
       switch (key_component_width) {
         case 4: {
           const auto composite_key_dict = reinterpret_cast<int32_t*>(cpu_hash_table_ptr);
@@ -482,7 +484,7 @@ class BaselineJoinHashTableBuilder {
 
     VLOG(1) << "Initializing GPU Hash Table for device " << device_id << " with "
             << keyspace_entry_count << " hash entries and " << one_to_many_hash_entries
-            << " entries in the one to many buffer";
+            << " entries in the " << HashJoin::getHashTypeString(layout) << " buffer";
     VLOG(1) << "Total hash table size: " << hash_table_size << " Bytes";
 
     hash_table_ = std::make_unique<BaselineHashTable>(executor->getDataMgr(),
@@ -531,7 +533,8 @@ class BaselineJoinHashTableBuilder {
     const bool for_semi_join =
         (join_type == JoinType::SEMI || join_type == JoinType::ANTI) &&
         layout == HashType::OneToOne;
-
+    setHashLayout(layout);
+    const auto key_handler_gpu = transfer_flat_object_to_gpu(*key_handler, allocator);
     switch (key_component_width) {
       case 4:
         init_baseline_hash_join_buff_on_device_32(gpu_hash_table_buff,
@@ -550,7 +553,6 @@ class BaselineJoinHashTableBuilder {
       default:
         UNREACHABLE();
     }
-    const auto key_handler_gpu = transfer_flat_object_to_gpu(*key_handler, allocator);
     switch (key_component_width) {
       case 4: {
         fill_baseline_hash_join_buff_on_device<int32_t>(
@@ -591,6 +593,7 @@ class BaselineJoinHashTableBuilder {
       auto one_to_many_buff = reinterpret_cast<int32_t*>(
           gpu_hash_table_buff + keyspace_entry_count * entry_size);
       init_hash_join_buff_on_device(one_to_many_buff, keyspace_entry_count, -1);
+      setHashLayout(layout);
       switch (key_component_width) {
         case 4: {
           const auto composite_key_dict = reinterpret_cast<int32_t*>(gpu_hash_table_buff);
@@ -630,6 +633,11 @@ class BaselineJoinHashTableBuilder {
 
   std::unique_ptr<BaselineHashTable> getHashTable() { return std::move(hash_table_); }
 
+  void setHashLayout(HashType layout) { layout_ = layout; }
+
+  HashType getHashLayout() const { return layout_; }
+
  private:
   std::unique_ptr<BaselineHashTable> hash_table_;
+  HashType layout_;
 };

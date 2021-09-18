@@ -24,6 +24,7 @@
 #include <list>
 #include <map>
 #include <set>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -276,6 +277,11 @@ inline TO reinterpret_bits(FROM const from) {
   TO to{0};
   memcpy(&to, &from, sizeof(TO) < sizeof(FROM) ? sizeof(TO) : sizeof(FROM));
   return to;
+}
+
+template <typename... STR>
+constexpr std::array<std::string_view, sizeof...(STR)> string_view_array(STR&&... str) {
+  return {std::forward<STR>(str)...};
 }
 
 }  // namespace shared

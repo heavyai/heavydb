@@ -80,6 +80,7 @@ enum JoinColumnSide {
            // Analyzer::BinOper*)
 };
 constexpr char const* EMPTY_QUERY_PLAN = "";
+constexpr QueryPlanHash EMPTY_HASHED_PLAN_DAG_KEY = 0;
 
 enum class SortAlgorithm { Default, SpeculativeTopN, StreamingTopN };
 

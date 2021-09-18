@@ -78,6 +78,7 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
     const int device_count,
     ColumnCacheMap& column_cache,
     Executor* executor,
+    const HashTableBuildDagMap& hashtable_build_dag_map,
     const RegisteredQueryHint& query_hint) {
   // the hash table is built over the LHS of the range oper. we then use the lhs
   // of the bin oper + the rhs of the range oper for the probe
@@ -120,16 +121,26 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
                                      condition.get(), executor, inner_outer_pairs)
                                : 0;
 
-  auto join_hash_table = std::make_shared<RangeJoinHashTable>(condition,
-                                                              join_type,
-                                                              range_expr,
-                                                              range_join_inner_col_expr,
-                                                              query_infos,
-                                                              memory_level,
-                                                              column_cache,
-                                                              executor,
-                                                              inner_outer_pairs,
-                                                              device_count);
+  auto hashtable_cache_key_string =
+      HashtableRecycler::getHashtableKeyString(inner_outer_pairs,
+                                               condition->get_optype(),
+                                               join_type,
+                                               hashtable_build_dag_map,
+                                               executor);
+
+  auto join_hash_table =
+      std::make_shared<RangeJoinHashTable>(condition,
+                                           join_type,
+                                           range_expr,
+                                           range_join_inner_col_expr,
+                                           query_infos,
+                                           memory_level,
+                                           column_cache,
+                                           executor,
+                                           inner_outer_pairs,
+                                           device_count,
+                                           hashtable_cache_key_string.first,
+                                           hashtable_cache_key_string.second);
   HashJoin::checkHashJoinReplicationConstraint(
       HashJoin::getInnerTableId(inner_outer_pairs), shard_count, executor);
   try {
@@ -353,20 +364,40 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
     const size_t entry_count,
     const size_t emitted_keys_count) {
   auto timer = DEBUG_TIMER(__func__);
+  decltype(std::chrono::steady_clock::now()) ts1, ts2;
+  ts1 = std::chrono::steady_clock::now();
   const auto composite_key_info =
       HashJoin::getCompositeKeyInfo(inner_outer_pairs_, executor_);
   CHECK(!join_columns.empty());
   CHECK(!join_bucket_info.empty());
 
-  OverlapsHashTableCacheKey cache_key{join_columns.front().num_elems,
-                                      composite_key_info.cache_key_chunks,
-                                      condition_->get_optype(),
-                                      max_hashtable_size_,
-                                      bucket_threshold_,
-                                      inverse_bucket_sizes_for_dimension_};
+  setOverlapsHashtableMetaInfo(
+      max_hashtable_size_, bucket_threshold_, inverse_bucket_sizes_for_dimension_);
+  generateCacheKey(max_hashtable_size_, max_hashtable_size_);
+
+  if ((query_plan_dag_.compare(EMPTY_QUERY_PLAN) == 0 ||
+       hashtable_cache_key_ == EMPTY_HASHED_PLAN_DAG_KEY) &&
+      inner_outer_pairs_.front().first->get_table_id() > 0) {
+    // sometimes we cannot retrieve query plan dag, so try to recycler cache
+    // with the old-passioned cache key if we deal with hashtable of non-temporary table
+    AlternativeCacheKeyForOverlapsHashJoin cache_key{inner_outer_pairs_,
+                                                     join_columns.front().num_elems,
+                                                     composite_key_info_.cache_key_chunks,
+                                                     condition_->get_optype(),
+                                                     max_hashtable_size_,
+                                                     bucket_threshold_,
+                                                     inverse_bucket_sizes_for_dimension_};
+    hashtable_cache_key_ = getAlternativeCacheKey(cache_key);
+    VLOG(2) << "Use alternative hashtable cache key due to unavailable query plan dag "
+               "extraction (hashtable_cache_key: "
+            << hashtable_cache_key_ << ")";
+  }
 
   std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
-  if (auto generic_hash_table = initHashTableOnCpuFromCache(cache_key)) {
+  if (auto generic_hash_table =
+          initHashTableOnCpuFromCache(hashtable_cache_key_,
+                                      CacheItemType::OVERLAPS_HT,
+                                      DataRecyclerUtil::CPU_DEVICE_IDENTIFIER)) {
     if (auto hash_table =
             std::dynamic_pointer_cast<BaselineHashTable>(generic_hash_table)) {
       // See if a hash table of a different layout was returned.
@@ -402,16 +433,20 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
                                               join_type_,
                                               getKeyComponentWidth(),
                                               getKeyComponentCount());
-
+  ts2 = std::chrono::steady_clock::now();
   if (err) {
     throw HashJoinFail(std::string("Unrecognized error when initializing CPU "
                                    "range join hash table (") +
                        std::to_string(err) + std::string(")"));
   }
   std::shared_ptr<BaselineHashTable> hash_table = builder.getHashTable();
-  if (HashJoin::getInnerTableId(inner_outer_pairs_) > 0) {
-    putHashTableOnCpuToCache(cache_key, hash_table);
-  }
+  auto hashtable_build_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
+  putHashTableOnCpuToCache(hashtable_cache_key_,
+                           CacheItemType::OVERLAPS_HT,
+                           hash_table,
+                           DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+                           hashtable_build_time);
   return hash_table;
 }
 
@@ -466,15 +501,10 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
     const auto composite_key_info =
         HashJoin::getCompositeKeyInfo(inner_outer_pairs_, executor_);
 
-    OverlapsHashTableCacheKey cache_key{
-        /* num_elements */ columns_per_device.front().join_columns.front().num_elems,
-        /* chunk_keys   */ composite_key_info.cache_key_chunks,
-        /* optype       */ condition_->get_optype(),
-        /* max_hashtable_size */ max_hashtable_size_,
-        /* bucket_threshold   */ bucket_threshold_,
-        /* inverse_bucket_sizes_for_dimension */ inverse_bucket_sizes_for_dimension_};
-
-    const auto cached_count_info = getApproximateTupleCountFromCache(cache_key);
+    const auto cached_count_info =
+        getApproximateTupleCountFromCache(hashtable_cache_key_,
+                                          CacheItemType::OVERLAPS_HT,
+                                          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
     if (cached_count_info.has_value() && cached_count_info.value().first) {
       VLOG(1) << "Using a cached tuple count: " << cached_count_info.value().first
               << ", emitted keys count: " << cached_count_info.value().second;

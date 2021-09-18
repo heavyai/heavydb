@@ -112,6 +112,21 @@ enum class JoinType { INNER, LEFT, SEMI, ANTI, INVALID };
 #include <string>
 #include "Logger/Logger.h"
 
+inline std::string toString(const JoinType& join_type) {
+  switch (join_type) {
+    case JoinType::INNER:
+      return "INNER";
+    case JoinType::LEFT:
+      return "LEFT";
+    case JoinType::SEMI:
+      return "SEMI";
+    case JoinType::ANTI:
+      return "ANTI";
+    default:
+      return "INVALID";
+  }
+}
+
 inline std::string toString(const SQLQualifier& qualifier) {
   switch (qualifier) {
     case kONE:

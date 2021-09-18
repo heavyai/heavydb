@@ -2041,7 +2041,6 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
   const auto memory_level = co.device_type == ExecutorDeviceType::GPU
                                 ? MemoryLevel::GPU_LEVEL
                                 : MemoryLevel::CPU_LEVEL;
-
   std::unique_ptr<WindowFunctionContext> context;
   if (partition_key_cond) {
     const auto join_table_or_err =
@@ -2051,6 +2050,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                               JoinType::INVALID,  // for window function
                                               HashType::OneToMany,
                                               column_cache_map,
+                                              ra_exe_unit.hash_table_build_plan_dag,
                                               ra_exe_unit.query_hint);
     if (!join_table_or_err.fail_reason.empty()) {
       throw std::runtime_error(join_table_or_err.fail_reason);
@@ -2065,7 +2065,6 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
     context = std::make_unique<WindowFunctionContext>(
         window_func, elem_count, co.device_type, row_set_mem_owner);
   }
-
   const auto& order_keys = window_func->getOrderKeys();
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   for (const auto& order_key : order_keys) {
@@ -2828,8 +2827,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
                               {sort_info.order_entries, sort_algorithm, limit, offset},
                               scan_total_limit,
                               source_exe_unit.query_hint,
-                              EMPTY_QUERY_PLAN, /* skip sort node's recycling */
-                              {},
+                              source_exe_unit.query_plan_dag,
+                              source_exe_unit.hash_table_build_plan_dag,
                               source_exe_unit.use_bump_allocator,
                               source_exe_unit.union_all,
                               source_exe_unit.query_state},

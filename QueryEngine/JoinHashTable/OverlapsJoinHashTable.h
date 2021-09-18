@@ -16,73 +16,10 @@
 
 #pragma once
 
+#include "QueryEngine/DataRecycler/OverlapsTuningParamRecycler.h"
 #include "QueryEngine/JoinHashTable/BaselineHashTable.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
-#include "QueryEngine/JoinHashTable/HashTableCache.h"
-
-struct OverlapsHashTableCacheKey {
-  const size_t num_elements;
-  const std::vector<ChunkKey> chunk_keys;
-  const SQLOps optype;
-  const size_t max_hashtable_size;
-  const double bucket_threshold;
-  const std::vector<double> inverse_bucket_sizes;
-
-  bool operator==(const struct OverlapsHashTableCacheKey& that) const {
-    if (inverse_bucket_sizes.size() != that.inverse_bucket_sizes.size()) {
-      return false;
-    }
-    for (size_t i = 0; i < inverse_bucket_sizes.size(); i++) {
-      // bucket sizes within 10^-4 are considered close enough
-      if (std::abs(inverse_bucket_sizes[i] - that.inverse_bucket_sizes[i]) > 1e-4) {
-        return false;
-      }
-    }
-    return num_elements == that.num_elements && chunk_keys == that.chunk_keys &&
-           optype == that.optype && max_hashtable_size == that.max_hashtable_size &&
-           bucket_threshold == that.bucket_threshold;
-  }
-
-  OverlapsHashTableCacheKey(const size_t num_elements,
-                            const std::vector<ChunkKey>& chunk_keys,
-                            const SQLOps& optype,
-                            const size_t max_hashtable_size,
-                            const double bucket_threshold,
-                            const std::vector<double> inverse_bucket_sizes = {})
-      : num_elements(num_elements)
-      , chunk_keys(chunk_keys)
-      , optype(optype)
-      , max_hashtable_size(max_hashtable_size)
-      , bucket_threshold(bucket_threshold)
-      , inverse_bucket_sizes(inverse_bucket_sizes) {}
-
-  // "copy" constructor
-  OverlapsHashTableCacheKey(const OverlapsHashTableCacheKey& that,
-                            const size_t max_hashtable_size,
-                            const double bucket_threshold,
-                            const std::vector<double>& inverse_bucket_sizes = {})
-      : num_elements(that.num_elements)
-      , chunk_keys(that.chunk_keys)
-      , optype(that.optype)
-      , max_hashtable_size(max_hashtable_size)
-      , bucket_threshold(bucket_threshold)
-      , inverse_bucket_sizes(inverse_bucket_sizes) {}
-};
-
-template <class K, class V>
-class OverlapsHashTableCache : public HashTableCache<K, V> {
- public:
-  std::optional<std::pair<K, V>> getWithKey(const K& key) {
-    std::lock_guard<std::mutex> guard(this->mutex_);
-    for (const auto& kv : this->contents_) {
-      if (kv.first == key) {
-        return kv;
-      }
-    }
-    return std::nullopt;
-  }
-};
 
 class OverlapsJoinHashTable : public HashJoin {
  public:
@@ -93,7 +30,9 @@ class OverlapsJoinHashTable : public HashJoin {
                         ColumnCacheMap& column_cache,
                         Executor* executor,
                         const std::vector<InnerOuter>& inner_outer_pairs,
-                        const int device_count)
+                        const int device_count,
+                        QueryPlan query_plan_dag,
+                        HashtableCacheMetaInfo hashtable_cache_meta_info)
       : condition_(condition)
       , join_type_(join_type)
       , query_infos_(query_infos)
@@ -101,7 +40,10 @@ class OverlapsJoinHashTable : public HashJoin {
       , executor_(executor)
       , column_cache_(column_cache)
       , inner_outer_pairs_(inner_outer_pairs)
-      , device_count_(device_count) {
+      , device_count_(device_count)
+      , query_plan_dag_(query_plan_dag)
+      , hashtable_cache_key_(EMPTY_HASHED_PLAN_DAG_KEY)
+      , hashtable_cache_meta_info_(hashtable_cache_meta_info) {
     CHECK_GT(device_count_, 0);
     hash_tables_for_device_.resize(std::max(device_count_, 1));
     query_hint_ = RegisteredQueryHint::defaults();
@@ -118,6 +60,7 @@ class OverlapsJoinHashTable : public HashJoin {
       const int device_count,
       ColumnCacheMap& column_cache,
       Executor* executor,
+      const HashTableBuildDagMap& hashtable_build_dag_map,
       const RegisteredQueryHint& query_hint);
 
   static auto getCacheInvalidator() -> std::function<void()> {
@@ -132,11 +75,14 @@ class OverlapsJoinHashTable : public HashJoin {
     };
   }
 
-  static size_t getCombinedHashTableCacheSize() {
-    // for unit tests
-    CHECK(hash_table_cache_ && auto_tuner_cache_);
-    return hash_table_cache_->getNumberOfCachedHashTables() +
-           auto_tuner_cache_->getNumberOfCachedHashTables();
+  static HashtableRecycler* getHashTableCache() {
+    CHECK(hash_table_cache_);
+    return hash_table_cache_.get();
+  }
+
+  static OverlapsTuningParamRecycler* getOverlapsTuningParamCache() {
+    CHECK(auto_tuner_cache_);
+    return auto_tuner_cache_.get();
   }
 
  protected:
@@ -159,8 +105,6 @@ class OverlapsJoinHashTable : public HashJoin {
                       const size_t entry_count,
                       const size_t emitted_keys_count,
                       const bool skip_hashtable_caching,
-                      const size_t chosen_max_hashtable_size,
-                      const double chosen_bucket_threshold,
                       const int device_id,
                       const logger::ThreadId parent_thread_id);
 
@@ -218,9 +162,7 @@ class OverlapsJoinHashTable : public HashJoin {
       const HashType layout,
       const size_t entry_count,
       const size_t emitted_keys_count,
-      const bool skip_hashtable_caching,
-      const size_t chosen_max_hashtable_size,
-      const double chosen_bucket_threshold);
+      const bool skip_hashtable_caching);
 
 #ifdef HAVE_CUDA
   std::shared_ptr<BaselineHashTable> initHashTableOnGpu(
@@ -261,7 +203,6 @@ class OverlapsJoinHashTable : public HashJoin {
     query_hint_ = query_hint;
   }
 
- protected:
   size_t getEntryCount() const {
     auto hash_table = getHashTableForDevice(0);
     CHECK(hash_table);
@@ -332,16 +273,80 @@ class OverlapsJoinHashTable : public HashJoin {
   std::string getHashJoinType() const final { return "Overlaps"; }
 
   std::shared_ptr<HashTable> initHashTableOnCpuFromCache(
-      const OverlapsHashTableCacheKey& key);
+      QueryPlanHash key,
+      CacheItemType item_type,
+      DeviceIdentifier device_identifier);
 
   std::optional<std::pair<size_t, size_t>> getApproximateTupleCountFromCache(
-      const OverlapsHashTableCacheKey&);
+      QueryPlanHash key,
+      CacheItemType item_type,
+      DeviceIdentifier device_identifier);
 
-  void putHashTableOnCpuToCache(const OverlapsHashTableCacheKey& key,
-                                std::shared_ptr<HashTable> hash_table);
+  void putHashTableOnCpuToCache(QueryPlanHash key,
+                                CacheItemType item_type,
+                                std::shared_ptr<HashTable> hashtable_ptr,
+                                DeviceIdentifier device_identifier,
+                                size_t hashtable_building_time);
 
   llvm::Value* codegenKey(const CompilationOptions&);
   std::vector<llvm::Value*> codegenManyKey(const CompilationOptions&);
+
+  std::optional<OverlapsHashTableMetaInfo> getOverlapsHashTableMetaInfo() {
+    return hashtable_cache_meta_info_.overlaps_meta_info;
+  }
+
+  struct AlternativeCacheKeyForOverlapsHashJoin {
+    std::vector<InnerOuter> inner_outer_pairs;
+    const size_t num_elements;
+    const std::vector<ChunkKey> chunk_key;
+    const SQLOps optype;
+    const size_t max_hashtable_size;
+    const double bucket_threshold;
+    const std::vector<double> inverse_bucket_sizes = {};
+  };
+
+  QueryPlanHash getAlternativeCacheKey(AlternativeCacheKeyForOverlapsHashJoin& info) {
+    auto hash = boost::hash_value(::toString(info.chunk_key));
+    for (InnerOuter inner_outer : info.inner_outer_pairs) {
+      auto inner_col = inner_outer.first;
+      auto rhs_col_var = dynamic_cast<const Analyzer::ColumnVar*>(inner_outer.second);
+      auto outer_col = rhs_col_var ? rhs_col_var : inner_col;
+      boost::hash_combine(hash, inner_col->toString());
+      if (inner_col->get_type_info().is_string()) {
+        boost::hash_combine(hash, outer_col->toString());
+      }
+    }
+    boost::hash_combine(hash, info.num_elements);
+    boost::hash_combine(hash, ::toString(info.optype));
+    boost::hash_combine(hash, info.max_hashtable_size);
+    boost::hash_combine(hash, info.bucket_threshold);
+    boost::hash_combine(hash, ::toString(info.inverse_bucket_sizes));
+    return hash;
+  }
+
+  void generateCacheKey(const size_t max_hashtable_size, const double bucket_threshold) {
+    std::ostringstream oss;
+    oss << query_plan_dag_;
+    oss << max_hashtable_size << "|";
+    oss << bucket_threshold;
+    hashtable_cache_key_ = boost::hash_value(oss.str());
+  }
+
+  QueryPlanHash getCacheKey() const { return hashtable_cache_key_; }
+
+  const std::vector<InnerOuter>& getInnerOuterPairs() const { return inner_outer_pairs_; }
+
+  void setOverlapsHashtableMetaInfo(size_t max_table_size_bytes,
+                                    double bucket_threshold,
+                                    std::vector<double>& bucket_sizes) {
+    OverlapsHashTableMetaInfo overlaps_meta_info;
+    overlaps_meta_info.bucket_sizes = bucket_sizes;
+    overlaps_meta_info.overlaps_max_table_size_bytes = max_table_size_bytes;
+    overlaps_meta_info.overlaps_bucket_threshold = bucket_threshold;
+    HashtableCacheMetaInfo meta_info;
+    meta_info.overlaps_meta_info = overlaps_meta_info;
+    hashtable_cache_meta_info_ = meta_info;
+  }
 
   const std::shared_ptr<Analyzer::BinOper> condition_;
   const JoinType join_type_;
@@ -355,23 +360,28 @@ class OverlapsJoinHashTable : public HashJoin {
   const int device_count_;
 
   std::vector<double> inverse_bucket_sizes_for_dimension_;
+  double chosen_overlaps_bucket_threshold_;
+  size_t chosen_overlaps_max_table_size_bytes_;
+  CompositeKeyInfo composite_key_info_;
 
   std::optional<HashType>
       layout_override_;  // allows us to use a 1:many hash table for many:many
 
   std::mutex cpu_hash_table_buff_mutex_;
 
-  using HashTableCacheValue = std::shared_ptr<HashTable>;
-  // includes bucket threshold
-  static std::unique_ptr<
-      OverlapsHashTableCache<OverlapsHashTableCacheKey, HashTableCacheValue>>
-      hash_table_cache_;
-  // skips bucket threshold
-  using BucketThreshold = double;
-  using BucketSizes = std::vector<double>;
-  static std::unique_ptr<
-      HashTableCache<OverlapsHashTableCacheKey, std::pair<BucketThreshold, BucketSizes>>>
-      auto_tuner_cache_;
+  // cache a hashtable based on the cache key C
+  // C = query plan dag D + join col J + hashtable params P
+  // by varying overlaps join hashtable parameters P, we can build
+  // multiple (and different) hashtables for the same query plan dag D
+  // in this scenario, the rule we follow is cache everything
+  // with the assumption that varying P is intended by user
+  // for the performance and so worth to keep it for future recycling
+  static std::unique_ptr<HashtableRecycler> hash_table_cache_;
+  // auto tuner cache is maintained separately with hashtable cache
+  static std::unique_ptr<OverlapsTuningParamRecycler> auto_tuner_cache_;
 
   RegisteredQueryHint query_hint_;
+  QueryPlan query_plan_dag_;
+  QueryPlanHash hashtable_cache_key_;
+  HashtableCacheMetaInfo hashtable_cache_meta_info_;
 };

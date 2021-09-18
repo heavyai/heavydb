@@ -26,12 +26,13 @@
 #include "DataMgr/Allocators/ThrustAllocator.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "QueryEngine/ColumnarResults.h"
+#include "QueryEngine/DataRecycler/HashingSchemeRecycler.h"
+#include "QueryEngine/DataRecycler/HashtableRecycler.h"
 #include "QueryEngine/Descriptors/InputDescriptors.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/ExpressionRange.h"
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
-#include "QueryEngine/JoinHashTable/HashTableCache.h"
 #include "QueryEngine/JoinHashTable/PerfectHashTable.h"
 
 #include <llvm/IR/Value.h>
@@ -48,8 +49,6 @@ struct HashEntryInfo;
 
 class PerfectJoinHashTable : public HashJoin {
  public:
-  using HashTableCacheValue = std::shared_ptr<PerfectHashTable>;
-
   //! Make hash table from an in-flight SQL query's parse tree etc.
   static std::shared_ptr<PerfectJoinHashTable> getInstance(
       const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
@@ -59,7 +58,8 @@ class PerfectJoinHashTable : public HashJoin {
       const HashType preferred_hash_type,
       const int device_count,
       ColumnCacheMap& column_cache,
-      Executor* executor);
+      Executor* executor,
+      const HashTableBuildDagMap& hashtable_build_dag_map);
 
   std::string toString(const ExecutorDeviceType device_type,
                        const int device_id = 0,
@@ -97,7 +97,14 @@ class PerfectJoinHashTable : public HashJoin {
 
   std::string getHashJoinType() const final { return "Perfect"; }
 
-  static auto getHashTableCache() { return hash_table_cache_.get(); }
+  static HashtableRecycler* getHashTableCache() {
+    CHECK(hash_table_cache_);
+    return hash_table_cache_.get();
+  }
+  static HashingSchemeRecycler* getHashingSchemeCache() {
+    CHECK(hash_table_layout_cache_);
+    return hash_table_layout_cache_.get();
+  }
 
   static auto getCacheInvalidator() -> std::function<void()> {
     CHECK(hash_table_cache_);
@@ -141,7 +148,9 @@ class PerfectJoinHashTable : public HashJoin {
                        const ExpressionRange& col_range,
                        ColumnCacheMap& column_cache,
                        Executor* executor,
-                       const int device_count)
+                       const int device_count,
+                       QueryPlanHash hashtable_cache_key,
+                       HashtableCacheMetaInfo hashtable_cache_meta_info)
       : qual_bin_oper_(qual_bin_oper)
       , join_type_(join_type)
       , col_var_(std::dynamic_pointer_cast<Analyzer::ColumnVar>(col_var->deep_copy()))
@@ -151,25 +160,28 @@ class PerfectJoinHashTable : public HashJoin {
       , col_range_(col_range)
       , executor_(executor)
       , column_cache_(column_cache)
-      , device_count_(device_count) {
+      , device_count_(device_count)
+      , hashtable_cache_key_(hashtable_cache_key)
+      , hashtable_cache_meta_info_(hashtable_cache_meta_info) {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
     CHECK_GT(device_count_, 0);
     hash_tables_for_device_.resize(device_count_);
   }
 
-  ChunkKey genHashTableKey(
-      const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
-      const Analyzer::Expr* outer_col,
-      const Analyzer::ColumnVar* inner_col) const;
+  ChunkKey genChunkKey(const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+                       const Analyzer::Expr* outer_col,
+                       const Analyzer::ColumnVar* inner_col) const;
 
   void reify();
-  std::shared_ptr<PerfectHashTable> initHashTableOnCpuFromCache(const ChunkKey& chunk_key,
-                                                                const size_t num_elements,
-                                                                const InnerOuter& cols);
-  void putHashTableOnCpuToCache(const ChunkKey& chunk_key,
-                                const size_t num_elements,
-                                HashTableCacheValue hash_table,
-                                const InnerOuter& cols);
+  std::shared_ptr<PerfectHashTable> initHashTableOnCpuFromCache(
+      QueryPlanHash key,
+      CacheItemType item_type,
+      DeviceIdentifier device_identifier);
+  void putHashTableOnCpuToCache(QueryPlanHash key,
+                                CacheItemType item_type,
+                                std::shared_ptr<PerfectHashTable> hashtable_ptr,
+                                DeviceIdentifier device_identifier,
+                                size_t hashtable_building_time);
 
   const InputTableInfo& getInnerQueryInfo(const Analyzer::ColumnVar* inner_col) const;
 
@@ -188,6 +200,30 @@ class PerfectJoinHashTable : public HashJoin {
 
   HashTable* getHashTableForDevice(const size_t device_id) const;
 
+  struct AlternativeCacheKeyForPerfectHashJoin {
+    const ExpressionRange col_range;
+    const Analyzer::ColumnVar* inner_col;
+    const Analyzer::ColumnVar* outer_col;
+    const ChunkKey chunk_key;
+    const size_t num_elements;
+    const SQLOps optype;
+    const JoinType join_type;
+  };
+
+  static QueryPlanHash getAlternativeCacheKey(
+      AlternativeCacheKeyForPerfectHashJoin& info) {
+    auto hash = boost::hash_value(::toString(info.chunk_key));
+    boost::hash_combine(hash, info.inner_col->toString());
+    if (info.inner_col->get_type_info().is_string()) {
+      boost::hash_combine(hash, info.outer_col->toString());
+    }
+    boost::hash_combine(hash, info.col_range.toString());
+    boost::hash_combine(hash, info.num_elements);
+    boost::hash_combine(hash, ::toString(info.optype));
+    boost::hash_combine(hash, ::toString(info.join_type));
+    return hash;
+  }
+
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   const JoinType join_type_;
   std::shared_ptr<Analyzer::ColumnVar> col_var_;
@@ -200,26 +236,11 @@ class PerfectJoinHashTable : public HashJoin {
   Executor* executor_;
   ColumnCacheMap& column_cache_;
   const int device_count_;
+  QueryPlanHash hashtable_cache_key_;
+  HashtableCacheMetaInfo hashtable_cache_meta_info_;
 
-  struct JoinHashTableCacheKey {
-    const ExpressionRange col_range;
-    const Analyzer::ColumnVar inner_col;
-    const Analyzer::ColumnVar outer_col;
-    const size_t num_elements;
-    const ChunkKey chunk_key;
-    const SQLOps optype;
-    const JoinType join_type;
-
-    bool operator==(const struct JoinHashTableCacheKey& that) const {
-      return col_range == that.col_range && inner_col == that.inner_col &&
-             outer_col == that.outer_col && num_elements == that.num_elements &&
-             chunk_key == that.chunk_key && optype == that.optype &&
-             join_type == that.join_type;
-    }
-  };
-
-  static std::unique_ptr<HashTableCache<JoinHashTableCacheKey, HashTableCacheValue>>
-      hash_table_cache_;
+  static std::unique_ptr<HashtableRecycler> hash_table_cache_;
+  static std::unique_ptr<HashingSchemeRecycler> hash_table_layout_cache_;
 };
 
 bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,

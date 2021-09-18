@@ -180,6 +180,7 @@ class HashJoin {
       const int device_count,
       ColumnCacheMap& column_cache,
       Executor* executor,
+      const HashTableBuildDagMap& hashtable_build_dag_map,
       const RegisteredQueryHint& query_hint);
 
   //! Make hash table from named tables and columns (such as for testing).

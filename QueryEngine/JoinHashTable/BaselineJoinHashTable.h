@@ -29,39 +29,15 @@
 #include "Analyzer/Analyzer.h"
 #include "DataMgr/MemoryLevel.h"
 #include "QueryEngine/ColumnarResults.h"
+#include "QueryEngine/DataRecycler/HashingSchemeRecycler.h"
+#include "QueryEngine/DataRecycler/HashtableRecycler.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/JoinHashTable/BaselineHashTable.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
-#include "QueryEngine/JoinHashTable/HashTableCache.h"
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
 
 class Executor;
-
-struct HashTableCacheKey {
-  const size_t num_elements;
-  const std::vector<ChunkKey> chunk_keys;
-  const SQLOps optype;
-  const JoinType join_type;
-
-  bool operator==(const struct HashTableCacheKey& that) const {
-    return num_elements == that.num_elements && chunk_keys == that.chunk_keys &&
-           optype == that.optype && join_type == that.join_type;
-  }
-};
-
-class HashTypeCache {
- public:
-  static void set(const std::vector<ChunkKey>& key, const HashType hash_type);
-
-  static std::pair<HashType, bool> get(const std::vector<ChunkKey>& key);
-
-  static void clear();
-
- private:
-  static std::map<std::vector<ChunkKey>, HashType> hash_type_cache_;
-  static std::mutex hash_type_cache_mutex_;
-};
 
 // Representation for a hash table using the baseline layout: an open-addressing
 // hash with a fill rate of 50%. It is used for equi-joins on multiple columns and
@@ -78,7 +54,8 @@ class BaselineJoinHashTable : public HashJoin {
       const HashType preferred_hash_type,
       const int device_count,
       ColumnCacheMap& column_cache,
-      Executor* executor);
+      Executor* executor,
+      const HashTableBuildDagMap& hashtable_build_dag_map);
 
   static size_t getShardCountForCondition(
       const Analyzer::BinOper* condition,
@@ -118,17 +95,17 @@ class BaselineJoinHashTable : public HashJoin {
   std::string getHashJoinType() const final { return "Baseline"; }
 
   static auto getCacheInvalidator() -> std::function<void()> {
-    return []() -> void {
-      // TODO: make hash type cache part of the main cache
-      CHECK(hash_table_cache_);
-      hash_table_cache_->clear();
-      HashTypeCache::clear();
-    };
+    CHECK(hash_table_cache_);
+    return hash_table_cache_->getCacheInvalidator();
   }
 
-  static auto* getHashTableCache() {
+  static HashtableRecycler* getHashTableCache() {
     CHECK(hash_table_cache_);
     return hash_table_cache_.get();
+  }
+  static HashingSchemeRecycler* getHashingSchemeCache() {
+    CHECK(hash_table_layout_cache_);
+    return hash_table_layout_cache_.get();
   }
 
   virtual ~BaselineJoinHashTable() {}
@@ -141,7 +118,9 @@ class BaselineJoinHashTable : public HashJoin {
                         ColumnCacheMap& column_cache,
                         Executor* executor,
                         const std::vector<InnerOuter>& inner_outer_pairs,
-                        const int device_count);
+                        const int device_count,
+                        QueryPlanHash hashtable_cache_key,
+                        HashtableCacheMetaInfo hashtable_cache_meta_info);
 
   size_t getComponentBufferSize() const noexcept override;
 
@@ -157,7 +136,10 @@ class BaselineJoinHashTable : public HashJoin {
       DeviceAllocator* dev_buff_owner);
 
   virtual std::pair<size_t, size_t> approximateTupleCount(
-      const std::vector<ColumnsForDevice>&) const;
+      const std::vector<ColumnsForDevice>&,
+      QueryPlanHash key,
+      CacheItemType item_type,
+      DeviceIdentifier device_identifier) const;
 
   virtual size_t getKeyComponentWidth() const;
 
@@ -191,15 +173,47 @@ class BaselineJoinHashTable : public HashJoin {
 
   llvm::Value* hashPtr(const size_t index);
 
-  std::shared_ptr<HashTable> initHashTableOnCpuFromCache(const HashTableCacheKey&);
+  std::shared_ptr<HashTable> initHashTableOnCpuFromCache(
+      QueryPlanHash key,
+      CacheItemType item_type,
+      DeviceIdentifier device_identifier);
 
-  void putHashTableOnCpuToCache(const HashTableCacheKey&,
-                                std::shared_ptr<HashTable>& hash_table);
+  void putHashTableOnCpuToCache(QueryPlanHash key,
+                                CacheItemType item_type,
+                                std::shared_ptr<HashTable> hashtable_ptr,
+                                DeviceIdentifier device_identifier,
+                                size_t hashtable_building_time);
 
   std::pair<std::optional<size_t>, size_t> getApproximateTupleCountFromCache(
-      const HashTableCacheKey&) const;
+      QueryPlanHash key,
+      CacheItemType item_type,
+      DeviceIdentifier device_identifier) const;
 
   bool isBitwiseEq() const;
+
+  struct AlternativeCacheKeyForBaselineHashJoin {
+    std::vector<InnerOuter> inner_outer_pairs;
+    const size_t num_elements;
+    const SQLOps optype;
+    const JoinType join_type;
+  };
+
+  static QueryPlanHash getAlternativeCacheKey(
+      AlternativeCacheKeyForBaselineHashJoin& info) {
+    auto hash = boost::hash_value(::toString(info.optype));
+    for (InnerOuter inner_outer : info.inner_outer_pairs) {
+      auto inner_col = inner_outer.first;
+      auto rhs_col_var = dynamic_cast<const Analyzer::ColumnVar*>(inner_outer.second);
+      auto outer_col = rhs_col_var ? rhs_col_var : inner_col;
+      boost::hash_combine(hash, inner_col->toString());
+      if (inner_col->get_type_info().is_string()) {
+        boost::hash_combine(hash, outer_col->toString());
+      }
+    }
+    boost::hash_combine(hash, info.num_elements);
+    boost::hash_combine(hash, ::toString(info.join_type));
+    return hash;
+  }
 
   const std::shared_ptr<Analyzer::BinOper> condition_;
   const JoinType join_type_;
@@ -216,7 +230,9 @@ class BaselineJoinHashTable : public HashJoin {
   std::optional<HashType>
       layout_override_;  // allows us to use a 1:many hash table for many:many
 
-  using HashTableCacheValue = std::shared_ptr<HashTable>;
-  static std::unique_ptr<HashTableCache<HashTableCacheKey, HashTableCacheValue>>
-      hash_table_cache_;
+  QueryPlanHash hashtable_cache_key_;
+  HashtableCacheMetaInfo hashtable_cache_meta_info_;
+
+  static std::unique_ptr<HashtableRecycler> hash_table_cache_;
+  static std::unique_ptr<HashingSchemeRecycler> hash_table_layout_cache_;
 };

@@ -152,6 +152,26 @@ class ExpressionRange {
 
   static bool typeSupportsRange(const SQLTypeInfo& ti);
 
+  std::string toString() const {
+    std::ostringstream oss;
+    switch (type_) {
+      case ExpressionRangeType::Integer:
+        oss << has_nulls_ << "|" << std::to_string(int_min_) << "|"
+            << std::to_string(int_max_);
+        break;
+      case ExpressionRangeType::Float:
+      case ExpressionRangeType::Double:
+        oss << has_nulls_ << "|" << std::to_string(fp_min_) << "|"
+            << std::to_string(fp_max_);
+        break;
+      default:
+        oss << "INVALID";
+        break;
+    }
+    oss << "|" << std::to_string(bucket_);
+    return oss.str();
+  }
+
  private:
   ExpressionRange(const int64_t int_min_in,
                   const int64_t int_max_in,

@@ -26,8 +26,10 @@
 #include "Parser/ParserWrapper.h"
 #include "Parser/parser.h"
 #include "QueryEngine/CalciteAdapter.h"
+#include "QueryEngine/DataRecycler/HashtableRecycler.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/QueryDispatchQueue.h"
+#include "QueryEngine/QueryPlanDagExtractor.h"
 #include "QueryEngine/RelAlgExecutor.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/ThriftSerializers.h"
@@ -438,11 +440,6 @@ QueryPlanDagInfo QueryRunner::getQueryInfoForDataRecyclerTest(
   auto join_info = ra_executor.getJoinInfo(root_node_shared_ptr.get());
   auto relAlgTranslator = ra_executor.getRelAlgTranslator(root_node_shared_ptr.get());
   return {root_node_shared_ptr, join_info.first, join_info.second, relAlgTranslator};
-}
-
-void QueryRunner::printQueryPlanDagCache() const {
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-  executor->getQueryPlanDagCache().printDag();
 }
 
 std::unique_ptr<Parser::DDLStmt> QueryRunner::createDDLStatement(
@@ -891,44 +888,149 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(
                         defaultExecutionOptionsForRunSQL(allow_loop_joins, just_explain));
 }
 
-const int32_t* QueryRunner::getCachedJoinHashTable(size_t idx) {
+ExtractedPlanDag QueryRunner::extractQueryPlanDag(const std::string& query_str) {
+  auto query_dag_info = getQueryInfoForDataRecyclerTest(query_str);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto extracted_dag_info =
+      QueryPlanDagExtractor::extractQueryPlanDag(query_dag_info.root_node.get(),
+                                                 *getCatalog(),
+                                                 std::nullopt,
+                                                 query_dag_info.left_deep_trees_info,
+                                                 *executor->getTemporaryTables(),
+                                                 executor,
+                                                 *query_dag_info.rel_alg_translator);
+  return extracted_dag_info;
+}
+
+const int32_t* QueryRunner::getCachedPerfectHashTable(QueryPlan plan_dag) {
   auto hash_table_cache = PerfectJoinHashTable::getHashTableCache();
   CHECK(hash_table_cache);
-  auto hash_table = hash_table_cache->getCachedHashTable(idx);
+  auto cache_key = boost::hash_value(plan_dag);
+  auto hash_table = hash_table_cache->getItemFromCache(
+      cache_key, CacheItemType::PERFECT_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
   CHECK(hash_table);
   return reinterpret_cast<int32_t*>(hash_table->getCpuBuffer());
-};
+}
 
-const int8_t* QueryRunner::getCachedBaselineHashTable(size_t idx) {
+const int8_t* QueryRunner::getCachedBaselineHashTable(QueryPlan plan_dag) {
   auto hash_table_cache = BaselineJoinHashTable::getHashTableCache();
   CHECK(hash_table_cache);
-  auto hash_table = hash_table_cache->getCachedHashTable(idx);
+  auto cache_key = boost::hash_value(plan_dag);
+  auto hash_table = hash_table_cache->getItemFromCache(
+      cache_key, CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
   CHECK(hash_table);
   return hash_table->getCpuBuffer();
-};
+}
 
-size_t QueryRunner::getEntryCntCachedBaselineHashTable(size_t idx) {
+size_t QueryRunner::getEntryCntCachedBaselineHashTable(QueryPlan plan_dag) {
   auto hash_table_cache = BaselineJoinHashTable::getHashTableCache();
   CHECK(hash_table_cache);
-  auto hash_table = hash_table_cache->getCachedHashTable(idx);
+  auto cache_key = boost::hash_value(plan_dag);
+  auto hash_table = hash_table_cache->getItemFromCache(
+      cache_key, CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
   CHECK(hash_table);
   return hash_table->getEntryCount();
 }
 
-size_t QueryRunner::getNumberOfCachedJoinHashTables() {
+// this function exists to test data recycler
+// specifically, it is tricky to get a hashtable cache key when we only know
+// a target query sql in test code
+// so this function utilizes an incorrect way to manipulate our hashtable recycler
+// but provides the cached hashtable for performing the test
+// a set "visited" contains cached hashtable keys that we have retrieved so far
+// based on that, this function iterates hashtable cache and return a cached one
+// when its hashtable cache key has not been visited yet
+// for instance, if we call this funtion with an empty "visited" key, we return
+// the first hashtable that its iterator visits
+std::tuple<QueryPlanHash,
+           std::shared_ptr<HashTable>,
+           std::optional<HashtableCacheMetaInfo>>
+QueryRunner::getCachedHashtableWithoutCacheKey(std::set<size_t>& visited,
+                                               CacheItemType hash_table_type,
+                                               DeviceIdentifier device_identifier) {
+  HashtableRecycler* hash_table_cache{nullptr};
+  switch (hash_table_type) {
+    case CacheItemType::PERFECT_HT: {
+      hash_table_cache = PerfectJoinHashTable::getHashTableCache();
+      break;
+    }
+    case CacheItemType::BASELINE_HT: {
+      hash_table_cache = BaselineJoinHashTable::getHashTableCache();
+      break;
+    }
+    case CacheItemType::OVERLAPS_HT: {
+      hash_table_cache = OverlapsJoinHashTable::getHashTableCache();
+      break;
+    }
+    default: {
+      UNREACHABLE();
+      break;
+    }
+  }
+  CHECK(hash_table_cache);
+  return hash_table_cache->getCachedHashtableWithoutCacheKey(
+      visited, hash_table_type, device_identifier);
+}
+
+std::shared_ptr<CacheItemMetric> QueryRunner::getCacheItemMetric(
+    QueryPlanHash cache_key,
+    CacheItemType hash_table_type,
+    DeviceIdentifier device_identifier) {
+  HashtableRecycler* hash_table_cache;
+  switch (hash_table_type) {
+    case CacheItemType::PERFECT_HT: {
+      hash_table_cache = PerfectJoinHashTable::getHashTableCache();
+      break;
+    }
+    case CacheItemType::BASELINE_HT: {
+      hash_table_cache = BaselineJoinHashTable::getHashTableCache();
+      break;
+    }
+    case CacheItemType::OVERLAPS_HT: {
+      hash_table_cache = OverlapsJoinHashTable::getHashTableCache();
+      break;
+    }
+    default: {
+      UNREACHABLE();
+      break;
+    }
+  }
+  CHECK(hash_table_cache);
+  return hash_table_cache->getCachedItemMetric(
+      hash_table_type, device_identifier, cache_key);
+}
+
+size_t QueryRunner::getNumberOfCachedPerfectHashTables() {
   auto hash_table_cache = PerfectJoinHashTable::getHashTableCache();
   CHECK(hash_table_cache);
-  return hash_table_cache->getNumberOfCachedHashTables();
+  return hash_table_cache->getCurrentNumCachedItems(
+      CacheItemType::PERFECT_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
 };
 
 size_t QueryRunner::getNumberOfCachedBaselineJoinHashTables() {
   auto hash_table_cache = BaselineJoinHashTable::getHashTableCache();
   CHECK(hash_table_cache);
-  return hash_table_cache->getNumberOfCachedHashTables();
-};
+  return hash_table_cache->getCurrentNumCachedItems(
+      CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+}
 
 size_t QueryRunner::getNumberOfCachedOverlapsHashTables() {
-  return OverlapsJoinHashTable::getCombinedHashTableCacheSize();
+  auto hash_table_cache = OverlapsJoinHashTable::getHashTableCache();
+  CHECK(hash_table_cache);
+  return hash_table_cache->getCurrentNumCachedItems(
+      CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+}
+
+size_t QueryRunner::getNumberOfCachedOverlapsHashTableTuringParams() {
+  auto hash_table_cache = OverlapsJoinHashTable::getOverlapsTuningParamCache();
+  CHECK(hash_table_cache);
+  return hash_table_cache->getCurrentNumCachedItems(
+      CacheItemType::OVERLAPS_AUTO_TUNER_PARAM, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+}
+
+size_t QueryRunner::getNumberOfCachedOverlapsHashTablesAndTuningParams() {
+  return getNumberOfCachedOverlapsHashTables() +
+         getNumberOfCachedOverlapsHashTableTuringParams();
 }
 
 void QueryRunner::reset() {

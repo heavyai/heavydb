@@ -29,7 +29,9 @@ class RangeJoinHashTable final : public OverlapsJoinHashTable {
                      ColumnCacheMap& column_cache,
                      Executor* executor,
                      const std::vector<InnerOuter>& inner_outer_pairs,
-                     const int device_count)
+                     const int device_count,
+                     QueryPlan query_plan_dag,
+                     HashtableCacheMetaInfo hashtable_cache_meta_info)
       : OverlapsJoinHashTable(condition,
                               join_type,
                               query_infos,
@@ -37,7 +39,9 @@ class RangeJoinHashTable final : public OverlapsJoinHashTable {
                               column_cache,
                               executor,
                               inner_outer_pairs,
-                              device_count)
+                              device_count,
+                              query_plan_dag,
+                              hashtable_cache_meta_info)
       , range_expr_(range_expr)
       , inner_col_expr_(std::move(inner_col_expr)) {}
 
@@ -52,6 +56,7 @@ class RangeJoinHashTable final : public OverlapsJoinHashTable {
       const int device_count,
       ColumnCacheMap& column_cache,
       Executor* executor,
+      const HashTableBuildDagMap& hashtable_build_dag_map,
       const RegisteredQueryHint& query_hint);
 
  protected:
@@ -109,7 +114,7 @@ class RangeJoinHashTable final : public OverlapsJoinHashTable {
   }
 
   inline bool isProbeCompressed() const {
-    const auto& inner_outer_pair = inner_outer_pairs_[0];
+    const auto& inner_outer_pair = getInnerOuterPairs()[0];
     const auto outer_col = inner_outer_pair.second;
     const auto outer_col_ti = outer_col->get_type_info();
 
@@ -120,4 +125,5 @@ class RangeJoinHashTable final : public OverlapsJoinHashTable {
   std::shared_ptr<Analyzer::ColumnVar> inner_col_expr_;
   const double bucket_threshold_{std::numeric_limits<double>::max()};
   const size_t max_hashtable_size_{std::numeric_limits<size_t>::max()};
+  HashtableCacheMetaInfo overlaps_hashtable_cache_meta_info_;
 };
