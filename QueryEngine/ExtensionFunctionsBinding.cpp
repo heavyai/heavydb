@@ -104,7 +104,89 @@ ExtArgumentType get_array_arg_elem_type(const ExtArgumentType ext_arg_array_type
   return ExtArgumentType{};
 }
 
+static int match_numeric_argument(const SQLTypeInfo& arg_type_info,
+                                  const bool is_arg_literal,
+                                  const ExtArgumentType& sig_ext_arg_type,
+                                  int32_t& penalty_score) {
+  const auto arg_type = arg_type_info.get_type();
+  CHECK(arg_type == kBOOLEAN || arg_type == kTINYINT || arg_type == kSMALLINT ||
+        arg_type == kINT || arg_type == kBIGINT || arg_type == kFLOAT ||
+        arg_type == kDOUBLE || arg_type == kDECIMAL || arg_type == kNUMERIC);
+  // Todo (todd): Add support for timestamp, date, and time types
+  const auto sig_type_info = ext_arg_type_to_type_info(sig_ext_arg_type);
+  const auto sig_type = sig_type_info.get_type();
+
+  // If we can't legally auto-cast to sig_type, abort
+  if (!arg_type_info.is_numeric_scalar_auto_castable(sig_type_info)) {
+    return -1;
+  }
+
+  // We now compare a measure of the scale of the sig_type with the arg_type,
+  // which provides a basis for scoring the match between the two.
+  // Note that get_numeric_scalar_scale for the most part returns the logical
+  // byte width of the type, with a few caveats for decimals and timestamps
+  // described in more depth in comments in the function itself.
+  // Also even though for example float and int types return 4 (as in 4 bytes),
+  // and double and bigint types return 8, a fp32 type cannot express every 32-bit integer
+  // (even if it can cover a larger absolute range), and an fp64 type likewise cannot
+  // express every 64-bit integer. However for the purposes of extension function casting
+  // we consider floats and ints to be equal scale, and similarly doubles and bigints.
+  const auto arg_type_relative_scale = arg_type_info.get_numeric_scalar_scale();
+  CHECK_GE(arg_type_relative_scale, 1);
+  CHECK_LE(arg_type_relative_scale, 8);
+  const auto sig_type_relative_scale = sig_type_info.get_numeric_scalar_scale();
+  CHECK_GE(sig_type_relative_scale, 1);
+  CHECK_LE(sig_type_relative_scale, 8);
+
+  // Current we do not allow auto-casting to types with less scale/precision, with the
+  // caveats around floating point and decimal types mentioned above
+  CHECK_GE(sig_type_relative_scale, arg_type_relative_scale);
+
+  // Calculate the ratio of the sig_type by the arg_type, per the above check will be >= 1
+  const auto sig_type_scale_gain_ratio =
+      sig_type_relative_scale / arg_type_relative_scale;
+  CHECK_GE(sig_type_scale_gain_ratio, 1);
+
+  const bool is_integer_to_fp_cast = (arg_type == kTINYINT || arg_type == kSMALLINT ||
+                                      arg_type == kINT || arg_type == kBIGINT) &&
+                                     (sig_type == kFLOAT || sig_type == kDOUBLE);
+
+  // Following the old bespoke scoring logic this function replaces, we heavily penalize
+  // any casts that move ints to floats/doubles for the precision-loss reasons above
+  // Arguably all integers in the tinyint and smallint can be fully specified with both
+  // float and double types, but we treat them the same as int and bigint types here.
+  const int32_t type_family_cast_penalty_score = is_integer_to_fp_cast ? 1001000 : 1000;
+
+  int32_t scale_cast_penalty_score;
+
+  // The following logic is new. Basically there are strong reasons to
+  // prefer the promotion of constant literals to the most precise type possible, as
+  // rather than the type being inherent in the data - that is a column or columns where
+  // a user specified a type (and with any expressions on those columns following our
+  // standard sql casting logic), literal types are given to us by Calcite and do not
+  // necessarily convey any semantic intent (i.e. 10 will be an int, but 10.0 a decimal)
+  // Hence it is better to promote these types to the most precise sig_type available,
+  // while at the same time keeping column expressions as close as possible to the input
+  // types (mainly for performance, we have many float versions of various functions
+  // to allow for greater performance when the underlying data is not of double precision,
+  // and hence there is little benefit of the extra cost of computing double precision
+  // operators on this data)
+  if (is_arg_literal) {
+    scale_cast_penalty_score =
+        (8000 / arg_type_relative_scale) - (1000 * sig_type_scale_gain_ratio);
+  } else {
+    scale_cast_penalty_score = (1000 * sig_type_scale_gain_ratio);
+  }
+
+  const auto cast_penalty_score =
+      type_family_cast_penalty_score + scale_cast_penalty_score;
+  CHECK_GT(cast_penalty_score, 0);
+  penalty_score += cast_penalty_score;
+  return 1;
+}
+
 static int match_arguments(const SQLTypeInfo& arg_type,
+                           const bool is_arg_literal,
                            int sig_pos,
                            const std::vector<ExtArgumentType>& sig_types,
                            int& penalty_score) {
@@ -134,142 +216,50 @@ static int match_arguments(const SQLTypeInfo& arg_type,
   if (sig_pos > max_pos) {
     return -1;
   }
-  auto stype = sig_types[sig_pos];
+  auto sig_type = sig_types[sig_pos];
   switch (arg_type.get_type()) {
     case kBOOLEAN:
-      if (stype == ExtArgumentType::Bool) {
-        penalty_score += 1000;
-        return 1;
-      }
-      break;
     case kTINYINT:
-      switch (stype) {
-        case ExtArgumentType::Int8:
-          penalty_score += 1000;
-          break;
-        case ExtArgumentType::Int16:
-          penalty_score += 2000;
-          break;
-        case ExtArgumentType::Int32:
-          penalty_score += 4000;
-          break;
-        case ExtArgumentType::Int64:
-          penalty_score += 8000;
-          break;
-        case ExtArgumentType::Float:
-          penalty_score += 1016000;
-          break;
-        case ExtArgumentType::Double:
-          penalty_score += 1032000;
-          break;
-        default:
-          return -1;
-      }
-      return 1;
     case kSMALLINT:
-      switch (stype) {
-        case ExtArgumentType::Int16:
-          penalty_score += 1000;
-          break;
-        case ExtArgumentType::Int32:
-          penalty_score += 2000;
-          break;
-        case ExtArgumentType::Int64:
-          penalty_score += 4000;
-          break;
-        case ExtArgumentType::Float:
-          penalty_score += 1008000;
-          break;
-        case ExtArgumentType::Double:
-          penalty_score += 1016000;
-          break;
-        default:
-          return -1;
-      }
-      return 1;
     case kINT:
-      switch (stype) {
-        case ExtArgumentType::Int32:
-          penalty_score += 1000;
-          break;
-        case ExtArgumentType::Int64:
-          penalty_score += 2000;
-          break;
-        case ExtArgumentType::Float:
-          penalty_score += 1004000;
-          break;
-        case ExtArgumentType::Double:
-          penalty_score += 1008000;
-          break;
-        default:
-          return -1;
-      }
-      return 1;
     case kBIGINT:
-      switch (stype) {
-        case ExtArgumentType::Int64:
-          penalty_score += 1000;
-          break;
-        case ExtArgumentType::Float:
-          penalty_score += 1002000;
-          break;
-        case ExtArgumentType::Double:
-          penalty_score += 1004000;
-          break;
-        default:
-          return -1;
-      }
-      return 1;
     case kFLOAT:
-      switch (stype) {
-        case ExtArgumentType::Float:
-          penalty_score += 1000;
-          break;
-        case ExtArgumentType::Double:
-          penalty_score += 2000;
-          break;
-        default:
-          return -1;
-      }
-      return 1;
     case kDOUBLE:
-      if (stype == ExtArgumentType::Double) {
-        penalty_score += 1000;
-        return 1;
-      }
-      break;
-
+    case kDECIMAL:
+    case kNUMERIC:
+      return match_numeric_argument(arg_type, is_arg_literal, sig_type, penalty_score);
     case kPOINT:
     case kLINESTRING:
-      if ((stype == ExtArgumentType::PInt8 || stype == ExtArgumentType::PInt16 ||
-           stype == ExtArgumentType::PInt32 || stype == ExtArgumentType::PInt64 ||
-           stype == ExtArgumentType::PFloat || stype == ExtArgumentType::PDouble) &&
+      if ((sig_type == ExtArgumentType::PInt8 || sig_type == ExtArgumentType::PInt16 ||
+           sig_type == ExtArgumentType::PInt32 || sig_type == ExtArgumentType::PInt64 ||
+           sig_type == ExtArgumentType::PFloat || sig_type == ExtArgumentType::PDouble) &&
           sig_pos < max_pos && sig_types[sig_pos + 1] == ExtArgumentType::Int64) {
         penalty_score += 1000;
         return 2;
-      } else if (stype == ExtArgumentType::GeoPoint ||
-                 stype == ExtArgumentType::GeoLineString) {
+      } else if (sig_type == ExtArgumentType::GeoPoint ||
+                 sig_type == ExtArgumentType::GeoLineString) {
         penalty_score += 1000;
         return 1;
       }
-      break;
+      return -1;
     case kARRAY:
-      if ((stype == ExtArgumentType::PInt8 || stype == ExtArgumentType::PInt16 ||
-           stype == ExtArgumentType::PInt32 || stype == ExtArgumentType::PInt64 ||
-           stype == ExtArgumentType::PFloat || stype == ExtArgumentType::PDouble ||
-           stype == ExtArgumentType::PBool) &&
+      if ((sig_type == ExtArgumentType::PInt8 || sig_type == ExtArgumentType::PInt16 ||
+           sig_type == ExtArgumentType::PInt32 || sig_type == ExtArgumentType::PInt64 ||
+           sig_type == ExtArgumentType::PFloat || sig_type == ExtArgumentType::PDouble ||
+           sig_type == ExtArgumentType::PBool) &&
           sig_pos < max_pos && sig_types[sig_pos + 1] == ExtArgumentType::Int64) {
         penalty_score += 1000;
         return 2;
-      } else if (is_ext_arg_type_array(stype)) {
+      } else if (is_ext_arg_type_array(sig_type)) {
         // array arguments must match exactly
         CHECK(arg_type.is_array());
-        const auto stype_ti = ext_arg_type_to_type_info(get_array_arg_elem_type(stype));
-        if (arg_type.get_elem_type() == kBOOLEAN && stype_ti.get_type() == kTINYINT) {
+        const auto sig_type_ti =
+            ext_arg_type_to_type_info(get_array_arg_elem_type(sig_type));
+        if (arg_type.get_elem_type() == kBOOLEAN && sig_type_ti.get_type() == kTINYINT) {
           /* Boolean array has the same low-level structure as Int8 array. */
           penalty_score += 1000;
           return 1;
-        } else if (arg_type.get_elem_type().get_type() == stype_ti.get_type()) {
+        } else if (arg_type.get_elem_type().get_type() == sig_type_ti.get_type()) {
           penalty_score += 1000;
           return 1;
         } else {
@@ -278,19 +268,19 @@ static int match_arguments(const SQLTypeInfo& arg_type,
       }
       break;
     case kPOLYGON:
-      if (stype == ExtArgumentType::PInt8 && sig_pos + 3 < max_pos &&
+      if (sig_type == ExtArgumentType::PInt8 && sig_pos + 3 < max_pos &&
           sig_types[sig_pos + 1] == ExtArgumentType::Int64 &&
           sig_types[sig_pos + 2] == ExtArgumentType::PInt32 &&
           sig_types[sig_pos + 3] == ExtArgumentType::Int64) {
         penalty_score += 1000;
         return 4;
-      } else if (stype == ExtArgumentType::GeoPolygon) {
+      } else if (sig_type == ExtArgumentType::GeoPolygon) {
         penalty_score += 1000;
         return 1;
       }
       break;
     case kMULTIPOLYGON:
-      if (stype == ExtArgumentType::PInt8 && sig_pos + 5 < max_pos &&
+      if (sig_type == ExtArgumentType::PInt8 && sig_pos + 5 < max_pos &&
           sig_types[sig_pos + 1] == ExtArgumentType::Int64 &&
           sig_types[sig_pos + 2] == ExtArgumentType::PInt32 &&
           sig_types[sig_pos + 3] == ExtArgumentType::Int64 &&
@@ -298,61 +288,31 @@ static int match_arguments(const SQLTypeInfo& arg_type,
           sig_types[sig_pos + 5] == ExtArgumentType::Int64) {
         penalty_score += 1000;
         return 6;
-      } else if (stype == ExtArgumentType::GeoMultiPolygon) {
+      } else if (sig_type == ExtArgumentType::GeoMultiPolygon) {
         penalty_score += 1000;
         return 1;
       }
       break;
-    case kDECIMAL:
-    case kNUMERIC:
-      if (stype == ExtArgumentType::Double) {
-        // prefer doubles for anything over 7 significant digits
-        penalty_score += 1000 * (arg_type.get_dimension() > 7 ? 1 : 2);
-        return 1;
-      }
-      if (stype == ExtArgumentType::Float) {
-        // prefer floats for anything with 7 significant digits or less
-        penalty_score += 1000 * (arg_type.get_dimension() <= 7 ? 1 : 2);
-        return 1;
-      }
-      if (is_ext_arg_type_scalar_integer(stype)) {
-        const auto num_digits_left_of_decimal =
-            arg_type.get_dimension() - arg_type.get_scale();
-        const bool has_trailing_digits = arg_type.get_scale() == 0 ? true : false;
-        const auto stype_max_integer_digits = max_digits_for_ext_integer_arg(stype);
-        if (num_digits_left_of_decimal <=
-            stype_max_integer_digits) {  // If arg_type doesn't fit into stype, its not a
-                                         // match
-          if (has_trailing_digits) {
-            // penalize a decimal input with digits trailing the decimal being coerced to
-            // an integer type
-            penalty_score += 1000100;
-            return 1;
-          }
-          penalty_score += 1000;
-          return 1;
-        }
-      }
-      break;
     case kNULLT:  // NULL maps to a pointer and size argument
-      if ((stype == ExtArgumentType::PInt8 || stype == ExtArgumentType::PInt16 ||
-           stype == ExtArgumentType::PInt32 || stype == ExtArgumentType::PInt64 ||
-           stype == ExtArgumentType::PFloat || stype == ExtArgumentType::PDouble ||
-           stype == ExtArgumentType::PBool) &&
+      if ((sig_type == ExtArgumentType::PInt8 || sig_type == ExtArgumentType::PInt16 ||
+           sig_type == ExtArgumentType::PInt32 || sig_type == ExtArgumentType::PInt64 ||
+           sig_type == ExtArgumentType::PFloat || sig_type == ExtArgumentType::PDouble ||
+           sig_type == ExtArgumentType::PBool) &&
           sig_pos < max_pos && sig_types[sig_pos + 1] == ExtArgumentType::Int64) {
         penalty_score += 1000;
         return 2;
       }
       break;
     case kCOLUMN:
-      if (is_ext_arg_type_column(stype)) {
+      if (is_ext_arg_type_column(sig_type)) {
         // column arguments must match exactly
-        const auto stype_ti = ext_arg_type_to_type_info(get_column_arg_elem_type(stype));
-        if (arg_type.get_elem_type() == kBOOLEAN && stype_ti.get_type() == kTINYINT) {
+        const auto sig_type_ti =
+            ext_arg_type_to_type_info(get_column_arg_elem_type(sig_type));
+        if (arg_type.get_elem_type() == kBOOLEAN && sig_type_ti.get_type() == kTINYINT) {
           /* Boolean column has the same low-level structure as Int8 column. */
           penalty_score += 1000;
           return 1;
-        } else if (arg_type.get_elem_type().get_type() == stype_ti.get_type()) {
+        } else if (arg_type.get_elem_type().get_type() == sig_type_ti.get_type()) {
           penalty_score += 1000;
           return 1;
         } else {
@@ -361,15 +321,15 @@ static int match_arguments(const SQLTypeInfo& arg_type,
       }
       break;
     case kCOLUMN_LIST:
-      if (is_ext_arg_type_column_list(stype)) {
+      if (is_ext_arg_type_column_list(sig_type)) {
         // column_list arguments must match exactly
-        const auto stype_ti =
-            ext_arg_type_to_type_info(get_column_list_arg_elem_type(stype));
-        if (arg_type.get_elem_type() == kBOOLEAN && stype_ti.get_type() == kTINYINT) {
+        const auto sig_type_ti =
+            ext_arg_type_to_type_info(get_column_list_arg_elem_type(sig_type));
+        if (arg_type.get_elem_type() == kBOOLEAN && sig_type_ti.get_type() == kTINYINT) {
           /* Boolean column_list has the same low-level structure as Int8 column_list. */
           penalty_score += 10000;
           return 1;
-        } else if (arg_type.get_elem_type().get_type() == stype_ti.get_type()) {
+        } else if (arg_type.get_elem_type().get_type() == sig_type_ti.get_type()) {
           penalty_score += 10000;
           return 1;
         } else {
@@ -378,7 +338,7 @@ static int match_arguments(const SQLTypeInfo& arg_type,
       }
       break;
     case kVARCHAR:
-      if (stype != ExtArgumentType::TextEncodingNone) {
+      if (sig_type != ExtArgumentType::TextEncodingNone) {
         return -1;
       }
       switch (arg_type.get_compression()) {
@@ -387,12 +347,12 @@ static int match_arguments(const SQLTypeInfo& arg_type,
           return 1;
         case kENCODING_DICT:
           return -1;
-          // Todo (todd): Evaluate when and where we can tranlate to none-encoded
+          // Todo (todd): Evaluate when and where we can tranlate to dictionary-encoded
         default:
           UNREACHABLE();
       }
     case kTEXT:
-      if (stype != ExtArgumentType::TextEncodingNone) {
+      if (sig_type != ExtArgumentType::TextEncodingNone) {
         return -1;
       }
       switch (arg_type.get_compression()) {
@@ -495,6 +455,7 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
   int optimal_variant = -1;
 
   std::vector<SQLTypeInfo> type_infos_input;
+  std::vector<bool> args_are_constants;
   for (auto atype : func_args) {
     if constexpr (std::is_same_v<T, table_functions::TableFunction>) {
       if (dynamic_cast<const Analyzer::ColumnVar*>(atype.get())) {
@@ -504,15 +465,23 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
                                          type_info.get_compression(),  // compression
                                          type_info.get_comp_param());  // comp_param
           type_infos_input.push_back(ti);
+          args_are_constants.push_back(false);
         } else {
           auto ti = generate_column_type(type_info.get_type());
           type_infos_input.push_back(ti);
+          args_are_constants.push_back(true);
         }
         continue;
       }
     }
     type_infos_input.push_back(atype->get_type_info());
+    if (dynamic_cast<const Analyzer::Constant*>(atype.get())) {
+      args_are_constants.push_back(true);
+    } else {
+      args_are_constants.push_back(false);
+    }
   }
+  CHECK_EQ(type_infos_input.size(), args_are_constants.size());
 
   if (type_infos_input.size() == 0 && ext_funcs.size() > 0) {
     CHECK_EQ(ext_funcs.size(), static_cast<size_t>(1));
@@ -617,17 +586,30 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
       index_variant++;
       int penalty_score = 0;
       int pos = 0;
+      int original_input_idx = 0;
+      CHECK_LE(type_infos.size(), args_are_constants.size());
+      // for (size_t ti_idx = 0; ti_idx != type_infos.size(); ++ti_idx) {
       for (const auto& ti : type_infos) {
-        int offset = match_arguments(ti, pos, ext_func_args, penalty_score);
+        int offset = match_arguments(ti,
+                                     args_are_constants[original_input_idx],
+                                     pos,
+                                     ext_func_args,
+                                     penalty_score);
         if (offset < 0) {
           // atype does not match with ext_func argument
           pos = -1;
           break;
         }
+        if (ti.get_type() == kCOLUMN_LIST) {
+          original_input_idx += ti.get_dimension();
+        } else {
+          original_input_idx++;
+        }
         pos += offset;
       }
 
       if ((size_t)pos == ext_func_args.size()) {
+        CHECK_EQ(args_are_constants.size(), original_input_idx);
         // prefer smaller return types
         penalty_score += ext_arg_type_to_type_info(ext_func.getRet()).get_logical_size();
         if (penalty_score < minimal_score) {

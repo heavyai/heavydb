@@ -621,6 +621,119 @@ class SQLTypeInfo {
     }
   }
 
+  /**
+   * @brief returns true if the sql_type can be cast to the type specified by
+   * new_type_info with no loss of precision. Currently only used in
+   * ExtensionFunctionsBindings to determine legal function matches, but we should
+   * consider whether we need to rationalize implicit casting behavior more broadly in
+   * QueryEngine.
+   */
+
+  inline bool is_numeric_scalar_auto_castable(const SQLTypeInfo& new_type_info) const {
+    const auto& new_type = new_type_info.get_type();
+    switch (type) {
+      case kBOOLEAN:
+        return new_type == kBOOLEAN;
+      case kTINYINT:
+      case kSMALLINT:
+      case kINT:
+        if (!new_type_info.is_number()) {
+          return false;
+        }
+        if (new_type_info.is_fp()) {
+          // We can lose precision here, but preserving existing behavior
+          return true;
+        }
+        return new_type_info.get_logical_size() >= get_logical_size();
+      case kBIGINT:
+        return new_type == kBIGINT || new_type == kDOUBLE;
+      case kFLOAT:
+      case kDOUBLE:
+        if (!new_type_info.is_fp()) {
+          return false;
+        }
+        return (new_type_info.get_logical_size() >= get_logical_size());
+      case kDECIMAL:
+      case kNUMERIC:
+        switch (new_type) {
+          case kDECIMAL:
+          case kNUMERIC:
+            return new_type_info.get_dimension() >= get_dimension();
+          case kDOUBLE:
+            return true;
+          case kFLOAT:
+            return get_dimension() <= 7;
+          default:
+            return false;
+        }
+      case kTIMESTAMP:
+        if (new_type != kTIMESTAMP) {
+          return false;
+        }
+        return new_type_info.get_dimension() >= get_dimension();
+      case kDATE:
+        return new_type == kDATE;
+      case kTIME:
+        return new_type == kTIME;
+      default:
+        UNREACHABLE();
+        return false;
+    }
+  }
+
+  /**
+   * @brief returns integer between 1 and 8 indicating what is roughly equivalent to the
+   * logical byte size of a scalar numeric type (including boolean + time types), but with
+   * decimals and numerics mapped to the byte size of their dimension (which may vary from
+   * the type width), and timestamps, dates and times handled in a relative fashion.
+   * Note: this function only takes the scalar numeric types above, and will throw a check
+   * for other types.
+   */
+
+  inline int32_t get_numeric_scalar_scale() const {
+    CHECK(type == kBOOLEAN || type == kTINYINT || type == kSMALLINT || type == kINT ||
+          type == kBIGINT || type == kFLOAT || type == kDOUBLE || type == kDECIMAL ||
+          type == kNUMERIC || type == kTIMESTAMP || type == kDATE || type == kTIME);
+    switch (type) {
+      case kBOOLEAN:
+        return 1;
+      case kTINYINT:
+      case kSMALLINT:
+      case kINT:
+      case kBIGINT:
+      case kFLOAT:
+      case kDOUBLE:
+        return get_logical_size();
+      case kDECIMAL:
+      case kNUMERIC:
+        if (get_dimension() > 7) {
+          return 8;
+        } else {
+          return 4;
+        }
+      case kTIMESTAMP:
+        switch (get_dimension()) {
+          case 9:
+            return 8;
+          case 6:
+            return 4;
+          case 3:
+            return 2;
+          case 0:
+            return 1;
+          default:
+            UNREACHABLE();
+        }
+      case kDATE:
+        return 1;
+      case kTIME:
+        return 1;
+      default:
+        UNREACHABLE();
+        return 0;
+    }
+  }
+
   HOST DEVICE inline bool is_null(const Datum& d) const {
     // assuming Datum is always uncompressed
     switch (type) {

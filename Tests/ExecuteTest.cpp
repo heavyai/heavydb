@@ -6679,6 +6679,105 @@ TEST(Select, CastRound) {
   }
 }
 
+TEST(Select, ExtensionFunctionsTypeMatching) {
+  run_ddl_statement("DROP TABLE IF EXISTS extension_func_type_match_test;");
+  run_ddl_statement(
+      "CREATE TABLE extension_func_type_match_test (tinyint_type TINYINT, smallint_type "
+      "SMALLINT, int_type INT, bigint_type BIGINT, float_type FLOAT, double_type DOUBLE, "
+      "decimal_7_type DECIMAL(7, 1), decimal_8_type DECIMAL(8, 1));");
+  run_multiple_agg(
+      "INSERT INTO extension_func_type_match_test VALUES (10.0, 10.0, 10.0, 10.0, 10.0, "
+      "10.0, 10.0, 10.0)",
+      ExecutorDeviceType::CPU);
+  const double float_result = 2.302585124969482;  // log(10) result using the fp32 version
+                                                  // of the log extension function
+  const double double_result =
+      2.302585092994046;  // log(10) result using the fp64 version of the log extension
+                          // function
+  constexpr double RESULT_EPS =
+      1.0e-8;  // Sufficient to differentiate fp32 and fp64 results
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      ASSERT_NEAR(
+          double_result, v<double>(run_simple_agg("SELECT log(10);", dt)), RESULT_EPS);
+    }
+
+    {
+      ASSERT_NEAR(
+          double_result, v<double>(run_simple_agg("SELECT log(10.0);", dt)), RESULT_EPS);
+    }
+
+    {
+      ASSERT_NEAR(double_result,
+                  v<double>(run_simple_agg("SELECT log(CAST(10.0 AS FLOAT));", dt)),
+                  RESULT_EPS);
+    }
+
+    {
+      ASSERT_NEAR(
+          float_result,
+          v<double>(run_simple_agg(
+              "SELECT log(tinyint_type) FROM extension_func_type_match_test;", dt)),
+          RESULT_EPS);
+    }
+
+    {
+      ASSERT_NEAR(
+          float_result,
+          v<double>(run_simple_agg(
+              "SELECT log(smallint_type) FROM extension_func_type_match_test;", dt)),
+          RESULT_EPS);
+    }
+
+    {
+      ASSERT_NEAR(float_result,
+                  v<double>(run_simple_agg(
+                      "SELECT log(int_type) FROM extension_func_type_match_test;", dt)),
+                  RESULT_EPS);
+    }
+
+    {
+      ASSERT_NEAR(
+          double_result,
+          v<double>(run_simple_agg(
+              "SELECT log(bigint_type) FROM extension_func_type_match_test;", dt)),
+          RESULT_EPS);
+    }
+
+    {
+      ASSERT_NEAR(float_result,
+                  v<double>(run_simple_agg(
+                      "SELECT log(float_type) FROM extension_func_type_match_test;", dt)),
+                  RESULT_EPS);
+    }
+
+    {
+      ASSERT_NEAR(
+          double_result,
+          v<double>(run_simple_agg(
+              "SELECT log(double_type) FROM extension_func_type_match_test;", dt)),
+          RESULT_EPS);
+    }
+
+    {
+      ASSERT_NEAR(
+          float_result,
+          v<double>(run_simple_agg(
+              "SELECT log(decimal_7_type) FROM extension_func_type_match_test;", dt)),
+          RESULT_EPS);
+    }
+
+    {
+      ASSERT_NEAR(
+          double_result,
+          v<double>(run_simple_agg(
+              "SELECT log(decimal_8_type) FROM extension_func_type_match_test;", dt)),
+          RESULT_EPS);
+    }
+  }
+}
+
 TEST(Select, DropSecondaryDB) {
   run_ddl_statement("CREATE DATABASE SECONDARY_DB;");
   run_ddl_statement("DROP DATABASE SECONDARY_DB;");
@@ -11174,6 +11273,7 @@ TEST(Select, Joins_Decimal) {
 TEST(Select, RuntimeFunctions) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+
     c("SELECT SUM(ABS(-x + 1)) FROM test;", dt);
     c("SELECT SUM(ABS(-w + 1)) FROM test;", dt);
     c("SELECT SUM(ABS(-y + 1)) FROM test;", dt);
@@ -11301,8 +11401,8 @@ TEST(Select, RuntimeFunctions) {
         v<int64_t>(run_simple_agg(
             "SELECT TRUNCATE(CAST(1171 AS SMALLINT),-3) FROM test LIMIT 1;", dt)));
     ASSERT_FLOAT_EQ(
-        static_cast<float>(1000),
-        v<float>(run_simple_agg(
+        static_cast<double>(1000),
+        v<double>(run_simple_agg(
             "SELECT TRUNCATE(CAST(1171.123 AS FLOAT),-3) FROM test LIMIT 1;", dt)));
     ASSERT_FLOAT_EQ(
         static_cast<double>(1000),
@@ -11313,8 +11413,8 @@ TEST(Select, RuntimeFunctions) {
         v<double>(run_simple_agg(
             "SELECT TRUNCATE(CAST(1171.123 AS DOUBLE),1) FROM test LIMIT 1;", dt)));
     ASSERT_FLOAT_EQ(
-        static_cast<float>(1171.11),
-        v<float>(run_simple_agg(
+        static_cast<double>(1171.11),
+        v<double>(run_simple_agg(
             "SELECT TRUNCATE(CAST(1171.113 AS FLOAT),2) FROM test LIMIT 1;", dt)));
     ASSERT_FLOAT_EQ(static_cast<float>(11000000000000),
                     v<float>(run_simple_agg(

@@ -501,13 +501,14 @@ TEST_F(TableFunctions, ConstantCasts) {
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
     }
-    // Numeric constant to integer
+    // Should throw: Numeric constant to integer
     {
-      const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT x FROM "
-          "tf_test), 2.2));",
-          dt);
-      ASSERT_EQ(rows->rowCount(), size_t(5));
+      EXPECT_THROW(
+          run_multiple_agg(
+              "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT x FROM "
+              "tf_test), 2.2));",
+              dt),
+          std::exception);
     }
     // Should throw: boolean constant to integer
     {
