@@ -128,14 +128,16 @@ class TableFunction {
                 const std::vector<ExtArgumentType>& output_args,
                 const std::vector<ExtArgumentType>& sql_args,
                 const std::vector<std::map<std::string, std::string>>& annotations,
-                bool is_runtime)
+                bool is_runtime,
+                bool uses_manager)
       : name_(name)
       , output_sizer_(output_sizer)
       , input_args_(input_args)
       , output_args_(output_args)
       , sql_args_(sql_args)
       , annotations_(annotations)
-      , is_runtime_(is_runtime) {}
+      , is_runtime_(is_runtime)
+      , uses_manager_(uses_manager) {}
 
   std::vector<ExtArgumentType> getArgs(const bool ensure_column = false) const {
     std::vector<ExtArgumentType> args;
@@ -253,12 +255,14 @@ class TableFunction {
 
   bool isRuntime() const { return is_runtime_; }
 
+  bool usesManager() const { return uses_manager_; }
+
   inline bool isGPU() const {
-    return (name_.find("_cpu_", name_.find("__")) == std::string::npos);
+    return !usesManager() && (name_.find("_cpu_", name_.find("__")) == std::string::npos);
   }
 
   inline bool isCPU() const {
-    return (name_.find("_gpu_", name_.find("__")) == std::string::npos);
+    return usesManager() || (name_.find("_gpu_", name_.find("__")) == std::string::npos);
   }
 
   inline bool useDefaultSizer() const {
@@ -274,6 +278,7 @@ class TableFunction {
     result += "], sql_args=[";
     result += ExtensionFunctionsWhitelist::toString(sql_args_);
     result += "], is_runtime=" + std::string((is_runtime_ ? "true" : "false"));
+    result += ", uses_manager=" + std::string((uses_manager_ ? "true" : "false"));
     result += ", sizer=" + ::toString(output_sizer_);
     result += ", annotations=[";
     for (auto annotation : annotations_) {
@@ -308,6 +313,7 @@ class TableFunction {
   const std::vector<ExtArgumentType> sql_args_;
   const std::vector<std::map<std::string, std::string>> annotations_;
   const bool is_runtime_;
+  const bool uses_manager_;
 };
 
 class TableFunctionsFactory {
@@ -318,7 +324,8 @@ class TableFunctionsFactory {
                   const std::vector<ExtArgumentType>& output_args,
                   const std::vector<ExtArgumentType>& sql_args,
                   const std::vector<std::map<std::string, std::string>>& annotations,
-                  bool is_runtime = false);
+                  bool is_runtime = false,
+                  bool uses_manager = false);
 
   static std::vector<TableFunction> get_table_funcs(const std::string& name,
                                                     const bool is_gpu);

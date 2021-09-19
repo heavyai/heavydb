@@ -23,7 +23,6 @@
 
 #include "QueryEngine/CodeGenerator.h"
 
-extern std::unique_ptr<llvm::Module> g_rt_module;
 extern std::unique_ptr<llvm::Module> rt_udf_cpu_module;
 extern std::unique_ptr<llvm::Module> rt_udf_gpu_module;
 
@@ -38,14 +37,16 @@ llvm::Function* generate_entry_point(const CgenState* cgen_state) {
   const auto i32_type = get_int_type(32, ctx);
 
   const auto func_type = llvm::FunctionType::get(
-      i32_type, {ppi8_type, pi64_type, ppi64_type, pi64_type}, false);
+      i32_type, {pi8_type, ppi8_type, pi64_type, ppi64_type, pi64_type}, false);
 
   auto func = llvm::Function::Create(func_type,
                                      llvm::Function::ExternalLinkage,
                                      "call_table_function",
                                      cgen_state->module_);
   auto arg_it = func->arg_begin();
-  const auto input_cols_arg = &*arg_it;
+  const auto mgr_arg = &*arg_it;
+  mgr_arg->setName("mgr_ptr");
+  const auto input_cols_arg = &*(++arg_it);
   input_cols_arg->setName("input_col_buffers");
   const auto input_row_counts = &*(++arg_it);
   input_row_counts->setName("input_row_counts");
@@ -215,21 +216,18 @@ llvm::Value* alloc_column_list(std::string col_list_name,
 
 TableFunctionCompilationContext::TableFunctionCompilationContext()
     : cgen_state_(std::make_unique<CgenState>(/*num_query_infos=*/0,
-                                              /*contains_left_deep_outer_join=*/false)) {
-  auto cgen_state = cgen_state_.get();
-  CHECK(cgen_state);
-
-  std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state));
-  cgen_state->module_ = module.get();
-
-  entry_point_func_ = generate_entry_point(cgen_state);
-  module_ = std::move(module);
-}
+                                              /*contains_left_deep_outer_join=*/false)) {}
 
 void TableFunctionCompilationContext::compile(const TableFunctionExecutionUnit& exe_unit,
                                               const CompilationOptions& co,
                                               Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
+  auto cgen_state = cgen_state_.get();
+  CHECK(cgen_state);
+  std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state));
+  cgen_state->module_ = module.get();
+  entry_point_func_ = generate_entry_point(cgen_state);
+  module_ = std::move(module);
   generateEntryPoint(exe_unit, /*is_gpu=*/co.device_type == ExecutorDeviceType::GPU);
   if (co.device_type == ExecutorDeviceType::GPU) {
     generateGpuKernel();
@@ -256,12 +254,13 @@ void TableFunctionCompilationContext::generateEntryPoint(
     const TableFunctionExecutionUnit& exe_unit,
     bool is_gpu) {
   CHECK(entry_point_func_);
+  CHECK_EQ(entry_point_func_->arg_size(), 5);
   auto arg_it = entry_point_func_->arg_begin();
-  const auto input_cols_arg = &*arg_it;
+  const auto mgr_ptr = &*arg_it;
+  const auto input_cols_arg = &*(++arg_it);
   const auto input_row_counts_arg = &*(++arg_it);
   const auto output_buffers_arg = &*(++arg_it);
   const auto output_row_count_ptr = &*(++arg_it);
-
   auto cgen_state = cgen_state_.get();
   CHECK(cgen_state);
   auto& ctx = cgen_state->context_;
@@ -273,20 +272,22 @@ void TableFunctionCompilationContext::generateEntryPoint(
 
   const auto func_body_bb = llvm::BasicBlock::Create(
       ctx, ".func_body", cgen_state->ir_builder_.GetInsertBlock()->getParent());
-  cgen_state->ir_builder_.SetInsertPoint(func_body_bb);
 
+  cgen_state->ir_builder_.SetInsertPoint(func_body_bb);
   auto col_heads = generate_column_heads_load(
       exe_unit.input_exprs.size(), input_cols_arg, cgen_state->ir_builder_, ctx);
   CHECK_EQ(exe_unit.input_exprs.size(), col_heads.size());
-
   auto row_count_heads = generate_column_heads_load(
       exe_unit.input_exprs.size(), input_row_counts_arg, cgen_state->ir_builder_, ctx);
-
   // The column arguments of C++ UDTFs processed by clang must be
   // passed by reference, see rbc issues 200 and 289.
   auto pass_column_by_value = passColumnsByValue(exe_unit, is_gpu);
   std::vector<llvm::Value*> func_args;
   size_t func_arg_index = 0;
+  if (exe_unit.table_func.usesManager()) {
+    func_args.push_back(mgr_ptr);
+    func_arg_index++;
+  }
   int col_index = -1;
   for (size_t i = 0; i < exe_unit.input_exprs.size(); i++) {
     const auto& expr = exe_unit.input_exprs[i];
@@ -377,9 +378,9 @@ void TableFunctionCompilationContext::generateEntryPoint(
         cgen_state_->ir_builder_);
     if (!is_gpu) {
       cgen_state->emitExternalCall(
-          "register_output_column",
+          "TableFunctionManager_register_output_column",
           llvm::Type::getVoidTy(ctx),
-          {llvm::ConstantInt::get(get_int_type(32, ctx), i, true), col_ptr});
+          {mgr_ptr, llvm::ConstantInt::get(get_int_type(32, ctx), i, true), col_ptr});
     }
     output_col_args.push_back((pass_column_by_value ? col : col_ptr));
   }
@@ -388,9 +389,9 @@ void TableFunctionCompilationContext::generateEntryPoint(
   // column instances are passed by value
   if (exe_unit.table_func.hasOutputSizeKnownPreLaunch() && !is_gpu) {
     cgen_state->emitExternalCall(
-        "set_output_row_size",
+        "TableFunctionManager_set_output_row_size",
         llvm::Type::getVoidTy(ctx),
-        {cgen_state_->ir_builder_.CreateLoad(output_row_count_ptr)});
+        {mgr_ptr, cgen_state_->ir_builder_.CreateLoad(output_row_count_ptr)});
   }
 
   for (auto& col : output_col_args) {
@@ -496,7 +497,6 @@ void TableFunctionCompilationContext::finalize(const CompilationOptions& co,
 
   LOG(IR) << "Table Function Entry Point IR\n"
           << serialize_llvm_object(entry_point_func_);
-
   if (co.device_type == ExecutorDeviceType::GPU) {
     LOG(IR) << "Table Function Kernel IR\n" << serialize_llvm_object(kernel_func_);
 
@@ -519,6 +519,5 @@ void TableFunctionCompilationContext::finalize(const CompilationOptions& co,
     func_ptr = reinterpret_cast<FuncPtr>(ee->getPointerToFunction(entry_point_func_));
     own_execution_engine_ = std::move(ee);
   }
-
   LOG(IR) << "End of IR";
 }

@@ -32,9 +32,16 @@
 EXTENSION_NOINLINE int8_t* allocate_varlen_buffer(int64_t element_count,
                                                   int64_t element_size);
 
+/*
+  Table function management functions:
+ */
 EXTENSION_NOINLINE void set_output_row_size(int64_t num_rows);
-
+EXTENSION_NOINLINE void TableFunctionManager_set_output_row_size(int8_t* mgr_ptr,
+                                                                 int64_t num_rows);
+EXTENSION_NOINLINE int8_t* TableFunctionManager_get_singleton();
 EXTENSION_NOINLINE int32_t table_function_error(const char* message);
+EXTENSION_NOINLINE int32_t TableFunctionManager_error_message(int8_t* mgr_ptr,
+                                                              const char* message);
 
 // https://www.fluentcpp.com/2018/04/06/strong-types-by-struct/
 struct TextEncodingDict {
@@ -268,6 +275,39 @@ struct ColumnList {
     }
     result += "], num_cols=" + std::to_string(num_cols_) +
               ", size=" + std::to_string(size_) + ")";
+    return result;
+  }
+
+#endif
+};
+
+/*
+  This TableFunctionManager struct is a minimal proxy to the
+  TableFunctionManager defined in TableFunctionManager.h. The
+  corresponding instances share `this` but have different virtual
+  tables for methods.
+*/
+struct TableFunctionManager {
+  static TableFunctionManager* get_singleton() {
+    return reinterpret_cast<TableFunctionManager*>(TableFunctionManager_get_singleton());
+  }
+
+  void set_output_row_size(int64_t num_rows) {
+    TableFunctionManager_set_output_row_size(reinterpret_cast<int8_t*>(this), num_rows);
+  }
+
+  int32_t error_message(const char* message) {
+    return TableFunctionManager_error_message(reinterpret_cast<int8_t*>(this), message);
+  }
+
+#ifdef HAVE_TOSTRING
+
+  std::string toString() const {
+    std::string result = ::typeName(this) + "(";
+    if (!this) {
+      result += "UNINITIALIZED";
+    }
+    result += ")";
     return result;
   }
 

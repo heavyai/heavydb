@@ -77,9 +77,12 @@
 #endif
 
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
-#define PRINT(EXPR)                                                      \
-  std::cout << "[" << __FILENAME__ << ":" << __func__ << "#" << __LINE__ \
-            << "]: " #EXPR "=" << ::toString(EXPR) << std::endl;
+#define PRINT(EXPR)                                                                   \
+  std::cout << std::hex                                                               \
+            << ((std::hash<std::thread::id>()(std::this_thread::get_id())) & 0xffff)  \
+            << std::dec << " [" << __FILENAME__ << ":" << __func__ << "#" << __LINE__ \
+            << "]: " #EXPR "=" << ::toString(EXPR) << std::endl                       \
+            << std::flush;
 
 template <typename T>
 std::string typeName(const T* v) {
@@ -92,6 +95,21 @@ std::string typeName(const T* v) {
   stream << std::string(demangled);
   free(demangled);
 #endif
+  return stream.str();
+}
+
+template <typename T, typename... Args>
+std::string typeName(T (*v)(Args... args)) {
+  std::stringstream stream;
+  int status;
+#ifdef _WIN32
+  stream << std::string(typeid(v).name());
+#else
+  char* demangled = abi::__cxa_demangle(typeid(v).name(), 0, 0, &status);
+  stream << std::string(demangled);
+  free(demangled);
+#endif
+  stream << "@0x" << std::hex << (uintptr_t)(reinterpret_cast<const void*>(v));
   return stream.str();
 }
 
@@ -166,6 +184,11 @@ std::string toString(const T& v) {
     v.print(rso, nullptr);
     return "(" + rso.str() + ")";
   } else if constexpr (std::is_same_v<T, llvm::Value>) {
+    std::string type_str;
+    llvm::raw_string_ostream rso(type_str);
+    v.print(rso);
+    return "(" + rso.str() + ")";
+  } else if constexpr (std::is_same_v<T, llvm::Argument>) {
     std::string type_str;
     llvm::raw_string_ostream rso(type_str);
     v.print(rso);

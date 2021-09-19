@@ -1412,13 +1412,24 @@ def is_template_function(sig):
     return i >= 0 and '__' in sig.name[:i+1]
 
 
+def uses_manager(sig):
+    return sig.inputs and sig.inputs[0].name == 'TableFunctionManager'
+
+
 def is_cpu_function(sig):
     # Any function that does not have _gpu_ suffix is a cpu function.
     i = sig.name.rfind('_gpu_')
-    return not (i >= 0 and '__' in sig.name[:i+1])
+    if i >= 0 and '__' in sig.name[:i+1]:
+        if uses_manager(sig):
+            raise ValueError('Table function {} with gpu execution target cannot have TableFunctionManager argument'.format(sig.name))
+        return False
+    return True
 
 
 def is_gpu_function(sig):
+    # A function with TableFunctionManager argument is a cpu-only function
+    if uses_manager(sig):
+        return False
     # Any function that does not have _cpu_ suffix is a gpu function.
     i = sig.name.rfind('_cpu_')
     return not (i >= 0 and '__' in sig.name[:i+1])
@@ -1440,7 +1451,8 @@ def parse_annotations(input_files):
             input_types_ = []
             input_annotations = []
             sizer = None
-            for t, annot in zip(sig.inputs, sig.input_annotations):
+            uses_manager = False
+            for i, (t, annot) in enumerate(zip(sig.inputs, sig.input_annotations)):
                 if t.is_output_buffer_sizer():
                     if t.is_user_specified():
                         sql_types_.append(Bracket.parse('int32').normalize(kind='input'))
@@ -1454,6 +1466,10 @@ def parse_annotations(input_files):
                         input_types_.append(t_)
                     input_annotations.append(annot)
                     sql_types_.append(Bracket('Cursor', args=()))
+                elif t.name == 'TableFunctionManager':
+                    if i != 0:
+                        raise ValueError('{} must appear as a first argument of {}, but found it at position {}.'.format(t, sig.name, i))
+                    uses_manager = True
                 else:
                     input_types_.append(t)
                     input_annotations.append(annot)
@@ -1494,10 +1510,12 @@ def parse_annotations(input_files):
                     cpu_template_functions.append(t)
                 if is_gpu_function(sig):
                     gpu_template_functions.append(t)
-                add = 'TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s);' % (name, sizer, input_types, output_types, sql_types, annotations)
+                add = ('TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s, /*is_runtime:*/false, /*uses_manager:*/%s);'
+                       % (name, sizer, input_types, output_types, sql_types, annotations, str(uses_manager).lower()))
                 add_stmts.append(add)
             else:
-                add = 'TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s);' % (sig.name, sizer, input_types, output_types, sql_types, annotations)
+                add = ('TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s, /*is_runtime:*/false, /*uses_manager:*/%s);'
+                       % (sig.name, sizer, input_types, output_types, sql_types, annotations, str(uses_manager).lower()))
                 add_stmts.append(add)
 
     return add_stmts, cpu_template_functions, gpu_template_functions

@@ -39,7 +39,8 @@ class TableFunctionCompilationContext {
                const CompilationOptions& co,
                Executor* executor);
 
-  using FuncPtr = int32_t (*)(const int8_t** input_cols,
+  using FuncPtr = int32_t (*)(const int8_t* mgr_ptr,
+                              const int8_t** input_cols,
                               const int64_t* input_row_count,
                               int64_t** out,
                               int64_t* output_row_count);

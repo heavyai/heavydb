@@ -61,5 +61,7 @@
         foo__cpu_template(ColumnInt32) -> ColumnDouble !
         foo__cpu_template(ColumnInt64) -> ColumnDouble
 
+  UDTF: foo__cpu(TableFunctionManager, int64_t) -> Column<int64_t> !
+        foo__cpu(TableFunctionManager, Int64) -> ColumnInt64
  */
 // clang-format on

@@ -135,7 +135,7 @@ set(query_engine_source_files
     Execute.h
     NvidiaKernel.h
     QueryTemplateGenerator.h
-    TableFunctions/QueryOutputBufferMemoryManager.h)
+    TableFunctions/TableFunctionManager.h)
 
 if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   list(APPEND query_engine_source_files

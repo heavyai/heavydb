@@ -259,9 +259,16 @@ void TableFunctionsFactory::add(
     const std::vector<ExtArgumentType>& output_args,
     const std::vector<ExtArgumentType>& sql_args,
     const std::vector<std::map<std::string, std::string>>& annotations,
-    bool is_runtime) {
-  auto tf = TableFunction(
-      name, sizer, input_args, output_args, sql_args, annotations, is_runtime);
+    bool is_runtime,
+    bool uses_manager) {
+  auto tf = TableFunction(name,
+                          sizer,
+                          input_args,
+                          output_args,
+                          sql_args,
+                          annotations,
+                          is_runtime,
+                          uses_manager);
   auto sig = tf.getSignature();
   for (auto it = functions_.begin(); it != functions_.end();) {
     if (it->second.getName() == name) {
@@ -301,7 +308,8 @@ void TableFunctionsFactory::add(
                              output_args,
                              sql_args2,
                              annotations,
-                             is_runtime);
+                             is_runtime,
+                             uses_manager);
     auto sig = tf2.getSignature();
     for (auto it = functions_.begin(); it != functions_.end();) {
       if (sig == it->second.getSignature() &&

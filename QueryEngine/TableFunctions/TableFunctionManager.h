@@ -14,64 +14,48 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "QueryEngine/QueryMemoryInitializer.h"
 
 /*
-  QueryOutputBufferMemoryManager manages the memory of output column
-  buffers using the following approach:
+  The TableFunctionManager implements the following features:
 
-  1. Before executing a table function, a memory manager of output
-  columns buffers is initiated (when entering launchCpuCode). This
-  step includes creating output Column instances that will passed as
-  arguments to the table functions. The pointers to the output Column
-  instances are saved within the memory manager so that the instances
-  ptr and size members can be updated when the number of output
-  columns rows is set and the buffers of output columns are allocated.
+  - Manage the memory of output column buffers.
 
-  2. If the number of rows of output columns is known,
-  `set_output_row_size` is called before executing the table
-  function. Otherwise (when
-  exe_unit.table_func.hasTableFunctionSpecifiedParameter() evaluates
-  to true), it is expected that the table function will call
-  `set_output_row_size` to set the number of rows of output columns.
-  Calling `set_output_row_size` will also update the output Column
-  instances members.
-
-  3. The table function is expected to return the final number of rows
-  of output columns. It must not be greater than the count specified
-  in the `set_output_row_size` call but may be a smaller value.
-
-  4. After returning the table function, one can access the output
-  Column instances until the memory manager of output columns is
-  destroyed (when leaving launchCpuCode). The buffers of output
-  columns are now owned by the ResultSet instance.
-
+  - Allow table functions to communicate error/exception messages up
+    to the execution context. Table functions can return with a call
+    to `table_function_error` with an error message. This will
+    indicate to the execution context that an error ocurred within the
+    table function, and the error will be propagated as an exception.
 */
 
-struct QueryOutputBufferMemoryManager {
+// Use a set negative value to distinguish from already-existing
+// negative return values
+enum TableFunctionError : int32_t {
+  GenericError = -0x75BCD15,
+};
+
+extern std::mutex TableFunctionManager_singleton_mutex;
+
+struct TableFunctionManager {
   std::unique_ptr<QueryMemoryInitializer> query_buffers;
 
-  /*
-    QueryOutputBufferMemoryManager is a dynamic singleton:
-    `get_singleton()` returns a pointer to the singleton instance when
-    in the scope of QueryOutputBufferMemoryManager life-time,
-    otherwise returns nullptr. For internal usage.
-  */
-  static QueryOutputBufferMemoryManager*& get_singleton() {
-    static QueryOutputBufferMemoryManager* instance = nullptr;
-    return instance;
-  }
-
-  QueryOutputBufferMemoryManager(const TableFunctionExecutionUnit& exe_unit,
-                                 Executor* executor,
-                                 std::vector<const int8_t*>& col_buf_ptrs,
-                                 std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
+  TableFunctionManager(const TableFunctionExecutionUnit& exe_unit,
+                       Executor* executor,
+                       std::vector<const int8_t*>& col_buf_ptrs,
+                       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                       bool is_singleton)
       : exe_unit_(exe_unit)
       , executor_(executor)
       , col_buf_ptrs_(col_buf_ptrs)
       , row_set_mem_owner_(row_set_mem_owner)
-      , output_num_rows_(-1) {
-    set_singleton(this);  // start of singleton life
+      , output_num_rows_(-1)
+      , is_singleton_(is_singleton)
+      , thread_id_(std::this_thread::get_id()) {
+    if (isSingleton()) {
+      set_singleton(this);  // start of singleton life
+    }
     auto num_out_columns = get_ncols();
     output_col_buf_ptrs.reserve(num_out_columns);
     output_column_ptrs.reserve(num_out_columns);
@@ -81,24 +65,29 @@ struct QueryOutputBufferMemoryManager {
     }
   }
 
-  ~QueryOutputBufferMemoryManager() {
-    set_singleton(nullptr);  // end of singleton life
-  }
-
   // Return the number of output columns
   size_t get_ncols() const { return exe_unit_.target_exprs.size(); }
 
   // Return the number of rows of output columns.
   size_t get_nrows() const { return output_num_rows_; }
 
+  void check_thread_id() const {
+    if (std::this_thread::get_id() != thread_id_) {
+      throw std::runtime_error(
+          "TableFunctionManager instance accessed from an alien thread!");
+    }
+  }
+
   // Store the pointer to output Column instance
   void set_output_column(int32_t index, int8_t* ptr) {
+    check_thread_id();
     CHECK(index >= 0 && index < static_cast<int32_t>(get_ncols()));
     CHECK(ptr);
     output_column_ptrs[index] = ptr;
   }
 
   void allocate_output_buffers(int64_t output_num_rows) {
+    check_thread_id();
     CHECK_EQ(output_num_rows_,
              size_t(-1));  // re-allocation of output buffers is not supported
     output_num_rows_ = output_num_rows;
@@ -151,14 +140,44 @@ struct QueryOutputBufferMemoryManager {
     }
   }
 
+  const char* get_error_message() const {
+    check_thread_id();
+    return error_message_.c_str();
+  }
+
+  void set_error_message(const char* msg) {
+    check_thread_id();
+    error_message_ = std::string(msg);
+  }
+
+  // Methods for managing singleton instance of TableFunctionManager:
+
+  bool isSingleton() const { return is_singleton_; }
+
+  ~TableFunctionManager() {
+    if (isSingleton()) {
+      set_singleton(nullptr);  // end of singleton life
+    }
+  }
+
+  static TableFunctionManager*& get_singleton() {
+    static TableFunctionManager* instance = nullptr;
+    return instance;
+  }
+
  private:
-  static void set_singleton(QueryOutputBufferMemoryManager* instance) {
+  void lock() { TableFunctionManager_singleton_mutex.lock(); }
+  void unlock() { TableFunctionManager_singleton_mutex.unlock(); }
+
+  static void set_singleton(TableFunctionManager* instance) {
     auto& instance_ = get_singleton();
-    // ensure being singleton
+    // ensure being singleton and lock/unlock
     if (instance) {
+      instance->lock();
       CHECK(instance_ == nullptr);
     } else {
       CHECK(instance_ != nullptr);
+      instance_->unlock();
     }
     instance_ = instance;
   }
@@ -175,4 +194,10 @@ struct QueryOutputBufferMemoryManager {
   size_t output_num_rows_;
   // Pointers to output Column instances
   std::vector<int8_t*> output_column_ptrs;
+  // If TableFunctionManager is global
+  bool is_singleton_;
+  // Store thread id for sanity check
+  std::thread::id thread_id_;
+  // Error message
+  std::string error_message_;
 };

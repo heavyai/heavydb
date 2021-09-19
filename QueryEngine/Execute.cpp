@@ -1717,8 +1717,14 @@ ResultSetPtr Executor::executeTableFunction(
                                 // framework, we may want to move this up a level
 
   ColumnFetcher column_fetcher(this, column_cache);
+
   TableFunctionCompilationContext compilation_context;
-  compilation_context.compile(exe_unit, co, this);
+  {
+    auto clock_begin = timer_start();
+    std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
+    compilation_queue_time_ms_ += timer_stop(clock_begin);
+    compilation_context.compile(exe_unit, co, this);
+  }
 
   TableFunctionExecutionContext exe_context(getRowSetMemoryOwner());
   return exe_context.execute(

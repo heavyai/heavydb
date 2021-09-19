@@ -20,9 +20,8 @@
 #include "Logger/Logger.h"
 #include "QueryEngine/ColumnFetcher.h"
 #include "QueryEngine/GpuMemUtils.h"
-#include "QueryEngine/TableFunctions/QueryOutputBufferMemoryManager.h"
 #include "QueryEngine/TableFunctions/TableFunctionCompilationContext.h"
-#include "QueryEngine/TableFunctions/TableFunctionExceptionManager.h"
+#include "QueryEngine/TableFunctions/TableFunctionManager.h"
 #include "Shared/funcannotations.h"
 
 namespace {
@@ -288,6 +287,8 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   return nullptr;
 }
 
+std::mutex TableFunctionManager_singleton_mutex;
+
 ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
     const TableFunctionExecutionUnit& exe_unit,
     const TableFunctionCompilationContext* compilation_context,
@@ -297,12 +298,16 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
     Executor* executor) {
   int64_t output_row_count = 0;
 
-  // mgr will allocate output buffers on output column resize
-  auto mgr = std::make_unique<QueryOutputBufferMemoryManager>(
-      exe_unit, executor, col_buf_ptrs, row_set_mem_owner_);
-
-  // except_mgr handles memory for error/exception messages
-  auto except_mgr = std::make_unique<TableFunctionExceptionManager>();
+  // If TableFunctionManager must be a singleton but it has been
+  // initialized from another thread, TableFunctionManager constructor
+  // blocks via TableFunctionManager_singleton_mutex until the
+  // existing singleton is deconstructed.
+  auto mgr = std::make_unique<TableFunctionManager>(
+      exe_unit,
+      executor,
+      col_buf_ptrs,
+      row_set_mem_owner_,
+      /*is_singleton=*/!exe_unit.table_func.usesManager());
 
   if (exe_unit.table_func.hasOutputSizeKnownPreLaunch()) {
     // allocate output buffers because the size is known up front, from
@@ -327,14 +332,15 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   // execute
   auto timer = DEBUG_TIMER(__func__);
   const auto err =
-      compilation_context->getFuncPtr()(byte_stream_ptr,  // input columns buffer
+      compilation_context->getFuncPtr()(reinterpret_cast<const int8_t*>(mgr.get()),
+                                        byte_stream_ptr,  // input columns buffer
                                         col_sizes_ptr,    // input column sizes
                                         nullptr,
                                         &output_row_count);
 
   if (err == TableFunctionError::GenericError) {
     throw std::runtime_error("Error executing table function: " +
-                             std::string(except_mgr->get_error_message()));
+                             std::string(mgr->get_error_message()));
   }
 
   else if (err) {
@@ -383,12 +389,12 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
     src += allocated_column_size;
     dst += column_size;
   }
-
   return mgr->query_buffers->getResultSetOwned(0);
 }
 
 namespace {
 enum {
+  MANAGER,
   ERROR_BUFFER,
   COL_BUFFERS,
   COL_SIZES,
@@ -416,6 +422,13 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   auto gpu_allocator = std::make_unique<CudaAllocator>(data_mgr, device_id);
   CHECK(gpu_allocator);
   std::vector<CUdeviceptr> kernel_params(KERNEL_PARAM_COUNT, 0);
+
+  // TODO: implement table function manager for CUDA
+  // kernels. kernel_params[MANAGER] ought to contain a device pointer
+  // to a struct that a table function kernel with a
+  // TableFunctionManager argument can access from the device.
+  kernel_params[MANAGER] =
+      reinterpret_cast<CUdeviceptr>(gpu_allocator->alloc(sizeof(int8_t*)));
 
   // setup the inputs
   auto byte_stream_ptr = !(col_buf_ptrs.empty())

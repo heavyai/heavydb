@@ -1001,4 +1001,112 @@ EXTENSION_NOINLINE int32_t ct_string_to_chars__cpu_(const TextEncodingNone& inpu
   return str_size;
 }
 
+// clang-format off
+/*
+  The purpose of ct_sleep1 and ct_sleep2 is to test parallel execution
+  of UDTFs (use --num-executors=..). For instance, ct_sleep1 output
+  column buffers are managed by a global manager, hence, ct_sleep1 can
+  be run only sequentially. However, ct_sleep2 output column buffers
+  are managed with a thread-safe manager instance, hence, ct_sleep2
+  can be run in parallel.
+
+  UDTF: ct_sleep1(int32_t seconds, int32_t mode) -> Column<int32_t> output
+  UDTF: ct_sleep2(TableFunctionManager, int32_t seconds, int32_t mode) -> Column<int32_t> output
+
+  Here mode argument is used to test various approaches of accessing
+  the table function manager:
+
+  - mode == 0
+    ct_sleep1 uses global set_output_row_size function
+    ct_sleep2 uses thread-safe set_output_row_size method
+
+  - mode == 1
+    ct_sleep1 retrieves global singleton manager and uses its set_output_row_size method
+    ct_sleep2 same as in mode == 1
+
+  - mode == 2
+    ct_sleep1 does not call set_output_row_size function, expect error return
+    ct_sleep2 does not call set_output_row_size method, expect error return
+
+  - mode == 3
+    ct_sleep1 same as mode == 2
+    ct_sleep2 calls global set_output_row_size function, expect error return
+*/
+// clang-format on
+EXTENSION_NOINLINE int32_t ct_sleep_worker(int32_t seconds, Column<int32_t>& output) {
+  // save entering time
+  output[0] = std::chrono::duration_cast<std::chrono::milliseconds>(
+                  std::chrono::system_clock::now().time_since_epoch())
+                  .count() &
+              0xffffff;
+  // store thread id info
+  output[2] = std::hash<std::thread::id>()(std::this_thread::get_id()) & 0xffff;
+  // do "computations" for given seconds
+  std::this_thread::sleep_for(std::chrono::seconds(seconds));
+  // save leaving time
+  output[1] = std::chrono::duration_cast<std::chrono::milliseconds>(
+                  std::chrono::system_clock::now().time_since_epoch())
+                  .count() &
+              0xffffff;
+  return 3;
+}
+
+EXTENSION_NOINLINE int32_t ct_sleep1(int32_t seconds,
+                                     int32_t mode,
+                                     Column<int32_t>& output) {
+  switch (mode) {
+    case 0: {
+      set_output_row_size(3);  // uses global singleton of TableFunctionManager
+      break;
+    }
+    case 1: {
+      auto* mgr = TableFunctionManager::get_singleton();
+      mgr->set_output_row_size(3);
+      break;
+    }
+    case 2:
+    case 3: {
+      break;
+    }
+    default:
+      return table_function_error("unexpected mode");
+  }
+  if (output.size() == 0) {
+    return table_function_error("unspecified output columns row size");
+  }
+  return ct_sleep_worker(seconds, output);
+}
+
+EXTENSION_NOINLINE int32_t ct_sleep2(TableFunctionManager& mgr,
+                                     int32_t seconds,
+                                     int32_t mode,
+                                     Column<int32_t>& output) {
+  switch (mode) {
+    case 0:
+    case 1: {
+      mgr.set_output_row_size(3);  // uses thread-safe TableFunctionManager instance
+      break;
+    }
+    case 2: {
+      break;
+    }
+    case 3: {
+      try {
+        auto* mgr0 = TableFunctionManager::get_singleton();  // it may throw "singleton is
+                                                             // not initialized"
+        mgr0->set_output_row_size(3);
+      } catch (std::exception& e) {
+        return mgr.error_message(e.what());
+      }
+      break;
+    }
+    default:
+      return mgr.error_message("unexpected mode");
+  }
+  if (output.size() == 0) {
+    return mgr.error_message("unspecified output columns row size");
+  }
+  return ct_sleep_worker(seconds, output);
+}
+
 #endif
