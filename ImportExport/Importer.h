@@ -42,6 +42,7 @@
 #include <string_view>
 #include <utility>
 
+#include "AbstractImporter.h"
 #include "Catalog/Catalog.h"
 #include "Catalog/TableDescriptor.h"
 #include "DataMgr/Chunk/Chunk.h"
@@ -743,7 +744,7 @@ class ImporterUtils {
                                            const SQLTypeInfo& geo_ti);
 };
 
-class Importer : public DataStreamSink {
+class Importer : public DataStreamSink, public AbstractImporter {
  public:
   Importer(Catalog_Namespace::Catalog& c,
            const TableDescriptor* t,
@@ -751,7 +752,7 @@ class Importer : public DataStreamSink {
            const CopyParams& p);
   Importer(Loader* providedLoader, const std::string& f, const CopyParams& p);
   ~Importer() override;
-  ImportStatus import(const Catalog_Namespace::SessionInfo* session_info);
+  ImportStatus import(const Catalog_Namespace::SessionInfo* session_info) override;
   ImportStatus importDelimited(
       const std::string& file_path,
       const bool decompressed,

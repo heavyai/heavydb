@@ -60,6 +60,8 @@ if(ENABLE_IMPORT_PARQUET)
   list(APPEND datamgr_source_files ForeignStorage/ParquetDataWrapper.cpp)
   list(APPEND datamgr_source_files ForeignStorage/ParquetShared.cpp)
   list(APPEND datamgr_source_files ForeignStorage/LazyParquetChunkLoader.cpp)
+  list(APPEND datamgr_source_files ForeignStorage/TypedParquetStorageBuffer.cpp)
+  list(APPEND datamgr_source_files ForeignStorage/ParquetImporter.cpp)
 endif()
 
 # On Linux, Arrow internally links symbols for its dependency libraries (such as the C++ AWS SDK)

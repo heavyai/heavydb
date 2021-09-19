@@ -49,6 +49,7 @@
 #include "Shared/scope.h"
 
 #include "DBHandlerTestHelpers.h"
+#include "ThriftHandler/DBHandler.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -58,6 +59,9 @@ using namespace std;
 using namespace TestHelpers;
 
 extern bool g_use_date_in_days_default_encoding;
+extern bool g_enable_fsi;
+extern bool g_enable_s3_fsi;
+extern bool g_enable_parquet_import_fsi;
 
 namespace {
 
@@ -560,6 +564,309 @@ TEST_F(ImportTestDateArray, ImportMixedDateArrays) {
     });
   // clang-format on
 }
+
+using ImportAndSelectTestParameters = std::tuple</*file_type=*/std::string,
+                                                 /*data_source_type=*/std::string>;
+
+class ImportAndSelectTest
+    : public ImportExportTestBase,
+      public ::testing::WithParamInterface<ImportAndSelectTestParameters> {
+ protected:
+  static void SetUpTestSuite() {
+#ifdef HAVE_AWS_S3
+    omnisci_aws_sdk::init_sdk();
+    g_allow_s3_server_privileges = true;
+#endif
+  }
+
+  static void TearDownTestSuite() {
+#ifdef HAVE_AWS_S3
+    omnisci_aws_sdk::shutdown_sdk();
+    g_allow_s3_server_privileges = false;
+#endif
+  }
+
+  void SetUp() override {
+    g_enable_fsi = true;
+    g_enable_s3_fsi = true;
+    g_enable_parquet_import_fsi = true;
+    ImportExportTestBase::SetUp();
+    ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS import_test_new;"));
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS import_test_new;"));
+    ImportExportTestBase::TearDown();
+    g_enable_fsi = false;
+    g_enable_s3_fsi = false;
+    g_enable_parquet_import_fsi = false;
+  }
+
+  // Have necessary credentials to access private buckets
+  bool insufficientPrivateCredentials() const {
+    return !is_valid_aws_key(get_aws_keys_from_env());
+  }
+
+  bool testShouldBeSkipped() {
+    std::string file_type, data_source_type;
+    std::tie(file_type, data_source_type) = GetParam();
+    if (data_source_type == "s3_private" && insufficientPrivateCredentials()) {
+      return true;
+    }
+    return false;
+  }
+
+  TQueryResult createTableCopyFromAndSelect(const std::string& schema,
+                                            const std::string& file_name_base,
+                                            const std::string& select_query,
+                                            const std::string& table_options = {},
+                                            const bool is_dir = false) {
+    std::string file_type, data_source_type;
+    std::tie(file_type, data_source_type) = GetParam();
+
+    std::string query = "CREATE TABLE import_test_new (" + schema + ")";
+    if (!table_options.empty()) {
+      query += " WITH (" + table_options + ")";
+    }
+    query += ";";
+
+    std::string base_name = file_name_base + "." + file_type;
+    if (is_dir) {
+      base_name = file_name_base + "_" + file_type + "_dir";
+    }
+    std::string file_path;
+    if (data_source_type == "local") {
+      file_path = "'../../Tests/FsiDataFiles/" + base_name + "'";
+    } else if (data_source_type == "s3_private") {
+      file_path = "'s3://omnisci-fsi-test/FsiDataFiles/" + base_name + "'";
+    } else if (data_source_type == "s3_public") {
+      file_path = "'s3://omnisci-fsi-test-public/FsiDataFiles/" + base_name + "'";
+    }
+    EXPECT_NO_THROW(sql(query));
+    EXPECT_NO_THROW(sql("COPY import_test_new FROM " + file_path +
+                        getCopyFromOptions(file_type, data_source_type) + ";"));
+    TQueryResult result;
+    sql(result, select_query);
+    return result;
+  }
+
+  std::string getCopyFromOptions(const std::string& file_type,
+                                 const std::string data_source_type) {
+    std::vector<std::string> options;
+    if (file_type == "parquet") {
+      options.push_back("parquet='True'");
+    }
+    if (data_source_type == "s3_public" || data_source_type == "s3_private") {
+      options.push_back("s3_region='us-west-1'");
+    }
+    if (options.empty()) {
+      return {};
+    }
+    std::string options_string = join(options, ", ");
+    return "WITH (" + options_string + ")";
+  }
+};
+
+TEST_P(ImportAndSelectTest, GeoTypes) {
+  if (testShouldBeSkipped()) {
+    GTEST_SKIP();
+  }
+  auto query = createTableCopyFromAndSelect(
+      "index int, p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON",
+      "geo_types",
+      "SELECT * FROM import_test_new ORDER BY index;");
+  // clang-format off
+    assertResultSetEqual({
+    {
+      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,0 1,1 1,0 0))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
+    },
+    {
+      i(2), Null, Null, Null, Null
+    },
+    {
+      i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+    },
+    {
+      i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
+      "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+    },
+    {
+      i(5), Null, Null, Null, Null
+    }},
+    query);
+  // clang-format on
+}
+
+TEST_P(ImportAndSelectTest, ArrayTypes) {
+  if (testShouldBeSkipped()) {
+    GTEST_SKIP();
+  }
+  auto query = createTableCopyFromAndSelect(
+      "index INT, b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[], f "
+      "FLOAT[], tm TIME[], tp TIMESTAMP[], d DATE[], txt TEXT[], fixedpoint "
+      "DECIMAL(10,5)[]",
+      "array_types",
+      "SELECT * FROM import_test_new ORDER BY index;");
+  // clang-format off
+  assertResultSetEqual({
+    {
+      1L, array({True}), array({50L, 100L}), array({30000L, 20000L}), array({2000000000L}),
+      array({9000000000000000000L}), array({10.1f, 11.1f}), array({"00:00:10"}),
+      array({"1/1/2000 00:00:59", "1/1/2010 00:00:59"}), array({"1/1/2000", "2/2/2000"}),
+      array({"text_1"}),array({1.23,2.34})
+    },
+    {
+      2L, array({False, True}), array({110L}), array({30500L}), array({2000500000L}),
+      array({9000000050000000000L}), array({100.12f}), array({"00:10:00", "00:20:00"}),
+      array({"6/15/2020 00:59:59"}), array({"6/15/2020"}),
+      array({"text_2", "text_3"}),array({3.456,4.5,5.6})
+    },
+    {
+      3L, array({True}), array({120L}), array({31000L}), array({2100000000L, 200000000L}),
+      array({9100000000000000000L, 9200000000000000000L}), array({1000.123f}), array({"10:00:00"}),
+      array({"12/31/2500 23:59:59"}), array({"12/31/2500"}),
+      array({"text_4"}),array({6.78})
+    }},
+    query);
+  // clang-format on
+}
+
+TEST_P(ImportAndSelectTest, FixedLengthArrayTypes) {
+  if (testShouldBeSkipped()) {
+    GTEST_SKIP();
+  }
+  auto query = createTableCopyFromAndSelect(
+      "index INT, b BOOLEAN[2], t TINYINT[2], s SMALLINT[2], i INTEGER[2], bi BIGINT[2], "
+      "f FLOAT[2], tm TIME[2], tp TIMESTAMP[2], d DATE[2], txt TEXT[2], fixedpoint "
+      "DECIMAL(10,5)[2]",
+      "array_fixed_len_types",
+      "SELECT * FROM import_test_new ORDER BY index;");
+  // clang-format off
+  assertResultSetEqual({
+    {
+      1L, array({True,False}), array({50L, 100L}), array({30000L, 20000L}), array({2000000000L,-100000L}),
+      array({9000000000000000000L,-9000000000000000000L}), array({10.1f, 11.1f}), array({"00:00:10","01:00:10"}),
+      array({"1/1/2000 00:00:59", "1/1/2010 00:00:59"}), array({"1/1/2000", "2/2/2000"}),
+      array({"text_1","text_2"}),array({1.23,2.34})
+    },
+    {
+      2L, array({False, True}), array({110L,101L}), array({30500L,10001L}), array({2000500000L,-23233L}),
+      array({9000000050000000000L,-9200000000000000000L}), array({100.12f,2.22f}), array({"00:10:00", "00:20:00"}),
+      array({"6/15/2020 00:59:59","8/22/2020 00:00:59"}), array({"6/15/2020","8/22/2020"}),
+      array({"text_3", "text_4"}),array({3.456,4.5})
+    },
+    {
+      3L, array({True,True}), array({120L,44L}), array({31000L,8123L}), array({2100000000L, 200000000L}),
+      array({9100000000000000000L, 9200000000000000000L}), array({1000.123f,1392.22f}), array({"10:00:00","20:00:00"}),
+      array({"12/31/2500 23:59:59","1/1/2500 23:59:59"}), array({"12/31/2500","1/1/2500"}),
+      array({"text_5","text_6"}),array({6.78,5.6})
+    }},
+    query);
+  // clang-format on
+}
+
+TEST_P(ImportAndSelectTest, ScalarTypes) {
+  if (testShouldBeSkipped()) {
+    GTEST_SKIP();
+  }
+  auto query = createTableCopyFromAndSelect(
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
+      "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
+      "txt_2 TEXT ENCODING NONE",
+      "scalar_types",
+      "SELECT * FROM import_test_new ORDER BY s;");
+
+  // clang-format off
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{
+      {True, 100L, 30000L, 2000000000L, 9000000000000000000L, 10.1f, 100.1234,
+        "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"},
+      {False, 110L, 30500L, 2000500000L, 9000000050000000000L, 100.12f, 2.1234,
+        "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"},
+      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, 1000.123f, 100.1,
+        "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"},
+  };
+  // clang-format on
+
+  std::string data_source_type = std::get<1>(GetParam());
+  if (data_source_type == "local") {
+    expected_values.push_back(
+        {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null});
+  }
+  assertResultSetEqual(expected_values, query);
+}
+
+TEST_P(ImportAndSelectTest, Sharded) {
+  if (testShouldBeSkipped()) {
+    GTEST_SKIP();
+  }
+  auto query = createTableCopyFromAndSelect(
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
+      "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
+      "txt_2 TEXT ENCODING NONE, shard key(t)",
+      "scalar_types",
+      "SELECT * FROM import_test_new ORDER BY s;",
+      "SHARD_COUNT=2");
+
+  // clang-format off
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{
+      {True, 100L, 30000L, 2000000000L, 9000000000000000000L, 10.1f, 100.1234,
+        "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"},
+      {False, 110L, 30500L, 2000500000L, 9000000050000000000L, 100.12f, 2.1234,
+        "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"},
+      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, 1000.123f, 100.1,
+        "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"},
+  };
+  // clang-format on
+
+  std::string data_source_type = std::get<1>(GetParam());
+  if (data_source_type == "local") {
+    expected_values.push_back(
+        {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null});
+  }
+  // clang-format off
+    assertResultSetEqual(expected_values,
+    query);
+  // clang-format on
+}
+
+TEST_P(ImportAndSelectTest, Multifile) {
+  if (testShouldBeSkipped()) {
+    GTEST_SKIP();
+  }
+  auto query = createTableCopyFromAndSelect("t TEXT, i INT, f FLOAT",
+                                            "example_2",
+                                            "SELECT * FROM import_test_new ORDER BY i,t;",
+                                            {},
+                                            true);
+
+  assertResultSetEqual(
+      {
+          {"a", 1L, 1.1f},
+          {"aa", 1L, 1.1f},
+          {"aaa", 1L, 1.1f},
+          {"aa", 2L, 2.2f},
+          {"aaa", 2L, 2.2f},
+          {"aaa", 3L, 3.3f},
+      },
+      query);
+}
+
+namespace {
+auto print_import_and_select_test_param = [](const auto& param_info) {
+  std::string file_type, data_source_type;
+  std::tie(file_type, data_source_type) = param_info.param;
+  return file_type + "_" + data_source_type;
+};
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    FileAndDataSourceTypes,
+    ImportAndSelectTest,
+    ::testing::Combine(::testing::Values("csv"),
+                       ::testing::Values("local", "s3_private", "s3_public")),
+    print_import_and_select_test_param);
 
 const char* create_table_timestamps = R"(
     CREATE TABLE import_test_timestamps(
@@ -2903,5 +3210,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+  g_enable_fsi = false;
   return err;
 }

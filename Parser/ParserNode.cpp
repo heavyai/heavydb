@@ -52,6 +52,7 @@
 #include "Fragmenter/TargetValueConvertersFactories.h"
 #include "Geospatial/Compression.h"
 #include "Geospatial/Types.h"
+#include "ImportExport/ForeignDataImporter.h"
 #include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
 #include "QueryEngine/CalciteAdapter.h"
@@ -78,6 +79,10 @@ size_t g_leaf_count{0};
 bool g_test_drop_column_rollback{false};
 extern bool g_enable_experimental_string_functions;
 extern bool g_enable_fsi;
+
+#ifdef ENABLE_IMPORT_PARQUET
+bool g_enable_parquet_import_fsi{false};
+#endif
 
 using Catalog_Namespace::SysCatalog;
 using namespace std::string_literals;
@@ -4602,18 +4607,27 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto importer_factory = [](Catalog_Namespace::Catalog& catalog,
                              const TableDescriptor* td,
                              const std::string& file_path,
-                             const import_export::CopyParams& copy_params) {
+                             const import_export::CopyParams& copy_params)
+      -> std::unique_ptr<import_export::AbstractImporter> {
+#ifdef ENABLE_IMPORT_PARQUET
+    if (copy_params.file_type == import_export::FileType::PARQUET &&
+        g_enable_parquet_import_fsi) {
+      return std::make_unique<import_export::ForeignDataImporter>(
+          file_path, copy_params, td);
+    }
+#endif
     return std::make_unique<import_export::Importer>(catalog, td, file_path, copy_params);
   };
   return execute(session, importer_factory);
 }
 
-void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
-                            const std::function<std::unique_ptr<import_export::Importer>(
-                                Catalog_Namespace::Catalog&,
-                                const TableDescriptor*,
-                                const std::string&,
-                                const import_export::CopyParams&)>& importer_factory) {
+void CopyTableStmt::execute(
+    const Catalog_Namespace::SessionInfo& session,
+    const std::function<std::unique_ptr<import_export::AbstractImporter>(
+        Catalog_Namespace::Catalog&,
+        const TableDescriptor*,
+        const std::string&,
+        const import_export::CopyParams&)>& importer_factory) {
   boost::regex non_local_file_regex{R"(^\s*(s3|http|https)://.+)",
                                     boost::regex::extended | boost::regex::icase};
   if (!boost::regex_match(*file_pattern_, non_local_file_regex)) {
@@ -4981,7 +4995,6 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
       // regular import
       auto importer = importer_factory(catalog, td, file_path, copy_params);
       auto start_time = ::toString(std::chrono::system_clock::now());
-      auto prev_table_epoch = importer->getLoader()->getTableEpochs();
       auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
       auto query_session = session.get_session_id();
       auto query_str = "COPYING " + td->tableName;

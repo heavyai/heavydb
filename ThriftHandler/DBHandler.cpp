@@ -47,6 +47,7 @@
 #include "Geospatial/GDAL.h"
 #include "Geospatial/Transforms.h"
 #include "Geospatial/Types.h"
+#include "ImportExport/DistributedForeignDataImporter.h"
 #include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
 #include "OSDependent/omnisci_hostname.h"
@@ -106,6 +107,10 @@
 #include "Shared/ArrowUtil.h"
 
 #define ENABLE_GEO_IMPORT_COLUMN_MATCHING 0
+
+#ifdef ENABLE_IMPORT_PARQUET
+extern bool g_enable_parquet_import_fsi;
+#endif
 
 #ifdef HAVE_AWS_S3
 extern bool g_allow_s3_server_privileges;
@@ -6455,7 +6460,8 @@ void DBHandler::execute_distributed_copy_statement(
                               const Catalog& catalog,
                               const TableDescriptor* td,
                               const std::string& file_path,
-                              const import_export::CopyParams& copy_params) {
+                              const import_export::CopyParams& copy_params)
+      -> std::unique_ptr<import_export::AbstractImporter> {
     return std::make_unique<import_export::Importer>(
         new DistributedLoader(session_info, td, &leaf_aggregator_),
         file_path,

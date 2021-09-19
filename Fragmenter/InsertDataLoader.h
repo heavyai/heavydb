@@ -30,6 +30,10 @@ struct InsertDataLoader {
         const Catalog_Namespace::SessionInfo& parent_session_info,
         const size_t leaf_idx,
         Fragmenter_Namespace::InsertData& insert_data) = 0;
+    virtual void checkpoint(const Catalog_Namespace::SessionInfo& parent_session_info,
+                            int tableId) = 0;
+    virtual void rollback(const Catalog_Namespace::SessionInfo& parent_session_info,
+                          int tableId) = 0;
   };
 
   InsertDataLoader(DistributedConnector& connector)

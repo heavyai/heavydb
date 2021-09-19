@@ -94,6 +94,23 @@ class LazyParquetChunkLoader {
   static bool isColumnMappingSupported(const ColumnDescriptor* omnisci_column,
                                        const parquet::ColumnDescriptor* parquet_column);
 
+  /**
+   * @brief Load row groups of data into given chunks
+   *
+   * @param row_group_interval - specifies which row groups to load
+   * @param chunks - map of column index to chunk which data will be loaded into
+   * @param schema - schema of the foreign table to perform metadata scan for
+   * @param column_dictionaries - a map of string dictionaries for columns that require it
+   *
+   * Note that only logical chunks are expected because the data is read into
+   * an intermediate form into the underlying buffers. This member is intended
+   * to be used for import.
+   */
+  void loadRowGroups(const RowGroupInterval& row_group_interval,
+                     const std::map<int, Chunk_NS::Chunk>& chunks,
+                     const ForeignTableSchema& schema,
+                     const std::map<int, StringDictionary*>& column_dictionaries);
+
  private:
   std::shared_ptr<arrow::fs::FileSystem> file_system_;
   FileReaderMap* file_reader_cache_;

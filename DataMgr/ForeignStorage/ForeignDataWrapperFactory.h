@@ -16,7 +16,9 @@
 
 #pragma once
 
+#include "Catalog/TableDescriptor.h"
 #include "ForeignDataWrapper.h"
+#include "ImportExport/CopyParams.h"
 
 namespace foreign_storage {
 /**
@@ -43,6 +45,35 @@ class ForeignDataWrapperFactory {
   static std::unique_ptr<ForeignDataWrapper> create(const std::string& data_wrapper_type,
                                                     const int db_id,
                                                     const ForeignTable* foreign_table);
+
+  static std::unique_ptr<UserMapping> createUserMappingProxyIfApplicable(
+      const int db_id,
+      const int user_id,
+      const std::string& file_path,
+      const import_export::CopyParams& copy_params,
+      const ForeignServer* server);
+
+  static std::unique_ptr<ForeignServer> createForeignServerProxy(
+      const int db_id,
+      const int user_id,
+      const std::string& file_path,
+      const import_export::CopyParams& copy_params);
+
+  static std::unique_ptr<ForeignTable> createForeignTableProxy(
+      const int db_id,
+      const TableDescriptor* table,
+      const std::string& file_path,
+      const import_export::CopyParams& copy_params,
+      const ForeignServer* server);
+
+  /**
+   * Create for the import use-case.
+   */
+  static std::unique_ptr<ForeignDataWrapper> createForImport(
+      const std::string& data_wrapper_type,
+      const int db_id,
+      const ForeignTable* foreign_table,
+      const UserMapping* user_mapping);
 
   /**
    * Creates an instance (or gets an existing instance) of an immutable ForeignDataWrapper

@@ -19,6 +19,7 @@
 #include "ParquetInPlaceEncoder.h"
 
 namespace foreign_storage {
+template <typename NullType>
 class ParquetDateInSecondsEncoder : public TypedParquetInPlaceEncoder<int64_t, int32_t>,
                                     public ParquetMetadataValidator {
  public:
@@ -31,12 +32,22 @@ class ParquetDateInSecondsEncoder : public TypedParquetInPlaceEncoder<int64_t, i
     CHECK(parquet_column_descriptor->logical_type()->is_date());
   }
 
+  ParquetDateInSecondsEncoder(Data_Namespace::AbstractBuffer* buffer)
+      : TypedParquetInPlaceEncoder<int64_t, int32_t>(buffer,
+                                                     sizeof(int64_t),
+                                                     sizeof(int32_t)) {}
+
   void encodeAndCopy(const int8_t* parquet_data_bytes,
                      int8_t* omnisci_data_bytes) override {
     const auto& parquet_data_value =
         reinterpret_cast<const int32_t*>(parquet_data_bytes)[0];
     auto& omnisci_data_value = reinterpret_cast<int64_t*>(omnisci_data_bytes)[0];
     omnisci_data_value = parquet_data_value * kSecsPerDay;
+  }
+
+  void setNull(int8_t* omnisci_data_bytes) override {
+    auto& omnisci_data_value = reinterpret_cast<int64_t*>(omnisci_data_bytes)[0];
+    omnisci_data_value = get_null_value<NullType>();
   }
 
   void validate(std::shared_ptr<parquet::Statistics> stats,

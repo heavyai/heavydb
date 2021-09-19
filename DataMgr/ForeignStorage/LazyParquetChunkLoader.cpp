@@ -26,13 +26,16 @@
 #include <parquet/types.h>
 
 #include "ForeignStorageException.h"
+#include "ParquetArrayImportEncoder.h"
 #include "ParquetDateFromTimestampEncoder.h"
 #include "ParquetDateInSecondsEncoder.h"
 #include "ParquetDecimalEncoder.h"
 #include "ParquetFixedLengthArrayEncoder.h"
 #include "ParquetFixedLengthEncoder.h"
 #include "ParquetGeospatialEncoder.h"
+#include "ParquetGeospatialImportEncoder.h"
 #include "ParquetStringEncoder.h"
+#include "ParquetStringImportEncoder.h"
 #include "ParquetStringNoneEncoder.h"
 #include "ParquetTimeEncoder.h"
 #include "ParquetTimestampEncoder.h"
@@ -670,13 +673,17 @@ std::shared_ptr<ParquetEncoder> create_parquet_date_encoder(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column,
     AbstractBuffer* buffer,
-    const bool is_metadata_scan) {
+    const bool is_metadata_scan,
+    const bool is_for_import) {
   auto column_type = omnisci_column->columnType;
   if (parquet_column->logical_type()->is_date() && column_type.is_date()) {
     if (column_type.get_compression() == kENCODING_DATE_IN_DAYS) {
       if (is_metadata_scan) {
-        return std::make_shared<ParquetDateInSecondsEncoder>(
+        return std::make_shared<ParquetDateInSecondsEncoder</*NullType=*/int64_t>>(
             buffer, omnisci_column, parquet_column);
+      } else if (is_for_import) {
+        return std::make_shared<ParquetDateInSecondsEncoder</*NullType=*/int32_t>>(
+            buffer);
       } else {
         if (column_type.get_comp_param() ==
             0) {  // DATE ENCODING FIXED (32) uses comp param 0
@@ -690,7 +697,7 @@ std::shared_ptr<ParquetEncoder> create_parquet_date_encoder(
         }
       }
     } else if (column_type.get_compression() == kENCODING_NONE) {  // for array types
-      return std::make_shared<ParquetDateInSecondsEncoder>(
+      return std::make_shared<ParquetDateInSecondsEncoder</*NullType=*/int64_t>>(
           buffer, omnisci_column, parquet_column);
     } else {
       UNREACHABLE();
@@ -704,29 +711,40 @@ std::shared_ptr<ParquetEncoder> create_parquet_string_encoder(
     const parquet::ColumnDescriptor* parquet_column,
     const Chunk_NS::Chunk& chunk,
     StringDictionary* string_dictionary,
-    std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata) {
+    std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
+    bool is_for_import) {
   auto column_type = omnisci_column->columnType;
   if (!is_valid_parquet_string(parquet_column) ||
       !omnisci_column->columnType.is_string()) {
     return {};
   }
   if (column_type.get_compression() == kENCODING_NONE) {
-    return std::make_shared<ParquetStringNoneEncoder>(chunk.getBuffer(),
-                                                      chunk.getIndexBuf());
+    if (is_for_import) {
+      return std::make_shared<ParquetStringImportEncoder>(chunk.getBuffer());
+    } else {
+      return std::make_shared<ParquetStringNoneEncoder>(chunk.getBuffer(),
+                                                        chunk.getIndexBuf());
+    }
   } else if (column_type.get_compression() == kENCODING_DICT) {
     chunk_metadata.emplace_back(std::make_unique<ChunkMetadata>());
-    auto& logical_chunk_metadata = chunk_metadata.back();
+    std::unique_ptr<ChunkMetadata>& logical_chunk_metadata = chunk_metadata.back();
     logical_chunk_metadata->sqlType = omnisci_column->columnType;
     switch (column_type.get_size()) {
       case 1:
         return std::make_shared<ParquetStringEncoder<uint8_t>>(
-            chunk.getBuffer(), string_dictionary, logical_chunk_metadata);
+            chunk.getBuffer(),
+            string_dictionary,
+            is_for_import ? nullptr : logical_chunk_metadata.get());
       case 2:
         return std::make_shared<ParquetStringEncoder<uint16_t>>(
-            chunk.getBuffer(), string_dictionary, logical_chunk_metadata);
+            chunk.getBuffer(),
+            string_dictionary,
+            is_for_import ? nullptr : logical_chunk_metadata.get());
       case 4:
         return std::make_shared<ParquetStringEncoder<int32_t>>(
-            chunk.getBuffer(), string_dictionary, logical_chunk_metadata);
+            chunk.getBuffer(),
+            string_dictionary,
+            is_for_import ? nullptr : logical_chunk_metadata.get());
       default:
         UNREACHABLE();
     }
@@ -741,10 +759,14 @@ std::shared_ptr<ParquetEncoder> create_parquet_geospatial_encoder(
     const parquet::ColumnDescriptor* parquet_column,
     std::list<Chunk_NS::Chunk>& chunks,
     std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
-    const bool is_metadata_scan) {
+    const bool is_metadata_scan,
+    const bool is_for_import) {
   auto column_type = omnisci_column->columnType;
   if (!is_valid_parquet_string(parquet_column) || !column_type.is_geometry()) {
     return {};
+  }
+  if (is_for_import) {
+    return std::make_shared<ParquetGeospatialImportEncoder>(chunks);
   }
   if (is_metadata_scan) {
     return std::make_shared<ParquetGeospatialEncoder>();
@@ -767,7 +789,8 @@ std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
     std::list<Chunk_NS::Chunk>& chunks,
     StringDictionary* string_dictionary,
     std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
-    const bool is_metadata_scan);
+    const bool is_metadata_scan,
+    const bool is_for_import);
 
 /**
  * @brief Create a Parquet specific encoder for a Parquet to OmniSci mapping.
@@ -782,6 +805,9 @@ std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
  * populated
  * @param is_metadata_scan - a flag indicating if the encoders created should be for a
  * metadata scan
+ * @param is_for_import - a flag indicating if the encoders created should be
+ * for import
+ *
  *
  * @return  An appropriate Parquet encoder for the use case defined by the Parquet to
  * OmniSci mapping.
@@ -804,10 +830,16 @@ std::shared_ptr<ParquetEncoder> create_parquet_encoder(
     std::list<Chunk_NS::Chunk>& chunks,
     StringDictionary* string_dictionary,
     std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
-    const bool is_metadata_scan = false) {
+    const bool is_metadata_scan = false,
+    const bool is_for_import = false) {
+  CHECK(!(is_metadata_scan && is_for_import));
   auto buffer = chunks.empty() ? nullptr : chunks.begin()->getBuffer();
-  if (auto encoder = create_parquet_geospatial_encoder(
-          omnisci_column, parquet_column, chunks, chunk_metadata, is_metadata_scan)) {
+  if (auto encoder = create_parquet_geospatial_encoder(omnisci_column,
+                                                       parquet_column,
+                                                       chunks,
+                                                       chunk_metadata,
+                                                       is_metadata_scan,
+                                                       is_for_import)) {
     return encoder;
   }
   if (auto encoder = create_parquet_array_encoder(omnisci_column,
@@ -815,7 +847,8 @@ std::shared_ptr<ParquetEncoder> create_parquet_encoder(
                                                   chunks,
                                                   string_dictionary,
                                                   chunk_metadata,
-                                                  is_metadata_scan)) {
+                                                  is_metadata_scan,
+                                                  is_for_import)) {
     return encoder;
   }
   if (auto encoder = create_parquet_decimal_encoder(
@@ -847,7 +880,7 @@ std::shared_ptr<ParquetEncoder> create_parquet_encoder(
     return encoder;
   }
   if (auto encoder = create_parquet_date_encoder(
-          omnisci_column, parquet_column, buffer, is_metadata_scan)) {
+          omnisci_column, parquet_column, buffer, is_metadata_scan, is_for_import)) {
     return encoder;
   }
   if (auto encoder = create_parquet_string_encoder(
@@ -855,7 +888,8 @@ std::shared_ptr<ParquetEncoder> create_parquet_encoder(
           parquet_column,
           chunks.empty() ? Chunk_NS::Chunk{} : *chunks.begin(),
           string_dictionary,
-          chunk_metadata)) {
+          chunk_metadata,
+          is_for_import)) {
     return encoder;
   }
   UNREACHABLE();
@@ -863,10 +897,28 @@ std::shared_ptr<ParquetEncoder> create_parquet_encoder(
 }
 
 /**
+ * Intended to be used for the import case.
+ */
+std::shared_ptr<ParquetEncoder> create_parquet_encoder_for_import(
+    std::list<Chunk_NS::Chunk>& chunks,
+    const ColumnDescriptor* omnisci_column,
+    const parquet::ColumnDescriptor* parquet_column,
+    StringDictionary* string_dictionary) {
+  std::list<std::unique_ptr<ChunkMetadata>> chunk_metadata;
+  return create_parquet_encoder(omnisci_column,
+                                parquet_column,
+                                chunks,
+                                string_dictionary,
+                                chunk_metadata,
+                                false,
+                                true);
+}
+
+/**
  * Intended to be used only with metadata scan. Creates an incomplete encoder
  * capable of updating metadata.
  */
-std::shared_ptr<ParquetEncoder> create_parquet_encoder(
+std::shared_ptr<ParquetEncoder> create_parquet_encoder_for_metadata_scan(
     const ColumnDescriptor* omnisci_column,
     const parquet::ColumnDescriptor* parquet_column) {
   std::list<Chunk_NS::Chunk> chunks;
@@ -881,7 +933,8 @@ std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
     std::list<Chunk_NS::Chunk>& chunks,
     StringDictionary* string_dictionary,
     std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
-    const bool is_metadata_scan) {
+    const bool is_metadata_scan,
+    const bool is_for_import) {
   bool is_valid_parquet_list = is_valid_parquet_list_column(parquet_column);
   if (!is_valid_parquet_list || !omnisci_column->columnType.is_array()) {
     return {};
@@ -893,21 +946,27 @@ std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
                                         chunks,
                                         string_dictionary,
                                         chunk_metadata,
-                                        is_metadata_scan);
+                                        is_metadata_scan,
+                                        is_for_import);
   CHECK(encoder.get());
   auto scalar_encoder = std::dynamic_pointer_cast<ParquetScalarEncoder>(encoder);
   CHECK(scalar_encoder);
-  if (omnisci_column->columnType.is_fixlen_array()) {
-    encoder = std::make_shared<ParquetFixedLengthArrayEncoder>(
-        is_metadata_scan ? nullptr : chunks.begin()->getBuffer(),
-        scalar_encoder,
-        omnisci_column);
-  } else {
-    encoder = std::make_shared<ParquetVariableLengthArrayEncoder>(
-        is_metadata_scan ? nullptr : chunks.begin()->getBuffer(),
-        is_metadata_scan ? nullptr : chunks.begin()->getIndexBuf(),
-        scalar_encoder,
-        omnisci_column);
+  if (!is_for_import) {
+    if (omnisci_column->columnType.is_fixlen_array()) {
+      encoder = std::make_shared<ParquetFixedLengthArrayEncoder>(
+          is_metadata_scan ? nullptr : chunks.begin()->getBuffer(),
+          scalar_encoder,
+          omnisci_column);
+    } else {
+      encoder = std::make_shared<ParquetVariableLengthArrayEncoder>(
+          is_metadata_scan ? nullptr : chunks.begin()->getBuffer(),
+          is_metadata_scan ? nullptr : chunks.begin()->getIndexBuf(),
+          scalar_encoder,
+          omnisci_column);
+    }
+  } else {  // is_for_import
+    encoder = std::make_shared<ParquetArrayImportEncoder>(
+        chunks.begin()->getBuffer(), scalar_encoder, omnisci_column);
   }
   return encoder;
 }
@@ -1369,7 +1428,37 @@ std::list<RowGroupMetadata> metadata_scan_rowgroup_interval(
   return row_group_metadata;
 }
 
-std::map<int, std::shared_ptr<ParquetEncoder>> populate_encoder_map(
+std::map<int, std::shared_ptr<ParquetEncoder>> populate_encoder_map_for_import(
+    const std::map<int, Chunk_NS::Chunk> chunks,
+    const ForeignTableSchema& schema,
+    const ReaderPtr& reader,
+    const std::map<int, StringDictionary*> column_dictionaries) {
+  std::map<int, std::shared_ptr<ParquetEncoder>> encoder_map;
+  auto file_metadata = reader->parquet_reader()->metadata();
+  for (auto& [column_id, chunk] : chunks) {
+    const auto column_descriptor = schema.getColumnDescriptor(column_id);
+    if (column_descriptor->isGeoPhyCol) {  // skip physical columns
+      continue;
+    }
+    auto parquet_column_descriptor =
+        file_metadata->schema()->Column(schema.getParquetColumnIndex(column_id));
+    auto find_it = column_dictionaries.find(column_id);
+    StringDictionary* dictionary =
+        (find_it == column_dictionaries.end() ? nullptr : find_it->second);
+    std::list<Chunk_NS::Chunk> chunks_for_import;
+    chunks_for_import.push_back(chunk);
+    if (column_descriptor->columnType.is_geometry()) {
+      for (int i = 0; i < column_descriptor->columnType.get_physical_cols(); ++i) {
+        chunks_for_import.push_back(chunks.at(column_id + i + 1));
+      }
+    }
+    encoder_map[column_id] = create_parquet_encoder_for_import(
+        chunks_for_import, column_descriptor, parquet_column_descriptor, dictionary);
+  }
+  return encoder_map;
+}
+
+std::map<int, std::shared_ptr<ParquetEncoder>> populate_encoder_map_for_metadata_scan(
     const Interval<ColumnType>& column_interval,
     const ForeignTableSchema& schema,
     const ReaderPtr& reader) {
@@ -1380,8 +1469,8 @@ std::map<int, std::shared_ptr<ParquetEncoder>> populate_encoder_map(
     const auto column_descriptor = schema.getColumnDescriptor(column_id);
     auto parquet_column_descriptor =
         file_metadata->schema()->Column(schema.getParquetColumnIndex(column_id));
-    encoder_map[column_id] =
-        create_parquet_encoder(column_descriptor, parquet_column_descriptor);
+    encoder_map[column_id] = create_parquet_encoder_for_metadata_scan(
+        column_descriptor, parquet_column_descriptor);
     column_id += column_descriptor->columnType.get_physical_cols();
   }
   return encoder_map;
@@ -1547,6 +1636,84 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::loadChunk(
   return {};
 }
 
+void LazyParquetChunkLoader::loadRowGroups(
+    const RowGroupInterval& row_group_interval,
+    const std::map<int, Chunk_NS::Chunk>& chunks,
+    const ForeignTableSchema& schema,
+    const std::map<int, StringDictionary*>& column_dictionaries) {
+  auto timer = DEBUG_TIMER(__func__);
+
+  const auto& file_path = row_group_interval.file_path;
+  auto file_reader = file_reader_cache_->insert(file_path, file_system_);
+  auto encoder_map =
+      populate_encoder_map_for_import(chunks, schema, file_reader, column_dictionaries);
+
+  // `def_levels` and `rep_levels` below are used to store the read definition
+  // and repetition levels of the Dremel encoding implemented by the Parquet
+  // format
+  std::vector<int16_t> def_levels(LazyParquetChunkLoader::batch_reader_num_elements);
+  std::vector<int16_t> rep_levels(LazyParquetChunkLoader::batch_reader_num_elements);
+  std::vector<int8_t> values;
+
+  auto file_metadata = file_reader->parquet_reader()->metadata();
+  for (auto& [column_id, encoder] : encoder_map) {
+    const auto& column_descriptor = schema.getColumnDescriptor(column_id);
+    const auto parquet_column_index = schema.getParquetColumnIndex(column_id);
+    auto parquet_column_descriptor =
+        file_metadata->schema()->Column(parquet_column_index);
+
+    resize_values_buffer(column_descriptor, parquet_column_descriptor, values);
+
+    auto [num_row_groups, num_columns] = get_parquet_table_size(file_reader);
+    CHECK(row_group_interval.start_index >= 0 &&
+          row_group_interval.end_index < num_row_groups);
+    CHECK(parquet_column_index >= 0 && parquet_column_index < num_columns);
+
+    parquet::ParquetFileReader* parquet_reader = file_reader->parquet_reader();
+
+    validate_max_repetition_and_definition_level(column_descriptor,
+                                                 parquet_column_descriptor);
+    int64_t values_read = 0;
+    for (int row_group_index = row_group_interval.start_index;
+         row_group_index <= row_group_interval.end_index;
+         ++row_group_index) {
+      auto group_reader = parquet_reader->RowGroup(row_group_index);
+      std::shared_ptr<parquet::ColumnReader> col_reader =
+          group_reader->Column(parquet_column_index);
+
+      auto db_encoder = chunks.at(column_id).getBuffer()->getEncoder();
+      db_encoder->setNumElems(db_encoder->getNumElems() +
+                              group_reader->metadata()->num_rows());
+      if (column_descriptor->columnType.is_geometry()) {
+        for (int i = 0; i < column_descriptor->columnType.get_physical_cols(); ++i) {
+          auto db_encoder = chunks.at(column_id + i + 1).getBuffer()->getEncoder();
+          db_encoder->setNumElems(db_encoder->getNumElems() +
+                                  group_reader->metadata()->num_rows());
+        }
+      }
+
+      while (col_reader->HasNext()) {
+        int64_t levels_read =
+            parquet::ScanAllValues(LazyParquetChunkLoader::batch_reader_num_elements,
+                                   def_levels.data(),
+                                   rep_levels.data(),
+                                   reinterpret_cast<uint8_t*>(values.data()),
+                                   &values_read,
+                                   col_reader.get());
+
+        encoder->appendData(def_levels.data(),
+                            rep_levels.data(),
+                            values_read,
+                            levels_read,
+                            values.data());
+      }
+      if (auto array_encoder = dynamic_cast<ParquetArrayEncoder*>(encoder.get())) {
+        array_encoder->finalizeRowGroup();
+      }
+    }
+  }
+}
+
 std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
     const std::set<std::string>& file_paths,
     const ForeignTableSchema& schema) {
@@ -1562,7 +1729,8 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
   auto first_reader = file_reader_cache_->insert(first_path, file_system_);
   validate_parquet_metadata(
       first_reader->parquet_reader()->metadata(), first_path, schema);
-  auto encoder_map = populate_encoder_map(column_interval, schema, first_reader);
+  auto encoder_map =
+      populate_encoder_map_for_metadata_scan(column_interval, schema, first_reader);
   const auto num_row_groups = get_parquet_table_size(first_reader).first;
   auto row_group_metadata = metadata_scan_rowgroup_interval(
       encoder_map, {first_path, 0, num_row_groups - 1}, first_reader, schema);

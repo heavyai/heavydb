@@ -1033,10 +1033,6 @@ struct DistributedConnector
                                               std::string& sql_query_string,
                                               std::vector<size_t> outer_frag_indices,
                                               bool allow_interrupt) = 0;
-  virtual void checkpoint(const Catalog_Namespace::SessionInfo& parent_session_info,
-                          int tableId) = 0;
-  virtual void rollback(const Catalog_Namespace::SessionInfo& parent_session_info,
-                        int tableId) = 0;
 };
 
 struct LocalConnector : public DistributedConnector {
@@ -1476,7 +1472,7 @@ class CopyTableStmt : public DDLStmt {
 
   void execute(const Catalog_Namespace::SessionInfo& session) override;
   void execute(const Catalog_Namespace::SessionInfo& session,
-               const std::function<std::unique_ptr<import_export::Importer>(
+               const std::function<std::unique_ptr<import_export::AbstractImporter>(
                    Catalog_Namespace::Catalog&,
                    const TableDescriptor*,
                    const std::string&,

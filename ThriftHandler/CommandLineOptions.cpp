@@ -380,6 +380,15 @@ void CommandLineOptions::fillOptions() {
       "enable-fsi",
       po::value<bool>(&g_enable_fsi)->default_value(g_enable_fsi)->implicit_value(true),
       "Enable foreign storage interface.");
+
+#ifdef ENABLE_IMPORT_PARQUET
+  help_desc.add_options()("enable-parquet-import-fsi",
+                          po::value<bool>(&g_enable_parquet_import_fsi)
+                              ->default_value(g_enable_parquet_import_fsi)
+                              ->implicit_value(true),
+                          "Enable foreign storage interface based parquet import.");
+#endif
+
   help_desc.add_options()("disk-cache-path",
                           po::value<std::string>(&disk_cache_config.path),
                           "Specify the path for the disk cache.");
@@ -963,6 +972,12 @@ void CommandLineOptions::validate() {
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_data");
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_log");
   g_enable_s3_fsi = false;
+
+#ifdef ENABLE_IMPORT_PARQUET
+  if (g_enable_parquet_import_fsi) {
+    g_enable_fsi = true;  // a requirement for FSI parquet import is for FSI to be enabled
+  }
+#endif
 
   if (disk_cache_level == "foreign_tables") {
     if (g_enable_fsi) {
