@@ -32,7 +32,6 @@
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "TestHelpers.h"
-#include "ThriftHandler/ForeignTableRefreshScheduler.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
