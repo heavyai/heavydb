@@ -100,6 +100,7 @@ TEMPLATE_NOINLINE __attribute__((__used__)) void mandelbrot_impl(
 
 template <typename T>
 TEMPLATE_NOINLINE __attribute__((__used__)) int32_t mandelbrot_cpu_template(
+    TableFunctionManager& mgr,
     const int32_t x_pixels,
     const int32_t y_pixels,
     const T x_min,
@@ -110,11 +111,22 @@ TEMPLATE_NOINLINE __attribute__((__used__)) int32_t mandelbrot_cpu_template(
     Column<T>& output_x,
     Column<T>& output_y,
     Column<int32_t>& output_num_iterations) {
+  if (max_iterations < 1) {
+    return mgr.error_message("max_iterations must be a positive integer");
+  }
+  if (x_pixels < 1 || y_pixels < 1) {
+    return mgr.error_message("x_pixels and y_pixels must be positive integers");
+  }
+  if (x_max <= x_min || y_max <= y_min) {
+    return mgr.error_message(
+        "Max x and y bounds must be greater than min x and y bounds");
+  }
+
   const T x_scale = get_scale(x_min, x_max, x_pixels);
   const T y_scale = get_scale(y_min, y_max, y_pixels);
 
   const int32_t num_pixels = x_pixels * y_pixels;
-  set_output_row_size(num_pixels);
+  mgr.set_output_row_size(num_pixels);
 #ifdef HAVE_TBB
   tbb::parallel_for(tbb::blocked_range<int32_t>(0, y_pixels),
                     [&](const tbb::blocked_range<int32_t>& y_itr) {
@@ -192,7 +204,8 @@ TEMPLATE_NOINLINE __attribute__((__used__)) int32_t mandelbrot_cuda_template__gp
 #ifndef __CUDACC__
 
 EXTENSION_NOINLINE
-__attribute__((used)) int32_t udtf_mandelbrot__cpu_(
+__attribute__((used)) int32_t tvf_mandelbrot__cpu_(
+    TableFunctionManager& mgr,
     const int32_t x_pixels,
     const int32_t y_pixels,
     const double x_min,
@@ -203,7 +216,8 @@ __attribute__((used)) int32_t udtf_mandelbrot__cpu_(
     Column<double>& output_x,
     Column<double>& output_y,
     Column<int32_t>& output_num_iterations) {
-  return Mandelbrot::mandelbrot_cpu_template<double>(x_pixels,
+  return Mandelbrot::mandelbrot_cpu_template<double>(mgr,
+                                                     x_pixels,
                                                      y_pixels,
                                                      x_min,
                                                      x_max,
@@ -216,7 +230,8 @@ __attribute__((used)) int32_t udtf_mandelbrot__cpu_(
 }
 
 EXTENSION_NOINLINE
-__attribute__((used)) int32_t udtf_mandelbrot_float__cpu_(
+__attribute__((used)) int32_t tvf_mandelbrot_float__cpu_(
+    TableFunctionManager& mgr,
     const int32_t x_pixels,
     const int32_t y_pixels,
     const float x_min,
@@ -227,7 +242,8 @@ __attribute__((used)) int32_t udtf_mandelbrot_float__cpu_(
     Column<float>& output_x,
     Column<float>& output_y,
     Column<int32_t>& output_num_iterations) {
-  return Mandelbrot::mandelbrot_cpu_template<float>(x_pixels,
+  return Mandelbrot::mandelbrot_cpu_template<float>(mgr,
+                                                    x_pixels,
                                                     y_pixels,
                                                     x_min,
                                                     x_max,
@@ -242,7 +258,7 @@ __attribute__((used)) int32_t udtf_mandelbrot_float__cpu_(
 #else  // #ifndef __CUDACC__
 
 EXTENSION_NOINLINE
-__attribute__((__used__)) int32_t udtf_mandelbrot_cuda__gpu_(
+__attribute__((__used__)) int32_t tvf_mandelbrot_cuda__gpu_(
     const int32_t x_pixels,
     const int32_t y_pixels,
     const double x_min,
@@ -268,7 +284,7 @@ __attribute__((__used__)) int32_t udtf_mandelbrot_cuda__gpu_(
 }
 
 EXTENSION_NOINLINE
-__attribute__((__used__)) int32_t udtf_mandelbrot_cuda_float__gpu_(
+__attribute__((__used__)) int32_t tvf_mandelbrot_cuda_float__gpu_(
     const int32_t x_pixels,
     const int32_t y_pixels,
     const float x_min,

@@ -747,6 +747,24 @@ TEST_F(TableFunctions, CursorlessInputs) {
         ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(7));
       }
     }
+
+    {
+      // Mandelbrot table function requires max_iterations to be >= 1
+      const auto rows = run_multiple_agg(
+          "SELECT MIN(num_iterations) AS min_iterations, MAX(num_iterations) AS "
+          "max_iterations, COUNT(*) AS n FROM TABLE(tvf_mandelbrot(128 /* width */ , 128 "
+          "/* height */, -2.5 /* min_x */, 1.0 /* max_x */, -1.0 /* min_y */, 1.0 /* "
+          "max_y */, 256 /* max_iterations */));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]),
+                static_cast<int64_t>(1));  // min_iterations
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]),
+                static_cast<int64_t>(256));  // max_iterations
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[2]),
+                static_cast<int64_t>(16384));  // num pixels - width X height
+    }
   }
 }
 
@@ -837,6 +855,15 @@ TEST_F(TableFunctions, ThrowingTests) {
               "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT d FROM "
               "err_test)));",
               dt),
+          std::runtime_error);
+    }
+    {
+      // Mandelbrot table function requires max_iterations to be >= 1
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(tvf_mandelbrot(128 /* width */ , 128 /* "
+                           "height */, -2.5 /* min_x */, 1.0 /* max_x */, -1.0 /* min_y "
+                           "*/, 1.0 /* max_y */, 0 /* max_iterations */));",
+                           dt),
           std::runtime_error);
     }
     {
