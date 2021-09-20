@@ -30,6 +30,7 @@ yay -S \
     google-glog \
     intel-tbb \
     jdk-openjdk \
+    libiodbc \
     librdkafka \
     libuv \
     llvm \
