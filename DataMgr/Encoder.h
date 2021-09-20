@@ -51,13 +51,13 @@ class DecimalOverflowValidator {
   }
 
   template <typename T>
-  void validate(T value) {
+  void validate(T value) const {
     if (std::is_integral<T>::value) {
       do_validate(static_cast<int64_t>(value));
     }
   }
 
-  void do_validate(int64_t value) {
+  void do_validate(int64_t value) const {
     if (!do_check_) {
       return;
     }

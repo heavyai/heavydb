@@ -29,41 +29,47 @@ class ParquetDecimalEncoder : public TypedParquetInPlaceEncoder<V, T> {
       : TypedParquetInPlaceEncoder<V, T>(buffer,
                                          column_desciptor,
                                          parquet_column_descriptor)
-      , parquet_column_type_length_(parquet_column_descriptor->type_length()) {}
+      , parquet_column_type_length_(parquet_column_descriptor->type_length())
+      , decimal_overflow_validator_(column_desciptor->columnType) {}
 
   void encodeAndCopy(const int8_t* parquet_data_bytes,
                      int8_t* omnisci_data_bytes) override {
     const auto& parquet_data_value = reinterpret_cast<const T*>(parquet_data_bytes)[0];
     auto& omnisci_data_value = reinterpret_cast<V*>(omnisci_data_bytes)[0];
-    encodeAndCopy(parquet_data_value, omnisci_data_value);
+    omnisci_data_value = getDecimal(parquet_data_value);
+  }
+
+  void validate(const int8_t* parquet_data,
+                const int64_t j,
+                const SQLTypeInfo& column_type) const override {
+    const auto& parquet_data_value = reinterpret_cast<const T*>(parquet_data)[j];
+    int64_t omnisci_data_value = getDecimal(parquet_data_value);
+    decimal_overflow_validator_.validate(omnisci_data_value);
   }
 
  protected:
-  void encodeAndCopy(const int32_t& parquet_data_value, V& omnisci_data_value) {
-    omnisci_data_value = parquet_data_value;
+  int64_t getDecimal(const int32_t& parquet_data_value) const {
+    return parquet_data_value;
   }
 
-  void encodeAndCopy(const int64_t& parquet_data_value, V& omnisci_data_value) {
-    omnisci_data_value = parquet_data_value;
+  int64_t getDecimal(const int64_t& parquet_data_value) const {
+    return parquet_data_value;
   }
 
-  void encodeAndCopy(const parquet::FixedLenByteArray& parquet_data_value,
-                     V& omnisci_data_value) {
-    omnisci_data_value =
-        convertDecimalByteArrayToInt(parquet_data_value.ptr, parquet_column_type_length_);
+  int64_t getDecimal(const parquet::FixedLenByteArray& parquet_data_value) const {
+    return convertDecimalByteArrayToInt(parquet_data_value.ptr,
+                                        parquet_column_type_length_);
   }
 
-  void encodeAndCopy(const parquet::ByteArray& parquet_data_value,
-                     V& omnisci_data_value) {
-    omnisci_data_value =
-        convertDecimalByteArrayToInt(parquet_data_value.ptr, parquet_data_value.len);
+  int64_t getDecimal(const parquet::ByteArray& parquet_data_value) const {
+    return convertDecimalByteArrayToInt(parquet_data_value.ptr, parquet_data_value.len);
   }
 
   bool encodingIsIdentityForSameTypes() const override { return true; }
 
  private:
   int64_t convertDecimalByteArrayToInt(const uint8_t* byte_array,
-                                       const int byte_array_size) {
+                                       const int byte_array_size) const {
     auto result = arrow::Decimal128::FromBigEndian(byte_array, byte_array_size);
     CHECK(result.ok()) << result.status().message();
     auto& decimal = result.ValueOrDie();
@@ -71,5 +77,6 @@ class ParquetDecimalEncoder : public TypedParquetInPlaceEncoder<V, T> {
   }
 
   const size_t parquet_column_type_length_;
+  const DecimalOverflowValidator decimal_overflow_validator_;
 };
 }  // namespace foreign_storage

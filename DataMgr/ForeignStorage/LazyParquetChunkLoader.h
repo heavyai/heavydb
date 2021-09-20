@@ -102,14 +102,20 @@ class LazyParquetChunkLoader {
    * @param schema - schema of the foreign table to perform metadata scan for
    * @param column_dictionaries - a map of string dictionaries for columns that require it
    *
+   * @return [num_rows_completed,num_rows_rejected] - returns number of rows
+   * loaded and rejected while loading
+   *
    * Note that only logical chunks are expected because the data is read into
    * an intermediate form into the underlying buffers. This member is intended
    * to be used for import.
+   *
+   * NOTE: Currently, loading one row group at a time is required.
    */
-  void loadRowGroups(const RowGroupInterval& row_group_interval,
-                     const std::map<int, Chunk_NS::Chunk>& chunks,
-                     const ForeignTableSchema& schema,
-                     const std::map<int, StringDictionary*>& column_dictionaries);
+  std::pair<size_t, size_t> loadRowGroups(
+      const RowGroupInterval& row_group_interval,
+      const std::map<int, Chunk_NS::Chunk>& chunks,
+      const ForeignTableSchema& schema,
+      const std::map<int, StringDictionary*>& column_dictionaries);
 
  private:
   std::shared_ptr<arrow::fs::FileSystem> file_system_;

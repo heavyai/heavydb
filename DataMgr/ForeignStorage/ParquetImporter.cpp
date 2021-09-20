@@ -95,30 +95,40 @@ class ParquetImportBatchResult : public import_export::ImportBatchResult {
                            const ForeignTableSchema* schema);
   ParquetImportBatchResult(ParquetImportBatchResult&& other) = default;
 
-  Fragmenter_Namespace::InsertData getInsertData() const override;
+  std::optional<Fragmenter_Namespace::InsertData> getInsertData() const override;
   import_export::ImportStatus getImportStatus() const override;
 
   std::pair<std::map<int, Chunk_NS::Chunk>, std::map<int, StringDictionary*>>
   getChunksAndDictionaries() const;
 
   void populateInsertData(const std::map<int, Chunk_NS::Chunk>& chunks);
+  void populateImportStatus(const size_t num_rows_completed,
+                            const size_t num_rows_rejected);
 
  private:
-  Fragmenter_Namespace::InsertData insert_data_;
+  std::optional<Fragmenter_Namespace::InsertData> insert_data_;
   std::map<int, std::unique_ptr<AbstractBuffer>> import_buffers_;  // holds data
 
   const ForeignTable* foreign_table_;
   int db_id_;
   const ForeignTableSchema* schema_;
+  import_export::ImportStatus import_status_;
 };
+
+void ParquetImportBatchResult::populateImportStatus(const size_t num_rows_completed,
+                                                    const size_t num_rows_rejected) {
+  import_status_.rows_completed = num_rows_completed;
+  import_status_.rows_rejected = num_rows_rejected;
+}
 
 void ParquetImportBatchResult::populateInsertData(
     const std::map<int, Chunk_NS::Chunk>& chunks) {
+  insert_data_ = Fragmenter_Namespace::InsertData{};
   size_t num_rows = chunks.begin()->second.getBuffer()->getEncoder()->getNumElems();
   for (const auto& [column_id, chunk] : chunks) {
     auto column_descriptor = chunk.getColumnDesc();
     CHECK(chunk.getBuffer()->getEncoder()->getNumElems() == num_rows);
-    insert_data_.columnIds.emplace_back(column_id);
+    insert_data_->columnIds.emplace_back(column_id);
     auto buffer = chunk.getBuffer();
     DataBlockPtr block_ptr;
     if (column_descriptor->columnType.is_array()) {
@@ -132,12 +142,12 @@ void ParquetImportBatchResult::populateInsertData(
     } else {
       block_ptr.numbersPtr = buffer->getMemoryPtr();
     }
-    insert_data_.data.emplace_back(block_ptr);
+    insert_data_->data.emplace_back(block_ptr);
   }
-  insert_data_.databaseId = db_id_;
-  insert_data_.tableId = foreign_table_->tableId;
-  insert_data_.is_default.assign(insert_data_.columnIds.size(), false);
-  insert_data_.numRows = num_rows;
+  insert_data_->databaseId = db_id_;
+  insert_data_->tableId = foreign_table_->tableId;
+  insert_data_->is_default.assign(insert_data_->columnIds.size(), false);
+  insert_data_->numRows = num_rows;
 }
 
 std::pair<std::map<int, Chunk_NS::Chunk>, std::map<int, StringDictionary*>>
@@ -191,14 +201,13 @@ ParquetImportBatchResult::ParquetImportBatchResult(const ForeignTable* foreign_t
   }
 }
 
-Fragmenter_Namespace::InsertData ParquetImportBatchResult::getInsertData() const {
+std::optional<Fragmenter_Namespace::InsertData> ParquetImportBatchResult::getInsertData()
+    const {
   return insert_data_;
 }
 
 import_export::ImportStatus ParquetImportBatchResult::getImportStatus() const {
-  import_export::ImportStatus import_status;
-  import_status.rows_completed = insert_data_.numRows;
-  return import_status;
+  return import_status_;
 }
 
 ParquetImporter::ParquetImporter() : db_id_(-1), foreign_table_(nullptr) {}
@@ -266,6 +275,11 @@ std::string ParquetImporter::getSerializedDataWrapper() const {
   return {};
 }
 
+std::vector<std::pair<const ColumnDescriptor*, StringDictionary*>>
+ParquetImporter::getStringDictionaries() const {
+  return string_dictionaries_per_column_;
+}
+
 std::unique_ptr<import_export::ImportBatchResult> ParquetImporter::getNextImportBatch() {
   if (!row_group_interval_tracker_) {
     row_group_interval_tracker_ = std::make_unique<RowGroupIntervalTracker>(
@@ -275,14 +289,26 @@ std::unique_ptr<import_export::ImportBatchResult> ParquetImporter::getNextImport
   auto import_batch_result =
       std::make_unique<ParquetImportBatchResult>(foreign_table_, db_id_, schema_.get());
   auto [chunks, string_dictionaries] = import_batch_result->getChunksAndDictionaries();
+  if (!string_dictionaries_per_column_.size()) {
+    for (const auto& [column_id, dict] : string_dictionaries) {
+      string_dictionaries_per_column_.push_back(
+          {chunks[column_id].getColumnDesc(), dict});
+    }
+  }
 
   LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get());
 
   auto next_row_group = row_group_interval_tracker_->getNextRowGroupInterval();
+  size_t num_rows_completed, num_rows_rejected;
   if (next_row_group.has_value()) {
-    chunk_loader.loadRowGroups(*next_row_group, chunks, *schema_, string_dictionaries);
+    std::tie(num_rows_completed, num_rows_rejected) = chunk_loader.loadRowGroups(
+        *next_row_group, chunks, *schema_, string_dictionaries);
+  } else {
+    return import_batch_result;  // terminate without populating data, read the last row
+                                 // group
   }
 
+  import_batch_result->populateImportStatus(num_rows_completed, num_rows_rejected);
   import_batch_result->populateInsertData(chunks);
 
   return import_batch_result;

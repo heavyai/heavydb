@@ -82,6 +82,7 @@ class ParquetInPlaceEncoder : public ParquetScalarEncoder {
 
  protected:
   const size_t omnisci_data_type_byte_size_;
+  const size_t parquet_data_type_byte_size_;
 
  private:
   void decodeNullsAndEncodeData(int8_t* data_ptr,
@@ -104,8 +105,6 @@ class ParquetInPlaceEncoder : public ParquetScalarEncoder {
       }
     }
   }
-
-  const size_t parquet_data_type_byte_size_;
 };
 
 template <typename V, typename T>
@@ -117,14 +116,63 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
       : ParquetInPlaceEncoder(
             buffer,
             column_desciptor->columnType.get_size(),
-            parquet::GetTypeByteSize(parquet_column_descriptor->physical_type())) {}
+            parquet::GetTypeByteSize(parquet_column_descriptor->physical_type()))
+      , current_batch_offset_(0) {}
 
   TypedParquetInPlaceEncoder(Data_Namespace::AbstractBuffer* buffer,
                              const size_t omnisci_data_type_byte_size,
                              const size_t parquet_data_type_byte_size)
       : ParquetInPlaceEncoder(buffer,
                               omnisci_data_type_byte_size,
-                              parquet_data_type_byte_size) {}
+                              parquet_data_type_byte_size)
+      , current_batch_offset_(0) {}
+
+  void validate(const int8_t* parquet_data,
+                const int64_t j,
+                const SQLTypeInfo& column_type) const override {
+    // no-op by default
+  }
+
+  void validateAndAppendData(const int16_t* def_levels,
+                             const int16_t* rep_levels,
+                             const int64_t values_read,
+                             const int64_t levels_read,
+                             int8_t* values,
+                             const SQLTypeInfo& column_type, /* may not be used */
+                             InvalidRowGroupIndices& invalid_indices) override {
+    int64_t i, j;
+    for (i = 0, j = 0; i < levels_read; ++i) {
+      if (def_levels[i]) {
+        try {
+          CHECK(j < values_read);
+          validate(values, j++, column_type);
+        } catch (const std::runtime_error& error) {
+          invalid_indices.insert(current_batch_offset_ + i);
+        }
+      }
+    }
+    current_batch_offset_ += levels_read;
+    appendData(def_levels, rep_levels, values_read, levels_read, values);
+  }
+
+  void eraseInvalidIndicesInBuffer(
+      const InvalidRowGroupIndices& invalid_indices) override {
+    if (invalid_indices.empty()) {
+      return;
+    }
+    auto omnisci_data_values = reinterpret_cast<V*>(buffer_->getMemoryPtr());
+    CHECK(buffer_->size() % omnisci_data_type_byte_size_ == 0);
+    size_t num_elements = buffer_->size() / omnisci_data_type_byte_size_;
+    std::remove_if(
+        omnisci_data_values, omnisci_data_values + num_elements, [&](const V& value) {
+          const V* start = omnisci_data_values;
+          auto index = std::distance(start, &value);
+          return invalid_indices.find(index) != invalid_indices.end();
+        });
+    size_t num_bytes_erased = invalid_indices.size() * omnisci_data_type_byte_size_;
+    CHECK(num_bytes_erased <= buffer_->size());
+    buffer_->setSize(buffer_->size() - num_bytes_erased);
+  }
 
   /**
    * This is a specialization of `ParquetInPlaceEncoder::appendData` for known
@@ -287,6 +335,8 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
     }
     return {stats_min, stats_max};
   }
+
+  int64_t current_batch_offset_ = 0;
 };
 
 }  // namespace foreign_storage

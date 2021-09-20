@@ -51,21 +51,28 @@ class ParquetTimestampEncoder : public TypedParquetInPlaceEncoder<V, T>,
     omnisci_data_value = convert(parquet_data_value);
   }
 
+  void validate(const int8_t* parquet_data,
+                const int64_t j,
+                const SQLTypeInfo& column_type) const override {
+    const auto& parquet_data_value = reinterpret_cast<const T*>(parquet_data)[j];
+    validate(parquet_data_value, column_type);
+  }
+
   void validate(std::shared_ptr<parquet::Statistics> stats,
                 const SQLTypeInfo& column_type) const override {
-    CHECK(column_type.is_timestamp() || column_type.is_date());
     auto [unencoded_stats_min, unencoded_stats_max] =
         TypedParquetInPlaceEncoder<V, T>::getUnencodedStats(stats);
+    validate(unencoded_stats_min, column_type);
+    validate(unencoded_stats_max, column_type);
+  }
+
+ private:
+  void validate(const T& value, const SQLTypeInfo& column_type) const {
+    CHECK(column_type.is_timestamp() || column_type.is_date());
     if (column_type.is_timestamp()) {
-      TimestampBoundsValidator<T>::validateValue(convert(unencoded_stats_max),
-                                                 column_type);
-      TimestampBoundsValidator<T>::validateValue(convert(unencoded_stats_min),
-                                                 column_type);
+      TimestampBoundsValidator<T>::validateValue(convert(value), column_type);
     } else if (column_type.is_date()) {
-      DateInSecondsBoundsValidator<T>::validateValue(convert(unencoded_stats_max),
-                                                     column_type);
-      DateInSecondsBoundsValidator<T>::validateValue(convert(unencoded_stats_min),
-                                                     column_type);
+      DateInSecondsBoundsValidator<T>::validateValue(convert(value), column_type);
     }
   }
 

@@ -87,7 +87,23 @@ class ParquetEncoder {
   }
 };
 
-class ParquetScalarEncoder : public ParquetEncoder {
+using InvalidRowGroupIndices = std::set<int64_t>;
+
+class ParquetImportEncoder {
+ public:
+  virtual void eraseInvalidIndicesInBuffer(
+      const InvalidRowGroupIndices& invalid_indices) = 0;
+
+  virtual void validateAndAppendData(const int16_t* def_levels,
+                                     const int16_t* rep_levels,
+                                     const int64_t values_read,
+                                     const int64_t levels_read,
+                                     int8_t* values,
+                                     const SQLTypeInfo& column_type, /* may not be used */
+                                     InvalidRowGroupIndices& invalid_indices) = 0;
+};
+
+class ParquetScalarEncoder : public ParquetEncoder, public ParquetImportEncoder {
  public:
   ParquetScalarEncoder(Data_Namespace::AbstractBuffer* buffer) : ParquetEncoder(buffer) {}
 
@@ -100,6 +116,10 @@ class ParquetScalarEncoder : public ParquetEncoder {
   virtual void encodeAndCopyContiguous(const int8_t* parquet_data_bytes,
                                        int8_t* omnisci_data_bytes,
                                        const size_t num_elements) = 0;
+
+  virtual void validate(const int8_t* parquet_data,
+                        const int64_t j,
+                        const SQLTypeInfo& column_type) const = 0;
 };
 
 }  // namespace foreign_storage

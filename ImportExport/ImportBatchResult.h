@@ -26,7 +26,7 @@ class ImportBatchResult {
  public:
   virtual ~ImportBatchResult() = default;
 
-  virtual Fragmenter_Namespace::InsertData getInsertData() const = 0;
+  virtual std::optional<Fragmenter_Namespace::InsertData> getInsertData() const = 0;
 
   virtual ImportStatus getImportStatus() const = 0;
 };

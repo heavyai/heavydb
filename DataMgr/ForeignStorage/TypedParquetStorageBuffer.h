@@ -61,6 +61,19 @@ class TypedParquetStorageBuffer : public Data_Namespace::AbstractBuffer {
   size_t reservedSize() const override;
   Data_Namespace::MemoryLevel getType() const override;
 
+  template <typename FindContainer>
+  void eraseInvalidData(const FindContainer& invalid_indices) {
+    if (invalid_indices.empty()) {
+      return;
+    }
+    auto end_it = std::remove_if(buffer_.begin(), buffer_.end(), [&](const Type& value) {
+      const Type* start = buffer_.data();
+      auto index = std::distance(start, &value);
+      return invalid_indices.find(index) != invalid_indices.end();
+    });
+    buffer_.erase(end_it, buffer_.end());
+  }
+
  private:
   std::vector<Type> buffer_;
 };

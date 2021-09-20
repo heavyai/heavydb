@@ -103,8 +103,7 @@ class ParquetArrayEncoder : public ParquetEncoder {
   const static int16_t empty_list_def_level = 1;
   const static int16_t list_null_def_level = 0;
 
- private:
-  void resetLastArrayMetadata() {
+  virtual void resetLastArrayMetadata() {
     is_empty_array_ = false;
     is_null_array_ = false;
     num_elements_in_array_ = 0;
@@ -114,6 +113,15 @@ class ParquetArrayEncoder : public ParquetEncoder {
     return rep_level == 0 && has_assembly_started_;
   }
 
+  virtual void appendArrayItem(const int64_t encoded_index) {
+    auto omnisci_data_ptr = resizeArrayDataBytes(1);
+    scalar_encoder_->copy(
+        encode_buffer_.data() + (encoded_index)*omnisci_data_type_byte_size_,
+        omnisci_data_ptr);
+    num_elements_in_array_++;
+  }
+
+ private:
   void processArrayItem(const int16_t def_level, int64_t& encoded_index) {
     has_assembly_started_ = true;
     if (def_level == non_null_def_level) {
@@ -139,14 +147,6 @@ class ParquetArrayEncoder : public ParquetEncoder {
   void markArrayAsNull() { is_null_array_ = true; }
 
   void markArrayAsEmpty() { is_empty_array_ = true; }
-
-  void appendArrayItem(const int64_t encoded_index) {
-    auto omnisci_data_ptr = resizeArrayDataBytes(1);
-    scalar_encoder_->copy(
-        encode_buffer_.data() + (encoded_index)*omnisci_data_type_byte_size_,
-        omnisci_data_ptr);
-    num_elements_in_array_++;
-  }
 
   void appendNullArrayItem() {
     scalar_encoder_->setNull(resizeArrayDataBytes(1));

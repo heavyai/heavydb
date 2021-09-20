@@ -39,6 +39,11 @@ class ForeignDataImporter : public AbstractImporter {
       connector_;
 
  private:
+  void finalize(const Catalog_Namespace::SessionInfo& parent_session_info,
+                ImportStatus& import_status,
+                const std::vector<std::pair<const ColumnDescriptor*, StringDictionary*>>&
+                    string_dictionaries);
+
   std::string file_path_;
   CopyParams copy_params_;
   const TableDescriptor* table_;

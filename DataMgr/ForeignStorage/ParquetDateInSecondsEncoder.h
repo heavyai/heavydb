@@ -52,6 +52,21 @@ class ParquetDateInSecondsEncoder : public TypedParquetInPlaceEncoder<int64_t, i
 
   void validate(std::shared_ptr<parquet::Statistics> stats,
                 const SQLTypeInfo& column_type) const override {
+    auto [unencoded_stats_min, unencoded_stats_max] =
+        TypedParquetInPlaceEncoder<int64_t, int32_t>::getUnencodedStats(stats);
+    validate(unencoded_stats_min, column_type);
+    validate(unencoded_stats_max, column_type);
+  }
+
+  void validate(const int8_t* parquet_data,
+                const int64_t j,
+                const SQLTypeInfo& column_type) const override {
+    const auto& parquet_data_value = reinterpret_cast<const int32_t*>(parquet_data)[j];
+    validate(parquet_data_value, column_type);
+  }
+
+ private:
+  void validate(const int32_t& value, const SQLTypeInfo& column_type) const {
     CHECK(column_type.is_date());
     if (column_type.get_compression() ==
         kENCODING_NONE) {  // do not validate NONE ENCODED dates as it is impossible for
@@ -60,12 +75,8 @@ class ParquetDateInSecondsEncoder : public TypedParquetInPlaceEncoder<int64_t, i
                            // as a 64-bit integer)
       return;
     }
-    auto [unencoded_stats_min, unencoded_stats_max] =
-        TypedParquetInPlaceEncoder<int64_t, int32_t>::getUnencodedStats(stats);
-    DateInSecondsBoundsValidator<int64_t>::validateValue(
-        unencoded_stats_max * kSecsPerDay, column_type);
-    DateInSecondsBoundsValidator<int64_t>::validateValue(
-        unencoded_stats_min * kSecsPerDay, column_type);
+    DateInSecondsBoundsValidator<int64_t>::validateValue(value * kSecsPerDay,
+                                                         column_type);
   }
 };
 

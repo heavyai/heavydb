@@ -36,7 +36,31 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
       , chunk_metadata_(chunk_metadata)
       , encode_buffer_(LazyParquetChunkLoader::batch_reader_num_elements * sizeof(V))
       , min_(std::numeric_limits<V>::max())
-      , max_(std::numeric_limits<V>::lowest()) {}
+      , max_(std::numeric_limits<V>::lowest())
+      , current_batch_offset_(0)
+      , invalid_indices_(nullptr) {}
+
+  void validateAndAppendData(const int16_t* def_levels,
+                             const int16_t* rep_levels,
+                             const int64_t values_read,
+                             const int64_t levels_read,
+                             int8_t* values,
+                             const SQLTypeInfo& column_type, /* may not be used */
+                             InvalidRowGroupIndices& invalid_indices) override {
+    auto parquet_data_ptr = reinterpret_cast<const parquet::ByteArray*>(values);
+    for (int64_t i = 0, j = 0; i < levels_read; ++i) {
+      if (def_levels[i]) {
+        CHECK(j < values_read);
+        auto& byte_array = parquet_data_ptr[j++];
+        if (byte_array.len > StringDictionary::MAX_STRLEN) {
+          invalid_indices.insert(current_batch_offset_ + i);
+        }
+      }
+    }
+    current_batch_offset_ += levels_read;
+    encodeAndCopyContiguous(values, encode_buffer_.data(), values_read);
+    appendData(def_levels, rep_levels, values_read, levels_read, values);
+  }
 
   void appendData(const int16_t* def_levels,
                   const int16_t* rep_levels,
@@ -59,8 +83,12 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
     string_views.reserve(num_elements);
     for (size_t i = 0; i < num_elements; ++i) {
       auto& byte_array = parquet_data_ptr[i];
-      string_views.emplace_back(reinterpret_cast<const char*>(byte_array.ptr),
-                                byte_array.len);
+      if (byte_array.len <= StringDictionary::MAX_STRLEN) {
+        string_views.emplace_back(reinterpret_cast<const char*>(byte_array.ptr),
+                                  byte_array.len);
+      } else {
+        string_views.emplace_back(nullptr, 0);
+      }
     }
     string_dictionary_->getOrAddBulk(string_views, omnisci_data_ptr);
     updateMetadataStats(num_elements, omnisci_data_bytes);
@@ -104,6 +132,9 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
   std::vector<int8_t> encode_buffer_;
 
   V min_, max_;
+
+  int64_t current_batch_offset_;
+  InvalidRowGroupIndices* invalid_indices_;
 };
 
 }  // namespace foreign_storage

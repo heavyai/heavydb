@@ -31,6 +31,34 @@ ForeignDataImporter::ForeignDataImporter(const std::string& file_path,
   connector_ = std::make_unique<Parser::LocalConnector>();
 }
 
+void ForeignDataImporter::finalize(
+    const Catalog_Namespace::SessionInfo& parent_session_info,
+    ImportStatus& import_status,
+    const std::vector<std::pair<const ColumnDescriptor*, StringDictionary*> >&
+        string_dictionaries) {
+  if (table_->persistenceLevel ==
+      Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident
+                                                  // tables
+    if (!import_status.load_failed) {
+      auto timer = DEBUG_TIMER("Dictionary Checkpointing");
+      for (const auto& [column_desciptor, string_dictionary] : string_dictionaries) {
+        if (!string_dictionary->checkpoint()) {
+          LOG(ERROR) << "Checkpointing Dictionary for Column "
+                     << column_desciptor->columnName << " failed.";
+          import_status.load_failed = true;
+          import_status.load_msg = "Dictionary checkpoint failed";
+          break;
+        }
+      }
+    }
+  }
+  if (import_status.load_failed) {
+    connector_->rollback(parent_session_info, table_->tableId);
+  } else {
+    connector_->checkpoint(parent_session_info, table_->tableId);
+  }
+}
+
 ImportStatus ForeignDataImporter::import(
     const Catalog_Namespace::SessionInfo* session_info) {
   auto& catalog = session_info->getCatalog();
@@ -65,19 +93,31 @@ ImportStatus ForeignDataImporter::import(
           dynamic_cast<foreign_storage::ParquetImporter*>(data_wrapper.get())) {
     Fragmenter_Namespace::InsertDataLoader insert_data_loader(*connector_);
     ImportStatus import_status;  // manually update
-    import_status.rows_completed = 0;
     while (true) {
       auto batch_result = parquet_import->getNextImportBatch();
       auto batch = batch_result->getInsertData();
-      if (batch.numRows == 0) {
+      if (!batch) {
         break;
       }
-      insert_data_loader.insertData(*session_info, batch);
-      import_status.rows_completed += batch.numRows;
+      insert_data_loader.insertData(*session_info, *batch);
+
+      auto batch_import_status = batch_result->getImportStatus();
+      import_status.rows_completed += batch_import_status.rows_completed;
+      import_status.rows_rejected += batch_import_status.rows_rejected;
+      if (import_status.rows_rejected > copy_params_.max_reject) {
+        import_status.load_failed = true;
+        import_status.load_msg =
+            "Load was cancelled due to max reject rows being reached";
+        break;
+      }
     }
 
-    // TODO: rollback on exceeded number of errors
-    connector_->checkpoint(*session_info, foreign_table->tableId);
+    if (import_status.load_failed) {
+      foreign_table.reset();  // this is to avoid calling the TableDescriptor dtor after
+                              // the rollback in the checkpoint below
+    }
+
+    finalize(*session_info, import_status, parquet_import->getStringDictionaries());
 
     return import_status;
   }

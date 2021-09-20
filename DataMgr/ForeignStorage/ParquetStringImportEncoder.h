@@ -24,7 +24,7 @@
 
 namespace foreign_storage {
 
-class ParquetStringImportEncoder : public ParquetEncoder {
+class ParquetStringImportEncoder : public ParquetEncoder, public ParquetImportEncoder {
  public:
   ParquetStringImportEncoder(Data_Namespace::AbstractBuffer* buffer)
       : ParquetEncoder(buffer)
@@ -49,6 +49,24 @@ class ParquetStringImportEncoder : public ParquetEncoder {
         string_buffer_->appendElement("");  // empty strings encode nulls
       }
     }
+  }
+
+  void validateAndAppendData(const int16_t* def_levels,
+                             const int16_t* rep_levels,
+                             const int64_t values_read,
+                             const int64_t levels_read,
+                             int8_t* values,
+                             const SQLTypeInfo& column_type, /* may not be used */
+                             InvalidRowGroupIndices& invalid_indices) override {
+    appendData(def_levels, rep_levels, values_read, levels_read, values);
+  }
+
+  void eraseInvalidIndicesInBuffer(
+      const InvalidRowGroupIndices& invalid_indices) override {
+    if (invalid_indices.empty()) {
+      return;
+    }
+    string_buffer_->eraseInvalidData(invalid_indices);
   }
 
  private:

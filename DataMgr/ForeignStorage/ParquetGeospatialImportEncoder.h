@@ -24,13 +24,21 @@
 
 namespace foreign_storage {
 
-class ParquetGeospatialImportEncoder : public ParquetEncoder, public GeospatialEncoder {
+class ParquetGeospatialImportEncoder : public ParquetEncoder,
+                                       public GeospatialEncoder,
+                                       public ParquetImportEncoder {
  public:
-  ParquetGeospatialImportEncoder() : ParquetEncoder(nullptr), GeospatialEncoder() {}
+  ParquetGeospatialImportEncoder()
+      : ParquetEncoder(nullptr)
+      , GeospatialEncoder()
+      , current_batch_offset_(0)
+      , invalid_indices_(nullptr) {}
 
   ParquetGeospatialImportEncoder(std::list<Chunk_NS::Chunk>& chunks)
       : ParquetEncoder(nullptr)
       , GeospatialEncoder(chunks)
+      , current_batch_offset_(0)
+      , invalid_indices_(nullptr)
       , base_column_buffer_(nullptr)
       , coords_column_buffer_(nullptr)
       , bounds_column_buffer_(nullptr)
@@ -76,6 +84,40 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder, public GeospatialE
     }
   }
 
+  void validateAndAppendData(const int16_t* def_levels,
+                             const int16_t* rep_levels,
+                             const int64_t values_read,
+                             const int64_t levels_read,
+                             int8_t* values,
+                             const SQLTypeInfo& column_type, /* may not be used */
+                             InvalidRowGroupIndices& invalid_indices) override {
+    invalid_indices_ = &invalid_indices;  // used in assembly algorithm
+    appendData(def_levels, rep_levels, values_read, levels_read, values);
+  }
+
+  void eraseInvalidIndicesInBuffer(
+      const InvalidRowGroupIndices& invalid_indices) override {
+    if (invalid_indices.empty()) {
+      return;
+    }
+    base_column_buffer_->eraseInvalidData(invalid_indices);
+    coords_column_buffer_->eraseInvalidData(invalid_indices);
+    if (hasBoundsColumn()) {
+      bounds_column_buffer_->eraseInvalidData(invalid_indices);
+    }
+    if (hasRingSizesColumn()) {
+      ring_sizes_column_buffer_->eraseInvalidData(invalid_indices);
+    }
+    if (hasPolyRingsColumn()) {
+      poly_rings_column_buffer_->eraseInvalidData(invalid_indices);
+    }
+    if (hasRenderGroupColumn()) {
+      render_group_column_buffer_->setSize(
+          sizeof(int32_t) *
+          (render_group_column_buffer_->size() - invalid_indices.size()));
+    }
+  }
+
   void appendData(const int16_t* def_levels,
                   const int16_t* rep_levels,
                   const int64_t values_read,
@@ -94,13 +136,23 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder, public GeospatialE
         auto& byte_array = parquet_data_ptr[j++];
         auto geo_string_view = std::string_view{
             reinterpret_cast<const char*>(byte_array.ptr), byte_array.len};
-        processGeoElement(geo_string_view);
+        try {
+          processGeoElement(geo_string_view);
+        } catch (const std::runtime_error& error) {
+          CHECK(invalid_indices_);
+          invalid_indices_->insert(current_batch_offset_ + i);
+          /// add null if failed
+          clearParseBuffers();
+          processNullGeoElement();
+        }
       }
     }
 
     appendArrayDatumsToBuffer();
 
     appendBaseAndRenderGroupData(levels_read);
+
+    current_batch_offset_ += levels_read;
   }
 
  private:
@@ -141,6 +193,8 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder, public GeospatialE
     return buffer;
   }
 
+  int64_t current_batch_offset_;
+  InvalidRowGroupIndices* invalid_indices_;
   TypedParquetStorageBuffer<std::string>* base_column_buffer_;
   TypedParquetStorageBuffer<ArrayDatum>* coords_column_buffer_;
   TypedParquetStorageBuffer<ArrayDatum>* bounds_column_buffer_;

@@ -78,6 +78,14 @@ class ParquetImporter : public AbstractFileStorageDataWrapper {
    */
   std::unique_ptr<import_export::ImportBatchResult> getNextImportBatch();
 
+  /**
+   * Return string dictionaries that are used per column.
+   *
+   * @return a vector of StringDictionary and ColumnDescriptor pairs
+   */
+  std::vector<std::pair<const ColumnDescriptor*, StringDictionary*>>
+  getStringDictionaries() const;
+
  private:
   const int db_id_;
   const ForeignTable* foreign_table_;
@@ -89,5 +97,7 @@ class ParquetImporter : public AbstractFileStorageDataWrapper {
   std::unique_ptr<ForeignTableSchema> schema_;
   std::shared_ptr<arrow::fs::FileSystem> file_system_;
   std::unique_ptr<FileReaderMap> file_reader_cache_;
+  std::vector<std::pair<const ColumnDescriptor*, StringDictionary*>>
+      string_dictionaries_per_column_;
 };
 }  // namespace foreign_storage

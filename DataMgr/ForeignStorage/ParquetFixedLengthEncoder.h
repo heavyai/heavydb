@@ -61,7 +61,14 @@ class ParquetFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T>,
 
   void validate(std::shared_ptr<parquet::Statistics> stats,
                 const SQLTypeInfo& column_type) const override {
-    validateIntegralOrFloatingPointValue(stats, column_type);
+    validateIntegralOrFloatingPointMetadata(stats, column_type);
+  }
+
+  void validate(const int8_t* parquet_data,
+                const int64_t j,
+                const SQLTypeInfo& column_type) const override {
+    const auto& parquet_data_value = reinterpret_cast<const T*>(parquet_data)[j];
+    validateIntegralOrFloatingPointValue(parquet_data_value, column_type);
   }
 
   bool encodingIsIdentityForSameTypes() const override { return true; }
@@ -72,20 +79,17 @@ class ParquetFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T>,
       std::enable_if_t<(!std::is_integral<TT>::value || std::is_same<TT, bool>::value) &&
                            !std::is_floating_point<TT>::value,
                        int> = 0>
-  void validateIntegralOrFloatingPointValue(std::shared_ptr<parquet::Statistics> stats,
+  void validateIntegralOrFloatingPointValue(const T& value,
                                             const SQLTypeInfo& column_type) const {
     // do nothing when type `T` is non-integral and non-floating-point (case
     // for which this can happen are when `T` is bool)
   }
 
   template <typename TT = T, std::enable_if_t<std::is_floating_point<TT>::value, int> = 0>
-  void validateIntegralOrFloatingPointValue(std::shared_ptr<parquet::Statistics> stats,
+  void validateIntegralOrFloatingPointValue(const T& value,
                                             const SQLTypeInfo& column_type) const {
-    auto [unencoded_stats_min, unencoded_stats_max] =
-        TypedParquetInPlaceEncoder<V, T>::getUnencodedStats(stats);
     if (column_type.is_fp()) {
-      FloatPointValidator<T>::validateValue(unencoded_stats_max, column_type);
-      FloatPointValidator<T>::validateValue(unencoded_stats_min, column_type);
+      FloatPointValidator<T>::validateValue(value, column_type);
     } else {
       UNREACHABLE();
     }
@@ -95,22 +99,25 @@ class ParquetFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T>,
       typename TT = T,
       std::enable_if_t<std::is_integral<TT>::value && !std::is_same<TT, bool>::value,
                        int> = 0>
-  void validateIntegralOrFloatingPointValue(std::shared_ptr<parquet::Statistics> stats,
+  void validateIntegralOrFloatingPointValue(const T& value,
                                             const SQLTypeInfo& column_type) const {
-    if (!column_type.is_integer() && !column_type.is_timestamp()) {
+    if (column_type.is_integer()) {
+      IntegralFixedLengthBoundsValidator<T>::validateValue(value, column_type);
+    } else if (column_type.is_timestamp()) {
+      TimestampBoundsValidator<T>::validateValue(value, column_type);
+    }
+  }
+
+  void validateIntegralOrFloatingPointMetadata(std::shared_ptr<parquet::Statistics> stats,
+                                               const SQLTypeInfo& column_type) const {
+    if (!column_type.is_integer() && !column_type.is_timestamp() &&
+        !column_type.is_fp()) {
       return;
     }
     auto [unencoded_stats_min, unencoded_stats_max] =
         TypedParquetInPlaceEncoder<V, T>::getUnencodedStats(stats);
-    if (column_type.is_integer()) {
-      IntegralFixedLengthBoundsValidator<T>::validateValue(unencoded_stats_max,
-                                                           column_type);
-      IntegralFixedLengthBoundsValidator<T>::validateValue(unencoded_stats_min,
-                                                           column_type);
-    } else if (column_type.is_timestamp()) {
-      TimestampBoundsValidator<T>::validateValue(unencoded_stats_max, column_type);
-      TimestampBoundsValidator<T>::validateValue(unencoded_stats_min, column_type);
-    }
+    validateIntegralOrFloatingPointValue(unencoded_stats_min, column_type);
+    validateIntegralOrFloatingPointValue(unencoded_stats_max, column_type);
   }
 };
 
@@ -167,6 +174,13 @@ class ParquetUnsignedFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T
                                                          column_type);
     IntegralFixedLengthBoundsValidator<U>::validateValue(unencoded_stats_min,
                                                          column_type);
+  }
+
+  void validate(const int8_t* parquet_data,
+                const int64_t j,
+                const SQLTypeInfo& column_type) const override {
+    const auto& parquet_data_value = reinterpret_cast<const T*>(parquet_data)[j];
+    IntegralFixedLengthBoundsValidator<U>::validateValue(parquet_data_value, column_type);
   }
 };
 
