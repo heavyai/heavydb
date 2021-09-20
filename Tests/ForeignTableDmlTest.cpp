@@ -43,6 +43,7 @@ extern bool g_enable_seconds_refresh;
 extern bool g_allow_s3_server_privileges;
 
 std::string test_binary_file_path;
+bool g_run_odbc{false};
 
 namespace bp = boost::process;
 namespace bf = boost::filesystem;
@@ -236,9 +237,13 @@ class ForeignTableTest : public DBHandlerTestFixture {
     dropLocalODBCServerIfExists();
   }
 
+  void skipIfOdbcDisabled() {
+    GTEST_SKIP() << "ODBC tests not supported with this build configuration.";
+  }
+
   void setupOdbcIfEnabled() {
     if (is_odbc(wrapper_type_)) {
-      GTEST_SKIP() << "ODBC tests not supported with this build configuration.";
+      skipIfOdbcDisabled();
     }
   }
 
@@ -5798,6 +5803,22 @@ int main(int argc, char** argv) {
 
   // get dirname of test binary
   test_binary_file_path = bf::canonical(argv[0]).parent_path().string();
+
+  po::options_description desc("Options");
+  // these are here to allow passing correctly google testing parameters
+  desc.add_options()("gtest_list_tests", "list all test");
+  desc.add_options()("gtest_filter", "filters tests, use --help for details");
+  desc.add_options()("gtest_repeat", "repeats tests, use --help for details");
+
+  desc.add_options()("run-odbc-tests", "Run ODBC DML tests.");
+
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  po::notify(vm);
+
+  if (vm.count("run-odbc-tests")) {
+    g_run_odbc = true;
+  }
 
   int err{0};
   try {
