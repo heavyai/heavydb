@@ -4071,12 +4071,17 @@ void DBHandler::render_vega(TRenderResult& _return,
     THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
   }
 
+  // cast away const-ness of incoming Thrift string ref
+  // to allow it to be passed down as an r-value and
+  // ultimately std::moved into the RenderSession
+  auto& non_const_vega_json = const_cast<std::string&>(vega_json);
+
   _return.total_time_ms = measure<>::execution([&]() {
     try {
       render_handler_->render_vega(_return,
                                    stdlog.getSessionInfo(),
                                    widget_id,
-                                   vega_json,
+                                   std::move(non_const_vega_json),
                                    compression_level,
                                    nonce);
     } catch (std::exception& e) {
@@ -6844,10 +6849,16 @@ void DBHandler::start_render_query(TPendingRenderQuery& _return,
   }
   LOG(INFO) << "start_render_query :" << *session_ptr << " :widget_id:" << widget_id
             << ":vega_json:" << vega_json;
+
+  // cast away const-ness of incoming Thrift string ref
+  // to allow it to be passed down as an r-value and
+  // ultimately std::moved into the RenderSession
+  auto& non_const_vega_json = const_cast<std::string&>(vega_json);
+
   auto time_ms = measure<>::execution([&]() {
     try {
       render_handler_->start_render_query(
-          _return, session, widget_id, node_idx, vega_json);
+          _return, session, widget_id, node_idx, std::move(non_const_vega_json));
     } catch (std::exception& e) {
       THROW_MAPD_EXCEPTION(e.what());
     }

@@ -50,7 +50,7 @@ void RenderHandler::render_vega(
     TRenderResult& _return,
     const std::shared_ptr<Catalog_Namespace::SessionInfo> session_info,
     const int64_t widget_id,
-    const std::string& vega_json,
+    std::string&& vega_json,
     const int32_t compression_level,
     const std::string& nonce) {
   CHECK(impl_);
@@ -60,7 +60,7 @@ void RenderHandler::start_render_query(TPendingRenderQuery& _return,
                                        const TSessionId& session,
                                        const int64_t widget_id,
                                        const int16_t node_idx,
-                                       const std::string& vega_json) {
+                                       std::string&& vega_json) {
   CHECK(impl_);
 }
 

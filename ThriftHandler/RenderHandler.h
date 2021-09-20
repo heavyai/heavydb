@@ -62,7 +62,7 @@ class RenderHandler {
   void render_vega(TRenderResult& _return,
                    const std::shared_ptr<Catalog_Namespace::SessionInfo> session_info,
                    const int64_t widget_id,
-                   const std::string& vega_json,
+                   std::string&& vega_json,
                    const int32_t compression_level,
                    const std::string& nonce);
 
@@ -70,7 +70,7 @@ class RenderHandler {
                           const TSessionId& session,
                           const int64_t widget_id,
                           const int16_t node_idx,
-                          const std::string& vega_json);
+                          std::string&& vega_json);
 
   void execute_next_render_step(TRenderStepResult& _return,
                                 const TPendingRenderQuery& pending_render,
