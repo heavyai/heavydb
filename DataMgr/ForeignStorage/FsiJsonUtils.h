@@ -85,6 +85,36 @@ void get_value(const rapidjson::Value& json_val, std::vector<T>& vector_value) {
   }
 }
 
+// std::vector<std::pair>
+template <class T, class V>
+void set_value(rapidjson::Value& json_val,
+               const std::vector<std::pair<T, V>>& vector_value,
+               rapidjson::Document::AllocatorType& allocator) {
+  json_val.SetArray();
+  for (const auto& pair : vector_value) {
+    rapidjson::Value pair_obj;
+    pair_obj.SetObject();
+    add_value_to_object(pair_obj, pair.first, "key", allocator);
+    add_value_to_object(pair_obj, pair.second, "value", allocator);
+    json_val.PushBack(pair_obj, allocator);
+  }
+}
+
+template <class T, class V>
+void get_value(const rapidjson::Value& json_val,
+               std::vector<std::pair<T, V>>& vector_value) {
+  CHECK(json_val.IsArray());
+  CHECK(vector_value.size() == 0);
+  for (const auto& json_obj : json_val.GetArray()) {
+    CHECK(json_obj.IsObject());
+    T key;
+    V value;
+    get_value_from_object(json_obj, key, "key");
+    get_value_from_object(json_obj, value, "value");
+    vector_value.emplace_back(std::make_pair(key, value));
+  }
+}
+
 // std::map
 template <class T, class V>
 void set_value(rapidjson::Value& json_val,

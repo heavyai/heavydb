@@ -1713,6 +1713,126 @@ TEST_P(DataWrapperSelectQueryTest, RegexPathFilterOnFiles) {
   // clang-format on
 }
 
+TEST_P(DataWrapperSelectQueryTest, SortedOnPathname) {
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
+  sql(createForeignTableQuery(
+      {{"i", "INT"}},
+      getDataFilesPath() + "sorted_dir/",
+      wrapper_file_type(GetParam()),
+      {{"REGEX_PATH_FILTER", ".*" + wrapper_file_type(GetParam())},
+       {"FILE_SORT_ORDER_BY", "pathNAME"}}));
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                      {{i(2)}, {i(1)}, {i(0)}, {i(9)}});
+}
+
+TEST_P(DataWrapperSelectQueryTest, SortedOnDateModified) {
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
+  auto source_dir =
+      bf::absolute(getDataFilesPath() + "sorted_dir/" + wrapper_file_type(GetParam()));
+  auto temp_dir = bf::absolute("temp_sorted_on_date_modified");
+  bf::remove_all(temp_dir);
+  bf::copy(source_dir, temp_dir);
+
+  // some platforms won't copy directory contents on a directory copy
+  for (auto& file : boost::filesystem::recursive_directory_iterator(source_dir)) {
+    auto source_file = file.path();
+    auto dest_file = temp_dir / file.path().filename();
+    if (!boost::filesystem::exists(dest_file)) {
+      boost::filesystem::copy(file.path(), temp_dir / file.path().filename());
+    }
+  }
+  auto reference_time = bf::last_write_time(temp_dir);
+  bf::last_write_time(temp_dir / ("zzz." + wrapper_file_type(GetParam())),
+                      reference_time - 2);
+  bf::last_write_time(temp_dir / ("a_21_2021-01-01." + wrapper_file_type(GetParam())),
+                      reference_time - 1);
+  bf::last_write_time(temp_dir / ("c_00_2021-02-15." + wrapper_file_type(GetParam())),
+                      reference_time);
+  bf::last_write_time(temp_dir / ("b_15_2021-12-31." + wrapper_file_type(GetParam())),
+                      reference_time + 1);
+
+  sql(createForeignTableQuery({{"i", "INT"}},
+                              temp_dir.string(),
+                              wrapper_file_type(GetParam()),
+                              {{"FILE_SORT_ORDER_BY", "DATE_MODIFIED"}}));
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                      {{i(9)}, {i(2)}, {i(0)}, {i(1)}});
+
+  bf::remove_all(temp_dir);
+}
+
+TEST_P(DataWrapperSelectQueryTest, SortedOnRegex) {
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
+  sql(createForeignTableQuery(
+      {{"i", "INT"}},
+      getDataFilesPath() + "sorted_dir/" + wrapper_file_type(GetParam()),
+      wrapper_file_type(GetParam()),
+      {{"FILE_SORT_ORDER_BY", "REGEX"}, {"FILE_SORT_REGEX", ".*[a-z]_[0-9]([0-9])_.*"}}));
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                      {{i(9)}, {i(0)}, {i(2)}, {i(1)}});
+}
+
+TEST_P(DataWrapperSelectQueryTest, SortedOnRegexDate) {
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
+  sql(createForeignTableQuery(
+      {{"i", "INT"}},
+      getDataFilesPath() + "sorted_dir/" + wrapper_file_type(GetParam()),
+      wrapper_file_type(GetParam()),
+      {{"FILE_SORT_ORDER_BY", "REGEX_DATE"},
+       {"FILE_SORT_REGEX", ".*[a-z]_[0-9][0-9]_(.*)\\..*"}}));
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                      {{i(9)}, {i(2)}, {i(0)}, {i(1)}});
+}
+
+TEST_P(DataWrapperSelectQueryTest, SortedOnRegexNumberAndMultiCaptureGroup) {
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
+  sql(createForeignTableQuery(
+      {{"i", "INT"}},
+      getDataFilesPath() + "sorted_dir/" + wrapper_file_type(GetParam()),
+      wrapper_file_type(GetParam()),
+      {{"FILE_SORT_ORDER_BY", "REGEX_NUMBER"},
+       {"FILE_SORT_REGEX", ".*[a-z]_(.*)_(.*)-(.*)-(.*)\\..*"}}));
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                      {{i(9)}, {i(0)}, {i(1)}, {i(2)}});
+}
+
+TEST_P(DataWrapperSelectQueryTest, SortedOnNonRegexWithSortRegex) {
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
+  queryAndAssertException(
+      createForeignTableQuery(
+          {{"i", "INT"}},
+          getDataFilesPath() + "sorted_dir/" + wrapper_file_type(GetParam()),
+          wrapper_file_type(GetParam()),
+          {{"FILE_SORT_ORDER_BY", "DATE_MODIFIED"}, {"FILE_SORT_REGEX", "xxx"}}),
+      "Option \"FILE_SORT_REGEX\" must not be set for selected option "
+      "\"FILE_SORT_ORDER_BY='DATE_MODIFIED'\".");
+}
+
+TEST_P(DataWrapperSelectQueryTest, SortedOnRegexWithoutSortRegex) {
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
+  }
+  queryAndAssertException(createForeignTableQuery({{"i", "INT"}},
+                                                  getDataFilesPath() + "sorted_dir/" +
+                                                      wrapper_file_type(GetParam()),
+                                                  wrapper_file_type(GetParam()),
+                                                  {{"FILE_SORT_ORDER_BY", "REGEX"}}),
+                          "Option \"FILE_SORT_REGEX\" must be set for selected option "
+                          "\"FILE_SORT_ORDER_BY='REGEX'\".");
+}
+
 TEST_P(DataWrapperSelectQueryTest, OutOfRange) {
   sql(createForeignTableQuery(
       {{"i", "INTEGER"}, {"i2", "INTEGER"}},

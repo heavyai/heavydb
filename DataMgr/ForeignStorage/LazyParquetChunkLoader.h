@@ -79,7 +79,7 @@ class LazyParquetChunkLoader {
    *
    * @return a list of the row group metadata extracted from `file_paths`
    */
-  std::list<RowGroupMetadata> metadataScan(const std::set<std::string>& file_paths,
+  std::list<RowGroupMetadata> metadataScan(const std::vector<std::string>& file_paths,
                                            const ForeignTableSchema& schema);
 
   /**

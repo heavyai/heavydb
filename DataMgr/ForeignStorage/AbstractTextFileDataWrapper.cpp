@@ -804,7 +804,13 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
     CHECK(fragment_id_to_file_regions_map_.empty());
     if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
       file_reader_ = std::make_unique<LocalMultiFileReader>(
-          file_path, copy_params, foreign_table_->getOption(REGEX_PATH_FILTER_KEY));
+          file_path,
+          copy_params,
+          foreign_table_->getOption(
+              AbstractFileStorageDataWrapper::REGEX_PATH_FILTER_KEY),
+          foreign_table_->getOption(
+              AbstractFileStorageDataWrapper::FILE_SORT_ORDER_BY_KEY),
+          foreign_table_->getOption(AbstractFileStorageDataWrapper::FILE_SORT_REGEX_KEY));
     } else {
       UNREACHABLE();
     }

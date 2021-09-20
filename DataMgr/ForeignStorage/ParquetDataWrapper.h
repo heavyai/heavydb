@@ -70,7 +70,7 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
                                               const ChunkToBufferMap& required_buffers);
 
   std::set<std::string> getProcessedFilePaths();
-  std::set<std::string> getAllFilePaths();
+  std::vector<std::string> getAllFilePaths();
 
   bool moveToNextFragment(size_t new_rows_count) const;
 
@@ -83,7 +83,7 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
 
   void resetParquetMetadata();
 
-  void metadataScanFiles(const std::set<std::string>& file_paths);
+  void metadataScanFiles(const std::vector<std::string>& file_paths);
 
   std::map<int, std::vector<RowGroupInterval>> fragment_to_row_group_interval_map_;
   std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;

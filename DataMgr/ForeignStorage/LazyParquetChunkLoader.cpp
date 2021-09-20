@@ -1825,7 +1825,7 @@ std::pair<size_t, size_t> LazyParquetChunkLoader::loadRowGroups(
 }
 
 std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
-    const std::set<std::string>& file_paths,
+    const std::vector<std::string>& file_paths,
     const ForeignTableSchema& schema) {
   auto timer = DEBUG_TIMER(__func__);
   auto column_interval =
@@ -1851,10 +1851,10 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
   // yet been opened.
   // Since we have already performed the first iteration, we skip it in the thread groups
   // so as not to process it twice.
-  std::set<std::string> cache_subset;
+  std::vector<std::string> cache_subset;
   for (auto path_it = ++(file_paths.begin()); path_it != file_paths.end(); ++path_it) {
     file_reader_cache_->initializeIfEmpty(*path_it);
-    cache_subset.insert(*path_it);
+    cache_subset.emplace_back(*path_it);
   }
 
   // Iterate asyncronously over any paths beyond the first.

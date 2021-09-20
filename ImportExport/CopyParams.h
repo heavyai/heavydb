@@ -84,6 +84,8 @@ struct CopyParams {
   bool geo_explode_collections;
   int32_t source_srid;
   std::optional<std::string> regex_path_filter;
+  std::optional<std::string> file_sort_order_by;
+  std::optional<std::string> file_sort_regex;
 
   CopyParams()
       : delimiter(',')

@@ -22,6 +22,7 @@
 #include "rapidjson/document.h"
 
 #include "Archive/PosixFileArchive.h"
+#include "Catalog/ForeignTable.h"
 #include "ImportExport/CopyParams.h"
 
 namespace foreign_storage {
@@ -371,7 +372,9 @@ class LocalMultiFileReader : public MultiFileReader {
  public:
   LocalMultiFileReader(const std::string& file_path,
                        const import_export::CopyParams& copy_params,
-                       const std::optional<std::string>& regex_pattern);
+                       const std::optional<std::string>& regex_path_filter,
+                       const std::optional<std::string>& file_sort_order_by,
+                       const std::optional<std::string>& file_sort_regex);
 
   LocalMultiFileReader(const std::string& file_path,
                        const import_export::CopyParams& copy_params,

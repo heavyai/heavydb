@@ -65,7 +65,7 @@
 #include "RenderGroupAnalyzer.h"
 #include "Shared/DateTimeParser.h"
 #include "Shared/SqlTypesLayout.h"
-#include "Shared/file_glob.h"
+#include "Shared/file_path_util.h"
 #include "Shared/import_helpers.h"
 #include "Shared/likely.h"
 #include "Shared/measure.h"
@@ -3633,9 +3633,12 @@ ImportStatus DataStreamSink::archivePlumber(
 
   std::vector<std::string> file_paths;
   try {
-    auto file_paths_set = shared::glob_recursive_and_filter_local_files(
-        file_path, copy_params.regex_path_filter);
-    file_paths = std::vector<std::string>(file_paths_set.begin(), file_paths_set.end());
+    shared::validate_sort_options(copy_params.file_sort_order_by,
+                                  copy_params.file_sort_regex);
+    file_paths = shared::local_glob_filter_sort_files(file_path,
+                                                      copy_params.regex_path_filter,
+                                                      copy_params.file_sort_order_by,
+                                                      copy_params.file_sort_regex);
   } catch (const shared::FileNotFoundException& e) {
     // After finding no matching files locally, file_path may still be an s3 url
     file_paths.push_back(file_path);
@@ -4014,7 +4017,9 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths,
                                            copy_params.s3_region,
                                            copy_params.s3_endpoint,
                                            copy_params.plain_text,
-                                           copy_params.regex_path_filter));
+                                           copy_params.regex_path_filter,
+                                           copy_params.file_sort_order_by,
+                                           copy_params.file_sort_regex));
         us3arch->init_for_read();
         total_file_size += us3arch->get_total_file_size();
         objkeys = us3arch->get_objkeys();
@@ -4146,7 +4151,9 @@ void DataStreamSink::import_compressed(
                                       copy_params.s3_region,
                                       copy_params.s3_endpoint,
                                       copy_params.plain_text,
-                                      copy_params.regex_path_filter));
+                                      copy_params.regex_path_filter,
+                                      copy_params.file_sort_order_by,
+                                      copy_params.file_sort_regex));
           us3arch->init_for_read();
           total_file_size += us3arch->get_total_file_size();
           // not land all files here but one by one in following iterations

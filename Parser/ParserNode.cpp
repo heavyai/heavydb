@@ -4964,6 +4964,24 @@ void CopyTableStmt::execute(
         const auto string_val = *str_literal->get_stringval();
         copy_params.regex_path_filter =
             string_val.empty() ? std::nullopt : std::optional<std::string>{string_val};
+      } else if (boost::iequals(*p->get_name(), "file_sort_order_by")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option file_sort_order_by must be a string.");
+        }
+        const auto string_val = *str_literal->get_stringval();
+        copy_params.file_sort_order_by =
+            string_val.empty() ? std::nullopt : std::optional<std::string>{string_val};
+      } else if (boost::iequals(*p->get_name(), "file_sort_regex")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option file_sort_regex must be a string.");
+        }
+        const auto string_val = *str_literal->get_stringval();
+        copy_params.file_sort_regex =
+            string_val.empty() ? std::nullopt : std::optional<std::string>{string_val};
       } else {
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }

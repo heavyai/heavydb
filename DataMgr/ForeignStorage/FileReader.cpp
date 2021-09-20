@@ -18,7 +18,7 @@
 
 #include "ForeignStorageException.h"
 #include "FsiJsonUtils.h"
-#include "Shared/file_glob.h"
+#include "Shared/file_path_util.h"
 #include "Shared/misc.h"
 
 namespace foreign_storage {
@@ -590,10 +590,12 @@ bool MultiFileReader::isEndOfLastFile() {
 LocalMultiFileReader::LocalMultiFileReader(
     const std::string& file_path,
     const import_export::CopyParams& copy_params,
-    const std::optional<std::string>& regex_pattern)
+    const std::optional<std::string>& regex_path_filter,
+    const std::optional<std::string>& file_sort_order_by,
+    const std::optional<std::string>& file_sort_regex)
     : MultiFileReader(file_path, copy_params) {
-  auto found_file_locations =
-      shared::glob_recursive_and_filter_local_files(file_path, regex_pattern);
+  auto found_file_locations = shared::local_glob_filter_sort_files(
+      file_path, regex_path_filter, file_sort_order_by, file_sort_regex);
   for (const auto& location : found_file_locations) {
     insertFile(location);
   }

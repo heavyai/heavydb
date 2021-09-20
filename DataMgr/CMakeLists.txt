@@ -45,6 +45,7 @@ set(datamgr_source_files
     ForeignStorage/ForeignDataWrapperFactory.cpp
     ForeignStorage/RegexParserDataWrapper.cpp
     ForeignStorage/RegexFileBufferParser.cpp
+    ForeignStorage/S3FilePathUtil.cpp
 )
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")

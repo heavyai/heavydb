@@ -27,7 +27,7 @@
 #include "Fragmenter/FragmentDefaultValues.h"
 #include "Geospatial/Types.h"
 #include "Parser/ReservedKeywords.h"
-#include "Shared/file_glob.h"
+#include "Shared/file_path_util.h"
 #include "Shared/misc.h"
 #include "Shared/sqltypes.h"
 
@@ -747,9 +747,8 @@ std::vector<std::string> get_expanded_file_paths(
     const DataTransferType data_transfer_type) {
   std::vector<std::string> file_paths;
   if (data_transfer_type == DataTransferType::IMPORT) {
-    std::set<std::string> file_paths_set;
-    file_paths_set = shared::glob_local_recursive_files(file_path);
-    file_paths = std::vector<std::string>(file_paths_set.begin(), file_paths_set.end());
+    file_paths = shared::local_glob_filter_sort_files(
+        file_path, std::nullopt, std::nullopt, std::nullopt);
   } else {
     std::string path;
     if (!boost::filesystem::exists(file_path)) {

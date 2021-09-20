@@ -25,7 +25,7 @@
 #include "FsiJsonUtils.h"
 #include "LazyParquetChunkLoader.h"
 #include "ParquetShared.h"
-#include "Shared/file_glob.h"
+#include "Shared/file_path_util.h"
 #include "Shared/misc.h"
 #include "Utils/DdlUtils.h"
 
@@ -217,19 +217,19 @@ void ParquetDataWrapper::addNewFile(const std::string& file_path) {
 void ParquetDataWrapper::fetchChunkMetadata() {
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
   CHECK(catalog);
-  std::set<std::string> new_file_paths;
+  std::vector<std::string> new_file_paths;
   auto processed_file_paths = getProcessedFilePaths();
   if (foreign_table_->isAppendMode() && !processed_file_paths.empty()) {
     auto all_file_paths = getAllFilePaths();
     for (const auto& file_path : processed_file_paths) {
-      if (all_file_paths.find(file_path) == all_file_paths.end()) {
+      if (!shared::contains(all_file_paths, file_path)) {
         throw_removed_file_error(file_path);
       }
     }
 
     for (const auto& file_path : all_file_paths) {
-      if (processed_file_paths.find(file_path) == processed_file_paths.end()) {
-        new_file_paths.emplace(file_path);
+      if (!shared::contains(processed_file_paths, file_path)) {
+        new_file_paths.emplace_back(file_path);
       }
     }
 
@@ -276,23 +276,25 @@ std::set<std::string> ParquetDataWrapper::getProcessedFilePaths() {
   return file_paths;
 }
 
-std::set<std::string> ParquetDataWrapper::getAllFilePaths() {
+std::vector<std::string> ParquetDataWrapper::getAllFilePaths() {
   auto timer = DEBUG_TIMER(__func__);
-  std::set<std::string> found_file_paths;
+  std::vector<std::string> found_file_paths;
   auto file_path = getFullFilePath(foreign_table_);
   const auto& regex_pattern = foreign_table_->getOption(REGEX_PATH_FILTER_KEY);
+  const auto& sort_by = foreign_table_->getOption(FILE_SORT_ORDER_BY_KEY);
+  const auto& sort_regex = foreign_table_->getOption(FILE_SORT_REGEX_KEY);
 
   auto& server_options = foreign_table_->foreign_server->options;
   if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
-    found_file_paths =
-        shared::glob_recursive_and_filter_local_files(file_path, regex_pattern);
+    found_file_paths = shared::local_glob_filter_sort_files(
+        file_path, regex_pattern, sort_by, sort_regex);
   } else {
     UNREACHABLE();
   }
   return found_file_paths;
 }
 
-void ParquetDataWrapper::metadataScanFiles(const std::set<std::string>& file_paths) {
+void ParquetDataWrapper::metadataScanFiles(const std::vector<std::string>& file_paths) {
   LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get());
   auto row_group_metadata = chunk_loader.metadataScan(file_paths, *schema_);
   auto column_interval =

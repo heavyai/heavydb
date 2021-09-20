@@ -44,6 +44,8 @@ void AbstractFileStorageDataWrapper::validateTableOptions(
     const ForeignTable* foreign_table) const {
   validateFilePathOptionKey(foreign_table);
   validateFilePath(foreign_table);
+  shared::validate_sort_options(foreign_table->getOption(FILE_SORT_ORDER_BY_KEY),
+                                foreign_table->getOption(FILE_SORT_REGEX_KEY));
 }
 
 const std::set<std::string_view>&
@@ -140,7 +142,9 @@ void AbstractFileStorageDataWrapper::validateFilePathOptionKey(
 
 const std::set<std::string_view> AbstractFileStorageDataWrapper::supported_table_options_{
     FILE_PATH_KEY,
-    REGEX_PATH_FILTER_KEY};
+    REGEX_PATH_FILTER_KEY,
+    FILE_SORT_ORDER_BY_KEY,
+    FILE_SORT_REGEX_KEY};
 
 const std::set<std::string_view>
     AbstractFileStorageDataWrapper::supported_server_options_{STORAGE_TYPE_KEY,

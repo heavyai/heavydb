@@ -43,7 +43,7 @@
 #include "ImportExport/Importer.h"
 #include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
-#include "Shared/file_glob.h"
+#include "Shared/file_path_util.h"
 #include "Shared/import_helpers.h"
 #include "Shared/misc.h"
 #include "Shared/scope.h"
@@ -73,10 +73,12 @@ bool g_regenerate_export_test_reference_files = false;
     return;                                              \
   }
 
-std::string options_to_string(const std::map<std::string, std::string>& options) {
+std::string options_to_string(const std::map<std::string, std::string>& options,
+                              bool seperate = true) {
   std::string options_str;
   for (auto const& [key, val] : options) {
-    options_str += "," + key + "='" + val + "'";
+    options_str += (seperate ? "," : "") + key + "='" + val + "'";
+    seperate = true;
   }
   return options_str;
 }
@@ -2367,6 +2369,141 @@ TEST_F(ImportServerPrivilegeTest, S3_Private_with_role_credentials) {
   EXPECT_NO_THROW(importPrivateBucket());
 }
 #endif  // HAVE_AWS_S3
+
+class SortedImportTest
+    : public ImportExportTestBase,
+      public testing::WithParamInterface<std::tuple<std::string, std::string>> {
+ public:
+#ifdef HAVE_AWS_S3
+  static void SetUpTestSuite() { omnisci_aws_sdk::init_sdk(); }
+
+  static void TearDownTestSuite() { omnisci_aws_sdk::shutdown_sdk(); }
+#endif
+
+  void SetUp() override {
+    ImportExportTestBase::SetUp();
+    locality_ = get<0>(GetParam());
+    file_type_ = get<1>(GetParam());
+    ASSERT_NO_THROW(sql("drop table if exists test_table_1;"));
+    ASSERT_NO_THROW(sql("create table test_table_1(C1 Int);"));
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(sql("drop table test_table_1;"));
+    ImportExportTestBase::TearDown();
+  }
+
+ protected:
+  string locality_;
+  string file_type_;
+
+  std::string getSourceDir() {
+    if (locality_ == "local") {
+      return "../../Tests/FsiDataFiles/sorted_dir/" + file_type_ + "/";
+    }
+    CHECK(locality_ == "s3");
+    return "s3://omnisci-fsi-test-public/FsiDataFiles/sorted_dir/" + file_type_ + "/";
+  }
+
+  std::string createCopyFromQuery(map<std::string, std::string> options = {},
+                                  std::string source_dir = "") {
+    source_dir = source_dir.empty() ? getSourceDir() : source_dir;
+    if (file_type_ == "csv") {
+      options.emplace("parquet", "false");
+    } else {
+      CHECK(file_type_ == "parquet");
+      options.emplace("parquet", "true");
+    }
+    options.emplace("HEADER", "true");
+    return "COPY test_table_1 FROM '" + source_dir + "' WITH (" +
+           options_to_string(options, false) + ");";
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(SortedImportTest,
+                         SortedImportTest,
+                         testing::Combine(testing::Values("local"),
+                                          testing::Values("csv", "parquet")));
+
+#ifdef HAVE_AWS_S3
+INSTANTIATE_TEST_SUITE_P(S3SortedImportTest,
+                         SortedImportTest,
+                         testing::Combine(testing::Values("s3"),
+                                          testing::Values("csv", "parquet")));
+#endif  // HAVE_AWS_S3
+
+TEST_P(SortedImportTest, SortedOnPathname) {
+  sql(createCopyFromQuery({{"FILE_SORT_ORDER_BY", "pathNAME"}}));
+  sqlAndCompareResult("SELECT * FROM test_table_1;", {{i(2)}, {i(1)}, {i(0)}, {i(9)}});
+}
+
+TEST_P(SortedImportTest, SortedOnDateModified) {
+  if (locality_ == "local") {
+    auto source_dir =
+        boost::filesystem::absolute("../../Tests/FsiDataFiles/sorted_dir/" + file_type_);
+    auto temp_dir = boost::filesystem::absolute("temp_sorted_on_date_modified");
+    boost::filesystem::remove_all(temp_dir);
+    boost::filesystem::copy(source_dir, temp_dir);
+
+    // some platforms won't copy directory contents on a directory copy
+    for (auto& file : boost::filesystem::recursive_directory_iterator(source_dir)) {
+      auto source_file = file.path();
+      auto dest_file = temp_dir / file.path().filename();
+      if (!boost::filesystem::exists(dest_file)) {
+        boost::filesystem::copy(file.path(), temp_dir / file.path().filename());
+      }
+    }
+    auto reference_time = boost::filesystem::last_write_time(temp_dir);
+    boost::filesystem::last_write_time(temp_dir / ("zzz." + file_type_),
+                                       reference_time - 2);
+    boost::filesystem::last_write_time(temp_dir / ("a_21_2021-01-01." + file_type_),
+                                       reference_time - 1);
+    boost::filesystem::last_write_time(temp_dir / ("c_00_2021-02-15." + file_type_),
+                                       reference_time);
+    boost::filesystem::last_write_time(temp_dir / ("b_15_2021-12-31." + file_type_),
+                                       reference_time + 1);
+
+    sql(createCopyFromQuery({{"FILE_SORT_ORDER_BY", "DATE_MODIFIED"}},
+                            temp_dir.string()));
+    sqlAndCompareResult("SELECT * FROM test_table_1;", {{i(9)}, {i(2)}, {i(0)}, {i(1)}});
+
+    boost::filesystem::remove_all(temp_dir);
+  } else {
+    sql(createCopyFromQuery({{"FILE_SORT_ORDER_BY", "DATE_MODIFIED"}}));
+    sqlAndCompareResult("SELECT * FROM test_table_1;", {{i(9)}, {i(2)}, {i(0)}, {i(1)}});
+  }
+}
+
+TEST_P(SortedImportTest, SortedOnRegex) {
+  sql(createCopyFromQuery(
+      {{"FILE_SORT_ORDER_BY", "REGEX"}, {"FILE_SORT_REGEX", ".*[a-z]_[0-9]([0-9])_.*"}}));
+  sqlAndCompareResult("SELECT * FROM test_table_1;", {{i(9)}, {i(0)}, {i(2)}, {i(1)}});
+}
+
+TEST_P(SortedImportTest, SortedOnRegexDate) {
+  sql(createCopyFromQuery({{"FILE_SORT_ORDER_BY", "REGEX_DATE"},
+                           {"FILE_SORT_REGEX", ".*[a-z]_[0-9][0-9]_(.*)\\..*"}}));
+  sqlAndCompareResult("SELECT * FROM test_table_1;", {{i(9)}, {i(2)}, {i(0)}, {i(1)}});
+}
+
+TEST_P(SortedImportTest, SortedOnRegexNumberAndMultiCaptureGroup) {
+  sql(createCopyFromQuery({{"FILE_SORT_ORDER_BY", "REGEX_NUMBER"},
+                           {"FILE_SORT_REGEX", ".*[a-z]_(.*)_(.*)-(.*)-(.*)\\..*"}}));
+  sqlAndCompareResult("SELECT * FROM test_table_1;", {{i(9)}, {i(0)}, {i(1)}, {i(2)}});
+}
+
+TEST_P(SortedImportTest, SortedOnNonRegexWithSortRegex) {
+  queryAndAssertException(
+      createCopyFromQuery({{"FILE_SORT_REGEX", "xxx"}}),
+      "Option \"FILE_SORT_REGEX\" must not be set for selected option "
+      "\"FILE_SORT_ORDER_BY='PATHNAME'\".");
+}
+
+TEST_P(SortedImportTest, SortedOnRegexWithoutSortRegex) {
+  queryAndAssertException(createCopyFromQuery({{"FILE_SORT_ORDER_BY", "REGEX"}}),
+                          "Option \"FILE_SORT_REGEX\" must be set for selected option "
+                          "\"FILE_SORT_ORDER_BY='REGEX'\".");
+}
 
 class ExportTest : public ImportTestGDAL {
  protected:
