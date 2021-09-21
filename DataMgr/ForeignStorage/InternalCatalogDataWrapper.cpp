@@ -361,7 +361,7 @@ void populate_import_buffers_for_catalog_role_assignments(
 std::map<int32_t, std::vector<TableDescriptor>> get_all_tables() {
   std::map<int32_t, std::vector<TableDescriptor>> tables_by_database;
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
-  for (const auto catalog : sys_catalog.getCatalogsForAllDbs()) {
+  for (const auto& catalog : sys_catalog.getCatalogsForAllDbs()) {
     if (catalog->name() != INFORMATION_SCHEMA_DB) {
       for (const auto& td : catalog->getAllTableMetadataCopy()) {
         tables_by_database[catalog->getDatabaseId()].emplace_back(td);
@@ -374,7 +374,7 @@ std::map<int32_t, std::vector<TableDescriptor>> get_all_tables() {
 std::map<int32_t, std::vector<DashboardDescriptor>> get_all_dashboards() {
   std::map<int32_t, std::vector<DashboardDescriptor>> dashboards_by_database;
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
-  for (const auto catalog : sys_catalog.getCatalogsForAllDbs()) {
+  for (const auto& catalog : sys_catalog.getCatalogsForAllDbs()) {
     for (const auto& dashboard : catalog->getAllDashboardsMetadataCopy()) {
       dashboards_by_database[catalog->getDatabaseId()].emplace_back(dashboard);
     }

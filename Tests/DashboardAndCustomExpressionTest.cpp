@@ -1050,7 +1050,7 @@ TEST_F(CustomExpressionTest, CreateCustomExpressionNonSuperUser) {
   TSessionId user_session;
   login("test_user", "test_pass", "omnisci", user_session);
   executeLambdaAndAssertException(
-      [this, &user_session]() {
+      [&user_session]() {
         const auto db_handler = getDbHandlerAndSessionId().first;
         db_handler->create_custom_expression(user_session,
                                              createCustomExpressionThriftObject());
@@ -1084,7 +1084,7 @@ TEST_F(CustomExpressionTest,
 
 TEST_F(CustomExpressionTest, CreateCustomExpressionInvalidTableName) {
   executeLambdaAndAssertException(
-      [this]() {
+      []() {
         auto non_existent_table_name = "non_existent_table";
         ASSERT_EQ(getCatalog().getMetadataForTable(non_existent_table_name, false),
                   nullptr);
@@ -1098,7 +1098,7 @@ TEST_F(CustomExpressionTest, CreateCustomExpressionInvalidTableName) {
 
 TEST_F(CustomExpressionTest, CreateCustomExpressionEmptyDataSourceName) {
   executeLambdaAndAssertException(
-      [this]() {
+      []() {
         auto custom_expr = createCustomExpressionThriftObject();
         custom_expr.data_source_name = "";
         const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
@@ -1184,7 +1184,7 @@ TEST_F(CustomExpressionTest, UpdateCustomExpressionNonExistentExpression) {
   createTestCustomExpressions();
   auto non_existent_id = getLastCustomExpressionId() + 1;
   executeLambdaAndAssertException(
-      [this, non_existent_id]() {
+      [non_existent_id]() {
         ASSERT_EQ(getCatalog().getCustomExpression(non_existent_id), nullptr);
         const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
         db_handler->update_custom_expression(

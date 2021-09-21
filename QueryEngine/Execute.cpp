@@ -1463,7 +1463,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
   do {
     SharedKernelContext shared_context(query_infos);
     ColumnFetcher column_fetcher(this, column_cache);
-    ScopeGuard scope_guard = [&column_fetcher, &device_type] {
+    ScopeGuard scope_guard = [&column_fetcher] {
       column_fetcher.freeLinearizedBuf();
       column_fetcher.freeTemporaryCpuLinearizedIdxBuf();
     };

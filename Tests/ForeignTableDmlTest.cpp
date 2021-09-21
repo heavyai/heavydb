@@ -157,17 +157,6 @@ bool compare_json_files(const std::string& generated,
   return true;
 }
 
-size_t regex_match_count(const std::string& line, const std::string& regex) {
-  size_t count{0};
-  std::smatch match;
-  auto search_str = line;
-  while (std::regex_search(search_str, match, std::regex{regex})) {
-    count++;
-    search_str = match.suffix().str();
-  }
-  return count;
-}
-
 std::string repeat_regex(size_t repeat_count, const std::string& regex) {
   std::string repeated_regex;
   for (size_t i = 0; i < repeat_count; i++) {

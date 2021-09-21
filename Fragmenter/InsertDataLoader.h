@@ -34,6 +34,8 @@ struct InsertDataLoader {
                             int tableId) = 0;
     virtual void rollback(const Catalog_Namespace::SessionInfo& parent_session_info,
                           int tableId) = 0;
+
+    virtual ~DistributedConnector() = default;
   };
 
   InsertDataLoader(DistributedConnector& connector)
