@@ -711,16 +711,22 @@ class ImportAndSelectTest
     g_enable_parquet_import_fsi = false;
   }
 
+#ifdef HAVE_AWS_S3
   // Have necessary credentials to access private buckets
   bool insufficientPrivateCredentials() const {
     return !is_valid_aws_key(get_aws_keys_from_env());
   }
+#endif
 
   bool testShouldBeSkipped() {
     std::string file_type, data_source_type;
     std::tie(file_type, data_source_type) = GetParam();
-    if (data_source_type == "s3_private" && insufficientPrivateCredentials()) {
+    if (data_source_type == "s3_private") {
+#ifdef HAVE_AWS_S3
+      return insufficientPrivateCredentials();
+#else
       return true;
+#endif
     }
     return false;
   }
@@ -970,12 +976,17 @@ auto print_import_and_select_test_param = [](const auto& param_info) {
 };
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    FileAndDataSourceTypes,
-    ImportAndSelectTest,
-    ::testing::Combine(::testing::Values("csv"),
-                       ::testing::Values("local", "s3_private", "s3_public")),
-    print_import_and_select_test_param);
+INSTANTIATE_TEST_SUITE_P(FileAndDataSourceTypes,
+                         ImportAndSelectTest,
+                         ::testing::Combine(::testing::Values("csv"),
+                                            ::testing::Values("local"
+#ifdef HAVE_AWS_S3
+                                                              ,
+                                                              "s3_private",
+                                                              "s3_public"
+#endif
+                                                              )),
+                         print_import_and_select_test_param);
 
 const char* create_table_timestamps = R"(
     CREATE TABLE import_test_timestamps(
@@ -1212,7 +1223,7 @@ class ImportTest : public ImportExportTestBase {
 
   bool importTestParquetWithNull(const int64_t cnt) {
     sqlAndCompareResult("select count(*) from trips where rate_code_id is null;",
-                        {{cnt}});
+                        {{ cnt }});
     return true;
   }
 
@@ -1226,7 +1237,7 @@ class ImportTest : public ImportExportTestBase {
         "select count(*) from trips where abs(dropoff_longitude-st_x(pt_dropoff))<0.01 "
         "and "
         "abs(dropoff_latitude-st_y(pt_dropoff))<0.01;";
-    sqlAndCompareResult(query_str, {{cnt}});
+    sqlAndCompareResult(query_str, {{ cnt }});
     return true;
   }
 

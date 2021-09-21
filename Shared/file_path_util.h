@@ -106,6 +106,7 @@ std::vector<arrow::fs::FileInfo> arrow_fs_filter_sort_files(
     const std::optional<std::string>& filter_regex,
     const std::optional<std::string>& sort_by,
     const std::optional<std::string>& sort_regex);
+#endif  // HAVE_AWS_S3
 
 const std::function<bool(const std::string&, const std::string&)>
     common_regex_date_comp_ = [](const std::string& lhs, const std::string& rhs) -> bool {
@@ -140,7 +141,6 @@ const std::function<bool(const std::string&, const std::string&)>
   }
   return lhs_i < rhs_i;
 };
-#endif  // HAVE_AWS_S3
 
 template <class T>
 class FileOrderBase {

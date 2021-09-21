@@ -46,8 +46,11 @@ set(datamgr_source_files
     ForeignStorage/InternalCatalogDataWrapper.cpp
     ForeignStorage/RegexParserDataWrapper.cpp
     ForeignStorage/RegexFileBufferParser.cpp
-    ForeignStorage/S3FilePathUtil.cpp
 )
+
+if(ENABLE_AWS_S3)
+  list(APPEND datamgr_source_files ForeignStorage/S3FilePathUtil.cpp)
+endif()
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 if(ENABLE_AWS_S3)

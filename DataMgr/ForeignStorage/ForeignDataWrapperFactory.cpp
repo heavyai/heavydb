@@ -28,23 +28,6 @@
 #include "Catalog/os/UserMapping.h"
 
 namespace {
-std::string get_s3_bucket_from_uri(const std::string& uri) {
-  const std::string bucket_prefix = "://";
-  auto base_pos = uri.find(bucket_prefix);
-  CHECK(base_pos != std::string::npos && base_pos < uri.length());
-  auto start_pos = base_pos + bucket_prefix.length();
-  auto end_pos = uri.find("/", start_pos);
-  return uri.substr(start_pos, end_pos - start_pos);
-}
-
-std::string get_s3_key_from_uri(const std::string& uri) {
-  const std::string bucket_prefix = "://";
-  auto base_pos = uri.find(bucket_prefix);
-  CHECK(base_pos != std::string::npos && base_pos < uri.length());
-  auto bucket_start_pos = base_pos + bucket_prefix.length();
-  auto bucket_end_pos = uri.find("/", bucket_start_pos);
-  return uri.substr(bucket_end_pos + 1);
-}
 
 bool is_s3_uri(const std::string& file_path) {
   const std::string s3_prefix = "s3://";
@@ -75,46 +58,7 @@ ForeignDataWrapperFactory::createUserMappingProxyIfApplicable(
     const std::string& file_path,
     const import_export::CopyParams& copy_params,
     const ForeignServer* server) {
-  if (!is_s3_uri(file_path)) {
-    return {};
-  }
-
-  if (copy_params.s3_access_key.empty() && copy_params.s3_secret_key.empty() &&
-      copy_params.s3_session_token.empty()) {
-    return {};
-  }
-
-  rapidjson::Document d;
-  d.SetObject();
-
-  if (!copy_params.s3_access_key.empty()) {
-    json_utils::add_value_to_object(d,
-                                    copy_params.s3_access_key,
-                                    AbstractFileStorageDataWrapper::S3_ACCESS_KEY,
-                                    d.GetAllocator());
-  }
-  if (!copy_params.s3_secret_key.empty()) {
-    json_utils::add_value_to_object(d,
-                                    copy_params.s3_secret_key,
-                                    AbstractFileStorageDataWrapper::S3_SECRET_KEY,
-                                    d.GetAllocator());
-  }
-  if (!copy_params.s3_session_token.empty()) {
-    json_utils::add_value_to_object(d,
-                                    copy_params.s3_session_token,
-                                    AbstractFileStorageDataWrapper::S3_SESSION_TOKEN,
-                                    d.GetAllocator());
-  }
-
-  auto options_str = json_utils::write_to_string(d);
-  auto user_mapping = std::make_unique<UserMapping>();
-  user_mapping->options = PkiEncryptor::publicKeyEncrypt(options_str);
-  user_mapping->foreign_server_id = -1;
-  user_mapping->user_id = OMNISCI_ROOT_USER_ID;
-  user_mapping->type = UserMappingType::PUBLIC;
-  user_mapping->validate(server);
-
-  return user_mapping;
+  return {};
 }
 
 std::unique_ptr<ForeignServer> ForeignDataWrapperFactory::createForeignServerProxy(
