@@ -635,6 +635,9 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
   // If so, we return an arrow result set that only
   // contains the schema (no record batch will be serialized).
   if (results_->isEmpty()) {
+    for (auto& field : schema->fields()) {
+      result_columns.push_back(arrow::MakeArrayOfNull(field->type(), 0).ValueOrDie());
+    }
     return ARROW_RECORDBATCH_MAKE(schema, 0, result_columns);
   }
 
