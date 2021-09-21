@@ -96,8 +96,10 @@ class CursorImpl : public Cursor {
  * DBEngine internal implementation
  */
 class DBEngineImpl : public DBEngine {
+  static constexpr const char* log_option = "omnisci_dbe";
+
  public:
-  DBEngineImpl() : is_temp_db_(false) {}
+  DBEngineImpl() : is_temp_db_(false), prog_config_opts_(log_option) {}
 
   ~DBEngineImpl() { reset(); }
 
@@ -116,7 +118,6 @@ class DBEngineImpl : public DBEngine {
     }
 
     // Generate command line to initialize CommandLineOptions for DBHandler
-    const char* log_option = "omnisci_dbe";
     std::vector<const char*> cstrings;
     cstrings.push_back(log_option);
     for (auto& param : parameters) {
@@ -125,12 +126,11 @@ class DBEngineImpl : public DBEngine {
     int argc = cstrings.size();
     const char** argv = cstrings.data();
 
-    CommandLineOptions prog_config_opts(log_option);
-    if (prog_config_opts.parse_command_line(argc, argv, false)) {
+    if (prog_config_opts_.parse_command_line(argc, argv, false)) {
       throw std::runtime_error("DBE paramerameters parsing failed");
     }
 
-    auto base_path = prog_config_opts.base_path;
+    auto base_path = prog_config_opts_.base_path;
 
     // Check path to the database
     bool is_new_db = base_path.empty() || !catalogExists(base_path);
@@ -140,43 +140,43 @@ class DBEngineImpl : public DBEngine {
         throw std::runtime_error("Database directory could not be created");
       }
     }
-    prog_config_opts.base_path = base_path;
-    prog_config_opts.init_logging();
+    prog_config_opts_.base_path = base_path;
+    prog_config_opts_.init_logging();
 
-    prog_config_opts.system_parameters.omnisci_server_port = -1;
-    prog_config_opts.system_parameters.calcite_keepalive = true;
+    prog_config_opts_.system_parameters.omnisci_server_port = -1;
+    prog_config_opts_.system_parameters.calcite_keepalive = true;
     try {
       db_handler_ =
-          std::make_shared<DBHandler>(prog_config_opts.db_leaves,
-                                      prog_config_opts.string_leaves,
-                                      prog_config_opts.base_path,
-                                      prog_config_opts.allow_multifrag,
-                                      prog_config_opts.jit_debug,
-                                      prog_config_opts.intel_jit_profile,
-                                      prog_config_opts.read_only,
-                                      prog_config_opts.allow_loop_joins,
-                                      prog_config_opts.enable_rendering,
-                                      prog_config_opts.renderer_use_vulkan_driver,
-                                      prog_config_opts.enable_auto_clear_render_mem,
-                                      prog_config_opts.render_oom_retry_threshold,
-                                      prog_config_opts.render_mem_bytes,
-                                      prog_config_opts.max_concurrent_render_sessions,
-                                      prog_config_opts.reserved_gpu_mem,
-                                      prog_config_opts.render_compositor_use_last_gpu,
-                                      prog_config_opts.num_reader_threads,
-                                      prog_config_opts.authMetadata,
-                                      prog_config_opts.system_parameters,
-                                      prog_config_opts.enable_legacy_syntax,
-                                      prog_config_opts.idle_session_duration,
-                                      prog_config_opts.max_session_duration,
-                                      prog_config_opts.enable_runtime_udf,
-                                      prog_config_opts.udf_file_name,
-                                      prog_config_opts.udf_compiler_path,
-                                      prog_config_opts.udf_compiler_options,
+          std::make_shared<DBHandler>(prog_config_opts_.db_leaves,
+                                      prog_config_opts_.string_leaves,
+                                      prog_config_opts_.base_path,
+                                      prog_config_opts_.allow_multifrag,
+                                      prog_config_opts_.jit_debug,
+                                      prog_config_opts_.intel_jit_profile,
+                                      prog_config_opts_.read_only,
+                                      prog_config_opts_.allow_loop_joins,
+                                      prog_config_opts_.enable_rendering,
+                                      prog_config_opts_.renderer_use_vulkan_driver,
+                                      prog_config_opts_.enable_auto_clear_render_mem,
+                                      prog_config_opts_.render_oom_retry_threshold,
+                                      prog_config_opts_.render_mem_bytes,
+                                      prog_config_opts_.max_concurrent_render_sessions,
+                                      prog_config_opts_.reserved_gpu_mem,
+                                      prog_config_opts_.render_compositor_use_last_gpu,
+                                      prog_config_opts_.num_reader_threads,
+                                      prog_config_opts_.authMetadata,
+                                      prog_config_opts_.system_parameters,
+                                      prog_config_opts_.enable_legacy_syntax,
+                                      prog_config_opts_.idle_session_duration,
+                                      prog_config_opts_.max_session_duration,
+                                      prog_config_opts_.enable_runtime_udf,
+                                      prog_config_opts_.udf_file_name,
+                                      prog_config_opts_.udf_compiler_path,
+                                      prog_config_opts_.udf_compiler_options,
 #ifdef ENABLE_GEOS
-                                      prog_config_opts.libgeos_so_filename,
+                                      prog_config_opts_.libgeos_so_filename,
 #endif
-                                      prog_config_opts.disk_cache_config,
+                                      prog_config_opts_.disk_cache_config,
                                       is_new_db);
     } catch (const std::exception& e) {
       LOG(FATAL) << "Failed to initialize database handler: " << e.what();
@@ -425,6 +425,7 @@ class DBEngineImpl : public DBEngine {
   std::shared_ptr<DBHandler> db_handler_;
   bool is_temp_db_;
   std::string udf_filename_;
+  CommandLineOptions prog_config_opts_;
 
   std::vector<std::string> system_folders_ = {"mapd_catalogs",
                                               "mapd_data",
