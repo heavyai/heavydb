@@ -421,6 +421,8 @@ class DataRecycler {
     }
   }
 
+  virtual ~DataRecycler() = default;
+
   virtual CACHED_ITEM_TYPE getItemFromCache(
       QueryPlanHash key,
       CacheItemType item_type,
