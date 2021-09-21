@@ -73,17 +73,10 @@ class CursorImpl : public Cursor {
     if (record_batch_) {
       return record_batch_;
     }
-    auto col_count = getColCount();
-    if (col_count > 0) {
-      auto row_count = getRowCount();
-      if (row_count > 0) {
-        auto converter =
-            std::make_unique<ArrowResultSetConverter>(result_set_, col_names_, -1);
-        record_batch_ = converter->convertToArrow();
-        return record_batch_;
-      }
-    }
-    return nullptr;
+    auto converter =
+        std::make_unique<ArrowResultSetConverter>(result_set_, col_names_, -1);
+    record_batch_ = converter->convertToArrow();
+    return record_batch_;
   }
 
  private:
