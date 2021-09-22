@@ -1275,25 +1275,36 @@ void QuerySpec::analyze(const Catalog_Namespace::Catalog& catalog,
 
 namespace {
 
+// clean known escape'd chars without having to do a full json parse
+std::string unescape(std::string s) {
+  boost::replace_all(s, "\\\\t", "\t");
+  boost::replace_all(s, "\\t", "\t");
+  boost::replace_all(s, "\\\\n", "\n");
+  boost::replace_all(s, "\\n", "\n");
+  return s;
+}
+
 void parse_options(const rapidjson::Value& payload,
                    std::list<std::unique_ptr<NameValueAssign>>& nameValueList,
                    bool stringToNull = false,
                    bool stringToInteger = false) {
   if (payload.HasMember("options") && payload["options"].IsObject()) {
     for (const auto& option : payload["options"].GetObject()) {
-      auto option_name = std::make_unique<std::string>(json_str(option.name));
+      auto option_name = std::make_unique<std::string>(option.name.GetString());
       std::unique_ptr<Literal> literal_value;
       if (option.value.IsString()) {
-        std::string literal_string = json_str(option.value);
-        if (stringToNull && option.value == "") {
+        std::string str = option.value.GetString();
+        if (stringToNull && str == "") {
           literal_value = std::make_unique<NullLiteral>();
-        } else if (stringToInteger &&
-                   std::all_of(literal_string.begin(), literal_string.end(), ::isdigit)) {
-          int iVal = std::stoi(literal_string);
+        } else if (stringToInteger && std::all_of(str.begin(), str.end(), ::isdigit)) {
+          int iVal = std::stoi(str);
           literal_value = std::make_unique<IntLiteral>(iVal);
         } else {
-          auto literal_string = std::make_unique<std::string>(json_str(option.value));
-          literal_value = std::make_unique<StringLiteral>(literal_string.release());
+          // Rapidjson will deliberately provide escape'd strings when accessed
+          //   ... but the literal should have a copy of the raw unescaped string
+          auto unique_literal_string = std::make_unique<std::string>(unescape(str));
+          literal_value =
+              std::make_unique<StringLiteral>(unique_literal_string.release());
         }
       } else if (option.value.IsInt() || option.value.IsInt64()) {
         literal_value = std::make_unique<IntLiteral>(json_i64(option.value));

@@ -1406,6 +1406,24 @@ TEST_F(ImportTest, One_csv_file) {
   EXPECT_TRUE(importTestLocal("trip_data_dir/csv/trip_data_9.csv", 100, 1.0));
 }
 
+TEST_F(ImportTest, tsv_file) {
+  // Test the delimeter option
+  EXPECT_TRUE(importTestCommon(
+      string("COPY trips FROM ") +
+          "'../../Tests/Import/datafiles/trip_data_dir/csv/trip_data.tsv'" +
+          " WITH (header='true', delimiter = '\t');",
+      100,
+      1.0));
+
+  // Test: Via omnisql the delimiter can get flattened/escaped
+  EXPECT_TRUE(importTestCommon(
+      string("COPY trips FROM ") +
+          "'../../Tests/Import/datafiles/trip_data_dir/csv/trip_data.tsv'" +
+          " WITH (header='true', delimiter = '\\t');",
+      200,
+      1.0));
+}
+
 TEST_F(ImportTest, array_including_quoted_fields) {
   EXPECT_TRUE(importTestArrayIncludingQuotedFieldsLocal(
       "array_including_quoted_fields.csv", 2, "array_delimiter=','"));
