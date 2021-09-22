@@ -24,11 +24,13 @@
 #include "QueryEngine/ResultSetBufferAccessors.h"
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryEngine/TypePunning.h"
+#include "Shared/Intervals.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/funcannotations.h"
+#include "Shared/threading.h"
 
 #ifdef HAVE_TBB
-#include <tbb/parallel_for.h>
+//#include <tbb/parallel_for.h>
 #include <tbb/parallel_sort.h>
 #else
 #include <thrust/sort.h>
@@ -540,37 +542,29 @@ void WindowFunctionContext::compute() {
   }
 
   const size_t partition_count{partitionCount()};
-#ifdef HAVE_TBB
-  const bool should_parallelize{g_enable_parallel_window_partition_compute &&
-                                elem_count_ >=
-                                    g_parallel_window_partition_compute_threshold};
-#else
-  const bool should_parallelize{false};
-#endif
 
-  if (should_parallelize) {
-#ifdef HAVE_TBB
-    auto timer = DEBUG_TIMER("Window Function Parallel Partition Compute");
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, partition_count),
-                      [&](const tbb::blocked_range<size_t>& r) {
-                        const size_t r_end_idx = r.end();
-                        for (size_t partition_idx = r.begin(); partition_idx != r_end_idx;
-                             ++partition_idx) {
-                          computePartition(
-                              partition_idx,
-                              intermediate_output_buffer + offsets()[partition_idx]);
-                        }
-                      });
-#else
-    UNREACHABLE();  // We only allow parallel_sort to be true if HAVE_TBB is defined
-#endif  // HAVE_TBB
-  } else {
-    auto timer = DEBUG_TIMER("Window Function Non-Parallelized Partition Compute");
-    for (size_t partition_idx = 0; partition_idx != partition_count; ++partition_idx) {
+  const auto compute_partitions = [&](const size_t start, const size_t end) {
+    for (size_t partition_idx = start; partition_idx != end; ++partition_idx) {
       computePartition(partition_idx,
                        intermediate_output_buffer + offsets()[partition_idx]);
     }
+  };
+
+  const bool should_parallelize{g_enable_parallel_window_partition_compute &&
+                                elem_count_ >=
+                                    g_parallel_window_partition_compute_threshold};
+  if (should_parallelize) {
+    auto timer = DEBUG_TIMER("Window Function Partition Compute");
+    threading::task_group thread_pool;
+    for (auto interval : makeIntervals<size_t>(0, partition_count, cpu_threads())) {
+      thread_pool.run([=] { compute_partitions(interval.begin, interval.end); });
+    }
+    thread_pool.wait();
+  } else {
+    auto timer = DEBUG_TIMER("Window Function Non-Parallelized Partition Compute");
+    compute_partitions(0, partition_count);
   }
+
   if (is_window_function_aggregate) {
     // If window function is aggregate we were able to write to the final output buffer
     // directly in computePartition and we are done.
@@ -579,26 +573,23 @@ void WindowFunctionContext::compute() {
 
   auto output_i64 = reinterpret_cast<int64_t*>(output_);
 
+  const auto payload_copy = [&](const size_t start, const size_t end) {
+    for (size_t i = start; i < end; ++i) {
+      output_i64[payload()[i]] = intermediate_output_buffer[i];
+    }
+  };
+
   if (should_parallelize) {
-#ifdef HAVE_TBB
     auto timer = DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Parallelized");
-    const size_t max_elems_per_thread = g_parallel_window_partition_compute_threshold * 4;
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, elem_count_, max_elems_per_thread),
-                      [&](const tbb::blocked_range<size_t>& r) {
-                        const size_t r_end_idx = r.end();
-                        for (size_t i = r.begin(); i != r_end_idx; ++i) {
-                          output_i64[payload()[i]] = intermediate_output_buffer[i];
-                        }
-                      });
-#else
-    UNREACHABLE();  // should_parallelize can only be true if HAVE_TBB defined
-#endif  // HAVE_TBB
+    threading::task_group thread_pool;
+    for (auto interval : makeIntervals<size_t>(0, elem_count_, cpu_threads())) {
+      thread_pool.run([=] { payload_copy(interval.begin, interval.end); });
+    }
+    thread_pool.wait();
   } else {
     auto timer =
         DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Non-Parallelized");
-    for (size_t i = 0; i < elem_count_; ++i) {
-      output_i64[payload()[i]] = intermediate_output_buffer[i];
-    }
+    payload_copy(0, elem_count_);
   }
 }
 
