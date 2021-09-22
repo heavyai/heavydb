@@ -1944,9 +1944,11 @@ TEST(Select, FilterAndGroupBy) {
     c("SELECT CASE WHEN x > 8 THEN 100000000 ELSE 42 END AS c, COUNT(*) FROM test GROUP "
       "BY c;",
       dt);
-    c("SELECT COUNT(*) FROM test WHERE CAST((CAST(x AS FLOAT) - 0) * 0.2 AS INT) = 1;",
+    // SQLite floors instead of rounds when casting float to int.
+    c("SELECT COUNT(*) FROM test WHERE CAST((CAST(x AS FLOAT) - 1) * 0.2 AS INT) = 1;",
       dt);
-    c("SELECT CAST(CAST(d AS FLOAT) AS INTEGER) AS key, COUNT(*) FROM test GROUP BY key;",
+    c("SELECT CAST(CAST(d/2 AS FLOAT) AS INTEGER) AS key, COUNT(*) FROM test GROUP BY "
+      "key;",
       dt);
     c("SELECT x * 2 AS x2, COUNT(DISTINCT y) AS n FROM test GROUP BY x2 ORDER BY n DESC;",
       dt);
@@ -6676,6 +6678,23 @@ TEST(Select, CastRound) {
         run_simple_agg("SELECT CAST('2262-04-11 23:47:16.854775807' AS TIMESTAMP(9)) = "
                        "CAST(9223372036854775807 AS TIMESTAMP(9));",
                        dt)));
+  }
+}
+
+TEST(Select, CastRoundNullable) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_EQ(
+        20,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test WHERE ROUND(f+0.2) = CAST(f+0.2 AS INT);", dt)));
+    EXPECT_EQ(
+        10,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test WHERE ROUND(fn-0.2) = CAST(fn-0.2 AS INT);", dt)));
+    EXPECT_EQ(10,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE CAST(fn AS INT) IS NULL;", dt)));
   }
 }
 

@@ -253,6 +253,15 @@ DEF_UMINUS_NULLABLE(double, double)
   DEF_CAST_NULLABLE(type1, type2)             \
   DEF_CAST_NULLABLE(type2, type1)
 
+#define DEF_ROUND_NULLABLE(from_type, to_type)                                     \
+  extern "C" ALWAYS_INLINE to_type cast_##from_type##_to_##to_type##_nullable(     \
+      const from_type operand,                                                     \
+      const from_type from_null_val,                                               \
+      const to_type to_null_val) {                                                 \
+    return operand == from_null_val ? to_null_val                                  \
+                                    : operand < 0 ? operand - 0.5 : operand + 0.5; \
+  }
+
 DEF_CAST_NULLABLE_BIDIR(int8_t, int16_t)
 DEF_CAST_NULLABLE_BIDIR(int8_t, int32_t)
 DEF_CAST_NULLABLE_BIDIR(int8_t, int64_t)
@@ -260,19 +269,31 @@ DEF_CAST_NULLABLE_BIDIR(int16_t, int32_t)
 DEF_CAST_NULLABLE_BIDIR(int16_t, int64_t)
 DEF_CAST_NULLABLE_BIDIR(int32_t, int64_t)
 DEF_CAST_NULLABLE_BIDIR(float, double)
-DEF_CAST_NULLABLE_BIDIR(float, int8_t)
-DEF_CAST_NULLABLE_BIDIR(float, int16_t)
-DEF_CAST_NULLABLE_BIDIR(float, int32_t)
-DEF_CAST_NULLABLE_BIDIR(float, int64_t)
-DEF_CAST_NULLABLE_BIDIR(double, int8_t)
-DEF_CAST_NULLABLE_BIDIR(double, int16_t)
-DEF_CAST_NULLABLE_BIDIR(double, int32_t)
-DEF_CAST_NULLABLE_BIDIR(double, int64_t)
+
+DEF_CAST_NULLABLE(int8_t, float)
+DEF_CAST_NULLABLE(int16_t, float)
+DEF_CAST_NULLABLE(int32_t, float)
+DEF_CAST_NULLABLE(int64_t, float)
+DEF_CAST_NULLABLE(int8_t, double)
+DEF_CAST_NULLABLE(int16_t, double)
+DEF_CAST_NULLABLE(int32_t, double)
+DEF_CAST_NULLABLE(int64_t, double)
+
+DEF_ROUND_NULLABLE(float, int8_t)
+DEF_ROUND_NULLABLE(float, int16_t)
+DEF_ROUND_NULLABLE(float, int32_t)
+DEF_ROUND_NULLABLE(float, int64_t)
+DEF_ROUND_NULLABLE(double, int8_t)
+DEF_ROUND_NULLABLE(double, int16_t)
+DEF_ROUND_NULLABLE(double, int32_t)
+DEF_ROUND_NULLABLE(double, int64_t)
+
 DEF_CAST_NULLABLE(uint8_t, int32_t)
 DEF_CAST_NULLABLE(uint16_t, int32_t)
 DEF_CAST_SCALED_NULLABLE(int64_t, float)
 DEF_CAST_SCALED_NULLABLE(int64_t, double)
 
+#undef DEF_ROUND_NULLABLE
 #undef DEF_CAST_NULLABLE_BIDIR
 #undef DEF_CAST_SCALED_NULLABLE
 #undef DEF_CAST_NULLABLE

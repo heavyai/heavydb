@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -448,6 +448,16 @@ llvm::Value* CodeGenerator::codegenCastFromFp(llvm::Value* operand_lv,
       return cgen_state_->ir_builder_.CreateFPTrunc(
           operand_lv, llvm::Type::getFloatTy(cgen_state_->context_));
     } else if (ti.is_integer()) {
+      // Round by adding/subtracting 0.5 before fptosi.
+      auto* fp_type = operand_lv->getType()->isFloatTy()
+                          ? llvm::Type::getFloatTy(cgen_state_->context_)
+                          : llvm::Type::getDoubleTy(cgen_state_->context_);
+      auto* zero = llvm::ConstantFP::get(fp_type, 0.0);
+      auto* mhalf = llvm::ConstantFP::get(fp_type, -0.5);
+      auto* phalf = llvm::ConstantFP::get(fp_type, 0.5);
+      auto* is_negative = cgen_state_->ir_builder_.CreateFCmpOLT(operand_lv, zero);
+      auto* offset = cgen_state_->ir_builder_.CreateSelect(is_negative, mhalf, phalf);
+      operand_lv = cgen_state_->ir_builder_.CreateFAdd(operand_lv, offset);
       return cgen_state_->ir_builder_.CreateFPToSI(
           operand_lv, get_int_type(get_bit_width(ti), cgen_state_->context_));
     } else {
