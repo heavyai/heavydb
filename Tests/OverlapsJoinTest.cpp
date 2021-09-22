@@ -690,6 +690,7 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
                                            executor->getTemporaryTables()),
             device_count,
             EMPTY_QUERY_PLAN,
+            {},
             {})
       , expected_values_per_step_(expected_values) {}
 

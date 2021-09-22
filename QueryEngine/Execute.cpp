@@ -1359,6 +1359,7 @@ RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in
           ra_exe_unit_in.query_hint,
           ra_exe_unit_in.query_plan_dag,
           ra_exe_unit_in.hash_table_build_plan_dag,
+          ra_exe_unit_in.table_id_to_node_map,
           ra_exe_unit_in.use_bump_allocator,
           ra_exe_unit_in.union_all,
           ra_exe_unit_in.query_state};
@@ -3402,7 +3403,8 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const HashType preferred_hash_type,
     ColumnCacheMap& column_cache,
     const HashTableBuildDagMap& hashtable_build_dag_map,
-    const RegisteredQueryHint& query_hint) {
+    const RegisteredQueryHint& query_hint,
+    const TableIdToNodeMap& table_id_to_node_map) {
   if (!g_enable_overlaps_hashjoin && qual_bin_oper->is_overlaps_oper()) {
     return {nullptr, "Overlaps hash join disabled, attempting to fall back to loop join"};
   }
@@ -3419,7 +3421,8 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                      column_cache,
                                      this,
                                      hashtable_build_dag_map,
-                                     query_hint);
+                                     query_hint,
+                                     table_id_to_node_map);
     return {tbl, ""};
   } catch (const HashJoinFail& e) {
     return {nullptr, e.what()};

@@ -79,7 +79,8 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
     ColumnCacheMap& column_cache,
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,
-    const RegisteredQueryHint& query_hint) {
+    const RegisteredQueryHint& query_hint,
+    const TableIdToNodeMap& table_id_to_node_map) {
   // the hash table is built over the LHS of the range oper. we then use the lhs
   // of the bin oper + the rhs of the range oper for the probe
   auto range_expr_col_var =
@@ -140,7 +141,9 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
                                            inner_outer_pairs,
                                            device_count,
                                            hashtable_cache_key_string.first,
-                                           hashtable_cache_key_string.second);
+                                           hashtable_cache_key_string.second,
+                                           hashtable_build_dag_map,
+                                           table_id_to_node_map);
   HashJoin::checkHashJoinReplicationConstraint(
       HashJoin::getInnerTableId(inner_outer_pairs), shard_count, executor);
   try {

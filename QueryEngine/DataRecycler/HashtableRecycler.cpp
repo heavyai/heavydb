@@ -24,7 +24,8 @@ bool HashtableRecycler::hasItemInCache(
     DeviceIdentifier device_identifier,
     std::lock_guard<std::mutex>& lock,
     std::optional<HashtableCacheMetaInfo> meta_info) const {
-  if (key == EMPTY_HASHED_PLAN_DAG_KEY) {
+  if (!g_enable_data_recycler || !g_use_hashtable_cache ||
+      key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return false;
   }
   auto hashtable_cache = getCachedItemContainer(item_type, device_identifier);
@@ -52,7 +53,8 @@ std::shared_ptr<HashTable> HashtableRecycler::getItemFromCache(
     CacheItemType item_type,
     DeviceIdentifier device_identifier,
     std::optional<HashtableCacheMetaInfo> meta_info) const {
-  if (key == EMPTY_HASHED_PLAN_DAG_KEY) {
+  if (!g_enable_data_recycler || !g_use_hashtable_cache ||
+      key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return nullptr;
   }
   std::lock_guard<std::mutex> lock(getCacheLock());
@@ -75,7 +77,8 @@ void HashtableRecycler::putItemToCache(QueryPlanHash key,
                                        size_t item_size,
                                        size_t compute_time,
                                        std::optional<HashtableCacheMetaInfo> meta_info) {
-  if (key == EMPTY_HASHED_PLAN_DAG_KEY) {
+  if (!g_enable_data_recycler || !g_use_hashtable_cache ||
+      key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return;
   }
   std::lock_guard<std::mutex> lock(getCacheLock());
@@ -118,7 +121,8 @@ void HashtableRecycler::removeItemFromCache(
     DeviceIdentifier device_identifier,
     std::lock_guard<std::mutex>& lock,
     std::optional<HashtableCacheMetaInfo> meta_info) {
-  if (key == EMPTY_HASHED_PLAN_DAG_KEY) {
+  if (!g_enable_data_recycler || !g_use_hashtable_cache ||
+      key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return;
   }
   auto& cache_metrics = getMetricTracker(item_type);
@@ -244,6 +248,48 @@ std::string HashtableRecycler::getJoinColumnInfoString(
   oss << "|";
   oss << executor->getQueryPlanDagCache().translateColVarsToInfoString(outer_cols, false);
   return oss.str();
+}
+
+bool HashtableRecycler::isSafeToCacheHashtable(
+    const TableIdToNodeMap& table_id_to_node_map,
+    bool need_dict_translation,
+    const int table_id) {
+  // if hashtable is built from subquery's resultset we need to check
+  // 1) whether resulset rows can have inconsistency, e.g., rows can randomly be
+  // permutated per execution and 2) whether it needs dictionary translation for hashtable
+  // building to recycle the hashtable safely
+  auto getNodeByTableId =
+      [&table_id_to_node_map](const int table_id) -> const RelAlgNode* {
+    auto it = table_id_to_node_map.find(table_id);
+    if (it != table_id_to_node_map.end()) {
+      return it->second;
+    }
+    return nullptr;
+  };
+  bool found_sort_node = false;
+  bool found_project_node = false;
+  if (table_id < 0) {
+    auto origin_table_id = table_id * -1;
+    auto inner_node = getNodeByTableId(origin_table_id);
+    if (!inner_node) {
+      // we have to keep the node info of temporary resultset
+      // so in this case we are not safe to recycle the hashtable
+      return false;
+    }
+    // it is not safe to recycle the hashtable when
+    // this resultset may have resultset ordering inconsistency and/or
+    // need dictionary translation for hashtable building
+    auto sort_node = dynamic_cast<const RelSort*>(inner_node);
+    if (sort_node) {
+      found_sort_node = true;
+    } else {
+      auto project_node = dynamic_cast<const RelProject*>(inner_node);
+      if (project_node) {
+        found_project_node = true;
+      }
+    }
+  }
+  return !(found_sort_node || (found_project_node && need_dict_translation));
 }
 
 std::pair<QueryPlan, HashtableCacheMetaInfo> HashtableRecycler::getHashtableKeyString(

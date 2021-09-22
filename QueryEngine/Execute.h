@@ -890,7 +890,8 @@ class Executor {
       const HashType preferred_hash_type,
       ColumnCacheMap& column_cache,
       const HashTableBuildDagMap& hashtable_build_dag_map,
-      const RegisteredQueryHint& query_hint);
+      const RegisteredQueryHint& query_hint,
+      const TableIdToNodeMap& table_id_to_node_map);
   void nukeOldState(const bool allow_lazy_fetch,
                     const std::vector<InputTableInfo>& query_infos,
                     const PlanState::DeletedColumnsMap& deleted_cols_map,
@@ -1101,6 +1102,7 @@ class Executor {
   const Catalog_Namespace::Catalog* catalog_;
   Data_Namespace::DataMgr* data_mgr_;
   const TemporaryTables* temporary_tables_;
+  TableIdToNodeMap table_id_to_node_map_;
 
   int64_t kernel_queue_time_ms_ = 0;
   int64_t compilation_queue_time_ms_ = 0;

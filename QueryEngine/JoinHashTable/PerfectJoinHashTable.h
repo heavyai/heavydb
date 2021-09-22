@@ -59,7 +59,8 @@ class PerfectJoinHashTable : public HashJoin {
       const int device_count,
       ColumnCacheMap& column_cache,
       Executor* executor,
-      const HashTableBuildDagMap& hashtable_build_dag_map);
+      const HashTableBuildDagMap& hashtable_build_dag_map,
+      const TableIdToNodeMap& table_id_to_node_map);
 
   std::string toString(const ExecutorDeviceType device_type,
                        const int device_id = 0,
@@ -108,7 +109,14 @@ class PerfectJoinHashTable : public HashJoin {
 
   static auto getCacheInvalidator() -> std::function<void()> {
     CHECK(hash_table_cache_);
-    return hash_table_cache_->getCacheInvalidator();
+    CHECK(hash_table_layout_cache_);
+    return []() -> void {
+      auto layout_cache_invalidator = hash_table_layout_cache_->getCacheInvalidator();
+      layout_cache_invalidator();
+
+      auto main_cache_invalidator = hash_table_cache_->getCacheInvalidator();
+      main_cache_invalidator();
+    };
   }
 
   virtual ~PerfectJoinHashTable() {}
@@ -150,7 +158,8 @@ class PerfectJoinHashTable : public HashJoin {
                        Executor* executor,
                        const int device_count,
                        QueryPlanHash hashtable_cache_key,
-                       HashtableCacheMetaInfo hashtable_cache_meta_info)
+                       HashtableCacheMetaInfo hashtable_cache_meta_info,
+                       const TableIdToNodeMap& table_id_to_node_map)
       : qual_bin_oper_(qual_bin_oper)
       , join_type_(join_type)
       , col_var_(std::dynamic_pointer_cast<Analyzer::ColumnVar>(col_var->deep_copy()))
@@ -161,6 +170,8 @@ class PerfectJoinHashTable : public HashJoin {
       , executor_(executor)
       , column_cache_(column_cache)
       , device_count_(device_count)
+      , needs_dict_translation_(false)
+      , table_id_to_node_map_(table_id_to_node_map)
       , hashtable_cache_key_(hashtable_cache_key)
       , hashtable_cache_meta_info_(hashtable_cache_meta_info) {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
@@ -236,6 +247,8 @@ class PerfectJoinHashTable : public HashJoin {
   Executor* executor_;
   ColumnCacheMap& column_cache_;
   const int device_count_;
+  mutable bool needs_dict_translation_;
+  const TableIdToNodeMap table_id_to_node_map_;
   QueryPlanHash hashtable_cache_key_;
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
 

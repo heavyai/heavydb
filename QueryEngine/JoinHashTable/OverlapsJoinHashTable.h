@@ -32,7 +32,8 @@ class OverlapsJoinHashTable : public HashJoin {
                         const std::vector<InnerOuter>& inner_outer_pairs,
                         const int device_count,
                         QueryPlan query_plan_dag,
-                        HashtableCacheMetaInfo hashtable_cache_meta_info)
+                        HashtableCacheMetaInfo hashtable_cache_meta_info,
+                        const TableIdToNodeMap& table_id_to_node_map)
       : condition_(condition)
       , join_type_(join_type)
       , query_infos_(query_infos)
@@ -42,6 +43,7 @@ class OverlapsJoinHashTable : public HashJoin {
       , inner_outer_pairs_(inner_outer_pairs)
       , device_count_(device_count)
       , query_plan_dag_(query_plan_dag)
+      , table_id_to_node_map_(table_id_to_node_map)
       , hashtable_cache_key_(EMPTY_HASHED_PLAN_DAG_KEY)
       , hashtable_cache_meta_info_(hashtable_cache_meta_info) {
     CHECK_GT(device_count_, 0);
@@ -61,7 +63,8 @@ class OverlapsJoinHashTable : public HashJoin {
       ColumnCacheMap& column_cache,
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,
-      const RegisteredQueryHint& query_hint);
+      const RegisteredQueryHint& query_hint,
+      const TableIdToNodeMap& table_id_to_node_map);
 
   static auto getCacheInvalidator() -> std::function<void()> {
     return []() -> void {
@@ -382,6 +385,7 @@ class OverlapsJoinHashTable : public HashJoin {
 
   RegisteredQueryHint query_hint_;
   QueryPlan query_plan_dag_;
+  const TableIdToNodeMap table_id_to_node_map_;
   QueryPlanHash hashtable_cache_key_;
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
 };

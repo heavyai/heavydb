@@ -21,7 +21,8 @@ std::optional<AutoTunerMetaInfo> OverlapsTuningParamRecycler::getItemFromCache(
     CacheItemType item_type,
     DeviceIdentifier device_identifier,
     std::optional<EMPTY_META_INFO> meta_info) const {
-  if (key == EMPTY_HASHED_PLAN_DAG_KEY) {
+  if (!g_enable_data_recycler || !g_use_hashtable_cache ||
+      key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return std::nullopt;
   }
   CHECK_EQ(item_type, CacheItemType::OVERLAPS_AUTO_TUNER_PARAM);
@@ -45,7 +46,8 @@ void OverlapsTuningParamRecycler::putItemToCache(
     size_t item_size,
     size_t compute_time,
     std::optional<EMPTY_META_INFO> meta_info) {
-  if (key == EMPTY_HASHED_PLAN_DAG_KEY) {
+  if (!g_enable_data_recycler || !g_use_hashtable_cache ||
+      key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return;
   }
   CHECK_EQ(item_type, CacheItemType::OVERLAPS_AUTO_TUNER_PARAM);
@@ -68,7 +70,8 @@ bool OverlapsTuningParamRecycler::hasItemInCache(
     DeviceIdentifier device_identifier,
     std::lock_guard<std::mutex>& lock,
     std::optional<EMPTY_META_INFO> meta_info) const {
-  if (key == EMPTY_HASHED_PLAN_DAG_KEY) {
+  if (!g_enable_data_recycler || !g_use_hashtable_cache ||
+      key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return false;
   }
   CHECK_EQ(item_type, CacheItemType::OVERLAPS_AUTO_TUNER_PARAM);
