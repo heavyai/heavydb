@@ -976,7 +976,7 @@ std::shared_ptr<CacheItemMetric> QueryRunner::getCacheItemMetric(
     QueryPlanHash cache_key,
     CacheItemType hash_table_type,
     DeviceIdentifier device_identifier) {
-  HashtableRecycler* hash_table_cache;
+  HashtableRecycler* hash_table_cache{nullptr};
   switch (hash_table_type) {
     case CacheItemType::PERFECT_HT: {
       hash_table_cache = PerfectJoinHashTable::getHashTableCache();

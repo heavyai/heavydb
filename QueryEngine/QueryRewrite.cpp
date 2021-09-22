@@ -83,6 +83,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteOverlapsJoin(
           ra_exe_unit_in.query_hint,
           ra_exe_unit_in.query_plan_dag,
           ra_exe_unit_in.hash_table_build_plan_dag,
+          ra_exe_unit_in.table_id_to_node_map,
           ra_exe_unit_in.use_bump_allocator};
 }
 
@@ -177,7 +178,8 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByInImpl(
           ra_exe_unit_in.scan_limit,
           ra_exe_unit_in.query_hint,
           ra_exe_unit_in.query_plan_dag,
-          ra_exe_unit_in.hash_table_build_plan_dag};
+          ra_exe_unit_in.hash_table_build_plan_dag,
+          ra_exe_unit_in.table_id_to_node_map};
 }
 
 std::shared_ptr<Analyzer::CaseExpr> QueryRewriter::generateCaseForDomainValues(
@@ -402,6 +404,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
                                          ra_exe_unit_in.query_hint,
                                          ra_exe_unit_in.query_plan_dag,
                                          ra_exe_unit_in.hash_table_build_plan_dag,
+                                         ra_exe_unit_in.table_id_to_node_map,
                                          ra_exe_unit_in.use_bump_allocator,
                                          ra_exe_unit_in.union_all,
                                          ra_exe_unit_in.query_state};
@@ -505,6 +508,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarDelete(
                                          ra_exe_unit_in.query_hint,
                                          ra_exe_unit_in.query_plan_dag,
                                          ra_exe_unit_in.hash_table_build_plan_dag,
+                                         ra_exe_unit_in.table_id_to_node_map,
                                          ra_exe_unit_in.use_bump_allocator,
                                          ra_exe_unit_in.union_all,
                                          ra_exe_unit_in.query_state};
@@ -611,6 +615,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteAggregateOnGroupByColumn(
                                          ra_exe_unit_in.query_hint,
                                          ra_exe_unit_in.query_plan_dag,
                                          ra_exe_unit_in.hash_table_build_plan_dag,
+                                         ra_exe_unit_in.table_id_to_node_map,
                                          ra_exe_unit_in.use_bump_allocator,
                                          ra_exe_unit_in.union_all,
                                          ra_exe_unit_in.query_state};

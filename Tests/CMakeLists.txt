@@ -13,7 +13,6 @@ add_executable(RunQueryLoop RunQueryLoop.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 add_executable(StringTransformTest StringTransformTest.cpp)
 add_executable(StringFunctionsTest StringFunctionsTest.cpp)
-add_executable(ProfileTest ProfileTest.cpp)
 add_executable(ForeignServerDdlTest ForeignServerDdlTest.cpp)
 add_executable(ShowCommandsDdlTest ShowCommandsDdlTest.cpp)
 add_executable(AlterSystemTest AlterSystemTest.cpp)
@@ -39,25 +38,6 @@ if(ENABLE_CUDA)
   if (SUPPRESS_NULL_LOGGER_DEPRECATION_WARNINGS)
     list(APPEND MAPD_DEFINITIONS -DSUPPRESS_NULL_LOGGER_DEPRECATION_WARNINGS)
   endif()
-  add_custom_command(
-    DEPENDS ProfileUtils.cu ProfileTest.h
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/libProfileUtils.so
-    COMMAND nvcc
-    ARGS
-        ${MAPD_HOST_COMPILER_FLAG}
-        -Xcompiler -fPIC
-        -O3
-        -D_FORCE_INLINES
-        ${MAPD_DEFINITIONS}
-        ${CUDA_COMPILATION_ARCH}
-        -std=c++14
-        -shared
-        ${CMAKE_CURRENT_SOURCE_DIR}/ProfileUtils.cu
-        -o ${CMAKE_CURRENT_BINARY_DIR}/libProfileUtils.so
-    )
-  add_custom_target(ProfileUtils DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libProfileUtils.so)
-  add_dependencies(ProfileTest ProfileUtils)
-  set(PROF_LIBRARIES ${CMAKE_CURRENT_BINARY_DIR}/libProfileUtils.so)
 endif()
 
 add_executable(DumpRestoreTest DumpRestoreTest.cpp)
@@ -121,7 +101,7 @@ endif()
 add_executable(TableUpdateDeleteBenchmark TableUpdateDeleteBenchmark.cpp)
 add_executable(GeospatialBenchmark GeospatialBenchmark.cpp)
 
-set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${PROFILER_LIBS})
+set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
 
 # Replace Licensing library with TestLicensing library
@@ -131,7 +111,6 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(REMOVE_ITEM THRIFT_HANDLER_TEST_LIBRARIES Licensing)
 endif()
 
-target_link_libraries(ProfileTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ResultSetTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ColumnarResultsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(FromTableReorderingTest ${EXECUTE_TEST_LIBS})
@@ -167,9 +146,9 @@ endif()
 target_link_libraries(OmniSQLUtilitiesTest gtest ${Boost_LIBRARIES})
 
 if(ENABLE_FOLLY) 
-  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary Logger Utils ${CMAKE_DL_LIBS} ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${PROFILER_LIBS})
+  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary Logger Utils ${CMAKE_DL_LIBS} ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 else()
-  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary Logger Utils ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${PROFILER_LIBS})
+  target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary Logger Utils ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 endif()
 
 target_link_libraries(GeoTypesTest gtest Logger Shared Geospatial ${CMAKE_DL_LIBS})
@@ -445,7 +424,7 @@ add_custom_target(all_tests
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                 ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS ${TEST_PROGRAMS} ProfileTest UtilTest RunQueryLoop StringDictionaryTest StringTransformTest StoragePerfTest
+    DEPENDS ${TEST_PROGRAMS} UtilTest RunQueryLoop StringDictionaryTest StringTransformTest StoragePerfTest
     USES_TERMINAL)
 
 add_custom_target(storage_perf_tests

@@ -43,7 +43,8 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     ColumnCacheMap& column_cache,
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,
-    const RegisteredQueryHint& query_hint) {
+    const RegisteredQueryHint& query_hint,
+    const TableIdToNodeMap& table_id_to_node_map) {
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
 
   std::vector<InnerOuter> inner_outer_pairs;
@@ -59,7 +60,8 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
                                            column_cache,
                                            executor,
                                            hashtable_build_dag_map,
-                                           query_hint);
+                                           query_hint,
+                                           table_id_to_node_map);
   } else {
     inner_outer_pairs = HashJoin::normalizeColumnPairs(
         condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
@@ -121,7 +123,8 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
                                               inner_outer_pairs,
                                               device_count,
                                               hashtable_cache_key_string.first,
-                                              hashtable_cache_key_string.second);
+                                              hashtable_cache_key_string.second,
+                                              table_id_to_node_map);
   if (query_hint.isAnyQueryHintDelivered()) {
     join_hash_table->registerQueryHint(query_hint);
   }

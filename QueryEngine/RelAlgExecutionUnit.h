@@ -28,6 +28,7 @@
 
 #include "Descriptors/InputDescriptors.h"
 #include "QueryHint.h"
+#include "RelAlgDagBuilder.h"
 #include "Shared/sqldefs.h"
 #include "Shared/toString.h"
 #include "TableFunctions/TableFunctionOutputBufferSizeType.h"
@@ -71,6 +72,14 @@ using HashTableBuildDag = std::pair<JoinColumnsInfo, QueryPlan>;
 // join col becomes inner since rel alg related metadata is required to extract query
 // plan, and the actual decision happens at the time of building hashtable
 using HashTableBuildDagMap = std::unordered_map<JoinColumnsInfo, HashTableBuildDag>;
+// A map btw. join column's input table id to its corresponding rel node
+// for each hash join operation, we can determine whether its input source
+// has inconsistency in its source data, e.g., row ordering
+// by seeing a type of input node, e.g., RelSort
+// note that disabling DAG extraction when we find sort node from join's input
+// is too restrict when a query becomes complex (and so have multiple joins)
+// since it eliminates a change of data recycling
+using TableIdToNodeMap = std::unordered_map<int, const RelAlgNode*>;
 
 enum JoinColumnSide {
   kInner,
@@ -120,6 +129,7 @@ struct RelAlgExecutionUnit {
   RegisteredQueryHint query_hint;
   QueryPlan query_plan_dag{EMPTY_QUERY_PLAN};
   HashTableBuildDagMap hash_table_build_plan_dag{};
+  TableIdToNodeMap table_id_to_node_map{};
   bool use_bump_allocator{false};
   // empty if not a UNION, true if UNION ALL, false if regular UNION
   const std::optional<bool> union_all;

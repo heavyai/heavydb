@@ -245,7 +245,8 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
     ColumnCacheMap& column_cache,
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,
-    const RegisteredQueryHint& query_hint) {
+    const RegisteredQueryHint& query_hint,
+    const TableIdToNodeMap& table_id_to_node_map) {
   auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<HashJoin> join_hash_table;
   CHECK_GT(device_count, 0);
@@ -263,7 +264,8 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                          column_cache,
                                                          executor,
                                                          hashtable_build_dag_map,
-                                                         query_hint);
+                                                         query_hint,
+                                                         table_id_to_node_map);
   } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
                  qual_bin_oper->get_left_operand())) {
     VLOG(1) << "Trying to build keyed hash table:";
@@ -275,7 +277,8 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                          device_count,
                                                          column_cache,
                                                          executor,
-                                                         hashtable_build_dag_map);
+                                                         hashtable_build_dag_map,
+                                                         table_id_to_node_map);
   } else {
     try {
       VLOG(1) << "Trying to build perfect hash table:";
@@ -287,7 +290,8 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                           device_count,
                                                           column_cache,
                                                           executor,
-                                                          hashtable_build_dag_map);
+                                                          hashtable_build_dag_map,
+                                                          table_id_to_node_map);
     } catch (TooManyHashEntries&) {
       const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
       CHECK_EQ(join_quals.size(), size_t(1));
@@ -302,7 +306,8 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                            device_count,
                                                            column_cache,
                                                            executor,
-                                                           hashtable_build_dag_map);
+                                                           hashtable_build_dag_map,
+                                                           table_id_to_node_map);
     }
   }
   CHECK(join_hash_table);
@@ -505,7 +510,8 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
                                           column_cache,
                                           executor,
                                           {},
-                                          query_hint);
+                                          query_hint,
+                                          {});
   return hash_table;
 }
 
@@ -532,7 +538,8 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
                                           column_cache,
                                           executor,
                                           {},
-                                          query_hint);
+                                          query_hint,
+                                          {});
   return hash_table;
 }
 
@@ -564,7 +571,8 @@ std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance
                                                         column_cache,
                                                         executor,
                                                         {},
-                                                        query_hint);
+                                                        query_hint,
+                                                        {});
       if (candidate_hash_table) {
         hash_table = candidate_hash_table;
       }

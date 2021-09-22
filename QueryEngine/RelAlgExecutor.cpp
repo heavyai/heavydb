@@ -2080,7 +2080,8 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                               HashType::OneToMany,
                                               column_cache_map,
                                               ra_exe_unit.hash_table_build_plan_dag,
-                                              ra_exe_unit.query_hint);
+                                              ra_exe_unit.query_hint,
+                                              ra_exe_unit.table_id_to_node_map);
     if (!join_table_or_err.fail_reason.empty()) {
       throw std::runtime_error(join_table_or_err.fail_reason);
     }
@@ -2858,6 +2859,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
                               source_exe_unit.query_hint,
                               source_exe_unit.query_plan_dag,
                               source_exe_unit.hash_table_build_plan_dag,
+                              source_exe_unit.table_id_to_node_map,
                               source_exe_unit.use_bump_allocator,
                               source_exe_unit.union_all,
                               source_exe_unit.query_state},
@@ -3757,6 +3759,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                         query_hint,
                                         EMPTY_QUERY_PLAN,
                                         {},
+                                        {},
                                         false,
                                         std::nullopt,
                                         query_state_};
@@ -3779,6 +3782,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
   if (is_extracted_dag_valid(dag_info)) {
     rewritten_exe_unit.query_plan_dag = dag_info.extracted_dag;
     rewritten_exe_unit.hash_table_build_plan_dag = dag_info.hash_table_plan_dag;
+    rewritten_exe_unit.table_id_to_node_map = dag_info.table_id_to_node_map;
   }
   return {rewritten_exe_unit,
           compound,
@@ -4048,6 +4052,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
                               query_hint,
                               dag_info.extracted_dag,
                               dag_info.hash_table_plan_dag,
+                              dag_info.table_id_to_node_map,
                               false,
                               std::nullopt,
                               query_state_},
@@ -4129,6 +4134,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
                                         query_hint,
                                         EMPTY_QUERY_PLAN,
                                         {},
+                                        {},
                                         false,
                                         std::nullopt,
                                         query_state_};
@@ -4151,6 +4157,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
   if (is_extracted_dag_valid(dag_info)) {
     rewritten_exe_unit.query_plan_dag = dag_info.extracted_dag;
     rewritten_exe_unit.hash_table_build_plan_dag = dag_info.hash_table_plan_dag;
+    rewritten_exe_unit.table_id_to_node_map = dag_info.table_id_to_node_map;
   }
   return {rewritten_exe_unit,
           project,
@@ -4233,6 +4240,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
                                         max_num_tuples,
                                         RegisteredQueryHint::defaults(),
                                         EMPTY_QUERY_PLAN,
+                                        {},
                                         {},
                                         false,
                                         logical_union->isAll(),
@@ -4538,7 +4546,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            0,
            query_hint,
            dag_info.extracted_dag,
-           dag_info.hash_table_plan_dag},
+           dag_info.hash_table_plan_dag,
+           dag_info.table_id_to_node_map},
           filter,
           g_default_max_groups_buffer_entry_guess,
           nullptr};

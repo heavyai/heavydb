@@ -40,6 +40,8 @@ struct ExtractedPlanDag {
   // a map btw. join qual to an access path (as a query plan DAG) to corresponding
   // hashtable
   const HashTableBuildDagMap hash_table_plan_dag;
+  // a map btw. inner join col's input table id to corresponding rel node ptr
+  const TableIdToNodeMap table_id_to_node_map;
   // show whether this query plan is not available to extract a DAG
   bool contain_not_supported_rel_node;
 };
@@ -62,7 +64,8 @@ class QueryPlanDagExtractor {
       , catalog_(catalog)
       , contain_not_supported_rel_node_(false)
       , left_deep_tree_infos_(left_deep_tree_infos)
-      , temporary_tables_(temporary_tables) {
+      , temporary_tables_(temporary_tables)
+      , executor_(executor) {
     translated_join_info_ = std::make_shared<TranslatedJoinInfo>();
   }
 
@@ -103,7 +106,22 @@ class QueryPlanDagExtractor {
       const Analyzer::BinOper* condition,
       const Catalog_Namespace::Catalog& cat);
 
-  bool isEmptyQueryPlanDag(const std::string& dag) { return dag.compare("N/A") == 0; };
+  bool isEmptyQueryPlanDag(const std::string& dag) { return dag.compare("N/A") == 0; }
+
+  TableIdToNodeMap& getTableIdToNodeMap() { return table_id_to_node_map_; }
+
+  void addTableIdToNodeLink(const int table_id, const RelAlgNode* node) {
+    auto it = table_id_to_node_map_.find(table_id);
+    if (it == table_id_to_node_map_.end()) {
+      table_id_to_node_map_.emplace(table_id, node);
+    }
+  }
+
+  void clearInternaStatus() {
+    contain_not_supported_rel_node_ = true;
+    extracted_dag_.clear();
+    table_id_to_node_map_.clear();
+  }
 
  private:
   void visit(const RelAlgNode*, const RelAlgNode*);
@@ -127,7 +145,9 @@ class QueryPlanDagExtractor {
   bool contain_not_supported_rel_node_;
   std::unordered_map<unsigned, JoinQualsPerNestingLevel>& left_deep_tree_infos_;
   const TemporaryTables& temporary_tables_;
+  Executor* executor_;
   std::shared_ptr<TranslatedJoinInfo> translated_join_info_;
   HashTableBuildDagMap hash_table_query_plan_dag_;
+  TableIdToNodeMap table_id_to_node_map_;
   std::vector<size_t> extracted_dag_;
 };

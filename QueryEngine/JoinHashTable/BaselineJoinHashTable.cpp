@@ -47,7 +47,8 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     const int device_count,
     ColumnCacheMap& column_cache,
     Executor* executor,
-    const HashTableBuildDagMap& hashtable_build_dag_map) {
+    const HashTableBuildDagMap& hashtable_build_dag_map,
+    const TableIdToNodeMap& table_id_to_node_map) {
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
 
   if (VLOGGING(1)) {
@@ -73,7 +74,8 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
                                 inner_outer_pairs,
                                 device_count,
                                 hashtable_cache_key.first,
-                                hashtable_cache_key.second));
+                                hashtable_cache_key.second,
+                                table_id_to_node_map));
   try {
     join_hash_table->reify(preferred_hash_type);
   } catch (const TableMustBeReplicated& e) {
@@ -119,7 +121,8 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     const std::vector<InnerOuter>& inner_outer_pairs,
     const int device_count,
     QueryPlanHash hashtable_cache_key,
-    HashtableCacheMetaInfo hashtable_cache_meta_info)
+    HashtableCacheMetaInfo hashtable_cache_meta_info,
+    const TableIdToNodeMap& table_id_to_node_map)
     : condition_(condition)
     , join_type_(join_type)
     , query_infos_(query_infos)
@@ -129,6 +132,8 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     , inner_outer_pairs_(inner_outer_pairs)
     , catalog_(executor->getCatalog())
     , device_count_(device_count)
+    , needs_dict_translation_(false)
+    , table_id_to_node_map_(table_id_to_node_map)
     , hashtable_cache_key_(hashtable_cache_key)
     , hashtable_cache_meta_info_(hashtable_cache_meta_info) {
   CHECK_GT(device_count_, 0);
@@ -314,17 +319,6 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
     hashtable_cache_key_ = getAlternativeCacheKey(cache_key);
     VLOG(2) << "Use alternative hashtable cache key due to unavailable query plan dag "
                "extraction";
-  }
-  if (hashtable_cache_key_ != EMPTY_HASHED_PLAN_DAG_KEY) {
-    auto cached_hashtable_layout_type = hash_table_layout_cache_->getItemFromCache(
-        hashtable_cache_key_,
-        CacheItemType::HT_HASHING_SCHEME,
-        DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-        {});
-    if (cached_hashtable_layout_type) {
-      hashtable_layout_type = *cached_hashtable_layout_type;
-      VLOG(1) << "Recycle hashtable layout: " << getHashTypeString(hashtable_layout_type);
-    }
   }
 
   size_t emitted_keys_count = 0;
@@ -571,6 +565,7 @@ Data_Namespace::MemoryLevel BaselineJoinHashTable::getEffectiveMemoryLevel(
   for (const auto& inner_outer_pair : inner_outer_pairs) {
     if (needs_dictionary_translation(
             inner_outer_pair.first, inner_outer_pair.second, executor_)) {
+      needs_dict_translation_ = true;
       return Data_Namespace::CPU_LEVEL;
     }
   }
@@ -591,6 +586,11 @@ int BaselineJoinHashTable::initHashTableForDevice(
   int err = 0;
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
   ts1 = std::chrono::steady_clock::now();
+  auto allow_hashtable_recycling =
+      HashtableRecycler::isSafeToCacheHashtable(table_id_to_node_map_,
+                                                needs_dict_translation_,
+                                                getInnerTableId(inner_outer_pairs_));
+  HashType hashtable_layout = layout;
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
     std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
 
@@ -603,11 +603,22 @@ int BaselineJoinHashTable::initHashTableForDevice(
       CHECK_EQ(device_id, size_t(0));
     }
     CHECK_LT(static_cast<size_t>(device_id), hash_tables_for_device_.size());
+    std::shared_ptr<HashTable> hash_table{nullptr};
+    if (allow_hashtable_recycling) {
+      auto cached_hashtable_layout_type = hash_table_layout_cache_->getItemFromCache(
+          hashtable_cache_key_,
+          CacheItemType::HT_HASHING_SCHEME,
+          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+          {});
+      if (cached_hashtable_layout_type) {
+        hashtable_layout = *cached_hashtable_layout_type;
+        VLOG(1) << "Recycle hashtable layout: " << getHashTypeString(hashtable_layout);
+      }
+      hash_table = initHashTableOnCpuFromCache(hashtable_cache_key_,
+                                               CacheItemType::BASELINE_HT,
+                                               DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    }
 
-    auto hash_table =
-        initHashTableOnCpuFromCache(hashtable_cache_key_,
-                                    CacheItemType::BASELINE_HT,
-                                    DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
     if (hash_table) {
       hash_tables_for_device_[device_id] = hash_table;
     } else {
@@ -627,7 +638,7 @@ int BaselineJoinHashTable::initHashTableForDevice(
                                        join_bucket_info,
                                        entry_count,
                                        join_columns.front().num_elems,
-                                       layout,
+                                       hashtable_layout,
                                        join_type_,
                                        getKeyComponentWidth(),
                                        getKeyComponentCount());
@@ -635,12 +646,13 @@ int BaselineJoinHashTable::initHashTableForDevice(
       ts2 = std::chrono::steady_clock::now();
       auto hashtable_build_time =
           std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
-      if (!err) {
+      if (!err && allow_hashtable_recycling) {
         putHashTableOnCpuToCache(hashtable_cache_key_,
                                  CacheItemType::BASELINE_HT,
                                  hash_tables_for_device_[device_id],
                                  DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
                                  hashtable_build_time);
+
         hash_table_layout_cache_->putItemToCache(hashtable_cache_key_,
                                                  builder.getHashLayout(),
                                                  CacheItemType::HT_HASHING_SCHEME,
@@ -703,7 +715,7 @@ int BaselineJoinHashTable::initHashTableForDevice(
 
     err = builder.initHashTableOnGpu(&key_handler,
                                      join_columns,
-                                     layout,
+                                     hashtable_layout,
                                      join_type_,
                                      getKeyComponentWidth(),
                                      getKeyComponentCount(),
@@ -713,7 +725,7 @@ int BaselineJoinHashTable::initHashTableForDevice(
                                      executor_);
     CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
     hash_tables_for_device_[device_id] = builder.getHashTable();
-    if (!err) {
+    if (!err && allow_hashtable_recycling) {
       hash_table_layout_cache_->putItemToCache(hashtable_cache_key_,
                                                builder.getHashLayout(),
                                                CacheItemType::HT_HASHING_SCHEME,
@@ -962,11 +974,15 @@ BaselineJoinHashTable::getApproximateTupleCountFromCache(
     CacheItemType item_type,
     DeviceIdentifier device_identifier) const {
   CHECK(hash_table_cache_);
-  auto hash_table_ptr =
-      hash_table_cache_->getItemFromCache(key, item_type, device_identifier);
-  if (hash_table_ptr) {
-    return std::make_pair(hash_table_ptr->getEntryCount() / 2,
-                          hash_table_ptr->getEmittedKeysCount());
+  if (HashtableRecycler::isSafeToCacheHashtable(table_id_to_node_map_,
+                                                needs_dict_translation_,
+                                                getInnerTableId(inner_outer_pairs_))) {
+    auto hash_table_ptr =
+        hash_table_cache_->getItemFromCache(key, item_type, device_identifier);
+    if (hash_table_ptr) {
+      return std::make_pair(hash_table_ptr->getEntryCount() / 2,
+                            hash_table_ptr->getEmittedKeysCount());
+    }
   }
   return std::make_pair(std::nullopt, 0);
 }

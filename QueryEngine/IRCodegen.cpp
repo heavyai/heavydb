@@ -987,7 +987,8 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
           HashType::OneToOne,
           column_cache,
           ra_exe_unit.hash_table_build_plan_dag,
-          ra_exe_unit.query_hint);
+          ra_exe_unit.query_hint,
+          ra_exe_unit.table_id_to_node_map);
       current_level_hash_table = hash_table_or_error.hash_table;
     }
     if (hash_table_or_error.hash_table) {

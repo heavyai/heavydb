@@ -144,7 +144,7 @@ int drop_table() {
 int create_and_populate_table() {
   try {
     drop_table();
-    const auto table_ddl = "(x int, y int);";
+    const auto table_ddl = "(x int, y int, z text encoding dict);";
     auto create_table_ddl = [&table_ddl](const std::string& tbl_name) {
       return "CREATE TABLE " + tbl_name + table_ddl;
     };
@@ -154,21 +154,21 @@ int create_and_populate_table() {
     run_ddl_statement(create_table_ddl("T4"));
     const auto data_insertion = [](const std::string& tbl_name) {
       auto insert_dml = "INSERT INTO " + tbl_name + " VALUES(";
-      std::vector<std::string> value_vec = {"1, 1", "2, 1", "3, 1"};
+      std::vector<std::string> value_vec = {"1, 1, '1'", "2, 1, '2'", "3, 1, '3'"};
       for (auto& v : value_vec) {
         QR::get()->runSQL(insert_dml + v + ");", ExecutorDeviceType::CPU);
       }
     };
     data_insertion("T1");
     data_insertion("T2");
-    QR::get()->runSQL("INSERT INTO T2 VALUES(4,2);", ExecutorDeviceType::CPU);
+    QR::get()->runSQL("INSERT INTO T2 VALUES(4,2,'4');", ExecutorDeviceType::CPU);
     data_insertion("T3");
-    QR::get()->runSQL("INSERT INTO T3 VALUES(4,2);", ExecutorDeviceType::CPU);
-    QR::get()->runSQL("INSERT INTO T3 VALUES(5,2);", ExecutorDeviceType::CPU);
+    QR::get()->runSQL("INSERT INTO T3 VALUES(4,2,'4');", ExecutorDeviceType::CPU);
+    QR::get()->runSQL("INSERT INTO T3 VALUES(5,2,'5');", ExecutorDeviceType::CPU);
     data_insertion("T4");
-    QR::get()->runSQL("INSERT INTO T4 VALUES(4,2);", ExecutorDeviceType::CPU);
-    QR::get()->runSQL("INSERT INTO T4 VALUES(5,2);", ExecutorDeviceType::CPU);
-    QR::get()->runSQL("INSERT INTO T4 VALUES(6,2);", ExecutorDeviceType::CPU);
+    QR::get()->runSQL("INSERT INTO T4 VALUES(4,2,'4');", ExecutorDeviceType::CPU);
+    QR::get()->runSQL("INSERT INTO T4 VALUES(5,2,'5');", ExecutorDeviceType::CPU);
+    QR::get()->runSQL("INSERT INTO T4 VALUES(6,2,'6');", ExecutorDeviceType::CPU);
 
     create_table_for_overlaps_hashjoin();
     insert_dml_for_overlaps_hashjoin();
@@ -1509,6 +1509,7 @@ TEST(DataRecycler, Hashtable_From_Subqueries) {
       ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedPerfectHashTables());
       auto ht1_ref_count_v2 = q1_perfect_ht_metrics->getRefCount();
       ASSERT_LT(ht1_ref_count_v1, ht1_ref_count_v2);
+
       auto q2 =
           "SELECT count(*) from t1, (select x from t2 where x < 2) tt2 where t1.x = "
           "tt2.x;";
@@ -1518,6 +1519,7 @@ TEST(DataRecycler, Hashtable_From_Subqueries) {
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
       auto ht1_ref_count_v3 = q2_perfect_ht_metrics->getRefCount();
       ASSERT_GT(ht1_ref_count_v2, ht1_ref_count_v3);
+
       auto q3 =
           "SELECT count(*) from (select x from t1) tt1, (select x from t2 where x < 2) "
           "tt2 where tt1.x = tt2.x;";
@@ -1565,6 +1567,23 @@ TEST(DataRecycler, Hashtable_From_Subqueries) {
                 QR::get()->getNumberOfCachedBaselineJoinHashTables());
       auto ht1_ref_count_v4 = q2_baseline_ht_metrics->getRefCount();
       ASSERT_LT(ht1_ref_count_v3, ht1_ref_count_v4);
+    }
+
+    {
+      // test 3. changing resultset's ordering
+      clearCaches();
+      auto q1 =
+          "WITH tt2 AS (SELECT z, approx_count_distinct(x) * 1.0 AS xx FROM t2 GROUP BY "
+          "z) SELECT tt2.z, tt2.xx FROM t4, tt2 WHERE (t4.z = tt2.z) ORDER BY tt2.z;";
+      auto q2 =
+          "WITH tt2 AS (SELECT z, x FROM t2 limit 2) SELECT tt2.z, tt2.x FROM t4, tt2 "
+          "WHERE (t4.z = tt2.z) ORDER BY tt2.z;";
+      for (int i = 0; i < 5; ++i) {
+        QR::get()->runSQL(q1, dt);
+        QR::get()->runSQL(q2, dt);
+      }
+      // we have to skip hashtable caching for the above query
+      ASSERT_EQ(static_cast<size_t>(0), QR::get()->getNumberOfCachedPerfectHashTables());
     }
   }
 }

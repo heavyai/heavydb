@@ -89,7 +89,7 @@ ExtractedPlanDag QueryPlanDagExtractor::extractQueryPlanDag(
   // check if this plan tree has not supported pattern for DAG extraction
   if (QueryPlanDagChecker::isNotSupportedDag(node, rel_alg_translator)) {
     VLOG(1) << "Stop DAG extraction due to not supproed node: " << node->toString();
-    return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, true};
+    return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, {}, true};
   }
 
   return extractQueryPlanDagImpl(
@@ -115,7 +115,7 @@ ExtractedPlanDag QueryPlanDagExtractor::extractQueryPlanDagImpl(
   if (!res) {
     VLOG(1) << "Stop DAG extraction while adding node to the DAG node cache: "
             << node->toString();
-    return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, true};
+    return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, {}, true};
   }
   CHECK(res.has_value());
   node->setRelNodeDagId(res.value());
@@ -135,7 +135,7 @@ ExtractedPlanDag QueryPlanDagExtractor::extractQueryPlanDagImpl(
       }
       VLOG(1) << "Visit an invalid rel node while extracting query plan DAG: "
               << ::toString(node);
-      return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, true};
+      return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, {}, true};
     case 0:  // leaf node
       break;
     default:
@@ -146,7 +146,7 @@ ExtractedPlanDag QueryPlanDagExtractor::extractQueryPlanDagImpl(
 
   // check whether extracted DAG is available to use
   if (dag_extractor.extracted_dag_.empty() || dag_extractor.isDagExtractionAvailable()) {
-    return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, true};
+    return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, {}, true};
   }
 
   return {node,
@@ -154,6 +154,7 @@ ExtractedPlanDag QueryPlanDagExtractor::extractQueryPlanDagImpl(
           dag_extractor.getTranslatedJoinInfo(),
           dag_extractor.getPerNestingJoinQualInfo(left_deep_tree_id),
           dag_extractor.getHashTableBuildDag(),
+          dag_extractor.getTableIdToNodeMap(),
           false};
 }
 
@@ -174,8 +175,7 @@ bool QueryPlanDagExtractor::validateNodeId(const RelAlgNode* node,
   if (!retrieved_node_id) {
     VLOG(1) << "Stop DAG extraction while adding node to the DAG node cache: "
             << node->toString();
-    contain_not_supported_rel_node_ = true;
-    extracted_dag_.clear();
+    clearInternaStatus();
     return false;
   }
   CHECK(retrieved_node_id.has_value());
@@ -221,8 +221,7 @@ void QueryPlanDagExtractor::visit(const RelAlgNode* parent_node,
     if (left_deep_tree_infos_.empty()) {
       // we should have left_deep_tree_info for input left deep tree node
       VLOG(1) << "Stop DAG extraction due to not supported join pattern";
-      contain_not_supported_rel_node_ = true;
-      extracted_dag_.clear();
+      clearInternaStatus();
       return;
     }
     const auto inner_cond = left_deep_joins->getInnerCondition();
@@ -271,18 +270,21 @@ void QueryPlanDagExtractor::handleTranslatedJoin(
   // hashtable access path
   QueryPlan current_plan_dag, after_rhs_visited, after_lhs_visited;
   current_plan_dag = getExtractedQueryPlanDagStr();
-  if (rel_trans_join->getRHS()) {
-    visit(rel_trans_join, rel_trans_join->getRHS());
+  auto rhs_node = rel_trans_join->getRHS();
+  if (rhs_node) {
+    visit(rel_trans_join, rhs_node);
     after_rhs_visited = getExtractedQueryPlanDagStr();
+    addTableIdToNodeLink(rhs_node->getId(), rhs_node);
   }
+  auto lhs_node = rel_trans_join->getLHS();
   if (rel_trans_join->getLHS()) {
-    visit(rel_trans_join, rel_trans_join->getLHS());
+    visit(rel_trans_join, lhs_node);
     after_lhs_visited = getExtractedQueryPlanDagStr();
+    addTableIdToNodeLink(lhs_node->getId(), lhs_node);
   }
   if (isEmptyQueryPlanDag(after_lhs_visited) || isEmptyQueryPlanDag(after_rhs_visited)) {
     VLOG(1) << "Stop DAG extraction while extracting query plan DAG for join qual";
-    contain_not_supported_rel_node_ = true;
-    extracted_dag_.clear();
+    clearInternaStatus();
     return;
   }
   // after visiting new node, we have added node id(s) which can be used as an access path
@@ -370,8 +372,7 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
   if (!left_deep_join_info) {
     // we should have left_deep_tree_info for input left deep tree node
     VLOG(1) << "Stop DAG extraction due to not supported join pattern";
-    contain_not_supported_rel_node_ = true;
-    extracted_dag_.clear();
+    clearInternaStatus();
     return;
   }
 
@@ -464,8 +465,7 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
     }
     if (inner_join_cols.size() != outer_join_cols.size()) {
       VLOG(1) << "Stop DAG extraction due to inner/outer col mismatch";
-      contain_not_supported_rel_node_ = true;
-      extracted_dag_.clear();
+      clearInternaStatus();
       return;
     }
 
