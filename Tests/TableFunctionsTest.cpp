@@ -858,15 +858,6 @@ TEST_F(TableFunctions, ThrowingTests) {
           std::runtime_error);
     }
     {
-      // Mandelbrot table function requires max_iterations to be >= 1
-      EXPECT_THROW(
-          run_multiple_agg("SELECT * FROM TABLE(tvf_mandelbrot(128 /* width */ , 128 /* "
-                           "height */, -2.5 /* min_x */, 1.0 /* max_x */, -1.0 /* min_y "
-                           "*/, 1.0 /* max_y */, 0 /* max_iterations */));",
-                           dt),
-          std::runtime_error);
-    }
-    {
       const auto rows = run_multiple_agg(
           "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT x2 FROM "
           "err_test)));",
@@ -875,6 +866,38 @@ TEST_F(TableFunctions, ThrowingTests) {
       auto crt_row = rows->getNextRow(false, false);
       ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]),
                 static_cast<int32_t>(10));  // 0+1+2+3+4=10
+    }
+    {
+      // Mandelbrot table function requires max_iterations to be >= 1
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(tvf_mandelbrot(128 /* width */ , 128 /* "
+                           "height */, -2.5 /* min_x */, 1.0 /* max_x */, -1.0 /* min_y "
+                           "*/, 1.0 /* max_y */, 0 /* max_iterations */));",
+                           dt),
+          std::runtime_error);
+    }
+
+    // Ensure TableFunctionMgr and error throwing works properly for templated CPU TVFs
+    {
+      EXPECT_THROW(
+          run_multiple_agg(
+              "SELECT * FROM TABLE(ct_throw_if_gt_100(CURSOR(SELECT CAST(f AS FLOAT) AS "
+              "f FROM (VALUES (0.0), (1.0), (2.0), (110.0)) AS t(f))));",
+              dt),
+          std::runtime_error);
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT CAST(val AS INT) AS val FROM TABLE(ct_throw_if_gt_100(CURSOR(SELECT "
+          "CAST(f AS DOUBLE) AS f FROM (VALUES (0.0), (1.0), (2.0), (3.0)) AS t(f)))) "
+          "ORDER BY val;",
+          dt);
+      const size_t num_rows = rows->rowCount();
+      ASSERT_EQ(num_rows, size_t(4));
+      for (size_t r = 0; r < num_rows; ++r) {
+        auto crt_row = rows->getNextRow(false, false);
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(r));
+      }
     }
   }
 }
