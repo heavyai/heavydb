@@ -38,8 +38,12 @@
 #include <limits>
 
 extern bool g_enable_fsi;
+
+#ifdef ENABLE_MEMKIND
 bool g_enable_tiered_cpu_mem{false};
+std::string g_pmem_path{};
 size_t g_pmem_size{0};
+#endif
 
 namespace Data_Namespace {
 
@@ -170,6 +174,7 @@ void DataMgr::allocateCpuBufferMgr(int32_t device_id,
                                    size_t maxCpuSlabSize,
                                    size_t page_size,
                                    const CpuTierSizeVector& cpu_tier_sizes) {
+#ifdef ENABLE_MEMKIND
   if (g_enable_tiered_cpu_mem) {
     bufferMgrs_[1].push_back(new Buffer_Namespace::TieredCpuBufferMgr(0,
                                                                       total_cpu_size,
@@ -179,15 +184,17 @@ void DataMgr::allocateCpuBufferMgr(int32_t device_id,
                                                                       page_size,
                                                                       cpu_tier_sizes,
                                                                       bufferMgrs_[0][0]));
-  } else {
-    bufferMgrs_[1].push_back(new Buffer_Namespace::CpuBufferMgr(0,
-                                                                total_cpu_size,
-                                                                cudaMgr_.get(),
-                                                                minCpuSlabSize,
-                                                                maxCpuSlabSize,
-                                                                page_size,
-                                                                bufferMgrs_[0][0]));
+    return;
   }
+#endif
+
+  bufferMgrs_[1].push_back(new Buffer_Namespace::CpuBufferMgr(0,
+                                                              total_cpu_size,
+                                                              cudaMgr_.get(),
+                                                              minCpuSlabSize,
+                                                              maxCpuSlabSize,
+                                                              page_size,
+                                                              bufferMgrs_[0][0]));
 }
 
 // This function exists for testing purposes so that we can test a reset of the cache.
@@ -232,19 +239,23 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
   LOG(INFO) << "Max memory pool size for CPU is " << (float)cpuBufferSize / (1024 * 1024)
             << "MB";
 
+  size_t total_cpu_size = 0;
+
+#ifdef ENABLE_MEMKIND
   CpuTierSizeVector cpu_tier_sizes(numCpuTiers, 0);
   cpu_tier_sizes[CpuTier::DRAM] = cpuBufferSize;
-
   if (g_enable_tiered_cpu_mem) {
     cpu_tier_sizes[CpuTier::PMEM] = g_pmem_size;
     LOG(INFO) << "Max memory pool size for PMEM is " << (float)g_pmem_size / (1024 * 1024)
               << "MB";
   }
-
-  size_t total_cpu_size = 0;
   for (auto cpu_tier_size : cpu_tier_sizes) {
     total_cpu_size += cpu_tier_size;
   }
+#else
+  CpuTierSizeVector cpu_tier_sizes{};
+  total_cpu_size = cpuBufferSize;
+#endif
 
   if (hasGpus_ || cudaMgr_) {
     LOG(INFO) << "Reserved GPU memory is " << (float)reservedGpuMem_ / (1024 * 1024)

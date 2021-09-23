@@ -21,6 +21,7 @@
 
 #include <gtest/gtest.h>
 #include <boost/filesystem.hpp>
+#include <boost/program_options.hpp>
 
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/Allocators/ArenaAllocator.h"
@@ -29,41 +30,11 @@
 #include "DataMgr/DataMgr.h"
 #include "TestHelpers.h"
 
+#ifdef ENABLE_MEMKIND
 extern bool g_enable_tiered_cpu_mem;
 extern size_t g_pmem_size;
-
-// A Mock that wraps the Arena allocators.  Forwards calls to the allocator, but also has
-// a "tier" value assigned to it that represends the intended memory tier and allows
-// allocators to be distinguished from one another by tests.
-class MockAllocator : public Arena {
- public:
-  MockAllocator(std::unique_ptr<Arena>& allocator, uint32_t tier)
-      : allocator_(std::move(allocator)), tier_(tier) {}
-
-  void* allocate(size_t num_bytes) override { return allocator_->allocate(num_bytes); }
-
-  void* allocateAndZero(const size_t num_bytes) override {
-    return allocator_->allocateAndZero(num_bytes);
-  }
-
-  size_t bytesUsed() const override { return allocator_->bytesUsed(); }
-
-  uint32_t getTier() { return tier_; }
-
- private:
-  std::unique_ptr<Arena> allocator_;
-  uint32_t tier_;
-};
-
-namespace {
-void replace_with_mocks(
-    std::vector<std::pair<std::unique_ptr<Arena>, const size_t>>& allocators) {
-  uint32_t allocator_num = 0;
-  for (auto& [allocator, size] : allocators) {
-    allocator = std::make_unique<MockAllocator>(allocator, allocator_num++);
-  }
-}
-}  // namespace
+extern std::string g_pmem_path;
+#endif
 
 class DataMgrTest : public testing::Test {
  public:
@@ -76,7 +47,9 @@ class DataMgrTest : public testing::Test {
     system_params_.max_cpu_slab_size = slab_size_;
     system_params_.min_cpu_slab_size = slab_size_;
     system_params_.cpu_buffer_mem_bytes = slab_size_ * num_slabs;
+#ifdef ENABLE_MEMKIND
     g_pmem_size = slab_size_ * num_slabs;
+#endif
     std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr;
     data_mgr_ = std::make_unique<Data_Namespace::DataMgr>(data_mgr_path_,
                                                           system_params_,
@@ -112,12 +85,25 @@ class DataMgrTest : public testing::Test {
   std::unique_ptr<Data_Namespace::DataMgr> data_mgr_;
 };
 
+TEST_F(DataMgrTest, ReuseWithPinnedGaps) {
+  // This test is designed to catch ASAN memory leaks and therefore does not use explicit
+  // assertions.
+  resetDataMgr(2);
+  auto chunk1 = writeChunkForKey({1, 1, 1, 1});  // pinned
+  writeChunkForKey({1, 1, 1, 2});                // unpinned
+  writeChunkForKey({1, 1, 1, 3});                // unpinned
+}
+
+#ifdef ENABLE_MEMKIND
 // Tests for the TieredCpuBufferMgr class.
 // These tests set the DataMgr to use small slabs (one page) to force situations like
 // exceeding an allocator's capacity and requiring eviction of slabs from the BufferMgr.
 class TieredCpuBufferMgrTest : public DataMgrTest {
  public:
   void SetUp() override {
+    if (g_pmem_path == "") {
+      GTEST_SKIP() << "No PMEM path specified.";
+    }
     g_enable_tiered_cpu_mem = true;
     g_pmem_size = slab_size_;
     DataMgrTest::SetUp();
@@ -133,32 +119,27 @@ class TieredCpuBufferMgrTest : public DataMgrTest {
     DataMgrTest::resetDataMgr(num_slabs);
     tiered_buffer_mgr_ =
         dynamic_cast<Buffer_Namespace::TieredCpuBufferMgr*>(data_mgr_->getCpuBufferMgr());
-    replace_with_mocks(tiered_buffer_mgr_->getAllocators());
   }
 
-  // Each MockAllocator is assigned a fake "tier" value which would represent a unique
-  // memory tier in a full implementation.  This function determines the tier that chunk's
-  // memory was allocated with.
   uint32_t getAllocatorTierForChunk(const Chunk_NS::Chunk* chunk) {
-    return dynamic_cast<MockAllocator*>(
-               tiered_buffer_mgr_->getAllocatorForSlab(
-                   dynamic_cast<Buffer_Namespace::Buffer*>(chunk->getBuffer())
-                       ->getSlabNum()))
-        ->getTier();
+    auto memory_type =
+        tiered_buffer_mgr_
+            ->getAllocatorForSlab(
+                dynamic_cast<Buffer_Namespace::Buffer*>(chunk->getBuffer())->getSlabNum())
+            ->getMemoryType();
+    if (memory_type == Arena::MemoryType::DRAM) {
+      return 0;
+    } else if (memory_type == Arena::MemoryType::PMEM) {
+      return 1;
+    } else {
+      UNREACHABLE() << "Unknown memory type";
+    }
+    return 0;
   }
 
  protected:
   Buffer_Namespace::TieredCpuBufferMgr* tiered_buffer_mgr_;
 };
-
-TEST_F(DataMgrTest, ReuseWithPinnedGaps) {
-  // This test is designed to catch ASAN memory leaks and therefore does not use explicit
-  // assertions.
-  resetDataMgr(2);
-  auto chunk1 = writeChunkForKey({1, 1, 1, 1});  // pinned
-  writeChunkForKey({1, 1, 1, 2});                // unpinned
-  writeChunkForKey({1, 1, 1, 3});                // unpinned
-}
 
 TEST_F(TieredCpuBufferMgrTest, AllocateInOrder) {
   // Two buffers will each allocate a new slab, so they should use new allocators for
@@ -210,9 +191,32 @@ TEST_F(TieredCpuBufferMgrTest, ReuseWithPinnedGaps) {
   ASSERT_EQ(getAllocatorTierForChunk(chunk4.get()), 1U);
 }
 
+#endif
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
+
+#ifdef ENABLE_MEMKIND
+  // We only need option processing if we are specifying a pmem path.
+  namespace po = boost::program_options;
+  po::options_description desc("Options");
+
+  // these two are here to allow passing correctly google testing parameters
+  desc.add_options()("gtest_list_tests", "list all tests");
+  desc.add_options()("gtest_filter", "filters tests, use --help for details");
+
+  desc.add_options()(
+      "pmem-path", po::value<std::string>(&g_pmem_path), "a path to app-direct pmem");
+
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  po::notify(vm);
+
+  if (vm.count("pmem-path")) {
+    g_pmem_path = boost::any_cast<std::string>(vm["pmem-path"].value());
+  }
+#endif
 
   int err{0};
   try {

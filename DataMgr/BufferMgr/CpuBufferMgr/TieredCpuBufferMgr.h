@@ -46,7 +46,7 @@ class TieredCpuBufferMgr : public CpuBufferMgr {
   }
 
   // Needed for testing to replace allocators with Mocks.
-  std::vector<std::pair<std::unique_ptr<Arena>, const size_t>>& getAllocators() {
+  std::vector<std::pair<std::unique_ptr<Arena>, size_t>>& getAllocators() {
     return allocators_;
   }
 
@@ -63,7 +63,7 @@ class TieredCpuBufferMgr : public CpuBufferMgr {
   // A vector of allocators (order in vector denotes priority for use).  These allocators
   // should represent various tiers of memory we intend to use, such as DRAM, PMEM, and
   // HBMEM.  The size specifies the maximum space is allowed for each allocator.
-  std::vector<std::pair<std::unique_ptr<Arena>, const size_t>> allocators_;
+  std::vector<std::pair<std::unique_ptr<Arena>, size_t>> allocators_;
   // Map to track which slabs were created by which allocator (may not be necessary
   // later).
   std::map<int32_t, Arena*> slab_to_allocator_map_;

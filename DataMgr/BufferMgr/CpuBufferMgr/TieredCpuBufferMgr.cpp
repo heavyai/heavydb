@@ -17,6 +17,7 @@
 #include "DataMgr/BufferMgr/CpuBufferMgr/TieredCpuBufferMgr.h"
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/Allocators/ArenaAllocator.h"
+#include "DataMgr/Allocators/PMemAllocator.h"
 #include "DataMgr/BufferMgr/CpuBufferMgr/CpuBuffer.h"
 #include "Shared/misc.h"
 
@@ -53,10 +54,12 @@ TieredCpuBufferMgr::TieredCpuBufferMgr(const int device_id,
                    page_size,
                    parent_mgr) {
   CHECK(cpu_tier_sizes.size() == numCpuTiers);
-  for (auto tier_size : cpu_tier_sizes) {
-    allocators_.emplace_back(std::unique_ptr<Arena>{}, tier_size);
-  }
-  initializeMem();
+  allocators_.emplace_back(
+      std::make_unique<DramArena>(max_slab_size_ + kArenaBlockOverhead),
+      cpu_tier_sizes[CpuTier::DRAM]);
+  allocators_.emplace_back(
+      std::make_unique<PMemArena>(max_slab_size_ + kArenaBlockOverhead),
+      cpu_tier_sizes[CpuTier::PMEM]);
 }
 
 Arena* TieredCpuBufferMgr::getAllocatorForSlab(int32_t slab_num) const {
@@ -107,9 +110,10 @@ void TieredCpuBufferMgr::freeAllMem() {
 }
 
 void TieredCpuBufferMgr::initializeMem() {
-  for (auto& [allocator, allocator_limit] : allocators_) {
-    allocator.reset(new Arena(max_slab_size_ + kArenaBlockOverhead));
-  }
+  allocators_[CpuTier::DRAM].first =
+      std::make_unique<DramArena>(max_slab_size_ + kArenaBlockOverhead);
+  allocators_[CpuTier::PMEM].first =
+      std::make_unique<PMemArena>(max_slab_size_ + kArenaBlockOverhead);
   slab_to_allocator_map_.clear();
 }
 

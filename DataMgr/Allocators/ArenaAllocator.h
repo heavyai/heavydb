@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,16 @@ class SysAllocator {
   friend bool operator!=(Self const&, Self const&) noexcept { return false; }
 };
 
+class Arena {
+ public:
+  enum class MemoryType { DRAM, PMEM };
+  virtual ~Arena() {}
+  virtual void* allocate(size_t size) = 0;
+  virtual void* allocateAndZero(const size_t size) = 0;
+  virtual size_t bytesUsed() const = 0;
+  virtual MemoryType getMemoryType() const = 0;
+};
+
 #ifdef HAVE_FOLLY
 
 #include <folly/Memory.h>
@@ -56,30 +66,33 @@ constexpr size_t kArenaBlockOverhead =
  * Arena allocator using checked_malloc with default allocation size 2GB. Note that the
  * allocator only frees memory on destruction.
  */
-class Arena : public folly::Arena<::SysAllocator<AllocatorType>> {
+class DramArena : public Arena, public folly::Arena<::SysAllocator<AllocatorType>> {
  public:
-  explicit Arena(size_t min_block_size = static_cast<size_t>(1ULL << 32) + kBlockOverhead,
-                 size_t size_limit = kNoSizeLimit,
-                 size_t max_align = kDefaultMaxAlign)
+  explicit DramArena(size_t min_block_size = static_cast<size_t>(1ULL << 32) +
+                                             kBlockOverhead,
+                     size_t size_limit = kNoSizeLimit,
+                     size_t max_align = kDefaultMaxAlign)
       : folly::Arena<::SysAllocator<AllocatorType>>({},
                                                     min_block_size,
                                                     size_limit,
                                                     max_align) {}
-  virtual ~Arena() {}
+  ~DramArena() override {}
 
-  virtual void* allocate(size_t size) {
+  void* allocate(size_t size) override {
     return folly::Arena<::SysAllocator<AllocatorType>>::allocate(size);
   }
 
-  virtual void* allocateAndZero(const size_t size) {
+  void* allocateAndZero(const size_t size) override {
     auto ret = allocate(size);
     std::memset(ret, 0, size);
     return ret;
   }
 
-  virtual size_t bytesUsed() const {
+  size_t bytesUsed() const override {
     return folly::Arena<::SysAllocator<AllocatorType>>::bytesUsed();
   }
+
+  MemoryType getMemoryType() const override { return MemoryType::DRAM; }
 };
 
 template <>
@@ -98,19 +111,19 @@ constexpr size_t kArenaBlockOverhead = 0;
  * freeing. For development and testing only, where folly is not available. Not for
  * production use.
  */
-class Arena {
+class DramArena : public Arena {
  public:
-  explicit Arena(size_t min_block_size = 1ULL << 32, size_t size_limit = 0)
+  explicit DramArena(size_t min_block_size = 1ULL << 32, size_t size_limit = 0)
       : size_limit_(size_limit), size_(0) {}
 
-  virtual ~Arena() {
+  ~DramArena() override {
     for (auto [ptr, size] : allocations_) {
       allocator_.deallocate(ptr, 0);
       size_ -= size;
     }
   }
 
-  virtual void* allocate(size_t num_bytes) {
+  void* allocate(size_t num_bytes) override {
     if (size_limit_ != 0 && size_ + num_bytes > size_limit_) {
       throw OutOfHostMemory(num_bytes);
     }
@@ -120,13 +133,15 @@ class Arena {
     return ret;
   }
 
-  virtual void* allocateAndZero(const size_t size) {
+  void* allocateAndZero(const size_t size) override {
     auto ret = allocate(size);
     std::memset(ret, 0, size);
     return ret;
   }
 
-  virtual size_t bytesUsed() const { return size_; }
+  size_t bytesUsed() const override { return size_; }
+
+  MemoryType getMemoryType() const override { return MemoryType::DRAM; }
 
  private:
   size_t size_limit_;

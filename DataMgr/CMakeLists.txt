@@ -52,6 +52,10 @@ if(ENABLE_AWS_S3)
   list(APPEND datamgr_source_files ForeignStorage/S3FilePathUtil.cpp)
 endif()
 
+if (ENABLE_MEMKIND)
+  list(APPEND datamgr_source_files Allocators/PMemAllocator.cpp)
+endif()
+
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 if(ENABLE_AWS_S3)
   list(APPEND datamgr_source_files ForeignStorage/ee/FileReaderS3.cpp)
@@ -90,7 +94,7 @@ endif()
 
 add_library(DataMgr ${datamgr_source_files})
 
-target_link_libraries(DataMgr CudaMgr $<$<BOOL:${ENABLE_FOLLY}>:${Folly_LIBRARIES}> Shared ${Boost_THREAD_LIBRARY} ${TBB_LIBS} ${CMAKE_DL_LIBS})
+target_link_libraries(DataMgr CudaMgr $<$<BOOL:${ENABLE_FOLLY}>:${Folly_LIBRARIES}> Shared ${Boost_THREAD_LIBRARY} ${TBB_LIBS} ${CMAKE_DL_LIBS} $<$<BOOL:${ENABLE_MEMKIND}>:${memkind_LIBRARIES}>)
 
 option(ENABLE_CRASH_CORRUPTION_TEST "Enable crash using SIGUSR2 during page deletion to faster and affirmative test/repro db corruption" OFF)
 if(ENABLE_CRASH_CORRUPTION_TEST)

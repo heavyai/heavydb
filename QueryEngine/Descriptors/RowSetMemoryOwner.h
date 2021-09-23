@@ -48,7 +48,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   RowSetMemoryOwner(const size_t arena_block_size, const size_t num_kernel_threads = 0)
       : arena_block_size_(arena_block_size) {
     for (size_t i = 0; i < num_kernel_threads + 1; i++) {
-      allocators_.emplace_back(std::make_unique<Arena>(arena_block_size));
+      allocators_.emplace_back(std::make_unique<DramArena>(arena_block_size));
     }
     CHECK(!allocators_.empty());
   }

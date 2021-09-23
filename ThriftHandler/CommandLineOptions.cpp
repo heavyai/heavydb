@@ -18,6 +18,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <filesystem>
 #include <iostream>
 
 #include "CommandLineOptions.h"
@@ -50,6 +51,9 @@ extern size_t g_parallel_top_min;
 extern size_t g_parallel_top_max;
 extern size_t g_estimator_failure_max_groupby_size;
 extern bool g_enable_system_tables;
+#ifdef ENABLE_MEMKIND
+extern std::string g_pmem_path;
+#endif
 
 namespace Catalog_Namespace {
 extern bool g_log_user_id;
@@ -464,17 +468,20 @@ void CommandLineOptions::fillOptions() {
       "allowed-export-paths",
       po::value<std::string>(&allowed_export_paths),
       "List of allowed root paths that can be used in export operations.");
-  help_desc.add_options()("enable-tiered-cpu-mem",
-                          po::value<bool>(&g_enable_tiered_cpu_mem)
-                              ->default_value(g_enable_tiered_cpu_mem)
-                              ->implicit_value(true),
-                          "Enable additional tiers of CPU memory (PMEM, etc...)");
   help_desc.add_options()("enable-system-tables",
                           po::value<bool>(&g_enable_system_tables)
                               ->default_value(g_enable_system_tables)
                               ->implicit_value(true),
                           "Enable use of system tables.");
+#ifdef ENABLE_MEMKIND
+  help_desc.add_options()("enable-tiered-cpu-mem",
+                          po::value<bool>(&g_enable_tiered_cpu_mem)
+                              ->default_value(g_enable_tiered_cpu_mem)
+                              ->implicit_value(true),
+                          "Enable additional tiers of CPU memory (PMEM, etc...)");
   help_desc.add_options()("pmem-size", po::value<size_t>(&g_pmem_size)->default_value(0));
+  help_desc.add_options()("pmem-path", po::value<std::string>(&g_pmem_path));
+#endif
 
   help_desc.add(log_options_.get_options());
 }
@@ -1046,6 +1053,21 @@ void CommandLineOptions::validate() {
       LOG(INFO) << "FSI has been enabled as a side effect of enabling system tables";
     }
   }
+
+#ifdef ENABLE_MEMKIND
+  if (g_enable_tiered_cpu_mem) {
+    if (g_pmem_path == "") {
+      throw std::runtime_error{"pmem-path must be set to use tiered cpu memory"};
+    }
+    if (g_pmem_size == 0) {
+      throw std::runtime_error{"pmem-size must be set to use tiered cpu memory"};
+    }
+    if (!std::filesystem::exists(g_pmem_path.c_str())) {
+      throw std::runtime_error{"path to PMem directory (" + g_pmem_path +
+                               ") does not exist."};
+    }
+  }
+#endif
 }
 
 boost::optional<int> CommandLineOptions::parse_command_line(

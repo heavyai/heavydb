@@ -63,7 +63,7 @@ class CpuBufferMgr : public BufferMgr {
   CudaMgr_Namespace::CudaMgr* cuda_mgr_;
 
  private:
-  std::unique_ptr<Arena> allocator_;
+  std::unique_ptr<DramArena> allocator_;
 };
 
 }  // namespace Buffer_Namespace

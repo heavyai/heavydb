@@ -327,6 +327,14 @@ else()
   endif()
 endif()
 
+option(ENABLE_MEMKIND "Enable memkind support" OFF)
+if (ENABLE_MEMKIND)
+  set(MEMKIND_REQUIRED_VERSION 1.11.0)
+  find_package(PkgConfig QUIET)
+  pkg_check_modules(memkind REQUIRED memkind>=${MEMKIND_REQUIRED_VERSION})
+  add_definitions("-DENABLE_MEMKIND")
+endif()
+
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 
 if(MSVC)
