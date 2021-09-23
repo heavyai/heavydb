@@ -63,7 +63,11 @@ ImportStatus ForeignDataImporter::import(
     const Catalog_Namespace::SessionInfo* session_info) {
   auto& catalog = session_info->getCatalog();
 
+#ifdef ENABLE_IMPORT_PARQUET
   CHECK(copy_params_.file_type == import_export::FileType::PARQUET);
+#else
+  UNREACHABLE() << "Unexpected method call for non-Parquet import";
+#endif
 
   auto& current_user = session_info->get_currentUser();
   auto server = foreign_storage::ForeignDataWrapperFactory::createForeignServerProxy(
