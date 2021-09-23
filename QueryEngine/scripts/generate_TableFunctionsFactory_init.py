@@ -1354,7 +1354,7 @@ def find_signatures(input_file):
     return signatures
 
 
-def build_template_function_call(caller, callee, input_types, output_types):
+def build_template_function_call(caller, callee, input_types, output_types, uses_manager):
     # caller calls callee
 
     def format_cpp_type(cpp_type, idx, is_input=True):
@@ -1376,6 +1376,10 @@ def build_template_function_call(caller, callee, input_types, output_types):
     input_cpp_args = []
     output_cpp_args = []
     arg_names = []
+
+    if uses_manager:
+        input_cpp_args.append("TableFunctionManager& mgr")
+        arg_names.append("mgr")
 
     for idx, input_type in enumerate(input_types):
         cpp_type = input_type.get_cpp_type()
@@ -1505,7 +1509,7 @@ def parse_annotations(input_files):
             if is_template_function(sig):
                 name = sig.name + '_' + str(counter)
                 counter += 1
-                t = build_template_function_call(name, sig.name, input_types_, sig.outputs)
+                t = build_template_function_call(name, sig.name, input_types_, sig.outputs, uses_manager)
                 if is_cpu_function(sig):
                     cpu_template_functions.append(t)
                 if is_gpu_function(sig):

@@ -1127,4 +1127,25 @@ EXTENSION_NOINLINE int32_t ct_sleep2(TableFunctionManager& mgr,
   return ct_sleep_worker(seconds, output);
 }
 
+// clang-format off
+/*
+  UDTF: ct_throw_if_gt_100__cpu_template(TableFunctionManager, Column<T>) -> Column<T> val, T=[float, double]
+*/
+// clang-format on
+
+template <typename T>
+TEMPLATE_NOINLINE int32_t ct_throw_if_gt_100__cpu_template(TableFunctionManager& mgr,
+                                                           const Column<T>& input,
+                                                           Column<T>& output) {
+  int64_t num_rows = input.size();
+  mgr.set_output_row_size(num_rows);
+  for (int64_t r = 0; r < num_rows; ++r) {
+    if (input[r] > 100) {
+      return mgr.error_message("Values greater than 100 not allowed");
+    }
+    output[r] = input[r];
+  }
+  return num_rows;
+}
+
 #endif
