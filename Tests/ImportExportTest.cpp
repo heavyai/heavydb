@@ -61,7 +61,9 @@ using namespace TestHelpers;
 extern bool g_use_date_in_days_default_encoding;
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
+#ifdef ENABLE_IMPORT_PARQUET
 extern bool g_enable_parquet_import_fsi;
+#endif
 
 namespace {
 
@@ -567,6 +569,7 @@ TEST_F(ImportTestDateArray, ImportMixedDateArrays) {
   // clang-format on
 }
 
+#ifdef ENABLE_IMPORT_PARQUET
 class ParquetImportErrorHandling : public ImportExportTestBase {
  protected:
   void SetUp() override {
@@ -673,6 +676,7 @@ TEST_F(ParquetImportErrorHandling, MaxReject) {
   sql(query, "SELECT count(*) FROM test_table;");
   assertResultSetEqual({{0L}}, query);  // confirm no data was loaded into table
 }
+#endif
 
 using ImportAndSelectTestParameters = std::tuple</*file_type=*/std::string,
                                                  /*data_source_type=*/std::string>;
@@ -698,7 +702,9 @@ class ImportAndSelectTest
   void SetUp() override {
     g_enable_fsi = true;
     g_enable_s3_fsi = true;
+#ifdef ENABLE_IMPORT_PARQUET
     g_enable_parquet_import_fsi = true;
+#endif
     ImportExportTestBase::SetUp();
     ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS import_test_new;"));
   }
@@ -708,7 +714,9 @@ class ImportAndSelectTest
     ImportExportTestBase::TearDown();
     g_enable_fsi = false;
     g_enable_s3_fsi = false;
+#ifdef ENABLE_IMPORT_PARQUET
     g_enable_parquet_import_fsi = false;
+#endif
   }
 
 #ifdef HAVE_AWS_S3
@@ -2437,12 +2445,14 @@ class SortedImportTest
   std::string createCopyFromQuery(map<std::string, std::string> options = {},
                                   std::string source_dir = "") {
     source_dir = source_dir.empty() ? getSourceDir() : source_dir;
+#ifdef ENABLE_IMPORT_PARQUET
     if (file_type_ == "csv") {
       options.emplace("parquet", "false");
     } else {
       CHECK(file_type_ == "parquet");
       options.emplace("parquet", "true");
     }
+#endif
     options.emplace("HEADER", "true");
     return "COPY test_table_1 FROM '" + source_dir + "' WITH (" +
            options_to_string(options, false) + ");";
@@ -2452,13 +2462,23 @@ class SortedImportTest
 INSTANTIATE_TEST_SUITE_P(SortedImportTest,
                          SortedImportTest,
                          testing::Combine(testing::Values("local"),
-                                          testing::Values("csv", "parquet")));
+                                          testing::Values("csv"
+#ifdef ENABLE_IMPORT_PARQUET
+                                                          ,
+                                                          "parquet"
+#endif
+                                                          )));
 
 #ifdef HAVE_AWS_S3
 INSTANTIATE_TEST_SUITE_P(S3SortedImportTest,
                          SortedImportTest,
                          testing::Combine(testing::Values("s3"),
-                                          testing::Values("csv", "parquet")));
+                                          testing::Values("csv"
+#ifdef ENABLE_IMPORT_PARQUET
+                                                          ,
+                                                          "parquet"
+#endif
+                                                          )));
 #endif  // HAVE_AWS_S3
 
 TEST_P(SortedImportTest, SortedOnPathname) {
