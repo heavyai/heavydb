@@ -480,9 +480,10 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_double(
 #ifndef __CUDACC__
   int32_t best_planar_srid;
   int32_t* best_planar_srid_ptr = nullptr;
-  if (arg1_srid == 4326 && static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kBUFFER) {
-    // Use the best (location-based) planar transform to project geometry before
-    // running geos operation, back-project the result to 4326
+  if (arg1_srid_out == 4326 &&
+      static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kBUFFER && arg2 != 0.0) {
+    // Use the best (location-based) planar transform to project 4326 argument before
+    // running geos operation, back-project the result of the operation to 4326
     best_planar_srid_ptr = &best_planar_srid;
   }
   WKB wkb1{};
@@ -509,8 +510,12 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_double(
   if (g1) {
     GEOSGeometry* g = nullptr;
     if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kBUFFER) {
-      int quadsegs = 8;  // default
-      g = GEOSBuffer_r(context, g1, arg2, quadsegs);
+      if (arg2 != 0.0) {
+        int quadsegs = 8;  // default
+        g = GEOSBuffer_r(context, g1, arg2, quadsegs);
+      } else {
+        g = GEOSGeom_clone_r(context, g1);
+      }
     }
     g = postprocess(context, g);
     if (g) {
