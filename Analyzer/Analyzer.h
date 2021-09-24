@@ -543,6 +543,19 @@ class RangeOper : public Expr {
   bool operator==(const Expr& rhs) const override;
   std::string toString() const override;
 
+  void collect_rte_idx(std::set<int>& rte_idx_set) const override {
+    left_operand_->collect_rte_idx(rte_idx_set);
+    right_operand_->collect_rte_idx(rte_idx_set);
+  }
+
+  void collect_column_var(
+      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>&
+          colvar_set,
+      bool include_agg) const override {
+    left_operand_->collect_column_var(colvar_set, include_agg);
+    right_operand_->collect_column_var(colvar_set, include_agg);
+  }
+
  private:
   // build a range between these two operands
   bool left_inclusive_;

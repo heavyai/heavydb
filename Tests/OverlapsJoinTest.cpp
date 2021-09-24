@@ -1665,6 +1665,7 @@ namespace range_join {
 const auto setup_stmts = {
     "CREATE TABLE t1_comp32 ( p1 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32) );",
     "CREATE TABLE t2_comp32 ( p1 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32) );",
+    "CREATE TABLE t2_comp32_small ( p1 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32) );",
     "CREATE TABLE t1 ( p1 GEOMETRY(POINT, 4326) ENCODING NONE );",
     "CREATE TABLE t2 ( p1 GEOMETRY(POINT, 4326) ENCODING NONE );",
 };
@@ -1685,6 +1686,9 @@ const auto insert_data_stmts = {
     "INSERT INTO t2_comp32 VALUES ( 'point(102.123 2.123)' );",
     "INSERT INTO t2_comp32 VALUES ( 'point(103.123 30.123)' );",
 
+    "INSERT INTO t2_comp32_small VALUES ( 'point(102.123 2.123)' );",
+    "INSERT INTO t2_comp32_small VALUES ( 'point(103.123 30.123)' );",
+
     "INSERT INTO t2 VALUES ( 'point(0.1 0.1)' );",
     "INSERT INTO t2 VALUES ( 'point(10.123 40.123)' );",
     "INSERT INTO t2 VALUES ( 'point(102.123 2.123)' );",
@@ -1694,6 +1698,7 @@ const auto insert_data_stmts = {
 const auto cleanup_stmts = {
     "DROP TABLE IF EXISTS t1_comp32;",
     "DROP TABLE IF EXISTS t2_comp32;",
+    "DROP TABLE IF EXISTS t2_comp32_small",
     "DROP TABLE IF EXISTS t1;",
     "DROP TABLE IF EXISTS t2;",
 };
@@ -1975,6 +1980,29 @@ TEST_F(RangeJoinTest, CanBeDisabled) {
     ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
         << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
   }
+}
+
+TEST_F(RangeJoinTest, BadOrdering) {
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+  g_enable_distance_rangejoin = true;
+
+  ExecutionContext ctx{
+      .device_type = ExecutorDeviceType::CPU,
+      .hash_join_enabled = true,
+  };
+
+  const auto tableA = "t1_comp32";
+  const auto tableB = "t2_comp32_small";
+
+  auto sql =
+      fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
+                  tableA,
+                  tableB,
+                  tableB,
+                  tableA,
+                  10);
+  EXPECT_NO_THROW(execSQL(sql, ctx));
 }
 
 int main(int argc, char* argv[]) {
