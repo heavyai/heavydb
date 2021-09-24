@@ -210,4 +210,36 @@ std::vector<std::filesystem::path> get_fs_paths(const std::string& file_or_direc
 
 }  // namespace FileUtilities
 
+template <typename T>
+bool is_valid_tvf_input(const T input,
+                        const T bounds_val,
+                        const BoundsType bounds_type,
+                        const IntervalType interval_type) {
+  switch (bounds_type) {
+    case BoundsType::Min:
+      switch (interval_type) {
+        case IntervalType::Inclusive:
+          return input >= bounds_val;
+        case IntervalType::Exclusive:
+          return input > bounds_val;
+        default:
+          UNREACHABLE();
+      }
+    case BoundsType::Max:
+      switch (interval_type) {
+        case IntervalType::Inclusive:
+          return input <= bounds_val;
+        case IntervalType::Exclusive:
+          return input < bounds_val;
+        default:
+          UNREACHABLE();
+      }
+      break;
+    default:
+      UNREACHABLE();
+  }
+  UNREACHABLE();
+  return false;  // To address compiler warning
+}
+
 #endif  // __CUDACC__

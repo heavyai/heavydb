@@ -104,6 +104,21 @@ namespace FileUtilities {
 std::vector<std::filesystem::path> get_fs_paths(const std::string& file_or_directory);
 }
 
+enum BoundsType { Min, Max };
+
+enum IntervalType { Inclusive, Exclusive };
+
+template <typename T>
+bool is_valid_tvf_input(const T input,
+                        const T bounds_val,
+                        const BoundsType bounds_type,
+                        const IntervalType interval_type);
+
+// template<typename T>
+// void check_tvf_input(TableFunctionManager& mgr, onst std::string& function_name, const
+// std::string& arg_name, const T input, const T bounds_val, const BoundsType bounds_type,
+// const IntervalType interval_type) {
+
 #endif  //__CUDACC__
 
 #include "Utilities.cpp"
