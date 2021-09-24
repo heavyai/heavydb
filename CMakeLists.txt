@@ -307,6 +307,11 @@ if(ENABLE_FOLLY)
   endif()
 endif()
 
+option (ENABLE_SYSTEM_TVFS OFF)
+if(ENABLE_SYSTEM_TVFS)
+  add_definitions("-DHAVE_SYSTEM_TVFS")
+endif()
+
 option(ENABLE_MLPACK "Use mlpack" OFF)
 if(ENABLE_MLPACK)
   find_package(OpenMP REQUIRED)

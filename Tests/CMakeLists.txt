@@ -83,6 +83,10 @@ add_executable(SQLHintTest SQLHintTest.cpp)
 add_executable(LoadTableTest LoadTableTest.cpp)
 add_executable(QuantileCpuTest Quantile/QuantileCpuTest.cpp)
 
+if(ENABLE_SYSTEM_TVFS)
+  add_executable(SystemTVFsTest SystemTVFsTest.cpp)
+endif()
+
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_executable(UdfTest UdfTest.cpp)
 endif()
@@ -139,6 +143,11 @@ target_link_libraries(UpdateMetadataTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StoragePerfTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TopKTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(OmniSQLCommandTest gtest ${Boost_LIBRARIES} mapd_thrift)
+
+if(ENABLE_SYSTEM_TVFS)
+  target_link_libraries(SystemTVFsTest ${EXECUTE_TEST_LIBS})
+endif()
+
 if(ENABLE_KRB5)
 	target_link_libraries(OmniSQLCommandTest krb5_gss Shared)
 endif()
@@ -283,6 +292,10 @@ add_test(LoadTableTest LoadTableTest ${TEST_ARGS})
 add_test(JSONTest JSONTest ${TEST_ARGS})
 add_test(DataMgrTest DataMgrTest ${TEST_ARGS})
 
+if(ENABLE_SYSTEM_TVFS)
+  add_test(SystemTVFsTest SystemTVFsTest ${TEST_ARGS})
+endif()
+
 if(ENABLE_CUDA)
   add_test(GpuSharedMemoryTest GpuSharedMemoryTest ${TEST_ARGS})
 elseif(ENABLE_DBE)
@@ -381,6 +394,10 @@ set(TEST_PROGRAMS
   JSONTest
   DataMgrTest
 )
+
+if (ENABLE_SYSTEM_TVFS)
+  list(APPEND TEST_PROGRAMS SystemTVFsTest)
+endif()
 
 if(ENABLE_CUDA)
   list(APPEND TEST_PROGRAMS GpuSharedMemoryTest)
