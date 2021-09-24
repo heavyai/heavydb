@@ -884,27 +884,33 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
     auto lhs = dynamic_cast<const Analyzer::GeoOperator*>(bin_oper->get_left_operand());
     auto rhs = dynamic_cast<const Analyzer::Constant*>(bin_oper->get_right_operand());
     if (lhs && rhs && lhs->getName() == "ST_Distance") {
-      const auto args = lhs->getChildExprs();
-      CHECK_GE(args.size(), size_t(2));
-      auto l_arg = dynamic_cast<const Analyzer::ColumnVar*>(args[0]);
-      auto r_arg = dynamic_cast<const Analyzer::ColumnVar*>(args[1]);
-      if (l_arg && r_arg) {
-        const int64_t hash_table_arg_index =
-            l_arg->get_rte_idx() > r_arg->get_rte_idx() ? 0 : 1;
-        auto hash_table_col_var = args[hash_table_arg_index];
-        if (!hash_table_col_var->get_type_info().is_geometry()) {
-          return boost::none;
-        }
-        const int64_t probe_arg_index = std::max<int64_t>(hash_table_arg_index - 1, 0);
-        auto probe_col_var = args[probe_arg_index]->deep_copy();
+      CHECK_EQ(lhs->size(), size_t(2));
+      auto l_arg = lhs->getOperand(0);
+      auto r_arg = lhs->getOperand(1);
 
-        const bool inclusive = bin_oper->get_optype() == kLE;
-        auto range_expr = makeExpr<Analyzer::RangeOper>(
-            inclusive, inclusive, hash_table_col_var->deep_copy(), rhs->deep_copy());
-        auto overlaps_oper = makeExpr<Analyzer::BinOper>(
-            kBOOLEAN, kOVERLAPS, kONE, probe_col_var, range_expr);
-        return OverlapsJoinConjunction{{expr}, {overlaps_oper}};
+      // Check for compatible join ordering. If the join ordering does not match expected
+      // ordering for overlaps, the join builder will fail.
+      std::set<int> lhs_rte_idx;
+      l_arg->collect_rte_idx(lhs_rte_idx);
+      CHECK(!lhs_rte_idx.empty());
+      std::set<int> rhs_rte_idx;
+      r_arg->collect_rte_idx(rhs_rte_idx);
+      CHECK(!rhs_rte_idx.empty());
+
+      if (lhs_rte_idx.size() > 1 || rhs_rte_idx.size() > 1 || lhs_rte_idx > rhs_rte_idx) {
+        LOG(INFO) << "Unable to rewrite " << lhs->getName()
+                  << " to overlaps conjunction. Cannot build hash table over LHS type. "
+                     "Check join order.\n"
+                  << bin_oper->toString();
+        return boost::none;
       }
+
+      const bool inclusive = bin_oper->get_optype() == kLE;
+      auto range_expr = makeExpr<Analyzer::RangeOper>(
+          inclusive, inclusive, r_arg->deep_copy(), rhs->deep_copy());
+      auto overlaps_oper = makeExpr<Analyzer::BinOper>(
+          kBOOLEAN, kOVERLAPS, kONE, l_arg->deep_copy(), range_expr);
+      return OverlapsJoinConjunction{{expr}, {overlaps_oper}};
     }
   }
   return boost::none;
