@@ -34,6 +34,7 @@ RenderHandler::RenderHandler(DBHandler* db_handler,
                              const bool enable_auto_clear_render_mem,
                              const int render_oom_retry_threshold,
                              const bool renderer_use_vulkan_driver,
+                             const bool renderer_prefer_igpu,
                              const SystemParameters system_parameters)
     : impl_(nullptr) {
   throw std::runtime_error(

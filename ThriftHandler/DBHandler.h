@@ -168,6 +168,7 @@ class DBHandler : public OmniSciIf {
             const bool allow_loop_joins,
             const bool enable_rendering,
             const bool renderer_use_vulkan_driver,
+            const bool renderer_prefer_igpu,
             const bool enable_auto_clear_render_mem,
             const int render_oom_retry_threshold,
             const size_t render_mem_bytes,
@@ -921,6 +922,7 @@ class DBHandler : public OmniSciIf {
 
   const bool enable_rendering_;
   const bool renderer_use_vulkan_driver_;
+  const bool renderer_prefer_igpu_;
   const bool enable_auto_clear_render_mem_;
   const int render_oom_retry_threshold_;
   const size_t max_concurrent_render_sessions_;
