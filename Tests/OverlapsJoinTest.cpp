@@ -16,6 +16,7 @@
 
 #include "QueryRunner/QueryRunner.h"
 
+#include <fmt/core.h>
 #include <gtest/gtest.h>
 #include <functional>
 #include <iostream>
@@ -48,6 +49,22 @@ bool skip_tests_on_gpu(const ExecutorDeviceType device_type) {
     continue;                                                \
   }
 
+struct ExecutionContext {
+  ExecutorDeviceType device_type;
+  bool hash_join_enabled;
+
+  std::string toString() const {
+    const auto device_str = device_type == ExecutorDeviceType::CPU ? "CPU" : "GPU";
+
+    return fmt::format(
+        "Execution Context:\n"
+        "  Device Type: {}\n"
+        "  Hash Join Enabled: {}\n",
+        device_str,
+        hash_join_enabled);
+  }
+};
+
 template <typename TEST_BODY>
 void executeAllScenarios(TEST_BODY fn) {
   for (const auto overlaps_state : {true, false}) {
@@ -67,7 +84,13 @@ void executeAllScenarios(TEST_BODY fn) {
 
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
       SKIP_NO_GPU();
-      fn(dt);
+      ExecutionContext execution_context{
+          .device_type = dt,
+          .hash_join_enabled = overlaps_state,
+      };
+      QR::get()->clearGpuMemory();
+      QR::get()->clearCpuMemory();
+      fn(execution_context);
     }
   }
 }
@@ -220,132 +243,132 @@ TargetValue execSQLWithAllowLoopJoin(const std::string& stmt,
 }
 
 TEST_F(OverlapsTest, SimplePointInPolyIntersects) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     const auto sql =
         "SELECT "
         "count(*) from "
         "does_intersect_a WHERE ST_Intersects(poly, pt);";
-    ASSERT_EQ(static_cast<int64_t>(2), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(2), v<int64_t>(execSQL(sql, ctx.device_type)));
   });
 }
 
 TEST_F(OverlapsTest, InnerJoinPointInPolyIntersects) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql =
         "SELECT "
         "count(*) from "
         "does_intersect_b as b JOIN does_intersect_a as a ON ST_Intersects(a.poly, "
         "b.pt);";
-    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, ctx.device_type)));
 
     sql =
         "SELECT count(*) from does_intersect_b as b JOIN "
         "does_intersect_a as a ON ST_Intersects(a.poly, b.pt);";
-    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, ctx.device_type)));
 
     sql =
         "SELECT "
         "count(*) from "
         "does_intersect_b as b JOIN does_intersect_a as a ON ST_Intersects(a.poly, "
         "ST_SetSRID(ST_Point(b.x, b.y), 4326));";
-    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, ctx.device_type)));
 
     sql =
         "SELECT count(*) from does_intersect_b as b JOIN "
         "does_intersect_a as a ON ST_Intersects(a.poly, "
         "ST_SetSRID(ST_Point(b.x, b.y), 4326));";
-    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, ctx.device_type)));
   });
 }
 
 // TODO(jclay): This should succeed without failure.
 // For now, we test against the (incorrect) failure.
 TEST_F(OverlapsTest, InnerJoinPolyInPointIntersects) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     const auto sql =
         "SELECT "
         "count(*) from "
         "does_intersect_b as b JOIN does_intersect_a as a ON ST_Intersects(a.pt, "
         "b.poly);";
     if (g_enable_hashjoin_many_to_many) {
-      EXPECT_ANY_THROW(execSQL(sql, dt));
+      EXPECT_ANY_THROW(execSQL(sql, ctx.device_type));
     } else {
       // Note(jclay): We return 0, postgis returns 4
       // Note(adb): Now we return 3. Progress?
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
+      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, ctx.device_type)));
     }
   });
 }
 
 TEST_F(OverlapsTest, InnerJoinPolyPolyIntersects) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                   JOIN does_intersect_b as b
                   ON ST_Intersects(a.poly, b.poly);)";
-    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, ctx.device_type)));
   });
 }
 
 TEST_F(OverlapsTest, InnerJoinMPolyPolyIntersects) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                   JOIN does_intersect_b as b
                   ON ST_Intersects(a.mpoly, b.poly);)";
-    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, ctx.device_type)));
   });
 }
 
 TEST_F(OverlapsTest, InnerJoinMPolyMPolyIntersects) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                   JOIN does_intersect_b as b
                   ON ST_Intersects(a.mpoly, b.mpoly);)";
-    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, ctx.device_type)));
   });
 }
 
 TEST_F(OverlapsTest, LeftJoinMPolyPolyIntersects) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                   LEFT JOIN does_intersect_b as b
                   ON ST_Intersects(a.mpoly, b.poly);)";
-    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, ctx.device_type)));
   });
 }
 
 TEST_F(OverlapsTest, LeftJoinMPolyMPolyIntersects) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                   LEFT JOIN does_intersect_b as b
                   ON ST_Intersects(a.mpoly, b.poly);)";
-    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, ctx.device_type)));
   });
 }
 
 TEST_F(OverlapsTest, InnerJoinPolyPolyIntersectsTranspose) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     const auto sql = R"(SELECT count(*) from does_intersect_a as a
                         JOIN does_intersect_b as b
                         ON ST_Intersects(b.poly, a.poly);)";
-    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, ctx.device_type)));
   });
 }
 
 TEST_F(OverlapsTest, LeftJoinPolyPolyIntersects) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_b as b
                       LEFT JOIN does_intersect_a as a
                       ON ST_Intersects(a.poly, b.poly);)";
-    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(execSQL(sql, ctx.device_type)));
   });
 }
 
 TEST_F(OverlapsTest, LeftJoinPointInPolyIntersects) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                       LEFT JOIN does_intersect_b as b
                       ON ST_Intersects(b.poly, a.pt);)";
-    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, ctx.device_type)));
   });
 }
 
@@ -354,24 +377,24 @@ TEST_F(OverlapsTest, LeftJoinPointInPolyIntersects) {
 // For now, we test against the (incorrect) failure.
 // It should return 3.
 TEST_F(OverlapsTest, LeftJoinPointInPolyIntersectsWrongLHS) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                       LEFT JOIN does_intersect_b as b
                       ON ST_Intersects(a.poly, b.pt);)";
     if (g_enable_hashjoin_many_to_many) {
-      EXPECT_ANY_THROW(execSQL(sql, dt));
+      EXPECT_ANY_THROW(execSQL(sql, ctx.device_type));
     } else {
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
+      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, ctx.device_type)));
     }
   });
 }
 
 TEST_F(OverlapsTest, InnerJoinPolyPolyContains) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_b as b
                   JOIN does_intersect_a as a
                   ON ST_Contains(a.poly, b.poly);)";
-    ASSERT_EQ(static_cast<int64_t>(0), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(0), v<int64_t>(execSQL(sql, ctx.device_type)));
   });
 }
 
@@ -380,59 +403,59 @@ TEST_F(OverlapsTest, InnerJoinPolyPolyContains) {
 // - ST_Contains_MultiPolygon_Polygon
 // As a result, the following should succeed rather than throw error.
 TEST_F(OverlapsTest, InnerJoinMPolyPolyContains) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                   JOIN does_intersect_b as b
                   ON ST_Contains(a.mpoly, b.poly);)";
-    EXPECT_ANY_THROW(execSQL(sql, dt));
+    EXPECT_ANY_THROW(execSQL(sql, ctx.device_type));
   });
 }
 
 TEST_F(OverlapsTest, InnerJoinMPolyMPolyContains) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_a as a
                   JOIN does_intersect_b as b
                   ON ST_Contains(a.mpoly, b.poly);)";
     // should return 4
-    EXPECT_ANY_THROW(execSQL(sql, dt));
+    EXPECT_ANY_THROW(execSQL(sql, ctx.device_type));
   });
 }
 
 // NOTE(jclay): We don't support multipoly / poly ST_Contains
 TEST_F(OverlapsTest, LeftJoinMPolyPolyContains) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_b as b
                   LEFT JOIN does_intersect_a as a
                   ON ST_Contains(a.mpoly, b.poly);)";
     // should return 4
-    EXPECT_ANY_THROW(execSQL(sql, dt));
+    EXPECT_ANY_THROW(execSQL(sql, ctx.device_type));
   });
 }
 
 TEST_F(OverlapsTest, LeftJoinMPolyMPolyContains) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql = R"(SELECT count(*) from does_intersect_b as b
                   LEFT JOIN does_intersect_a as a
                   ON ST_Contains(a.mpoly, b.mpoly);)";
     // should return 4
-    EXPECT_ANY_THROW(execSQL(sql, dt));
+    EXPECT_ANY_THROW(execSQL(sql, ctx.device_type));
   });
 }
 
 TEST_F(OverlapsTest, JoinPolyPointContains) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql =
         "SELECT "
         "count(*) from "
         "does_intersect_b as b JOIN does_intersect_a as a ON ST_Contains(a.poly, b.pt);";
-    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, ctx.device_type)));
 
     sql =
         "SELECT "
         "count(*) from "
         "does_intersect_b as b JOIN does_intersect_a as a ON "
         "ST_Contains(a.poly, ST_SetSRID(ST_Point(b.x, b.y), 4326));";
-    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, ctx.device_type)));
 
     // sql =
     //     "SELECT "
@@ -444,40 +467,40 @@ TEST_F(OverlapsTest, JoinPolyPointContains) {
 }
 
 TEST_F(OverlapsTest, JoinPolyCentroidContains) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     auto sql =
         "SELECT "
         "count(*) from "
         "does_intersect_b as b JOIN does_intersect_a as a ON "
         "ST_Contains(a.poly, ST_SetSRID(ST_Centroid(b.poly), 4326));";
-    ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(execSQL(sql, ctx.device_type)));
 
     sql =
         "SELECT "
         "count(*) from "
         "does_intersect_b as b JOIN does_intersect_a as a ON "
         "ST_Contains(a.poly, ST_SetSRID(ST_Centroid(b.mpoly), 4326));";
-    ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(execSQL(sql, ctx.device_type)));
   });
 }
 
 TEST_F(OverlapsTest, PolyPolyDoesNotIntersect) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     ASSERT_EQ(static_cast<int64_t>(0),
               v<int64_t>(execSQL("SELECT count(*) FROM does_not_intersect_b as b "
                                  "JOIN does_not_intersect_a as a "
                                  "ON ST_Intersects(a.poly, b.poly);",
-                                 dt)));
+                                 ctx.device_type)));
   });
 }
 
 TEST_F(OverlapsTest, EmptyPolyPolyJoin) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     const auto sql =
         "SELECT count(*) FROM does_not_intersect_a as a "
         "JOIN empty_table as b "
         "ON ST_Intersects(a.poly, b.poly);";
-    ASSERT_EQ(static_cast<int64_t>(0), v<int64_t>(execSQL(sql, dt)));
+    ASSERT_EQ(static_cast<int64_t>(0), v<int64_t>(execSQL(sql, ctx.device_type)));
   });
 }
 
@@ -1330,7 +1353,7 @@ class MultiFragGeoOverlapsJoinTest : public ::testing::Test {
 
 TEST_F(MultiFragGeoOverlapsJoinTest, Point) {
   // point - point by stwithin
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     std::vector<std::string> cols{"gpt", "gpt4e", "gpt4n"};
     int64_t single_frag_res = 10;
     auto execute_tests = [&](std::vector<std::string>& col_names) {
@@ -1340,8 +1363,10 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Point) {
             << ", s." << c << ");";
         mq2 << "SELECT COUNT(1) FROM mfgeo3 s, mfgeo3 r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
-        auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
-        auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
+        auto multi_frag_res1 =
+            v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), ctx.device_type));
+        auto multi_frag_res2 =
+            v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), ctx.device_type));
         ASSERT_EQ(single_frag_res, multi_frag_res1) << mq1.str();
         ASSERT_EQ(single_frag_res, multi_frag_res2) << mq2.str();
       }
@@ -1352,7 +1377,7 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Point) {
 
 TEST_F(MultiFragGeoOverlapsJoinTest, Linestring) {
   // linestring - polygon by st_intersect
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     std::vector<std::string> cols{"gl", "gl4e", "gl4n"};
     int64_t single_frag_res = 22;
     auto execute_tests = [&](std::vector<std::string>& col_names) {
@@ -1362,8 +1387,10 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Linestring) {
             << ", r." << c << ");";
         mq2 << "SELECT COUNT(1) FROM mfgeo3 s, mfgeo3 r WHERE ST_INTERSECTS(s." << c
             << ", r." << c << ");";
-        auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
-        auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
+        auto multi_frag_res1 =
+            v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), ctx.device_type));
+        auto multi_frag_res2 =
+            v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), ctx.device_type));
         ASSERT_EQ(single_frag_res, multi_frag_res1) << mq1.str();
         ASSERT_EQ(single_frag_res, multi_frag_res2) << mq2.str();
       }
@@ -1374,7 +1401,7 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Linestring) {
 
 TEST_F(MultiFragGeoOverlapsJoinTest, Polygon) {
   // polygon - point by st_intersects
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     std::vector<std::string> cols{"gp", "gp4e", "gp4n"};
     int64_t single_frag_res = 100;
     auto execute_tests = [&](std::vector<std::string>& col_names) {
@@ -1384,8 +1411,10 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Polygon) {
             << ", s." << c << ");";
         mq2 << "SELECT COUNT(1) FROM mfgeo3 s, mfgeo3 r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
-        auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
-        auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
+        auto multi_frag_res1 =
+            v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), ctx.device_type));
+        auto multi_frag_res2 =
+            v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), ctx.device_type));
         ASSERT_EQ(single_frag_res, multi_frag_res1) << mq1.str();
         ASSERT_EQ(single_frag_res, multi_frag_res2) << mq2.str();
       }
@@ -1396,7 +1425,7 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Polygon) {
 
 TEST_F(MultiFragGeoOverlapsJoinTest, MultiPolygon) {
   // multipolygon - polygon by st_intersects
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     std::vector<std::string> cols{"gmp", "gmp4e", "gmp4n"};
     int64_t single_frag_res = 100;
     auto execute_tests = [&](std::vector<std::string>& col_names) {
@@ -1406,8 +1435,10 @@ TEST_F(MultiFragGeoOverlapsJoinTest, MultiPolygon) {
             << ", s." << c << ");";
         mq2 << "SELECT COUNT(1) FROM mfgeo3 s, mfgeo3 r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
-        auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
-        auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
+        auto multi_frag_res1 =
+            v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), ctx.device_type));
+        auto multi_frag_res2 =
+            v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), ctx.device_type));
         ASSERT_EQ(single_frag_res, multi_frag_res1) << mq1.str();
         ASSERT_EQ(single_frag_res, multi_frag_res2) << mq2.str();
       }
@@ -1418,7 +1449,7 @@ TEST_F(MultiFragGeoOverlapsJoinTest, MultiPolygon) {
 
 TEST_F(MultiFragGeoOverlapsJoinTest, Point_Nullable) {
   // point - point by stwithin
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     std::vector<std::string> cols{"gpt", "gpt4e", "gpt4n"};
     int64_t single_frag_res = 8;
     auto execute_tests = [&](std::vector<std::string>& col_names) {
@@ -1428,8 +1459,10 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Point_Nullable) {
             << ", s." << c << ");";
         mq2 << "SELECT COUNT(1) FROM mfgeo3_n s, mfgeo3_n r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
-        auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
-        auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
+        auto multi_frag_res1 =
+            v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), ctx.device_type));
+        auto multi_frag_res2 =
+            v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), ctx.device_type));
         ASSERT_EQ(single_frag_res, multi_frag_res1) << mq1.str();
         ASSERT_EQ(single_frag_res, multi_frag_res2) << mq2.str();
       }
@@ -1440,7 +1473,7 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Point_Nullable) {
 
 TEST_F(MultiFragGeoOverlapsJoinTest, Linestring_Nullable) {
   // linestring - polygon by st_intersect
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     std::vector<std::string> cols{"gl", "gl4e", "gl4n"};
     int64_t single_frag_res = 14;
     auto execute_tests = [&](std::vector<std::string>& col_names) {
@@ -1450,8 +1483,10 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Linestring_Nullable) {
             << ", r." << c << ");";
         mq2 << "SELECT COUNT(1) FROM mfgeo3_n s, mfgeo3_n r WHERE ST_INTERSECTS(s." << c
             << ", r." << c << ");";
-        auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
-        auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
+        auto multi_frag_res1 =
+            v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), ctx.device_type));
+        auto multi_frag_res2 =
+            v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), ctx.device_type));
         ASSERT_EQ(single_frag_res, multi_frag_res1) << mq1.str();
         ASSERT_EQ(single_frag_res, multi_frag_res2) << mq2.str();
       }
@@ -1462,7 +1497,7 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Linestring_Nullable) {
 
 TEST_F(MultiFragGeoOverlapsJoinTest, Polygon_Nullable) {
   // polygon - point by st_intersects
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     std::vector<std::string> cols{"gp", "gp4e", "gp4n"};
     int64_t single_frag_res = 64;
     auto execute_tests = [&](std::vector<std::string>& col_names) {
@@ -1472,8 +1507,10 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Polygon_Nullable) {
             << ", s." << c << ");";
         mq2 << "SELECT COUNT(1) FROM mfgeo3_n s, mfgeo3_n r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
-        auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
-        auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
+        auto multi_frag_res1 =
+            v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), ctx.device_type));
+        auto multi_frag_res2 =
+            v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), ctx.device_type));
         ASSERT_EQ(single_frag_res, multi_frag_res1) << mq1.str();
         ASSERT_EQ(single_frag_res, multi_frag_res2) << mq2.str();
       }
@@ -1484,7 +1521,7 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Polygon_Nullable) {
 
 TEST_F(MultiFragGeoOverlapsJoinTest, MultiPolygon_Nullable) {
   // multipolygon - polygon by st_intersects
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     std::vector<std::string> cols{"gmp", "gmp4e", "gmp4n"};
     int64_t single_frag_res = 64;
     auto execute_tests = [&](std::vector<std::string>& col_names) {
@@ -1494,8 +1531,10 @@ TEST_F(MultiFragGeoOverlapsJoinTest, MultiPolygon_Nullable) {
             << ", s." << c << ");";
         mq2 << "SELECT COUNT(1) FROM mfgeo3_n s, mfgeo3_n r WHERE ST_INTERSECTS(r." << c
             << ", s." << c << ");";
-        auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
-        auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
+        auto multi_frag_res1 =
+            v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), ctx.device_type));
+        auto multi_frag_res2 =
+            v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), ctx.device_type));
         ASSERT_EQ(single_frag_res, multi_frag_res1) << mq1.str();
         ASSERT_EQ(single_frag_res, multi_frag_res2) << mq2.str();
       }
@@ -1505,7 +1544,7 @@ TEST_F(MultiFragGeoOverlapsJoinTest, MultiPolygon_Nullable) {
 }
 
 TEST_F(MultiFragGeoOverlapsJoinTest, Nullable_Geo_Exhaustive) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     int64_t single_frag_res1 = 114;
     int64_t single_frag_res2 = 5163;
     int64_t single_frag_res3 = 2178;
@@ -1519,10 +1558,14 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Nullable_Geo_Exhaustive) {
            "s.pt);";
     mq4 << "SELECT COUNT(1) FROM mfgeo_n_v2 r, mfgeo_n_v2 s WHERE ST_INTERSECTS(r.mp, "
            "s.pt);";
-    auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
-    auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
-    auto multi_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), dt));
-    auto multi_frag_res4 = v<int64_t>(execSQLWithAllowLoopJoin(mq4.str(), dt));
+    auto multi_frag_res1 =
+        v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), ctx.device_type));
+    auto multi_frag_res2 =
+        v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), ctx.device_type));
+    auto multi_frag_res3 =
+        v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), ctx.device_type));
+    auto multi_frag_res4 =
+        v<int64_t>(execSQLWithAllowLoopJoin(mq4.str(), ctx.device_type));
     ASSERT_EQ(single_frag_res1, multi_frag_res1) << mq1.str();
     ASSERT_EQ(single_frag_res2, multi_frag_res2) << mq2.str();
     ASSERT_EQ(single_frag_res3, multi_frag_res3) << mq3.str();
@@ -1537,7 +1580,7 @@ class ParallelLinearization : public ::testing::Test {
 };
 
 TEST_F(ParallelLinearization, GeoJoin) {
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     int64_t single_frag_res1 = 1020;
     int64_t single_frag_res2 = 80940;
     int64_t single_frag_res3 = 38378;
@@ -1547,17 +1590,21 @@ TEST_F(ParallelLinearization, GeoJoin) {
     mq2 << "SELECT COUNT(1) FROM mfgeo_p r, mfgeo_p s WHERE ST_INTERSECTS(s.p, r.l);";
     mq3 << "SELECT COUNT(1) FROM mfgeo_p r, mfgeo_p s WHERE ST_INTERSECTS(r.p, s.pt);";
     mq4 << "SELECT COUNT(1) FROM mfgeo_p r, mfgeo_p s WHERE ST_INTERSECTS(r.mp, s.pt);";
-    auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
-    auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
-    auto multi_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), dt));
-    auto multi_frag_res4 = v<int64_t>(execSQLWithAllowLoopJoin(mq4.str(), dt));
+    auto multi_frag_res1 =
+        v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), ctx.device_type));
+    auto multi_frag_res2 =
+        v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), ctx.device_type));
+    auto multi_frag_res3 =
+        v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), ctx.device_type));
+    auto multi_frag_res4 =
+        v<int64_t>(execSQLWithAllowLoopJoin(mq4.str(), ctx.device_type));
     ASSERT_EQ(single_frag_res1, multi_frag_res1) << mq1.str();
     ASSERT_EQ(single_frag_res2, multi_frag_res2) << mq2.str();
     ASSERT_EQ(single_frag_res3, multi_frag_res3) << mq3.str();
     ASSERT_EQ(single_frag_res4, multi_frag_res4) << mq4.str();
   });
 
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     int64_t single_frag_res1 = 895;
     int64_t single_frag_res2 = 70115;
     int64_t single_frag_res3 = 33096;
@@ -1570,17 +1617,21 @@ TEST_F(ParallelLinearization, GeoJoin) {
            "s.pt);";
     mq4 << "SELECT COUNT(1) FROM mfgeo_n_p r, mfgeo_n_p s WHERE ST_INTERSECTS(r.mp, "
            "s.pt);";
-    auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
-    auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
-    auto multi_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), dt));
-    auto multi_frag_res4 = v<int64_t>(execSQLWithAllowLoopJoin(mq4.str(), dt));
+    auto multi_frag_res1 =
+        v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), ctx.device_type));
+    auto multi_frag_res2 =
+        v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), ctx.device_type));
+    auto multi_frag_res3 =
+        v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), ctx.device_type));
+    auto multi_frag_res4 =
+        v<int64_t>(execSQLWithAllowLoopJoin(mq4.str(), ctx.device_type));
     ASSERT_EQ(single_frag_res1, multi_frag_res1) << mq1.str();
     ASSERT_EQ(single_frag_res2, multi_frag_res2) << mq2.str();
     ASSERT_EQ(single_frag_res3, multi_frag_res3) << mq3.str();
     ASSERT_EQ(single_frag_res4, multi_frag_res4) << mq4.str();
   });
 
-  executeAllScenarios([](ExecutorDeviceType dt) -> void {
+  executeAllScenarios([](const ExecutionContext ctx) -> void {
     int64_t single_frag_res1 = 914;
     int64_t single_frag_res2 = 71556;
     int64_t single_frag_res3 = 33905;
@@ -1594,15 +1645,336 @@ TEST_F(ParallelLinearization, GeoJoin) {
            "s.pt);";
     mq4 << "SELECT COUNT(1) FROM mfgeo_n2_p r, mfgeo_n2_p s WHERE ST_INTERSECTS(r.mp, "
            "s.pt);";
-    auto multi_frag_res1 = v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), dt));
-    auto multi_frag_res2 = v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), dt));
-    auto multi_frag_res3 = v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), dt));
-    auto multi_frag_res4 = v<int64_t>(execSQLWithAllowLoopJoin(mq4.str(), dt));
+    auto multi_frag_res1 =
+        v<int64_t>(execSQLWithAllowLoopJoin(mq1.str(), ctx.device_type));
+    auto multi_frag_res2 =
+        v<int64_t>(execSQLWithAllowLoopJoin(mq2.str(), ctx.device_type));
+    auto multi_frag_res3 =
+        v<int64_t>(execSQLWithAllowLoopJoin(mq3.str(), ctx.device_type));
+    auto multi_frag_res4 =
+        v<int64_t>(execSQLWithAllowLoopJoin(mq4.str(), ctx.device_type));
     ASSERT_EQ(single_frag_res1, multi_frag_res1) << mq1.str();
     ASSERT_EQ(single_frag_res2, multi_frag_res2) << mq2.str();
     ASSERT_EQ(single_frag_res3, multi_frag_res3) << mq3.str();
     ASSERT_EQ(single_frag_res4, multi_frag_res4) << mq4.str();
   });
+}
+
+namespace range_join {
+
+const auto setup_stmts = {
+    "CREATE TABLE t1_comp32 ( p1 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32) );",
+    "CREATE TABLE t2_comp32 ( p1 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32) );",
+    "CREATE TABLE t1 ( p1 GEOMETRY(POINT, 4326) ENCODING NONE );",
+    "CREATE TABLE t2 ( p1 GEOMETRY(POINT, 4326) ENCODING NONE );",
+};
+
+const auto insert_data_stmts = {
+    "INSERT INTO t1_comp32 VALUES ( 'point(0.123 0.123)' );",
+    "INSERT INTO t1_comp32 VALUES ( 'point(1.123 0.123)' );",
+    "INSERT INTO t1_comp32 VALUES ( 'point(2.123 2.123)' );",
+    "INSERT INTO t1_comp32 VALUES ( 'point(3.123 30.123)' );",
+
+    "INSERT INTO t1 VALUES ( 'point(0.123 0.123)' );",
+    "INSERT INTO t1 VALUES ( 'point(1.123 0.123)' );",
+    "INSERT INTO t1 VALUES ( 'point(2.123 2.123)' );",
+    "INSERT INTO t1 VALUES ( 'point(3.123 30.123)' );",
+
+    "INSERT INTO t2_comp32 VALUES ( 'point(0.1 0.1)' );",
+    "INSERT INTO t2_comp32 VALUES ( 'point(10.123 40.123)' );",
+    "INSERT INTO t2_comp32 VALUES ( 'point(102.123 2.123)' );",
+    "INSERT INTO t2_comp32 VALUES ( 'point(103.123 30.123)' );",
+
+    "INSERT INTO t2 VALUES ( 'point(0.1 0.1)' );",
+    "INSERT INTO t2 VALUES ( 'point(10.123 40.123)' );",
+    "INSERT INTO t2 VALUES ( 'point(102.123 2.123)' );",
+    "INSERT INTO t2 VALUES ( 'point(103.123 30.123)' );",
+};
+
+const auto cleanup_stmts = {
+    "DROP TABLE IF EXISTS t1_comp32;",
+    "DROP TABLE IF EXISTS t2_comp32;",
+    "DROP TABLE IF EXISTS t1;",
+    "DROP TABLE IF EXISTS t2;",
+};
+
+}  // namespace range_join
+struct BoundsWithValues {
+  double upper_bound;
+  int expected_value;
+
+  std::string toString() const {
+    return fmt::format(
+        "BoundsWithValues:\n"
+        "  upper_bound: {}\n"
+        "  expected_value: {}\n",
+        upper_bound,
+        expected_value);
+  }
+};
+
+class RangeJoinTest : public ::testing::Test {
+ protected:
+  static void SetUpTestSuite() {
+    for (const auto& stmt : range_join::cleanup_stmts) {
+      QR::get()->runDDLStatement(stmt);
+    }
+
+    for (const auto& stmt : range_join::setup_stmts) {
+      QR::get()->runDDLStatement(stmt);
+    }
+
+    for (const auto& stmt : range_join::insert_data_stmts) {
+      QR::get()->runSQL(stmt, ExecutorDeviceType::CPU);
+    }
+  }
+
+  static void TearDownTestSuite() {
+    for (const auto& stmt : range_join::cleanup_stmts) {
+      QR::get()->runDDLStatement(stmt);
+    }
+  }
+
+  std::vector<BoundsWithValues> testBounds() {
+    return {
+        BoundsWithValues{.upper_bound = 1, .expected_value = 1},
+        BoundsWithValues{.upper_bound = 6.33, .expected_value = 3},
+        BoundsWithValues{.upper_bound = 60, .expected_value = 8},
+        BoundsWithValues{.upper_bound = 1000, .expected_value = 16},
+    };
+  };
+};
+
+TargetValue execSQL(const std::string& stmt,
+                    const ExecutionContext ctx,
+                    const bool geo_return_geo_tv = true) {
+  auto rows = QR::get()->runSQL(stmt, ctx.device_type, true, false);
+  if (geo_return_geo_tv) {
+    rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+  }
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size()) << stmt;
+  return crt_row[0];
+}
+
+TargetValue execSQLWithAllowLoopJoin(const std::string& stmt,
+                                     const ExecutionContext ctx,
+                                     const bool geo_return_geo_tv = true) {
+  auto rows = QR::get()->runSQL(stmt, ctx.device_type, true, true);
+  if (geo_return_geo_tv) {
+    rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+  }
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size()) << stmt;
+  return crt_row[0];
+}
+
+TEST_F(RangeJoinTest, DistanceLessThanEqCompressedCols) {
+  executeAllScenarios([this](const ExecutionContext ctx) -> void {
+    size_t expected_hash_tables = 0;
+
+    if (ctx.hash_join_enabled) {
+      ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+          << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+      expected_hash_tables++;
+    }
+    const auto tableA = "t1_comp32";
+    const auto tableB = "t2_comp32";
+
+    for (const auto& b : testBounds()) {
+      auto sql = fmt::format(
+          "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
+          tableA,
+          tableB,
+          tableA,
+          tableB,
+          b.upper_bound);
+
+      ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
+          << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+
+      if (ctx.hash_join_enabled) {
+        ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+            << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+        expected_hash_tables++;
+      }
+    }
+  });
+}
+
+TEST_F(RangeJoinTest, DistanceLessThanEqUnCompressedCols) {
+  const auto tableA = "t1";
+  const auto tableB = "t2";
+
+  executeAllScenarios([&](const ExecutionContext ctx) -> void {
+    size_t expected_hash_tables = 0;
+
+    if (ctx.hash_join_enabled) {
+      ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+          << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+      expected_hash_tables++;
+    }
+
+    for (const auto& b : testBounds()) {
+      auto sql = fmt::format(
+          "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
+          tableA,
+          tableB,
+          tableA,
+          tableB,
+          b.upper_bound);
+
+      ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
+          << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+
+      if (ctx.hash_join_enabled) {
+        ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+            << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+        expected_hash_tables++;
+      }
+    }
+  });
+}
+
+TEST_F(RangeJoinTest, DistanceLessThanMixedEncoding) {
+  {
+    const auto tableA = "t1_comp32";
+    const auto tableB = "t2";
+
+    executeAllScenarios([&](const ExecutionContext ctx) -> void {
+      size_t expected_hash_tables = 0;
+
+      if (ctx.hash_join_enabled) {
+        ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+            << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+        expected_hash_tables++;
+      }
+
+      for (const auto& b : testBounds()) {
+        auto sql = fmt::format(
+            "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
+            tableA,
+            tableB,
+            tableA,
+            tableB,
+            b.upper_bound);
+
+        ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
+            << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+
+        if (ctx.hash_join_enabled) {
+          ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(),
+                    expected_hash_tables)
+              << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+          expected_hash_tables++;
+        }
+      }
+    });
+  }
+
+  {  // run same tests again, transpose LHS & RHS
+    const auto tableA = "t2";
+    const auto tableB = "t1_comp32";
+
+    executeAllScenarios([&](const ExecutionContext ctx) -> void {
+      size_t expected_hash_tables = 0;
+
+      if (ctx.hash_join_enabled) {
+        ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+            << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+        expected_hash_tables++;
+      }
+
+      for (const auto& b : testBounds()) {
+        auto sql = fmt::format(
+            "SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
+            tableA,
+            tableB,
+            tableA,
+            tableB,
+            b.upper_bound);
+
+        ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
+            << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+
+        if (ctx.hash_join_enabled) {
+          ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(),
+                    expected_hash_tables)
+              << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+          expected_hash_tables++;
+        }
+      }
+    });
+  }
+}
+
+TEST_F(RangeJoinTest, IsEnabledByDefault) {
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+  ExecutionContext ctx{
+      .device_type = ExecutorDeviceType::CPU,
+      .hash_join_enabled = true,
+  };
+  size_t expected_hash_tables{0};
+
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+      << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+  expected_hash_tables++;
+
+  const auto tableA = "t1_comp32";
+  const auto tableB = "t2_comp32";
+
+  for (const auto& b : testBounds()) {
+    auto sql =
+        fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
+                    tableA,
+                    tableB,
+                    tableA,
+                    tableB,
+                    b.upper_bound);
+
+    ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
+        << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+
+    ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+        << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+    expected_hash_tables++;
+  }
+}
+
+TEST_F(RangeJoinTest, CanBeDisabled) {
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+  g_enable_distance_rangejoin = false;
+
+  ExecutionContext ctx{
+      .device_type = ExecutorDeviceType::CPU,
+      .hash_join_enabled = false,
+  };
+
+  const size_t expected_hash_tables{0};
+
+  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+      << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+
+  const auto tableA = "t1_comp32";
+  const auto tableB = "t2_comp32";
+
+  for (const auto& b : testBounds()) {
+    auto sql =
+        fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
+                    tableA,
+                    tableB,
+                    tableA,
+                    tableB,
+                    b.upper_bound);
+
+    ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
+        << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+
+    ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+        << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+  }
 }
 
 int main(int argc, char* argv[]) {
