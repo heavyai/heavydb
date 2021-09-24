@@ -1351,8 +1351,8 @@ void create_compound(
   for (const auto node_idx : pattern) {
     const auto ra_node = nodes[node_idx];
     auto registered_query_hint_it = query_hints.find(ra_node->toHash());
-    hint_registered = registered_query_hint_it != query_hints.end();
-    if (hint_registered) {
+    if (registered_query_hint_it != query_hints.end()) {
+      hint_registered = true;
       node_hash = registered_query_hint_it->first;
       registered_query_hint = registered_query_hint_it->second;
     }
@@ -1925,6 +1925,23 @@ class RexInputBackpropagationVisitor : public RexDeepCopyVisitor {
   mutable RelProject* node_;
 };
 
+void propagate_hints_to_new_project(
+    std::shared_ptr<RelProject> prev_node,
+    std::shared_ptr<RelProject> new_node,
+    std::unordered_map<size_t, RegisteredQueryHint>& query_hints) {
+  auto delivered_hints = prev_node->getDeliveredHints();
+  bool needs_propagate_hints = !delivered_hints->empty();
+  if (needs_propagate_hints) {
+    for (auto& kv : *delivered_hints) {
+      new_node->addHint(kv.second);
+    }
+    auto prev_it = query_hints.find(prev_node->toHash());
+    // query hint for the prev projection node should be registered
+    CHECK(prev_it != query_hints.end());
+    query_hints.emplace(new_node->toHash(), prev_it->second);
+  }
+}
+
 /**
  * Detect the presence of window function operators nested inside expressions. Separate
  * the window function operator from the expression, computing the expression as a
@@ -1941,7 +1958,8 @@ class RexInputBackpropagationVisitor : public RexDeepCopyVisitor {
  expression copy
  */
 void separate_window_function_expressions(
-    std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+    std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+    std::unordered_map<size_t, RegisteredQueryHint>& query_hints) {
   std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
 
   WindowFunctionDetectionVisitor visitor;
@@ -2034,6 +2052,7 @@ void separate_window_function_expressions(
           std::make_shared<RelProject>(new_scalar_exprs,
                                        window_func_project_node->getFields(),
                                        window_func_project_node);
+      propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
       node_list.insert(std::next(node_itr), new_project);
 
       // Rebind all the following inputs
@@ -2077,7 +2096,8 @@ class RexInputCollector : public RexVisitor<RexInputSet> {
  */
 void add_window_function_pre_project(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes,
-    const bool always_add_project_if_first_project_is_window_expr) {
+    const bool always_add_project_if_first_project_is_window_expr,
+    std::unordered_map<size_t, RegisteredQueryHint>& query_hints) {
   std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
   size_t project_node_counter{0};
   for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
@@ -2158,6 +2178,7 @@ void add_window_function_pre_project(
     }
 
     auto new_project = std::make_shared<RelProject>(scalar_exprs, fields, prev_node);
+    propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
     node_list.insert(node_itr, new_project);
     window_func_project_node->replaceInput(
         prev_node, new_project, old_index_to_new_index);
@@ -2737,9 +2758,11 @@ void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
   }
   eliminate_dead_columns(nodes_);
   eliminate_dead_subqueries(subqueries_, nodes_.back().get());
-  separate_window_function_expressions(nodes_);
+  separate_window_function_expressions(nodes_, query_hint_);
   add_window_function_pre_project(
-      nodes_, g_cluster /* always_add_project_if_first_project_is_window_expr */);
+      nodes_,
+      g_cluster /* always_add_project_if_first_project_is_window_expr */,
+      query_hint_);
   coalesce_nodes(nodes_, left_deep_joins, query_hint_);
   CHECK(nodes_.back().use_count() == 1);
   create_left_deep_join(nodes_);

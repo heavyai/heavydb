@@ -67,7 +67,9 @@ std::shared_ptr<ResultSet> run_query(const std::string& query_str,
 }
 
 void createTable() {
-  QR::get()->runDDLStatement("CREATE TABLE SQL_HINT_DUMMY(key int);");
+  QR::get()->runDDLStatement(
+      "CREATE TABLE SQL_HINT_DUMMY(key int, ts1 timestamp(0) encoding fixed(32), ts2 "
+      "timestamp(0) encoding fixed(32), str1 TEXT ENCODING DICT(16));");
   QR::get()->runDDLStatement(
       "CREATE TABLE geospatial_test(id INT, p POINT, l LINESTRING, poly POLYGON);");
   QR::get()->runDDLStatement(
@@ -87,9 +89,9 @@ TEST(kCpuMode, ForceToCPUMode) {
   if (QR::get()->gpusPresent()) {
     auto query_hints = QR::get()->getParsedQueryHint(query_with_cpu_mode_hint);
     const bool cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
-    CHECK(cpu_mode_enabled);
+    EXPECT_TRUE(cpu_mode_enabled);
     query_hints = QR::get()->getParsedQueryHint(query_without_cpu_mode_hint);
-    CHECK(!query_hints.isAnyQueryHintDelivered());
+    EXPECT_FALSE(query_hints.isAnyQueryHintDelivered());
   }
 }
 
@@ -239,43 +241,43 @@ TEST(QueryHint, checkQueryLayoutHintWithEnablingColumnarOutput) {
   {
     auto query_hints = QR::get()->getParsedQueryHint(q1);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
-    CHECK(!hint_enabled);
+    EXPECT_FALSE(hint_enabled);
   }
 
   {
     auto query_hints = QR::get()->getParsedQueryHint(q2);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kRowwiseOutput);
-    CHECK(hint_enabled);
+    EXPECT_TRUE(hint_enabled);
   }
 
   {
     auto query_hints = QR::get()->getParsedQueryHint(q3);
     auto hint_enabled = query_hints.isAnyQueryHintDelivered();
-    CHECK(!hint_enabled);
+    EXPECT_FALSE(hint_enabled);
   }
 
   {
     auto query_hints = QR::get()->getParsedQueryHint(q4);
     auto hint_enabled = query_hints.isAnyQueryHintDelivered();
-    CHECK(!hint_enabled);
+    EXPECT_FALSE(hint_enabled);
   }
 
   {
     auto query_hints = QR::get()->getParsedQueryHint(q5);
     auto hint_enabled = query_hints.isAnyQueryHintDelivered();
-    CHECK(!hint_enabled);
+    EXPECT_FALSE(hint_enabled);
   }
 
   {
     auto query_hints = QR::get()->getParsedQueryHint(q6);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kRowwiseOutput);
-    CHECK(hint_enabled);
+    EXPECT_TRUE(hint_enabled);
   }
 
   {
     auto query_hints = QR::get()->getParsedQueryHint(q7);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
-    CHECK(!hint_enabled);
+    EXPECT_FALSE(hint_enabled);
   }
 }
 
@@ -297,43 +299,43 @@ TEST(QueryHint, checkQueryLayoutHintWithoutEnablingColumnarOutput) {
   {
     auto query_hints = QR::get()->getParsedQueryHint(q1);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
-    CHECK(hint_enabled);
+    EXPECT_TRUE(hint_enabled);
   }
 
   {
     auto query_hints = QR::get()->getParsedQueryHint(q2);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kRowwiseOutput);
-    CHECK(!hint_enabled);
+    EXPECT_FALSE(hint_enabled);
   }
 
   {
     auto query_hints = QR::get()->getParsedQueryHint(q3);
     auto hint_enabled = query_hints.isAnyQueryHintDelivered();
-    CHECK(!hint_enabled);
+    EXPECT_FALSE(hint_enabled);
   }
 
   {
     auto query_hints = QR::get()->getParsedQueryHint(q4);
     auto hint_enabled = query_hints.isAnyQueryHintDelivered();
-    CHECK(!hint_enabled);
+    EXPECT_FALSE(hint_enabled);
   }
 
   {
     auto query_hints = QR::get()->getParsedQueryHint(q5);
     auto hint_enabled = query_hints.isAnyQueryHintDelivered();
-    CHECK(!hint_enabled);
+    EXPECT_FALSE(hint_enabled);
   }
 
   {
     auto query_hints = QR::get()->getParsedQueryHint(q6);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kRowwiseOutput);
-    CHECK(!hint_enabled);
+    EXPECT_FALSE(hint_enabled);
   }
 
   {
     auto query_hints = QR::get()->getParsedQueryHint(q7);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
-    CHECK(hint_enabled);
+    EXPECT_TRUE(hint_enabled);
   }
 }
 
@@ -352,16 +354,18 @@ TEST(QueryHint, UDF) {
       "cpu_mode */ key FROM SQL_HINT_DUMMY)));";
   {
     auto query_hints = QR::get()->getParsedQueryHints(q1);
-    CHECK(query_hints);
-    CHECK(query_hints->size() == static_cast<size_t>(1));
-    CHECK(query_hints->begin()->second.isHintRegistered(QueryHint::kColumnarOutput));
+    EXPECT_TRUE(query_hints);
+    EXPECT_EQ(query_hints->size(), static_cast<size_t>(1));
+    EXPECT_TRUE(
+        query_hints->begin()->second.isHintRegistered(QueryHint::kColumnarOutput));
   }
   {
     auto query_hints = QR::get()->getParsedQueryHints(q2);
-    CHECK(query_hints);
-    CHECK(query_hints->size() == static_cast<size_t>(1));
-    CHECK(query_hints->begin()->second.isHintRegistered(QueryHint::kColumnarOutput));
-    CHECK(query_hints->begin()->second.isHintRegistered(QueryHint::kCpuMode));
+    EXPECT_TRUE(query_hints);
+    EXPECT_EQ(query_hints->size(), static_cast<size_t>(1));
+    EXPECT_TRUE(
+        query_hints->begin()->second.isHintRegistered(QueryHint::kColumnarOutput));
+    EXPECT_TRUE(query_hints->begin()->second.isHintRegistered(QueryHint::kCpuMode));
   }
 }
 
@@ -389,27 +393,59 @@ TEST(QueryHint, checkPerQueryBlockHint) {
         for (auto& hint : hints) {
           if (hint.second.isHintRegistered(QueryHint::kColumnarOutput)) {
             find_columnar_hint = true;
-            CHECK(!hint.second.isHintRegistered(QueryHint::kCpuMode));
+            EXPECT_FALSE(hint.second.isHintRegistered(QueryHint::kCpuMode));
             continue;
           }
           if (hint.second.isHintRegistered(QueryHint::kCpuMode)) {
             find_cpu_mode_hint = true;
-            CHECK(!hint.second.isHintRegistered(QueryHint::kColumnarOutput));
+            EXPECT_FALSE(hint.second.isHintRegistered(QueryHint::kColumnarOutput));
             continue;
           }
         }
-        CHECK(find_columnar_hint);
-        CHECK(find_cpu_mode_hint);
+        EXPECT_TRUE(find_columnar_hint);
+        EXPECT_TRUE(find_cpu_mode_hint);
       };
   {
     auto query_hints = QR::get()->getParsedQueryHints(q1);
-    CHECK(query_hints);
+    EXPECT_TRUE(query_hints);
     check_registered_hint(query_hints.value());
   }
   {
     auto query_hints = QR::get()->getParsedQueryHints(q2);
-    CHECK(query_hints);
+    EXPECT_TRUE(query_hints);
     check_registered_hint(query_hints.value());
+  }
+}
+
+TEST(QueryHint, WindowFunction) {
+  const auto enable_columnar_output = g_enable_columnar_output;
+  g_enable_columnar_output = false;
+  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
+    g_enable_columnar_output = enable_columnar_output;
+  };
+
+  const auto q1 =
+      "SELECT /*+ columnar_output */ str1, timestampdiff(minute, lag(ts1) over "
+      "(partition by str1 order by ts1), ts2) as m_el FROM SQL_HINT_DUMMY;";
+  {
+    auto query_hints = QR::get()->getParsedQueryHints(q1);
+    EXPECT_TRUE(query_hints);
+    for (auto& kv : *query_hints) {
+      auto query_hint = kv.second;
+      EXPECT_TRUE(query_hint.isHintRegistered(QueryHint::kColumnarOutput));
+    }
+  }
+  const auto q2 =
+      "SELECT /*+ columnar_output */ count(1) FROM (SELECT /*+ columnar_output */ str1, "
+      "timestampdiff(minute, lag(ts1) over (partition by str1 order by ts1), ts2) as "
+      "m_el FROM SQL_HINT_DUMMY) T1 WHERE T1.m_el < 30;";
+  {
+    auto query_hints = QR::get()->getParsedQueryHints(q2);
+    EXPECT_TRUE(query_hints);
+    for (auto& kv : *query_hints) {
+      auto query_hint = kv.second;
+      EXPECT_TRUE(query_hint.isHintRegistered(QueryHint::kColumnarOutput));
+    }
   }
 }
 
