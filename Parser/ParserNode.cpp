@@ -4143,6 +4143,15 @@ void checkNameSubstition(SubstituteMap& sMap) {
 }
 }  // namespace
 
+namespace {
+void disable_foreign_tables(const TableDescriptor* td) {
+  if (td->storageType == StorageType::FOREIGN_TABLE) {
+    throw std::runtime_error(td->tableName + " is a foreign table. " +
+                             "Use ALTER FOREIGN TABLE.");
+  }
+}
+}  // namespace
+
 void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
@@ -4184,8 +4193,9 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     if (hasData(tableSubtituteMap, altCurTableName)) {
       const TableDescriptor* td = catalog.getMetadataForTable(altCurTableName);
       if (td) {
-        // any table that pre-exists must pass these tests
-        validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
+        // Tables *and* views may be renamed here, foreign tables not
+        //    -> just block just foreign tables
+        disable_foreign_tables(td);
         check_alter_table_privilege(session, td);
       }
 
