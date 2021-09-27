@@ -431,7 +431,8 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb_Predicate(
     int64_t arg1_meta2_size,
     // TODO: add meta3 args to support generic geometries
     int32_t arg1_ic,
-    int32_t arg1_srid,
+    int32_t arg1_srid_in,
+    int32_t arg1_srid_out,
     int arg2_type,
     int8_t* arg2_coords,
     int64_t arg2_coords_size,
@@ -441,7 +442,8 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb_Predicate(
     int64_t arg2_meta2_size,
     // TODO: add meta3 args to support generic geometries
     int32_t arg2_ic,
-    int32_t arg2_srid,
+    int32_t arg2_srid_in,
+    int32_t arg2_srid_out,
     bool* result) {
 #ifndef __CUDACC__
   WKB wkb1{};
@@ -454,6 +456,8 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb_Predicate(
              arg1_meta2,
              arg1_meta2_size,
              arg1_ic,
+             arg1_srid_in,
+             arg1_srid_out,
              nullptr)) {
     return false;
   }
@@ -467,6 +471,8 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb_Predicate(
              arg2_meta2,
              arg2_meta2_size,
              arg2_ic,
+             arg2_srid_in,
+             arg2_srid_out,
              nullptr)) {
     return false;
   }
