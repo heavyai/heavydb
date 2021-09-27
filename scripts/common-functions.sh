@@ -208,6 +208,27 @@ function install_llvm() {
     popd
 }
 
+SPIRV_TRANSLATOR_VERSION=12.0.0
+
+function install_spirv_translator() {
+    VERS=${SPIRV_TRANSLATOR_VERSION}
+    download https://github.com/KhronosGroup/SPIRV-LLVM-Translator/archive/refs/tags/v${VERS}.tar.gz
+    BUILD_DIR="SPIRV-LLVM-Translator-${VERS}/build"
+
+    rm -rf SPIRV-LLVM-Translator-${VERS}
+    extract v$VERS.tar.gz
+    mkdir -p ${BUILD_DIR}
+
+    pushd ${BUILD_DIR}
+    cmake \
+          -DLLVM_DIR=${LLVM_HOME:-${PREFIX}} \
+          -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+    makej
+    make install
+    popd
+}
+
+
 PROJ_VERSION=7.2.1
 GDAL_VERSION=3.2.2
 
