@@ -3564,6 +3564,7 @@ std::shared_ptr<Analyzer::Expr> GeoConstant::add_cast(const SQLTypeInfo& new_typ
   // TODO: we should eliminate the notion of input and output SRIDs on a type. A type can
   // only have 1 SRID. A cast or transforms changes the SRID of the type.
   // NOTE: SRID 0 indicates set srid, skip cast
+  SQLTypeInfo cast_type_info = new_type_info;
   if (!(get_type_info().get_input_srid() == 0) &&
       (get_type_info().get_input_srid() != new_type_info.get_output_srid())) {
     // run cast
@@ -3572,8 +3573,11 @@ std::shared_ptr<Analyzer::Expr> GeoConstant::add_cast(const SQLTypeInfo& new_typ
                          new_type_info.get_output_srid())) {
       throw std::runtime_error("Failed to transform constant geometry: " + toString());
     }
+    // The geo constant has been transformed but the new type info still encodes
+    // a transform. Need to reset it and eliminate srid transition.
+    cast_type_info.set_input_srid(new_type_info.get_output_srid());
   }
-  return makeExpr<GeoConstant>(std::move(geo_), new_type_info);
+  return makeExpr<GeoConstant>(std::move(geo_), cast_type_info);
 }
 
 GeoOperator::GeoOperator(const SQLTypeInfo& ti,
