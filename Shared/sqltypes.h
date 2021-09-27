@@ -538,7 +538,8 @@ class SQLTypeInfo {
     return is_array() || is_column() || is_column_list() || is_bytes();
   }
   inline bool transforms() const {
-    return IS_GEO(type) && get_output_srid() != get_input_srid();
+    return IS_GEO(type) && get_input_srid() > 0 && get_output_srid() > 0 &&
+           get_output_srid() != get_input_srid();
   }
 
   inline bool is_varlen() const {  // TODO: logically this should ignore fixlen arrays

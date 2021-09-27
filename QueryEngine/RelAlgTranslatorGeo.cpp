@@ -256,7 +256,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
     const bool expand_geo_col,
     const bool is_projection,
     const bool use_geo_expressions,
-    const bool try_to_compress) const {
+    const bool try_to_compress,
+    const bool allow_gdal_transforms) const {
   std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
 
   const auto rex_input = dynamic_cast<const RexInput*>(rex_scalar);
@@ -303,10 +304,12 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       } else {
         throw QueryNotSupported(rex_function->getName() + ": expecting integer SRID");
       }
-      if (srid != 900913 && ((use_geo_expressions || is_projection) && srid != 4326 &&
-                             !spatial_type::Transform::isUtm(srid))) {
-        throw QueryNotSupported(rex_function->getName() + ": unsupported output SRID " +
-                                std::to_string(srid));
+      if (!allow_gdal_transforms) {
+        if (srid != 900913 && ((use_geo_expressions || is_projection) && srid != 4326 &&
+                               !spatial_type::Transform::isUtm(srid))) {
+          throw QueryNotSupported(rex_function->getName() + ": unsupported output SRID " +
+                                  std::to_string(srid));
+        }
       }
       arg_ti.set_output_srid(srid);  // Forward output srid down to argument translation
       auto arg0 = translateGeoFunctionArg(
@@ -340,7 +343,10 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
           if (auto geo_constant =
                   std::dynamic_pointer_cast<Analyzer::GeoConstant>(arg0.front())) {
             // fold transform
-            return {geo_constant->add_cast(arg0_ti)};
+            auto cast_geo_constant = geo_constant->add_cast(arg0_ti);
+            // update return type info
+            arg_ti = cast_geo_constant->get_type_info();
+            return {cast_geo_constant};
           } else if (auto col_var =
                          std::dynamic_pointer_cast<Analyzer::ColumnVar>(arg0.front())) {
             const auto& col_ti = col_var->get_type_info();
@@ -350,15 +356,17 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
               // fall through to transform code below
             }
           } else {
-            throw std::runtime_error(
-                "Transform on non-POINT geospatial types not yet supported in this "
-                "context.");
+            if (!allow_gdal_transforms) {
+              throw std::runtime_error(
+                  "Transform on non-POINT geospatial types not yet supported in this "
+                  "context.");
+            }
           }
         }
       }
 
       if (arg_ti.get_input_srid() > 0) {
-        if (arg_ti.get_input_srid() != 4326) {
+        if (!allow_gdal_transforms && arg_ti.get_input_srid() != 4326) {
           throw QueryNotSupported(rex_function->getName() + ": unsupported input SRID " +
                                   std::to_string(arg_ti.get_input_srid()));
         }
@@ -406,6 +414,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
 
         if (rex_function->getName() == "ST_GeogFromText"sv) {
           arg_ti.set_subtype(kGEOGRAPHY);
+        } else {
+          arg_ti.set_subtype(kGEOMETRY);
         }
 
         auto func_args = translateGeoFunctionArg(rex_function->getOperand(0),
@@ -788,6 +798,13 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         ti.set_comp_param(32);
       }
       ti.set_notnull(true);
+      // Before removing dependence on arg_ti need to note that ST_Transform uses it
+      // as a vehicle to pass transform output SRID to its args.
+      // arg_ti is also expected to be filled with relevant data, which wasn't done here.
+      // Not filling arg_ti with the geo constant data (which went to ti instead)
+      // resulted in GeoConstant::add_cast adopting a corrupt type info,
+      // which later killed codegen. Need to complete arg_ti composition:
+      arg_ti = ti;
       return {makeExpr<Analyzer::GeoConstant>(std::move(geospatial_base), ti)};
     }
     return translateGeoLiteral(rex_literal, arg_ti, with_bounds);
@@ -853,16 +870,34 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoConstructor(
                    "ST_Union"sv,
                    "ST_Buffer"sv)) {
     // First arg: geometry
-    geoargs0 = translateGeoFunctionArg(
-        rex_function->getOperand(0), arg0_ti, false, false, true, true);
+    geoargs0 = translateGeoFunctionArg(rex_function->getOperand(0),
+                                       arg0_ti,
+                                       false,
+                                       false,
+                                       true,
+                                       true,
+                                       false,
+                                       false,
+                                       /* allow_gdal_transforms = */ true);
   }
   if (func_resolve(rex_function->getName(),
                    "ST_Intersection"sv,
                    "ST_Difference"sv,
                    "ST_Union"sv)) {
     // Second arg: geometry
-    geoargs1 = translateGeoFunctionArg(
-        rex_function->getOperand(1), arg1_ti, false, false, true, true);
+    geoargs1 = translateGeoFunctionArg(rex_function->getOperand(1),
+                                       arg1_ti,
+                                       false,
+                                       false,
+                                       true,
+                                       true,
+                                       false,
+                                       false,
+                                       /* allow_gdal_transforms = */ true);
+    if (arg0_ti.get_output_srid() != arg1_ti.get_output_srid()) {
+      throw QueryNotSupported(rex_function->getName() +
+                              " geo constructor requires arguments with matching srids");
+    }
   } else if (func_resolve(rex_function->getName(), "ST_Buffer"sv)) {
     // Second arg: double scalar
     auto param_expr = translateScalarRex(rex_function->getOperand(1));
@@ -876,10 +911,19 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoConstructor(
   auto srid = ti.get_output_srid();
   ti = arg0_ti;
   ti.set_type(kMULTIPOLYGON);
+  ti.set_subtype(kGEOMETRY);
   ti.set_compression(kENCODING_NONE);  // Constructed geometries are not compressed
   ti.set_comp_param(0);
+  ti.set_input_srid(arg0_ti.get_output_srid());
   if (srid > 0) {
-    ti.set_output_srid(srid);  // Requested SRID sent from above
+    if (ti.get_input_srid() > 0) {
+      ti.set_output_srid(srid);  // Requested SRID sent from the encompassing transform
+    } else {
+      throw QueryNotSupported("Transform of geo constructor " + rex_function->getName() +
+                              " requires its argument(s) to have a valid srid");
+    }
+  } else {
+    ti.set_output_srid(ti.get_input_srid());  // No encompassing transform
   }
   return makeExpr<Analyzer::GeoBinOper>(op, ti, arg0_ti, arg1_ti, geoargs0, geoargs1);
 }

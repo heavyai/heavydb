@@ -192,7 +192,8 @@ class RelAlgTranslator {
       const bool expand_geo_col,
       const bool is_projection = false,
       const bool use_geo_expressions = false,
-      const bool try_to_compress = false) const;
+      const bool try_to_compress = false,
+      const bool allow_gdal_transforms = false) const;
 
   std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoColumn(
       const RexInput*,
