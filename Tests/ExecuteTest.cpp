@@ -6695,6 +6695,10 @@ TEST(Select, CastRoundNullable) {
     EXPECT_EQ(10,
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE CAST(fn AS INT) IS NULL;", dt)));
+    EXPECT_EQ(11,
+              v<int64_t>(run_simple_agg("SELECT CAST(CAST(x AS FLOAT) * 1.6 AS INT) AS "
+                                        "key0 FROM test GROUP BY key0 ORDER BY key0;",
+                                        dt)));
   }
 }
 
