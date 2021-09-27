@@ -1746,6 +1746,8 @@ class RenameTableTest : public CreateAndDropTableDdlTest {
   void SetUp() override {
     CreateAndDropTableDdlTest::SetUp();
 
+    sql("DROP VIEW IF EXISTS AVIEW");
+    sql("DROP VIEW IF EXISTS BVIEW");
     sql(getDropTableQuery(ddl_utils::TableType::TABLE, "A", true));
     sql(getDropTableQuery(ddl_utils::TableType::TABLE, "B", true));
     sql(getDropTableQuery(ddl_utils::TableType::TABLE, "C", true));
@@ -1770,15 +1772,22 @@ class RenameTableTest : public CreateAndDropTableDdlTest {
 
     sql("CREATE TABLE E (Name text);");
     sql("INSERT INTO  E (Name) values ('E');");
+
+    // test rename VIEW which uses same machinery
+    sql("CREATE VIEW AVIEW as SELECT * FROM A;");
+    sql("CREATE VIEW BVIEW as SELECT * FROM B;");
   }
 
   void TearDown() override {
     g_enable_fsi = true;
+    sql("DROP VIEW IF EXISTS AVIEW");
+    sql("DROP VIEW IF EXISTS BVIEW");
     sql(getDropTableQuery(ddl_utils::TableType::TABLE, "A", true));
     sql(getDropTableQuery(ddl_utils::TableType::TABLE, "B", true));
     sql(getDropTableQuery(ddl_utils::TableType::TABLE, "C", true));
     sql(getDropTableQuery(ddl_utils::TableType::TABLE, "D", true));
     sql(getDropTableQuery(ddl_utils::TableType::TABLE, "E", true));
+
     dropTestUser();
 
     CreateAndDropTableDdlTest::TearDown();
@@ -1846,6 +1855,18 @@ TEST_F(RenameTableTest, ErrorChecks) {
 
   // verify
   sqlAndCompareResult("SELECT count(*) FROM A WHERE Name = 'A';", {{i(1)}});
+}
+
+TEST_F(RenameTableTest, RenameViews) {
+  sql("RENAME TABLE AVIEW to XVIEW;");
+  sql("ALTER TABLE BVIEW RENAME TO ZVIEW;");
+
+  sqlAndCompareResult("SELECT count(*) FROM XVIEW WHERE Name = 'A';", {{i(1)}});
+  sqlAndCompareResult("SELECT count(*) FROM ZVIEW WHERE Name = 'B';", {{i(1)}});
+
+  // reset
+  sql("RENAME TABLE XVIEW to AVIEW;");
+  sql("ALTER TABLE ZVIEW RENAME TO BVIEW;");
 }
 
 class CreateShardedTableTest : public CreateAndDropTableDdlTest {
