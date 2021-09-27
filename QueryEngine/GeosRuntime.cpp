@@ -97,11 +97,17 @@ bool toWkb(WKB& wkb,
            int32_t* meta2,      // e.g. rings (number of rings in each poly)
            int64_t meta2_size,  // e.g. num_polys
            int32_t ic,          // input compression
+           int32_t srid_in,     // input srid
+           int32_t srid_out,    // output srid
            int32_t* best_planar_srid_ptr) {
   // decompressed double coords
   auto cv = Geospatial::decompress_coords<double, int32_t>(ic, coords, coords_size);
+  auto execute_transform = (srid_in > 0 && srid_out > 0 && srid_in != srid_out);
   if (static_cast<SQLTypes>(type) == kPOINT) {
     GeoPoint point(*cv);
+    if (execute_transform && !point.transform(srid_in, srid_out)) {
+      return false;
+    }
     if (best_planar_srid_ptr) {
       // A non-NULL pointer signifies a request to find the best planar srid
       // to transform this WGS84 geometry to.
@@ -114,6 +120,9 @@ bool toWkb(WKB& wkb,
   }
   if (static_cast<SQLTypes>(type) == kLINESTRING) {
     GeoLineString linestring(*cv);
+    if (execute_transform && !linestring.transform(srid_in, srid_out)) {
+      return false;
+    }
     if (best_planar_srid_ptr) {
       // A non-NULL pointer signifies a request to find the best planar srid
       // to transform this WGS84 geometry to, based on geometry's centroid.
@@ -127,6 +136,9 @@ bool toWkb(WKB& wkb,
   std::vector<int32_t> meta1v(meta1, meta1 + meta1_size);
   if (static_cast<SQLTypes>(type) == kPOLYGON) {
     GeoPolygon poly(*cv, meta1v);
+    if (execute_transform && !poly.transform(srid_in, srid_out)) {
+      return false;
+    }
     if (best_planar_srid_ptr) {
       // A non-NULL pointer signifies a request to find the best planar srid
       // to transform this WGS84 geometry to, based on geometry's centroid.
@@ -150,6 +162,9 @@ bool toWkb(WKB& wkb,
       }
     }
     GeoMultiPolygon mpoly(*cv, meta1v, meta2v);
+    if (execute_transform && !mpoly.transform(srid_in, srid_out)) {
+      return false;
+    }
     if (best_planar_srid_ptr) {
       // A non-NULL pointer signifies a request to find the best planar srid
       // to transform this WGS84 geometry to, based on geometry's centroid.
@@ -173,13 +188,22 @@ bool fromWkb(WKB& wkb,
              int64_t* result_meta1_size,
              int32_t** result_meta2,
              int64_t* result_meta2_size,
+             int32_t result_srid_in,
+             int32_t result_srid_out,
              int32_t* best_planar_srid_ptr) {
   auto result = GeoTypesFactory::createGeoType(wkb);
-  if (best_planar_srid_ptr && !result->isEmpty()) {
-    // If original geometry has previously been projected to planar srid,
-    // need to transform back to WGS84
-    if (!result->transform(*best_planar_srid_ptr, 4326)) {
-      return false;
+  if (!result->isEmpty()) {
+    if (best_planar_srid_ptr) {
+      // If original geometry has previously been projected to planar srid,
+      // need to transform back to WGS84
+      if (!result->transform(*best_planar_srid_ptr, 4326)) {
+        return false;
+      }
+    }
+    if (result_srid_in > 0 && result_srid_out > 0 and result_srid_in != result_srid_out) {
+      if (!result->transform(result_srid_in, result_srid_out)) {
+        return false;
+      }
     }
   }
 
@@ -279,7 +303,8 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb(
     int64_t arg1_meta2_size,
     // TODO: add meta3 args to support generic geometries
     int32_t arg1_ic,
-    int32_t arg1_srid,
+    int32_t arg1_srid_in,
+    int32_t arg1_srid_out,
     int arg2_type,
     int8_t* arg2_coords,
     int64_t arg2_coords_size,
@@ -289,7 +314,8 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb(
     int64_t arg2_meta2_size,
     // TODO: add meta3 args to support generic geometries
     int32_t arg2_ic,
-    int32_t arg2_srid,
+    int32_t arg2_srid_in,
+    int32_t arg2_srid_out,
     // TODO: add transform args
     int* result_type,
     int8_t** result_coords,
@@ -297,13 +323,24 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb(
     int32_t** result_meta1,
     int64_t* result_meta1_size,
     int32_t** result_meta2,
-    int64_t* result_meta2_size) {
+    int64_t* result_meta2_size,
+    // TODO: add support for output compression
+    int32_t result_srid_out) {
 #ifndef __CUDACC__
   // Get the result geo
   // What if intersection is not a POLYGON? POINT? LINESTRING, MULTIPOLYGON?
   // What if intersection is empty? Return null buffer pointers? Return false?
   // What if geos fails?
 
+  int32_t best_planar_srid;
+  int32_t* best_planar_srid_ptr = nullptr;
+  if (arg1_srid_out == 4326 &&
+      static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kINTERSECTION) {
+    // Use the best (location-based) planar transform to project 4326 argument before
+    // running geos operation, back-project the result of the operation to 4326
+    // TODO: Turn on automatic planar transform for Intersection, other binary ops
+    // best_planar_srid_ptr = &best_planar_srid;
+  }
   WKB wkb1{};
   if (!toWkb(wkb1,
              arg1_type,
@@ -314,7 +351,9 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb(
              arg1_meta2,
              arg1_meta2_size,
              arg1_ic,
-             nullptr)) {
+             arg1_srid_in,
+             arg1_srid_out,
+             best_planar_srid_ptr)) {
     return false;
   }
   WKB wkb2{};
@@ -327,7 +366,9 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb(
              arg2_meta2,
              arg2_meta2_size,
              arg2_ic,
-             nullptr)) {
+             arg2_srid_in,
+             arg2_srid_out,
+             best_planar_srid_ptr)) {
     return false;
   }
   auto status = false;
@@ -362,7 +403,9 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb(
                            result_meta1_size,
                            result_meta2,
                            result_meta2_size,
-                           nullptr);
+                           /* result_srid_in = */ arg1_srid_out,
+                           result_srid_out,
+                           best_planar_srid_ptr);
         }
         GEOSGeom_destroy_r(context, g);
       }
@@ -467,7 +510,8 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_double(
     int64_t arg1_meta2_size,
     // TODO: add meta3 args to support generic geometries
     int32_t arg1_ic,
-    int32_t arg1_srid,
+    int32_t arg1_srid_in,
+    int32_t arg1_srid_out,
     double arg2,
     // TODO: add transform args
     int* result_type,
@@ -476,7 +520,9 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_double(
     int32_t** result_meta1,
     int64_t* result_meta1_size,
     int32_t** result_meta2,
-    int64_t* result_meta2_size) {
+    int64_t* result_meta2_size,
+    // TODO: add support for output compression
+    int32_t result_srid_out) {
 #ifndef __CUDACC__
   int32_t best_planar_srid;
   int32_t* best_planar_srid_ptr = nullptr;
@@ -487,7 +533,6 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_double(
     best_planar_srid_ptr = &best_planar_srid;
   }
   WKB wkb1{};
-  // Project to best planar srid before running certain geos ops
   if (!toWkb(wkb1,
              arg1_type,
              arg1_coords,
@@ -497,6 +542,8 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_double(
              arg1_meta2,
              arg1_meta2_size,
              arg1_ic,
+             arg1_srid_in,
+             arg1_srid_out,
              best_planar_srid_ptr)) {
     return false;
   }
@@ -533,6 +580,8 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_double(
                          result_meta1_size,
                          result_meta2,
                          result_meta2_size,
+                         /* result_srid_in = */ arg1_srid_out,
+                         result_srid_out,
                          best_planar_srid_ptr);
       }
       GEOSGeom_destroy_r(context, g);
@@ -557,7 +606,8 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb(
     int64_t arg_meta2_size,
     // TODO: add meta3 args to support generic geometries
     int32_t arg_ic,
-    int32_t arg_srid,
+    int32_t arg_srid_in,
+    int32_t arg_srid_out,
     bool* result) {
 #ifndef __CUDACC__
   WKB wkb1{};
@@ -570,6 +620,8 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb(
                         arg_meta2,
                         arg_meta2_size,
                         arg_ic,
+                        arg_srid_in,
+                        arg_srid_out,
                         nullptr)) {
     return false;
   }
