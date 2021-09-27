@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,6 @@
  */
 
 #include "ExpressionRange.h"
-#include <algorithm>
-#include <cfenv>
-#include <cmath>
 #include "DateTimeTranslator.h"
 #include "DateTimeUtils.h"
 #include "DateTruncate.h"
@@ -26,6 +23,10 @@
 #include "ExtractFromTime.h"
 #include "GroupByAndAggregate.h"
 #include "QueryPhysicalInputsCollector.h"
+
+#include <algorithm>
+#include <cfenv>
+#include <cmath>
 
 #define DEF_OPERATOR(fname, op)                                                    \
   ExpressionRange fname(const ExpressionRange& other) const {                      \
@@ -825,8 +826,10 @@ ExpressionRange getExpressionRange(
                                                      arg_range.hasNulls());
       }
       if (ti.is_integer()) {
-        return ExpressionRange::makeIntRange(
-            arg_range.getFpMin(), arg_range.getFpMax(), 0, arg_range.hasNulls());
+        return ExpressionRange::makeIntRange(std::floor(arg_range.getFpMin()),
+                                             std::ceil(arg_range.getFpMax()),
+                                             0,
+                                             arg_range.hasNulls());
       }
       break;
     }
