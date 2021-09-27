@@ -243,6 +243,7 @@ class CodeGenerator {
 
   std::vector<llvm::Value*> codegenGeosConstructorCall(const std::string&,
                                                        std::vector<llvm::Value*>,
+                                                       llvm::Value*,
                                                        const CompilationOptions&);
 
   std::vector<llvm::Value*> codegenGeoArgs(

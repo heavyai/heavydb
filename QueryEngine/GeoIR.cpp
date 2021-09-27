@@ -186,14 +186,14 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
   // Basic set of arguments is currently common to all Geos_* func invocations:
   // op kind, type of the first geo arg0, geo arg0 components
   std::string func = "Geos_Wkb"s;
-  if (geo_expr->getTypeInfo0().transforms()) {
-    throw std::runtime_error(
-        "GEOS runtime does not support transforms on geometry inputs.");
-  }
-  // Catch transforms applied to geometry construction only
-  if (geo_expr->get_type_info().transforms()) {
-    throw std::runtime_error(
-        "GEOS runtime does not support transforms on geometry outputs.");
+
+  if (geo_expr->getTypeInfo0().transforms() || geo_expr->get_type_info().transforms()) {
+    // If there is a transform on the argument and/or on the result of the operation,
+    // verify that the argument's output srid is equal to result's input srid
+    if (geo_expr->getTypeInfo0().get_output_srid() !=
+        geo_expr->get_type_info().get_input_srid()) {
+      throw std::runtime_error("GEOS runtime: input/output srids have to match.");
+    }
   }
   // Prepend arg0 geo SQLType
   argument_list.insert(
@@ -213,7 +213,11 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
       argument_list.end(),
       cgen_state_->llInt(static_cast<int>(
           Geospatial::get_compression_scheme(geo_expr->getTypeInfo0()))));
-  // Append geo expr SRID
+  // Append geo expr input srid
+  argument_list.insert(
+      argument_list.end(),
+      cgen_state_->llInt(static_cast<int>(geo_expr->getTypeInfo0().get_input_srid())));
+  // Append geo expr output srid
   argument_list.insert(
       argument_list.end(),
       cgen_state_->llInt(static_cast<int>(geo_expr->getTypeInfo0().get_output_srid())));
@@ -244,13 +248,13 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
   // Basic set of arguments is currently common to all Geos_* func invocations:
   // op kind, type of the first geo arg0, geo arg0 components
   std::string func = "Geos_Wkb"s;
-  if (geo_expr->getTypeInfo0().transforms() || geo_expr->getTypeInfo1().transforms()) {
-    throw std::runtime_error(
-        "GEOS runtime does not support transforms on geometry inputs.");
-  }
-  if (geo_expr->get_type_info().transforms()) {
-    throw std::runtime_error(
-        "GEOS runtime does not support transforms on geometry outputs.");
+  if (geo_expr->getTypeInfo0().transforms() || geo_expr->get_type_info().transforms()) {
+    // If there is a transform on the argument and/or on the result of the operation,
+    // verify that the argument's output srid is equal to result's input srid
+    if (geo_expr->getTypeInfo0().get_output_srid() !=
+        geo_expr->get_type_info().get_input_srid()) {
+      throw std::runtime_error("GEOS runtime: input/output srids have to match.");
+    }
   }
   // Prepend arg0 geo SQLType
   argument_list.insert(
@@ -270,7 +274,11 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
       argument_list.end(),
       cgen_state_->llInt(static_cast<int>(
           Geospatial::get_compression_scheme(geo_expr->getTypeInfo0()))));
-  // Append geo expr SRID
+  // Append geo expr input srid
+  argument_list.insert(
+      argument_list.end(),
+      cgen_state_->llInt(static_cast<int>(geo_expr->getTypeInfo0().get_input_srid())));
+  // Append geo expr output srid
   argument_list.insert(
       argument_list.end(),
       cgen_state_->llInt(static_cast<int>(geo_expr->getTypeInfo0().get_output_srid())));
@@ -299,7 +307,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
     arg1_list.insert(arg1_list.end(),
                      cgen_state_->llInt(static_cast<int>(
                          Geospatial::get_compression_scheme(geo_expr->getTypeInfo1()))));
-    // Append geo expr compression
+    // Append geo expr input srid
+    arg1_list.insert(arg1_list.end(),
+                     cgen_state_->llInt(geo_expr->getTypeInfo1().get_input_srid()));
+    // Append geo expr output srid
     arg1_list.insert(arg1_list.end(),
                      cgen_state_->llInt(geo_expr->getTypeInfo1().get_output_srid()));
   } else if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kBUFFER) {
@@ -317,7 +328,9 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
     return codegenGeosPredicateCall(func, argument_list, co);
   }
 
-  return codegenGeosConstructorCall(func, argument_list, co);
+  auto result_srid = cgen_state_->llInt(geo_expr->get_type_info().get_output_srid());
+
+  return codegenGeosConstructorCall(func, argument_list, result_srid, co);
 }
 
 std::vector<llvm::Value*> CodeGenerator::codegenGeoArgs(
@@ -436,6 +449,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeosPredicateCall(
 std::vector<llvm::Value*> CodeGenerator::codegenGeosConstructorCall(
     const std::string& func,
     std::vector<llvm::Value*> argument_list,
+    llvm::Value* result_srid,
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   // Create output buffer pointers, append pointers to output args to
@@ -467,6 +481,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeosConstructorCall(
   argument_list.emplace_back(result_ring_sizes_size);
   argument_list.emplace_back(result_poly_rings);
   argument_list.emplace_back(result_poly_rings_size);
+  argument_list.emplace_back(result_srid);
 
   // Generate call to GEOS wrapper
   cgen_state_->needs_geos_ = true;
