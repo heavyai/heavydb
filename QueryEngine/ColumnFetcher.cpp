@@ -672,6 +672,39 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
   auto chunk_num_tuple_it = local_chunk_num_tuples.begin();
   bool null_padded_first_elem = false;
   bool null_padded_last_val = false;
+  // before entering the actual linearization part, we first need to check
+  // the overflow case where the sum of index offset becomes larger than 2GB
+  // which currently incurs incorrect query result due to negative array offset
+  // note that we can separate this from the main linearization logic b/c
+  // we just need to see few last elems
+  // todo (yoonmin) : relax this to support larger chunk size (>2GB)
+  for (; chunk_holder_it != local_chunk_holder.end();
+       chunk_holder_it++, chunk_num_tuple_it++) {
+    // check the offset overflow based on the last "valid" offset for each chunk
+    auto target_chunk = chunk_holder_it->get();
+    auto target_chunk_data_buffer = target_chunk->getBuffer();
+    auto target_chunk_idx_buffer = target_chunk->getIndexBuf();
+    auto target_idx_buf_ptr =
+        reinterpret_cast<ArrayOffsetT*>(target_chunk_idx_buffer->getMemoryPtr());
+    auto cur_chunk_num_tuples = *chunk_num_tuple_it;
+    ArrayOffsetT original_offset = -1;
+    size_t cur_idx = cur_chunk_num_tuples;
+    // find the valid (e.g., non-null) offset starting from the last elem
+    while (original_offset < 0) {
+      original_offset = target_idx_buf_ptr[--cur_idx];
+    }
+    ArrayOffsetT new_offset = original_offset + sum_data_buf_size;
+    if (new_offset < 0) {
+      throw std::runtime_error(
+          "Linearization of a variable-length column having chunk size larger than 2GB "
+          "not supported yet");
+    }
+    sum_data_buf_size += target_chunk_data_buffer->size();
+  }
+  chunk_holder_it = local_chunk_holder.begin();
+  chunk_num_tuple_it = local_chunk_num_tuples.begin();
+  sum_data_buf_size = 0;
+
   for (; chunk_holder_it != local_chunk_holder.end();
        chunk_holder_it++, chunk_iter_holder_it++, chunk_num_tuple_it++) {
     if (g_enable_non_kernel_time_query_interrupt &&
