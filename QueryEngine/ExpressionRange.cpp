@@ -980,7 +980,8 @@ ExpressionRange getExpressionRange(
   auto target_value_expr = width_bucket_expr->get_target_value();
   auto target_value_range = getExpressionRange(target_value_expr, query_infos, executor);
   auto target_ti = target_value_expr->get_type_info();
-  if (width_bucket_expr->is_constant_expr()) {
+  if (width_bucket_expr->is_constant_expr() &&
+      target_value_range.getType() != ExpressionRangeType::Invalid) {
     auto const_target_value = dynamic_cast<const Analyzer::Constant*>(target_value_expr);
     if (const_target_value) {
       if (const_target_value->get_is_null()) {
@@ -1020,18 +1021,19 @@ ExpressionRange getExpressionRange(
     return res_range;
   } else {
     // we cannot determine a possibility of skipping oob check safely
-    auto target_expression_range = getExpressionRange(
+    const bool has_nulls = target_value_range.getType() == ExpressionRangeType::Invalid ||
+                           target_value_range.hasNulls();
+    auto partition_expr_range = getExpressionRange(
         width_bucket_expr->get_partition_count(), query_infos, executor, simple_quals);
-    auto res =
-        ExpressionRange::makeIntRange(0, INT32_MAX, 0, target_value_range.hasNulls());
-    switch (target_expression_range.getType()) {
+    auto res = ExpressionRange::makeIntRange(0, INT32_MAX, 0, has_nulls);
+    switch (partition_expr_range.getType()) {
       case ExpressionRangeType::Integer: {
-        res.setIntMax(target_expression_range.getIntMax() + 1);
+        res.setIntMax(partition_expr_range.getIntMax() + 1);
         break;
       }
       case ExpressionRangeType::Float:
       case ExpressionRangeType::Double: {
-        res.setIntMax(static_cast<int64_t>(target_expression_range.getFpMax()) + 1);
+        res.setIntMax(static_cast<int64_t>(partition_expr_range.getFpMax()) + 1);
         break;
       }
       default:

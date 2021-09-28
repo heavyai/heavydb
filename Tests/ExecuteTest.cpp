@@ -2321,6 +2321,28 @@ TEST(Select, ConstantWidthBucketExpr) {
       auto queries = test_queries(col);
       c(queries.first, queries.second, dt);
     }
+
+    // check when target_expr has an invalid range due to geo exprs such as st_x and st_y
+    EXPECT_EQ(
+        int64_t(255),
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM (SELECT WIDTH_BUCKET(st_x(p), 0, "
+                                  "254, 255) FROM varlen_table);",
+                                  dt)));
+    EXPECT_EQ(
+        int64_t(255),
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM (SELECT WIDTH_BUCKET(st_x(p), "
+                                  "st_y(p), 254, 255) FROM varlen_table);",
+                                  dt)));
+    EXPECT_EQ(
+        int64_t(255),
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM (SELECT WIDTH_BUCKET(st_x(p), 0, "
+                                  "st_y(p), 255) FROM varlen_table);",
+                                  dt)));
+    EXPECT_EQ(int64_t(255),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM (SELECT WIDTH_BUCKET(st_x(p), 0, 254, 255) x, "
+                  "WIDTH_BUCKET(st_y(p), 0, 254, 255) y FROM varlen_table GROUP BY x,y);",
+                  dt)));
   }
   run_ddl_statement(drop);
   g_sqlite_comparator.query(drop);
