@@ -208,6 +208,28 @@ function install_llvm() {
     popd
 }
 
+function install_llvm_12() {
+    VERS="12.0.0"
+    download https://github.com/llvm/llvm-project/archive/refs/tags/llvmorg-$VERS.tar.gz
+    rm -rf llvm-project-llvmorg-$VERS
+    extract llvmorg-$VERS.tar.gz
+
+    rm -rf build.llvm-$VERS
+    mkdir build.llvm-$VERS
+    pushd build.llvm-$VERS
+
+    LLVM_SHARED=""
+    if [ "$LLVM_BUILD_DYLIB" = "true" ]; then
+      LLVM_SHARED="-DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON"
+    fi
+
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DLLVM_ENABLE_RTTI=on -DLLVM_USE_INTEL_JITEVENTS=on $LLVM_SHARED -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra;compiler-rt;libcxx;libcxxabi;lld;lldb" ../llvm-project-llvmorg-$VERS/llvm
+    makej
+    make install
+
+    popd
+}
+
 SPIRV_TRANSLATOR_VERSION=12.0.0
 
 function install_spirv_translator() {
