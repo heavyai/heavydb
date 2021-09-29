@@ -50,6 +50,13 @@ done
 # Distro-specific installations
 if [ "$ID" == "ubuntu" ] ; then
   sudo $PACKAGER update
+
+  # required for gcc-9 on Ubuntu 18.04
+  if [ "$VERSION_ID" == "18.04" ]; then
+    DEBIAN_FRONTEND=noninteractive sudo apt install -y software-properties-common
+    DEBIAN_FRONTEND=noninteractive sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+  fi
+
   sudo $PACKAGER install \
       software-properties-common \
       build-essential \
@@ -59,8 +66,8 @@ if [ "$ID" == "ubuntu" ] ; then
       git \
       wget \
       curl \
-      gcc-8 \
-      g++-8 \
+      gcc-9 \
+      g++-9 \
       libboost-all-dev \
       libgoogle-glog-dev \
       golang \
@@ -105,24 +112,15 @@ if [ "$ID" == "ubuntu" ] ; then
       libxerces-c-dev \
       swig
 
-# Set up gcc-8 as default gcc
+# Set up gcc-9 as default gcc
 sudo update-alternatives \
-  --install /usr/bin/gcc gcc /usr/bin/gcc-8 800 \
-  --slave /usr/bin/g++ g++ /usr/bin/g++-8
+  --install /usr/bin/gcc gcc /usr/bin/gcc-9 900 \
+  --slave /usr/bin/g++ g++ /usr/bin/g++-9
 
   if [ "$VERSION_ID" == "19.04" ] || [ "$VERSION_ID" == "18.04" ] ; then
     sudo $PACKAGER install \
       libxerces-c-dev \
       libxmlsec1-dev
-  elif [ "$VERSION_ID" == "16.04" ]; then
-    sudo $PACKAGER install libtool
-     # Install gcc 7
-    sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
-    sudo $PACKAGER update
-    sudo $PACKAGER install g++-7
-    sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 70 \
-                             --slave /usr/bin/g++ g++ /usr/bin/g++-7
-    sudo update-alternatives --config gcc
   fi
 
   sudo mkdir -p $PREFIX

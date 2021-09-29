@@ -44,6 +44,7 @@
 #include <string>
 #include <utility>
 #include <stdexcept>
+#include <vector>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/regex.hpp>
