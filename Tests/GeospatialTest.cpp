@@ -336,6 +336,13 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
                                   "WHERE ST_Distance(p, 'LINESTRING(-1 0, 0 1)') < 2.5;",
                                   dt)));
 
+    // distance transforms
+    EXPECT_EQ(double(0),
+              v<double>(run_simple_agg(
+                  "SELECT ST_Distance(ST_Transform(gpoly4326, 900913), gp900913) from "
+                  "geospatial_test WHERE id = 1;",
+                  dt)));
+
     // SRID mismatch
     EXPECT_THROW(run_simple_agg("SELECT ST_Distance('POINT(0 0)', "
                                 "ST_Transform(ST_SetSRID(p, 4326), 900913)) "

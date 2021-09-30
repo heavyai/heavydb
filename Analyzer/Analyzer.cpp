@@ -3571,15 +3571,19 @@ std::shared_ptr<Analyzer::Expr> GeoConstant::add_cast(const SQLTypeInfo& new_typ
 
 GeoOperator::GeoOperator(const SQLTypeInfo& ti,
                          const std::string& name,
-                         const std::vector<std::shared_ptr<Analyzer::Expr>>& args)
-    : GeoExpr(ti), name_(name), args_(args) {}
+                         const std::vector<std::shared_ptr<Analyzer::Expr>>& args,
+                         const std::optional<int>& output_srid_override)
+    : GeoExpr(ti)
+    , name_(name)
+    , args_(args)
+    , output_srid_override_(output_srid_override) {}
 
 std::shared_ptr<Analyzer::Expr> GeoOperator::deep_copy() const {
   std::vector<std::shared_ptr<Analyzer::Expr>> args;
   for (size_t i = 0; i < args_.size(); i++) {
     args.push_back(args_[i]->deep_copy());
   }
-  return makeExpr<GeoOperator>(type_info, name_, args);
+  return makeExpr<GeoOperator>(type_info, name_, args, output_srid_override_);
 }
 
 void GeoOperator::collect_rte_idx(std::set<int>& rte_idx_set) const {
@@ -3642,7 +3646,7 @@ std::shared_ptr<Analyzer::Expr> GeoOperator::add_cast(const SQLTypeInfo& new_typ
       args.push_back(args_[i]->deep_copy());
     }
     CHECK(new_type_info.is_geometry());
-    return makeExpr<GeoOperator>(new_type_info, name_, args);
+    return makeExpr<GeoOperator>(new_type_info, name_, args, output_srid_override_);
   } else {
     auto new_expr = deep_copy();
     return makeExpr<UOper>(new_type_info, /*contains_agg=*/false, kCAST, new_expr);

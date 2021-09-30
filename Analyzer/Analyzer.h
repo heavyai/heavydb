@@ -1903,7 +1903,8 @@ class GeoOperator : public GeoExpr {
  public:
   GeoOperator(const SQLTypeInfo& ti,
               const std::string& name,
-              const std::vector<std::shared_ptr<Analyzer::Expr>>& args);
+              const std::vector<std::shared_ptr<Analyzer::Expr>>& args,
+              const std::optional<int>& output_srid_override = std::nullopt);
 
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
 
@@ -1937,9 +1938,14 @@ class GeoOperator : public GeoExpr {
 
   std::shared_ptr<Analyzer::Expr> add_cast(const SQLTypeInfo& new_type_info) final;
 
+  auto getOutputSridOverride() const { return output_srid_override_; }
+
  protected:
   const std::string name_;
   const std::vector<std::shared_ptr<Analyzer::Expr>> args_;
+
+  // for legacy geo code, allow passing in a srid to force a transform in the function
+  std::optional<int> output_srid_override_;
 };
 
 class GeoTransformOperator : public GeoOperator {
