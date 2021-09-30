@@ -191,8 +191,10 @@ class Distance : public Codegen {
     operand_lvs.push_back(cgen_state->llInt(
         Geospatial::get_compression_scheme(second_operand_ti)));  // ic 2
     operand_lvs.push_back(
-        cgen_state->llInt(second_operand_ti.get_input_srid()));          // in srid 2
-    operand_lvs.push_back(cgen_state->llInt(ret_ti.get_output_srid()));  // out srid
+        cgen_state->llInt(second_operand_ti.get_input_srid()));  // in srid 2
+    const auto srid_override = operator_->getOutputSridOverride();
+    operand_lvs.push_back(
+        cgen_state->llInt(srid_override ? *srid_override : 0));  // out srid
 
     if (getName() == "ST_Distance" && first_operand_ti.get_subtype() != kGEOGRAPHY &&
         (first_operand_ti.get_type() != kPOINT ||

@@ -315,7 +315,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
           is_projection,
           is_projection ? /*use_geo_expressions=*/true : use_geo_expressions);
 
-      if (use_geo_expressions || is_projection) {
+      if (use_geo_expressions) {
         CHECK_EQ(arg0.size(), size_t(1));
         auto arg0_ti = arg0.front()->get_type_info();  // make a copy so we can override
         arg0_ti.set_output_srid(srid);
@@ -330,6 +330,14 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
                   std::dynamic_pointer_cast<Analyzer::GeoConstant>(arg0.front())) {
             // fold transform
             return {geo_constant->add_cast(arg0_ti)};
+          } else if (auto col_var =
+                         std::dynamic_pointer_cast<Analyzer::ColumnVar>(arg0.front())) {
+            const auto& col_ti = col_var->get_type_info();
+            CHECK(col_ti.is_geometry());
+            if (col_ti.get_type() != kPOINT) {
+              arg_ti.set_input_srid(col_ti.get_input_srid());
+              // fall through to transform code below
+            }
           } else {
             throw std::runtime_error(
                 "Transform on non-POINT geospatial types not yet supported in this "
@@ -780,13 +788,25 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoProjection(
     const RexFunctionOperator* rex_function,
     SQLTypeInfo& ti,
     const bool with_bounds) const {
-  auto geoargs = translateGeoFunctionArg(rex_function, ti, false, false, true, true);
+  // note that this is a bit of a misnomer, as ST_SetSRID embedded in a transform will
+  // eventually use geo expressions -- just not here
+  const bool use_geo_projections = !(rex_function->getName() == "ST_GeomFromText" ||
+                                     rex_function->getName() == "ST_GeogFromText" ||
+                                     rex_function->getName() == "ST_SetSRID");
+  auto geoargs = translateGeoFunctionArg(rex_function,
+                                         ti,
+                                         /*with_bounds=*/false,
+                                         /*with_render_group=*/false,
+                                         /*expand_geo_col=*/true,
+                                         /*is_projection=*/true,
+                                         /*use_geo_expressions=*/use_geo_projections);
   CHECK(!geoargs.empty());
   if (std::dynamic_pointer_cast<const Analyzer::GeoExpr>(geoargs.front()) &&
       !geoargs.front()->get_type_info().is_array()) {
     // GeoExpression
     return geoargs.front();
   }
+  CHECK(!use_geo_projections);
   return makeExpr<Analyzer::GeoUOper>(
       Geospatial::GeoBase::GeoOp::kPROJECTION, ti, ti, geoargs);
 }
@@ -1117,6 +1137,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   if (function_name == "ST_Distance"sv || function_name == "ST_MaxDistance"sv) {
     CHECK_EQ(size_t(2), rex_function->size());
     std::vector<std::shared_ptr<Analyzer::Expr>> args;
+    int legacy_transform_srid = 0;
     for (size_t i = 0; i < rex_function->size(); i++) {
       SQLTypeInfo arg0_ti;  // discard
       auto geoargs = translateGeoFunctionArg(rex_function->getOperand(i),
@@ -1126,10 +1147,21 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
                                              /*expand_geo_col=*/false,
                                              /*is_projection = */ false,
                                              /*use_geo_expressions=*/true);
+      if (arg0_ti.get_output_srid() > 0 &&
+          std::dynamic_pointer_cast<Analyzer::ColumnVar>(geoargs.front())) {
+        // legacy transform
+        CHECK(legacy_transform_srid == 0 ||
+              legacy_transform_srid == arg0_ti.get_output_srid());
+        legacy_transform_srid = arg0_ti.get_output_srid();
+      }
       args.insert(args.end(), geoargs.begin(), geoargs.end());
     }
     return makeExpr<Analyzer::GeoOperator>(
-        SQLTypeInfo(kDOUBLE, /*not_null=*/false), function_name, args);
+        SQLTypeInfo(kDOUBLE, /*not_null=*/false),
+        function_name,
+        args,
+        legacy_transform_srid > 0 ? std::make_optional<int>(legacy_transform_srid)
+                                  : std::nullopt);
   }
 
   bool swap_args = false;
