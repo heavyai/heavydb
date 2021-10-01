@@ -1173,6 +1173,14 @@ const char* create_table_with_array_including_quoted_fields = R"(
   ) WITH (FRAGMENT_SIZE=75000000);
 )";
 
+const char* create_table_with_two_arrays = R"(
+  CREATE TABLE two_text_arrays (
+    id   INTEGER,
+    arr1   TEXT[],
+    arr2   TEXT[]
+  );
+)";
+
 const char* create_table_random_strings_with_line_endings = R"(
     CREATE TABLE random_strings_with_line_endings (
       random_string TEXT
@@ -1208,6 +1216,8 @@ class ImportTest : public ImportExportTestBase {
     sql(create_table_with_quoted_fields);
     sql("drop table if exists array_including_quoted_fields;");
     sql(create_table_with_array_including_quoted_fields);
+    sql("drop table if exists two_text_arrays;");
+    sql(create_table_with_two_arrays);
   }
 
   void TearDown() override {
@@ -1217,6 +1227,7 @@ class ImportTest : public ImportExportTestBase {
     sql("drop table if exists geo;");
     sql("drop table if exists array_including_quoted_fields;");
     sql("drop table if exists unique_rowgroups;");
+    sql("drop table if exists two_text_arrays;");
     ImportExportTestBase::TearDown();
   }
 
@@ -1435,6 +1446,36 @@ TEST_F(ImportTest, tsv_file) {
 TEST_F(ImportTest, array_including_quoted_fields) {
   EXPECT_TRUE(importTestArrayIncludingQuotedFieldsLocal(
       "array_including_quoted_fields.csv", 2, "array_delimiter=','"));
+}
+
+TEST_F(ImportTest, empty_text_arrays) {
+  std::string query_str =
+      "COPY two_text_arrays FROM '../../Tests/Import/datafiles/empty_text_arrays.csv' "
+      "WITH (header='false', quoted='true', array_delimiter=',');";
+  sql(query_str);
+
+  std::string select_query_str = "SELECT * FROM two_text_arrays ORDER BY id;";
+  sqlAndCompareResult(select_query_str,
+                      {
+                          {1L, array({}), array({"string 1", "string 2"})},
+                          {2L, array({"string 1", "string 2"}), array({})},
+                      });
+}
+
+TEST_F(ImportTest, null_text_arrays) {
+  std::string query_str =
+      "COPY two_text_arrays FROM '../../Tests/Import/datafiles/null_text_arrays.csv' "
+      "WITH (header='false', quoted='true', array_delimiter=',');";
+  sql(query_str);
+
+  std::string select_query_str = "SELECT * FROM two_text_arrays ORDER BY id;";
+  sqlAndCompareResult(select_query_str,
+                      {
+                          {1L, array({Null, Null}), array({Null})},
+                          {2L, array({Null}), array({Null, Null})},
+                          {3L, Null, array({Null, Null})},
+                          {4L, array({Null, Null}), Null},
+                      });
 }
 
 TEST_F(ImportTest, array_including_quoted_fields_different_delimiter) {

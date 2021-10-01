@@ -3639,6 +3639,44 @@ TEST_F(SelectQueryTest, CsvArrayQuotedText) {
   // clang-format on
 }
 
+TEST_F(SelectQueryTest, CsvArrayEmptyText) {
+  const auto& query = getCreateForeignTableQuery("(index INT, txt1 TEXT[], txt2 TEXT[])",
+                                                 {{"header", "false"}},
+                                                 "empty_text_arrays",
+                                                 "csv");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY index;");
+  // clang-format off
+  assertResultSetEqual({
+                          {1L, array({}), array({"string 1", "string 2"})},
+                          {2L, array({"string 1", "string 2"}), array({})},
+                      },
+    result);
+  // clang-format on
+}
+
+TEST_F(SelectQueryTest, CsvArrayNullText) {
+  const auto& query = getCreateForeignTableQuery("(index INT, txt1 TEXT[], txt2 TEXT[])",
+                                                 {{"header", "false"}},
+                                                 "null_text_arrays",
+                                                 "csv");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY index;");
+  // clang-format off
+  assertResultSetEqual({
+                          {1L, array({Null, Null}), array({Null})},
+                          {2L, array({Null}), array({Null, Null})},
+                          {3L, Null, array({Null, Null})},
+                          {4L, array({Null, Null}), Null},
+                      },
+    result);
+  // clang-format on
+}
+
 TEST_F(SelectQueryTest, CsvMultipleFilesWithExpectedAndMismatchedColumns) {
   auto file_path = getDataFilesPath() + "different_cols";
   sql("CREATE FOREIGN TABLE " + default_table_name +

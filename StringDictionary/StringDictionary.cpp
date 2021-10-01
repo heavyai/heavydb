@@ -333,6 +333,10 @@ template void StringDictionary::getOrAddBulkArray(
     const std::vector<std::vector<std::string>>& string_array_vec,
     std::vector<std::vector<int32_t>>& ids_array_vec);
 
+template void StringDictionary::getOrAddBulkArray(
+    const std::vector<std::vector<std::string_view>>& string_array_vec,
+    std::vector<std::vector<int32_t>>& ids_array_vec);
+
 /**
  * Method to hash a vector of strings in parallel.
  * @param string_vec input vector of strings to be hashed

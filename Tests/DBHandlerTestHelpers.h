@@ -503,7 +503,8 @@ class DBHandlerTestFixture : public testing::Test {
     return column_count;
   }
 
-  void setDatumArray(std::vector<TDatum>& datum_array, const TColumnData& column_data) {
+  void setDatumArray(std::vector<TDatum>& datum_array, const TColumn& column) {
+    const auto& column_data = column.data;
     if (!column_data.int_col.empty()) {
       for (auto& item : column_data.int_col) {
         TDatum datum_item{};
@@ -525,6 +526,12 @@ class DBHandlerTestFixture : public testing::Test {
     } else {
       // no-op: it is possible for the array to be empty
     }
+    const auto& nulls = column.nulls;
+    CHECK(nulls.size() == datum_array.size())
+        << "mismatch of size between null data array and data read from array.";
+    for (size_t i = 0; i < nulls.size(); ++i) {
+      datum_array[i].is_null = nulls[i];
+    }
   }
 
   void setDatum(TDatum& datum,
@@ -540,7 +547,7 @@ class DBHandlerTestFixture : public testing::Test {
     } else if (!column_data.arr_col.empty()) {
       std::vector<TDatum> datum_array{};
       if (!is_null) {
-        setDatumArray(datum_array, column_data.arr_col[index].data);
+        setDatumArray(datum_array, column_data.arr_col[index]);
       }
       datum.val.arr_val = datum_array;
     } else {

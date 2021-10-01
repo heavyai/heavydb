@@ -389,12 +389,6 @@ ArrayDatum NullArray(const SQLTypeInfo& ti) {
   SQLTypeInfo elem_ti = ti.get_elem_type();
   auto len = ti.get_size();
 
-  if (elem_ti.is_string()) {
-    // must not be called for array of strings
-    CHECK(false);
-    return ArrayDatum(0, NULL, true);
-  }
-
   if (len > 0) {
     // Compose a NULL fixlen array
     int8_t* buf = (int8_t*)checked_malloc(len);
@@ -693,7 +687,6 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         import_export::delimited_parser::parse_string_array(
             std::string(val), copy_params, string_vec);
         if (!is_null) {
-          // TODO: add support for NULL string arrays
           if (ti.get_size() > 0) {
             auto sti = ti.get_elem_type();
             size_t expected_size = ti.get_size() / sti.get_size();
@@ -712,9 +705,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
             throw std::runtime_error("Fixed length array column " + cd->columnName +
                                      " currently cannot accept NULL arrays");
           }
-          // TODO: add support for NULL string arrays, replace with addStringArray(),
-          //       for now add whatever parseStringArray() outputs for NULLs ("NULL")
-          addStringArray(string_vec);
+          addStringArray(std::nullopt);
         }
       } else {
         if (!is_null) {
@@ -1136,11 +1127,11 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
       dataSize = col.data.arr_col.size();
       if (IS_STRING(cd->columnType.get_subtype())) {
         for (size_t i = 0; i < dataSize; i++) {
-          std::vector<std::string>& string_vec = addStringArray();
+          OptionalStringVector& string_vec = addStringArray();
           if (!col.nulls[i]) {
             size_t stringArrSize = col.data.arr_col[i].data.str_col.size();
             for (size_t str_idx = 0; str_idx != stringArrSize; ++str_idx) {
-              string_vec.push_back(col.data.arr_col[i].data.str_col[str_idx]);
+              string_vec->push_back(col.data.arr_col[i].data.str_col[str_idx]);
             }
           }
         }
@@ -1429,8 +1420,8 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         throw std::runtime_error("NULL for column " + cd->columnName);
       }
       if (IS_STRING(cd->columnType.get_subtype())) {
-        std::vector<std::string>& string_vec = addStringArray();
-        addBinaryStringArray(datum, string_vec);
+        OptionalStringVector& string_vec = addStringArray();
+        addBinaryStringArray(datum, *string_vec);
       } else {
         if (!is_null) {
           addArray(TDatumToArrayDatum(datum, cd->columnType));

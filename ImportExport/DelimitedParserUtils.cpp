@@ -305,9 +305,6 @@ void parse_string_array(const std::string& s,
                         const import_export::CopyParams& copy_params,
                         std::vector<std::string>& string_vec) {
   if (s == copy_params.null_str || s == "NULL" || s.size() < 1 || s.empty()) {
-    // TODO: should not convert NULL, empty arrays to {"NULL"},
-    //       need to support NULL, empty properly
-    string_vec.emplace_back("NULL");
     return;
   }
   if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
@@ -315,7 +312,11 @@ void parse_string_array(const std::string& s,
   }
 
   std::string row(s.c_str() + 1, s.length() - 2);
+  if (row.empty()) {  // allow empty arrays
+    return;
+  }
   row.push_back('\n');
+
   bool try_single_thread = false;
   import_export::CopyParams array_params = copy_params;
   array_params.delimiter = copy_params.array_delim;
@@ -331,12 +332,16 @@ void parse_string_array(const std::string& s,
           true);
 
   for (size_t i = 0; i < string_vec.size(); ++i) {
-    if (string_vec[i].empty()) {  // Disallow empty strings for now
-      string_vec.erase(string_vec.begin() + i);
-      --i;
-    } else if (string_vec[i].size() > StringDictionary::MAX_STRLEN) {
+    if (string_vec[i].size() > StringDictionary::MAX_STRLEN) {
       throw std::runtime_error("Array String too long : " + string_vec[i] + " max is " +
                                std::to_string(StringDictionary::MAX_STRLEN));
+    }
+  }
+
+  // use empty string to mark nulls
+  for (auto& value : string_vec) {
+    if (value == copy_params.null_str || value == "NULL" || value.empty()) {
+      value.clear();
     }
   }
 }

@@ -81,8 +81,16 @@ struct BadRowsTracker {
   Importer* importer;
 };
 
+class ImporterUtils {
+ public:
+  static ArrayDatum composeNullArray(const SQLTypeInfo& ti);
+  static ArrayDatum composeNullPointCoords(const SQLTypeInfo& coords_ti,
+                                           const SQLTypeInfo& geo_ti);
+};
+
 class TypedImportBuffer : boost::noncopyable {
  public:
+  using OptionalStringVector = std::optional<std::vector<std::string>>;
   TypedImportBuffer(const ColumnDescriptor* col_desc, StringDictionary* string_dict)
       : column_desc_(col_desc), string_dict_(string_dict) {
     switch (col_desc->columnType.get_type()) {
@@ -137,7 +145,7 @@ class TypedImportBuffer : boost::noncopyable {
       case kARRAY:
         if (IS_STRING(col_desc->columnType.get_subtype())) {
           CHECK(col_desc->columnType.get_compression() == kENCODING_DICT);
-          string_array_buffer_ = new std::vector<std::vector<std::string>>();
+          string_array_buffer_ = new std::vector<OptionalStringVector>();
           string_array_dict_buffer_ = new std::vector<ArrayDatum>();
         } else {
           array_buffer_ = new std::vector<ArrayDatum>();
@@ -241,40 +249,62 @@ class TypedImportBuffer : boost::noncopyable {
 
   void addArray(const ArrayDatum& v) { array_buffer_->push_back(v); }
 
-  std::vector<std::string>& addStringArray() {
-    string_array_buffer_->emplace_back();
+  OptionalStringVector& addStringArray() {
+    string_array_buffer_->emplace_back(std::vector<std::string>{});
     return string_array_buffer_->back();
   }
 
-  void addStringArray(const std::vector<std::string>& arr) {
+  void addStringArray(const OptionalStringVector& arr) {
     string_array_buffer_->push_back(arr);
   }
 
   void addDictEncodedString(const std::vector<std::string>& string_vec);
 
   void addDictEncodedStringArray(
-      const std::vector<std::vector<std::string>>& string_array_vec) {
+      const std::vector<OptionalStringVector>& string_array_vec) {
     CHECK(string_dict_);
 
     // first check data is ok
     for (auto& p : string_array_vec) {
-      for (const auto& str : p) {
+      if (!p) {
+        continue;
+      }
+      for (const auto& str : *p) {
         if (str.size() > StringDictionary::MAX_STRLEN) {
           throw std::runtime_error("String too long for dictionary encoding.");
         }
       }
     }
 
-    std::vector<std::vector<int32_t>> ids_array(0);
-    string_dict_->getOrAddBulkArray(string_array_vec, ids_array);
+    // to avoid copying, create a string view of each string in the
+    // `string_array_vec` where the array holding the string is *not null*
+    std::vector<std::vector<std::string_view>> string_view_array_vec;
+    for (auto& p : string_array_vec) {
+      if (!p) {
+        continue;
+      }
+      auto& array = string_view_array_vec.emplace_back();
+      for (const auto& str : *p) {
+        array.emplace_back(str);
+      }
+    }
 
-    for (auto& p : ids_array) {
-      size_t len = p.size() * sizeof(int32_t);
-      auto a = static_cast<int32_t*>(checked_malloc(len));
-      memcpy(a, &p[0], len);
-      // TODO: distinguish between empty and NULL
-      string_array_dict_buffer_->push_back(
-          ArrayDatum(len, reinterpret_cast<int8_t*>(a), len == 0));
+    std::vector<std::vector<int32_t>> ids_array(0);
+    string_dict_->getOrAddBulkArray(string_view_array_vec, ids_array);
+
+    size_t i, j;
+    for (i = 0, j = 0; i < string_array_vec.size(); ++i) {
+      if (!string_array_vec[i]) {  // null array
+        string_array_dict_buffer_->push_back(
+            ImporterUtils::composeNullArray(column_desc_->columnType));
+      } else {  // non-null array
+        auto& p = ids_array[j++];
+        size_t len = p.size() * sizeof(int32_t);
+        auto a = static_cast<int32_t*>(checked_malloc(len));
+        memcpy(a, &p[0], len);
+        string_array_dict_buffer_->push_back(
+            ArrayDatum(len, reinterpret_cast<int8_t*>(a), false));
+      }
     }
   }
 
@@ -344,7 +374,7 @@ class TypedImportBuffer : boost::noncopyable {
 
   std::vector<ArrayDatum>* getArrayBuffer() const { return array_buffer_; }
 
-  std::vector<std::vector<std::string>>* getStringArrayBuffer() const {
+  std::vector<OptionalStringVector>* getStringArrayBuffer() const {
     return string_array_buffer_;
   }
 
@@ -497,7 +527,7 @@ class TypedImportBuffer : boost::noncopyable {
     std::vector<std::string>* string_buffer_;
     std::vector<std::string>* geo_string_buffer_;
     std::vector<ArrayDatum>* array_buffer_;
-    std::vector<std::vector<std::string>>* string_array_buffer_;
+    std::vector<OptionalStringVector>* string_array_buffer_;
   };
   union {
     std::vector<uint8_t>* string_dict_i8_buffer_;
@@ -735,13 +765,6 @@ class Detector : public DataStreamSink {
   boost::filesystem::path file_path;
   std::chrono::duration<double> timeout{1};
   std::string line1;
-};
-
-class ImporterUtils {
- public:
-  static ArrayDatum composeNullArray(const SQLTypeInfo& ti);
-  static ArrayDatum composeNullPointCoords(const SQLTypeInfo& coords_ti,
-                                           const SQLTypeInfo& geo_ti);
 };
 
 class Importer : public DataStreamSink, public AbstractImporter {
