@@ -652,7 +652,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+      return typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(SqlTypeName.INTEGER), /*nullable=*/true);
     }
 
     private static java.util.List<SqlTypeFamily> signature() {
