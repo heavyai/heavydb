@@ -85,6 +85,11 @@ add_executable(QuantileCpuTest Quantile/QuantileCpuTest.cpp)
 
 if(ENABLE_SYSTEM_TVFS)
   add_executable(SystemTVFsTest SystemTVFsTest.cpp)
+  if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+    if(ENABLE_RF_PROP_TVFS)
+      add_executable(RFPropTVFsTest ee/Tvf/RFPropTVFsTest.cpp)
+    endif()
+  endif()
 endif()
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
@@ -146,6 +151,11 @@ target_link_libraries(OmniSQLCommandTest gtest ${Boost_LIBRARIES} mapd_thrift)
 
 if(ENABLE_SYSTEM_TVFS)
   target_link_libraries(SystemTVFsTest ${EXECUTE_TEST_LIBS})
+  if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+    if(ENABLE_RF_PROP_TVFS)
+      target_link_libraries(RFPropTVFsTest ${EXECUTE_TEST_LIBS})
+    endif()
+  endif()
 endif()
 
 if(ENABLE_KRB5)
@@ -294,6 +304,11 @@ add_test(DataMgrTest DataMgrTest ${TEST_ARGS})
 
 if(ENABLE_SYSTEM_TVFS)
   add_test(SystemTVFsTest SystemTVFsTest ${TEST_ARGS})
+  if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+    if(ENABLE_RF_PROP_TVFS)
+      add_test(RFPropTVFsTest RFPropTVFsTest ${TEST_ARGS}) 
+    endif()
+  endif()
 endif()
 
 if(ENABLE_CUDA)
@@ -397,6 +412,11 @@ set(TEST_PROGRAMS
 
 if (ENABLE_SYSTEM_TVFS)
   list(APPEND TEST_PROGRAMS SystemTVFsTest)
+  if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+    if(ENABLE_RF_PROP_TVFS)
+      list(APPEND TEST_PROGRAMS RFPropTVFsTest) 
+    endif()
+  endif()
 endif()
 
 if(ENABLE_CUDA)

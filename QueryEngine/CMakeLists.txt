@@ -248,6 +248,12 @@ if (ENABLE_SYSTEM_TVFS)
   list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/Utilities.hpp)
   list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/GeoRaster.hpp)
 
+  if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+    if(ENABLE_RF_PROP_TVFS)
+      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/RFProp.hpp)
+    endif()
+  endif()
+
   if(ENABLE_MLPACK)
     list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/MLFunctions.hpp)
   endif()
