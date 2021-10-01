@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,25 +18,24 @@
  * @file    Analyzer.h
  * @author  Wei Hong <wei@map-d.com>
  * @brief   Defines data structures for the semantic analysis phase of query processing
- *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 #ifndef ANALYZER_H
 #define ANALYZER_H
-
-#include <cstdint>
-#include <iostream>
-#include <list>
-#include <set>
-#include <string>
-#include <type_traits>
-#include <utility>
-#include <vector>
 
 #include "Geospatial/Types.h"
 #include "Logger/Logger.h"
 #include "Shared/sqldefs.h"
 #include "Shared/sqltypes.h"
+
+#include <cstdint>
+#include <iostream>
+#include <list>
+#include <optional>
+#include <set>
+#include <string>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 namespace Analyzer {
 class Expr;
