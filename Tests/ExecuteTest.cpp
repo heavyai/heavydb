@@ -2530,6 +2530,29 @@ TEST(Select, WidthBucketWithGroupBy) {
   }
 }
 
+TEST(Select, WidthBucketNullability) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    {
+      // no results
+      auto result = run_multiple_agg(
+          R"(SELECT WIDTH_BUCKET(x, 1, 20, 3) AS w, COUNT(*) AS n FROM test GROUP BY w HAVING (w IS null);)",
+          dt);
+      EXPECT_EQ(result->rowCount(), size_t(0));
+    }
+
+    {
+      // one null row
+      // no results
+      auto result = run_multiple_agg(
+          R"(SELECT WIDTH_BUCKET(ofd, 1, 20, 3) AS w, COUNT(*) AS n FROM test GROUP BY w HAVING (w IS null);)",
+          dt);
+      EXPECT_EQ(result->rowCount(), size_t(1));
+    }
+  }
+}
+
 TEST(Select, CountWithLimitAndOffset) {
   SKIP_ALL_ON_AGGREGATOR();
   run_ddl_statement("DROP TABLE IF EXISTS count_test;");
