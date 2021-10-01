@@ -400,13 +400,13 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       throw std::runtime_error("Checking pending query status failed: unknown error");
     }
   }
+  int64_t queue_time_ms = timer_stop(clock_begin);
 
   prepare_for_system_table_execution(ra, cat_, co);
 
   // Notify foreign tables to load prior to caching
   prepare_foreign_table_for_execution(ra, cat_);
 
-  int64_t queue_time_ms = timer_stop(clock_begin);
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto phys_inputs = get_physical_inputs(cat_, &ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
