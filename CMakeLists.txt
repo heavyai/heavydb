@@ -307,16 +307,34 @@ if(ENABLE_FOLLY)
   endif()
 endif()
 
+
 option (ENABLE_SYSTEM_TVFS OFF)
 option (ENABLE_RF_PROP_TVFS OFF)
+option(ENABLE_POINT_CLOUD_TFS "Enable point cloud table functions" OFF)
+option(ENABLE_PDAL OFF)
+
 if(ENABLE_SYSTEM_TVFS)
   add_definitions("-DHAVE_SYSTEM_TVFS")
   if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
     if(ENABLE_RF_PROP_TVFS)
       add_definitions ("-DHAVE_RF_PROP_TVFS")
     endif()
+    if (ENABLE_POINT_CLOUD_TFS)
+      find_package(PDAL REQUIRED)
+      message ( "PDAL FOUND" )
+      include_directories(${PDAL_INCLUDE_DIRS})
+      message ( ${PDAL_INCLUDE_DIRS} )
+
+      link_directories(${PDAL_LIBRARIES})
+      message ( ${PDAL_LIBRARIES} )
+      add_definitions( ${PDAL_DEFINITIONS} )
+      set(ENABLE_PDAL ON)
+      add_definitions("-DHAVE_PDAL")
+      add_definitions("-DHAVE_POINT_CLOUD_TFS")
+    endif()
   endif()
 endif()
+
 
 option(ENABLE_MLPACK "Use mlpack" OFF)
 if(ENABLE_MLPACK)
@@ -769,6 +787,10 @@ list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
 
 if(ENABLE_FOLLY)
   list(APPEND MAPD_LIBRARIES ${Folly_LIBRARIES})
+endif()
+
+if(ENABLE_PDAL)
+  list(APPEND MAPD_LIBRARIES ${PDAL_LIBRARIES})
 endif()
 
 if(ENABLE_MLPACK)

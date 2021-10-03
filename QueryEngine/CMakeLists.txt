@@ -150,6 +150,11 @@ else()
     ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/RenderRelAlgUtils.cpp)
 endif()
 
+#if(HAVE_PDAL)
+#  list(APPEND query_engine_source_files
+#  TableFunctions/SystemFunctions/Loaders/PdalLoader.cpp)
+#endif()
+
 set(group_by_hash_test_files
     GroupByHashTest.cpp
     MurmurHash.cpp
@@ -252,6 +257,10 @@ if (ENABLE_SYSTEM_TVFS)
   if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
     if(ENABLE_RF_PROP_TVFS)
       list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/RFProp.hpp)
+    endif()
+    if(ENABLE_POINT_CLOUD_TFS)
+      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/PointCloud.hpp)
+      #list(APPEND query_engine_source_files TableFunctions/SystemFunctions/ee/PointCloud.cpp)
     endif()
   endif()
 

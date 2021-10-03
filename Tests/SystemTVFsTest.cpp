@@ -20,6 +20,7 @@
 
 #include <gtest/gtest.h>
 #include <limits>
+#include <numeric>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>

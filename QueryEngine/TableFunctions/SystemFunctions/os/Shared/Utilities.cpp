@@ -21,6 +21,7 @@
 #include <filesystem>
 #include <memory>
 #include <mutex>
+#include <regex>
 #include <shared_mutex>
 #include <string>
 #include <unordered_map>
@@ -188,6 +189,35 @@ void DataCache<T>::putDataForKey(const std::string& key, std::shared_ptr<T> cons
 
 namespace FileUtilities {
 
+// Following implementation taken from https://stackoverflow.com/a/65851545
+
+std::regex glob_to_regex(const std::string& glob, bool case_sensitive = false) {
+  // Note It is possible to automate checking if filesystem is case sensitive or not (e.g.
+  // by performing a test first time this function is ran)
+  std::string regex_string{glob};
+  // Escape all regex special chars:
+  regex_string = std::regex_replace(regex_string, std::regex("\\\\"), "\\\\");
+  regex_string = std::regex_replace(regex_string, std::regex("\\^"), "\\^");
+  regex_string = std::regex_replace(regex_string, std::regex("\\."), "\\.");
+  regex_string = std::regex_replace(regex_string, std::regex("\\$"), "\\$");
+  regex_string = std::regex_replace(regex_string, std::regex("\\|"), "\\|");
+  regex_string = std::regex_replace(regex_string, std::regex("\\("), "\\(");
+  regex_string = std::regex_replace(regex_string, std::regex("\\)"), "\\)");
+  regex_string = std::regex_replace(regex_string, std::regex("\\{"), "\\{");
+  regex_string = std::regex_replace(regex_string, std::regex("\\{"), "\\}");
+  regex_string = std::regex_replace(regex_string, std::regex("\\["), "\\[");
+  regex_string = std::regex_replace(regex_string, std::regex("\\]"), "\\]");
+  regex_string = std::regex_replace(regex_string, std::regex("\\+"), "\\+");
+  regex_string = std::regex_replace(regex_string, std::regex("\\/"), "\\/");
+  // Convert wildcard specific chars '*?' to their regex equivalents:
+  regex_string = std::regex_replace(regex_string, std::regex("\\?"), ".");
+  regex_string = std::regex_replace(regex_string, std::regex("\\*"), ".*");
+
+  return std::regex(
+      regex_string,
+      case_sensitive ? std::regex_constants::ECMAScript : std::regex_constants::icase);
+}
+
 std::vector<std::filesystem::path> get_fs_paths(const std::string& file_or_directory) {
   const std::filesystem::path file_or_directory_path(file_or_directory);
   const auto file_status = std::filesystem::status(file_or_directory_path);
@@ -204,6 +234,24 @@ std::vector<std::filesystem::path> get_fs_paths(const std::string& file_or_direc
       }
     }
     return fs_paths;
+  } else {
+    const auto parent_path = file_or_directory_path.parent_path();
+    const auto parent_status = std::filesystem::status(parent_path);
+    if (std::filesystem::is_directory(parent_status)) {
+      const auto file_glob = file_or_directory_path.filename();
+      const std::regex glob_regex{glob_to_regex(file_glob.string(), false)};
+
+      for (std::filesystem::directory_entry const& entry :
+           std::filesystem::directory_iterator(parent_path)) {
+        if (std::filesystem::is_regular_file(std::filesystem::status(entry))) {
+          const auto entry_filename = entry.path().filename().string();
+          if (std::regex_match(entry_filename, glob_regex)) {
+            fs_paths.emplace_back(entry.path());
+          }
+        }
+      }
+      return fs_paths;
+    }
   }
   return fs_paths;
 }
