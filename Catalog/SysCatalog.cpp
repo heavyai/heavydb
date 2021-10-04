@@ -1110,6 +1110,13 @@ void SysCatalog::updateUserRoleName(const std::string& roleName,
     std::swap(granteeMap_[to_upper(newName)], it->second);
     granteeMap_.erase(it);
   }
+
+  // Also rename in objectDescriptorMap_
+  for (auto d = objectDescriptorMap_.begin(); d != objectDescriptorMap_.end(); ++d) {
+    if (d->second->roleName == roleName) {
+      d->second->roleName = newName;
+    }
+  }
 }
 
 void SysCatalog::renameUser(std::string const& old_name, std::string const& new_name) {
@@ -1928,12 +1935,32 @@ void SysCatalog::changeDBObjectOwnership(const UserMetadata& new_owner,
     if (!previous_owner.isSuper && revoke_privileges) {  // no need to revoke from suser
       revokeDBObjectPrivileges_unsafe(previous_owner.userName, object, catalog);
     }
+    auto object_key = object.getObjectKey();
+    sqliteConnector_->query_with_text_params(
+        "UPDATE mapd_object_permissions SET objectOwnerId = ? WHERE dbId = ? AND "
+        "objectId = ? AND objectPermissionsType = ?",
+        std::vector<std::string>{std::to_string(new_owner.userId),
+                                 std::to_string(object_key.dbId),
+                                 std::to_string(object_key.objectId),
+                                 std::to_string(object_key.permissionType)});
+
+    for (const auto& [user_or_role, grantee] : granteeMap_) {
+      grantee->reassignObjectOwner(object_key, new_owner.userId);
+    }
+
+    for (const auto& [map_object_key, map_object_descriptor] : objectDescriptorMap_) {
+      if (map_object_descriptor->objectId == object_key.objectId &&
+          map_object_descriptor->objectType == object_key.permissionType &&
+          map_object_descriptor->dbId == object_key.dbId) {
+        map_object_descriptor->objectOwnerId = new_owner.userId;
+      }
+    }
   } catch (std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
+    rebuildObjectMaps();
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
-  object.setOwner(new_owner.userId);  // change owner if no exceptions happen
 }
 
 void SysCatalog::getDBObjectPrivileges(const std::string& granteeName,
@@ -1997,6 +2024,13 @@ void SysCatalog::createRole_unsafe(const std::string& roleName,
 void SysCatalog::dropRole_unsafe(const std::string& roleName, const bool is_temporary) {
   sys_write_lock write_lock(this);
 
+  for (auto d = objectDescriptorMap_.begin(); d != objectDescriptorMap_.end();) {
+    if (d->second->roleName == roleName) {
+      d = objectDescriptorMap_.erase(d);
+    } else {
+      d++;
+    }
+  }
   // it may very well be a user "role", so keep it generic
   granteeMap_.erase(to_upper(roleName));
 
@@ -2805,12 +2839,7 @@ void SysCatalog::reassignObjectOwners(
     }
   } catch (std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
-
-    // Rebuild updated maps from storage
-    granteeMap_.clear();
-    buildRoleMap();
-    objectDescriptorMap_.clear();
-    buildObjectDescriptorMap();
+    rebuildObjectMaps();
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
@@ -2872,4 +2901,13 @@ void SysCatalog::createVersionHistoryTable() const {
       "CREATE TABLE mapd_version_history(version integer, migration_history text "
       "unique)");
 }
+
+void SysCatalog::rebuildObjectMaps() {
+  // Rebuild updated maps from storage
+  granteeMap_.clear();
+  buildRoleMap();
+  objectDescriptorMap_.clear();
+  buildObjectDescriptorMap();
+}
+
 }  // namespace Catalog_Namespace

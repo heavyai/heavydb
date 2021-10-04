@@ -331,6 +331,20 @@ void Grantee::reassignObjectOwners(const std::set<int32_t>& old_owner_ids,
   }
 }
 
+void Grantee::reassignObjectOwner(DBObjectKey& object_key, int32_t new_owner_id) {
+  for (const auto& [grantee_object_key, object] : effectivePrivileges_) {
+    if (grantee_object_key == object_key) {
+      object->setOwner(new_owner_id);
+    }
+  }
+
+  for (const auto& [grantee_object_key, object] : directPrivileges_) {
+    if (grantee_object_key == object_key) {
+      object->setOwner(new_owner_id);
+    }
+  }
+}
+
 Role::~Role() {
   for (auto it = grantees_.begin(); it != grantees_.end();) {
     auto current_grantee = *it;

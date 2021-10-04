@@ -61,6 +61,7 @@ class Grantee {
   void reassignObjectOwners(const std::set<int32_t>& old_owner_ids,
                             int32_t new_owner_id,
                             int32_t db_id);
+  void reassignObjectOwner(DBObjectKey& object_key, int32_t new_owner_id);
 
  protected:
   std::string name_;

@@ -3792,6 +3792,77 @@ TEST(Temporary, Users) {
   EXPECT_EQ(g_user.userName, "username2");
 }
 
+class ObjectDescriptorCleanupTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    sql("DROP TABLE IF EXISTS test_table;");
+    sql("CREATE TABLE test_table (i INTEGER);");
+  }
+
+  void TearDown() override { sql("DROP TABLE IF EXISTS test_table;"); }
+
+  void assertNumObjectDesciptors(size_t num_descriptors) {
+    auto td = getCatalog().getMetadataForTable("test_table", false);
+    ASSERT_EQ(sys_cat
+                  .getMetadataForObject(getCatalog().getDatabaseId(),
+                                        DBObjectType::TableDBObjectType,
+                                        td->tableId)
+                  .size(),
+              num_descriptors);
+  }
+
+  void assertExpectedDescriptorRole() {
+    assertNumObjectDesciptors(1);
+    auto td = getCatalog().getMetadataForTable("test_table", false);
+    auto object_desc = sys_cat.getMetadataForObject(
+        getCatalog().getDatabaseId(), DBObjectType::TableDBObjectType, td->tableId)[0];
+    ASSERT_EQ(object_desc->roleName, "test_role");
+    ASSERT_EQ(object_desc->roleType, false);
+    ASSERT_TRUE(
+        object_desc->privs.hasPermission(AccessPrivileges::SELECT_FROM_TABLE.privileges));
+  }
+
+  void assertExpectedDescriptorUser(std::string username = "test_user") {
+    assertNumObjectDesciptors(1);
+    auto td = getCatalog().getMetadataForTable("test_table", false);
+    auto object_desc = sys_cat.getMetadataForObject(
+        getCatalog().getDatabaseId(), DBObjectType::TableDBObjectType, td->tableId)[0];
+    ASSERT_EQ(object_desc->roleName, username);
+    ASSERT_EQ(object_desc->roleType, true);
+    ASSERT_TRUE(
+        object_desc->privs.hasPermission(AccessPrivileges::SELECT_FROM_TABLE.privileges));
+  }
+};
+
+TEST_F(ObjectDescriptorCleanupTest, DeleteObjectDescriptorOnDropRole) {
+  sql("CREATE ROLE test_role;");
+  assertNumObjectDesciptors(0);
+  sql("GRANT SELECT ON TABLE test_table TO test_role");
+  assertExpectedDescriptorRole();
+  sql("DROP ROLE test_role;");
+  assertNumObjectDesciptors(0);
+}
+
+TEST_F(ObjectDescriptorCleanupTest, DeleteObjectDescriptorOnDropUser) {
+  sql("CREATE USER test_user;");
+  assertNumObjectDesciptors(0);
+  sql("GRANT SELECT ON TABLE test_table TO test_user");
+  assertExpectedDescriptorUser();
+  sql("DROP USER test_user;");
+  assertNumObjectDesciptors(0);
+}
+
+TEST_F(ObjectDescriptorCleanupTest, DeleteObjectDescriptorFromRenamedUser) {
+  sql("CREATE USER test_user");
+  assertNumObjectDesciptors(0);
+  sql("GRANT SELECT ON TABLE test_table TO test_user");
+  assertExpectedDescriptorUser();
+  sql("ALTER USER test_user RENAME TO test_user_renamed;");
+  assertExpectedDescriptorUser("test_user_renamed");
+  sql("DROP USER test_user_renamed;");
+  assertNumObjectDesciptors(0);
+}
+
 class ReassignOwnedTest : public DBHandlerTestFixture {
  protected:
   static void SetUpTestSuite() {
@@ -3921,15 +3992,24 @@ class ReassignOwnedTest : public DBHandlerTestFixture {
                                   int32_t object_id,
                                   int32_t owner_id) {
     auto object_type_id = static_cast<int>(object_type);
+    int found_objects = 0;
     for (const auto object : SysCatalog::instance().getMetadataForObject(
              getCatalog().getDatabaseId(), object_type_id, object_id)) {
-      if (object->objectType == object_type_id && object->objectId == object_id &&
-          object->objectOwnerId == owner_id) {
-        return;
+      if (object->objectType == object_type_id && object->objectId == object_id) {
+        if (object->objectOwnerId != owner_id) {
+          FAIL() << "ObjectRoleDescriptor found with wrong owner id,  object type: "
+                 << object_type_id << ", object id: " << object_id
+                 << ", owner id: " << object->objectOwnerId
+                 << ", expected owner id: " << owner_id
+                 << " name: " << object->objectName;
+        }
+        found_objects++;
       }
     }
-    FAIL() << "No ObjectRoleDescriptor found for object type: " << object_type_id
-           << ", object id: " << object_id << ", owner id: " << owner_id;
+    if (found_objects == 0) {
+      FAIL() << "No ObjectRoleDescriptor found for object type: " << object_type_id
+             << ", object id: " << object_id << ", owner id: " << owner_id;
+    }
   }
 
   void assertObjectPermissions(const std::string& user_name,
@@ -4210,6 +4290,57 @@ TEST_F(ReassignOwnedTest, NonExistentNewOwner) {
   loginAdmin();
   queryAndAssertException("REASSIGN OWNED BY test_user_1 TO nonexistent_user;",
                           "User with username \"nonexistent_user\" does not exist.");
+}
+
+class AlterServerOwnerTest : public ReassignOwnedTest {
+ protected:
+  void SetUp() override {
+    if (g_aggregator) {
+      LOG(INFO) << "Test fixture not supported in distributed mode.";
+      GTEST_SKIP();
+    }
+    ReassignOwnedTest::dropAllDatabaseObjects();
+  }
+
+  static void createServer() {
+    sql("CREATE SERVER test_server_1 FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type "
+        "= 'LOCAL_FILE', base_path = '/test_path/');");
+    // grant alter on server to other user to create additional ObjectRoleDescriptor that
+    // needs to be updated
+    sql("GRANT ALTER ON SERVER test_server_1 TO test_user_2;");
+  }
+
+  void verifyOwnership(std::string user_name) {
+    UserMetadata user;
+    SysCatalog::instance().getMetadataForUser(user_name, user);
+    auto user_id = user.userId;
+    auto& catalog = getCatalog();
+    auto server = catalog.getForeignServer("test_server_1");
+    ASSERT_NE(server, nullptr);
+    ASSERT_EQ(user_id, server->user_id);
+    if (!user.isSuper) {
+      ASSERT_TRUE(SysCatalog::instance().verifyDBObjectOwnership(
+          user, DBObject{server->id, DBObjectType::ServerDBObjectType}, catalog));
+    }
+    // Assumes additional privileges have been granted if owner is superuser
+    assertObjectRoleDescriptor(DBObjectType::ServerDBObjectType, server->id, user_id);
+  }
+};
+
+TEST_F(AlterServerOwnerTest, ToRegularUser) {
+  createServer();
+  verifyOwnership("admin");
+  sql("ALTER SERVER test_server_1 OWNER TO test_user_1;");
+  verifyOwnership("test_user_1");
+}
+
+TEST_F(AlterServerOwnerTest, ToSuperUser) {
+  login("test_user_1", "test_pass");
+  createServer();
+  verifyOwnership("test_user_1");
+  loginAdmin();
+  sql("ALTER SERVER test_server_1 OWNER TO admin;");
+  verifyOwnership("admin");
 }
 
 int main(int argc, char* argv[]) {

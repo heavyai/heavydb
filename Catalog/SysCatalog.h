@@ -388,6 +388,7 @@ class SysCatalog : private CommonFileOperations {
   void buildRoleMap();
   void buildUserRoleMap();
   void buildObjectDescriptorMap();
+  void rebuildObjectMaps();
   void checkAndExecuteMigrations();
   void importDataFromOldMapdDB();
   void createRoles();
