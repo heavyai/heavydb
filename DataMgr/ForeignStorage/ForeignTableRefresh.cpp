@@ -38,8 +38,7 @@ void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,
   catalog.removeFragmenterForTable(td->tableId);
   ChunkKey table_key{catalog.getCurrentDB().dbId, td->tableId};
 
-  if (catalog.getForeignTableUnlocked(td->tableId)->isAppendMode() &&
-      !evict_cached_entries) {
+  if (catalog.getForeignTable(td->tableId)->isAppendMode() && !evict_cached_entries) {
     ChunkMetadataVector metadata_vec;
     data_mgr.getChunkMetadataVecForKeyPrefix(metadata_vec, table_key);
     int last_fragment_id = 0;

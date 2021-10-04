@@ -170,7 +170,7 @@ bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) const {
     return false;
   }
 
-  auto table = catalog->getMetadataForTableImpl(table_id, false);
+  auto table = catalog->getMetadataForTable(table_id, false);
   CHECK(table);
   return table->storageType == StorageType::FOREIGN_TABLE;
 }

@@ -31,8 +31,8 @@ void init_chunk_for_column(
   ChunkKey data_chunk_key = chunk_key;
   AbstractBuffer* data_buffer = nullptr;
   AbstractBuffer* index_buffer = nullptr;
-  const auto column = catalog->getMetadataForColumnUnlocked(
-      chunk_key[CHUNK_KEY_TABLE_IDX], chunk_key[CHUNK_KEY_COLUMN_IDX]);
+  const auto column = catalog->getMetadataForColumn(chunk_key[CHUNK_KEY_TABLE_IDX],
+                                                    chunk_key[CHUNK_KEY_COLUMN_IDX]);
 
   if (column->columnType.is_varlen_indeed()) {
     data_chunk_key.push_back(1);

@@ -380,8 +380,8 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
 
   StringDictionary* string_dictionary = nullptr;
   if (is_dictionary_encoded_string_column) {
-    auto dict_descriptor = catalog->getMetadataForDictUnlocked(
-        logical_column->columnType.get_comp_param(), true);
+    auto dict_descriptor =
+        catalog->getMetadataForDict(logical_column->columnType.get_comp_param(), true);
     CHECK(dict_descriptor);
     string_dictionary = dict_descriptor->stringDict.get();
   }

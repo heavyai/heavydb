@@ -173,15 +173,12 @@ class Catalog final {
 
   const TableDescriptor* getMetadataForTable(const std::string& tableName,
                                              const bool populateFragmenter = true) const;
-  const TableDescriptor* getMetadataForTableImpl(int tableId,
-                                                 const bool populateFragmenter) const;
   const TableDescriptor* getMetadataForTable(int tableId,
                                              bool populateFragmenter = true) const;
 
   const ColumnDescriptor* getMetadataForColumn(int tableId,
                                                const std::string& colName) const;
   const ColumnDescriptor* getMetadataForColumn(int tableId, int columnId) const;
-  const ColumnDescriptor* getMetadataForColumnUnlocked(int tableId, int columnId) const;
 
   const int getColumnIdBySpi(const int tableId, const size_t spi) const;
   const ColumnDescriptor* getMetadataForColumnBySpi(const int tableId,
@@ -197,7 +194,6 @@ class Catalog final {
   const LinkDescriptor* getMetadataForLink(const std::string& link) const;
   const LinkDescriptor* getMetadataForLink(int linkId) const;
 
-  const foreign_storage::ForeignTable* getForeignTableUnlocked(int tableId) const;
   const foreign_storage::ForeignTable* getForeignTable(
       const std::string& tableName) const;
 
@@ -216,14 +212,6 @@ class Catalog final {
       const bool fetchSystemColumns,
       const bool fetchVirtualColumns,
       const bool fetchPhysicalColumns) const;
-  /**
-   * Same as above, but without first taking a catalog read lock.
-   */
-  std::list<const ColumnDescriptor*> getAllColumnMetadataForTableUnlocked(
-      const int tableId,
-      const bool fetchSystemColumns,
-      const bool fetchVirtualColumns,
-      const bool fetchPhysicalColumns) const;
 
   std::list<const TableDescriptor*> getAllTableMetadata() const;
   std::vector<TableDescriptor> getAllTableMetadataCopy() const;
@@ -235,7 +223,6 @@ class Catalog final {
   const std::string& getCatalogBasePath() const { return basePath_; }
 
   const DictDescriptor* getMetadataForDict(int dict_ref, bool loadDict = true) const;
-  const DictDescriptor* getMetadataForDictUnlocked(int dict_ref, bool loadDict) const;
 
   const std::vector<LeafHostInfo>& getStringDictionaryHosts() const;
 
@@ -297,12 +284,12 @@ class Catalog final {
   const ColumnDescriptor* getDeletedColumnIfRowsDeleted(const TableDescriptor* td) const;
 
   void setDeletedColumn(const TableDescriptor* td, const ColumnDescriptor* cd);
-  void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
   int getLogicalTableId(const int physicalTableId) const;
   void checkpoint(const int logicalTableId) const;
   void checkpointWithAutoRollback(const int logical_table_id) const;
   std::string name() const { return getCurrentDB().dbName; }
-  void eraseDBData();
+  void eraseDbMetadata();
+  void eraseDbPhysicalData();
   void eraseTablePhysicalData(const TableDescriptor* td);
   void setForReload(const int32_t tableId);
 
@@ -609,7 +596,7 @@ class Catalog final {
   void removeTableFromMap(const std::string& tableName,
                           const int tableId,
                           const bool is_on_error = false);
-  void doDropTable(const TableDescriptor* td);
+  void eraseTableMetadata(const TableDescriptor* td);
   void executeDropTableSqliteQueries(const TableDescriptor* td);
   void doTruncateTable(const TableDescriptor* td);
   void renamePhysicalTable(const TableDescriptor* td, const std::string& newTableName);
@@ -703,7 +690,7 @@ class Catalog final {
                                 const UserMetadata& user_metadata,
                                 const GetTablesType get_tables_type) const;
 
-  TableDescriptor* getMutableMetadataForTableUnlocked(int tableId);
+  TableDescriptor* getMutableMetadataForTableUnlocked(int table_id) const;
 
   /**
    * Same as createForeignServer() but without acquiring locks. This should only be called
@@ -717,7 +704,7 @@ class Catalog final {
       const std::string& tableName) const;
 
   const Catalog* getObjForLock();
-  void removeChunksUnlocked(const int table_id) const;
+  void removeChunks(const int table_id) const;
 
   void buildCustomExpressionsMap();
   std::unique_ptr<CustomExpression> getCustomExpressionFromConnector(size_t row);
@@ -736,6 +723,8 @@ class Catalog final {
       const std::string& table_name,
       const std::string& server_name,
       const std::vector<std::pair<std::string, SQLTypeInfo>>& column_type_by_name);
+
+  void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
 
   static constexpr const char* CATALOG_SERVER_NAME{"omnisci_catalog_server"};
 

@@ -3934,6 +3934,10 @@ bool user_can_access_table(const Catalog_Namespace::SessionInfo& session_info,
 void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
           catalog, *table_);
@@ -4519,6 +4523,10 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
 void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
+
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
 
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
@@ -5607,6 +5615,9 @@ void ShowCreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session)
           legacylockmgr::ExecutorOuterLock, true));
 
   auto& catalog = session.getCatalog();
+  auto table_read_lock =
+      lockmgr::TableSchemaLockMgr::getReadLockForTable(catalog, *table_);
+
   const TableDescriptor* td = catalog.getMetadataForTable(*table_, false);
   if (!td) {
     throw std::runtime_error("Table/View " + *table_ + " does not exist.");
@@ -5688,6 +5699,10 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     ddl_utils::validate_allowed_file_path(*file_path_,
                                           ddl_utils::DataTransferType::EXPORT);
   }
+
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
 
   // get column info
   auto column_info_result =
@@ -5972,6 +5987,10 @@ DropViewStmt::DropViewStmt(const rapidjson::Value& payload) {
 
 void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
+
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
 
   const TableDescriptor* td{nullptr};
   std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>> td_with_lock;
@@ -6292,6 +6311,16 @@ DumpTableStmt::DumpTableStmt(const rapidjson::Value& payload)
     : DumpRestoreTableStmtBase(payload, false) {}
 
 void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
+  auto& catalog = session.getCatalog();
+  // Prevent modification of the table schema during a dump operation, while allowing
+  // concurrent inserts.
+  auto table_read_lock =
+      lockmgr::TableSchemaLockMgr::getReadLockForTable(catalog, *table_);
+
   // check access privileges
   if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
                                        AccessPrivileges::SELECT_FROM_TABLE,
@@ -6304,7 +6333,6 @@ void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Table " + *table_ +
                              " will not be dumped. User has no create privileges.");
   }
-  auto& catalog = session.getCatalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table_);
   TableArchiver table_archiver(&catalog);
   table_archiver.dumpTable(td, *path_, compression_);

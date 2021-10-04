@@ -433,8 +433,8 @@ void initialize_chunks(std::map<ChunkKey, Chunk_NS::Chunk>& chunks,
                        const Catalog_Namespace::Catalog& catalog) {
   for (auto& [chunk_key, buffer] : buffers) {
     CHECK_EQ(fragment_id, chunk_key[CHUNK_KEY_FRAGMENT_IDX]);
-    const auto column = catalog.getMetadataForColumnUnlocked(
-        chunk_key[CHUNK_KEY_TABLE_IDX], chunk_key[CHUNK_KEY_COLUMN_IDX]);
+    const auto column = catalog.getMetadataForColumn(chunk_key[CHUNK_KEY_TABLE_IDX],
+                                                     chunk_key[CHUNK_KEY_COLUMN_IDX]);
     if (is_varlen_index_key(chunk_key)) {
       continue;
     }
@@ -477,7 +477,7 @@ void initialize_import_buffers(
         (column->columnType.is_array() && IS_STRING(column->columnType.get_subtype()) &&
          column->columnType.get_compression() == kENCODING_DICT)) {
       auto dict_descriptor =
-          catalog.getMetadataForDictUnlocked(column->columnType.get_comp_param(), true);
+          catalog.getMetadataForDict(column->columnType.get_comp_param(), true);
       string_dictionary = dict_descriptor->stringDict.get();
     }
     import_buffers.emplace_back(
@@ -549,7 +549,7 @@ void InternalCatalogDataWrapper::initializeObjectsForTable(
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   if (foreign_table_->tableName == Catalog_Namespace::USERS_SYS_TABLE_NAME) {
     users_.clear();
-    users_ = sys_catalog.getAllUserMetadataUnlocked();
+    users_ = sys_catalog.getAllUserMetadata();
     row_count_ = users_.size();
   } else if (foreign_table_->tableName == Catalog_Namespace::TABLES_SYS_TABLE_NAME) {
     tables_by_database_.clear();
@@ -565,15 +565,15 @@ void InternalCatalogDataWrapper::initializeObjectsForTable(
     }
   } else if (foreign_table_->tableName == Catalog_Namespace::PERMISSIONS_SYS_TABLE_NAME) {
     object_permissions_.clear();
-    object_permissions_ = sys_catalog.getMetadataForAllObjectsUnlocked();
+    object_permissions_ = sys_catalog.getMetadataForAllObjects();
     row_count_ = object_permissions_.size();
   } else if (foreign_table_->tableName == Catalog_Namespace::DATABASES_SYS_TABLE_NAME) {
     databases_.clear();
-    databases_ = sys_catalog.getAllDBMetadataUnlocked();
+    databases_ = sys_catalog.getAllDBMetadata();
     row_count_ = databases_.size();
   } else if (foreign_table_->tableName == Catalog_Namespace::ROLES_SYS_TABLE_NAME) {
     roles_.clear();
-    roles_ = sys_catalog.getCreatedRolesUnlocked();
+    roles_ = sys_catalog.getCreatedRoles();
     row_count_ = roles_.size();
   } else if (foreign_table_->tableName ==
              Catalog_Namespace::ROLE_ASSIGNMENTS_SYS_TABLE_NAME) {

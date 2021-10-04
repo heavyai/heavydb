@@ -49,7 +49,7 @@ std::set<const ColumnDescriptor*> get_columns(const ChunkToBufferMap& buffers,
   for (const auto& entry : buffers) {
     CHECK_EQ(fragment_id, entry.first[CHUNK_KEY_FRAGMENT_IDX]);
     const auto column_id = entry.first[CHUNK_KEY_COLUMN_IDX];
-    const auto column = catalog.getMetadataForColumnUnlocked(table_id, column_id);
+    const auto column = catalog.getMetadataForColumn(table_id, column_id);
     columns.emplace(column);
   }
   return columns;
@@ -114,7 +114,7 @@ void AbstractTextFileDataWrapper::updateMetadata(
     CHECK(catalog);
     for (auto& entry : column_id_to_chunk_map) {
       const auto& column =
-          catalog->getMetadataForColumnUnlocked(foreign_table_->tableId, entry.first);
+          catalog->getMetadataForColumn(foreign_table_->tableId, entry.first);
       if (skip_metadata_scan(column)) {
         ChunkKey data_chunk_key = {
             db_id_, foreign_table_->tableId, column->columnId, fragment_id};
@@ -819,8 +819,8 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
     append_start_offset_ = 0;
   }
 
-  auto columns = catalog->getAllColumnMetadataForTableUnlocked(
-      foreign_table_->tableId, false, false, true);
+  auto columns =
+      catalog->getAllColumnMetadataForTable(foreign_table_->tableId, false, false, true);
   std::map<int32_t, const ColumnDescriptor*> column_by_id{};
   for (auto column : columns) {
     column_by_id[column->columnId] = column;

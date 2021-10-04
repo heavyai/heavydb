@@ -25,9 +25,9 @@ class ForeignTableSchema {
     catalog_ = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
     CHECK(catalog_);
     foreign_table_ = foreign_table;
-    logical_and_physical_columns_ = catalog_->getAllColumnMetadataForTableUnlocked(
+    logical_and_physical_columns_ = catalog_->getAllColumnMetadataForTable(
         foreign_table->tableId, false, false, true);
-    logical_columns_ = catalog_->getAllColumnMetadataForTableUnlocked(
+    logical_columns_ = catalog_->getAllColumnMetadataForTable(
         foreign_table->tableId, false, false, false);
 
     for (const auto column : logical_columns_) {
@@ -39,8 +39,7 @@ class ForeignTableSchema {
    * Gets a pointer to the column descriptor object for the given column id.
    */
   const ColumnDescriptor* getColumnDescriptor(const int column_id) const {
-    auto column =
-        catalog_->getMetadataForColumnUnlocked(foreign_table_->tableId, column_id);
+    auto column = catalog_->getMetadataForColumn(foreign_table_->tableId, column_id);
     CHECK(column);
     return column;
   }
