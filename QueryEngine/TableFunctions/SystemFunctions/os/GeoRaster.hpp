@@ -105,17 +105,9 @@ struct GeoRaster {
                              const int64_t neighborhood_null_fill_radius) const;
 };
 
-//// clang-format off
-///*
-//  UDTF: tvf_geo_rasterize__cpu_template(TableFunctionManager, Cursor<Column<T> x,
-//  Column<T> y, Column<Z> z>, T, bool, int64_t) | filter_table_function_transpose=on ->
-//  Column<T> x, Column<T> y, Column<Z> z, T=[float, double], Z=[float, double]
-// */
-//// clang-format on
-
 // clang-format off
 /*
-  UDTF: tvf_geo_rasterize__cpu_template(TableFunctionManager, Cursor<Column<T>, Column<T>, Column<Z>>, T, bool, int64_t) -> Column<T> x, Column<T> y, Column<Z> z, T=[float, double], Z=[float, double]
+  UDTF: tvf_geo_rasterize__cpu_template(TableFunctionManager, Cursor<Column<T> x, Column<T> y, Column<Z> z>, T, bool, int64_t) | filter_table_function_transpose=on -> Column<T> x, Column<T> y, Column<Z> z, T=[float, double], Z=[float, double]
  */
 // clang-format on
 

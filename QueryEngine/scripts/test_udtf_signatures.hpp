@@ -18,12 +18,12 @@
         foo(ColumnInt32, kConstant<5>) -> ColumnInt32
 
   UDTF: foo(Cursor<Column<int32>>) -> Column<int32> !
-        foo(Cursor<ColumnInt32>) -> ColumnInt32
+        foo(Cursor<ColumnInt32> | fields=[field0]) -> ColumnInt32
 
   UDTF: foo(Cursor<Column<int32>, Column<float>>) -> Column<int32> !
-        foo(Cursor<ColumnInt32, ColumnFloat>) -> ColumnInt32
+        foo(Cursor<ColumnInt32, ColumnFloat> | fields=[field0,field1]) -> ColumnInt32
   UDTF: foo(Cursor<Column<int32>>, Cursor<Column<float>>) -> Column<int32> !
-        foo(Cursor<ColumnInt32>, Cursor<ColumnFloat>) -> ColumnInt32
+        foo(Cursor<ColumnInt32> | fields=[field0], Cursor<ColumnFloat> | fields=[field0]) -> ColumnInt32
 
   UDTF: foo(Column<int32>) -> Column<int32>, Column<float> !
         foo(ColumnInt32) -> ColumnInt32, ColumnFloat
@@ -51,9 +51,9 @@
         foo__cpu_template(ColumnInt32) -> ColumnInt32
 
   UDTF: foo__cpu(Column<T>, T, Cursor<ColumnList<U>>) -> Column<T>, T=[int32], U=[float] !
-        foo__cpu(ColumnInt32, Int32, Cursor<ColumnListFloat>) -> ColumnInt32
+        foo__cpu(ColumnInt32, Int32, Cursor<ColumnListFloat> | fields=[field0]) -> ColumnInt32
   UDTF: foo__cpu(Column<T> in1, T in2, Cursor<ColumnList<U>> in3) -> Column<T> out1, Column<U> out2, T=[int32], U=[float] !
-        foo__cpu(ColumnInt32 | name=in1, Int32 | name=in2, Cursor<ColumnListFloat> | name=in3) -> ColumnInt32 | name=out1, ColumnFloat | name=out2
+        foo__cpu(ColumnInt32 | name=in1, Int32 | name=in2, Cursor<ColumnListFloat> | name=in3 | fields=[field0]) -> ColumnInt32 | name=out1, ColumnFloat | name=out2
 
   UDTF: foo__cpu_template(Column<T>) -> Column<U>, T=[int32, int64], U=[float, double] !
         foo__cpu_template(ColumnInt32) -> ColumnFloat  !
@@ -63,5 +63,22 @@
 
   UDTF: foo__cpu(TableFunctionManager, int64_t) -> Column<int64_t> !
         foo__cpu(TableFunctionManager, Int64) -> ColumnInt64
- */
+
+  UDTF: foo__cpu(TableFunctionManager, Cursor<Column<int64_t> x, Column<int64_t> y> z) -> Column<int64_t> !
+        foo__cpu(TableFunctionManager, Cursor<ColumnInt64 | name=x, ColumnInt64 | name=y> | name=z | fields=[x,y]) -> ColumnInt64
+
+  UDTF: foo__cpu(TableFunctionManager) | filter_table_function_transpose=on -> Column<int64_t> !
+        foo__cpu(TableFunctionManager) | filter_table_function_transpose=1 -> ColumnInt64
+  UDTF: foo__cpu(TableFunctionManager) | filter_table_function_transpose=off -> Column<int64_t> !
+        foo__cpu(TableFunctionManager) | filter_table_function_transpose=0 -> ColumnInt64
+  UDTF: foo__cpu(TableFunctionManager) | bar=off -> Column<int64_t> !
+        TransformerException: unknown function annotation: `bar`
+  UDTF: foo__cpu(TableFunctionManager | bar=off) -> Column<int64_t> !
+        TransformerException: unknown input annotation: `bar`
+  UDTF: foo__cpu(TableFunctionManager) -> Column<int64_t> | bar=off !
+        TransformerException: unknown output annotation: `bar`
+
+  UDTF: foo__cpu(TableFunctionManager, Cursor<int32_t x> | fields=[x1]) -> Column<int64_t>!
+        foo__cpu(TableFunctionManager, Cursor<Int32 | name=x> | fields=[x1]) -> ColumnInt64
+*/
 // clang-format on

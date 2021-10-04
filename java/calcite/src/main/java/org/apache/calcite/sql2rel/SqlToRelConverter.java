@@ -37,6 +37,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
+import com.mapd.calcite.parser.MapDSqlOperatorTable.ExtTableFunction;
 
 import org.apache.calcite.avatica.util.Spaces;
 import org.apache.calcite.linq4j.Ord;
@@ -2413,6 +2414,10 @@ public class SqlToRelConverter {
   }
 
   private Set<RelColumnMapping> getColumnMappings(SqlOperator op) {
+    if (op instanceof ExtTableFunction) {
+      ExtTableFunction tf = (ExtTableFunction) op;
+      return tf.getColumnMappings();
+    }
     SqlReturnTypeInference rti = op.getReturnTypeInference();
     if (rti == null) {
       return null;

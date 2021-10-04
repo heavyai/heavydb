@@ -1148,4 +1148,46 @@ TEMPLATE_NOINLINE int32_t ct_throw_if_gt_100__cpu_template(TableFunctionManager&
   return num_rows;
 }
 
+// clang-format off
+/*
+  The following UDTFs are used to test an optimization rule that moves
+  filters on UDTF outputs to the inputs when the names of outputs and
+  input arguments match in the UDTF signatures. This optimization
+  makes sense only if filters and table functions are commutative with
+  respect to the corresponding input and output arguments:
+
+    filter(udtf(..., input[j], ...)[i]) == udtf(..., filter(input[j]), ...)[i]
+
+  The UDTFs below invalidate this requirement for the purpose of
+  testing the feature: the result will depend on whether the
+  optimization is enabled or not.
+
+  UDTF: ct_copy_and_add_size(TableFunctionManager, Column<int32_t> x) | filter_table_function_transpose=on -> Column<int32_t> x
+  UDTF: ct_add_size_and_mul_alpha(TableFunctionManager, Cursor<Column<int32_t>, Column<int32_t>> | fields=[x, x2], int32_t alpha) | filter_table_function_transpose=on -> Column<int32_t> x, Column<int32_t> x2
+*/
+// clang-format on
+EXTENSION_NOINLINE int32_t ct_copy_and_add_size(TableFunctionManager& mgr,
+                                                const Column<int32_t>& input,
+                                                Column<int32_t>& output) {
+  mgr.set_output_row_size(input.size());
+  for (int32_t i = 0; i < input.size(); i++) {
+    output[i] = input[i] + input.size();
+  }
+  return output.size();
+}
+
+EXTENSION_NOINLINE int32_t ct_add_size_and_mul_alpha(TableFunctionManager& mgr,
+                                                     const Column<int32_t>& input1,
+                                                     const Column<int32_t>& input2,
+                                                     int32_t alpha,
+                                                     Column<int32_t>& output1,
+                                                     Column<int32_t>& output2) {
+  auto size = input1.size();
+  mgr.set_output_row_size(size);
+  for (int32_t i = 0; i < size; i++) {
+    output1[i] = input1[i] + size;
+    output2[i] = input2[i] * alpha;
+  }
+  return size;
+}
 #endif

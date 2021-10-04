@@ -175,6 +175,10 @@ const std::map<std::string, std::string>& TableFunction::getOutputAnnotation(
   return getAnnotation(output_arg_idx + sql_args_.size());
 }
 
+const std::map<std::string, std::string>& TableFunction::getFunctionAnnotation() const {
+  return getAnnotation(annotations_.size() - 1);
+}
+
 std::pair<int32_t, int32_t> TableFunction::getInputID(const size_t idx) const {
   // if the annotation is of the form args<INT,INT>, it is refering to a column list
 #define PREFIX_LENGTH 5

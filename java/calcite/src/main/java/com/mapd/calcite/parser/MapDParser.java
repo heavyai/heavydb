@@ -26,6 +26,7 @@ import com.mapd.parser.extension.ddl.JsonSerializableDdl;
 import com.mapd.parser.hint.OmniSciHintStrategyTable;
 import com.mapd.parser.server.ExtensionFunction;
 
+// import com.mapd.calcite.rel.rules.FilterTableFunctionTransposeRule2;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.config.CalciteConnectionConfigImpl;
@@ -54,6 +55,7 @@ import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
 import org.apache.calcite.rel.rules.CoreRules;
 import org.apache.calcite.rel.rules.FilterMergeRule;
 import org.apache.calcite.rel.rules.FilterProjectTransposeRule;
+import org.apache.calcite.rel.rules.FilterTableFunctionTransposeRule;
 import org.apache.calcite.rel.rules.JoinProjectTransposeRule;
 import org.apache.calcite.rel.rules.ProjectMergeRule;
 import org.apache.calcite.rel.rules.ProjectRemoveRule;
@@ -772,7 +774,6 @@ public final class MapDParser {
     MapDPlanner planner = mapDPlanner;
     boolean allowCorrelatedSubQueryExpansion = true;
     boolean patchUpdateToDelete = false;
-
     if (node.isA(DELETE)) {
       SqlDelete sqlDelete = (SqlDelete) node;
       node = new SqlUpdate(node.getParserPosition(),
@@ -785,7 +786,6 @@ public final class MapDParser {
 
       patchUpdateToDelete = true;
     }
-
     if (node.isA(UPDATE)) {
       SqlUpdate update = (SqlUpdate) node;
       update = (SqlUpdate) planner.validate(update);
@@ -807,7 +807,6 @@ public final class MapDParser {
 
       return root;
     }
-
     if (parserOptions.isLegacySyntax()) {
       // close original planner
       planner.close();
@@ -823,8 +822,10 @@ public final class MapDParser {
     relR = replaceIsTrue(planner.getTypeFactory(), relR);
     planner.close();
 
+    HepProgramBuilder builder = new HepProgramBuilder();
     if (!parserOptions.isViewOptimizeEnabled()) {
-      return relR;
+      builder.addRuleInstance(CoreRules.FILTER_TABLE_FUNCTION_TRANSPOSE);
+      builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
     } else {
       // check to see if a view is involved in the query
       boolean foundView = false;
@@ -840,24 +841,23 @@ public final class MapDParser {
           foundView = true;
         }
       }
-
-      if (!foundView) {
-        return relR;
+      if (foundView) {
+        builder.addRuleInstance(CoreRules.JOIN_PROJECT_BOTH_TRANSPOSE_INCLUDE_OUTER);
+        builder.addRuleInstance(CoreRules.FILTER_MERGE);
+        builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
       }
-
-      HepProgramBuilder builder = new HepProgramBuilder();
-      builder.addRuleInstance(CoreRules.JOIN_PROJECT_BOTH_TRANSPOSE_INCLUDE_OUTER);
-      builder.addRuleInstance(CoreRules.FILTER_MERGE);
+      builder.addRuleInstance(CoreRules.FILTER_TABLE_FUNCTION_TRANSPOSE);
       builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
-      builder.addRuleInstance(CoreRules.PROJECT_MERGE);
-      builder.addRuleInstance(ProjectProjectRemoveRule.INSTANCE);
-      HepPlanner hepPlanner = MapDPlanner.getHepPlanner(builder.build(), true);
-      final RelNode root = relR.project();
-      hepPlanner.setRoot(root);
-      final RelNode newRel = hepPlanner.findBestExp();
-
-      return RelRoot.of(newRel, relR.kind);
+      if (foundView) {
+        builder.addRuleInstance(CoreRules.PROJECT_MERGE);
+        builder.addRuleInstance(ProjectProjectRemoveRule.INSTANCE);
+      }
     }
+    HepPlanner hepPlanner = MapDPlanner.getHepPlanner(builder.build(), true);
+    final RelNode root = relR.project();
+    hepPlanner.setRoot(root);
+    final RelNode newRel = hepPlanner.findBestExp();
+    return RelRoot.of(newRel, relR.kind);
   }
 
   private RelRoot replaceIsTrue(final RelDataTypeFactory typeFactory, RelRoot root) {

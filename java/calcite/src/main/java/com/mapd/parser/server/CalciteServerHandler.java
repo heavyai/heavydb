@@ -437,7 +437,11 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     for (TExtArgumentType atype : udtf.sqlArgTypes) {
       args.add(toExtArgumentType(atype));
       Map<String, String> annot = udtf.annotations.get(index);
-      names.add(annot.getOrDefault("name", "inp" + index));
+      String name = annot.getOrDefault("name", "inp" + index);
+      if (atype == TExtArgumentType.Cursor && annot.containsKey("fields")) {
+        name = name + annot.get("fields");
+      }
+      names.add(name);
       index++;
     }
     List<ExtensionFunction.ExtArgumentType> outs =
@@ -449,7 +453,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       index++;
       out_index++;
     }
-    return new ExtensionFunction(args, outs, names);
+    return new ExtensionFunction(
+            args, outs, names, udtf.annotations.get(udtf.annotations.size() - 1));
   }
 
   private static ExtensionFunction.ExtArgumentType toExtArgumentType(

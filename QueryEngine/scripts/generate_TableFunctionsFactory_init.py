@@ -75,7 +75,7 @@ else:
     from collections import Iterable
 
 # fmt: off
-Signature = namedtuple('Signature', ['name', 'inputs', 'outputs', 'input_annotations', 'output_annotations'])
+Signature = namedtuple('Signature', ['name', 'inputs', 'outputs', 'input_annotations', 'output_annotations', 'function_annotations'])
 
 ExtArgumentTypes = ''' Int8, Int16, Int32, Int64, Float, Double, Void, PInt8, PInt16,
 PInt32, PInt64, PFloat, PDouble, PBool, Bool, ArrayInt8, ArrayInt16,
@@ -91,7 +91,12 @@ kConstant, kUserSpecifiedConstantParameter, kUserSpecifiedRowMultiplier, kTableF
 '''.strip().replace(' ', '').split(',')
 
 SupportedAnnotations = '''
-input_id, name
+input_id, name, fields
+'''.strip().replace(' ', '').split(',')
+
+# TODO: support `gpu`, `cpu`, `template` as function annotations
+SupportedFunctionAnnotations = '''
+filter_table_function_transpose
 '''.strip().replace(' ', '').split(',')
 
 translate_map = dict(
@@ -112,6 +117,43 @@ for t in ['Int8', 'Int16', 'Int32', 'Int64', 'Float', 'Double', 'Bool',
         translate_map[t.lower() + '_t'] = t
 
 
+class Declaration:
+    """Holds a `TYPE | ANNOTATIONS`-like structure.
+    """
+    def __init__(self, type, annotations=[]):
+        self.type = type
+        self.annotations = annotations
+
+    def __repr__(self):
+        return 'Declaration(%r, %r)' % (self.type, self.annotations)
+
+    def __str__(self):
+        if not self.annotations:
+            return str(self.type)
+        return '%s | %s' % (self.type, ' | '.join(map(str, self.annotations)))
+
+    def tostring(self):
+        return self.type.tostring()
+
+    def apply_column(self):
+        return self.__class__(self.type.apply_column(), self.annotations)
+
+    def apply_namespace(self, ns='ExtArgumentType'):
+        return self.__class__(self.type.apply_namespace(ns), self.annotations)
+
+    def get_cpp_type(self):
+        return self.type.get_cpp_type()
+
+    def __getattr__(self, name):
+        if name.startswith('is_'):
+            return getattr(self.type, name)()
+        raise AttributeError(name)
+
+
+def tostring(obj):
+    return obj.tostring()
+
+
 class Bracket:
     """Holds a `NAME<ARGS>`-like structure.
     """
@@ -129,6 +171,11 @@ class Bracket:
         if not self.args:
             return self.name
         return '%s<%s>' % (self.name, ', '.join(map(str, self.args)))
+
+    def tostring(self):
+        if not self.args:
+            return self.name
+        return '%s<%s>' % (self.name, ', '.join(map(tostring, self.args)))
 
     def normalize(self, kind='input'):
         """Normalize bracket for given kind
@@ -272,6 +319,12 @@ def line_is_incomplete(line):
     # TODO: try to parse the line to be certain about completeness.
     # `!' is used to separate the UDTF signature and the expected result
     return line.endswith(',') or line.endswith('->') or line.endswith('!')
+
+
+def is_identifier_cursor(identifier):
+    return identifier.lower() == 'cursor'
+
+
 # fmt: on
 
 
@@ -280,6 +333,10 @@ class TokenizeException(Exception):
 
 
 class ParserException(Exception):
+    pass
+
+
+class TransformerException(Exception):
     pass
 
 
@@ -514,6 +571,7 @@ class AstTransformer(AstVisitor):
         udtf.outputs = [arg.accept(self) for arg in udtf.outputs]
         if udtf.templates:
             udtf.templates = [t.accept(self) for t in udtf.templates]
+        udtf.annotations = [annot.accept(self) for annot in udtf.annotations]
         return udtf
 
     def visit_composed_node(self, composed_node):
@@ -545,11 +603,14 @@ class AstPrinter(AstVisitor):
         name = udtf_node.name
         inputs = ", ".join([arg.accept(self) for arg in udtf_node.inputs])
         outputs = ", ".join([arg.accept(self) for arg in udtf_node.outputs])
+        annotations = "| ".join([annot.accept(self) for annot in udtf_node.annotations])
+        if annotations:
+            annotations = ' | ' + annotations
         if udtf_node.templates:
             templates = ", ".join([t.accept(self) for t in udtf_node.templates])
-            return "%s(%s) -> %s, %s" % (name, inputs, outputs, templates)
+            return "%s(%s)%s -> %s, %s" % (name, inputs, annotations, outputs, templates)
         else:
-            return "%s(%s) -> %s" % (name, inputs, outputs)
+            return "%s(%s)%s -> %s" % (name, inputs, annotations, outputs)
 
     def visit_template_node(self, template_node):
         # T=[T1, T2, ..., TN]
@@ -561,6 +622,8 @@ class AstPrinter(AstVisitor):
         # key=value
         key = annotation_node.key
         value = annotation_node.value
+        if isinstance(value, list):
+            return "%s=[%s]" % (key, ','.join([v.accept(self) for v in value]))
         return "%s=%s" % (key, value)
 
     def visit_arg_node(self, arg_node):
@@ -630,7 +693,7 @@ class TemplateTransformer(AstTransformer):
             self.mapping_dict = product
             inputs = [input_arg.accept(self) for input_arg in udtf_node.inputs]
             outputs = [output_arg.accept(self) for output_arg in udtf_node.outputs]
-            udtfs.append(UdtfNode(name, inputs, outputs, None, udtf_node.line))
+            udtfs.append(UdtfNode(name, inputs, outputs, udtf_node.annotations, None, udtf_node.line))
             self.mapping_dict = {}
 
         if len(udtfs) == 1:
@@ -652,24 +715,30 @@ class TemplateTransformer(AstTransformer):
 
 
 class NormalizeTransformer(AstTransformer):
+
     def visit_udtf_node(self, udtf_node):
         """
         * Add default_input_id to Column(List)<TextEncodingDict> without one
+        * Generate fields annotation to Cursor if non-existing
         """
         udtf_node = super(type(self), self).visit_udtf_node(udtf_node)
 
         # add default input_id
         default_input_id = None
         for idx, t in enumerate(udtf_node.inputs):
-            t = t.type
-            if not isinstance(t, ComposedNode):
+
+            if not isinstance(t.type, ComposedNode):
                 continue
-            if t.is_column_text_encoding_dict():
+            if default_input_id is not None:
+                pass
+            elif t.type.is_column_text_encoding_dict():
                 default_input_id = AnnotationNode('input_id', 'args<%s>' % (idx,))
-                break
-            elif t.is_column_list_text_encoding_dict():
+            elif t.type.is_column_list_text_encoding_dict():
                 default_input_id = AnnotationNode('input_id', 'args<%s, 0>' % (idx,))
-                break
+
+            if t.type.is_cursor() and t.get_annotation('fields') is None:
+                fields = list(PrimitiveNode(a.get_annotation('name', 'field%s' % i)) for i, a in enumerate(t.type.inner))
+                t.annotations.append(AnnotationNode('fields', fields))
 
         for t in udtf_node.outputs:
             if isinstance(t.type, ComposedNode) and t.type.is_any_text_encoding_dict():
@@ -703,6 +772,29 @@ class NormalizeTransformer(AstTransformer):
         return primitive_node.copy(translate_map.get(t, t))
 
 
+class SupportedAnnotationsTransformer(AstTransformer):
+    """
+    * Checks for supported annotations in a UDTF
+    """
+    def visit_udtf_node(self, udtf_node):
+        for idx, t in enumerate(udtf_node.inputs):
+            for a in t.annotations:
+                if a.key not in SupportedAnnotations:
+                    raise TransformerException('unknown input annotation: `%s`' % (a.key))
+        for t in udtf_node.outputs:
+            for a in t.annotations:
+                if a.key not in SupportedAnnotations:
+                    raise TransformerException('unknown output annotation: `%s`' % (a.key))
+        for annot in udtf_node.annotations:
+            if annot.key not in SupportedFunctionAnnotations:
+                raise TransformerException('unknown function annotation: `%s`' % (annot.key))
+            if annot.value.lower() in ['enable', 'on', '1', 'true']:
+                annot.value = '1'
+            elif annot.value.lower() in ['disable', 'off', '0', 'false']:
+                annot.value = '0'
+        return udtf_node
+
+
 class SignatureTransformer(AstTransformer):
 
     def visit_udtf_node(self, udtf_node):
@@ -711,23 +803,28 @@ class SignatureTransformer(AstTransformer):
         input_annotations = []
         outputs = []
         output_annotations = []
+        function_annotations = []
 
         for i in udtf_node.inputs:
-            inp, anns = i.accept(self)
-            inputs.append(inp)
-            input_annotations.append(anns)
+            decl = i.accept(self)
+            inputs.append(decl.type)
+            input_annotations.append(decl.annotations)
 
         for o in udtf_node.outputs:
-            out, anns = o.accept(self)
-            outputs.append(out)
-            output_annotations.append(anns)
+            decl = o.accept(self)
+            outputs.append(decl.type)
+            output_annotations.append(decl.annotations)
 
-        return Signature(name, inputs, outputs, input_annotations, output_annotations)
+        for annot in udtf_node.annotations:
+            annot = annot.accept(self)
+            function_annotations.append(annot)
+
+        return Signature(name, inputs, outputs, input_annotations, output_annotations, function_annotations)
 
     def visit_arg_node(self, arg_node):
         t = arg_node.type.accept(self)
         anns = [a.accept(self) for a in arg_node.annotations]
-        return t, anns
+        return Declaration(t, anns)
 
     def visit_composed_node(self, composed_node):
         typ = translate_map.get(composed_node.type, composed_node.type)
@@ -788,19 +885,21 @@ class IterableNode(Iterable):
 
 class UdtfNode(Node, IterableNode):
 
-    def __init__(self, name, inputs, outputs, templates, line):
+    def __init__(self, name, inputs, outputs, annotations, templates, line):
         """
         Parameters
         ----------
         name : str
         inputs : list[ArgNode]
         outputs : list[ArgNode]
+        annotations : Optional[List[AnnotationNode]]
         templates : Optional[list[TemplateNode]]
         line: str
         """
         self.name = name
         self.inputs = inputs
         self.outputs = outputs
+        self.annotations = annotations
         self.templates = templates
         self.line = line
 
@@ -811,17 +910,26 @@ class UdtfNode(Node, IterableNode):
         name = self.name
         inputs = [str(i) for i in self.inputs]
         outputs = [str(o) for o in self.outputs]
+        annotations = [str(a) for a in self.annotations]
         if self.templates:
             templates = [str(t) for t in self.templates]
-            return "UDFT: %s (%s) -> %s, %s" % (name, inputs, outputs, templates)
+            if annotations:
+                return "UDTF: %s (%s) | %s -> %s, %s" % (name, inputs, annotations, outputs, templates)
+            else:
+                return "UDTF: %s (%s) -> %s, %s" % (name, inputs, outputs, templates)
         else:
-            return "UDFT: %s (%s) -> %s" % (name, inputs, outputs)
+            if annotations:
+                return "UDTF: %s (%s) | %s -> %s" % (name, inputs, annotations, outputs)
+            else:
+                return "UDTF: %s (%s) -> %s" % (name, inputs, outputs)
 
     def __iter__(self):
         for i in self.inputs:
             yield i
         for o in self.outputs:
             yield o
+        for a in self.annotations:
+            yield a
         if self.templates:
             for t in self.templates:
                 yield t
@@ -860,6 +968,12 @@ class ArgNode(Node, IterableNode):
 
     __repr__ = __str__
 
+    def get_annotation(self, key, default=None):
+        for a in self.annotations:
+            if a.key == key:
+                return a.value
+        return default
+
 
 class TypeNode(Node):
     def is_column(self):
@@ -890,7 +1004,7 @@ class PrimitiveNode(TypeNode):
         return visitor.visit_primitive_node(self)
 
     def __str__(self):
-        return "Primitive(%s)" % (self.type)
+        return self.accept(AstPrinter())
 
     def is_text_encoding_dict(self):
         return self.type == 'TextEncodingDict'
@@ -944,7 +1058,7 @@ class AnnotationNode(Node):
         Parameters
         ----------
         key : str
-        value : str
+        value : {str, list}
         """
         self.key = key
         self.value = value
@@ -1065,17 +1179,21 @@ class Parser:
     def parse_udtf(self):
         """fmt: off
 
-        udtf: IDENTIFIER "(" (args)? ")" "->" args ("," templates)?
+        udtf: IDENTIFIER "(" (args)? ")" ("|" annotation)* "->" args ("," templates)?
 
         fmt: on
         """
         name = self.parse_identifier()
         self.expect(Token.LPAR)  # (
-        input_args = [] 
+        input_args = []
         if not self.match(Token.RPAR):
             input_args = self.parse_args()
         self.expect(Token.RPAR)  # )
-        self.expect(Token.RARROW)
+        annotations = []
+        while not self.is_at_end() and self.match(Token.VBAR):  # |
+            self.consume(Token.VBAR)
+            annotations.append(self.parse_annotation())
+        self.expect(Token.RARROW)  # ->
         output_args = self.parse_args()
 
         templates = None
@@ -1094,7 +1212,7 @@ class Parser:
             arg.arg_pos = i
             arg.kind = "output"
 
-        return UdtfNode(name, input_args, output_args, templates, self.line)
+        return UdtfNode(name, input_args, output_args, annotations, templates, self.line)
 
     def parse_args(self):
         """fmt: off
@@ -1156,21 +1274,29 @@ class Parser:
             return primitive
 
         self._curr = curr  # return state
+
         return self.parse_composed()
 
     def parse_composed(self):
         """fmt: off
 
-        composed: IDENTIFIER "<" type ("," type)* ">"
+        composed: "Cursor" "<" arg ("," arg)* ">"
+                | IDENTIFIER "<" type ("," type)* ">"
 
         fmt: on
         """
         idtn = self.parse_identifier()
         self.consume(Token.LESS)
-        inner = [self.parse_type()]
-        while self.match(Token.COMMA):
-            self.consume(Token.COMMA)
-            inner.append(self.parse_type())
+        if is_identifier_cursor(idtn):
+            inner = [self.parse_arg()]
+            while self.match(Token.COMMA):
+                self.consume(Token.COMMA)
+                inner.append(self.parse_arg())
+        else:
+            inner = [self.parse_type()]
+            while self.match(Token.COMMA):
+                self.consume(Token.COMMA)
+                inner.append(self.parse_type())
         self.consume(Token.GREATER)
         return ComposedNode(idtn, inner)
 
@@ -1226,22 +1352,34 @@ class Parser:
         """fmt: off
 
         annotation: IDENTIFIER "=" IDENTIFIER ("<" NUMBER ("," NUMBER) ">")?
+                  | IDENTIFIER "=" "[" PRIMITIVE? ("," PRIMITIVE)* "]"
 
         fmt: on
         """
         key = self.parse_identifier()
         self.consume(Token.EQUAL)
-        value = self.parse_identifier()
-        if not self.is_at_end() and self.match(Token.LESS):
-            self.consume(Token.LESS)
-            num1 = self.parse_number()
-            if self.match(Token.COMMA):
-                self.consume(Token.COMMA)
-                num2 = self.parse_number()
-                value += "<%s,%s>" % (num1, num2)
-            else:
-                value += "<%s>" % (num1)
-            self.consume(Token.GREATER)
+
+        if not self.is_at_end() and self.match(Token.LSQB):
+            value = []
+            self.consume(Token.LSQB)
+            if not self.match(Token.RSQB):
+                value.append(self.parse_primitive())
+                while self.match(Token.COMMA):
+                    self.consume(Token.COMMA)
+                    value.append(self.parse_primitive())
+            self.consume(Token.RSQB)
+        else:
+            value = self.parse_identifier()
+            if not self.is_at_end() and self.match(Token.LESS):
+                self.consume(Token.LESS)
+                num1 = self.parse_number()
+                if self.match(Token.COMMA):
+                    self.consume(Token.COMMA)
+                    num2 = self.parse_number()
+                    value += "<%s,%s>" % (num1, num2)
+                else:
+                    value += "<%s>" % (num1)
+                self.consume(Token.GREATER)
         return AnnotationNode(key, value)
 
     def parse_identifier(self):
@@ -1267,7 +1405,7 @@ class Parser:
     def parse(self):
         """fmt: off
 
-        udtf: IDENTIFIER "(" (args)? ")" "->" args ("," templates)?
+        udtf: IDENTIFIER "(" (args)? ")" ("|" annotation)* "->" args ("," templates)?
 
         args: arg ("," arg)*
 
@@ -1276,11 +1414,14 @@ class Parser:
         type: composed
             | primitive
 
-        composed: IDENTIFIER "<" type ("," type)* ">"
+        composed: "Cursor" "<" arg ("," arg)* ">"
+                | IDENTIFIER "<" type ("," type)* ">"
+
         primitive: IDENTIFIER
                  | NUMBER
 
         annotation: IDENTIFIER "=" IDENTIFIER ("<" NUMBER ("," NUMBER) ">")?
+                  | IDENTIFIER "=" "[" PRIMITIVE? ("," PRIMITIVE)* "]"
 
         templates: template ("," template)
         template: IDENTIFIER "=" "[" IDENTIFIER ("," IDENTIFIER)* "]"
@@ -1340,15 +1481,24 @@ def find_signatures(input_file):
 
         if expected_result is not None:
             # Template transformer expands templates into multiple lines
-            result = Pipeline(TemplateTransformer, NormalizeTransformer, AstPrinter)(ast)
-            assert set(result) == set(expected_result), "\n\tresult: %s != \n\texpected: %s" % (
+            skip_signature = False
+            try:
+                result = Pipeline(TemplateTransformer, NormalizeTransformer, SupportedAnnotationsTransformer, AstPrinter)(ast)
+            except TransformerException as msg:
+                result = ['%s: %s' % (type(msg).__name__, msg)]
+                skip_signature = True
+            assert set(result) == set(expected_result), "\n\tresult:   %s != \n\texpected: %s" % (
                 result,
                 expected_result,
             )
+            if skip_signature:
+                continue
 
         signature = Pipeline(TemplateTransformer,
                              NormalizeTransformer,
+                             SupportedAnnotationsTransformer,
                              SignatureTransformer)(ast)
+
         signatures.extend(signature)
 
     return signatures
@@ -1392,7 +1542,6 @@ def build_template_function_call(caller, callee, input_types, output_types, uses
         cpp_arg, arg_name = format_cpp_type(cpp_type, idx, is_input=False)
         output_cpp_args.append(cpp_arg)
         arg_names.append(arg_name)
-
 
     args = ', '.join(input_cpp_args + output_cpp_args)
     arg_names = ', '.join(arg_names)
@@ -1493,10 +1642,10 @@ def parse_annotations(input_files):
             ns_input_types = tuple([t.apply_namespace(ns='ExtArgumentType') for t in input_types_])
             ns_sql_types = tuple([t.apply_namespace(ns='ExtArgumentType') for t in sql_types_])
 
-            input_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(str, ns_input_types)))
-            output_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(str, ns_output_types)))
-            sql_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(str, ns_sql_types)))
-            annotations = format_annotations(input_annotations + sig.output_annotations)
+            input_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(tostring, ns_input_types)))
+            output_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(tostring, ns_output_types)))
+            sql_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(tostring, ns_sql_types)))
+            annotations = format_annotations(input_annotations + sig.output_annotations + [sig.function_annotations])
 
             # Notice that input_types and sig.input_types, (and
             # similarly, input_annotations and sig.input_annotations)

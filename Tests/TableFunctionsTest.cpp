@@ -61,13 +61,13 @@ class TableFunctions : public ::testing::Test {
     {
       run_ddl_statement("DROP TABLE IF EXISTS tf_test;");
       run_ddl_statement(
-          "CREATE TABLE tf_test (x INT, f FLOAT, d DOUBLE, d2 DOUBLE) WITH "
+          "CREATE TABLE tf_test (x INT, x2 INT, f FLOAT, d DOUBLE, d2 DOUBLE) WITH "
           "(FRAGMENT_SIZE=2);");
 
       TestHelpers::ValuesGenerator gen("tf_test");
 
       for (int i = 0; i < 5; i++) {
-        const auto insert_query = gen(i, i * 1.1, i * 1.1, 1.0 - i * 2.2);
+        const auto insert_query = gen(i, 5 - i, i * 1.1, i * 1.1, 1.0 - i * 2.2);
         run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       }
     }
@@ -871,6 +871,77 @@ TEST_F(TableFunctions, ThrowingTests) {
         auto crt_row = rows->getNextRow(false, false);
         ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int32_t>(r));
       }
+    }
+  }
+}
+
+TEST_F(TableFunctions, FilterTransposeRule) {
+  // Test FILTER_TABLE_FUNCTION_TRANSPOSE optimization.
+
+  auto check_result = [](const auto rows, std::vector<int64_t> result) {
+    ASSERT_EQ(rows->rowCount(), result.size());
+    for (size_t i = 0; i < result.size(); i++) {
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), result[i]);
+    }
+  };
+
+  auto check_result2 =
+      [](const auto rows, std::vector<int64_t> result1, std::vector<int64_t> result2) {
+        ASSERT_EQ(rows->rowCount(), result1.size());
+        ASSERT_EQ(rows->rowCount(), result2.size());
+        for (size_t i = 0; i < result1.size(); i++) {
+          auto crt_row = rows->getNextRow(false, false);
+          ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), result1[i]);
+          ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]), result2[i]);
+        }
+      };
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_copy_and_add_size(cursor(SELECT x FROM tf_test WHERE "
+          "x>1)));",
+          dt);
+      check_result(rows, {2 + 3, 3 + 3, 4 + 3});
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_copy_and_add_size(cursor(SELECT x FROM tf_test)))"
+          "WHERE x>1;",
+          dt);
+      check_result(rows, {2 + 3, 3 + 3, 4 + 3});
+    }
+    {
+      run_ddl_statement("DROP VIEW IF EXISTS view_ct_copy_and_add_size");
+      run_ddl_statement(
+          "CREATE VIEW view_ct_copy_and_add_size AS SELECT * FROM "
+          "TABLE(ct_copy_and_add_size(cursor(SELECT x FROM tf_test)));");
+      const auto rows1 =
+          run_multiple_agg("SELECT * FROM view_ct_copy_and_add_size WHERE x>1;", dt);
+      check_result(rows1, {2 + 3, 3 + 3, 4 + 3});
+      const auto rows2 = run_multiple_agg("SELECT * FROM view_ct_copy_and_add_size;", dt);
+      check_result(rows2, {0 + 5, 1 + 5, 2 + 5, 3 + 5, 4 + 5});
+    }
+    {
+      // x=0,1,2,3,4
+      // x2=5,4,3,2,1
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_add_size_and_mul_alpha(cursor(SELECT x, x2 FROM "
+          "tf_test WHERE "
+          "x>1 and x2>1), 4));",
+          dt);
+      check_result2(rows, {2 + 2, 3 + 2}, {3 * 4, 2 * 4});
+    }
+    {
+      // x =0,1,2,3,4
+      // x2=5,4,3,2,1
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_add_size_and_mul_alpha(cursor(SELECT x, x2 FROM "
+          "tf_test), 4)) WHERE x>1 and x2>1;",
+          dt);
+      check_result2(rows, {2 + 2, 3 + 2}, {3 * 4, 2 * 4});
     }
   }
 }

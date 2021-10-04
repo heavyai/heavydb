@@ -22,7 +22,9 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -87,16 +89,19 @@ public class ExtensionFunction {
     this.outs = null;
     this.names = null;
     this.isRowUdf = true;
+    this.options = null;
   }
 
   ExtensionFunction(final List<ExtArgumentType> args,
           final List<ExtArgumentType> outs,
-          final List<String> names) {
+          final List<String> names,
+          final Map<String, String> options) {
     this.args = args;
     this.ret = null;
     this.outs = outs;
     this.names = names;
     this.isRowUdf = false;
+    this.options = options;
   }
 
   public List<ExtArgumentType> getArgs() {
@@ -137,6 +142,13 @@ public class ExtensionFunction {
       sql_outs.add(toSqlTypeName(getValueType(otype)));
     }
     return sql_outs;
+  }
+
+  public Map<String, String> getOptions() {
+    if (this.options != null) {
+      return new HashMap<String, String>(this.options);
+    }
+    return null;
   }
 
   public boolean isRowUdf() {
@@ -283,6 +295,7 @@ public class ExtensionFunction {
   private final List<String> names;
   private final ExtArgumentType ret; // only used by UDFs
   private final boolean isRowUdf;
+  private final Map<String, String> options;
 
   public final java.util.List<SqlTypeFamily> toSqlSignature() {
     java.util.List<SqlTypeFamily> sql_sig = new java.util.ArrayList<SqlTypeFamily>();

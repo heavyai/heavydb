@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
 import com.mapd.parser.server.ExtensionFunction;
 
+import org.apache.calcite.rel.metadata.RelColumnMapping;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeFactory.FieldInfoBuilder;
@@ -55,6 +56,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 class CaseInsensitiveListSqlOperatorTable extends ListSqlOperatorTable {
   @Override
@@ -1924,7 +1926,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     private final SqlTypeName ret;
   }
 
-  static class ExtTableFunction extends SqlFunction implements SqlTableFunction {
+  public static class ExtTableFunction extends SqlFunction implements SqlTableFunction {
     ExtTableFunction(final String name, final ExtensionFunction sig) {
       super(name,
               SqlKind.OTHER_FUNCTION,
@@ -1934,6 +1936,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
       outs = sig.getSqlOuts();
       out_names = sig.getOutNames();
+      arg_names = sig.getArgNames();
+      options = sig.getOptions();
     }
 
     @Override
@@ -1946,9 +1950,35 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         return ret.build();
       };
     }
+    public Set<RelColumnMapping> getColumnMappings() {
+      Set<RelColumnMapping> s = new HashSet<RelColumnMapping>();
+      if (Integer.valueOf(options.getOrDefault("filter_table_function_transpose", "0"))
+              == 1) {
+        for (int arg_idx = 0; arg_idx < arg_names.size(); ++arg_idx) {
+          String arg_name = arg_names.get(arg_idx);
+          String[] fields;
+          int start = arg_name.indexOf("[");
+          if (start != -1) {
+            int end = arg_name.lastIndexOf("]");
+            fields = arg_name.substring(start, end).replaceAll("\\s+", "").split(",", 0);
+          } else {
+            fields = new String[] {arg_name};
+          }
+          for (int field_idx = 0; field_idx < fields.length; ++field_idx) {
+            int out_idx = out_names.indexOf(fields[field_idx]);
+            if (out_idx >= 0) {
+              s.add(new RelColumnMapping(out_idx, arg_idx, field_idx, false));
+            }
+          }
+        }
+      }
+      return s;
+    }
 
     private final List<SqlTypeName> outs;
+    private final List<String> arg_names;
     private final List<String> out_names;
+    private final Map<String, String> options;
   }
 
   //

@@ -227,6 +227,7 @@ class TableFunction {
       const size_t input_arg_idx) const;
   const std::map<std::string, std::string>& getOutputAnnotation(
       const size_t output_arg_idx) const;
+  const std::map<std::string, std::string>& getFunctionAnnotation() const;
 
   std::pair<int32_t, int32_t> getInputID(const size_t idx) const;
 
