@@ -1,0 +1,6 @@
+SELECT
+  severity,
+  COUNT(*) AS c
+FROM ##TAB##
+GROUP BY severity
+ORDER BY c DESC NULLS LAST LIMIT 100
