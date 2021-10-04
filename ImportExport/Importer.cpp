@@ -3167,17 +3167,14 @@ void Loader::dropColumns(const std::vector<int>& columnIds) {
   }
 }
 
-void Loader::init(const bool use_catalog_locks) {
+void Loader::init() {
   insert_data_.databaseId = catalog_.getCurrentDB().dbId;
   insert_data_.tableId = table_desc_->tableId;
   for (auto cd : column_descs_) {
     insert_data_.columnIds.push_back(cd->columnId);
     if (cd->columnType.get_compression() == kENCODING_DICT) {
       CHECK(cd->columnType.is_string() || cd->columnType.is_string_array());
-      const auto dd = use_catalog_locks
-                          ? catalog_.getMetadataForDict(cd->columnType.get_comp_param())
-                          : catalog_.getMetadataForDictUnlocked(
-                                cd->columnType.get_comp_param(), true);
+      const auto dd = catalog_.getMetadataForDict(cd->columnType.get_comp_param());
       CHECK(dd);
       dict_map_[cd->columnId] = dd->stringDict.get();
     }

@@ -292,10 +292,7 @@ void TableArchiver::dumpTable(const TableDescriptor* td,
     }
     file_paths.push_back(file_name);
   };
-  // Prevent modification of the table schema during a dump operation, while allowing
-  // concurrent inserts.
-  auto table_read_lock =
-      lockmgr::TableSchemaLockMgr::getReadLockForTable(*cat_, td->tableName);
+
   const auto table_name = td->tableName;
   {
     // - gen schema file

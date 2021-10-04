@@ -219,11 +219,7 @@ class SysCatalog : private CommonFileOperations {
   const std::string& getCatalogBasePath() const { return basePath_; }
   SqliteConnector* getSqliteConnector() { return sqliteConnector_.get(); }
   std::list<DBMetadata> getAllDBMetadata();
-  // TODO: remove after use of unlocked methods in the data wrapper is resolved
-  std::list<DBMetadata> getAllDBMetadataUnlocked();
   std::list<UserMetadata> getAllUserMetadata();
-  // TODO: remove after use of unlocked methods in the data wrapper is resolved
-  std::list<UserMetadata> getAllUserMetadataUnlocked();
   /**
    * return the users associated with the given DB
    */
@@ -314,8 +310,6 @@ class SysCatalog : private CommonFileOperations {
                                                           int32_t dbType,
                                                           int32_t objectId) const;
   std::vector<ObjectRoleDescriptor> getMetadataForAllObjects() const;
-  // TODO: remove after use of unlocked methods in the data wrapper is resolved
-  std::vector<ObjectRoleDescriptor> getMetadataForAllObjectsUnlocked() const;
   bool isRoleGrantedToGrantee(const std::string& granteeName,
                               const std::string& roleName,
                               bool only_direct) const;
@@ -326,8 +320,6 @@ class SysCatalog : private CommonFileOperations {
   // Get all roles that have been created, even roles that have not been assigned to other
   // users or roles.
   std::set<std::string> getCreatedRoles() const;
-  // TODO: remove after use of unlocked methods in the data wrapper is resolved
-  std::set<std::string> getCreatedRolesUnlocked() const;
   bool isAggregator() const { return aggregator_; }
   static SysCatalog& instance() {
     if (!instance_) {

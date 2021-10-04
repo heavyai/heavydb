@@ -32,7 +32,7 @@ inline bool is_system_table_chunk_key(const ChunkKey& chunk_key) {
   auto catalog =
       Catalog_Namespace::SysCatalog::instance().getCatalog(chunk_key[CHUNK_KEY_DB_IDX]);
   CHECK(catalog);
-  auto table = catalog->getForeignTableUnlocked(chunk_key[CHUNK_KEY_TABLE_IDX]);
+  auto table = catalog->getForeignTable(chunk_key[CHUNK_KEY_TABLE_IDX]);
   CHECK(table);
   return table->is_system_table;
 }
@@ -181,7 +181,7 @@ void CachingForeignStorageMgr::refreshTableInCache(const ChunkKey& table_key) {
       Catalog_Namespace::SysCatalog::instance().getCatalog(table_key[CHUNK_KEY_DB_IDX]);
   CHECK(catalog);
   bool append_mode =
-      catalog->getForeignTableUnlocked(table_key[CHUNK_KEY_TABLE_IDX])->isAppendMode();
+      catalog->getForeignTable(table_key[CHUNK_KEY_TABLE_IDX])->isAppendMode();
 
   append_mode ? refreshAppendTableInCache(table_key, old_chunk_keys)
               : refreshNonAppendTableInCache(table_key, old_chunk_keys);

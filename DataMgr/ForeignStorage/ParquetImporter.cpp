@@ -163,7 +163,7 @@ ParquetImportBatchResult::getChunksAndDictionaries() const {
          column_descriptor->columnType.get_elem_type().is_dict_encoded_string());
 
     if (is_dictionary_encoded_string_column) {
-      auto dict_descriptor = catalog->getMetadataForDictUnlocked(
+      auto dict_descriptor = catalog->getMetadataForDict(
           column_descriptor->columnType.get_comp_param(), true);
       CHECK(dict_descriptor);
       auto string_dictionary = dict_descriptor->stringDict.get();

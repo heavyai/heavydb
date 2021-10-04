@@ -43,8 +43,8 @@ ParseBufferRequest::ParseBufferRequest(size_t buffer_size,
       if (column->columnType.is_dict_encoded_string() ||
           (column->columnType.is_array() && IS_STRING(column->columnType.get_subtype()) &&
            column->columnType.get_compression() == kENCODING_DICT)) {
-        auto dict_descriptor = getCatalog()->getMetadataForDictUnlocked(
-            column->columnType.get_comp_param(), true);
+        auto dict_descriptor =
+            getCatalog()->getMetadataForDict(column->columnType.get_comp_param(), true);
         string_dictionary = dict_descriptor->stringDict.get();
       }
       import_buffers.emplace_back(

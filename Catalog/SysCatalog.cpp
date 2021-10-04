@@ -1324,9 +1324,10 @@ void SysCatalog::createDatabase(const string& name, int owner) {
 }
 
 void SysCatalog::dropDatabase(const DBMetadata& db) {
+  auto cat = getCatalog(db, false);
+  cat->eraseDbPhysicalData();
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
-  auto cat = getCatalog(db, false);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     // remove this database ID from any users that have it set as their default database
@@ -1357,7 +1358,7 @@ void SysCatalog::dropDatabase(const DBMetadata& db) {
     }
     sqliteConnector_->query_with_text_param("DELETE FROM mapd_databases WHERE dbid = ?",
                                             std::to_string(db.dbId));
-    cat->eraseDBData();
+    cat->eraseDbMetadata();
     removeCatalog(db.dbName);
   } catch (const std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
@@ -1457,10 +1458,6 @@ bool SysCatalog::getMetadataForUserById(const int32_t idIn, UserMetadata& user) 
 
 list<DBMetadata> SysCatalog::getAllDBMetadata() {
   sys_sqlite_lock sqlite_lock(this);
-  return getAllDBMetadataUnlocked();
-}
-
-list<DBMetadata> SysCatalog::getAllDBMetadataUnlocked() {
   sqliteConnector_->query("SELECT dbid, name, owner FROM mapd_databases");
   int numRows = sqliteConnector_->getNumRows();
   list<DBMetadata> db_list;
@@ -1521,10 +1518,6 @@ list<UserMetadata> SysCatalog::getAllUserMetadata(const int64_t dbId) {
 
 list<UserMetadata> SysCatalog::getAllUserMetadata() {
   sys_sqlite_lock sqlite_lock(this);
-  return getAllUserMetadataUnlocked();
-}
-
-list<UserMetadata> SysCatalog::getAllUserMetadataUnlocked() {
   return get_users(*this, sqliteConnector_);
 }
 
@@ -2269,10 +2262,6 @@ SysCatalog::getMetadataForObject(int32_t dbId, int32_t dbType, int32_t objectId)
 
 std::vector<ObjectRoleDescriptor> SysCatalog::getMetadataForAllObjects() const {
   sys_read_lock read_lock(this);
-  return getMetadataForAllObjectsUnlocked();
-}
-
-std::vector<ObjectRoleDescriptor> SysCatalog::getMetadataForAllObjectsUnlocked() const {
   std::vector<ObjectRoleDescriptor> objects;
   for (const auto& entry : objectDescriptorMap_) {
     auto object_role = entry.second.get();
@@ -2352,10 +2341,6 @@ std::vector<std::string> SysCatalog::getRoles(bool userPrivateRole,
 
 std::set<std::string> SysCatalog::getCreatedRoles() const {
   sys_read_lock read_lock(this);
-  return getCreatedRolesUnlocked();
-}
-
-std::set<std::string> SysCatalog::getCreatedRolesUnlocked() const {
   std::set<std::string> roles;
   for (const auto& [key, grantee] : granteeMap_) {
     if (!grantee->isUser() && !isDashboardSystemRole(grantee->getName())) {

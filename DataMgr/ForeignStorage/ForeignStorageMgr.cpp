@@ -38,7 +38,7 @@ void ForeignStorageMgr::checkIfS3NeedsToBeEnabled(const ChunkKey& chunk_key) {
   auto catalog =
       Catalog_Namespace::SysCatalog::instance().getCatalog(chunk_key[CHUNK_KEY_DB_IDX]);
   CHECK(catalog);
-  auto foreign_table = catalog->getForeignTableUnlocked(chunk_key[CHUNK_KEY_TABLE_IDX]);
+  auto foreign_table = catalog->getForeignTable(chunk_key[CHUNK_KEY_TABLE_IDX]);
   auto storage_type_entry = foreign_table->foreign_server->options.find(
       AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY);
 
@@ -201,7 +201,7 @@ void ForeignStorageMgr::setDataWrapper(
 void ForeignStorageMgr::createDataWrapperUnlocked(int32_t db_id, int32_t tb_id) {
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
   CHECK(catalog);
-  auto foreign_table = catalog->getForeignTableUnlocked(tb_id);
+  auto foreign_table = catalog->getForeignTable(tb_id);
   ChunkKey table_key{db_id, tb_id};
   data_wrapper_map_[table_key] = ForeignDataWrapperFactory::create(
       foreign_table->foreign_server->data_wrapper_type, db_id, foreign_table);
@@ -225,7 +225,7 @@ void ForeignStorageMgr::refreshTable(const ChunkKey& table_key,
   CHECK(catalog);
   // Clear datawrapper unless table is non-append and evict is false
   if (evict_cached_entries ||
-      !catalog->getForeignTableUnlocked(table_key[CHUNK_KEY_TABLE_IDX])->isAppendMode()) {
+      !catalog->getForeignTable(table_key[CHUNK_KEY_TABLE_IDX])->isAppendMode()) {
     clearDataWrapper(table_key);
   }
 }
@@ -345,7 +345,7 @@ std::set<ChunkKey> get_keys_set_from_table(const ChunkKey& destination_chunk_key
   auto fragment_id = destination_chunk_key[CHUNK_KEY_FRAGMENT_IDX];
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
   CHECK(catalog);
-  auto foreign_table = catalog->getForeignTableUnlocked(table_id);
+  auto foreign_table = catalog->getForeignTable(table_id);
 
   ForeignTableSchema schema{db_id, foreign_table};
   auto logical_column = schema.getLogicalColumn(destination_column_id);
@@ -377,7 +377,7 @@ std::vector<ChunkKey> get_keys_vec_from_table(const ChunkKey& destination_chunk_
   auto fragment_id = destination_chunk_key[CHUNK_KEY_FRAGMENT_IDX];
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
   CHECK(catalog);
-  auto foreign_table = catalog->getForeignTableUnlocked(table_id);
+  auto foreign_table = catalog->getForeignTable(table_id);
 
   ForeignTableSchema schema{db_id, foreign_table};
   auto logical_column = schema.getLogicalColumn(destination_column_id);

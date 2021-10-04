@@ -6203,18 +6203,9 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
       return;
     }
 
-    if (g_enable_system_tables && is_info_schema_db(cat.name())) {
-      // Prevent any other query from running while accessing system tables.
-      // TODO: Remove this logic after use of unlocked methods in system table data
-      // wrappers is resolved.
-      executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
-          *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-              legacylockmgr::ExecutorOuterLock, true));
-    } else {
-      executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
-          *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-              legacylockmgr::ExecutorOuterLock, true));
-    }
+    executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
+        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+            legacylockmgr::ExecutorOuterLock, true));
 
     std::string query_ra = query_str;
     if (use_calcite) {
@@ -6546,6 +6537,8 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
         if (g_enable_system_tables) {
           // Reset system tables fragmenters in order to force chunk metadata fetch on
           // next query
+          auto table_write_lock =
+              lockmgr::TableSchemaLockMgr::getWriteLockForTable(*cat, td->tableName);
           cat->removeFragmenterForTable(td->tableId);
         } else {
           throw std::runtime_error(
