@@ -2841,9 +2841,11 @@ void Catalog::getForeignServersForUser(
   // Return pointers to objects
   results.reserve(num_rows);
   for (size_t row = 0; row < num_rows; ++row) {
-    const foreign_storage::ForeignServer* foreign_server =
-        getForeignServer(sqliteConnector_.getData<std::string>(row, 0));
-
+    const auto& server_name = sqliteConnector_.getData<std::string>(row, 0);
+    if (shared::contains(INTERNAL_SERVERS, server_name)) {
+      continue;
+    }
+    const foreign_storage::ForeignServer* foreign_server = getForeignServer(server_name);
     CHECK(foreign_server != nullptr);
 
     DBObject dbObject(foreign_server->name, ServerDBObjectType);
@@ -5375,42 +5377,39 @@ void Catalog::conditionallyInitializeSystemTables() {
           ROLES_SYS_TABLE_NAME, CATALOG_SERVER_NAME, {{"role_name", {kTEXT}}});
     }
 
-    // TODO: Add the following tables after resolving the issue with data wrappers using
-    // unlocked methods
+    if (!getMetadataForTable(TABLES_SYS_TABLE_NAME, false)) {
+      createSystemTable(TABLES_SYS_TABLE_NAME,
+                        CATALOG_SERVER_NAME,
+                        {{"database_id", {kINT}},
+                         {"table_id", {kINT}},
+                         {"table_name", {kTEXT}},
+                         {"owner_id", {kINT}},
+                         {"column_count", {kINT}},
+                         {"is_view", {kBOOLEAN}},
+                         {"view_sql", {kTEXT}},
+                         {"max_fragment_size", {kINT}},
+                         {"max_chunk_size", {kBIGINT}},
+                         {"fragment_page_size", {kINT}},
+                         {"max_rows", {kBIGINT}},
+                         {"max_rollback_epochs", {kINT}},
+                         {"shard_count", {kINT}}});
+    }
 
-    //    if (!getMetadataForTable(TABLES_SYS_TABLE_NAME, false)) {
-    //      createSystemTable(TABLES_SYS_TABLE_NAME,
-    //                        CATALOG_SERVER_NAME,
-    //                        {{"database_id", {kINT}},
-    //                         {"table_id", {kINT}},
-    //                         {"table_name", {kTEXT}},
-    //                         {"owner_id", {kINT}},
-    //                         {"column_count", {kINT}},
-    //                         {"is_view", {kBOOLEAN}},
-    //                         {"view_sql", {kTEXT}},
-    //                         {"max_fragment_size", {kINT}},
-    //                         {"max_chunk_size", {kBIGINT}},
-    //                         {"fragment_page_size", {kINT}},
-    //                         {"max_rows", {kBIGINT}},
-    //                         {"max_rollback_epochs", {kINT}},
-    //                         {"shard_count", {kINT}}});
-    //    }
-    //
-    //    if (!getMetadataForTable(DASHBOARDS_SYS_TABLE_NAME, false)) {
-    //      createSystemTable(DASHBOARDS_SYS_TABLE_NAME,
-    //                        CATALOG_SERVER_NAME,
-    //                        {{"database_id", {kINT}},
-    //                         {"dashboard_id", {kINT}},
-    //                         {"dashboard_name", {kTEXT}},
-    //                         {"owner_id", {kINT}},
-    //                         {"last_updated_at", {kTIMESTAMP}}});
-    //    }
-    //
-    //    if (!getMetadataForTable(ROLE_ASSIGNMENTS_SYS_TABLE_NAME, false)) {
-    //      createSystemTable(ROLE_ASSIGNMENTS_SYS_TABLE_NAME,
-    //                        CATALOG_SERVER_NAME,
-    //                        {{"role_name", {kTEXT}}, {"user_name", {kTEXT}}});
-    //    }
+    if (!getMetadataForTable(DASHBOARDS_SYS_TABLE_NAME, false)) {
+      createSystemTable(DASHBOARDS_SYS_TABLE_NAME,
+                        CATALOG_SERVER_NAME,
+                        {{"database_id", {kINT}},
+                         {"dashboard_id", {kINT}},
+                         {"dashboard_name", {kTEXT}},
+                         {"owner_id", {kINT}},
+                         {"last_updated_at", {kTIMESTAMP}}});
+    }
+
+    if (!getMetadataForTable(ROLE_ASSIGNMENTS_SYS_TABLE_NAME, false)) {
+      createSystemTable(ROLE_ASSIGNMENTS_SYS_TABLE_NAME,
+                        CATALOG_SERVER_NAME,
+                        {{"role_name", {kTEXT}}, {"user_name", {kTEXT}}});
+    }
   }
 }
 

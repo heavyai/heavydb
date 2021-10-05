@@ -387,7 +387,8 @@ std::map<std::string, std::vector<std::string>> get_all_role_assignments() {
   const auto& users = sys_catalog.getAllUserMetadata();
   std::map<std::string, std::vector<std::string>> user_names_by_role;
   for (const auto& user : users) {
-    for (const auto& role : sys_catalog.getRoles(false, user.isSuper, user.userName)) {
+    for (const auto& role :
+         sys_catalog.getRoles(false, user.isSuper, user.userName, true)) {
       user_names_by_role[role].emplace_back(user.userName);
     }
   }

@@ -977,11 +977,11 @@ void SysCatalog::dropUser(const string& name) {
   sqliteConnector_->query("END TRANSACTION");
 }
 
-std::vector<std::shared_ptr<Catalog>> SysCatalog::getCatalogsForAllDbs() {
-  std::vector<std::shared_ptr<Catalog>> catalogs{};
+std::vector<Catalog*> SysCatalog::getCatalogsForAllDbs() {
+  std::vector<Catalog*> catalogs{};
   const auto& db_metadata_list = getAllDBMetadata();
   for (const auto& db_metadata : db_metadata_list) {
-    catalogs.emplace_back(getCatalog(db_metadata, false));
+    catalogs.emplace_back(getCatalog(db_metadata, false).get());
   }
   return catalogs;
 }
@@ -2353,16 +2353,26 @@ std::vector<std::string> SysCatalog::getRoles(const std::string& userName,
   return roles;
 }
 
-std::vector<std::string> SysCatalog::getRoles(bool userPrivateRole,
-                                              bool isSuper,
-                                              const std::string& userName) {
+std::vector<std::string> SysCatalog::getRoles(bool include_user_private_role,
+                                              bool is_super,
+                                              const std::string& user_name,
+                                              bool ignore_deleted_user) {
   sys_read_lock read_lock(this);
+  if (ignore_deleted_user) {
+    // In certain cases, it is possible to concurrently call this method while the user is
+    // being dropped. In such a case, return an empty result.
+    UserMetadata user;
+    if (!getMetadataForUser(user_name, user)) {
+      return {};
+    }
+  }
   std::vector<std::string> roles;
   for (auto& grantee : granteeMap_) {
-    if (!userPrivateRole && grantee.second->isUser()) {
+    if (!include_user_private_role && grantee.second->isUser()) {
       continue;
     }
-    if (!isSuper && !isRoleGrantedToGrantee(userName, grantee.second->getName(), false)) {
+    if (!is_super &&
+        !isRoleGrantedToGrantee(user_name, grantee.second->getName(), false)) {
       continue;
     }
     if (isDashboardSystemRole(grantee.second->getName())) {

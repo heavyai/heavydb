@@ -18,7 +18,8 @@ package com.mapd.tests;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CyclicBarrier;
 
 public class SystemTableConcurrencyTest {
@@ -36,8 +37,69 @@ public class SystemTableConcurrencyTest {
   }
 
   private void runTest() throws Exception {
-    final int num_threads = 8;
-    ArrayList<Exception> exceptions = new ArrayList<Exception>();
+    final List<ThreadDbQueries> queriesPerThread = Arrays.asList(
+            new ThreadDbQueries("omnisci",
+                    Arrays.asList("CREATE USER user_1 (password = 'HyperInteractive');",
+                            "ALTER USER user_1 (password = 'HyperInteractive2');",
+                            "DROP USER user_1;",
+                            "CREATE USER user_2 (password = 'HyperInteractive');",
+                            "ALTER USER user_2 (password = 'HyperInteractive2');",
+                            "DROP USER user_2;")),
+            new ThreadDbQueries("omnisci",
+                    Arrays.asList("CREATE USER user_3 (password = 'HyperInteractive');",
+                            "GRANT SELECT ON DATABASE omnisci TO user_3;",
+                            "REVOKE SELECT ON DATABASE omnisci FROM user_3;",
+                            "GRANT CREATE ON DATABASE omnisci TO user_3;",
+                            "REVOKE CREATE ON DATABASE omnisci FROM user_3;",
+                            "DROP USER user_3;")),
+            new ThreadDbQueries("omnisci",
+                    Arrays.asList("CREATE DATABASE db_1;",
+                            "CREATE DATABASE db_2;",
+                            "DROP DATABASE db_1;",
+                            "DROP DATABASE db_2;")),
+            new ThreadDbQueries("omnisci",
+                    Arrays.asList("CREATE ROLE role_1;",
+                            "CREATE ROLE role_2;",
+                            "DROP ROLE role_1;",
+                            "DROP ROLE role_2;")),
+            new ThreadDbQueries("omnisci",
+                    Arrays.asList("CREATE TABLE table_1 (i INTEGER, t TEXT);",
+                            "INSERT INTO table_1 VALUES (1, 'abc');",
+                            "CREATE VIEW view_1 AS SELECT * FROM table_1;",
+                            "DROP VIEW view_1;",
+                            "DROP TABLE table_1;")),
+            new ThreadDbQueries("omnisci",
+                    Arrays.asList("CREATE USER user_4 (password = 'HyperInteractive');",
+                            "CREATE USER user_5 (password = 'HyperInteractive');",
+                            "CREATE ROLE role_3;",
+                            "CREATE ROLE role_4;",
+                            "GRANT role_3, role_4 TO user_4, user_5;",
+                            "REVOKE role_3 FROM user_5;",
+                            "REVOKE role_4 FROM user_4, user_5;",
+                            "REVOKE role_3 FROM user_4;",
+                            "DROP USER user_4;",
+                            "DROP USER user_5;",
+                            "DROP ROLE role_3;",
+                            "DROP ROLE role_4;")),
+            new ThreadDbQueries(
+                    "information_schema", Arrays.asList("SELECT * FROM users;")),
+            new ThreadDbQueries(
+                    "information_schema", Arrays.asList("SELECT * FROM permissions;")),
+            new ThreadDbQueries(
+                    "information_schema", Arrays.asList("SELECT * FROM databases;")),
+            new ThreadDbQueries(
+                    "information_schema", Arrays.asList("SELECT * FROM roles;")),
+            new ThreadDbQueries(
+                    "information_schema", Arrays.asList("SELECT * FROM tables;")),
+            new ThreadDbQueries("information_schema",
+                    Arrays.asList("SELECT * FROM role_assignments;")),
+            new ThreadDbQueries(
+                    "information_schema", Arrays.asList("SELECT * FROM dashboards;")));
+
+    final int num_threads = queriesPerThread.size()
+            + 1; // +1 for dashboard creation/update thread, which is created separately.
+    Exception[] exceptions = new Exception[num_threads];
+    Thread[] threads = new Thread[num_threads];
 
     // Use a barrier here to synchronize the start of each competing thread and make
     // sure there is a race condition. The barrier ensures no thread will run until they
@@ -45,142 +107,48 @@ public class SystemTableConcurrencyTest {
     final CyclicBarrier barrier = new CyclicBarrier(
             num_threads, () -> { logger.info("Barrier acquired. Starting queries..."); });
 
-    Thread[] threads = new Thread[num_threads];
     threads[0] = new Thread(() -> {
       try {
         logger.info("Starting thread[0]");
         MapdTestClient user = MapdTestClient.getClient(
                 "localhost", 6274, "omnisci", "admin", "HyperInteractive");
         barrier.await();
-        runSqlAsUser("CREATE USER user_1 (password = 'HyperInteractive');", user, "0");
-        runSqlAsUser("ALTER USER user_1 (password = 'HyperInteractive2');", user, "0");
-        runSqlAsUser("DROP USER user_1;", user, "0");
-        runSqlAsUser("CREATE USER user_2 (password = 'HyperInteractive');", user, "0");
-        runSqlAsUser("ALTER USER user_2 (password = 'HyperInteractive2');", user, "0");
-        runSqlAsUser("DROP USER user_2;", user, "0");
+        logger.info("0 create dashboard \"dashboard_1\"");
+        int dashboardId = user.create_dashboard("dashboard_1");
+        logger.info("0 get dashboard " + dashboardId);
+        user.get_dashboard(dashboardId);
+        logger.info("0 replace dashboard " + dashboardId);
+        user.replace_dashboard(dashboardId, "dashboard_2", "admin");
+        logger.info("0 delete dashboard " + dashboardId);
+        user.delete_dashboard(dashboardId);
         logger.info("Finished thread[0]");
       } catch (Exception e) {
         logger.error("Thread[0] Caught Exception: " + e.getMessage(), e);
-        exceptions.add(e);
+        exceptions[0] = e;
       }
     });
     threads[0].start();
 
-    threads[1] = new Thread(() -> {
-      try {
-        logger.info("Starting thread[1]");
-        MapdTestClient user = MapdTestClient.getClient(
-                "localhost", 6274, "omnisci", "admin", "HyperInteractive");
-        barrier.await();
-        runSqlAsUser("CREATE USER user_3 (password = 'HyperInteractive');", user, "1");
-        runSqlAsUser("GRANT SELECT ON DATABASE omnisci TO user_3;", user, "1");
-        runSqlAsUser("REVOKE SELECT ON DATABASE omnisci FROM user_3;", user, "1");
-        runSqlAsUser("GRANT CREATE ON DATABASE omnisci TO user_3;", user, "1");
-        runSqlAsUser("REVOKE CREATE ON DATABASE omnisci FROM user_3;", user, "1");
-        runSqlAsUser("DROP USER user_3;", user, "1");
-        logger.info("Finished thread[1]");
-      } catch (Exception e) {
-        logger.error("Thread[1] Caught Exception: " + e.getMessage(), e);
-        exceptions.add(e);
-      }
-    });
-    threads[1].start();
-
-    threads[2] = new Thread(() -> {
-      try {
-        logger.info("Starting thread[2]");
-        MapdTestClient user = MapdTestClient.getClient(
-                "localhost", 6274, "omnisci", "admin", "HyperInteractive");
-        barrier.await();
-        runSqlAsUser("CREATE DATABASE db_1;", user, "2");
-        runSqlAsUser("CREATE DATABASE db_2;", user, "2");
-        runSqlAsUser("DROP DATABASE db_1;", user, "2");
-        runSqlAsUser("DROP DATABASE db_2;", user, "2");
-        logger.info("Finished thread[2]");
-      } catch (Exception e) {
-        logger.error("Thread[2] Caught Exception: " + e.getMessage(), e);
-        exceptions.add(e);
-      }
-    });
-    threads[2].start();
-
-    threads[3] = new Thread(() -> {
-      try {
-        logger.info("Starting thread[3]");
-        MapdTestClient user = MapdTestClient.getClient(
-                "localhost", 6274, "omnisci", "admin", "HyperInteractive");
-        barrier.await();
-        runSqlAsUser("CREATE ROLE role_1;", user, "3");
-        runSqlAsUser("CREATE ROLE role_2;", user, "3");
-        runSqlAsUser("DROP ROLE role_1;", user, "3");
-        runSqlAsUser("DROP ROLE role_2;", user, "3");
-        logger.info("Finished thread[3]");
-      } catch (Exception e) {
-        logger.error("Thread[3] Caught Exception: " + e.getMessage(), e);
-        exceptions.add(e);
-      }
-    });
-    threads[3].start();
-
-    threads[4] = new Thread(() -> {
-      try {
-        logger.info("Starting thread[4]");
-        MapdTestClient user = MapdTestClient.getClient(
-                "localhost", 6274, "information_schema", "admin", "HyperInteractive");
-        barrier.await();
-        runSqlAsUser("SELECT * FROM users;", user, "4");
-        logger.info("Finished thread[4]");
-      } catch (Exception e) {
-        logger.error("Thread[4] Caught Exception: " + e.getMessage(), e);
-        exceptions.add(e);
-      }
-    });
-    threads[4].start();
-
-    threads[5] = new Thread(() -> {
-      try {
-        logger.info("Starting thread[5]");
-        MapdTestClient user = MapdTestClient.getClient(
-                "localhost", 6274, "information_schema", "admin", "HyperInteractive");
-        barrier.await();
-        runSqlAsUser("SELECT * FROM permissions;", user, "5");
-        logger.info("Finished thread[5]");
-      } catch (Exception e) {
-        logger.error("Thread[5] Caught Exception: " + e.getMessage(), e);
-        exceptions.add(e);
-      }
-    });
-    threads[5].start();
-
-    threads[6] = new Thread(() -> {
-      try {
-        logger.info("Starting thread[6]");
-        MapdTestClient user = MapdTestClient.getClient(
-                "localhost", 6274, "information_schema", "admin", "HyperInteractive");
-        barrier.await();
-        runSqlAsUser("SELECT * FROM databases;", user, "6");
-        logger.info("Finished thread[6]");
-      } catch (Exception e) {
-        logger.error("Thread[6] Caught Exception: " + e.getMessage(), e);
-        exceptions.add(e);
-      }
-    });
-    threads[6].start();
-
-    threads[7] = new Thread(() -> {
-      try {
-        logger.info("Starting thread[7]");
-        MapdTestClient user = MapdTestClient.getClient(
-                "localhost", 6274, "information_schema", "admin", "HyperInteractive");
-        barrier.await();
-        runSqlAsUser("SELECT * FROM roles;", user, "7");
-        logger.info("Finished thread[7]");
-      } catch (Exception e) {
-        logger.error("Thread[7] Caught Exception: " + e.getMessage(), e);
-        exceptions.add(e);
-      }
-    });
-    threads[7].start();
+    for (int i = 0; i < queriesPerThread.size(); i++) {
+      final ThreadDbQueries threadQueries = queriesPerThread.get(i);
+      final int threadId = i + 1;
+      threads[threadId] = new Thread(() -> {
+        try {
+          logger.info("Starting thread[" + threadId + "]");
+          MapdTestClient user = MapdTestClient.getClient(
+                  "localhost", 6274, threadQueries.database, "admin", "HyperInteractive");
+          barrier.await();
+          for (final String query : threadQueries.queries) {
+            runSqlAsUser(query, user, threadId);
+          }
+          logger.info("Finished thread[" + threadId + "]");
+        } catch (Exception e) {
+          logger.error("Thread[" + threadId + "] Caught Exception: " + e.getMessage(), e);
+          exceptions[threadId] = e;
+        }
+      });
+      threads[threadId].start();
+    }
 
     for (Thread t : threads) {
       t.join();
@@ -194,9 +162,19 @@ public class SystemTableConcurrencyTest {
     }
   }
 
-  private void runSqlAsUser(String sql, MapdTestClient user, String logPrefix)
+  private void runSqlAsUser(String sql, MapdTestClient user, int threadId)
           throws Exception {
-    logger.info(logPrefix + " " + sql);
+    logger.info(threadId + " " + sql);
     user.runSql(sql);
+  }
+
+  private class ThreadDbQueries {
+    public ThreadDbQueries(final String database, final List<String> queries) {
+      this.database = database;
+      this.queries = queries;
+    }
+
+    public final String database;
+    public final List<String> queries;
   }
 }

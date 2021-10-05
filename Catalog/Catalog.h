@@ -28,6 +28,7 @@
 
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <ctime>
@@ -727,6 +728,7 @@ class Catalog final {
   void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
 
   static constexpr const char* CATALOG_SERVER_NAME{"omnisci_catalog_server"};
+  static constexpr std::array<const char*, 1> INTERNAL_SERVERS{CATALOG_SERVER_NAME};
 
  public:
   mutable std::mutex sqliteMutex_;

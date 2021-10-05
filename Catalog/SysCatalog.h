@@ -313,9 +313,10 @@ class SysCatalog : private CommonFileOperations {
   bool isRoleGrantedToGrantee(const std::string& granteeName,
                               const std::string& roleName,
                               bool only_direct) const;
-  std::vector<std::string> getRoles(bool userPrivateRole,
-                                    bool isSuper,
-                                    const std::string& userName);
+  std::vector<std::string> getRoles(bool include_user_private_role,
+                                    bool is_super,
+                                    const std::string& user_name,
+                                    bool ignore_deleted_user = false);
   std::vector<std::string> getRoles(const std::string& userName, const int32_t dbId);
   // Get all roles that have been created, even roles that have not been assigned to other
   // users or roles.
@@ -341,7 +342,7 @@ class SysCatalog : private CommonFileOperations {
   std::unordered_map<std::string, std::vector<std::string>> getGranteesOfSharedDashboards(
       const std::vector<std::string>& dashboard_ids);
   void check_for_session_encryption(const std::string& pki_cert, std::string& session);
-  std::vector<std::shared_ptr<Catalog>> getCatalogsForAllDbs();
+  std::vector<Catalog*> getCatalogsForAllDbs();
 
   std::shared_ptr<Catalog> getDummyCatalog() { return dummyCatalog_; }
 

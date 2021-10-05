@@ -31,6 +31,7 @@
 
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
+extern bool g_enable_system_tables;
 
 namespace {
 std::string get_file_server_options() {
@@ -592,6 +593,7 @@ class ShowForeignServerTest : public DBHandlerTestFixture {
   }
 
   void TearDown() override {
+    loginAdmin();
     sql("DROP SERVER IF EXISTS test_server;");
     DBHandlerTestFixture::TearDown();
   }
@@ -669,19 +671,30 @@ class ShowForeignServerTest : public DBHandlerTestFixture {
     ASSERT_EQ(result.row_set.columns[OPTIONS].data.str_col.size(), num_results);
   }
 
+  void queryAndAssertAllDefaultServers(const std::optional<TSessionId>& session_id = {}) {
+    TQueryResult result;
+    if (session_id.has_value()) {
+      sql(result, "SHOW SERVERS;", session_id.value());
+    } else {
+      sql(result, "SHOW SERVERS;");
+    }
+    assertExpectedFormat(result);
+    assertNumResults(result, LOCAL_DATA_WRAPPERS_COUNT);
+    assertServerLocalCSVFound(result);
+    assertServerLocalParquetFound(result);
+    assertServerLocalRegexParserFound(result);
+  }
+
   static constexpr size_t LOCAL_DATA_WRAPPERS_COUNT{3};
 };
 
 TEST_F(ShowForeignServerTest, SHOWALL_DEFAULT) {
-  TQueryResult result;
-  std::string query{"SHOW SERVERS;"};
-  sql(result, query);
-  assertExpectedFormat(result);
-  // Three default servers
-  assertNumResults(result, LOCAL_DATA_WRAPPERS_COUNT);
-  assertServerLocalCSVFound(result);
-  assertServerLocalParquetFound(result);
-  assertServerLocalRegexParserFound(result);
+  queryAndAssertAllDefaultServers();
+}
+
+TEST_F(ShowForeignServerTest, ShowAllDefaultInInformationSchemaDb) {
+  login("admin", "HyperInteractive", "information_schema");
+  queryAndAssertAllDefaultServers();
 }
 
 TEST_F(ShowForeignServerTest, SHOW_WHERE_EQ) {
@@ -851,17 +864,7 @@ TEST_F(ShowForeignServerTest, SHOW_ADD_DROP) {
     std::string query{"DROP SERVER test_server;"};
     sql(result, query);
   }
-  {
-    TQueryResult result;
-    std::string query{"SHOW SERVERS;"};
-    sql(result, query);
-    assertExpectedFormat(result);
-    // Three default servers
-    assertNumResults(result, LOCAL_DATA_WRAPPERS_COUNT);
-    assertServerLocalCSVFound(result);
-    assertServerLocalParquetFound(result);
-    assertServerLocalRegexParserFound(result);
-  }
+  queryAndAssertAllDefaultServers();
 }
 
 TEST_F(ShowForeignServerTest, SHOW_PRIVILEGE) {
@@ -878,15 +881,7 @@ TEST_F(ShowForeignServerTest, SHOW_PRIVILEGE) {
     assertNumResults(result, 0);
   }
   sql("GRANT ALL ON DATABASE omnisci TO test;");
-  {
-    TQueryResult result;
-    sql(result, "SHOW SERVERS;", test_session_id);
-    // Three default servers
-    assertNumResults(result, LOCAL_DATA_WRAPPERS_COUNT);
-    assertServerLocalCSVFound(result);
-    assertServerLocalParquetFound(result);
-    assertServerLocalRegexParserFound(result);
-  }
+  queryAndAssertAllDefaultServers(test_session_id);
   logout(test_session_id);
   sql("DROP USER test;");
 }
@@ -1209,6 +1204,7 @@ TEST_F(AlterForeignServerTest, InvalidDataWrapper) {
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   g_enable_s3_fsi = true;
+  g_enable_system_tables = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
@@ -1220,5 +1216,6 @@ int main(int argc, char** argv) {
   }
 
   g_enable_fsi = false;
+  g_enable_system_tables = false;
   return err;
 }
