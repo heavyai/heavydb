@@ -39,6 +39,7 @@
 #endif
 
 #include "Logger/Logger.h"
+#include "OSDependent/omnisci_fs.h"
 
 using namespace clang;
 using namespace clang::tooling;
@@ -162,9 +163,10 @@ const char* convert(const std::string& s) {
 std::string exec_output(std::string cmd) {
   std::array<char, 128> buffer;
   std::string result;
-  std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
+  std::unique_ptr<FILE, decltype(&omnisci::pclose)> pipe(omnisci::popen(cmd.c_str(), "r"),
+                                                         omnisci::pclose);
   if (!pipe) {
-    throw std::runtime_error("popen(\"" + cmd + "\") failed!");
+    throw std::runtime_error("omnisci::popen(\"" + cmd + "\") failed!");
   }
   while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
     result += buffer.data();

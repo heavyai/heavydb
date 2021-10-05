@@ -26,8 +26,7 @@
 #include <termios.h>
 #else
 #include <Shlobj.h>
-#include <windows.h>
-#include "Shared/cleanup_global_namespace.h"
+#include "Shared/clean_windows.h"
 #endif
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>

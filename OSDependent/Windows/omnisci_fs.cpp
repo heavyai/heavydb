@@ -22,8 +22,7 @@
 #include <fcntl.h>
 #include <io.h>
 
-#include <windows.h>
-#include "Shared/cleanup_global_namespace.h"
+#include "Shared/clean_windows.h"
 
 #include <memoryapi.h>
 
@@ -86,12 +85,23 @@ void close(const int fd) {
       err = fopen_s(&f, filename, mode);
     }
   }
-  CHECK(!err);
+  CHECK(!err) << "ERROR [" << filename << ":" << mode << "[" << err << "]";
   return f;
+}
+
+::FILE* popen(const char* command, const char* type) {
+  return _popen(command, type);
+}
+
+int32_t pclose(::FILE* fh) {
+  return _pclose(fh);
 }
 
 int get_page_size() {
   return 4096;  // TODO: reasonable guess for now
 }
 
+int32_t ftruncate(const int32_t fd, int64_t length) {
+  return _chsize_s(fd, length);
+}
 }  // namespace omnisci

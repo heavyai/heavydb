@@ -14,6 +14,15 @@
 #     GDAL_INCLUDE_DIR - Where to find the headers
 #
 
+# windows uses vcpkgi which will call this module,
+# though it doesn't need to.  Further windows vcpkg 
+# doesn't use or install GDAL_CONFIG and the call
+# will make the cmake process fail.
+# Hence the early exit for WIN32
+if(MSVC)
+  return()
+endif()
+
 find_program(GDAL_CONFIG gdal-config
     PATH_SUFFIXES bin
     PATHS

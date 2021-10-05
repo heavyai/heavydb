@@ -24,8 +24,8 @@
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_path.h"
 
-#ifdef _MSC_VER
-#include <Windows.h>
+#ifdef _WIN32
+#include "Shared/clean_windows.h"
 #endif
 
 namespace Geospatial {

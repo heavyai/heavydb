@@ -18,7 +18,7 @@
 
 #include <boost/filesystem.hpp>
 
-#include <windows.h>
+#include "Shared/clean_windows.h"
 
 #include <string>
 #include <vector>

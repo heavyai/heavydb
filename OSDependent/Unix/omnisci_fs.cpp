@@ -73,4 +73,16 @@ void close(const int fd) {
   return ::fopen(filename, mode);
 }
 
+::FILE* popen(const char* command, const char* type) {
+  return ::popen(command, type);
+}
+
+int32_t pclose(::FILE* fh) {
+  return ::pclose(fh);
+}
+
+int32_t ftruncate(const int32_t fd, int64_t length) {
+  return ::ftruncate(fd, length);
+}
+
 }  // namespace omnisci

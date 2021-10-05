@@ -26,6 +26,12 @@
 #include <cmath>
 #include <limits>
 
+#ifdef _WIN32
+// M_PI is defined a file then isn't include in the OS release
+// TODO look at moving 'constants.h' to be OS avaliable.
+constexpr double M_PI{3.14159265358979323846};
+#endif
+
 namespace {
 // Naming conventions break from style guide to match equation variables.
 constexpr double f = 1 / 298.257223563;  // WGS84 Earth flattening

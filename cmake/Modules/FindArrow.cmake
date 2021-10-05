@@ -97,7 +97,12 @@ endif()
 set(Arrow_LIBRARIES ${Arrow_LIBRARY} ${Arrow_DC_LIBRARY} ${Arrow_DEPS_LIBRARY})
 set(Arrow_GPU_CUDA_LIBRARIES ${Arrow_GPU_CUDA_LIBRARY})
 set(Arrow_LIBRARY_DIRS ${Arrow_LIBRARY_DIR})
-set(Arrow_INCLUDE_DIRS ${Arrow_LIBRARY_DIR}/../include)
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND MSVC)
+  set(Arrow_INCLUDE_DIRS ${Arrow_LIBRARY_DIR}/../../include)
+else()
+  set(Arrow_INCLUDE_DIRS ${Arrow_LIBRARY_DIR}/../include)
+endif()
 
 # Arrow 4+ defines the default io context slightly differently
 try_compile(HAVE_ARROW_4_IO_CONTEXT

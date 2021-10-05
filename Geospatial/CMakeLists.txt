@@ -6,7 +6,7 @@ add_custom_target(geo_samples ALL COMMAND ${CMAKE_COMMAND} -E copy_directory "${
 
 find_program(PROJINFO_EXECUTABLE NAMES projinfo)
 if(NOT PROJINFO_EXECUTABLE)
-  message(ERROR "projinfo not found. Will not attempt to copy proj_lib data files.")
+  message(WARNING "projinfo not found. Will not attempt to copy proj_lib data files.")
 else()
   execute_process(
     COMMAND ${PROJINFO_EXECUTABLE} --searchpaths

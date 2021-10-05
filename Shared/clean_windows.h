@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,20 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
-#include "OSDependent/omnisci_hostname.h"
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 
-#include "Shared/clean_windows.h"
+#include <Windows.h>
 
-namespace omnisci {
-std::string get_hostname() {
-  static constexpr DWORD kSize = MAX_COMPUTERNAME_LENGTH + 1;
-  DWORD buffer_size = kSize;
-  char hostname[MAX_COMPUTERNAME_LENGTH + 1];
-  if (GetComputerNameA(hostname, &buffer_size)) {
-    return {hostname};
-  } else {
-    return {};
-  }
-}
-}  // namespace omnisci
+#undef WIN32_LEAN_AND_MEAN
+#include "Shared/cleanup_global_namespace.h"
+
+#endif

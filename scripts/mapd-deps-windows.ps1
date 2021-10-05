@@ -44,6 +44,7 @@ Write-Host "Cloning vcpkg"
 git clone https://github.com/Microsoft/vcpkg.git
 Write-Host "Boostrapping vcpkg"
 Push-Location vcpkg
+git -c advice.detachedHead=false checkout  dd462392f4651dcbce3051225a20b161035bef5e
 .\bootstrap-vcpkg.bat
 
 Write-Host "Installing vcpkg dependencies (this will take a long time)..."
@@ -69,7 +70,7 @@ $package_list = @("glog",
                   "boost-process",
                   "boost-sort",
                   "boost-uuid",
-                  "arrow",
+                  "boost-iostream",
                   "aws-sdk-cpp",
                   "librdkafka",
                   "libarchive"
@@ -79,6 +80,9 @@ foreach ($package in $package_list) {
   $package_config = $package+":x64-windows"
   .\vcpkg install $package_config
 }
+
+pkg install "arrow:x64-windows" --overlay-ports="$script_path\windows\port_overlays\arrow"
+
 
 Pop-Location
 Pop-Location

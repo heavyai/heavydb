@@ -19,7 +19,19 @@
 
 #ifndef __CUDACC__
 #include <boost/config.hpp>
+#if defined(_WIN32) && !defined(WIN32_LEAN_AND_MEAN)
+// boost/regex.hpp on win32 includes Windows.h
+// and we need to clean up macros such as ERROR and GetObject
+#define WIN32_LEAN_AND_MEAN
+#endif
+
 #include <boost/regex.hpp>
+
+#if defined(_WIN32)
+#include "Shared/cleanup_global_namespace.h"
+#undef WIN32_LEAN_AND_MEAN
+#endif
+
 #include <optional>
 #include <string_view>
 #endif  // __CUDACC__

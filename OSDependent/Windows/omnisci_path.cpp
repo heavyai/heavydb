@@ -20,7 +20,7 @@
 
 #include "Logger/Logger.h"
 
-#include <windows.h>  // Must be last
+#include "Shared/clean_windows.h"
 
 namespace omnisci {
 
