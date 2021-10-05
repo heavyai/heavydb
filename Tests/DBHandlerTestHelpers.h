@@ -299,7 +299,9 @@ class DBHandlerTestFixture : public testing::Test {
   }
 
   // Execute SQL with session_id
-  static void sql(TQueryResult& result, const std::string& query, TSessionId& sess_id) {
+  static void sql(TQueryResult& result,
+                  const std::string& query,
+                  const TSessionId& sess_id) {
     db_handler_->sql_execute(result, sess_id, boost::trim_copy(query), true, "", -1, -1);
   }
 

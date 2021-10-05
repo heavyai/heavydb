@@ -1254,8 +1254,7 @@ TEST_F(SystemTablesShowCreateTableTest, Users) {
         "is_super_user BOOLEAN,\n  default_db_id INTEGER,\n  can_login BOOLEAN);"}});
 }
 
-// TODO: enable after use of unlocked methods in the data wrapper is resolved
-TEST_F(SystemTablesShowCreateTableTest, DISABLED_Tables) {
+TEST_F(SystemTablesShowCreateTableTest, Tables) {
   sqlAndCompareResult(
       "SHOW CREATE TABLE tables;",
       {{"CREATE TABLE tables (\n  database_id INTEGER,\n  table_id INTEGER,\n  "
@@ -1266,8 +1265,7 @@ TEST_F(SystemTablesShowCreateTableTest, DISABLED_Tables) {
         "INTEGER);"}});
 }
 
-// TODO: enable after use of unlocked methods in the data wrapper is resolved
-TEST_F(SystemTablesShowCreateTableTest, DISABLED_Dashboards) {
+TEST_F(SystemTablesShowCreateTableTest, Dashboards) {
   sqlAndCompareResult(
       "SHOW CREATE TABLE dashboards;",
       {{"CREATE TABLE dashboards (\n  database_id INTEGER,\n  dashboard_id INTEGER,\n  "
@@ -1290,8 +1288,7 @@ TEST_F(SystemTablesShowCreateTableTest, Permissions) {
         "ENCODING DICT(32),\n  object_permissions TEXT[] ENCODING DICT(32));"}});
 }
 
-// TODO: enable after use of unlocked methods in the data wrapper is resolved
-TEST_F(SystemTablesShowCreateTableTest, DISABLED_RoleAssignments) {
+TEST_F(SystemTablesShowCreateTableTest, RoleAssignments) {
   sqlAndCompareResult("SHOW CREATE TABLE role_assignments;",
                       {{"CREATE TABLE role_assignments (\n  role_name TEXT ENCODING "
                         "DICT(32),\n  user_name TEXT ENCODING DICT(32));"}});
@@ -2465,8 +2462,7 @@ TEST_F(SystemTablesTest, UsersSystemTable) {
                        {getUserId("test_user_2"), "test_user_2", False, i(1), True}});
 }
 
-// TODO: enable after use of unlocked methods in the data wrapper is resolved
-TEST_F(SystemTablesTest, DISABLED_TablesSystemTable) {
+TEST_F(SystemTablesTest, TablesSystemTable) {
   switchToAdmin();
   sql("CREATE DATABASE test_db_1;");
 
@@ -2511,8 +2507,7 @@ TEST_F(SystemTablesTest, DISABLED_TablesSystemTable) {
   // clang-format on
 }
 
-// TODO: enable after use of unlocked methods in the data wrapper is resolved
-TEST_F(SystemTablesTest, DISABLED_DashboardsSystemTable) {
+TEST_F(SystemTablesTest, DashboardsSystemTable) {
   switchToAdmin();
   sql("CREATE DATABASE test_db_1;");
 
@@ -2601,8 +2596,7 @@ TEST_F(SystemTablesTest, PermissionsSystemTable) {
   // clang-format on
 }
 
-// TODO: enable after use of unlocked methods in the data wrapper is resolved
-TEST_F(SystemTablesTest, DISABLED_RoleAssignmentsSystemTable) {
+TEST_F(SystemTablesTest, RoleAssignmentsSystemTable) {
   switchToAdmin();
   sql("CREATE ROLE test_role_1;");
   sql("GRANT test_role_1 TO test_user_1, test_user_2;");
