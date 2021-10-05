@@ -304,7 +304,17 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       } else {
         throw QueryNotSupported(rex_function->getName() + ": expecting integer SRID");
       }
-      if (!allow_gdal_transforms) {
+      bool allow_result_gdal_transform = false;
+      const auto rex_function0 = dynamic_cast<const RexFunctionOperator*>(rex_scalar0);
+      if (rex_function0 && func_resolve(rex_function0->getName(),
+                                        "ST_Intersection"sv,
+                                        "ST_Difference"sv,
+                                        "ST_Union"sv,
+                                        "ST_Buffer"sv)) {
+        // Sink result transform into geos runtime
+        allow_result_gdal_transform = true;
+      }
+      if (!allow_gdal_transforms && !allow_result_gdal_transform) {
         if (srid != 900913 && ((use_geo_expressions || is_projection) && srid != 4326 &&
                                !spatial_type::Transform::isUtm(srid))) {
           throw QueryNotSupported(rex_function->getName() + ": unsupported output SRID " +
@@ -356,7 +366,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
               // fall through to transform code below
             }
           } else {
-            if (!allow_gdal_transforms) {
+            if (!allow_gdal_transforms && !allow_result_gdal_transform) {
               throw std::runtime_error(
                   "Transform on non-POINT geospatial types not yet supported in this "
                   "context.");
@@ -366,9 +376,12 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       }
 
       if (arg_ti.get_input_srid() > 0) {
-        if (!allow_gdal_transforms && arg_ti.get_input_srid() != 4326) {
-          throw QueryNotSupported(rex_function->getName() + ": unsupported input SRID " +
-                                  std::to_string(arg_ti.get_input_srid()));
+        if (!allow_gdal_transforms && !allow_result_gdal_transform) {
+          if (arg_ti.get_input_srid() != 4326) {
+            throw QueryNotSupported(rex_function->getName() +
+                                    ": unsupported input SRID " +
+                                    std::to_string(arg_ti.get_input_srid()));
+          }
         }
         arg_ti.set_output_srid(
             srid);  // We have a valid input SRID, register the output SRID for transform
