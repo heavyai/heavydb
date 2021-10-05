@@ -36,8 +36,10 @@ namespace File_Namespace {
 
 enum class DiskCacheLevel { none, fsi, non_fsi, all };
 struct DiskCacheConfig {
-  static constexpr size_t DEFAULT_MAX_SIZE{1024UL * 1024UL * 1024UL *
-                                           100UL};  // 100G default
+  // Note the suffix UL is not portable. 'long' i a different size
+  // on nix vs windows.  Hense the explicit cast to long.
+  static constexpr size_t DEFAULT_MAX_SIZE{(size_t)1024 * (size_t)1024 * (size_t)1024 *
+                                           (size_t)100};  // 100G default
   std::string path;
   DiskCacheLevel enabled_level = DiskCacheLevel::none;
   size_t num_reader_threads = 0;

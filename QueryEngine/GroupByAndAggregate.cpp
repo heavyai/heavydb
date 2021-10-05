@@ -1559,7 +1559,11 @@ llvm::Value* GroupByAndAggregate::codegenAggColumnPtr(
       uint32_t col_off = query_mem_desc.getColOffInBytes(agg_out_off);
       // multiplying by chosen_bytes, i.e., << log2(chosen_bytes)
       auto out_per_col_byte_idx =
+#ifdef _WIN32
+          LL_BUILDER.CreateShl(out_row_idx, __lzcnt(chosen_bytes) - 1);
+#else
           LL_BUILDER.CreateShl(out_row_idx, __builtin_ffs(chosen_bytes) - 1);
+#endif
       auto byte_offset = LL_BUILDER.CreateAdd(out_per_col_byte_idx,
                                               LL_INT(static_cast<int64_t>(col_off)));
       byte_offset->setName("out_byte_off_target_" + std::to_string(target_idx));

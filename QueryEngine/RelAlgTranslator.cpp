@@ -253,7 +253,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
                 scalar_sources[rex->getOperand(1)])
                 ->add_cast(SQLTypeInfo(kDOUBLE)));
       } else {
+#ifdef _WIN32
+        Datum median;
+        median.doubleval = 0.5;
+#else
         constexpr Datum median{.doubleval = 0.5};
+#endif
         arg1 = std::make_shared<Analyzer::Constant>(kDOUBLE, false, median);
       }
     }

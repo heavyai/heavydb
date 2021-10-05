@@ -43,7 +43,11 @@ bool SessionInfo::checkDBAccessPrivileges(const DBObjectType& permissionType,
 std::string SessionInfo::public_session_id() const {
   const time_t start_time = get_start_time();
   struct tm st;
+#ifdef __linux__
   localtime_r(&start_time, &st);
+#else
+  localtime_s(&st, &start_time);
+#endif
   std::ostringstream ss;
   ss << (st.tm_min % 10) << std::setfill('0') << std::setw(2) << st.tm_sec << '-'
      << session_id_.substr(0, 4);

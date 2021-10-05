@@ -16,6 +16,24 @@
 
 #pragma once
 
+/*
+ * Note on WIN32 GetObject error in rapidson.
+ *
+ * Rapidjson has defined a GetObject method which
+ * wil; 'conflict' with the GetObject defined in Window.h
+ *
+ * Further boost/regex.hpp includes windows.h.  If that files
+ * is included in the same compilation unit as this one this
+ * can cause issues.
+ *
+ * At the moment the best way to solve the boost problem is to
+ * wrap the boost include in #defines which clean the name space.
+ *
+ * TODO work out exactly what is causing the boost/regex.hpp rapidjson
+ * conflict.
+ *
+
+*/
 #include <string>
 #include <unordered_map>
 

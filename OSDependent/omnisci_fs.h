@@ -17,6 +17,7 @@
 #pragma once
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 namespace omnisci {
@@ -37,6 +38,11 @@ void close(const int fd);
 
 ::FILE* fopen(const char* filename, const char* mode);
 
+::FILE* popen(const char* command, const char* type);
+
+int32_t pclose(::FILE* fh);
+
 int get_page_size();
 
+int32_t ftruncate(const int32_t fd, int64_t length);
 }  // namespace omnisci

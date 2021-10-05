@@ -29,6 +29,10 @@
 #include "StringDictionary/StringDictionary.h"
 #include "Utils/DdlUtils.h"
 
+#ifdef _WIN32
+#include <io.h>
+#endif
+
 const std::string CommandLineOptions::nodeIds_token = {"node_id"};
 
 extern std::string cluster_command_line_arg;
@@ -849,11 +853,7 @@ void CommandLineOptions::validate() {
     const auto lock_file = boost::filesystem::path(base_path) / "omnisci_server_pid.lck";
     auto pid = std::to_string(getpid());
 
-#ifdef _WIN32
-    int pid_fd = _open(lock_file.string().c_str(), O_RDWR | O_CREAT, 0644);
-#else
-    int pid_fd = open(lock_file.string().c_str(), O_RDWR | O_CREAT, 0644);
-#endif
+    int pid_fd = omnisci::open(lock_file.string().c_str(), O_RDWR | O_CREAT, 0644);
     if (pid_fd == -1) {
       auto err = std::string("Failed to open PID file ") + lock_file.string().c_str() +
                  ". " + strerror(errno) + ".";
@@ -862,20 +862,20 @@ void CommandLineOptions::validate() {
 // TODO: support lock on Windows
 #ifndef _WIN32
     if (lockf(pid_fd, F_TLOCK, 0) == -1) {
-      ::close(pid_fd);
+      omnisci::close(pid_fd);
       auto err = std::string("Another OmniSci Server is using data directory ") +
                  base_path + ".";
       throw std::runtime_error(err);
     }
 #endif
-    if (ftruncate(pid_fd, 0) == -1) {
-      ::close(pid_fd);
+    if (omnisci::ftruncate(pid_fd, 0) == -1) {
+      omnisci::close(pid_fd);
       auto err = std::string("Failed to truncate PID file ") +
                  lock_file.string().c_str() + ". " + strerror(errno) + ".";
       throw std::runtime_error(err);
     }
     if (write(pid_fd, pid.c_str(), pid.length()) == -1) {
-      ::close(pid_fd);
+      omnisci::close(pid_fd);
       auto err = std::string("Failed to write PID file ") + lock_file.string().c_str() +
                  ". " + strerror(errno) + ".";
       throw std::runtime_error(err);

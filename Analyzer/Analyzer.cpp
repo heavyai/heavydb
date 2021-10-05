@@ -795,8 +795,15 @@ int64_t safeScale(T from, unsigned const scale) {
   constexpr auto pow10 = shared::powersOf<int64_t, max_scale + 1>(10);
   if constexpr (std::is_integral_v<T>) {
     int64_t retval;
-    if (scale < pow10.size() && !__builtin_mul_overflow(from, pow10[scale], &retval)) {
-      return retval;
+    if (scale < pow10.size()) {
+#ifdef __linux__
+      if (!__builtin_mul_overflow(from, pow10[scale], &retval)) {
+        return retval;
+      }
+      // Not over flow safe.
+#else
+      return from * pow10[scale];
+#endif
     }
   } else if constexpr (std::is_floating_point_v<T>) {
     if (scale < pow10.size()) {

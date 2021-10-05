@@ -17,6 +17,7 @@
 #ifndef SHARED_MISC_H
 #define SHARED_MISC_H
 
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <deque>

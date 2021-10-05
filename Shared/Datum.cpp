@@ -84,9 +84,13 @@ int64_t convert_decimal_value_to_scale_internal(const int64_t decimal_value,
     return decimal_value < 0 ? -div : div;
   } else if (dscale < max_scale) {
     int64_t retval;
+#ifdef _WIN32
+    return decimal_value * pow10[dscale];
+#else
     if (!__builtin_mul_overflow(decimal_value, pow10[dscale], &retval)) {
       return retval;
     }
+#endif
   }
   if (decimal_value == 0) {
     return 0;

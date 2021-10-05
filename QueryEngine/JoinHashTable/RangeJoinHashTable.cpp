@@ -363,6 +363,19 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
     const size_t chosen_max_hashtable_size,
     const double chosen_bucket_threshold) {
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
+#ifdef _WIN32
+  // WIN32 needs have C++20 set for designated initialisation to work
+  CountDistinctDescriptor count_distinct_desc{
+      CountDistinctImplType::Bitmap,
+      0,
+      11,
+      true,
+      effective_memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
+          ? ExecutorDeviceType::GPU
+          : ExecutorDeviceType::CPU,
+      1,
+  };
+#else
   CountDistinctDescriptor count_distinct_desc{
       .impl_type_ = CountDistinctImplType::Bitmap,
       .min_val = 0,
@@ -373,6 +386,7 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
                          : ExecutorDeviceType::CPU,
       .sub_bitmap_count = 1,
   };
+#endif
   const auto padded_size_bytes = count_distinct_desc.bitmapPaddedSizeBytes();
 
   CHECK(!columns_per_device.empty() && !columns_per_device.front().join_columns.empty());

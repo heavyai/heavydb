@@ -1,5 +1,10 @@
 add_library(DBEngine SHARED DBETypes.cpp DBEngine.cpp DBEngine.h DBETypes.h)
 
+if(MSVC)
+  message(STATUS "WIN32 - enable DBEngine dll entry points")
+  set_target_properties(DBEngine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS true)
+endif()
+
 target_link_libraries(DBEngine mapd_thrift thrift_handler Catalog QueryState Parser QueryEngine DataMgr ${Arrow_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${TBB_LIBS})
 install(TARGETS DBEngine DESTINATION "lib" COMPONENT "DBE")
 install(FILES DBEngine.h DBETypes.h DESTINATION "Embedded" COMPONENT "include")

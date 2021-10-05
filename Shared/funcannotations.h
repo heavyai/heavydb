@@ -40,7 +40,7 @@
 
 #ifdef __CUDACC__
 #define FORCE_INLINE __forceinline__
-#elif defined(_MSC_VER)
+#elif defined(_WIN32)
 #define FORCE_INLINE __forceinline
 #else
 #define FORCE_INLINE inline __attribute__((always_inline))
@@ -49,9 +49,9 @@
 #if defined(__CUDACC__) || (defined(__GNUC__) && defined(__SANITIZE_THREAD__)) || \
     defined(WITH_JIT_DEBUG)
 #define ALWAYS_INLINE
-#elif defined(ENABLE_EMBEDDED_DATABASE)
+#elif defined(ENABLE_EMBEDDED_DATABASE) && !defined(_WIN32)
 #define ALWAYS_INLINE __attribute__((inline)) __attribute__((__visibility__("protected")))
-#elif defined(_MSC_VER)
+#elif defined(_WIN32)
 #define ALWAYS_INLINE __inline
 #else
 #define ALWAYS_INLINE __attribute__((always_inline))
@@ -59,7 +59,7 @@
 
 #ifdef __CUDACC__
 #define NEVER_INLINE
-#elif defined(_MSC_VER)
+#elif defined(_WIN32)
 #define NEVER_INLINE __declspec(noinline)
 #else
 #define NEVER_INLINE __attribute__((noinline))

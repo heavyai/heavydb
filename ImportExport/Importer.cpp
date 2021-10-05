@@ -2984,7 +2984,7 @@ ImportStatus Importer::importDelimited(
   }
 
   if (copy_params.threads == 0) {
-    max_threads = std::min(static_cast<size_t>(sysconf(_SC_NPROCESSORS_CONF)),
+    max_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()),
                            g_max_import_threads);
   } else {
     max_threads = static_cast<size_t>(copy_params.threads);

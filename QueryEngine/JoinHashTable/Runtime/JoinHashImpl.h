@@ -30,7 +30,8 @@
 
 #ifdef __CUDACC__
 #define insert_key_cas(address, compare, val) atomicCAS(address, compare, val)
-#elif defined(_MSC_VER)
+#elif defined(_WIN32)
+#include "Shared/clean_windows.h"
 #define insert_key_cas(address, compare, val)                           \
   InterlockedCompareExchange(reinterpret_cast<volatile long*>(address), \
                              static_cast<long>(val),                    \

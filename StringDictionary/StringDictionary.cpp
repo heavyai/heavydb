@@ -26,8 +26,9 @@
 #include <thread>
 
 // TODO(adb): fixup
-#ifdef _MSC_VER
+#ifdef _WIN32
 #include <fcntl.h>
+#include <io.h>
 #else
 #include <sys/fcntl.h>
 #endif

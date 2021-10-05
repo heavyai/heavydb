@@ -30,6 +30,7 @@
 #include "DataMgr/DataMgrBufferProvider.h"
 #include "DataMgr/DataMgrDataProvider.h"
 #include "MemoryLevel.h"
+#include "OSDependent/omnisci_fs.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
 #include "SchemaMgr/ColumnInfo.h"
 
@@ -144,9 +145,12 @@ class ProcBuddyinfoParser {
         orders_[i - skipped_columns] += strtoull(columns[i].c_str(), NULL, 10);
       }
     }
-
+#ifdef __linux__
     const long page_size =
         sysconf(_SC_PAGE_SIZE);  // in case x86-64 is configured to use 2MB pages
+#else
+    const long page_size = omnisci::get_page_size();
+#endif
     size_t scaled = 0;
     size_t total = 0;
     for (size_t order = 0; order < orders_.size(); ++order) {
