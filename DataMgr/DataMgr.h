@@ -46,6 +46,8 @@ namespace CudaMgr_Namespace {
 class CudaMgr;
 }
 
+class DeviceAllocator;
+
 namespace Buffer_Namespace {
 class CpuBufferMgr;
 }
@@ -215,6 +217,8 @@ class DataMgr {
 
   // database_id, table_id, column_id, fragment_id
   std::vector<int> levelSizes_;
+
+  std::unique_ptr<DeviceAllocator> createGpuAllocator(int device_id);
 
   struct SystemMemoryUsage {
     size_t free;      // available CPU RAM memory in bytes

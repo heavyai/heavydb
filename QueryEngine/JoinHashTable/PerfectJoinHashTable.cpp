@@ -645,11 +645,12 @@ int PerfectJoinHashTable::initHashTableForDevice(
       // GPU size returns reserved size
       CHECK_LE(hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
                gpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::GPU));
-      copy_to_gpu(data_mgr,
-                  reinterpret_cast<CUdeviceptr>(gpu_buffer_ptr),
-                  hash_table->getCpuBuffer(),
-                  hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
-                  device_id);
+
+      auto device_allocator = data_mgr->createGpuAllocator(device_id);
+      device_allocator->copyToDevice(
+          gpu_buffer_ptr,
+          hash_table->getCpuBuffer(),
+          hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU));
       CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
       hash_tables_for_device_[device_id] = std::move(gpu_hash_table);
 #else
@@ -903,11 +904,9 @@ std::string PerfectJoinHashTable::toString(const ExecutorDeviceType device_type,
   if (device_type == ExecutorDeviceType::GPU) {
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
 
-    copy_from_gpu(executor_->getDataMgr(),
-                  buffer_copy.get(),
-                  reinterpret_cast<CUdeviceptr>(reinterpret_cast<int8_t*>(buffer)),
-                  buffer_size,
-                  device_id);
+    auto data_mgr = executor_->getDataMgr();
+    auto device_allocator = data_mgr->createGpuAllocator(device_id);
+    device_allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
 #else
@@ -940,11 +939,9 @@ std::set<DecodedJoinHashBufferEntry> PerfectJoinHashTable::toSet(
   if (device_type == ExecutorDeviceType::GPU) {
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
 
-    copy_from_gpu(executor_->getDataMgr(),
-                  buffer_copy.get(),
-                  reinterpret_cast<CUdeviceptr>(reinterpret_cast<int8_t*>(buffer)),
-                  buffer_size,
-                  device_id);
+    auto data_mgr = executor_->getDataMgr();
+    auto device_allocator = data_mgr->createGpuAllocator(device_id);
+    device_allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
 #else

@@ -525,16 +525,17 @@ class BaselineJoinHashTableBuilder {
       return 0;
     }
     auto data_mgr = executor->getDataMgr();
-    CudaAllocator allocator(data_mgr, device_id);
-    auto dev_err_buff = reinterpret_cast<CUdeviceptr>(allocator.alloc(sizeof(int)));
-    copy_to_gpu(data_mgr, dev_err_buff, &err, sizeof(err), device_id);
+    auto allocator = data_mgr->createGpuAllocator(device_id);
+    auto dev_err_buff = allocator->alloc(sizeof(int));
+
+    allocator->copyToDevice(dev_err_buff, &err, sizeof(err));
     auto gpu_hash_table_buff = hash_table_->getGpuBuffer();
     CHECK(gpu_hash_table_buff);
     const bool for_semi_join =
         (join_type == JoinType::SEMI || join_type == JoinType::ANTI) &&
         layout == HashType::OneToOne;
     setHashLayout(layout);
-    const auto key_handler_gpu = transfer_flat_object_to_gpu(*key_handler, allocator);
+    const auto key_handler_gpu = transfer_flat_object_to_gpu(*key_handler, *allocator);
     switch (key_component_width) {
       case 4:
         init_baseline_hash_join_buff_on_device_32(gpu_hash_table_buff,
@@ -565,7 +566,7 @@ class BaselineJoinHashTableBuilder {
             reinterpret_cast<int*>(dev_err_buff),
             key_handler_gpu,
             join_columns.front().num_elems);
-        copy_from_gpu(data_mgr, &err, dev_err_buff, sizeof(err), device_id);
+        allocator->copyFromDevice(&err, dev_err_buff, sizeof(err));
         break;
       }
       case 8: {
@@ -579,7 +580,7 @@ class BaselineJoinHashTableBuilder {
             reinterpret_cast<int*>(dev_err_buff),
             key_handler_gpu,
             join_columns.front().num_elems);
-        copy_from_gpu(data_mgr, &err, dev_err_buff, sizeof(err), device_id);
+        allocator->copyFromDevice(&err, dev_err_buff, sizeof(err));
         break;
       }
       default:
