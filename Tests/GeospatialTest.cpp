@@ -2291,12 +2291,35 @@ TEST_F(GeoSpatialTempTables, Geos) {
             R"(SELECT ST_Area(ST_Buffer(gpoly4326, 0.0)) FROM geospatial_test WHERE id = 2;)",
             dt)),
         static_cast<double>(0.00001)));
-    // geos runtime doesn't support geometry transforms
-    EXPECT_THROW(
-        run_simple_agg(
-            R"(SELECT ST_Area(ST_Transform(ST_Buffer(gpoly4326, 0.1), 900913)) FROM geospatial_test WHERE id = 2;)",
-            dt),
-        std::runtime_error);
+    // geos runtime support for any gdal-recognized transforms on geos call inputs
+    EXPECT_GPU_THROW(ASSERT_NEAR(
+        static_cast<double>(409421544.01788),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Area(ST_Buffer(ST_Transform(ST_GeomFromText('POLYGON((-118.240356 34.04880299999999,-118.64035599999998 34.04880300000001,-118.440356 34.24880300000001))',4326), 26945), 1.0));)",
+            dt)),
+        static_cast<double>(0.00001)));
+    // geos runtime support for any gdal-recognized transforms on geos call outputs
+    EXPECT_GPU_THROW(ASSERT_NEAR(
+        static_cast<double>(409421494.3899536),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Area(ST_Transform(ST_Buffer(ST_GeomFromText('POLYGON((-118.240356 34.04880299999999,-118.64035599999998 34.04880300000001,-118.440356 34.24880300000001))',4326), 1.0), 26945));)",
+            dt)),
+        static_cast<double>(0.00001)));
+    // geos runtime support for both input and output geo transforms (gdal-backed)
+    EXPECT_GPU_THROW(ASSERT_NEAR(
+        static_cast<double>(1756.549591064453),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Area(ST_Transform(ST_Buffer(ST_Transform(ST_GeomFromText('POLYGON((-71.11603599316368 42.37469906933211,-71.11600627260486 42.37479327587576,-71.11582940503467 42.37476302224121,-71.11582340452516 42.37478309974037,-71.11570078841396 42.37476310907647,-71.11565279759817 42.37492120281317,-71.11577467489042 42.374941582218895,-71.11576735791459 42.374966813944184,-71.11631216001115 42.37505880035607,-71.11631985924761 42.37503569400519,-71.11641211477945 42.37505132899332,-71.11646061071951 42.37489401310859,-71.11636318099954 42.37487692897568,-71.11636960854412 42.37485520073258,-71.11618998476843 42.37482420784997,-71.11621803803246 42.37472943072518,-71.11603599316368 42.37469906933211))',4326), 26919), 1.0), 26986));)",
+            dt)),
+        static_cast<double>(0.00001)));
+    // geos runtime support for both input and output geo transforms (gdal-backed),
+    // case of geos noop call, it's short-circuited leaving in place just transforms
+    EXPECT_GPU_THROW(ASSERT_NEAR(
+        static_cast<double>(1558.806243896484),
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Area(ST_Transform(ST_Buffer(ST_Transform(ST_GeomFromText('POLYGON((-71.11603599316368 42.37469906933211,-71.11600627260486 42.37479327587576,-71.11582940503467 42.37476302224121,-71.11582340452516 42.37478309974037,-71.11570078841396 42.37476310907647,-71.11565279759817 42.37492120281317,-71.11577467489042 42.374941582218895,-71.11576735791459 42.374966813944184,-71.11631216001115 42.37505880035607,-71.11631985924761 42.37503569400519,-71.11641211477945 42.37505132899332,-71.11646061071951 42.37489401310859,-71.11636318099954 42.37487692897568,-71.11636960854412 42.37485520073258,-71.11618998476843 42.37482420784997,-71.11621803803246 42.37472943072518,-71.11603599316368 42.37469906933211))',4326), 26919), 0.0), 26986));)",
+            dt)),
+        static_cast<double>(0.00001)));
     // Handling geos returning a MULTIPOINT
     EXPECT_GPU_THROW(ASSERT_NEAR(
         static_cast<double>(0.9),
@@ -2330,21 +2353,12 @@ TEST_F(GeoSpatialTempTables, Geos) {
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
             R"(SELECT ST_IsValid(gpoly4326) FROM geospatial_test limit 1;)", dt))));
-    // geos runtime doesn't yet support input geo transforms
-    EXPECT_THROW(run_simple_agg("SELECT ST_IsEmpty(ST_Transform(gpoly4326, 900913)) "
-                                "FROM geospatial_test limit 1;",
-                                dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_simple_agg("SELECT ST_Buffer(ST_Transform(gpoly4326, 900913), 1) "
-                                "FROM geospatial_test limit 1;",
-                                dt),
-                 std::runtime_error);
-    // geos runtime doesn't yet support output geo transforms
-    EXPECT_THROW(
-        run_simple_agg("SELECT ST_Area(ST_Transform(ST_Buffer(gpoly4326, 0), 900913)) "
-                       "FROM geospatial_test limit 1;",
-                       dt),
-        std::runtime_error);
+    // geos runtime support for input geo transforms
+    EXPECT_GPU_THROW(ASSERT_EQ(
+        static_cast<int64_t>(0),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_IsEmpty(ST_Transform(gpoly4326, 900913)) FROM geospatial_test limit 1;)",
+            dt))));
     // geos runtime doesn't yet support geometry columns in temporary tables
     EXPECT_THROW(run_simple_agg("SELECT ST_Intersection(SAMPLE(poly), SAMPLE(mpoly)) "
                                 "FROM geospatial_test limit 1;",
