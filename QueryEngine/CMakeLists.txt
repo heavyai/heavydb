@@ -249,18 +249,17 @@ add_custom_target(QueryEngineFunctionsTargets
 
 set(TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctionsTesting.hpp)
 
-if (ENABLE_SYSTEM_TVFS)
+if (ENABLE_SYSTEM_TFS)
   list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/ExampleFunctions.hpp)
   list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/Utilities.hpp)
   list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/GeoRaster.hpp)
 
   if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-    if(ENABLE_RF_PROP_TVFS)
+    if(ENABLE_RF_PROP_TFS)
       list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/RFProp.hpp)
     endif()
     if(ENABLE_POINT_CLOUD_TFS)
       list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/PointCloud.hpp)
-      #list(APPEND query_engine_source_files TableFunctions/SystemFunctions/ee/PointCloud.cpp)
     endif()
   endif()
 

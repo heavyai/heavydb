@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
+#ifdef HAVE_SYSTEM_TFS
 #ifndef __CUDACC__
 
-#include <tbb/parallel_for.h>
 #include <cstring>  // std::memcpy
 #include <filesystem>
 #include <memory>
@@ -25,6 +25,8 @@
 #include <shared_mutex>
 #include <string>
 #include <unordered_map>
+
+#include <tbb/parallel_for.h>
 
 #include "Utilities.hpp"
 
@@ -259,10 +261,10 @@ std::vector<std::filesystem::path> get_fs_paths(const std::string& file_or_direc
 }  // namespace FileUtilities
 
 template <typename T>
-bool is_valid_tvf_input(const T input,
-                        const T bounds_val,
-                        const BoundsType bounds_type,
-                        const IntervalType interval_type) {
+bool is_valid_tf_input(const T input,
+                       const T bounds_val,
+                       const BoundsType bounds_type,
+                       const IntervalType interval_type) {
   switch (bounds_type) {
     case BoundsType::Min:
       switch (interval_type) {
@@ -291,3 +293,4 @@ bool is_valid_tvf_input(const T input,
 }
 
 #endif  // __CUDACC__
+#endif  // HAVE_SYSTEM_TFS

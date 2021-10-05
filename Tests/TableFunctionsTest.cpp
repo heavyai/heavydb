@@ -850,7 +850,7 @@ TEST_F(TableFunctions, ThrowingTests) {
                 static_cast<int32_t>(10));  // 0+1+2+3+4=10
     }
 
-    // Ensure TableFunctionMgr and error throwing works properly for templated CPU TVFs
+    // Ensure TableFunctionMgr and error throwing works properly for templated CPU TFs
     {
       EXPECT_THROW(
           run_multiple_agg(

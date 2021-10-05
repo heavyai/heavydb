@@ -16,6 +16,7 @@
 
 #pragma once
 
+#ifdef HAVE_SYSTEM_TFS
 #ifndef __CUDACC__
 
 #include <filesystem>
@@ -109,16 +110,12 @@ enum BoundsType { Min, Max };
 enum IntervalType { Inclusive, Exclusive };
 
 template <typename T>
-bool is_valid_tvf_input(const T input,
-                        const T bounds_val,
-                        const BoundsType bounds_type,
-                        const IntervalType interval_type);
-
-// template<typename T>
-// void check_tvf_input(TableFunctionManager& mgr, onst std::string& function_name, const
-// std::string& arg_name, const T input, const T bounds_val, const BoundsType bounds_type,
-// const IntervalType interval_type) {
-
-#endif  //__CUDACC__
+bool is_valid_tf_input(const T input,
+                       const T bounds_val,
+                       const BoundsType bounds_type,
+                       const IntervalType interval_type);
 
 #include "Utilities.cpp"
+
+#endif  //__CUDACC__
+#endif  // HAVE_SYSTEM_TFS

@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_SYSTEM_TVFS
+#ifdef HAVE_SYSTEM_TFS
 
 #include "TestHelpers.h"
 
 #include <gtest/gtest.h>
+
 #include <limits>
 #include <numeric>
 #include <unordered_map>
@@ -63,17 +64,17 @@ bool skip_tests(const ExecutorDeviceType device_type) {
     continue;                                                \
   }
 
-class SystemTVFs : public ::testing::Test {
+class SystemTFs : public ::testing::Test {
   void SetUp() override {}
 };
 
-TEST_F(SystemTVFs, Mandelbrot) {
+TEST_F(SystemTFs, Mandelbrot) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     {
       // Mandelbrot table function requires max_iterations to be >= 1
       EXPECT_THROW(
-          run_multiple_agg("SELECT * FROM TABLE(tvf_mandelbrot(128 /* width */ , 128 /* "
+          run_multiple_agg("SELECT * FROM TABLE(tf_mandelbrot(128 /* width */ , 128 /* "
                            "height */, -2.5 /* min_x */, 1.0 /* max_x */, -1.0 /* min_y "
                            "*/, 1.0 /* max_y */, 0 /* max_iterations */));",
                            dt),
@@ -82,7 +83,7 @@ TEST_F(SystemTVFs, Mandelbrot) {
     {
       const auto rows = run_multiple_agg(
           "SELECT MIN(num_iterations) AS min_iterations, MAX(num_iterations) AS "
-          "max_iterations, COUNT(*) AS n FROM TABLE(tvf_mandelbrot(128 /* width */ , 128 "
+          "max_iterations, COUNT(*) AS n FROM TABLE(tf_mandelbrot(128 /* width */ , 128 "
           "/* height */, -2.5 /* min_x */, 1.0 /* max_x */, -1.0 /* min_y */, 1.0 /* "
           "max_y */, 256 /* max_iterations */));",
           dt);
@@ -99,37 +100,37 @@ TEST_F(SystemTVFs, Mandelbrot) {
   }
 }
 
-TEST_F(SystemTVFs, GeoRasterize) {
+TEST_F(SystemTFs, GeoRasterize) {
   const std::string raster_values_sql =
       "CURSOR(SELECT CAST(x AS DOUBLE) AS y, CAST(y AS DOUBLE) AS x, CAST(z AS FLOAT) as "
       "z FROM (VALUES (0.0, 0.0, 10.0), (1.1, 1.2, 20.0), (0.8, 0.4, 5.0), (1.2, 1.43, "
       "15.0), (-0.4, 0.8, 40.0)) AS t(x, y, z))";
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    // tvf_geo_rasterize requires bin_dim_meters to be > 0
+    // tf_geo_rasterize requires bin_dim_meters to be > 0
     {
       EXPECT_THROW(
-          run_multiple_agg("SELECT * FROM TABLE(tvf_geo_rasterize(" + raster_values_sql +
+          run_multiple_agg("SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
                                ", 0.0 /* bin_dim_meters */, false /* geographic_coords "
                                "*/, 0 /* null_neighborhood_fill_radius */));",
                            dt),
           std::runtime_error);
     }
 
-    // tvf_geo_rasterize requires null_neighborhood_fill_radius to be >= 0
+    // tf_geo_rasterize requires null_neighborhood_fill_radius to be >= 0
     {
       EXPECT_THROW(
-          run_multiple_agg("SELECT * FROM TABLE(tvf_geo_rasterize(" + raster_values_sql +
+          run_multiple_agg("SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
                                ", 1.0 /* bin_dim_meters */, false /* geographic_coords "
                                "*/, -1 /* null_neighborhood_fill_radius */));",
                            dt),
           std::runtime_error);
     }
 
-    // tvf_geo_rasterize requires x_min to be < x_max
+    // tf_geo_rasterize requires x_min to be < x_max
     {
       EXPECT_THROW(run_multiple_agg(
-                       "SELECT * FROM TABLE(tvf_geo_rasterize(" + raster_values_sql +
+                       "SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
                            ", 1.0 /* bin_dim_meters */, false /* geographic_coords */, 0 "
                            "/* null_neighborhood_fill_radius */, 0.0 /* x_min */, 0.0 /* "
                            "x_max */, -1.0 /* y_min */, 1.0 /* y_max */));",
@@ -139,7 +140,7 @@ TEST_F(SystemTVFs, GeoRasterize) {
     // Test case without null fill radius or bounds definition
     {
       const auto rows = run_multiple_agg(
-          "SELECT * FROM TABLE(tvf_geo_rasterize(" + raster_values_sql +
+          "SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
               ", 1.0 /* bin_dim_meters */, false /* geographic_coords */, 0 /* "
               "null_neighborhood_fill_radius */)) ORDER BY x, y;",
           dt);
@@ -162,7 +163,7 @@ TEST_F(SystemTVFs, GeoRasterize) {
     // Test explicit raster bounds definition
     {
       const auto rows = run_multiple_agg(
-          "SELECT * FROM TABLE(tvf_geo_rasterize(" + raster_values_sql +
+          "SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
               ", 1.0 /* bin_dim_meters */, false /* geographic_coords */, 0 /* "
               "null_neighborhood_fill_radius */, 1.0 /* x_min */, 2.0 /* x_max */, 1.0 "
               "/* y_min */, 2.0 /* y_max */ )) ORDER BY x, y;",
@@ -184,7 +185,7 @@ TEST_F(SystemTVFs, GeoRasterize) {
     // Test null neighborhood fill radius
     {
       const auto rows = run_multiple_agg(
-          "SELECT * FROM TABLE(tvf_geo_rasterize(" + raster_values_sql +
+          "SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
               ", 1.0 /* bin_dim_meters */, false /* geographic_coords */, 1 /* "
               "null_neighborhood_fill_radius */)) ORDER BY x, y;",
           dt);
@@ -225,4 +226,4 @@ int main(int argc, char** argv) {
   return err;
 }
 
-#endif  // HAVE_SYSTEM_TVFS
+#endif  // HAVE_SYSTEM_TFS

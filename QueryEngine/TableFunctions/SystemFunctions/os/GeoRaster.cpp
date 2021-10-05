@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#ifdef HAVE_SYSTEM_TFS
 #ifndef __CUDACC__
 
 #include <cmath>
@@ -245,3 +246,4 @@ int64_t GeoRaster<T, Z>::outputDenseColumns(
 }
 
 #endif  // __CUDACC__
+#endif  // HAVE_SYSTEM_TFS

@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
+#ifdef HAVE_SYSTEM_TFS
 #ifndef __CUDACC__
+
 #ifdef HAVE_TBB
 #include <tbb/parallel_for.h>
 #endif
@@ -204,7 +206,7 @@ TEMPLATE_NOINLINE __attribute__((__used__)) int32_t mandelbrot_cuda_template__gp
 #ifndef __CUDACC__
 
 EXTENSION_NOINLINE
-__attribute__((used)) int32_t tvf_mandelbrot__cpu_(
+__attribute__((used)) int32_t tf_mandelbrot__cpu_(
     TableFunctionManager& mgr,
     const int32_t x_pixels,
     const int32_t y_pixels,
@@ -230,7 +232,7 @@ __attribute__((used)) int32_t tvf_mandelbrot__cpu_(
 }
 
 EXTENSION_NOINLINE
-__attribute__((used)) int32_t tvf_mandelbrot_float__cpu_(
+__attribute__((used)) int32_t tf_mandelbrot_float__cpu_(
     TableFunctionManager& mgr,
     const int32_t x_pixels,
     const int32_t y_pixels,
@@ -258,7 +260,7 @@ __attribute__((used)) int32_t tvf_mandelbrot_float__cpu_(
 #else  // #ifndef __CUDACC__
 
 EXTENSION_NOINLINE
-__attribute__((__used__)) int32_t tvf_mandelbrot_cuda__gpu_(
+__attribute__((__used__)) int32_t tf_mandelbrot_cuda__gpu_(
     const int32_t x_pixels,
     const int32_t y_pixels,
     const double x_min,
@@ -284,7 +286,7 @@ __attribute__((__used__)) int32_t tvf_mandelbrot_cuda__gpu_(
 }
 
 EXTENSION_NOINLINE
-__attribute__((__used__)) int32_t tvf_mandelbrot_cuda_float__gpu_(
+__attribute__((__used__)) int32_t tf_mandelbrot_cuda_float__gpu_(
     const int32_t x_pixels,
     const int32_t y_pixels,
     const float x_min,
@@ -310,3 +312,4 @@ __attribute__((__used__)) int32_t tvf_mandelbrot_cuda_float__gpu_(
 }
 
 #endif  // #ifndef __CUDACC__
+#endif  // HAVE_SYSTEM_TFS

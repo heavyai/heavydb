@@ -16,6 +16,7 @@
 
 #pragma once
 
+#ifdef HAVE_SYSTEM_TFS
 #ifndef __CUDACC__
 
 #include <vector>
@@ -107,30 +108,30 @@ struct GeoRaster {
 
 // clang-format off
 /*
-  UDTF: tvf_geo_rasterize__cpu_template(TableFunctionManager, Cursor<Column<T> x, Column<T> y, Column<Z> z>, T, bool, int64_t) | filter_table_function_transpose=on -> Column<T> x, Column<T> y, Column<Z> z, T=[float, double], Z=[float, double]
+  UDTF: tf_geo_rasterize__cpu_template(TableFunctionManager, Cursor<Column<T> x, Column<T> y, Column<Z> z>, T, bool, int64_t) | filter_table_function_transpose=on -> Column<T> x, Column<T> y, Column<Z> z, T=[float, double], Z=[float, double]
  */
 // clang-format on
 
 template <typename T, typename Z>
 TEMPLATE_NOINLINE int32_t
-tvf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
-                                const Column<T>& input_x,
-                                const Column<T>& input_y,
-                                const Column<Z>& input_z,
-                                const T bin_dim_meters,
-                                const bool geographic_coords,
-                                const int64_t null_neighborhood_fill_radius,
-                                Column<T>& output_x,
-                                Column<T>& output_y,
-                                Column<Z>& output_z) {
+tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
+                               const Column<T>& input_x,
+                               const Column<T>& input_y,
+                               const Column<Z>& input_z,
+                               const T bin_dim_meters,
+                               const bool geographic_coords,
+                               const int64_t null_neighborhood_fill_radius,
+                               Column<T>& output_x,
+                               Column<T>& output_y,
+                               Column<Z>& output_z) {
   if (bin_dim_meters <= 0) {
     return mgr.error_message(
-        "tvf_geo_rasterize: bin_dim_meters argument must be greater than 0");
+        "tf_geo_rasterize: bin_dim_meters argument must be greater than 0");
   }
 
   if (null_neighborhood_fill_radius < 0) {
     return mgr.error_message(
-        "tvf_geo_rasterize: null_neighborhood_fill_radius argument must be greater than "
+        "tf_geo_rasterize: null_neighborhood_fill_radius argument must be greater than "
         "or equal to 0");
   }
 
@@ -142,43 +143,43 @@ tvf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
 
 // clang-format off
 /*
-  UDTF: tvf_geo_rasterize__cpu_template(TableFunctionManager, Cursor<Column<T>, Column<T>, Column<Z>>, T, bool, int64_t, T, T, T, T) -> Column<T> x, Column<T> y, Column<Z> z, T=[float, double], Z=[float, double]
+  UDTF: tf_geo_rasterize__cpu_template(TableFunctionManager, Cursor<Column<T>, Column<T>, Column<Z>>, T, bool, int64_t, T, T, T, T) -> Column<T> x, Column<T> y, Column<Z> z, T=[float, double], Z=[float, double]
  */
 // clang-format on
 
 template <typename T, typename Z>
 TEMPLATE_NOINLINE int32_t
-tvf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
-                                const Column<T>& input_x,
-                                const Column<T>& input_y,
-                                const Column<Z>& input_z,
-                                const T bin_dim_meters,
-                                const bool geographic_coords,
-                                const int64_t null_neighborhood_fill_radius,
-                                const T x_min,
-                                const T x_max,
-                                const T y_min,
-                                const T y_max,
-                                Column<T>& output_x,
-                                Column<T>& output_y,
-                                Column<Z>& output_z) {
+tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
+                               const Column<T>& input_x,
+                               const Column<T>& input_y,
+                               const Column<Z>& input_z,
+                               const T bin_dim_meters,
+                               const bool geographic_coords,
+                               const int64_t null_neighborhood_fill_radius,
+                               const T x_min,
+                               const T x_max,
+                               const T y_min,
+                               const T y_max,
+                               Column<T>& output_x,
+                               Column<T>& output_y,
+                               Column<Z>& output_z) {
   if (bin_dim_meters <= 0) {
     return mgr.error_message(
-        "tvf_geo_rasterize: bin_dim_meters argument must be greater than 0");
+        "tf_geo_rasterize: bin_dim_meters argument must be greater than 0");
   }
 
   if (null_neighborhood_fill_radius < 0) {
     return mgr.error_message(
-        "tvf_geo_rasterize: null_neighborhood_fill_radius argument must be greater than "
+        "tf_geo_rasterize: null_neighborhood_fill_radius argument must be greater than "
         "or equal to 0");
   }
 
   if (x_min >= x_max) {
-    return mgr.error_message("tvf_geo_rasterize: x_min must be less than x_max");
+    return mgr.error_message("tf_geo_rasterize: x_min must be less than x_max");
   }
 
   if (y_min >= y_max) {
-    return mgr.error_message("tvf_geo_rasterize: y_min must be less than y_max");
+    return mgr.error_message("tf_geo_rasterize: y_min must be less than y_max");
   }
 
   GeoRaster<T, Z> geo_raster(input_x,
@@ -195,6 +196,7 @@ tvf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
       mgr, output_x, output_y, output_z, null_neighborhood_fill_radius);
 }
 
-#endif  //__CUDACC__
-
 #include "GeoRaster.cpp"
+
+#endif  // __CUDACC__
+#endif  // HAVE_SYSTEM_TFS
