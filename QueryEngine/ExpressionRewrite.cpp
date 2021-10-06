@@ -887,6 +887,13 @@ boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
       CHECK_EQ(lhs->size(), size_t(2));
       auto l_arg = lhs->getOperand(0);
       auto r_arg = lhs->getOperand(1);
+      const bool is_geography = l_arg->get_type_info().get_subtype() == kGEOGRAPHY ||
+                                r_arg->get_type_info().get_subtype() == kGEOGRAPHY;
+      if (is_geography) {
+        VLOG(1) << "Range join not yet supported for geodesic distance "
+                << bin_oper->toString();
+        return boost::none;
+      }
 
       // Check for compatible join ordering. If the join ordering does not match expected
       // ordering for overlaps, the join builder will fail.
