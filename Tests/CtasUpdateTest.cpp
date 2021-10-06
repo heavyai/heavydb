@@ -2226,6 +2226,18 @@ TEST_P(Update, UpdateFirstColumnByLiteral) {
   }
 }
 
+TEST_P(Update, UnsupportedWindowFunctions) {
+  sql("DROP TABLE IF EXISTS update_window_func;");
+  sql("CREATE TABLE update_window_func (a INT, b INT);");
+  sql("INSERT INTO update_window_func VALUES(1, 10);");
+  sql("INSERT INTO update_window_func VALUES(2, 1);");
+  sql("INSERT INTO update_window_func VALUES(1, 20);");
+  sql("INSERT INTO update_window_func VALUES(2, 4);");
+  sql("ALTER TABLE update_window_func ADD COLUMN c INT;");
+  ASSERT_ANY_THROW(
+      sql("UPDATE update_window_func SET c = MAX(b) OVER (PARTITION BY a);"));
+}
+
 const std::shared_ptr<TestColumnDescriptor> STRING_NONE_BASE =
     std::make_shared<StringColumnDescriptor>("TEXT ENCODING NONE",
                                              kTEXT,
