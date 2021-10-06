@@ -1828,6 +1828,11 @@ class RelModify : public RelAlgNode {
         dynamic_cast<RelProject const*>(inputs_[0].get());
     CHECK(previous_project_node != nullptr);
 
+    if (previous_project_node->hasWindowFunctionExpr()) {
+      throw std::runtime_error(
+          "UPDATE of a column using a window function is not currently supported.");
+    }
+
     previous_project_node->setUpdateViaSelectFlag();
     // remove the offset column in the projection for update handling
     target_column_list_.pop_back();
