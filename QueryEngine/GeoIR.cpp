@@ -53,26 +53,43 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoColumnVar(
     const Analyzer::GeoColumnVar* geo_col_var,
     const bool fetch_columns,
     const CompilationOptions& co) {
-  const auto& ti = geo_col_var->get_type_info();
-  if (ti.get_type() == kPOINT) {
-    // create a new operand which is just the coords and codegen it
-    const auto catalog = executor()->getCatalog();
-    CHECK(catalog);
-    const auto coords_column_id = geo_col_var->get_column_id() + 1;  // + 1 for coords
-    auto coords_cd =
-        get_column_descriptor(coords_column_id, geo_col_var->get_table_id(), *catalog);
-    CHECK(coords_cd);
+  const auto catalog = executor()->getCatalog();
+  CHECK(catalog);
 
-    const auto coords_col_var = Analyzer::ColumnVar(coords_cd->columnType,
-                                                    geo_col_var->get_table_id(),
-                                                    coords_column_id,
-                                                    geo_col_var->get_rte_idx());
-    const auto coords_lv = codegen(&coords_col_var, /*fetch_columns=*/true, co);
-    CHECK_EQ(coords_lv.size(), size_t(1));  // ptr
-    return coords_lv;
-  } else {
-    UNREACHABLE() << geo_col_var->toString();
+  auto generate_column_lvs = [this, catalog, geo_col_var, &co](const int column_id) {
+    auto cd = get_column_descriptor(column_id, geo_col_var->get_table_id(), *catalog);
+    CHECK(cd);
+
+    const auto col_var = Analyzer::ColumnVar(cd->columnType,
+                                             geo_col_var->get_table_id(),
+                                             column_id,
+                                             geo_col_var->get_rte_idx());
+    const auto lv_vec = codegen(&col_var, /*fetch_columns=*/true, co);
+    CHECK_EQ(lv_vec.size(), size_t(1));  // ptr
+    return lv_vec;
+  };
+
+  const auto& ti = geo_col_var->get_type_info();
+  switch (ti.get_type()) {
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON: {
+      std::vector<llvm::Value*> geo_lvs;
+      // iterate over physical columns
+      for (int i = 0; i < ti.get_physical_coord_cols(); i++) {
+        const auto column_id = geo_col_var->get_column_id() + 1 + i;
+        const auto lvs = generate_column_lvs(column_id);
+        CHECK_EQ(lvs.size(), size_t(1));  // expecting ptr for each column
+        geo_lvs.insert(geo_lvs.end(), lvs.begin(), lvs.end());
+      }
+
+      return geo_lvs;
+    }
+    default:
+      UNREACHABLE() << geo_col_var->toString();
   }
+  UNREACHABLE();
   return {};
 }
 
