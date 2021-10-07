@@ -1,0 +1,9 @@
+Class CacheMetricTracker
+========================
+
+.. doxygenclass:: CacheMetricTracker
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class shared::FileOrderLocal
+============================
+
+.. doxygenclass:: shared::FileOrderLocal
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

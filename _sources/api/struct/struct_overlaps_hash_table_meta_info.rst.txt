@@ -1,0 +1,9 @@
+Struct OverlapsHashTableMetaInfo
+================================
+
+.. doxygenstruct:: OverlapsHashTableMetaInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

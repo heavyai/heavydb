@@ -1,0 +1,9 @@
+Struct foreign_storage::ParquetBatchData
+========================================
+
+.. doxygenstruct:: foreign_storage::ParquetBatchData
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class import_export::ImportBatchResult
+======================================
+
+.. doxygenclass:: import_export::ImportBatchResult
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

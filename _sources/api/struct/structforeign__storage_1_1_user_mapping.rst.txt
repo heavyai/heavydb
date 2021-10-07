@@ -1,0 +1,9 @@
+Struct foreign_storage::UserMapping
+===================================
+
+.. doxygenstruct:: foreign_storage::UserMapping
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

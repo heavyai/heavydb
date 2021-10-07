@@ -1,0 +1,9 @@
+Struct OverlapsJoinHashTable::AlternativeCacheKeyForOverlapsHashJoin
+====================================================================
+
+.. doxygenstruct:: OverlapsJoinHashTable::AlternativeCacheKeyForOverlapsHashJoin
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

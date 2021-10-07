@@ -1,0 +1,9 @@
+Class import_export::ForeignDataImporter
+========================================
+
+.. doxygenclass:: import_export::ForeignDataImporter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

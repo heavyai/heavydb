@@ -1,0 +1,9 @@
+Struct PerfectJoinHashTable::AlternativeCacheKeyForPerfectHashJoin
+==================================================================
+
+.. doxygenstruct:: PerfectJoinHashTable::AlternativeCacheKeyForPerfectHashJoin
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

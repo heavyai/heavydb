@@ -1,0 +1,9 @@
+Class foreign_storage::RowGroupIntervalTracker
+==============================================
+
+.. doxygenclass:: foreign_storage::RowGroupIntervalTracker
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

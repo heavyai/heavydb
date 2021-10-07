@@ -1,0 +1,9 @@
+Struct EMPTY_META_INFO
+======================
+
+.. doxygenstruct:: EMPTY_META_INFO
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class foreign_storage::ParquetArrayImportEncoder
+================================================
+
+.. doxygenclass:: foreign_storage::ParquetArrayImportEncoder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

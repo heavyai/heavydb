@@ -1,0 +1,9 @@
+Class shared::FileOrderBase
+===========================
+
+.. doxygenclass:: shared::FileOrderBase
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
