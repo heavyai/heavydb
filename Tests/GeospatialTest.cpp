@@ -2433,6 +2433,23 @@ TEST_P(GeoSpatialJoinTablesFixture, GeoJoins) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    // distance joins
+    EXPECT_EQ(
+        int64_t(26),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) from geospatial_test a, geospatial_inner_join_test b  WHERE ST_Distance(gl4326none, ST_SetSRID(ST_Point(b.id, b.id), 4326)) > 3;)",
+            dt)));
+    EXPECT_EQ(
+        int64_t(20),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) from geospatial_test a, geospatial_inner_join_test b  WHERE ST_Distance(a.gpoly4326, ST_SetSRID(ST_Point(b.id, b.id), 4326)) > 3;)",
+            dt)));
+    EXPECT_EQ(
+        int64_t(20),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT count(*) from geospatial_test a, geospatial_inner_join_test b  WHERE ST_Distance(ST_SetSRID(a.mpoly, 4326), ST_SetSRID(ST_Point(b.id, b.id), 4326)) > 3;)",
+            dt)));
+
     // Test query rewrite for simple project
     ASSERT_NO_THROW(run_simple_agg(
         R"(SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);)",
