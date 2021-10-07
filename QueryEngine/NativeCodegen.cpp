@@ -1935,7 +1935,7 @@ void Executor::createErrorCheckControlFlow(
             // table is not sufficiently large, and so cannot be interrupted
             int32_t num_shift_by_gridDim = shared::getExpOfTwo(gridSize());
             int32_t num_shift_by_blockDim = shared::getExpOfTwo(blockSize());
-            int total_num_shift = num_shift_by_gridDim + num_shift_by_blockDim;
+            int64_t total_num_shift = num_shift_by_gridDim + num_shift_by_blockDim;
             uint64_t interrupt_checking_freq = 32;
             if (!input_table_infos.empty()) {
               const auto& outer_table_info = *input_table_infos.begin();
