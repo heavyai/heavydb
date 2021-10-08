@@ -1164,6 +1164,9 @@ TEMPLATE_NOINLINE int32_t ct_throw_if_gt_100__cpu_template(TableFunctionManager&
 
   UDTF: ct_copy_and_add_size(TableFunctionManager, Column<int32_t> x) | filter_table_function_transpose=on -> Column<int32_t> x
   UDTF: ct_add_size_and_mul_alpha(TableFunctionManager, Cursor<Column<int32_t>, Column<int32_t>> | fields=[x, x2], int32_t alpha) | filter_table_function_transpose=on -> Column<int32_t> x, Column<int32_t> x2
+
+  UDTF: ct_sparse_add(TableFunctionManager, Cursor<Column<int32_t> x, Column<int32_t> d1>, int32_t f1, Cursor<Column<int32_t> x, Column<int32_t> d2>, int32_t f2) | filter_table_function_transpose=on -> Column<int32_t> x, Column<int32_t> d
+
 */
 // clang-format on
 EXTENSION_NOINLINE int32_t ct_copy_and_add_size(TableFunctionManager& mgr,
@@ -1190,6 +1193,66 @@ EXTENSION_NOINLINE int32_t ct_add_size_and_mul_alpha(TableFunctionManager& mgr,
   }
   return size;
 }
+
+/*
+  Add two sparse graphs given by pairs of coordinates and the
+  corresponding values and multiply with the size of output
+  columns. Unspecified points are assumed to have the specified fill
+  value.
+*/
+EXTENSION_NOINLINE int32_t ct_sparse_add(TableFunctionManager& mgr,
+                                         const Column<int32_t>& x1,
+                                         const Column<int32_t>& d1,
+                                         int32_t f1,
+                                         const Column<int32_t>& x2,
+                                         const Column<int32_t>& d2,
+                                         int32_t f2,
+                                         Column<int32_t>& x,
+                                         Column<int32_t>& d) {
+  PRINT(x1);
+  PRINT(x2);
+
+  // sorted set of common coordinates:
+  std::set<int32_t, std::less<int32_t>> x12;
+  // inverse map of coordinates and indices, keys are sorted:
+  std::map<int32_t, int32_t, std::less<int32_t>> i1, i2;
+
+  for (int32_t i = 0; i < x1.size(); i++) {
+    i1[x1[i]] = i;
+    x12.insert(x1[i]);
+  }
+  for (int32_t i = 0; i < x2.size(); i++) {
+    i2[x2[i]] = i;
+    x12.insert(x2[i]);
+  }
+  auto size = x12.size();
+
+  PRINT(x12);
+
+  mgr.set_output_row_size(size);
+  int32_t k = 0;
+  for (auto x_ : x12) {
+    x[k] = x_;
+    auto i1_ = i1.find(x_);
+    auto i2_ = i2.find(x_);
+    if (i1_ != i1.end()) {
+      if (i2_ != i2.end()) {
+        d[k] = d1[i1_->second] + d2[i2_->second];
+      } else {
+        d[k] = d1[i1_->second] + f2;
+      }
+    } else if (i2_ != i2.end()) {
+      d[k] = f1 + d2[i2_->second];
+    } else {
+      d[k] = f1 + f2;
+    }
+    d[k] *= size;
+    PRINT(d[k]);
+    k++;
+  }
+  return size;
+}
+
 #endif
 
 // clang-format off
