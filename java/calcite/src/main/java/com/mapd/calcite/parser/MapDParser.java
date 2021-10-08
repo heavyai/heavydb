@@ -19,6 +19,7 @@ import static org.apache.calcite.sql.parser.SqlParserPos.ZERO;
 
 import com.google.common.collect.ImmutableList;
 import com.mapd.calcite.parser.MapDParserOptions.FilterPushDownInfo;
+import com.mapd.calcite.rel.rules.FilterTableFunctionTransposeRule2;
 import com.mapd.common.SockTransportProperties;
 import com.mapd.metadata.MetaConnect;
 import com.mapd.parser.extension.ddl.ExtendedSqlParser;
@@ -26,7 +27,6 @@ import com.mapd.parser.extension.ddl.JsonSerializableDdl;
 import com.mapd.parser.hint.OmniSciHintStrategyTable;
 import com.mapd.parser.server.ExtensionFunction;
 
-// import com.mapd.calcite.rel.rules.FilterTableFunctionTransposeRule2;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.config.CalciteConnectionConfigImpl;
@@ -55,7 +55,6 @@ import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
 import org.apache.calcite.rel.rules.CoreRules;
 import org.apache.calcite.rel.rules.FilterMergeRule;
 import org.apache.calcite.rel.rules.FilterProjectTransposeRule;
-import org.apache.calcite.rel.rules.FilterTableFunctionTransposeRule;
 import org.apache.calcite.rel.rules.JoinProjectTransposeRule;
 import org.apache.calcite.rel.rules.ProjectMergeRule;
 import org.apache.calcite.rel.rules.ProjectRemoveRule;
@@ -824,7 +823,7 @@ public final class MapDParser {
 
     HepProgramBuilder builder = new HepProgramBuilder();
     if (!parserOptions.isViewOptimizeEnabled()) {
-      builder.addRuleInstance(CoreRules.FILTER_TABLE_FUNCTION_TRANSPOSE);
+      builder.addRuleInstance(FilterTableFunctionTransposeRule2.Config.DEFAULT.toRule());
       builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
     } else {
       // check to see if a view is involved in the query
@@ -846,7 +845,7 @@ public final class MapDParser {
         builder.addRuleInstance(CoreRules.FILTER_MERGE);
         builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
       }
-      builder.addRuleInstance(CoreRules.FILTER_TABLE_FUNCTION_TRANSPOSE);
+      builder.addRuleInstance(FilterTableFunctionTransposeRule2.Config.DEFAULT.toRule());
       builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
       if (foundView) {
         builder.addRuleInstance(CoreRules.PROJECT_MERGE);

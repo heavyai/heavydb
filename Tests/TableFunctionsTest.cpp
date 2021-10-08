@@ -73,6 +73,19 @@ class TableFunctions : public ::testing::Test {
       }
     }
     {
+      run_ddl_statement("DROP TABLE IF EXISTS tf_test2;");
+      run_ddl_statement(
+          "CREATE TABLE tf_test2 (x2 INT, d2 INT) WITH "
+          "(FRAGMENT_SIZE=2);");
+
+      TestHelpers::ValuesGenerator gen("tf_test2");
+
+      for (int i = 0; i < 5; i++) {
+        const auto insert_query = gen(i, i * i);
+        run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      }
+    }
+    {
       run_ddl_statement("DROP TABLE IF EXISTS sd_test;");
       run_ddl_statement(
           "CREATE TABLE sd_test ("
@@ -1013,6 +1026,7 @@ TEST_F(TableFunctions, FilterTransposeRule) {
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    // Single cursor arguments
     {
       const auto rows = run_multiple_agg(
           "SELECT * FROM TABLE(ct_copy_and_add_size(cursor(SELECT x FROM tf_test WHERE "
@@ -1056,6 +1070,52 @@ TEST_F(TableFunctions, FilterTransposeRule) {
           "tf_test), 4)) WHERE x>1 and x2>1;",
           dt);
       check_result2(rows, {2 + 2, 3 + 2}, {3 * 4, 2 * 4});
+    }
+    // Multiple cursor arguments
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT x, d FROM TABLE(ct_sparse_add(cursor(SELECT x, x FROM tf_test), 0"
+          ", cursor(SELECT x, x FROM tf_test), 0));",
+          dt);
+      check_result2(
+          rows, {0, 1, 2, 3, 4}, {0, (1 + 1) * 5, (2 + 2) * 5, (3 + 3) * 5, (4 + 4) * 5});
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT x, d FROM TABLE(ct_sparse_add(cursor(SELECT x, x FROM tf_test), 0"
+          ", cursor(SELECT x, x + 1 FROM tf_test WHERE x > 2), 15)) WHERE (x > 1 AND x < "
+          "4);",
+          dt);
+      check_result2(rows, {2, 3}, {(2 + 15) * 2, (3 + 4) * 2});
+    }
+    {
+      // filter is not applied to the second cursor argument
+      const auto rows = run_multiple_agg(
+          "SELECT x, d FROM TABLE(ct_sparse_add(cursor(SELECT x, x FROM tf_test), -5"
+          ", cursor(SELECT x2, d2 FROM tf_test2), 0)) WHERE (x > 1 AND x < 4);",
+          dt);
+      check_result2(
+          rows,
+          {0, 1, 2, 3, 4},
+          {(-5 + 0) * 5, (-5 + 1) * 5, (2 + 4) * 5, (3 + 9) * 5, (-5 + 16) * 5});
+    }
+    {
+      // filter is applied to the second cursor argument when renamed using `AS`
+      const auto rows = run_multiple_agg(
+          "SELECT x, d FROM TABLE(ct_sparse_add(cursor(SELECT x, x FROM tf_test), -5"
+          ", cursor(SELECT x2 AS x, d2 FROM tf_test2), 0)) WHERE (x > 1 AND x < 4);",
+          dt);
+      check_result2(rows, {2, 3}, {(2 + 4) * 2, (3 + 9) * 2});
+    }
+    {
+      // filter is applied to the second cursor argument when renamed using `AS`, reversed
+      // fields positions are adjusted
+      const auto rows = run_multiple_agg(
+          "SELECT x, d FROM TABLE(ct_sparse_add(cursor(SELECT x, x FROM tf_test), -5"
+          ", cursor(SELECT d2, x2 AS x FROM tf_test2), 0)) WHERE (x > 1 AND x < 4);",
+          dt);
+      check_result2(
+          rows, {2, 3, 4, 9}, {(2 + 0) * 4, (3 + 0) * 4, (-5 + 2) * 4, (-5 + 3) * 4});
     }
   }
 }
