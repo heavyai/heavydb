@@ -153,6 +153,17 @@ int32_t TableFunction::countScalarArgs() const {
   return scalar_args;
 }
 
+bool TableFunction::requireInAnnotations() const {
+  // workaround for default args
+  for (size_t idx = 0; idx < std::min(input_args_.size(), annotations_.size()); idx++) {
+    const auto& ann = getInputAnnotation(idx);
+    if (ann.find("require") != ann.end()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 const std::map<std::string, std::string>& TableFunction::getAnnotation(
     const size_t idx) const {
   if (annotations_.size() == 0) {
@@ -370,6 +381,11 @@ std::string TableFunction::getName(const bool drop_suffix, const bool lower) con
     boost::algorithm::to_lower(result);
   }
   return result;
+}
+
+std::string TableFunction::getRequireCheckName() const {
+  // gets the name of the require check function associated with this table function
+  return getName() + REQUIRE_CHECK_SUFFIX;
 }
 
 std::vector<TableFunction> TableFunctionsFactory::get_table_funcs(const std::string& name,

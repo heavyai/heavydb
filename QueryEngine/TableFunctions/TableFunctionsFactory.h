@@ -26,6 +26,7 @@
 
 #define DEFAULT_ROW_MULTIPLIER_SUFFIX "__default_RowMultiplier_"
 #define DEFAULT_ROW_MULTIPLIER_VALUE 1
+#define REQUIRE_CHECK_SUFFIX "__require_check"
 
 /*
 
@@ -221,6 +222,9 @@ class TableFunction {
   OutputBufferSizeType getOutputRowSizeType() const { return output_sizer_.type; }
 
   size_t getOutputRowSizeParameter() const { return output_sizer_.val; }
+
+  bool requireInAnnotations() const;
+  std::string getRequireCheckName() const;
 
   const std::map<std::string, std::string>& getAnnotation(const size_t idx) const;
   const std::map<std::string, std::string>& getInputAnnotation(

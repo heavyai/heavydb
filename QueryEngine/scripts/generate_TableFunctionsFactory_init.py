@@ -91,7 +91,7 @@ kConstant, kUserSpecifiedConstantParameter, kUserSpecifiedRowMultiplier, kTableF
 '''.strip().replace(' ', '').split(',')
 
 SupportedAnnotations = '''
-input_id, name, fields
+input_id, name, fields, require
 '''.strip().replace(' ', '').split(',')
 
 # TODO: support `gpu`, `cpu`, `template` as function annotations
@@ -143,6 +143,9 @@ class Declaration:
 
     def get_cpp_type(self):
         return self.type.get_cpp_type()
+
+    def format_cpp_type(self, idx):
+        return self.type.format_cpp_type(idx)
 
     def __getattr__(self, name):
         if name.startswith('is_'):
@@ -275,6 +278,21 @@ class Bracket:
             return ctype
         return '%s<%s>' % (clsname, ctype)
 
+    def format_cpp_type(self, idx, arg_name=None, is_input=True):
+        # Perhaps integrate this to Bracket?
+        col_typs = ('Column', 'ColumnList')
+        literal_ref_typs = ('TextEncodingNone',)
+        # TODO: use name in annotations when present?
+        if arg_name is None:
+            arg_name = 'input' + str(idx) if is_input else 'output' + str(idx)
+        const = 'const ' if is_input else ''
+        cpp_type = self.get_cpp_type()
+
+        if any(cpp_type.startswith(t) for t in col_typs + literal_ref_typs):
+            return '%s%s& %s' % (const, cpp_type, arg_name), arg_name
+        else:
+            return '%s %s' % (cpp_type, arg_name), arg_name
+
     @classmethod
     def parse(cls, typ):
         """typ is a string in format NAME<ARGS> or NAME
@@ -289,13 +307,13 @@ class Bracket:
             assert typ.endswith('>'), typ
             name = typ[:i].strip()
             args = []
-            rest = typ[i+1:-1].strip()
+            rest = typ[i + 1:-1].strip()
             while rest:
                 i = find_comma(rest)
                 if i == -1:
                     a, rest = rest, ''
                 else:
-                    a, rest = rest[:i].rstrip(), rest[i+1:].lstrip()
+                    a, rest = rest[:i].rstrip(), rest[i + 1:].lstrip()
                 args.append(cls.parse(a))
             args = tuple(args)
 
@@ -355,6 +373,7 @@ class Token:
     LSQB = 12        # [
     RSQB = 13        # ]
     IDENTIFIER = 14  #
+    COLON = 15       # :
 
     def __init__(self, type, lexeme):
         """
@@ -385,6 +404,7 @@ class Token:
             Token.LSQB: "LSQB",
             Token.RSQB: "RSQB",
             Token.IDENTIFIER: "IDENTIFIER",
+            Token.COLON: "COLON",
         }
         return names.get(token)
 
@@ -418,6 +438,8 @@ class Tokenize:
                 self.consume_whitespace()
             elif self.is_digit():
                 self.consume_number()
+            elif self.is_token_string():
+                self.consume_string()
             elif self.is_token_identifier():
                 self.consume_identifier()
             elif self.can_token_be_double_char():
@@ -481,11 +503,27 @@ class Tokenize:
             self.add_token(Token.LSQB)
         elif char == "]":
             self.add_token(Token.RSQB)
+        elif char == ":":
+            self.add_token(Token.COLON)
         else:
             self.raise_tokenize_error()
         self.advance()
 
     def consume_whitespace(self):
+        self.advance()
+
+    def consume_string(self):
+        """
+        STRING: \".*?\"
+        """
+        while True:
+            char = self.lookahead()
+            curr = self.peek()
+            if char == '"' and curr != '\\':
+                self.advance()
+                break
+            self.advance()
+        self.add_token(Token.STRING)
         self.advance()
 
     def consume_number(self):
@@ -517,6 +555,9 @@ class Tokenize:
     def is_token_identifier(self):
         return self.peek().isalpha() or self.peek() == "_"
 
+    def is_token_string(self):
+        return self.peek() == '"'
+
     def is_digit(self):
         return self.peek().isdigit()
 
@@ -530,7 +571,7 @@ class Tokenize:
         curr = self.curr
         char = self.peek()
         raise TokenizeException(
-            'Could not match char "%s" at pos %d on line\n%s' % (char, curr, self.line)
+            'Could not match char "%s" at pos %d on line\n  %s' % (char, curr, self.line)
         )
 
 
@@ -1353,13 +1394,16 @@ class Parser:
 
         annotation: IDENTIFIER "=" IDENTIFIER ("<" NUMBER ("," NUMBER) ">")?
                   | IDENTIFIER "=" "[" PRIMITIVE? ("," PRIMITIVE)* "]"
+                  | "require" "=" STRING
 
         fmt: on
         """
         key = self.parse_identifier()
         self.consume(Token.EQUAL)
 
-        if not self.is_at_end() and self.match(Token.LSQB):
+        if key == "require":
+            value = self.parse_string()
+        elif not self.is_at_end() and self.match(Token.LSQB):
             value = []
             self.consume(Token.LSQB)
             if not self.match(Token.RSQB):
@@ -1392,6 +1436,16 @@ class Parser:
         token = self.consume(Token.IDENTIFIER)
         return token.lexeme
 
+    def parse_string(self):
+        """ fmt: off
+
+        STRING: \".*?\"
+
+        fmt: on
+        """
+        token = self.consume(Token.STRING)
+        return token.lexeme
+
     def parse_number(self):
         """ fmt: off
 
@@ -1422,12 +1476,14 @@ class Parser:
 
         annotation: IDENTIFIER "=" IDENTIFIER ("<" NUMBER ("," NUMBER) ">")?
                   | IDENTIFIER "=" "[" PRIMITIVE? ("," PRIMITIVE)* "]"
+                  | "require" "=" STRING
 
         templates: template ("," template)
         template: IDENTIFIER "=" "[" IDENTIFIER ("," IDENTIFIER)* "]"
 
         IDENTIFIER: [A-Za-z_][A-Za-z0-9_]*
         NUMBER: [0-9]+
+        STRING: \".*?\"
 
         fmt: on
         """
@@ -1507,22 +1563,6 @@ def find_signatures(input_file):
 def build_template_function_call(caller, callee, input_types, output_types, uses_manager):
     # caller calls callee
 
-    def format_cpp_type(cpp_type, idx, is_input=True):
-        # Perhaps integrate this to Bracket?
-        col_typs = ('Column', 'ColumnList')
-        literal_ref_typs = ('TextEncodingNone',)
-        idx = str(idx)
-        # TODO: use name in annotations when present?
-        arg_name = 'input' + idx if is_input else 'out' + idx
-        const = 'const ' if is_input else ''
-
-        if any(cpp_type.startswith(ct) for ct in col_typs):
-            return '%s%s& %s' % (const, cpp_type, arg_name), arg_name
-        elif any(cpp_type.startswith(lrt) for lrt in literal_ref_typs):
-            return '%s%s& %s' % (const, cpp_type, arg_name), arg_name
-        else:
-            return '%s %s' % (cpp_type, arg_name), arg_name
-
     input_cpp_args = []
     output_cpp_args = []
     arg_names = []
@@ -1532,14 +1572,12 @@ def build_template_function_call(caller, callee, input_types, output_types, uses
         arg_names.append("mgr")
 
     for idx, input_type in enumerate(input_types):
-        cpp_type = input_type.get_cpp_type()
-        cpp_arg, arg_name = format_cpp_type(cpp_type, idx)
+        cpp_arg, arg_name = input_type.format_cpp_type(idx)
         input_cpp_args.append(cpp_arg)
         arg_names.append(arg_name)
 
     for idx, output_type in enumerate(output_types):
-        cpp_type = output_type.get_cpp_type()
-        cpp_arg, arg_name = format_cpp_type(cpp_type, idx, is_input=False)
+        cpp_arg, arg_name = output_type.format_cpp_type(idx, is_input=False)
         output_cpp_args.append(cpp_arg)
         arg_names.append(arg_name)
 
@@ -1553,16 +1591,70 @@ def build_template_function_call(caller, callee, input_types, output_types, uses
     return template
 
 
+def build_require_check_function(fn_name, input_types, input_annotations, uses_manager):
+
+    def format_error_msg(err_msg, uses_manager):
+        if uses_manager:
+            return "    return mgr.error_message(%s);\n" % (err_msg,)
+        else:
+            return "    return table_function_error(%s);\n" % (err_msg,)
+
+    input_cpp_args = []
+    arg_names = []
+
+    for idx, (typ, ann) in enumerate(zip(input_types, input_annotations)):
+        arg_names.append(dict(ann).get('name', 'input%s' % (idx)))
+        cpp_arg, _ = typ.format_cpp_type(idx, arg_name=arg_names[idx])
+        input_cpp_args.append(cpp_arg)
+
+    if uses_manager:
+        input_cpp_args = ["TableFunctionManager& mgr"] + input_cpp_args
+        arg_names = ["mgr"] + arg_names
+        input_annotations = [[]] + input_annotations
+
+    fn = "EXTENSION_NOINLINE int32_t\n"
+    fn += "%s(%s) {\n" % (fn_name.lower() + "__require_check", ', '.join(input_cpp_args))
+
+    for idx, arg_name in enumerate(arg_names):
+        ann = input_annotations[idx]
+        for key, value in ann:
+            if key == 'require':
+                err_msg = '"Constraint `%s` is not satisfied."' % (value[1:-1])
+
+                fn += "  if (!(%s)) {\n" % (value[1:-1].replace('\\', ''),)
+                fn += format_error_msg(err_msg, uses_manager)
+                fn += "  }\n"
+
+    fn += "  return 0;\n"
+    fn += "}\n\n"
+
+    return fn
+
+
+def contains_require_check(sig):
+    for arg_annotations in sig.input_annotations:
+        d = dict(arg_annotations)
+        if 'require' in d.keys():
+            return True
+    return False
+
+
 def format_annotations(annotations_):
+    def fmt(k, v):
+        # type(v) is not always 'str'
+        if k == 'require':
+            return v[1:-1]
+        return v
+
     s = "std::vector<std::map<std::string, std::string>>{"
-    s += ', '.join(('{' + ', '.join('{"%s", "%s"}' % (k, v) for k, v in a) + '}') for a in annotations_)
+    s += ', '.join(('{' + ', '.join('{"%s", "%s"}' % (k, fmt(k, v)) for k, v in a) + '}') for a in annotations_)
     s += "}"
     return s
 
 
 def is_template_function(sig):
     i = sig.name.rfind('_template')
-    return i >= 0 and '__' in sig.name[:i+1]
+    return i >= 0 and '__' in sig.name[:i + 1]
 
 
 def uses_manager(sig):
@@ -1572,7 +1664,7 @@ def uses_manager(sig):
 def is_cpu_function(sig):
     # Any function that does not have _gpu_ suffix is a cpu function.
     i = sig.name.rfind('_gpu_')
-    if i >= 0 and '__' in sig.name[:i+1]:
+    if i >= 0 and '__' in sig.name[:i + 1]:
         if uses_manager(sig):
             raise ValueError('Table function {} with gpu execution target cannot have TableFunctionManager argument'.format(sig.name))
         return False
@@ -1585,7 +1677,7 @@ def is_gpu_function(sig):
         return False
     # Any function that does not have _cpu_ suffix is a gpu function.
     i = sig.name.rfind('_cpu_')
-    return not (i >= 0 and '__' in sig.name[:i+1])
+    return not (i >= 0 and '__' in sig.name[:i + 1])
 
 
 def parse_annotations(input_files):
@@ -1595,6 +1687,7 @@ def parse_annotations(input_files):
     add_stmts = []
     cpu_template_functions = []
     gpu_template_functions = []
+    cond_fns = []
 
     for input_file in input_files:
         for sig in find_signatures(input_file):
@@ -1655,6 +1748,10 @@ def parse_annotations(input_files):
             # while sig.input_types contains all arguments of the
             # implementation of an UDTF.
 
+            if contains_require_check(sig):
+                check_fn = build_require_check_function(sig.name, input_types_, input_annotations, uses_manager)
+                cond_fns.append(check_fn)
+
             if is_template_function(sig):
                 name = sig.name + '_' + str(counter)
                 counter += 1
@@ -1671,14 +1768,14 @@ def parse_annotations(input_files):
                        % (sig.name, sizer, input_types, output_types, sql_types, annotations, str(uses_manager).lower()))
                 add_stmts.append(add)
 
-    return add_stmts, cpu_template_functions, gpu_template_functions
+    return add_stmts, cpu_template_functions, gpu_template_functions, cond_fns
 
 
 if len(sys.argv) < 3:
 
     input_files = [os.path.join(os.path.dirname(__file__), 'test_udtf_signatures.hpp')]
     print('Running tests from %s' % (', '.join(input_files)))
-    add_stmts, _, _ = parse_annotations(input_files)
+    add_stmts, _, _, _ = parse_annotations(input_files)
     print('Usage:\n  %s %s input1.hpp input2.hpp ... output.hpp' % (sys.executable, sys.argv[0], ))
 
     sys.exit(1)
@@ -1688,7 +1785,7 @@ cpu_output_header = os.path.splitext(output_filename)[0] + '_cpu.hpp'
 gpu_output_header = os.path.splitext(output_filename)[0] + '_gpu.hpp'
 assert input_files, sys.argv
 
-add_stmts, cpu_template_functions, gpu_template_functions = parse_annotations(sys.argv[1:-1])
+add_stmts, cpu_template_functions, gpu_template_functions, cond_fns = parse_annotations(sys.argv[1:-1])
 
 canonical_input_files = [input_file[input_file.find("/QueryEngine/") + 1:] for input_file in input_files]
 header_includes = ['#include "' + canonical_input_file + '"' for canonical_input_file in canonical_input_files]
@@ -1725,9 +1822,14 @@ void TableFunctionsFactory::init() {
   });
 }
 
+// conditional check functions
+%s
+
 }  // namespace table_functions
 
-''' % (sys.argv[0], '\n'.join(header_includes), '\n    '.join(add_stmts))
+''' % (sys.argv[0], '\n'.join(header_includes),
+       '\n    '.join(add_stmts),
+       ''.join(cond_fns))
 
 header_content = '''
 /*

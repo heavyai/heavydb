@@ -1191,3 +1191,35 @@ EXTENSION_NOINLINE int32_t ct_add_size_and_mul_alpha(TableFunctionManager& mgr,
   return size;
 }
 #endif
+
+// clang-format off
+/*
+  UDTF: ct_require(Column<int32_t>, int | name=i | require="i > 0") -> Column<int32_t>
+  UDTF: ct_require_mgr(TableFunctionManager, Column<int32_t>, int i | require="i > 1" | require="i < 5") -> Column<int32_t>
+  UDTF: ct_require_str(Column<int32>t, TextEncodingNone s | require="s == \"hello\"") -> Column<int32_t>
+*/
+// clang-format on
+EXTENSION_NOINLINE int32_t ct_require(const Column<int32_t>& input1,
+                                      const int32_t i,
+                                      Column<int32_t>& out) {
+  set_output_row_size(1);
+  out[0] = 3;
+  return 1;
+}
+
+EXTENSION_NOINLINE int32_t ct_require_str(const Column<int32_t>& input1,
+                                          const TextEncodingNone& s,
+                                          Column<int32_t>& out) {
+  set_output_row_size(1);
+  out[0] = 3;
+  return 1;
+}
+
+EXTENSION_NOINLINE int32_t ct_require_mgr(TableFunctionManager& mgr,
+                                          const Column<int32_t>& input1,
+                                          const int32_t i,
+                                          Column<int32_t>& out) {
+  set_output_row_size(1);
+  out[0] = 4;
+  return 1;
+}

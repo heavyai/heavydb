@@ -50,6 +50,8 @@ class TableFunctionCompilationContext {
 
  private:
   void generateEntryPoint(const TableFunctionExecutionUnit& exe_unit, bool is_gpu);
+  void generateRequireCheckCall(const TableFunctionExecutionUnit& exe_unit,
+                                const std::vector<llvm::Value*>& args);
   void generateGpuKernel();
   bool passColumnsByValue(const TableFunctionExecutionUnit& exe_unit, bool is_gpu);
   void finalize(const CompilationOptions& co, Executor* executor);

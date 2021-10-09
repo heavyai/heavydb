@@ -80,5 +80,14 @@
 
   UDTF: foo__cpu(TableFunctionManager, Cursor<int32_t x> | fields=[x1]) -> Column<int64_t>!
         foo__cpu(TableFunctionManager, Cursor<Int32 | name=x> | fields=[x1]) -> ColumnInt64
-*/
+
+  UDTF: foo_int_require(Column<int> | name=col, int32_t | require="sqrt(arg1) > col.size()" | name=arg1) -> int32_t !
+        foo_int_require(ColumnInt32 | name=col, Int32 | require="sqrt(arg1) > col.size()" | name=arg1) -> Int32
+  UDTF: foo_int_require_mgr(TableFunctionManager, Column<int> | name=col, int32_t | require="sqrt(arg1) > col.size()" | name=arg1) -> int32_t !
+        foo_int_require_mgr(TableFunctionManager, ColumnInt32 | name=col, Int32 | require="sqrt(arg1) > col.size()" | name=arg1) -> Int32
+  UDTF: foo_int_require(Column<int> col, int x | require="x > 0" | require="x < 5") -> int !
+        foo_int_require(ColumnInt32 | name=col, Int32 | name=x | require="x > 0" | require="x < 5") -> Int32
+  UDTF: foo_str_require(TextEncodingNone s | require="s == \"str\"") -> int32_t !
+        foo_str_require(TextEncodingNone | name=s | require="s == \"str\"") -> Int32
+ */
 // clang-format on

@@ -250,6 +250,33 @@ bool TableFunctionCompilationContext::passColumnsByValue(
   return exe_unit.table_func.isRuntime();
 }
 
+void TableFunctionCompilationContext::generateRequireCheckCall(
+    const TableFunctionExecutionUnit& exe_unit,
+    const std::vector<llvm::Value*>& func_args) {
+  // call require check function
+  llvm::LLVMContext& ctx = cgen_state_->context_;
+
+  std::string require_check_fn = exe_unit.table_func.getRequireCheckName();
+  boost::algorithm::to_lower(require_check_fn);
+  llvm::Value* require_check_fn_return =
+      cgen_state_->emitExternalCall(require_check_fn, get_int_type(32, ctx), func_args);
+  require_check_fn_return->setName("require_check_fn_return");
+
+  // if require_chec_fn_return != 0, return its value
+  llvm::BasicBlock* bb_exit_1 =
+      llvm::BasicBlock::Create(ctx, ".exit1", entry_point_func_);
+  llvm::BasicBlock* bb_ok =
+      llvm::BasicBlock::Create(ctx, ".func_body1", entry_point_func_);
+
+  llvm::ConstantInt* zero = cgen_state_->llInt(0);
+  auto is_ok = cgen_state_->ir_builder_.CreateICmpEQ(require_check_fn_return, zero);
+  cgen_state_->ir_builder_.CreateCondBr(is_ok, bb_ok, bb_exit_1);
+
+  cgen_state_->ir_builder_.SetInsertPoint(bb_exit_1);
+  cgen_state_->ir_builder_.CreateRet(require_check_fn_return);
+  cgen_state_->ir_builder_.SetInsertPoint(bb_ok);
+}
+
 void TableFunctionCompilationContext::generateEntryPoint(
     const TableFunctionExecutionUnit& exe_unit,
     bool is_gpu) {
@@ -271,7 +298,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
   const auto bb_exit = llvm::BasicBlock::Create(ctx, ".exit", entry_point_func_);
 
   const auto func_body_bb = llvm::BasicBlock::Create(
-      ctx, ".func_body", cgen_state->ir_builder_.GetInsertBlock()->getParent());
+      ctx, ".func_body0", cgen_state->ir_builder_.GetInsertBlock()->getParent());
 
   cgen_state->ir_builder_.SetInsertPoint(func_body_bb);
   auto col_heads = generate_column_heads_load(
@@ -397,6 +424,10 @@ void TableFunctionCompilationContext::generateEntryPoint(
   for (auto& col : output_col_args) {
     func_args.push_back(
         (pass_column_by_value ? cgen_state_->ir_builder_.CreateLoad(col) : col));
+  }
+
+  if (exe_unit.table_func.requireInAnnotations()) {
+    generateRequireCheckCall(exe_unit, func_args);
   }
 
   auto func_name = exe_unit.table_func.getName();
