@@ -100,10 +100,4 @@ int32_t tf_mandelbrot_cuda_float__gpu_(const int32_t x_pixels,
                                        Column<int32_t>& output_num_iterations);
 
 #endif  // __CUDACC__
-
-// TODO(todd): Determine why implementations in cpp file are being culled,
-// even when using __attribute__((__used__)), so that we can avoid including
-// the cpp file below
-#include "ExampleFunctions.cpp"
-
 #endif  // HAVE_SYSTEM_TFS

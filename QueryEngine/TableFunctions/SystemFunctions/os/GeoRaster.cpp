@@ -20,8 +20,7 @@
 #include <cmath>
 #include <vector>
 
-#include "GeoRaster.hpp"
-#include "Shared/Utilities.hpp"
+#include "Shared/Utilities.h"
 
 // Allow input types to GeoRaster that are different than class types/output Z type
 // So we can move everything to the type of T and Z (which can each be either float

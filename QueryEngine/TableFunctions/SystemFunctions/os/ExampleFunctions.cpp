@@ -22,7 +22,7 @@
 #endif
 #endif
 
-#include "ExampleFunctions.hpp"
+#include "ExampleFunctions.h"
 
 namespace Mandelbrot {
 // Modified from original code by Akanksha Jolly,

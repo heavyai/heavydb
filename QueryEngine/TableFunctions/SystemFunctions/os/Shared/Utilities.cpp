@@ -28,7 +28,7 @@
 
 #include <tbb/parallel_for.h>
 
-#include "Utilities.hpp"
+#include "Utilities.h"
 
 #define NANOSECONDS_PER_SECOND 1000000000
 

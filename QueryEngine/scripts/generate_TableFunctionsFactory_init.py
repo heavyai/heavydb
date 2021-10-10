@@ -1687,6 +1687,8 @@ def parse_annotations(input_files):
     add_stmts = []
     cpu_template_functions = []
     gpu_template_functions = []
+    cpu_function_address_expressions = []
+    gpu_function_address_expressions = []
     cond_fns = []
 
     for input_file in input_files:
@@ -1756,26 +1758,37 @@ def parse_annotations(input_files):
                 name = sig.name + '_' + str(counter)
                 counter += 1
                 t = build_template_function_call(name, sig.name, input_types_, sig.outputs, uses_manager)
+                address_expression = ('avoid_opt_address(reinterpret_cast<void*>(%s))' % name)
                 if is_cpu_function(sig):
                     cpu_template_functions.append(t)
+                    cpu_function_address_expressions.append(address_expression)
                 if is_gpu_function(sig):
                     gpu_template_functions.append(t)
+                    gpu_function_address_expressions.append(address_expression)
                 add = ('TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s, /*is_runtime:*/false, /*uses_manager:*/%s);'
                        % (name, sizer, input_types, output_types, sql_types, annotations, str(uses_manager).lower()))
                 add_stmts.append(add)
+
             else:
                 add = ('TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s, /*is_runtime:*/false, /*uses_manager:*/%s);'
                        % (sig.name, sizer, input_types, output_types, sql_types, annotations, str(uses_manager).lower()))
                 add_stmts.append(add)
+                address_expression = ('avoid_opt_address(reinterpret_cast<void*>(%s))' % sig.name)
 
-    return add_stmts, cpu_template_functions, gpu_template_functions, cond_fns
+                if is_cpu_function(sig):
+                    cpu_function_address_expressions.append(address_expression)
+                if is_gpu_function(sig):
+                    gpu_function_address_expressions.append(address_expression)
+
+    return add_stmts, cpu_template_functions, gpu_template_functions, cpu_function_address_expressions, gpu_function_address_expressions, cond_fns
 
 
 if len(sys.argv) < 3:
 
     input_files = [os.path.join(os.path.dirname(__file__), 'test_udtf_signatures.hpp')]
     print('Running tests from %s' % (', '.join(input_files)))
-    add_stmts, _, _, _ = parse_annotations(input_files)
+    add_stmts, _, _, _, _, _ = parse_annotations(input_files)
+
     print('Usage:\n  %s %s input1.hpp input2.hpp ... output.hpp' % (sys.executable, sys.argv[0], ))
 
     sys.exit(1)
@@ -1785,7 +1798,7 @@ cpu_output_header = os.path.splitext(output_filename)[0] + '_cpu.hpp'
 gpu_output_header = os.path.splitext(output_filename)[0] + '_gpu.hpp'
 assert input_files, sys.argv
 
-add_stmts, cpu_template_functions, gpu_template_functions, cond_fns = parse_annotations(sys.argv[1:-1])
+add_stmts, cpu_template_functions, gpu_template_functions, cpu_address_expressions, gpu_address_expressions, cond_fns = parse_annotations(sys.argv[1:-1])
 
 canonical_input_files = [input_file[input_file.find("/QueryEngine/") + 1:] for input_file in input_files]
 header_includes = ['#include "' + canonical_input_file + '"' for canonical_input_file in canonical_input_files]
@@ -1813,10 +1826,34 @@ namespace table_functions {
 
 std::once_flag init_flag;
 
+// volatile+noinline prevents compiler optimization
+__attribute__((noinline))
+volatile bool avoid_opt_address(void *address) {
+  return address != nullptr;
+}
+
+bool functions_exist() {
+  bool ret = true;
+
+  ret &= (%s);
+
+#ifdef __CUDACC__
+  ret &= (%s);
+#endif
+
+  return ret;
+}
+
 void TableFunctionsFactory::init() {
   if (!g_enable_table_functions) {
     return;
   }
+
+  if (!functions_exist()) {
+    UNREACHABLE();
+    return;
+  }
+
   std::call_once(init_flag, []() {
     %s
   });
@@ -1827,9 +1864,12 @@ void TableFunctionsFactory::init() {
 
 }  // namespace table_functions
 
-''' % (sys.argv[0], '\n'.join(header_includes),
-       '\n    '.join(add_stmts),
-       ''.join(cond_fns))
+''' % (sys.argv[0],
+        '\n'.join(header_includes),
+        ' &&\n'.join(cpu_address_expressions),
+        ' &&\n'.join(gpu_address_expressions),
+        '\n    '.join(add_stmts),
+        ''.join(cond_fns))
 
 header_content = '''
 /*
