@@ -21,7 +21,6 @@ dependencies:
   - arrow-cpp  3.0
   - pyarrow    3.0
   - pandas     1.3
-  - ray-core   1.4
   - thrift-cpp
   - thrift
   - llvmdev     9.*
