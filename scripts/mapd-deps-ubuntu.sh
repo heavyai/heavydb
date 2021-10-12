@@ -109,7 +109,8 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     swig \
     pkg-config \
     libxerces-c-dev \
-    libxmlsec1-dev
+    libxmlsec1-dev \
+    libtool
 
 # Set up gcc-8 as default gcc
 sudo update-alternatives \
@@ -125,6 +126,8 @@ install_ninja
 install_maven
 
 install_cmake
+
+install_memkind
 
 # llvm
 # (see common-functions.sh)
