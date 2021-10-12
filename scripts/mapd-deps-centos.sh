@@ -42,6 +42,7 @@ source $SCRIPTS_DIR/common-functions.sh
 
 sudo yum groupinstall -y "Development Tools"
 sudo yum install -y \
+    ca-certificates \
     zlib-devel \
     epel-release \
     which \
