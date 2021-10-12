@@ -44,39 +44,43 @@ struct EnableBitmaskOps {
 };
 
 template <typename T>
-typename std::enable_if_t<EnableBitmaskOps<T>::enable, T> operator&(T lhs, T rhs) {
+typename std::enable_if_t<EnableBitmaskOps<T>::enable, T> constexpr operator&(T lhs,
+                                                                              T rhs) {
   using type = typename std::underlying_type_t<T>;
   return static_cast<T>(static_cast<type>(lhs) & static_cast<type>(rhs));
 }
 template <typename T>
-typename std::enable_if_t<EnableBitmaskOps<T>::enable, T> operator|(T lhs, T rhs) {
+typename std::enable_if_t<EnableBitmaskOps<T>::enable, T> constexpr operator|(T lhs,
+                                                                              T rhs) {
   using type = typename std::underlying_type_t<T>;
   return static_cast<T>(static_cast<type>(lhs) | static_cast<type>(rhs));
 }
 template <typename T>
-typename std::enable_if_t<EnableBitmaskOps<T>::enable, T> operator~(T t) {
+typename std::enable_if_t<EnableBitmaskOps<T>::enable, T> constexpr operator~(T t) {
   return static_cast<T>(~static_cast<std::underlying_type_t<T>>(t));
 }
 template <typename T>
-typename std::enable_if_t<EnableBitmaskOps<T>::enable, T> operator|=(T& lhs, T rhs) {
+typename std::enable_if_t<EnableBitmaskOps<T>::enable, T> constexpr operator|=(T& lhs,
+                                                                               T rhs) {
   lhs = lhs | rhs;
   return lhs;
 }
 template <typename T>
-typename std::enable_if_t<EnableBitmaskOps<T>::enable, T> operator&=(T& lhs, T rhs) {
+typename std::enable_if_t<EnableBitmaskOps<T>::enable, T> constexpr operator&=(T& lhs,
+                                                                               T rhs) {
   lhs = lhs & rhs;
   return lhs;
 }
 
 template <typename T>
-typename std::enable_if_t<EnableBitmaskOps<T>::enable, bool> any_bits_set(T t) {
+typename std::enable_if_t<EnableBitmaskOps<T>::enable, bool> constexpr any_bits_set(T t) {
   using type = typename std::underlying_type_t<T>;
   constexpr type zero{};
   return static_cast<type>(t) != zero;
 }
 
-#define ENABLE_BITMASK_OPS(x)        \
-  template <>                        \
-  struct EnableBitmaskOps<x> {       \
-    static const bool enable = true; \
+#define ENABLE_BITMASK_OPS(x)            \
+  template <>                            \
+  struct EnableBitmaskOps<x> {           \
+    static constexpr bool enable = true; \
   };
