@@ -387,3 +387,23 @@ function install_libuv() {
   popd
   popd
 }
+
+LIBNUMA_VERSION=2.0.14
+MEMKIND_VERSION=1.11.0
+
+function install_memkind() {
+  download_make_install https://github.com/numactl/numactl/releases/download/v${LIBNUMA_VERSION}/numactl-${LIBNUMA_VERSION}.tar.gz
+  
+  download https://github.com/memkind/memkind/archive/refs/tags/v${MEMKIND_VERSION}.tar.gz
+  extract v${MEMKIND_VERSION}.tar.gz
+  pushd memkind-${MEMKIND_VERSION}
+  ./autogen.sh
+  if [[ $(cat /etc/os-release) = *"fedora"* ]]; then
+    ./configure --prefix=${PREFIX} --libdir=${PREFIX}/lib64
+  else
+    ./configure --prefix=${PREFIX} --libdir=${PREFIX}/lib
+  fi
+  makej
+  make_install
+  popd
+}

@@ -18,9 +18,11 @@ glog | [BSD-like](<https://github.com/google/glog/blob/master/COPYING>) | C++ lo
 cpp-jwt | [MIT](<https://github.com/arun11299/cpp-jwt/blob/master/LICENSE>) | Elliptical Curve Digital Signature |
 libcurl | [MIT](<https://curl.haxx.se/docs/copyright.html>) | AWS metadata download |
 libldap | varies, [OpenLDAP](<http://www.openldap.org/software/release/license.html>) | LDAP support; provided by OS (dynamic linked) |
+libnuma | [LGPL](<https://github.com/numactl/numactl/blob/master/LICENSE.LGPL2.1>) | Optane support, dynamic linked
 libpng | [libpng](<http://libpng.org/pub/png/src/libpng-LICENSE.txt>) | Render encoding / transport |
 linenoise | [BSD](<https://github.com/antirez/linenoise/blob/master/LICENSE>) | CLI |
 LLVM | [LLVM](<http://llvm.org/releases/3.9.1/LICENSE.TXT>) | JIT |
+memkind | [BSD](<https://github.com/memkind/memkind/blob/master/COPYING>) | Optane support
 muparserx | [BSD](<https://github.com/beltoforion/muparserx/blob/master/License.txt>) | Expression string parsing |
 ncurses | [X11](<http://invisible-island.net/ncurses/ncurses.faq.html#who_owns_it>) | CLI/password entry |
 PicoSHA2 | [MIT](<https://github.com/okdshin/PicoSHA2/blob/master/LICENSE>) | SHA256 Library |

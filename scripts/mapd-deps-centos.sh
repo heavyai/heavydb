@@ -115,6 +115,8 @@ download_make_install ftp://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz
 # http://zlib.net/zlib-1.2.8.tar.xz
 download_make_install ${HTTP_DEPS}/zlib-1.2.8.tar.xz
 
+install_memkind
+
 VERS=1.0.6
 # http://bzip.org/$VERS/bzip2-$VERS.tar.gz
 download ${HTTP_DEPS}/bzip2-$VERS.tar.gz
