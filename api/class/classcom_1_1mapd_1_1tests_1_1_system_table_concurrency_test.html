@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Class com::mapd::tests::TablePermissionsTest" href="classcom_1_1mapd_1_1tests_1_1_table_permissions_test.html" />
+    <link rel="next" title="Class com::mapd::tests::SystemTableConcurrencyTest::ThreadDbQueries" href="classcom_1_1mapd_1_1tests_1_1_system_table_concurrency_test_1_1_thread_db_queries.html" />
     <link rel="prev" title="Class com::mapd::tests::SelectUpdateDeleteDifferentTables" href="classcom_1_1mapd_1_1tests_1_1_select_update_delete_different_tables.html" /> 
 </head>
 
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev 312809f
+                5.9.0dev 4929290
               </div>
             
           
@@ -1074,6 +1074,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_select_copy_from_delete_concurrency_test.html">Class com::mapd::tests::SelectCopyFromDeleteConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_select_update_delete_different_tables.html">Class com::mapd::tests::SelectUpdateDeleteDifferentTables</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class com::mapd::tests::SystemTableConcurrencyTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_system_table_concurrency_test_1_1_thread_db_queries.html">Class com::mapd::tests::SystemTableConcurrencyTest::ThreadDbQueries</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_table_permissions_test.html">Class com::mapd::tests::TablePermissionsTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_update_delete_insert_concurrency_test.html">Class com::mapd::tests::UpdateDeleteInsertConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_view_permissions_test.html">Class com::mapd::tests::ViewPermissionsTest</a></li>
@@ -2168,10 +2169,36 @@
 
 <dl class="function">
 <dt>
-<span class="target" id="classcom_1_1mapd_1_1tests_1_1_system_table_concurrency_test_1a2abbdff9e911bbdc05999b28f2665186"></span><code class="sig-name descname">void com.mapd.tests.SystemTableConcurrencyTest.runSqlAsUser(String sql, MapdTestClient user, String logPrefix)</code></dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_system_table_concurrency_test_1ac74b6b29fc4d4cb2e4fa2da009d3dfb3"></span><code class="sig-name descname">void com.mapd.tests.SystemTableConcurrencyTest.runSqlAsUser(String sql, MapdTestClient user, int threadId)</code></dt>
 <dd></dd></dl>
 
 </div>
+<dl class="class">
+<dt id="_CPPv4N3com4mapd5tests26SystemTableConcurrencyTest15ThreadDbQueriesE">
+<span id="_CPPv3N3com4mapd5tests26SystemTableConcurrencyTest15ThreadDbQueriesE"></span><span id="_CPPv2N3com4mapd5tests26SystemTableConcurrencyTest15ThreadDbQueriesE"></span><span id="com::mapd::tests::SystemTableConcurrencyTest::ThreadDbQueries"></span><span class="target" id="classcom_1_1mapd_1_1tests_1_1_system_table_concurrency_test_1_1_thread_db_queries"></span><em class="property">class </em><code class="sig-name descname">ThreadDbQueries</code><a class="headerlink" href="#_CPPv4N3com4mapd5tests26SystemTableConcurrencyTest15ThreadDbQueriesE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Functions</p>
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_system_table_concurrency_test_1_1_thread_db_queries_1a136482b9d67369ab43642f8eef6b2b9b"></span><code class="sig-name descname">com.mapd.tests.SystemTableConcurrencyTest.ThreadDbQueries.ThreadDbQueries(final String database, final List&lt; String &gt; queries)</code></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Members</p>
+<dl class="member">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_system_table_concurrency_test_1_1_thread_db_queries_1a2794f7b1fa8aa431845c86ad8c9f26d4"></span><code class="sig-name descname">final String com.mapd.tests.SystemTableConcurrencyTest.ThreadDbQueries.database</code></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_system_table_concurrency_test_1_1_thread_db_queries_1a4417175902ca03fda2435d171fb8fa94"></span><code class="sig-name descname">final List&lt;String&gt; com.mapd.tests.SystemTableConcurrencyTest.ThreadDbQueries.queries</code></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
 </dd></dl>
 
 </div>
@@ -2184,7 +2211,7 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="classcom_1_1mapd_1_1tests_1_1_table_permissions_test.html" class="btn btn-neutral float-right" title="Class com::mapd::tests::TablePermissionsTest" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="classcom_1_1mapd_1_1tests_1_1_system_table_concurrency_test_1_1_thread_db_queries.html" class="btn btn-neutral float-right" title="Class com::mapd::tests::SystemTableConcurrencyTest::ThreadDbQueries" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="classcom_1_1mapd_1_1tests_1_1_select_update_delete_different_tables.html" class="btn btn-neutral float-left" title="Class com::mapd::tests::SelectUpdateDeleteDifferentTables" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

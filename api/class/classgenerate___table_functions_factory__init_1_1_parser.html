@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev 312809f
+                5.9.0dev 4929290
               </div>
             
           
@@ -1074,6 +1074,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_select_copy_from_delete_concurrency_test.html">Class com::mapd::tests::SelectCopyFromDeleteConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_select_update_delete_different_tables.html">Class com::mapd::tests::SelectUpdateDeleteDifferentTables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_system_table_concurrency_test.html">Class com::mapd::tests::SystemTableConcurrencyTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_system_table_concurrency_test_1_1_thread_db_queries.html">Class com::mapd::tests::SystemTableConcurrencyTest::ThreadDbQueries</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_table_permissions_test.html">Class com::mapd::tests::TablePermissionsTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_update_delete_insert_concurrency_test.html">Class com::mapd::tests::UpdateDeleteInsertConcurrencyTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1tests_1_1_view_permissions_test.html">Class com::mapd::tests::ViewPermissionsTest</a></li>
@@ -2314,6 +2315,7 @@
 
 <span class="nl">annotation</span><span class="p">:</span> <span class="n">IDENTIFIER</span> <span class="s">&quot;=&quot;</span> <span class="n">IDENTIFIER</span> <span class="p">(</span><span class="s">&quot;&lt;&quot;</span> <span class="n">NUMBER</span> <span class="p">(</span><span class="s">&quot;,&quot;</span> <span class="n">NUMBER</span><span class="p">)</span> <span class="s">&quot;&gt;&quot;</span><span class="p">)</span><span class="o">?</span>
   <span class="o">|</span> <span class="n">IDENTIFIER</span> <span class="s">&quot;=&quot;</span> <span class="s">&quot;[&quot;</span> <span class="n">PRIMITIVE</span><span class="o">?</span> <span class="p">(</span><span class="s">&quot;,&quot;</span> <span class="n">PRIMITIVE</span><span class="p">)</span><span class="o">*</span> <span class="s">&quot;]&quot;</span>
+  <span class="o">|</span> <span class="s">&quot;require&quot;</span> <span class="s">&quot;=&quot;</span> <span class="n">STRING</span>
 
 <span class="nl">fmt</span><span class="p">:</span> <span class="n">on</span>
 </pre></div>
@@ -2336,6 +2338,19 @@
 
 <dl class="function">
 <dt>
+<span class="target" id="classgenerate___table_functions_factory__init_1_1_parser_1a93cf57b61206f3a6562649349f2fc8d9"></span><code class="sig-name descname">def generate_TableFunctionsFactory_init.Parser.parse_string()</code></dt>
+<dd><p><div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span>fmt: off
+
+STRING: \&quot;.*?\&quot;
+
+fmt: on
+</pre></div>
+</div>
+ </p>
+</dd></dl>
+
+<dl class="function">
+<dt>
 <span class="target" id="classgenerate___table_functions_factory__init_1_1_parser_1a2b97054c134b17effa48a75786bb3f43"></span><code class="sig-name descname">def generate_TableFunctionsFactory_init.Parser.parse_number()</code></dt>
 <dd><p><div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="nl">fmt</span><span class="p">:</span> <span class="n">off</span>
 
@@ -2350,33 +2365,35 @@
 <dl class="function">
 <dt>
 <span class="target" id="classgenerate___table_functions_factory__init_1_1_parser_1afbe37d9b3d1a1c8470681f772da9239b"></span><code class="sig-name descname">def generate_TableFunctionsFactory_init.Parser.parse()</code></dt>
-<dd><p><div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="nl">fmt</span><span class="p">:</span> <span class="n">off</span>
+<dd><p><div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span>fmt: off
 
-<span class="nl">udtf</span><span class="p">:</span> <span class="n">IDENTIFIER</span> <span class="s">&quot;(&quot;</span> <span class="p">(</span><span class="n">args</span><span class="p">)</span><span class="o">?</span> <span class="s">&quot;)&quot;</span> <span class="p">(</span><span class="s">&quot;|&quot;</span> <span class="n">annotation</span><span class="p">)</span><span class="o">*</span> <span class="s">&quot;-&gt;&quot;</span> <span class="n">args</span> <span class="p">(</span><span class="s">&quot;,&quot;</span> <span class="n">templates</span><span class="p">)</span><span class="o">?</span>
+udtf: IDENTIFIER &quot;(&quot; (args)? &quot;)&quot; (&quot;|&quot; annotation)* &quot;-&gt;&quot; args (&quot;,&quot; templates)?
 
-<span class="nl">args</span><span class="p">:</span> <span class="n">arg</span> <span class="p">(</span><span class="s">&quot;,&quot;</span> <span class="n">arg</span><span class="p">)</span><span class="o">*</span>
+args: arg (&quot;,&quot; arg)*
 
-<span class="nl">arg</span><span class="p">:</span> <span class="n">type</span> <span class="n">IDENTIFIER</span><span class="o">?</span> <span class="p">(</span><span class="s">&quot;|&quot;</span> <span class="n">annotation</span><span class="p">)</span><span class="o">*</span>
+arg: type IDENTIFIER? (&quot;|&quot; annotation)*
 
-<span class="nl">type</span><span class="p">:</span> <span class="n">composed</span>
-    <span class="o">|</span> <span class="n">primitive</span>
+type: composed
+    | primitive
 
-<span class="nl">composed</span><span class="p">:</span> <span class="s">&quot;Cursor&quot;</span> <span class="s">&quot;&lt;&quot;</span> <span class="n">arg</span> <span class="p">(</span><span class="s">&quot;,&quot;</span> <span class="n">arg</span><span class="p">)</span><span class="o">*</span> <span class="s">&quot;&gt;&quot;</span>
-<span class="o">|</span> <span class="n">IDENTIFIER</span> <span class="s">&quot;&lt;&quot;</span> <span class="n">type</span> <span class="p">(</span><span class="s">&quot;,&quot;</span> <span class="n">type</span><span class="p">)</span><span class="o">*</span> <span class="s">&quot;&gt;&quot;</span>
+composed: &quot;Cursor&quot; &quot;&lt;&quot; arg (&quot;,&quot; arg)* &quot;&gt;&quot;
+| IDENTIFIER &quot;&lt;&quot; type (&quot;,&quot; type)* &quot;&gt;&quot;
 
-<span class="nl">primitive</span><span class="p">:</span> <span class="n">IDENTIFIER</span>
- <span class="o">|</span> <span class="n">NUMBER</span>
+primitive: IDENTIFIER
+ | NUMBER
 
-<span class="nl">annotation</span><span class="p">:</span> <span class="n">IDENTIFIER</span> <span class="s">&quot;=&quot;</span> <span class="n">IDENTIFIER</span> <span class="p">(</span><span class="s">&quot;&lt;&quot;</span> <span class="n">NUMBER</span> <span class="p">(</span><span class="s">&quot;,&quot;</span> <span class="n">NUMBER</span><span class="p">)</span> <span class="s">&quot;&gt;&quot;</span><span class="p">)</span><span class="o">?</span>
-  <span class="o">|</span> <span class="n">IDENTIFIER</span> <span class="s">&quot;=&quot;</span> <span class="s">&quot;[&quot;</span> <span class="n">PRIMITIVE</span><span class="o">?</span> <span class="p">(</span><span class="s">&quot;,&quot;</span> <span class="n">PRIMITIVE</span><span class="p">)</span><span class="o">*</span> <span class="s">&quot;]&quot;</span>
+annotation: IDENTIFIER &quot;=&quot; IDENTIFIER (&quot;&lt;&quot; NUMBER (&quot;,&quot; NUMBER) &quot;&gt;&quot;)?
+  | IDENTIFIER &quot;=&quot; &quot;[&quot; PRIMITIVE? (&quot;,&quot; PRIMITIVE)* &quot;]&quot;
+  | &quot;require&quot; &quot;=&quot; STRING
 
-<span class="nl">templates</span><span class="p">:</span> <span class="k">template</span> <span class="p">(</span><span class="s">&quot;,&quot;</span> <span class="k">template</span><span class="p">)</span>
-<span class="k">template</span><span class="o">:</span> <span class="n">IDENTIFIER</span> <span class="s">&quot;=&quot;</span> <span class="s">&quot;[&quot;</span> <span class="n">IDENTIFIER</span> <span class="p">(</span><span class="s">&quot;,&quot;</span> <span class="n">IDENTIFIER</span><span class="p">)</span><span class="o">*</span> <span class="s">&quot;]&quot;</span>
+templates: template (&quot;,&quot; template)
+template: IDENTIFIER &quot;=&quot; &quot;[&quot; IDENTIFIER (&quot;,&quot; IDENTIFIER)* &quot;]&quot;
 
-<span class="nl">IDENTIFIER</span><span class="p">:</span> <span class="p">[</span><span class="n">A</span><span class="o">-</span><span class="n">Za</span><span class="o">-</span><span class="n">z_</span><span class="p">][</span><span class="n">A</span><span class="o">-</span><span class="n">Za</span><span class="o">-</span><span class="n">z0</span><span class="o">-</span><span class="mi">9</span><span class="n">_</span><span class="p">]</span><span class="o">*</span>
-<span class="nl">NUMBER</span><span class="p">:</span> <span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">9</span><span class="p">]</span><span class="o">+</span>
+IDENTIFIER: [A-Za-z_][A-Za-z0-9_]*
+NUMBER: [0-9]+
+STRING: \&quot;.*?\&quot;
 
-<span class="nl">fmt</span><span class="p">:</span> <span class="n">on</span>
+fmt: on
 </pre></div>
 </div>
  </p>

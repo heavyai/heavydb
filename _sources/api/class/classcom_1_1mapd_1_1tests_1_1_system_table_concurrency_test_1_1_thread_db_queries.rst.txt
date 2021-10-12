@@ -1,0 +1,9 @@
+Class com::mapd::tests::SystemTableConcurrencyTest::ThreadDbQueries
+===================================================================
+
+.. doxygenclass:: com::mapd::tests::SystemTableConcurrencyTest::ThreadDbQueries
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
