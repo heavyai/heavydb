@@ -2317,7 +2317,7 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
       } else {
         results = exec_ctx->getRowSet(*ra_exe_unit, exec_ctx->query_mem_desc_);
       }
-      shared_context.addDeviceResults(std::move(results), {});
+      shared_context.addDeviceResults(std::move(results), 0, {});
     }
   }
 }
