@@ -156,6 +156,7 @@ extern bool g_from_table_reordering;
 extern bool g_enable_filter_push_down;
 extern bool g_allow_cpu_retry;
 extern bool g_allow_query_step_cpu_retry;
+extern bool g_inf_div_by_zero;
 extern bool g_null_div_by_zero;
 extern bool g_bigint_count;
 extern bool g_inner_join_fragment_skipping;
@@ -186,6 +187,7 @@ extern bool g_enable_smem_non_grouped_agg;
 extern bool g_enable_smem_grouped_non_count_agg;
 extern bool g_use_estimator_result_cache;
 extern bool g_enable_lazy_fetch;
+extern bool g_enable_multifrag_rs;
 
 extern int64_t g_omni_kafka_seek;
 extern size_t g_leaf_count;
