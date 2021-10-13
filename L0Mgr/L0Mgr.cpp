@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,10 +81,11 @@ std::vector<std::shared_ptr<L0Driver>> get_drivers() {
 
 L0CommandList::L0CommandList(ze_command_list_handle_t handle) : handle_(handle) {}
 
-void L0CommandList::submit(ze_command_queue_handle_t queue) {
+void L0CommandList::submit(L0CommandQueue& queue) {
   L0_SAFE_CALL(zeCommandListClose(handle_));
-  L0_SAFE_CALL(zeCommandQueueExecuteCommandLists(queue, 1, &handle_, nullptr));
-  L0_SAFE_CALL(zeCommandQueueSynchronize(queue, std::numeric_limits<uint32_t>::max()));
+  L0_SAFE_CALL(zeCommandQueueExecuteCommandLists(queue.handle(), 1, &handle_, nullptr));
+  L0_SAFE_CALL(
+      zeCommandQueueSynchronize(queue.handle(), std::numeric_limits<uint32_t>::max()));
 }
 
 ze_command_list_handle_t L0CommandList::handle() const {
@@ -116,6 +117,7 @@ void* allocate_device_mem(const size_t num_bytes, L0Device& device) {
 
 L0Device::L0Device(const L0Driver& driver, ze_device_handle_t device)
     : device_(device), driver_(driver) {
+  ze_command_queue_handle_t queue_handle;
   ze_command_queue_desc_t command_queue_desc = {ZE_STRUCTURE_TYPE_COMMAND_QUEUE_DESC,
                                                 nullptr,
                                                 0,
@@ -124,15 +126,12 @@ L0Device::L0Device(const L0Driver& driver, ze_device_handle_t device)
                                                 ZE_COMMAND_QUEUE_MODE_DEFAULT,
                                                 ZE_COMMAND_QUEUE_PRIORITY_NORMAL};
   L0_SAFE_CALL(
-      zeCommandQueueCreate(driver_.ctx(), device_, &command_queue_desc, &command_queue_));
+      zeCommandQueueCreate(driver_.ctx(), device_, &command_queue_desc, &queue_handle));
+
+  command_queue_ = std::make_shared<L0CommandQueue>(queue_handle);
 }
 
-L0Device::~L0Device() {
-  auto status = (zeCommandQueueDestroy(command_queue_));
-  if (status) {
-    std::cerr << "Non-zero status for command queue destructor" << std::endl;
-  }
-}
+L0Device::~L0Device() {}
 
 ze_context_handle_t L0Device::ctx() const {
   return driver_.ctx();
@@ -140,7 +139,7 @@ ze_context_handle_t L0Device::ctx() const {
 ze_device_handle_t L0Device::device() const {
   return device_;
 }
-ze_command_queue_handle_t L0Device::command_queue() const {
+std::shared_ptr<L0CommandQueue> L0Device::command_queue() const {
   return command_queue_;
 }
 
@@ -154,6 +153,19 @@ std::unique_ptr<L0CommandList> L0Device::create_command_list() const {
   ze_command_list_handle_t res;
   zeCommandListCreate(ctx(), device_, &desc, &res);
   return std::make_unique<L0CommandList>(res);
+}
+
+L0CommandQueue::L0CommandQueue(ze_command_queue_handle_t handle) : handle_(handle) {}
+
+ze_command_queue_handle_t L0CommandQueue::handle() const {
+  return handle_;
+}
+
+L0CommandQueue::~L0CommandQueue() {
+  auto status = (zeCommandQueueDestroy(handle_));
+  if (status) {
+    std::cerr << "Non-zero status for command queue destructor" << std::endl;
+  }
 }
 
 std::shared_ptr<L0Module> L0Device::create_module(uint8_t* code,
@@ -199,12 +211,8 @@ const std::vector<std::shared_ptr<L0Driver>>& L0Manager::drivers() const {
 }
 
 int8_t* L0Manager::allocateDeviceMem(const size_t num_bytes, int device_id) {
-#ifdef HAVE_L0
   auto& device = drivers_[0]->devices()[device_id];
   return (int8_t*)allocate_device_mem(num_bytes, *device);
-#else
-  return nullptr;
-#endif  // HAVE_L0
 }
 
 L0Module::L0Module(ze_module_handle_t handle) : handle_(handle) {}
@@ -264,7 +272,7 @@ void L0Manager::copyHostToDevice(int8_t* device_ptr,
   auto queue = device->command_queue();
 
   cl->copy(device_ptr, host_ptr, num_bytes);
-  cl->submit(queue);
+  cl->submit(*queue);
 }
 
 void L0Manager::copyDeviceToHost(int8_t* host_ptr,
@@ -276,7 +284,7 @@ void L0Manager::copyDeviceToHost(int8_t* host_ptr,
   auto queue = device->command_queue();
 
   cl->copy(host_ptr, device_ptr, num_bytes);
-  cl->submit(queue);
+  cl->submit(*queue);
 }
 
 void L0Manager::copyDeviceToDevice(int8_t* dest_ptr,
@@ -289,6 +297,7 @@ void L0Manager::copyDeviceToDevice(int8_t* dest_ptr,
 
 int8_t* L0Manager::allocatePinnedHostMem(const size_t num_bytes) {
   CHECK(false);
+  return nullptr;
 }
 
 void L0Manager::freePinnedHostMem(int8_t* host_ptr) {
@@ -309,21 +318,17 @@ void L0Manager::setDeviceMem(int8_t* device_ptr,
                              const unsigned char uc,
                              const size_t num_bytes,
                              const int device_num) {
-#if HAVE_L0
   auto& device = drivers_[0]->devices()[device_num];
   auto cl = device->create_command_list();
   L0_SAFE_CALL(zeCommandListAppendMemoryFill(
       cl->handle(), device_ptr, &uc, 1, num_bytes, nullptr, 0, nullptr));
-  cl->submit(device->command_queue());
-#endif  // HAVE_L0
+  cl->submit(*device->command_queue());
 }
 
 void L0Manager::synchronizeDevices() const {
-#if HAVE_L0
   for (auto& device : drivers_[0]->devices()) {
-    L0_SAFE_CALL(zeCommandQueueSynchronize(device->command_queue(),
+    L0_SAFE_CALL(zeCommandQueueSynchronize(device->command_queue()->handle(),
                                            std::numeric_limits<uint32_t>::max()));
   }
-#endif  // HAVE_L0
 }
 }  // namespace l0
