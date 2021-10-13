@@ -19,7 +19,7 @@ import static org.apache.calcite.sql.parser.SqlParserPos.ZERO;
 
 import com.google.common.collect.ImmutableList;
 import com.mapd.calcite.parser.MapDParserOptions.FilterPushDownInfo;
-import com.mapd.calcite.rel.rules.FilterTableFunctionTransposeRule2;
+import com.mapd.calcite.rel.rules.FilterTableFunctionMultiInputTransposeRule;
 import com.mapd.common.SockTransportProperties;
 import com.mapd.metadata.MetaConnect;
 import com.mapd.parser.extension.ddl.ExtendedSqlParser;
@@ -823,7 +823,9 @@ public final class MapDParser {
 
     HepProgramBuilder builder = new HepProgramBuilder();
     if (!parserOptions.isViewOptimizeEnabled()) {
-      builder.addRuleInstance(FilterTableFunctionTransposeRule2.Config.DEFAULT.toRule());
+      builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
+      builder.addRuleInstance(
+              FilterTableFunctionMultiInputTransposeRule.Config.DEFAULT.toRule());
       builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
     } else {
       // check to see if a view is involved in the query
@@ -843,9 +845,10 @@ public final class MapDParser {
       if (foundView) {
         builder.addRuleInstance(CoreRules.JOIN_PROJECT_BOTH_TRANSPOSE_INCLUDE_OUTER);
         builder.addRuleInstance(CoreRules.FILTER_MERGE);
-        builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
       }
-      builder.addRuleInstance(FilterTableFunctionTransposeRule2.Config.DEFAULT.toRule());
+      builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
+      builder.addRuleInstance(
+              FilterTableFunctionMultiInputTransposeRule.Config.DEFAULT.toRule());
       builder.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE);
       if (foundView) {
         builder.addRuleInstance(CoreRules.PROJECT_MERGE);

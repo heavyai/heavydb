@@ -17,6 +17,7 @@
 #pragma once
 
 #include "../../QueryEngine/OmniSciTypes.h"
+#include "../../QueryEngine/TableFunctions/SystemFunctions/os/Shared/Utilities.h"
 
 /*
   This file contains tesing compile-time UDTFs. The unit-tests are
@@ -1162,13 +1163,13 @@ TEMPLATE_NOINLINE int32_t ct_throw_if_gt_100__cpu_template(TableFunctionManager&
   testing the feature: the result will depend on whether the
   optimization is enabled or not.
 
-  UDTF: ct_copy_and_add_size(TableFunctionManager, Column<int32_t> x) | filter_table_function_transpose=on -> Column<int32_t> x
+  UDTF: ct_copy_and_add_size(TableFunctionManager, Cursor<Column<int32_t> x>) | filter_table_function_transpose=on -> Column<int32_t> x
   UDTF: ct_add_size_and_mul_alpha(TableFunctionManager, Cursor<Column<int32_t>, Column<int32_t>> | fields=[x, x2], int32_t alpha) | filter_table_function_transpose=on -> Column<int32_t> x, Column<int32_t> x2
 
   UDTF: ct_sparse_add(TableFunctionManager, Cursor<Column<int32_t> x, Column<int32_t> d1>, int32_t f1, Cursor<Column<int32_t> x, Column<int32_t> d2>, int32_t f2) | filter_table_function_transpose=on -> Column<int32_t> x, Column<int32_t> d
-
 */
 // clang-format on
+
 EXTENSION_NOINLINE int32_t ct_copy_and_add_size(TableFunctionManager& mgr,
                                                 const Column<int32_t>& input,
                                                 Column<int32_t>& output) {
@@ -1209,9 +1210,6 @@ EXTENSION_NOINLINE int32_t ct_sparse_add(TableFunctionManager& mgr,
                                          int32_t f2,
                                          Column<int32_t>& x,
                                          Column<int32_t>& d) {
-  PRINT(x1);
-  PRINT(x2);
-
   // sorted set of common coordinates:
   std::set<int32_t, std::less<int32_t>> x12;
   // inverse map of coordinates and indices, keys are sorted:
@@ -1226,8 +1224,6 @@ EXTENSION_NOINLINE int32_t ct_sparse_add(TableFunctionManager& mgr,
     x12.insert(x2[i]);
   }
   auto size = x12.size();
-
-  PRINT(x12);
 
   mgr.set_output_row_size(size);
   int32_t k = 0;
@@ -1247,13 +1243,177 @@ EXTENSION_NOINLINE int32_t ct_sparse_add(TableFunctionManager& mgr,
       d[k] = f1 + f2;
     }
     d[k] *= size;
-    PRINT(d[k]);
     k++;
   }
   return size;
 }
 
 #endif
+
+enum TFAggType { MIN, MAX };
+
+template <typename T>
+TEMPLATE_INLINE T get_min_or_max(const Column<T>& col, const TFAggType min_or_max) {
+  const auto input_min_max = get_column_min_max(col);
+  if (min_or_max == TFAggType::MIN) {
+    return input_min_max.first;
+  }
+  return input_min_max.second;
+}
+
+template <typename T>
+TEMPLATE_INLINE T get_min_or_max_union(const Column<T>& col1,
+                                       const Column<T>& col2,
+                                       const TFAggType min_or_max) {
+  const auto input1_min_max = get_column_min_max(col1);
+  const auto input2_min_max = get_column_min_max(col2);
+  if (min_or_max == TFAggType::MIN) {
+    return input1_min_max.first < input2_min_max.first ? input1_min_max.first
+                                                       : input2_min_max.first;
+  }
+  return input1_min_max.second > input2_min_max.second ? input1_min_max.second
+                                                       : input2_min_max.second;
+}
+
+// clang-format off
+/*
+  UDTF: ct_pushdown_stats__cpu_template(TableFunctionManager, TextEncodingNone agg_type, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z>) | filter_table_function_transpose=on -> Column<int32_t> row_count, Column<K> id | input_id=args<0>, Column<T> x, Column<T> y, Column<Z> z, K=[int32_t, int64_t, TextEncodingDict], T=[int32_t, int64_t, float, double], Z=[int32_t, int64_t, float, double]
+*/
+// clang-format on
+template <typename K, typename T, typename Z>
+TEMPLATE_NOINLINE int32_t
+ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                const TextEncodingNone& agg_type,
+                                const Column<K>& input_id,
+                                const Column<T>& input_x,
+                                const Column<T>& input_y,
+                                const Column<Z>& input_z,
+                                Column<int32_t>& output_row_count,
+                                Column<K>& output_id,
+                                Column<T>& output_x,
+                                Column<T>& output_y,
+                                Column<Z>& output_z) {
+  const std::string agg_type_str = agg_type.getString();
+  const TFAggType min_or_max = agg_type_str == "MIN" ? TFAggType::MIN : TFAggType::MAX;
+  mgr.set_output_row_size(1);
+  output_row_count[0] = input_id.size();
+  output_id[0] = get_min_or_max(input_id, min_or_max);
+  output_x[0] = get_min_or_max(input_x, min_or_max);
+  output_y[0] = get_min_or_max(input_y, min_or_max);
+  output_z[0] = get_min_or_max(input_z, min_or_max);
+  return 1;
+}
+
+// clang-format off
+/*
+  UDTF: ct_pushdown_projection__cpu_template(TableFunctionManager, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z>) | filter_table_function_transpose=on -> Column<K> id | input_id=args<0>, Column<T> x, Column<T> y, Column<Z> z, K=[int32_t, int64_t, TextEncodingDict], T=[int32_t, int64_t, float, double], Z=[int32_t, int64_t, float, double]
+*/
+// clang-format on
+
+template <typename K, typename T, typename Z>
+TEMPLATE_NOINLINE int32_t ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
+                                                               const Column<K>& input_id,
+                                                               const Column<T>& input_x,
+                                                               const Column<T>& input_y,
+                                                               const Column<Z>& input_z,
+                                                               Column<K>& output_id,
+                                                               Column<T>& output_x,
+                                                               Column<T>& output_y,
+                                                               Column<Z>& output_z) {
+  const int64_t input_size = input_id.size();
+  mgr.set_output_row_size(input_size);
+  for (int64_t input_idx = 0; input_idx < input_size; ++input_idx) {
+    output_id[input_idx] = input_id[input_idx];
+    output_x[input_idx] = input_x[input_idx];
+    output_y[input_idx] = input_y[input_idx];
+    output_z[input_idx] = input_z[input_idx];
+  }
+  return input_size;
+}
+
+// clang-format off
+/*
+  UDTF: ct_union_pushdown_stats__cpu_template(TableFunctionManager, TextEncodingNone agg_type, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z>, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z, Column<T> w>) | filter_table_function_transpose=on -> Column<int32_t> row_count, Column<K> id | input_id=args<0, 0>, Column<T> x, Column<T> y, Column<Z> z, Column<T> w, K=[int32_t, int64_t, TextEncodingDict], T=[int32_t, int64_t, float, double], Z=[int32_t, int64_t, float, double]
+*/
+// clang-format on
+template <typename K, typename T, typename Z>
+TEMPLATE_NOINLINE int32_t
+ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
+                                      const TextEncodingNone& agg_type,
+                                      const Column<K>& input1_id,
+                                      const Column<T>& input1_x,
+                                      const Column<T>& input1_y,
+                                      const Column<Z>& input1_z,
+                                      const Column<K>& input2_id,
+                                      const Column<T>& input2_x,
+                                      const Column<T>& input2_y,
+                                      const Column<Z>& input2_z,
+                                      const Column<T>& input2_w,
+                                      Column<int32_t>& output_row_count,
+                                      Column<K>& output_id,
+                                      Column<T>& output_x,
+                                      Column<T>& output_y,
+                                      Column<Z>& output_z,
+                                      Column<T>& output_w) {
+  mgr.set_output_row_size(1);
+  const std::string agg_type_str = agg_type.getString();
+  const TFAggType min_or_max = agg_type_str == "MIN" ? TFAggType::MIN : TFAggType::MAX;
+  output_row_count[0] = input1_id.size() + input2_id.size();
+  output_id[0] = get_min_or_max_union(input1_id, input2_id, min_or_max);
+  output_x[0] = get_min_or_max_union(input1_x, input2_x, min_or_max);
+  output_y[0] = get_min_or_max_union(input1_y, input2_y, min_or_max);
+  output_z[0] = get_min_or_max_union(input1_z, input2_z, min_or_max);
+  if (input2_w.size() > 0) {
+    const auto w_min_max = get_column_min_max(input2_w);
+    output_w[0] = agg_type_str == "MIN" ? w_min_max.first : w_min_max.second;
+  } else {
+    output_w.setNull(0);
+  }
+  return 1;
+}
+
+// clang-format off
+/*
+  UDTF: ct_union_pushdown_projection__cpu_template(TableFunctionManager, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z>, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z, Column<T> w>) | filter_table_function_transpose=on -> Column<K> id | input_id=args<0, 0>, Column<T> x, Column<T> y, Column<Z> z, Column<T> w, K=[int32_t, int64_t, TextEncodingDict], T=[int32_t, int64_t, float, double], Z=[int32_t, int64_t, float, double]
+*/
+// clang-format on
+template <typename K, typename T, typename Z>
+TEMPLATE_NOINLINE int32_t
+ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
+                                           const Column<K>& input1_id,
+                                           const Column<T>& input1_x,
+                                           const Column<T>& input1_y,
+                                           const Column<Z>& input1_z,
+                                           const Column<K>& input2_id,
+                                           const Column<T>& input2_x,
+                                           const Column<T>& input2_y,
+                                           const Column<Z>& input2_z,
+                                           const Column<T>& input2_w,
+                                           Column<K>& output_id,
+                                           Column<T>& output_x,
+                                           Column<T>& output_y,
+                                           Column<Z>& output_z,
+                                           Column<T>& output_w) {
+  const int64_t input1_size = input1_id.size();
+  const int64_t input2_size = input2_id.size();
+  int64_t output_size = input1_size + input2_size;
+  mgr.set_output_row_size(output_size);
+  for (int64_t input1_idx = 0; input1_idx < input1_size; ++input1_idx) {
+    output_id[input1_idx] = input1_id[input1_idx];
+    output_x[input1_idx] = input1_x[input1_idx];
+    output_y[input1_idx] = input1_y[input1_idx];
+    output_z[input1_idx] = input1_z[input1_idx];
+    output_w.setNull(input1_idx);
+  }
+  for (int64_t input2_idx = 0; input2_idx < input2_size; ++input2_idx) {
+    output_id[input1_size + input2_idx] = input2_id[input2_idx];
+    output_x[input1_size + input2_idx] = input2_x[input2_idx];
+    output_y[input1_size + input2_idx] = input2_y[input2_idx];
+    output_z[input1_size + input2_idx] = input2_z[input2_idx];
+    output_w[input1_size + input2_idx] = input2_w[input2_idx];
+  }
+  return output_size;
+}
 
 // clang-format off
 /*

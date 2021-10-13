@@ -1952,13 +1952,22 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         return ret.build();
       };
     }
+
+    private void debugPrint(String msg, Boolean debugMode) {
+      if (debugMode) {
+        System.out.println(msg);
+      }
+    }
+
     public Set<RelColumnMapping> getColumnMappings() {
+      final Boolean debugMode = false;
       Set<RelColumnMapping> s = new HashSet<RelColumnMapping>();
-      System.out.println("getNameAsId() -> " + getNameAsId() + ", arg_names=" + arg_names
-              + ", out_names=" + out_names);
+      debugPrint("getNameAsId() -> " + getNameAsId() + ", arg_names=" + arg_names
+                      + ", out_names=" + out_names,
+              debugMode);
       if (Integer.valueOf(options.getOrDefault("filter_table_function_transpose", "0"))
               == 1) {
-        System.out.println("getNameAsId() -> " + getNameAsId());
+        debugPrint("getNameAsId() -> " + getNameAsId(), debugMode);
         int rel_idx = -1;
         for (int arg_idx = 0; arg_idx < arg_names.size(); ++arg_idx) {
           String arg_name = arg_names.get(arg_idx);
@@ -1973,13 +1982,14 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
           } else {
             fields = new String[] {arg_name};
           }
-          System.out.println("fields=" + Arrays.toString(fields));
+          debugPrint("fields=" + Arrays.toString(fields), debugMode);
           for (int field_idx = 0; field_idx < fields.length; ++field_idx) {
             int out_idx = out_names.indexOf(fields[field_idx]);
             if (out_idx >= 0) {
               s.add(new RelColumnMapping(out_idx, rel_idx, field_idx, false));
-              System.out.println("out_idx, arg_idx/rel_idx, field_idx=" + out_idx + ", "
-                      + arg_idx + "/" + rel_idx + ", " + field_idx);
+              debugPrint("out_idx, arg_idx/rel_idx, field_idx=" + out_idx + ", " + arg_idx
+                              + "/" + rel_idx + ", " + field_idx,
+                      debugMode);
             }
           }
         }

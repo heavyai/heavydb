@@ -38,6 +38,8 @@ inline void run_ddl_statement(const std::string& stmt) {
 
 std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
                                             const ExecutorDeviceType device_type) {
+  // Following line left but commented out for easy debugging
+  // std::cout << std::endl << "Query: " << query_str << std::endl;
   return QR::get()->runSQL(query_str, device_type, false, false);
 }
 
@@ -1003,7 +1005,533 @@ TEST_F(TableFunctions, ThrowingTests) {
   }
 }
 
-TEST_F(TableFunctions, FilterTransposeRule) {
+std::string gen_grid_values(const int32_t num_x_bins,
+                            const int32_t num_y_bins,
+                            const bool add_w_val,
+                            const bool merge_with_w_null,
+                            const std::string& aliased_table = "") {
+  const std::string project_w_sql = add_w_val ? ", CAST(w AS INT) as w" : "";
+  std::string values_sql =
+      "SELECT CAST(id AS INT) as id, CAST(x AS INT) AS x, CAST(y AS INT) AS y, CAST(z AS "
+      "INT) AS z" +
+      project_w_sql + " FROM (VALUES ";
+  auto gen_values = [](const int32_t num_x_bins,
+                       const int32_t num_y_bins,
+                       const int32_t start_id,
+                       const int32_t start_x_bin,
+                       const int32_t start_y_bin,
+                       const bool add_w_val,
+                       const bool w_is_null) {
+    std::string values_sql;
+    int32_t out_id = start_id;
+    for (int32_t y_bin = start_y_bin; y_bin < start_y_bin + num_y_bins; ++y_bin) {
+      for (int32_t x_bin = start_x_bin; x_bin < start_x_bin + num_x_bins; ++x_bin) {
+        const std::string id_str = std::to_string(out_id);
+        const std::string x_val_str = std::to_string(x_bin);
+        const std::string y_val_str = std::to_string(y_bin);
+        const int32_t z_val = x_bin * y_bin;
+        const std::string z_val_str = std::to_string(z_val);
+        const int32_t w_val = x_bin;
+        const std::string w_val_str = w_is_null ? "null" : std::to_string(w_val);
+        if (out_id++ > start_id) {
+          values_sql += ", ";
+        }
+        values_sql +=
+            "(" + id_str + ", " + x_val_str + ", " + y_val_str + ", " + z_val_str;
+        if (add_w_val) {
+          values_sql += ", " + w_val_str;
+        }
+        values_sql += ")";
+      }
+    }
+    return values_sql;
+  };
+  if (add_w_val) {
+    if (merge_with_w_null) {
+      values_sql += gen_values(num_x_bins, num_y_bins, 0, 0, 0, true, true) + ", ";
+      values_sql += gen_values(num_x_bins,
+                               num_y_bins,
+                               num_x_bins * num_y_bins,
+                               num_x_bins,
+                               num_y_bins,
+                               true,
+                               false);
+    } else {
+      values_sql += gen_values(num_x_bins,
+                               num_y_bins,
+                               num_x_bins * num_y_bins,
+                               num_x_bins,
+                               num_y_bins,
+                               true,
+                               false);
+    }
+  } else {
+    values_sql += gen_values(num_x_bins, num_y_bins, 0, 0, 0, false, false);
+  }
+  if (aliased_table.empty()) {
+    values_sql += ") AS t(id, x, y, z";
+    if (add_w_val) {
+      values_sql += ", w";
+    }
+    values_sql += ")";
+  } else {
+    values_sql += ") AS " + aliased_table;
+  }
+  return values_sql;
+}
+
+void check_result_set_equality(const ResultSetPtr rows_1, const ResultSetPtr rows_2) {
+  const size_t num_result_rows_1 = rows_1->rowCount();
+  const size_t num_result_rows_2 = rows_2->rowCount();
+  ASSERT_EQ(num_result_rows_1, num_result_rows_2);
+  const size_t num_result_cols_1 = rows_1->colCount();
+  const size_t num_result_cols_2 = rows_2->colCount();
+  ASSERT_EQ(num_result_cols_1, num_result_cols_2);
+  for (size_t r = 0; r < num_result_rows_1; ++r) {
+    const auto& row_1 = rows_1->getNextRow(false, false);
+    const auto& row_2 = rows_2->getNextRow(false, false);
+    for (size_t c = 0; c < num_result_cols_1; ++c) {
+      ASSERT_EQ(TestHelpers::v<int64_t>(row_1[c]), TestHelpers::v<int64_t>(row_2[c]));
+    }
+  }
+}
+
+void check_result_against_expected_result(
+    const ResultSetPtr rows,
+    const std::vector<std::vector<int64_t>>& expected_result) {
+  const size_t num_result_rows = rows->rowCount();
+  ASSERT_EQ(num_result_rows, expected_result.size());
+  const size_t num_result_cols = rows->colCount();
+  for (size_t r = 0; r < num_result_rows; ++r) {
+    const auto& expected_result_row = expected_result[r];
+    const auto& row = rows->getNextRow(false, false);
+    ASSERT_EQ(num_result_cols, expected_result_row.size());
+    ASSERT_EQ(num_result_cols, row.size());
+    for (size_t c = 0; c < num_result_cols; ++c) {
+      ASSERT_EQ(TestHelpers::v<int64_t>(row[c]), expected_result_row[c]);
+    }
+  }
+}
+
+void print_result(const ResultSetPtr rows) {
+  const size_t num_result_rows = rows->rowCount();
+  const size_t num_result_cols = rows->colCount();
+  for (size_t r = 0; r < num_result_rows; ++r) {
+    std::cout << std::endl << "Row: " << r << std::endl;
+    const auto& row = rows->getNextRow(false, false);
+    for (size_t c = 0; c < num_result_cols; ++c) {
+      std::cout << "Col: " << c << " Result: " << TestHelpers::v<int64_t>(row[c])
+                << std::endl;
+    }
+  }
+}
+
+TEST_F(TableFunctions, FilterTransposeRuleOneCursor) {
+  // Test FILTER_TABLE_FUNCTION_TRANSPOSE optimization on single cursor table functions
+
+  enum StatType { MIN, MAX };
+
+  auto compare_tf_pushdown_with_values_rollup =
+      [&](const std::string& values_sql,
+          const std::string& filter_sql,
+          const std::string& non_pushdown_filter_sql,
+          const StatType stat_type,
+          const ExecutorDeviceType dt) {
+        std::string tf_filter = filter_sql;
+        if (non_pushdown_filter_sql.size()) {
+          tf_filter += " AND " + non_pushdown_filter_sql;
+        }
+        const std::string stat_type_agg = stat_type == StatType::MIN ? "MIN" : "MAX";
+        const std::string tf_query = "SELECT * FROM TABLE(ct_pushdown_stats('" +
+                                     stat_type_agg + "', CURSOR(" + values_sql +
+                                     "))) WHERE " + tf_filter + ";";
+        std::string values_rollup_query =
+            "SELECT COUNT(*) AS row_count, " + stat_type_agg + "(id) AS id, " +
+            stat_type_agg + "(x) AS x, " + stat_type_agg + "(y) AS y, " + stat_type_agg +
+            "(z) AS z FROM (" + values_sql + " WHERE " + filter_sql + ")";
+        if (!non_pushdown_filter_sql.empty()) {
+          values_rollup_query = "SELECT * FROM (" + values_rollup_query + ") WHERE " +
+                                non_pushdown_filter_sql + ";";
+        } else {
+          values_rollup_query += ";";
+        }
+        const auto tf_rows = run_multiple_agg(tf_query, dt);
+        const auto values_rollup_rows = run_multiple_agg(values_rollup_query, dt);
+        check_result_set_equality(tf_rows, values_rollup_rows);
+      };
+
+  auto compare_tf_pushdown_with_values_projection =
+      [&](const std::string& values_sql,
+          const std::string& filter_sql,
+          const std::string& non_pushdown_filter_sql,
+          const ExecutorDeviceType dt) {
+        std::string tf_filter = filter_sql;
+        if (non_pushdown_filter_sql.size()) {
+          tf_filter += " AND " + non_pushdown_filter_sql;
+        }
+        const std::string tf_query =
+            "SELECT * FROM TABLE(ct_pushdown_projection(CURSOR(" + values_sql +
+            "))) WHERE " + tf_filter + " ORDER BY id ASC;";
+
+        std::string values_projection_query =
+            "SELECT * FROM (" + values_sql + " WHERE " + filter_sql + ")";
+        if (!non_pushdown_filter_sql.empty()) {
+          values_projection_query = "SELECT * FROM (" + values_projection_query +
+                                    ") WHERE " + non_pushdown_filter_sql;
+        }
+        values_projection_query += " ORDER BY id ASC;";
+        const auto tf_rows = run_multiple_agg(tf_query, dt);
+        const auto values_projection_rows = run_multiple_agg(values_projection_query, dt);
+        check_result_set_equality(tf_rows, values_projection_rows);
+      };
+
+  auto run_tests_for_filter = [&](const std::string& values_sql,
+                                  const std::string& filter_sql,
+                                  const std::string& non_pushdown_filter_sql,
+                                  const ExecutorDeviceType dt) {
+    compare_tf_pushdown_with_values_rollup(
+        values_sql, filter_sql, non_pushdown_filter_sql, StatType::MIN, dt);
+    compare_tf_pushdown_with_values_rollup(
+        values_sql, filter_sql, non_pushdown_filter_sql, StatType::MAX, dt);
+    compare_tf_pushdown_with_values_projection(
+        values_sql, filter_sql, non_pushdown_filter_sql, dt);
+  };
+
+  const std::string grid_values =
+      gen_grid_values(8, 8, false /* add_w_val */, false /* merge_with_w_null */);
+  std::cout << grid_values << std::endl;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // Single cursor arguments
+
+    {
+      // no filter
+      const std::string pushdown_filter{"TRUE"};
+      run_tests_for_filter(grid_values, pushdown_filter, "", dt);
+    }
+
+    {
+      // single filter
+      const std::string pushdown_filter{"x <= 4"};
+      run_tests_for_filter(grid_values, pushdown_filter, "", dt);
+    }
+
+    {
+      // two filters
+      const std::string pushdown_filter{"x < 4 AND y < 3"};
+      run_tests_for_filter(grid_values, pushdown_filter, "", dt);
+    }
+
+    {
+      // two filters - with betweens and equality
+      const std::string pushdown_filter{"x BETWEEN 2 AND 4 AND y = 4"};
+      run_tests_for_filter(grid_values, pushdown_filter, "", dt);
+    }
+
+    {
+      // three filters - with inequality
+      const std::string pushdown_filter{"z <> 6 AND x <= 3 AND y between -5 and 2"};
+      run_tests_for_filter(grid_values, pushdown_filter, "", dt);
+    }
+
+    {
+      // filter that filters out all rows
+      // compare_tf_pushdown_with_values_rollup(grid_values, "z <> 3 AND x <= 0 AND y
+      // between 1 and 2", "", StatType::MIN, dt);
+      const std::string pushdown_filter{"z <> 3 AND x <= 0 AND y between 1 and 2"};
+      run_tests_for_filter(grid_values, pushdown_filter, "", dt);
+    }
+
+    {
+      // four filters
+      const std::string pushdown_filter{
+          "z <> 3 AND x > 1 AND y between 1 and 4 AND id < 15"};
+      run_tests_for_filter(grid_values, pushdown_filter, "", dt);
+    }
+
+    {
+      // four pushdown filters + one filter that cannot be pushed down
+      const std::string pushdown_filter{
+          "z <> 3 AND x > 1 AND y between 1 and 8 AND id < 28"};
+      const std::string non_pushdown_filter{"row_count > 0"};
+      compare_tf_pushdown_with_values_rollup(
+          grid_values, pushdown_filter, non_pushdown_filter, StatType::MIN, dt);
+      compare_tf_pushdown_with_values_rollup(
+          grid_values, pushdown_filter, non_pushdown_filter, StatType::MAX, dt);
+    }
+
+    {
+      // disjunctive pushdown filter
+      const std::string pushdown_filter{"x >= 2 OR y >= 3"};
+      run_tests_for_filter(grid_values, pushdown_filter, "", dt);
+    }
+
+    {
+      // conjunctive pushdown filter with disjunctive sub-predicate
+      const std::string pushdown_filter{"x >= 1 OR y < 3 AND z < 4"};
+      run_tests_for_filter(grid_values, pushdown_filter, "", dt);
+    }
+
+    {
+      // More complexity...
+      const std::string pushdown_filter{
+          "x >= 1 AND x + y + z < 20 AND x * y < y + 6 OR z > 12"};
+      run_tests_for_filter(grid_values, pushdown_filter, "", dt);
+    }
+  }
+}
+
+TEST_F(TableFunctions, FilterTransposeRuleMultipleCursors) {
+  enum StatType { MIN, MAX };
+
+  auto compare_tf_pushdown_with_values_rollup =
+      [&](const std::string& values1_sql,
+          const std::string& values2_sql,
+          const std::string& values_merged_sql,
+          const std::string& filter_sql,
+          const std::string& non_pushdown_filter_sql,
+          const StatType stat_type,
+          const ExecutorDeviceType dt) {
+        std::string tf_filter = filter_sql;
+        if (non_pushdown_filter_sql.size()) {
+          tf_filter += " AND " + non_pushdown_filter_sql;
+        }
+        const std::string stat_type_agg = stat_type == StatType::MIN ? "MIN" : "MAX";
+        const std::string tf_query = "SELECT * FROM TABLE(ct_union_pushdown_stats('" +
+                                     stat_type_agg + "', CURSOR(" + values1_sql +
+                                     "), CURSOR(" + values2_sql + "))) WHERE " +
+                                     tf_filter + ";";
+        // std::cout << "Query plan" << std::endl;
+        // const std::string tf_explain = "EXPLAIN PLAN " << tf_query << std::endl;
+        // const auto tf_explain = run_multiple_agg(tf_query, dt);
+        // std::cout << tf_explain << std::endl;
+
+        std::string values_rollup_query =
+            "SELECT COUNT(*) AS row_count, " + stat_type_agg + "(id) AS id, " +
+            stat_type_agg + "(x) AS x, " + stat_type_agg + "(y) AS y, " + stat_type_agg +
+            "(z) AS z, " + stat_type_agg + "(w) AS w FROM (" + values_merged_sql +
+            " WHERE " + filter_sql + ")";
+        if (!non_pushdown_filter_sql.empty()) {
+          values_rollup_query = "SELECT * FROM (" + values_rollup_query + ") WHERE " +
+                                non_pushdown_filter_sql + ";";
+        } else {
+          values_rollup_query += ";";
+        }
+        const auto tf_rows = run_multiple_agg(tf_query, dt);
+        const auto values_rollup_rows = run_multiple_agg(values_rollup_query, dt);
+        check_result_set_equality(tf_rows, values_rollup_rows);
+      };
+
+  auto compare_tf_pushdown_with_values_projection =
+      [&](const std::string& values1_sql,
+          const std::string& values2_sql,
+          const std::string& values_merged_sql,
+          const std::string& filter_sql,
+          const std::string& non_pushdown_filter_sql,
+          const ExecutorDeviceType dt) {
+        std::string tf_filter = filter_sql;
+        if (non_pushdown_filter_sql.size()) {
+          tf_filter += " AND " + non_pushdown_filter_sql;
+        }
+        const std::string tf_query =
+            "SELECT * FROM TABLE(ct_union_pushdown_projection(CURSOR(" + values1_sql +
+            "), CURSOR(" + values2_sql + "))) WHERE " + tf_filter + " ORDER BY id;";
+
+        std::string values_projection_query =
+            "SELECT * FROM (" + values_merged_sql + " WHERE " + filter_sql + ")";
+        if (!non_pushdown_filter_sql.empty()) {
+          values_projection_query = "SELECT * FROM (" + values_projection_query +
+                                    ") WHERE " + non_pushdown_filter_sql;
+        }
+        values_projection_query += " ORDER BY id ASC;";
+        const auto tf_rows = run_multiple_agg(tf_query, dt);
+        const auto values_projection_rows = run_multiple_agg(values_projection_query, dt);
+        check_result_set_equality(tf_rows, values_projection_rows);
+      };
+
+  // TM: Commenting out the following function to eliminate an unused variable warning
+  // but leaving as its quite useful for debugging
+
+  // auto print_tf_pushdown_projection = [&](const std::string& values1_sql,
+  //                                        const std::string& values2_sql,
+  //                                        const std::string& filter_sql,
+  //                                        const std::string& non_pushdown_filter_sql,
+  //                                        const ExecutorDeviceType dt) {
+  //  std::string tf_filter = filter_sql;
+  //  if (non_pushdown_filter_sql.size()) {
+  //    tf_filter += " AND " + non_pushdown_filter_sql;
+  //  }
+  //  const std::string tf_query =
+  //      "SELECT * FROM TABLE(ct_union_pushdown_projection(CURSOR(" + values1_sql +
+  //      "), CURSOR(" + values2_sql + "))) WHERE " + tf_filter + " ORDER BY id;";
+  //  const auto tf_rows = run_multiple_agg(tf_query, dt);
+  //  print_result(tf_rows);
+  //};
+
+  auto compare_tf_pushdown_with_expected_result =
+      [&](const std::string& values1_sql,
+          const std::string& values2_sql,
+          const std::string& filter_sql,
+          const std::vector<std::vector<int64_t>>& expected_result,
+          const StatType stat_type,
+          const ExecutorDeviceType dt) {
+        const std::string stat_type_agg = stat_type == StatType::MIN ? "MIN" : "MAX";
+        const std::string tf_query = "SELECT * FROM TABLE(ct_union_pushdown_stats('" +
+                                     stat_type_agg + "', CURSOR(" + values1_sql +
+                                     "), CURSOR(" + values2_sql + "))) WHERE " +
+                                     filter_sql + ";";
+        const auto tf_rows = run_multiple_agg(tf_query, dt);
+        check_result_against_expected_result(tf_rows, expected_result);
+      };
+
+  auto run_tests_for_filter = [&](const std::string& values1_sql,
+                                  const std::string& values2_sql,
+                                  const std::string& values_merged_sql,
+                                  const std::string& filter_sql,
+                                  const std::string& non_pushdown_filter_sql,
+                                  const ExecutorDeviceType dt) {
+    compare_tf_pushdown_with_values_rollup(values1_sql,
+                                           values2_sql,
+                                           values_merged_sql,
+                                           filter_sql,
+                                           non_pushdown_filter_sql,
+                                           StatType::MIN,
+                                           dt);
+    compare_tf_pushdown_with_values_rollup(values1_sql,
+                                           values2_sql,
+                                           values_merged_sql,
+                                           filter_sql,
+                                           non_pushdown_filter_sql,
+                                           StatType::MAX,
+                                           dt);
+    compare_tf_pushdown_with_values_projection(values1_sql,
+                                               values2_sql,
+                                               values_merged_sql,
+                                               filter_sql,
+                                               non_pushdown_filter_sql,
+                                               dt);
+  };
+
+  const std::string grid_values_1 = gen_grid_values(8, 8, false, false);
+  const std::string grid_values_2 = gen_grid_values(8, 8, true, false);
+  const std::string grid_values_merged = gen_grid_values(8, 8, true, true);
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // No filter
+      const std::string filter_sql{"TRUE"};
+      run_tests_for_filter(
+          grid_values_1, grid_values_2, grid_values_merged, filter_sql, "", dt);
+    }
+
+    {
+      // One filter
+      const std::string filter_sql{"x > 1"};
+      run_tests_for_filter(
+          grid_values_1, grid_values_2, grid_values_merged, filter_sql, "", dt);
+    }
+
+    {
+      // One range filter
+      const std::string filter_sql{"x BETWEEN 1 AND 10"};
+      run_tests_for_filter(
+          grid_values_1, grid_values_2, grid_values_merged, filter_sql, "", dt);
+    }
+
+    {
+      // Two filters
+      const std::string filter_sql{"x BETWEEN 4 AND 10 AND y < 9"};
+      run_tests_for_filter(
+          grid_values_1, grid_values_2, grid_values_merged, filter_sql, "", dt);
+    }
+
+    {
+      // Two filters - order swap
+      const std::string filter_sql{"y < 9 AND x BETWEEN 4 AND 10"};
+      run_tests_for_filter(
+          grid_values_1, grid_values_2, grid_values_merged, filter_sql, "", dt);
+    }
+
+    {
+      // Three filters
+      const std::string filter_sql{"x < 10 AND y > 4 AND z BETWEEN 4 AND 20"};
+      run_tests_for_filter(
+          grid_values_1, grid_values_2, grid_values_merged, filter_sql, "", dt);
+    }
+
+    {
+      // One filter - push down only to one input (w)
+      compare_tf_pushdown_with_expected_result(grid_values_1,
+                                               grid_values_2,
+                                               "w >= 12",
+                                               {{96, 0, 0, 0, 0, 12}},
+                                               StatType::MIN,
+                                               dt);
+      compare_tf_pushdown_with_expected_result(grid_values_1,
+                                               grid_values_2,
+                                               "w >= 12",
+                                               {{96, 127, 15, 15, 225, 15}},
+                                               StatType::MAX,
+                                               dt);
+      compare_tf_pushdown_with_values_projection(grid_values_1,
+                                                 grid_values_2,
+                                                 grid_values_merged,
+                                                 "w >= 12 OR w IS null",
+                                                 "",
+                                                 dt);
+    }
+
+    {
+      // Three filters - one only pushes down to one input (w)
+      compare_tf_pushdown_with_expected_result(
+          grid_values_1,
+          grid_values_2,
+          "z <= 72 AND w BETWEEN 7 AND 10 AND x >= 7",
+          {{11, 7, 7, 0, 0, 8}},
+          StatType::MIN,
+          dt);
+      compare_tf_pushdown_with_expected_result(
+          grid_values_1,
+          grid_values_2,
+          "z <= 72 AND w BETWEEN 7 AND 10 AND x >= 7",
+          {{11, 72, 9, 9, 72, 9}},
+          StatType::MAX,
+          dt);
+      compare_tf_pushdown_with_values_projection(grid_values_1,
+                                                 grid_values_2,
+                                                 grid_values_merged,
+                                                 "w BETWEEN 7 AND 10 OR w IS NULL",
+                                                 "",
+                                                 dt);
+    }
+
+    {
+      // Three filters - one only pushes down to one input (w)
+      compare_tf_pushdown_with_expected_result(
+          grid_values_1,
+          grid_values_2,
+          "z <= 72 AND w BETWEEN 7 AND 10 AND x >= 7",
+          {{11, 7, 7, 0, 0, 8}},
+          StatType::MIN,
+          dt);
+      compare_tf_pushdown_with_expected_result(
+          grid_values_1,
+          grid_values_2,
+          "z <= 72 AND w BETWEEN 7 AND 10 AND x >= 7",
+          {{11, 72, 9, 9, 72, 9}},
+          StatType::MAX,
+          dt);
+      compare_tf_pushdown_with_values_projection(grid_values_1,
+                                                 grid_values_2,
+                                                 grid_values_merged,
+                                                 "w BETWEEN 7 AND 10 OR w IS NULL",
+                                                 "",
+                                                 dt);
+    }
+  }
+}
+
+TEST_F(TableFunctions, FilterTransposeRuleMisc) {
   // Test FILTER_TABLE_FUNCTION_TRANSPOSE optimization.
 
   auto check_result = [](const auto rows, std::vector<int64_t> result) {
@@ -1027,7 +1555,6 @@ TEST_F(TableFunctions, FilterTransposeRule) {
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    // Single cursor arguments
     {
       const auto rows = run_multiple_agg(
           "SELECT * FROM TABLE(ct_copy_and_add_size(cursor(SELECT x FROM tf_test WHERE "
@@ -1088,35 +1615,6 @@ TEST_F(TableFunctions, FilterTransposeRule) {
           "4);",
           dt);
       check_result2(rows, {2, 3}, {(2 + 15) * 2, (3 + 4) * 2});
-    }
-    {
-      // filter is not applied to the second cursor argument
-      const auto rows = run_multiple_agg(
-          "SELECT x, d FROM TABLE(ct_sparse_add(cursor(SELECT x, x FROM tf_test), -5"
-          ", cursor(SELECT x2, d2 FROM tf_test2), 0)) WHERE (x > 1 AND x < 4);",
-          dt);
-      check_result2(
-          rows,
-          {0, 1, 2, 3, 4},
-          {(-5 + 0) * 5, (-5 + 1) * 5, (2 + 4) * 5, (3 + 9) * 5, (-5 + 16) * 5});
-    }
-    {
-      // filter is applied to the second cursor argument when renamed using `AS`
-      const auto rows = run_multiple_agg(
-          "SELECT x, d FROM TABLE(ct_sparse_add(cursor(SELECT x, x FROM tf_test), -5"
-          ", cursor(SELECT x2 AS x, d2 FROM tf_test2), 0)) WHERE (x > 1 AND x < 4);",
-          dt);
-      check_result2(rows, {2, 3}, {(2 + 4) * 2, (3 + 9) * 2});
-    }
-    {
-      // filter is applied to the second cursor argument when renamed using `AS`, reversed
-      // fields positions are adjusted
-      const auto rows = run_multiple_agg(
-          "SELECT x, d FROM TABLE(ct_sparse_add(cursor(SELECT x, x FROM tf_test), -5"
-          ", cursor(SELECT d2, x2 AS x FROM tf_test2), 0)) WHERE (x > 1 AND x < 4);",
-          dt);
-      check_result2(
-          rows, {2, 3, 4, 9}, {(2 + 0) * 4, (3 + 0) * 4, (-5 + 2) * 4, (-5 + 3) * 4});
     }
   }
 }
