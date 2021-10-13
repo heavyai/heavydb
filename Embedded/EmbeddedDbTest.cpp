@@ -73,6 +73,7 @@ int main(int argc, char* argv[]) {
     auto dbe = DBEngine::create(opt_str);
     if (dbe) {
       auto memory_pool = arrow::default_memory_pool();
+      arrow::io::IOContext io_context = arrow::io::default_io_context();
       auto arrow_parse_options = arrow::csv::ParseOptions::Defaults();
       auto arrow_read_options = arrow::csv::ReadOptions::Defaults();
       auto arrow_convert_options = arrow::csv::ConvertOptions::Defaults();
@@ -80,7 +81,7 @@ int main(int argc, char* argv[]) {
       auto file_result = arrow::io::ReadableFile::Open("/localdisk/artemale/test.csv");
       ARROW_THROW_NOT_OK(file_result.status());
       inp = file_result.ValueOrDie();
-      auto table_reader_result = arrow::csv::TableReader::Make(memory_pool,
+      auto table_reader_result = arrow::csv::TableReader::Make(io_context,
                                                                inp,
                                                                arrow_read_options,
                                                                arrow_parse_options,
