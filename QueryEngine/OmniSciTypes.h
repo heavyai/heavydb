@@ -60,6 +60,10 @@ struct TextEncodingDict {
     value = other;
     return *this;
   }
+#ifndef __CUDACC__
+  TextEncodingDict(const int32_t other) : value(other) {}
+  TextEncodingDict() : value(0) {}
+#endif
 };
 
 template <typename T>
