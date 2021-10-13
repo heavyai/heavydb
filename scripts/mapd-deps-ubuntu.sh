@@ -141,7 +141,7 @@ install_geos
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)
 
-VERS=0.14.2
+VERS=0.15.0
 wget --continue http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
 tar xvf thrift-$VERS.tar.gz
 pushd thrift-$VERS
