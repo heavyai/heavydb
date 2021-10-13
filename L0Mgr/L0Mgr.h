@@ -25,6 +25,8 @@
 #include <level_zero/ze_api.h>
 
 namespace l0 {
+
+#ifdef HAVE_L0
 class L0Device;
 class L0Driver {
  private:
@@ -76,18 +78,10 @@ class L0Module {
   explicit L0Module(ze_module_handle_t handle);
   ze_module_handle_t handle() const;
 
-  template <typename... Args>
-  std::shared_ptr<L0Kernel> create_kernel(char* name, Args&&... args) const {
-    ze_kernel_desc_t desc{
-        .stype = ZE_STRUCTURE_TYPE_KERNEL_DESC,
-        .pNext = nullptr,
-        .flags = 0,
-        .pKernelName = name,
-    };
-    ze_kernel_handle_t handle;
-    L0_SAFE_CALL(zeKernelCreate(this->handle_, &desc, &handle));
-    return std::make_shared<L0Kernel>(handle, std::forward<Args>(args)...);
-  }
+  std::shared_ptr<L0Kernel> create_kernel(const char* name,
+                                          uint32_t x,
+                                          uint32_t y,
+                                          uint32_t z) const;
 
   ~L0Module();
 };
@@ -113,25 +107,11 @@ class L0Kernel {
   ze_group_count_t group_size_;
 
  public:
-  template <typename... Args>
-  L0Kernel(ze_kernel_handle_t handle, uint32_t x, uint32_t y, uint32_t z, Args&&... args)
-      : handle_(handle), group_size_({x, y, z}) {
-    set_kernel_args<0>(handle, std::forward<Args>(args)...);
-    zeKernelSetGroupSize(handle_, x, y, z);
-  }
+  L0Kernel(ze_kernel_handle_t handle, uint32_t x, uint32_t y, uint32_t z);
 
   ze_group_count_t& group_size();
   ze_kernel_handle_t handle() const;
   ~L0Kernel();
-};
-
-class L0Manager {
- private:
-  std::vector<std::shared_ptr<L0Driver>> drivers_;
-
- public:
-  L0Manager();
-  const std::vector<std::shared_ptr<L0Driver>>& drivers() const;
 };
 
 class L0CommandList {
@@ -143,13 +123,63 @@ class L0CommandList {
 
   void copy(void* dst, const void* src, const size_t num_bytes);
 
-  void launch(L0Kernel& kernel);
+  template <typename... Args>
+  void launch(L0Kernel& kernel, Args&&... args) {
+    set_kernel_args<0>(kernel.handle(), std::forward<Args>(args)...);
+
+    L0_SAFE_CALL(zeCommandListAppendLaunchKernel(
+        handle_, kernel.handle(), &kernel.group_size(), nullptr, 0, nullptr));
+
+    L0_SAFE_CALL(zeCommandListAppendBarrier(handle_, nullptr, 0, nullptr));
+  }
 
   void submit(ze_command_queue_handle_t queue);
+
+  ze_command_list_handle_t handle() const;
 
   ~L0CommandList();
 };
 
 void* allocate_device_mem(const size_t num_bytes, L0Device& device);
+
+#endif  // HAVE_L0
+
+class L0Manager {
+ public:
+  L0Manager();
+
+  void copyHostToDevice(int8_t* device_ptr,
+                        const int8_t* host_ptr,
+                        const size_t num_bytes,
+                        const int device_num);
+  void copyDeviceToHost(int8_t* host_ptr,
+                        const int8_t* device_ptr,
+                        const size_t num_bytes,
+                        const int device_num);
+  void copyDeviceToDevice(int8_t* dest_ptr,
+                          int8_t* src_ptr,
+                          const size_t num_bytes,
+                          const int dest_device_num,
+                          const int src_device_num);
+
+  int8_t* allocatePinnedHostMem(const size_t num_bytes);
+  int8_t* allocateDeviceMem(const size_t num_bytes, const int device_num);
+  void freePinnedHostMem(int8_t* host_ptr);
+  void freeDeviceMem(int8_t* device_ptr);
+  void zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes, const int device_num);
+  void setDeviceMem(int8_t* device_ptr,
+                    const unsigned char uc,
+                    const size_t num_bytes,
+                    const int device_num);
+
+  void synchronizeDevices() const;
+
+#ifdef HAVE_L0
+  const std::vector<std::shared_ptr<L0Driver>>& drivers() const;
+
+ private:
+  std::vector<std::shared_ptr<L0Driver>> drivers_;
+#endif  // HAVE_L0
+};
 
 }  // namespace l0
