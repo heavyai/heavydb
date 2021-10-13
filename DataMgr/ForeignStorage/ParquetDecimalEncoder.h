@@ -20,15 +20,15 @@
 #include "ParquetInPlaceEncoder.h"
 
 namespace foreign_storage {
-template <typename V, typename T>
-class ParquetDecimalEncoder : public TypedParquetInPlaceEncoder<V, T> {
+template <typename V, typename T, typename NullType = V>
+class ParquetDecimalEncoder : public TypedParquetInPlaceEncoder<V, T, NullType> {
  public:
   ParquetDecimalEncoder(Data_Namespace::AbstractBuffer* buffer,
                         const ColumnDescriptor* column_desciptor,
                         const parquet::ColumnDescriptor* parquet_column_descriptor)
-      : TypedParquetInPlaceEncoder<V, T>(buffer,
-                                         column_desciptor,
-                                         parquet_column_descriptor)
+      : TypedParquetInPlaceEncoder<V, T, NullType>(buffer,
+                                                   column_desciptor,
+                                                   parquet_column_descriptor)
       , parquet_column_type_length_(parquet_column_descriptor->type_length())
       , decimal_overflow_validator_(column_desciptor->columnType) {}
 

@@ -34,23 +34,24 @@ namespace foreign_storage {
 // At chunk load:
 // V - type of data (to load data)
 // T - physical type of parquet data
-template <typename V, typename T>
-class ParquetFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T>,
+// NullType - the type to use for encoding nulls
+template <typename V, typename T, typename NullType = V>
+class ParquetFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T, NullType>,
                                   public ParquetMetadataValidator {
  public:
   ParquetFixedLengthEncoder(Data_Namespace::AbstractBuffer* buffer,
                             const ColumnDescriptor* column_desciptor,
                             const parquet::ColumnDescriptor* parquet_column_descriptor)
-      : TypedParquetInPlaceEncoder<V, T>(buffer,
-                                         column_desciptor,
-                                         parquet_column_descriptor) {}
+      : TypedParquetInPlaceEncoder<V, T, NullType>(buffer,
+                                                   column_desciptor,
+                                                   parquet_column_descriptor) {}
 
   ParquetFixedLengthEncoder(Data_Namespace::AbstractBuffer* buffer,
                             const size_t omnisci_data_type_byte_size,
                             const size_t parquet_data_type_byte_size)
-      : TypedParquetInPlaceEncoder<V, T>(buffer,
-                                         omnisci_data_type_byte_size,
-                                         parquet_data_type_byte_size) {}
+      : TypedParquetInPlaceEncoder<V, T, NullType>(buffer,
+                                                   omnisci_data_type_byte_size,
+                                                   parquet_data_type_byte_size) {}
 
   void encodeAndCopy(const int8_t* parquet_data_bytes,
                      int8_t* omnisci_data_bytes) override {
@@ -115,7 +116,7 @@ class ParquetFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T>,
       return;
     }
     auto [unencoded_stats_min, unencoded_stats_max] =
-        TypedParquetInPlaceEncoder<V, T>::getUnencodedStats(stats);
+        TypedParquetInPlaceEncoder<V, T, NullType>::getUnencodedStats(stats);
     validateIntegralOrFloatingPointValue(unencoded_stats_min, column_type);
     validateIntegralOrFloatingPointValue(unencoded_stats_max, column_type);
   }
@@ -137,24 +138,26 @@ class ParquetFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T>,
 // V - type of data (to load data)
 // T - physical type of parquet data
 // U - unsigned type that the parquet data represents
-template <typename V, typename T, typename U>
-class ParquetUnsignedFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T>,
-                                          public ParquetMetadataValidator {
+// NullType - the type to use for encoding nulls
+template <typename V, typename T, typename U, typename NullType = V>
+class ParquetUnsignedFixedLengthEncoder
+    : public TypedParquetInPlaceEncoder<V, T, NullType>,
+      public ParquetMetadataValidator {
  public:
   ParquetUnsignedFixedLengthEncoder(
       Data_Namespace::AbstractBuffer* buffer,
       const ColumnDescriptor* column_desciptor,
       const parquet::ColumnDescriptor* parquet_column_descriptor)
-      : TypedParquetInPlaceEncoder<V, T>(buffer,
-                                         column_desciptor,
-                                         parquet_column_descriptor) {}
+      : TypedParquetInPlaceEncoder<V, T, NullType>(buffer,
+                                                   column_desciptor,
+                                                   parquet_column_descriptor) {}
 
   ParquetUnsignedFixedLengthEncoder(Data_Namespace::AbstractBuffer* buffer,
                                     const size_t omnisci_data_type_byte_size,
                                     const size_t parquet_data_type_byte_size)
-      : TypedParquetInPlaceEncoder<V, T>(buffer,
-                                         omnisci_data_type_byte_size,
-                                         parquet_data_type_byte_size) {}
+      : TypedParquetInPlaceEncoder<V, T, NullType>(buffer,
+                                                   omnisci_data_type_byte_size,
+                                                   parquet_data_type_byte_size) {}
 
   void encodeAndCopy(const int8_t* parquet_data_bytes,
                      int8_t* omnisci_data_bytes) override {
@@ -169,7 +172,7 @@ class ParquetUnsignedFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T
       return;
     }
     auto [unencoded_stats_min, unencoded_stats_max] =
-        TypedParquetInPlaceEncoder<V, T>::getUnencodedStats(stats);
+        TypedParquetInPlaceEncoder<V, T, NullType>::getUnencodedStats(stats);
     IntegralFixedLengthBoundsValidator<U>::validateValue(unencoded_stats_max,
                                                          column_type);
     IntegralFixedLengthBoundsValidator<U>::validateValue(unencoded_stats_min,

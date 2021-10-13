@@ -107,7 +107,7 @@ class ParquetInPlaceEncoder : public ParquetScalarEncoder {
   }
 };
 
-template <typename V, typename T>
+template <typename V, typename T, typename NullType = V>
 class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
  public:
   TypedParquetInPlaceEncoder(Data_Namespace::AbstractBuffer* buffer,
@@ -115,16 +115,14 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
                              const parquet::ColumnDescriptor* parquet_column_descriptor)
       : ParquetInPlaceEncoder(
             buffer,
-            column_desciptor->columnType.get_size(),
+            sizeof(V),
             parquet::GetTypeByteSize(parquet_column_descriptor->physical_type()))
       , current_batch_offset_(0) {}
 
   TypedParquetInPlaceEncoder(Data_Namespace::AbstractBuffer* buffer,
                              const size_t omnisci_data_type_byte_size,
                              const size_t parquet_data_type_byte_size)
-      : ParquetInPlaceEncoder(buffer,
-                              omnisci_data_type_byte_size,
-                              parquet_data_type_byte_size)
+      : ParquetInPlaceEncoder(buffer, sizeof(V), parquet_data_type_byte_size)
       , current_batch_offset_(0) {}
 
   void validate(const int8_t* parquet_data,
@@ -212,7 +210,7 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
 
   void setNull(int8_t* omnisci_data_bytes) override {
     auto& omnisci_data_value = reinterpret_cast<V*>(omnisci_data_bytes)[0];
-    omnisci_data_value = get_null_value<V>();
+    omnisci_data_value = get_null_value<NullType>();
   }
 
   void copy(const int8_t* omnisci_data_bytes_source,
@@ -263,7 +261,10 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
     metadata->chunkStats.has_nulls = null_count > 0;
 
     // update sizing
-    metadata->numBytes = omnisci_data_type_byte_size_ * column_metadata->num_values();
+    metadata->numBytes =
+        sizeof(NullType)  // use NullType byte size since it is guaranteed to
+                          // be the byte size of stored data
+        * column_metadata->num_values();
     metadata->numElements = group_metadata->num_rows();
 
     return metadata;

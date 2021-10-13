@@ -20,22 +20,24 @@
 
 namespace foreign_storage {
 template <typename NullType>
-class ParquetDateInSecondsEncoder : public TypedParquetInPlaceEncoder<int64_t, int32_t>,
-                                    public ParquetMetadataValidator {
+class ParquetDateInSecondsEncoder
+    : public TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>,
+      public ParquetMetadataValidator {
  public:
   ParquetDateInSecondsEncoder(Data_Namespace::AbstractBuffer* buffer,
                               const ColumnDescriptor* column_desciptor,
                               const parquet::ColumnDescriptor* parquet_column_descriptor)
-      : TypedParquetInPlaceEncoder<int64_t, int32_t>(buffer,
-                                                     column_desciptor,
-                                                     parquet_column_descriptor) {
+      : TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>(
+            buffer,
+            column_desciptor,
+            parquet_column_descriptor) {
     CHECK(parquet_column_descriptor->logical_type()->is_date());
   }
 
   ParquetDateInSecondsEncoder(Data_Namespace::AbstractBuffer* buffer)
-      : TypedParquetInPlaceEncoder<int64_t, int32_t>(buffer,
-                                                     sizeof(int64_t),
-                                                     sizeof(int32_t)) {}
+      : TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>(buffer,
+                                                               sizeof(int64_t),
+                                                               sizeof(int32_t)) {}
 
   void encodeAndCopy(const int8_t* parquet_data_bytes,
                      int8_t* omnisci_data_bytes) override {
@@ -45,15 +47,10 @@ class ParquetDateInSecondsEncoder : public TypedParquetInPlaceEncoder<int64_t, i
     omnisci_data_value = parquet_data_value * kSecsPerDay;
   }
 
-  void setNull(int8_t* omnisci_data_bytes) override {
-    auto& omnisci_data_value = reinterpret_cast<int64_t*>(omnisci_data_bytes)[0];
-    omnisci_data_value = get_null_value<NullType>();
-  }
-
   void validate(std::shared_ptr<parquet::Statistics> stats,
                 const SQLTypeInfo& column_type) const override {
     auto [unencoded_stats_min, unencoded_stats_max] =
-        TypedParquetInPlaceEncoder<int64_t, int32_t>::getUnencodedStats(stats);
+        TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::getUnencodedStats(stats);
     validate(unencoded_stats_min, column_type);
     validate(unencoded_stats_max, column_type);
   }

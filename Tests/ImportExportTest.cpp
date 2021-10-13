@@ -591,6 +591,21 @@ class ParquetImportErrorHandling : public ImportExportTestBase {
   const std::string fsi_file_base_dir = "../../Tests/FsiDataFiles/";
 };
 
+class ParquetImportErrorHandlingOfTypes
+    : public ParquetImportErrorHandling,
+      public ::testing::WithParamInterface<std::string> {};
+
+TEST_F(ParquetImportErrorHandling, GreaterThanMaxReject) {
+  sql("CREATE TABLE test_table (id INT, i INT, p POINT, a INT[], t TEXT, ts TIMESTAMP "
+      "(0) ENCODING FIXED(32), days DATE ENCODING DAYS(16), ts2days DATE ENCODING DAYS "
+      "(16) );");
+  sql("COPY test_table FROM '" + fsi_file_base_dir +
+      "/invalid_parquet/' WITH (parquet='True', max_reject=6);");
+  TQueryResult query;
+  sql(query, "SELECT count(*) FROM test_table;");
+  assertResultSetEqual({{0L}}, query);  // confirm no data was loaded into table
+}
+
 TEST_F(ParquetImportErrorHandling, MismatchNumberOfColumns) {
   sql("CREATE TABLE test_table (i INT);");
   queryAndAssertException(
@@ -610,71 +625,35 @@ TEST_F(ParquetImportErrorHandling, MismatchColumnType) {
       "Parquet file: ../../Tests/FsiDataFiles/two_col_1_2.parquet.");
 }
 
-TEST_F(ParquetImportErrorHandling, FixedEncodingIntType) {
-  sql("CREATE TABLE test_table (i1 BIGINT ENCODING FIXED (32), i2 BIGINT);");
-  queryAndAssertException(
-      "COPY test_table FROM '" + fsi_file_base_dir +
-          "/two_col_1_2.parquet' WITH (parquet='True');",
-      "Using fixed length encoding with Parquet import is not supported; please use the "
-      "coercible non fixed-length encoded column type instead. Parquet column: col1, "
-      "OmniSci column: i1, Parquet file: ../../Tests/FsiDataFiles/two_col_1_2.parquet.");
-}
+INSTANTIATE_TEST_SUITE_P(ColumnType,
+                         ParquetImportErrorHandlingOfTypes,
+                         ::testing::Values("int",
+                                           "geo",
+                                           "array",
+                                           "text",
+                                           "timestamp",
+                                           "date",
+                                           "timestamp2date"),
+                         [](const auto& param_info) { return param_info.param; });
 
-TEST_F(ParquetImportErrorHandling, OneInvalidInteger) {
-  sql("CREATE TABLE test_table (id INT, i INT, p POINT, a INT[], t TEXT);");
-  sql("COPY test_table FROM '" + fsi_file_base_dir +
-      "/invalid_parquet/one_invalid_row_int.parquet' WITH (parquet='True');");
+TEST_P(ParquetImportErrorHandlingOfTypes, OneInvalidType) {
+  sql("CREATE TABLE test_table (id INT, i INT, p POINT, a INT[], t TEXT, ts TIMESTAMP "
+      "(0) ENCODING FIXED(32), days DATE ENCODING DAYS(16), ts2days DATE ENCODING DAYS "
+      "(16) );");
+  sql("COPY test_table FROM '" + fsi_file_base_dir + "/invalid_parquet/one_invalid_row_" +
+      GetParam() + ".parquet' WITH (parquet='True');");
   TQueryResult query;
   sql(query, "SELECT * FROM test_table ORDER BY id;");
-  assertResultSetEqual({{1L, 100L, "POINT (0 0)", array({1L, 2L}), "a"},
-                        {2L, 200L, "POINT (1 0)", array({3L, 4L}), "b"},
-                        {4L, 400L, "POINT (2 2)", array({8L, 9L}), "d"}},
-                       query);
-}
-
-TEST_F(ParquetImportErrorHandling, OneInvalidGeoType) {
-  sql("CREATE TABLE test_table (id INT, i INT, p POINT, a INT[], t TEXT);");
-  sql("COPY test_table FROM '" + fsi_file_base_dir +
-      "/invalid_parquet/one_invalid_row_geo.parquet' WITH (parquet='True');");
-  TQueryResult query;
-  sql(query, "SELECT * FROM test_table ORDER BY id;");
-  assertResultSetEqual({{1L, 100L, "POINT (0 0)", array({1L, 2L}), "a"},
-                        {2L, 200L, "POINT (1 0)", array({3L, 4L}), "b"},
-                        {4L, 400L, "POINT (2 2)", array({8L, 9L}), "d"}},
-                       query);
-}
-
-TEST_F(ParquetImportErrorHandling, OneInvalidArrayType) {
-  sql("CREATE TABLE test_table (id INT, i INT, p POINT, a INT[], t TEXT);");
-  sql("COPY test_table FROM '" + fsi_file_base_dir +
-      "/invalid_parquet/one_invalid_row_array.parquet' WITH (parquet='True');");
-  TQueryResult query;
-  sql(query, "SELECT * FROM test_table ORDER BY id;");
-  assertResultSetEqual({{1L, 100L, "POINT (0 0)", array({1L, 2L}), "a"},
-                        {2L, 200L, "POINT (1 0)", array({3L, 4L}), "b"},
-                        {4L, 400L, "POINT (2 2)", array({8L, 9L}), "d"}},
-                       query);
-}
-
-TEST_F(ParquetImportErrorHandling, OneInvalidString) {
-  sql("CREATE TABLE test_table (id INT, i INT, p POINT, a INT[], t TEXT);");
-  sql("COPY test_table FROM '" + fsi_file_base_dir +
-      "/invalid_parquet/one_invalid_row_text.parquet' WITH (parquet='True');");
-  TQueryResult query;
-  sql(query, "SELECT * FROM test_table ORDER BY id;");
-  assertResultSetEqual({{1L, 100L, "POINT (0 0)", array({1L, 2L}), "a"},
-                        {2L, 200L, "POINT (1 0)", array({3L, 4L}), "b"},
-                        {4L, 400L, "POINT (2 2)", array({8L, 9L}), "d"}},
-                       query);
-}
-
-TEST_F(ParquetImportErrorHandling, MaxReject) {
-  sql("CREATE TABLE test_table (id INT, i INT, p POINT, a INT[], t TEXT);");
-  sql("COPY test_table FROM '" + fsi_file_base_dir +
-      "/invalid_parquet/' WITH (parquet='True', max_reject=3);");
-  TQueryResult query;
-  sql(query, "SELECT count(*) FROM test_table;");
-  assertResultSetEqual({{0L}}, query);  // confirm no data was loaded into table
+  // clang-format off
+  assertResultSetEqual({
+      {1L, 100L, "POINT (0 0)", array({1L, 2L}), "a",
+       "1901-12-13 20:45:53", "1880-04-15", "1901-12-13"},
+      {2L, 200L, "POINT (1 0)", array({3L, 4L}), "b",
+       "2038-01-19 03:14:07", "2059-09-18", "2038-01-19"},
+      {4L, 400L, "POINT (2 2)", array({8L, 9L}), "d",
+       "1911-12-13 20:45:53", "2020-04-15", "1911-12-13"}},
+       query);
+  // clang-format on
 }
 #endif
 

@@ -31,17 +31,17 @@ namespace foreign_storage {
 // specify it at compile-time versus run-time. In testing this has a major
 // impact on the runtime of the conversion performed by this encoder since the
 // compiler can significantly optimize if this is known at compile time.
-template <typename V, typename T, T conversion_denominator>
+template <typename V, typename T, T conversion_denominator, typename NullType = V>
 class ParquetDateFromTimestampEncoder
-    : public ParquetTimestampEncoder<V, T, conversion_denominator> {
+    : public ParquetTimestampEncoder<V, T, conversion_denominator, NullType> {
  public:
   ParquetDateFromTimestampEncoder(
       Data_Namespace::AbstractBuffer* buffer,
       const ColumnDescriptor* column_desciptor,
       const parquet::ColumnDescriptor* parquet_column_descriptor)
-      : ParquetTimestampEncoder<V, T, conversion_denominator>(buffer,
-                                                              column_desciptor,
-                                                              parquet_column_descriptor) {
-  }
+      : ParquetTimestampEncoder<V, T, conversion_denominator, NullType>(
+            buffer,
+            column_desciptor,
+            parquet_column_descriptor) {}
 };
 }  // namespace foreign_storage
