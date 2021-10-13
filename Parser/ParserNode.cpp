@@ -3627,10 +3627,8 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
               LOG(INFO) << "CTAS: sharing text dictionary on column "
                         << source_cd.columnName << " with " << targetTable->tableName
                         << "." << targetColumn->columnName;
-              sharedDictionaryRefs.push_back(
-                  SharedDictionaryDef(source_cd.columnName,
-                                      targetTable->tableName,
-                                      targetColumn->columnName));
+              sharedDictionaryRefs.emplace_back(
+                  source_cd.columnName, targetTable->tableName, targetColumn->columnName);
             }
           }
         }
@@ -4114,8 +4112,9 @@ std::string loadTable(Catalog_Namespace::Catalog& catalog,
                       SubstituteMap& sMap,
                       std::string tableName) {
   if (sMap.find(tableName) != sMap.end()) {
-    if (sMap[tableName] == EMPTY_NAME)
+    if (sMap[tableName] == EMPTY_NAME) {
       return tableName;
+    }
     return sMap[tableName];
   } else {
     // lookup table in src catalog
@@ -4210,16 +4209,13 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         recordRename(tableSubtituteMap, altCurTableName, EMPTY_NAME);
         recordRename(tableSubtituteMap, altNewTableName, tmpNewTableName);
         recordRename(tableSubtituteMap, tmpNewTableName, tmpNewTableName);
-        names.push_back(
-            std::pair<std::string, std::string>(altNewTableName, tmpNewTableName));
-        names.push_back(
-            std::pair<std::string, std::string>(altCurTableName, altNewTableName));
+        names.emplace_back(altNewTableName, tmpNewTableName);
+        names.emplace_back(altCurTableName, altNewTableName);
       } else {
         // rename: curNewTableName to newTableName
         recordRename(tableSubtituteMap, altCurTableName, EMPTY_NAME);
         recordRename(tableSubtituteMap, altNewTableName, altNewTableName);
-        names.push_back(
-            std::pair<std::string, std::string>(altCurTableName, altNewTableName));
+        names.emplace_back(altCurTableName, altNewTableName);
       }
     } else {
       throw std::runtime_error("Source table \'" + curTableName + "\' does not exist.");

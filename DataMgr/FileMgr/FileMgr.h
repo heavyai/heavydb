@@ -168,7 +168,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   FileMgr(GlobalFileMgr* gfm, const size_t defaultPageSize, std::string basePath);
 
   /// Destructor
-  virtual ~FileMgr() override;
+  ~FileMgr() override;
 
   StorageStats getStorageStats();
   /// Creates a chunk with the specified key and page size.

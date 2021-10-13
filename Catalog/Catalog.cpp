@@ -1643,26 +1643,29 @@ void Catalog::deleteMetadataForDashboards(const std::vector<int32_t> dashboard_i
     object.loadKey(*this);
     object.setPrivileges(AccessPrivileges::DELETE_DASHBOARD);
     std::vector<DBObject> privs = {object};
-    if (!SysCatalog::instance().checkPrivileges(user, privs))
+    if (!SysCatalog::instance().checkPrivileges(user, privs)) {
       restricted_ids << (!restricted_ids.str().empty() ? ", " : "") << dashboard_id;
+    }
   }
 
   if (invalid_ids.str().size() > 0 || restricted_ids.str().size() > 0) {
     std::stringstream error_message;
     error_message << "Delete dashboard(s) failed with error(s):";
-    if (invalid_ids.str().size() > 0)
+    if (invalid_ids.str().size() > 0) {
       error_message << "\nDashboard id: " << invalid_ids.str()
                     << " - Dashboard id does not exist";
-    if (restricted_ids.str().size() > 0)
+    }
+    if (restricted_ids.str().size() > 0) {
       error_message
           << "\nDashboard id: " << restricted_ids.str()
           << " - User should be either owner of dashboard or super user to delete it";
+    }
     throw std::runtime_error(error_message.str());
   }
   std::vector<DBObject> dash_objs;
 
   for (int32_t dashboard_id : dashboard_ids) {
-    dash_objs.push_back(DBObject(dashboard_id, DashboardDBObjectType));
+    dash_objs.emplace_back(dashboard_id, DashboardDBObjectType);
   }
   // BE-5245: Transactionally unsafe (like other combined Catalog/Syscatalog operations)
   SysCatalog::instance().revokeDBObjectPrivilegesFromAllBatch(dash_objs, this);
@@ -2821,7 +2824,7 @@ void Catalog::getForeignServersForUser(
         arguments.push_back(std::to_string(
             dateTimeParse<kTIMESTAMP>(filter_def["value"].GetString(), 0)));
       } else {
-        arguments.push_back(filter_def["value"].GetString());
+        arguments.emplace_back(filter_def["value"].GetString());
       }
 
       num_filters++;
@@ -2834,8 +2837,9 @@ void Catalog::getForeignServersForUser(
   sqliteConnector_.query_with_text_params(query, arguments);
   auto num_rows = sqliteConnector_.getNumRows();
 
-  if (sqliteConnector_.getNumRows() == 0)
+  if (sqliteConnector_.getNumRows() == 0) {
     return;
+  }
 
   CHECK(sqliteConnector_.getNumCols() == 1);
   // Return pointers to objects
@@ -3700,10 +3704,11 @@ const TableDescriptor* lookupTableDescriptor(Catalog* cat,
     // get the cached tableId
     //   and use that to lookup the TableDescriptor
     int tableId = (*iter).second;
-    if (tableId == -1)
+    if (tableId == -1) {
       return NULL;
-    else
+    } else {
       return cat->getMetadataForTable(tableId);
+    }
   }
 
   // else ... lookup in standard location
@@ -3806,12 +3811,11 @@ void Catalog::renameTable(std::vector<std::pair<std::string, std::string>>& name
           CHECK(phys_td);
           std::string newPhysTableName =
               generatePhysicalTableName(newTableName, static_cast<int32_t>(k + 1));
-          allNames.push_back(
-              std::pair<std::string, std::string>(phys_td->tableName, newPhysTableName));
+          allNames.emplace_back(phys_td->tableName, newPhysTableName);
           allTableIds.push_back(phys_td->tableId);
         }
       }
-      allNames.push_back(std::pair<std::string, std::string>(curTableName, newTableName));
+      allNames.emplace_back(curTableName, newTableName);
       allTableIds.push_back(tableId);
     }
     // rename all tables in one shot
@@ -4702,7 +4706,8 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
                            std::to_string(td->maxRollbackEpochs));
   }
   if (!foreign_table && (dump_defaults || !td->hasDeletedCol)) {
-    with_options.push_back(td->hasDeletedCol ? "VACUUM='DELAYED'" : "VACUUM='IMMEDIATE'");
+    with_options.emplace_back(td->hasDeletedCol ? "VACUUM='DELAYED'"
+                                                : "VACUUM='IMMEDIATE'");
   }
   if (!foreign_table && !td->partitions.empty()) {
     with_options.push_back("PARTITIONS='" + td->partitions + "'");

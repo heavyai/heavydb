@@ -278,11 +278,11 @@ struct ArrowValue<void*> : ArrowValueBase<void*> {
 
   template <typename DATA_TYPE>
   explicit operator DATA_TYPE() const {
-    if constexpr (std::is_integral<DATA_TYPE>::value) {
+    if constexpr (std::is_integral<DATA_TYPE>::value) {  // NOLINT
       return inline_fixed_encoding_null_val(data.cd->columnType);
-    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {
+    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {  // NOLINT
       return inline_fp_null_val(data.cd->columnType);
-    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {
+    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {  // NOLINT
       return std::string();
     }
   }
@@ -296,14 +296,14 @@ struct ArrowValue<bool> : ArrowValueBase<bool> {
 
   template <typename DATA_TYPE>
   explicit operator DATA_TYPE() const {
-    if constexpr (std::is_integral<DATA_TYPE>::value) {
+    if constexpr (std::is_integral<DATA_TYPE>::value) {  // NOLINT
       if (!(data.cd->columnType.is_number() || data.cd->columnType.is_boolean())) {
         type_conversion_error("bool", data.cd, data.bad_rows_tracker);
       }
       return v;
-    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {
+    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {  // NOLINT
       return v ? 1 : 0;
-    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {
+    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {  // NOLINT
       return v ? "T" : "F";
     }
   }
@@ -317,7 +317,7 @@ struct ArrowValue<float> : ArrowValueBase<float> {
 
   template <typename DATA_TYPE>
   explicit operator DATA_TYPE() const {
-    if constexpr (std::is_integral<DATA_TYPE>::value) {
+    if constexpr (std::is_integral<DATA_TYPE>::value) {  // NOLINT
       const auto ti = data.cd->columnType;
       DATA_TYPE v = ti.is_decimal() ? this->v * pow(10, ti.get_scale()) : this->v;
       if (!(std::numeric_limits<DATA_TYPE>::lowest() < v &&
@@ -325,9 +325,9 @@ struct ArrowValue<float> : ArrowValueBase<float> {
         data_conversion_error<DATA_TYPE>(v, data.cd, data.bad_rows_tracker);
       }
       return v;
-    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {
+    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {  // NOLINT
       return v;
-    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {
+    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {  // NOLINT
       return std::to_string(v);
     }
   }
@@ -341,7 +341,7 @@ struct ArrowValue<double> : ArrowValueBase<double> {
 
   template <typename DATA_TYPE>
   explicit operator DATA_TYPE() const {
-    if constexpr (std::is_integral<DATA_TYPE>::value) {
+    if constexpr (std::is_integral<DATA_TYPE>::value) {  // NOLINT
       const auto ti = data.cd->columnType;
       DATA_TYPE v = ti.is_decimal() ? this->v * pow(10, ti.get_scale()) : this->v;
       if (!(std::numeric_limits<DATA_TYPE>::lowest() < v &&
@@ -349,7 +349,7 @@ struct ArrowValue<double> : ArrowValueBase<double> {
         data_conversion_error<DATA_TYPE>(v, data.cd, data.bad_rows_tracker);
       }
       return v;
-    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {
+    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {  // NOLINT
       if (std::is_same<DATA_TYPE, float>::value) {
         if (!(std::numeric_limits<float>::lowest() < v &&
               v <= std::numeric_limits<float>::max())) {
@@ -357,7 +357,7 @@ struct ArrowValue<double> : ArrowValueBase<double> {
         }
       }
       return v;
-    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {
+    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {  // NOLINT
       return std::to_string(v);
     }
   }
@@ -371,7 +371,7 @@ struct ArrowValue<int64_t> : ArrowValueBase<int64_t> {
 
   template <typename DATA_TYPE>
   explicit operator DATA_TYPE() const {
-    if constexpr (std::is_integral<DATA_TYPE>::value) {
+    if constexpr (std::is_integral<DATA_TYPE>::value) {  // NOLINT
       int64_t v = this->v;
       if (std::is_same<int64_t, DATA_TYPE>::value) {
       } else if (std::numeric_limits<DATA_TYPE>::lowest() < v &&
@@ -383,9 +383,9 @@ struct ArrowValue<int64_t> : ArrowValueBase<int64_t> {
         v = this->resolve_time(v);
       }
       return v;
-    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {
+    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {  // NOLINT
       return v;
-    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {
+    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {  // NOLINT
       const auto& type_id = data.arrow_type.id();
       if (type_id == arrow::Type::DATE32 || type_id == arrow::Type::DATE64) {
         auto& date_type = static_cast<const arrow::DateType&>(data.arrow_type);
@@ -425,7 +425,7 @@ struct ArrowValue<std::string> : ArrowValueBase<std::string> {
 
   template <typename DATA_TYPE>
   explicit operator DATA_TYPE() const {
-    if constexpr (std::is_same<DATA_TYPE, bool>::value) {
+    if constexpr (std::is_same<DATA_TYPE, bool>::value) {  // NOLINT
       if (v.size() == 0) {
         return inline_int_null_value<int8_t>();
       }
@@ -437,7 +437,7 @@ struct ArrowValue<std::string> : ArrowValueBase<std::string> {
         data_conversion_error(v, data.cd, data.bad_rows_tracker);
         return false;
       }
-    } else if constexpr (std::is_integral<DATA_TYPE>::value) {
+    } else if constexpr (std::is_integral<DATA_TYPE>::value) {  // NOLINT
       if (v.size() == 0) {
         return inline_fixed_encoding_null_val(data.cd->columnType);
       }
@@ -449,9 +449,9 @@ struct ArrowValue<std::string> : ArrowValueBase<std::string> {
         data_conversion_error(v, data.cd, data.bad_rows_tracker);
         return 0;
       }
-    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {
+    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {  // NOLINT
       return atof(v.data());
-    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {
+    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {  // NOLINT
       return v;
     }
   }
@@ -470,7 +470,7 @@ struct ArrowValue<arrow::Decimal128> : ArrowValueBase<arrow::Decimal128> {
 
   template <typename DATA_TYPE>
   explicit operator DATA_TYPE() const {
-    if constexpr (std::is_integral<DATA_TYPE>::value) {
+    if constexpr (std::is_integral<DATA_TYPE>::value) {  // NOLINT
       int64_t v = static_cast<int64_t>(this->v);
       if (data.cd->columnType.is_decimal()) {
         return convert_decimal_value_to_scale(v, data.old_type, data.new_type);
@@ -485,10 +485,10 @@ struct ArrowValue<arrow::Decimal128> : ArrowValueBase<arrow::Decimal128> {
         data_conversion_error<DATA_TYPE>(v, data.cd, data.bad_rows_tracker);
       }
       return v;
-    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {
+    } else if constexpr (std::is_floating_point<DATA_TYPE>::value) {  // NOLINT
       int64_t v = static_cast<int64_t>(this->v);
       return data.arrow_decimal_scale ? v / pow(10, data.arrow_decimal_scale) : v;
-    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {
+    } else if constexpr (std::is_same<DATA_TYPE, std::string>::value) {  // NOLINT
       return v.ToString(data.arrow_decimal_scale);
     }
   }

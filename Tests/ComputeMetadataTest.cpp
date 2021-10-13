@@ -1430,7 +1430,7 @@ class OpportunisticVacuumingTest : public OptimizeTableVacuumTest {
     EncodedType min{std::numeric_limits<EncodedType>::max()},
         max{std::numeric_limits<EncodedType>::lowest()};
     for (const auto& row : rows) {
-      if constexpr (convert_input) {
+      if constexpr (convert_input) {  // NOLINT
         auto str_value = std::get<column_index>(row);
         if (!str_value.empty()) {
           auto value = type_converter(str_value);

@@ -180,7 +180,7 @@ class CachingFileMgr : public FileMgr {
 
   CachingFileMgr(const DiskCacheConfig& config);
 
-  virtual ~CachingFileMgr();
+  ~CachingFileMgr() override;
 
   // Simple getters.
   inline MgrType getMgrType() override { return CACHING_FILE_MGR; };

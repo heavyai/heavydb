@@ -107,7 +107,7 @@ class GeoPoint : public GeoBase {
   void getColumns(std::vector<double>& coords) const;
   GeoType getType() const final { return GeoType::kPOINT; }
 
-  std::unique_ptr<GeoBase> clone() const;
+  std::unique_ptr<GeoBase> clone() const override;
 
  protected:
   GeoPoint(OGRGeometry* geom, const bool owns_geom_obj) : GeoBase(geom, owns_geom_obj) {}

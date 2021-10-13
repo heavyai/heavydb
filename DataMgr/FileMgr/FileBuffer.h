@@ -80,7 +80,7 @@ class FileBuffer : public AbstractBuffer {
              const std::vector<HeaderInfo>::const_iterator& headerEndIt);
 
   /// Destructor
-  virtual ~FileBuffer() override;
+  ~FileBuffer() override;
 
   Page addNewMultiPage(const int32_t epoch);
 

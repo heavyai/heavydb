@@ -117,8 +117,9 @@ class task_group {
   void cancel() { /*not implemented*/
   }
   void wait() {  // TODO task_group_status ?
-    for (auto& child : this->threads_)
+    for (auto& child : this->threads_) {
       child.wait();
+    }
   }
 };  // class task_group
 
@@ -147,8 +148,9 @@ void parallel_for(const blocked_range<Int>& range,
     worker_threads.emplace_back(
         std::async(launch, body, blocked_range<Int>(start_entry, end_entry)));
   }
-  for (auto& child : worker_threads)
+  for (auto& child : worker_threads) {
     child.wait();
+  }
 }
 
 //! Parallel iteration over a range of integers with a default step value and default
@@ -163,8 +165,9 @@ void parallel_for(Index first,
       [&f](const blocked_range<Index>& r) {
         //#pragma ivdep
         //#pragma omp simd
-        for (auto i = r.begin(), e = r.end(); i < e; i++)
+        for (auto i = r.begin(), e = r.end(); i < e; i++) {
           f(i);
+        }
       },
       p);
 }
@@ -197,8 +200,10 @@ Value parallel_reduce(const blocked_range<Int>& range,
         launch, real_body, blocked_range<Int>(start_entry, end_entry), Value{}));
   }
   Value v = identity;
-  for (auto& child : worker_threads)
+  for (auto& child : worker_threads) {
     v = reduction(v, child.get());
+  }
+
   return v;
 }
 

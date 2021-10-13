@@ -291,8 +291,8 @@ std::unique_ptr<import_export::ImportBatchResult> ParquetImporter::getNextImport
   auto [chunks, string_dictionaries] = import_batch_result->getChunksAndDictionaries();
   if (!string_dictionaries_per_column_.size()) {
     for (const auto& [column_id, dict] : string_dictionaries) {
-      string_dictionaries_per_column_.push_back(
-          {chunks[column_id].getColumnDesc(), dict});
+      string_dictionaries_per_column_.emplace_back(chunks[column_id].getColumnDesc(),
+                                                   dict);
     }
   }
 

@@ -203,11 +203,13 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
             // update import/col idx according to types
             if (!is_null && cd->columnType == kPOINT &&
                 isCoordinateScalar(row[import_idx])) {
-              if (!columns_are_pre_filtered)
+              if (!columns_are_pre_filtered) {
                 ++import_idx;
+              }
             }
-            if (!columns_are_pre_filtered)
+            if (!columns_are_pre_filtered) {
               ++import_idx;
+            }
             ++col_idx;
             col_idx += col_ti.get_physical_cols();
           }

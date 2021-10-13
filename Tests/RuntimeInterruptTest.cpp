@@ -179,16 +179,16 @@ int create_and_populate_table() {
     very_large_out.close();
 
     std::vector<std::string> geo_dataset;
-    geo_dataset.push_back("\"POINT(0 0)\"");
-    geo_dataset.push_back("\"POINT(1 0)\"");
-    geo_dataset.push_back("\"POINT(2 0)\"");
-    geo_dataset.push_back("\"POINT(3 0)\"");
-    geo_dataset.push_back("\"POINT(4 0)\"");
-    geo_dataset.push_back("\"POINT(5 0)\"");
-    geo_dataset.push_back("\"POINT(6 0)\"");
-    geo_dataset.push_back("\"POINT(7 0)\"");
-    geo_dataset.push_back("\"POINT(8 0)\"");
-    geo_dataset.push_back("\"POINT(9 0)\"");
+    geo_dataset.emplace_back("\"POINT(0 0)\"");
+    geo_dataset.emplace_back("\"POINT(1 0)\"");
+    geo_dataset.emplace_back("\"POINT(2 0)\"");
+    geo_dataset.emplace_back("\"POINT(3 0)\"");
+    geo_dataset.emplace_back("\"POINT(4 0)\"");
+    geo_dataset.emplace_back("\"POINT(5 0)\"");
+    geo_dataset.emplace_back("\"POINT(6 0)\"");
+    geo_dataset.emplace_back("\"POINT(7 0)\"");
+    geo_dataset.emplace_back("\"POINT(8 0)\"");
+    geo_dataset.emplace_back("\"POINT(9 0)\"");
 
     const auto file_path_geo =
         boost::filesystem::path("../../Tests/Import/datafiles/interrupt_table_geo.csv");
@@ -206,34 +206,34 @@ int create_and_populate_table() {
     geo_out.close();
 
     std::vector<std::string> gdal_dataset;
-    gdal_dataset.push_back(
+    gdal_dataset.emplace_back(
         "{ \"type\": \"Feature\", \"properties\": { \"trip\": 0.0 }, \"geometry\": { "
         "\"type\": \"Point\", \"coordinates\": [ 0.0, 1.0 ] } },");
-    gdal_dataset.push_back(
+    gdal_dataset.emplace_back(
         "{ \"type\": \"Feature\", \"properties\": { \"trip\": 1.0 }, \"geometry\": { "
         "\"type\": \"Point\", \"coordinates\": [ 1.0, 2.0 ] } },");
-    gdal_dataset.push_back(
+    gdal_dataset.emplace_back(
         "{ \"type\": \"Feature\", \"properties\": { \"trip\": 2.0 }, \"geometry\": { "
         "\"type\": \"Point\", \"coordinates\": [ 2.0, 3.0 ] } },");
-    gdal_dataset.push_back(
+    gdal_dataset.emplace_back(
         "{ \"type\": \"Feature\", \"properties\": { \"trip\": 3.0 }, \"geometry\": { "
         "\"type\": \"Point\", \"coordinates\": [ 3.0, 4.0 ] } },");
-    gdal_dataset.push_back(
+    gdal_dataset.emplace_back(
         "{ \"type\": \"Feature\", \"properties\": { \"trip\": 4.0 }, \"geometry\": { "
         "\"type\": \"Point\", \"coordinates\": [ 4.0, 5.0 ] } },");
-    gdal_dataset.push_back(
+    gdal_dataset.emplace_back(
         "{ \"type\": \"Feature\", \"properties\": { \"trip\": 5.0 }, \"geometry\": { "
         "\"type\": \"Point\", \"coordinates\": [ 5.0, 6.0 ] } },");
-    gdal_dataset.push_back(
+    gdal_dataset.emplace_back(
         "{ \"type\": \"Feature\", \"properties\": { \"trip\": 6.0 }, \"geometry\": { "
         "\"type\": \"Point\", \"coordinates\": [ 6.0, 7.0 ] } },");
-    gdal_dataset.push_back(
+    gdal_dataset.emplace_back(
         "{ \"type\": \"Feature\", \"properties\": { \"trip\": 7.0 }, \"geometry\": { "
         "\"type\": \"Point\", \"coordinates\": [ 7.0, 8.0 ] } },");
-    gdal_dataset.push_back(
+    gdal_dataset.emplace_back(
         "{ \"type\": \"Feature\", \"properties\": { \"trip\": 8.0 }, \"geometry\": { "
         "\"type\": \"Point\", \"coordinates\": [ 8.0, 9.0 ] } },");
-    gdal_dataset.push_back(
+    gdal_dataset.emplace_back(
         "{ \"type\": \"Feature\", \"properties\": { \"trip\": 9.0 }, \"geometry\": { "
         "\"type\": \"Point\", \"coordinates\": [ 9.0, 0.0 ] } },");
 

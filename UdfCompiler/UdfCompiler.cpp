@@ -472,7 +472,7 @@ int UdfCompiler::compileFromCommandLine(
         }
       }
 
-      if constexpr (CLANG_VERSION_MAJOR == 10)
+      if constexpr (CLANG_VERSION_MAJOR == 10) {
         if (clang_version_major > 10) {
           // The following clang 10 flags are unknown to clang >10:
           if (s == "-masm-verbose" || s == "-dwarf-column-info" ||
@@ -486,8 +486,9 @@ int UdfCompiler::compileFromCommandLine(
             continue;
           }
         }
+      }
 
-      if constexpr (CLANG_VERSION_MAJOR >= 10)
+      if constexpr (CLANG_VERSION_MAJOR >= 10) {
         if (clang_version_major < 10) {
           // The following clang >10 flags are unknown to clang <10:
           if (s == "-fno-rounding-math" || s.rfind("-mframe-pointer=", 0) == 0 ||
@@ -496,8 +497,9 @@ int UdfCompiler::compileFromCommandLine(
             continue;
           }
         }
+      }
 
-      if constexpr (CLANG_VERSION_MAJOR == 11)
+      if constexpr (CLANG_VERSION_MAJOR == 11) {
         if (clang_version_major < 11) {
           // The following clang 11 flags are unknown to clang <11:
           if (s == "-fno-verbose-asm") {
@@ -510,6 +512,7 @@ int UdfCompiler::compileFromCommandLine(
             continue;
           }
         }
+      }
 
       cmd += " " + s;
       last = s;

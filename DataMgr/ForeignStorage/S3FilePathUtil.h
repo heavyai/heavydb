@@ -23,7 +23,7 @@ class FileOrderS3 : public shared::FileOrderBase<S3ObjectComparator> {
               const std::optional<std::string>& sort_by)
       : FileOrderBase<S3ObjectComparator>(sort_regex, sort_by) {}
 
-  virtual inline S3ObjectComparator getFileComparator() {
+  inline S3ObjectComparator getFileComparator() override {
     auto comparator_pair = comparator_map_.find(getSortBy());
     CHECK(comparator_pair != comparator_map_.end());
     return comparator_pair->second;

@@ -61,8 +61,9 @@ std::map<int, DataBlockPtr> TextFileBufferParser::convertImportBuffersToDataBloc
       encoded_data_block_ptrs_futures;
   // make all async calls to string dictionary here and then continue execution
   for (const auto& import_buffer : import_buffers) {
-    if (import_buffer == nullptr)
+    if (import_buffer == nullptr) {
       continue;
+    }
     DataBlockPtr p;
     if (import_buffer->getTypeInfo().is_number() ||
         import_buffer->getTypeInfo().is_time() ||

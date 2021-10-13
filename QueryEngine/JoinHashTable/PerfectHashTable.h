@@ -42,7 +42,7 @@ class PerfectHashTable : public HashTable {
     }
   }
 
-  ~PerfectHashTable() {
+  ~PerfectHashTable() override {
     if (gpu_hash_table_buff_) {
       CHECK(data_mgr_);
       data_mgr_->free(gpu_hash_table_buff_);

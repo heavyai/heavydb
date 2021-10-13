@@ -407,8 +407,9 @@ std::string get_cuda_home(void) {
 
   if (!(env = getenv("CUDA_HOME")) && !(env = getenv("CUDA_DIR"))) {
     // check if the default CUDA directory exists: /usr/local/cuda
-    if (boost::filesystem::exists(boost::filesystem::path(CUDA_DEFAULT_PATH)))
+    if (boost::filesystem::exists(boost::filesystem::path(CUDA_DEFAULT_PATH))) {
       env = CUDA_DEFAULT_PATH;
+    }
   }
 
   if (env == nullptr) {

@@ -163,44 +163,44 @@ inline constexpr bool has_printTo_v = has_printTo<T>::value;
 
 template <typename T>
 std::string toString(const T& v) {
-  if constexpr (std::is_same_v<T, std::string>) {
+  if constexpr (std::is_same_v<T, std::string>) {  // NOLINT
     return "\"" + v + "\"";
 #ifdef ENABLE_TOSTRING_RAPIDJSON
-  } else if constexpr (std::is_same_v<T, rapidjson::Value>) {
+  } else if constexpr (std::is_same_v<T, rapidjson::Value>) {  // NOLINT
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     v.Accept(writer);
     return buffer.GetString();
 #endif
 #ifdef ENABLE_TOSTRING_LLVM
-  } else if constexpr (std::is_same_v<T, llvm::Module>) {
+  } else if constexpr (std::is_same_v<T, llvm::Module>) {  // NOLINT
     std::string type_str;
     llvm::raw_string_ostream rso(type_str);
     v.print(rso, nullptr);
     return "(" + rso.str() + ")";
-  } else if constexpr (std::is_same_v<T, llvm::Function>) {
+  } else if constexpr (std::is_same_v<T, llvm::Function>) {  // NOLINT
     std::string type_str;
     llvm::raw_string_ostream rso(type_str);
     v.print(rso, nullptr);
     return "(" + rso.str() + ")";
-  } else if constexpr (std::is_same_v<T, llvm::Value>) {
+  } else if constexpr (std::is_same_v<T, llvm::Value>) {  // NOLINT
     std::string type_str;
     llvm::raw_string_ostream rso(type_str);
     v.print(rso);
     return "(" + rso.str() + ")";
-  } else if constexpr (std::is_same_v<T, llvm::Argument>) {
+  } else if constexpr (std::is_same_v<T, llvm::Argument>) {  // NOLINT
     std::string type_str;
     llvm::raw_string_ostream rso(type_str);
     v.print(rso);
     return "(" + rso.str() + ")";
-  } else if constexpr (std::is_same_v<T, llvm::Type>) {
+  } else if constexpr (std::is_same_v<T, llvm::Type>) {  // NOLINT
     std::string type_str;
     llvm::raw_string_ostream rso(type_str);
     v.print(rso);
     return "(" + rso.str() + ")";
-  } else if constexpr (std::is_same_v<T, llvm::Triple>) {
+  } else if constexpr (std::is_same_v<T, llvm::Triple>) {  // NOLINT
     return v.str();
-  } else if constexpr (std::is_same_v<T, llvm::opt::ArgStringList>) {
+  } else if constexpr (std::is_same_v<T, llvm::opt::ArgStringList>) {  // NOLINT
     std::string r;
     for (unsigned i = 0; i < v.size(); i++) {
       if (i) {
@@ -209,7 +209,7 @@ std::string toString(const T& v) {
       r += v[i];
     }
     return "[" + r + "]";
-  } else if constexpr (std::is_same_v<T, llvm::opt::DerivedArgList>) {
+  } else if constexpr (std::is_same_v<T, llvm::opt::DerivedArgList>) {  // NOLINT
     std::string r;
     for (unsigned i = 0; i < v.getNumInputArgStrings(); i++) {
       if (i) {
@@ -218,25 +218,25 @@ std::string toString(const T& v) {
       r += v.getArgString(i);
     }
     return "[" + r + "]";
-  } else if constexpr (std::is_same_v<T, clang::driver::JobList>) {
+  } else if constexpr (std::is_same_v<T, clang::driver::JobList>) {  // NOLINT
     std::string type_str;
     llvm::raw_string_ostream rso(type_str);
     v.Print(rso, nullptr, true);
     return rso.str();
 #endif
-  } else if constexpr (std::is_same_v<T, bool>) {
+  } else if constexpr (std::is_same_v<T, bool>) {  // NOLINT
     return v ? "True" : "False";
-  } else if constexpr (std::is_arithmetic_v<T>) {
+  } else if constexpr (std::is_arithmetic_v<T>) {  // NOLINT
     return std::to_string(v);
 #ifdef ENABLE_TOSTRING_str
-  } else if constexpr (has_str_v<T>) {
+  } else if constexpr (has_str_v<T>) {  // NOLINT
     return v.str();
 #endif
 #ifdef ENABLE_TOSTRING_to_string
-  } else if constexpr (has_to_string_v<T>) {
+  } else if constexpr (has_to_string_v<T>) {  // NOLINT
     return v.to_string();
 #endif
-  } else if constexpr (has_toString_v<T>) {
+  } else if constexpr (has_toString_v<T>) {  // NOLINT
     return v.toString();
   } else if constexpr (get_has_toString_v<T>) {
     auto ptr = v.get();

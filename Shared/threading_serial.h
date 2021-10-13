@@ -57,8 +57,9 @@ void parallel_for(Index first,
   parallel_for(
       blocked_range<Index>(first, last),
       [&f](const blocked_range<Index>& r) {
-        for (auto i = r.begin(), e = r.end(); i < e; i++)
+        for (auto i = r.begin(), e = r.end(); i < e; i++) {
           f(i);
+        }
       },
       p);
 }
@@ -91,8 +92,10 @@ Value parallel_reduce(const blocked_range<Int>& range,
         real_body(blocked_range<Int>(start_entry, end_entry), Value{}));
   }
   Value v = identity;
-  for (auto& child : worker_threads)
+  for (auto& child : worker_threads) {
     v = reduction(v, child);
+  }
+
   return v;
 }
 

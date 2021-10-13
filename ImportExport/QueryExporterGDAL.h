@@ -32,7 +32,7 @@ class QueryExporterGDAL : public QueryExporter {
  public:
   explicit QueryExporterGDAL(const FileType file_type);
   QueryExporterGDAL() = delete;
-  ~QueryExporterGDAL();
+  ~QueryExporterGDAL() override;
 
   void beginExport(const std::string& file_path,
                    const std::string& layer_name,

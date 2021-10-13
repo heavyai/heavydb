@@ -47,7 +47,8 @@ constexpr auto enum_name() noexcept {
 #endif
   name.remove_prefix(prefix.size());
   name.remove_suffix(suffix.size());
-  if (const auto pos = name.find_last_of(":)"); pos != std::string_view::npos)
+  if (const auto pos = name.find_last_of(":)"); pos != std::string_view::npos) {
     name.remove_prefix(pos + 1);
+  }
   return name;
 }
