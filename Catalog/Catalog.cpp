@@ -1449,26 +1449,29 @@ void Catalog::deleteMetadataForDashboards(const std::vector<int32_t> dashboard_i
     object.loadKey(*this);
     object.setPrivileges(AccessPrivileges::DELETE_DASHBOARD);
     std::vector<DBObject> privs = {object};
-    if (!SysCatalog::instance().checkPrivileges(user, privs))
+    if (!SysCatalog::instance().checkPrivileges(user, privs)) {
       restricted_ids << (!restricted_ids.str().empty() ? ", " : "") << dashboard_id;
+    }
   }
 
   if (invalid_ids.str().size() > 0 || restricted_ids.str().size() > 0) {
     std::stringstream error_message;
     error_message << "Delete dashboard(s) failed with error(s):";
-    if (invalid_ids.str().size() > 0)
+    if (invalid_ids.str().size() > 0) {
       error_message << "\nDashboard id: " << invalid_ids.str()
                     << " - Dashboard id does not exist";
-    if (restricted_ids.str().size() > 0)
+    }
+    if (restricted_ids.str().size() > 0) {
       error_message
           << "\nDashboard id: " << restricted_ids.str()
           << " - User should be either owner of dashboard or super user to delete it";
+    }
     throw std::runtime_error(error_message.str());
   }
   std::vector<DBObject> dash_objs;
 
   for (int32_t dashboard_id : dashboard_ids) {
-    dash_objs.push_back(DBObject(dashboard_id, DashboardDBObjectType));
+    dash_objs.emplace_back(dashboard_id, DashboardDBObjectType);
   }
   // BE-5245: Transactionally unsafe (like other combined Catalog/Syscatalog operations)
   SysCatalog::instance().revokeDBObjectPrivilegesFromAllBatch(dash_objs, this);
@@ -2820,10 +2823,11 @@ const TableDescriptor* lookupTableDescriptor(Catalog* cat,
     // get the cached tableId
     //   and use that to lookup the TableDescriptor
     int tableId = (*iter).second;
-    if (tableId == -1)
+    if (tableId == -1) {
       return NULL;
-    else
+    } else {
       return cat->getMetadataForTable(tableId);
+    }
   }
 
   // else ... lookup in standard location
@@ -2915,7 +2919,7 @@ void Catalog::renameTable(std::vector<std::pair<std::string, std::string>>& name
       std::string& curTableName = names[i].first;
       std::string& newTableName = names[i].second;
 
-      allNames.push_back(std::pair<std::string, std::string>(curTableName, newTableName));
+      allNames.emplace_back(curTableName, newTableName);
       allTableIds.push_back(tableId);
     }
     // rename all tables in one shot

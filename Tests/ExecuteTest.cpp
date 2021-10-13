@@ -2373,13 +2373,13 @@ TEST(Select, WidthBucketExpr) {
 TEST(Select, WidthBucketWithGroupBy) {
   SKIP_ALL_ON_AGGREGATOR();
   std::vector<std::string> drop_tables;
-  drop_tables.push_back("DROP TABLE IF EXISTS wb_test_nullable;");
-  drop_tables.push_back("DROP TABLE IF EXISTS wb_test_non_nullable;");
-  drop_tables.push_back("DROP TABLE IF EXISTS wb_test;");
+  drop_tables.emplace_back("DROP TABLE IF EXISTS wb_test_nullable;");
+  drop_tables.emplace_back("DROP TABLE IF EXISTS wb_test_non_nullable;");
+  drop_tables.emplace_back("DROP TABLE IF EXISTS wb_test;");
   std::vector<std::string> create_tables;
-  create_tables.push_back("CREATE TABLE wb_test_nullable (val int);");
-  create_tables.push_back("CREATE TABLE wb_test_non_nullable (val int not null);");
-  create_tables.push_back("CREATE TABLE wb_test (val int);");
+  create_tables.emplace_back("CREATE TABLE wb_test_nullable (val int);");
+  create_tables.emplace_back("CREATE TABLE wb_test_non_nullable (val int not null);");
+  create_tables.emplace_back("CREATE TABLE wb_test (val int);");
   std::vector<std::string> populate_tables;
   for (int i = 1; i < 4; ++i) {
     populate_tables.push_back("INSERT INTO wb_test_nullable VALUES(" + std::to_string(i) +
@@ -2388,7 +2388,7 @@ TEST(Select, WidthBucketWithGroupBy) {
                               std::to_string(i) + ");");
     populate_tables.push_back("INSERT INTO wb_test VALUES(" + std::to_string(i) + ");");
   }
-  populate_tables.push_back("INSERT INTO wb_test_nullable VALUES(null);");
+  populate_tables.emplace_back("INSERT INTO wb_test_nullable VALUES(null);");
   for (const auto& stmt : drop_tables) {
     run_ddl_statement(stmt);
     g_sqlite_comparator.query(stmt);
@@ -8500,24 +8500,24 @@ TEST(Select, GroupByPerfectHash) {
       {
         // all these key columns are small ranged to force perfect hash
         std::vector<std::pair<std::string, std::string>> query_ids;
-        query_ids.push_back({"big_int_null", "SUM(float_null), COUNT(*)"});
-        query_ids.push_back({"id", "AVG(big_int_null), COUNT(*)"});
-        query_ids.push_back({"id_null", "MAX(tiny_int), MIN(tiny_int)"});
-        query_ids.push_back(
-            {"small_int", "SUM(cast (id as double)), SUM(double_not_null)"});
-        query_ids.push_back({"tiny_int", "COUNT(small_int_null), COUNT(*)"});
-        query_ids.push_back({"tiny_int_null", "AVG(small_int), COUNT(tiny_int)"});
-        query_ids.push_back(
-            {"case when id = 6 then -17 when id = 5 then 33 else NULL end",
-             "COUNT(*), AVG(small_int_null)"});
-        query_ids.push_back(
-            {"case when id = 5 then NULL when id = 6 then -57 else cast(61 as tinyint) "
-             "end",
-             "AVG(big_int), SUM(tiny_int)"});
-        query_ids.push_back(
-            {"case when float_not_null > 2 then -3 when float_null < 4 then "
-             "87 else NULL end",
-             "MAX(id), COUNT(*)"});
+        query_ids.emplace_back("big_int_null", "SUM(float_null), COUNT(*)");
+        query_ids.emplace_back("id", "AVG(big_int_null), COUNT(*)");
+        query_ids.emplace_back("id_null", "MAX(tiny_int), MIN(tiny_int)");
+        query_ids.emplace_back("small_int",
+                               "SUM(cast (id as double)), SUM(double_not_null)");
+        query_ids.emplace_back("tiny_int", "COUNT(small_int_null), COUNT(*)");
+        query_ids.emplace_back("tiny_int_null", "AVG(small_int), COUNT(tiny_int)");
+        query_ids.emplace_back(
+            "case when id = 6 then -17 when id = 5 then 33 else NULL end",
+            "COUNT(*), AVG(small_int_null)");
+        query_ids.emplace_back(
+            "case when id = 5 then NULL when id = 6 then -57 else cast(61 as tinyint) "
+            "end",
+            "AVG(big_int), SUM(tiny_int)");
+        query_ids.emplace_back(
+            "case when float_not_null > 2 then -3 when float_null < 4 then "
+            "87 else NULL end",
+            "MAX(id), COUNT(*)");
         const std::string table_name("logical_size_test");
         for (auto& pqid : query_ids) {
           std::string query("SELECT " + pqid.first + ", " + pqid.second + " FROM ");

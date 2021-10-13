@@ -656,10 +656,10 @@ class ImportAndSelectTest
                                  const std::string data_source_type) {
     std::vector<std::string> options;
     if (file_type == "parquet") {
-      options.push_back("parquet='True'");
+      options.emplace_back("parquet='True'");
     }
     if (data_source_type == "s3_public" || data_source_type == "s3_private") {
-      options.push_back("s3_region='us-west-1'");
+      options.emplace_back("s3_region='us-west-1'");
     }
     if (options.empty()) {
       return {};

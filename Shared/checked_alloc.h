@@ -36,7 +36,7 @@ class OutOfHostMemory : public std::bad_alloc {
             << boost::stacktrace::stacktrace();
   }
 
-  virtual const char* what() const noexcept final { return what_str_.c_str(); }
+  const char* what() const noexcept final { return what_str_.c_str(); }
 
  private:
   const std::string what_str_;

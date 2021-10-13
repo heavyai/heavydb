@@ -181,7 +181,7 @@ class FileOrderLocal : public FileOrderBase<LocalFileComparator> {
                  const std::optional<std::string>& sort_by)
       : FileOrderBase<LocalFileComparator>(sort_regex, sort_by) {}
 
-  virtual inline LocalFileComparator getFileComparator() {
+  inline LocalFileComparator getFileComparator() override {
     auto comparator_pair = comparator_map_.find(getSortBy());
     CHECK(comparator_pair != comparator_map_.end());
     return comparator_pair->second;
@@ -220,7 +220,7 @@ class FileOrderArrow : public FileOrderBase<ArrowFsComparator> {
                  const std::optional<std::string>& sort_by)
       : FileOrderBase<ArrowFsComparator>(sort_regex, sort_by) {}
 
-  virtual inline ArrowFsComparator getFileComparator() {
+  inline ArrowFsComparator getFileComparator() override {
     auto comparator_pair = comparator_map_.find(getSortBy());
     CHECK(comparator_pair != comparator_map_.end());
     return comparator_pair->second;

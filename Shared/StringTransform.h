@@ -145,25 +145,29 @@ namespace {
 template <typename T>
 inline decltype(auto) stringlike(T&& parm) {
   // String.
-  if constexpr (std::is_base_of_v<std::string, std::remove_reference_t<decltype(parm)>>) {
+  if constexpr (std::is_base_of_v<std::string,
+                                  std::remove_reference_t<decltype(parm)>>) {  // NOLINT
     return std::forward<T>(parm);
-  }
 
-  // Char Array.
-  else if constexpr (std::is_array_v<std::remove_reference_t<decltype(parm)>>) {
+    // Char Array.
+
+  } else if constexpr (std::is_array_v<
+                           std::remove_reference_t<decltype(parm)>>) {  // NOLINT
     return std::forward<T>(parm);
-  }
 
-  // Char String.
-  else if constexpr (std::is_same_v<std::remove_reference_t<decltype(parm)>,
-                                    const char*> ||
-                     std::is_same_v<std::remove_reference_t<decltype(parm)>, char*>) {
+    // Char String.
+
+  } else if constexpr (std::is_same_v<std::remove_reference_t<decltype(parm)>,
+                                      const char*> ||
+                       std::is_same_v<std::remove_reference_t<decltype(parm)>,
+                                      char*>) {  // NOLINT
     return std::forward<T>(parm);
-  }
 
-  // Integer or Floating Point.
-  else if constexpr (std::is_integral_v<std::remove_reference_t<decltype(parm)>> ||
-                     std::is_floating_point_v<std::remove_reference_t<decltype(parm)>>) {
+    // Integer or Floating Point.
+
+  } else if constexpr (std::is_integral_v<std::remove_reference_t<decltype(parm)>> ||
+                       std::is_floating_point_v<
+                           std::remove_reference_t<decltype(parm)>>) {  // NOLINT
     return std::to_string(std::forward<T>(parm));
   }
 

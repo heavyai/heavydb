@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
 
 #include "QueryEngine/CompareKeysInl.h"
 #include "QueryEngine/MurmurHash.h"
@@ -171,11 +171,13 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t insert_sorted(int32_t* arr
                                                                     size_t elem_count,
                                                                     int32_t elem) {
   for (size_t i = 0; i < elem_count; i++) {
-    if (elem == arr[i])
+    if (elem == arr[i]) {
       return 0;
+    }
 
-    if (elem > arr[i])
+    if (elem > arr[i]) {
       continue;
+    }
 
     for (size_t j = elem_count; i < j; j--) {
       arr[j] = arr[j - 1];

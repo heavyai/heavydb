@@ -333,15 +333,15 @@ void import_tables_cache_invalidation_for_CPU_one_to_one_join(bool reverse) {
 
   std::vector<std::string> row_insert_sql;
   if (reverse) {
-    row_insert_sql.push_back("INSERT INTO cache_invalid_t1 VALUES (1, 1, 'row-0');");
-    row_insert_sql.push_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 'row-1');");
+    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (1, 1, 'row-0');");
+    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 'row-1');");
   } else {
-    row_insert_sql.push_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 'row-0');");
-    row_insert_sql.push_back("INSERT INTO cache_invalid_t1 VALUES (1, 1, 'row-1');");
+    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 'row-0');");
+    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (1, 1, 'row-1');");
   }
-  row_insert_sql.push_back("INSERT INTO cache_invalid_t2 VALUES (1, 1, 'row-0');");
-  row_insert_sql.push_back("INSERT INTO cache_invalid_t2 VALUES (1, 1, 'row-1');");
-  row_insert_sql.push_back("INSERT INTO cache_invalid_t2 VALUES (1, 1, 'row-2');");
+  row_insert_sql.emplace_back("INSERT INTO cache_invalid_t2 VALUES (1, 1, 'row-0');");
+  row_insert_sql.emplace_back("INSERT INTO cache_invalid_t2 VALUES (1, 1, 'row-1');");
+  row_insert_sql.emplace_back("INSERT INTO cache_invalid_t2 VALUES (1, 1, 'row-2');");
   for (std::string insert_str : row_insert_sql) {
     run_query(insert_str, ExecutorDeviceType::CPU);
   }
@@ -363,16 +363,16 @@ void import_tables_cache_invalidation_for_CPU_one_to_many_join(bool reverse) {
 
   std::vector<std::string> row_insert_sql;
   if (reverse) {
-    row_insert_sql.push_back("INSERT INTO cache_invalid_t1 VALUES (1, 1, 1, 2);");
-    row_insert_sql.push_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 1, 2);");
-    row_insert_sql.push_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 2, 1);");
+    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (1, 1, 1, 2);");
+    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 1, 2);");
+    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 2, 1);");
   } else {
-    row_insert_sql.push_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 1, 2);");
-    row_insert_sql.push_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 2, 1);");
-    row_insert_sql.push_back("INSERT INTO cache_invalid_t1 VALUES (1, 1, 1, 2);");
+    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 1, 2);");
+    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (0, 0, 2, 1);");
+    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t1 VALUES (1, 1, 1, 2);");
   }
   for (size_t i = 0; i < 6; ++i) {
-    row_insert_sql.push_back("INSERT INTO cache_invalid_t2 VALUES (1, 1);");
+    row_insert_sql.emplace_back("INSERT INTO cache_invalid_t2 VALUES (1, 1);");
   }
   for (std::string insert_str : row_insert_sql) {
     run_query(insert_str, ExecutorDeviceType::CPU);

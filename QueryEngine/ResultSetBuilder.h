@@ -60,7 +60,7 @@ class ResultSetDefaultBuilder : public ResultSetBuilder {
   ResultSetDefaultBuilder(const QueryMemoryDescriptor& query_mem_desc,
                           const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
-  ResultSet* build();
+  ResultSet* build() override;
 };
 
 class ResultSetLogicalValuesBuilder : public ResultSetBuilder {
@@ -86,7 +86,7 @@ class ResultSetLogicalValuesBuilder : public ResultSetBuilder {
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
       const Executor* executor);
 
-  ResultSet* build();
+  ResultSet* build() override;
 
   // A simplified/common pre-packaged use case for this builder that creates a ResultSet
   //     ExecutorDeviceType is "CPU"

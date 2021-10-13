@@ -114,7 +114,7 @@ class Intervals {
 
 template <typename T, typename U = typename std::make_unsigned<T>::type>
 Intervals<T> makeIntervals(T begin, T end, std::size_t n_workers) {
-  if constexpr (sizeof(U) < sizeof(std::size_t)) {
+  if constexpr (sizeof(U) < sizeof(std::size_t)) {  // NOLINT
     if (std::numeric_limits<U>::max() < n_workers) {
       n_workers = std::numeric_limits<U>::max();
     }

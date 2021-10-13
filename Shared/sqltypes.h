@@ -400,12 +400,17 @@ class SQLTypeInfo {
                   ")");
   }
   inline std::string get_buffer_name() const {
-    if (is_array())
+    if (is_array()) {
       return "Array";
-    if (is_bytes())
+    }
+    if (is_bytes()) {
       return "Bytes";
-    if (is_column())
+    }
+
+    if (is_column()) {
       return "Column";
+    }
+
     assert(false);
     return "";
   }

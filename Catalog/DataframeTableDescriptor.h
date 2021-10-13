@@ -60,7 +60,7 @@ struct DataframeTableDescriptor : TableDescriptor {
     hasHeader = true;
   }
 
-  virtual ~DataframeTableDescriptor() = default;
+  ~DataframeTableDescriptor() override = default;
 };
 
 #endif  // DATAFRAME_TABLE_DESCRIPTOR_H

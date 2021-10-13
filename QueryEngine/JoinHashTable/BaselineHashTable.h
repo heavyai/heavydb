@@ -67,7 +67,7 @@ class BaselineHashTable : public HashTable {
 #endif
   }
 
-  ~BaselineHashTable() {
+  ~BaselineHashTable() override {
 #ifdef HAVE_CUDA
     if (gpu_hash_table_buff_) {
       CHECK(buffer_provider_);

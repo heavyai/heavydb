@@ -150,9 +150,9 @@ class JSON final {
   operator T() const {
     static_assert((std::is_integral_v<T> && !std::is_same_v<bool, std::remove_cv_t<T>>) ||
                   (std::is_floating_point_v<T>));
-    if constexpr (std::is_integral_v<T>) {
-      if constexpr (std::numeric_limits<T>::is_signed) {
-        if constexpr (sizeof(T) < 8) {
+    if constexpr (std::is_integral_v<T>) {                // NOLINT
+      if constexpr (std::numeric_limits<T>::is_signed) {  // NOLINT
+        if constexpr (sizeof(T) < 8) {                    // NOLINT
           if (!vptr_->IsInt()) {
             throw std::runtime_error("can't convert JSON field '" + name_ +
                                      "' to be signed integer from [" +
@@ -168,7 +168,7 @@ class JSON final {
           return vptr_->GetInt64();
         }
       } else {
-        if constexpr (sizeof(T) < 8) {
+        if constexpr (sizeof(T) < 8) {  // NOLINT
           if (!vptr_->IsUint()) {
             throw std::runtime_error("can't convert JSON field '" + name_ +
                                      "' to be unsigned integer from [" +
@@ -184,7 +184,7 @@ class JSON final {
           return vptr_->GetUint64();
         }
       }
-    } else if constexpr (std::is_floating_point_v<T>) {
+    } else if constexpr (std::is_floating_point_v<T>) {  // NOLINT
       if (!vptr_->IsDouble()) {
         throw std::runtime_error("can't convert JSON field '" + name_ +
                                  "' to be floating point number from [" +

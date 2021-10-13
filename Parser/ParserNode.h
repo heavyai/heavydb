@@ -1025,7 +1025,7 @@ class CreateTableStmt : public CreateTableBaseStmt {
 
 struct DistributedConnector
     : public Fragmenter_Namespace::InsertDataLoader::DistributedConnector {
-  virtual ~DistributedConnector() {}
+  ~DistributedConnector() override {}
 
   virtual size_t getOuterFragmentCount(QueryStateProxy,
                                        std::string& sql_query_string) = 0;
@@ -1036,7 +1036,7 @@ struct DistributedConnector
 };
 
 struct LocalConnector : public DistributedConnector {
-  virtual ~LocalConnector() {}
+  ~LocalConnector() override {}
 
   size_t getOuterFragmentCount(QueryStateProxy, std::string& sql_query_string) override;
 

@@ -162,7 +162,7 @@ class GpuReductionHelperJIT : public ResultSetReductionJIT {
    * reduceOneEntryNoCollissionsIdx(reduce one slot for perfect hash), and reduceLoop (the
    * outer loop).
    */
-  virtual ReductionCode codegen() const;
+  ReductionCode codegen() const override;
 
  private:
   const QueryMemoryDescriptor& query_mem_desc_;

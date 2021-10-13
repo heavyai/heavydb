@@ -123,7 +123,7 @@ class SingleFileReader : public FileReader {
   SingleFileReader(const std::string& file_path,
                    const import_export::CopyParams& copy_params);
 
-  virtual ~SingleFileReader() = default;
+  ~SingleFileReader() override = default;
 
   FirstLineByFilePath getFirstLineForEachFile() const override;
 

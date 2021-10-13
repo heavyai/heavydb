@@ -62,7 +62,7 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
                 const size_t num_reader_threads = 0,
                 const size_t defaultPageSize = DEFAULT_PAGE_SIZE);
 
-  virtual ~GlobalFileMgr() {}
+  ~GlobalFileMgr() override {}
 
   /// Creates a chunk with the specified key and page size.
   AbstractBuffer* createBuffer(const ChunkKey& key,

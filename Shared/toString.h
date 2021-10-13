@@ -211,7 +211,7 @@ std::string toString(const T& v) {
       r += v[i];
     }
     return "[" + r + "]";
-  } else if constexpr (std::is_same_v<T, llvm::opt::DerivedArgList>) {
+  } else if constexpr (std::is_same_v<T, llvm::opt::DerivedArgList>) {  // NOLINT
     std::string r;
     for (unsigned i = 0; i < v.getNumInputArgStrings(); i++) {
       if (i) {
@@ -220,25 +220,25 @@ std::string toString(const T& v) {
       r += v.getArgString(i);
     }
     return "[" + r + "]";
-  } else if constexpr (std::is_same_v<T, clang::driver::JobList>) {
+  } else if constexpr (std::is_same_v<T, clang::driver::JobList>) {  // NOLINT
     std::string type_str;
     llvm::raw_string_ostream rso(type_str);
     v.Print(rso, nullptr, true);
     return rso.str();
 #endif
-  } else if constexpr (std::is_same_v<T, bool>) {
+  } else if constexpr (std::is_same_v<T, bool>) {  // NOLINT
     return v ? "True" : "False";
-  } else if constexpr (std::is_arithmetic_v<T>) {
+  } else if constexpr (std::is_arithmetic_v<T>) {  // NOLINT
     return std::to_string(v);
 #ifdef ENABLE_TOSTRING_str
-  } else if constexpr (has_str_v<T>) {
+  } else if constexpr (has_str_v<T>) {  // NOLINT
     return v.str();
 #endif
 #ifdef ENABLE_TOSTRING_to_string
-  } else if constexpr (has_to_string_v<T>) {
+  } else if constexpr (has_to_string_v<T>) {  // NOLINT
     return v.to_string();
 #endif
-  } else if constexpr (has_toString_v<T>) {
+  } else if constexpr (has_toString_v<T>) {  // NOLINT
     return v.toString();
   } else if constexpr (get_has_toString_v<T>) {
     auto ptr = v.get();

@@ -98,8 +98,7 @@ class ForeignStorageCacheUnitTest : public testing::Test {
     for (auto& array : data) {
       if (array.size()) {
         size_t num_bytes = array.size() * sizeof(T);
-        datums.push_back(
-            ArrayDatum(num_bytes, reinterpret_cast<int8_t*>(array.data()), false));
+        datums.emplace_back(num_bytes, reinterpret_cast<int8_t*>(array.data()), false);
       } else {
         datums.push_back(null_datum);
       }

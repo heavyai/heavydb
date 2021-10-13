@@ -492,15 +492,13 @@ class ShowUserDetailsTest : public DBHandlerTestFixture {
       if (result.row_set.columns[NAME].data.str_col[i] == username) {
         num_matches++;
         // integral
-        if constexpr (std::is_integral_v<CLEANT>) {
+        if constexpr (std::is_integral_v<CLEANT>) {  // NOLINT
           ASSERT_EQ(result.row_set.columns[col].data.int_col[i], val);
-        }
-        // floating point
-        else if constexpr (std::is_floating_point_v<CLEANT>) {
+          // floating point
+        } else if constexpr (std::is_floating_point_v<CLEANT>) {  // NOLINT
           ASSERT_EQ(result.row_set.columns[col].data.real_col[i], val);
-        }
-        // string
-        else if constexpr (std::is_same_v<std::string, CLEANT>) {
+          // string
+        } else if constexpr (std::is_same_v<std::string, CLEANT>) {  // NOLINT
           ASSERT_EQ(result.row_set.columns[col].data.str_col[i], val);
         }
       }

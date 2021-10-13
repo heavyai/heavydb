@@ -124,14 +124,14 @@ OSTREAM& operator<<(OSTREAM& os, PrintContainer<CONTAINER> pc) {
   if (pc.container.empty()) {
     return os << "()";
   } else {
-    if constexpr (is_std_container<typename CONTAINER::value_type>::value) {
+    if constexpr (is_std_container<typename CONTAINER::value_type>::value) {  // NOLINT
       os << '(';
       for (auto& container : pc.container) {
         os << printContainer(container);
       }
     } else {
       for (auto itr = pc.container.begin(); itr != pc.container.end(); ++itr) {
-        if constexpr (std::is_pointer_v<typename CONTAINER::value_type>) {
+        if constexpr (std::is_pointer_v<typename CONTAINER::value_type>) {  // NOLINT
           os << (itr == pc.container.begin() ? '(' : ' ') << (void const*)*itr;
         } else {
           os << (itr == pc.container.begin() ? '(' : ' ') << *itr;
@@ -196,7 +196,7 @@ inline bool contains(const T& container, const U& element) {
 // Calculate polynomial c0 + c1*x + c2*x^2 + ... + cn*x^n using Horner's method.
 template <typename... COEFFICIENTS>
 constexpr double horner(double const x, double const c0, COEFFICIENTS... c) {
-  if constexpr (sizeof...(COEFFICIENTS) == 0) {
+  if constexpr (sizeof...(COEFFICIENTS) == 0) {  // NOLINT
     return c0;
   } else {
     return horner(x, c...) * x + c0;

@@ -220,7 +220,7 @@ TEST(StringTransform, toString) {
      public:
       std::string toString() const override { return "A2"; };
 
-      virtual ~A2() {}
+      ~A2() override {}
     };
 
     A1 a1;

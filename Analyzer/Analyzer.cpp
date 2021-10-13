@@ -732,7 +732,7 @@ constexpr FLOAT_TYPE maxRound() {
   static_assert(std::is_integral_v<INT_TYPE> && std::is_floating_point_v<FLOAT_TYPE>);
   constexpr int dd =
       std::numeric_limits<INT_TYPE>::digits - std::numeric_limits<FLOAT_TYPE>::digits;
-  if constexpr (0 < dd) {
+  if constexpr (0 < dd) {  // NOLINT
     return static_cast<FLOAT_TYPE>(std::numeric_limits<INT_TYPE>::max() - (1ll << dd));
   } else {
     return static_cast<FLOAT_TYPE>(std::numeric_limits<INT_TYPE>::max());
@@ -756,7 +756,7 @@ T roundDecimal(int64_t n, unsigned scale) {
   constexpr size_t max_scale = std::numeric_limits<uint64_t>::digits10;  // 19
   constexpr auto pow10 = shared::powersOf<uint64_t, max_scale + 1>(10);
   if (scale == 0) {
-    if constexpr (sizeof(T) < sizeof(int64_t)) {
+    if constexpr (sizeof(T) < sizeof(int64_t)) {  // NOLINT
       return safeNarrow<T>(n);
     } else {
       return n;
@@ -769,7 +769,7 @@ T roundDecimal(int64_t n, unsigned scale) {
   uint64_t div = u / pow;
   uint64_t rem = u % pow;
   div += pow / 2 <= rem;
-  if constexpr (sizeof(T) < sizeof(int64_t)) {
+  if constexpr (sizeof(T) < sizeof(int64_t)) {  // NOLINT
     return safeNarrow<T>(static_cast<int64_t>(n < 0 ? -div : div));
   } else {
     return n < 0 ? -div : div;
@@ -793,7 +793,7 @@ int64_t safeScale(T from, unsigned const scale) {
   static_assert(std::is_arithmetic_v<T>);
   constexpr size_t max_scale = std::numeric_limits<int64_t>::digits10;  // 18
   constexpr auto pow10 = shared::powersOf<int64_t, max_scale + 1>(10);
-  if constexpr (std::is_integral_v<T>) {
+  if constexpr (std::is_integral_v<T>) {  // NOLINT
     int64_t retval;
     if (scale < pow10.size()) {
 #ifdef __linux__
