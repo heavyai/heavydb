@@ -30,9 +30,22 @@
     table function, and the error will be propagated as an exception.
 */
 
+// TableFunctionError encapsulates any runtime errors caused by table function execution.
+class TableFunctionError : public std::runtime_error {
+ public:
+  TableFunctionError(const std::string& message) : std::runtime_error(message) {}
+};
+
+// UserTableFunctionErrors represent errors thrown explicitly by user code within table
+// functions, i.e. through calling table_function_error()
+class UserTableFunctionError : public TableFunctionError {
+ public:
+  UserTableFunctionError(const std::string& message) : TableFunctionError(message) {}
+};
+
 // Use a set negative value to distinguish from already-existing
 // negative return values
-enum TableFunctionError : int32_t {
+enum TableFunctionErrorCode : int32_t {
   GenericError = -0x75BCD15,
 };
 

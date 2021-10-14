@@ -33,8 +33,17 @@ EXTENSION_NOINLINE int8_t* allocate_varlen_buffer(int64_t element_count,
                                                   int64_t element_size);
 
 /*
-  Table function management functions:
+  Table function management functions and macros:
  */
+#define FUNC_NAME (std::string(__func__).substr(0, std::string(__func__).find("__")))
+// TODO: support windows path format
+#define ERROR_STRING(MSG)                                                     \
+  (std::string(__FILE__).substr(std::string(__FILE__).rfind("/") + 1) + ":" + \
+   std::to_string(__LINE__) + " " + FUNC_NAME + ": " + MSG)                   \
+      .c_str()
+#define TABLE_FUNCTION_ERROR(MSG) table_function_error(ERROR_STRING(MSG))
+#define ERROR_MESSAGE(MSG) error_message(ERROR_STRING(MSG))
+
 EXTENSION_NOINLINE void set_output_row_size(int64_t num_rows);
 EXTENSION_NOINLINE void TableFunctionManager_set_output_row_size(int8_t* mgr_ptr,
                                                                  int64_t num_rows);

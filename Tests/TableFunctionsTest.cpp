@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 
 #include "QueryEngine/ResultSet.h"
+#include "QueryEngine/TableFunctions/TableFunctionManager.h"
 #include "QueryRunner/QueryRunner.h"
 
 #ifndef BASE_PATH
@@ -338,7 +339,7 @@ TEST_F(TableFunctions, BasicProjection) {
           run_multiple_agg(
               "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), -3));",
               dt),
-          std::runtime_error);
+          UserTableFunctionError);
     }
 
     if (false && dt == ExecutorDeviceType::CPU) {
@@ -346,7 +347,7 @@ TEST_F(TableFunctions, BasicProjection) {
           run_multiple_agg(
               "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), -4));",
               dt),
-          std::runtime_error);
+          UserTableFunctionError);
     }
 
     if (false && dt == ExecutorDeviceType::CPU) {
@@ -354,7 +355,7 @@ TEST_F(TableFunctions, BasicProjection) {
           run_multiple_agg(
               "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), -5));",
               dt),
-          std::runtime_error);
+          TableFunctionError);
     }
   }
 }
@@ -609,7 +610,7 @@ TEST_F(TableFunctions, CallFailure) {
     EXPECT_THROW(run_multiple_agg("SELECT out0 FROM TABLE(row_copier(cursor("
                                   "SELECT d FROM tf_test),101));",
                                   dt),
-                 std::runtime_error);
+                 UserTableFunctionError);
 
     // Skip this test for GPU. TODO: row_copier return value is ignored.
     break;
@@ -827,7 +828,7 @@ TEST_F(TableFunctions, ThrowingTests) {
               "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT x FROM "
               "err_test)));",
               dt),
-          std::runtime_error);
+          UserTableFunctionError);
     }
     {
       EXPECT_THROW(
@@ -835,7 +836,7 @@ TEST_F(TableFunctions, ThrowingTests) {
               "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT y FROM "
               "err_test)));",
               dt),
-          std::runtime_error);
+          UserTableFunctionError);
     }
     {
       EXPECT_THROW(
@@ -843,7 +844,7 @@ TEST_F(TableFunctions, ThrowingTests) {
               "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT f FROM "
               "err_test)));",
               dt),
-          std::runtime_error);
+          UserTableFunctionError);
     }
     {
       EXPECT_THROW(
@@ -851,7 +852,7 @@ TEST_F(TableFunctions, ThrowingTests) {
               "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT d FROM "
               "err_test)));",
               dt),
-          std::runtime_error);
+          UserTableFunctionError);
     }
     {
       EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(ct_require(cursor(SELECT x"
@@ -889,7 +890,7 @@ TEST_F(TableFunctions, ThrowingTests) {
               "SELECT * FROM TABLE(ct_throw_if_gt_100(CURSOR(SELECT CAST(f AS FLOAT) AS "
               "f FROM (VALUES (0.0), (1.0), (2.0), (110.0)) AS t(f))));",
               dt),
-          std::runtime_error);
+          UserTableFunctionError);
     }
     {
       const auto rows = run_multiple_agg(

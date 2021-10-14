@@ -114,13 +114,13 @@ TEMPLATE_NOINLINE __attribute__((__used__)) int32_t mandelbrot_cpu_template(
     Column<T>& output_y,
     Column<int32_t>& output_num_iterations) {
   if (max_iterations < 1) {
-    return mgr.error_message("max_iterations must be a positive integer");
+    return mgr.ERROR_MESSAGE("max_iterations must be a positive integer");
   }
   if (x_pixels < 1 || y_pixels < 1) {
-    return mgr.error_message("x_pixels and y_pixels must be positive integers");
+    return mgr.ERROR_MESSAGE("x_pixels and y_pixels must be positive integers");
   }
   if (x_max <= x_min || y_max <= y_min) {
-    return mgr.error_message(
+    return mgr.ERROR_MESSAGE(
         "Max x and y bounds must be greater than min x and y bounds");
   }
 

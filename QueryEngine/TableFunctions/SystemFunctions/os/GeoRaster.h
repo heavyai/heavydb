@@ -125,13 +125,12 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
                                Column<T>& output_y,
                                Column<Z>& output_z) {
   if (bin_dim_meters <= 0) {
-    return mgr.error_message(
-        "tf_geo_rasterize: bin_dim_meters argument must be greater than 0");
+    return mgr.ERROR_MESSAGE("bin_dim_meters argument must be greater than 0");
   }
 
   if (null_neighborhood_fill_radius < 0) {
-    return mgr.error_message(
-        "tf_geo_rasterize: null_neighborhood_fill_radius argument must be greater than "
+    return mgr.ERROR_MESSAGE(
+        "null_neighborhood_fill_radius argument must be greater than "
         "or equal to 0");
   }
 
@@ -164,22 +163,21 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
                                Column<T>& output_y,
                                Column<Z>& output_z) {
   if (bin_dim_meters <= 0) {
-    return mgr.error_message(
-        "tf_geo_rasterize: bin_dim_meters argument must be greater than 0");
+    return mgr.ERROR_MESSAGE("bin_dim_meters argument must be greater than 0");
   }
 
   if (null_neighborhood_fill_radius < 0) {
-    return mgr.error_message(
-        "tf_geo_rasterize: null_neighborhood_fill_radius argument must be greater than "
+    return mgr.ERROR_MESSAGE(
+        "null_neighborhood_fill_radius argument must be greater than "
         "or equal to 0");
   }
 
   if (x_min >= x_max) {
-    return mgr.error_message("tf_geo_rasterize: x_min must be less than x_max");
+    return mgr.ERROR_MESSAGE("x_min must be less than x_max");
   }
 
   if (y_min >= y_max) {
-    return mgr.error_message("tf_geo_rasterize: y_min must be less than y_max");
+    return mgr.ERROR_MESSAGE("y_min must be less than y_max");
   }
 
   GeoRaster<T, Z> geo_raster(input_x,

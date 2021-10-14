@@ -37,7 +37,7 @@ extern "C" DEVICE RUNTIME_EXPORT void TableFunctionManager_set_output_row_size(
     int64_t num_rows) {
   auto mgr = reinterpret_cast<TableFunctionManager*>(mgr_ptr);
   if (num_rows < 0) {
-    throw std::runtime_error(
+    throw TableFunctionError(
         "set_output_row_size: expected non-negative row size but got " +
         std::to_string(num_rows));
   }
@@ -80,7 +80,7 @@ TableFunctionManager_error_message(int8_t* mgr_ptr, const char* message) {
   } else {
     mgr->set_error_message("no error message set");
   }
-  return TableFunctionError::GenericError;
+  return TableFunctionErrorCode::GenericError;
 }
 
 extern "C" DEVICE RUNTIME_EXPORT int32_t table_function_error(const char* message) {
@@ -95,7 +95,7 @@ extern "C" DEVICE RUNTIME_EXPORT int32_t table_function_error(const char* messag
 extern "C" DEVICE RUNTIME_EXPORT int8_t* TableFunctionManager_get_singleton() {
   auto& mgr = TableFunctionManager::get_singleton();
   if (!mgr) {
-    throw std::runtime_error("uninitialized TableFunctionManager singleton");
+    throw TableFunctionError("uninitialized TableFunctionManager singleton");
   }
   return reinterpret_cast<int8_t*>(mgr);
 }

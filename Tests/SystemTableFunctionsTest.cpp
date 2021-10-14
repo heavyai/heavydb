@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "QueryEngine/ResultSet.h"
+#include "QueryEngine/TableFunctions/TableFunctionManager.h"
 #include "QueryRunner/QueryRunner.h"
 
 #ifndef BASE_PATH
@@ -78,7 +79,7 @@ TEST_F(SystemTFs, Mandelbrot) {
                            "height */, -2.5 /* min_x */, 1.0 /* max_x */, -1.0 /* min_y "
                            "*/, 1.0 /* max_y */, 0 /* max_iterations */));",
                            dt),
-          std::runtime_error);
+          UserTableFunctionError);
     }
     {
       const auto rows = run_multiple_agg(
@@ -114,7 +115,7 @@ TEST_F(SystemTFs, GeoRasterize) {
                                ", 0.0 /* bin_dim_meters */, false /* geographic_coords "
                                "*/, 0 /* null_neighborhood_fill_radius */));",
                            dt),
-          std::runtime_error);
+          UserTableFunctionError);
     }
 
     // tf_geo_rasterize requires null_neighborhood_fill_radius to be >= 0
@@ -124,7 +125,7 @@ TEST_F(SystemTFs, GeoRasterize) {
                                ", 1.0 /* bin_dim_meters */, false /* geographic_coords "
                                "*/, -1 /* null_neighborhood_fill_radius */));",
                            dt),
-          std::runtime_error);
+          UserTableFunctionError);
     }
 
     // tf_geo_rasterize requires x_min to be < x_max
@@ -135,7 +136,7 @@ TEST_F(SystemTFs, GeoRasterize) {
                            "/* null_neighborhood_fill_radius */, 0.0 /* x_min */, 0.0 /* "
                            "x_max */, -1.0 /* y_min */, 1.0 /* y_max */));",
                        dt),
-                   std::runtime_error);
+                   UserTableFunctionError);
     }
     // Test case without null fill radius or bounds definition
     {

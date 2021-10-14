@@ -249,7 +249,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
                                                      literals_owner,
                                                      device_allocator.get()));
       } else {
-        throw std::runtime_error("Literal value " + constant_val->toString() +
+        throw TableFunctionError("Literal value " + constant_val->toString() +
                                  " is not yet supported.");
       }
     }
@@ -338,18 +338,19 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
                                         nullptr,
                                         &output_row_count);
 
-  if (err == TableFunctionError::GenericError) {
-    throw std::runtime_error("Error executing table function: " +
-                             std::string(mgr->get_error_message()));
+  if (err == TableFunctionErrorCode::GenericError) {
+    throw UserTableFunctionError("Error executing table function: " +
+                                 std::string(mgr->get_error_message()));
   }
 
   else if (err) {
-    throw std::runtime_error("Error executing table function: " + std::to_string(err));
+    throw UserTableFunctionError("Error executing table function: " +
+                                 std::to_string(err));
   }
 
   if (exe_unit.table_func.hasCompileTimeOutputSizeConstant()) {
     if (static_cast<size_t>(output_row_count) != mgr->get_nrows()) {
-      throw std::runtime_error(
+      throw TableFunctionError(
           "Table function with constant sizing parameter must return " +
           std::to_string(mgr->get_nrows()) + " (got " + std::to_string(output_row_count) +
           ")");
@@ -366,7 +367,7 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
       // allocate for empty output columns
       mgr->allocate_output_buffers(0);
     } else {
-      throw std::runtime_error("Table function must call set_output_row_size");
+      throw TableFunctionError("Table function must call set_output_row_size");
     }
   }
 
@@ -531,7 +532,7 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
       sizeof(int64_t));
   if (exe_unit.table_func.hasNonUserSpecifiedOutputSize()) {
     if (static_cast<size_t>(output_row_count) != allocated_output_row_count) {
-      throw std::runtime_error(
+      throw TableFunctionError(
           "Table function with constant sizing parameter must return " +
           std::to_string(allocated_output_row_count) + " (got " +
           std::to_string(output_row_count) + ")");

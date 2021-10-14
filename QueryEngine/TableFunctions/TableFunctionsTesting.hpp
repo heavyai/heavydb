@@ -914,9 +914,9 @@ int32_t column_list_safe_row_sum__cpu_template(const ColumnList<T>& input,
       try {
         s = safe_addition(s, col[j]);
       } catch (const std::exception& e) {
-        return table_function_error(e.what());
+        return TABLE_FUNCTION_ERROR(e.what());
       } catch (...) {
-        return table_function_error("Unknown error");
+        return TABLE_FUNCTION_ERROR("Unknown error");
       }
     }
     out[i] = s;
@@ -1087,10 +1087,10 @@ EXTENSION_NOINLINE int32_t ct_sleep1(int32_t seconds,
       break;
     }
     default:
-      return table_function_error("unexpected mode");
+      return TABLE_FUNCTION_ERROR("unexpected mode");
   }
   if (output.size() == 0) {
-    return table_function_error("unspecified output columns row size");
+    return TABLE_FUNCTION_ERROR("unspecified output columns row size");
   }
   return ct_sleep_worker(seconds, output);
 }
@@ -1114,15 +1114,15 @@ EXTENSION_NOINLINE int32_t ct_sleep2(TableFunctionManager& mgr,
                                                              // not initialized"
         mgr0->set_output_row_size(3);
       } catch (std::exception& e) {
-        return mgr.error_message(e.what());
+        return mgr.ERROR_MESSAGE(e.what());
       }
       break;
     }
     default:
-      return mgr.error_message("unexpected mode");
+      return mgr.ERROR_MESSAGE("unexpected mode");
   }
   if (output.size() == 0) {
-    return mgr.error_message("unspecified output columns row size");
+    return mgr.ERROR_MESSAGE("unspecified output columns row size");
   }
   return ct_sleep_worker(seconds, output);
 }
@@ -1141,7 +1141,7 @@ TEMPLATE_NOINLINE int32_t ct_throw_if_gt_100__cpu_template(TableFunctionManager&
   mgr.set_output_row_size(num_rows);
   for (int64_t r = 0; r < num_rows; ++r) {
     if (input[r] > 100) {
-      return mgr.error_message("Values greater than 100 not allowed");
+      return mgr.ERROR_MESSAGE("Values greater than 100 not allowed");
     }
     output[r] = input[r];
   }
