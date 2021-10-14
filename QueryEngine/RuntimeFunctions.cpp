@@ -273,13 +273,16 @@ DEF_UMINUS_NULLABLE(double, double)
   DEF_CAST_NULLABLE(type1, type2)             \
   DEF_CAST_NULLABLE(type2, type1)
 
-#define DEF_ROUND_NULLABLE(from_type, to_type)                                     \
-  extern "C" ALWAYS_INLINE to_type cast_##from_type##_to_##to_type##_nullable(     \
-      const from_type operand,                                                     \
-      const from_type from_null_val,                                               \
-      const to_type to_null_val) {                                                 \
-    return operand == from_null_val ? to_null_val                                  \
-                                    : operand < 0 ? operand - 0.5 : operand + 0.5; \
+#define DEF_ROUND_NULLABLE(from_type, to_type)                                 \
+  extern "C" ALWAYS_INLINE to_type cast_##from_type##_to_##to_type##_nullable( \
+      const from_type operand,                                                 \
+      const from_type from_null_val,                                           \
+      const to_type to_null_val) {                                             \
+    return operand == from_null_val                                            \
+               ? to_null_val                                                   \
+               : static_cast<to_type>(operand + (operand < from_type(0)        \
+                                                     ? from_type(-0.5)         \
+                                                     : from_type(0.5)));       \
   }
 
 DEF_CAST_NULLABLE_BIDIR(int8_t, int16_t)
