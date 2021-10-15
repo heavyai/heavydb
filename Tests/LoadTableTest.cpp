@@ -1077,6 +1077,7 @@ class ThriftImportServerPrivilegeTest : public ThriftDetectServerPrivilegeTest {
 TEST_F(ThriftImportServerPrivilegeTest, S3_Public_without_credentials) {
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
   EXPECT_NO_THROW(importTable(PUBLIC_S3_FILE, "import_test_table"));
+  sqlAndCompareResult("SELECT * FROM import_test_table", {{i(0)}});
 }
 
 TEST_F(ThriftImportServerPrivilegeTest, S3_Private_without_credentials) {
@@ -1109,6 +1110,7 @@ TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_valid_specified_credenti
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
   EXPECT_NO_THROW(importTable(
       PRIVATE_S3_FILE, "import_test_table", aws_access_key_id, aws_secret_access_key));
+  sqlAndCompareResult("SELECT * FROM import_test_table", {{i(0)}});
 }
 
 TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_env_credentials) {
@@ -1118,6 +1120,7 @@ TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_env_credentials) {
   restore_aws_keys(aws_environment_);
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
   EXPECT_NO_THROW(importTable(PRIVATE_S3_FILE, "import_test_table"));
+  sqlAndCompareResult("SELECT * FROM import_test_table", {{i(0)}});
   unset_aws_keys();
 }
 
@@ -1127,6 +1130,7 @@ TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_profile_credentials) {
   }
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, true, aws_environment_);
   EXPECT_NO_THROW(importTable(PRIVATE_S3_FILE, "import_test_table"));
+  sqlAndCompareResult("SELECT * FROM import_test_table", {{i(0)}});
 }
 
 TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_role_credentials) {
@@ -1135,6 +1139,7 @@ TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_role_credentials) {
   }
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
   EXPECT_NO_THROW(importTable(PRIVATE_S3_FILE, "import_test_table"));
+  sqlAndCompareResult("SELECT * FROM import_test_table", {{i(0)}});
 }
 
 #endif  // HAVE_AWS_S3
