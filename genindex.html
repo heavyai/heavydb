@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.9.0dev 4929290
+                5.9.0dev 6686921
               </div>
             
           
@@ -772,6 +772,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_sys_allocator.html">Class SysAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_table_archiver.html">Class TableArchiver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_table_function_compilation_context.html">Class TableFunctionCompilationContext</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_table_function_error.html">Class TableFunctionError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_table_function_execution_context.html">Class TableFunctionExecutionContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_table_generations.html">Class TableGenerations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_table_must_be_replicated.html">Class TableMustBeReplicated</a></li>
@@ -794,6 +795,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_update_log_for_fragment.html">Class UpdateLogForFragment</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_used_columns_visitor.html">Class UsedColumnsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_user.html">Class User</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_user_table_function_error.html">Class UserTableFunctionError</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_value.html">Class Value</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_vector_view.html">Class VectorView</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_watchdog_exception.html">Class WatchdogException</a></li>
@@ -12607,7 +12609,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper16total_row_count_E">foreign_storage::ParquetDataWrapper::total_row_count_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_date_from_timestamp_encoder.html#_CPPv4I00_1TEN15foreign_storage31ParquetDateFromTimestampEncoderE">foreign_storage::ParquetDateFromTimestampEncoder (C++ class)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_date_from_timestamp_encoder.html#_CPPv4I00_1T0EN15foreign_storage31ParquetDateFromTimestampEncoderE">foreign_storage::ParquetDateFromTimestampEncoder (C++ class)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_date_from_timestamp_encoder.html#_CPPv4N15foreign_storage31ParquetDateFromTimestampEncoder31ParquetDateFromTimestampEncoderEPN14Data_Namespace14AbstractBufferEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">foreign_storage::ParquetDateFromTimestampEncoder::ParquetDateFromTimestampEncoder (C++ function)</a>
 </li>
@@ -12617,11 +12619,9 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_date_in_seconds_encoder.html#_CPPv4N15foreign_storage27ParquetDateInSecondsEncoder27ParquetDateInSecondsEncoderEPN14Data_Namespace14AbstractBufferE">foreign_storage::ParquetDateInSecondsEncoder::ParquetDateInSecondsEncoder (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_parquet_date_in_seconds_encoder.html#_CPPv4N15foreign_storage27ParquetDateInSecondsEncoder27ParquetDateInSecondsEncoderEPN14Data_Namespace14AbstractBufferEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">[1]</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_date_in_seconds_encoder.html#_CPPv4N15foreign_storage27ParquetDateInSecondsEncoder7setNullEP6int8_t">foreign_storage::ParquetDateInSecondsEncoder::setNull (C++ function)</a>
-</li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_date_in_seconds_encoder.html#_CPPv4NK15foreign_storage27ParquetDateInSecondsEncoder8validateENSt10shared_ptrIN7parquet10StatisticsEEERK11SQLTypeInfo">foreign_storage::ParquetDateInSecondsEncoder::validate (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_parquet_date_in_seconds_encoder.html#_CPPv4NK15foreign_storage27ParquetDateInSecondsEncoder8validateEPK6int8_tK7int64_tRK11SQLTypeInfo">[1]</a>, <a href="api/class/classforeign__storage_1_1_parquet_date_in_seconds_encoder.html#_CPPv4NK15foreign_storage27ParquetDateInSecondsEncoder8validateERK7int32_tRK11SQLTypeInfo">[2]</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_decimal_encoder.html#_CPPv4I00EN15foreign_storage21ParquetDecimalEncoderE">foreign_storage::ParquetDecimalEncoder (C++ class)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_decimal_encoder.html#_CPPv4I000EN15foreign_storage21ParquetDecimalEncoderE">foreign_storage::ParquetDecimalEncoder (C++ class)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_decimal_encoder.html#_CPPv4NK15foreign_storage21ParquetDecimalEncoder28convertDecimalByteArrayToIntEPK7uint8_tKi">foreign_storage::ParquetDecimalEncoder::convertDecimalByteArrayToInt (C++ function)</a>
 </li>
@@ -12681,7 +12681,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_array_encoder.html#_CPPv4N15foreign_storage30ParquetFixedLengthArrayEncoder19throwWrongSizeArrayEK6size_tK6size_tRKNSt6stringE">foreign_storage::ParquetFixedLengthArrayEncoder::throwWrongSizeArray (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4I00EN15foreign_storage25ParquetFixedLengthEncoderE">foreign_storage::ParquetFixedLengthEncoder (C++ class)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4I000EN15foreign_storage25ParquetFixedLengthEncoderE">foreign_storage::ParquetFixedLengthEncoder (C++ class)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_fixed_length_encoder.html#_CPPv4N15foreign_storage25ParquetFixedLengthEncoder13encodeAndCopyEPK6int8_tP6int8_t">foreign_storage::ParquetFixedLengthEncoder::encodeAndCopy (C++ function)</a>
 </li>
@@ -12919,13 +12919,13 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_string_none_encoder.html#_CPPv4N15foreign_storage24ParquetStringNoneEncoder30writeInitialOffsetIfApplicableEv">foreign_storage::ParquetStringNoneEncoder::writeInitialOffsetIfApplicable (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_time_encoder.html#_CPPv4I00_1TEN15foreign_storage18ParquetTimeEncoderE">foreign_storage::ParquetTimeEncoder (C++ class)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_time_encoder.html#_CPPv4I00_1T0EN15foreign_storage18ParquetTimeEncoderE">foreign_storage::ParquetTimeEncoder (C++ class)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_time_encoder.html#_CPPv4N15foreign_storage18ParquetTimeEncoder13encodeAndCopyEPK6int8_tP6int8_t">foreign_storage::ParquetTimeEncoder::encodeAndCopy (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_time_encoder.html#_CPPv4N15foreign_storage18ParquetTimeEncoder18ParquetTimeEncoderEPN14Data_Namespace14AbstractBufferEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">foreign_storage::ParquetTimeEncoder::ParquetTimeEncoder (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_timestamp_encoder.html#_CPPv4I00_1TEN15foreign_storage23ParquetTimestampEncoderE">foreign_storage::ParquetTimestampEncoder (C++ class)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_timestamp_encoder.html#_CPPv4I00_1T0EN15foreign_storage23ParquetTimestampEncoderE">foreign_storage::ParquetTimestampEncoder (C++ class)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_timestamp_encoder.html#_CPPv4NK15foreign_storage23ParquetTimestampEncoder7convertERK1T">foreign_storage::ParquetTimestampEncoder::convert (C++ function)</a>
 </li>
@@ -12935,7 +12935,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_timestamp_encoder.html#_CPPv4NK15foreign_storage23ParquetTimestampEncoder8validateENSt10shared_ptrIN7parquet10StatisticsEEERK11SQLTypeInfo">foreign_storage::ParquetTimestampEncoder::validate (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_parquet_timestamp_encoder.html#_CPPv4NK15foreign_storage23ParquetTimestampEncoder8validateEPK6int8_tK7int64_tRK11SQLTypeInfo">[1]</a>, <a href="api/class/classforeign__storage_1_1_parquet_timestamp_encoder.html#_CPPv4NK15foreign_storage23ParquetTimestampEncoder8validateERK1TRK11SQLTypeInfo">[2]</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html#_CPPv4I000EN15foreign_storage33ParquetUnsignedFixedLengthEncoderE">foreign_storage::ParquetUnsignedFixedLengthEncoder (C++ class)</a>
+      <li><a href="api/class/classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html#_CPPv4I0000EN15foreign_storage33ParquetUnsignedFixedLengthEncoderE">foreign_storage::ParquetUnsignedFixedLengthEncoder (C++ class)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html#_CPPv4N15foreign_storage33ParquetUnsignedFixedLengthEncoder13encodeAndCopyEPK6int8_tP6int8_t">foreign_storage::ParquetUnsignedFixedLengthEncoder::encodeAndCopy (C++ function)</a>
 </li>
@@ -13189,7 +13189,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_timestamp_bounds_validator.html#_CPPv4N15foreign_storage24TimestampBoundsValidator17valueWithinBoundsERK1TRK11SQLTypeInfo">foreign_storage::TimestampBoundsValidator::valueWithinBounds (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html#_CPPv4I00EN15foreign_storage26TypedParquetInPlaceEncoderE">foreign_storage::TypedParquetInPlaceEncoder (C++ class)</a>
+      <li><a href="api/class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html#_CPPv4I000EN15foreign_storage26TypedParquetInPlaceEncoderE">foreign_storage::TypedParquetInPlaceEncoder (C++ class)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_typed_parquet_in_place_encoder.html#_CPPv4N15foreign_storage26TypedParquetInPlaceEncoder10appendDataEPK7int16_tPK7int16_tK7int64_tK7int64_tP6int8_t">foreign_storage::TypedParquetInPlaceEncoder::appendData (C++ function)</a>
 </li>
@@ -25297,6 +25297,10 @@
 </li>
       <li><a href="api/class/class_table_function_compilation_context.html#_CPPv4N31TableFunctionCompilationContext31TableFunctionCompilationContextERK31TableFunctionCompilationContext">TableFunctionCompilationContext::TableFunctionCompilationContext (C++ function)</a>, <a href="api/class/class_table_function_compilation_context.html#_CPPv4N31TableFunctionCompilationContext31TableFunctionCompilationContextEv">[1]</a>
 </li>
+      <li><a href="api/class/class_table_function_error.html#_CPPv418TableFunctionError">TableFunctionError (C++ class)</a>
+</li>
+      <li><a href="api/class/class_table_function_error.html#_CPPv4N18TableFunctionError18TableFunctionErrorERKNSt6stringE">TableFunctionError::TableFunctionError (C++ function)</a>
+</li>
       <li><a href="api/class/class_table_function_execution_context.html#_CPPv429TableFunctionExecutionContext">TableFunctionExecutionContext (C++ class)</a>
 </li>
       <li><a href="api/class/class_table_function_execution_context.html#_CPPv4N29TableFunctionExecutionContext7executeERK26TableFunctionExecutionUnitRKNSt6vectorI14InputTableInfoEEPK31TableFunctionCompilationContextRK13ColumnFetcherK18ExecutorDeviceTypeP8Executor">TableFunctionExecutionContext::execute (C++ function)</a>
@@ -25487,10 +25491,10 @@
 </li>
       <li><a href="api/struct/struct_table_privileges.html#_CPPv4N15TablePrivileges12CREATE_TABLEE">TablePrivileges::CREATE_TABLE (C++ member)</a>
 </li>
-      <li><a href="api/struct/struct_table_privileges.html#_CPPv4N15TablePrivileges17DELETE_FROM_TABLEE">TablePrivileges::DELETE_FROM_TABLE (C++ member)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/struct/struct_table_privileges.html#_CPPv4N15TablePrivileges17DELETE_FROM_TABLEE">TablePrivileges::DELETE_FROM_TABLE (C++ member)</a>
+</li>
       <li><a href="api/struct/struct_table_privileges.html#_CPPv4N15TablePrivileges10DROP_TABLEE">TablePrivileges::DROP_TABLE (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_table_privileges.html#_CPPv4N15TablePrivileges17INSERT_INTO_TABLEE">TablePrivileges::INSERT_INTO_TABLE (C++ member)</a>
@@ -25981,10 +25985,10 @@
 </li>
       <li><a href="api/class/class_update_log_for_fragment.html#_CPPv4N20UpdateLogForFragment3rs_E">UpdateLogForFragment::rs_ (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_update_log_for_fragment.html#_CPPv4N20UpdateLogForFragment20UpdateLogForFragmentERK16FragmentInfoTypeK6size_tRKNSt10shared_ptrI9ResultSetEE">UpdateLogForFragment::UpdateLogForFragment (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/struct_updel_roll.html#_CPPv49UpdelRoll">UpdelRoll (C++ class)</a>
 </li>
       <li><a href="api/struct/struct_updel_roll.html#_CPPv4N9UpdelRoll13addDirtyChunkENSt10shared_ptrIN8Chunk_NS5ChunkEEEi">UpdelRoll::addDirtyChunk (C++ function)</a>
@@ -26038,6 +26042,10 @@
       <li><a href="api/class/class_user.html#_CPPv4NK4User6isUserEv">User::isUser (C++ function)</a>
 </li>
       <li><a href="api/class/class_user.html#_CPPv4N4User4UserERKNSt6stringE">User::User (C++ function)</a>
+</li>
+      <li><a href="api/class/class_user_table_function_error.html#_CPPv422UserTableFunctionError">UserTableFunctionError (C++ class)</a>
+</li>
+      <li><a href="api/class/class_user_table_function_error.html#_CPPv4N22UserTableFunctionError22UserTableFunctionErrorERKNSt6stringE">UserTableFunctionError::UserTableFunctionError (C++ function)</a>
 </li>
   </ul></td>
 </tr></table>
