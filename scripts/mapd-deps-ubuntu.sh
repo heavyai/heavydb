@@ -222,7 +222,7 @@ install_rdkafka
 install_libuv
 
 # glslang (with spirv-tools)
-VERS=8.13.3743 # stable 4/27/20
+VERS=11.6.0 # stable 8/25/21
 rm -rf glslang
 mkdir -p glslang
 pushd glslang
