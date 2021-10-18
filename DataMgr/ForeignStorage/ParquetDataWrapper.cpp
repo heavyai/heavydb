@@ -22,6 +22,7 @@
 #include <boost/filesystem.hpp>
 
 #include "ForeignStorageException.h"
+#include "FsiChunkUtils.h"
 #include "FsiJsonUtils.h"
 #include "LazyParquetChunkLoader.h"
 #include "ParquetShared.h"

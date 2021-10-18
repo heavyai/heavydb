@@ -26,6 +26,7 @@
 #include <parquet/types.h>
 
 #include "ForeignStorageException.h"
+#include "FsiChunkUtils.h"
 #include "ParquetArrayImportEncoder.h"
 #include "ParquetDateFromTimestampEncoder.h"
 #include "ParquetDateInSecondsEncoder.h"

@@ -32,44 +32,6 @@ namespace foreign_storage {
 using UniqueReaderPtr = std::unique_ptr<parquet::arrow::FileReader>;
 using ReaderPtr = parquet::arrow::FileReader*;
 
-/*
-  Splits up a set of items to be processed into multiple partitions, with the intention
-  that each thread will process a separate part.
- */
-// TODO(Misiu): Change this to return a list of Views/Ranges when we support c++20.
-template <typename T>
-auto partition_for_threads(const std::set<T>& items, size_t max_threads) {
-  const size_t items_per_thread = (items.size() + (max_threads - 1)) / max_threads;
-  std::list<std::set<T>> items_by_thread;
-  auto i = 0U;
-  for (auto item : items) {
-    if (i++ % items_per_thread == 0) {
-      items_by_thread.emplace_back(std::set<T>{});
-    }
-    items_by_thread.back().emplace(item);
-  }
-  return items_by_thread;
-}
-
-/*
-  Splits up a vector of items to be processed into multiple partitions, with the intention
-  that each thread will process a separate part.
- */
-// TODO: refactor partition_for_threads to use Requires when we support c++20
-template <typename T>
-auto partition_for_threads(const std::vector<T>& items, size_t max_threads) {
-  const size_t items_per_thread = (items.size() + (max_threads - 1)) / max_threads;
-  std::list<std::vector<T>> items_by_thread;
-  auto i = 0U;
-  for (auto item : items) {
-    if (i++ % items_per_thread == 0) {
-      items_by_thread.emplace_back(std::vector<T>{});
-    }
-    items_by_thread.back().emplace_back(item);
-  }
-  return items_by_thread;
-}
-
 struct RowGroupInterval {
   std::string file_path;
   int start_index{-1}, end_index{-1};
