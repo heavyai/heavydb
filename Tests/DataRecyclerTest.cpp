@@ -1034,6 +1034,32 @@ TEST(DataRecycler, Hashtable_From_Subqueries) {
   }
 }
 
+TEST(DataRecycler, Empty_Hashtable) {
+  run_ddl_statement("DROP TABLE IF EXISTS T5;");
+  run_ddl_statement("DROP TABLE IF EXISTS T6;");
+  run_ddl_statement("CREATE TABLE T5 (c1 INT, c2 INT);");
+  run_ddl_statement("CREATE TABLE T6 (c1 INT, c2 INT);");
+  auto data_mgr = &QR::get()->getCatalog()->getDataMgr();
+  auto executor =
+      Executor::getExecutor(
+          Executor::UNITARY_EXECUTOR_ID, data_mgr, data_mgr->getBufferProvider())
+          .get();
+  auto clearCaches = [&executor, data_mgr](ExecutorDeviceType dt) {
+    auto memory_level =
+        dt == ExecutorDeviceType::CPU ? MemoryLevel::CPU_LEVEL : MemoryLevel::GPU_LEVEL;
+    executor->clearMemory(memory_level, data_mgr);
+    executor->getQueryPlanDagCache().clearQueryPlanCache();
+  };
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    QR::get()->runSQL("SELECT COUNT(1) FROM T5 INNER JOIN T6 ON (T5.c1 = T6.c1);", dt);
+    clearCaches(dt);
+    QR::get()->runSQL(
+        "SELECT COUNT(1) FROM T5 INNER JOIN T6 ON (T5.c1 = T6.c1 AND T5.c2 = T6.c2);",
+        dt);
+    clearCaches(dt);
+  }
+}
+
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);

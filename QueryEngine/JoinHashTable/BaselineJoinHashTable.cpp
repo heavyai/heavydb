@@ -595,20 +595,22 @@ int BaselineJoinHashTable::initHashTableForDevice(
       ts2 = std::chrono::steady_clock::now();
       auto hashtable_build_time =
           std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
-      if (!err && allow_hashtable_recycling) {
+      if (!err && allow_hashtable_recycling && hash_tables_for_device_[device_id]) {
+        // add ht-related items to cache iff we have a valid hashtable
         putHashTableOnCpuToCache(hashtable_cache_key_,
                                  CacheItemType::BASELINE_HT,
                                  hash_tables_for_device_[device_id],
                                  DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
                                  hashtable_build_time);
 
-        hash_table_layout_cache_->putItemToCache(hashtable_cache_key_,
-                                                 builder.getHashLayout(),
-                                                 CacheItemType::HT_HASHING_SCHEME,
-                                                 DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-                                                 0,
-                                                 0,
-                                                 {});
+        hash_table_layout_cache_->putItemToCache(
+            hashtable_cache_key_,
+            hash_tables_for_device_[device_id]->getLayout(),
+            CacheItemType::HT_HASHING_SCHEME,
+            DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+            0,
+            0,
+            {});
       }
     }
     // Transfer the hash table on the GPU if we've only built it on CPU
@@ -672,14 +674,16 @@ int BaselineJoinHashTable::initHashTableForDevice(
                                      executor_);
     CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
     hash_tables_for_device_[device_id] = builder.getHashTable();
-    if (!err && allow_hashtable_recycling) {
-      hash_table_layout_cache_->putItemToCache(hashtable_cache_key_,
-                                               builder.getHashLayout(),
-                                               CacheItemType::HT_HASHING_SCHEME,
-                                               DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-                                               0,
-                                               0,
-                                               {});
+    if (!err && allow_hashtable_recycling && hash_tables_for_device_[device_id]) {
+      // add layout to cache iff we have a valid hashtable
+      hash_table_layout_cache_->putItemToCache(
+          hashtable_cache_key_,
+          hash_tables_for_device_[device_id]->getLayout(),
+          CacheItemType::HT_HASHING_SCHEME,
+          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+          0,
+          0,
+          {});
     }
 #else
     UNREACHABLE();

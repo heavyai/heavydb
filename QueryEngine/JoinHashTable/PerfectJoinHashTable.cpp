@@ -526,7 +526,8 @@ int PerfectJoinHashTable::initHashTableForDevice(
         ts2 = std::chrono::steady_clock::now();
         auto build_time =
             std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
-        if (allow_hashtable_recycling) {
+        if (allow_hashtable_recycling && hash_table) {
+          // add ht-related items to cache iff we have a valid hashtable
           hash_table_layout_cache_->putItemToCache(
               hashtable_cache_key_,
               hashtable_layout,
@@ -609,14 +610,16 @@ int PerfectJoinHashTable::initHashTableForDevice(
                                executor_);
     CHECK_LT(size_t(device_id), hash_tables_for_device_.size());
     hash_tables_for_device_[device_id] = builder.getHashTable();
-    if (!err && allow_hashtable_recycling) {
-      hash_table_layout_cache_->putItemToCache(hashtable_cache_key_,
-                                               hashtable_layout,
-                                               CacheItemType::HT_HASHING_SCHEME,
-                                               DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-                                               0,
-                                               0,
-                                               {});
+    if (!err && allow_hashtable_recycling && hash_tables_for_device_[device_id]) {
+      // add layout to cache iff we have a valid hashtable
+      hash_table_layout_cache_->putItemToCache(
+          hashtable_cache_key_,
+          hash_tables_for_device_[device_id]->getLayout(),
+          CacheItemType::HT_HASHING_SCHEME,
+          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+          0,
+          0,
+          {});
     }
 #else
     UNREACHABLE();
