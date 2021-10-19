@@ -1036,6 +1036,30 @@ std::string unescape(std::string s) {
   boost::replace_all(s, "\\t", "\t");
   boost::replace_all(s, "\\\\n", "\n");
   boost::replace_all(s, "\\n", "\n");
+
+  // handle numerics
+  std::smatch m;
+
+  // "\x00"
+  std::regex e1("(\\\\x[0-9A-Fa-f][0-9A-Fa-f])");
+  while (std::regex_search(s, m, e1)) {
+    std::string original(m[0].first, m[0].second);
+    std::string replacement;
+    long val = strtol(original.substr(2, 2).c_str(), NULL, 16);
+    replacement.push_back(val);
+    boost::replace_all(s, original, replacement);
+  }
+
+  // "\u0000"
+  std::regex e2("(\\\\u[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f])");
+  while (std::regex_search(s, m, e2)) {
+    std::string original(m[0].first, m[0].second);
+    std::string replacement;
+    long val = strtol(original.substr(2, 4).c_str(), NULL, 16);
+    replacement.push_back(val);
+    boost::replace_all(s, original, replacement);
+  }
+
   return s;
 }
 

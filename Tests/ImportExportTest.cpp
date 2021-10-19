@@ -1215,6 +1215,22 @@ TEST_F(ImportTest, tsv_file) {
           " WITH (header='true', delimiter = '\\t');",
       200,
       1.0));
+
+  // Test: Delimiter as numeric value
+  EXPECT_TRUE(importTestCommon(
+      string("COPY trips FROM ") +
+          "'../../Tests/Import/datafiles/trip_data_dir/csv/trip_data.tsv'" +
+          " WITH (header='true', delimiter = '\x09');",
+      300,
+      1.0));
+
+  // Test: Delimiter as unicode numeric value
+  EXPECT_TRUE(importTestCommon(
+      string("COPY trips FROM ") +
+          "'../../Tests/Import/datafiles/trip_data_dir/csv/trip_data.tsv'" +
+          " WITH (header='true', delimiter = '\u0009');",
+      400,
+      1.0));
 }
 
 TEST_F(ImportTest, array_including_quoted_fields) {
