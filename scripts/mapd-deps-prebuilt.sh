@@ -76,7 +76,7 @@ diff -ru thrust-old/system/tbb/detail/reduce_by_key.inl thrust/system/tbb/detail
    // generate O(P) intervals of sequential work
    // XXX oversubscribing is a tuning opportunity
 EOF
-  patch -p0 --forward -r- < /tmp/cuda-11.0-tbb-thrust.patch || true
+  sudo patch -p0 --forward -r- < /tmp/cuda-11.0-tbb-thrust.patch || true
   popd
 fi
 
