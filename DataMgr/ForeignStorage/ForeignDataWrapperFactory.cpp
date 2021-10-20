@@ -24,8 +24,8 @@
 #include "ParquetDataWrapper.h"
 #include "ParquetImporter.h"
 #endif
-#include "RegexParserDataWrapper.h"
 #include "Catalog/os/UserMapping.h"
+#include "RegexParserDataWrapper.h"
 
 namespace {
 
