@@ -190,7 +190,7 @@ function install_llvm() {
     # Patch llvm 9 for glibc 2.31+ support
     # from: https://bugs.gentoo.org/708430
     pushd llvm-$VERS.src/projects/
-    patch -p0 < $SCRIPTS_DIR/llvm-9-glibc-2.31-708430.patch
+    sudo patch -p0 < $SCRIPTS_DIR/llvm-9-glibc-2.31-708430.patch
     popd
 
     rm -rf build.llvm-$VERS
