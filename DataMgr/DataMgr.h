@@ -51,7 +51,8 @@ class DeviceAllocator;
 
 namespace Buffer_Namespace {
 class CpuBufferMgr;
-}
+class GpuCudaBufferMgr;
+}  // namespace Buffer_Namespace
 
 namespace Data_Namespace {
 
@@ -200,7 +201,8 @@ class DataMgr {
   bool isBufferOnDevice(const ChunkKey& key,
                         const MemoryLevel memLevel,
                         const int deviceId);
-  std::vector<MemoryInfo> getMemoryInfo(const MemoryLevel memLevel);
+  std::vector<MemoryInfo> getMemoryInfo(const MemoryLevel memLevel) const;
+  std::vector<MemoryInfo> getMemoryInfoUnlocked(const MemoryLevel memLevel) const;
   std::string dumpLevel(const MemoryLevel memLevel);
   void clearMemory(const MemoryLevel memLevel);
 
@@ -245,6 +247,9 @@ class DataMgr {
   // Used for testing.
   Buffer_Namespace::CpuBufferMgr* getCpuBufferMgr() const;
 
+  // Used for testing.
+  Buffer_Namespace::GpuCudaBufferMgr* getGpuBufferMgr() const;
+
  private:
   void populateMgrs(const SystemParameters& system_parameters,
                     const size_t userSpecifiedNumReaderThreads,
@@ -264,7 +269,7 @@ class DataMgr {
   std::string dataDir_;
   bool hasGpus_;
   size_t reservedGpuMem_;
-  std::mutex buffer_access_mutex_;
+  mutable std::mutex buffer_access_mutex_;
 };
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage&);

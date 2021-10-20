@@ -347,11 +347,15 @@ void DataMgr::createTopLevelMetadata()
   }
 }
 
-std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
+std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel mem_level) const {
   std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
+  return getMemoryInfoUnlocked(mem_level);
+}
 
+std::vector<MemoryInfo> DataMgr::getMemoryInfoUnlocked(
+    const MemoryLevel mem_level) const {
   std::vector<MemoryInfo> mem_info;
-  if (memLevel == MemoryLevel::CPU_LEVEL) {
+  if (mem_level == MemoryLevel::CPU_LEVEL) {
     Buffer_Namespace::CpuBufferMgr* cpu_buffer =
         dynamic_cast<Buffer_Namespace::CpuBufferMgr*>(
             bufferMgrs_[MemoryLevel::CPU_LEVEL][0]);
@@ -630,11 +634,21 @@ std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem
 }
 
 PersistentStorageMgr* DataMgr::getPersistentStorageMgr() const {
-  return dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0]);
+  return dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[MemoryLevel::DISK_LEVEL][0]);
 }
 
 Buffer_Namespace::CpuBufferMgr* DataMgr::getCpuBufferMgr() const {
-  return dynamic_cast<Buffer_Namespace::CpuBufferMgr*>(bufferMgrs_[1][0]);
+  return dynamic_cast<Buffer_Namespace::CpuBufferMgr*>(
+      bufferMgrs_[MemoryLevel::CPU_LEVEL][0]);
+}
+
+Buffer_Namespace::GpuCudaBufferMgr* DataMgr::getGpuBufferMgr() const {
+  if (bufferMgrs_.size() > MemoryLevel::GPU_LEVEL) {
+    return dynamic_cast<Buffer_Namespace::GpuCudaBufferMgr*>(
+        bufferMgrs_[MemoryLevel::GPU_LEVEL][0]);
+  } else {
+    return nullptr;
+  }
 }
 
 }  // namespace Data_Namespace

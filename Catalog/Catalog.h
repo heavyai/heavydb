@@ -101,6 +101,8 @@ static constexpr const char* DATABASES_SYS_TABLE_NAME{"databases"};
 static constexpr const char* PERMISSIONS_SYS_TABLE_NAME{"permissions"};
 static constexpr const char* ROLES_SYS_TABLE_NAME{"roles"};
 static constexpr const char* ROLE_ASSIGNMENTS_SYS_TABLE_NAME{"role_assignments"};
+static constexpr const char* MEMORY_SUMMARY_SYS_TABLE_NAME{"memory_summary"};
+static constexpr const char* MEMORY_DETAILS_SYS_TABLE_NAME{"memory_details"};
 
 /**
  * @type Catalog
@@ -728,7 +730,9 @@ class Catalog final {
   void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
 
   static constexpr const char* CATALOG_SERVER_NAME{"omnisci_catalog_server"};
-  static constexpr std::array<const char*, 1> INTERNAL_SERVERS{CATALOG_SERVER_NAME};
+  static constexpr const char* MEMORY_STATS_SERVER_NAME{"omnisci_memory_stats_server"};
+  static constexpr std::array<const char*, 2> INTERNAL_SERVERS{CATALOG_SERVER_NAME,
+                                                               MEMORY_STATS_SERVER_NAME};
 
  public:
   mutable std::mutex sqliteMutex_;

@@ -20,10 +20,13 @@
  */
 
 #include <gtest/gtest.h>
+#include "boost/filesystem.hpp"
+
 #include "DBHandlerTestHelpers.h"
+#include "DataMgr/BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
+#include "DataMgr/BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
 #include "Shared/File.h"
 #include "TestHelpers.h"
-#include "boost/filesystem.hpp"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -1297,6 +1300,25 @@ TEST_F(SystemTablesShowCreateTableTest, Roles) {
                       {{"CREATE TABLE roles (\n  role_name TEXT ENCODING DICT(32));"}});
 }
 
+TEST_F(SystemTablesShowCreateTableTest, MemorySummary) {
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE memory_summary;",
+      {{"CREATE TABLE memory_summary (\n  node TEXT ENCODING DICT(32),\n  device_id "
+        "INTEGER,\n  device_type TEXT ENCODING DICT(32),\n  max_page_count BIGINT,\n  "
+        "page_size BIGINT,\n  allocated_page_count BIGINT,\n  used_page_count BIGINT,\n  "
+        "free_page_count BIGINT);"}});
+}
+
+TEST_F(SystemTablesShowCreateTableTest, MemoryDetails) {
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE memory_details;",
+      {{"CREATE TABLE memory_details (\n  node TEXT ENCODING DICT(32),\n  database_id "
+        "INTEGER,\n  table_id INTEGER,\n  column_id INTEGER,\n  chunk_key INTEGER[],\n  "
+        "device_id INTEGER,\n  device_type TEXT ENCODING DICT(32),\n  memory_status TEXT "
+        "ENCODING DICT(32),\n  page_count BIGINT,\n  page_size BIGINT,\n  slab_id "
+        "INTEGER,\n  start_page BIGINT,\n  last_touch_epoch BIGINT);"}});
+}
+
 namespace {
 const int64_t PAGES_PER_DATA_FILE =
     File_Namespace::FileMgr::DEFAULT_NUM_PAGES_PER_DATA_FILE;
@@ -2233,6 +2255,7 @@ class SystemTablesTest : public DBHandlerTestFixture {
       GTEST_SKIP() << "Test is not supported in distributed mode.";
     }
     switchToAdmin();
+    sql("DROP TABLE IF EXISTS test_table_1;");
     dropUser("test_user_3");
     resetDbObjectsAndPermissions();
   }
@@ -2267,7 +2290,7 @@ class SystemTablesTest : public DBHandlerTestFixture {
     return user.userId;
   }
 
-  int32_t getTableId(const std::string& table_name) {
+  int64_t getTableId(const std::string& table_name) {
     auto td = getCatalog().getMetadataForTable(table_name, false);
     CHECK(td);
     return td->tableId;
@@ -2340,6 +2363,58 @@ class SystemTablesTest : public DBHandlerTestFixture {
 
   void loginInformationSchema() {
     login("admin", "HyperInteractive", "information_schema");
+  }
+
+  void initTestTableAndClearMemory() {
+    switchToAdmin();
+    sql("CREATE TABLE test_table_1 (i INTEGER);");
+    sql("INSERT INTO test_table_1 VALUES (10);");
+    sql("SELECT * FROM test_table_1;");
+    sql("ALTER SYSTEM CLEAR CPU MEMORY;");
+    sql("ALTER SYSTEM CLEAR GPU MEMORY;");
+  }
+
+  Buffer_Namespace::CpuBufferMgr* getCpuBufferMgr() {
+    auto cpu_buffer_mgr = getCatalog().getDataMgr().getCpuBufferMgr();
+    CHECK(cpu_buffer_mgr);
+    return cpu_buffer_mgr;
+  }
+
+  int64_t getCpuPageSize() { return getCpuBufferMgr()->getPageSize(); }
+
+  int64_t getMaxCpuPageCount() {
+    return getCpuBufferMgr()->getMaxBufferSize() / getCpuPageSize();
+  }
+
+  int64_t getAllocatedCpuPageCount() {
+    return getTotalSlabPages(getCpuBufferMgr()->getSlabSegments());
+  }
+
+  Buffer_Namespace::GpuCudaBufferMgr* getGpuBufferMgr() {
+    auto gpu_buffer_mgr = getCatalog().getDataMgr().getGpuBufferMgr();
+    CHECK(gpu_buffer_mgr);
+    return gpu_buffer_mgr;
+  }
+
+  int64_t getGpuPageSize() { return getGpuBufferMgr()->getPageSize(); }
+
+  int64_t getMaxGpuPageCount() {
+    return getGpuBufferMgr()->getMaxBufferSize() / getGpuPageSize();
+  }
+
+  int64_t getAllocatedGpuPageCount() {
+    return getTotalSlabPages(getGpuBufferMgr()->getSlabSegments());
+  }
+
+  int64_t getTotalSlabPages(
+      const std::vector<Buffer_Namespace::BufferList>& slab_segments_vector) {
+    int64_t pages_count{0};
+    for (const auto& slab_segments : slab_segments_vector) {
+      for (const auto& segment : slab_segments) {
+        pages_count += segment.num_pages;
+      }
+    }
+    return pages_count;
   }
 
   std::map<std::string, int32_t> dashboard_id_by_name_;
@@ -2632,6 +2707,91 @@ TEST_F(SystemTablesTest, RolesSystemTable) {
 
   loginInformationSchema();
   sqlAndCompareResult("SELECT * FROM roles ORDER BY role_name;", {{"test_role_2"}});
+}
+
+TEST_F(SystemTablesTest, MemorySummarySystemTableCpu) {
+  initTestTableAndClearMemory();
+
+  loginInformationSchema();
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM memory_summary WHERE device_type = 'CPU';",
+                      {{"Server", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
+                        i(0), i(0), i(0)}});
+  // clang-format on
+
+  switchToAdmin();
+  sql("ALTER SYSTEM CLEAR CPU MEMORY;");
+  sql("SELECT * FROM test_table_1;");
+
+  loginInformationSchema();
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM memory_summary WHERE device_type = 'CPU';",
+                      {{"Server", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
+                        getAllocatedCpuPageCount(), i(1), getAllocatedCpuPageCount() - 1}});
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, MemorySummarySystemTableGpu) {
+  if (!setExecuteMode(TExecuteMode::GPU)) {
+    GTEST_SKIP() << "GPU is not enabled.";
+  }
+  initTestTableAndClearMemory();
+
+  sql("ALTER SYSTEM CLEAR GPU MEMORY;");
+  sql("SELECT AVG(i) FROM test_table_1;");
+
+  loginInformationSchema();
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM memory_summary WHERE device_type = 'GPU' AND device_id = 0;",
+      {{"Server", i(0), "GPU", getMaxGpuPageCount(), getGpuPageSize(),
+        getAllocatedGpuPageCount(), i(1), getAllocatedGpuPageCount() - 1}});
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, MemoryDetailsSystemTableCpu) {
+  initTestTableAndClearMemory();
+
+  auto db_id = getDbId("omnisci");
+  auto table_id = getTableId("test_table_1");
+
+  loginInformationSchema();
+  sqlAndCompareResult("SELECT * FROM memory_details;", {});
+
+  switchToAdmin();
+  sql("ALTER SYSTEM CLEAR CPU MEMORY;");
+  sql("SELECT * FROM test_table_1;");
+
+  loginInformationSchema();
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM memory_details WHERE device_type = 'CPU';",
+                      {{"Server", db_id, table_id, i(1), array({db_id, table_id, i(1), i(0)}),
+                        i(0), "CPU", "USED", i(1), getCpuPageSize(), i(0), i(0), i(1)},
+                       {"Server", Null, Null, Null, Null,
+                        i(0), "CPU", "FREE", getAllocatedCpuPageCount() - 1, getCpuPageSize(), i(0), i(1), i(0)}});
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
+  if (!setExecuteMode(TExecuteMode::GPU)) {
+    GTEST_SKIP() << "GPU is not enabled.";
+  }
+  initTestTableAndClearMemory();
+
+  auto db_id = getDbId("omnisci");
+  auto table_id = getTableId("test_table_1");
+
+  sql("ALTER SYSTEM CLEAR GPU MEMORY;");
+  sql("SELECT AVG(i) FROM test_table_1;");
+
+  loginInformationSchema();
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM memory_details WHERE device_type = 'GPU' AND device_id = 0;",
+                      {{"Server", db_id, table_id, i(1), array({db_id, table_id, i(1), i(0)}),
+                        i(0), "GPU", "USED", i(1), getGpuPageSize(), i(0), i(0), i(0)},
+                       {"Server", Null, Null, Null, Null,
+                        i(0), "GPU", "FREE", getAllocatedGpuPageCount() - 1, getGpuPageSize(), i(0), i(1), i(14)}});
+  // clang-format on
 }
 
 int main(int argc, char** argv) {

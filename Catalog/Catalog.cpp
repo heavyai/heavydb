@@ -5346,6 +5346,8 @@ void Catalog::conditionallyInitializeSystemTables() {
   if (g_enable_system_tables && name() == INFORMATION_SCHEMA_DB) {
     createSystemTableServer(CATALOG_SERVER_NAME,
                             foreign_storage::DataWrapperType::INTERNAL_CATALOG);
+    createSystemTableServer(MEMORY_STATS_SERVER_NAME,
+                            foreign_storage::DataWrapperType::INTERNAL_MEMORY_STATS);
     if (!getMetadataForTable(USERS_SYS_TABLE_NAME, false)) {
       createSystemTable(USERS_SYS_TABLE_NAME,
                         CATALOG_SERVER_NAME,
@@ -5414,6 +5416,37 @@ void Catalog::conditionallyInitializeSystemTables() {
       createSystemTable(ROLE_ASSIGNMENTS_SYS_TABLE_NAME,
                         CATALOG_SERVER_NAME,
                         {{"role_name", {kTEXT}}, {"user_name", {kTEXT}}});
+    }
+
+    if (!getMetadataForTable(MEMORY_SUMMARY_SYS_TABLE_NAME, false)) {
+      createSystemTable(MEMORY_SUMMARY_SYS_TABLE_NAME,
+                        MEMORY_STATS_SERVER_NAME,
+                        {{"node", {kTEXT}},
+                         {"device_id", {kINT}},
+                         {"device_type", {kTEXT}},
+                         {"max_page_count", {kBIGINT}},
+                         {"page_size", {kBIGINT}},
+                         {"allocated_page_count", {kBIGINT}},
+                         {"used_page_count", {kBIGINT}},
+                         {"free_page_count", {kBIGINT}}});
+    }
+
+    if (!getMetadataForTable(MEMORY_DETAILS_SYS_TABLE_NAME, false)) {
+      createSystemTable(MEMORY_DETAILS_SYS_TABLE_NAME,
+                        MEMORY_STATS_SERVER_NAME,
+                        {{"node", {kTEXT}},
+                         {"database_id", {kINT}},
+                         {"table_id", {kINT}},
+                         {"column_id", {kINT}},
+                         {"chunk_key", {kARRAY, 0, 0, false, kENCODING_NONE, 0, kINT}},
+                         {"device_id", {kINT}},
+                         {"device_type", {kTEXT}},
+                         {"memory_status", {kTEXT}},
+                         {"page_count", {kBIGINT}},
+                         {"page_size", {kBIGINT}},
+                         {"slab_id", {kINT}},
+                         {"start_page", {kBIGINT}},
+                         {"last_touch_epoch", {kBIGINT}}});
     }
   }
 }

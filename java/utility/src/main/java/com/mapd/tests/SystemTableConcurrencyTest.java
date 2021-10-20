@@ -65,7 +65,9 @@ public class SystemTableConcurrencyTest {
             new ThreadDbQueries("omnisci",
                     Arrays.asList("CREATE TABLE table_1 (i INTEGER, t TEXT);",
                             "INSERT INTO table_1 VALUES (1, 'abc');",
+                            "SELECT AVG(i) FROM table_1;",
                             "CREATE VIEW view_1 AS SELECT * FROM table_1;",
+                            "SELECT * FROM view_1;",
                             "DROP VIEW view_1;",
                             "DROP TABLE table_1;")),
             new ThreadDbQueries("omnisci",
@@ -94,7 +96,11 @@ public class SystemTableConcurrencyTest {
             new ThreadDbQueries("information_schema",
                     Arrays.asList("SELECT * FROM role_assignments;")),
             new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM dashboards;")));
+                    "information_schema", Arrays.asList("SELECT * FROM dashboards;")),
+            new ThreadDbQueries(
+                    "information_schema", Arrays.asList("SELECT * FROM memory_summary;")),
+            new ThreadDbQueries("information_schema",
+                    Arrays.asList("SELECT * FROM memory_details;")));
 
     final int num_threads = queriesPerThread.size()
             + 1; // +1 for dashboard creation/update thread, which is created separately.

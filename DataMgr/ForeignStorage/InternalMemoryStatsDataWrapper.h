@@ -16,20 +16,21 @@
 
 #pragma once
 
-#include <list>
+#include <map>
+#include <vector>
 
-#include "Catalog/DashboardDescriptor.h"
-#include "Catalog/SysCatalog.h"
-#include "Catalog/TableDescriptor.h"
+#include "Catalog/ForeignTable.h"
+#include "DataMgr/Chunk/Chunk.h"
+#include "ForeignDataWrapper.h"
 #include "InternalSystemDataWrapper.h"
 
 namespace foreign_storage {
 
-class InternalCatalogDataWrapper : public InternalSystemDataWrapper {
+class InternalMemoryStatsDataWrapper : public InternalSystemDataWrapper {
  public:
-  InternalCatalogDataWrapper();
+  InternalMemoryStatsDataWrapper();
 
-  InternalCatalogDataWrapper(const int db_id, const ForeignTable* foreign_table);
+  InternalMemoryStatsDataWrapper(const int db_id, const ForeignTable* foreign_table);
 
  private:
   void initializeObjectsForTable(const std::string& table_name) override;
@@ -38,12 +39,6 @@ class InternalCatalogDataWrapper : public InternalSystemDataWrapper {
       const std::string& table_name,
       std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) override;
 
-  std::list<Catalog_Namespace::UserMetadata> users_;
-  std::map<int32_t, std::vector<TableDescriptor>> tables_by_database_;
-  std::map<int32_t, std::vector<DashboardDescriptor>> dashboards_by_database_;
-  std::vector<ObjectRoleDescriptor> object_permissions_;
-  std::list<Catalog_Namespace::DBMetadata> databases_;
-  std::set<std::string> roles_;
-  std::map<std::string, std::vector<std::string>> user_names_by_role_;
+  std::map<std::string, std::vector<MemoryInfo>> memory_info_by_device_type_;
 };
 }  // namespace foreign_storage
