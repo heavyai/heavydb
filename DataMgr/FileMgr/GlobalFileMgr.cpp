@@ -306,6 +306,12 @@ size_t GlobalFileMgr::getTableEpoch(const int32_t db_id, const int32_t tb_id) {
   return epoch;
 }
 
+void GlobalFileMgr::resetTableEpochFloor(const int32_t db_id, const int32_t tb_id) {
+  AbstractBufferMgr* fm = getFileMgr(db_id, tb_id);
+  CHECK(fm);
+  dynamic_cast<FileMgr*>(fm)->resetEpochFloor();
+}
+
 StorageStats GlobalFileMgr::getStorageStats(const int32_t db_id, const int32_t tb_id) {
   mapd_shared_lock<mapd_shared_mutex> read_lock(fileMgrs_mutex_);
   AbstractBufferMgr* opened_fm = findFileMgr(db_id, tb_id);

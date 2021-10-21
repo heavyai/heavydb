@@ -605,6 +605,13 @@ size_t DataMgr::getTableEpoch(const int db_id, const int tb_id) {
   return gfm->getTableEpoch(db_id, tb_id);
 }
 
+void DataMgr::resetTableEpochFloor(const int32_t db_id, const int32_t tb_id) {
+  File_Namespace::GlobalFileMgr* gfm{nullptr};
+  gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
+  CHECK(gfm);
+  gfm->resetTableEpochFloor(db_id, tb_id);
+}
+
 File_Namespace::GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
   File_Namespace::GlobalFileMgr* global_file_mgr{nullptr};
   global_file_mgr =

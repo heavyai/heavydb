@@ -292,6 +292,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
     return epoch() - (epochIsCheckpointed_ ? 0 : 1);
   }
 
+  inline void resetEpochFloor() { epoch_.floor(epoch_.ceiling()); }
+
   /**
    * @brief Returns value max_rollback_epochs
    */

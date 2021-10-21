@@ -692,6 +692,31 @@ class SetTableEpochsTest : public EpochConsistencyTest {
     }
     return {catalog.getDatabaseId(), table_epoch_info_vector};
   }
+
+  // assert all epochs are equal to current_epoch, then set to new_epoch
+  void assertAndSetTableEpoch(int32_t current_epoch, int32_t new_epoch) {
+    std::vector<TTableEpochInfo> epochs_vector;
+    const auto& catalog = getCatalog();
+    auto [db_handler, session_id] = getDbHandlerAndSessionId();
+    auto [db_id, epoch_vector] = getDbIdAndTableEpochs();
+    auto table_id = catalog.getMetadataForTable("test_table", false)->tableId;
+    db_handler->get_table_epochs(epochs_vector, session_id, db_id, table_id);
+
+    for (auto& tei : epochs_vector) {
+      CHECK_EQ(tei.table_epoch, current_epoch);
+      tei.table_epoch = new_epoch;
+    }
+    db_handler->set_table_epochs(session_id, db_id, epochs_vector);
+  }
+
+  std::string getTableIdString() {
+    const auto& catalog = getCatalog();
+    auto table_id = catalog.getMetadataForTable("test_table", false)->tableId;
+    std::stringstream id_ss;
+    // +1 as message will be from first shard
+    id_ss << "(" << catalog.getDatabaseId() << ", " << table_id + 1 << ")";
+    return id_ss.str();
+  }
 };
 
 TEST_F(SetTableEpochsTest, Admin) {
@@ -805,6 +830,73 @@ TEST_F(SetTableEpochsTest, CappedAlter) {
 
   sqlAndCompareResult("select count(*) from test_table;", {{i(16)}});
   assertTableEpochs({16, 16});
+}
+
+TEST_F(SetTableEpochsTest, AddColumn) {
+  loginAdmin();
+  std::string select = "select * from test_table order by a;";
+
+  sql("create table test_table(a int, shard key(a)) with (shard_count = 2, "
+      "max_rollback_epochs = 25);");
+  sql("insert into test_table values (0);");
+  assertTableEpochs({1, 1});
+  sqlAndCompareResult(select, {{i(0)}});
+
+  sql("alter table test_table add b int default 0;");
+  assertTableEpochs({2, 2});
+  sqlAndCompareResult(select, {{i(0), i(0)}});
+
+  sql("insert into test_table values (1,1);");
+  sqlAndCompareResult(select, {{i(0), i(0)}, {i(1), i(1)}});
+  assertTableEpochs({3, 3});
+
+  try {
+    assertAndSetTableEpoch(3, 1);
+  } catch (const std::exception& e) {
+    ASSERT_EQ("Cannot set epoch for table " + getTableIdString() +
+                  " lower than the minimum rollback epoch (2).",
+              std::string(e.what()));
+  }
+
+  sqlAndCompareResult(select, {{i(0), i(0)}, {i(1), i(1)}});
+
+  // Make sure rollback to just after schema change works
+  assertAndSetTableEpoch(3, 2);
+  sqlAndCompareResult(select, {{i(0), i(0)}});
+}
+
+TEST_F(SetTableEpochsTest, DropColumn) {
+  loginAdmin();
+  std::string select = "select * from test_table order by a;";
+
+  sql("create table test_table(a int, shard key(a), b int ) with (shard_count = 2, "
+      "max_rollback_epochs = 25);");
+
+  sql("insert into test_table values (0,0);");
+  assertTableEpochs({1, 1});
+  sqlAndCompareResult(select, {{i(0), i(0)}});
+
+  sql("alter table test_table drop b;");
+  assertTableEpochs({2, 2});
+  sqlAndCompareResult(select, {{i(0)}});
+
+  sql("insert into test_table values (1);");
+  sqlAndCompareResult(select, {{i(0)}, {i(1)}});
+  assertTableEpochs({3, 3});
+
+  try {
+    assertAndSetTableEpoch(3, 1);
+  } catch (const std::exception& e) {
+    ASSERT_EQ("Cannot set epoch for table " + getTableIdString() +
+                  " lower than the minimum rollback epoch (2).",
+              std::string(e.what()));
+  }
+
+  sqlAndCompareResult(select, {{i(0)}, {i(1)}});
+
+  // Make sure rollback to just after schema change works
+  assertAndSetTableEpoch(3, 2);
+  sqlAndCompareResult(select, {{i(0)}});
 }
 
 class EpochValidationTest : public EpochConsistencyTest {

@@ -4256,6 +4256,15 @@ void Catalog::checkpointWithAutoRollback(const int logical_table_id) const {
   }
 }
 
+void Catalog::resetTableEpochFloor(const int logicalTableId) const {
+  cat_read_lock read_lock(this);
+  const auto td = getMetadataForTable(logicalTableId, false);
+  const auto shards = getPhysicalTablesDescriptors(td, false);
+  for (const auto shard : shards) {
+    getDataMgr().resetTableEpochFloor(getCurrentDB().dbId, shard->tableId);
+  }
+}
+
 void Catalog::eraseDbMetadata() {
   const auto tables = getAllTableMetadata();
   for (const auto table : tables) {

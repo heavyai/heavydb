@@ -216,6 +216,7 @@ class DataMgr {
   void removeTableRelatedDS(const int db_id, const int tb_id);
   void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);
   size_t getTableEpoch(const int db_id, const int tb_id);
+  void resetTableEpochFloor(const int32_t db_id, const int32_t tb_id);
 
   CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cudaMgr_.get(); }
   File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;

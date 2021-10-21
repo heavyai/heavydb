@@ -4454,6 +4454,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       throw std::runtime_error("loadNoCheckpoint failed!");
     }
     catalog.roll(true);
+    catalog.resetTableEpochFloor(td->tableId);
     loader->checkpoint();
     catalog.getSqliteConnector().query("END TRANSACTION");
   } catch (...) {
@@ -4527,6 +4528,7 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
     catalog.roll(true);
     if (td->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
+      catalog.resetTableEpochFloor(td->tableId);
       catalog.checkpoint(td->tableId);
     }
     catalog.getSqliteConnector().query("END TRANSACTION");

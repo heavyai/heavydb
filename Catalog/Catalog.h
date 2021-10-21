@@ -290,6 +290,7 @@ class Catalog final {
   int getLogicalTableId(const int physicalTableId) const;
   void checkpoint(const int logicalTableId) const;
   void checkpointWithAutoRollback(const int logical_table_id) const;
+  void resetTableEpochFloor(const int logicalTableId) const;
   std::string name() const { return getCurrentDB().dbName; }
   void eraseDbMetadata();
   void eraseDbPhysicalData();
