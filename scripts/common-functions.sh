@@ -244,7 +244,8 @@ function install_spirv_translator() {
     pushd ${BUILD_DIR}
     cmake \
           -DLLVM_DIR=${LLVM_HOME:-${PREFIX}} \
-          -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+          -DCMAKE_INSTALL_PREFIX=$PREFIX .. \
+          -DLLVM_SPIRV_BUILD_EXTERNAL=YES
     makej
     make install
     popd
