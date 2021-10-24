@@ -121,35 +121,46 @@ static int match_numeric_argument(const SQLTypeInfo& arg_type_info,
     return -1;
   }
 
-  // We now compare a measure of the scale of the sig_type with the arg_type,
-  // which provides a basis for scoring the match between the two.
-  // Note that get_numeric_scalar_scale for the most part returns the logical
-  // byte width of the type, with a few caveats for decimals and timestamps
-  // described in more depth in comments in the function itself.
-  // Also even though for example float and int types return 4 (as in 4 bytes),
-  // and double and bigint types return 8, a fp32 type cannot express every 32-bit integer
-  // (even if it can cover a larger absolute range), and an fp64 type likewise cannot
-  // express every 64-bit integer. However for the purposes of extension function casting
-  // we consider floats and ints to be equal scale, and similarly doubles and bigints.
+  // We now compare a measure of the scale of the sig_type with the
+  // arg_type, which provides a basis for scoring the match between
+  // the two.  Note that get_numeric_scalar_scale for the most part
+  // returns the logical byte width of the type, with a few caveats
+  // for decimals and timestamps described in more depth in comments
+  // in the function itself.  Also even though for example float and
+  // int types return 4 (as in 4 bytes), and double and bigint types
+  // return 8, a fp32 type cannot express every 32-bit integer (even
+  // if it can cover a larger absolute range), and an fp64 type
+  // likewise cannot express every 64-bit integer.  With the aim to
+  // minimize the precision loss from casting (always precise) integer
+  // value to (imprecise) floating point value, in the case of integer
+  // inputs, we'll penalize wider floating point argument types least
+  // by a specific scale transformation (see the implementation
+  // below). For instance, casting tinyint to fp64 is prefered over
+  // casting it to fp32 to minimize precision loss.
+  const bool is_integer_to_fp_cast = (arg_type == kTINYINT || arg_type == kSMALLINT ||
+                                      arg_type == kINT || arg_type == kBIGINT) &&
+                                     (sig_type == kFLOAT || sig_type == kDOUBLE);
+
   const auto arg_type_relative_scale = arg_type_info.get_numeric_scalar_scale();
   CHECK_GE(arg_type_relative_scale, 1);
   CHECK_LE(arg_type_relative_scale, 8);
-  const auto sig_type_relative_scale = sig_type_info.get_numeric_scalar_scale();
+  auto sig_type_relative_scale = sig_type_info.get_numeric_scalar_scale();
   CHECK_GE(sig_type_relative_scale, 1);
   CHECK_LE(sig_type_relative_scale, 8);
 
-  // Current we do not allow auto-casting to types with less scale/precision, with the
-  // caveats around floating point and decimal types mentioned above
+  if (is_integer_to_fp_cast) {
+    // transform fp scale: 4 becomes 16, 8 remains 8
+    sig_type_relative_scale = (3 - (sig_type_relative_scale >> 2)) << 3;
+  }
+
+  // We do not allow auto-casting to types with less scale/precision
+  // within the same type family.
   CHECK_GE(sig_type_relative_scale, arg_type_relative_scale);
 
   // Calculate the ratio of the sig_type by the arg_type, per the above check will be >= 1
   const auto sig_type_scale_gain_ratio =
       sig_type_relative_scale / arg_type_relative_scale;
   CHECK_GE(sig_type_scale_gain_ratio, 1);
-
-  const bool is_integer_to_fp_cast = (arg_type == kTINYINT || arg_type == kSMALLINT ||
-                                      arg_type == kINT || arg_type == kBIGINT) &&
-                                     (sig_type == kFLOAT || sig_type == kDOUBLE);
 
   // Following the old bespoke scoring logic this function replaces, we heavily penalize
   // any casts that move ints to floats/doubles for the precision-loss reasons above

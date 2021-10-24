@@ -556,7 +556,7 @@ class SQLTypeInfo {
         }
         return new_type_info.get_logical_size() >= get_logical_size();
       case kBIGINT:
-        return new_type == kBIGINT || new_type == kDOUBLE;
+        return new_type == kBIGINT || new_type == kDOUBLE || new_type == kFLOAT;
       case kFLOAT:
       case kDOUBLE:
         if (!new_type_info.is_fp()) {

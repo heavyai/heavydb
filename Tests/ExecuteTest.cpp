@@ -6711,7 +6711,7 @@ TEST(Select, ExtensionFunctionsTypeMatching) {
 
     {
       ASSERT_NEAR(
-          float_result,
+          double_result,
           v<double>(run_simple_agg(
               "SELECT log(tinyint_type) FROM extension_func_type_match_test;", dt)),
           RESULT_EPS);
@@ -6719,14 +6719,14 @@ TEST(Select, ExtensionFunctionsTypeMatching) {
 
     {
       ASSERT_NEAR(
-          float_result,
+          double_result,
           v<double>(run_simple_agg(
               "SELECT log(smallint_type) FROM extension_func_type_match_test;", dt)),
           RESULT_EPS);
     }
 
     {
-      ASSERT_NEAR(float_result,
+      ASSERT_NEAR(double_result,
                   v<double>(run_simple_agg(
                       "SELECT log(int_type) FROM extension_func_type_match_test;", dt)),
                   RESULT_EPS);
