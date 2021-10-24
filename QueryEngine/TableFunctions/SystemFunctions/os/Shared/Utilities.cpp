@@ -27,6 +27,8 @@
 #include <unordered_map>
 
 #include <tbb/parallel_for.h>
+#include <tbb/task_arena.h>
+#include <tbb/task_group.h>
 
 #include "Utilities.h"
 
@@ -37,15 +39,66 @@ TEMPLATE_NOINLINE std::pair<T, T> get_column_min_max(const Column<T>& col) {
   T col_min = std::numeric_limits<T>::max();
   T col_max = std::numeric_limits<T>::lowest();
   const int64_t num_rows = col.size();
-  for (int64_t r = 0; r < num_rows; ++r) {
-    if (col[r] < col_min) {
-      col_min = col[r];
+  const size_t max_thread_count = std::thread::hardware_concurrency();
+  const size_t max_inputs_per_thread = 200000;
+  const size_t num_threads = std::min(
+      max_thread_count, ((num_rows + max_inputs_per_thread - 1) / max_inputs_per_thread));
+  // std::cout << "Min/max # threads: " << num_threads << std::endl;
+
+  std::vector<T> local_col_mins(num_threads, std::numeric_limits<T>::max());
+  std::vector<T> local_col_maxes(num_threads, std::numeric_limits<T>::lowest());
+  tbb::task_arena limited_arena(num_threads);
+  tbb::task_group tg;
+
+  limited_arena.execute([&] {
+    tg.run([&] {
+      tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_rows),
+                        [&](const tbb::blocked_range<int64_t>& r) {
+                          const int64_t start_idx = r.begin();
+                          const int64_t end_idx = r.end();
+                          T local_col_min = std::numeric_limits<T>::max();
+                          T local_col_max = std::numeric_limits<T>::lowest();
+                          for (int64_t r = start_idx; r < end_idx; ++r) {
+                            if (col.isNull(r)) {
+                              continue;
+                            }
+                            if (col[r] < local_col_min) {
+                              local_col_min = col[r];
+                            }
+                            if (col[r] > local_col_max) {
+                              local_col_max = col[r];
+                            }
+                          }
+                          size_t thread_idx =
+                              tbb::this_task_arena::current_thread_index();
+                          if (local_col_min < local_col_mins[thread_idx]) {
+                            local_col_mins[thread_idx] = local_col_min;
+                          }
+                          if (local_col_max > local_col_maxes[thread_idx]) {
+                            local_col_maxes[thread_idx] = local_col_max;
+                          }
+                        });
+    });
+  });
+
+  limited_arena.execute([&] { tg.wait(); });
+
+  for (size_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
+    if (local_col_mins[thread_idx] < col_min) {
+      col_min = local_col_mins[thread_idx];
     }
-    if (col[r] > col_max) {
-      col_max = col[r];
+    if (local_col_maxes[thread_idx] > col_max) {
+      col_max = local_col_maxes[thread_idx];
     }
   }
   return std::make_pair(col_min, col_max);
+}
+
+std::pair<int32_t, int32_t> get_column_min_max(const Column<TextEncodingDict>& col) {
+  Column<int32_t> int_alias_col;
+  int_alias_col.ptr_ = reinterpret_cast<int32_t*>(col.ptr_);
+  int_alias_col.size_ = col.size_;
+  return get_column_min_max(int_alias_col);
 }
 
 template <typename T1, typename T2>

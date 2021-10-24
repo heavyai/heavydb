@@ -111,20 +111,22 @@ TEST_F(SystemTFs, GeoRasterize) {
     // tf_geo_rasterize requires bin_dim_meters to be > 0
     {
       EXPECT_THROW(
-          run_multiple_agg("SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
-                               ", 0.0 /* bin_dim_meters */, false /* geographic_coords "
-                               "*/, 0 /* null_neighborhood_fill_radius */));",
-                           dt),
+          run_multiple_agg(
+              "SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
+                  ", 0.0 /* bin_dim_meters */, false /* geographic_coords "
+                  "*/, 0 /* neighborhood_fill_radius */, false /* fill_only_nulls */));",
+              dt),
           UserTableFunctionError);
     }
 
-    // tf_geo_rasterize requires null_neighborhood_fill_radius to be >= 0
+    // tf_geo_rasterize requires neighborhood_fill_radius to be >= 0
     {
       EXPECT_THROW(
-          run_multiple_agg("SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
-                               ", 1.0 /* bin_dim_meters */, false /* geographic_coords "
-                               "*/, -1 /* null_neighborhood_fill_radius */));",
-                           dt),
+          run_multiple_agg(
+              "SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
+                  ", 1.0 /* bin_dim_meters */, false /* geographic_coords "
+                  "*/, -1 /* neighborhood_fill_radius */, false /* fill_only_nulls */));",
+              dt),
           UserTableFunctionError);
     }
 
@@ -133,7 +135,8 @@ TEST_F(SystemTFs, GeoRasterize) {
       EXPECT_THROW(run_multiple_agg(
                        "SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
                            ", 1.0 /* bin_dim_meters */, false /* geographic_coords */, 0 "
-                           "/* null_neighborhood_fill_radius */, 0.0 /* x_min */, 0.0 /* "
+                           "/* neighborhood_fill_radius */, false /* fill_only_nulls */, "
+                           "0.0 /* x_min */, 0.0 /* "
                            "x_max */, -1.0 /* y_min */, 1.0 /* y_max */));",
                        dt),
                    UserTableFunctionError);
@@ -143,7 +146,7 @@ TEST_F(SystemTFs, GeoRasterize) {
       const auto rows = run_multiple_agg(
           "SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
               ", 1.0 /* bin_dim_meters */, false /* geographic_coords */, 0 /* "
-              "null_neighborhood_fill_radius */)) ORDER BY x, y;",
+              "neighborhood_fill_radius */, false /* fill_only_nulls */)) ORDER BY x, y;",
           dt);
       const size_t num_rows = rows->rowCount();
       ASSERT_EQ(num_rows, size_t(6));
@@ -166,7 +169,8 @@ TEST_F(SystemTFs, GeoRasterize) {
       const auto rows = run_multiple_agg(
           "SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
               ", 1.0 /* bin_dim_meters */, false /* geographic_coords */, 0 /* "
-              "null_neighborhood_fill_radius */, 1.0 /* x_min */, 2.0 /* x_max */, 1.0 "
+              "neighborhood_fill_radius */, false, /* fill_only_nulls */, 1.0 /* x_min "
+              "*/, 2.0 /* x_max */, 1.0 "
               "/* y_min */, 2.0 /* y_max */ )) ORDER BY x, y;",
           dt);
       const size_t num_rows = rows->rowCount();
@@ -188,7 +192,7 @@ TEST_F(SystemTFs, GeoRasterize) {
       const auto rows = run_multiple_agg(
           "SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
               ", 1.0 /* bin_dim_meters */, false /* geographic_coords */, 1 /* "
-              "null_neighborhood_fill_radius */)) ORDER BY x, y;",
+              "neighborhood_fill_radius */, false /* fill_only_nulls */)) ORDER BY x, y;",
           dt);
       const size_t num_rows = rows->rowCount();
       ASSERT_EQ(num_rows, size_t(6));

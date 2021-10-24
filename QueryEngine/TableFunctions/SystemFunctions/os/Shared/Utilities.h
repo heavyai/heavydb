@@ -31,6 +31,9 @@
 template <typename T>
 TEMPLATE_NOINLINE std::pair<T, T> get_column_min_max(const Column<T>& col);
 
+TEMPLATE_NOINLINE std::pair<int32_t, int32_t> get_column_min_max(
+    const Column<TextEncodingDict>& col);
+
 template <typename T1, typename T2>
 TEMPLATE_NOINLINE T1
 distance_in_meters(const T1 fromlon, const T1 fromlat, const T2 tolon, const T2 tolat);

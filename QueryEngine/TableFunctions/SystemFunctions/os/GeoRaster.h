@@ -99,6 +99,20 @@ struct GeoRaster {
                const Column<T2>& input_y,
                const Column<Z2>& input_z);
 
+  template <typename T2, typename Z2>
+  void computeParallel(const Column<T2>& input_x,
+                       const Column<T2>& input_y,
+                       const Column<Z2>& input_z,
+                       const size_t max_inputs_per_thread);
+
+  void fill_bins_from_neighbors(const int64_t neighborhood_fill_radius,
+                                const bool fill_only_nulls);
+
+  int64_t outputDenseColumns(TableFunctionManager& mgr,
+                             Column<T>& output_x,
+                             Column<T>& output_y,
+                             Column<Z>& output_z) const;
+
   int64_t outputDenseColumns(TableFunctionManager& mgr,
                              Column<T>& output_x,
                              Column<T>& output_y,
@@ -108,7 +122,7 @@ struct GeoRaster {
 
 // clang-format off
 /*
-  UDTF: tf_geo_rasterize__cpu_template(TableFunctionManager, Cursor<Column<T> x, Column<T> y, Column<Z> z>, T, bool, int64_t) | filter_table_function_transpose=on -> Column<T> x, Column<T> y, Column<Z> z, T=[float, double], Z=[float, double]
+  UDTF: tf_geo_rasterize__cpu_template(TableFunctionManager, Cursor<Column<T> x, Column<T> y, Column<Z> z>, T, bool, int64_t, bool) | filter_table_function_transpose=on -> Column<T> x, Column<T> y, Column<Z> z, T=[float, double], Z=[float, double]
  */
 // clang-format on
 
@@ -120,7 +134,8 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
                                const Column<Z>& input_z,
                                const T bin_dim_meters,
                                const bool geographic_coords,
-                               const int64_t null_neighborhood_fill_radius,
+                               const int64_t neighborhood_fill_radius,
+                               const bool fill_only_nulls,
                                Column<T>& output_x,
                                Column<T>& output_y,
                                Column<Z>& output_z) {
@@ -128,21 +143,25 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
     return mgr.ERROR_MESSAGE("bin_dim_meters argument must be greater than 0");
   }
 
-  if (null_neighborhood_fill_radius < 0) {
+  if (neighborhood_fill_radius < 0) {
     return mgr.ERROR_MESSAGE(
-        "null_neighborhood_fill_radius argument must be greater than "
+        "neighborhood_fill_radius argument must be greater than "
         "or equal to 0");
   }
 
   GeoRaster<T, Z> geo_raster(
       input_x, input_y, input_z, bin_dim_meters, geographic_coords, true);
-  return geo_raster.outputDenseColumns(
-      mgr, output_x, output_y, output_z, null_neighborhood_fill_radius);
+
+  if (neighborhood_fill_radius > 0) {
+    geo_raster.fill_bins_from_neighbors(neighborhood_fill_radius, fill_only_nulls);
+  }
+
+  return geo_raster.outputDenseColumns(mgr, output_x, output_y, output_z);
 }
 
 // clang-format off
 /*
-  UDTF: tf_geo_rasterize__cpu_template(TableFunctionManager, Cursor<Column<T>, Column<T>, Column<Z>>, T, bool, int64_t, T, T, T, T) -> Column<T> x, Column<T> y, Column<Z> z, T=[float, double], Z=[float, double]
+  UDTF: tf_geo_rasterize__cpu_template(TableFunctionManager, Cursor<Column<T>, Column<T>, Column<Z>>, T, bool, int64_t, bool, T, T, T, T) -> Column<T> x, Column<T> y, Column<Z> z, T=[float, double], Z=[float, double]
  */
 // clang-format on
 
@@ -154,7 +173,8 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
                                const Column<Z>& input_z,
                                const T bin_dim_meters,
                                const bool geographic_coords,
-                               const int64_t null_neighborhood_fill_radius,
+                               const int64_t neighborhood_fill_radius,
+                               const bool fill_only_nulls,
                                const T x_min,
                                const T x_max,
                                const T y_min,
@@ -166,9 +186,9 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
     return mgr.ERROR_MESSAGE("bin_dim_meters argument must be greater than 0");
   }
 
-  if (null_neighborhood_fill_radius < 0) {
+  if (neighborhood_fill_radius < 0) {
     return mgr.ERROR_MESSAGE(
-        "null_neighborhood_fill_radius argument must be greater than "
+        "neighborhood_fill_radius argument must be greater than "
         "or equal to 0");
   }
 
@@ -190,8 +210,12 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
                              x_max,
                              y_min,
                              y_max);
-  return geo_raster.outputDenseColumns(
-      mgr, output_x, output_y, output_z, null_neighborhood_fill_radius);
+
+  if (neighborhood_fill_radius > 0) {
+    geo_raster.fill_bins_from_neighbors(neighborhood_fill_radius, fill_only_nulls);
+  }
+
+  return geo_raster.outputDenseColumns(mgr, output_x, output_y, output_z);
 }
 
 #include "GeoRaster.cpp"

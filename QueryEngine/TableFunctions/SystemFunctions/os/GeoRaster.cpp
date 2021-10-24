@@ -20,7 +20,12 @@
 #include <cmath>
 #include <vector>
 
+#include <tbb/parallel_for.h>
+#include <tbb/task_arena.h>
+#include <tbb/task_group.h>
 #include "Shared/Utilities.h"
+
+const size_t max_inputs_per_thread = 1000000L;
 
 // Allow input types to GeoRaster that are different than class types/output Z type
 // So we can move everything to the type of T and Z (which can each be either float
@@ -36,6 +41,7 @@ GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
     : bin_dim_meters_(bin_dim_meters)
     , geographic_coords_(geographic_coords)
     , null_sentinel_(std::numeric_limits<Z>::lowest()) {
+  auto timer = DEBUG_TIMER(__func__);
   const int64_t input_size{input_z.size()};
   if (input_size <= 0) {
     num_bins_ = 0;
@@ -59,11 +65,9 @@ GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
     // have the last x/y bins cover the range [40.0, 50.0), not [30.0, 40.0)
     align_bins_max_inclusive();
   }
-  // std::cout << "X range: [" << x_min_ << ", " << x_max_ << "]" << std::endl;
-  // std::cout << "Y range: [" << y_min_ << ", " << y_max_ << "]" << std::endl;
 
   calculate_bins_and_scales();
-  compute(input_x, input_y, input_z);
+  computeParallel(input_x, input_y, input_z, max_inputs_per_thread);
 }
 
 // Allow input types to GeoRaster that are different than class types/output Z type
@@ -88,6 +92,7 @@ GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
     , x_max_(x_max)
     , y_min_(y_min)
     , y_max_(y_max) {
+  auto timer = DEBUG_TIMER(__func__);
   if (align_bins_to_zero_based_grid && !geographic_coords_) {
     // For explicit, user-defined bounds, we treat the max of the x and y ranges as
     // exclusive (open interval), since if the user specifies the max x/y as the end of
@@ -98,7 +103,7 @@ GeoRaster<T, Z>::GeoRaster(const Column<T2>& input_x,
     align_bins_max_exclusive();
   }
   calculate_bins_and_scales();
-  compute(input_x, input_y, input_z);
+  computeParallel(input_x, input_y, input_z, max_inputs_per_thread);
 }
 
 template <typename T, typename Z>
@@ -196,6 +201,7 @@ template <typename T2, typename Z2>
 void GeoRaster<T, Z>::compute(const Column<T2>& input_x,
                               const Column<T2>& input_y,
                               const Column<Z2>& input_z) {
+  auto timer = DEBUG_TIMER(__func__);
   const int64_t input_size{input_z.size()};
   z_.resize(num_bins_, null_sentinel_);
   for (int64_t sparse_idx = 0; sparse_idx != input_size; ++sparse_idx) {
@@ -214,33 +220,166 @@ void GeoRaster<T, Z>::compute(const Column<T2>& input_x,
 }
 
 template <typename T, typename Z>
+template <typename T2, typename Z2>
+void GeoRaster<T, Z>::computeParallel(const Column<T2>& input_x,
+                                      const Column<T2>& input_y,
+                                      const Column<Z2>& input_z,
+                                      const size_t max_inputs_per_thread) {
+  const size_t input_size = input_z.size();
+  const size_t max_thread_count = std::thread::hardware_concurrency();
+  const size_t num_threads =
+      std::min(max_thread_count,
+               ((input_size + max_inputs_per_thread - 1) / max_inputs_per_thread));
+  if (num_threads == 1) {
+    compute(input_x, input_y, input_z);
+    return;
+  }
+  auto timer = DEBUG_TIMER(__func__);
+
+  std::vector<std::vector<Z>> per_thread_z_outputs(num_threads);
+
+  tbb::parallel_for(tbb::blocked_range<size_t>(0, num_threads),
+                    [&](const tbb::blocked_range<size_t>& r) {
+                      for (size_t t = r.begin(); t != r.end(); ++t) {
+                        per_thread_z_outputs[t].resize(num_bins_, null_sentinel_);
+                      }
+                    });
+
+  tbb::task_arena limited_arena(num_threads);
+  tbb::task_group tg;
+  limited_arena.execute([&] {
+    tg.run([&] {
+      tbb::parallel_for(
+          tbb::blocked_range<int64_t>(0, input_size),
+          [&](const tbb::blocked_range<int64_t>& r) {
+            const int64_t start_idx = r.begin();
+            const int64_t end_idx = r.end();
+            size_t thread_idx = tbb::this_task_arena::current_thread_index();
+            std::vector<Z>& this_thread_z_output = per_thread_z_outputs[thread_idx];
+
+            for (int64_t sparse_idx = start_idx; sparse_idx != end_idx; ++sparse_idx) {
+              const int64_t x_bin = get_x_bin(input_x[sparse_idx]);
+              const int64_t y_bin = get_y_bin(input_y[sparse_idx]);
+              if (x_bin < 0 || x_bin >= num_x_bins_ || y_bin < 0 ||
+                  y_bin >= num_y_bins_) {
+                continue;
+              }
+              // Take the max height for this version, but may want to allow different
+              // metrics like average as well
+              const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
+              if (!(input_z.isNull(sparse_idx)) &&
+                  input_z[sparse_idx] > this_thread_z_output[bin_idx]) {
+                this_thread_z_output[bin_idx] = input_z[sparse_idx];
+              }
+            }
+          });
+    });
+  });
+
+  limited_arena.execute([&] { tg.wait(); });
+
+  z_.resize(num_bins_, null_sentinel_);
+
+  tbb::parallel_for(
+      tbb::blocked_range<size_t>(0, num_bins_), [&](const tbb::blocked_range<size_t>& r) {
+        const size_t start_idx = r.begin();
+        const size_t end_idx = r.end();
+        for (size_t bin_idx = start_idx; bin_idx != end_idx; ++bin_idx) {
+          for (size_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
+            const T thread_bin_z_output = per_thread_z_outputs[thread_idx][bin_idx];
+            if (thread_bin_z_output != null_sentinel_ &&
+                thread_bin_z_output > z_[bin_idx]) {
+              z_[bin_idx] = thread_bin_z_output;
+            }
+          }
+        }
+      });
+}
+
+template <typename T, typename Z>
+void GeoRaster<T, Z>::fill_bins_from_neighbors(const int64_t neighborhood_fill_radius,
+                                               const bool fill_only_nulls) {
+  auto timer = DEBUG_TIMER(__func__);
+  std::vector<Z> new_z(num_bins_);
+  tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_y_bins_),
+                    [&](const tbb::blocked_range<int64_t>& r) {
+                      for (int64_t y_bin = r.begin(); y_bin != r.end(); ++y_bin) {
+                        for (int64_t x_bin = 0; x_bin < num_x_bins_; ++x_bin) {
+                          const int64_t bin_idx =
+                              x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
+                          const Z z_val = z_[bin_idx];
+                          if (!fill_only_nulls || z_val == null_sentinel_) {
+                            new_z[bin_idx] = fill_bin_from_avg_neighbors(
+                                x_bin, y_bin, neighborhood_fill_radius);
+                          } else {
+                            new_z[bin_idx] = z_val;
+                          }
+                        }
+                      }
+                    });
+  z_.swap(new_z);
+}
+
+template <typename T, typename Z>
 int64_t GeoRaster<T, Z>::outputDenseColumns(
     TableFunctionManager& mgr,
     Column<T>& output_x,
     Column<T>& output_y,
     Column<Z>& output_z,
     const int64_t neighborhood_null_fill_radius) const {
+  auto timer = DEBUG_TIMER(__func__);
   mgr.set_output_row_size(num_bins_);
-  for (int64_t y_bin = 0; y_bin < num_y_bins_; ++y_bin) {
-    for (int64_t x_bin = 0; x_bin < num_x_bins_; ++x_bin) {
-      const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
-      output_x[bin_idx] = x_min_ + (x_bin + 0.5) * x_scale_bin_to_input_;
-      output_y[bin_idx] = y_min_ + (y_bin + 0.5) * y_scale_bin_to_input_;
-      const Z z_val = z_[bin_idx];
-      if (z_val == null_sentinel_) {
-        output_z.setNull(bin_idx);
-        if (neighborhood_null_fill_radius) {
-          const Z avg_neighbor_value =
-              fill_bin_from_avg_neighbors(x_bin, y_bin, neighborhood_null_fill_radius);
-          if (avg_neighbor_value != null_sentinel_) {
-            output_z[bin_idx] = avg_neighbor_value;
+  tbb::parallel_for(
+      tbb::blocked_range<int64_t>(0, num_y_bins_),
+      [&](const tbb::blocked_range<int64_t>& r) {
+        for (int64_t y_bin = r.begin(); y_bin != r.end(); ++y_bin) {
+          for (int64_t x_bin = 0; x_bin < num_x_bins_; ++x_bin) {
+            const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
+            output_x[bin_idx] = x_min_ + (x_bin + 0.5) * x_scale_bin_to_input_;
+            output_y[bin_idx] = y_min_ + (y_bin + 0.5) * y_scale_bin_to_input_;
+            const Z z_val = z_[bin_idx];
+            if (z_val == null_sentinel_) {
+              output_z.setNull(bin_idx);
+              if (neighborhood_null_fill_radius) {
+                const Z avg_neighbor_value = fill_bin_from_avg_neighbors(
+                    x_bin, y_bin, neighborhood_null_fill_radius);
+                if (avg_neighbor_value != null_sentinel_) {
+                  output_z[bin_idx] = avg_neighbor_value;
+                }
+              }
+            } else {
+              output_z[bin_idx] = z_[bin_idx];
+            }
           }
         }
-      } else {
-        output_z[bin_idx] = z_[bin_idx];
-      }
-    }
-  }
+      });
+  return num_bins_;
+}
+
+template <typename T, typename Z>
+int64_t GeoRaster<T, Z>::outputDenseColumns(TableFunctionManager& mgr,
+                                            Column<T>& output_x,
+                                            Column<T>& output_y,
+                                            Column<Z>& output_z) const {
+  auto timer = DEBUG_TIMER(__func__);
+  mgr.set_output_row_size(num_bins_);
+  tbb::parallel_for(
+      tbb::blocked_range<int64_t>(0, num_y_bins_),
+      [&](const tbb::blocked_range<int64_t>& r) {
+        for (int64_t y_bin = r.begin(); y_bin != r.end(); ++y_bin) {
+          for (int64_t x_bin = 0; x_bin < num_x_bins_; ++x_bin) {
+            const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
+            output_x[bin_idx] = x_min_ + (x_bin + 0.5) * x_scale_bin_to_input_;
+            output_y[bin_idx] = y_min_ + (y_bin + 0.5) * y_scale_bin_to_input_;
+            const Z z_val = z_[bin_idx];
+            if (z_val == null_sentinel_) {
+              output_z.setNull(bin_idx);
+            } else {
+              output_z[bin_idx] = z_[bin_idx];
+            }
+          }
+        }
+      });
   return num_bins_;
 }
 
