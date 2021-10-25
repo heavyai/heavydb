@@ -144,7 +144,7 @@ bool FileMgr::coreInit() {
 }
 
 FileMetadata FileMgr::getMetadataForFile(
-    const boost::filesystem::directory_iterator& fileIterator) {
+    const boost::filesystem::directory_iterator& fileIterator) const {
   FileMetadata fileMetadata;
   fileMetadata.is_data_file = false;
   fileMetadata.file_path = fileIterator->path().string();
@@ -326,8 +326,16 @@ bool is_metadata_file(size_t file_size,
 }
 }  // namespace
 
-StorageStats FileMgr::getStorageStats() {
+StorageStats FileMgr::getStorageStats() const {
   StorageStats storage_stats;
+  setDataAndMetadataFileStats(storage_stats);
+  if (isFullyInitted_) {
+    storage_stats.fragment_count = getFragmentCount();
+  }
+  return storage_stats;
+}
+
+void FileMgr::setDataAndMetadataFileStats(StorageStats& storage_stats) const {
   mapd_shared_lock<mapd_shared_mutex> read_lock(files_rw_mutex_);
   if (!isFullyInitted_) {
     CHECK(!fileMgrBasePath_.empty());
@@ -386,7 +394,15 @@ StorageStats FileMgr::getStorageStats() {
       }
     }
   }
-  return storage_stats;
+}
+
+uint32_t FileMgr::getFragmentCount() const {
+  mapd_shared_lock<mapd_shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
+  std::set<int32_t> fragment_ids;
+  for (const auto& [chunk_key, file_buffer] : chunkIndex_) {
+    fragment_ids.emplace(chunk_key[CHUNK_KEY_FRAGMENT_IDX]);
+  }
+  return static_cast<uint32_t>(fragment_ids.size());
 }
 
 void FileMgr::processFileFutures(

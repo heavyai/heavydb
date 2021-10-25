@@ -4121,6 +4121,22 @@ std::vector<const TableDescriptor*> Catalog::getPhysicalTablesDescriptors(
   return physicalTables;
 }
 
+std::vector<std::pair<int32_t, int32_t>> Catalog::getAllPersistedTableAndShardIds()
+    const {
+  cat_read_lock read_lock(this);
+  std::vector<std::pair<int32_t, int32_t>> table_and_shard_ids;
+  table_and_shard_ids.reserve(tableDescriptorMapById_.size());
+  for (const auto [table_id, td] : tableDescriptorMapById_) {
+    // Only include ids for physical persisted tables
+    if (!td->isView && !td->isTemporaryTable() && !td->isForeignTable() &&
+        logicalToPhysicalTableMapById_.find(table_id) ==
+            logicalToPhysicalTableMapById_.end()) {
+      table_and_shard_ids.emplace_back(table_id, td->shard);
+    }
+  }
+  return table_and_shard_ids;
+}
+
 const std::map<int, const ColumnDescriptor*> Catalog::getDictionaryToColumnMapping() {
   cat_read_lock read_lock(this);
 
@@ -4424,7 +4440,8 @@ std::vector<std::string> Catalog::getTableDataDirectories(
 }
 
 // get a column's dict dir basename
-std::string Catalog::getColumnDictDirectory(const ColumnDescriptor* cd) const {
+std::string Catalog::getColumnDictDirectory(const ColumnDescriptor* cd,
+                                            bool file_name_only) const {
   if ((cd->columnType.is_string() || cd->columnType.is_string_array()) &&
       cd->columnType.get_compression() == kENCODING_DICT &&
       cd->columnType.get_comp_param() > 0) {
@@ -4433,8 +4450,12 @@ std::string Catalog::getColumnDictDirectory(const ColumnDescriptor* cd) const {
     const auto dit = dictDescriptorMapByRef_.find(dictRef);
     CHECK(dit != dictDescriptorMapByRef_.end());
     CHECK(dit->second);
-    boost::filesystem::path file_path(dit->second->dictFolderPath);
-    return file_path.filename().string();
+    if (file_name_only) {
+      boost::filesystem::path file_path(dit->second->dictFolderPath);
+      return file_path.filename().string();
+    } else {
+      return dit->second->dictFolderPath;
+    }
   }
   return std::string();
 }
@@ -4451,6 +4472,18 @@ std::vector<std::string> Catalog::getTableDictDirectories(
     }
   }
   return file_paths;
+}
+
+std::set<std::string> Catalog::getTableDictDirectoryPaths(int32_t table_id) const {
+  cat_read_lock read_lock(this);
+  std::set<std::string> directory_paths;
+  for (auto cd : getAllColumnMetadataForTable(table_id, false, false, true)) {
+    auto directory_path = getColumnDictDirectory(cd, false);
+    if (!directory_path.empty()) {
+      directory_paths.emplace(directory_path);
+    }
+  }
+  return directory_paths;
 }
 
 // returns table schema in a string
@@ -5357,6 +5390,8 @@ void Catalog::conditionallyInitializeSystemTables() {
                             foreign_storage::DataWrapperType::INTERNAL_CATALOG);
     createSystemTableServer(MEMORY_STATS_SERVER_NAME,
                             foreign_storage::DataWrapperType::INTERNAL_MEMORY_STATS);
+    createSystemTableServer(STORAGE_STATS_SERVER_NAME,
+                            foreign_storage::DataWrapperType::INTERNAL_STORAGE_STATS);
     if (!getMetadataForTable(USERS_SYS_TABLE_NAME, false)) {
       createSystemTable(USERS_SYS_TABLE_NAME,
                         CATALOG_SERVER_NAME,
@@ -5456,6 +5491,27 @@ void Catalog::conditionallyInitializeSystemTables() {
                          {"slab_id", {kINT}},
                          {"start_page", {kBIGINT}},
                          {"last_touch_epoch", {kBIGINT}}});
+    }
+
+    if (!getMetadataForTable(STORAGE_DETAILS_SYS_TABLE_NAME, false)) {
+      createSystemTable(STORAGE_DETAILS_SYS_TABLE_NAME,
+                        STORAGE_STATS_SERVER_NAME,
+                        {{"node", {kTEXT}},
+                         {"database_id", {kINT}},
+                         {"table_id", {kINT}},
+                         {"epoch", {kINT}},
+                         {"epoch_floor", {kINT}},
+                         {"fragment_count", {kINT}},
+                         {"shard_id", {kINT}},
+                         {"data_file_count", {kINT}},
+                         {"metadata_file_count", {kINT}},
+                         {"total_data_file_size", {kBIGINT}},
+                         {"total_data_page_count", {kBIGINT}},
+                         {"total_free_data_page_count", {kBIGINT}},
+                         {"total_metadata_file_size", {kBIGINT}},
+                         {"total_metadata_page_count", {kBIGINT}},
+                         {"total_free_metadata_page_count", {kBIGINT}},
+                         {"total_dictionary_data_file_size", {kBIGINT}}});
     }
   }
 }

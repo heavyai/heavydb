@@ -103,6 +103,7 @@ static constexpr const char* ROLES_SYS_TABLE_NAME{"roles"};
 static constexpr const char* ROLE_ASSIGNMENTS_SYS_TABLE_NAME{"role_assignments"};
 static constexpr const char* MEMORY_SUMMARY_SYS_TABLE_NAME{"memory_summary"};
 static constexpr const char* MEMORY_DETAILS_SYS_TABLE_NAME{"memory_details"};
+static constexpr const char* STORAGE_DETAILS_SYS_TABLE_NAME{"storage_details"};
 
 /**
  * @type Catalog
@@ -235,6 +236,8 @@ class Catalog final {
       const TableDescriptor* logical_table_desc,
       bool populate_fragmenter = true) const;
 
+  std::vector<std::pair<int32_t, int32_t>> getAllPersistedTableAndShardIds() const;
+
   /**
    * Get names of all tables accessible to user.
    *
@@ -299,7 +302,9 @@ class Catalog final {
 
   std::vector<std::string> getTableDataDirectories(const TableDescriptor* td) const;
   std::vector<std::string> getTableDictDirectories(const TableDescriptor* td) const;
-  std::string getColumnDictDirectory(const ColumnDescriptor* cd) const;
+  std::set<std::string> getTableDictDirectoryPaths(int32_t table_id) const;
+  std::string getColumnDictDirectory(const ColumnDescriptor* cd,
+                                     bool file_name_only = true) const;
   std::string dumpSchema(const TableDescriptor* td) const;
   std::string dumpCreateTable(const TableDescriptor* td,
                               bool multiline_formatting = true,
@@ -732,8 +737,10 @@ class Catalog final {
 
   static constexpr const char* CATALOG_SERVER_NAME{"omnisci_catalog_server"};
   static constexpr const char* MEMORY_STATS_SERVER_NAME{"omnisci_memory_stats_server"};
-  static constexpr std::array<const char*, 2> INTERNAL_SERVERS{CATALOG_SERVER_NAME,
-                                                               MEMORY_STATS_SERVER_NAME};
+  static constexpr const char* STORAGE_STATS_SERVER_NAME{"omnisci_storage_stats_server"};
+  static constexpr std::array<const char*, 3> INTERNAL_SERVERS{CATALOG_SERVER_NAME,
+                                                               MEMORY_STATS_SERVER_NAME,
+                                                               STORAGE_STATS_SERVER_NAME};
 
  public:
   mutable std::mutex sqliteMutex_;

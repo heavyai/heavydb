@@ -45,6 +45,7 @@ set(datamgr_source_files
     ForeignStorage/ForeignDataWrapperFactory.cpp
     ForeignStorage/InternalCatalogDataWrapper.cpp
     ForeignStorage/InternalMemoryStatsDataWrapper.cpp
+    ForeignStorage/InternalStorageStatsDataWrapper.cpp
     ForeignStorage/InternalSystemDataWrapper.cpp
     ForeignStorage/RegexParserDataWrapper.cpp
     ForeignStorage/RegexFileBufferParser.cpp

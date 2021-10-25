@@ -99,8 +99,10 @@ public class SystemTableConcurrencyTest {
                     "information_schema", Arrays.asList("SELECT * FROM dashboards;")),
             new ThreadDbQueries(
                     "information_schema", Arrays.asList("SELECT * FROM memory_summary;")),
+            new ThreadDbQueries(
+                    "information_schema", Arrays.asList("SELECT * FROM memory_details;")),
             new ThreadDbQueries("information_schema",
-                    Arrays.asList("SELECT * FROM memory_details;")));
+                    Arrays.asList("SELECT * FROM storage_details;")));
 
     final int num_threads = queriesPerThread.size()
             + 1; // +1 for dashboard creation/update thread, which is created separately.

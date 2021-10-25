@@ -2794,6 +2794,197 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
   // clang-format on
 }
 
+struct StorageDetailsResult {
+  std::string node{"Server"};
+  int64_t database_id{0};
+  int64_t table_id{0};
+  int64_t epoch{1};
+  int64_t epoch_floor{0};
+  int64_t fragment_count{1};
+  int64_t shard_id{-1};
+  int64_t data_file_count{1};
+  int64_t metadata_file_count{1};
+  int64_t total_data_file_size{DEFAULT_DATA_FILE_SIZE};
+  int64_t total_data_page_count{PAGES_PER_DATA_FILE};
+  int64_t total_free_data_page_count{PAGES_PER_DATA_FILE};
+  int64_t total_metadata_file_size{DEFAULT_METADATA_FILE_SIZE};
+  int64_t total_metadata_page_count{PAGES_PER_METADATA_FILE};
+  int64_t total_free_metadata_page_count{PAGES_PER_METADATA_FILE};
+  int64_t total_dictionary_data_file_size{0};
+};
+
+class StorageDetailsSystemTableTest : public SystemTablesTest,
+                                      public testing::WithParamInterface<int32_t> {
+ protected:
+  void SetUp() override {
+    SystemTablesTest::SetUp();
+    switchToAdmin();
+    sql("CREATE DATABASE test_db;");
+    login("admin", "HyperInteractive", "test_db");
+  }
+
+  void TearDown() override {
+    switchToAdmin();
+    sql("DROP DATABASE IF EXISTS test_db");
+    SystemTablesTest::TearDown();
+  }
+
+  void sqlAndCompareResult(const std::vector<StorageDetailsResult>& results) {
+    std::vector<std::vector<NullableTargetValue>> target_values;
+    for (const auto& result : results) {
+      target_values.emplace_back(
+          std::vector<NullableTargetValue>{result.node,
+                                           result.database_id,
+                                           result.table_id,
+                                           result.epoch,
+                                           result.epoch_floor,
+                                           result.fragment_count,
+                                           result.shard_id,
+                                           result.data_file_count,
+                                           result.metadata_file_count,
+                                           result.total_data_file_size,
+                                           result.total_data_page_count,
+                                           result.total_free_data_page_count,
+                                           result.total_metadata_file_size,
+                                           result.total_metadata_page_count,
+                                           result.total_free_metadata_page_count,
+                                           result.total_dictionary_data_file_size});
+    }
+    loginInformationSchema();
+    // Skip the "omnisci" database, since it can contain default created tables
+    // and tables created by other test suites.
+    std::string query{"SELECT * FROM storage_details WHERE database_id <> " +
+                      std::to_string(getDbId("omnisci")) + " ORDER BY table_id;"};
+    SystemTablesTest::sqlAndCompareResult(query, target_values);
+  }
+
+  size_t getDictionarySize(const std::string& table_name,
+                           const std::string& column_name) {
+    const auto& catalog = getCatalog();
+    auto td = catalog.getMetadataForTable(table_name, false);
+    CHECK(td);
+    auto cd = catalog.getMetadataForColumn(td->tableId, column_name);
+    CHECK(cd);
+    CHECK(cd->columnType.is_dict_encoded_string());
+    auto dd = catalog.getMetadataForDict(cd->columnType.get_comp_param(), false);
+    CHECK(dd);
+    auto& path = dd->dictFolderPath;
+    CHECK(boost::filesystem::exists(path));
+    CHECK(boost::filesystem::is_directory(path));
+    size_t dictionary_size{0};
+    for (const auto& entry : boost::filesystem::directory_iterator(path)) {
+      CHECK(boost::filesystem::is_regular_file(entry.path()));
+      dictionary_size += boost::filesystem::file_size(entry.path());
+    }
+    return dictionary_size;
+  }
+};
+
+TEST_F(StorageDetailsSystemTableTest, ShardedTable) {
+  sql("CREATE TABLE test_table (c1 INTEGER, c2 TEXT, c3 DOUBLE, SHARD KEY(c1)) WITH "
+      "(shard_count = 2);");
+  sql("INSERT INTO test_table VALUES (20, 'efgh', 1.23);");
+
+  auto db_id = getDbId("test_db");
+  auto table_id = getTableId("test_table");
+  StorageDetailsResult shard_1_result;
+  shard_1_result.database_id = db_id;
+  shard_1_result.table_id = table_id;
+  shard_1_result.shard_id = 0;
+  // One page for each of the 3 defined columns + the $deleted$ column
+  shard_1_result.total_free_metadata_page_count -= 4;
+  shard_1_result.total_free_data_page_count -= 4;
+  shard_1_result.total_dictionary_data_file_size = getDictionarySize("test_table", "c2");
+
+  StorageDetailsResult shard_2_result;
+  shard_2_result.database_id = db_id;
+  shard_2_result.table_id = table_id;
+  // Only the first shard should contain table data/metadata
+  shard_2_result.fragment_count = 0;
+  shard_2_result.data_file_count = 0;
+  shard_2_result.metadata_file_count = 0;
+  shard_2_result.total_data_file_size = 0;
+  shard_2_result.total_metadata_file_size = 0;
+  shard_2_result.shard_id = 1;
+  shard_2_result.total_metadata_page_count = 0;
+  shard_2_result.total_free_metadata_page_count = 0;
+  shard_2_result.total_data_page_count = 0;
+  shard_2_result.total_free_data_page_count = 0;
+  shard_2_result.total_dictionary_data_file_size = getDictionarySize("test_table", "c2");
+  sqlAndCompareResult({shard_1_result, shard_2_result});
+}
+
+TEST_F(StorageDetailsSystemTableTest, MultipleFragments) {
+  sql("CREATE TABLE test_table (c1 INTEGER) WITH (fragment_size = 1);");
+  const size_t row_count{5};
+  for (size_t i = 0; i < row_count; i++) {
+    sql("INSERT INTO test_table VALUES (" + std::to_string(i) + ");");
+  }
+
+  auto db_id = getDbId("test_db");
+  auto table_id = getTableId("test_table");
+  StorageDetailsResult result;
+  result.database_id = db_id;
+  result.table_id = table_id;
+  // One page for each defined integer column chunk + the $deleted$ column chunks
+  result.total_free_metadata_page_count -= row_count * 2;
+  result.total_free_data_page_count -= row_count * 2;
+  result.epoch = row_count;
+  result.epoch_floor = row_count - DEFAULT_MAX_ROLLBACK_EPOCHS;
+  result.fragment_count = row_count;
+  sqlAndCompareResult({result});
+}
+
+TEST_F(StorageDetailsSystemTableTest, NonLocalTables) {
+  sql("CREATE TEMPORARY TABLE test_table (c1 INTEGER);");
+  sql("INSERT INTO test_table VALUES (10);");
+
+  sql("CREATE FOREIGN TABLE test_foreign_table (i INTEGER) SERVER omnisci_local_csv WITH "
+      "(file_path = '" +
+      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
+  sql("CREATE VIEW test_view AS SELECT * FROM test_foreign_table;");
+  sqlAndCompareResult({});
+}
+
+TEST_P(StorageDetailsSystemTableTest, DifferentPageSizes) {
+  const auto page_size = GetParam();
+  sql("CREATE TABLE test_table (c1 INTEGER) WITH (page_size = " +
+      std::to_string(page_size) + ");");
+  sql("INSERT INTO test_table VALUES (10);");
+
+  auto db_id = getDbId("test_db");
+  auto table_id = getTableId("test_table");
+  StorageDetailsResult result;
+  result.database_id = db_id;
+  result.table_id = table_id;
+  result.total_data_file_size = page_size * PAGES_PER_DATA_FILE;
+  if (page_size == METADATA_PAGE_SIZE) {
+    // In the case where the data page size is the same as the metadata page size, the
+    // same (data) files will be used for both the data and metadata.
+    result.metadata_file_count = 0;
+    result.total_metadata_file_size = 0;
+    result.total_metadata_page_count = 0;
+    result.total_free_metadata_page_count = 0;
+    // Both metadata and data pages for the defined integer column + the $deleted$ column
+    result.total_free_data_page_count -= 4;
+  } else {
+    // One page for the defined integer column + the $deleted$ column
+    result.total_free_metadata_page_count -= 2;
+    result.total_free_data_page_count -= 2;
+  }
+  sqlAndCompareResult({result});
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    DifferentPageSizes,
+    StorageDetailsSystemTableTest,
+    testing::Values(100 /* Arbitrary page size */,
+                    METADATA_PAGE_SIZE,
+                    65536 /* Results in the same file size as the metadata file */),
+    [](const auto& param_info) {
+      return "Page_Size_" + std::to_string(param_info.param);
+    });
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   g_enable_system_tables = true;

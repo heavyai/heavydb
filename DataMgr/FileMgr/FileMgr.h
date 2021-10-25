@@ -97,14 +97,15 @@ struct FileMetadata {
 struct StorageStats {
   int32_t epoch{0};
   int32_t epoch_floor{0};
-  uint64_t metadata_file_count{0};
+  uint32_t metadata_file_count{0};
   uint64_t total_metadata_file_size{0};
   uint64_t total_metadata_page_count{0};
   std::optional<uint64_t> total_free_metadata_page_count{};
-  uint64_t data_file_count{0};
+  uint32_t data_file_count{0};
   uint64_t total_data_file_size{0};
   uint64_t total_data_page_count{0};
   std::optional<uint64_t> total_free_data_page_count{};
+  std::optional<uint32_t> fragment_count{};
 
   StorageStats() = default;
   StorageStats(const StorageStats& storage_stats) = default;
@@ -170,7 +171,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   /// Destructor
   ~FileMgr() override;
 
-  StorageStats getStorageStats();
+  StorageStats getStorageStats() const;
   /// Creates a chunk with the specified key and page size.
   FileBuffer* createBuffer(const ChunkKey& key,
                            size_t pageSize = 0,
@@ -220,7 +221,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   }
 
   FileMetadata getMetadataForFile(
-      const boost::filesystem::directory_iterator& fileIterator);
+      const boost::filesystem::directory_iterator& fileIterator) const;
 
   void init(const size_t num_reader_threads, const int32_t epochOverride);
   void init(const std::string& dataPathToConvertFrom, const int32_t epochOverride);
@@ -288,7 +289,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   /**
    * @brief Returns value of epoch at last checkpoint
    */
-  inline int32_t lastCheckpointedEpoch() {
+  inline int32_t lastCheckpointedEpoch() const {
     return epoch() - (epochIsCheckpointed_ ? 0 : 1);
   }
 
@@ -507,6 +508,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
   bool coreInit();
   inline int32_t epoch() const { return static_cast<int32_t>(epoch_.ceiling()); }
   void writeDirtyBuffers();
+
+  void setDataAndMetadataFileStats(StorageStats& storage_stats) const;
+  uint32_t getFragmentCount() const;
 
   GlobalFileMgr* gfm_;  /// Global FileMgr
   TablePair fileMgrKey_;

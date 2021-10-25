@@ -21,6 +21,7 @@
 #include "ForeignDataWrapper.h"
 #include "InternalCatalogDataWrapper.h"
 #include "InternalMemoryStatsDataWrapper.h"
+#include "InternalStorageStatsDataWrapper.h"
 #ifdef ENABLE_IMPORT_PARQUET
 #include "ParquetDataWrapper.h"
 #include "ParquetImporter.h"
@@ -147,6 +148,9 @@ std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::create(
     data_wrapper = std::make_unique<InternalCatalogDataWrapper>(db_id, foreign_table);
   } else if (data_wrapper_type == DataWrapperType::INTERNAL_MEMORY_STATS) {
     data_wrapper = std::make_unique<InternalMemoryStatsDataWrapper>(db_id, foreign_table);
+  } else if (data_wrapper_type == DataWrapperType::INTERNAL_STORAGE_STATS) {
+    data_wrapper =
+        std::make_unique<InternalStorageStatsDataWrapper>(db_id, foreign_table);
   } else {
     throw std::runtime_error("Unsupported data wrapper");
   }
@@ -188,6 +192,9 @@ const ForeignDataWrapper& ForeignDataWrapperFactory::createForValidation(
     } else if (data_wrapper_type == DataWrapperType::INTERNAL_MEMORY_STATS) {
       validation_data_wrappers_[data_wrapper_type_key] =
           std::make_unique<InternalMemoryStatsDataWrapper>();
+    } else if (data_wrapper_type == DataWrapperType::INTERNAL_STORAGE_STATS) {
+      validation_data_wrappers_[data_wrapper_type_key] =
+          std::make_unique<InternalStorageStatsDataWrapper>();
     } else {
       UNREACHABLE();
     }
