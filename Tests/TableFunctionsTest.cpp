@@ -317,6 +317,21 @@ TEST_F(TableFunctions, BasicProjection) {
         ASSERT_EQ(v, expected_result_set[i]);
       }
     }
+    {
+      if (dt == ExecutorDeviceType::GPU) {
+        const auto rows = run_multiple_agg(
+            "SELECT * FROM TABLE(ct_require_device_cuda(cursor(SELECT x"
+            " FROM tf_test), 2));",
+            dt);
+        ASSERT_EQ(rows->rowCount(), size_t(1));
+        std::vector<int64_t> expected_result_set{12345};
+        for (size_t i = 0; i < 1; i++) {
+          auto row = rows->getNextRow(true, false);
+          auto v = TestHelpers::v<int64_t>(row[0]);
+          ASSERT_EQ(v, expected_result_set[i]);
+        }
+      }
+    }
 
     // Tests various invalid returns from a table function:
     if (dt == ExecutorDeviceType::CPU) {
@@ -858,19 +873,28 @@ TEST_F(TableFunctions, ThrowingTests) {
       EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(ct_require(cursor(SELECT x"
                                     " FROM tf_test), -2));",
                                     dt),
-                   std::runtime_error);
+                   TableFunctionError);
+    }
+    {
+      if (dt == ExecutorDeviceType::GPU) {
+        EXPECT_THROW(
+            run_multiple_agg("SELECT * FROM TABLE(ct_require_device_cuda(cursor(SELECT x"
+                             " FROM tf_test), -2));",
+                             dt),
+            TableFunctionError);
+      }
     }
     {
       EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(ct_require_mgr(cursor(SELECT x"
                                     " FROM tf_test), -2));",
                                     dt),
-                   std::runtime_error);
+                   TableFunctionError);
     }
     {
       EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(ct_require_mgr(cursor(SELECT x"
                                     " FROM tf_test), 6));",
                                     dt),
-                   std::runtime_error);
+                   TableFunctionError);
     }
     {
       const auto rows = run_multiple_agg(

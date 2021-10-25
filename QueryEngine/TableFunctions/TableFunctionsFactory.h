@@ -223,8 +223,8 @@ class TableFunction {
 
   size_t getOutputRowSizeParameter() const { return output_sizer_.val; }
 
-  bool requireInAnnotations() const;
-  std::string getRequireCheckName() const;
+  bool containsRequireFnCheck() const;
+  std::string getRequireCheckFnName() const;
 
   const std::map<std::string, std::string>& getAnnotation(const size_t idx) const;
   const std::map<std::string, std::string>& getInputAnnotation(

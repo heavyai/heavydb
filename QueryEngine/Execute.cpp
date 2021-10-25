@@ -1720,16 +1720,37 @@ ResultSetPtr Executor::executeTableFunction(
   ColumnFetcher column_fetcher(this, column_cache);
 
   TableFunctionCompilationContext compilation_context;
+  TableFunctionExecutionContext exe_context(getRowSetMemoryOwner());
+
   {
     auto clock_begin = timer_start();
     std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
     compilation_queue_time_ms_ += timer_stop(clock_begin);
-    compilation_context.compile(exe_unit, co, this);
+
+    if (exe_unit.table_func.containsRequireFnCheck()) {
+      compilation_context.compile(exe_unit,
+                                  CompilationOptions::makeCpuOnly(co),
+                                  this,
+                                  true /* emit_only_require_check*/);
+      exe_context.execute(exe_unit,
+                          table_infos,
+                          &compilation_context,
+                          column_fetcher,
+                          ExecutorDeviceType::CPU,
+                          this,
+                          true /* is_pre_launch_udtf */);
+    }
+
+    compilation_context.compile(exe_unit, co, this, false /* emit_only_require_check */);
   }
 
-  TableFunctionExecutionContext exe_context(getRowSetMemoryOwner());
-  return exe_context.execute(
-      exe_unit, table_infos, &compilation_context, column_fetcher, co.device_type, this);
+  return exe_context.execute(exe_unit,
+                             table_infos,
+                             &compilation_context,
+                             column_fetcher,
+                             co.device_type,
+                             this,
+                             false /* is_pre_launch_udtf */);
 }
 
 ResultSetPtr Executor::executeExplain(const QueryCompilationDescriptor& query_comp_desc) {

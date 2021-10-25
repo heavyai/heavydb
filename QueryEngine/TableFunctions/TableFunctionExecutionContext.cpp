@@ -120,7 +120,8 @@ ResultSetPtr TableFunctionExecutionContext::execute(
     const TableFunctionCompilationContext* compilation_context,
     const ColumnFetcher& column_fetcher,
     const ExecutorDeviceType device_type,
-    Executor* executor) {
+    Executor* executor,
+    bool is_pre_launch_udtf) {
   CHECK(compilation_context);
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::vector<std::unique_ptr<char[]>> literals_owner;
@@ -266,28 +267,99 @@ ResultSetPtr TableFunctionExecutionContext::execute(
                                                       // row size
     CHECK(input_num_rows);
   }
-  switch (device_type) {
-    case ExecutorDeviceType::CPU:
-      return launchCpuCode(exe_unit,
-                           compilation_context,
-                           col_buf_ptrs,
-                           col_sizes,
-                           *input_num_rows,
-                           executor);
-    case ExecutorDeviceType::GPU:
-      return launchGpuCode(exe_unit,
-                           compilation_context,
-                           col_buf_ptrs,
-                           col_sizes,
-                           *input_num_rows,
-                           /*device_id=*/0,
-                           executor);
+
+  if (is_pre_launch_udtf) {
+    CHECK(exe_unit.table_func.containsRequireFnCheck());
+    launchPreCodeOnCpu(exe_unit,
+                       compilation_context,
+                       col_buf_ptrs,
+                       col_sizes,
+                       *input_num_rows,
+                       executor);
+    return nullptr;
+  } else {
+    switch (device_type) {
+      case ExecutorDeviceType::CPU:
+        return launchCpuCode(exe_unit,
+                             compilation_context,
+                             col_buf_ptrs,
+                             col_sizes,
+                             *input_num_rows,
+                             executor);
+      case ExecutorDeviceType::GPU:
+        return launchGpuCode(exe_unit,
+                             compilation_context,
+                             col_buf_ptrs,
+                             col_sizes,
+                             *input_num_rows,
+                             /*device_id=*/0,
+                             executor);
+    }
   }
+
   UNREACHABLE();
   return nullptr;
 }
 
 std::mutex TableFunctionManager_singleton_mutex;
+
+void TableFunctionExecutionContext::launchPreCodeOnCpu(
+    const TableFunctionExecutionUnit& exe_unit,
+    const TableFunctionCompilationContext* compilation_context,
+    std::vector<const int8_t*>& col_buf_ptrs,
+    std::vector<int64_t>& col_sizes,
+    const size_t elem_count,  // taken from first source only currently
+    Executor* executor) {
+  int64_t output_row_count = 0;
+
+  // If TableFunctionManager must be a singleton but it has been
+  // initialized from another thread, TableFunctionManager constructor
+  // blocks via TableFunctionManager_singleton_mutex until the
+  // existing singleton is deconstructed.
+  auto mgr = std::make_unique<TableFunctionManager>(
+      exe_unit,
+      executor,
+      col_buf_ptrs,
+      row_set_mem_owner_,
+      /*is_singleton=*/!exe_unit.table_func.usesManager());
+
+  if (exe_unit.table_func.hasOutputSizeKnownPreLaunch()) {
+    // allocate output buffers because the size is known up front, from
+    // user specified parameters (and table size in the case of a user
+    // specified row multiplier)
+    output_row_count = get_output_row_count(exe_unit, elem_count);
+  }
+
+  // setup the inputs
+  // We can have an empty col_buf_ptrs vector if there are no arguments to the function
+  const auto byte_stream_ptr = !col_buf_ptrs.empty()
+                                   ? reinterpret_cast<const int8_t**>(col_buf_ptrs.data())
+                                   : nullptr;
+  if (!col_buf_ptrs.empty()) {
+    CHECK(byte_stream_ptr);
+  }
+  const auto col_sizes_ptr = !col_sizes.empty() ? col_sizes.data() : nullptr;
+  if (!col_sizes.empty()) {
+    CHECK(col_sizes_ptr);
+  }
+
+  // execute
+  auto timer = DEBUG_TIMER(__func__);
+  const auto err =
+      compilation_context->getFuncPtr()(reinterpret_cast<const int8_t*>(mgr.get()),
+                                        byte_stream_ptr,  // input columns buffer
+                                        col_sizes_ptr,    // input column sizes
+                                        nullptr,
+                                        &output_row_count);
+
+  if (err == TableFunctionErrorCode::GenericError) {
+    throw UserTableFunctionError("Error executing table function require check: " +
+                                 std::string(mgr->get_error_message()));
+  } else if (err) {
+    throw UserTableFunctionError("Error executing table function require check: " +
+                                 std::to_string(err));
+  }
+}
 
 ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
     const TableFunctionExecutionUnit& exe_unit,

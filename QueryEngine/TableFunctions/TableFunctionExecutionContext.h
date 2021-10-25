@@ -39,9 +39,16 @@ class TableFunctionExecutionContext {
                        const TableFunctionCompilationContext* compilation_context,
                        const ColumnFetcher& column_fetcher,
                        const ExecutorDeviceType device_type,
-                       Executor* executor);
+                       Executor* executor,
+                       bool is_pre_launch_udtf);
 
  private:
+  void launchPreCodeOnCpu(const TableFunctionExecutionUnit& exe_unit,
+                          const TableFunctionCompilationContext* compilation_context,
+                          std::vector<const int8_t*>& col_buf_ptrs,
+                          std::vector<int64_t>& col_sizes,
+                          const size_t elem_count,
+                          Executor* executor);
   ResultSetPtr launchCpuCode(const TableFunctionExecutionUnit& exe_unit,
                              const TableFunctionCompilationContext* compilation_context,
                              std::vector<const int8_t*>& col_buf_ptrs,

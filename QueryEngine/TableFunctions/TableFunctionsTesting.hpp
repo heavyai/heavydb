@@ -1196,7 +1196,7 @@ EXTENSION_NOINLINE int32_t ct_add_size_and_mul_alpha(TableFunctionManager& mgr,
 /*
   UDTF: ct_require(Column<int32_t>, int | name=i | require="i > 0") -> Column<int32_t>
   UDTF: ct_require_mgr(TableFunctionManager, Column<int32_t>, int i | require="i > 1" | require="i < 5") -> Column<int32_t>
-  UDTF: ct_require_str(Column<int32>t, TextEncodingNone s | require="s == \"hello\"") -> Column<int32_t>
+  UDTF: ct_require_str(Column<int32_t>, TextEncodingNone s | require="s == \"hello\"") -> Column<int32_t>
 */
 // clang-format on
 EXTENSION_NOINLINE int32_t ct_require(const Column<int32_t>& input1,
@@ -1223,3 +1223,20 @@ EXTENSION_NOINLINE int32_t ct_require_mgr(TableFunctionManager& mgr,
   out[0] = 4;
   return 1;
 }
+
+#ifdef __CUDACC__
+
+// clang-format off
+/*
+  UDTF: ct_require_device_cuda__gpu_(Column<int32_t>, Constant<1>, int | name=i | require="i > 0") -> Column<int32_t>
+*/
+// clang-format on
+
+EXTENSION_NOINLINE int32_t ct_require_device_cuda__gpu_(const Column<int32_t>& input1,
+                                                        const int32_t i,
+                                                        Column<int32_t>& out) {
+  out[0] = (i > 0 ? 12345 : 54321);
+  return 1;
+}
+
+#endif  //__CUDACC__

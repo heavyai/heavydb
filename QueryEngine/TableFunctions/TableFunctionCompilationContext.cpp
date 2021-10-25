@@ -220,19 +220,32 @@ TableFunctionCompilationContext::TableFunctionCompilationContext()
 
 void TableFunctionCompilationContext::compile(const TableFunctionExecutionUnit& exe_unit,
                                               const CompilationOptions& co,
-                                              Executor* executor) {
+                                              Executor* executor,
+                                              bool emit_only_require_check) {
   auto timer = DEBUG_TIMER(__func__);
+
+  // Avoid compile functions that set the sizer at runtime if the device is GPU
+  // This should be fixed in the python script as well to minimize the number of
+  // QueryMustRunOnCpu exceptions
+  if (co.device_type == ExecutorDeviceType::GPU &&
+      exe_unit.table_func.hasTableFunctionSpecifiedParameter()) {
+    throw QueryMustRunOnCpu();
+  }
+
   auto cgen_state = cgen_state_.get();
   CHECK(cgen_state);
   std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state));
   cgen_state->module_ = module.get();
   entry_point_func_ = generate_entry_point(cgen_state);
   module_ = std::move(module);
-  generateEntryPoint(exe_unit, /*is_gpu=*/co.device_type == ExecutorDeviceType::GPU);
+  generateEntryPoint(exe_unit,
+                     /*is_gpu=*/co.device_type == ExecutorDeviceType::GPU,
+                     emit_only_require_check);
   if (co.device_type == ExecutorDeviceType::GPU) {
+    CHECK(!emit_only_require_check);
     generateGpuKernel();
   }
-  finalize(co, executor);
+  finalize(exe_unit, co, executor, emit_only_require_check);
 }
 
 bool TableFunctionCompilationContext::passColumnsByValue(
@@ -250,36 +263,50 @@ bool TableFunctionCompilationContext::passColumnsByValue(
   return exe_unit.table_func.isRuntime();
 }
 
-void TableFunctionCompilationContext::generateRequireCheckCall(
+void TableFunctionCompilationContext::generateTableFunctionCall(
     const TableFunctionExecutionUnit& exe_unit,
-    const std::vector<llvm::Value*>& func_args) {
-  // call require check function
+    const std::vector<llvm::Value*>& func_args,
+    llvm::BasicBlock* bb_exit,
+    llvm::Value* output_row_count_ptr,
+    bool emit_only_require_check) {
+  // Emit llvm IR code to call the table function
   llvm::LLVMContext& ctx = cgen_state_->context_;
+  llvm::IRBuilder<>* ir_builder = &cgen_state_->ir_builder_;
 
-  std::string require_check_fn = exe_unit.table_func.getRequireCheckName();
-  boost::algorithm::to_lower(require_check_fn);
-  llvm::Value* require_check_fn_return =
-      cgen_state_->emitExternalCall(require_check_fn, get_int_type(32, ctx), func_args);
-  require_check_fn_return->setName("require_check_fn_return");
+  std::string func_name =
+      (emit_only_require_check ? exe_unit.table_func.getRequireCheckFnName()
+                               : exe_unit.table_func.getName(false, true));
+  llvm::Value* table_func_return =
+      cgen_state_->emitExternalCall(func_name, get_int_type(32, ctx), func_args);
 
-  // if require_chec_fn_return != 0, return its value
-  llvm::BasicBlock* bb_exit_1 =
-      llvm::BasicBlock::Create(ctx, ".exit1", entry_point_func_);
-  llvm::BasicBlock* bb_ok =
-      llvm::BasicBlock::Create(ctx, ".func_body1", entry_point_func_);
+  table_func_return->setName(emit_only_require_check ? "require_check_func_ret"
+                                                     : "table_func_ret");
 
-  llvm::ConstantInt* zero = cgen_state_->llInt(0);
-  auto is_ok = cgen_state_->ir_builder_.CreateICmpEQ(require_check_fn_return, zero);
-  cgen_state_->ir_builder_.CreateCondBr(is_ok, bb_ok, bb_exit_1);
+  // If table_func_return is non-negative then store the value in
+  // output_row_count and return zero. Otherwise, return
+  // table_func_return that negative value contains the error code.
+  llvm::BasicBlock* bb_exit_0 =
+      llvm::BasicBlock::Create(ctx, ".exit0", entry_point_func_);
 
-  cgen_state_->ir_builder_.SetInsertPoint(bb_exit_1);
-  cgen_state_->ir_builder_.CreateRet(require_check_fn_return);
-  cgen_state_->ir_builder_.SetInsertPoint(bb_ok);
+  llvm::Constant* const_zero =
+      llvm::ConstantInt::get(table_func_return->getType(), 0, true);
+  llvm::Value* is_ok = ir_builder->CreateICmpSGE(table_func_return, const_zero);
+  ir_builder->CreateCondBr(is_ok, bb_exit_0, bb_exit);
+
+  ir_builder->SetInsertPoint(bb_exit_0);
+  llvm::Value* r =
+      ir_builder->CreateIntCast(table_func_return, get_int_type(64, ctx), true);
+  ir_builder->CreateStore(r, output_row_count_ptr);
+  ir_builder->CreateRet(const_zero);
+
+  ir_builder->SetInsertPoint(bb_exit);
+  ir_builder->CreateRet(table_func_return);
 }
 
 void TableFunctionCompilationContext::generateEntryPoint(
     const TableFunctionExecutionUnit& exe_unit,
-    bool is_gpu) {
+    bool is_gpu,
+    bool emit_only_require_check) {
   CHECK(entry_point_func_);
   CHECK_EQ(entry_point_func_->arg_size(), 5);
   auto arg_it = entry_point_func_->arg_begin();
@@ -292,13 +319,17 @@ void TableFunctionCompilationContext::generateEntryPoint(
   CHECK(cgen_state);
   auto& ctx = cgen_state->context_;
 
-  const auto bb_entry = llvm::BasicBlock::Create(ctx, ".entry", entry_point_func_, 0);
+  llvm::BasicBlock* bb_entry =
+      llvm::BasicBlock::Create(ctx, ".entry", entry_point_func_, 0);
   cgen_state->ir_builder_.SetInsertPoint(bb_entry);
 
-  const auto bb_exit = llvm::BasicBlock::Create(ctx, ".exit", entry_point_func_);
+  llvm::BasicBlock* bb_exit = llvm::BasicBlock::Create(ctx, ".exit", entry_point_func_);
 
-  const auto func_body_bb = llvm::BasicBlock::Create(
+  llvm::BasicBlock* func_body_bb = llvm::BasicBlock::Create(
       ctx, ".func_body0", cgen_state->ir_builder_.GetInsertBlock()->getParent());
+
+  cgen_state->ir_builder_.SetInsertPoint(bb_entry);
+  cgen_state->ir_builder_.CreateBr(func_body_bb);
 
   cgen_state->ir_builder_.SetInsertPoint(func_body_bb);
   auto col_heads = generate_column_heads_load(
@@ -426,36 +457,8 @@ void TableFunctionCompilationContext::generateEntryPoint(
         (pass_column_by_value ? cgen_state_->ir_builder_.CreateLoad(col) : col));
   }
 
-  if (exe_unit.table_func.requireInAnnotations()) {
-    generateRequireCheckCall(exe_unit, func_args);
-  }
-
-  auto func_name = exe_unit.table_func.getName();
-  boost::algorithm::to_lower(func_name);
-  const auto table_func_return =
-      cgen_state->emitExternalCall(func_name, get_int_type(32, ctx), func_args);
-  table_func_return->setName("table_func_ret");
-
-  // If table_func_return is non-negative then store the value in
-  // output_row_count and return zero. Otherwise, return
-  // table_func_return that negative value contains the error code.
-  const auto bb_exit_0 = llvm::BasicBlock::Create(ctx, ".exit0", entry_point_func_);
-
-  auto const_zero = llvm::ConstantInt::get(table_func_return->getType(), 0, true);
-  auto is_ok = cgen_state_->ir_builder_.CreateICmpSGE(table_func_return, const_zero);
-  cgen_state_->ir_builder_.CreateCondBr(is_ok, bb_exit_0, bb_exit);
-
-  cgen_state_->ir_builder_.SetInsertPoint(bb_exit_0);
-  auto r = cgen_state->ir_builder_.CreateIntCast(
-      table_func_return, get_int_type(64, ctx), true);
-  cgen_state->ir_builder_.CreateStore(r, output_row_count_ptr);
-  cgen_state->ir_builder_.CreateRet(const_zero);
-
-  cgen_state->ir_builder_.SetInsertPoint(bb_exit);
-  cgen_state->ir_builder_.CreateRet(table_func_return);
-
-  cgen_state->ir_builder_.SetInsertPoint(bb_entry);
-  cgen_state->ir_builder_.CreateBr(func_body_bb);
+  generateTableFunctionCall(
+      exe_unit, func_args, bb_exit, output_row_count_ptr, emit_only_require_check);
 
   // std::cout << "=================================" << std::endl;
   // entry_point_func_->print(llvm::outs());
@@ -504,12 +507,15 @@ void TableFunctionCompilationContext::generateGpuKernel() {
   b.CreateRetVoid();
 }
 
-void TableFunctionCompilationContext::finalize(const CompilationOptions& co,
-                                               Executor* executor) {
+void TableFunctionCompilationContext::finalize(const TableFunctionExecutionUnit& exe_unit,
+                                               const CompilationOptions& co,
+                                               Executor* executor,
+                                               bool emit_only_require_check) {
   /*
     TODO 1: eliminate need for OverrideFromSrc
     TODO 2: detect and link only the udf's that are needed
   */
+
   if (co.device_type == ExecutorDeviceType::GPU && rt_udf_gpu_module != nullptr) {
     CodeGenerator::link_udf_module(rt_udf_gpu_module,
                                    *module_,
@@ -526,7 +532,8 @@ void TableFunctionCompilationContext::finalize(const CompilationOptions& co,
   module_.release();
   // Add code to cache?
 
-  LOG(IR) << "Table Function Entry Point IR\n"
+  LOG(IR) << (emit_only_require_check ? "Require Check Function Entry Point IR\n"
+                                      : "Table Function Entry Point IR\n")
           << serialize_llvm_object(entry_point_func_);
   if (co.device_type == ExecutorDeviceType::GPU) {
     LOG(IR) << "Table Function Kernel IR\n" << serialize_llvm_object(kernel_func_);

@@ -37,7 +37,8 @@ class TableFunctionCompilationContext {
 
   void compile(const TableFunctionExecutionUnit& exe_unit,
                const CompilationOptions& co,
-               Executor* executor);
+               Executor* executor,
+               bool emit_only_require_check);
 
   using FuncPtr = int32_t (*)(const int8_t* mgr_ptr,
                               const int8_t** input_cols,
@@ -49,12 +50,20 @@ class TableFunctionCompilationContext {
   GpuCompilationContext* getGpuCode() const { return gpu_code_.get(); }
 
  private:
-  void generateEntryPoint(const TableFunctionExecutionUnit& exe_unit, bool is_gpu);
-  void generateRequireCheckCall(const TableFunctionExecutionUnit& exe_unit,
-                                const std::vector<llvm::Value*>& args);
+  void generateEntryPoint(const TableFunctionExecutionUnit& exe_unit,
+                          bool is_gpu,
+                          bool emit_only_require_check);
+  void generateTableFunctionCall(const TableFunctionExecutionUnit& exe_unit,
+                                 const std::vector<llvm::Value*>& func_args,
+                                 llvm::BasicBlock* bb_exit,
+                                 llvm::Value* output_row_count_ptr,
+                                 bool emit_only_require_check);
   void generateGpuKernel();
   bool passColumnsByValue(const TableFunctionExecutionUnit& exe_unit, bool is_gpu);
-  void finalize(const CompilationOptions& co, Executor* executor);
+  void finalize(const TableFunctionExecutionUnit& exe_unit,
+                const CompilationOptions& co,
+                Executor* executor,
+                bool emit_only_require_check);
 
   std::unique_ptr<CgenState> cgen_state_;
   std::unique_ptr<llvm::Module> module_;
