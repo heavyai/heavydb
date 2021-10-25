@@ -136,8 +136,7 @@ set(query_engine_source_files
     Codec.h
     Execute.h
     NvidiaKernel.h
-    TableFunctions/TableFunctionManager.h)
-    TableFunctions/QueryOutputBufferMemoryManager.h
+    TableFunctions/TableFunctionManager.h
     L0Kernel.h
     QueryTemplateGenerator.h)
 
