@@ -26,6 +26,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include <math.h>
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/TableFunctions/TableFunctionManager.h"
 #include "QueryRunner/QueryRunner.h"
@@ -103,8 +104,8 @@ TEST_F(SystemTFs, Mandelbrot) {
 
 TEST_F(SystemTFs, GeoRasterize) {
   const std::string raster_values_sql =
-      "CURSOR(SELECT CAST(x AS DOUBLE) AS y, CAST(y AS DOUBLE) AS x, CAST(z AS FLOAT) as "
-      "z FROM (VALUES (0.0, 0.0, 10.0), (1.1, 1.2, 20.0), (0.8, 0.4, 5.0), (1.2, 1.43, "
+      "CURSOR(SELECT CAST(x AS DOUBLE) AS x, CAST(y AS DOUBLE) AS y, CAST(z AS FLOAT) as "
+      "z FROM (VALUES (0.0, 0.0, 10.0), (1.1, 1.2, 20.0), (0.8, 0., 5.0), (1.2, 1.43, "
       "15.0), (-0.4, 0.8, 40.0)) AS t(x, y, z))";
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -169,7 +170,7 @@ TEST_F(SystemTFs, GeoRasterize) {
       const auto rows = run_multiple_agg(
           "SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
               ", 1.0 /* bin_dim_meters */, false /* geographic_coords */, 0 /* "
-              "neighborhood_fill_radius */, false, /* fill_only_nulls */, 1.0 /* x_min "
+              "neighborhood_fill_radius */, false /* fill_only_nulls */, 1.0 /* x_min "
               "*/, 2.0 /* x_max */, 1.0 "
               "/* y_min */, 2.0 /* y_max */ )) ORDER BY x, y;",
           dt);
@@ -192,7 +193,7 @@ TEST_F(SystemTFs, GeoRasterize) {
       const auto rows = run_multiple_agg(
           "SELECT * FROM TABLE(tf_geo_rasterize(" + raster_values_sql +
               ", 1.0 /* bin_dim_meters */, false /* geographic_coords */, 1 /* "
-              "neighborhood_fill_radius */, false /* fill_only_nulls */)) ORDER BY x, y;",
+              "neighborhood_fill_radius */, true /* fill_only_nulls */)) ORDER BY x, y;",
           dt);
       const size_t num_rows = rows->rowCount();
       ASSERT_EQ(num_rows, size_t(6));
@@ -208,6 +209,68 @@ TEST_F(SystemTFs, GeoRasterize) {
                   expected_z_values[r]);
       }
     }
+
+    // Test slope and aspect computation
+    {
+      std::string slope_aspect_raster_values_sql =
+          "CURSOR(SELECT CAST(x AS DOUBLE) AS x, CAST(y AS DOUBLE) AS y, CAST(z AS "
+          "DOUBLE) as "
+          "z FROM (VALUES ";
+      for (int32_t y_bin = 0; y_bin < 5; ++y_bin) {
+        for (int32_t x_bin = 0; x_bin < 5; ++x_bin) {
+          const std::string x_val_str = std::to_string(x_bin * 2) + ".1";
+          const std::string y_val_str = std::to_string(y_bin * 2) + ".2";
+          const double z_val = 3.0 - abs(x_bin - 2);
+          const std::string z_val_str = std::to_string(z_val);
+          if (x_bin > 0 || y_bin > 0) {
+            slope_aspect_raster_values_sql += ", ";
+          }
+          slope_aspect_raster_values_sql +=
+              "(" + x_val_str + ", " + y_val_str + ", " + z_val_str + ")";
+        }
+      }
+      slope_aspect_raster_values_sql += ") AS t(x, y, z))";
+
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(tf_geo_rasterize_slope(" + slope_aspect_raster_values_sql +
+              ", 2.0 /* bin_dim_meters */, false /* geographic_coords */, 0 /* "
+              "neighborhood_fill_radius */, true /* fill_only_nulls */, true /* "
+              "compute_slope_in_degrees */)) ORDER BY x, y;",
+          dt);
+
+      const size_t num_rows = rows->rowCount();
+      ASSERT_EQ(num_rows, size_t(25));
+      ASSERT_EQ(rows->colCount(), size_t(5));
+      const double null_value = inline_fp_null_val(SQLTypeInfo(kDOUBLE, false));
+      constexpr double SLOPE_EPS = 1.0e-7;
+      for (int32_t x_bin = 0; x_bin < 5; ++x_bin) {
+        for (int32_t y_bin = 0; y_bin < 5; ++y_bin) {
+          auto crt_row = rows->getNextRow(false, false);
+          ASSERT_EQ(static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[0]))),
+                    static_cast<int64_t>(x_bin * 2 + 1));
+          ASSERT_EQ(static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[1]))),
+                    static_cast<int64_t>(y_bin * 2 + 1));
+          ASSERT_EQ(static_cast<int64_t>(std::floor(TestHelpers::v<double>(crt_row[2]))),
+                    static_cast<int64_t>(3 - abs(x_bin - 2)));
+          if (x_bin == 0 || x_bin == 4 || y_bin == 0 || y_bin == 4) {
+            ASSERT_EQ(TestHelpers::v<double>(crt_row[3]), null_value);
+            ASSERT_EQ(TestHelpers::v<double>(crt_row[4]), null_value);
+          } else {
+            const double expected_slope =
+                (x_bin == 1 || x_bin == 3) ? atan(0.5) * 180.0 / M_PI : 0;
+            ASSERT_NEAR(TestHelpers::v<double>(crt_row[3]), expected_slope, SLOPE_EPS);
+            if (x_bin == 2) {
+              // No aspect at crest
+              ASSERT_EQ(TestHelpers::v<double>(crt_row[4]), null_value);
+            } else {
+              const double expected_aspect = x_bin == 1 ? 270.0 : 90.0;
+              ASSERT_NEAR(TestHelpers::v<double>(crt_row[4]), expected_aspect, SLOPE_EPS);
+            }
+          }
+        }
+      }
+    }
+
     // TODO(todd): Add tests for geographic coords
   }
 }

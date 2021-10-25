@@ -108,6 +108,17 @@ struct GeoRaster {
   void fill_bins_from_neighbors(const int64_t neighborhood_fill_radius,
                                 const bool fill_only_nulls);
 
+  bool get_nxn_neighbors_if_not_null(const int64_t x_bin,
+                                     const int64_t y_bin,
+                                     const int64_t num_bins_radius,
+                                     std::vector<Z>& neighboring_bins) const;
+  inline std::pair<Z, Z> calculate_slope_and_aspect_of_cell(
+      const std::vector<Z>& neighboring_cells,
+      const bool compute_slope_in_degrees) const;
+  void calculate_slope_and_aspect(Column<Z>& slope,
+                                  Column<Z>& aspect,
+                                  const bool compute_slope_in_degrees) const;
+
   int64_t outputDenseColumns(TableFunctionManager& mgr,
                              Column<T>& output_x,
                              Column<T>& output_y,
@@ -157,6 +168,52 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
   }
 
   return geo_raster.outputDenseColumns(mgr, output_x, output_y, output_z);
+}
+
+// clang-format off
+/*
+  UDTF: tf_geo_rasterize_slope__cpu_template(TableFunctionManager, Cursor<Column<T> x, Column<T> y, Column<Z> z>, T, bool, int64_t, bool, bool) | filter_table_function_transpose=on -> Column<T> x, Column<T> y, Column<Z> z, Column<Z> slope, Column<Z> aspect, T=[float, double], Z=[float, double]
+ */
+// clang-format on
+
+template <typename T, typename Z>
+TEMPLATE_NOINLINE int32_t
+tf_geo_rasterize_slope__cpu_template(TableFunctionManager& mgr,
+                                     const Column<T>& input_x,
+                                     const Column<T>& input_y,
+                                     const Column<Z>& input_z,
+                                     const T bin_dim_meters,
+                                     const bool geographic_coords,
+                                     const int64_t neighborhood_fill_radius,
+                                     const bool fill_only_nulls,
+                                     const bool compute_slope_in_degrees,
+                                     Column<T>& output_x,
+                                     Column<T>& output_y,
+                                     Column<Z>& output_z,
+                                     Column<Z>& output_slope,
+                                     Column<Z>& output_aspect) {
+  if (bin_dim_meters <= 0) {
+    return mgr.ERROR_MESSAGE("bin_dim_meters argument must be greater than 0");
+  }
+
+  if (neighborhood_fill_radius < 0) {
+    return mgr.ERROR_MESSAGE(
+        "neighborhood_fill_radius argument must be greater than "
+        "or equal to 0");
+  }
+
+  GeoRaster<T, Z> geo_raster(
+      input_x, input_y, input_z, bin_dim_meters, geographic_coords, true);
+
+  if (neighborhood_fill_radius > 0) {
+    geo_raster.fill_bins_from_neighbors(neighborhood_fill_radius, fill_only_nulls);
+  }
+
+  const size_t output_rows =
+      geo_raster.outputDenseColumns(mgr, output_x, output_y, output_z);
+  geo_raster.calculate_slope_and_aspect(
+      output_slope, output_aspect, compute_slope_in_degrees);
+  return output_rows;
 }
 
 // clang-format off

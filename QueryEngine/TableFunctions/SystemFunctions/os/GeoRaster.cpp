@@ -26,6 +26,8 @@
 #include "Shared/Utilities.h"
 
 const size_t max_inputs_per_thread = 1000000L;
+const size_t max_temp_output_entries = 200000000L;
+constexpr double radians_to_degrees{180.0 / M_PI};
 
 // Allow input types to GeoRaster that are different than class types/output Z type
 // So we can move everything to the type of T and Z (which can each be either float
@@ -227,10 +229,14 @@ void GeoRaster<T, Z>::computeParallel(const Column<T2>& input_x,
                                       const size_t max_inputs_per_thread) {
   const size_t input_size = input_z.size();
   const size_t max_thread_count = std::thread::hardware_concurrency();
-  const size_t num_threads =
+  const size_t num_threads_by_input_elements =
       std::min(max_thread_count,
                ((input_size + max_inputs_per_thread - 1) / max_inputs_per_thread));
-  if (num_threads == 1) {
+  const size_t num_threads_by_output_size =
+      std::min(max_thread_count, ((max_temp_output_entries + num_bins_ - 1) / num_bins_));
+  const size_t num_threads =
+      std::min(num_threads_by_input_elements, num_threads_by_output_size);
+  if (num_threads <= 1) {
     compute(input_x, input_y, input_z);
     return;
   }
@@ -318,6 +324,95 @@ void GeoRaster<T, Z>::fill_bins_from_neighbors(const int64_t neighborhood_fill_r
                       }
                     });
   z_.swap(new_z);
+}
+
+template <typename T, typename Z>
+bool GeoRaster<T, Z>::get_nxn_neighbors_if_not_null(
+    const int64_t x_bin,
+    const int64_t y_bin,
+    const int64_t num_bins_radius,
+    std::vector<Z>& neighboring_bins) const {
+  const size_t num_bins_per_dim = num_bins_radius * 2 + 1;
+  CHECK_EQ(neighboring_bins.size(), num_bins_per_dim * num_bins_per_dim);
+  const int64_t end_y_bin_idx = y_bin + num_bins_radius;
+  const int64_t end_x_bin_idx = x_bin + num_bins_radius;
+  size_t output_bin = 0;
+  for (int64_t y_bin_idx = y_bin - num_bins_radius; y_bin_idx <= end_y_bin_idx;
+       ++y_bin_idx) {
+    for (int64_t x_bin_idx = x_bin - num_bins_radius; x_bin_idx <= end_x_bin_idx;
+         ++x_bin_idx) {
+      if (x_bin_idx < 0 || x_bin_idx >= num_x_bins_ || y_bin_idx < 0 ||
+          y_bin_idx >= num_y_bins_) {
+        return false;
+      }
+      const int64_t bin_idx = x_y_bin_to_bin_index(x_bin_idx, y_bin_idx, num_x_bins_);
+      neighboring_bins[output_bin++] = z_[bin_idx];
+      if (z_[bin_idx] == null_sentinel_) {
+        return false;
+      }
+    }
+  }
+  return true;  // not_null
+}
+
+template <typename T, typename Z>
+inline std::pair<Z, Z> GeoRaster<T, Z>::calculate_slope_and_aspect_of_cell(
+    const std::vector<Z>& neighboring_cells,
+    const bool compute_slope_in_degrees) const {
+  const Z dz_dx =
+      ((neighboring_cells[8] + 2 * neighboring_cells[5] + neighboring_cells[2]) -
+       (neighboring_cells[6] + 2 * neighboring_cells[3] + neighboring_cells[0])) /
+      (8 * bin_dim_meters_);
+  const Z dz_dy =
+      ((neighboring_cells[6] + 2 * neighboring_cells[7] + neighboring_cells[8]) -
+       (neighboring_cells[0] + 2 * neighboring_cells[1] + neighboring_cells[2])) /
+      (8 * bin_dim_meters_);
+  const Z slope = sqrt(dz_dx * dz_dx + dz_dy * dz_dy);
+  std::pair<Z, Z> slope_and_aspect;
+  slope_and_aspect.first =
+      compute_slope_in_degrees ? atan(slope) * radians_to_degrees : slope;
+  if (slope < 0.0001) {
+    slope_and_aspect.second = null_sentinel_;
+  } else {
+    const Z aspect_degrees = radians_to_degrees * atan2(dz_dx, dz_dy);  // -180.0 to 180.0
+    slope_and_aspect.second = aspect_degrees + 180.0;
+    // aspect_degrees < 0.0 ? 180.0 + aspect_degrees : aspect_degrees;
+  }
+  return slope_and_aspect;
+}
+
+template <typename T, typename Z>
+void GeoRaster<T, Z>::calculate_slope_and_aspect(
+    Column<Z>& slope,
+    Column<Z>& aspect,
+    const bool compute_slope_in_degrees) const {
+  auto timer = DEBUG_TIMER(__func__);
+  CHECK_EQ(slope.size(), num_bins_);
+  tbb::parallel_for(
+      tbb::blocked_range<int64_t>(0, num_y_bins_),
+      [&](const tbb::blocked_range<int64_t>& r) {
+        std::vector<Z> neighboring_z_vals(9);  // 3X3 calc
+        for (int64_t y_bin = r.begin(); y_bin != r.end(); ++y_bin) {
+          for (int64_t x_bin = 0; x_bin < num_x_bins_; ++x_bin) {
+            const bool not_null =
+                get_nxn_neighbors_if_not_null(x_bin, y_bin, 1, neighboring_z_vals);
+            const int64_t bin_idx = x_y_bin_to_bin_index(x_bin, y_bin, num_x_bins_);
+            if (!not_null) {
+              slope.setNull(bin_idx);
+              aspect.setNull(bin_idx);
+            } else {
+              const auto slope_and_aspect = calculate_slope_and_aspect_of_cell(
+                  neighboring_z_vals, compute_slope_in_degrees);
+              slope[bin_idx] = slope_and_aspect.first;
+              if (slope_and_aspect.second == null_sentinel_) {
+                aspect.setNull(bin_idx);
+              } else {
+                aspect[bin_idx] = slope_and_aspect.second;
+              }
+            }
+          }
+        }
+      });
 }
 
 template <typename T, typename Z>
