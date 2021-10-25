@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev e83a4a3
+                5.9.0dev 471d68c
               </div>
             
           
@@ -1149,6 +1149,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_geospatial_encoder.html">Class foreign_storage::GeospatialEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_integral_fixed_length_bounds_validator.html">Class foreign_storage::IntegralFixedLengthBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_internal_catalog_data_wrapper.html">Class foreign_storage::InternalCatalogDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_internal_memory_stats_data_wrapper.html">Class foreign_storage::InternalMemoryStatsDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_internal_system_data_wrapper.html">Class foreign_storage::InternalSystemDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_mock_foreign_data_wrapper.html">Class foreign_storage::MockForeignDataWrapper</a></li>
@@ -2199,8 +2201,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N14Data_Namespace7DataMgr13getMemoryInfoEK11MemoryLevel">
-<span id="_CPPv3N14Data_Namespace7DataMgr13getMemoryInfoEK11MemoryLevel"></span><span id="_CPPv2N14Data_Namespace7DataMgr13getMemoryInfoEK11MemoryLevel"></span><span id="Data_Namespace::DataMgr::getMemoryInfo__MemoryLevelC"></span><span class="target" id="class_data___namespace_1_1_data_mgr_1abbbb7e8f79cd0b8824521721251a9668"></span>std::vector&lt;<a class="reference internal" href="../struct/struct_data___namespace_1_1_memory_info.html#_CPPv4N14Data_Namespace10MemoryInfoE" title="Data_Namespace::MemoryInfo">MemoryInfo</a>&gt; <code class="sig-name descname">getMemoryInfo</code><span class="sig-paren">(</span><em class="property">const</em> MemoryLevel <em>memLevel</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14Data_Namespace7DataMgr13getMemoryInfoEK11MemoryLevel" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK14Data_Namespace7DataMgr13getMemoryInfoEK11MemoryLevel">
+<span id="_CPPv3NK14Data_Namespace7DataMgr13getMemoryInfoEK11MemoryLevel"></span><span id="_CPPv2NK14Data_Namespace7DataMgr13getMemoryInfoEK11MemoryLevel"></span><span id="Data_Namespace::DataMgr::getMemoryInfo__MemoryLevelCC"></span><span class="target" id="class_data___namespace_1_1_data_mgr_1a4077ac3254980f3c126edbf2b2c7b618"></span>std::vector&lt;<a class="reference internal" href="../struct/struct_data___namespace_1_1_memory_info.html#_CPPv4N14Data_Namespace10MemoryInfoE" title="Data_Namespace::MemoryInfo">MemoryInfo</a>&gt; <code class="sig-name descname">getMemoryInfo</code><span class="sig-paren">(</span><em class="property">const</em> MemoryLevel <em>memLevel</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK14Data_Namespace7DataMgr13getMemoryInfoEK11MemoryLevel" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK14Data_Namespace7DataMgr21getMemoryInfoUnlockedEK11MemoryLevel">
+<span id="_CPPv3NK14Data_Namespace7DataMgr21getMemoryInfoUnlockedEK11MemoryLevel"></span><span id="_CPPv2NK14Data_Namespace7DataMgr21getMemoryInfoUnlockedEK11MemoryLevel"></span><span id="Data_Namespace::DataMgr::getMemoryInfoUnlocked__MemoryLevelCC"></span><span class="target" id="class_data___namespace_1_1_data_mgr_1ae3a1344499937a88d1209ad7dac5b28c"></span>std::vector&lt;<a class="reference internal" href="../struct/struct_data___namespace_1_1_memory_info.html#_CPPv4N14Data_Namespace10MemoryInfoE" title="Data_Namespace::MemoryInfo">MemoryInfo</a>&gt; <code class="sig-name descname">getMemoryInfoUnlocked</code><span class="sig-paren">(</span><em class="property">const</em> MemoryLevel <em>memLevel</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK14Data_Namespace7DataMgr21getMemoryInfoUnlockedEK11MemoryLevel" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2254,6 +2261,11 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4N14Data_Namespace7DataMgr20resetTableEpochFloorEK7int32_tK7int32_t">
+<span id="_CPPv3N14Data_Namespace7DataMgr20resetTableEpochFloorEK7int32_tK7int32_t"></span><span id="_CPPv2N14Data_Namespace7DataMgr20resetTableEpochFloorEK7int32_tK7int32_t"></span><span id="Data_Namespace::DataMgr::resetTableEpochFloor__int32_tC.int32_tC"></span><span class="target" id="class_data___namespace_1_1_data_mgr_1acc5ae3dcdb3bd2df87de443e338c83a1"></span>void <code class="sig-name descname">resetTableEpochFloor</code><span class="sig-paren">(</span><em class="property">const</em> int32_t <em>db_id</em>, <em class="property">const</em> int32_t <em>tb_id</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14Data_Namespace7DataMgr20resetTableEpochFloorEK7int32_tK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4NK14Data_Namespace7DataMgr10getCudaMgrEv">
 <span id="_CPPv3NK14Data_Namespace7DataMgr10getCudaMgrEv"></span><span id="_CPPv2NK14Data_Namespace7DataMgr10getCudaMgrEv"></span><span id="Data_Namespace::DataMgr::getCudaMgrC"></span><span class="target" id="class_data___namespace_1_1_data_mgr_1a7ececb3c190477a7fbc2e58a6fd8d9de"></span>CudaMgr_Namespace::<a class="reference internal" href="class_cuda_mgr___namespace_1_1_cuda_mgr.html#_CPPv4N17CudaMgr_Namespace7CudaMgrE" title="CudaMgr_Namespace::CudaMgr">CudaMgr</a> *<code class="sig-name descname">getCudaMgr</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK14Data_Namespace7DataMgr10getCudaMgrEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2291,6 +2303,11 @@
 <dl class="function">
 <dt id="_CPPv4NK14Data_Namespace7DataMgr15getCpuBufferMgrEv">
 <span id="_CPPv3NK14Data_Namespace7DataMgr15getCpuBufferMgrEv"></span><span id="_CPPv2NK14Data_Namespace7DataMgr15getCpuBufferMgrEv"></span><span id="Data_Namespace::DataMgr::getCpuBufferMgrC"></span><span class="target" id="class_data___namespace_1_1_data_mgr_1acd93220a149acb2d76bfcdf9b8a8b703"></span>Buffer_Namespace::<a class="reference internal" href="class_buffer___namespace_1_1_cpu_buffer_mgr.html#_CPPv4N16Buffer_Namespace12CpuBufferMgrE" title="Buffer_Namespace::CpuBufferMgr">CpuBufferMgr</a> *<code class="sig-name descname">getCpuBufferMgr</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK14Data_Namespace7DataMgr15getCpuBufferMgrEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK14Data_Namespace7DataMgr15getGpuBufferMgrEv">
+<span id="_CPPv3NK14Data_Namespace7DataMgr15getGpuBufferMgrEv"></span><span id="_CPPv2NK14Data_Namespace7DataMgr15getGpuBufferMgrEv"></span><span id="Data_Namespace::DataMgr::getGpuBufferMgrC"></span><span class="target" id="class_data___namespace_1_1_data_mgr_1adca57191c15ec6c358dd01d54ef12760"></span>Buffer_Namespace::<a class="reference internal" href="class_buffer___namespace_1_1_gpu_cuda_buffer_mgr.html#_CPPv4N16Buffer_Namespace16GpuCudaBufferMgrE" title="Buffer_Namespace::GpuCudaBufferMgr">GpuCudaBufferMgr</a> *<code class="sig-name descname">getGpuBufferMgr</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK14Data_Namespace7DataMgr15getGpuBufferMgrEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev e83a4a3
+                5.9.0dev 471d68c
               </div>
             
           
@@ -1149,6 +1149,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_geospatial_encoder.html">Class foreign_storage::GeospatialEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_integral_fixed_length_bounds_validator.html">Class foreign_storage::IntegralFixedLengthBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_internal_catalog_data_wrapper.html">Class foreign_storage::InternalCatalogDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_internal_memory_stats_data_wrapper.html">Class foreign_storage::InternalMemoryStatsDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_internal_system_data_wrapper.html">Class foreign_storage::InternalSystemDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_mock_foreign_data_wrapper.html">Class foreign_storage::MockForeignDataWrapper</a></li>
@@ -2530,6 +2532,11 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4NK17Catalog_Namespace7Catalog20resetTableEpochFloorEKi">
+<span id="_CPPv3NK17Catalog_Namespace7Catalog20resetTableEpochFloorEKi"></span><span id="_CPPv2NK17Catalog_Namespace7Catalog20resetTableEpochFloorEKi"></span><span id="Catalog_Namespace::Catalog::resetTableEpochFloor__iCC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1ac1c603e18f5bb7107808495f88938f83"></span>void <code class="sig-name descname">resetTableEpochFloor</code><span class="sig-paren">(</span><em class="property">const</em> int <em>logicalTableId</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK17Catalog_Namespace7Catalog20resetTableEpochFloorEKi" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4NK17Catalog_Namespace7Catalog4nameEv">
 <span id="_CPPv3NK17Catalog_Namespace7Catalog4nameEv"></span><span id="_CPPv2NK17Catalog_Namespace7Catalog4nameEv"></span><span id="Catalog_Namespace::Catalog::nameC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a56add209c58ae4305f1266d81b1d4884"></span>std::string <code class="sig-name descname">name</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK17Catalog_Namespace7Catalog4nameEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -3478,8 +3485,13 @@
 <dd></dd></dl>
 
 <dl class="member">
+<dt id="_CPPv4N17Catalog_Namespace7Catalog24MEMORY_STATS_SERVER_NAMEE">
+<span id="_CPPv3N17Catalog_Namespace7Catalog24MEMORY_STATS_SERVER_NAMEE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog24MEMORY_STATS_SERVER_NAMEE"></span><span id="Catalog_Namespace::Catalog::MEMORY_STATS_SERVER_NAME__cCP"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1ad114a1a423634e1f10879c0eeaffab30"></span><em class="property">constexpr</em> <em class="property">const</em> char *<code class="sig-name descname">MEMORY_STATS_SERVER_NAME</code> = {&quot;omnisci_memory_stats_server&quot;}<a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog24MEMORY_STATS_SERVER_NAMEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog16INTERNAL_SERVERSE">
-<span id="_CPPv3N17Catalog_Namespace7Catalog16INTERNAL_SERVERSE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog16INTERNAL_SERVERSE"></span><span id="Catalog_Namespace::Catalog::INTERNAL_SERVERS__std::array:cCP.1:"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1ad47ca800cb2981197d27d5269ac826e7"></span><em class="property">constexpr</em> std::array&lt;<em class="property">const</em> char *, 1&gt; <code class="sig-name descname">INTERNAL_SERVERS</code> = {<a class="reference internal" href="#_CPPv4N17Catalog_Namespace7Catalog19CATALOG_SERVER_NAMEE" title="Catalog_Namespace::Catalog::CATALOG_SERVER_NAME">CATALOG_SERVER_NAME</a>}<a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog16INTERNAL_SERVERSE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N17Catalog_Namespace7Catalog16INTERNAL_SERVERSE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog16INTERNAL_SERVERSE"></span><span id="Catalog_Namespace::Catalog::INTERNAL_SERVERS__std::array:cCP.2:"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a75b4d86b776f1e76bcbee3c49563d326"></span><em class="property">constexpr</em> std::array&lt;<em class="property">const</em> char *, 2&gt; <code class="sig-name descname">INTERNAL_SERVERS</code> = {<a class="reference internal" href="#_CPPv4N17Catalog_Namespace7Catalog19CATALOG_SERVER_NAMEE" title="Catalog_Namespace::Catalog::CATALOG_SERVER_NAME">CATALOG_SERVER_NAME</a>, }<a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog16INTERNAL_SERVERSE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

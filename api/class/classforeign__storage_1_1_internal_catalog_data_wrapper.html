@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Class foreign_storage::LazyParquetChunkLoader" href="classforeign__storage_1_1_lazy_parquet_chunk_loader.html" />
+    <link rel="next" title="Class foreign_storage::InternalMemoryStatsDataWrapper" href="classforeign__storage_1_1_internal_memory_stats_data_wrapper.html" />
     <link rel="prev" title="Class foreign_storage::IntegralFixedLengthBoundsValidator" href="classforeign__storage_1_1_integral_fixed_length_bounds_validator.html" /> 
 </head>
 
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev e83a4a3
+                5.9.0dev 471d68c
               </div>
             
           
@@ -1149,6 +1149,8 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_geospatial_encoder.html">Class foreign_storage::GeospatialEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_integral_fixed_length_bounds_validator.html">Class foreign_storage::IntegralFixedLengthBoundsValidator</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class foreign_storage::InternalCatalogDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_internal_memory_stats_data_wrapper.html">Class foreign_storage::InternalMemoryStatsDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_internal_system_data_wrapper.html">Class foreign_storage::InternalSystemDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_mock_foreign_data_wrapper.html">Class foreign_storage::MockForeignDataWrapper</a></li>
@@ -2145,7 +2147,7 @@
 <h1>Class foreign_storage::InternalCatalogDataWrapper<a class="headerlink" href="#class-foreign-storage-internalcatalogdatawrapper" title="Permalink to this headline">¶</a></h1>
 <dl class="class">
 <dt id="_CPPv4N15foreign_storage26InternalCatalogDataWrapperE">
-<span id="_CPPv3N15foreign_storage26InternalCatalogDataWrapperE"></span><span id="_CPPv2N15foreign_storage26InternalCatalogDataWrapperE"></span><span id="foreign_storage::InternalCatalogDataWrapper"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper"></span><em class="property">class </em><code class="sig-name descname">InternalCatalogDataWrapper</code> : <em class="property">public</em> foreign_storage::<a class="reference internal" href="classforeign__storage_1_1_foreign_data_wrapper.html#_CPPv4N15foreign_storage18ForeignDataWrapperE" title="foreign_storage::ForeignDataWrapper">ForeignDataWrapper</a><a class="headerlink" href="#_CPPv4N15foreign_storage26InternalCatalogDataWrapperE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N15foreign_storage26InternalCatalogDataWrapperE"></span><span id="_CPPv2N15foreign_storage26InternalCatalogDataWrapperE"></span><span id="foreign_storage::InternalCatalogDataWrapper"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper"></span><em class="property">class </em><code class="sig-name descname">InternalCatalogDataWrapper</code> : <em class="property">public</em> foreign_storage::<a class="reference internal" href="classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4N15foreign_storage25InternalSystemDataWrapperE" title="foreign_storage::InternalSystemDataWrapper">InternalSystemDataWrapper</a><a class="headerlink" href="#_CPPv4N15foreign_storage26InternalCatalogDataWrapperE" title="Permalink to this definition">¶</a><br /></dt>
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
@@ -2158,131 +2160,22 @@
 <span id="_CPPv3N15foreign_storage26InternalCatalogDataWrapper26InternalCatalogDataWrapperEKiPK12ForeignTable"></span><span id="_CPPv2N15foreign_storage26InternalCatalogDataWrapper26InternalCatalogDataWrapperEKiPK12ForeignTable"></span><span id="foreign_storage::InternalCatalogDataWrapper::InternalCatalogDataWrapper__iC.ForeignTableCP"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1a90cecea844b3c5cc0636df38ded907d2"></span><code class="sig-name descname">InternalCatalogDataWrapper</code><span class="sig-paren">(</span><em class="property">const</em> int <em>db_id</em>, <em class="property">const</em> <a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTableE" title="foreign_storage::ForeignTable">ForeignTable</a> *<em>foreign_table</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage26InternalCatalogDataWrapper26InternalCatalogDataWrapperEKiPK12ForeignTable" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage26InternalCatalogDataWrapper21populateChunkMetadataER19ChunkMetadataVector">
-<span id="_CPPv3N15foreign_storage26InternalCatalogDataWrapper21populateChunkMetadataER19ChunkMetadataVector"></span><span id="_CPPv2N15foreign_storage26InternalCatalogDataWrapper21populateChunkMetadataER19ChunkMetadataVector"></span><span id="foreign_storage::InternalCatalogDataWrapper::populateChunkMetadata__ChunkMetadataVectorR"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1a61a33fcfa073bf4cb812fb9fa5a40801"></span>void <code class="sig-name descname">populateChunkMetadata</code><span class="sig-paren">(</span>ChunkMetadataVector &amp;<em>chunk_metadata_vector</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage26InternalCatalogDataWrapper21populateChunkMetadataER19ChunkMetadataVector" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Populates given chunk metadata vector with metadata for all chunks in related foreign table.</p>
-<p><dl class="simple">
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">chunk_metadata_vector</span></code>: - vector that will be populated with chunk metadata </p></li>
-</ul>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage26InternalCatalogDataWrapper20populateChunkBuffersERK16ChunkToBufferMapRK16ChunkToBufferMap">
-<span id="_CPPv3N15foreign_storage26InternalCatalogDataWrapper20populateChunkBuffersERK16ChunkToBufferMapRK16ChunkToBufferMap"></span><span id="_CPPv2N15foreign_storage26InternalCatalogDataWrapper20populateChunkBuffersERK16ChunkToBufferMapRK16ChunkToBufferMap"></span><span id="foreign_storage::InternalCatalogDataWrapper::populateChunkBuffers__ChunkToBufferMapCR.ChunkToBufferMapCR"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1a2acc69a32330c66041707501daac8f6c"></span>void <code class="sig-name descname">populateChunkBuffers</code><span class="sig-paren">(</span><em class="property">const</em> ChunkToBufferMap &amp;<em>required_buffers</em>, <em class="property">const</em> ChunkToBufferMap &amp;<em>optional_buffers</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage26InternalCatalogDataWrapper20populateChunkBuffersERK16ChunkToBufferMapRK16ChunkToBufferMap" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Populates given chunk buffers identified by chunk keys. All provided chunk buffers are expected to be for the same fragment.</p>
-<p><dl class="simple">
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">required_buffers</span></code>: - chunk buffers that must always be populated </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">optional_buffers</span></code>: - chunk buffers that can be optionally populated, if the data wrapper has to scan through chunk data anyways (typically for row wise data formats) </p></li>
-</ul>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK15foreign_storage26InternalCatalogDataWrapper21validateServerOptionsEPK13ForeignServer">
-<span id="_CPPv3NK15foreign_storage26InternalCatalogDataWrapper21validateServerOptionsEPK13ForeignServer"></span><span id="_CPPv2NK15foreign_storage26InternalCatalogDataWrapper21validateServerOptionsEPK13ForeignServer"></span><span id="foreign_storage::InternalCatalogDataWrapper::validateServerOptions__ForeignServerCPC"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1a63d0960e0b6b3e9195dcac14194cf181"></span>void <code class="sig-name descname">validateServerOptions</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE" title="foreign_storage::ForeignServer">ForeignServer</a> *<em>foreign_server</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage26InternalCatalogDataWrapper21validateServerOptionsEPK13ForeignServer" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Checks that the options for the given foreign server object are valid. <dl class="simple">
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">foreign_server</span></code>: - foreign server object containing options to be validated </p></li>
-</ul>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK15foreign_storage26InternalCatalogDataWrapper20validateTableOptionsEPK12ForeignTable">
-<span id="_CPPv3NK15foreign_storage26InternalCatalogDataWrapper20validateTableOptionsEPK12ForeignTable"></span><span id="_CPPv2NK15foreign_storage26InternalCatalogDataWrapper20validateTableOptionsEPK12ForeignTable"></span><span id="foreign_storage::InternalCatalogDataWrapper::validateTableOptions__ForeignTableCPC"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1ad9698cb72e2dacd79fde6b3083f5f913"></span>void <code class="sig-name descname">validateTableOptions</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTableE" title="foreign_storage::ForeignTable">ForeignTable</a> *<em>foreign_table</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage26InternalCatalogDataWrapper20validateTableOptionsEPK12ForeignTable" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Checks that the options for the given foreign table object are valid. <dl class="simple">
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">foreign_table</span></code>: - foreign table object containing options to be validated </p></li>
-</ul>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK15foreign_storage26InternalCatalogDataWrapper24getSupportedTableOptionsEv">
-<span id="_CPPv3NK15foreign_storage26InternalCatalogDataWrapper24getSupportedTableOptionsEv"></span><span id="_CPPv2NK15foreign_storage26InternalCatalogDataWrapper24getSupportedTableOptionsEv"></span><span id="foreign_storage::InternalCatalogDataWrapper::getSupportedTableOptionsC"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1abedf23570ce57467f66e249389d2fa1c"></span><em class="property">const</em> std::set&lt;std::string_view&gt; &amp;<code class="sig-name descname">getSupportedTableOptions</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage26InternalCatalogDataWrapper24getSupportedTableOptionsEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Gets the set of supported table options for the data wrapper. </p>
-</dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK15foreign_storage26InternalCatalogDataWrapper26validateUserMappingOptionsEPK11UserMappingPK13ForeignServer">
-<span id="_CPPv3NK15foreign_storage26InternalCatalogDataWrapper26validateUserMappingOptionsEPK11UserMappingPK13ForeignServer"></span><span id="_CPPv2NK15foreign_storage26InternalCatalogDataWrapper26validateUserMappingOptionsEPK11UserMappingPK13ForeignServer"></span><span id="foreign_storage::InternalCatalogDataWrapper::validateUserMappingOptions__UserMappingCP.ForeignServerCPC"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1a02d90449ad59565dffd7f743bc6962a8"></span>void <code class="sig-name descname">validateUserMappingOptions</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/structforeign__storage_1_1_user_mapping.html#_CPPv4N15foreign_storage11UserMappingE" title="foreign_storage::UserMapping">UserMapping</a> *<em>user_mapping</em>, <em class="property">const</em> <a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE" title="foreign_storage::ForeignServer">ForeignServer</a> *<em>foreign_server</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage26InternalCatalogDataWrapper26validateUserMappingOptionsEPK11UserMappingPK13ForeignServer" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Checks that the options for the given user mapping object are valid. <dl class="simple">
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">user_mapping</span></code>: - user mapping object containing options to be validated </p></li>
-</ul>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK15foreign_storage26InternalCatalogDataWrapper30getSupportedUserMappingOptionsEv">
-<span id="_CPPv3NK15foreign_storage26InternalCatalogDataWrapper30getSupportedUserMappingOptionsEv"></span><span id="_CPPv2NK15foreign_storage26InternalCatalogDataWrapper30getSupportedUserMappingOptionsEv"></span><span id="foreign_storage::InternalCatalogDataWrapper::getSupportedUserMappingOptionsC"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1a84143ab8b1c974fa7f1534120a64c249"></span><em class="property">const</em> std::set&lt;std::string_view&gt; &amp;<code class="sig-name descname">getSupportedUserMappingOptions</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage26InternalCatalogDataWrapper30getSupportedUserMappingOptionsEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Gets the set of supported user mapping options for the data wrapper. </p>
-</dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK15foreign_storage26InternalCatalogDataWrapper24getSerializedDataWrapperEv">
-<span id="_CPPv3NK15foreign_storage26InternalCatalogDataWrapper24getSerializedDataWrapperEv"></span><span id="_CPPv2NK15foreign_storage26InternalCatalogDataWrapper24getSerializedDataWrapperEv"></span><span id="foreign_storage::InternalCatalogDataWrapper::getSerializedDataWrapperC"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1a1275594cad5eee01e7581cd7723af45e"></span>std::string <code class="sig-name descname">getSerializedDataWrapper</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage26InternalCatalogDataWrapper24getSerializedDataWrapperEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Serialize internal state of wrapper into file at given path if implemented </p>
-</dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage26InternalCatalogDataWrapper27restoreDataWrapperInternalsERKNSt6stringERK19ChunkMetadataVector">
-<span id="_CPPv3N15foreign_storage26InternalCatalogDataWrapper27restoreDataWrapperInternalsERKNSt6stringERK19ChunkMetadataVector"></span><span id="_CPPv2N15foreign_storage26InternalCatalogDataWrapper27restoreDataWrapperInternalsERKNSt6stringERK19ChunkMetadataVector"></span><span id="foreign_storage::InternalCatalogDataWrapper::restoreDataWrapperInternals__ssCR.ChunkMetadataVectorCR"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1a227f3fab43fee894033c29605e24961f"></span>void <code class="sig-name descname">restoreDataWrapperInternals</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>file_path</em>, <em class="property">const</em> ChunkMetadataVector &amp;<em>chunk_metadata</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage26InternalCatalogDataWrapper27restoreDataWrapperInternalsERKNSt6stringERK19ChunkMetadataVector" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Restore internal state of datawrapper <dl class="simple">
-<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">file_path</span></code>: - location of file created by serializeMetadata </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">chunk_metadata_vector</span></code>: - vector of chunk metadata recovered from disk </p></li>
-</ul>
-</dd>
-</dl>
-</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK15foreign_storage26InternalCatalogDataWrapper10isRestoredEv">
-<span id="_CPPv3NK15foreign_storage26InternalCatalogDataWrapper10isRestoredEv"></span><span id="_CPPv2NK15foreign_storage26InternalCatalogDataWrapper10isRestoredEv"></span><span id="foreign_storage::InternalCatalogDataWrapper::isRestoredC"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1ac26794cc5d99ea6d3058fe4e7d8f894b"></span>bool <code class="sig-name descname">isRestored</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage26InternalCatalogDataWrapper10isRestoredEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
 <dl class="function">
 <dt id="_CPPv4N15foreign_storage26InternalCatalogDataWrapper25initializeObjectsForTableERKNSt6stringE">
-<span id="_CPPv3N15foreign_storage26InternalCatalogDataWrapper25initializeObjectsForTableERKNSt6stringE"></span><span id="_CPPv2N15foreign_storage26InternalCatalogDataWrapper25initializeObjectsForTableERKNSt6stringE"></span><span id="foreign_storage::InternalCatalogDataWrapper::initializeObjectsForTable__ssCR"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1a3cb7895afde9eade640e7d527fa14459"></span>void <code class="sig-name descname">initializeObjectsForTable</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>table_name</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage26InternalCatalogDataWrapper25initializeObjectsForTableERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N15foreign_storage26InternalCatalogDataWrapper25initializeObjectsForTableERKNSt6stringE"></span><span id="_CPPv2N15foreign_storage26InternalCatalogDataWrapper25initializeObjectsForTableERKNSt6stringE"></span><span id="foreign_storage::InternalCatalogDataWrapper::initializeObjectsForTable__ssCR"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1a029aa682d700acb6c7cd3f41bdcfb272"></span>void <code class="sig-name descname">initializeObjectsForTable</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>table_name</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage26InternalCatalogDataWrapper25initializeObjectsForTableERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N15foreign_storage26InternalCatalogDataWrapper28populateChunkBuffersForTableERKNSt6stringERNSt3mapINSt6stringEPN13import_export17TypedImportBufferEEE">
-<span id="_CPPv3N15foreign_storage26InternalCatalogDataWrapper28populateChunkBuffersForTableERKNSt6stringERNSt3mapINSt6stringEPN13import_export17TypedImportBufferEEE"></span><span id="_CPPv2N15foreign_storage26InternalCatalogDataWrapper28populateChunkBuffersForTableERKNSt6stringERNSt3mapINSt6stringEPN13import_export17TypedImportBufferEEE"></span><span id="foreign_storage::InternalCatalogDataWrapper::populateChunkBuffersForTable__ssCR.std::map:ss.import_export::TypedImportBufferP:R"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1a5fd2bc6096fd8c79dfe6d80f3f2f5acf"></span>void <code class="sig-name descname">populateChunkBuffersForTable</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>table_name</em>, std::map&lt;std::string, import_export::<a class="reference internal" href="classimport__export_1_1_typed_import_buffer.html#_CPPv4N13import_export17TypedImportBufferE" title="import_export::TypedImportBuffer">TypedImportBuffer</a> *&gt; &amp;<em>import_buffers</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage26InternalCatalogDataWrapper28populateChunkBuffersForTableERKNSt6stringERNSt3mapINSt6stringEPN13import_export17TypedImportBufferEEE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N15foreign_storage26InternalCatalogDataWrapper28populateChunkBuffersForTableERKNSt6stringERNSt3mapINSt6stringEPN13import_export17TypedImportBufferEEE"></span><span id="_CPPv2N15foreign_storage26InternalCatalogDataWrapper28populateChunkBuffersForTableERKNSt6stringERNSt3mapINSt6stringEPN13import_export17TypedImportBufferEEE"></span><span id="foreign_storage::InternalCatalogDataWrapper::populateChunkBuffersForTable__ssCR.std::map:ss.import_export::TypedImportBufferP:R"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1a58ab08ced203da81f8848a3fd6f91382"></span>void <code class="sig-name descname">populateChunkBuffersForTable</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>table_name</em>, std::map&lt;std::string, import_export::<a class="reference internal" href="classimport__export_1_1_typed_import_buffer.html#_CPPv4N13import_export17TypedImportBufferE" title="import_export::TypedImportBuffer">TypedImportBuffer</a> *&gt; &amp;<em>import_buffers</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage26InternalCatalogDataWrapper28populateChunkBuffersForTableERKNSt6stringERNSt3mapINSt6stringEPN13import_export17TypedImportBufferEEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Members</p>
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage26InternalCatalogDataWrapper6db_id_E">
-<span id="_CPPv3N15foreign_storage26InternalCatalogDataWrapper6db_id_E"></span><span id="_CPPv2N15foreign_storage26InternalCatalogDataWrapper6db_id_E"></span><span id="foreign_storage::InternalCatalogDataWrapper::db_id___iC"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1a1f98f3dc127fe40765a7905075aa3919"></span><em class="property">const</em> int <code class="sig-name descname">db_id_</code><a class="headerlink" href="#_CPPv4N15foreign_storage26InternalCatalogDataWrapper6db_id_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage26InternalCatalogDataWrapper14foreign_table_E">
-<span id="_CPPv3N15foreign_storage26InternalCatalogDataWrapper14foreign_table_E"></span><span id="_CPPv2N15foreign_storage26InternalCatalogDataWrapper14foreign_table_E"></span><span id="foreign_storage::InternalCatalogDataWrapper::foreign_table___ForeignTableCP"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1adea2f05c20ba60c47d51907424a8a753"></span><em class="property">const</em> <a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTableE" title="foreign_storage::ForeignTable">ForeignTable</a> *<code class="sig-name descname">foreign_table_</code><a class="headerlink" href="#_CPPv4N15foreign_storage26InternalCatalogDataWrapper14foreign_table_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
 <dl class="member">
 <dt id="_CPPv4N15foreign_storage26InternalCatalogDataWrapper6users_E">
 <span id="_CPPv3N15foreign_storage26InternalCatalogDataWrapper6users_E"></span><span id="_CPPv2N15foreign_storage26InternalCatalogDataWrapper6users_E"></span><span id="foreign_storage::InternalCatalogDataWrapper::users___std::list:Catalog_Namespace::UserMetadata:"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1a8168fcda5719e97249d0bf52af95acc6"></span>std::list&lt;Catalog_Namespace::<a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadataE" title="Catalog_Namespace::UserMetadata">UserMetadata</a>&gt; <code class="sig-name descname">users_</code><a class="headerlink" href="#_CPPv4N15foreign_storage26InternalCatalogDataWrapper6users_E" title="Permalink to this definition">¶</a><br /></dt>
@@ -2318,11 +2211,6 @@
 <span id="_CPPv3N15foreign_storage26InternalCatalogDataWrapper19user_names_by_role_E"></span><span id="_CPPv2N15foreign_storage26InternalCatalogDataWrapper19user_names_by_role_E"></span><span id="foreign_storage::InternalCatalogDataWrapper::user_names_by_role___std::map:ss.std::vector:ss::"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1a2471b1d67b6f6398060a368ea9c3e101"></span>std::map&lt;std::string, std::vector&lt;std::string&gt;&gt; <code class="sig-name descname">user_names_by_role_</code><a class="headerlink" href="#_CPPv4N15foreign_storage26InternalCatalogDataWrapper19user_names_by_role_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
-<dl class="member">
-<dt id="_CPPv4N15foreign_storage26InternalCatalogDataWrapper10row_count_E">
-<span id="_CPPv3N15foreign_storage26InternalCatalogDataWrapper10row_count_E"></span><span id="_CPPv2N15foreign_storage26InternalCatalogDataWrapper10row_count_E"></span><span id="foreign_storage::InternalCatalogDataWrapper::row_count___s"></span><span class="target" id="classforeign__storage_1_1_internal_catalog_data_wrapper_1a6ee8936b199b7cd80e98a98da5fec601"></span>size_t <code class="sig-name descname">row_count_</code> = {0}<a class="headerlink" href="#_CPPv4N15foreign_storage26InternalCatalogDataWrapper10row_count_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
 </div>
 </dd></dl>
 
@@ -2336,7 +2224,7 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="classforeign__storage_1_1_lazy_parquet_chunk_loader.html" class="btn btn-neutral float-right" title="Class foreign_storage::LazyParquetChunkLoader" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="classforeign__storage_1_1_internal_memory_stats_data_wrapper.html" class="btn btn-neutral float-right" title="Class foreign_storage::InternalMemoryStatsDataWrapper" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="classforeign__storage_1_1_integral_fixed_length_bounds_validator.html" class="btn btn-neutral float-left" title="Class foreign_storage::IntegralFixedLengthBoundsValidator" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

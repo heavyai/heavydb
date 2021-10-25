@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.9.0dev e83a4a3
+                5.9.0dev 471d68c
               </div>
             
           
@@ -1148,6 +1148,8 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_geospatial_encoder.html">Class foreign_storage::GeospatialEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_integral_fixed_length_bounds_validator.html">Class foreign_storage::IntegralFixedLengthBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html">Class foreign_storage::InternalCatalogDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_internal_memory_stats_data_wrapper.html">Class foreign_storage::InternalMemoryStatsDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html">Class foreign_storage::InternalSystemDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classforeign__storage_1_1_mock_foreign_data_wrapper.html">Class foreign_storage::MockForeignDataWrapper</a></li>
@@ -5275,6 +5277,8 @@
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog30logicalToPhysicalTableMapById_E">Catalog_Namespace::Catalog::logicalToPhysicalTableMapById_ (C++ member)</a>
 </li>
+      <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog24MEMORY_STATS_SERVER_NAMEE">Catalog_Namespace::Catalog::MEMORY_STATS_SERVER_NAME (C++ member)</a>
+</li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog4nameEv">Catalog_Namespace::Catalog::name (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog15nextTempDictId_E">Catalog_Namespace::Catalog::nextTempDictId_ (C++ member)</a>
@@ -5308,6 +5312,8 @@
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog22renameTableDirectoriesERKNSt6stringERKNSt6vectorINSt6stringEEERKNSt6stringE">Catalog_Namespace::Catalog::renameTableDirectories (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog16replaceDashboardER19DashboardDescriptor">Catalog_Namespace::Catalog::replaceDashboard (C++ function)</a>
+</li>
+      <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog20resetTableEpochFloorEKi">Catalog_Namespace::Catalog::resetTableEpochFloor (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog16restoreOldOwnersERKNSt3mapI7int32_tNSt6vectorI8DBObjectEEEE7int32_t">Catalog_Namespace::Catalog::restoreOldOwners (C++ function)</a>
 </li>
@@ -6153,10 +6159,10 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator11codegenCastEPKN8Analyzer5UOperERK18CompilationOptions">CodeGenerator::codegenCast (C++ function)</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator11codegenCastEPN4llvm5ValueERK11SQLTypeInfoRK11SQLTypeInfoKbRK18CompilationOptions">[1]</a>
 </li>
-      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator26codegenCastBetweenIntTypesEPN4llvm5ValueERK11SQLTypeInfoRK11SQLTypeInfob">CodeGenerator::codegenCastBetweenIntTypes (C++ function)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator26codegenCastBetweenIntTypesEPN4llvm5ValueERK11SQLTypeInfoRK11SQLTypeInfob">CodeGenerator::codegenCastBetweenIntTypes (C++ function)</a>
+</li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator40codegenCastBetweenIntTypesOverflowChecksEPN4llvm5ValueERK11SQLTypeInfoRK11SQLTypeInfoK7int64_t">CodeGenerator::codegenCastBetweenIntTypesOverflowChecks (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator28codegenCastBetweenTimestampsEPN4llvm5ValueERK11SQLTypeInfoRK11SQLTypeInfoKb">CodeGenerator::codegenCastBetweenTimestamps (C++ function)</a>
@@ -7743,7 +7749,11 @@
 </li>
       <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4NK14Data_Namespace7DataMgr16getGlobalFileMgrEv">Data_Namespace::DataMgr::getGlobalFileMgr (C++ function)</a>
 </li>
-      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr13getMemoryInfoEK11MemoryLevel">Data_Namespace::DataMgr::getMemoryInfo (C++ function)</a>
+      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4NK14Data_Namespace7DataMgr15getGpuBufferMgrEv">Data_Namespace::DataMgr::getGpuBufferMgr (C++ function)</a>
+</li>
+      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4NK14Data_Namespace7DataMgr13getMemoryInfoEK11MemoryLevel">Data_Namespace::DataMgr::getMemoryInfo (C++ function)</a>
+</li>
+      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4NK14Data_Namespace7DataMgr21getMemoryInfoUnlockedEK11MemoryLevel">Data_Namespace::DataMgr::getMemoryInfoUnlocked (C++ function)</a>
 </li>
       <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4NK14Data_Namespace7DataMgr23getPersistentStorageMgrEv">Data_Namespace::DataMgr::getPersistentStorageMgr (C++ function)</a>
 </li>
@@ -7768,6 +7778,8 @@
       <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr15reservedGpuMem_E">Data_Namespace::DataMgr::reservedGpuMem_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr22resetPersistentStorageERKN14File_Namespace15DiskCacheConfigEK6size_tRK16SystemParameters">Data_Namespace::DataMgr::resetPersistentStorage (C++ function)</a>
+</li>
+      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr20resetTableEpochFloorEK7int32_tK7int32_t">Data_Namespace::DataMgr::resetTableEpochFloor (C++ function)</a>
 </li>
       <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr13setTableEpochEKiKiKi">Data_Namespace::DataMgr::setTableEpoch (C++ function)</a>
 </li>
@@ -8399,12 +8411,12 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler23has_database_permissionERK16AccessPrivilegesRK20TDBObjectPermissions">DBHandler::has_database_permission (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler20has_object_privilegeERK10TSessionIdRKNSt6stringERKNSt6stringEKN13TDBObjectType4typeERK20TDBObjectPermissions">DBHandler::has_object_privilege (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler8has_roleERK10TSessionIdRKNSt6stringERKNSt6stringE">DBHandler::has_role (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler21has_server_permissionERK16AccessPrivilegesRK20TDBObjectPermissions">DBHandler::has_server_permission (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler20has_table_permissionERK16AccessPrivilegesRK20TDBObjectPermissions">DBHandler::has_table_permission (C++ function)</a>
@@ -10987,6 +10999,8 @@
 </li>
       <li><a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr16requestFreePagesE6size_t6size_tRNSt6vectorI4PageEEKb">File_Namespace::FileMgr::requestFreePages (C++ function)</a>
 </li>
+      <li><a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr15resetEpochFloorEv">File_Namespace::FileMgr::resetEpochFloor (C++ function)</a>
+</li>
       <li><a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr20resumeFileCompactionERKNSt6stringE">File_Namespace::FileMgr::resumeFileCompaction (C++ function)</a>
 </li>
       <li><a href="api/class/class_file___namespace_1_1_file_mgr.html#_CPPv4N14File_Namespace7FileMgr14rollOffOldDataEK7int32_tKb">File_Namespace::FileMgr::rollOffOldData (C++ function)</a>
@@ -11122,6 +11136,8 @@
       <li><a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr9putBufferERK8ChunkKeyP14AbstractBufferK6size_t">File_Namespace::GlobalFileMgr::putBuffer (C++ function)</a>
 </li>
       <li><a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr20removeTableRelatedDSEK7int32_tK7int32_t">File_Namespace::GlobalFileMgr::removeTableRelatedDS (C++ function)</a>
+</li>
+      <li><a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr20resetTableEpochFloorEK7int32_tK7int32_t">File_Namespace::GlobalFileMgr::resetTableEpochFloor (C++ function)</a>
 </li>
       <li><a href="api/class/class_file___namespace_1_1_global_file_mgr.html#_CPPv4N14File_Namespace13GlobalFileMgr12setDBConvertEb">File_Namespace::GlobalFileMgr::setDBConvert (C++ function)</a>
 </li>
@@ -11709,6 +11725,10 @@
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_data_wrapper_type.html#_CPPv4N15foreign_storage15DataWrapperType16INTERNAL_CATALOGE">foreign_storage::DataWrapperType::INTERNAL_CATALOG (C++ member)</a>
 </li>
+      <li><a href="api/struct/structforeign__storage_1_1_data_wrapper_type.html#_CPPv4N15foreign_storage15DataWrapperType22INTERNAL_DATA_WRAPPERSE">foreign_storage::DataWrapperType::INTERNAL_DATA_WRAPPERS (C++ member)</a>
+</li>
+      <li><a href="api/struct/structforeign__storage_1_1_data_wrapper_type.html#_CPPv4N15foreign_storage15DataWrapperType21INTERNAL_MEMORY_STATSE">foreign_storage::DataWrapperType::INTERNAL_MEMORY_STATS (C++ member)</a>
+</li>
       <li><a href="api/struct/structforeign__storage_1_1_data_wrapper_type.html#_CPPv4N15foreign_storage15DataWrapperType7PARQUETE">foreign_storage::DataWrapperType::PARQUET (C++ member)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_data_wrapper_type.html#_CPPv4N15foreign_storage15DataWrapperType12REGEX_PARSERE">foreign_storage::DataWrapperType::REGEX_PARSER (C++ member)</a>
@@ -12125,12 +12145,12 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema19getColumnDescriptorEKi">foreign_storage::ForeignTableSchema::getColumnDescriptor (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema15getForeignTableEv">foreign_storage::ForeignTableSchema::getForeignTable (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema28getLogicalAndPhysicalColumnsEv">foreign_storage::ForeignTableSchema::getLogicalAndPhysicalColumns (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema16getLogicalColumnEKi">foreign_storage::ForeignTableSchema::getLogicalColumn (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema26getLogicalColumnIdIteratorEKi">foreign_storage::ForeignTableSchema::getLogicalColumnIdIterator (C++ function)</a>
@@ -12279,35 +12299,15 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4N15foreign_storage26InternalCatalogDataWrapper10databases_E">foreign_storage::InternalCatalogDataWrapper::databases_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4N15foreign_storage26InternalCatalogDataWrapper6db_id_E">foreign_storage::InternalCatalogDataWrapper::db_id_ (C++ member)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4N15foreign_storage26InternalCatalogDataWrapper14foreign_table_E">foreign_storage::InternalCatalogDataWrapper::foreign_table_ (C++ member)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4NK15foreign_storage26InternalCatalogDataWrapper24getSerializedDataWrapperEv">foreign_storage::InternalCatalogDataWrapper::getSerializedDataWrapper (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4NK15foreign_storage26InternalCatalogDataWrapper24getSupportedTableOptionsEv">foreign_storage::InternalCatalogDataWrapper::getSupportedTableOptions (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4NK15foreign_storage26InternalCatalogDataWrapper30getSupportedUserMappingOptionsEv">foreign_storage::InternalCatalogDataWrapper::getSupportedUserMappingOptions (C++ function)</a>
-</li>
       <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4N15foreign_storage26InternalCatalogDataWrapper25initializeObjectsForTableERKNSt6stringE">foreign_storage::InternalCatalogDataWrapper::initializeObjectsForTable (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4N15foreign_storage26InternalCatalogDataWrapper26InternalCatalogDataWrapperEKiPK12ForeignTable">foreign_storage::InternalCatalogDataWrapper::InternalCatalogDataWrapper (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4N15foreign_storage26InternalCatalogDataWrapper26InternalCatalogDataWrapperEv">[1]</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4NK15foreign_storage26InternalCatalogDataWrapper10isRestoredEv">foreign_storage::InternalCatalogDataWrapper::isRestored (C++ function)</a>
-</li>
       <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4N15foreign_storage26InternalCatalogDataWrapper19object_permissions_E">foreign_storage::InternalCatalogDataWrapper::object_permissions_ (C++ member)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4N15foreign_storage26InternalCatalogDataWrapper20populateChunkBuffersERK16ChunkToBufferMapRK16ChunkToBufferMap">foreign_storage::InternalCatalogDataWrapper::populateChunkBuffers (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4N15foreign_storage26InternalCatalogDataWrapper28populateChunkBuffersForTableERKNSt6stringERNSt3mapINSt6stringEPN13import_export17TypedImportBufferEEE">foreign_storage::InternalCatalogDataWrapper::populateChunkBuffersForTable (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4N15foreign_storage26InternalCatalogDataWrapper21populateChunkMetadataER19ChunkMetadataVector">foreign_storage::InternalCatalogDataWrapper::populateChunkMetadata (C++ function)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4N15foreign_storage26InternalCatalogDataWrapper27restoreDataWrapperInternalsERKNSt6stringERK19ChunkMetadataVector">foreign_storage::InternalCatalogDataWrapper::restoreDataWrapperInternals (C++ function)</a>
-</li>
       <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4N15foreign_storage26InternalCatalogDataWrapper6roles_E">foreign_storage::InternalCatalogDataWrapper::roles_ (C++ member)</a>
-</li>
-      <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4N15foreign_storage26InternalCatalogDataWrapper10row_count_E">foreign_storage::InternalCatalogDataWrapper::row_count_ (C++ member)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4N15foreign_storage26InternalCatalogDataWrapper19tables_by_database_E">foreign_storage::InternalCatalogDataWrapper::tables_by_database_ (C++ member)</a>
 </li>
@@ -12315,11 +12315,49 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4N15foreign_storage26InternalCatalogDataWrapper6users_E">foreign_storage::InternalCatalogDataWrapper::users_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4NK15foreign_storage26InternalCatalogDataWrapper21validateServerOptionsEPK13ForeignServer">foreign_storage::InternalCatalogDataWrapper::validateServerOptions (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_internal_memory_stats_data_wrapper.html#_CPPv4N15foreign_storage30InternalMemoryStatsDataWrapperE">foreign_storage::InternalMemoryStatsDataWrapper (C++ class)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4NK15foreign_storage26InternalCatalogDataWrapper20validateTableOptionsEPK12ForeignTable">foreign_storage::InternalCatalogDataWrapper::validateTableOptions (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_internal_memory_stats_data_wrapper.html#_CPPv4N15foreign_storage30InternalMemoryStatsDataWrapper25initializeObjectsForTableERKNSt6stringE">foreign_storage::InternalMemoryStatsDataWrapper::initializeObjectsForTable (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_internal_catalog_data_wrapper.html#_CPPv4NK15foreign_storage26InternalCatalogDataWrapper26validateUserMappingOptionsEPK11UserMappingPK13ForeignServer">foreign_storage::InternalCatalogDataWrapper::validateUserMappingOptions (C++ function)</a>
+      <li><a href="api/class/classforeign__storage_1_1_internal_memory_stats_data_wrapper.html#_CPPv4N15foreign_storage30InternalMemoryStatsDataWrapper30InternalMemoryStatsDataWrapperEKiPK12ForeignTable">foreign_storage::InternalMemoryStatsDataWrapper::InternalMemoryStatsDataWrapper (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_internal_memory_stats_data_wrapper.html#_CPPv4N15foreign_storage30InternalMemoryStatsDataWrapper30InternalMemoryStatsDataWrapperEv">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_memory_stats_data_wrapper.html#_CPPv4N15foreign_storage30InternalMemoryStatsDataWrapper27memory_info_by_device_type_E">foreign_storage::InternalMemoryStatsDataWrapper::memory_info_by_device_type_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_memory_stats_data_wrapper.html#_CPPv4N15foreign_storage30InternalMemoryStatsDataWrapper28populateChunkBuffersForTableERKNSt6stringERNSt3mapINSt6stringEPN13import_export17TypedImportBufferEEE">foreign_storage::InternalMemoryStatsDataWrapper::populateChunkBuffersForTable (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4N15foreign_storage25InternalSystemDataWrapperE">foreign_storage::InternalSystemDataWrapper (C++ class)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4N15foreign_storage25InternalSystemDataWrapper6db_id_E">foreign_storage::InternalSystemDataWrapper::db_id_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4N15foreign_storage25InternalSystemDataWrapper14foreign_table_E">foreign_storage::InternalSystemDataWrapper::foreign_table_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4NK15foreign_storage25InternalSystemDataWrapper24getSerializedDataWrapperEv">foreign_storage::InternalSystemDataWrapper::getSerializedDataWrapper (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4NK15foreign_storage25InternalSystemDataWrapper24getSupportedTableOptionsEv">foreign_storage::InternalSystemDataWrapper::getSupportedTableOptions (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4NK15foreign_storage25InternalSystemDataWrapper30getSupportedUserMappingOptionsEv">foreign_storage::InternalSystemDataWrapper::getSupportedUserMappingOptions (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4N15foreign_storage25InternalSystemDataWrapper25initializeObjectsForTableERKNSt6stringE">foreign_storage::InternalSystemDataWrapper::initializeObjectsForTable (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4N15foreign_storage25InternalSystemDataWrapper25InternalSystemDataWrapperEKiPK12ForeignTable">foreign_storage::InternalSystemDataWrapper::InternalSystemDataWrapper (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4N15foreign_storage25InternalSystemDataWrapper25InternalSystemDataWrapperEv">[1]</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4NK15foreign_storage25InternalSystemDataWrapper10isRestoredEv">foreign_storage::InternalSystemDataWrapper::isRestored (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4N15foreign_storage25InternalSystemDataWrapper20populateChunkBuffersERK16ChunkToBufferMapRK16ChunkToBufferMap">foreign_storage::InternalSystemDataWrapper::populateChunkBuffers (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4N15foreign_storage25InternalSystemDataWrapper28populateChunkBuffersForTableERKNSt6stringERNSt3mapINSt6stringEPN13import_export17TypedImportBufferEEE">foreign_storage::InternalSystemDataWrapper::populateChunkBuffersForTable (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4N15foreign_storage25InternalSystemDataWrapper21populateChunkMetadataER19ChunkMetadataVector">foreign_storage::InternalSystemDataWrapper::populateChunkMetadata (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4N15foreign_storage25InternalSystemDataWrapper27restoreDataWrapperInternalsERKNSt6stringERK19ChunkMetadataVector">foreign_storage::InternalSystemDataWrapper::restoreDataWrapperInternals (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4N15foreign_storage25InternalSystemDataWrapper10row_count_E">foreign_storage::InternalSystemDataWrapper::row_count_ (C++ member)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4NK15foreign_storage25InternalSystemDataWrapper21validateServerOptionsEPK13ForeignServer">foreign_storage::InternalSystemDataWrapper::validateServerOptions (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4NK15foreign_storage25InternalSystemDataWrapper20validateTableOptionsEPK12ForeignTable">foreign_storage::InternalSystemDataWrapper::validateTableOptions (C++ function)</a>
+</li>
+      <li><a href="api/class/classforeign__storage_1_1_internal_system_data_wrapper.html#_CPPv4NK15foreign_storage25InternalSystemDataWrapper26validateUserMappingOptionsEPK11UserMappingPK13ForeignServer">foreign_storage::InternalSystemDataWrapper::validateUserMappingOptions (C++ function)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_interval.html#_CPPv4I0EN15foreign_storage8IntervalE">foreign_storage::Interval (C++ class)</a>
 </li>
