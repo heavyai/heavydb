@@ -1149,3 +1149,22 @@ TEMPLATE_NOINLINE int32_t ct_throw_if_gt_100__cpu_template(TableFunctionManager&
 }
 
 #endif
+
+// clang-format off
+/*
+  UDTF: ct_test_nullable(Column<int32_t>, RowMultiplier) -> Column<int32_t>
+*/
+// clang-format on
+
+EXTENSION_NOINLINE int32_t ct_test_nullable(const Column<int32_t>& input,
+                                            const int32_t i,
+                                            Column<int32_t>& out) {
+  for (int i = 0; i < input.size(); i++) {
+    if (i % 2 == 0) {
+      out.setNull(i);
+    } else {
+      out[i] = input[i];
+    }
+  }
+  return input.size();
+}

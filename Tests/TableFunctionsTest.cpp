@@ -303,6 +303,21 @@ TEST_F(TableFunctions, BasicProjection) {
       }
     }
 
+    // Test for columns containing null values (QE-163)
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(ct_test_nullable(cursor(SELECT x from tf_test), 1)) "
+          "where out0 is not null;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(2));
+      std::vector<int64_t> expected_result_set{1, 3};
+      for (size_t i = 0; i < 2; i++) {
+        auto row = rows->getNextRow(true, false);
+        auto v = TestHelpers::v<int64_t>(row[0]);
+        ASSERT_EQ(v, expected_result_set[i]);
+      }
+    }
+
     // Tests various invalid returns from a table function:
     if (dt == ExecutorDeviceType::CPU) {
       const auto rows = run_multiple_agg(

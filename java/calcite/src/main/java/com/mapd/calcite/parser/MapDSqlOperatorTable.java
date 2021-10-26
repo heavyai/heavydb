@@ -1942,6 +1942,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         FieldInfoBuilder ret = opBinding.getTypeFactory().builder();
         for (int out_idx = 0; out_idx < outs.size(); ++out_idx) {
           ret = ret.add(out_names.get(out_idx), outs.get(out_idx));
+          ret = ret.nullable(true);
         }
         return ret.build();
       };
