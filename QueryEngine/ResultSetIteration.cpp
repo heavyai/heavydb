@@ -806,9 +806,9 @@ TargetValue build_string_array_target_value(
           StringDictionaryProxy* sdp = row_set_mem_owner->getLiteralStringDictProxy();
           values.emplace_back(sdp->getString(string_id));
         } else {
-          values.emplace_back(
-              NullableString(row_set_mem_owner
-                                 ->getOrAddStringDictProxy(db_id, dict_id, /*with_generation=*/false)
+          values.emplace_back(NullableString(
+              row_set_mem_owner
+                  ->getOrAddStringDictProxy(db_id, dict_id, /*with_generation=*/false)
                   ->getString(string_id)));
         }
       }
@@ -887,7 +887,8 @@ inline std::unique_ptr<ArrayDatum> fetch_data_from_gpu(int64_t varlen_ptr,
                                                        const int64_t length,
                                                        BufferProvider* buffer_provider,
                                                        const int device_id) {
-  auto cpu_buf = std::shared_ptr<int8_t>(new int8_t[length], FreeDeleter());
+  auto cpu_buf =
+      std::shared_ptr<int8_t>(new int8_t[length], std::default_delete<int8_t[]>());
   buffer_provider->copyFromDevice(
       cpu_buf.get(), reinterpret_cast<const int8_t*>(varlen_ptr), length, device_id);
   // Just fetching the data from gpu

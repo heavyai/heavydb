@@ -66,6 +66,7 @@ add_custom_command(
     COMMAND sed
       -e "s/register //g"
       -e "s/Scanner_with_register/Scanner/g"
+      -e "s/delete yy_state_buf\;/delete[] yy_state_buf\;/"
       ${FlexppOutput} > ${ScannerPatched}
     DEPENDS ${FlexppOutput}
     COMMENT "Patching Scanner.cpp to remove register keyword"
