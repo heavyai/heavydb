@@ -431,12 +431,10 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
     eb.setOptLevel(llvm::CodeGenOpt::None);
   }
 
-#ifdef _WIN32
-  // TODO: workaround for data layout mismatch crash for now
+  // Force the module data layout to match the layout for the selected target
   auto target_machine = eb.selectTarget();
   CHECK(target_machine);
   module->setDataLayout(target_machine->createDataLayout());
-#endif
 
   ExecutionEngineWrapper execution_engine(eb.create(), co);
   CHECK(execution_engine.get());
