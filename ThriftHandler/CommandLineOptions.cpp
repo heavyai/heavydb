@@ -477,6 +477,11 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(g_enable_system_tables)
                               ->implicit_value(true),
                           "Enable use of system tables.");
+  help_desc.add_options()("enable-table-functions",
+                          po::value<bool>(&g_enable_table_functions)
+                              ->default_value(g_enable_table_functions)
+                              ->implicit_value(true),
+                          "Enable system table functions support.");
 #ifdef ENABLE_MEMKIND
   help_desc.add_options()("enable-tiered-cpu-mem",
                           po::value<bool>(&g_enable_tiered_cpu_mem)
@@ -576,12 +581,13 @@ void CommandLineOptions::fillAdvancedOptions() {
                                po::value<bool>(&g_enable_window_functions)
                                    ->default_value(g_enable_window_functions)
                                    ->implicit_value(true),
-                               "Enable experimental window function support.");
-  developer_desc.add_options()("enable-table-functions",
-                               po::value<bool>(&g_enable_table_functions)
-                                   ->default_value(g_enable_table_functions)
+                               "Enable window function support.");
+  developer_desc.add_options()("enable-dev-table-functions",
+                               po::value<bool>(&g_enable_dev_table_functions)
+                                   ->default_value(g_enable_dev_table_functions)
                                    ->implicit_value(true),
-                               "Enable experimental table functions support.");
+                               "Enable dev (test or alpha) table functions. Also "
+                               "requires --enable-table-functions to be turned on");
   developer_desc.add_options()(
       "jit-debug-ir",
       po::value<bool>(&jit_debug)->default_value(jit_debug)->implicit_value(true),

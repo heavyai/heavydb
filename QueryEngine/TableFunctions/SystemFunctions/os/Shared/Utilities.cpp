@@ -43,7 +43,6 @@ TEMPLATE_NOINLINE std::pair<T, T> get_column_min_max(const Column<T>& col) {
   const size_t max_inputs_per_thread = 200000;
   const size_t num_threads = std::min(
       max_thread_count, ((num_rows + max_inputs_per_thread - 1) / max_inputs_per_thread));
-  // std::cout << "Min/max # threads: " << num_threads << std::endl;
 
   std::vector<T> local_col_mins(num_threads, std::numeric_limits<T>::max());
   std::vector<T> local_col_maxes(num_threads, std::numeric_limits<T>::lowest());

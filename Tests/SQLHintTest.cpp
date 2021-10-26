@@ -33,6 +33,7 @@ namespace po = boost::program_options;
 using namespace Catalog_Namespace;
 
 extern bool g_enable_table_functions;
+extern bool g_enable_test_table_functions;
 
 using QR = QueryRunner::QueryRunner;
 
@@ -454,6 +455,7 @@ int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
 
   g_enable_table_functions = true;
+  g_enable_dev_table_functions = true;
   QR::init(BASE_PATH);
   int err{0};
 

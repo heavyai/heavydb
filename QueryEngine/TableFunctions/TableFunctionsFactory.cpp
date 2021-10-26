@@ -18,8 +18,10 @@
 
 #include <boost/algorithm/string.hpp>
 #include <mutex>
+#include <unordered_set>
 
 extern bool g_enable_table_functions;
+extern bool g_enable_dev_table_functions;
 
 namespace table_functions {
 
@@ -267,6 +269,21 @@ size_t TableFunction::getSqlOutputRowSizeParameter() const {
   return getOutputRowSizeParameter();
 }
 
+bool is_table_function_whitelisted(const std::string& function_name) {
+  // All table functions that will be on by default (and not just for testing)
+  // must be added to the whitelisted_table_functions set below.
+  static const std::unordered_set<std::string> whitelisted_table_functions = {
+      "tf_mandelbrot",
+      "tf_mandelbrot_float",
+      "tf_geo_rasterize",
+      "tf_geo_rasterize_slope",
+      "tf_rf_prop",
+      "tf_rf_prop_max_signal"};
+
+  return (whitelisted_table_functions.find(function_name) !=
+          whitelisted_table_functions.end());
+}
+
 void TableFunctionsFactory::add(
     const std::string& name,
     const TableFunctionOutputRowSizer sizer,
@@ -284,6 +301,11 @@ void TableFunctionsFactory::add(
                           annotations,
                           is_runtime,
                           uses_manager);
+  if (!g_enable_dev_table_functions && !is_runtime &&
+      !is_table_function_whitelisted(
+          tf.getName(true /* drop_suffix */, true /* lower */))) {
+    return;
+  }
   auto sig = tf.getSignature();
   for (auto it = functions_.begin(); it != functions_.end();) {
     if (it->second.getName() == name) {
