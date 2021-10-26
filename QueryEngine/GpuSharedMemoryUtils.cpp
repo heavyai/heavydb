@@ -132,8 +132,9 @@ void GpuSharedMemCodeBuilder::codegenReduction() {
       dest_buffer_ptr, llvm::Type::getInt8PtrTy(context_, 0), "dest_byte_stream");
 
   // running the result set reduction JIT code to get reduce_one_entry_idx function
+  auto fixup_query_mem_desc = ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_);
   auto rs_reduction_jit = std::make_unique<GpuReductionHelperJIT>(
-      ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_),
+      fixup_query_mem_desc,
       targets_,
       result_set::initialize_target_values_for_storage(targets_));
   auto reduction_code = rs_reduction_jit->codegen();

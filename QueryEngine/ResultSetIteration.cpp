@@ -928,7 +928,8 @@ inline std::unique_ptr<ArrayDatum> fetch_data_from_gpu(int64_t varlen_ptr,
                                                        const int64_t length,
                                                        Data_Namespace::DataMgr* data_mgr,
                                                        const int device_id) {
-  auto cpu_buf = std::shared_ptr<int8_t>(new int8_t[length], FreeDeleter());
+  auto cpu_buf =
+      std::shared_ptr<int8_t>(new int8_t[length], std::default_delete<int8_t[]>());
   auto allocator = data_mgr->createGpuAllocator(device_id);
   allocator->copyFromDevice(cpu_buf.get(), reinterpret_cast<int8_t*>(varlen_ptr), length);
   // Just fetching the data from gpu, not checking geo nullness
