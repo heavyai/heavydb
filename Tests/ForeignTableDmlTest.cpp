@@ -308,6 +308,8 @@ class ForeignTableTest : public DBHandlerTestFixture {
           } else if (type == "TIMESTAMP") {
             // Postgres times by default  are time(6).
             type = "timestamp(0)";
+          } else if (type == "TIMESTAMP (6)") {
+            type = "timestamp";
           }
         }
       }
