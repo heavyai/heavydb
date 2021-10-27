@@ -2332,6 +2332,11 @@ TEST_F(GeoSpatialTempTables, Geos) {
                        "FROM geospatial_test limit 1;",
                        dt),
         std::runtime_error);
+    // geos runtime doesn't yet support geometry columns in temporary tables
+    EXPECT_THROW(run_simple_agg("SELECT ST_Intersection(SAMPLE(poly), SAMPLE(mpoly)) "
+                                "FROM geospatial_test limit 1;",
+                                dt),
+                 std::runtime_error);
 #else
     // geos disabled, expect throws
     EXPECT_THROW(
