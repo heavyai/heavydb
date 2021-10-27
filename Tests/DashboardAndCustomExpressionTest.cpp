@@ -41,12 +41,7 @@ class BaseTestFixture : public DBHandlerTestFixture {
   }
 
   static void dropTestUser(const std::string& user_name) {
-    try {
-      sql("DROP USER " + user_name + ";");
-    } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
-      LOG(WARNING) << e.what();
-    }
+    sql("DROP USER IF EXISTS " + user_name + ";");
   }
 };
 
@@ -224,12 +219,7 @@ class GetDashboardTest : public DBHandlerTestFixture {
   }
 
   static void dropTestUser(const std::string& user_name) {
-    try {
-      sql("DROP USER " + user_name + ";");
-    } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
-      LOG(WARNING) << e.what();
-    }
+    sql("DROP USER IF EXISTS " + user_name + ";");
   }
 
   inline static int32_t test_user_1_id;
@@ -775,12 +765,7 @@ class DashboardBulkDeleteTest : public DBHandlerTestFixture {
   }
 
   static void dropTestUser(const std::string& user_name) {
-    try {
-      sql("DROP USER " + user_name + ";");
-    } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
-      LOG(WARNING) << e.what();
-    }
+    sql("DROP USER IF EXISTS " + user_name + ";");
   }
 
   inline static int32_t test_user_1_id;

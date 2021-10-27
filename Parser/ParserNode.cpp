@@ -5136,6 +5136,11 @@ void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 DropRoleStmt::DropRoleStmt(const rapidjson::Value& payload) {
   CHECK(payload.HasMember("role"));
   role_ = std::make_unique<std::string>(json_str(payload["role"]));
+
+  if_exists_ = false;
+  if (payload.HasMember("ifExists")) {
+    if_exists_ = json_bool(payload["ifExists"]);
+  }
 }
 
 void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -5145,11 +5150,12 @@ void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                              " failed. It can only be executed by super user.");
   }
   auto* rl = SysCatalog::instance().getRoleGrantee(get_role());
-  if (!rl) {
+  if (rl) {
+    SysCatalog::instance().dropRole(get_role(), /*is_temporary=*/false);
+  } else if (!if_exists_) {
     throw std::runtime_error("DROP ROLE " + get_role() +
                              " failed because role with this name does not exist.");
   }
-  SysCatalog::instance().dropRole(get_role(), /*is_temporary=*/false);
 }
 
 std::vector<std::string> splitObjectHierName(const std::string& hierName) {
@@ -6252,12 +6258,23 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 DropUserStmt::DropUserStmt(const rapidjson::Value& payload) {
   CHECK(payload.HasMember("name"));
   user_name_ = std::make_unique<std::string>(json_str(payload["name"]));
+
+  if_exists_ = false;
+  if (payload.HasMember("ifExists")) {
+    if_exists_ = json_bool(payload["ifExists"]);
+  }
 }
 
 void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error("Only super user can drop users.");
   }
+
+  // Test to see if the user does not exist *and* if_exists_ flag set
+  Catalog_Namespace::UserMetadata user;
+  if (if_exists_ && !SysCatalog::instance().getMetadataForUser(*user_name_, user))
+    return;
+
   SysCatalog::instance().dropUser(*user_name_);
 }
 

@@ -982,13 +982,15 @@ SqlCreate SqlCreateUser(Span s, boolean replace) :
  */
 SqlDdl SqlDropUser(Span s) :
 {
+    final boolean ifExists;
     final SqlIdentifier userName;
 }
 {
     <USER>
+    ifExists = IfExistsOpt()
     userName = CompoundIdentifier()
     {
-        return new SqlDropUser(s.end(this), userName.toString());
+        return new SqlDropUser(s.end(this), ifExists, userName.toString());
     }
 }
 
@@ -1051,12 +1053,15 @@ SqlCreate SqlCreateRole(Span s, boolean replace) :
  */
 SqlDrop SqlDropRole(Span s) :
 {
+    final boolean ifExists;
     final SqlIdentifier role;
 }
 {
-    <ROLE> role = CompoundIdentifier()
+    <ROLE> 
+    ifExists = IfExistsOpt()
+    role = CompoundIdentifier()
     {
-        return new SqlDropRole(s.end(this), role.toString());
+        return new SqlDropRole(s.end(this), ifExists, role.toString());
     }
 }
 

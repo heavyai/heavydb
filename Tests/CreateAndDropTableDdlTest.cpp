@@ -134,12 +134,7 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
 
   void dropTestUser() {
     loginAdmin();
-    try {
-      sql("DROP USER test_user;");
-    } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
-      LOG(WARNING) << e.what();
-    }
+    sql("DROP USER IF EXISTS test_user;");
   }
 
   std::string getTableDirPath() {
