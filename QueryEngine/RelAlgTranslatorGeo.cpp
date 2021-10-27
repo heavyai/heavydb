@@ -57,7 +57,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
     // (see RelAlgTranslator::translateInput)
     table_id = -source->getId();
 
-    CHECK(!expand_geo_col);
     if (with_bounds || with_render_group) {
       throw QueryNotSupported(
           "Geospatial columns not yet supported in intermediate results.");
@@ -68,6 +67,10 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
     column_id = rex_input->getIndex();
     CHECK_LT(static_cast<size_t>(column_id), in_metainfo.size());
     ti = in_metainfo[column_id].get_type_info();
+    if (expand_geo_col && ti.is_geometry()) {
+      throw QueryNotSupported(
+          "Geospatial columns not yet supported in this temporary table context.");
+    }
   }
   CHECK(IS_GEO(ti.get_type()));
 
