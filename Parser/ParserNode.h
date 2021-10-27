@@ -1532,13 +1532,14 @@ class CreateRoleStmt : public DDLStmt {
  */
 class DropRoleStmt : public DDLStmt {
  public:
-  DropRoleStmt(std::string* r) : role_(r) {}
+  DropRoleStmt(std::string* r, bool e) : role_(r), if_exists_(e) {}
   DropRoleStmt(const rapidjson::Value& payload);
   const std::string& get_role() const { return *role_; }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:
   std::unique_ptr<std::string> role_;
+  bool if_exists_;
 };
 
 inline void parser_slistval_to_vector(std::list<std::string*>* l,
@@ -2012,12 +2013,13 @@ class AlterUserStmt : public DDLStmt {
 class DropUserStmt : public DDLStmt {
  public:
   DropUserStmt(const rapidjson::Value& payload);
-  DropUserStmt(std::string* n) : user_name_(n) {}
+  DropUserStmt(std::string* n, bool e) : user_name_(n), if_exists_(e) {}
   auto const& getUserName() { return user_name_; }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:
   std::unique_ptr<std::string> user_name_;
+  bool if_exists_;
 };
 
 /*

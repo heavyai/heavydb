@@ -559,21 +559,7 @@ TEST_F(ShowUserDetailsTest, Columns) {
   assertUserResultFound(result, "user1", CAN_LOGIN, true);
 }
 
-class ShowTest : public DBHandlerTestFixture {
- public:
-  static void dropUserIfExists(const std::string& user_name) {
-    switchToAdmin();
-    try {
-      sql("DROP USER " + user_name + ";");
-    } catch (const std::exception& e) {
-      ASSERT_NE(std::string(e.what()).find("Cannot drop user. User " + user_name +
-                                           " does not exist."),
-                std::string::npos);
-    }
-  }
-};
-
-class ShowTableDdlTest : public ShowTest {
+class ShowTableDdlTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
@@ -599,14 +585,7 @@ class ShowTableDdlTest : public ShowTest {
     sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
   }
 
-  static void dropTestUser() {
-    try {
-      sql("DROP USER test_user;");
-    } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
-      LOG(WARNING) << e.what();
-    }
-  }
+  static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
 
   void assertExpectedQueryFormat(const TQueryResult& result) const {
     ASSERT_EQ(result.row_set.is_columnar, true);
@@ -790,12 +769,7 @@ class ShowDatabasesTest : public DBHandlerTestFixture {
 
   static void dropTestUser(const std::string& user_name) {
     switchToAdmin();
-    try {
-      sql("DROP USER " + user_name + ";");
-    } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
-      LOG(WARNING) << e.what();
-    }
+    sql("DROP USER IF EXISTS " + user_name + ";");
   }
 };
 
@@ -1328,7 +1302,7 @@ const int64_t DEFAULT_DATA_FILE_SIZE{DEFAULT_PAGE_SIZE * PAGES_PER_DATA_FILE};
 const int64_t DEFAULT_METADATA_FILE_SIZE{METADATA_PAGE_SIZE * PAGES_PER_METADATA_FILE};
 }  // namespace
 
-class ShowDiskCacheUsageTest : public ShowTest {
+class ShowDiskCacheUsageTest : public DBHandlerTestFixture {
  public:
   static inline constexpr int64_t epoch_file_size{2 * sizeof(int64_t)};
   static inline constexpr int64_t empty_mgr_size{0};
@@ -1351,7 +1325,7 @@ class ShowDiskCacheUsageTest : public ShowTest {
 
   static void TearDownTestSuite() {
     sql("DROP DATABASE IF EXISTS test_db;");
-    dropUserIfExists("test_user");
+    sql("DROP USER IF EXISTS test_user;");
     DBHandlerTestFixture::TearDownTestSuite();
   }
 
@@ -1581,7 +1555,7 @@ TEST_F(ShowDiskCacheUsageForNormalTableTest, NormalTableMinimum) {
                        {table1, i(chunk_size * 2 + getWrapperSizeForTable(table1))}});
 }
 
-class ShowTableDetailsTest : public ShowTest,
+class ShowTableDetailsTest : public DBHandlerTestFixture,
                              public testing::WithParamInterface<int32_t> {
  protected:
   void SetUp() override {
@@ -1616,7 +1590,7 @@ class ShowTableDetailsTest : public ShowTest,
     sql("GRANT ACCESS ON DATABASE test_db TO test_user;");
   }
 
-  static void dropTestUser() { dropUserIfExists("test_user"); }
+  static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
 
   void loginTestUser() { login("test_user", "test_pass", "test_db"); }
 
@@ -2142,7 +2116,7 @@ TEST_F(ShowTableDetailsTest, ViewSpecified) {
                           "test_view. Table does not exist.");
 }
 
-class ShowQueriesTest : public ShowTest {
+class ShowQueriesTest : public DBHandlerTestFixture {
  public:
   static void SetUpTestSuite() {
     createDBHandler();
@@ -2161,8 +2135,8 @@ class ShowQueriesTest : public ShowTest {
   void TearDown() override { DBHandlerTestFixture::TearDown(); }
 
   static void createTestUser() {
-    dropUserIfExists("u1");
-    dropUserIfExists("u2");
+    sql("DROP USER IF EXISTS u1;");
+    sql("DROP USER IF EXISTS u2;");
     sql("CREATE USER u1 (password = 'u1');");
     sql("GRANT ALL ON DATABASE omnisci TO u1;");
     sql("CREATE USER u2 (password = 'u2');");
@@ -2170,13 +2144,8 @@ class ShowQueriesTest : public ShowTest {
   }
 
   static void dropTestUser() {
-    try {
-      sql("DROP USER u1;");
-      sql("DROP USER u2;");
-    } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
-      LOG(WARNING) << e.what();
-    }
+    sql("DROP USER IF EXISTS u1;");
+    sql("DROP USER IF EXISTS u2;");
   }
 };
 
@@ -2275,12 +2244,7 @@ class SystemTablesTest : public DBHandlerTestFixture {
 
   static void dropUser(const std::string& user_name) {
     switchToAdmin();
-    try {
-      sql("DROP USER " + user_name + ";");
-    } catch (const std::exception& e) {
-      // TODO: remove when IF EXIST option is implemented
-      LOG(WARNING) << e.what();
-    }
+    sql("DROP USER IF EXISTS " + user_name + ";");
   }
 
   int64_t getUserId(const std::string& user_name) {
@@ -2342,17 +2306,8 @@ class SystemTablesTest : public DBHandlerTestFixture {
   }
 
   void dropRoles() {
-    dropRole("test_role_1");
-    dropRole("test_role_2");
-  }
-
-  void dropRole(const std::string& role_name) {
-    try {
-      sql("DROP ROLE " + role_name + ";");
-    } catch (const std::exception& e) {
-      // TODO: Add IF EXIST option
-      LOG(WARNING) << e.what();
-    }
+    sql("DROP ROLE IF EXISTS test_role_1;");
+    sql("DROP ROLE IF EXISTS test_role_2;");
   }
 
   void resetPermissions() {

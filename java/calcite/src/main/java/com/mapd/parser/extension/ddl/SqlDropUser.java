@@ -15,14 +15,17 @@ public class SqlDropUser extends SqlDrop implements JsonSerializableDdl {
   private static final SqlOperator OPERATOR =
           new SqlSpecialOperator("DROP_USER", SqlKind.OTHER_DDL);
   @Expose
+  private boolean ifExists;
+  @Expose
   private String command;
   @Expose
   private String name;
 
-  public SqlDropUser(final SqlParserPos pos, final String name) {
-    super(OPERATOR, pos, false);
-    this.name = name;
+  public SqlDropUser(final SqlParserPos pos, final boolean ifExists, final String name) {
+    super(OPERATOR, pos, ifExists);
+    this.ifExists = ifExists;
     this.command = OPERATOR.getName();
+    this.name = name;
   }
 
   @Override

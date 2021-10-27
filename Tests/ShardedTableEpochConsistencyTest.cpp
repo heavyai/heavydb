@@ -38,12 +38,7 @@ class EpochConsistencyTest : public DBHandlerTestFixture {
 
   static void dropUser() {
     switchToAdmin();
-    try {
-      sql("drop user non_super_user;");
-    } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
-      LOG(WARNING) << e.what();
-    }
+    sql("drop user IF EXISTS non_super_user;");
   }
 
   static void loginTestUser() { login("non_super_user", "HyperInteractive"); }

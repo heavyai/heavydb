@@ -2437,10 +2437,7 @@ TEST(SysCatalog, DropDatabase_ByOwner) {
   const std::string dbname = "thedb";
 
   ScopeGuard scope_guard = [&] {
-    try {
-      run_ddl_statement("DROP USER " + username + ";");
-    } catch (...) {
-    }
+    run_ddl_statement("DROP USER IF EXISTS " + username + ";");
     run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
   };
 
@@ -2469,14 +2466,8 @@ TEST(SysCatalog, DropDatabase_ByNonOwner) {
   const std::string dbname = "thedb";
 
   ScopeGuard scope_guard = [&] {
-    try {
-      run_ddl_statement("DROP USER " + username + ";");
-    } catch (...) {
-    }
-    try {
-      run_ddl_statement("DROP USER not" + username + ";");
-    } catch (...) {
-    }
+    run_ddl_statement("DROP USER IF EXISTS " + username + ";");
+    run_ddl_statement("DROP USER IF EXISTS not" + username + ";");
     run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
   };
 
@@ -2507,14 +2498,8 @@ TEST(SysCatalog, DropDatabase_BySuperUser) {
   const std::string dbname = "thedb";
 
   ScopeGuard scope_guard = [&] {
-    try {
-      run_ddl_statement("DROP USER " + username + ";");
-    } catch (...) {
-    }
-    try {
-      run_ddl_statement("DROP USER not" + username + ";");
-    } catch (...) {
-    }
+    run_ddl_statement("DROP USER IF EXISTS " + username + ";");
+    run_ddl_statement("DROP USER IF EXISTS not" + username + ";");
     run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
   };
 
@@ -2551,8 +2536,8 @@ TEST(SysCatalog, GetDatabaseList) {
       run_ddl_statement("DROP DATABASE IF EXISTS " + dbname3 + ";");
       run_ddl_statement("DROP DATABASE IF EXISTS " + dbname2 + ";");
       run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
-      run_ddl_statement("DROP USER " + username2 + ";");
-      run_ddl_statement("DROP USER " + username + ";");
+      run_ddl_statement("DROP USER IF EXISTS " + username2 + ";");
+      run_ddl_statement("DROP USER IF EXISTS " + username + ";");
     }
   } cleanupGuard;
 
@@ -2607,7 +2592,7 @@ TEST(SysCatalog, LoginWithDefaultDatabase) {
     ~CleanupGuard() {
       run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
       run_ddl_statement("DROP DATABASE IF EXISTS " + dbnamex + ";");
-      run_ddl_statement("DROP USER " + username + ";");
+      run_ddl_statement("DROP USER IF EXISTS " + username + ";");
     }
   } cleanupGuard;
 
@@ -2657,22 +2642,10 @@ TEST(SysCatalog, SwitchDatabase) {
   static std::string dbname3{dbname + "3"};
 
   // cleanup
-  try {
-    sql("DROP DATABASE IF EXISTS " + dbname + ";");
-  } catch (...) {
-  }
-  try {
-    sql("DROP DATABASE IF EXISTS " + dbname2 + ";");
-  } catch (...) {
-  }
-  try {
-    sql("DROP DATABASE IF EXISTS " + dbname3 + ";");
-  } catch (...) {
-  }
-  try {
-    sql("DROP USER " + username + ";");
-  } catch (...) {
-  }
+  sql("DROP DATABASE IF EXISTS " + dbname + ";");
+  sql("DROP DATABASE IF EXISTS " + dbname2 + ";");
+  sql("DROP DATABASE IF EXISTS " + dbname3 + ";");
+  sql("DROP USER IF EXISTS " + username + ";");
 
   // setup
   sql("CREATE USER " + username + " (password = 'password');");
@@ -2703,22 +2676,10 @@ TEST(SysCatalog, SwitchDatabase) {
   // }
 
   // cleanup
-  try {
-    sql("DROP DATABASE IF EXISTS " + dbname + ";");
-  } catch (...) {
-  }
-  try {
-    sql("DROP DATABASE IF EXISTS " + dbname2 + ";");
-  } catch (...) {
-  }
-  try {
-    sql("DROP DATABASE IF EXISTS " + dbname3 + ";");
-  } catch (...) {
-  }
-  try {
-    sql("DROP USER " + username + ";");
-  } catch (...) {
-  }
+  sql("DROP DATABASE IF EXISTS " + dbname + ";");
+  sql("DROP DATABASE IF EXISTS " + dbname2 + ";");
+  sql("DROP DATABASE IF EXISTS " + dbname3 + ";");
+  sql("DROP USER IF EXISTS " + username + ";");
 }
 
 namespace {
@@ -2837,10 +2798,10 @@ TEST(SysCatalog, RecursiveRolesUserMetaData) {
 
   struct CleanupGuard {
     ~CleanupGuard() {
-      run_ddl_statement("DROP ROLE " + london + ";");
-      run_ddl_statement("DROP ROLE " + north_london + ";");
-      run_ddl_statement("DROP ROLE " + munich + ";");
-      run_ddl_statement("DROP ROLE " + turin + ";");
+      run_ddl_statement("DROP ROLE IF EXISTS " + london + ";");
+      run_ddl_statement("DROP ROLE IF EXISTS " + north_london + ";");
+      run_ddl_statement("DROP ROLE IF EXISTS " + munich + ";");
+      run_ddl_statement("DROP ROLE IF EXISTS " + turin + ";");
       run_ddl_statement("DROP DATABASE IF EXISTS " + champions + ";");
       run_ddl_statement("DROP DATABASE IF EXISTS " + europa + ";");
     }
@@ -3121,14 +3082,7 @@ class TablePermissionsTest : public DBHandlerTestFixture {
     }
   }
 
-  static void dropTestUser() {
-    try {
-      sql("DROP USER test_user;");
-    } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
-      LOG(WARNING) << e.what();
-    }
-  }
+  static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
 
  private:
   bool is_foreign_table_;
@@ -3513,14 +3467,7 @@ class ServerPrivApiTest : public DBHandlerTestFixture {
     sql("GRANT ACCESS ON DATABASE omnisci TO  " + name + ";");
   }
 
-  static void dropTestUser(std::string name) {
-    try {
-      sql("DROP USER " + name + ";");
-    } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
-      LOG(WARNING) << e.what();
-    }
-  }
+  static void dropTestUser(std::string name) { sql("DROP USER IF EXISTS " + name + ";"); }
 
   void revokeTestUserServerPrivileges(std::string name) {
     sql("REVOKE ALL ON DATABASE omnisci FROM " + name + ";");
@@ -3917,13 +3864,7 @@ class ReassignOwnedTest : public DBHandlerTestFixture {
   }
 
   static void dropTestUser(const std::string& user_name) {
-    try {
-      sql("DROP USER " + user_name + ";");
-    } catch (const std::exception& e) {
-      // TODO: Remove try/catch when IF EXISTS clause is implemented.
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
-      LOG(WARNING) << e.what();
-    }
+    sql("DROP USER IF EXISTS " + user_name + ";");
   }
 
   void createDatabaseObjects(const std::string& name_suffix) {

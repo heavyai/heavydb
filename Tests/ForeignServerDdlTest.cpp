@@ -298,15 +298,7 @@ class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
     sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
   }
 
-  static void dropTestUser() {
-    try {
-      sql("DROP USER test_user;");
-    } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS"
-      // option.
-      LOG(WARNING) << e.what();
-    }
-  }
+  static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
 
   void createTestServer() {
     sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
@@ -943,15 +935,7 @@ class AlterForeignServerTest : public DBHandlerTestFixture {
     sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
   }
 
-  static void dropTestUser() {
-    try {
-      sql("DROP USER test_user;");
-    } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS"
-      // option.
-      LOG(WARNING) << e.what();
-    }
-  }
+  static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
 
   void createTestServer() {
     sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
