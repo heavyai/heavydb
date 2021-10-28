@@ -86,8 +86,10 @@ ExtractedPlanDag QueryPlanDagExtractor::extractQueryPlanDag(
     Executor* executor,
     const RelAlgTranslator& rel_alg_translator) {
   // check if this plan tree has not supported pattern for DAG extraction
-  if (QueryPlanDagChecker::isNotSupportedDag(node, rel_alg_translator)) {
-    VLOG(1) << "Stop DAG extraction due to not supproed node: " << node->toString();
+  auto dag_checker_res =
+      QueryPlanDagChecker::hasNonSupportedNodeInDag(node, rel_alg_translator);
+  if (dag_checker_res.first) {
+    VLOG(1) << "Stop DAG extraction (" << dag_checker_res.second << ")";
     return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, {}, true};
   }
 
@@ -116,8 +118,7 @@ ExtractedPlanDag QueryPlanDagExtractor::extractQueryPlanDagImpl(
   // add the root node of this query plan DAG
   auto res = cached_dag.addNodeIfAbsent(node);
   if (!res) {
-    VLOG(1) << "Stop DAG extraction while adding node to the DAG node cache: "
-            << node->toString();
+    VLOG(1) << "Stop DAG extraction (Query plan dag cache reaches the maximum capacity)";
     return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, {}, true};
   }
   CHECK(res.has_value());
@@ -176,8 +177,7 @@ std::string QueryPlanDagExtractor::getExtractedQueryPlanDagStr() {
 bool QueryPlanDagExtractor::validateNodeId(const RelAlgNode* node,
                                            std::optional<RelNodeId> retrieved_node_id) {
   if (!retrieved_node_id) {
-    VLOG(1) << "Stop DAG extraction while adding node to the DAG node cache: "
-            << node->toString();
+    VLOG(1) << "Stop DAG extraction (Detect an invalid dag id)";
     clearInternaStatus();
     return false;
   }
@@ -223,7 +223,7 @@ void QueryPlanDagExtractor::visit(const RelAlgNode* parent_node,
   if (auto left_deep_joins = dynamic_cast<const RelLeftDeepInnerJoin*>(child_node)) {
     if (left_deep_tree_infos_.empty()) {
       // we should have left_deep_tree_info for input left deep tree node
-      VLOG(1) << "Stop DAG extraction due to not supported join pattern";
+      VLOG(1) << "Stop DAG extraction (Detect non-supported join pattern)";
       clearInternaStatus();
       return;
     }
@@ -286,7 +286,7 @@ void QueryPlanDagExtractor::handleTranslatedJoin(
     addTableIdToNodeLink(lhs_node->getId(), lhs_node);
   }
   if (isEmptyQueryPlanDag(after_lhs_visited) || isEmptyQueryPlanDag(after_rhs_visited)) {
-    VLOG(1) << "Stop DAG extraction while extracting query plan DAG for join qual";
+    VLOG(1) << "Stop DAG extraction (Detect invalid query plan dag of join col(s))";
     clearInternaStatus();
     return;
   }
@@ -374,7 +374,7 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
   auto left_deep_join_info = getPerNestingJoinQualInfo(left_deep_tree_id);
   if (!left_deep_join_info) {
     // we should have left_deep_tree_info for input left deep tree node
-    VLOG(1) << "Stop DAG extraction due to not supported join pattern";
+    VLOG(1) << "Stop DAG extraction (Detect Non-supported join pattern)";
     clearInternaStatus();
     return;
   }
@@ -467,7 +467,7 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
       }
     }
     if (inner_join_cols.size() != outer_join_cols.size()) {
-      VLOG(1) << "Stop DAG extraction due to inner/outer col mismatch";
+      VLOG(1) << "Stop DAG extraction (Detect inner/outer col mismatch)";
       clearInternaStatus();
       return;
     }

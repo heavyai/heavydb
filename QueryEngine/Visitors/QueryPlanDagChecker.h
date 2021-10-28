@@ -25,28 +25,33 @@
 class QueryPlanDagChecker final : public RelRexDagVisitor {
  public:
   QueryPlanDagChecker(const RelAlgTranslator& rel_alg_translator)
-      : contain_not_supported_node_(false)
+      : detect_non_supported_node_(false)
+      , non_supported_node_tag_("")
       , rel_alg_translator_(rel_alg_translator)
-      , not_supported_functions_(getNotSupportedFunctionsList()) {}
-  static std::unordered_set<std::string> getNotSupportedFunctionsList() {
-    std::unordered_set<std::string> not_supported_functions;
-    not_supported_functions.emplace("CURRENT_USER");
-    not_supported_functions.emplace("CARDINALITY");
-    not_supported_functions.emplace("ARRAY_LENGTH");
-    not_supported_functions.emplace("ITEM");
-    not_supported_functions.emplace("NOW");
-    not_supported_functions.emplace("SIGN");
-    not_supported_functions.emplace("OFFSET_IN_FRAGMENT");
-    not_supported_functions.emplace("DATETIME");
-    return not_supported_functions;
+      , non_supported_functions_(getNonSupportedFunctionsList()) {
+    non_supported_function_tag_ = boost::join(non_supported_functions_, "/");
+  }
+  static std::unordered_set<std::string> getNonSupportedFunctionsList() {
+    std::unordered_set<std::string> non_supported_functions;
+    non_supported_functions.emplace("CURRENT_USER");
+    non_supported_functions.emplace("CARDINALITY");
+    non_supported_functions.emplace("ARRAY_LENGTH");
+    non_supported_functions.emplace("ITEM");
+    non_supported_functions.emplace("NOW");
+    non_supported_functions.emplace("SIGN");
+    non_supported_functions.emplace("OFFSET_IN_FRAGMENT");
+    non_supported_functions.emplace("DATETIME");
+    return non_supported_functions;
   }
 
-  static bool isNotSupportedDag(const RelAlgNode* rel_alg_node,
-                                const RelAlgTranslator& rel_alg_translator);
+  static std::pair<bool, std::string> hasNonSupportedNodeInDag(
+      const RelAlgNode* rel_alg_node,
+      const RelAlgTranslator& rel_alg_translator);
   void check(const RelAlgNode*);
-  void detectNotSupportedNode();
+  void detectNonSupportedNode(const std::string& node_tag);
   void reset();
   bool getCheckResult() const;
+  std::string const& getNonSupportedNodeTag() const;
 
  private:
   void visit(const RelLogicalValues*) override;
@@ -59,7 +64,9 @@ class QueryPlanDagChecker final : public RelRexDagVisitor {
   void visit(const RexFunctionOperator*) override;
   void visit(const RexOperator*) override;
 
-  bool contain_not_supported_node_;
+  bool detect_non_supported_node_;
+  std::string non_supported_node_tag_;
+  std::string non_supported_function_tag_;
   const RelAlgTranslator& rel_alg_translator_;
-  const std::unordered_set<std::string> not_supported_functions_;
+  const std::unordered_set<std::string> non_supported_functions_;
 };

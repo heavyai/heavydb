@@ -17,18 +17,20 @@
 #include "QueryPlanDagChecker.h"
 
 bool QueryPlanDagChecker::getCheckResult() const {
-  return contain_not_supported_node_;
+  return detect_non_supported_node_;
 }
 
-void QueryPlanDagChecker::detectNotSupportedNode() {
-  contain_not_supported_node_ = true;
+void QueryPlanDagChecker::detectNonSupportedNode(const std::string& node_tag) {
+  detect_non_supported_node_ = true;
+  non_supported_node_tag_ = node_tag;
 }
 
-bool QueryPlanDagChecker::isNotSupportedDag(const RelAlgNode* rel_alg_node,
-                                            const RelAlgTranslator& rel_alg_translator) {
+std::pair<bool, std::string> QueryPlanDagChecker::hasNonSupportedNodeInDag(
+    const RelAlgNode* rel_alg_node,
+    const RelAlgTranslator& rel_alg_translator) {
   QueryPlanDagChecker checker(rel_alg_translator);
   checker.check(rel_alg_node);
-  return checker.getCheckResult();
+  return std::make_pair(checker.getCheckResult(), checker.getNonSupportedNodeTag());
 }
 
 void QueryPlanDagChecker::check(const RelAlgNode* rel_alg_node) {
@@ -36,12 +38,12 @@ void QueryPlanDagChecker::check(const RelAlgNode* rel_alg_node) {
 }
 
 void QueryPlanDagChecker::visit(const RelLogicalValues* rel_alg_node) {
-  detectNotSupportedNode();
+  detectNonSupportedNode("Detect RelLogicalValues node");
   return;
 }
 
 void QueryPlanDagChecker::visit(const RelTableFunction* rel_alg_node) {
-  detectNotSupportedNode();
+  detectNonSupportedNode("Detect RelTableFunction node");
   return;
 }
 
@@ -58,7 +60,9 @@ void QueryPlanDagChecker::visit(const RelCompound* rel_alg_node) {
       if (agg_expr && (agg_expr->getKind() == SQLAgg::kSINGLE_VALUE ||
                        agg_expr->getKind() == SQLAgg::kSAMPLE ||
                        agg_expr->getKind() == SQLAgg::kAPPROX_QUANTILE)) {
-        detectNotSupportedNode();
+        detectNonSupportedNode(
+            "Detect non-supported aggregation function: "
+            "SINGLE_VALUE/SAMPLE/APPROX_QUANTILE");
         return;
       }
     }
@@ -67,7 +71,7 @@ void QueryPlanDagChecker::visit(const RelCompound* rel_alg_node) {
 }
 
 void QueryPlanDagChecker::visit(const RelLogicalUnion* rel_alg_node) {
-  detectNotSupportedNode();
+  detectNonSupportedNode("Detect RelLogicalUnion node");
   return;
 }
 
@@ -78,7 +82,7 @@ void QueryPlanDagChecker::visit(const RelScan* rel_alg_node) {
 void QueryPlanDagChecker::visit(RexOperator const* rex_node) {
   // prevent too heavy IN clause containing more than 20 values to check
   if (rex_node->getOperator() == SQLOps::kOR && rex_node->size() > 20) {
-    detectNotSupportedNode();
+    detectNonSupportedNode("Detect heavy IN-clause having more than 20 values");
     return;
   }
   for (size_t i = 0; i < rex_node->size(); ++i) {
@@ -89,8 +93,9 @@ void QueryPlanDagChecker::visit(RexOperator const* rex_node) {
 }
 
 void QueryPlanDagChecker::visit(RexFunctionOperator const* rex_node) {
-  if (not_supported_functions_.count(rex_node->getName())) {
-    detectNotSupportedNode();
+  if (non_supported_functions_.count(rex_node->getName())) {
+    detectNonSupportedNode("Detect non-supported function: " +
+                           non_supported_function_tag_);
     if (rex_node->getName() == "DATETIME") {
       const auto arg = rel_alg_translator_.translateScalarRex(rex_node->getOperand(0));
       const auto arg_lit = std::dynamic_pointer_cast<Analyzer::Constant>(arg);
@@ -112,5 +117,10 @@ void QueryPlanDagChecker::visit(RexFunctionOperator const* rex_node) {
 }
 
 void QueryPlanDagChecker::reset() {
-  contain_not_supported_node_ = false;
+  detect_non_supported_node_ = false;
+  non_supported_node_tag_ = "";
+}
+
+const std::string& QueryPlanDagChecker::getNonSupportedNodeTag() const {
+  return non_supported_node_tag_;
 }
