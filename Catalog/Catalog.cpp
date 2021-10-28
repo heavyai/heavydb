@@ -2234,7 +2234,8 @@ int64_t get_next_refresh_time(const foreign_storage::ForeignTable& foreign_table
   CHECK(timing_type_entry != foreign_table.options.end());
   if (timing_type_entry->second ==
       foreign_storage::ForeignTable::SCHEDULE_REFRESH_TIMING_TYPE) {
-    return foreign_storage::get_next_refresh_time(foreign_table.options);
+    return foreign_storage::RefreshTimeCalculator::getNextRefreshTime(
+        foreign_table.options);
   }
   return foreign_storage::ForeignTable::NULL_REFRESH_TIME;
 }
@@ -4801,9 +4802,7 @@ std::vector<const TableDescriptor*> Catalog::getAllForeignTablesForRefresh() con
       auto timing_type_entry = foreign_table->options.find(
           foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY);
       CHECK(timing_type_entry != foreign_table->options.end());
-      int64_t current_time = std::chrono::duration_cast<std::chrono::seconds>(
-                                 std::chrono::system_clock::now().time_since_epoch())
-                                 .count();
+      auto current_time = foreign_storage::RefreshTimeCalculator::getCurrentTime();
       if (timing_type_entry->second ==
               foreign_storage::ForeignTable::SCHEDULE_REFRESH_TIMING_TYPE &&
           foreign_table->next_refresh_time <= current_time) {
@@ -4822,10 +4821,7 @@ void Catalog::updateForeignTableRefreshTimes(const int32_t table_id) {
   CHECK(table_descriptor);
   auto foreign_table = dynamic_cast<foreign_storage::ForeignTable*>(table_descriptor);
   CHECK(foreign_table);
-  int64_t current_time = std::chrono::duration_cast<std::chrono::seconds>(
-                             std::chrono::system_clock::now().time_since_epoch())
-                             .count();
-  auto last_refresh_time = current_time;
+  auto last_refresh_time = foreign_storage::RefreshTimeCalculator::getCurrentTime();
   auto next_refresh_time = get_next_refresh_time(*foreign_table);
   sqliteConnector_.query_with_text_params(
       "UPDATE omnisci_foreign_tables SET last_refresh_time = ?, next_refresh_time = ? "

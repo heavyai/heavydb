@@ -12,6 +12,7 @@ set(catalog_source_files
     ForeignTable.cpp
     DdlCommandExecutor.cpp
     DdlCommandExecutor.h
+    RefreshTimeCalculator.cpp
 )
 
 get_target_property(StringDictionary_BINARY_DIR StringDictionary BINARY_DIR)

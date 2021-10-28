@@ -23,12 +23,11 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 
+#include "Catalog/RefreshTimeCalculator.h"
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
-#include "DataMgr/ForeignStorage/ForeignTableRefresh.h"
 #include "DataMgr/ForeignStorage/RegexFileBufferParser.h"
-#include "DataMgrTestHelpers.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "TestHelpers.h"

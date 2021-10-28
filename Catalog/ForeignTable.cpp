@@ -19,6 +19,7 @@
 #include <regex>
 
 #include "DataMgr/ForeignStorage/ForeignDataWrapperFactory.h"
+#include "RefreshTimeCalculator.h"
 #include "Shared/DateTimeParser.h"
 #include "Shared/misc.h"
 
@@ -96,9 +97,7 @@ void ForeignTable::validateRefreshOptionValues() const {
                                " option must be provided for scheduled refreshes."};
     }
     auto start_date_time = dateTimeParse<kTIMESTAMP>(start_date_entry->second, 0);
-    int64_t current_time = std::chrono::duration_cast<std::chrono::seconds>(
-                               std::chrono::system_clock::now().time_since_epoch())
-                               .count();
+    int64_t current_time = RefreshTimeCalculator::getCurrentTime();
     if (start_date_time < current_time) {
       throw std::runtime_error{std::string{REFRESH_START_DATE_TIME_KEY} +
                                " cannot be a past date time."};
