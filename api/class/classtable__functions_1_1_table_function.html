@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev 471d68c
+                5.9.0dev 409a3fa
               </div>
             
           
@@ -1150,6 +1150,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_integral_fixed_length_bounds_validator.html">Class foreign_storage::IntegralFixedLengthBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_internal_catalog_data_wrapper.html">Class foreign_storage::InternalCatalogDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_internal_memory_stats_data_wrapper.html">Class foreign_storage::InternalMemoryStatsDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_internal_storage_stats_data_wrapper.html">Class foreign_storage::InternalStorageStatsDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_internal_system_data_wrapper.html">Class foreign_storage::InternalSystemDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
@@ -1230,6 +1231,14 @@
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_render_group_analyzer.html">Class import_export::RenderGroupAnalyzer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_typed_import_buffer.html">Class import_export::TypedImportBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1delimited__parser_1_1_insufficient_buffer_size_exception.html">Class import_export::delimited_parser::InsufficientBufferSizeException</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classl0_1_1_l0_command_list.html">Class l0::L0CommandList</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classl0_1_1_l0_command_queue.html">Class l0::L0CommandQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classl0_1_1_l0_device.html">Class l0::L0Device</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classl0_1_1_l0_driver.html">Class l0::L0Driver</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classl0_1_1_l0_exception.html">Class l0::L0Exception</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classl0_1_1_l0_kernel.html">Class l0::L0Kernel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classl0_1_1_l0_manager.html">Class l0::L0Manager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classl0_1_1_l0_module.html">Class l0::L0Module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlegacylockmgr_1_1_lock_mgr.html">Class legacylockmgr::LockMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_abstract_lock_container.html">Class lockmgr::AbstractLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_insert_data_lock_mgr.html">Class lockmgr::InsertDataLockMgr</a></li>
@@ -1975,6 +1984,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_parse_file_region_result.html">Struct foreign_storage::ParseFileRegionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_interval.html">Struct foreign_storage::RowGroupInterval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_metadata.html">Struct foreign_storage::RowGroupMetadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_storage_details.html">Struct foreign_storage::StorageDetails</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_user_mapping.html">Struct foreign_storage::UserMapping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_user_mapping_type.html">Struct foreign_storage::UserMappingType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structimport__export_1_1_bad_rows_tracker.html">Struct import_export::BadRowsTracker</a></li>
@@ -2276,13 +2286,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK15table_functions13TableFunction20requireInAnnotationsEv">
-<span id="_CPPv3NK15table_functions13TableFunction20requireInAnnotationsEv"></span><span id="_CPPv2NK15table_functions13TableFunction20requireInAnnotationsEv"></span><span id="table_functions::TableFunction::requireInAnnotationsC"></span><span class="target" id="classtable__functions_1_1_table_function_1abfce4467709ed0a15bd439cc97fb8da7"></span>bool <code class="sig-name descname">requireInAnnotations</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15table_functions13TableFunction20requireInAnnotationsEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK15table_functions13TableFunction22containsRequireFnCheckEv">
+<span id="_CPPv3NK15table_functions13TableFunction22containsRequireFnCheckEv"></span><span id="_CPPv2NK15table_functions13TableFunction22containsRequireFnCheckEv"></span><span id="table_functions::TableFunction::containsRequireFnCheckC"></span><span class="target" id="classtable__functions_1_1_table_function_1a2d345d6d5d54227fc242cae18cd2e1c0"></span>bool <code class="sig-name descname">containsRequireFnCheck</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15table_functions13TableFunction22containsRequireFnCheckEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK15table_functions13TableFunction19getRequireCheckNameEv">
-<span id="_CPPv3NK15table_functions13TableFunction19getRequireCheckNameEv"></span><span id="_CPPv2NK15table_functions13TableFunction19getRequireCheckNameEv"></span><span id="table_functions::TableFunction::getRequireCheckNameC"></span><span class="target" id="classtable__functions_1_1_table_function_1ae51206af936828ceec7853dc3883281d"></span>std::string <code class="sig-name descname">getRequireCheckName</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15table_functions13TableFunction19getRequireCheckNameEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK15table_functions13TableFunction21getRequireCheckFnNameEv">
+<span id="_CPPv3NK15table_functions13TableFunction21getRequireCheckFnNameEv"></span><span id="_CPPv2NK15table_functions13TableFunction21getRequireCheckFnNameEv"></span><span id="table_functions::TableFunction::getRequireCheckFnNameC"></span><span class="target" id="classtable__functions_1_1_table_function_1a680c4171b2a9b2cdead531174ca30e92"></span>std::string <code class="sig-name descname">getRequireCheckFnName</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15table_functions13TableFunction21getRequireCheckFnNameEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

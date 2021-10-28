@@ -1,0 +1,9 @@
+Struct foreign_storage::StorageDetails
+======================================
+
+.. doxygenstruct:: foreign_storage::StorageDetails
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

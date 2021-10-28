@@ -1,0 +1,9 @@
+Class l0::L0Device
+==================
+
+.. doxygenclass:: l0::L0Device
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

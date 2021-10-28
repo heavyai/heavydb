@@ -1,0 +1,9 @@
+Class foreign_storage::InternalStorageStatsDataWrapper
+======================================================
+
+.. doxygenclass:: foreign_storage::InternalStorageStatsDataWrapper
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

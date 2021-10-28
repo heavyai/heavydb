@@ -1,0 +1,9 @@
+Class l0::L0Manager
+===================
+
+.. doxygenclass:: l0::L0Manager
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

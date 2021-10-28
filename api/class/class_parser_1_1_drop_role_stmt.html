@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev 471d68c
+                5.9.0dev 409a3fa
               </div>
             
           
@@ -1150,6 +1150,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_integral_fixed_length_bounds_validator.html">Class foreign_storage::IntegralFixedLengthBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_internal_catalog_data_wrapper.html">Class foreign_storage::InternalCatalogDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_internal_memory_stats_data_wrapper.html">Class foreign_storage::InternalMemoryStatsDataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_internal_storage_stats_data_wrapper.html">Class foreign_storage::InternalStorageStatsDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_internal_system_data_wrapper.html">Class foreign_storage::InternalSystemDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_lazy_parquet_chunk_loader.html">Class foreign_storage::LazyParquetChunkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_local_multi_file_reader.html">Class foreign_storage::LocalMultiFileReader</a></li>
@@ -1230,6 +1231,14 @@
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_render_group_analyzer.html">Class import_export::RenderGroupAnalyzer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_typed_import_buffer.html">Class import_export::TypedImportBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1delimited__parser_1_1_insufficient_buffer_size_exception.html">Class import_export::delimited_parser::InsufficientBufferSizeException</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classl0_1_1_l0_command_list.html">Class l0::L0CommandList</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classl0_1_1_l0_command_queue.html">Class l0::L0CommandQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classl0_1_1_l0_device.html">Class l0::L0Device</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classl0_1_1_l0_driver.html">Class l0::L0Driver</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classl0_1_1_l0_exception.html">Class l0::L0Exception</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classl0_1_1_l0_kernel.html">Class l0::L0Kernel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classl0_1_1_l0_manager.html">Class l0::L0Manager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classl0_1_1_l0_module.html">Class l0::L0Module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlegacylockmgr_1_1_lock_mgr.html">Class legacylockmgr::LockMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_abstract_lock_container.html">Class lockmgr::AbstractLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_insert_data_lock_mgr.html">Class lockmgr::InsertDataLockMgr</a></li>
@@ -1975,6 +1984,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_parse_file_region_result.html">Struct foreign_storage::ParseFileRegionResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_interval.html">Struct foreign_storage::RowGroupInterval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_row_group_metadata.html">Struct foreign_storage::RowGroupMetadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_storage_details.html">Struct foreign_storage::StorageDetails</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_user_mapping.html">Struct foreign_storage::UserMapping</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_user_mapping_type.html">Struct foreign_storage::UserMappingType</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structimport__export_1_1_bad_rows_tracker.html">Struct import_export::BadRowsTracker</a></li>
@@ -2151,8 +2161,8 @@
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N6Parser12DropRoleStmt12DropRoleStmtEPNSt6stringE">
-<span id="_CPPv3N6Parser12DropRoleStmt12DropRoleStmtEPNSt6stringE"></span><span id="_CPPv2N6Parser12DropRoleStmt12DropRoleStmtEPNSt6stringE"></span><span id="Parser::DropRoleStmt::DropRoleStmt__ssP"></span><span class="target" id="class_parser_1_1_drop_role_stmt_1aca917861052526446f4a8c3834cf310f"></span><code class="sig-name descname">DropRoleStmt</code><span class="sig-paren">(</span>std::string *<em>r</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6Parser12DropRoleStmt12DropRoleStmtEPNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N6Parser12DropRoleStmt12DropRoleStmtEPNSt6stringEb">
+<span id="_CPPv3N6Parser12DropRoleStmt12DropRoleStmtEPNSt6stringEb"></span><span id="_CPPv2N6Parser12DropRoleStmt12DropRoleStmtEPNSt6stringEb"></span><span id="Parser::DropRoleStmt::DropRoleStmt__ssP.b"></span><span class="target" id="class_parser_1_1_drop_role_stmt_1a08e4faff913492d8fe3be4c2dbb45dfa"></span><code class="sig-name descname">DropRoleStmt</code><span class="sig-paren">(</span>std::string *<em>r</em>, bool <em>e</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6Parser12DropRoleStmt12DropRoleStmtEPNSt6stringEb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2176,6 +2186,11 @@
 <dl class="member">
 <dt id="_CPPv4N6Parser12DropRoleStmt5role_E">
 <span id="_CPPv3N6Parser12DropRoleStmt5role_E"></span><span id="_CPPv2N6Parser12DropRoleStmt5role_E"></span><span id="Parser::DropRoleStmt::role___std::unique_ptr:ss:"></span><span class="target" id="class_parser_1_1_drop_role_stmt_1a337bd742a12f2c341da3daacb0b059d5"></span>std::unique_ptr&lt;std::string&gt; <code class="sig-name descname">role_</code><a class="headerlink" href="#_CPPv4N6Parser12DropRoleStmt5role_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N6Parser12DropRoleStmt10if_exists_E">
+<span id="_CPPv3N6Parser12DropRoleStmt10if_exists_E"></span><span id="_CPPv2N6Parser12DropRoleStmt10if_exists_E"></span><span id="Parser::DropRoleStmt::if_exists___b"></span><span class="target" id="class_parser_1_1_drop_role_stmt_1ab355a772b3bd43c1e5d4f1ec7448fda4"></span>bool <code class="sig-name descname">if_exists_</code><a class="headerlink" href="#_CPPv4N6Parser12DropRoleStmt10if_exists_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

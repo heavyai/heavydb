@@ -1,0 +1,9 @@
+Class l0::L0Module
+==================
+
+.. doxygenclass:: l0::L0Module
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
