@@ -69,6 +69,9 @@ class QueryCompilationDescriptor {
         return std::string{"IR for the GPU:\n===============\n" +
                            compilation_result_.llvm_ir};
       }
+      case ExecutorDeviceType::L0: {
+        throw std::runtime_error("getIR() for L0 execution type is unsupported");
+      }
     }
     UNREACHABLE();
     return "";

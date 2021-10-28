@@ -320,6 +320,8 @@ void DBHandler::initialize(const bool is_new_db) {
 #ifdef HAVE_CUDA
     executor_device_type_ = ExecutorDeviceType::GPU;
     cpu_mode_only_ = false;
+#elif HAVE_L0
+    throw std::runtime_error("L0 execution device type is not supported");
 #else
     executor_device_type_ = ExecutorDeviceType::CPU;
     LOG(WARNING) << "This build isn't CUDA enabled, will run on CPU";
@@ -432,6 +434,8 @@ void DBHandler::initialize(const bool is_new_db) {
     case ExecutorDeviceType::CPU:
       LOG(INFO) << "Started in CPU mode" << std::endl;
       break;
+    case ExecutorDeviceType::L0:
+      LOG(INFO) << "Started in L0 mode" << std::endl;
   }
 
   try {
@@ -1478,14 +1482,21 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
                                      Executor::UNITARY_EXECUTOR_ID,
                                      QuerySessionStatus::QueryStatus::PENDING_QUEUE);
       }
+#ifdef HAVE_CUDA
+      auto dt = (results_device_type == TDeviceType::CPU) ? ExecutorDeviceType::CPU
+                                                          : ExecutorDeviceType::GPU;
+#elif HAVE_L0
+      auto dt = (results_device_type == TDeviceType::CPU) ? ExecutorDeviceType::CPU
+                                                          : ExecutorDeviceType::L0;
+#else
+      auto dt = ExecutorDeviceType::CPU;
+#endif
       execute_rel_alg_df(_return,
                          query_ra,
                          query_state_proxy,
                          *session_ptr,
                          executor_device_type,
-                         results_device_type == TDeviceType::CPU
-                             ? ExecutorDeviceType::CPU
-                             : ExecutorDeviceType::GPU,
+                         dt,
                          static_cast<size_t>(device_id),
                          first_n,
                          transport_method);
@@ -1536,11 +1547,18 @@ void DBHandler::deallocate_df(const TSessionId& session,
   std::vector<char> df_handle(df.df_handle.begin(), df.df_handle.end());
   ArrowResult result{
       sm_handle, df.sm_size, df_handle, df.df_size, serialized_cuda_handle};
-  ArrowResultSet::deallocateArrowResultBuffer(
-      result,
-      device_type == TDeviceType::CPU ? ExecutorDeviceType::CPU : ExecutorDeviceType::GPU,
-      device_id,
-      data_mgr_);
+
+#ifdef HAVE_CUDA
+  auto dt =
+      device_type == TDeviceType::CPU ? ExecutorDeviceType::CPU : ExecutorDeviceType::GPU;
+#elif HAVE_L0
+  auto dt =
+      device_type == TDeviceType::CPU ? ExecutorDeviceType::CPU : ExecutorDeviceType::L0;
+#else
+  auto dt = ExecutorDeviceType::CPU;
+#endif
+
+  ArrowResultSet::deallocateArrowResultBuffer(result, dt, device_id, data_mgr_);
 }
 
 void DBHandler::sql_validate(TRowDescriptor& _return,
@@ -5675,7 +5693,14 @@ void DBHandler::set_execution_mode_nolock(Catalog_Namespace::SessionInfo* sessio
         e.error_msg = "Cannot switch to GPU mode in a server started in CPU-only mode.";
         throw e;
       }
+#ifdef HAVE_CUDA
       session_ptr->set_executor_device_type(ExecutorDeviceType::GPU);
+#elif HAVE_L0
+      session_ptr->set_executor_device_type(ExecutorDeviceType::L0);
+#else
+      UNREACHABLE();
+#endif
+
       LOG(INFO) << "User " << user_name << " sets GPU mode.";
       break;
     case TExecuteMode::CPU:

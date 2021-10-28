@@ -45,6 +45,10 @@ const int8_t* create_literal_buffer(const T literal,
           gpu_literal_buf_ptr, reinterpret_cast<const int8_t*>(&literal), sizeof(T));
       return gpu_literal_buf_ptr;
     }
+    case ExecutorDeviceType::L0: {
+      throw std::runtime_error(
+          "create_literal_buffer() unsupported for L0 execution device type");
+    }
   }
   UNREACHABLE();
   return nullptr;
@@ -81,6 +85,10 @@ const int8_t* create_literal_buffer(std::string* const literal,
                                   reinterpret_cast<const int8_t*>(literal->data()),
                                   string_size);
       return gpu_literal_buf_ptr;
+    }
+    case ExecutorDeviceType::L0: {
+      throw std::runtime_error(
+          "create_literal_buffer() unsupported for L0 execution device type");
     }
   }
   UNREACHABLE();
@@ -282,6 +290,10 @@ ResultSetPtr TableFunctionExecutionContext::execute(
                            *input_num_rows,
                            /*device_id=*/0,
                            executor);
+    case ExecutorDeviceType::L0: {
+      throw std::runtime_error(
+          "Table function execution is not supported for L0 execution device type");
+    }
   }
   UNREACHABLE();
   return nullptr;
