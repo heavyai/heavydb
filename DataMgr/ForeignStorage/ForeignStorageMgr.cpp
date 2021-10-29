@@ -75,37 +75,33 @@ void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
     }
   }
 
-  std::set<ChunkKey> chunk_keys = get_keys_set_from_table(chunk_key);
-  chunk_keys.erase(chunk_key);
+  auto column_keys = get_column_key_set(chunk_key);
 
   // Use hints to prefetch other chunks in fragment
   ChunkToBufferMap optional_buffers;
 
   // Use hints to prefetch other chunks in fragment into cache
-  auto& data_wrapper = *getDataWrapper(chunk_key);
-  std::set<ChunkKey> optional_keys;
-  getOptionalChunkKeySet(optional_keys,
-                         chunk_key,
-                         get_keys_set_from_table(chunk_key),
-                         data_wrapper.getNonCachedParallelismLevel());
+  auto optional_keys = getOptionalChunkKeySet(
+      chunk_key, column_keys, getDataWrapper(chunk_key)->getNonCachedParallelismLevel());
   if (optional_keys.size()) {
-    {
-      std::shared_lock temp_chunk_buffer_map_lock(temp_chunk_buffer_map_mutex_);
-      // Erase anything already in temp_chunk_buffer_map_
-      for (auto it = optional_keys.begin(); it != optional_keys.end();) {
-        if (temp_chunk_buffer_map_.find(*it) != temp_chunk_buffer_map_.end()) {
-          it = optional_keys.erase(it);
-        } else {
-          ++it;
-        }
+    std::shared_lock temp_chunk_buffer_map_lock(temp_chunk_buffer_map_mutex_);
+    // Erase anything already in temp_chunk_buffer_map_
+    // TODO(Misiu): Change to use std::erase_if when we get c++20
+    for (auto it = optional_keys.begin(); it != optional_keys.end();) {
+      if (temp_chunk_buffer_map_.find(*it) != temp_chunk_buffer_map_.end()) {
+        it = optional_keys.erase(it);
+      } else {
+        ++it;
       }
     }
-    if (optional_keys.size()) {
-      optional_buffers = allocateTempBuffersForChunks(optional_keys);
-    }
+  }
+  if (optional_keys.size()) {
+    optional_buffers = allocateTempBuffersForChunks(optional_keys);
   }
 
-  auto required_buffers = allocateTempBuffersForChunks(chunk_keys);
+  // Remove the original key as it will be replaced by the destination_buffer.
+  column_keys.erase(chunk_key);
+  auto required_buffers = allocateTempBuffersForChunks(column_keys);
   required_buffers[chunk_key] = destination_buffer;
   // populate will write directly to destination_buffer so no need to copy.
   getDataWrapper(chunk_key)->populateChunkBuffers(required_buffers, optional_buffers);
@@ -337,7 +333,14 @@ void ForeignStorageMgr::free(AbstractBuffer* buffer) {
   UNREACHABLE();
 }
 
-std::set<ChunkKey> get_keys_set_from_table(const ChunkKey& destination_chunk_key) {
+size_t get_max_chunk_size(const ChunkKey& key) {
+  auto [db_id, table_id] = get_table_prefix(key);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+  CHECK(catalog);
+  return catalog->getForeignTable(table_id)->maxChunkSize;
+}
+
+std::set<ChunkKey> get_column_key_set(const ChunkKey& destination_chunk_key) {
   std::set<ChunkKey> chunk_keys;
   auto db_id = destination_chunk_key[CHUNK_KEY_DB_IDX];
   auto table_id = destination_chunk_key[CHUNK_KEY_TABLE_IDX];
@@ -369,7 +372,7 @@ std::set<ChunkKey> get_keys_set_from_table(const ChunkKey& destination_chunk_key
   return chunk_keys;
 }
 
-std::vector<ChunkKey> get_keys_vec_from_table(const ChunkKey& destination_chunk_key) {
+std::vector<ChunkKey> get_column_key_vec(const ChunkKey& destination_chunk_key) {
   std::vector<ChunkKey> chunk_keys;
   auto db_id = destination_chunk_key[CHUNK_KEY_DB_IDX];
   auto table_id = destination_chunk_key[CHUNK_KEY_TABLE_IDX];
@@ -401,6 +404,39 @@ std::vector<ChunkKey> get_keys_vec_from_table(const ChunkKey& destination_chunk_
   return chunk_keys;
 }
 
+// Defines the "<" operator to use as a comparator.
+// This is similar to comparing chunks normally, but we want to give fragments a higher
+// priority than columns so that if we have to exit early we prioritize same fragment
+// fetching.
+bool set_comp(const ChunkKey& left, const ChunkKey& right) {
+  CHECK_GE(left.size(), 4ULL);
+  CHECK_GE(right.size(), 4ULL);
+  if ((left[CHUNK_KEY_DB_IDX] < right[CHUNK_KEY_DB_IDX]) ||
+      (left[CHUNK_KEY_TABLE_IDX] < right[CHUNK_KEY_TABLE_IDX]) ||
+      (left[CHUNK_KEY_FRAGMENT_IDX] < right[CHUNK_KEY_FRAGMENT_IDX]) ||
+      (left[CHUNK_KEY_COLUMN_IDX] < right[CHUNK_KEY_COLUMN_IDX])) {
+    return true;
+  }
+  if (left.size() < right.size()) {
+    return true;
+  }
+  if (is_varlen_key(left) && is_varlen_key(right) &&
+      left[CHUNK_KEY_VARLEN_IDX] < right[CHUNK_KEY_VARLEN_IDX]) {
+    return true;
+  }
+  return false;
+}
+
+bool contains_fragment_key(const std::set<ChunkKey>& key_set,
+                           const ChunkKey& target_key) {
+  for (const auto& key : key_set) {
+    if (get_fragment_key(target_key) == get_fragment_key(key)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 ChunkToBufferMap ForeignStorageMgr::allocateTempBuffersForChunks(
     const std::set<ChunkKey>& chunk_keys) {
   ChunkToBufferMap chunk_buffer_map;
@@ -419,34 +455,106 @@ void ForeignStorageMgr::setParallelismHints(
   parallelism_hints_per_table_ = hints_per_table;
 }
 
-void ForeignStorageMgr::getOptionalChunkKeySet(
-    std::set<ChunkKey>& optional_chunk_keys,
+std::pair<std::set<ChunkKey, decltype(set_comp)*>,
+          std::set<ChunkKey, decltype(set_comp)*>>
+ForeignStorageMgr::getPrefetchSets(
     const ChunkKey& chunk_key,
     const std::set<ChunkKey>& required_chunk_keys,
-    const ForeignDataWrapper::ParallelismLevel parallelism_level) {
-  if (parallelism_level == ForeignDataWrapper::NONE) {
-    return;
-  }
+    const ForeignDataWrapper::ParallelismLevel parallelism_level) const {
   std::shared_lock data_wrapper_lock(parallelism_hints_mutex_);
-  for (const auto& hint : parallelism_hints_per_table_[get_table_key(chunk_key)]) {
+  auto same_fragment_keys = std::set<ChunkKey, decltype(set_comp)*>(set_comp);
+  auto diff_fragment_keys = std::set<ChunkKey, decltype(set_comp)*>(set_comp);
+
+  auto table_hints = parallelism_hints_per_table_.find(get_table_key(chunk_key));
+  if (table_hints == parallelism_hints_per_table_.end()) {
+    return {{}, {}};
+  }
+  for (const auto& hint : table_hints->second) {
     const auto& [column_id, fragment_id] = hint;
-    ChunkKey optional_chunk_key_key = get_table_key(chunk_key);
-    optional_chunk_key_key.push_back(column_id);
-    auto optional_chunk_key = optional_chunk_key_key;
+    auto optional_chunk_key = get_table_key(chunk_key);
+    optional_chunk_key.push_back(column_id);
     if (parallelism_level == ForeignDataWrapper::INTRA_FRAGMENT) {
       optional_chunk_key.push_back(chunk_key[CHUNK_KEY_FRAGMENT_IDX]);
     } else if (parallelism_level == ForeignDataWrapper::INTER_FRAGMENT) {
       optional_chunk_key.push_back(fragment_id);
     } else {
-      UNREACHABLE();
+      UNREACHABLE() << "Unknown parallelism level.";
     }
-    std::set<ChunkKey> keys = get_keys_set_from_table(optional_chunk_key);
-    for (const auto& key : keys) {
-      if (required_chunk_keys.find(key) == required_chunk_keys.end()) {
-        optional_chunk_keys.insert(key);
+
+    if (!contains_fragment_key(required_chunk_keys, optional_chunk_key)) {
+      // Do not insert an optional key if it is already a required key.
+      if (optional_chunk_key[CHUNK_KEY_FRAGMENT_IDX] ==
+          chunk_key[CHUNK_KEY_FRAGMENT_IDX]) {
+        same_fragment_keys.emplace(optional_chunk_key);
+      } else {
+        diff_fragment_keys.emplace(optional_chunk_key);
       }
     }
   }
+  return {same_fragment_keys, diff_fragment_keys};
+}
+
+std::set<ChunkKey> ForeignStorageMgr::getOptionalKeysWithinSizeLimit(
+    size_t total_chunk_size,
+    const ChunkKey& chunk_key,
+    const std::set<ChunkKey, decltype(set_comp)*>& same_fragment_keys,
+    const std::set<ChunkKey, decltype(set_comp)*>& diff_fragment_keys) const {
+  std::set<ChunkKey> optional_keys;
+  auto max_chunk_size = get_max_chunk_size(chunk_key);
+  auto max_size = maxFetchSize(chunk_key[CHUNK_KEY_DB_IDX]);
+  // Add keys to the list of optional keys starting with the same fragment.  If we run out
+  // of space, then exit early with what we have added so far.
+  for (const auto& keys : {same_fragment_keys, diff_fragment_keys}) {
+    for (auto key : keys) {
+      auto column_keys = get_column_key_set(key);
+      if (hasMaxFetchSize()) {
+        // If we have a maximum size, then early exist if we exceed it.
+        total_chunk_size += max_chunk_size * column_keys.size();
+        if (total_chunk_size > max_size) {
+          return optional_keys;
+        }
+      }
+      for (auto column_key : column_keys) {
+        optional_keys.emplace(column_key);
+      }
+    }
+  }
+  return optional_keys;
+}
+
+size_t ForeignStorageMgr::getRequiredBuffersSize(const ChunkKey& chunk_key) const {
+  auto max_chunk_size = get_max_chunk_size(chunk_key);
+  auto max_size = maxFetchSize(chunk_key[CHUNK_KEY_DB_IDX]);
+  size_t total_size = max_chunk_size * get_column_key_set(chunk_key).size();
+  if (hasMaxFetchSize()) {
+    // Query cannot complete if the required buffers alone are larger than the cache.
+    CHECK_LE(total_size, max_size);
+  }
+  return total_size;
+}
+
+std::set<ChunkKey> ForeignStorageMgr::getOptionalChunkKeySet(
+    const ChunkKey& chunk_key,
+    const std::set<ChunkKey>& required_chunk_keys,
+    const ForeignDataWrapper::ParallelismLevel parallelism_level) const {
+  if (parallelism_level == ForeignDataWrapper::NONE) {
+    return {};
+  }
+
+  auto total_size = getRequiredBuffersSize(chunk_key);
+  auto [same_fragment_keys, diff_fragment_keys] =
+      getPrefetchSets(chunk_key, required_chunk_keys, parallelism_level);
+
+  return getOptionalKeysWithinSizeLimit(
+      total_size, chunk_key, same_fragment_keys, diff_fragment_keys);
+}
+
+size_t ForeignStorageMgr::maxFetchSize(int32_t db_id) const {
+  return 0;
+}
+
+bool ForeignStorageMgr::hasMaxFetchSize() const {
+  return false;
 }
 
 }  // namespace foreign_storage

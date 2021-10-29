@@ -87,35 +87,30 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
     buffer->copyTo(destination_buffer, num_bytes);
     return;
   } else {
-    std::vector<ChunkKey> chunk_keys = get_keys_vec_from_table(chunk_key);
-    std::vector<ChunkKey> optional_keys;
-    ChunkToBufferMap optional_buffers;
+    auto column_keys = get_column_key_set(chunk_key);
 
     // Use hints to prefetch other chunks in fragment into cache
     auto& data_wrapper = *getDataWrapper(chunk_key);
-    std::set<ChunkKey> optional_set;
-    getOptionalChunkKeySet(optional_set,
-                           chunk_key,
-                           get_keys_set_from_table(chunk_key),
-                           data_wrapper.getCachedParallelismLevel());
-    for (const auto& key : optional_set) {
-      if (disk_cache_->getCachedChunkIfExists(key) == nullptr) {
-        optional_keys.emplace_back(key);
+    auto optional_set = getOptionalChunkKeySet(
+        chunk_key, column_keys, data_wrapper.getCachedParallelismLevel());
+
+    // Remove any chunks that are already cached.
+    // TODO(Misiu): Change to use std::erase_if when we get c++20
+    for (auto it = optional_set.begin(); it != optional_set.end();) {
+      if (disk_cache_->getCachedChunkIfExists(*it) != nullptr) {
+        it = optional_set.erase(it);
+      } else {
+        ++it;
       }
     }
 
-    if (optional_keys.size()) {
-      optional_buffers = disk_cache_->getChunkBuffersForCaching(optional_keys);
-    }
-
-    ChunkToBufferMap required_buffers =
-        disk_cache_->getChunkBuffersForCaching(chunk_keys);
+    auto optional_buffers = disk_cache_->getChunkBuffersForCaching(optional_set);
+    auto required_buffers = disk_cache_->getChunkBuffersForCaching(column_keys);
     CHECK(required_buffers.find(chunk_key) != required_buffers.end());
     populateChunkBuffersSafely(data_wrapper, required_buffers, optional_buffers);
 
     AbstractBuffer* buffer = required_buffers.at(chunk_key);
     CHECK(buffer);
-
     buffer->copyTo(destination_buffer, num_bytes);
   }
 }
@@ -249,10 +244,10 @@ void CachingForeignStorageMgr::refreshChunksInCacheByFragment(
   // Iterate through previously cached chunks and re-cache them. Caching is
   // done one fragment at a time, for all applicable chunks in the fragment.
   ChunkToBufferMap optional_buffers;
-  std::vector<ChunkKey> chunk_keys_to_be_cached;
+  std::set<ChunkKey> chunk_keys_to_be_cached;
   auto fragment_id = old_chunk_keys[0][CHUNK_KEY_FRAGMENT_IDX];
   const ChunkKey table_key{get_table_key(old_chunk_keys[0])};
-  std::vector<ChunkKey> chunk_keys_in_fragment;
+  std::set<ChunkKey> chunk_keys_in_fragment;
   for (const auto& chunk_key : old_chunk_keys) {
     CHECK(chunk_key[CHUNK_KEY_TABLE_IDX] == table_key[CHUNK_KEY_TABLE_IDX]);
     if (chunk_key[CHUNK_KEY_FRAGMENT_IDX] < start_frag_id) {
@@ -292,11 +287,11 @@ void CachingForeignStorageMgr::refreshChunksInCacheByFragment(
                                    chunk_key[CHUNK_KEY_COLUMN_IDX],
                                    chunk_key[CHUNK_KEY_FRAGMENT_IDX],
                                    2};
-          chunk_keys_in_fragment.emplace_back(index_chunk_key);
-          chunk_keys_to_be_cached.emplace_back(index_chunk_key);
+          chunk_keys_in_fragment.emplace(index_chunk_key);
+          chunk_keys_to_be_cached.emplace(index_chunk_key);
         }
-        chunk_keys_in_fragment.emplace_back(chunk_key);
-        chunk_keys_to_be_cached.emplace_back(chunk_key);
+        chunk_keys_in_fragment.emplace(chunk_key);
+        chunk_keys_to_be_cached.emplace(chunk_key);
       }
     }
   }
@@ -330,6 +325,14 @@ bool CachingForeignStorageMgr::createDataWrapperIfNotExists(const ChunkKey& chun
 void CachingForeignStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {
   disk_cache_->clearForTablePrefix({db_id, table_id});
   ForeignStorageMgr::removeTableRelatedDS(db_id, table_id);
+}
+
+size_t CachingForeignStorageMgr::maxFetchSize(int32_t db_id) const {
+  return disk_cache_->getMaxChunkDataSize();
+}
+
+bool CachingForeignStorageMgr::hasMaxFetchSize() const {
+  return true;
 }
 
 }  // namespace foreign_storage

@@ -205,23 +205,6 @@ std::vector<ChunkKey> ForeignStorageCache::getCachedChunksForKeyPrefix(
   return caching_file_mgr_->getChunkKeysForPrefix(chunk_prefix);
 }
 
-ChunkToBufferMap ForeignStorageCache::getChunkBuffersForCaching(
-    const std::vector<ChunkKey>& chunk_keys) const {
-  ChunkToBufferMap chunk_buffer_map;
-  for (const auto& chunk_key : chunk_keys) {
-    CHECK(caching_file_mgr_->isBufferOnDevice(chunk_key));
-    chunk_buffer_map[chunk_key] = caching_file_mgr_->getBuffer(chunk_key);
-    auto file_buf =
-        dynamic_cast<File_Namespace::FileBuffer*>(chunk_buffer_map[chunk_key]);
-    CHECK(file_buf);
-    CHECK(!file_buf->hasDataPages());
-
-    // Clear all buffer metadata
-    file_buf->resetToEmpty();
-  }
-  return chunk_buffer_map;
-}
-
 void ForeignStorageCache::eraseChunk(const ChunkKey& chunk_key) {
   caching_file_mgr_->removeChunkKeepMetadata(chunk_key);
 }
@@ -232,6 +215,10 @@ std::string ForeignStorageCache::dumpCachedChunkEntries() const {
 
 std::string ForeignStorageCache::dumpCachedMetadataEntries() const {
   return caching_file_mgr_->dumpKeysWithMetadata();
+}
+
+std::string ForeignStorageCache::dumpEvictionQueue() const {
+  return caching_file_mgr_->dumpEvictionQueue();
 }
 
 void ForeignStorageCache::validatePath(const std::string& base_path) const {
@@ -265,6 +252,22 @@ void ForeignStorageCache::cacheMetadataWithFragIdGreaterOrEqualTo(
     }
   }
   cacheMetadataVec(new_metadata_vec);
+}
+
+ChunkToBufferMap ForeignStorageCache::getChunkBuffersForCaching(
+    const std::set<ChunkKey>& keys) const {
+  ChunkToBufferMap chunk_buffer_map;
+  for (const auto& key : keys) {
+    CHECK(caching_file_mgr_->isBufferOnDevice(key));
+    chunk_buffer_map[key] = caching_file_mgr_->getBuffer(key);
+    auto file_buf = dynamic_cast<File_Namespace::FileBuffer*>(chunk_buffer_map[key]);
+    CHECK(file_buf);
+    CHECK(!file_buf->hasDataPages());
+
+    // Clear all buffer metadata
+    file_buf->resetToEmpty();
+  }
+  return chunk_buffer_map;
 }
 
 AbstractBuffer* ForeignStorageCache::getChunkBufferForPrecaching(

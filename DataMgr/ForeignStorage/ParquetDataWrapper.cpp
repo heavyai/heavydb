@@ -484,6 +484,11 @@ void ParquetDataWrapper::populateChunkBuffers(const ChunkToBufferMap& required_b
     }));
   }
 
+  // We wait on all futures, then call get because we want all threads to have finished
+  // before we propagate a potential exception.
+  for (auto& future : futures) {
+    future.wait();
+  }
   for (auto& future : futures) {
     future.get();
   }

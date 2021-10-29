@@ -53,6 +53,9 @@ class CachingForeignStorageMgr : public ForeignStorageMgr {
                                   ChunkToBufferMap& required_buffers,
                                   ChunkToBufferMap& optional_buffers);
   void clearTable(const ChunkKey& table_key);
+  size_t maxFetchSize(int32_t db_id) const override;
+  bool hasMaxFetchSize() const override;
+
   ForeignStorageCache* disk_cache_;
 };
 

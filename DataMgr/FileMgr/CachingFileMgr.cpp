@@ -47,9 +47,23 @@ ChunkKey evict_chunk_or_fail(LRUEvictionAlgorithm& alg) {
   }
   return ret;
 }
+
 }  // namespace
 
 namespace File_Namespace {
+
+std::string CachingFileMgr::dump() const {
+  std::stringstream ss;
+  ss << "Dump Cache:\n";
+  for (const auto& [key, buf] : chunkIndex_) {
+    ss << "  " << show_chunk(key) << " num_pages: " << buf->pageCount()
+       << ", is dirty: " << buf->isDirty() << "\n";
+  }
+  ss << "Data Eviction Queue:\n" << chunk_evict_alg_.dumpEvictionQueue();
+  ss << "Metadata Eviction Queue:\n" << table_evict_alg_.dumpEvictionQueue();
+  ss << "\n";
+  return ss.str();
+}
 
 CachingFileMgr::CachingFileMgr(const DiskCacheConfig& config) {
   fileMgrBasePath_ = config.path;

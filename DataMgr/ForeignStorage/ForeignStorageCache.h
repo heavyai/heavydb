@@ -52,9 +52,10 @@ class ForeignStorageCache {
   bool hasCachedMetadataForKeyPrefix(const ChunkKey&) const;
   void clearForTablePrefix(const ChunkKey&);
   void clear();
+  size_t getMaxChunkDataSize() const { return caching_file_mgr_->getMaxDataFilesSize(); }
   std::vector<ChunkKey> getCachedChunksForKeyPrefix(const ChunkKey&) const;
-  ChunkToBufferMap getChunkBuffersForCaching(
-      const std::vector<ChunkKey>& chunk_keys) const;
+
+  ChunkToBufferMap getChunkBuffersForCaching(const std::set<ChunkKey>& chunk_keys) const;
 
   // Get a chunk buffer for writing to disk prior to metadata creation/caching
   AbstractBuffer* getChunkBufferForPrecaching(const ChunkKey& chunk_key,
@@ -72,6 +73,8 @@ class ForeignStorageCache {
   // Useful for debugging.
   std::string dumpCachedChunkEntries() const;
   std::string dumpCachedMetadataEntries() const;
+  std::string dumpEvictionQueue() const;
+  std::string dump() const { return caching_file_mgr_->dump(); }
 
   inline std::string getCacheDirectory() const {
     return caching_file_mgr_->getFileMgrBasePath();

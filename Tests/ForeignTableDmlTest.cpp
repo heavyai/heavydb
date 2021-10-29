@@ -605,12 +605,11 @@ class RecoverCacheQueryTest : public ForeignTableTest {
   foreign_storage::ForeignStorageCache* cache_;
 
  protected:
-  void resetPersistentStorageMgr(File_Namespace::DiskCacheLevel cache_level) {
+    void resetPersistentStorageMgr(File_Namespace::DiskCacheConfig cache_config) {
     for (auto table_it : cat_->getAllTableMetadata()) {
       cat_->removeFragmenterForTable(table_it->tableId);
     }
-    cat_->getDataMgr().resetPersistentStorage(
-        {cache_path_, cache_level}, 0, getSystemParameters());
+    cat_->getDataMgr().resetPersistentStorage(cache_config, 0, getSystemParameters());
     psm_ = cat_->getDataMgr().getPersistentStorageMgr();
     cache_ = psm_->getDiskCache();
   }
@@ -652,7 +651,7 @@ class RecoverCacheQueryTest : public ForeignTableTest {
 
   void resetStorageManagerAndClearTableMemory(const ChunkKey& table_key) {
     // Reset cache and clear memory representations.
-    resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::fsi);
+    resetPersistentStorageMgr({cache_path_, File_Namespace::DiskCacheLevel::fsi});
     cat_->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
     cat_->getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
   }
@@ -3137,7 +3136,7 @@ class AppendRefreshBase : public RecoverCacheQueryTest, public TempDirManager {
 
   void recoverCacheIfSpecified() {
     if (recover_cache_) {
-      resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::fsi);
+      resetPersistentStorageMgr({cache_path_, File_Namespace::DiskCacheLevel::fsi});
     }
   }
 
@@ -3609,7 +3608,7 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes) {
     {
       True,i(120), i(31000), i(2100000000), i(9100000000000000000), 1000.123f, 100.1, "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"
     },
-    { i(NULL_BOOLEAN),  
+    { i(NULL_BOOLEAN),
       wrapper_type_ == "postgres" ? i(NULL_SMALLINT) : i(NULL_TINYINT), // TINYINT
       i(NULL_SMALLINT), i(NULL_INT), i(NULL_BIGINT),
       wrapper_type_ == "sqlite" ? NULL_DOUBLE : NULL_FLOAT, // FLOAT
@@ -4181,7 +4180,7 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, GeoTypes) {
                   {"p", "TEXT"},
                   {"l", "TEXT"},
                   {"poly", "TEXT"},
-                  {"multipoly", "TEXT"}}; 
+                  {"multipoly", "TEXT"}};
   }
   std::map<std::string, std::string> options{{"FRAGMENT_SIZE", fragmentSizeStr()}};
   if (data_wrapper_type == "regex_parser") {
@@ -4839,29 +4838,51 @@ class MockDataWrapper : public foreign_storage::MockForeignDataWrapper {
     throw_on_chunk_fetch_ = throw_on_chunk_fetch;
   }
 
-  std::string getSerializedDataWrapper() const override { return ""; };
+  std::string getSerializedDataWrapper() const override {
+    return parent_data_wrapper_->getSerializedDataWrapper();
+  }
 
   void restoreDataWrapperInternals(const std::string& file_path,
-                                   const ChunkMetadataVector& chunk_metadata) override{};
+                                   const ChunkMetadataVector& chunk_metadata) override {
+    parent_data_wrapper_->restoreDataWrapperInternals(file_path, chunk_metadata);
+  }
 
-  bool isRestored() const override { return false; };
+  bool isRestored() const override { return parent_data_wrapper_->isRestored(); }
 
-  void validateServerOptions(const ForeignServer* foreign_server) const override {}
+  void validateServerOptions(const ForeignServer* foreign_server) const override {
+    parent_data_wrapper_->validateServerOptions(foreign_server);
+  }
 
-  void validateTableOptions(const ForeignTable* foreign_table) const override {}
+  void validateTableOptions(const ForeignTable* foreign_table) const override {
+    parent_data_wrapper_->validateTableOptions(foreign_table);
+  }
 
   const std::set<std::string_view>& getSupportedTableOptions() const override {
     return supported_table_options_;
   }
 
   void validateUserMappingOptions(const UserMapping* user_mapping,
-                                  const ForeignServer* foreign_server) const override {}
+                                  const ForeignServer* foreign_server) const override {
+    parent_data_wrapper_->validateUserMappingOptions(user_mapping, foreign_server);
+  }
+
+  void validateSchema(const std::list<ColumnDescriptor>& columns) const override {
+    parent_data_wrapper_->validateSchema(columns);
+  };
+
+  ParallelismLevel getCachedParallelismLevel() const override {
+    return parent_data_wrapper_->getCachedParallelismLevel();
+  }
+
+  ParallelismLevel getNonCachedParallelismLevel() const override {
+    return parent_data_wrapper_->getNonCachedParallelismLevel();
+  }
 
   const std::set<std::string_view>& getSupportedUserMappingOptions() const override {
     return supported_user_mapping_options_;
   }
 
- private:
+ protected:
   std::shared_ptr<foreign_storage::ForeignDataWrapper> parent_data_wrapper_;
   std::atomic<bool> throw_on_metadata_scan_;
   std::atomic<bool> throw_on_chunk_fetch_;
@@ -5943,6 +5964,372 @@ INSTANTIATE_TEST_SUITE_P(DifferentBufferSizes,
                          RegexParserSelectQueryTest,
                          testing::Values(4, import_export::kImportFileBufferSize),
                          testing::PrintToStringParamName());
+
+namespace fn = File_Namespace;
+class TrackBuffersMockWrapper : public MockDataWrapper {
+ public:
+  TrackBuffersMockWrapper() : is_first_call_(true) {}
+
+  void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
+                            const ChunkToBufferMap& optional_buffers) override {
+    parent_data_wrapper_->populateChunkBuffers(required_buffers, optional_buffers);
+    is_first_call_ = false;
+  }
+
+ protected:
+  // When the cache is invlolved, we will prune already cached buffers out of
+  // optional_buffers, so to get accurate results for some checks we only want to compare
+  // against the first call when the cache is empty.
+  bool is_first_call_;
+};
+
+class KeySetMockWrapper : public TrackBuffersMockWrapper {
+ public:
+  KeySetMockWrapper(const std::set<ChunkKey>& data_keys) : data_keys_(data_keys) {}
+
+  void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
+                            const ChunkToBufferMap& optional_buffers) override {
+    if (is_first_call_) {
+      compareExpected(required_buffers, optional_buffers);
+    }
+    TrackBuffersMockWrapper::populateChunkBuffers(required_buffers, optional_buffers);
+  }
+
+  void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override {
+    TrackBuffersMockWrapper::populateChunkMetadata(chunk_metadata_vector);
+  }
+
+  virtual void compareExpected(const ChunkToBufferMap& required_buffers,
+                               const ChunkToBufferMap& optional_buffers) {
+    std::set<ChunkKey> keys;
+    for (auto [key, buf] : optional_buffers) {
+      keys.emplace(key);
+    }
+    for (auto [key, buf] : required_buffers) {
+      keys.emplace(key);
+    }
+    ASSERT_EQ(keys, data_keys_);
+  }
+
+ protected:
+  std::set<ChunkKey> data_keys_;
+};
+
+class SizeLimitMockWrapper : public TrackBuffersMockWrapper {
+ public:
+  SizeLimitMockWrapper(size_t size) : expected_size_(size) {}
+
+  void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
+                            const ChunkToBufferMap& optional_buffers) override {
+    if (is_first_call_) {
+      compareExpectedSize(required_buffers, optional_buffers, expected_size_);
+    }
+    TrackBuffersMockWrapper::populateChunkBuffers(required_buffers, optional_buffers);
+  }
+
+  void compareExpectedSize(const ChunkToBufferMap& required_buffers,
+                           const ChunkToBufferMap& optional_buffers,
+                           size_t expected_size) {
+    // optional_buffers has any cached buffers removed, so only the first call (the
+    // one that populates the cache) will contain any optional buffers.
+    std::set<ChunkKey> keys;
+    for (auto [key, buf] : optional_buffers) {
+      keys.emplace(key);
+    }
+    for (auto [key, buf] : required_buffers) {
+      keys.emplace(key);
+    }
+    ASSERT_EQ(keys.size(), expected_size);
+  }
+
+ private:
+  size_t expected_size_ = 0;
+};
+
+class SameFragmentMockWrapper : public SizeLimitMockWrapper {
+ public:
+  SameFragmentMockWrapper(size_t size) : SizeLimitMockWrapper(size) {}
+  void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
+                            const ChunkToBufferMap& optional_buffers) override {
+    assertSameFragment(required_buffers, optional_buffers);
+    SizeLimitMockWrapper::populateChunkBuffers(required_buffers, optional_buffers);
+  }
+
+ private:
+  // We want to prioritize any optional chunks that share the same fragment as the
+  // required buffer, so check that chunks share the same fragment id.
+  void assertSameFragment(const ChunkToBufferMap& required_buffers,
+                          const ChunkToBufferMap& optional_buffers) {
+    auto required_fragment = required_buffers.begin()->first[CHUNK_KEY_FRAGMENT_IDX];
+    for (const auto& [key, buf] : optional_buffers) {
+      ASSERT_EQ(key[CHUNK_KEY_FRAGMENT_IDX], required_fragment);
+    }
+  }
+};
+
+class PrefetchLimitTest : public RecoverCacheQueryTest {
+ protected:
+  static constexpr size_t max_buffer_size_ = 1ULL << 31;  // 2GB
+  // The cache reserves %10 for metadata, so multiply our expected data amount by 1.12 to
+  // got from %90 to ~%100 of expected cache size.
+  static constexpr double cache_data_ratio_ = 1.12;
+  static constexpr size_t cache_size_ = 1ULL << 34;  // 16GB
+
+  void SetUp() override {
+    // TODO(Misiu): Right now we only test parquet since it prefetches multi-fragment and
+    // does not prefetch for metdata scan.
+    wrapper_type_ = "parquet";
+    RecoverCacheQueryTest::SetUp();
+    resetPersistentStorageMgr({cache_path_, fn::DiskCacheLevel::fsi, 0, cache_size_});
+  }
+
+  void TearDown() override {
+    resetPersistentStorageMgr({cache_path_, fn::DiskCacheLevel::fsi});
+    RecoverCacheQueryTest::TearDown();
+  }
+
+  void setMockWrapper(std::shared_ptr<MockDataWrapper> mock_wrapper,
+                      const std::string& table_name) {
+    auto db_id = cat_->getCurrentDB().dbId;
+    auto tb_id = cat_->getMetadataForTable(table_name, false)->tableId;
+    auto fsm = psm_->getForeignStorageMgr();
+    auto parent_wrapper = fsm->getDataWrapper({db_id, tb_id});
+    mock_wrapper->setParentWrapper(parent_wrapper);
+    fsm->setDataWrapper({db_id, tb_id}, mock_wrapper);
+  }
+
+  void createTextTable() {
+    sql(createForeignTableQuery({{"i", "INTEGER"},
+                                 {"text_encoded", "TEXT"},
+                                 {"text_unencoded", "TEXT ENCODING NONE"},
+                                 {"text_array", "TEXT[]"}},
+                                getDataFilesPath() + "0_9.parquet",
+                                wrapper_type_,
+                                {{"fragment_size", "1"}}));
+    sql("SELECT COUNT(*) FROM " + default_table_name);
+  }
+
+  std::vector<std::vector<NullableTargetValue>> textTableResults() {
+    std::vector<std::vector<NullableTargetValue>> expected;
+    for (int number = 0; number < 10; number++) {
+      expected.push_back({i(number),
+                          std::to_string(number),
+                          std::to_string(number),
+                          array({std::to_string(number)})});
+    }
+    return expected;
+  }
+};
+
+// If the cache is too small to prefetch all the chunks we want for the query, then we
+// should only fetch the amount that can fit.
+TEST_F(PrefetchLimitTest, MultiFragmentLimit) {
+  resetPersistentStorageMgr(
+      {cache_path_,
+       fn::DiskCacheLevel::fsi,
+       0,
+       static_cast<size_t>(max_buffer_size_ * cache_data_ratio_ * 18)});
+
+  createTextTable();
+
+  // There are 4 columns per fragment, two of which are varlen. This means 6 chunk keys
+  // per fragment which gives us space for 3 fragments, or 18 keys total.
+  auto mock_data_wrapper = std::make_shared<SizeLimitMockWrapper>(18);
+  setMockWrapper(mock_data_wrapper, default_table_name);
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY i;",
+                      textTableResults());
+}
+
+// If we only have space for one fragment's worth of keys, they should all be from the
+// same fragment.
+TEST_F(PrefetchLimitTest, SingleFragmentLimit) {
+  resetPersistentStorageMgr(
+      {cache_path_,
+       fn::DiskCacheLevel::fsi,
+       0,
+       static_cast<size_t>(max_buffer_size_ * cache_data_ratio_ * 6)});
+
+  createTextTable();
+
+  auto mock_data_wrapper = std::make_shared<SameFragmentMockWrapper>(6);
+  setMockWrapper(mock_data_wrapper, default_table_name);
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY i;",
+                      textTableResults());
+}
+
+// If we extend past one fragment, then we should fill the first fragment and then start
+// populating the second.
+TEST_F(PrefetchLimitTest, OneAndHalfFragmentLimit) {
+  resetPersistentStorageMgr(
+      {cache_path_,
+       fn::DiskCacheLevel::fsi,
+       0,
+       static_cast<size_t>(max_buffer_size_ * cache_data_ratio_ * 3)});
+
+  createTextTable();
+
+  auto mock_data_wrapper = std::make_shared<SizeLimitMockWrapper>(3);
+  setMockWrapper(mock_data_wrapper, default_table_name);
+
+  std::vector<std::vector<NullableTargetValue>> expected;
+  for (int number = 0; number < 10; number++) {
+    expected.push_back({i(number), std::to_string(number)});
+  }
+
+  sqlAndCompareResult(
+      "SELECT i, text_encoded FROM " + default_table_name + " ORDER BY i;", expected);
+}
+
+// If the cache is too small to contain one full fragment, then we should partially
+// populate it with chunks from that one fragment.
+TEST_F(PrefetchLimitTest, PartialFragmentLimit) {
+  resetPersistentStorageMgr({cache_path_,
+                             fn::DiskCacheLevel::fsi,
+                             0,
+                             static_cast<size_t>(max_buffer_size_ * cache_data_ratio_)});
+  createTextTable();
+
+  auto mock_data_wrapper = std::make_shared<SameFragmentMockWrapper>(1);
+  setMockWrapper(mock_data_wrapper, default_table_name);
+
+  std::vector<std::vector<NullableTargetValue>> expected;
+  for (int number = 0; number < 10; number++) {
+    expected.push_back({i(number), std::to_string(number)});
+  }
+
+  sqlAndCompareResult(
+      "SELECT i, text_encoded FROM " + default_table_name + " ORDER BY i;", expected);
+}
+
+// If we don't have space for both varlen keys then we store neither.
+TEST_F(PrefetchLimitTest, PartialFragmentLimitVarlen) {
+  resetPersistentStorageMgr(
+      {cache_path_,
+       fn::DiskCacheLevel::fsi,
+       0,
+       static_cast<size_t>(max_buffer_size_ * 3 * cache_data_ratio_)});
+  createTextTable();
+
+  auto mock_data_wrapper = std::make_shared<SameFragmentMockWrapper>(2);
+  setMockWrapper(mock_data_wrapper, default_table_name);
+
+  std::vector<std::vector<NullableTargetValue>> expected;
+  for (int number = 0; number < 10; number++) {
+    expected.push_back({std::to_string(number), array({std::to_string(number)})});
+  }
+
+  sqlAndCompareResult(
+      "SELECT text_unencoded, text_array FROM " + default_table_name + ";", expected);
+}
+
+// This point chunk is made up of 3 physical chunks.
+// Currently tries to add more than two fragments.  1 is required, the other two are
+// optional. Should return one required and one optional.
+TEST_F(PrefetchLimitTest, PartialFragmentLimitPoint) {
+  resetPersistentStorageMgr(
+      {cache_path_,
+       fn::DiskCacheLevel::fsi,
+       0,
+       static_cast<size_t>(max_buffer_size_ * 7 * cache_data_ratio_)});
+
+  sql(createForeignTableQuery({{"p", "POINT"}},
+                              getDataFilesPath() + "GeoTypes/point.parquet",
+                              wrapper_type_,
+                              {{"fragment_size", "1"}}));
+  sql("SELECT COUNT(*) FROM " + default_table_name);
+
+  auto mock_data_wrapper = std::make_shared<SizeLimitMockWrapper>(6);
+  setMockWrapper(mock_data_wrapper, default_table_name);
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                      {{"POINT (0 0)"}, {"POINT (1 1)"}, {"POINT (2 2)"}});
+}
+
+// This linestring is composed of 5 physical chunks
+TEST_F(PrefetchLimitTest, PartialFragmentLimitLinestring) {
+  resetPersistentStorageMgr(
+      {cache_path_,
+       fn::DiskCacheLevel::fsi,
+       0,
+       static_cast<size_t>(max_buffer_size_ * 11 * cache_data_ratio_)});
+
+  sql(createForeignTableQuery({{"l", "LINESTRING"}},
+                              getDataFilesPath() + "GeoTypes/linestring.parquet",
+                              wrapper_type_,
+                              {{"fragment_size", "1"}}));
+  sql("SELECT COUNT(*) FROM " + default_table_name);
+
+  auto mock_data_wrapper = std::make_shared<SizeLimitMockWrapper>(10);
+  setMockWrapper(mock_data_wrapper, default_table_name);
+
+  sqlAndCompareResult(
+      "SELECT * FROM " + default_table_name + ";",
+      {{"LINESTRING (0 0,0 0)"}, {"LINESTRING (1 1,2 2,3 3)"}, {"LINESTRING (2 2,3 3)"}});
+}
+
+// This polygon is composed of 8 physical chunks
+TEST_F(PrefetchLimitTest, PartialFragmentLimitPolygon) {
+  resetPersistentStorageMgr(
+      {cache_path_,
+       fn::DiskCacheLevel::fsi,
+       0,
+       static_cast<size_t>(max_buffer_size_ * 17 * cache_data_ratio_)});
+
+  sql(createForeignTableQuery({{"p", "POLYGON"}},
+                              getDataFilesPath() + "GeoTypes/polygon.parquet",
+                              wrapper_type_,
+                              {{"fragment_size", "1"}}));
+  sql("SELECT COUNT(*) FROM " + default_table_name);
+
+  auto mock_data_wrapper = std::make_shared<SizeLimitMockWrapper>(16);
+  setMockWrapper(mock_data_wrapper, default_table_name);
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                      {{"POLYGON ((0 0,1 0,0 1,1 1,0 0))"},
+                       {"POLYGON ((5 4,7 4,6 5,5 4))"},
+                       {"POLYGON ((1 1,3 1,2 3,1 1))"}});
+}
+
+// This multipolygon is composed of 10 physical chunks.
+TEST_F(PrefetchLimitTest, PartialFragmentLimitMultiPolygon) {
+  resetPersistentStorageMgr(
+      {cache_path_,
+       fn::DiskCacheLevel::fsi,
+       0,
+       static_cast<size_t>(max_buffer_size_ * 21 * cache_data_ratio_)});
+
+  sql(createForeignTableQuery({{"m", "MULTIPOLYGON"}},
+                              getDataFilesPath() + "GeoTypes/multipolygon.parquet",
+                              wrapper_type_,
+                              {{"fragment_size", "1"}}));
+  sql("SELECT COUNT(*) FROM " + default_table_name);
+
+  auto mock_data_wrapper = std::make_shared<SizeLimitMockWrapper>(20);
+  setMockWrapper(mock_data_wrapper, default_table_name);
+
+  sqlAndCompareResult(
+      "SELECT * FROM " + default_table_name + ";",
+      {{"MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"},
+       {"MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"},
+       {"MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"}});
+}
+
+// If the cache is disabled, then we should only be prefetching one fragment's worth of
+// chunks at a time, since that is the amount that needs to fit in memory for a query to
+// process anyways.
+TEST_F(PrefetchLimitTest, NoCacheFragmentOnly) {
+  resetPersistentStorageMgr({cache_path_, fn::DiskCacheLevel::none, 0});
+  createTextTable();
+
+  // The non-cached parallelism level for parquet is only intra-fragment.
+  auto mock_data_wrapper = std::make_shared<SameFragmentMockWrapper>(6);
+  setMockWrapper(mock_data_wrapper, default_table_name);
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY i;",
+                      textTableResults());
+}
 
 int main(int argc, char** argv) {
   g_enable_fsi = true;

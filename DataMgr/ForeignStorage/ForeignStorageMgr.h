@@ -41,6 +41,8 @@ class PostEvictionRefreshException : public std::runtime_error {
 
 namespace foreign_storage {
 
+bool set_comp(const ChunkKey& left, const ChunkKey& right);
+
 // For testing purposes only
 class MockForeignDataWrapper : public ForeignDataWrapper {
  public:
@@ -94,17 +96,19 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   bool isDatawrapperRestored(const ChunkKey& chunk_key);
   void setDataWrapper(const ChunkKey& table_key,
                       std::shared_ptr<MockForeignDataWrapper> data_wrapper);
+  std::shared_ptr<ForeignDataWrapper> getDataWrapper(const ChunkKey& chunk_key);
 
   virtual void refreshTable(const ChunkKey& table_key, const bool evict_cached_entries);
 
   using ParallelismHint = std::pair<int, int>;
   void setParallelismHints(
       const std::map<ChunkKey, std::set<ParallelismHint>>& hints_per_table);
+  virtual size_t maxFetchSize(int32_t db_id) const;
+  virtual bool hasMaxFetchSize() const;
 
  protected:
   void createDataWrapperUnlocked(int32_t db, int32_t tb);
   void clearDataWrapper(const ChunkKey& table_key);
-  std::shared_ptr<ForeignDataWrapper> getDataWrapper(const ChunkKey& chunk_key);
   bool fetchBufferIfTempBufferMapEntryExists(const ChunkKey& chunk_key,
                                              AbstractBuffer* destination_buffer,
                                              const size_t num_bytes);
@@ -112,26 +116,41 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   void clearTempChunkBufferMapEntriesForTable(const ChunkKey& table_key);
   void clearTempChunkBufferMapEntriesForTableUnlocked(const ChunkKey& table_key);
 
-  void getOptionalChunkKeySet(
-      std::set<ChunkKey>& optional_chunk_keys,
+  std::set<ChunkKey> getOptionalChunkKeySet(
       const ChunkKey& chunk_key,
       const std::set<ChunkKey>& required_chunk_keys,
-      const ForeignDataWrapper::ParallelismLevel parallelism_level);
+      const ForeignDataWrapper::ParallelismLevel parallelism_level) const;
+
+  std::pair<std::set<ChunkKey, decltype(set_comp)*>,
+            std::set<ChunkKey, decltype(set_comp)*>>
+  getPrefetchSets(const ChunkKey& chunk_key,
+                  const std::set<ChunkKey>& required_chunk_keys,
+                  const ForeignDataWrapper::ParallelismLevel parallelism_level) const;
+
+  std::set<ChunkKey> getOptionalKeysWithinSizeLimit(
+      size_t total_chunk_size,
+      const ChunkKey& chunk_key,
+      const std::set<ChunkKey, decltype(set_comp)*>& same_fragment_keys,
+      const std::set<ChunkKey, decltype(set_comp)*>& diff_fragment_keys) const;
+
+  size_t getRequiredBuffersSize(const ChunkKey& chunk_key) const;
 
   static void checkIfS3NeedsToBeEnabled(const ChunkKey& chunk_key);
 
-  std::shared_mutex data_wrapper_mutex_;
+  mutable std::shared_mutex data_wrapper_mutex_;
   std::map<ChunkKey, std::shared_ptr<ForeignDataWrapper>> data_wrapper_map_;
 
   // TODO: Remove below map, which is used to temporarily hold chunk buffers,
   // when buffer mgr interface is updated to accept multiple buffers in one call
   std::map<ChunkKey, std::unique_ptr<AbstractBuffer>> temp_chunk_buffer_map_;
-  std::shared_mutex temp_chunk_buffer_map_mutex_;
+  mutable std::shared_mutex temp_chunk_buffer_map_mutex_;
 
-  std::shared_mutex parallelism_hints_mutex_;
+  mutable std::shared_mutex parallelism_hints_mutex_;
   std::map<ChunkKey, std::set<ParallelismHint>> parallelism_hints_per_table_;
 };
 
-std::vector<ChunkKey> get_keys_vec_from_table(const ChunkKey& destination_chunk_key);
-std::set<ChunkKey> get_keys_set_from_table(const ChunkKey& destination_chunk_key);
+std::vector<ChunkKey> get_column_key_vec(const ChunkKey& destination_chunk_key);
+std::set<ChunkKey> get_column_key_set(const ChunkKey& destination_chunk_key);
+size_t get_max_chunk_size(const ChunkKey& key);
+bool contains_fragment_key(const std::set<ChunkKey>& key_set, const ChunkKey& target_key);
 }  // namespace foreign_storage

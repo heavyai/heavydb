@@ -79,7 +79,7 @@ class ForeignStorageCacheUnitTest : public testing::Test {
     }
 
     void cacheChunk(const ChunkKey& chunk_key) {
-      auto buffer_map = cache_->getChunkBuffersForCaching({chunk_key});
+      auto buffer_map = cache_->getChunkBuffersForCaching(std::set<ChunkKey>{chunk_key});
       buffer_map[chunk_key]->append(chunk->getBuffer()->getMemoryPtr(),
                                     chunk->getBuffer()->size());
       buffer_map[chunk_key]->syncEncoder(chunk->getBuffer());
@@ -376,7 +376,7 @@ TEST_F(ForeignStorageCacheFileTest, FileCreation) {
     std::shared_ptr<ChunkMetadata> cached_meta = std::make_shared<ChunkMetadata>();
     source_buffer.getEncoder()->getMetadata(cached_meta);
     cache.cacheMetadataVec({std::make_pair(chunk_key1, cached_meta)});
-    auto buffer_map = cache.getChunkBuffersForCaching({chunk_key1});
+    auto buffer_map = cache.getChunkBuffersForCaching(std::set<ChunkKey>{chunk_key1});
     buffer_map[chunk_key1]->append(source_buffer.getMemoryPtr(), source_buffer.size());
     cache.checkpoint(chunk_key1[CHUNK_KEY_DB_IDX], chunk_key1[CHUNK_KEY_TABLE_IDX]);
     ASSERT_TRUE(boost::filesystem::exists(cache_path_ + "/0.4096.mapd"));

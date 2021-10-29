@@ -83,6 +83,14 @@ inline bool in_same_table(const ChunkKey& left_key, const ChunkKey& right_key) {
           left_key[CHUNK_KEY_TABLE_IDX] == right_key[CHUNK_KEY_TABLE_IDX]);
 }
 
+inline ChunkKey get_fragment_key(const ChunkKey& key) {
+  CHECK(key.size() >= 4);
+  return ChunkKey{key[CHUNK_KEY_DB_IDX],
+                  key[CHUNK_KEY_TABLE_IDX],
+                  key[CHUNK_KEY_COLUMN_IDX],
+                  key[CHUNK_KEY_FRAGMENT_IDX]};
+}
+
 inline std::string show_chunk(const ChunkKey& key) {
   std::ostringstream tss;
   for (auto vecIt = key.begin(); vecIt != key.end(); ++vecIt) {

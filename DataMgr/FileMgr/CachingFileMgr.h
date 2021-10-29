@@ -206,6 +206,9 @@ class CachingFileMgr : public FileMgr {
   inline size_t getAllocated() override {
     return getFilesSize() + getTableFileMgrsSize();
   }
+  inline size_t getMaxDataFilesSize() const {
+    return getMaxDataFiles() * getDataFileSize();
+  }
 
   /**
    * @brief Free pages for chunk and remove it from the chunk eviction algorithm.
@@ -352,6 +355,8 @@ class CachingFileMgr : public FileMgr {
   std::string dumpKeysWithMetadata() const;
   std::string dumpKeysWithChunkData() const;
   std::string dumpTableQueue() const { return table_evict_alg_.dumpEvictionQueue(); }
+  std::string dumpEvictionQueue() const { return chunk_evict_alg_.dumpEvictionQueue(); }
+  std::string dump() const;
 
   // Used for unit testing
   void setMaxNumDataFiles(size_t max) { max_num_data_files_ = max; }
