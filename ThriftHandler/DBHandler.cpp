@@ -238,6 +238,7 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
                      const bool enable_rendering,
                      const bool renderer_use_vulkan_driver,
                      const bool renderer_prefer_igpu,
+                     const unsigned renderer_vulkan_timeout_ms,
                      const bool enable_auto_clear_render_mem,
                      const int render_oom_retry_threshold,
                      const size_t render_mem_bytes,
@@ -283,6 +284,7 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     , enable_rendering_(enable_rendering)
     , renderer_use_vulkan_driver_(renderer_use_vulkan_driver)
     , renderer_prefer_igpu_(renderer_prefer_igpu)
+    , renderer_vulkan_timeout_(renderer_vulkan_timeout_ms)
     , enable_auto_clear_render_mem_(enable_auto_clear_render_mem)
     , render_oom_retry_threshold_(render_oom_retry_threshold)
     , max_concurrent_render_sessions_(max_concurrent_render_sessions)
@@ -460,6 +462,7 @@ void DBHandler::initialize(const bool is_new_db) {
                                               0,
                                               false,
                                               renderer_prefer_igpu_,
+                                              renderer_vulkan_timeout_,
                                               system_parameters_));
     } catch (const std::exception& e) {
       LOG(ERROR) << "Backend rendering disabled: " << e.what();

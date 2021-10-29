@@ -70,6 +70,7 @@ class CommandLineOptions {
   bool render_compositor_use_last_gpu = true;
   bool renderer_use_vulkan_driver = false;
   bool renderer_prefer_igpu = false;
+  unsigned renderer_vulkan_timeout_ms = 300000;  // in milliseconds
 
   bool enable_runtime_udf = false;
 

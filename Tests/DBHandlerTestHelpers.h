@@ -228,6 +228,7 @@ class DBHandlerTestFixture : public testing::Test {
       const bool enable_rendering{false};
       const bool renderer_use_vulkan_driver{false};
       const bool renderer_prefer_igpu{false};
+      const unsigned renderer_vulkan_timeout_ms{300000};
       const bool enable_auto_clear_render_mem{false};
       const int render_oom_retry_threshold{0};
       const size_t render_mem_bytes{500000000};
@@ -261,6 +262,7 @@ class DBHandlerTestFixture : public testing::Test {
                                                 enable_rendering,
                                                 renderer_use_vulkan_driver,
                                                 renderer_prefer_igpu,
+                                                renderer_vulkan_timeout_ms,
                                                 enable_auto_clear_render_mem,
                                                 render_oom_retry_threshold,
                                                 render_mem_bytes,
