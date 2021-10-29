@@ -159,6 +159,7 @@ class DBEngineImpl : public DBEngine {
                                       prog_config_opts.enable_rendering,
                                       prog_config_opts.renderer_use_vulkan_driver,
                                       prog_config_opts.renderer_prefer_igpu,
+                                      prog_config_opts.renderer_vulkan_timeout_ms,
                                       prog_config_opts.enable_auto_clear_render_mem,
                                       prog_config_opts.render_oom_retry_threshold,
                                       prog_config_opts.render_mem_bytes,
