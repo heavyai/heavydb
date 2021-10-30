@@ -52,4 +52,4 @@ CREATE FOREIGN TABLE ##TAB## (
     dropoff_ntacode         TEXT  ENCODING DICT,
     dropoff_ntaname         TEXT ENCODING DICT,
     dropoff_puma            TEXT  ENCODING DICT
-) SERVER omnisci_local_csv WITH ( file_path = '##FILE##', header = 'false' )
+) SERVER benchmark_s3_parquet WITH ( file_path = '##FILE##' )
