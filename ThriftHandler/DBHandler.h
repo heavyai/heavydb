@@ -535,6 +535,9 @@ class DBHandler : public OmniSciIf {
   void get_all_roles_for_user(std::vector<std::string>& _return,
                               const TSessionId& session,
                               const std::string& granteeName) override;
+  void get_all_effective_roles_for_user(std::vector<std::string>& _return,
+                                        const TSessionId& session,
+                                        const std::string& granteeName) override;
   std::vector<std::string> get_valid_groups(const TSessionId& session,
                                             int32_t dashboard_id,
                                             std::vector<std::string> groups);
@@ -662,6 +665,12 @@ class DBHandler : public OmniSciIf {
                               const bool get_system,
                               const bool get_physical,
                               const std::string& database_name = {});
+  void getAllRolesForUserImpl(
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr,
+      std::vector<std::string>& roles,
+      const TSessionId& sessionId,
+      const std::string& granteeName,
+      bool effective);
   void check_read_only(const std::string& str);
   void check_session_exp_unsafe(const SessionMap::iterator& session_it);
   void validateGroups(const std::vector<std::string>& groups);

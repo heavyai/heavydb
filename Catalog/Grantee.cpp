@@ -34,12 +34,22 @@ Grantee::~Grantee() {
   roles_.clear();
 }
 
-std::vector<std::string> Grantee::getRoles() const {
-  std::vector<std::string> roles;
-  for (const auto role : roles_) {
-    roles.push_back(role->getName());
+std::vector<std::string> Grantee::getRoles(bool only_direct) const {
+  std::set<std::string> roles;  // Sorted for human readers.
+  std::stack<const Grantee*> g;
+  g.push(this);
+  while (!g.empty()) {
+    auto r = g.top();
+    g.pop();
+    for (auto direct_role : r->roles_) {
+      g.push(direct_role);
+      roles.insert(direct_role->getName());
+    }
+    if (only_direct) {
+      break;
+    }
   }
-  return roles;
+  return std::vector(roles.begin(), roles.end());
 }
 
 bool Grantee::hasRole(Role* role, bool only_direct) const {
