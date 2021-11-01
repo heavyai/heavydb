@@ -2298,6 +2298,16 @@ bool SysCatalog::isDashboardSystemRole(const std::string& roleName) const {
   return boost::algorithm::ends_with(roleName, SYSTEM_ROLE_TAG);
 }
 
+std::vector<std::string> SysCatalog::getRoles(const std::string& user_name,
+                                              bool effective) {
+  sys_read_lock read_lock(this);
+  auto* grantee = getGrantee(user_name);
+  if (!grantee) {
+    throw std::runtime_error("user or role not found");
+  }
+  return grantee->getRoles(/*only_direct=*/!effective);
+}
+
 std::vector<std::string> SysCatalog::getRoles(const std::string& userName,
                                               const int32_t dbId) {
   sys_sqlite_lock sqlite_lock(this);
@@ -2351,7 +2361,7 @@ std::vector<std::string> SysCatalog::getRoles(bool include_user_private_role,
 
 std::set<std::string> SysCatalog::getCreatedRoles() const {
   sys_read_lock read_lock(this);
-  std::set<std::string> roles;
+  std::set<std::string> roles;  // Sorted for human readers.
   for (const auto& [key, grantee] : granteeMap_) {
     if (!grantee->isUser() && !isDashboardSystemRole(grantee->getName())) {
       roles.emplace(grantee->getName());

@@ -488,6 +488,8 @@ ExecutionResult DdlCommandExecutor::execute() {
     result = ShowDiskCacheUsageCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "SHOW_USER_DETAILS") {
     result = ShowUserDetailsCommand{*ddl_data_, session_ptr_}.execute();
+  } else if (ddl_command_ == "SHOW_ROLES") {
+    result = ShowRolesCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "REASSIGN_OWNED") {
     result = ReassignOwnedCommand{*ddl_data_, session_ptr_}.execute();
   } else {
@@ -1721,6 +1723,69 @@ ExecutionResult ShowUserDetailsCommand::execute() {
     logical_values.back().emplace_back(genLiteralBoolean(user.isSuper.load()));
     logical_values.back().emplace_back(genLiteralStr(dbname));
     logical_values.back().emplace_back(genLiteralBoolean(user.can_login));
+  }
+
+  // Create ResultSet
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
+}
+
+ShowRolesCommand::ShowRolesCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data);
+  CHECK(ddl_payload["userName"].IsString());
+  CHECK(ddl_payload["effective"].IsBool());
+}
+
+ExecutionResult ShowRolesCommand::execute() {
+  auto& ddl_payload = extractPayload(ddl_data_);
+  auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
+
+  // label_infos -> column labels
+  std::vector<TargetMetaInfo> label_infos;
+  std::vector<std::string> labels{"ROLES"};
+  label_infos.emplace_back(labels[0], SQLTypeInfo(kTEXT, true));
+
+  // logical_values -> table data
+  std::vector<RelLogicalValues::RowValues> logical_values;
+  std::vector<std::string> roles_list;
+  Catalog_Namespace::UserMetadata self = session_ptr_->get_currentUser();
+  std::string user_name = ddl_payload["userName"].GetString();
+  bool effective = ddl_payload["effective"].GetBool();
+  if (user_name.empty()) {
+    user_name = self.userName;
+  }
+  Catalog_Namespace::UserMetadata user;
+  bool is_user = sys_cat.getMetadataForUser(user_name, user);
+  if (!self.isSuper) {
+    if (is_user) {
+      if (self.userId != user.userId) {
+        throw std::runtime_error(
+            "Only a superuser is authorized to request list of roles granted to another "
+            "user.");
+      }
+    } else {
+      if (!sys_cat.isRoleGrantedToGrantee(
+              self.userName, user_name, /*only_direct=*/false)) {
+        throw std::runtime_error(
+            "Only a superuser is authorized to request list of roles granted to a role "
+            "they don't have.");
+      }
+    }
+  }
+  if (user.isSuper) {
+    auto s = sys_cat.getCreatedRoles();
+    roles_list.insert(roles_list.end(), s.begin(), s.end());
+  } else {
+    roles_list = sys_cat.getRoles(user_name, effective);
+  }
+  for (const std::string& role_name : roles_list) {
+    logical_values.emplace_back(RelLogicalValues::RowValues{});
+    logical_values.back().emplace_back(genLiteralStr(role_name));
   }
 
   // Create ResultSet

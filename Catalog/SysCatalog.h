@@ -313,6 +313,7 @@ class SysCatalog : private CommonFileOperations {
   bool isRoleGrantedToGrantee(const std::string& granteeName,
                               const std::string& roleName,
                               bool only_direct) const;
+  std::vector<std::string> getRoles(const std::string& user_name, bool effective = true);
   std::vector<std::string> getRoles(bool include_user_private_role,
                                     bool is_super,
                                     const std::string& user_name,

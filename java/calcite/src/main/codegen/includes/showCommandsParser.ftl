@@ -151,9 +151,7 @@ SqlDdl SqlShowTableDetails(Span s) :
 }
 
 /*
- * Show create table using the following syntax:
- *
- * SHOW CREATE TABLE [<table_name>]
+ * SHOW CREATE TABLE <table_name>
  */
 SqlDdl SqlShowCreateTable(Span s) :
 {
@@ -164,5 +162,27 @@ SqlDdl SqlShowCreateTable(Span s) :
     tableName = CompoundIdentifier()
     {
         return new SqlShowCreateTable(s.end(this), tableName.toString());
+    }
+}
+
+/*
+ * SHOW ROLES [username]
+ */
+SqlDdl SqlShowRoles(Span s) :
+{
+    SqlIdentifier userName = null;
+    boolean effective = false;
+}
+{
+    <SHOW>
+    [<EFFECTIVE> {effective = true;}]
+    <ROLES>
+    [userName = CompoundIdentifier()]
+    {
+        String u = "";
+        if (userName != null) {
+          u = userName.toString();
+        }
+        return new SqlShowRoles(s.end(this), u, effective);
     }
 }
