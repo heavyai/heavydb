@@ -641,7 +641,8 @@ service OmniSci {
   list<string> get_roles(1: TSessionId session) throws (1: TOmniSciException e)
   list<TDBObject> get_db_objects_for_grantee(1: TSessionId session, 2: string roleName) throws (1: TOmniSciException e)
   list<TDBObject> get_db_object_privs(1: TSessionId session, 2: string objectName, 3: TDBObjectType type) throws (1: TOmniSciException e)
-  list<string> get_all_roles_for_user(1: TSessionId session, 2: string userName) throws (1: TOmniSciException e)
+  list<string> get_all_roles_for_user(1: TSessionId session, 2: string userName) throws (1: TOmniSciException e)  # NOTE: only gives direct roles, not all effective roles
+  list<string> get_all_effective_roles_for_user(1: TSessionId session, 2: string userName) throws (1: TOmniSciException e)
   bool has_role(1: TSessionId session, 2: string granteeName, 3: string roleName) throws (1: TOmniSciException e)
   bool has_object_privilege(1: TSessionId session, 2: string granteeName, 3: string ObjectName, 4: TDBObjectType objectType, 5: TDBObjectPermissions permissions) throws (1: TOmniSciException e)
   # licensing

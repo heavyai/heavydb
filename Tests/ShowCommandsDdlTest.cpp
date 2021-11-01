@@ -730,6 +730,247 @@ TEST_F(ShowTableDdlTest, CreateTableCreateViewAndViewNotSeen) {
   sql("DROP VIEW test_view;");
 }
 
+class ShowRolesTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+
+  void TearDown() override {
+    switchToAdmin();
+    DBHandlerTestFixture::TearDown();
+  }
+
+  static void SetUpTestSuite() {
+    createDBHandler();
+    createTestUser("u1", "p1");
+    createTestUser("u2", "p2");
+  }
+
+  static void TearDownTestSuite() {
+    dropTestUser("u1");
+    dropTestUser("u2");
+  }
+
+  static void createTestUser(const std::string& user_name,
+                             const std::string& pass,
+                             const bool is_super_user = false) {
+    sql("CREATE USER " + user_name + " (password = '" + pass + "', is_super = '" +
+        (is_super_user ? "true" : "false") + "');");
+    sql("GRANT ALL ON DATABASE omnisci TO " + user_name + ";");
+  }
+
+  static void dropTestUser(const std::string& user_name) {
+    switchToAdmin();
+    sql("DROP USER IF EXISTS " + user_name + ";");
+  }
+
+  void assertExpectedResult(const std::vector<std::string> headers,
+                            const std::vector<std::vector<std::string>> rows,
+                            const TQueryResult& result) {
+    const auto& row_set = result.row_set;
+    const auto& row_descriptor = result.row_set.row_desc;
+
+    ASSERT_TRUE(row_set.is_columnar);
+    ASSERT_EQ(headers.size(), row_descriptor.size());
+    ASSERT_FALSE(row_set.columns.empty());
+
+    for (size_t i = 0; i < headers.size(); i++) {
+      ASSERT_EQ(row_descriptor[i].col_name, headers[i]);
+      ASSERT_EQ(TDatumType::type::STR, row_descriptor[i].col_type.type);
+    }
+
+    for (const auto& column : row_set.columns) {
+      ASSERT_EQ(rows.size(), column.data.str_col.size());
+    }
+
+    for (size_t row = 0; row < rows.size(); row++) {
+      for (size_t column = 0; column < rows[row].size(); column++) {
+        ASSERT_EQ(rows[row][column], row_set.columns[column].data.str_col[row]);
+        ASSERT_FALSE(row_set.columns[column].nulls[row]);
+      }
+    }
+  }
+};
+
+TEST_F(ShowRolesTest, SuperUser) {
+  sql("CREATE ROLE r1;");
+  sql("CREATE ROLE r2;");
+  sql("CREATE ROLE r3;");
+  sql("CREATE ROLE r4;");
+  sql("CREATE ROLE r5;");
+
+  ScopeGuard guard{[&] {
+    sql("DROP ROLE r1;");
+    sql("DROP ROLE r2;");
+    sql("DROP ROLE r3;");
+    sql("DROP ROLE r4;");
+    sql("DROP ROLE r5;");
+  }};
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SHOW ROLES;"));
+    assertExpectedResult({"ROLES"}, {{"r1"}, {"r2"}, {"r3"}, {"r4"}, {"r5"}}, result);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE ROLES;"));
+    assertExpectedResult({"ROLES"}, {{"r1"}, {"r2"}, {"r3"}, {"r4"}, {"r5"}}, result);
+  }
+};
+
+TEST_F(ShowRolesTest, Direct) {
+  sql("CREATE ROLE r1;");
+  sql("CREATE ROLE r2;");
+  sql("CREATE ROLE r3;");
+  sql("CREATE ROLE r4;");
+  sql("CREATE ROLE r5;");
+
+  ScopeGuard guard{[&] {
+    switchToAdmin();
+    sql("DROP ROLE r1;");
+    sql("DROP ROLE r2;");
+    sql("DROP ROLE r3;");
+    sql("DROP ROLE r4;");
+    sql("DROP ROLE r5;");
+  }};
+
+  sql("GRANT r3 TO r1;");
+  sql("GRANT r5 TO r3;");
+
+  sql("GRANT r4 TO r2;");
+  sql("GRANT r5 TO r4;");
+
+  sql("GRANT r1 TO u1;");
+  sql("GRANT r2 TO u1;");
+
+  sql("GRANT r1 TO u2;");
+  sql("GRANT r2 TO u2;");
+  sql("GRANT r5 TO u2;");
+
+  {
+    TQueryResult result;
+    login("u1", "p1");
+    EXPECT_NO_THROW(sql(result, "SHOW ROLES;"));
+    assertExpectedResult({"ROLES"}, {{"r1"}, {"r2"}}, result);
+  }
+
+  {
+    TQueryResult result;
+    login("u2", "p2");
+    EXPECT_NO_THROW(sql(result, "SHOW ROLES;"));
+    assertExpectedResult({"ROLES"}, {{"r1"}, {"r2"}, {"r5"}}, result);
+  }
+};
+
+TEST_F(ShowRolesTest, Effective) {
+  sql("CREATE ROLE r1;");
+  sql("CREATE ROLE r2;");
+  sql("CREATE ROLE r3;");
+  sql("CREATE ROLE r4;");
+  sql("CREATE ROLE r5;");
+
+  ScopeGuard guard{[&] {
+    switchToAdmin();
+    sql("DROP ROLE r1;");
+    sql("DROP ROLE r2;");
+    sql("DROP ROLE r3;");
+    sql("DROP ROLE r4;");
+    sql("DROP ROLE r5;");
+  }};
+
+  sql("GRANT r3 TO r1;");
+  sql("GRANT r5 TO r3;");
+
+  sql("GRANT r4 TO r2;");
+  sql("GRANT r5 TO r4;");
+
+  sql("GRANT r1 TO u1;");
+  sql("GRANT r2 TO u2;");
+
+  {
+    TQueryResult result;
+    login("u1", "p1");
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE ROLES;"));
+    assertExpectedResult({"ROLES"}, {{"r1"}, {"r3"}, {"r5"}}, result);
+  }
+
+  {
+    TQueryResult result;
+    login("u2", "p2");
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE ROLES;"));
+    assertExpectedResult({"ROLES"}, {{"r2"}, {"r4"}, {"r5"}}, result);
+  }
+};
+
+TEST_F(ShowRolesTest, Security) {
+  sql("CREATE ROLE r1;");
+  sql("CREATE ROLE r2;");
+  sql("CREATE ROLE r3;");
+  sql("CREATE ROLE r4;");
+  sql("CREATE ROLE r5;");
+
+  ScopeGuard guard{[&] {
+    switchToAdmin();
+    sql("DROP ROLE r1;");
+    sql("DROP ROLE r2;");
+    sql("DROP ROLE r3;");
+    sql("DROP ROLE r4;");
+    sql("DROP ROLE r5;");
+  }};
+
+  sql("GRANT r3 TO r1;");
+  sql("GRANT r5 TO r3;");
+
+  sql("GRANT r4 TO r2;");
+  sql("GRANT r5 TO r4;");
+
+  sql("GRANT r1 TO u1;");
+  sql("GRANT r2 TO u2;");
+
+  {
+    TQueryResult result;
+    login("u1", "p1");
+
+    EXPECT_NO_THROW(sql(result, "SHOW ROLES u1;"));
+    EXPECT_ANY_THROW(sql(result, "SHOW ROLES u2;"));
+    EXPECT_NO_THROW(sql(result, "SHOW ROLES r1;"));
+    EXPECT_ANY_THROW(sql(result, "SHOW ROLES r2;"));
+    EXPECT_NO_THROW(sql(result, "SHOW ROLES r3;"));
+    EXPECT_ANY_THROW(sql(result, "SHOW ROLES r4;"));
+    EXPECT_NO_THROW(sql(result, "SHOW ROLES r5;"));
+
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE ROLES u1;"));
+    EXPECT_ANY_THROW(sql(result, "SHOW EFFECTIVE ROLES u2;"));
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE ROLES r1;"));
+    EXPECT_ANY_THROW(sql(result, "SHOW EFFECTIVE ROLES r2;"));
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE ROLES r3;"));
+    EXPECT_ANY_THROW(sql(result, "SHOW EFFECTIVE ROLES r4;"));
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE ROLES r5;"));
+  }
+
+  {
+    TQueryResult result;
+    login("u2", "p2");
+
+    EXPECT_ANY_THROW(sql(result, "SHOW ROLES u1;"));
+    EXPECT_NO_THROW(sql(result, "SHOW ROLES u2;"));
+    EXPECT_ANY_THROW(sql(result, "SHOW ROLES r1;"));
+    EXPECT_NO_THROW(sql(result, "SHOW ROLES r2;"));
+    EXPECT_ANY_THROW(sql(result, "SHOW ROLES r3;"));
+    EXPECT_NO_THROW(sql(result, "SHOW ROLES r4;"));
+    EXPECT_NO_THROW(sql(result, "SHOW ROLES r5;"));
+
+    EXPECT_ANY_THROW(sql(result, "SHOW EFFECTIVE ROLES u1;"));
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE ROLES u2;"));
+    EXPECT_ANY_THROW(sql(result, "SHOW EFFECTIVE ROLES r1;"));
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE ROLES r2;"));
+    EXPECT_ANY_THROW(sql(result, "SHOW EFFECTIVE ROLES r3;"));
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE ROLES r4;"));
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE ROLES r5;"));
+  }
+}
+
 class ShowDatabasesTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override { DBHandlerTestFixture::SetUp(); }

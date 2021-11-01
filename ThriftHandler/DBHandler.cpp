@@ -2159,22 +2159,22 @@ void DBHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
   }
 }
 
-void DBHandler::get_all_roles_for_user(std::vector<std::string>& roles,
-                                       const TSessionId& sessionId,
-                                       const std::string& granteeName) {
-  auto stdlog = STDLOG(get_session_ptr(sessionId));
-  auto session_ptr = stdlog.getConstSessionInfo();
+void DBHandler::getAllRolesForUserImpl(
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr,
+    std::vector<std::string>& roles,
+    const TSessionId& sessionId,
+    const std::string& granteeName,
+    bool effective) {
   auto* grantee = SysCatalog::instance().getGrantee(granteeName);
   if (grantee) {
     if (session_ptr->get_currentUser().isSuper) {
-      roles = grantee->getRoles();
+      roles = grantee->getRoles(/*only_direct=*/!effective);
     } else if (grantee->isUser()) {
       if (session_ptr->get_currentUser().userName == granteeName) {
-        roles = grantee->getRoles();
+        roles = grantee->getRoles(/*only_direct=*/!effective);
       } else {
         THROW_MAPD_EXCEPTION(
-            "Only a superuser is authorized to request list of roles granted to "
-            "another "
+            "Only a superuser is authorized to request list of roles granted to another "
             "user.");
       }
     } else {
@@ -2183,7 +2183,7 @@ void DBHandler::get_all_roles_for_user(std::vector<std::string>& roles,
       // only if it is granted to us
       if (SysCatalog::instance().isRoleGrantedToGrantee(
               session_ptr->get_currentUser().userName, granteeName, false)) {
-        roles = grantee->getRoles();
+        roles = grantee->getRoles(/*only_direct=*/!effective);
       } else {
         THROW_MAPD_EXCEPTION("A user can check only roles granted to him.");
       }
@@ -2191,6 +2191,24 @@ void DBHandler::get_all_roles_for_user(std::vector<std::string>& roles,
   } else {
     THROW_MAPD_EXCEPTION("Grantee " + granteeName + " does not exist.");
   }
+}
+
+void DBHandler::get_all_roles_for_user(std::vector<std::string>& roles,
+                                       const TSessionId& sessionId,
+                                       const std::string& granteeName) {
+  // WARNING: This function only returns directly granted roles.
+  // See also: get_all_effective_roles_for_user() for all of a user's roles.
+  auto stdlog = STDLOG(get_session_ptr(sessionId));
+  auto session_ptr = stdlog.getConstSessionInfo();
+  getAllRolesForUserImpl(session_ptr, roles, sessionId, granteeName, /*effective=*/false);
+}
+
+void DBHandler::get_all_effective_roles_for_user(std::vector<std::string>& roles,
+                                                 const TSessionId& sessionId,
+                                                 const std::string& granteeName) {
+  auto stdlog = STDLOG(get_session_ptr(sessionId));
+  auto session_ptr = stdlog.getConstSessionInfo();
+  getAllRolesForUserImpl(session_ptr, roles, sessionId, granteeName, /*effective=*/true);
 }
 
 namespace {
