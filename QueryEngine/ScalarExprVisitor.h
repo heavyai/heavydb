@@ -153,6 +153,11 @@ class ScalarExprVisitor {
     if (agg) {
       return visitAggExpr(agg);
     }
+    const auto range_join_oper = dynamic_cast<const Analyzer::RangeOper*>(expr);
+    if (range_join_oper) {
+      return visitRangeJoinOper(range_join_oper);
+    }
+
     return defaultResult();
   }
 
@@ -361,6 +366,13 @@ class ScalarExprVisitor {
   virtual T visitAggExpr(const Analyzer::AggExpr* agg) const {
     T result = defaultResult();
     return aggregateResult(result, visit(agg->get_arg()));
+  }
+
+  virtual T visitRangeJoinOper(const Analyzer::RangeOper* range_oper) const {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(range_oper->get_left_operand()));
+    result = aggregateResult(result, visit(range_oper->get_right_operand()));
+    return result;
   }
 
  protected:
