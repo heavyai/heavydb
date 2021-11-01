@@ -327,8 +327,17 @@ void redirect_inputs_of(
 void cleanup_dead_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   for (auto nodeIt = nodes.rbegin(); nodeIt != nodes.rend(); ++nodeIt) {
     if (nodeIt->use_count() == 1) {
-      LOG(INFO) << "ID=" << (*nodeIt)->getId() << " " << (*nodeIt)->toString()
-                << " deleted!";
+      VLOG(1) << "Node (ID: " << (*nodeIt)->getId() << ") deleted.";
+      if (logger::fast_logging_check(logger::Severity::DEBUG2)) {
+        auto node_str = (*nodeIt)->toString();
+        constexpr size_t max_node_print_len{500};
+        const size_t node_str_len = node_str.size();
+        if (node_str_len > max_node_print_len) {
+          node_str = node_str.substr(0, max_node_print_len) + "...";
+        }
+        VLOG(2) << "Deleted Node (ID: " << (*nodeIt)->getId()
+                << ") contents: " << node_str;
+      }
       nodeIt->reset();
     }
   }
@@ -1476,10 +1485,18 @@ void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
       CHECK(folded_filter);
       // TODO(miyu) : drop filter w/ only expression valued constant TRUE?
       if (auto rex_operator = dynamic_cast<const RexOperator*>(filter->getCondition())) {
-        LOG(INFO) << "ID=" << filter->getId() << " " << filter->toString()
-                  << " folded into "
-                  << "ID=" << folded_filter->getId() << " " << folded_filter->toString()
-                  << std::endl;
+        VLOG(1) << "Node ID=" << filter->getId() << " folded into "
+                << "ID=" << folded_filter->getId();
+        if (logger::fast_logging_check(logger::Severity::DEBUG2)) {
+          auto node_str = folded_filter->toString();
+          constexpr size_t max_node_print_len{500};
+          const size_t node_str_len = node_str.size();
+          if (node_str_len > max_node_print_len) {
+            node_str = node_str.substr(0, max_node_print_len) + "...";
+          }
+          VLOG(2) << "Folded Node (ID: " << folded_filter->getId()
+                  << ") contents: " << node_str;
+        }
         std::vector<std::unique_ptr<const RexScalar>> operands;
         operands.emplace_back(folded_filter->getAndReleaseCondition());
         auto old_condition = dynamic_cast<const RexOperator*>(operands.back().get());
