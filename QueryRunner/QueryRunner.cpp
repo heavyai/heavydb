@@ -653,7 +653,6 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
        &pending_query_check_freq](const size_t worker_id) {
         auto executor = Executor::getExecutor(worker_id);
         CompilationOptions co = CompilationOptions::defaults(device_type);
-        co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
 
         ExecutionOptions eo = {g_enable_columnar_output,
                                true,
@@ -769,22 +768,15 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
   const auto& cat = query_state.getConstSessionInfo()->getCatalog();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CompilationOptions co = CompilationOptions::defaults(device_type);
-  co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
   co.explain_type = explain_type;
 
-  ExecutionOptions eo = {g_enable_columnar_output,
-                         true,
-                         just_explain,
-                         allow_loop_joins,
-                         false,
-                         false,
-                         false,
-                         false,
-                         10000,
-                         with_filter_push_down,
-                         false,
-                         g_gpu_mem_limit_percent,
-                         false};
+  ExecutionOptions eo = ExecutionOptions::defaults();
+  eo.output_columnar_hint = g_enable_columnar_output;
+  eo.just_explain = just_explain;
+  eo.allow_loop_joins = allow_loop_joins;
+  eo.find_push_down_candidates = with_filter_push_down;
+  eo.gpu_input_mem_limit_percent = g_gpu_mem_limit_percent;
+
   auto calcite_mgr = cat.getCalciteMgr();
   const auto query_ra = calcite_mgr
                             ->process(query_state_proxy,
@@ -876,7 +868,6 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
         // reset to its default values.
         co = CompilationOptions::defaults(co.device_type);
         co.explain_type = explain_type;
-        co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
         auto calcite_mgr = cat.getCalciteMgr();
         const auto query_ra = calcite_mgr
                                   ->process(query_state->createQueryStateProxy(),
