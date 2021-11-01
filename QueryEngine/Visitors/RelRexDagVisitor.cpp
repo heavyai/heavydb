@@ -51,7 +51,8 @@ void RelRexDagVisitor::visit(RelAlgNode const* rel_alg_node) {
                                              RelProject,
                                              RelScan,
                                              RelSort,
-                                             RelTableFunction>();
+                                             RelTableFunction,
+                                             RelTranslatedJoin>();
   static_assert(std::is_trivially_destructible_v<decltype(handlers)>);
   // Will throw std::bad_typeid if rel_alg_node == nullptr.
   auto const& type_index = std::type_index(typeid(*rel_alg_node));
@@ -106,6 +107,14 @@ void RelRexDagVisitor::visit(RelProject const* rel_projection) {
 void RelRexDagVisitor::visit(RelTableFunction const* rel_table_function) {
   for (size_t i = 0; i < rel_table_function->getTableFuncInputsSize(); ++i) {
     visit(rel_table_function->getTableFuncInputAt(i));
+  }
+}
+
+void RelRexDagVisitor::visit(RelTranslatedJoin const* rel_translated_join) {
+  visit(rel_translated_join->getLHS());
+  visit(rel_translated_join->getRHS());
+  if (auto* outer_join_condition = rel_translated_join->getOuterJoinCond()) {
+    visit(outer_join_condition);
   }
 }
 

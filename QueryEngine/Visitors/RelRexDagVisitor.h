@@ -49,6 +49,7 @@ class RelRexDagVisitor {
   virtual void visit(RelScan const*) {}
   virtual void visit(RelSort const*) {}
   virtual void visit(RelTableFunction const*);
+  virtual void visit(RelTranslatedJoin const*);
 
   virtual void visit(RexAbstractInput const*) {}
   virtual void visit(RexCase const*);
