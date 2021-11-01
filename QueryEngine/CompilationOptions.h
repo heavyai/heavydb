@@ -22,7 +22,7 @@
 
 enum class ExecutorDeviceType { CPU, GPU };
 
-enum class ExecutorOptLevel { Default, LoopStrengthReduction, ReductionJIT };
+enum class ExecutorOptLevel { Default, ReductionJIT };
 
 enum class ExecutorExplainType { Default, Optimized };
 
@@ -55,14 +55,14 @@ struct CompilationOptions {
   static CompilationOptions defaults(
       const ExecutorDeviceType device_type = ExecutorDeviceType::GPU) {
     return CompilationOptions{device_type,
-                              true,
-                              ExecutorOptLevel::Default,
-                              false,
-                              true,
-                              true,
-                              ExecutorExplainType::Default,
-                              false,
-                              false};
+                              /*hoist_literals=*/true,
+                              /*opt_level=*/ExecutorOptLevel::Default,
+                              /*with_dynamic_watchdog=*/false,
+                              /*allow_lazy_fetch=*/true,
+                              /*filter_on_delted_column=*/true,
+                              /*explain_type=*/ExecutorExplainType::Default,
+                              /*register_intel_jit_listener=*/false,
+                              /*use_groupby_buffer_desc=*/false};
   }
 };
 

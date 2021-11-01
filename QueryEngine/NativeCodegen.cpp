@@ -303,10 +303,6 @@ void optimize_ir(llvm::Function* query_func,
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
   pass_manager.add(llvm::createGlobalOptimizerPass());
 
-  if (co.opt_level == ExecutorOptLevel::LoopStrengthReduction) {
-    pass_manager.add(llvm::createLoopStrengthReducePass());
-  }
-
   pass_manager.add(llvm::createCFGSimplificationPass());  // cleanup after everything
 
   pass_manager.run(*module);

@@ -2171,7 +2171,6 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                              query_ra,
                              query_state_proxy.getQueryState().shared_from_this());
   CompilationOptions co = CompilationOptions::defaults(device_type);
-  co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
   ExecutionOptions eo = {false,
@@ -2233,8 +2232,7 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
           .plan_result;
   RelAlgExecutor ra_executor(
       executor.get(), &catalog, catalog.getDataMgr().getDataProvider(), query_ra);
-  CompilationOptions co = {
-      device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
+  CompilationOptions co = {device_type, true, ExecutorOptLevel::Default, false};
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
   ExecutionOptions eo = {false,

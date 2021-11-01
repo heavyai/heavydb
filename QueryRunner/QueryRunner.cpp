@@ -618,7 +618,6 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
             worker_id, &cat.getDataMgr(), cat.getDataMgr().getBufferProvider());
 
         CompilationOptions co = CompilationOptions::defaults(device_type);
-        co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
         co.use_groupby_buffer_desc = g_use_groupby_buffer_desc;
 
         ExecutionOptions eo = {g_enable_columnar_output,
@@ -744,7 +743,6 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
                                         cat.getDataMgr().getBufferProvider());
 
   CompilationOptions co = CompilationOptions::defaults(device_type);
-  co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
   co.explain_type = explain_type;
   co.use_groupby_buffer_desc = g_use_groupby_buffer_desc;
 
@@ -856,7 +854,6 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
         // reset to its default values.
         co = CompilationOptions::defaults(co.device_type);
         co.explain_type = explain_type;
-        co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
         co.use_groupby_buffer_desc = g_use_groupby_buffer_desc;
 
         auto calcite_mgr = cat.getCalciteMgr();
