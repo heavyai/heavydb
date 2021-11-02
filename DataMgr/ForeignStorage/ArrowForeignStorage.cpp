@@ -60,6 +60,8 @@ class ArrowForeignStorageBase : public PersistentForeignStorageInterface {
                       const SQLTypeInfo& sql_type,
                       const size_t numBytes) override;
 
+  void dropTable(const int db_id, const int table_id) override;
+
   void parseArrowTable(Catalog_Namespace::Catalog* catalog,
                        std::pair<int, int> table_key,
                        const std::string& type,
@@ -613,6 +615,13 @@ int8_t* ArrowForeignStorageBase::tryZeroCopy(const ChunkKey& chunk_key,
   auto offsets_buffer = reinterpret_cast<const uint32_t*>(array_data->buffers[1]->data());
   auto string_buffer_offset = offsets_buffer[offset + array_data->offset];
   return data + string_buffer_offset;
+}
+
+void ArrowForeignStorageBase::dropTable(const int db_id, const int table_id) {
+  auto it = m_columns.lower_bound({db_id, table_id, 0});
+  while (it->first[0] == db_id && it->first[1] == table_id) {
+    it = m_columns.erase(it);
+  }
 }
 
 std::shared_ptr<arrow::ChunkedArray>

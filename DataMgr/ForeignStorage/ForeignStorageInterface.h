@@ -52,6 +52,7 @@ class PersistentForeignStorageInterface {
                              const TableDescriptor& td,
                              const std::list<ColumnDescriptor>& cols,
                              Data_Namespace::AbstractBufferMgr* mgr) = 0;
+  virtual void dropTable(const int db_id, const int table_id) = 0;
   virtual std::string getType() const = 0;
 };
 
@@ -205,7 +206,7 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
   }
 
   void removeTableRelatedDS(const int db_id, const int table_id) override {
-    UNREACHABLE();
+    persistent_foreign_storage_->dropTable(db_id, table_id);
   }
 
  private:
@@ -227,6 +228,7 @@ class ForeignStorageInterface {
 
   Data_Namespace::AbstractBufferMgr* lookupBufferManager(const int db_id,
                                                          const int table_id);
+  void dropBufferManager(const int db_id, const int table_id);
 
   void registerPersistentStorageInterface(
       std::unique_ptr<PersistentForeignStorageInterface> persistent_foreign_storage);
