@@ -2524,10 +2524,6 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
         if (is_null && !is_point_coords) {
           if (size > 0) {
             // NULL fixlen array: NULL_ARRAY sentinel followed by NULL sentinels
-            if (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT) {
-              throw std::runtime_error("Column " + cd->columnName +
-                                       " doesn't accept NULL values");
-            }
             int8_t* buf = (int8_t*)checked_malloc(size);
             put_null_array(static_cast<void*>(buf), elem_ti, "");
             for (int8_t* p = buf + elem_ti.get_size(); (p - buf) < size;
@@ -2569,7 +2565,8 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
           for (auto& e : l) {
             auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
             CHECK(c);
-            p = appendDatum(p, c->get_constval(), elem_ti);
+            p = append_datum(p, c->get_constval(), elem_ti);
+            CHECK(p);
           }
           arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, is_null));
         }

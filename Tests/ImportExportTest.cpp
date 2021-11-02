@@ -266,7 +266,7 @@ TEST_F(ImportTestMixedVarlen, Fix_failed_import_arrays_after_geos) {
       "'../../Tests/Import/datafiles/mixed_varlen.txt' with "
       "(header='false');");
   std::string query_str = "SELECT COUNT(*) FROM import_test_mixed_varlen;";
-  sqlAndCompareResult(query_str, {{1L}});
+  sqlAndCompareResult(query_str, {{2L}});
 }
 
 const char* create_table_date = R"(
@@ -1160,6 +1160,15 @@ const char* create_table_with_two_arrays = R"(
   );
 )";
 
+const char* create_table_with_null_text_arrays = R"(
+  CREATE TABLE null_text_arrays (
+    id INTEGER,
+    txt1 TEXT[],
+    txt2 TEXT[],
+    txt3 TEXT[2]
+  );
+)";
+
 const char* create_table_random_strings_with_line_endings = R"(
     CREATE TABLE random_strings_with_line_endings (
       random_string TEXT
@@ -1197,6 +1206,8 @@ class ImportTest : public ImportExportTestBase {
     sql(create_table_with_array_including_quoted_fields);
     sql("drop table if exists two_text_arrays;");
     sql(create_table_with_two_arrays);
+    sql("drop table if exists null_text_arrays;");
+    sql(create_table_with_null_text_arrays);
   }
 
   void TearDown() override {
@@ -1207,6 +1218,7 @@ class ImportTest : public ImportExportTestBase {
     sql("drop table if exists array_including_quoted_fields;");
     sql("drop table if exists unique_rowgroups;");
     sql("drop table if exists two_text_arrays;");
+    sql("drop table if exists null_text_arrays;");
     ImportExportTestBase::TearDown();
   }
 
@@ -1445,7 +1457,7 @@ TEST_F(ImportTest, array_including_quoted_fields) {
 
 TEST_F(ImportTest, empty_text_arrays) {
   std::string query_str =
-      "COPY two_text_arrays FROM '../../Tests/Import/datafiles/empty_text_arrays.csv' "
+      "COPY two_text_arrays FROM '../../Tests/FsiDataFiles/empty_text_arrays.csv' "
       "WITH (header='false', quoted='true', array_delimiter=',');";
   sql(query_str);
 
@@ -1458,18 +1470,15 @@ TEST_F(ImportTest, empty_text_arrays) {
 }
 
 TEST_F(ImportTest, null_text_arrays) {
-  std::string query_str =
-      "COPY two_text_arrays FROM '../../Tests/Import/datafiles/null_text_arrays.csv' "
-      "WITH (header='false', quoted='true', array_delimiter=',');";
-  sql(query_str);
+  sql("COPY null_text_arrays FROM '../../Tests/FsiDataFiles/null_text_arrays.csv';");
 
-  std::string select_query_str = "SELECT * FROM two_text_arrays ORDER BY id;";
+  std::string select_query_str = "SELECT * FROM null_text_arrays ORDER BY id;";
   sqlAndCompareResult(select_query_str,
                       {
-                          {1L, array({Null, Null}), array({Null})},
-                          {2L, array({Null}), array({Null, Null})},
-                          {3L, Null, array({Null, Null})},
-                          {4L, array({Null, Null}), Null},
+                          {1L, array({Null, Null}), array({Null}), Null},
+                          {2L, array({Null}), array({Null, Null}), Null},
+                          {3L, Null, array({Null, Null}), array({Null, Null})},
+                          {4L, array({Null, Null}), Null, Null},
                       });
 }
 

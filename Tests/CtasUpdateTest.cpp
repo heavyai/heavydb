@@ -2102,13 +2102,17 @@ TEST_F(Export, ExportFromSelectSharded) {
 TEST_P(Update, InvalidTextArrayAssignment) {
   sql("DROP TABLE IF EXISTS arr;");
   sql("CREATE TABLE arr (id int, ia text[3]);");
-  sql("INSERT INTO arr VALUES(1 , ARRAY[null,null,null]); ");
-  ASSERT_ANY_THROW(sql("INSERT INTO arr VALUES(0 , null); "));
-  ASSERT_ANY_THROW(sql("UPDATE arr set ia = NULL;"));
+  sql("INSERT INTO arr VALUES(1 , ARRAY[null,null,null]);");
+  sql("INSERT INTO arr VALUES(0 , null);");
+  sql("UPDATE arr set ia = NULL;");
   ASSERT_ANY_THROW(sql("UPDATE arr set ia = ARRAY[];"));
   ASSERT_ANY_THROW(sql("UPDATE arr set ia = ARRAY[null];"));
   ASSERT_ANY_THROW(sql("UPDATE arr set ia = ARRAY['one'];"));
   ASSERT_ANY_THROW(sql("UPDATE arr set ia = ARRAY['one', 'two', 'three', 'four'];"));
+  sqlAndCompareResult("SELECT COUNT(*) FROM arr WHERE ia IS NULL;", {{i(2)}});
+  sql("INSERT INTO arr VALUES(2, ARRAY['a','b','c']);");
+  sqlAndCompareResult("SELECT * FROM arr WHERE ia IS NOT NULL;",
+                      {{i(2), array({"a", "b", "c"})}});
 }
 
 TEST_P(Update, UpdateColumnByColumn) {
@@ -3648,6 +3652,65 @@ TEST_F(CtasTableTest, CreateTableAsSelect) {
   sql("SELECT m, m_3, m_6, m_9, n, o, o1, o2 FROM ctas_test_full ORDER BY m, m_3, m_6, "
       "m_9, n, o, o1, o2;");
   // }
+}
+
+class NullTextArrayTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("DROP TABLE IF EXISTS null_text_arrays;");
+    sql("DROP TABLE IF EXISTS null_text_arrays_2;");
+  }
+
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS null_text_arrays;");
+    sql("DROP TABLE IF EXISTS null_text_arrays_2;");
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void createTable(const std::string& table_name) {
+    sql("CREATE TABLE " + table_name + " (index INTEGER, txt1 TEXT[], txt2 TEXT[2]);");
+  }
+
+  void insertNullValues(const std::string& table_name) {
+    sql("INSERT INTO " + table_name + " VALUES (1, {NULL, NULL}, NULL);");
+    sql("INSERT INTO " + table_name + " VALUES (2, {NULL}, NULL);");
+    sql("INSERT INTO " + table_name + " VALUES (3, {NULL, NULL}, {NULL, NULL});");
+    sql("INSERT INTO " + table_name + " VALUES (4, NULL, NULL);");
+  }
+
+  void queryAndAssertExpectedResult(const std::string& table_name) {
+    // clang-format off
+    sqlAndCompareResult("SELECT * FROM " + table_name + " ORDER BY index;",
+                        {{i(1), array({Null, Null}), Null},
+                         {i(2), array({Null}), Null},
+                         {i(3), array({Null, Null}), array({Null, Null})},
+                         {i(4), Null, Null}});
+    // clang-format on
+  }
+};
+
+TEST_F(NullTextArrayTest, Insert) {
+  createTable("null_text_arrays");
+  insertNullValues("null_text_arrays");
+  queryAndAssertExpectedResult("null_text_arrays");
+}
+
+TEST_F(NullTextArrayTest, CreateTableAsSelect) {
+  createTable("null_text_arrays");
+  insertNullValues("null_text_arrays");
+
+  sql("CREATE TABLE null_text_arrays_2 AS (SELECT * FROM null_text_arrays);");
+  queryAndAssertExpectedResult("null_text_arrays_2");
+}
+
+TEST_F(NullTextArrayTest, InsertIntoTableAsSelect) {
+  createTable("null_text_arrays");
+  insertNullValues("null_text_arrays");
+
+  createTable("null_text_arrays_2");
+  sql("INSERT INTO null_text_arrays_2 (SELECT * FROM null_text_arrays);");
+  queryAndAssertExpectedResult("null_text_arrays_2");
 }
 
 int main(int argc, char* argv[]) {

@@ -250,9 +250,23 @@ static const std::string trim_space(const char* field, const size_t len) {
   return std::string(field + i, j - i);
 }
 
+namespace {
+inline SQLTypes get_type_for_datum(const SQLTypeInfo& ti) {
+  SQLTypes type;
+  if (ti.is_decimal()) {
+    type = decimal_to_int_type(ti);
+  } else if (ti.is_dict_encoded_string()) {
+    type = string_dict_to_int_type(ti);
+  } else {
+    type = ti.get_type();
+  }
+  return type;
+}
+}  // namespace
+
 Datum NullDatum(SQLTypeInfo& ti) {
   Datum d;
-  const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+  const auto type = get_type_for_datum(ti);
   switch (type) {
     case kBOOLEAN:
       d.boolval = inline_fixed_encoding_null_val(ti);
@@ -293,7 +307,7 @@ Datum NullDatum(SQLTypeInfo& ti) {
 
 Datum NullArrayDatum(SQLTypeInfo& ti) {
   Datum d;
-  const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+  const auto type = get_type_for_datum(ti);
   switch (type) {
     case kBOOLEAN:
       d.boolval = inline_fixed_encoding_null_array_val(ti);
@@ -376,7 +390,8 @@ ArrayDatum StringToArray(const std::string& s,
         }
       }
       Datum d = is_null ? NullDatum(elem_ti) : StringToDatum(e, elem_ti);
-      p = appendDatum(p, d, elem_ti);
+      p = append_datum(p, d, elem_ti);
+      CHECK(p);
     }
     return ArrayDatum(len, buf, false);
   }
@@ -394,11 +409,13 @@ ArrayDatum NullArray(const SQLTypeInfo& ti) {
     int8_t* buf = (int8_t*)checked_malloc(len);
     // First scalar is a NULL_ARRAY sentinel
     Datum d = NullArrayDatum(elem_ti);
-    int8_t* p = appendDatum(buf, d, elem_ti);
+    int8_t* p = append_datum(buf, d, elem_ti);
+    CHECK(p);
     // Rest is filled with normal NULL sentinels
     Datum d0 = NullDatum(elem_ti);
     while ((p - buf) < len) {
-      p = appendDatum(p, d0, elem_ti);
+      p = append_datum(p, d0, elem_ti);
+      CHECK(p);
     }
     CHECK((p - buf) == len);
     return ArrayDatum(len, buf, true);
@@ -492,7 +509,8 @@ ArrayDatum TDatumToArrayDatum(const TDatum& datum, const SQLTypeInfo& ti) {
   int8_t* buf = (int8_t*)checked_malloc(len);
   int8_t* p = buf;
   for (auto& e : datum.val.arr_val) {
-    p = appendDatum(p, TDatumToDatum(e, elem_ti), elem_ti);
+    p = append_datum(p, TDatumToDatum(e, elem_ti), elem_ti);
+    CHECK(p);
   }
 
   return ArrayDatum(len, buf, false);
@@ -700,11 +718,6 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
           }
           addStringArray(string_vec);
         } else {
-          if (ti.get_size() > 0) {
-            // TODO: remove once NULL fixlen arrays are allowed
-            throw std::runtime_error("Fixed length array column " + cd->columnName +
-                                     " currently cannot accept NULL arrays");
-          }
           addStringArray(std::nullopt);
         }
       } else {

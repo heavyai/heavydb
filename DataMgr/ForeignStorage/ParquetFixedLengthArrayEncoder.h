@@ -62,13 +62,12 @@ class ParquetFixedLengthArrayEncoder : public ParquetArrayEncoder {
 
   void setNullFixedLengthArraySentinel(int8_t* omnisci_data_bytes) {
     auto ti = column_desciptor_.columnType.get_elem_type();
-    if (ti.is_string()) {
-      // TODO: after investigation as to why fixed length arrays with
-      // strings can not represent null arrays, either fix this error
-      // or erase this comment.
-      throwNullInDictionaryEncodedColumn(column_desciptor_.columnName);
+    SQLTypes type;
+    if (ti.is_dict_encoded_string()) {
+      type = string_dict_to_int_type(ti);
+    } else {
+      type = ti.get_type();
     }
-    const auto type = ti.get_type();
     switch (type) {
       case kBOOLEAN:
         reinterpret_cast<bool*>(omnisci_data_bytes)[0] =
@@ -155,14 +154,6 @@ class ParquetFixedLengthArrayEncoder : public ParquetArrayEncoder {
                                   "' which has a fixed length array type,"
                                   " expecting " +
                                   std::to_string(array_element_count) + " elements.");
-  }
-
-  void throwNullInDictionaryEncodedColumn(const std::string& omnisci_column_name) {
-    throw ForeignStorageException("Detected a null array being imported into OmniSci '" +
-                                  omnisci_column_name +
-                                  "' column which has a fixed length array type of "
-                                  "dictionary encoded text. Currently "
-                                  "null arrays for this type of column are not allowed.");
   }
 
   const ColumnDescriptor column_desciptor_;

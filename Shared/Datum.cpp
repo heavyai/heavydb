@@ -506,6 +506,63 @@ SQLTypes decimal_to_int_type(const SQLTypeInfo& ti) {
   return kNULLT;
 }
 
+SQLTypes string_dict_to_int_type(const SQLTypeInfo& ti) {
+  CHECK(ti.is_dict_encoded_string());
+  switch (ti.get_size()) {
+    case 1:
+      return kTINYINT;
+    case 2:
+      return kSMALLINT;
+    case 4:
+      return kINT;
+    default:
+      UNREACHABLE() << "Unexpected string dictionary encoding size: " << ti.get_size();
+  }
+  return kNULLT;
+}
+
+int8_t* append_datum(int8_t* buf, const Datum& d, const SQLTypeInfo& ti) {
+  SQLTypes type;
+  if (ti.is_dict_encoded_string()) {
+    type = string_dict_to_int_type(ti);
+  } else {
+    type = ti.get_type();
+  }
+  switch (type) {
+    case kBOOLEAN:
+      *(int8_t*)buf = d.boolval;
+      return buf + sizeof(int8_t);
+    case kNUMERIC:
+    case kDECIMAL:
+    case kBIGINT:
+      *(int64_t*)buf = d.bigintval;
+      return buf + sizeof(int64_t);
+    case kINT:
+      *(int32_t*)buf = d.intval;
+      return buf + sizeof(int32_t);
+    case kSMALLINT:
+      *(int16_t*)buf = d.smallintval;
+      return buf + sizeof(int16_t);
+    case kTINYINT:
+      *(int8_t*)buf = d.tinyintval;
+      return buf + sizeof(int8_t);
+    case kFLOAT:
+      *(float*)buf = d.floatval;
+      return buf + sizeof(float);
+    case kDOUBLE:
+      *(double*)buf = d.doubleval;
+      return buf + sizeof(double);
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      *reinterpret_cast<int64_t*>(buf) = d.bigintval;
+      return buf + sizeof(int64_t);
+    default:
+      UNREACHABLE() << "Unexpected type: " << type;
+      return nullptr;
+  }
+}
+
 // Return decimal_value * 10^dscale
 // where dscale = new_type_info.get_scale() - type_info.get_scale()
 int64_t convert_decimal_value_to_scale(const int64_t decimal_value,

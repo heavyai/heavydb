@@ -172,7 +172,7 @@ std::string get_line_regex(size_t column_count) {
 }
 
 std::string get_line_array_regex(size_t column_count) {
-  return repeat_regex(column_count, "(\\{[^\\}]+\\}|NULL)");
+  return repeat_regex(column_count, "(\\{[^\\}]+\\}|NULL|)");
 }
 
 std::string get_line_geo_regex(size_t column_count) {
@@ -1852,6 +1852,29 @@ TEST_P(DataWrapperSelectQueryTest, OutOfRange) {
         "column type INTEGER. Min allowed value: -2147483647. Max allowed value: "
         "2147483647. Encountered value: -2147483648.");
   }
+}
+
+TEST_P(DataWrapperSelectQueryTest, NullTextArray) {
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP()
+        << "Sqlite does not support array types; Postgres arrays currently unsupported";
+  }
+  std::map<std::string, std::string> options;
+  if (wrapper_type_ == "regex_parser") {
+    options["LINE_REGEX"] = "(\\d+),\\s*" + get_line_array_regex(3);
+  }
+  sql(createForeignTableQuery(
+      {{"index", "INTEGER"}, {"txt1", "TEXT[]"}, {"txt2", "TEXT[]"}, {"txt3", "TEXT[2]"}},
+      getDataFilesPath() + "null_text_arrays" + wrapper_ext(GetParam()),
+      GetParam(),
+      options));
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY index;",
+                      {{i(1), array({Null, Null}), array({Null}), Null},
+                       {i(2), array({Null}), array({Null, Null}), Null},
+                       {i(3), Null, array({Null, Null}), array({Null, Null})},
+                       {i(4), array({Null, Null}), Null, Null}});
+  // clang-format on
 }
 
 class CSVFileTypeTests
@@ -3657,26 +3680,6 @@ TEST_F(SelectQueryTest, CsvArrayEmptyText) {
   // clang-format on
 }
 
-TEST_F(SelectQueryTest, CsvArrayNullText) {
-  const auto& query = getCreateForeignTableQuery("(index INT, txt1 TEXT[], txt2 TEXT[])",
-                                                 {{"header", "false"}},
-                                                 "null_text_arrays",
-                                                 "csv");
-  sql(query);
-
-  TQueryResult result;
-  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY index;");
-  // clang-format off
-  assertResultSetEqual({
-                          {(int64_t)1, array({Null, Null}), array({Null})},
-                          {(int64_t)2, array({Null}), array({Null, Null})},
-                          {(int64_t)3, Null, array({Null, Null})},
-                          {(int64_t)4, array({Null, Null}), Null},
-                      },
-    result);
-  // clang-format on
-}
-
 TEST_F(SelectQueryTest, CsvMultipleFilesWithExpectedAndMismatchedColumns) {
   auto file_path = getDataFilesPath() + "different_cols";
   sql("CREATE FOREIGN TABLE " + default_table_name +
@@ -3774,21 +3777,6 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayMalformed) {
       "'bigint_array' which has a fixed length array type, expecting 3 elements. Row "
       "group: 2, Parquet column: 'i64.list.item', Parquet file: '" +
           getDataFilesPath() + "array_fixed_len_malformed.parquet'");
-}
-
-TEST_F(SelectQueryTest, ParquetFixedLengthStringArrayWithNullArray) {
-  const auto& query = getCreateForeignTableQuery(
-      "(text_array TEXT[3])", "fixed_length_string_array_with_null_array", "parquet");
-  sql(query);
-  TQueryResult result;
-  queryAndAssertException(
-      default_select,
-      "Detected a null array being imported into OmniSci 'text_array' "
-      "column which has a fixed length array type of dictionary encoded text. Currently "
-      "null arrays for this type of column are not allowed. Row group: 0, Parquet "
-      "column: "
-      "'string_array.list.item', Parquet file: '" +
-          getDataFilesPath() + "fixed_length_string_array_with_null_array.parquet'");
 }
 
 TEST_F(SelectQueryTest, ParquetFixedLengthArrayDateTimeTypes) {

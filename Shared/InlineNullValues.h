@@ -265,11 +265,6 @@ inline int64_t inline_fixed_encoding_null_array_val(const SQL_TYPE_INFO& ti) {
   }
   if (ti.get_compression() == kENCODING_DICT) {
     CHECK(ti.is_string());
-#ifndef __CUDACC__
-    CHECK(false) << "Currently don't support fixed length arrays of dict encoded strings";
-#else
-    CHECK(false);
-#endif
     switch (ti.get_size()) {
       case 1:
         return inline_int_null_array_value<uint8_t>();

@@ -87,8 +87,6 @@ struct NumericValueConverter : public TargetValueConverter {
 
   void setValueCaster(CasterFunc caster) { checked_caster_ = caster; }
 
-  bool allowFixedNullArray() { return true; }
-
   void populateFixedArrayNullSentinel(size_t num_rows) {
     allocateColumnarData(num_rows);
     CHECK(fixed_array_null_value_ != 0);
@@ -224,8 +222,6 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
   }
 
   ~DictionaryValueConverter() override {}
-
-  bool allowFixedNullArray() { return false; }
 
   ElementsBufferColumnPtr allocateColumnarBuffer(size_t num_rows) {
     CHECK(num_rows > 0);
@@ -590,10 +586,6 @@ struct ArrayValueConverter : public TargetValueConverter {
     } else {
       if (!do_check_null_) {
         throw std::runtime_error("NULL assignment of non null column not allowed");
-      }
-
-      if (fixed_array_elements_count_ && !element_converter_->allowFixedNullArray()) {
-        throw std::runtime_error("NULL assignment of fixed length array not allowed");
       }
 
       bool is_null = true;  // do_check_null_;

@@ -6817,7 +6817,7 @@ void DBHandler::insert_data(const TSessionId& session,
               // For geo point, we manually mark its null sentinel to coord buffer
               array_column->push_back(
                   import_export::ImporterUtils::composeNullPointCoords(ti, geo_ti));
-            } else if (ti.get_size() > 0 && !ti.get_elem_type().is_string()) {
+            } else if (ti.get_size() > 0) {
               array_column->push_back(import_export::ImporterUtils::composeNullArray(ti));
             } else {
               array_column->emplace_back(0, nullptr, true);

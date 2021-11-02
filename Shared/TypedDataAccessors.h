@@ -268,6 +268,7 @@ inline void put_null(void* ndptr, const SQLTypeInfo& ntype, const std::string co
     case kINTERVAL_YEAR_MONTH:
     case kNUMERIC:
     case kDECIMAL:
+    case kTEXT:
       switch (ntype.get_size()) {
         case 1:
           *(int8_t*)ndptr = inline_int_null_value<int8_t>();
@@ -318,6 +319,7 @@ inline void put_null_array(void* ndptr,
     case kINTERVAL_YEAR_MONTH:
     case kNUMERIC:
     case kDECIMAL:
+    case kTEXT:
       switch (ntype.get_size()) {
         case 1:
           *(int8_t*)ndptr = inline_int_null_array_value<int8_t>();
