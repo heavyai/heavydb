@@ -254,9 +254,12 @@ void GlobalFileMgr::writeFileMgrData(
 
 void GlobalFileMgr::removeTableRelatedDS(const int32_t db_id, const int32_t tb_id) {
   mapd_unique_lock<mapd_shared_mutex> write_lock(fileMgrs_mutex_);
-  auto fm = dynamic_cast<File_Namespace::FileMgr*>(findFileMgrUnlocked(db_id, tb_id));
-  if (fm) {
+  auto abm = findFileMgrUnlocked(db_id, tb_id);
+  if (auto fm = dynamic_cast<File_Namespace::FileMgr*>(abm)) {
     fm->closeRemovePhysical();
+  } else if (dynamic_cast<ForeignStorageBufferMgr*>(abm)) {
+    abm->removeTableRelatedDS(db_id, tb_id);
+    fsi_->dropBufferManager(db_id, tb_id);
   } else {
     // fileMgr has not been initialized so there is no need to
     // spend the time initializing
