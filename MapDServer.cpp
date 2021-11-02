@@ -366,6 +366,38 @@ void heartbeat() {
   thrift_stop();
 }
 
+#ifdef HAVE_THRIFT_MESSAGE_LIMIT
+namespace {
+// Creates a configuration object with the maximum possible value for the message size
+// limit (~2GB).
+inline std::shared_ptr<TConfiguration> create_unbounded_transport_config() {
+  return std::make_shared<TConfiguration>(std::numeric_limits<int32_t>::max());
+}
+
+class UnboundedTBufferedTransportFactory : public TBufferedTransportFactory {
+ public:
+  UnboundedTBufferedTransportFactory() : TBufferedTransportFactory() {}
+
+  std::shared_ptr<TTransport> getTransport(
+      std::shared_ptr<TTransport> transport) override {
+    return std::shared_ptr<TTransport>(
+        new TBufferedTransport(transport, create_unbounded_transport_config()));
+  }
+};
+
+class UnboundedTHttpServerTransportFactory : public THttpServerTransportFactory {
+ public:
+  UnboundedTHttpServerTransportFactory() : THttpServerTransportFactory() {}
+
+  std::shared_ptr<TTransport> getTransport(
+      std::shared_ptr<TTransport> transport) override {
+    return std::shared_ptr<TTransport>(
+        new THttpServer(transport, create_unbounded_transport_config()));
+  }
+};
+}  // namespace
+#endif
+
 int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server = true) {
   // Prepare to launch the Thrift server.
   LOG(INFO) << "OmniSciDB starting up";
@@ -518,8 +550,13 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
 
   // Thrift TCP server launch.
   std::shared_ptr<TServerTransport> tcp_st = tcp_socket;
+#ifdef HAVE_THRIFT_MESSAGE_LIMIT
+  std::shared_ptr<TTransportFactory> tcp_tf{
+      std::make_shared<UnboundedTBufferedTransportFactory>()};
+#else
   std::shared_ptr<TTransportFactory> tcp_tf{
       std::make_shared<TBufferedTransportFactory>()};
+#endif
   std::shared_ptr<TProtocolFactory> tcp_pf{std::make_shared<TBinaryProtocolFactory>()};
   g_thrift_tcp_server.reset(new TThreadedServer(processor, tcp_st, tcp_tf, tcp_pf));
   server_threads.insert(std::make_unique<std::thread>(
@@ -530,8 +567,13 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
   // Thrift HTTP server launch.
   if (start_http_server) {
     std::shared_ptr<TServerTransport> http_st = http_socket;
+#ifdef HAVE_THRIFT_MESSAGE_LIMIT
+    std::shared_ptr<TTransportFactory> http_tf{
+        std::make_shared<UnboundedTHttpServerTransportFactory>()};
+#else
     std::shared_ptr<TTransportFactory> http_tf{
         std::make_shared<THttpServerTransportFactory>()};
+#endif
     std::shared_ptr<TProtocolFactory> http_pf{std::make_shared<TJSONProtocolFactory>()};
     g_thrift_http_server.reset(new TThreadedServer(processor, http_st, http_tf, http_pf));
     server_threads.insert(std::make_unique<std::thread>(
