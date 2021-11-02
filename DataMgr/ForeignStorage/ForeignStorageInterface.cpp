@@ -165,6 +165,12 @@ Data_Namespace::AbstractBufferMgr* ForeignStorageInterface::lookupBufferManager(
   return it_ok.first->second.get();
 }
 
+void ForeignStorageInterface::dropBufferManager(const int db_id, const int table_id) {
+  std::lock_guard<std::mutex> persistent_storage_interfaces_lock(
+      persistent_storage_interfaces_mutex_);
+  managers_map_.erase(std::make_pair(db_id, table_id));
+}
+
 void ForeignStorageInterface::registerPersistentStorageInterface(
     std::unique_ptr<PersistentForeignStorageInterface> persistent_foreign_storage) {
   std::lock_guard<std::mutex> persistent_storage_interfaces_lock(
