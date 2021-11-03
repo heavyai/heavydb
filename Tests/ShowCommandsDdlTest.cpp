@@ -2613,6 +2613,18 @@ class SystemTablesTest : public DBHandlerTestFixture {
     return pages_count;
   }
 
+  std::string getGpuDeviceId(const std::string& table_name) {
+    auto td = getCatalog().getMetadataForTable(table_name, true);
+    CHECK(td);
+    CHECK(td->fragmenter);
+    auto table_info = td->fragmenter->getFragmentsForQuery();
+    CHECK_EQ(table_info.fragments.size(), static_cast<size_t>(1));
+    const auto& fragment = table_info.fragments[0];
+    auto device_level = static_cast<size_t>(MemoryLevel::GPU_LEVEL);
+    CHECK_GT(fragment.deviceIds.size(), device_level);
+    return std::to_string(fragment.deviceIds[device_level]);
+  }
+
   std::map<std::string, int32_t> dashboard_id_by_name_;
 };
 
@@ -2935,11 +2947,13 @@ TEST_F(SystemTablesTest, MemorySummarySystemTableGpu) {
 
   sql("ALTER SYSTEM CLEAR GPU MEMORY;");
   sql("SELECT AVG(i) FROM test_table_1;");
+  auto device_id = getGpuDeviceId("test_table_1");
 
   loginInformationSchema();
   // clang-format off
   sqlAndCompareResult(
-      "SELECT * FROM memory_summary WHERE device_type = 'GPU' AND device_id = 0;",
+      "SELECT * FROM memory_summary WHERE device_type = 'GPU' AND "
+      "device_id = " + device_id + ";",
       {{"Server", i(0), "GPU", getMaxGpuPageCount(), getGpuPageSize(),
         getAllocatedGpuPageCount(), i(1), getAllocatedGpuPageCount() - 1}});
   // clang-format on
@@ -2979,10 +2993,12 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
 
   sql("ALTER SYSTEM CLEAR GPU MEMORY;");
   sql("SELECT AVG(i) FROM test_table_1;");
+  auto device_id = getGpuDeviceId("test_table_1");
 
   loginInformationSchema();
   // clang-format off
-  sqlAndCompareResult("SELECT * FROM memory_details WHERE device_type = 'GPU' AND device_id = 0;",
+  sqlAndCompareResult("SELECT * FROM memory_details WHERE device_type = 'GPU' AND "
+                      "device_id = " + device_id + ";",
                       {{"Server", db_id, table_id, i(1), array({db_id, table_id, i(1), i(0)}),
                         i(0), "GPU", "USED", i(1), getGpuPageSize(), i(0), i(0), i(0)},
                        {"Server", Null, Null, Null, Null,
