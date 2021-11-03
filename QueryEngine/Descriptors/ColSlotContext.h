@@ -69,6 +69,11 @@ class ColSlotContext {
     return slot_sizes_[slot_idx];
   }
 
+  void setPaddedSlotWidthBytes(const size_t slot_idx, const int8_t bytes) {
+    CHECK_LT(slot_idx, slot_sizes_.size());
+    slot_sizes_[slot_idx].padded_size = bytes;
+  }
+
   const std::vector<size_t>& getSlotsForCol(const size_t col_idx) const {
     CHECK_LT(col_idx, col_to_slot_map_.size());
     return col_to_slot_map_[col_idx];

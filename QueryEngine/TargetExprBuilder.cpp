@@ -503,6 +503,7 @@ void TargetExprCodegen::codegenAggregate(
 
 void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
                                           const Executor* executor,
+                                          QueryMemoryDescriptor& query_mem_desc,
                                           const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
   if (query_mem_desc.getPaddedSlotWidthBytes(slot_index_counter) == 0) {
@@ -521,6 +522,16 @@ void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
       !is_columnar_projection(query_mem_desc)) {
     // TODO(miyu): enable different byte width in the layout w/o padding
     throw CompilationRetryNoCompaction();
+  }
+
+  if (is_columnar_projection(query_mem_desc) &&
+      executor->plan_state_->isLazyFetchColumn(target_expr)) {
+    // For columnar outputs, we need to pad lazy fetched columns to 8 bytes to allow the
+    // lazy fetch index to be placed in the column. The QueryMemoryDescriptor is created
+    // before Lazy Fetch information is known, therefore we need to update the QMD with
+    // the new slot size width bytes for these columns.
+    query_mem_desc.setPaddedSlotWidthBytes(slot_index_counter, int8_t(8));
+    CHECK_EQ(query_mem_desc.getPaddedSlotWidthBytes(slot_index_counter), int8_t(8));
   }
 
   auto target_info = get_target_info(target_expr, g_bigint_count);
@@ -727,7 +738,8 @@ void TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions(
         executor->castToIntPtrTyIn(agg_out_vec[first_sample_expr.base_slot_index], 64);
   }
 
-  auto sample_cas_lv = codegenSlotEmptyKey(agg_col_ptr, target_lvs, executor, init_val);
+  auto sample_cas_lv =
+      codegenSlotEmptyKey(agg_col_ptr, target_lvs, executor, query_mem_desc, init_val);
 
   DiamondCodegen sample_cfg(
       sample_cas_lv, executor, false, "sample_valcheck", &diamond_codegen, false);
@@ -752,6 +764,7 @@ llvm::Value* TargetExprCodegenBuilder::codegenSlotEmptyKey(
     llvm::Value* agg_col_ptr,
     std::vector<llvm::Value*>& target_lvs,
     Executor* executor,
+    const QueryMemoryDescriptor& query_mem_desc,
     const int64_t init_val) const {
   AUTOMATIC_IR_METADATA(executor->cgen_state_.get());
   const auto& first_sample_expr = sample_exprs_to_codegen.front();

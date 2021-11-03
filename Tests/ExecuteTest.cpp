@@ -17994,6 +17994,56 @@ TEST_F(SubqueryTestEnv, SubqueryTest) {
   }
 }
 
+class ManyRowsTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";"));
+
+    ASSERT_NO_THROW(run_ddl_statement("CREATE TABLE " + table_name +
+                                      " (t TINYINT, x INTEGER, y BIGINT);"));
+
+    // add one additional "duplicate" row at the end
+    for (size_t i = 0; i < row_count - 1; i++) {
+      run_multiple_agg("INSERT INTO " + table_name + " VALUES (" + std::to_string(i) +
+                           "," + std::to_string(i) + "," + std::to_string(i) + ");",
+                       ExecutorDeviceType::CPU);
+    }
+
+    run_multiple_agg("INSERT INTO " + table_name + " VALUES (1, 2, 3);",
+                     ExecutorDeviceType::CPU);
+  }
+
+  void TearDown() override {
+    if (!g_keep_test_data) {
+      ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";"));
+    }
+  }
+
+  static const std::string table_name;
+  static const size_t row_count;
+};
+
+const std::string ManyRowsTest::table_name = "many_rows";
+const size_t ManyRowsTest::row_count = 129;
+
+// ensure lazy fetch works properly for queries where the number of rows exceeds the bit
+// width of the target type
+TEST_F(ManyRowsTest, Projection) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    EXPECT_NO_THROW({
+      auto result = run_multiple_agg(
+          R"(SELECT t, x, y from many_rows ORDER BY x ASC NULLS FIRST;)", dt);
+      EXPECT_EQ(result->rowCount(), ManyRowsTest::row_count);
+      for (size_t i = 0; i < ManyRowsTest::row_count; i++) {
+        auto row = result->getNextRow(false, false);
+        EXPECT_EQ(row.size(), size_t(3));
+      }
+    });
+  }
+}
+
 namespace {
 int create_and_populate_window_func_table(const bool multi_frag) {
   std::string create_table_suffix = " WITH (FRAGMENT_SIZE=";

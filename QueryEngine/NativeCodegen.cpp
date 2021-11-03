@@ -2861,7 +2861,7 @@ void Executor::insertErrorCodeChecker(llvm::Function* query_func,
 
 bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
                            GroupByAndAggregate& group_by_and_aggregate,
-                           const QueryMemoryDescriptor& query_mem_desc,
+                           QueryMemoryDescriptor& query_mem_desc,
                            const CompilationOptions& co,
                            const GpuSharedMemoryContext& gpu_smem_context) {
   AUTOMATIC_IR_METADATA(cgen_state_.get());

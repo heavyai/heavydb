@@ -202,6 +202,8 @@ class QueryMemoryDescriptor {
   const int8_t getPaddedSlotWidthBytes(const size_t slot_idx) const;
   const int8_t getLogicalSlotWidthBytes(const size_t slot_idx) const;
 
+  void setPaddedSlotWidthBytes(const size_t slot_idx, const int8_t bytes);
+
   const int8_t getSlotIndexForSingleSlotCol(const size_t col_idx) const;
 
   size_t getPaddedColWidthForRange(const size_t offset, const size_t range) const {

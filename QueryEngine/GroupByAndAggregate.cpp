@@ -822,7 +822,7 @@ bool GroupByAndAggregate::gpuCanHandleOrderEntries(
 
 bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
                                   llvm::BasicBlock* sc_false,
-                                  const QueryMemoryDescriptor& query_mem_desc,
+                                  QueryMemoryDescriptor& query_mem_desc,
                                   const CompilationOptions& co,
                                   const GpuSharedMemoryContext& gpu_smem_context) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
@@ -1474,7 +1474,7 @@ bool GroupByAndAggregate::codegenAggCalls(
     const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx_in,
     llvm::Value* varlen_output_buffer,
     const std::vector<llvm::Value*>& agg_out_vec,
-    const QueryMemoryDescriptor& query_mem_desc,
+    QueryMemoryDescriptor& query_mem_desc,
     const CompilationOptions& co,
     const GpuSharedMemoryContext& gpu_smem_context,
     DiamondCodegen& diamond_codegen) {
@@ -1506,13 +1506,13 @@ bool GroupByAndAggregate::codegenAggCalls(
     out_row_idx->setName("out_row_idx");
   }
 
-  TargetExprCodegenBuilder target_builder(query_mem_desc, ra_exe_unit_, is_group_by);
+  TargetExprCodegenBuilder target_builder(ra_exe_unit_, is_group_by);
   for (size_t target_idx = 0; target_idx < ra_exe_unit_.target_exprs.size();
        ++target_idx) {
     auto target_expr = ra_exe_unit_.target_exprs[target_idx];
     CHECK(target_expr);
 
-    target_builder(target_expr, executor_, co);
+    target_builder(target_expr, executor_, query_mem_desc, co);
   }
 
   target_builder.codegen(this,

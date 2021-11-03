@@ -820,12 +820,12 @@ class Executor {
                         GroupByAndAggregate& group_by_and_aggregate,
                         llvm::Function* query_func,
                         llvm::BasicBlock* entry_bb,
-                        const QueryMemoryDescriptor& query_mem_desc,
+                        QueryMemoryDescriptor& query_mem_desc,
                         const CompilationOptions& co,
                         const ExecutionOptions& eo);
   bool compileBody(const RelAlgExecutionUnit& ra_exe_unit,
                    GroupByAndAggregate& group_by_and_aggregate,
-                   const QueryMemoryDescriptor& query_mem_desc,
+                   QueryMemoryDescriptor& query_mem_desc,
                    const CompilationOptions& co,
                    const GpuSharedMemoryContext& gpu_smem_context = {});
 
